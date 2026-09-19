@@ -439,6 +439,8 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
         intkl[h] = ik;
         deltal[h] = f - ik as f64;
         let prev_at = |idx: usize| -> f64 {
+            // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (an index-0 read happens when L grows).
+            let idx = if idx == 0 { 1 } else { idx };
             state
                 .log2_ml
                 .get(idx)
@@ -457,6 +459,8 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
     let unvc = 0.2046 / w0.sqrt();
     for h in 1..=l as usize {
         let prev_at = |idx: usize| -> f64 {
+            // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (an index-0 read happens when L grows).
+            let idx = if idx == 0 { 1 } else { idx };
             state
                 .log2_ml
                 .get(idx)

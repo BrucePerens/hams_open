@@ -86,6 +86,8 @@ pub struct SpeechParameters {
 /// the float sibling's own `.get(idx).copied().unwrap_or(*last)` resampling behavior exactly (needed
 /// because the previous frame's own `L` can differ from this frame's `L`).
 fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
+    // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (read when L grows).
+    let idx = if idx == 0 { 1 } else { idx };
     log2_ml_q16.get(idx).copied().unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0))
 }
 
@@ -96,6 +98,7 @@ fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
 pub fn dequantize_speech(
     l: u32,
     w0_q16: i32,
+    vuv_w0_q16: i32,
     raw: &RawSpeechParameters,
     tables: &SpeechTables,
     state: &mut MbeDecoderState,
@@ -103,7 +106,9 @@ pub fn dequantize_speech(
     let l_usize = l as usize;
 
     // f0 = w0 / (2*pi) -- needed for the VUV per-harmonic lookup below.
-    let f0_q16 = div_q16(w0_q16, TWO_PI_Q16_16);
+    // `vuv_w0_q16` is the fundamental used for the V/UV slot lookup only: mbelib uses its own unscaled pitch there
+    // (D-STAR passes the table pitch before the chip-fit scale; AMBE+2 passes `w0_q16` itself).
+    let f0_q16 = div_q16(vuv_w0_q16, TWO_PI_Q16_16);
 
     // jl = floor(harmonic * 16 * f0) -- an exact Q16.16-to-integer floor via a plain right shift
     // (every operand here is non-negative). **A real, quantified, expected source of rare

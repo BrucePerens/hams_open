@@ -322,7 +322,8 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
 
     let mut voiced = vec![false; l as usize + 1];
     for (harmonic, slot) in voiced.iter_mut().enumerate().skip(1) {
-        let jl = (harmonic as f64 * 16.0 * f0) as usize;
+        // mbelib's V/UV slot uses its own unscaled f0, not the chip-fitted scale applied to the pitch itself.
+        let jl = (harmonic as f64 * 16.0 * (f0 / F0_CHIP_SCALE)) as usize;
         *slot = tables::VUV[raw.b1 as usize][jl.min(7)];
     }
 
@@ -420,6 +421,8 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
         intkl[h] = ik;
         deltal[h] = f - ik as f64;
         let prev_at = |idx: usize| -> f64 {
+            // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (an index-0 read happens when L grows).
+            let idx = if idx == 0 { 1 } else { idx };
             state
                 .log2_ml
                 .get(idx)
@@ -438,6 +441,8 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
     let unvc = 0.2046 / w0.sqrt();
     for h in 1..=l as usize {
         let prev_at = |idx: usize| -> f64 {
+            // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (an index-0 read happens when L grows).
+            let idx = if idx == 0 { 1 } else { idx };
             state
                 .log2_ml
                 .get(idx)

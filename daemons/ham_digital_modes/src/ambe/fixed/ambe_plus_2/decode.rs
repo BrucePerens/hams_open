@@ -86,6 +86,6 @@ pub fn dequantize(raw: &RawParameters, state: &mut MbeDecoderState) -> Dequantiz
         b8: raw.b8,
     };
     let tables = speech_tables();
-    let params = dequantize_speech(l, w0_q16, &raw_speech, &tables, state);
+    let params = dequantize_speech(l, w0_q16, w0_q16, &raw_speech, &tables, state);
     DequantizedFrame::Speech(params)
 }

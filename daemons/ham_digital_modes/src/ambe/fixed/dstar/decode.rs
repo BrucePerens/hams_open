@@ -28,6 +28,9 @@ pub use crate::ambe::float::dstar::decode::{
 /// representable in 16 fractional bits) -- see [`ToneKind::Single`]'s own doc comment.
 const HZ_PER_INDEX_Q16_16: i32 = 2_048_000;
 
+/// `round(1.024 * 65536)`.
+const F0_CHIP_SCALE_Q16_16: i32 = 67_109;
+
 /// The fixed-point equivalent of `ambe::float::dstar::decode::ToneKind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToneKind {
@@ -92,6 +95,9 @@ pub fn dequantize(d: u64, state: &mut MbeDecoderState) -> DequantizedFrame {
         b8: raw.b8,
     };
     let tables = speech_tables();
-    let params = dequantize_speech(l, w0_q16, &raw_speech, &tables, state);
+    // The V/UV slot uses the pitch before the chip-fit scale (`ambe::float::dstar::decode::F0_CHIP_SCALE`,
+    // 1.024 = 67109/65536 in Q16.16), matching the float sibling.
+    let vuv_w0_q16 = (((w0_q16 as i64) << 16) / F0_CHIP_SCALE_Q16_16 as i64) as i32;
+    let params = dequantize_speech(l, w0_q16, vuv_w0_q16, &raw_speech, &tables, state);
     DequantizedFrame::Speech(params)
 }
