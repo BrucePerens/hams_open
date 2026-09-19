@@ -1,5 +1,5 @@
 //! Fixed-point AMBE implementations, mirroring [`super::float`]'s per-mode layout
-//! (`ratet27`/`dstar`/`ambe_plus_2`, plus [`general`] for arithmetic primitives genuinely specific
+//! (`tia_102_baba`/`dstar`/`ambe_plus_2`, plus [`general`] for arithmetic primitives genuinely specific
 //! to a fixed-point build -- not to be confused with [`super::general`], the sibling module that
 //! holds precision-*independent* shared code like the Golay/Hamming FEC, reused unchanged by both
 //! [`super::float`] and this tree). Every function in this tree must compile and run correctly

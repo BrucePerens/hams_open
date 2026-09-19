@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Fixed-point RATET(27) pitch estimation (TIA-102.BABA_2003.pdf section 5.1): the per-frame error
+//! Fixed-point TIA-102.BABA pitch estimation (TIA-102.BABA_2003.pdf section 5.1): the per-frame error
 //! function `E(P)`, look-back and look-ahead tracking, and the initial-estimate decision. Fixed-point
 //! sibling of [`crate::ambe::float::tia_102_baba::pitch`]; see [`super::super`]'s doc comment for the
 //! numeric convention.

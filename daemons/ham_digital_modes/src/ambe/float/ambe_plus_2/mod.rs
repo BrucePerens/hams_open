@@ -1,5 +1,5 @@
 //! AMBE+2 half-rate (the DMR / Yaesu System Fusion / P25 Phase 2 generation, TIA-102.BABA-1's own
-//! 2009 addendum to the base P25 IMBE standard `super::ratet27` implements): a 72-bit frame every
+//! 2009 addendum to the base P25 IMBE standard `super::tia_102_baba` implements): a 72-bit frame every
 //! 20ms (3600 total / 2450 speech / 1150 FEC bps -- DVSI's own USB-3000 Manual lists this as
 //! `PKT_RATET` Rate Index 33 "APCO Project 25 half-rate with FEC" and Rate Index 34 "APCO Project
 //! 25 half-rate with No FEC", `0x21`/`0x22`; see
@@ -11,7 +11,7 @@
 //! AMBE+2 is covered by 12 specific patents named in the TIA-102.BABA-1 addendum itself. This
 //! module exists **only** for internal testing against real DVSI chip hardware -- confirming or
 //! refuting the hypothesis that the chip's own "P25" configurations are actually running an
-//! AMBE+2-family algorithm, not the published, patent-clear IMBE algorithm `super::ratet27`
+//! AMBE+2-family algorithm, not the published, patent-clear IMBE algorithm `super::tia_102_baba`
 //! implements. It is not enabled by default, not exported for any deployment use, and real
 //! deployment would need the patent-clearance question resolved separately (see
 //! `AMBE_PLUS_2_NOTES.md`'s own dated sections for the authorization history). Build/test it with

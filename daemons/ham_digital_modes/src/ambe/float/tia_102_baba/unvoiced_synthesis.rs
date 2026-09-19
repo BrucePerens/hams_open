@@ -208,11 +208,11 @@ pub fn unvoiced_scaling_coefficient() -> f64 {
 /// 1-indexed by harmonic (`voiced[0]` is harmonic 1, i.e. `v_bar_1`/`M_bar_1(0)`) and must be the same
 /// length; returns `None` on a length mismatch.
 ///
-/// **History: this was first investigated and proven unreachable for RATET(27)'s own decode path (below), then
+/// **History: this was first investigated and proven unreachable for TIA-102.BABA's own decode path (below), then
 /// became reachable once D-STAR/AMBE+2 started feeding this same shared synthesis: their harmonic count `L` comes
 /// from a table indexed by `b0`, not from `harmonics_count(omega0)`, and the chip's D-STAR pitch is ~3% above the
 /// formula the tables were paired with, so `(L+0.5)*omega0` can exceed pi. The loop below therefore clamps the
-/// band to the valid bins (`unvoiced_spectrum_clamps_bands_past_nyquist`). RATET(27)'s original proof follows.** `bin_index` panics if `band_edge_b(l_hat,
+/// band to the valid bins (`unvoiced_spectrum_clamps_bands_past_nyquist`). TIA-102.BABA's original proof follows.** `bin_index` panics if `band_edge_b(l_hat,
 /// omega0_tilde).ceil()` reaches `128` for the top harmonic `l_hat`, i.e. whenever
 /// `(l_hat + 0.5) * omega0_tilde > pi`. This *is* reachable from a hand-constructed, physically
 /// invalid `(l_hat, omega0_tilde)` pair (the mistake a synthetic test made while building the

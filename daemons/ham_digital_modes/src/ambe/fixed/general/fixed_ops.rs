@@ -37,7 +37,7 @@ pub fn div_q16(a: i32, b: i32) -> i32 {
 /// `a * b` for an `i64` value `a` with 16 fractional bits (`a_real = a / 65536`, the same "wide
 /// container, same convention" idea [`super::explog::log2_q16_i64`] documents) and an ordinary Q16.16
 /// `i32` scalar `b`, returning the product with the same 16-fractional-bit `i64` convention. Uses an
-/// `i128` intermediate rather than `i64` -- `a` can be large enough (RATET(27) enhancement's own
+/// `i128` intermediate rather than `i64` -- `a` can be large enough (TIA-102.BABA enhancement's own
 /// `R_M0`/`S_E`) that `a * b` alone can exceed `i64::MAX` before the final shift, and an `i128`
 /// product costs nothing extra here (it is not a floating-point type; this crate's own "no floating
 /// point whatsoever" rule is about `f32`/`f64`, not integer width).
@@ -49,7 +49,7 @@ pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64 {
 
 /// `a / b` for two `i64` values sharing the same 16-fractional-bit convention [`mul_q16_i64`]/
 /// [`super::explog::log2_q16_i64`] use, returning a Q16.16 `i32` ratio -- for computing a
-/// dimensionless ratio (RATET(27) enhancement's own `k = R_M1/R_M0`, bounded to `[-1,1]` by
+/// dimensionless ratio (TIA-102.BABA enhancement's own `k = R_M1/R_M0`, bounded to `[-1,1]` by
 /// Cauchy-Schwarz, or its final `gamma = sqrt(R_M0/E_enh)` rescale) from two values whose own
 /// individual magnitudes may not fit an `i32`, even though their *ratio* always will. Normalizes
 /// both operands by the same right-shift first so `numerator << 16` cannot overflow `i64` regardless

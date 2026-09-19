@@ -12,7 +12,7 @@
 //! spec's DFT construction rather than mbelib's multisine mix, and `SynthesisState` also applies the
 //! spec's V/UV and amplitude smoothing, which mbelib omits.
 //!
-//! FEC error statistics feed the same smoothing thresholds as RATET(27), using the two Golay blocks
+//! FEC error statistics feed the same smoothing thresholds as TIA-102.BABA, using the two Golay blocks
 //! these two modes actually carry (`epsilon_c0`, `epsilon_c1`) and zero for the vectors they lack.
 
 use super::tia_102_baba::error_estimation::{estimate_errors, FrameErrors};

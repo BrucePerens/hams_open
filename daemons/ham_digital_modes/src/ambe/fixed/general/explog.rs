@@ -16,7 +16,7 @@ use super::explog_table::{EXP2_FRAC_LEN, EXP2_FRAC_Q16_16, LOG2_FRAC_LEN, LOG2_F
 
 /// `log2(x)` in Q16.16, for a positive `x` given as an **`i64` with the same 16 fractional bits**
 /// as everywhere else in this crate (`x_real = x / 65536`) rather than a plain `i32` -- for a caller
-/// whose own value's *integer* range genuinely exceeds `i32` (RATET(27) enhancement's own `R_M0`/
+/// whose own value's *integer* range genuinely exceeds `i32` (TIA-102.BABA enhancement's own `R_M0`/
 /// `S_E`, which real chip data shows spans roughly 9 to 4x10^8, see
 /// `ambe::fixed::tia_102_baba::enhancement`'s own doc comment), while its needed *fractional* precision
 /// is still just 16 bits. Mirrors [`log2_q16`]'s own table lookup and interpolation exactly (same
@@ -125,7 +125,7 @@ pub fn exp2_q16(y: i32) -> i32 {
 /// `round(log2(e) * 65536)` -- `e`'s own base-2 logarithm, the constant that converts a natural
 /// exponent into a base-2 one: `exp(x) = 2^(x * log2(e))`. `pub` (not just used internally by
 /// [`exp_q16`]) since a caller building its own log-domain computation around a natural-log-based
-/// spec formula (RATET(27) enhancement's own `V_M`, Eq. 112) needs the same conversion.
+/// spec formula (TIA-102.BABA enhancement's own `V_M`, Eq. 112) needs the same conversion.
 pub const LOG2_E_Q16_16: i32 = 94548;
 
 /// `exp(x)` in Q16.16, for a Q16.16 `x` -- via `exp2_q16(x * log2(e))`, since this crate's own

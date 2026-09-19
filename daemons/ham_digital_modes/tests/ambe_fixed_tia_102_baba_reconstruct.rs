@@ -6,7 +6,7 @@
 //!
 //! **Every quantizer value used here is kept within its own real bit-width range for the chosen
 //! `L`** (via [`in_range_value`]), not just "small-looking" -- a real, disclosed lesson from this
-//! test's own first draft: RATET(27)'s own bit budget shrinks as `L` grows (Annex F/G), so a
+//! test's own first draft: TIA-102.BABA's own bit budget shrinks as `L` grows (Annex F/G), so a
 //! quantizer value that looks moderate at low `L` can be wildly out of range at high `L` (e.g. `20`
 //! against a 3-bit field meant to span `0..8`), and `dequantize_uniform`'s own bin-center formula
 //! has no bounds check -- both the float and fixed sides apply it identically, so an out-of-range

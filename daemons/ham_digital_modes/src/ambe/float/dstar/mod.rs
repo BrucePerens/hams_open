@@ -1,6 +1,6 @@
 //! D-STAR's own AMBE variant: a 72-bit, 9-byte frame every 20ms (3600 total / 2400 speech / 1200
 //! FEC bps), an older and structurally different generation from the P25 half/full-rate codec in
-//! `super::ratet27` (built from the published TIA-102.BABA text). DVSI has never published a spec for
+//! `super::tia_102_baba` (built from the published TIA-102.BABA text). DVSI has never published a spec for
 //! this D-STAR variant; its real frame structure and quantizer tables here are reverse-derived from
 //! mbelib (<https://github.com/szechyjs/mbelib>, ISC-licensed, a real working open-source decoder),
 //! confirmed against two independent primary sources for the on-chip configuration: DVSI's own

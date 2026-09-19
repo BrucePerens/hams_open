@@ -3,9 +3,9 @@
 //! section 11.2, Eq. 117-126) -- see that module's own doc comment for the spec derivation and the
 //! `kchmck/imbe.rs` cross-check; this module only documents the *fixed-point-specific* choices.
 //!
-//! Lives under `fixed::general`, not `fixed::ratet27`, on purpose: this synthesis stage is
+//! Lives under `fixed::general`, not `fixed::tia_102_baba`, on purpose: this synthesis stage is
 //! mode-independent MBE (mbelib itself shares one `mbe_synthesizeSpeech` across every mode), and
-//! RATET(27) is only the first mode with a float reference to port from -- AMBE+2 half-rate/D-STAR
+//! TIA-102.BABA is only the first mode with a float reference to port from -- AMBE+2 half-rate/D-STAR
 //! will reuse this unchanged once/if they grow their own synthesis.
 //!
 //! **Numeric design, decided before writing any arithmetic below**: the noise recurrence (Eq. 117)

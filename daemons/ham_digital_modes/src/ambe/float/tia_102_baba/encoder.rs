@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Streaming PCM-to-frame encoder for RATET(27): composes the spec's full pitch estimation (section 5.1:
+//! Streaming PCM-to-frame encoder for TIA-102.BABA: composes the spec's full pitch estimation (section 5.1:
 //! per-frame error function `E(P)`, look-back and look-ahead tracking, the initial-estimate decision, and
 //! quarter-sample refinement) with [`super::encode_frame`]'s own analysis/quantization/FEC pipeline.
 //!

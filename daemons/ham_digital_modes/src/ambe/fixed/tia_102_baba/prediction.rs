@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Fixed-point port of `ambe::float::tia_102_baba::prediction`'s decoder-side function
 //! (`reconstruct_log2_amplitude`) -- the encoder-side `prediction_residual` is not ported (encoding
-//! is out of scope for this decoder-focused port, same reasoning as RATET(27)'s pitch-estimation
+//! is out of scope for this decoder-focused port, same reasoning as TIA-102.BABA's pitch-estimation
 //! chain). `prediction_coefficient` is an exact table lookup (`L` only has 48 possible values,
 //! `9..=56`) rather than the float sibling's own piecewise formula, avoiding hand-transcribing Q16.16
 //! literals for a formula that's cheap to precompute exactly instead.

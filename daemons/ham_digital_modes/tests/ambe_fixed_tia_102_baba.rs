@@ -34,7 +34,7 @@ fn harmonics_count_from_b0_matches_the_float_sibling_exactly_for_every_b0() {
 }
 
 /// `L~` must stay within the spec's own documented range across the full real `b_hat_0` domain --
-/// the same sanity property `ambe::float::ratet27`'s own tests hold the floating-point side to.
+/// the same sanity property `ambe::float::tia_102_baba`'s own tests hold the floating-point side to.
 #[test]
 fn harmonics_count_from_b0_stays_within_the_specs_own_9_to_56_range() {
     for b0 in 0..=B0_MAX {

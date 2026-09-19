@@ -53,7 +53,7 @@ fn concat_snr(pairs: &[(Vec<f64>, Vec<f64>)]) -> f64 {
 /// (the frames that hold no voiced harmonics of significant level agree at 62-66 dB), 22.8 dB over the
 /// whole 40 frames. The multi-frame decline is *not* fixed-point synthesis arithmetic: see
 /// `speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic` below, which removes the
-/// pitch difference and recovers the 40 dB bar. The cause is the same as for RATET(27)
+/// pitch difference and recovers the 40 dB bar. The cause is the same as for TIA-102.BABA
 /// (`ambe_fixed_tia_102_baba_decode.rs`): the fixed decoder's pitch comes from a Q16.16 table (relative
 /// error up to ~0.1% at the lowest pitches), and a harmonic's phase accumulator multiplies that error
 /// by the harmonic number and integrates it every sample.

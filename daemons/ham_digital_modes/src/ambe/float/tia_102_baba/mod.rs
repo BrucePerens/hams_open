@@ -4,7 +4,7 @@
 //! frame (four Golay(23,12) + three Hamming(15,11) blocks plus 7 raw bits). This module tree implements that
 //! standard from the published document.
 //!
-//! **Naming history**: it was previously called `ratet27`, after DVSI's rate-table index 27 (7200/4400/2800 bps) that
+//! **Naming history**: it was previously called `tia_102_baba`, after DVSI's rate-table index 27 (7200/4400/2800 bps) that
 //! was assumed to be this codec. Live tests showed the chip's `RATET(27)` / "P25 FEC" setting is a different,
 //! DVSI-proprietary AMBE-family codec (log-scale pitch index, non-TIA amplitude fields, non-OTA interleave); its
 //! framing lives in [`crate::ambe::dvsi_p25fec`]. Where older comments here say "RATET(27)" they mean this codec by

@@ -212,7 +212,7 @@ impl Default for AnalysisState {
 }
 
 /// Per-harmonic voicing and amplitudes for one frame at an already-quantized pitch `w0` (rad/sample) with `l`
-/// harmonics, reusing RATET(27)'s analysis (`vuv::determine_voicing`, `spectral_amplitude`), whose amplitude scale is
+/// harmonics, reusing TIA-102.BABA's analysis (`vuv::determine_voicing`, `spectral_amplitude`), whose amplitude scale is
 /// the one this crate's shared synthesis expects. Both returned vectors are 1-indexed (index 0 unused), length
 /// `l + 1`.
 pub fn analyze_at_pitch(

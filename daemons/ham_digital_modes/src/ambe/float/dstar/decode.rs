@@ -299,7 +299,7 @@ pub enum DequantizedFrame {
 /// mbelib's real, working decoder actually uses). Extracted as its own function (previously inlined
 /// directly in [`dequantize`]) so `examples/ambe_fixed_generate_dstar_tables.rs` can generate a
 /// fixed-point table by calling this real function directly, the same reasoning
-/// `tia_102_baba::parameter_encoding::dequantize_fundamental_frequency` already established for RATET(27).
+/// `tia_102_baba::parameter_encoding::dequantize_fundamental_frequency` already established for TIA-102.BABA.
 pub fn f0_from_b0(b0: u32) -> f64 {
     F0_CHIP_SCALE * 2f64.powf(-4.311767578125 - 2.1336e-2 * (b0 as f64 + 0.5))
 }

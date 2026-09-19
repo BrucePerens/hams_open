@@ -91,7 +91,7 @@ pub fn phase_from_pi_multiple_q16(x_q16: i32) -> u32 {
 const PI_Q48: i128 = 884_279_719_003_555;
 
 /// Converts a Q16.16 angle in radians directly into this module's own `u32` phase convention, for
-/// callers whose own formula is a genuine radian angle (e.g. `omega0 * l`, RATET(27)'s own
+/// callers whose own formula is a genuine radian angle (e.g. `omega0 * l`, TIA-102.BABA's own
 /// enhancement-stage phase term) rather than a clean multiple of `pi`. `phase = angle / (2*pi) *
 /// 2^32 = angle * 2^15 / pi`; computed against [`PI_Q48`] (not `fixed_ops::PI_Q16_16` -- see that
 /// constant's own doc comment for why) in a wide enough integer type before ever reducing mod `2^32`,

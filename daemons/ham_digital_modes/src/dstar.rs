@@ -6,7 +6,7 @@
 //! (P25's own, built from TIA-102.BABA) with Project 25. That was wrong, not merely superseded --
 //! two independent primary sources (DVSI's own USB-3000 Manual and G4KLX's AMBETools source) confirm
 //! D-STAR's real on-chip configuration is a 72-bit frame (3600/2400/1200 bps), not
-//! [`crate::ambe::float::ratet27`]'s 144-bit one (7200/4400/2800 bps, an exact match to DVSI's own
+//! [`crate::ambe::float::tia_102_baba`]'s 144-bit one (7200/4400/2800 bps, an exact match to DVSI's own
 //! rate-table index 27). D-STAR's own
 //! vocoder is implemented separately, in [`crate::ambe::float::dstar`] -- see that module's own doc comment
 //! for the full frame structure and provenance, and
