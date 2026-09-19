@@ -4,14 +4,16 @@
 //! ([`crate::ambe::float::mbe_encode::analyze_at_pitch`]), then the inverse of this mode's dequantization chain
 //! ([`crate::ambe::float::mbe_encode::quantize_speech`]). A mirror of the decoder's own state is advanced by
 //! actually dequantizing each emitted frame, so the encoder's predictions always match what a decoder will hold.
-//! Emits logical 72-bit frames (see [`super::interleave::frame_to_wire_bytes`] for the chip's wire layout).
+//! Frames whose 20 ms slot is a DTMF digit or a sustained single tone are emitted as tone frames (see
+//! [`crate::ambe::float::tone_detect`]), as the chip's own detector does. Emits logical 72-bit frames (see [`super::interleave::frame_to_wire_bytes`] for the chip's wire layout).
 
 use super::decode::{dequantize, DStarDecoderState, RawParameters};
-use super::encode::{build_frame, pack_raw_parameters};
+use super::encode::{build_frame, build_tone_frame, pack_raw_parameters};
 use super::quantize::quantize_pitch;
 use super::tables;
 use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
 use crate::ambe::float::ratet27::encoder::FrameAnalyzer;
+use crate::ambe::float::tone_detect::{detect_tone, volume_for_amplitude, DetectedTone};
 
 pub struct Encoder {
     analyzer: FrameAnalyzer,
@@ -35,6 +37,13 @@ impl Encoder {
     /// The next 72-bit logical frame if enough lookahead has been pushed.
     pub fn next_frame(&mut self) -> Option<u128> {
         let a = self.analyzer.next_analysis()?;
+        if let Some(det) = detect_tone(&a.slot_samples) {
+            let index = match det.tone {
+                DetectedTone::Dtmf { row, col } => 128 + row as u32 + 4 * col as u32,
+                DetectedTone::Single { index, .. } => index,
+            };
+            return Some(build_tone_frame(index, volume_for_amplitude(det.amplitude)));
+        }
         let b0 = quantize_pitch(a.omega0_hat);
         let l = tables::L_TABLE[b0 as usize];
         let f0 = super::decode::f0_from_b0(b0);
@@ -121,5 +130,33 @@ mod tests {
             }
         }
         assert!(checked >= 15);
+    }
+
+    #[test]
+    fn dtmf_and_single_tones_are_emitted_as_tone_frames_with_the_chips_index_and_level() {
+        use crate::ambe::float::dstar::decode::{classify_b0, decode_tone, extract_raw_parameters, FrameKind};
+        let sine = |freqs: &[f64], amp: f64| -> Vec<f64> {
+            (0..160 * 12)
+                .map(|i| freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()).sum())
+                .collect()
+        };
+        // Measured on the chip: DTMF '5' (770 + 1336 Hz) at amplitude 4000 -> index 133, volume 186;
+        // 1 kHz at amplitude 12000 -> index 32, volume 213.
+        for (signal, index, volume) in [(sine(&[770.0, 1336.0], 4000.0), 133u32, 186u32), (sine(&[1000.0], 12000.0), 32, 213)] {
+            let mut enc = Encoder::new();
+            enc.push_samples(&signal);
+            let mut frames = Vec::new();
+            while let Some(f) = enc.next_frame() {
+                frames.push(f);
+            }
+            assert!(frames.len() >= 8);
+            for &f in &frames {
+                let d = parse_frame(f).d;
+                assert_eq!(classify_b0(extract_raw_parameters(d).b0), FrameKind::Tone);
+                let t = decode_tone(d);
+                assert_eq!(t.index, index);
+                assert!((t.volume as i32 - volume as i32).abs() <= 1, "volume {} vs {}", t.volume, volume);
+            }
+        }
     }
 }

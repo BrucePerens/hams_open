@@ -5,11 +5,29 @@
 //! (convert with [`super::interleave::frame_to_interleaved`] for the chip's wire layout).
 
 use super::decode::{dequantize, DecoderState, RawParameters};
-use super::encode::build_frame;
+use super::encode::{build_frame, build_tone_frame};
 use super::quantize::quantize_pitch;
 use super::tables;
 use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
 use crate::ambe::float::ratet27::encoder::FrameAnalyzer;
+use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
+
+/// The 12-bit level field a chip encoder writes for a tone of per-tone amplitude `amplitude` (measured 1 kHz sine
+/// captures: amplitude 250/500/1000/2000/4000/8000/16000 -> 0x715/0x725/0xea2/0xed2/0xf12/0xf62/0xfa2). The chip's own
+/// decoder ignores this field, so the mapping is by interpolation in log2(amplitude) over those points.
+fn amplitude_field(amplitude: f64) -> u16 {
+    const POINTS: [(f64, f64); 7] = [(250.0, 0x715 as f64), (500.0, 0x725 as f64), (1000.0, 0xea2 as f64), (2000.0, 0xed2 as f64), (4000.0, 0xf12 as f64), (8000.0, 0xf62 as f64), (16000.0, 0xfa2 as f64)];
+    let x = amplitude.max(1.0).log2();
+    let (mut lo, mut hi) = (POINTS[0], POINTS[POINTS.len() - 1]);
+    for w in POINTS.windows(2) {
+        if x >= w[0].0.log2() && x <= w[1].0.log2() {
+            (lo, hi) = (w[0], w[1]);
+            break;
+        }
+    }
+    let t = ((x - lo.0.log2()) / (hi.0.log2() - lo.0.log2())).clamp(0.0, 1.0);
+    (lo.1 + t * (hi.1 - lo.1)).round() as u16
+}
 
 pub struct Encoder {
     analyzer: FrameAnalyzer,
@@ -33,6 +51,13 @@ impl Encoder {
     /// The next 72-bit logical frame if enough lookahead has been pushed.
     pub fn next_frame(&mut self) -> Option<u128> {
         let a = self.analyzer.next_analysis()?;
+        if let Some(det) = detect_tone(&a.slot_samples) {
+            let tone_idx = match det.tone {
+                DetectedTone::Dtmf { row, col } => super::decode::dtmf_tone_idx(row, col),
+                DetectedTone::Single { index, .. } => index as u8,
+            };
+            return Some(build_tone_frame(tone_idx, false, amplitude_field(det.amplitude)));
+        }
         let b0 = quantize_pitch(a.omega0_hat);
         let l = tables::L_TABLE[b0 as usize];
         let f0 = tables::W0_TABLE[b0 as usize];
@@ -117,5 +142,27 @@ mod tests {
             }
         }
         assert!(checked >= 15);
+    }
+
+    #[test]
+    fn dtmf_and_single_tones_are_emitted_as_tone_frames() {
+        use crate::ambe::float::ambe_plus_2::decode::{classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx, ToneIdentity};
+        let sine = |freqs: &[f64], amp: f64| -> Vec<f64> {
+            (0..160 * 12)
+                .map(|i| freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()).sum())
+                .collect()
+        };
+        let mut enc = Encoder::new();
+        enc.push_samples(&sine(&[770.0, 1336.0], 4000.0)); // DTMF 5
+        while let Some(f) = enc.next_frame() {
+            let idx = decode_tone_idx(parse_frame(f).d).expect("tone frame");
+            assert_eq!(dtmf_digit_from_tone_idx(idx), Some((1, 1)));
+        }
+        let mut enc = Encoder::new();
+        enc.push_samples(&sine(&[1000.0], 4000.0));
+        while let Some(f) = enc.next_frame() {
+            let idx = decode_tone_idx(parse_frame(f).d).expect("tone frame");
+            assert!(matches!(classify_tone_idx(idx), ToneIdentity::SingleTone { hz } if (hz - 1000.0).abs() < 16.0));
+        }
     }
 }

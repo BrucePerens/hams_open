@@ -232,6 +232,12 @@ pub fn dtmf_digit_from_tone_idx(tone_idx: u8) -> Option<(u8, u8)> {
     }
 }
 
+/// The inverse of [`dtmf_digit_from_tone_idx`]: the `TONE_IDX` (`0x80 | nibble`) for a DTMF `(row, col)`.
+pub fn dtmf_tone_idx(row: u8, col: u8) -> u8 {
+    const NIBBLE: [[u8; 4]; 4] = [[0x1, 0x2, 0x3, 0xA], [0x4, 0x5, 0x6, 0xB], [0x7, 0x8, 0x9, 0xC], [0xE, 0x0, 0xF, 0xD]];
+    0x80 | NIBBLE[row as usize & 3][col as usize & 3]
+}
+
 /// DVSI's own `Call Progress` sub-range of `TONE_IDX` (`0xA0`/`0xA1`/`0xA2`/`0xFF`, Table 104).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallProgressTone {
@@ -494,6 +500,15 @@ mod tests {
     /// used by exactly one parameter, exactly once (`mod.rs`'s own doc comment claims this
     /// explicitly, unlike D-STAR's own scatter which leaves one bit unused). A missed or doubled
     /// index here is the exact class of transcription bug the D-STAR build caught twice.
+    #[test]
+    fn dtmf_tone_idx_inverts_dtmf_digit_from_tone_idx() {
+        for row in 0..4u8 {
+            for col in 0..4u8 {
+                assert_eq!(dtmf_digit_from_tone_idx(dtmf_tone_idx(row, col)), Some((row, col)));
+            }
+        }
+    }
+
     #[test]
     fn scatter_covers_every_bit_of_d_exactly_once() {
         // Build a d[] where bit i (MSB-relative, matching bits()/bit()'s own convention) is set

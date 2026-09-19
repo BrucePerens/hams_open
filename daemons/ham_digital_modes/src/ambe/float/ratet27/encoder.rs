@@ -48,6 +48,9 @@ pub struct FrameAnalysis {
     pub omega0_hat: f64,
     pub initial_pitch_error: f64,
     pub refinement: RefinementFrame,
+    /// The 160 input samples of this frame's own 20 ms slot (`k*160..(k+1)*160`, zero padded past the input's end), for
+    /// tone detection.
+    pub slot_samples: Vec<f64>,
 }
 
 /// Streaming pitch analysis shared by every mode's encoder: buffers input, runs the spec's two-frame lookahead
@@ -144,6 +147,8 @@ impl FrameAnalyzer {
         let center = self.center(k) - self.trimmed;
         let refinement = RefinementFrame::new(&self.raw, center);
         let omega0_hat = refine_pitch(&refinement, p_initial);
+        let slot_start = LEAD + k * FRAME_SAMPLES - self.trimmed;
+        let slot_samples = self.raw[slot_start..slot_start + FRAME_SAMPLES].to_vec();
 
         self.prev2 = self.prev1;
         self.prev1 = (p_initial, e_initial);
@@ -158,7 +163,7 @@ impl FrameAnalyzer {
             self.raw.drain(..drop);
             self.trimmed += drop;
         }
-        Some(FrameAnalysis { omega0_hat, initial_pitch_error: e_initial, refinement })
+        Some(FrameAnalysis { omega0_hat, initial_pitch_error: e_initial, refinement, slot_samples })
     }
 }
 
