@@ -78,6 +78,7 @@
 
 pub mod decode;
 pub mod encode;
+pub mod encoder;
 pub mod interleave;
 pub mod quantize;
 pub mod synthesis;

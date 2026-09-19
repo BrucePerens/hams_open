@@ -63,3 +63,7 @@ required-features = ["ambe_plus_2"]
 [[example]]
 name = "ambe_plus_2_dvsi_reference_replay"
 required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_plus_2_chip_encode_compare"
+required-features = ["ambe_plus_2"]
