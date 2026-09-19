@@ -87,3 +87,23 @@ pub fn exp2_q16(y: i32) -> i32 {
         ((interp + (1i64 << (shift - 1))) >> shift) as i32
     }
 }
+
+/// `round(log2(e) * 65536)` -- `e`'s own base-2 logarithm, the constant that converts a natural
+/// exponent into a base-2 one: `exp(x) = 2^(x * log2(e))`.
+const LOG2_E_Q16_16: i32 = 94548;
+
+/// `exp(x)` in Q16.16, for a Q16.16 `x` -- via `exp2_q16(x * log2(e))`, since this crate's own
+/// primitive table is base-2. Inherits [`exp2_q16`]'s own documented precision floor and saturation
+/// behavior at extreme magnitudes.
+pub fn exp_q16(x_q16: i32) -> i32 {
+    exp2_q16(super::fixed_ops::mul_q16(x_q16, LOG2_E_Q16_16))
+}
+
+/// `x^p` in Q16.16, for a positive Q16.16 `x` and a Q16.16 exponent `p` (which need not be an
+/// integer) -- via `exp2_q16(p * log2_q16(x))`, the standard identity for a fractional power. `x`
+/// must be positive (as with [`log2_q16`], a non-positive `x` returns `i32::MIN`'s own log2 sentinel
+/// routed through `exp2_q16`, which saturates it to `0` -- `0^p` for `p > 0`, a reasonable answer,
+/// though this function does not special-case `p <= 0` separately).
+pub fn powf_q16(x_q16: i32, p_q16: i32) -> i32 {
+    exp2_q16(super::fixed_ops::mul_q16(p_q16, log2_q16(x_q16)))
+}

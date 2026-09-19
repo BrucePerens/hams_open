@@ -73,6 +73,16 @@ pub fn phase_from_pi_multiple_q16(x_q16: i32) -> u32 {
     ((x_q16 as i64).wrapping_mul(1i64 << 31) >> 16) as u32
 }
 
+/// Converts a Q16.16 angle in radians directly into this module's own `u32` phase convention, for
+/// callers whose own formula is a genuine radian angle (e.g. `omega0 * l`, RATET(27)'s own
+/// enhancement-stage phase term) rather than a clean multiple of `pi`. `phase = angle / (2*pi) *
+/// 2^32 = angle * 2^31 / pi`; computed as one exact integer division by [`super::fixed_ops::
+/// PI_Q16_16`] in a wide enough integer type before ever reducing mod `2^32`, so the final
+/// truncating cast to `u32` is the correct wraparound, not a source of extra error.
+pub fn phase_from_radians_q16(angle_q16: i32) -> u32 {
+    (((angle_q16 as i64) << 31) / (super::fixed_ops::PI_Q16_16 as i64)) as u32
+}
+
 // No `#[cfg(test)]` module here: any test comparing this module's output against `f64::sin`/`cos`
 // needs floating point to compute the expected value, which would put `f64` tokens inside
 // `src/ambe/fixed` and defeat the whole-tree "zero floating point" check this crate enforces (see

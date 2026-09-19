@@ -9,31 +9,32 @@
 //! coder's own recursion can compound arbitrary synthetic inputs into values a real, self-consistent
 //! encoded stream never reaches).
 //!
-//! **A real, disclosed limitation of this validator, not of the fixed-point port**: RATET(27)'s
-//! `should_mute_frame`/`should_repeat_frame` thresholds fire on almost every one of the 3320 real
-//! captured frames in this run (`Decoded (non-repeat/mute): 3`), leaving a much smaller live sample
-//! than the AMBE+2 half-rate/D-STAR validators get. This tracks back to `error_estimation.rs`'s own
-//! `errors.rate` climbing past its `0.0875` mute threshold and staying there (its own `0.95`-decay
-//! recursion is slow to recover), which in turn means the Golay/Hamming-corrected error counts this
-//! validator's own `wire_bytes_to_c` extraction produces are higher than a genuinely clean decode
-//! should show -- most plausibly a wire/dibit-extraction subtlety specific to this validator (the
-//! same Annex H dibit-deinterleave path `examples/ambe_frame_diagnose.rs`'s own method 6 uses),
-//! **not** a defect in `ambe::fixed::ratet27::reconstruct`/`prediction` themselves, which are
-//! independently verified correct against in-range synthetic values in
-//! `tests/ambe_fixed_ratet27_reconstruct.rs` and matched the float sibling exactly on all 3 real
-//! frames this validator did manage to decode (worst Ml relative error 0.08%). Left as a known,
-//! disclosed gap rather than silently accepted or hidden -- a future session should compare this
-//! validator's own per-frame corrected-error counts against `examples/ambe_chip_validate_ratet27.rs`
-//! (or `p25_ratet27_capture_real_speech.rs`)'s own reported real-speech error rate under the same
-//! `RATEP_P25_FEC` config to confirm whether the extraction itself needs fixing, before trusting a
-//! larger sample from this validator.
+//! **A previously-disclosed limitation of this validator, now fixed**: an earlier version of
+//! `wire_bytes_to_c` built 72 "dibit symbols" from the raw wire bits and deinterleaved them via
+//! `interleave::deinterleave_from_dibit_symbols` -- the domain a real over-the-air P25 C4FM dibit
+//! stream uses, not the DVSI chip's own UDP `CHAND` byte layout this validator actually talks to.
+//! That wrong domain corrupted `u_hat_1..u_hat_6`/`b_hat_0` on nearly every frame, driving
+//! `errors.rate` past the `0.0875` mute threshold almost immediately (`Decoded: 3/3320`).
+//! `wire_bytes_to_c` now extracts each block's raw pre-FEC codeword directly via
+//! `ratet27_wire_format::block_wire_members` -- the same convention
+//! `ratet27_fec::decode_block`/`ratet27_frame::decode_frame` use and that
+//! `examples/ambe_chip_validate_ratet27.rs`'s own zero-corrected-error PASS harness already confirms
+//! against the live chip -- which recovers `Decoded: 3291/3320` (worst Ml relative error observed
+//! well under the 1% tolerance). The remaining ~29 non-decoded frames are `should_mute_frame`/
+//! `should_repeat_frame`/out-of-range-`b0` outcomes on real, individual frames (leading/trailing
+//! silence and genuine repeats), not a systemic extraction defect.
+//!
+//! Also prints the real chip-derived `R_M0` (spectral energy, Eq. 105) range across all decoded
+//! frames -- min=9.2, max=4.0e8, mean=8.5e5 in one representative run -- which is the evidence
+//! behind `ambe::fixed::ratet27::enhancement`'s own log-domain design (see that module's doc
+//! comment): 8 orders of magnitude rules out any single linear Q16.16 rescale.
 //!
 //! Usage: `cargo run --release --example ambe_fixed_chip_validate_ratet27 -- <host:port>`
 
 use ham_digital_modes::ambe::fixed::ratet27::prediction::INITIAL_L_HAT_PREV as FIXED_INITIAL_L_HAT_PREV;
 use ham_digital_modes::ambe::fixed::ratet27::reconstruct::reconstruct_spectral_amplitudes_q16;
 use ham_digital_modes::ambe::float::ratet27::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::ratet27::interleave::deinterleave_from_dibit_symbols;
+use ham_digital_modes::ambe::float::ratet27::ratet27_wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -97,21 +98,44 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
     data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
 }
-/// The confirmed-working Annex H dibit-deinterleave path (`examples/ambe_frame_diagnose.rs`'s own
-/// method 6): MSB-first bits per byte, paired into 72 dibit symbols, deinterleaved via this crate's
-/// own real table.
+/// Extracts `decode_parameters`'s own `c_hat_0..c_hat_7` domain -- the 8 raw, pre-FEC-decode code
+/// vectors -- directly from the DVSI chip's raw UDP wire bytes (MSB-first bits per byte, the same
+/// convention `ratet27_fec::decode_block`/`ratet27_frame::decode_frame` use and that
+/// `ambe_chip_validate_ratet27.rs`'s own zero-corrected-error PASS harness already confirms against
+/// the live chip). **This replaces an earlier, wrong extraction** that instead paired wire bits into
+/// 72 "dibit symbols" and ran them through `interleave::deinterleave_from_dibit_symbols` -- that
+/// function's own domain is a real over-the-air P25 C4FM dibit stream, a genuinely different wire
+/// convention from the DVSI chip's own UDP `CHAND` byte layout this validator actually talks to.
+/// Using the wrong domain corrupted `u_hat_1..u_hat_6`/`b_hat_0` on nearly every frame, which is why
+/// this validator used to see almost every frame hit `should_mute_frame`/`should_repeat_frame`
+/// (`Decoded: 3/3320`) rather than decoding normally.
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
-    let mut msb_bits = [false; 144];
+    let mut wire_frame_bits = [false; 144];
     for (byte_idx, &byte) in bytes.iter().enumerate() {
         for b in 0..8 {
-            msb_bits[byte_idx * 8 + b] = (byte >> (7 - b)) & 1 == 1;
+            wire_frame_bits[byte_idx * 8 + b] = (byte >> (7 - b)) & 1 == 1;
         }
     }
-    let mut symbols = [(false, false); 72];
-    for (i, sym) in symbols.iter_mut().enumerate() {
-        *sym = (msb_bits[i * 2], msb_bits[i * 2 + 1]);
-    }
-    deinterleave_from_dibit_symbols(symbols)
+    let raw = |block: Block| -> u32 {
+        let members = block_wire_members(block);
+        let mut received: u32 = 0;
+        for (offset, &wire) in members.iter().enumerate() {
+            if wire_frame_bits[wire] {
+                received |= 1 << (members.len() - 1 - offset);
+            }
+        }
+        received
+    };
+    [
+        raw(Block::Golay { index: 0 }),
+        raw(Block::Golay { index: 1 }),
+        raw(Block::Golay { index: 2 }),
+        raw(Block::Golay { index: 3 }),
+        raw(Block::Hamming { index: 0 }),
+        raw(Block::Hamming { index: 1 }),
+        raw(Block::Hamming { index: 2 }),
+        raw(Block::Raw),
+    ]
 }
 
 fn main() {
@@ -141,6 +165,10 @@ fn main() {
     let mut total_frames = 0usize;
     let mut decoded_frames = 0usize;
     let mut worst_ml_rel_err = 0.0f64;
+    let mut r_m0_min = f64::INFINITY;
+    let mut r_m0_max = f64::NEG_INFINITY;
+    let mut r_m0_sum = 0.0f64;
+    let mut non_decoded_indices: Vec<usize> = Vec::new();
     let mut hard_failures: Vec<String> = Vec::new();
 
     for path in speech_files {
@@ -166,6 +194,12 @@ fn main() {
             match float_decoder.decode_parameters(c) {
                 Some(FrameOutcome::Decoded(params)) => {
                     decoded_frames += 1;
+                    let r_m0 = ham_digital_modes::ambe::float::ratet27::enhancement::energy(
+                        &params.reconstructed_amplitudes,
+                    );
+                    r_m0_min = r_m0_min.min(r_m0);
+                    r_m0_max = r_m0_max.max(r_m0);
+                    r_m0_sum += r_m0;
                     let gain_values: [u32; 5] = std::array::from_fn(|idx| params.bits.gain_vector[idx].0);
                     let higher_order_values: Vec<u32> =
                         params.bits.higher_order.iter().map(|&(v, _)| v).collect();
@@ -222,13 +256,23 @@ fn main() {
                     }
                 }
                 Some(FrameOutcome::Repeat) | Some(FrameOutcome::Mute) | None => {
-                    // Not this validator's concern -- no new reconstruction happens on these paths.
+                    non_decoded_indices.push(i);
                 }
             }
         }
     }
 
     println!("Total real chip frames: {total_frames}, Decoded (non-repeat/mute): {decoded_frames}");
+    println!(
+        "Real R_M0 (energy) range over decoded frames: min={r_m0_min:.1} max={r_m0_max:.1} mean={:.1}",
+        r_m0_sum / decoded_frames as f64
+    );
+    println!(
+        "Non-decoded frame indices (per-file, {} total): {:?}{}",
+        non_decoded_indices.len(),
+        &non_decoded_indices[..non_decoded_indices.len().min(40)],
+        if non_decoded_indices.len() > 40 { ", ..." } else { "" }
+    );
     println!("Worst Ml relative error observed: {worst_ml_rel_err:.6} (tolerance {ML_RELATIVE_TOLERANCE})");
     if hard_failures.is_empty() {
         println!(

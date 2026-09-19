@@ -21,7 +21,7 @@ use super::trig::cos_pi_frac;
 /// (mbelib's real `.65` literal, `AMBE_CHIP_VALIDATION_FINDINGS.md`'s own transcription history).
 const POINT_65_Q16_16: i64 = 42598;
 /// `round(0.2046 * 65536)` -- the unvoiced scaling constant (mbelib's real `unvc` formula).
-const POINT_2046_Q16_16: i32 = 13411;
+const POINT_2046_Q16_16: i32 = 13409;
 
 /// The nine raw parameter indices needed by [`dequantize_speech`] -- `b0` itself is not included
 /// since the caller has already used it to resolve `l`/`w0` before calling this function.
