@@ -11,10 +11,12 @@ from . import test_request_context
 from . import test_ui_tours
 from . import test_tunnel_daemon
 from . import test_tunnel_provisioning_security
+from . import test_tunnel_multi_website
 from . import test_waf_management
 from . import test_hooks
 from . import test_view_rendering_audit_cluster
 from . import test_bridge_and_misc
 from . import test_domain_custom_hostname
+from . import test_hostname_pending_delete
 from . import test_tenant_key
 from . import tunnel_simulator

@@ -36,3 +36,5 @@ access_cloudflare_tenant_key_admin,cloudflare.tenant.key admin,model_cloudflare_
 access_cloudflare_tenant_key_purge_svc,cloudflare.tenant.key purge svc,model_cloudflare_tenant_key,cloudflare.group_cloudflare_purge,1,0,1,0
 access_cloudflare_tenant_key_waf_svc,cloudflare.tenant.key waf svc,model_cloudflare_tenant_key,cloudflare.group_cloudflare_waf,1,0,1,0
 access_cloudflare_tenant_key_tunnel_svc,cloudflare.tenant.key tunnel svc,model_cloudflare_tenant_key,cloudflare.group_cloudflare_tunnel,1,0,1,0
+access_cloudflare_hostname_pending_delete_admin,cloudflare.hostname.pending.delete admin,model_cloudflare_hostname_pending_delete,base.group_system,1,1,1,1
+access_cloudflare_hostname_pending_delete_tunnel_svc,cloudflare.hostname.pending.delete tunnel svc,model_cloudflare_hostname_pending_delete,cloudflare.group_cloudflare_tunnel,1,1,1,1
