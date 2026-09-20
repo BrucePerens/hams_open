@@ -472,4 +472,13 @@ def delete_custom_hostname(hostname_id, token, zone_id):
     )
     if response and response.status_code == 200:
         return True, "Custom hostname deleted successfully."
+    # 404 means the hostname is not on the zone -- someone removed it in the
+    # Cloudflare dashboard, or an earlier attempt succeeded and its response
+    # was lost. Either way the caller's goal ("this hostname must not exist")
+    # is already met, so reporting it as a failure would make
+    # cloudflare.hostname.pending.delete retry forever against something that
+    # is not there. _make_request deliberately returns the 404 response rather
+    # than raising, which is what makes this distinguishable at all.
+    if response is not None and response.status_code == 404:
+        return True, "Custom hostname was already gone."
     return False, "API Error"

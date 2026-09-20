@@ -118,11 +118,15 @@ class CloudflareRoutingDomain(models.Model):
                     record.cloudflare_hostname_id, token, zone_id
                 )
                 if not success:
-                    # The local record is still deleted by unlink() (whether a failed
-                    # Cloudflare delete should block that is an open product question,
-                    # night_shift_questions/open/cloudflare-hostname-delete-failure-block-or-proceed).
-                    # Until then the failure must at least be visible to the operator, since
-                    # the orphaned hostname on Cloudflare has no local record left to retry from.
+                    # ANSWERED 2026-09-19 (Bruce, "3 sounds good to me" --
+                    # night_shift_questions/answered/cloudflare-hostname-delete-
+                    # failure-block-or-proceed-05a5144b.md): the local record is
+                    # still deleted by unlink(), because blocking it would make a
+                    # domain undeletable whenever a token is revoked for good --
+                    # but the orphaned hostname now gets a pending-delete record a
+                    # cron retries, instead of only a log line nothing revisits.
+                    # The WARNING stays: the operator should still see the failure
+                    # at the moment it happens, not only in a backend list.
                     _logger.warning(
                         "Cloudflare custom hostname delete FAILED for %s (hostname id %s): %s. "
                         "The hostname may still be active on the Cloudflare zone and must be "
@@ -130,6 +134,9 @@ class CloudflareRoutingDomain(models.Model):
                         record.name,
                         record.cloudflare_hostname_id,
                         message,
+                    )
+                    self.env["cloudflare.hostname.pending.delete"]._record_failed_delete(
+                        record.name, record.cloudflare_hostname_id, website, message
                     )
 
     # [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]

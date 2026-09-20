@@ -88,6 +88,8 @@ The module enforces strict website-level isolation. Users can only manage Cloudf
 
 * [Secure Edge Bridging via Tunnels](docs/stories/tunnels.md) `[@ANCHOR: story_tunnels]`
 
+* [A custom hostname Cloudflare would not let go](docs/stories/hostname_pending_deletes.md)
+
 * [CAPTCHA Verification with Turnstile](docs/stories/turnstile_verification.md) `[@ANCHOR: story_turnstile]`
 
 * [Automated WAF IP Banning](docs/stories/waf_banning.md) `[@ANCHOR: story_waf_banning]`

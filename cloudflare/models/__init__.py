@@ -8,6 +8,7 @@ from . import config_backup
 from . import config_manager
 from . import domain
 from . import edge_context
+from . import hostname_pending_delete
 from . import ip_ban
 from . import ir_http
 from . import purge_queue
