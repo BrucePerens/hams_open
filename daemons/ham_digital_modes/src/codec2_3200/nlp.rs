@@ -351,9 +351,10 @@ const fn window_fits_i32(w: &[i64]) -> bool {
 /// (16- or 32-bit) fixed-point FFT would need is simply unnecessary at
 /// `i64`/`i128` width, and skipping it avoids the extra rounding error
 /// per-stage rescaling would otherwise cost.
-// [@ANCHOR: nlp:fft_fixed] -- namespaced: `fixed_fft.rs` defines its own,
-// unrelated `fft_fixed` (a different, general-purpose, variable-size,
-// phase-correct FFT used by envelope/synthesis/spectral_bridge). A bare
+// [@ANCHOR: nlp:fft_fixed] -- namespaced: `fixed_fft.rs` defines its own
+// `fft_fixed` (the test-only dense reference of the const-generic transform
+// this function now runs on, whose size-specialised entry points the
+// envelope/synthesis/spectral_bridge stages use). A bare
 // `fft_fixed` anchor here would silently collide with that one in any
 // repo-wide anchor index (per this crate's own documented, previously-hit
 // collision class -- see `hams_com/agents/skills/bug-hunt/SKILL.md`'s

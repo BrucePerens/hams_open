@@ -1047,13 +1047,17 @@ const fn quadrant_symmetric<const M: usize>(t: &[(i32, i32); M]) -> bool {
     true
 }
 
-const TW_512: [(i32, i32); FFT_ENC / 2] = narrow_twiddles(&TWIDDLES_512_Q23);
-const _: () = assert!(quadrant_symmetric(&TW_512));
+const TW_512_DATA: [(i32, i32); FFT_ENC / 2] = narrow_twiddles(&TWIDDLES_512_Q23);
+const _: () = assert!(quadrant_symmetric(&TW_512_DATA));
+// `static`, so there is exactly one copy in flash however many sites use it.
+static TW_512: [(i32, i32); FFT_ENC / 2] = TW_512_DATA;
 static BITREV_512: [u16; FFT_ENC] = build_bit_reverse_table::<FFT_ENC>();
 #[cfg(feature = "codec2_16k_bridge")]
-const TW_1024: [(i32, i32); FFT_ENC_SB / 2] = narrow_twiddles(&TWIDDLES_1024_Q23);
+const TW_1024_DATA: [(i32, i32); FFT_ENC_SB / 2] = narrow_twiddles(&TWIDDLES_1024_Q23);
 #[cfg(feature = "codec2_16k_bridge")]
-const _: () = assert!(quadrant_symmetric(&TW_1024));
+static TW_1024: [(i32, i32); FFT_ENC_SB / 2] = TW_1024_DATA;
+#[cfg(feature = "codec2_16k_bridge")]
+const _: () = assert!(quadrant_symmetric(&TW_1024_DATA));
 #[cfg(feature = "codec2_16k_bridge")]
 static BITREV_1024: [u16; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_SB>();
 
@@ -1694,7 +1698,7 @@ pub(crate) fn fft_fixed_sparse_prefix_forward<const N: usize, const NZ: usize>(
 /// table, which differs from the decoder's in the last bit at some entries
 /// and so must be kept) in this module's `(wr, wif)` layout, where the
 /// inverse direction applies `wi = -wif`.
-const PITCH_TW_512: [(i32, i32); FFT_ENC / 2] = {
+const PITCH_TW_512_DATA: [(i32, i32); FFT_ENC / 2] = {
     let src = &super::tables::NLP_TWIDDLES_Q23;
     let mut out = [(0i32, 0i32); FFT_ENC / 2];
     let mut i = 0;
@@ -1705,6 +1709,7 @@ const PITCH_TW_512: [(i32, i32); FFT_ENC / 2] = {
     }
     out
 };
+static PITCH_TW_512: [(i32, i32); FFT_ENC / 2] = PITCH_TW_512_DATA;
 
 /// The pitch estimator's 512-point transform: real input `input[0..NZ]`
 /// (natural order), everything else zero, the estimator's own twiddle table

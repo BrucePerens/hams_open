@@ -481,8 +481,8 @@ impl SpectralBridgeStateFixed {
         Self::default()
     }
 
-    /// Fixed-point `synthesize_subframe_sb`. `k_q23 = synth_k_q23(model.wo)`
-    /// is the *same* bin-index scaling `synthesize_subframe_fixed`
+    /// Fixed-point `synthesize_subframe_sb`. `k_q23 = model.k_q23` (`synth_k_q23(wo)`,
+    /// computed once in `ModelFixed::new`) is the *same* bin-index scaling `synthesize_subframe_fixed`
     /// already uses (built from the original `FFT_ENC`=512, not
     /// `FFT_ENC_SB` -- see this module's own doc comment on why the bin
     /// formula stays anchored to the original constant), just no longer

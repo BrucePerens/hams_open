@@ -50,7 +50,7 @@ rate specialisation: `f59f8fcd` for the 8 kHz run (also the host build's) and `9
 | --- | --- | --- |
 | Encode, 8 kHz | 644,149 | 507,554 |
 | Decode, 8 kHz, `codec2_16k_bridge` not compiled in | 1,317,832 | 712,234 |
-| Decode, 8 kHz, bridge compiled in (`--features bridge`, 16 kHz path not called) | 1,344,266 | 712,478 |
+| Decode, 8 kHz, bridge compiled in (`--features bridge`, 16 kHz path not called) | 1,344,266 (1,345,916 with per-stage marks on) | 712,478 |
 | Decode, 16 kHz (`decode_16k_fixed`, `--features decode16k`) | 2,498,432 | 1,211,040 |
 | Worst frame (encode / decode 8 kHz / decode 16 kHz) | 649,867 / 1,360,876 / 2,602,565 | 512,871 / 770,915 / 1,333,775 |
 | State (struct size), encoder / decoder | 11,424 / 9,592 (28,544 with the bridge) | unchanged |
@@ -77,7 +77,7 @@ constant of a monomorphised copy:
   512 / 320 of 1024 points). Its 64-bit multiply kernel uses unsigned first-quadrant twiddles (exactly
   rotating the data for the upper quadrant), so it needs no sign corrections; the switch to the checked
   128-bit path moved from a value sum of 2^37 to 2^39, the actual bound.
-* The forward transform of the 11 LPC coefficients is an instance specialised for exactly that input count: no
+* The forward transform of the 11 linear-prediction coefficients is an instance specialised for exactly that input count: no
   clearing, no permutation, and the runs of equal values that the first stages produce are written directly
   instead of being copied up stage by stage. The pitch estimator's 64-input transform uses the same machinery
   with its own twiddle table (which differs from the decoder's in the last bit at 124 entries, so it is kept).
@@ -85,7 +85,7 @@ constant of a monomorphised copy:
   harmonic bin scale (`k_q23`, a 64-bit division) is computed once per sub-frame in `ModelFixed`.
 * `log2_q23` / `exp2_q23` run in 32-bit arithmetic with a table leading-zero count (these cores have no
   count-leading-zeros instruction), swept bit for bit against the previous 64-bit forms by a test; the
-  LPC-spectrum magnitude and the pitch decimation filter use 32x32 products.
+  linear-prediction spectrum magnitude and the pitch decimation filter use 32x32 products.
 
 Tests added, none removed or weakened: the sparse inverse against the textbook `i128` transform (random and
 structured harmonic layouts, empty, overwritten and one-sided spectra, exactly at the kernel limit, both
@@ -94,8 +94,8 @@ dense-transform tests now run through const-generic helpers at both sizes (same 
 
 ### Flash footprint and the code-size versus speed trade
 
-Text plus read-only data, without the bench's 64,000 bytes of speech (the code figure includes the bench's own
-few KB of harness):
+Text plus read-only data, without the bench's 64,000 bytes of speech (the code figure still includes the bench's own
+harness, about 8 KB, the same in both columns):
 
 | | Before | After |
 | --- | --- | --- |
@@ -114,7 +114,7 @@ tables, the 512-point transform twiddles (2,048, was 4,096) and bit-reversal tab
 1024-point twiddles (4,096) and bit-reversal table (2,048) and the 2,560-byte overlap window.
 
 Code grows by 19 KB (8 kHz) because the transforms are unrolled per stage and per size (largest pieces: sparse
-inverse 8.9 KB at 512 points and 9.1 KB at 1024, pitch transform 7.1 KB, forward LPC transform 3.4 KB, the
+inverse 8.9 KB at 512 points and 9.1 KB at 1024, pitch transform 7.1 KB, forward linear-prediction transform 3.4 KB, the
 compact any-mode fallbacks about 2.7 KB each) while the tables shrink by 4.7 KB (8 kHz) and 11.2 KB (bridge
 image). Total growth is under the 20 percent warning level. Choice made: every stage of the hot instances is
 its own unrolled copy. Sharing one run-time-length loop for the stages up to length 16 saves 3 KB but costs

@@ -424,8 +424,8 @@ fn initial_lsps_q23() -> [i64; LPC_ORD] {
 /// `f32` anywhere except the final `i16` PCM boundary each sub-frame's
 /// own `synthesize_subframe_fixed` call already handles. No FFT planner
 /// field (unlike `Decoder`'s own `fft: Arc<dyn Fft<f32>>`) since
-/// `envelope::compute_harmonic_amplitudes_fixed` calls straight into
-/// `fixed_fft::fft_fixed`, no trait object needed.
+/// `envelope::compute_harmonic_amplitudes_fixed` and the synthesis stages call straight into
+/// the size-specialised transforms in `fixed_fft`, no trait object needed.
 pub struct DecoderFixed {
     prev_wo: i64,
     prev_voiced: bool,
