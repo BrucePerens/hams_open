@@ -25,8 +25,39 @@ _SO_PATH = os.path.join(
 )
 
 _lib = None
-_tunnel_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="CloudflareTunnelDaemon")
-_tunnel_future = None
+
+# The key every piece of per-tunnel state below is filed under when a caller
+# does not name one. tunnel.py always names one (the Cloudflare tunnel id); the
+# default exists for the direct, single-tunnel callers that predate multi-tunnel
+# support.
+DEFAULT_TUNNEL_KEY = "default"
+
+# One Odoo server fronting several websites is the common case, not the exotic
+# one (Bruce, 2026-09-19, answering
+# hams_com/night_shift_questions/answered/
+# cloudflare-tunnel-ensure-running-multi-tunnel-scope-ec6882e6.md: "one server
+# fronting multiple web sites is the common case ... So, make that work
+# correctly"), so the daemon state here is keyed PER TUNNEL instead of living in
+# a single module-level slot.
+#
+# This replaced ONE shared `ThreadPoolExecutor(max_workers=1)` and one
+# `_tunnel_future`. That was not merely single-tunnel by convention, it was
+# single-tunnel by construction: `run_tunnel()` never returns, so a second
+# `submit()` on that shared executor would have sat in its queue forever behind
+# the first tunnel and only ever started if the first one stopped -- a silent
+# failure, on a queue nothing inspects. One single-worker executor PER TUNNEL
+# has no such queue, while keeping each tunnel's own thread count bounded at one
+# (the reason this is an executor rather than a bare `threading.Thread`, which
+# the repo's burn list rejects outright as an unbounded-thread DOS vector).
+#
+# The KEY is the Cloudflare tunnel id: an opaque, non-secret identifier that is
+# safe to log and to name a thread after. The tunnel's RUN TOKEN is never a key,
+# never logged, and never stored -- it arrives as a Python argument and goes
+# straight into `.encode('utf-8')` for the C call, which is exactly as far as it
+# travelled before this change.
+_tunnel_executors = {}
+_tunnel_futures = {}
+_tunnel_stop_events = {}
 
 # [@ANCHOR: cloudflare:COMM_get_lib]
 def _get_lib():
@@ -49,7 +80,6 @@ def _get_lib():
     _lib.StopTunnel.argtypes = []
     return _lib
 
-_stop_event = threading.Event()
 # Bug fix (bug-hunt, review_tier 1, 2026-09-09): the "is it already running"
 # check and the submit() that starts a new one were two separate statements
 # with no lock between them -- two threads in this same process calling
@@ -58,35 +88,71 @@ _stop_event = threading.Event()
 # `_tunnel_future` as not-yet-running and both proceed to submit a
 # run_tunnel() loop, silently losing the first future's own reference and
 # queuing a second one behind it. This lock closes that same-process race.
+# It still does, per tunnel key, now that the single `_tunnel_future` has
+# become the `_tunnel_futures` dict: the check and the submit() are both
+# inside it, so two callers racing on the SAME key cannot both start.
+# Different keys are independent by construction, which is the point.
 # NOTE: it does NOT close the equivalent race ACROSS Odoo worker PROCESSES
 # (each worker has its own independent copy of every module-level global
-# here -- `_tunnel_future`, `_lib`, `_stop_event`, `_tunnel_lock` included),
-# so two requests landing on two different workers can still each pass this
-# check and each start a real, independent native tunnel daemon for the
-# same token. Closing that would need a cross-process primitive (a DB row,
-# a file lock, a PID file) coordinated with whatever calls this from
-# tunnel.py -- out of scope for this file alone; flagged in the bug-hunt
-# claim for cloudflare:COMM_start_tunnel_daemon instead of fixed here.
+# here -- `_tunnel_futures`, `_lib`, `_tunnel_stop_events`, `_tunnel_lock`
+# included), so two requests landing on two different workers can still each
+# start a real, independent native tunnel daemon for the same token. Closing
+# that would need a cross-process primitive (a DB row, a file lock, a PID
+# file) coordinated with whatever calls this from tunnel.py -- out of scope
+# for this file alone; flagged in the bug-hunt claim for
+# cloudflare:COMM_start_tunnel_daemon instead of fixed here.
 _tunnel_lock = threading.Lock()
 
-def start_tunnel_daemon(token):
+
+# [@ANCHOR: cloudflare:COMM_is_tunnel_daemon_running]
+def is_tunnel_daemon_running(tunnel_key=DEFAULT_TUNNEL_KEY):
+    """True when this process already has a live daemon loop for `tunnel_key`.
+
+    The caller tunnel.py uses this to decide whether a tunnel needs anything
+    doing at all, so that a tunnel already running does not cost a Cloudflare
+    API round trip on every five-minute cron tick -- and so that "an already
+    running tunnel is not restarted" is a fact a test can assert directly
+    rather than infer from the absence of a side effect.
     """
-    Starts the Cloudflare tunnel in a background thread using the CGO wrapper.
-    Restarts immediately if it crashes, unless explicitly stopped.
-    """
-    global _tunnel_future
     with _tunnel_lock:
-        if _tunnel_future and not _tunnel_future.done():
-            _logger.warning("Cloudflare tunnel is already running.")
-            return
+        future = _tunnel_futures.get(tunnel_key)
+        return bool(future is not None and not future.done())
+
+
+def start_tunnel_daemon(token, tunnel_key=DEFAULT_TUNNEL_KEY):
+    """
+    Starts one Cloudflare tunnel on its own single-worker executor using the
+    CGO wrapper. Restarts immediately if it crashes, unless explicitly stopped.
+
+    Idempotent per `tunnel_key`: a key whose loop is still running is left
+    alone (and the call returns False), so re-running "ensure the tunnels are
+    up" never doubles a daemon. A key whose loop has ENDED is started again on
+    that same key's executor, which is what makes this an "ensure", not a
+    "start once".
+
+    `token` is the tunnel's run token. It is deliberately not part of the key,
+    is never logged, and never leaves this function except as the UTF-8 bytes
+    handed to the C entry point.
+    """
+    with _tunnel_lock:
+        existing = _tunnel_futures.get(tunnel_key)
+        if existing is not None and not existing.done():
+            _logger.warning("Cloudflare tunnel %s is already running.", tunnel_key)
+            return False
 
         lib = _get_lib()
-        _stop_event.clear()
-        _logger.info("Starting native Cloudflare tunnel daemon...")
+        # A fresh Event per start, rather than .clear() on a shared one: a
+        # stop_tunnel_daemon() for THIS key must not be able to reach into a
+        # later start's loop, and a stop for ANOTHER key must not reach into
+        # this one at all -- which is what the single module-level
+        # `_stop_event` did by construction before this change.
+        stop_event = threading.Event()
+        _tunnel_stop_events[tunnel_key] = stop_event
+        _logger.info("Starting native Cloudflare tunnel daemon for %s...", tunnel_key)
         # # Verified by [@ANCHOR: COMM_test_edge_traffic_parsing]
 
         def run_tunnel():
-            while not _stop_event.is_set():
+            while not stop_event.is_set():
                 try:
                     # We must encode the token as a null-terminated UTF-8 string for C.
                     # The same native library backs StartTunnel (this real
@@ -96,26 +162,65 @@ def start_tunnel_daemon(token):
                     # # Verified by [@ANCHOR: COMM_test_websocket_traffic]
                     lib.StartTunnel(token.encode('utf-8'))
                 except Exception as e:  # audit-ignore-catch-all
-                    _logger.exception("Cloudflare tunnel daemon crashed: %s", e)
+                    _logger.exception(
+                        "Cloudflare tunnel daemon %s crashed: %s", tunnel_key, e
+                    )
 
-                if not _stop_event.is_set():
-                    _logger.warning("Cloudflare tunnel exited unexpectedly. Restarting immediately...")
-                    _stop_event.wait(1) # Small pause to prevent tight looping on immediate failure
+                if not stop_event.is_set():
+                    _logger.warning(
+                        "Cloudflare tunnel %s exited unexpectedly. Restarting immediately...",
+                        tunnel_key,
+                    )
+                    stop_event.wait(1) # Small pause to prevent tight looping on immediate failure
 
         # Submitting must stay inside the lock too -- otherwise two threads
         # could both pass the "not running" check above, both release the
         # lock, and both submit here, which is the exact race this lock
         # exists to close.
-        _tunnel_future = _tunnel_executor.submit(run_tunnel)
+        #
+        # The executor is created once per key and REUSED across restarts of
+        # that same tunnel: its single worker is free again the moment the
+        # previous run_tunnel() returned, and reusing it means a tunnel that
+        # flaps cannot accumulate one abandoned executor per restart.
+        executor = _tunnel_executors.get(tunnel_key)
+        if executor is None:
+            executor = ThreadPoolExecutor(
+                max_workers=1,
+                thread_name_prefix="CloudflareTunnelDaemon-%s" % tunnel_key,
+            )
+            _tunnel_executors[tunnel_key] = executor
+        _tunnel_futures[tunnel_key] = executor.submit(run_tunnel)
+        return True
 
 # [@ANCHOR: cloudflare:COMM_stop_tunnel_daemon]
-def stop_tunnel_daemon():
+def stop_tunnel_daemon(tunnel_key=None):
     """
-    Signals the Cloudflare tunnel to stop.
+    Signals Cloudflare tunnel daemons to stop: one named `tunnel_key`, or
+    every one this process started when `tunnel_key` is None (the default,
+    and the behavior every pre-existing caller already relied on).
+
+    The native library's own `StopTunnel()` takes no tunnel handle -- there is
+    exactly one, process-wide -- so it is only called for a stop-ALL. Stopping
+    a single tunnel therefore signals just that tunnel's own Python loop and
+    deliberately leaves the native call alone, because making it here would
+    reach into every OTHER tunnel's daemon, which is precisely what must not
+    happen on a multi-tunnel server. Giving the FFI a per-tunnel handle is a
+    real follow-on, recorded in this function's own claim, not something this
+    Python layer can fake.
     """
+    if tunnel_key is not None:
+        stop_event = _tunnel_stop_events.get(tunnel_key)
+        if stop_event is not None:
+            _logger.info(
+                "Stopping native Cloudflare tunnel daemon for %s...", tunnel_key
+            )
+            stop_event.set()
+        return
+
     if _lib:
-        _logger.info("Stopping native Cloudflare tunnel daemon...")
-        _stop_event.set()
+        _logger.info("Stopping every native Cloudflare tunnel daemon...")
+        for stop_event in list(_tunnel_stop_events.values()):
+            stop_event.set()
         _lib.StopTunnel()
 
 # [@ANCHOR: cloudflare:COMM_start_tunnel_simulator]

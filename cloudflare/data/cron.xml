@@ -27,5 +27,17 @@
             <field name="active" eval="True"/>
             <field name="user_id" ref="cloudflare.user_cloudflare_tunnel"/>
         </record>
+
+        <record id="ir_cron_retry_pending_hostname_deletes" model="ir.cron">
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: COMM_cron_retry_pending_hostname_deletes] -->
+            <field name="name">Cloudflare: Retry Pending Custom Hostname Deletes</field>
+            <field name="model_id" ref="model_cloudflare_hostname_pending_delete"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_retry_pending_deletes()</field>
+            <field name="interval_number">5</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+            <field name="user_id" ref="cloudflare.user_cloudflare_tunnel"/>
+        </record>
     </data>
 </odoo>
