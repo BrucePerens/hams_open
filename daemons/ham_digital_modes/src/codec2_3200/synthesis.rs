@@ -308,7 +308,7 @@ impl SynthesisState {
 }
 
 use super::envelope::{synth_k_q23, ModelFixed};
-use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23, FftScratch};
+use super::fixed_fft::{rshift_round_i128, ComplexQ23, FftScratch, SparseInverse};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::trig_fixed::sin_cos_q23;
 
@@ -550,28 +550,22 @@ impl SynthesisStateFixed {
         self.sn_.copy_within(N_SAMP.., 0);
         self.sn_[N_SAMP - 1] = 0;
 
-        for i in 0..FFT_ENC {
-            self.scratch.re[i] = 0;
-            self.scratch.im[i] = 0;
-        }
         let k_q23 = synth_k_q23(model.wo);
+        let mut spectrum = SparseInverse::<FFT_ENC>::new(&mut self.scratch.re, &mut self.scratch.im);
         for l in 1..=model.l {
             let raw = l as i64 * k_q23;
             let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC / 2 - 1);
-            let bin = model.phi[l].mul(ComplexQ23 {
-                re: model.a[l],
-                im: 0,
-            });
-            self.scratch.re[b] = bin.re;
-            self.scratch.im[b] = bin.im;
-        }
-        for k in 1..(FFT_ENC / 2) {
-            self.scratch.re[FFT_ENC - k] = self.scratch.re[k];
-            self.scratch.im[FFT_ENC - k] = -self.scratch.im[k];
+            spectrum.put(
+                b,
+                model.phi[l].mul(ComplexQ23 {
+                    re: model.a[l],
+                    im: 0,
+                }),
+            );
         }
 
         profile_mark!(13);
-        fft_fixed(&mut self.scratch.re, &mut self.scratch.im, false);
+        spectrum.run::<N_SAMP>();
         profile_mark!(14);
 
         #[allow(clippy::needless_range_loop)]

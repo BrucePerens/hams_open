@@ -97,7 +97,7 @@
 use super::envelope::{synth_k_q23, ModelFixed};
 #[cfg(feature = "std")]
 use super::envelope::Model;
-use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23};
+use super::fixed_fft::{rshift_round_i128, ComplexQ23, SparseInverse};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::synthesis::{ear_protection_fixed, phase_increment_q32};
 #[cfg(feature = "std")]
@@ -498,13 +498,8 @@ impl SpectralBridgeStateFixed {
         self.sn_.copy_within(N_SAMP_SB.., 0);
         self.sn_[N_SAMP_SB - 1] = 0;
 
-        for i in 0..FFT_ENC_SB {
-            self.ifft_re[i] = 0;
-            self.ifft_im[i] = 0;
-        }
-
         let k_q23 = synth_k_q23(model.wo);
-        #[allow(clippy::needless_range_loop)]
+        let mut spectrum = SparseInverse::<FFT_ENC_SB>::new(&mut self.ifft_re, &mut self.ifft_im);
         for m in 1..=l2 {
             let raw = m as i64 * k_q23;
             let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC_SB / 2 - 1);
@@ -524,15 +519,9 @@ impl SpectralBridgeStateFixed {
                     im: 0,
                 })
             };
-            self.ifft_re[b] = bin.re;
-            self.ifft_im[b] = bin.im;
+            spectrum.put(b, bin);
         }
-        for k in 1..(FFT_ENC_SB / 2) {
-            self.ifft_re[FFT_ENC_SB - k] = self.ifft_re[k];
-            self.ifft_im[FFT_ENC_SB - k] = -self.ifft_im[k];
-        }
-
-        fft_fixed(&mut self.ifft_re, &mut self.ifft_im, false);
+        spectrum.run::<N_SAMP_SB>();
 
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP_SB - 1) {

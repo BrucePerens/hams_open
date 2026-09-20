@@ -1117,6 +1117,34 @@ fn mode_for_sum(sum: u64) -> u8 {
     }
 }
 
+/// `w * x` as the two 32-bit halves of the exact 64-bit product, for a
+/// 24-bit twiddle `w` and an `i64` `x`: three 32-bit multiplies (a full
+/// 32x32 signed-by-unsigned product for the low word of `x`, and the
+/// cross term with its high word, which the 64-bit result truncates).
+#[inline(always)]
+fn mul_w_x(w: i32, x: i64) -> (u32, i32) {
+    let xl = x as u32;
+    let xh = (x >> 32) as i32;
+    let p = w as i64 * xl as i64; // signed 32 x unsigned 32: one `mul` + one `mulhsu`
+    ((p as u32), ((p >> 32) as i32).wrapping_add(w.wrapping_mul(xh)))
+}
+
+/// `(w1 * x1 + w2 * x2 + 2^22) >> 23` for 24-bit `w1`, `w2` and `i64`
+/// `x1`, `x2` whose weighted sum is under 2^62 in magnitude, done on
+/// 32-bit halves. Bit-identical to the plain `i64` expression.
+#[inline(always)]
+fn mul_round_i64(w1: i32, x1: i64, w2: i32, x2: i64) -> i64 {
+    let (l1, h1) = mul_w_x(w1, x1);
+    let (l2, h2) = mul_w_x(w2, x2);
+    let (lo, c1) = l1.overflowing_add(l2);
+    let hi = h1.wrapping_add(h2).wrapping_add(c1 as i32);
+    let (lo, c2) = lo.overflowing_add(1 << (FRAC_BITS - 1));
+    let hi = hi.wrapping_add(c2 as i32);
+    let out_lo = (lo >> FRAC_BITS) | ((hi as u32) << (32 - FRAC_BITS));
+    let out_hi = hi >> FRAC_BITS;
+    ((out_hi as i64) << 32) | out_lo as i64
+}
+
 /// One radix-2 butterfly on `(a, b)` with twiddle `(wr, wif)` (`wif` is the
 /// forward-convention imaginary part; the inverse negates it). `MODE` says
 /// how much the caller has proven about the whole transform: `MODE_I32`
@@ -1149,14 +1177,13 @@ fn bf<const FWD: bool, const MODE: u8>(
         *bi = (xi - vi) as i64;
         return;
     }
-    let (wr, wi) = (wr as i64, wi as i64);
     let (vr, vi) = if MODE == MODE_I64 {
         (
-            rshift_round_i64(wr * *br - wi * *bi, FRAC_BITS),
-            rshift_round_i64(wr * *bi + wi * *br, FRAC_BITS),
+            mul_round_i64(wr, *br, -wi, *bi),
+            mul_round_i64(wr, *bi, wi, *br),
         )
     } else {
-        twiddle_mul(wr, wi, *br, *bi)
+        twiddle_mul(wr as i64, wi as i64, *br, *bi)
     };
     let (xr, xi) = (*ar, *ai);
     *ar = xr + vr;
@@ -1226,7 +1253,8 @@ fn block<const FWD: bool, const MODE: u8>(
     }
 }
 
-/// One dense stage (every block), `len` a literal in the hot instances.
+/// One dense stage (every block). Test oracle only.
+#[cfg(test)]
 #[inline(always)]
 fn stage_dense<const N: usize, const FWD: bool, const MODE: u8>(
     re: &mut [i64; N],
@@ -1267,33 +1295,6 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
     }
 }
 
-/// All stages, dense, with every stage length a literal (fully specialised
-/// for one size, direction and mode).
-#[inline(always)]
-fn stages_dense_hot<const N: usize, const FWD: bool, const MODE: u8>(
-    re: &mut [i64; N],
-    im: &mut [i64; N],
-    tw: &[(i32, i32)],
-) {
-    macro_rules! st {
-        ($len:literal) => {
-            if $len <= N {
-                stage_dense::<N, FWD, MODE>(re, im, tw, $len);
-            }
-        };
-    }
-    st!(2);
-    st!(4);
-    st!(8);
-    st!(16);
-    st!(32);
-    st!(64);
-    st!(128);
-    st!(256);
-    st!(512);
-    st!(1024);
-}
-
 #[inline(always)]
 fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8>(
     re: &mut [i64; N],
@@ -1325,6 +1326,7 @@ fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8>(
 /// mode), the stage length a run-time variable. Used for the cold modes
 /// (inputs too large for the fast paths, or the test-only forward dense
 /// transform), where code size matters more than speed.
+#[cfg(test)]
 #[inline(never)]
 fn stages_dense_loop<const N: usize, const FWD: bool, const MODE: u8>(
     re: &mut [i64; N],
@@ -1354,6 +1356,7 @@ fn stages_prefix_loop<const N: usize, const FWD: bool, const MODE: u8>(
 }
 
 /// In-place bit-reversal permutation of a dense input.
+#[cfg(test)]
 #[inline(always)]
 fn bit_reverse_permute<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], bitrev: &[u16]) {
     for i in 0..N {
@@ -1365,6 +1368,7 @@ fn bit_reverse_permute<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], bit
     }
 }
 
+#[cfg(test)]
 fn sum_abs<const N: usize>(re: &[i64; N], im: &[i64; N]) -> u64 {
     let mut sum = 0u64;
     for i in 0..N {
@@ -1384,6 +1388,7 @@ fn sum_abs<const N: usize>(re: &[i64; N], im: &[i64; N]) -> u64 {
 /// with its own constant tables. `forward == true` matches `rustfft`'s
 /// `plan_fft_forward`; `false` is the unnormalised inverse.
 // [@ANCHOR: fft_fixed]
+#[cfg(test)]
 pub(crate) fn fft_fixed<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], forward: bool)
 where
     Size<N>: FftTables,
@@ -1396,16 +1401,10 @@ where
         (true, MODE_I32) => stages_dense_loop::<N, true, MODE_I32>(re, im, tw),
         (true, MODE_I64) => stages_dense_loop::<N, true, MODE_I64>(re, im, tw),
         (true, _) => stages_dense_loop::<N, true, MODE_CHECKED>(re, im, tw),
-        // Inverse: the unrolled instance handles everything below 2^37
-        // (the I64 kernel is exact for smaller values too).
-        (false, MODE_CHECKED) => stages_dense_loop::<N, false, MODE_CHECKED>(re, im, tw),
-        (false, _) => inverse_dense_hot::<N>(re, im, tw),
+        (false, MODE_I32) => stages_dense_loop::<N, false, MODE_I32>(re, im, tw),
+        (false, MODE_I64) => stages_dense_loop::<N, false, MODE_I64>(re, im, tw),
+        (false, _) => stages_dense_loop::<N, false, MODE_CHECKED>(re, im, tw),
     }
-}
-
-#[inline(never)]
-fn inverse_dense_hot<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], tw: &[(i32, i32)]) {
-    stages_dense_hot::<N, false, MODE_I64>(re, im, tw);
 }
 
 /// Same transform as [`fft_fixed`] for an input whose only nonzero entries
@@ -1483,6 +1482,268 @@ fn prefix_forward_i32_hot<const N: usize, const NZ: usize>(
     bitrev: &[u16],
 ) {
     stages_prefix_hot::<N, true, MODE_I32>(re, im, tw, bitrev, NZ);
+}
+
+/// Real part of `(wr + j wi) * (br + j bi)` rounded back to Q23, for the
+/// inverse direction (`wi = -wif`), in the given mode.
+#[inline(always)]
+fn twiddle_real_inverse<const MODE: u8>((wr, wif): (i32, i32), br: i64, bi: i64) -> i64 {
+    if MODE == MODE_CHECKED {
+        // Same range check as `twiddle_mul`, real part only.
+        let (wr, wi) = (wr as i64, -(wif as i64));
+        if (br.unsigned_abs() | bi.unsigned_abs()) < (1u64 << 38) {
+            rshift_round_i64(wr * br - wi * bi, FRAC_BITS)
+        } else {
+            rshift_round_i128(wr as i128 * br as i128 - wi as i128 * bi as i128, FRAC_BITS)
+        }
+    } else {
+        mul_round_i64(wr, br, wif, bi)
+    }
+}
+
+/// Number of `u32` words of block-occupancy flags kept for a transform of
+/// size `N` (`2N` bits: `N` for the inputs, then `N/2`, `N/4`, ... one
+/// level per stage), sized for the largest supported transform.
+const FLAG_WORDS: usize = 2 * FFT_MAX / 32;
+const FFT_MAX: usize = 1024;
+
+#[inline(always)]
+fn flag(flags: &[u32; FLAG_WORDS], bit: usize) -> bool {
+    (flags[bit >> 5] >> (bit & 31)) & 1 != 0
+}
+
+#[inline(always)]
+fn set_flag(flags: &mut [u32; FLAG_WORDS], bit: usize) {
+    flags[bit >> 5] |= 1 << (bit & 31);
+}
+
+/// Fills the flag levels above the input level: the block of stage `s`
+/// (`step = N >> s` residues) with residue `r` is nonzero when either of
+/// its halves (residues `r` and `r + step` of the previous level) is.
+/// Level `s` starts at bit `2N - 2 * step`.
+fn fold_flags<const N: usize>(flags: &mut [u32; FLAG_WORDS]) {
+    let mut step = N / 2;
+    while step >= 1 {
+        let out = 2 * N - 2 * step;
+        let inp = 2 * N - 4 * step;
+        if step >= 32 {
+            let (ow, iw, sw) = (out / 32, inp / 32, step / 32);
+            for w in 0..sw {
+                flags[ow + w] = flags[iw + w] | flags[iw + w + sw];
+            }
+        } else {
+            for r in 0..step {
+                if flag(flags, inp + r) || flag(flags, inp + r + step) {
+                    set_flag(flags, out + r);
+                }
+            }
+        }
+        step /= 2;
+    }
+}
+
+/// One stage of the sparse inverse: only blocks whose flag is set are
+/// touched. A block whose upper half is all zero is a copy of its lower
+/// half; one whose lower half is all zero gets that half cleared first and
+/// then takes the ordinary butterfly (rare, so not worth its own kernel).
+#[inline(always)]
+fn stage_sparse<const N: usize, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    flags: &[u32; FLAG_WORDS],
+    len: usize,
+) {
+    let step = N / len;
+    let out = 2 * N - 2 * step;
+    let inp = 2 * N - 4 * step;
+    for r in 0..step {
+        if !flag(flags, out + r) {
+            continue;
+        }
+        let base = bitrev[r] as usize;
+        let half = len / 2;
+        if !flag(flags, inp + r + step) {
+            block::<false, MODE>(re, im, tw, base, len, step, true);
+            continue;
+        }
+        if !flag(flags, inp + r) {
+            re[base..base + half].fill(0);
+            im[base..base + half].fill(0);
+        }
+        block::<false, MODE>(re, im, tw, base, len, step, false);
+    }
+}
+
+#[inline(always)]
+fn stages_sparse_hot<const N: usize, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    flags: &[u32; FLAG_WORDS],
+) {
+    macro_rules! st {
+        ($len:literal) => {
+            if $len < N {
+                stage_sparse::<N, MODE>(re, im, tw, bitrev, flags, $len);
+            }
+        };
+    }
+    st!(2);
+    st!(4);
+    st!(8);
+    st!(16);
+    st!(32);
+    st!(64);
+    st!(128);
+    st!(256);
+    st!(512);
+}
+
+#[inline(never)]
+fn stages_sparse_loop<const N: usize, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    flags: &[u32; FLAG_WORDS],
+) {
+    let mut len = 2usize;
+    while len < N {
+        stage_sparse::<N, MODE>(re, im, tw, bitrev, flags, len);
+        len *= 2;
+    }
+}
+
+/// The last stage of the inverse transform, computing only what the
+/// synthesis reads: the real parts of outputs `0..=NS` (lower half) and of
+/// `N - NS + 1 .. N` (upper half, i.e. indices `N/2 - NS + 1 .. N/2` of the
+/// upper half). Nothing else is written. Requires `NS < N / 4`.
+#[inline(always)]
+fn final_stage_real<const N: usize, const NS: usize, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &[i64; N],
+    tw: &[(i32, i32)],
+) {
+    let half = N / 2;
+    let (lr, hr) = re.split_at_mut(half);
+    let (_, hi) = im.split_at(half);
+    // j == 0: twiddle 1.
+    lr[0] += hr[0];
+    for j in 1..=NS {
+        let v = twiddle_real_inverse::<MODE>(tw[j], hr[j], hi[j]);
+        lr[j] += v;
+    }
+    for j in half - NS + 1..half {
+        let v = twiddle_real_inverse::<MODE>(tw[j], hr[j], hi[j]);
+        hr[j] = lr[j] - v;
+    }
+}
+
+#[inline(never)]
+fn final_stage_real_hot<const N: usize, const NS: usize>(
+    re: &mut [i64; N],
+    im: &[i64; N],
+    tw: &[(i32, i32)],
+) {
+    final_stage_real::<N, NS, MODE_I64>(re, im, tw);
+}
+
+#[inline(never)]
+fn final_stage_real_checked<const N: usize, const NS: usize>(
+    re: &mut [i64; N],
+    im: &[i64; N],
+    tw: &[(i32, i32)],
+) {
+    final_stage_real::<N, NS, MODE_CHECKED>(re, im, tw);
+}
+
+#[inline(never)]
+fn sparse_inverse_hot<const N: usize, const NS: usize>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    flags: &[u32; FLAG_WORDS],
+) {
+    stages_sparse_hot::<N, MODE_I64>(re, im, tw, bitrev, flags);
+    final_stage_real_hot::<N, NS>(re, im, tw);
+}
+
+/// Inverse transform of a sparse, conjugate-symmetric (real output)
+/// spectrum, for the harmonic synthesis: the caller [`put`](Self::put)s the
+/// bins `1..N/2` that are nonzero (the mirrored bin `N - b` is filled in
+/// here), then [`run`](Self::run)s. Neither buffer needs clearing: inputs
+/// are scattered straight to their bit-reversed positions, occupancy flags
+/// record which blocks of each stage can be nonzero, and zero blocks are
+/// never read. Only the outputs the overlap-add uses are computed: the real
+/// parts at indices `0..=NS` and `N - NS + 1 .. N`; the rest of `re`, and
+/// all of `im`, are left undefined.
+///
+/// Bit-identical, at those outputs, to filling both buffers densely
+/// (including the mirror `X[N-k] = conj(X[k])`) and running [`fft_fixed`]
+/// backward.
+pub(crate) struct SparseInverse<'a, const N: usize> {
+    re: &'a mut [i64; N],
+    im: &'a mut [i64; N],
+    flags: [u32; FLAG_WORDS],
+    sum: u64,
+}
+
+impl<'a, const N: usize> SparseInverse<'a, N>
+where
+    Size<N>: FftTables,
+{
+    pub(crate) fn new(re: &'a mut [i64; N], im: &'a mut [i64; N]) -> Self {
+        SparseInverse { re, im, flags: [0; FLAG_WORDS], sum: 0 }
+    }
+
+    /// Sets bin `b` (`1 <= b < N / 2`) and its mirror. A later `put` at the
+    /// same bin overwrites the earlier one, as the dense fill did.
+    #[inline(always)]
+    pub(crate) fn put(&mut self, b: usize, v: ComplexQ23) {
+        let bitrev = <Size<N> as FftTables>::BITREV;
+        let (p, pm) = (bitrev[b] as usize, bitrev[N - b] as usize);
+        self.re[p] = v.re;
+        self.im[p] = v.im;
+        self.re[pm] = v.re;
+        self.im[pm] = -v.im;
+        set_flag(&mut self.flags, b);
+        set_flag(&mut self.flags, N - b);
+        // Upper bound on the transform's value sum (counts overwritten
+        // bins too, which only makes the bound looser).
+        self.sum = self
+            .sum
+            .saturating_add(2 * (v.re.unsigned_abs().saturating_add(v.im.unsigned_abs())));
+    }
+
+    /// Runs the transform; see the type's documentation for what is valid
+    /// afterwards.
+    pub(crate) fn run<const NS: usize>(mut self) {
+        let bitrev = <Size<N> as FftTables>::BITREV;
+        let tw = <Size<N> as FftTables>::TW;
+        fold_flags::<N>(&mut self.flags);
+        // Halves of the last stage that are entirely zero: clear them so
+        // the ordinary last stage applies. The last stage is level `s` with
+        // `step == 1`, its halves are the two residues of the level below.
+        let lvl = 2 * N - 4; // level of stage N/2: step == 2
+        if !flag(&self.flags, lvl) {
+            self.re[..N / 2].fill(0);
+            self.im[..N / 2].fill(0);
+        }
+        if !flag(&self.flags, lvl + 1) {
+            self.re[N / 2..].fill(0);
+            self.im[N / 2..].fill(0);
+        }
+        if self.sum < I64_SUM_LIMIT {
+            sparse_inverse_hot::<N, NS>(self.re, self.im, tw, bitrev, &self.flags);
+        } else {
+            stages_sparse_loop::<N, MODE_CHECKED>(self.re, self.im, tw, bitrev, &self.flags);
+            final_stage_real_checked::<N, NS>(self.re, self.im, tw);
+        }
+    }
 }
 
 /// Scratch buffers for one 512-point transform. Kept in a long-lived
@@ -1871,6 +2132,95 @@ mod tests {
         prefix_const_case::<FFT_ENC, 13>(&mut seed);
         prefix_const_case::<FFT_ENC, 100>(&mut seed);
         prefix_const_case::<FFT_ENC_SB, 11>(&mut seed);
+    }
+
+    /// One trial of the sparse harmonic inverse: build the dense spectrum
+    /// the way the old synthesis fill did (later bins overwrite earlier
+    /// ones, then mirror), run the textbook inverse, and compare the
+    /// outputs the overlap-add reads.
+    fn sparse_inverse_trial<const N: usize, const NS: usize>(bins: &[(usize, ComplexQ23)])
+    where
+        Size<N>: FftTables,
+    {
+        let mut re_ref = [0i64; N];
+        let mut im_ref = [0i64; N];
+        for &(b, v) in bins {
+            re_ref[b] = v.re;
+            im_ref[b] = v.im;
+        }
+        for k in 1..N / 2 {
+            re_ref[N - k] = re_ref[k];
+            im_ref[N - k] = -im_ref[k];
+        }
+        reference_fft::<N>(&mut re_ref, &mut im_ref, false);
+
+        // Garbage in the buffers on entry: nothing may depend on it.
+        let mut re = [0x1357_9bdfi64; N];
+        let mut im = [-0x2468_ace0i64; N];
+        let mut sp = SparseInverse::<N>::new(&mut re, &mut im);
+        for &(b, v) in bins {
+            sp.put(b, v);
+        }
+        sp.run::<NS>();
+        for j in 0..=NS {
+            assert_eq!(re[j], re_ref[j], "n={N} lower output {j}, {} bins", bins.len());
+        }
+        for j in N - NS + 1..N {
+            assert_eq!(re[j], re_ref[j], "n={N} upper output {j}, {} bins", bins.len());
+        }
+    }
+
+    fn sparse_inverse_case<const N: usize, const NS: usize>(seed: &mut u64)
+    where
+        Size<N>: FftTables,
+    {
+        let rnd = |seed: &mut u64, bits: u32| -> i64 {
+            (lcg(seed) % (1i64 << bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 }
+        };
+        for &mag_bits in &[10u32, 24, 32, 34, 36, 37, 38, 40] {
+            // Random harmonic counts, including none, one, and dense; the
+            // bin clamp of the real callers is `N / 2 - 1`.
+            for &count in &[0usize, 1, 2, 5, 17, 40, 80, 160] {
+                let bins: Vec<(usize, ComplexQ23)> = (0..count)
+                    .map(|_| {
+                        let b = 1 + (lcg(seed) as usize) % (N / 2 - 1);
+                        (b, ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) })
+                    })
+                    .collect();
+                sparse_inverse_trial::<N, NS>(&bins);
+            }
+            // Structured layouts: only even bins, only odd bins (one whole
+            // half of the last stage empty), regularly spaced harmonics
+            // like the real callers, and a repeated bin.
+            for parity in 0..2usize {
+                let bins: Vec<(usize, ComplexQ23)> = (1..N / 2 - 1)
+                    .filter(|b| b % 2 == parity && b % 6 == 1 + parity)
+                    .map(|b| (b, ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) }))
+                    .collect();
+                sparse_inverse_trial::<N, NS>(&bins);
+            }
+            let comb: Vec<(usize, ComplexQ23)> = (1..)
+                .map(|l| ((l * 37 + 8) / 10, l))
+                .take_while(|&(b, _)| b < N / 2)
+                .map(|(b, _)| (b, ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) }))
+                .collect();
+            sparse_inverse_trial::<N, NS>(&comb);
+            let v = ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) };
+            sparse_inverse_trial::<N, NS>(&[(3, v), (3, ComplexQ23 { re: v.im, im: v.re })]);
+            sparse_inverse_trial::<N, NS>(&[(N / 2 - 1, v)]);
+        }
+    }
+
+    /// The sparse harmonic inverse (occupancy-flag block skipping, scattered
+    /// bit-reversed input, pruned last stage, uncleared buffers) equals the
+    /// dense textbook inverse at every output the synthesis reads, at both
+    /// sizes, across input magnitudes that select the fast and checked
+    /// kernels.
+    #[test]
+    fn sparse_harmonic_inverse_is_bit_identical_to_the_dense_reference_at_the_used_outputs() {
+        let mut seed = 2026u64;
+        sparse_inverse_case::<FFT_ENC, 80>(&mut seed);
+        sparse_inverse_case::<FFT_ENC_SB, 160>(&mut seed);
     }
 
     /// Fast-path complex multiply and squared magnitude equal the exact
