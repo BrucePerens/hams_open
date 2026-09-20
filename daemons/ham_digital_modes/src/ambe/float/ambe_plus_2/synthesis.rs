@@ -107,7 +107,18 @@ impl AmbePlus2SynthesisDecoder {
         if classify_b0(raw.b0) == FrameKind::Speech && self.error_policy.is_bad(parsed.epsilon_c0, parsed.epsilon_c1) {
             self.repeats += 1;
             match self.error_policy.bad_frame_action(self.repeats) {
-                BadFrameAction::Repeat => return self.synth.synthesize_repeat(),
+                BadFrameAction::Repeat => {
+                    if self.error_policy == ErrorPolicy::ChipCompatible {
+                        // Measured on the chip (`ambe_plus_2_field_scan ... repeatstate`): a repeated frame still runs the gain
+                        // recursion on the damaged frame's own gain, and the frames after it decay as the recursion's 0.5 memory
+                        // predicts; the spectral history (`l`, `log2_ml`) is untouched.
+                        let mut st = DecoderState { l: self.dequant.l, log2_ml: self.dequant.log2_ml.clone(), gamma: self.dequant.gamma };
+                        if let DequantizedFrame::Speech(_) = dequantize(&raw, &mut st) {
+                            self.dequant.gamma = st.gamma;
+                        }
+                    }
+                    return self.synth.synthesize_repeat();
+                }
                 BadFrameAction::Mute => {
                     self.dequant = DecoderState::initial();
                     self.synth = MbeSynthesizer::new();

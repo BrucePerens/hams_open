@@ -138,6 +138,40 @@ policy_tests!(
     to_f64 = fixed_to_f64
 );
 
+/// On the chip a repeated AMBE+2 frame still runs the gain recursion on the damaged frame's own gain, so the frame after it comes out
+/// louder than the settled level (measured +11 dB on the chip for a large gain jump; the test frames here are a small one) although the repeat itself is quiet.
+#[cfg(feature = "ambe_plus_2")]
+mod ambe_plus_2_repeat_gain_memory {
+    use super::*;
+
+    /// (settled level, level of the repeated frame, level of the frame after it).
+    fn levels<D>(mut dec: D, mut decode: impl FnMut(&mut D, u128) -> Vec<f64>) -> (f64, f64, f64) {
+        let (quiet, loud) = (ambe_plus_2_frames::quiet(), ambe_plus_2_frames::loud());
+        for _ in 0..8 {
+            decode(&mut dec, quiet);
+        }
+        let settled = rms(&decode(&mut dec, quiet));
+        let repeated = rms(&decode(&mut dec, loud ^ THREE_C0_ERRORS));
+        (settled, repeated, rms(&decode(&mut dec, quiet)))
+    }
+
+    #[test]
+    fn chip_compatible_repeat_raises_the_next_frame_float() {
+        use ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder as D;
+        let (settled, repeated, after) = levels(D::new().with_error_policy(ErrorPolicy::ChipCompatible), |d, f| d.decode_frame(f).unwrap().to_vec());
+        assert!(repeated < 1.3 * settled, "the repeat itself is the previous frame: {repeated} vs {settled}");
+        assert!(after > 1.1 * settled, "next frame {after} vs settled {settled}");
+    }
+
+    #[test]
+    fn chip_compatible_repeat_raises_the_next_frame_fixed() {
+        use ham_digital_modes::ambe::fixed::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder as D;
+        let (settled, repeated, after) = levels(D::new().with_error_policy(ErrorPolicy::ChipCompatible), |d, f| fixed_to_f64(&d.decode_frame(f).unwrap()));
+        assert!(repeated < 1.3 * settled, "the repeat itself is the previous frame: {repeated} vs {settled}");
+        assert!(after > 1.1 * settled, "next frame {after} vs settled {settled}");
+    }
+}
+
 /// The chip treats the reserved D-STAR pitch codes 125 and 127 as invalid frames (repeat three times, then mute); normal operation
 /// decodes them leniently.
 mod dstar_reserved_codes {

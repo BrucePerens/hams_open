@@ -110,7 +110,12 @@ The standard TIA-102.BABA decoder is unchanged (unvoiced gain 1.0).
 
 * The chip's frame crossfade and noise source differ from the standard's (see `docs/references/AMBE_CHIP_NOISE_GENERATOR.md`: its
   noise generator has period 65,536 and is not identified), so unvoiced output cannot match the chip sample for sample.
-* The chip's predictor changes during repeated frames are not modelled in the chip-compatible error mode.
+* Chip-compatible repeats now run the AMBE+2 gain recursion on the damaged frame (measured: the frames after a repeat decay as the
+  recursion's 0.5 memory predicts). Still not modelled: the chip's first frame after a repeat is louder than ours (+11.5 dB against +7.1 dB
+  in the probe) and each further repeat on the chip rises by about 1.5 dB; test mode only.
+* AMBE+2 frame-energy correlation with the chip (0.978-0.990) is limited by fully unvoiced frames, where the two decoders' noise is
+  different and the frame energy differs by 2-3 dB standard deviation; the fine-scale (64-sample) log-envelope correlation is 0.988 with no
+  timing offset. Unvoiced frames with many harmonics still come out about 1.7 dB louder than the chip's in the 100-500 Hz band.
 * Reserved D-STAR pitch codes 125 and 127 are invalid on the chip; normal operation decodes them leniently (a tone frame with a flipped uncoded bit is better decoded), and the chip-compatible policy reproduces the chip.
 * No DVSI test vectors were available; JMBE was not run.
 
