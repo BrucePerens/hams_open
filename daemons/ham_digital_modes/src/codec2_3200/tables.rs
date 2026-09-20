@@ -51,6 +51,7 @@ pub(crate) const LPC_PI_Q23: i64 = 26353590;
 /// W0_MIN, Q23
 pub(crate) const MOD_W0_MIN_Q23: i64 = 329420;
 /// SAMPLE_RATE / TAU, Q23
+#[cfg(feature = "codec2_16k_bridge")]
 pub(crate) const SB_HZ_PER_RAD_Q23: i64 = 10680707072;
 /// Windowed-sinc decimation filter, Q23.
 pub(crate) static NLP_LOWPASS_Q23: [i64; 25] = [
@@ -2340,6 +2341,7 @@ pub(crate) static SYNTH_PARZEN_Q23: [i64; 160] = [
     838861, 734003, 629146, 524288, 419430, 314573, 209715, 104858,
 ];
 /// Spectral-bridge overlap-add window, Q23.
+#[cfg(feature = "codec2_16k_bridge")]
 pub(crate) static SB_PARZEN_Q23: [i64; 320] = [
     0, 52429, 104858, 157286, 209715, 262144, 314573, 367002,
     419430, 471859, 524288, 576717, 629146, 681574, 734003, 786432,

@@ -229,13 +229,21 @@ pub(super) fn render() -> String {
          //! `tables_gen::tests::committed_tables_match_the_generator` fails if this drifts.\n\
          //! Contains no floating point: every value is an integer constant.\n\n",
     );
+    // The 16 kHz spectral-bridge tables are only compiled when that feature is on.
+    let gate = |name: &str| {
+        if name.starts_with("SB_") {
+            "#[cfg(feature = \"codec2_16k_bridge\")]\n"
+        } else {
+            ""
+        }
+    };
     for val in all_values() {
         match val {
             Value::Scalar(name, doc, x) => {
-                writeln!(out, "/// {doc}\npub(crate) const {name}: i64 = {x};").unwrap();
+                writeln!(out, "/// {doc}\n{}pub(crate) const {name}: i64 = {x};", gate(name)).unwrap();
             }
             Value::Array(name, ty, doc, xs) => {
-                writeln!(out, "/// {doc}\npub(crate) static {name}: [{ty}; {}] = [", xs.len()).unwrap();
+                writeln!(out, "/// {doc}\n{}pub(crate) static {name}: [{ty}; {}] = [", gate(name), xs.len()).unwrap();
                 for chunk in xs.chunks(8) {
                     let line: Vec<String> = chunk.iter().map(|x| x.to_string()).collect();
                     writeln!(out, "    {},", line.join(", ")).unwrap();
@@ -243,7 +251,7 @@ pub(super) fn render() -> String {
                 out.push_str("];\n");
             }
             Value::Pairs(name, doc, xs) => {
-                writeln!(out, "/// {doc}\npub(crate) static {name}: [(i64, i64); {}] = [", xs.len()).unwrap();
+                writeln!(out, "/// {doc}\n{}pub(crate) static {name}: [(i64, i64); {}] = [", gate(name), xs.len()).unwrap();
                 for chunk in xs.chunks(4) {
                     let line: Vec<String> = chunk.iter().map(|(a, b)| format!("({a}, {b})")).collect();
                     writeln!(out, "    {},", line.join(", ")).unwrap();

@@ -63,20 +63,29 @@ impl EncoderFixed {
     /// real, checkable status: every `as f32` conversion below marks a
     /// stage still delegating to the float reference.
     // [@ANCHOR: EncoderFixed::encode]
+    // (`packed` is only a named binding so the `codec2_profile` hook can run after packing.)
+    #[allow(clippy::let_and_return)]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
+        profile_mark!(15);
         self.shift_in(&speech[..N_SAMP]);
 
         // nlp::nlp_fixed: migrated, real i16 in, no conversion at all.
-        nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+        // (The pitch bin of this first half-frame is not needed; the call only advances the
+        // estimator's own filter/decimation history, exactly as before.)
+        let _ = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
+        profile_mark!(0);
         // voicing::is_voiced_fixed: migrated, real i16 in, no
         // conversion at all.
         let voiced0 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+        profile_mark!(1);
 
         self.shift_in(&speech[N_SAMP..]);
         let f0_bin = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
+        profile_mark!(0);
         let voiced1 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+        profile_mark!(1);
 
         // quantise::encode_wo takes the one f32 boundary value nlp_fixed
         // itself produces (its own final Hz->bin conversion) -- see
@@ -84,6 +93,7 @@ impl EncoderFixed {
         // boundary point rather than pushing the quantizer itself into
         // fixed point.
         let wo_index = tables::NLP_BIN_WO_INDEX[f0_bin] as u32;
+        profile_mark!(2);
 
         // Windowing + autocorrelate + Levinson-Durbin: MIGRATED, genuine
         // fixed-point, no f32 anywhere in this block. `wn_q[i] = sn[i] *
@@ -101,6 +111,7 @@ impl EncoderFixed {
             *w = ((s as i64 * win as i64) >> 7) as i32;
         }
         let r_q = lpc::autocorrelate_fixed(&wn_q);
+        profile_mark!(3);
         // White noise correction (fixed point) applies only to
         // Levinson-Durbin's own input -- a separate corrected copy, so
         // lpc_energy_fixed below still reports the real, uncorrected
@@ -108,7 +119,8 @@ impl EncoderFixed {
         // r_for_levinson pattern).
         let mut r_q_for_levinson = r_q;
         lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
-        let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
+        let mut a_q23 = lpc::levinson_durbin_q23_from_integer_r(&r_q_for_levinson);
+        profile_mark!(4);
 
         // lpc_energy: now fixed-point too -- no separate float windowing/
         // autocorrelate pass needed anymore. Must run before bw_gamma
@@ -116,6 +128,7 @@ impl EncoderFixed {
         // the pre-expansion a_q23 -- hence taking it before the
         // bandwidth-expansion step below mutates it in place.
         let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q);
+        profile_mark!(5);
 
         // bw_gamma + lpc_to_lsp: now fixed-point too, including the
         // acos() call itself (lpc::acos_lut_fixed). lsp stays f32-typed
@@ -125,6 +138,7 @@ impl EncoderFixed {
         lpc::apply_bw_gamma_fixed(&mut a_q23);
         let lsp_q23 = lpc::lpc_to_lsp_q23_from_integer_ak(&a_q23)
             .unwrap_or(tables::MOD_FALLBACK_LSP_Q23);
+        profile_mark!(6);
 
         // quantise::encode_energy already routes through fixed_point::
         // log2_lut (now genuinely integer, see that module). encode_
@@ -135,6 +149,7 @@ impl EncoderFixed {
 
         let e_index = quantise::encode_energy_q23(e_q23);
         let lsp_indexes = quantise::encode_lsps_delta_scalar_q23(&lsp_q23);
+        profile_mark!(7);
 
         let fields = bits::FrameFields {
             voiced0,
@@ -143,7 +158,9 @@ impl EncoderFixed {
             e_index,
             lsp_indexes,
         };
-        bits::pack_frame(&fields, WO_BITS, E_BITS)
+        let packed = bits::pack_frame(&fields, WO_BITS, E_BITS);
+        profile_mark!(8);
+        packed
     }
 }
 

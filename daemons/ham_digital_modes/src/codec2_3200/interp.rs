@@ -8,6 +8,7 @@
 
 use super::LPC_ORD;
 
+#[cfg(feature = "std")]
 /// Interpolated `Wo`/voicing for the first (earlier) 10ms sub-frame,
 /// given the previous frame's own decoded `(Wo, voiced)` and this
 /// frame's newly received `(wo_next, voiced_next)`. Voicing-aware:
@@ -47,6 +48,7 @@ pub fn interp_voiced(voiced0: bool, prev_voiced: bool, next_voiced: bool) -> boo
     voiced0 && (prev_voiced || next_voiced)
 }
 
+#[cfg(feature = "std")]
 /// Energy is a power-domain quantity, so its natural interpolation is
 /// geometric (equal-ratio steps), not arithmetic.
 // [@ANCHOR: interp_energy]
@@ -54,6 +56,7 @@ pub fn interp_energy(prev_e: f32, next_e: f32) -> f32 {
     (prev_e * next_e).sqrt()
 }
 
+#[cfg(feature = "std")]
 pub fn interpolate_lsp(prev: &[f32; LPC_ORD], next: &[f32; LPC_ORD]) -> [f32; LPC_ORD] {
     core::array::from_fn(|i| prev[i] + 0.5 * (next[i] - prev[i]))
 }

@@ -12,7 +12,7 @@ license = "LGPL-3.0-or-later"
 # real transmitted signal's spectrum), not a hand-rolled approximation.
 # libm is a pure-Rust, MIT/Apache-2.0 port of the actual C math library
 # algorithms, not a crude approximation of its own.
-libm = "0.2"
+libm = { version = "0.2", optional = true }
 # wspr_decode.rs's sync search: FT8's own decode takes the vendored-C
 # route (ft8.rs, vendor/ft8_lib, MIT-licensed) instead of a from-scratch
 # DSP reimplementation, but no equivalent permissively-licensed C WSPR
@@ -22,7 +22,7 @@ libm = "0.2"
 # library that could be FFI'd in. rustfft is MIT/Apache-2.0, so it's
 # used directly for the STFT the sync search needs, rather than
 # hand-rolling a DFT.
-rustfft = "6"
+rustfft = { version = "6", optional = true }
 # codec2_3200/codec2_1600's own FLOAT structs (Decoder/Encoder/
 # SynthesisState/SpectralBridgeState -- distinct from the *Fixed
 # variants, which already use fixed_fft.rs's own no_std-compatible
@@ -43,12 +43,24 @@ rustfft = "6"
 # (f64, a different digital mode) is untouched -- microfft doesn't
 # support f64, and that usage was never part of the no_std-buildability
 # problem this dependency solves.
-microfft = { version = "0.6", features = ["size-512", "size-1024"] }
+microfft = { version = "0.6", features = ["size-512", "size-1024"], optional = true }
 
 [build-dependencies]
 cc = "1.0"
 
 [features]
+# Default-on: everything in the crate (FT8, WSPR, PSK31, RTTY, D-STAR, the whole AMBE tree,
+# Codec2 1600, the floating-point Codec2 3200 reference and adapters). Turning it off
+# (`--no-default-features`) builds ONLY the fixed-point Codec2 3200 path as `no_std`, using `core`
+# only (no heap, no floating-point unit needed). See docs/CODEC2_NO_STD.md.
+default = ["std"]
+std = ["dep:libm", "dep:rustfft", "dep:microfft", "codec2_16k_bridge"]
+# The 16 kHz output spectral bridge (about 19 KB extra decoder state). Off unless asked for; the
+# `std` build turns it on so the default build keeps every existing API.
+codec2_16k_bridge = []
+# Instruction-count hooks for the bare-metal bench (tools/codec2_riscv32_bench): the crate calls an
+# extern `codec2_profile_mark(id)` the harness provides. Off by default; adds no code when off.
+codec2_profile = []
 # AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate, TIA-102.BABA-1's 2009 addendum) is
 # covered by 12 specific named patents -- off by default, on only for internal chip-compatibility
 # testing. See src/ambe_plus_2/mod.rs's own doc comment and src/ambe/AMBE_PLUS_2_NOTES.md for the

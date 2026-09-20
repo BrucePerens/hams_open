@@ -3,6 +3,11 @@
 // shim.c, our own thin C wrapper giving Rust an opaque-pointer API.
 
 fn main() {
+    // The vendored C FT8 library is only used by the `std` build; the `no_std` Codec2 build must not
+    // invoke a C compiler (there is none for bare-metal targets).
+    if std::env::var_os("CARGO_FEATURE_STD").is_none() {
+        return;
+    }
     let dir = "vendor/ft8_lib";
     println!("cargo:rerun-if-changed={dir}");
     println!("cargo:rerun-if-changed=windows_stpcpy_compat.c");

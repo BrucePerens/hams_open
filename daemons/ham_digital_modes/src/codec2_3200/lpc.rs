@@ -36,10 +36,13 @@
 //! the algorithm the plan doc's own two open options separately
 //! identified).
 
+#[cfg(feature = "std")]
 use super::fixed_point;
 use super::LPC_ORD;
 
+#[cfg(feature = "std")]
 pub type Autocorr = [f32; LPC_ORD + 1];
+#[cfg(feature = "std")]
 pub type LpcCoeffs = [f32; LPC_ORD + 1];
 /// LPC coefficients in Q8.23 fixed-point (`COEF_FRAC_BITS`), the real
 /// internal representation `levinson_durbin_fixed_core` computes in --
@@ -246,6 +249,7 @@ pub fn apply_white_noise_correction_fixed(r_q: &mut [i64; LPC_ORD + 1]) {
 /// same reason the narrower format did).
 const LEVINSON_FRAC_BITS: u32 = 40;
 
+#[cfg(feature = "std")]
 /// Real fixed-point Levinson-Durbin, matching `levinson_durbin`'s exact
 /// arithmetic shape but in genuine integer arithmetic throughout the
 /// per-iteration recursion -- the actual target this exists for is
@@ -369,6 +373,7 @@ fn q_mul(a: i64, b: i64) -> i64 {
     shifted as i64
 }
 
+#[cfg(feature = "std")]
 /// The real per-iteration recursion shared by `levinson_durbin_fixed`
 /// (which only needs the final `ak[]`) and this module's own tests
 /// (which need to know, per iteration, whether the `|k|>1` clamp
@@ -563,14 +568,23 @@ fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
 /// latter to stay fixed-point end to end; a caller that doesn't can
 /// simply ignore the second element.
 // [@ANCHOR: levinson_durbin_fixed_from_integer_r]
+#[cfg(feature = "std")]
 pub fn levinson_durbin_fixed_from_integer_r(
     r_q: &[i64; LPC_ORD + 1],
 ) -> (LpcCoeffs, [i64; LPC_ORD + 1]) {
-    let r_norm_q = r0_normalize_fixed(r_q);
-    let (a_q23, _fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
+    let a_q23 = levinson_durbin_q23_from_integer_r(r_q);
     (dequantize_coef_q23(&a_q23), a_q23)
 }
 
+/// Integer-only form of `levinson_durbin_fixed_from_integer_r`: just the Q8.23 coefficients, no
+/// `f32` anywhere, so it builds without floating point (`no_std`).
+pub fn levinson_durbin_q23_from_integer_r(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
+    let r_norm_q = r0_normalize_fixed(r_q);
+    let (a_q23, _fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
+    a_q23
+}
+
+#[cfg(feature = "std")]
 /// Converts Q8.23 LPC coefficients (`a_q23`, e.g. from
 /// `levinson_durbin_fixed_from_integer_r` or after `apply_bw_gamma_
 /// fixed`) to `LpcCoeffs` (`f32`) -- the "integer core, float boundary"
@@ -598,11 +612,13 @@ pub(crate) const COEF_FRAC_BITS: u32 = 23;
 /// there produced real, monotonically worsening mismatch rates).
 const CHEB_FRAC_BITS: u32 = 29;
 
+#[cfg(feature = "std")]
 // [@ANCHOR: f32_to_q]
 fn f32_to_q(x: f32, frac_bits: u32) -> i32 {
     (x as f64 * (1i64 << frac_bits) as f64).round() as i32
 }
 
+#[cfg(feature = "std")]
 /// Same conversion as `f32_to_q`, but returning `i64` -- required for
 /// `LEVINSON_FRAC_BITS` (40): even a bounded `[-1,1]` value at 40
 /// fractional bits needs up to ~2^40, which silently overflows `i32`
@@ -660,6 +676,7 @@ fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i32 {
     cheb_poly_eval_fixed_core(&coef_q, x)
 }
 
+#[cfg(feature = "std")]
 /// The real per-`x` arithmetic, shared by `cheb_poly_eval_fixed` above
 /// (which quantizes `coef` from `f32` on every call) and a caller that
 /// already has `coef_q` in Q8.23 (e.g. `build_p_q_fixed`'s own output)
@@ -696,6 +713,7 @@ fn cheb_poly_eval_q29(coef_q: &[i32; 6], x_q: i32) -> i32 {
     sum
 }
 
+#[cfg(feature = "std")]
 /// Search step for `lpc_to_lsp`'s coarse root-bracketing sweep across
 /// `x` in `[-1, 1]`.
 const LSP_SEARCH_STEP: f32 = 0.01;
@@ -735,6 +753,7 @@ fn build_p_q_fixed(a_q23: &[i64; LPC_ORD + 1]) -> ([i32; 6], [i32; 6]) {
     )
 }
 
+#[cfg(feature = "std")]
 /// The real search, shared by `floating_reference::lpc::find_next_root`
 /// (which quantizes `poly` once up front, not once per candidate `x` the
 /// way calling `cheb_poly_eval_fixed` directly used to) and a caller
@@ -824,6 +843,7 @@ pub(crate) const fn pi_q23() -> i64 {
     super::tables::LPC_PI_Q23
 }
 
+#[cfg(feature = "std")]
 /// Fixed-point `acos`: genuinely integer end to end, the same LUT shape
 /// `fixed_point.rs`'s `log2_lut`/`exp2_lut` already established.
 /// `x` (a Chebyshev root in `[-1, 1]`) isn't IEEE754-structured the way
@@ -989,6 +1009,7 @@ pub fn lpc_to_lsp_q23_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[i64
     Some(freq)
 }
 
+#[cfg(feature = "std")]
 pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LPC_ORD]> {
     let (p, q) = build_p_q_fixed(a_q23);
     let mut search_from = 1.0f32;
@@ -1008,6 +1029,7 @@ pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LP
 /// coefficients.
 const HALF_POLY_LEN: usize = LPC_ORD + 2;
 
+#[cfg(feature = "std")]
 /// Multiplies two polynomials (ascending-power coefficient order,
 /// `a_len`/`b_len` real lengths within their fixed-capacity buffers) into
 /// `out`, returning the product's own length. Plain convolution, no heap
@@ -1031,6 +1053,7 @@ fn poly_mul_fixed(
     out_len
 }
 
+#[cfg(feature = "std")]
 /// Builds `P(z)` or `Q(z)` (see `lsp_to_lpc`'s own doc comment): cascades
 /// a degree-2 factor `1 - 2*cos(lsp_i)*z^-1 + z^-2` per LSP at indices
 /// `start_offset, start_offset+2, ...`, then multiplies by the boundary
@@ -1055,6 +1078,7 @@ fn build_half_poly(
     (buf, len)
 }
 
+#[cfg(feature = "std")]
 /// Inverse of `lpc_to_lsp`: `LPC_ORD` Line Spectral Frequencies (radians)
 /// back to `LPC_ORD` LPC coefficients. Standard LSP reconstruction
 /// (e.g. Kabal & Ramachandran 1986): `P(z)` is the product of a degree-2
@@ -1154,6 +1178,7 @@ pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1] {
     ak
 }
 
+#[cfg(feature = "std")]
 /// Fixed-point `lpc_energy`: `a_q23` (from `levinson_durbin_fixed_from_
 /// integer_r`'s own second return value) and `r_q` (from `autocorrelate_
 /// fixed`, same Q8.23 as `a_q23`) in, real `f32` energy out (matching

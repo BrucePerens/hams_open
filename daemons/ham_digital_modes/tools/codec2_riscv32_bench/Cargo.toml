@@ -6,8 +6,8 @@ name = "codec2_riscv32_bench"
 version = "0.1.0"
 edition = "2021"
 [dependencies]
-libm = "0.2"
-microfft = { version = "0.6", features = ["size-512", "size-1024"] }
+# The real crate, no_std: no copying of sources any more.
+ham_digital_modes = { path = "../..", default-features = false }
 [profile.release]
 opt-level = 3
 lto = "fat"
@@ -17,4 +17,10 @@ debug = false
 [profile.dev]
 panic = "abort"
 [features]
+# Per-stage instruction marks inside the crate (its `codec2_profile` feature). Turn off with
+# `--no-default-features` for the plain whole-frame counts with zero hook overhead.
+default = ["profile"]
+profile = ["ham_digital_modes/codec2_profile"]
 small = []
+# Also build the 16 kHz spectral bridge (about 19 KB more decoder state) to measure its cost.
+bridge = ["ham_digital_modes/codec2_16k_bridge"]

@@ -1,5 +1,4 @@
 target/
-src/codec2_3200/
 speech.raw
 speech_small.raw
 Cargo.lock

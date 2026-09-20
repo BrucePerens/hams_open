@@ -156,6 +156,7 @@ pub(crate) fn rshift_round_i128(x: i128, n: u32) -> i64 {
     shifted as i64
 }
 
+#[cfg(feature = "codec2_16k_bridge")]
 /// `spectral_bridge.rs`'s own doubled-resolution FFT size -- imported
 /// here (rather than re-derived as `2*FFT_ENC`) so there is exactly one
 /// definition of it, matching `spectral_bridge.rs`'s own `pub const
@@ -482,6 +483,7 @@ const TWIDDLES_512_Q23: [(i64, i64); 256] = [
     (-8387976, -102941),
 ];
 
+#[cfg(feature = "codec2_16k_bridge")]
 /// Twiddle factors for `FFT_ENC_SB`=1024 (`spectral_bridge.rs`'s own
 /// doubled-resolution transform) -- same generation/checked-in-data
 /// convention as [`TWIDDLES_512_Q23`] above, same validating test.
@@ -1018,6 +1020,7 @@ const fn build_bit_reverse_table<const N: usize>() -> [usize; N] {
 }
 
 const BIT_REVERSE_512: [usize; FFT_ENC] = build_bit_reverse_table::<FFT_ENC>();
+#[cfg(feature = "codec2_16k_bridge")]
 const BIT_REVERSE_1024: [usize; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_SB>();
 
 /// Twiddle/bit-reversal tables for the two real FFT sizes this port
@@ -1033,8 +1036,9 @@ const BIT_REVERSE_1024: [usize; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_
 fn fft_twiddles_q23(n: usize) -> &'static [(i64, i64)] {
     match n {
         FFT_ENC => &TWIDDLES_512_Q23,
+        #[cfg(feature = "codec2_16k_bridge")]
         FFT_ENC_SB => &TWIDDLES_1024_Q23,
-        _ => panic!("fft_twiddles_q23: unsupported FFT size {n} (only {FFT_ENC} and {FFT_ENC_SB} have cached tables)"),
+        _ => panic!("fft_twiddles_q23: unsupported FFT size {n} (only FFT_ENC, and with the 16 kHz bridge FFT_ENC_SB, have cached tables)"),
     }
 }
 
@@ -1042,8 +1046,9 @@ fn fft_twiddles_q23(n: usize) -> &'static [(i64, i64)] {
 fn fft_bit_reverse_table(n: usize) -> &'static [usize] {
     match n {
         FFT_ENC => &BIT_REVERSE_512,
+        #[cfg(feature = "codec2_16k_bridge")]
         FFT_ENC_SB => &BIT_REVERSE_1024,
-        _ => panic!("fft_bit_reverse_table: unsupported FFT size {n} (only {FFT_ENC} and {FFT_ENC_SB} have cached tables)"),
+        _ => panic!("fft_bit_reverse_table: unsupported FFT size {n} (only FFT_ENC, and with the 16 kHz bridge FFT_ENC_SB, have cached tables)"),
     }
 }
 

@@ -4,8 +4,11 @@
 //! sample buffer, normalized so the windowed signal's own energy sum
 //! matches what `super::lpc`'s autocorrelation-based analysis expects.
 
-use super::{FFT_ENC, M_PITCH, NW};
+use super::M_PITCH;
+#[cfg(feature = "std")]
+use super::{FFT_ENC, NW};
 
+#[cfg(feature = "std")]
 /// Builds the time-domain analysis window (`M_PITCH` samples, mostly
 /// zero outside the centered `NW`-sample Hann taper).
 // [@ANCHOR: make_analysis_window]

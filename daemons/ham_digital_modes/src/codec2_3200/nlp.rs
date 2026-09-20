@@ -22,6 +22,7 @@ use super::{M_PITCH, NLP_DEC, N_SAMP, PE_FFT_SIZE, P_MAX, P_MIN, SAMPLE_RATE};
 /// nlp`'s own `decimate`/`nlp` need this too.
 pub(crate) const NDEC: usize = M_PITCH / NLP_DEC;
 
+#[cfg(feature = "std")]
 /// First-order DC-blocking filter: `y[n] = x[n] - x[n-1] + a*y[n-1]`, a
 /// standard high-pass structure with its pole at `a` (closer to 1.0 means
 /// a lower corner frequency). `0.95` at 8kHz puts the corner around
@@ -36,6 +37,7 @@ pub(crate) const NOTCH_A: f32 = 0.95;
 /// own `decimate` needs this too.
 pub(crate) const LPF_TAPS: usize = 25;
 
+#[cfg(feature = "std")]
 /// Windowed-sinc low-pass FIR, unity DC gain, cutoff at `cutoff` cycles
 /// per original-rate sample (`0.5 / NLP_DEC` for anti-aliasing ahead of
 /// decimation by `NLP_DEC`).
@@ -61,6 +63,7 @@ pub(crate) fn design_lowpass(taps: usize, cutoff: f32) -> [f32; LPF_TAPS] {
     h
 }
 
+#[cfg(feature = "std")]
 /// `pub(crate)`: `floating_reference::nlp`'s own `decimate` needs this
 /// too (its float twin of `decimate_fixed` below).
 // [@ANCHOR: lowpass_coeffs]
@@ -70,6 +73,7 @@ pub(crate) fn lowpass_coeffs() -> &'static [f32; LPF_TAPS] {
     COEFFS.get_or_init(|| design_lowpass(LPF_TAPS, 0.5 / NLP_DEC as f32))
 }
 
+#[cfg(feature = "std")]
 /// Fraction of the global peak magnitude a sub-multiple candidate must
 /// clear to be preferred over the raw global peak -- lowered by half
 /// when that candidate is close to the previous frame's own estimate
@@ -78,6 +82,7 @@ pub(crate) fn lowpass_coeffs() -> &'static [f32; LPF_TAPS] {
 /// too.
 pub(crate) const CNLP: f32 = 0.3;
 
+#[cfg(feature = "std")]
 /// `f0` (Hz) -> `Wo` (normalized angular pitch frequency), the form
 /// `quantise::encode_wo` expects. Shared unchanged by both encoders.
 pub fn f0_to_wo(f0: f32) -> f32 {
@@ -441,6 +446,7 @@ fn correct_sub_multiples_fixed(
     cmax_bin
 }
 
+#[cfg(feature = "std")]
 /// Fixed-point twin of `floating_reference::nlp::nlp`. `sn` is this
 /// crate's own real `i16`-native sample history (`EncoderFixed`'s own
 /// `sn` field) -- no `f32` conversion anywhere in this call. Returns

@@ -16,10 +16,17 @@
 //! peak-limiter as a defensive measure against bit-error-induced level
 //! spikes.
 
+#[cfg(feature = "std")]
 use super::envelope::Model;
-use super::{BG_BETA, BG_MARGIN, BG_THRESH, FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER_FRAME, TW};
+use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER_FRAME};
+#[cfg(feature = "std")]
+use super::TW;
+#[cfg(feature = "std")]
+use super::{BG_BETA, BG_MARGIN, BG_THRESH};
+#[cfg(feature = "std")]
 use rustfft::num_complex::Complex32;
 
+#[cfg(feature = "std")]
 // [@ANCHOR: make_synthesis_window]
 pub(crate) fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME];
@@ -48,6 +55,7 @@ pub(crate) fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
     pn
 }
 
+#[cfg(feature = "std")]
 /// Simple xorshift PRNG for unvoiced-excitation and postfilter phase
 /// randomization -- doesn't need to match the reference's own generator
 /// (purely a synthesis-quality detail, not transmitted).
@@ -59,6 +67,7 @@ pub(crate) fn next_rand(state: &mut u32) -> f32 {
     (*state >> 8) as f32 / (1u32 << 24) as f32 * std::f32::consts::TAU
 }
 
+#[cfg(feature = "std")]
 /// Advances the voiced-excitation phase track by one frame and samples
 /// each harmonic's phase through the LPC synthesis filter (`h`, from
 /// `envelope::sample_filter_phase`) -- voiced harmonics phase-lock to a
@@ -99,6 +108,7 @@ fn synthesize_phase(
     }
 }
 
+#[cfg(feature = "std")]
 /// Pure decision logic behind `postfilter` below -- no RNG/phi
 /// mutation, and the two log-domain operations (`e_db`, `thresh`) are
 /// parameterized (`log2`/`exp2`) rather than hardcoded, so
@@ -142,6 +152,7 @@ pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(
     (new_bg_est, decisions)
 }
 
+#[cfg(feature = "std")]
 /// Randomizes the phase of harmonics quiet relative to the tracked
 /// background-noise level during voiced frames (makes them sound
 /// unvoiced/noise-like rather than tonal, closer to real speech's own
@@ -175,6 +186,7 @@ fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32) {
     }
 }
 
+#[cfg(feature = "std")]
 /// Attenuates a whole frame if any sample would exceed a safe int16
 /// level -- a defensive measure against bit-error-induced amplitude
 /// spikes reaching real ears/speakers, not a normal-operation limiter.
@@ -191,6 +203,7 @@ pub(crate) fn ear_protection(samples: &mut [f32]) {
     }
 }
 
+#[cfg(feature = "std")]
 /// Persistent per-decoder synthesis state.
 pub struct SynthesisState {
     /// `SAMPLES_PER_FRAME`-sample overlap-add buffer: the newest
@@ -215,6 +228,7 @@ pub struct SynthesisState {
     ifft_buf: [Complex32; FFT_ENC],
 }
 
+#[cfg(feature = "std")]
 impl Default for SynthesisState {
     fn default() -> Self {
         SynthesisState {
@@ -228,6 +242,7 @@ impl Default for SynthesisState {
     }
 }
 
+#[cfg(feature = "std")]
 impl SynthesisState {
     pub fn new() -> Self {
         Self::default()
@@ -526,8 +541,11 @@ impl SynthesisStateFixed {
         model: &mut ModelFixed,
         h: &[ComplexQ23; MAX_AMP + 1],
     ) -> [i16; N_SAMP] {
+        profile_mark!(15);
         synthesize_phase_fixed(model, h, &mut self.ex_phase, &mut self.rng);
+        profile_mark!(11);
         postfilter_fixed(model, &mut self.bg_est, &mut self.rng);
+        profile_mark!(12);
 
         self.sn_.copy_within(N_SAMP.., 0);
         self.sn_[N_SAMP - 1] = 0;
@@ -552,7 +570,9 @@ impl SynthesisStateFixed {
             self.scratch.im[FFT_ENC - k] = -self.scratch.im[k];
         }
 
+        profile_mark!(13);
         fft_fixed(&mut self.scratch.re, &mut self.scratch.im, false);
+        profile_mark!(14);
 
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP - 1) {

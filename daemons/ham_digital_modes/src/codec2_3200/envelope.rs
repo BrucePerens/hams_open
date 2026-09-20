@@ -17,9 +17,13 @@
 //! reference's own real, published approach since it's a genuinely
 //! good, well-motivated technique, not incidental.
 
-use super::{FFT_ENC, LPCPF_GAMMA, LPCPF_TWO_BETA, LPC_ORD, MAX_AMP, SAMPLE_RATE};
+use super::{FFT_ENC, LPC_ORD, MAX_AMP};
+#[cfg(feature = "std")]
+use super::{LPCPF_GAMMA, LPCPF_TWO_BETA, SAMPLE_RATE};
+#[cfg(feature = "std")]
 use rustfft::num_complex::Complex32;
 
+#[cfg(feature = "std")]
 /// Sinusoidal-synthesis model parameters for one 10ms sub-frame: pitch
 /// (`wo`, normalized angular frequency), harmonic count (`l`), per
 /// harmonic amplitude/phase (`a`/`phi`, both 1-indexed -- index 0
@@ -45,6 +49,7 @@ pub struct Model {
     pub voiced: bool,
 }
 
+#[cfg(feature = "std")]
 impl Model {
     // [@ANCHOR: Model::new]
     pub fn new(wo: f32, voiced: bool) -> Self {
@@ -63,6 +68,7 @@ impl Model {
 /// rest is the conjugate mirror, redundant).
 const SPEC_BINS: usize = FFT_ENC / 2 + 1;
 
+#[cfg(feature = "std")]
 /// `ak[]` zero-padded into a `FFT_ENC`-point real buffer, forward FFT'd,
 /// returning the complex spectrum's first `SPEC_BINS` bins. Fixed-size
 /// stack buffers throughout (`FFT_ENC` is a compile-time constant) --
@@ -82,6 +88,7 @@ fn lpc_spectrum(ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
     core::array::from_fn(|i| out[i])
 }
 
+#[cfg(feature = "std")]
 /// Computes `model.a[1..=model.l]` from `ak`/`e` (the real LPC energy),
 /// and returns the raw LPC spectrum (`Aw`, `SPEC_BINS` complex bins)
 /// alongside it, since `synthesis.rs`'s own phase reconstruction needs
@@ -148,6 +155,7 @@ pub fn compute_harmonic_amplitudes(
     aw
 }
 
+#[cfg(feature = "std")]
 /// First-harmonic correction: for very low-pitched (typically male)
 /// voices, LPC modelling tends to overestimate the fundamental's own
 /// amplitude -- a real, documented quirk of this general modelling
@@ -163,6 +171,7 @@ pub fn apply_first_harmonic_correction(model: &mut Model) {
     }
 }
 
+#[cfg(feature = "std")]
 /// `H[m] = conj(Aw[bin])` for each harmonic `m` -- the synthesis
 /// filter's phase response at each harmonic, opposite phase to the
 /// analysis filter (`Aw`) it's derived from.
@@ -333,7 +342,9 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
     // harmonic bins (`h`, what synthesis needs) and the squared magnitudes
     // are read out of it right away, so the full 257-bin spectrum is never
     // copied into a 4 KB array of its own.
+    profile_mark!(15);
     lpc_spectrum_fixed(ak_q23, scratch);
+    profile_mark!(6);
     let h = sample_filter_phase_with(
         |b| ComplexQ23 {
             re: scratch.re[b],
@@ -348,6 +359,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
         }) + eps_a2_q23()
     });
 
+    profile_mark!(7);
     let mut ak_gamma_q23 = [0i64; LPC_ORD + 1];
     ak_gamma_q23[0] = ak_q23[0];
     for i in 1..=LPC_ORD {
@@ -373,6 +385,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
     // log2/exp2 evaluations behind it dominate this function's cost, so
     // it is computed exactly once per bin and reused. Results are
     // bit-identical to recomputing it.
+    profile_mark!(8);
     let mut pw_bin_q23 = [0i64; FFT_ENC / 2];
     let mut e_before_q23: i64 = 0;
     let mut e_after_q23: i64 = 0;

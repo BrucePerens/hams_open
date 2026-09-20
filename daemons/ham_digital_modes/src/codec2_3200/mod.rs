@@ -115,16 +115,39 @@
 //! for the real verification that found this, which is why no separate
 //! LGPL-2.1-only data file was needed here at all.
 
+/// Instruction-count profiling hooks for the bare-metal bench harness (`tools/codec2_riscv32_bench`).
+/// With the `codec2_profile` feature off (the default) `profile_mark!` expands to nothing.
+#[cfg(feature = "codec2_profile")]
+pub mod profile {
+    extern "Rust" {
+        fn codec2_profile_mark(id: usize);
+    }
+    /// Calls the harness-provided `#[no_mangle] fn codec2_profile_mark(id: usize)`.
+    #[inline(always)]
+    pub fn mark(id: usize) {
+        // SAFETY: the harness defines this symbol with exactly this signature.
+        unsafe { codec2_profile_mark(id) }
+    }
+}
+macro_rules! profile_mark {
+    ($id:expr) => {
+        #[cfg(feature = "codec2_profile")]
+        $crate::codec2_3200::profile::mark($id);
+    };
+}
+
 pub mod bits;
 pub mod encoder_fixed;
 pub mod envelope;
 pub mod fixed_fft;
 pub mod fixed_point;
+#[cfg(feature = "std")]
 pub mod floating_reference;
 pub mod interp;
 pub mod lpc;
 pub mod nlp;
 pub mod quantise;
+#[cfg(feature = "codec2_16k_bridge")]
 pub mod spectral_bridge;
 pub mod synthesis;
 mod tables;
@@ -155,9 +178,11 @@ pub const NLP_DEC: usize = 5;
 /// Sample rate this mode operates at.
 pub const SAMPLE_RATE: u32 = 8000;
 
+#[cfg(feature = "std")]
 /// `Wo` (normalized angular pitch frequency) quantizer range: `P_MAX`
 /// (160 samples, ~50Hz) to `P_MIN` (20 samples, ~400Hz) pitch period.
 pub const W0_MIN: f32 = (2.0 * std::f32::consts::PI) / 160.0;
+#[cfg(feature = "std")]
 pub const W0_MAX: f32 = (2.0 * std::f32::consts::PI) / 20.0;
 pub const WO_BITS: u32 = 7;
 
@@ -165,8 +190,10 @@ pub const WO_BITS: u32 = 7;
 pub const P_MIN: usize = 20;
 pub const P_MAX: usize = 160;
 
+#[cfg(feature = "std")]
 /// Energy quantizer range, dB.
 pub const E_MIN_DB: f32 = -10.0;
+#[cfg(feature = "std")]
 pub const E_MAX_DB: f32 = 40.0;
 pub const E_BITS: u32 = 5;
 
@@ -184,18 +211,25 @@ pub const MAX_AMP: usize = 80;
 /// window.
 pub const TW: usize = 40;
 
+#[cfg(feature = "std")]
 /// LPC postfilter constants (bandwidth-expansion gamma exponent base,
 /// spectral-envelope-flattening beta) -- Codec2's own real, published
 /// choices for this specific postfilter design.
 pub const LPCPF_GAMMA: f32 = 0.5;
+#[cfg(feature = "std")]
 pub const LPCPF_BETA: f32 = 0.2;
+#[cfg(feature = "std")]
 pub const LPCPF_TWO_BETA: f32 = 2.0 * LPCPF_BETA;
 
+#[cfg(feature = "std")]
 /// Background-noise estimator (voiced/unvoiced harmonic split) constants.
 pub const BG_THRESH: f32 = 40.0;
+#[cfg(feature = "std")]
 pub const BG_BETA: f32 = 0.1;
+#[cfg(feature = "std")]
 pub const BG_MARGIN: f32 = 6.0;
 
+#[cfg(feature = "std")]
 /// `~15Hz` bandwidth expansion applied to LPC coefficients before LSP
 /// conversion, geometric: `bw_gamma[i] = 0.994^i`. Verified directly
 /// against the real vendored reference's own literal table (11 values,
@@ -207,6 +241,7 @@ pub fn bw_gamma(i: usize) -> f32 {
     GAMMA.powi(i as i32)
 }
 
+#[cfg(feature = "std")]
 /// LSPs to substitute when `lpc::lpc_to_lsp` fails to find all
 /// `LPC_ORD` roots (a real, if rare, LPC analysis failure mode on
 /// pathological input) -- evenly spaced across `[0, pi]`, matching the
@@ -215,6 +250,7 @@ fn fallback_lsp() -> [f32; LPC_ORD] {
     core::array::from_fn(|i| (std::f32::consts::PI / LPC_ORD as f32) * i as f32)
 }
 
+#[cfg(feature = "std")]
 /// LSPs the reference's own decoder starts from before any real frame
 /// has been decoded -- evenly spaced across `[0, pi]`, same shape as
 /// `fallback_lsp` (a fresh decoder has nothing better to interpolate the
@@ -223,6 +259,7 @@ fn initial_lsps() -> [f32; LPC_ORD] {
     core::array::from_fn(|i| (i as f32 * std::f32::consts::PI) / (LPC_ORD as f32 + 1.0))
 }
 
+#[cfg(feature = "std")]
 /// Persistent per-decoder state: the previous frame's own decoded
 /// `Wo`/voiced/LSPs/energy (needed for interpolating the next frame's
 /// first sub-frame), plus `synthesis::SynthesisState`'s own overlap-add
@@ -241,6 +278,7 @@ pub struct Decoder {
     pub spectral_bridge: spectral_bridge::SpectralBridgeState,
 }
 
+#[cfg(feature = "std")]
 impl Default for Decoder {
     fn default() -> Self {
         Decoder {
@@ -254,6 +292,7 @@ impl Default for Decoder {
     }
 }
 
+#[cfg(feature = "std")]
 impl Decoder {
     pub fn new() -> Self {
         Self::default()
@@ -393,6 +432,7 @@ pub struct DecoderFixed {
     prev_lsps: [i64; LPC_ORD],
     prev_e: i64,
     synth: synthesis::SynthesisStateFixed,
+    #[cfg(feature = "codec2_16k_bridge")]
     pub(crate) spectral_bridge: spectral_bridge::SpectralBridgeStateFixed,
 }
 
@@ -404,6 +444,7 @@ impl Default for DecoderFixed {
             prev_lsps: initial_lsps_q23(),
             prev_e: 1i64 << 23,
             synth: synthesis::SynthesisStateFixed::new(),
+            #[cfg(feature = "codec2_16k_bridge")]
             spectral_bridge: spectral_bridge::SpectralBridgeStateFixed::new(),
         }
     }
@@ -419,6 +460,7 @@ impl DecoderFixed {
     /// mirror, genuinely fixed-point end to end.
     // [@ANCHOR: DecoderFixed::decode]
     pub fn decode(&mut self, bytes: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
+        profile_mark!(15);
         let fields = bits::unpack_frame(bytes, WO_BITS, E_BITS);
         let wo1 = quantise::decode_wo_fixed(fields.wo_index);
         let e1 = quantise::decode_energy_fixed(fields.e_index);
@@ -435,11 +477,13 @@ impl DecoderFixed {
         );
         let e0 = interp::interp_energy_fixed(self.prev_e, e1);
         let lsps0 = interp::interpolate_lsp_fixed(&self.prev_lsps, &lsps1);
+        profile_mark!(0);
 
         let mut out = [0i16; SAMPLES_PER_FRAME];
         let subframes = [(wo0, voiced0, lsps0, e0), (wo1, fields.voiced1, lsps1, e1)];
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc_fixed(&lsps);
+            profile_mark!(1);
             let mut model = envelope::ModelFixed::new(wo, voiced);
             let h = envelope::compute_harmonic_amplitudes_fixed(
                 &ak,
@@ -447,8 +491,11 @@ impl DecoderFixed {
                 &mut model,
                 &mut self.synth.scratch,
             );
+            profile_mark!(2);
             envelope::apply_first_harmonic_correction_fixed(&mut model);
+            profile_mark!(3);
             let sub = self.synth.synthesize_subframe_fixed(&mut model, &h);
+            profile_mark!(4);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
         }
 
@@ -466,6 +513,7 @@ impl DecoderFixed {
     /// interleaving `decode()`/`decode_16k_fixed()` on one instance
     /// (same shared inter-frame state here too).
     // [@ANCHOR: DecoderFixed::decode_16k_fixed]
+    #[cfg(feature = "codec2_16k_bridge")]
     pub fn decode_16k_fixed(
         &mut self,
         bytes: &[u8; BYTES_PER_FRAME],

@@ -29,13 +29,17 @@
 //! (the one shared `Decoder` needs) also uses: `LspDim`, `LSP_DIMS`,
 //! `LSP_LEVELS`, `lsp_dim_value_hz`.
 
-use super::{E_BITS, E_MAX_DB, E_MIN_DB, LPC_ORD, W0_MAX, W0_MIN, WO_BITS};
+use super::{E_BITS, LPC_ORD};
+#[cfg(feature = "std")]
+use super::{E_MAX_DB, E_MIN_DB, W0_MAX, W0_MIN, WO_BITS};
 
+#[cfg(feature = "std")]
 // [@ANCHOR: encode_wo]
 pub fn encode_wo(wo: f32) -> u32 {
     quantize_linear(wo, W0_MIN, W0_MAX, WO_BITS)
 }
 
+#[cfg(feature = "std")]
 // [@ANCHOR: decode_wo]
 pub fn decode_wo(index: u32) -> f32 {
     dequantize_linear(index, W0_MIN, W0_MAX, WO_BITS)
@@ -65,6 +69,7 @@ pub fn decode_wo_fixed(index: u32) -> i64 {
     w0_min_q23() + w0_step_q23() * index as i64
 }
 
+#[cfg(feature = "std")]
 /// Uses `fixed_point::log2_lut` (an 8-bit, linearly-interpolated
 /// log2/exp2 LUT -- the real fixed-point-friendly shape validated in
 /// `docs/references/CODEC2_MOD_FIXED_POINT_PLAN.md` for `aks_to_mag2`'s
@@ -95,13 +100,18 @@ pub fn encode_energy_q23(e_q23: i64) -> u32 {
     let log2_q23 = super::fixed_point::log2_q23(e_q23.max(1));
     let e_db_q23 = (log2_q23 * super::tables::SYNTH_TEN_OVER_LOG2_10_Q23 + (1 << 22)) >> 23;
     const LEVELS: i64 = 1 << E_BITS;
-    const MIN_Q23: i64 = (E_MIN_DB as i64) << 23;
-    const SPAN_Q23: i64 = ((E_MAX_DB - E_MIN_DB) as i64) << 23;
+    // Integer copies of `E_MIN_DB` / `E_MAX_DB` (the `f32` constants exist only in the `std`
+    // build); `integer_energy_bounds_match_the_float_constants` keeps them in step.
+    const E_MIN_DB_INT: i64 = -10;
+    const E_MAX_DB_INT: i64 = 40;
+    const MIN_Q23: i64 = E_MIN_DB_INT << 23;
+    const SPAN_Q23: i64 = (E_MAX_DB_INT - E_MIN_DB_INT) << 23;
     // floor(levels * (e_db - min) / span + 1/2), then clamp.
     let num = (e_db_q23 - MIN_Q23) * LEVELS + SPAN_Q23 / 2;
     (num.div_euclid(SPAN_Q23)).clamp(0, LEVELS - 1) as u32
 }
 
+#[cfg(feature = "std")]
 pub fn decode_energy(index: u32) -> f32 {
     let e_db = dequantize_linear(index, E_MIN_DB, E_MAX_DB, E_BITS);
     super::fixed_point::exp2_lut(e_db / 10.0 * std::f32::consts::LOG2_10)
@@ -133,6 +143,7 @@ pub fn decode_energy_fixed(index: u32) -> i64 {
     super::fixed_point::exp2_q23(y_q23)
 }
 
+#[cfg(feature = "std")]
 /// Real linear scalar quantizer shared by `Wo` and energy: `bits`
 /// levels evenly spaced across `[min, max]`, index rounded to nearest
 /// and clamped. `pub(crate)` so `fixed_point.rs`'s LUT-based energy
@@ -146,6 +157,7 @@ pub(crate) fn quantize_linear(value: f32, min: f32, max: f32, bits: u32) -> u32 
     index.clamp(0, levels as i32 - 1) as u32
 }
 
+#[cfg(feature = "std")]
 // [@ANCHOR: dequantize_linear]
 pub(crate) fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f32 {
     let levels = 1u32 << bits;
@@ -153,6 +165,7 @@ pub(crate) fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f3
     min + step * index as f32
 }
 
+#[cfg(feature = "std")]
 /// One dimension of the LSP delta-scalar quantizer: 32 levels (5 bits),
 /// `step1`Hz apart for the first `breakpoint` levels, `step2`Hz apart
 /// after that (`step1 == step2` for a purely uniform dimension).
@@ -162,6 +175,7 @@ pub(crate) struct LspDim {
     pub(crate) step2: f32,
 }
 
+#[cfg(feature = "std")]
 /// The real per-dimension parameters, reverse-derived from the
 /// reference's own real quantizer boundaries (see this module's own doc
 /// comment) -- 7 of 10 dimensions are uniform, 3 (indices 3, 4, 5) widen
@@ -184,6 +198,7 @@ pub(crate) const LSP_DIMS: [LspDim; LPC_ORD] = {
 
 pub(crate) const LSP_LEVELS: u32 = 32;
 
+#[cfg(feature = "std")]
 // [@ANCHOR: lsp_dim_value_hz]
 pub(crate) fn lsp_dim_value_hz(dim: &LspDim, level: u32) -> f32 {
     if level < dim.breakpoint {
@@ -193,6 +208,7 @@ pub(crate) fn lsp_dim_value_hz(dim: &LspDim, level: u32) -> f32 {
     }
 }
 
+#[cfg(feature = "std")]
 // [@ANCHOR: decode_lsps_delta_scalar]
 pub fn decode_lsps_delta_scalar(indexes: &[u32; LPC_ORD]) -> [f32; LPC_ORD] {
     const RAD_PER_HZ: f32 = std::f32::consts::PI / 4000.0;
@@ -279,6 +295,7 @@ fn lsp_dim_nearest_level_q16(dim: &LspDimQ16, target_q16: i64) -> u32 {
     best_level
 }
 
+#[cfg(feature = "std")]
 /// Fixed-point `encode_lsps_delta_scalar`: same signature (every real
 /// caller's `lsp[]` is still `f32`-typed, coming from `lpc::lpc_to_lsp_
 /// from_integer_ak`'s own boundary conversion), but every quantizer
@@ -357,6 +374,13 @@ pub fn decode_lsps_delta_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[test]
+    fn integer_energy_bounds_match_the_float_constants() {
+        // `encode_energy_q23` uses integer copies (-10, 40) so it builds without floating point.
+        assert_eq!(E_MIN_DB, -10.0);
+        assert_eq!(E_MAX_DB, 40.0);
+    }
 
     macro_rules! fixture {
         ($name:literal) => {

@@ -1,10 +1,8 @@
 #![no_std]
 #![no_main]
 #![allow(dead_code, static_mut_refs, unused_imports, unused_variables)]
-mod codec2_3200;
 mod prof;
-mod shim;
-use codec2_3200::{DecoderFixed, EncoderFixed, SAMPLES_PER_FRAME, BYTES_PER_FRAME};
+use ham_digital_modes::codec2_3200::{DecoderFixed, EncoderFixed, BYTES_PER_FRAME, SAMPLES_PER_FRAME};
 use core::fmt::Write;
 
 core::arch::global_asm!(r#"
@@ -79,6 +77,17 @@ static SPEECH: &[u8] = include_bytes!("../speech_small.raw");
 const E_NAMES: [&str; 9] = ["nlp(x2)", "voicing(x2)", "encode_wo", "window+autocorr", "white+levinson", "lpc_energy", "bw+lpc_to_lsp", "quantise", "pack"];
 const D_NAMES: [&str; 5] = ["unpack+dequant+interp", "lsp_to_lpc(x2)", "harmonic_amps(x2)", "first_harm(x2)", "synth(x2)"];
 
+// Kept out of line so the stack high-water mark below includes the codec's whole call tree (with
+// link-time inlining the frames would otherwise be folded into `main`'s own frame and not measured).
+#[inline(never)]
+fn do_encode(enc: &mut EncoderFixed, fr: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
+    enc.encode(fr)
+}
+#[inline(never)]
+fn do_decode(dec: &mut DecoderFixed, fr: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLES_PER_FRAME] {
+    dec.decode(fr)
+}
+
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     let mut u = Uart;
@@ -99,7 +108,7 @@ pub extern "C" fn main() -> ! {
             fr[i] = i16::from_le_bytes([SPEECH[o], SPEECH[o + 1]]);
         }
         let t0 = prof::instret();
-        frames[f] = enc.encode_profiled(&fr);
+        frames[f] = do_encode(&mut enc, &fr);
         let d = prof::instret().wrapping_sub(t0);
         if f == 0 { first = d; unsafe { prof::ACC = [0; 16]; } } else { enc_tot += d as u64; enc_max = enc_max.max(d); }
         for &b in &frames[f] { cksum = cksum.wrapping_mul(16777619).wrapping_add(b as u32); }
@@ -114,7 +123,7 @@ pub extern "C" fn main() -> ! {
     let mut dfirst = 0u32; let mut dec_tot = 0u64; let mut dec_max = 0u32;
     for f in 0..n {
         let t0 = prof::instret();
-        let out = dec.decode_profiled(&frames[f]);
+        let out = do_decode(&mut dec, &frames[f]);
         let d = prof::instret().wrapping_sub(t0);
         if f == 0 { dfirst = d; unsafe { prof::ACC = [0; 16]; } } else { dec_tot += d as u64; dec_max = dec_max.max(d); }
         for &s in &out { cksum = cksum.wrapping_mul(16777619).wrapping_add(s as u16 as u32); }

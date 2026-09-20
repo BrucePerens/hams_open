@@ -94,12 +94,17 @@
 //! Extrapolation is also always skipped for unvoiced sub-frames even
 //! when enabled -- see `extrapolate_amplitudes`'s own doc comment.
 
-use super::envelope::{synth_k_q23, Model, ModelFixed};
+use super::envelope::{synth_k_q23, ModelFixed};
+#[cfg(feature = "std")]
+use super::envelope::Model;
 use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23};
 use super::fixed_point::{exp2_q23, log2_q23};
-use super::synthesis::{ear_protection, ear_protection_fixed, phase_increment_q32};
+use super::synthesis::{ear_protection_fixed, phase_increment_q32};
+#[cfg(feature = "std")]
+use super::synthesis::ear_protection;
 use super::trig_fixed::sin_cos_q23;
 use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLE_RATE};
+#[cfg(feature = "std")]
 use rustfft::num_complex::Complex32;
 
 const FRAC_BITS: u32 = 23;
@@ -120,6 +125,7 @@ pub const FFT_ENC_SB: usize = 2 * FFT_ENC;
 /// already capped at `MAX_AMP`).
 pub const MAX_AMP_SB: usize = 2 * MAX_AMP;
 
+#[cfg(feature = "std")]
 // [@ANCHOR: make_synthesis_window_sb]
 pub(crate) fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME_SB];
@@ -152,6 +158,7 @@ pub(crate) fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
     pn
 }
 
+#[cfg(feature = "std")]
 /// Extrapolates harmonic amplitudes above `model.l` -- see this
 /// module's own doc comment for the fitting method. Returns the
 /// extended amplitude array (indices `1..=l2` populated, matching
@@ -224,6 +231,7 @@ pub fn extrapolate_amplitudes(model: &Model, enabled: bool) -> ([f32; MAX_AMP_SB
     (a_ext, l2)
 }
 
+#[cfg(feature = "std")]
 /// Persistent per-decoder Spectral Bridge synthesis state -- parallel
 /// to, and independent of, `synthesis::SynthesisState` (the base 8kHz
 /// path is untouched by this module entirely). `ex_phase` is updated
@@ -248,6 +256,7 @@ pub struct SpectralBridgeState {
     ifft_buf: [Complex32; FFT_ENC_SB],
 }
 
+#[cfg(feature = "std")]
 impl Default for SpectralBridgeState {
     fn default() -> Self {
         SpectralBridgeState {
@@ -260,6 +269,7 @@ impl Default for SpectralBridgeState {
     }
 }
 
+#[cfg(feature = "std")]
 impl SpectralBridgeState {
     pub fn new() -> Self {
         Self::default()

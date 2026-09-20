@@ -6,6 +6,11 @@ pub fn instret() -> u32 {
     unsafe { core::arch::asm!("csrr {0}, minstret", out(reg) x) };
     x
 }
+/// Hook the crate's `profile_mark!` calls (feature `codec2_profile`) resolve to.
+#[no_mangle]
+pub extern "Rust" fn codec2_profile_mark(id: usize) {
+    mark(id)
+}
 /// Adds instructions retired since the previous mark to bucket `i` (mark(15) just resets the baseline).
 #[inline(never)]
 pub fn mark(i: usize) {

@@ -123,6 +123,7 @@ fn log2_lut_generic(x: f32, bits: u32, table: &[f32]) -> f32 {
     exponent as f32 + table[idx] + frac * (table[idx + 1] - table[idx])
 }
 
+#[cfg(feature = "std")]
 /// Q23 fixed-point sibling of `log2_lut_generic` -- the real
 /// implementation `log2_lut()` now calls. `table[idx]`'s own log2
 /// values live in `[0.0, 1.0]` (log2 of a mantissa in `[1.0, 2.0)`), so
@@ -204,6 +205,7 @@ fn exp2_lut_table_frac_q23() -> &'static [i32; LOG2_LUT_SIZE] {
     &super::tables::EXP2_LUT_FRAC_Q23
 }
 
+#[cfg(feature = "std")]
 /// Exact `round(y * 2^frac_bits)` computed straight from `y`'s own
 /// IEEE754 bit pattern -- no float multiply at all, the same bit-
 /// extraction trick `log2_lut_generic_fixed` already uses on its own
@@ -247,6 +249,7 @@ pub(crate) fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64 {
     sign * mag as i64
 }
 
+#[cfg(feature = "std")]
 /// Q23 fixed-point sibling of `exp2_lut_generic` -- the real
 /// implementation `exp2_lut()` now calls. Unlike `log2_lut_generic_
 /// fixed` (whose input `x` is already IEEE754-shaped, so its
@@ -291,6 +294,7 @@ fn exp2_lut_generic_fixed(y: f32, bits: u32, table_frac_q23: &[i32]) -> f32 {
     f32::from_bits(raw_bits)
 }
 
+#[cfg(feature = "std")]
 /// `pub(crate)`: `quantise::encode_energy` calls this directly (see
 /// that function) -- this is the actual implementation the codec uses,
 /// not a parallel unused sibling. Signature stays `f32 -> f32` (every
@@ -304,6 +308,7 @@ pub(crate) fn log2_lut(x: f32) -> f32 {
     log2_lut_generic_fixed(x, LOG2_LUT_BITS, log2_lut_table_q23())
 }
 
+#[cfg(feature = "std")]
 /// `pub(crate)`: `quantise::decode_energy` calls this directly. As of
 /// this pass, `exp2_lut_generic_fixed` closes the same interpolation gap
 /// for `exp2_lut` that `log2_lut_generic_fixed` closed above.
