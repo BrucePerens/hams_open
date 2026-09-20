@@ -5,6 +5,7 @@ import ipaddress
 import json
 import os
 import tempfile
+import time
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -186,9 +187,24 @@ class TestSyntheticSpooler(HamsTransactionCase):
                 "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.SPOOL_FILE",
                 spool_path,
             )
+            # Root cause of an intermittent empty "Unexpected execution error:"
+            # here: patching "...pager_synthetic_spooler.time.sleep" patches
+            # the process-global `time` module, so the worker thread's own
+            # subprocess.run(timeout=...) -> Popen._wait() (which polls with
+            # time.sleep when bwrap is not yet reaped after pipe EOF, i.e.
+            # under load) raised _StopLoop, whose str() is empty, and the
+            # bash check reported success=False. Replace only the daemon
+            # module's `time` name with a proxy so nothing else is affected.
+            class _LoopStopTime:
+                time = staticmethod(time.time)
+
+                @staticmethod
+                def sleep(_seconds):
+                    raise _StopLoop()
+
             self.safe_patch(
-                "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.time.sleep",
-                side_effect=_StopLoop,
+                "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.time",
+                new=_LoopStopTime,
             )
 
             with self.assertRaises(_StopLoop):
