@@ -91,3 +91,6 @@ required-features = ["ambe_plus_2"]
 [[example]]
 name = "ambe_roundtrip_quality_report"
 required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_error_concealment_eval"
