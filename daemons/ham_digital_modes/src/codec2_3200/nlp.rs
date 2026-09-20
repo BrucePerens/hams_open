@@ -296,24 +296,48 @@ fn dc_notch_fixed(x: i64, mem_x: &mut i64, mem_y: &mut i64) -> i64 {
 // [@ANCHOR: decimate_fixed]
 fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
     let h = lowpass_coeffs_q23();
-    let half = (LPF_TAPS as isize - 1) / 2;
+    const _: () = assert!(window_fits_i32(&super::tables::NLP_LOWPASS_Q23));
+    let half = (LPF_TAPS - 1) / 2;
+    // The 32x32->64 products below (two multiplies on a 32-bit core rather
+    // than a full 64x64 one) need every sample under 2^31 in magnitude,
+    // which the DC notch guarantees; checked once per call anyway.
+    let fits_i32 = sq.iter().fold(0u64, |m, &v| m | v.unsigned_abs()) < (1u64 << 31);
     let mut out = [0i64; NDEC];
     for (k, out_k) in out.iter_mut().enumerate() {
-        let center = (k * NLP_DEC) as isize;
+        let center = k * NLP_DEC;
         // `i64` accumulator: |sq| <= 2^30 + 1 (the DC notch output is
         // `x[n] - 0.05 * sum(0.95^k x[n-1-k])` with `x` a squared `i16`,
         // so it stays within `[-2^30, 2^30]`), |h| <= 2^23, 25 taps whose
         // absolute sum is a small constant: the accumulator stays under
         // 2^60. Bit-identical to the former `i128` accumulation.
         let mut acc: i64 = 0;
-        for (t, &coeff) in h.iter().enumerate() {
-            let idx = center + t as isize - half;
-            let idx = idx.clamp(0, M_PITCH as isize - 1) as usize;
-            acc += coeff * sq[idx];
+        if fits_i32 && center >= half && center + half < M_PITCH {
+            // Interior output: no edge clamping needed.
+            let base = center - half;
+            for (t, &coeff) in h.iter().enumerate() {
+                acc += (coeff as i32 as i64) * (sq[base + t] as i32 as i64);
+            }
+        } else {
+            for (t, &coeff) in h.iter().enumerate() {
+                let idx = center as isize + t as isize - half as isize;
+                let idx = idx.clamp(0, M_PITCH as isize - 1) as usize;
+                acc += coeff * sq[idx];
+            }
         }
         *out_k = rshift_round(acc, NLP_FRAC_BITS);
     }
     out
+}
+
+const fn window_fits_i32(w: &[i64]) -> bool {
+    let mut i = 0;
+    while i < w.len() {
+        if w[i] != w[i] as i32 as i64 {
+            return false;
+        }
+        i += 1;
+    }
+    true
 }
 
 /// In-place iterative radix-2 decimation-in-time FFT over `PE_FFT_SIZE`
