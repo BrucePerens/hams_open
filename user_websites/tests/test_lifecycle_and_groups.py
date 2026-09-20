@@ -212,13 +212,18 @@ class TestLifecycleAndGroups(RealTransactionCase):
         self.user_a.with_context(test_mode=True).active = False
         self.env.cr.commit()
 
-        for _ in range(20):
+        # The background job unpublishes pages, commits, and only then unpublishes posts in a
+        # second transaction. Wait on the real DB state of BOTH; the deadline only bounds a
+        # genuine hang, and the assertions below are unchanged.
+        deadline = time.monotonic() + 120
+        while True:
             self.env.cr.commit()
             self.env.invalidate_all()
-            if not page.website_published:
-                time.sleep(0.5)  # audit-ignore-sleep
+            if not page.website_published and not post.is_published:
                 break
-            time.sleep(0.5)  # audit-ignore-sleep
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.25)  # audit-ignore-sleep
 
         page.invalidate_recordset()
         post.invalidate_recordset()
