@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn c0_field_has_even_parity_like_the_chips_extended_golay_code() {
-        for d in [0u64, 1, 0x1_FFFF_FFFF_FFFF, 0x0123_4567_89AB, 0x1555_5555_5555, 0xAAAA_AAAA_AAA] {
+        for d in [0u64, 1, 0x1_FFFF_FFFF_FFFF, 0x0123_4567_89AB, 0x1555_5555_5555, 0x0AAA_AAAA_AAAA] {
             let frame = build_frame(d & ((1u64 << 49) - 1));
             assert_eq!(((frame >> 48) & 0xFF_FFFF).count_ones() % 2, 0, "d = {d:#x}");
         }
