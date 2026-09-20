@@ -1007,277 +1007,482 @@ const TWIDDLES_1024_Q23: [(i64, i64); 512] = [
 /// this is computed for real at compile time as a `const fn`, not
 /// generated offline and checked in: there's no drift risk to guard a
 /// test against, and no runtime cost or heap allocation either way.
+/// Entries are `u16` (both sizes are at most 1024) to halve the flash.
 // [@ANCHOR: build_bit_reverse_table]
-const fn build_bit_reverse_table<const N: usize>() -> [usize; N] {
+const fn build_bit_reverse_table<const N: usize>() -> [u16; N] {
     let bits = (N as u32).trailing_zeros();
-    let mut table = [0usize; N];
+    let mut table = [0u16; N];
     let mut i = 0;
     while i < N {
-        table[i] = ((i as u32).reverse_bits() >> (32 - bits)) as usize;
+        table[i] = ((i as u32).reverse_bits() >> (32 - bits)) as u16;
         i += 1;
     }
     table
 }
 
-const BIT_REVERSE_512: [usize; FFT_ENC] = build_bit_reverse_table::<FFT_ENC>();
-#[cfg(feature = "codec2_16k_bridge")]
-const BIT_REVERSE_1024: [usize; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_SB>();
-
-/// Twiddle/bit-reversal tables for the two real FFT sizes this port
-/// ever needs (`FFT_ENC`=512, and `spectral_bridge.rs`'s own doubled
-/// `FFT_ENC_SB`=1024). Plain `const` data, not a lazily-built `Vec`
-/// behind an `OnceLock` (this function's own earlier form) -- that
-/// pattern needs `std`/a heap allocator, which a genuinely FPU-less
-/// embedded target (this whole fixed-point port's actual reason for
-/// existing) may not have at all; a size this function hasn't been
-/// built a table for is a programming error, not a runtime condition
-/// to handle gracefully.
-// [@ANCHOR: fft_twiddles_q23]
-fn fft_twiddles_q23(n: usize) -> &'static [(i64, i64)] {
-    match n {
-        FFT_ENC => &TWIDDLES_512_Q23,
-        #[cfg(feature = "codec2_16k_bridge")]
-        FFT_ENC_SB => &TWIDDLES_1024_Q23,
-        _ => panic!("fft_twiddles_q23: unsupported FFT size {n} (only FFT_ENC, and with the 16 kHz bridge FFT_ENC_SB, have cached tables)"),
+/// Twiddle table narrowed to `i32` pairs at compile time: every entry is
+/// at most `2^23` in magnitude, so the `i64` source tables above (kept as
+/// the checked-in, regenerated-and-diffed reference data) narrow exactly,
+/// and the run-time table is half the size.
+const fn narrow_twiddles<const M: usize>(src: &[(i64, i64); M]) -> [(i32, i32); M] {
+    let mut out = [(0i32, 0i32); M];
+    let mut i = 0;
+    while i < M {
+        assert!(src[i].0 == src[i].0 as i32 as i64 && src[i].1 == src[i].1 as i32 as i64);
+        out[i] = (src[i].0 as i32, src[i].1 as i32);
+        i += 1;
     }
+    out
+}
+
+const TW_512: [(i32, i32); FFT_ENC / 2] = narrow_twiddles(&TWIDDLES_512_Q23);
+static BITREV_512: [u16; FFT_ENC] = build_bit_reverse_table::<FFT_ENC>();
+#[cfg(feature = "codec2_16k_bridge")]
+const TW_1024: [(i32, i32); FFT_ENC_SB / 2] = narrow_twiddles(&TWIDDLES_1024_Q23);
+#[cfg(feature = "codec2_16k_bridge")]
+static BITREV_1024: [u16; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_SB>();
+
+/// One transform size. The codec runs at exactly two sample rates: 8 kHz
+/// (`Size<512>`, [`Rate8k`]) and, with the spectral bridge, 16 kHz
+/// (`Size<1024>`, [`Rate16k`]). Everything that depends only on the size
+/// (twiddle table, bit-reversal table, stage count, block strides) is a
+/// compile-time constant of the monomorphised code: there is no run-time
+/// size dispatch and no generic slice length.
+pub(crate) struct Size<const N: usize>;
+
+/// 8 kHz transform (`FFT_ENC` = 512 points).
+pub(crate) type Rate8k = Size<FFT_ENC>;
+/// 16 kHz transform (`FFT_ENC_SB` = 1024 points).
+#[cfg(feature = "codec2_16k_bridge")]
+pub(crate) type Rate16k = Size<FFT_ENC_SB>;
+
+/// Per-size constant tables. Only sizes with an implementation exist, so
+/// asking for any other size is a compile error, not a run-time panic.
+pub(crate) trait FftTables {
+    /// `(cos, -sin)` of `2 pi k / N` in Q23 for `k < N / 2`.
+    const TW: &'static [(i32, i32)];
+    /// Bit-reversal permutation of `0..N`.
+    const BITREV: &'static [u16];
+}
+
+impl FftTables for Size<FFT_ENC> {
+    const TW: &'static [(i32, i32)] = &TW_512;
+    const BITREV: &'static [u16] = &BITREV_512;
+}
+
+#[cfg(feature = "codec2_16k_bridge")]
+impl FftTables for Size<FFT_ENC_SB> {
+    const TW: &'static [(i32, i32)] = &TW_1024;
+    const BITREV: &'static [u16] = &BITREV_1024;
+}
+
+/// Twiddle table for size `N` (test reference and generic callers).
+// [@ANCHOR: fft_twiddles_q23]
+#[cfg(test)]
+fn fft_twiddles_q23<const N: usize>() -> &'static [(i32, i32)]
+where
+    Size<N>: FftTables,
+{
+    <Size<N> as FftTables>::TW
 }
 
 // [@ANCHOR: fft_bit_reverse_table]
-fn fft_bit_reverse_table(n: usize) -> &'static [usize] {
-    match n {
-        FFT_ENC => &BIT_REVERSE_512,
-        #[cfg(feature = "codec2_16k_bridge")]
-        FFT_ENC_SB => &BIT_REVERSE_1024,
-        _ => panic!("fft_bit_reverse_table: unsupported FFT size {n} (only FFT_ENC, and with the 16 kHz bridge FFT_ENC_SB, have cached tables)"),
-    }
-}
-
-/// In-place radix-2 decimation-in-time FFT, Q23 fixed-point throughout
-/// (no `f32` inside the transform itself -- only the one-time twiddle-
-/// table construction above uses float, the same "table construction
-/// isn't the hot path" convention this port uses elsewhere). No
-/// per-stage rescaling: `i64`/`i128` headroom vastly exceeds this
-/// transform's real dynamic range (LPC-spectrum and sparse-harmonic-
-/// spectrum inputs, not full-scale noise), the same reasoning `nlp.rs`'s
-/// own `fft_fixed` documents for its own, differently-scaled input --
-/// re-verified, not just inherited, at the doubled `FFT_ENC_SB` size by
-/// this module's own `spectral_bridge_size_matches_rustfft_on_a_real_
-/// extended_harmonic_spectrum` test, which stresses a real extended
-/// (up to `MAX_AMP_SB`-harmonic) spectrum rather than the 4-tone
-/// fixture the original 512-point tests use.
-///
-/// Takes plain slices at a runtime size `n = re.len()` (a power of two,
-/// `debug_assert`ed) rather than a `[i64; FFT_ENC]`-shaped array --
-/// genuinely the same algorithm at two different sizes for the same
-/// semantic use (phase-correct spectral synthesis), unlike `nlp.rs`'s
-/// own separate `fft_fixed`, which exists apart from this one because
-/// it serves a *different* consumer with different phase-correctness
-/// needs, not merely a different size (see this module's own doc
-/// comment above).
-// [@ANCHOR: fft_fixed]
-pub(crate) fn fft_fixed(re: &mut [i64], im: &mut [i64], forward: bool) {
-    let n = re.len();
-    debug_assert!(
-        n.is_power_of_two(),
-        "fft_fixed: n={n} must be a power of two"
-    );
-    debug_assert_eq!(im.len(), n, "fft_fixed: re/im length mismatch");
-
-    let bitrev = fft_bit_reverse_table(n);
-    for (i, &j) in bitrev.iter().enumerate() {
-        if j > i {
-            re.swap(i, j);
-            im.swap(i, j);
-        }
-    }
-    fft_stages(re, im, n, forward);
+#[cfg(test)]
+fn fft_bit_reverse_table<const N: usize>() -> &'static [u16]
+where
+    Size<N>: FftTables,
+{
+    <Size<N> as FftTables>::BITREV
 }
 
 const MODE_CHECKED: u8 = 0;
 const MODE_I64: u8 = 1;
 const MODE_I32: u8 = 2;
 
-/// One radix-2 butterfly range: `lo[j] +/-= w_j * hi[j]` for the twiddles
-/// yielded by `tw`. `MODE` says how much the caller has proven about the
-/// whole transform: `MODE_I32` every value is under 2^29 (32-bit data,
-/// 32x32->64 products), `MODE_I64` every value is under 2^38 (plain `i64`
-/// products, |wr br - wi bi| < 2^62), `MODE_CHECKED` nothing (each
-/// butterfly uses the range-checked [`twiddle_mul`]).
+/// Largest value sum (of `|re| + |im|` over the whole transform) that still
+/// allows each mode. Every intermediate value is a partial DFT of the
+/// inputs, so it is bounded in magnitude by the sum of the input
+/// magnitudes (plus a small rounding allowance).
+const I32_SUM_LIMIT: u64 = 1 << 29;
+const I64_SUM_LIMIT: u64 = 1 << 37;
+
 #[inline(always)]
-fn butterfly_range<'a, const FWD: bool, const MODE: u8>(
-    lr: &mut [i64],
-    li: &mut [i64],
-    hr: &mut [i64],
-    hi: &mut [i64],
-    tw: impl Iterator<Item = &'a (i64, i64)>,
-) {
-    for ((((ar, ai), br), bi), &(wr, wi_fwd)) in lr
-        .iter_mut()
-        .zip(li.iter_mut())
-        .zip(hr.iter_mut())
-        .zip(hi.iter_mut())
-        .zip(tw)
-    {
-        let wi = if FWD { wi_fwd } else { -wi_fwd };
-        if MODE == MODE_I32 {
-            // Every value in the transform is under 2^29 in magnitude, so
-            // it fits `i32`; each product is then a 32x32->64 multiply
-            // (two instructions on a 32-bit core) instead of a full
-            // 64x64 one. Same integer arithmetic, same result.
-            let (wr, wi) = (wr as i32 as i64, wi as i32 as i64);
-            let (yr, yi) = (*br as i32 as i64, *bi as i32 as i64);
-            let vr = ((wr * yr - wi * yi + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
-            let vi = ((wr * yi + wi * yr + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
-            let (xr, xi) = (*ar as i32, *ai as i32);
-            *ar = (xr + vr) as i64;
-            *ai = (xi + vi) as i64;
-            *br = (xr - vr) as i64;
-            *bi = (xi - vi) as i64;
-            continue;
-        }
-        let (vr, vi) = if MODE == MODE_I64 {
-            let (wr, wi) = (wr as i32 as i64, wi as i32 as i64);
-            (
-                rshift_round_i64(wr * *br - wi * *bi, FRAC_BITS),
-                rshift_round_i64(wr * *bi + wi * *br, FRAC_BITS),
-            )
-        } else {
-            twiddle_mul(wr, wi, *br, *bi)
-        };
-        let (xr, xi) = (*ar, *ai);
-        *ar = xr + vr;
-        *ai = xi + vi;
-        *br = xr - vr;
-        *bi = xi - vi;
+fn mode_for_sum(sum: u64) -> u8 {
+    if sum < I32_SUM_LIMIT {
+        MODE_I32
+    } else if sum < I64_SUM_LIMIT {
+        MODE_I64
+    } else {
+        MODE_CHECKED
     }
 }
 
-/// The butterfly stages proper, on data already in bit-reversed order,
-/// for a transform whose only nonzero natural-order inputs are the first
-/// `nz`. See [`fft_fixed_sparse_prefix`] for why blocks/half-blocks can
-/// be skipped or copied; `nz == n` is the ordinary dense transform.
-///
-/// Also exploits the two exactly-representable twiddles: `j == 0` is
+/// One radix-2 butterfly on `(a, b)` with twiddle `(wr, wif)` (`wif` is the
+/// forward-convention imaginary part; the inverse negates it). `MODE` says
+/// how much the caller has proven about the whole transform: `MODE_I32`
+/// every value is under 2^29 (32-bit data, 32x32->64 products), `MODE_I64`
+/// every value is under 2^37 (plain `i64` products, |wr br - wi bi| <
+/// 2^62), `MODE_CHECKED` nothing (each butterfly uses the range-checked
+/// [`twiddle_mul`]). Same integer arithmetic in every mode, so the same
+/// result.
+#[inline(always)]
+fn bf<const FWD: bool, const MODE: u8>(
+    ar: &mut i64,
+    ai: &mut i64,
+    br: &mut i64,
+    bi: &mut i64,
+    (wr, wif): (i32, i32),
+) {
+    let wi = if FWD { wif } else { -wif };
+    if MODE == MODE_I32 {
+        // Every value is under 2^29 in magnitude, so it fits `i32`; each
+        // product is then a 32x32->64 multiply (two instructions on a
+        // 32-bit core) instead of a full 64x64 one.
+        let (wr, wi) = (wr as i64, wi as i64);
+        let (yr, yi) = (*br as i32 as i64, *bi as i32 as i64);
+        let vr = ((wr * yr - wi * yi + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
+        let vi = ((wr * yi + wi * yr + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
+        let (xr, xi) = (*ar as i32, *ai as i32);
+        *ar = (xr + vr) as i64;
+        *ai = (xi + vi) as i64;
+        *br = (xr - vr) as i64;
+        *bi = (xi - vi) as i64;
+        return;
+    }
+    let (wr, wi) = (wr as i64, wi as i64);
+    let (vr, vi) = if MODE == MODE_I64 {
+        (
+            rshift_round_i64(wr * *br - wi * *bi, FRAC_BITS),
+            rshift_round_i64(wr * *bi + wi * *br, FRAC_BITS),
+        )
+    } else {
+        twiddle_mul(wr, wi, *br, *bi)
+    };
+    let (xr, xi) = (*ar, *ai);
+    *ar = xr + vr;
+    *ai = xi + vi;
+    *br = xr - vr;
+    *bi = xi - vi;
+}
+
+/// The two exactly representable twiddles need no multiply: `j == 0` is
 /// `1` (`(x * 2^23 + 2^22) >> 23 == x`) and `j == half/2` is `-j`
-/// (forward) / `+j` (inverse) whose table entry is exactly `(0, -2^23)`,
-/// so those butterflies are add/subtract only. Bit-identical to the
-/// generic butterfly.
-fn fft_stages_dispatch<const FWD: bool, const MODE: u8>(
+/// (forward) / `+j` (inverse) whose table entry is exactly `(0, -2^23)`.
+/// Those butterflies are add/subtract only, bit-identical to the generic
+/// butterfly.
+#[inline(always)]
+fn bf_one(ar: &mut i64, ai: &mut i64, br: &mut i64, bi: &mut i64) {
+    let (xr, xi, yr, yi) = (*ar, *ai, *br, *bi);
+    *ar = xr + yr;
+    *ai = xi + yi;
+    *br = xr - yr;
+    *bi = xi - yi;
+}
+
+#[inline(always)]
+fn bf_quarter<const FWD: bool>(ar: &mut i64, ai: &mut i64, br: &mut i64, bi: &mut i64) {
+    let (xr, xi, yr, yi) = (*ar, *ai, *br, *bi);
+    let (vr, vi) = if FWD { (yi, -yr) } else { (-yi, yr) };
+    *ar = xr + vr;
+    *ai = xi + vi;
+    *br = xr - vr;
+    *bi = xi - vi;
+}
+
+/// One block of one stage: the `len` positions starting at `base` hold two
+/// finished half-size transforms (`lo`, `hi`) that are merged in place.
+/// `len`/`step` are literals in the hot monomorphisations (so every
+/// address and trip count is a constant) and run-time values in the
+/// compact fallback. `hi_zero` says the upper half is all zero (sparse
+/// input), which makes every butterfly `(a, a)`.
+#[inline(always)]
+fn block<const FWD: bool, const MODE: u8>(
     re: &mut [i64],
     im: &mut [i64],
-    n: usize,
+    tw: &[(i32, i32)],
+    base: usize,
+    len: usize,
+    step: usize,
+    hi_zero: bool,
+) {
+    let half = len / 2;
+    let (lr, hr) = re[base..base + len].split_at_mut(half);
+    let (li, hi) = im[base..base + len].split_at_mut(half);
+    if hi_zero {
+        hr.copy_from_slice(lr);
+        hi.copy_from_slice(li);
+        return;
+    }
+    bf_one(&mut lr[0], &mut li[0], &mut hr[0], &mut hi[0]);
+    if half >= 2 {
+        let q = half / 2;
+        bf_quarter::<FWD>(&mut lr[q], &mut li[q], &mut hr[q], &mut hi[q]);
+        for j in 1..q {
+            bf::<FWD, MODE>(&mut lr[j], &mut li[j], &mut hr[j], &mut hi[j], tw[j * step]);
+        }
+        for j in q + 1..half {
+            bf::<FWD, MODE>(&mut lr[j], &mut li[j], &mut hr[j], &mut hi[j], tw[j * step]);
+        }
+    }
+}
+
+/// One dense stage (every block), `len` a literal in the hot instances.
+#[inline(always)]
+fn stage_dense<const N: usize, const FWD: bool, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    len: usize,
+) {
+    let step = N / len;
+    let mut i = 0;
+    while i < N {
+        block::<FWD, MODE>(re, im, tw, i, len, step, false);
+        i += len;
+    }
+}
+
+/// One sparse-prefix stage. The natural-order input is nonzero only in
+/// `0..nz`; the block of `len` positions holding natural indices
+/// `r, r + step, ...` (`step = N / len`) sits at bit-reversed position
+/// `bitrev[r]` and is all zero exactly when `r >= nz`, and its upper half
+/// (`r + step`) is all zero when `r + step >= nz`. Zero blocks are never
+/// touched (nothing later reads them either, because their parent sees
+/// `hi_zero`), so the arrays do not have to be cleared beforehand.
+#[inline(always)]
+fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    len: usize,
     nz: usize,
 ) {
-    let bitrev = fft_bit_reverse_table(n);
-    let twiddles = fft_twiddles_q23(n);
-    let mut len = 2usize;
-    while len <= n {
-        let half = len / 2;
-        let step = n / len;
-        let quarter = half / 2;
-        let mut i = 0;
-        while i < n {
-            let c1 = bitrev[i];
-            if c1 < nz {
-                let (lr, hr) = re[i..i + len].split_at_mut(half);
-                let (li, hi) = im[i..i + len].split_at_mut(half);
-                if c1 + step >= nz {
-                    // Upper half is all zero: every butterfly is (a, a).
-                    hr.copy_from_slice(lr);
-                    hi.copy_from_slice(li);
-                } else {
-                    // j == 0: twiddle 1.
-                    let (xr, xi, yr, yi) = (lr[0], li[0], hr[0], hi[0]);
-                    lr[0] = xr + yr;
-                    li[0] = xi + yi;
-                    hr[0] = xr - yr;
-                    hi[0] = xi - yi;
-                    if half >= 2 {
-                        // j == half/2: twiddle -j (forward) / +j (inverse).
-                        let q = quarter;
-                        let (xr, xi, yr, yi) = (lr[q], li[q], hr[q], hi[q]);
-                        let (vr, vi) = if FWD { (yi, -yr) } else { (-yi, yr) };
-                        lr[q] = xr + vr;
-                        li[q] = xi + vi;
-                        hr[q] = xr - vr;
-                        hi[q] = xi - vi;
-                        // Everything in between and above.
-                        butterfly_range::<FWD, MODE>(
-                            &mut lr[1..q],
-                            &mut li[1..q],
-                            &mut hr[1..q],
-                            &mut hi[1..q],
-                            twiddles.iter().skip(step).step_by(step),
-                        );
-                        butterfly_range::<FWD, MODE>(
-                            &mut lr[q + 1..],
-                            &mut li[q + 1..],
-                            &mut hr[q + 1..],
-                            &mut hi[q + 1..],
-                            twiddles.iter().skip((q + 1) * step).step_by(step),
-                        );
-                    }
-                }
+    let step = N / len;
+    let blocks = if nz < step { nz } else { step };
+    let mut r = 0;
+    while r < blocks {
+        block::<FWD, MODE>(re, im, tw, bitrev[r] as usize, len, step, r + step >= nz);
+        r += 1;
+    }
+}
+
+/// All stages, dense, with every stage length a literal (fully specialised
+/// for one size, direction and mode).
+#[inline(always)]
+fn stages_dense_hot<const N: usize, const FWD: bool, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+) {
+    macro_rules! st {
+        ($len:literal) => {
+            if $len <= N {
+                stage_dense::<N, FWD, MODE>(re, im, tw, $len);
             }
-            i += len;
-        }
+        };
+    }
+    st!(2);
+    st!(4);
+    st!(8);
+    st!(16);
+    st!(32);
+    st!(64);
+    st!(128);
+    st!(256);
+    st!(512);
+    st!(1024);
+}
+
+#[inline(always)]
+fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    nz: usize,
+) {
+    macro_rules! st {
+        ($len:literal) => {
+            if $len <= N {
+                stage_prefix::<N, FWD, MODE>(re, im, tw, bitrev, $len, nz);
+            }
+        };
+    }
+    st!(2);
+    st!(4);
+    st!(8);
+    st!(16);
+    st!(32);
+    st!(64);
+    st!(128);
+    st!(256);
+    st!(512);
+    st!(1024);
+}
+
+/// Compact fallbacks: one copy of the stage loop per (size, direction,
+/// mode), the stage length a run-time variable. Used for the cold modes
+/// (inputs too large for the fast paths, or the test-only forward dense
+/// transform), where code size matters more than speed.
+#[inline(never)]
+fn stages_dense_loop<const N: usize, const FWD: bool, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+) {
+    let mut len = 2usize;
+    while len <= N {
+        stage_dense::<N, FWD, MODE>(re, im, tw, len);
         len *= 2;
     }
 }
 
-fn fft_stages(re: &mut [i64], im: &mut [i64], n: usize, forward: bool) {
-    fft_stages_sparse(re, im, n, n, forward)
+#[inline(never)]
+fn stages_prefix_loop<const N: usize, const FWD: bool, const MODE: u8>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+    nz: usize,
+) {
+    let mut len = 2usize;
+    while len <= N {
+        stage_prefix::<N, FWD, MODE>(re, im, tw, bitrev, len, nz);
+        len *= 2;
+    }
 }
 
-fn fft_stages_sparse(re: &mut [i64], im: &mut [i64], n: usize, nz: usize, forward: bool) {
-    // Every intermediate value is a partial DFT of the inputs, so it is
-    // bounded in magnitude by the sum of the input magnitudes (plus a
-    // small rounding allowance): one check up front decides whether the
-    // whole transform can use the unchecked `i64` butterfly.
-    let sum: u64 = re
-        .iter()
-        .zip(im.iter())
-        .map(|(&r, &i)| r.unsigned_abs().saturating_add(i.unsigned_abs()))
-        .fold(0u64, |a, b| a.saturating_add(b));
-    let mode = if sum < (1u64 << 29) {
-        MODE_I32
-    } else if sum < (1u64 << 37) {
-        MODE_I64
-    } else {
-        MODE_CHECKED
-    };
-    match (forward, mode) {
-        (true, MODE_I32) => fft_stages_dispatch::<true, MODE_I32>(re, im, n, nz),
-        (true, MODE_I64) => fft_stages_dispatch::<true, MODE_I64>(re, im, n, nz),
-        (true, _) => fft_stages_dispatch::<true, MODE_CHECKED>(re, im, n, nz),
-        (false, MODE_I32) => fft_stages_dispatch::<false, MODE_I32>(re, im, n, nz),
-        (false, MODE_I64) => fft_stages_dispatch::<false, MODE_I64>(re, im, n, nz),
-        (false, _) => fft_stages_dispatch::<false, MODE_CHECKED>(re, im, n, nz),
+/// In-place bit-reversal permutation of a dense input.
+#[inline(always)]
+fn bit_reverse_permute<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], bitrev: &[u16]) {
+    for i in 0..N {
+        let j = bitrev[i] as usize;
+        if j > i {
+            re.swap(i, j);
+            im.swap(i, j);
+        }
     }
+}
+
+fn sum_abs<const N: usize>(re: &[i64; N], im: &[i64; N]) -> u64 {
+    let mut sum = 0u64;
+    for i in 0..N {
+        sum = sum.saturating_add(re[i].unsigned_abs().saturating_add(im[i].unsigned_abs()));
+    }
+    sum
+}
+
+/// In-place radix-2 decimation-in-time FFT of exactly `N` points, Q23
+/// fixed-point throughout (no float inside the transform). No per-stage
+/// rescaling: `i64`/`i128` headroom vastly exceeds this transform's real
+/// dynamic range (LPC-spectrum and sparse-harmonic-spectrum inputs, not
+/// full-scale noise).
+///
+/// `N` is a const generic: the 8 kHz decoder uses `N = 512`, the 16 kHz
+/// spectral bridge `N = 1024`, and each gets its own monomorphised copy
+/// with its own constant tables. `forward == true` matches `rustfft`'s
+/// `plan_fft_forward`; `false` is the unnormalised inverse.
+// [@ANCHOR: fft_fixed]
+pub(crate) fn fft_fixed<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], forward: bool)
+where
+    Size<N>: FftTables,
+{
+    let bitrev = <Size<N> as FftTables>::BITREV;
+    let tw = <Size<N> as FftTables>::TW;
+    bit_reverse_permute::<N>(re, im, bitrev);
+    let mode = mode_for_sum(sum_abs::<N>(re, im));
+    match (forward, mode) {
+        (true, MODE_I32) => stages_dense_loop::<N, true, MODE_I32>(re, im, tw),
+        (true, MODE_I64) => stages_dense_loop::<N, true, MODE_I64>(re, im, tw),
+        (true, _) => stages_dense_loop::<N, true, MODE_CHECKED>(re, im, tw),
+        // Inverse: the unrolled instance handles everything below 2^37
+        // (the I64 kernel is exact for smaller values too).
+        (false, MODE_CHECKED) => stages_dense_loop::<N, false, MODE_CHECKED>(re, im, tw),
+        (false, _) => inverse_dense_hot::<N>(re, im, tw),
+    }
+}
+
+#[inline(never)]
+fn inverse_dense_hot<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], tw: &[(i32, i32)]) {
+    stages_dense_hot::<N, false, MODE_I64>(re, im, tw);
 }
 
 /// Same transform as [`fft_fixed`] for an input whose only nonzero entries
-/// are `re[0..nz]` (real, `im` all zero on entry): bit-identical output,
-/// but butterflies whose inputs are known zeros are skipped or reduced
-/// to copies. In the bit-reversed decimation-in-time layout the block of
-/// `len` positions starting at `i` holds the sub-transform of the natural
-/// indices `c, c + n/len, ...` with `c = bitrev(i)`, so the block is all
-/// zero exactly when `c >= nz`, and its upper half (`c + n/len`) is all
-/// zero when `c + n/len >= nz`; a butterfly with a zero second input is
-/// just `(a, a)` because `w * 0` rounds to exactly 0.
+/// are the real values `input[0..nz]` (`re[i] = input[i]`, `im` all zero):
+/// bit-identical output, but the input is scattered straight to its
+/// bit-reversed positions, blocks whose inputs are known zeros are skipped
+/// or reduced to copies, and neither array needs clearing beforehand (both
+/// are fully overwritten). See [`stage_prefix`].
 // [@ANCHOR: fft_fixed_sparse_prefix]
-pub(crate) fn fft_fixed_sparse_prefix(re: &mut [i64], im: &mut [i64], nz: usize, forward: bool) {
-    let n = re.len();
-    debug_assert!(n.is_power_of_two() && im.len() == n && nz <= n);
-    debug_assert!(im.iter().all(|&v| v == 0));
-    let bitrev = fft_bit_reverse_table(n);
-    // Bit-reverse permute the real part in place (`im` is all zero).
-    for (i, &j) in bitrev.iter().enumerate() {
-        if j > i {
-            re.swap(i, j);
-        }
+pub(crate) fn fft_fixed_sparse_prefix<const N: usize>(
+    input: &[i64],
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    forward: bool,
+) where
+    Size<N>: FftTables,
+{
+    let nz = input.len();
+    debug_assert!(nz >= 1 && nz <= N);
+    let bitrev = <Size<N> as FftTables>::BITREV;
+    let tw = <Size<N> as FftTables>::TW;
+    let mut sum = 0u64;
+    for (k, &v) in input.iter().enumerate() {
+        let p = bitrev[k] as usize;
+        re[p] = v;
+        im[p] = 0;
+        sum = sum.saturating_add(v.unsigned_abs());
     }
-    fft_stages_sparse(re, im, n, nz, forward);
+    match (forward, mode_for_sum(sum)) {
+        (true, MODE_I32) => stages_prefix_loop::<N, true, MODE_I32>(re, im, tw, bitrev, nz),
+        (true, MODE_I64) => stages_prefix_loop::<N, true, MODE_I64>(re, im, tw, bitrev, nz),
+        (true, _) => stages_prefix_loop::<N, true, MODE_CHECKED>(re, im, tw, bitrev, nz),
+        (false, MODE_I32) => stages_prefix_loop::<N, false, MODE_I32>(re, im, tw, bitrev, nz),
+        (false, MODE_I64) => stages_prefix_loop::<N, false, MODE_I64>(re, im, tw, bitrev, nz),
+        (false, _) => stages_prefix_loop::<N, false, MODE_CHECKED>(re, im, tw, bitrev, nz),
+    }
+}
+
+/// [`fft_fixed_sparse_prefix`] with the number of nonzero inputs a
+/// compile-time constant, forward direction: the production LPC-spectrum
+/// call. When the input is small enough for the 32-bit kernel (always, for
+/// real LPC coefficients) the whole transform runs in one fully specialised
+/// instance: every block position, copy decision and twiddle stride is a
+/// constant.
+pub(crate) fn fft_fixed_sparse_prefix_forward<const N: usize, const NZ: usize>(
+    input: &[i64; NZ],
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+) where
+    Size<N>: FftTables,
+{
+    let bitrev = <Size<N> as FftTables>::BITREV;
+    let tw = <Size<N> as FftTables>::TW;
+    let mut sum = 0u64;
+    for k in 0..NZ {
+        sum = sum.saturating_add(input[k].unsigned_abs());
+    }
+    if sum < I32_SUM_LIMIT {
+        for k in 0..NZ {
+            let p = bitrev[k] as usize;
+            re[p] = input[k];
+            im[p] = 0;
+        }
+        prefix_forward_i32_hot::<N, NZ>(re, im, tw, bitrev);
+    } else {
+        fft_fixed_sparse_prefix::<N>(input, re, im, true);
+    }
+}
+
+#[inline(never)]
+fn prefix_forward_i32_hot<const N: usize, const NZ: usize>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+) {
+    stages_prefix_hot::<N, true, MODE_I32>(re, im, tw, bitrev, NZ);
 }
 
 /// Scratch buffers for one 512-point transform. Kept in a long-lived
@@ -1461,8 +1666,8 @@ mod tests {
     fn inverse_fft_fixed_at_fft_enc_sb_matches_rustfft_on_a_real_extended_harmonic_spectrum() {
         use super::super::spectral_bridge::{FFT_ENC_SB, MAX_AMP_SB};
         let l2 = MAX_AMP_SB / 2;
-        let mut re = vec![0i64; FFT_ENC_SB];
-        let mut im = vec![0i64; FFT_ENC_SB];
+        let mut re = [0i64; FFT_ENC_SB];
+        let mut im = [0i64; FFT_ENC_SB];
         let mut re_f = vec![0.0f32; FFT_ENC_SB];
         let mut im_f = vec![0.0f32; FFT_ENC_SB];
         let mut seed = 42u32;
@@ -1522,16 +1727,20 @@ mod tests {
 
     /// Reference for the optimized butterflies: the original textbook
     /// stage loop with `i128` products and no shortcuts whatsoever.
-    fn reference_fft(re: &mut [i64], im: &mut [i64], forward: bool) {
-        let n = re.len();
-        let bitrev = fft_bit_reverse_table(n);
+    fn reference_fft<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], forward: bool)
+    where
+        Size<N>: FftTables,
+    {
+        let n = N;
+        let bitrev = fft_bit_reverse_table::<N>();
         for (i, &j) in bitrev.iter().enumerate() {
+            let j = j as usize;
             if j > i {
                 re.swap(i, j);
                 im.swap(i, j);
             }
         }
-        let twiddles = fft_twiddles_q23(n);
+        let twiddles = fft_twiddles_q23::<N>();
         let mut len = 2usize;
         while len <= n {
             let half = len / 2;
@@ -1540,6 +1749,7 @@ mod tests {
             while i < n {
                 for j in 0..half {
                     let (wr, wi_fwd) = twiddles[j * step];
+                    let (wr, wi_fwd) = (wr as i64, wi_fwd as i64);
                     let wi = if forward { wi_fwd } else { -wi_fwd };
                     let (br, bi) = (re[i + j + half], im[i + j + half]);
                     let vr = rshift_round_i128(
@@ -1567,6 +1777,27 @@ mod tests {
         (*seed >> 16) as i64
     }
 
+    fn dense_case<const N: usize>(seed: &mut u64)
+    where
+        Size<N>: FftTables,
+    {
+        for &mag_bits in &[8u32, 17, 18, 19, 24, 28, 29, 30, 33, 34, 36, 37, 38, 40, 44] {
+            for &forward in &[true, false] {
+                let mut re = [0i64; N];
+                let mut im = [0i64; N];
+                for k in 0..N {
+                    re[k] = (lcg(seed) % (1i64 << mag_bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 };
+                    im[k] = lcg(seed) % (1i64 << mag_bits);
+                }
+                let (mut re_r, mut im_r) = (re, im);
+                fft_fixed::<N>(&mut re, &mut im, forward);
+                reference_fft::<N>(&mut re_r, &mut im_r, forward);
+                assert_eq!(re, re_r, "n={N} bits={mag_bits} fwd={forward}");
+                assert_eq!(im, im_r, "n={N} bits={mag_bits} fwd={forward}");
+            }
+        }
+    }
+
     /// The optimized dense transform (unchecked-`i64` fast path, exact
     /// twiddle shortcuts) must equal the textbook `i128` loop bit for
     /// bit, at both sizes, in both directions, on inputs small enough
@@ -1575,20 +1806,54 @@ mod tests {
     // Tests [@ANCHOR: fft_fixed]
     fn optimized_fft_is_bit_identical_to_the_textbook_i128_loop() {
         let mut seed = 42u64;
-        for &n in &[FFT_ENC, FFT_ENC_SB] {
-            for &mag_bits in &[8u32, 17, 18, 19, 24, 30, 33, 34, 36, 40, 44] {
+        dense_case::<FFT_ENC>(&mut seed);
+        dense_case::<FFT_ENC_SB>(&mut seed);
+    }
+
+    fn prefix_case<const N: usize>(seed: &mut u64)
+    where
+        Size<N>: FftTables,
+    {
+        for &nz in &[1usize, 2, 3, 11, 64, 100, 255, 257, N] {
+            for &mag_bits in &[10u32, 18, 19, 26, 34] {
                 for &forward in &[true, false] {
-                    let mut re: Vec<i64> = (0..n)
-                        .map(|_| (lcg(&mut seed) % (1i64 << mag_bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 })
-                        .collect();
-                    let mut im: Vec<i64> = (0..n).map(|_| lcg(&mut seed) % (1i64 << mag_bits)).collect();
-                    let (mut re_r, mut im_r) = (re.clone(), im.clone());
-                    fft_fixed(&mut re, &mut im, forward);
-                    reference_fft(&mut re_r, &mut im_r, forward);
-                    assert_eq!(re, re_r, "n={n} bits={mag_bits} fwd={forward}");
-                    assert_eq!(im, im_r, "n={n} bits={mag_bits} fwd={forward}");
+                    let mut input = [0i64; N];
+                    for v in input.iter_mut().take(nz) {
+                        *v = (lcg(seed) % (1i64 << mag_bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 };
+                    }
+                    let mut re = [0x5a5a_5a5ai64; N];
+                    let mut im = [-0x1234_5678i64; N];
+                    let (mut re_r, mut im_r) = (input, [0i64; N]);
+                    fft_fixed_sparse_prefix::<N>(&input[..nz], &mut re, &mut im, forward);
+                    reference_fft::<N>(&mut re_r, &mut im_r, forward);
+                    assert_eq!(re, re_r, "n={N} nz={nz} bits={mag_bits} fwd={forward}");
+                    assert_eq!(im, im_r, "n={N} nz={nz} bits={mag_bits} fwd={forward}");
                 }
             }
+        }
+    }
+
+    /// The compile-time-`NZ` forward form (the production LPC-spectrum
+    /// call) equals the dense reference, for several `NZ`, on both the
+    /// 32-bit-kernel path and the large-input fallback, and does not care
+    /// what the output arrays held before.
+    fn prefix_const_case<const N: usize, const NZ: usize>(seed: &mut u64)
+    where
+        Size<N>: FftTables,
+    {
+        for &mag_bits in &[10u32, 22, 24, 26, 34, 40] {
+            let mut input = [0i64; NZ];
+            for v in input.iter_mut() {
+                *v = (lcg(seed) % (1i64 << mag_bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 };
+            }
+            let mut re = [0x5a5a_5a5ai64; N];
+            let mut im = [-0x1234_5678i64; N];
+            let (mut re_r, mut im_r) = ([0i64; N], [0i64; N]);
+            re_r[..NZ].copy_from_slice(&input);
+            fft_fixed_sparse_prefix_forward::<N, NZ>(&input, &mut re, &mut im);
+            reference_fft::<N>(&mut re_r, &mut im_r, true);
+            assert_eq!(re, re_r, "n={N} nz={NZ} bits={mag_bits}");
+            assert_eq!(im, im_r, "n={N} nz={NZ} bits={mag_bits}");
         }
     }
 
@@ -1598,24 +1863,14 @@ mod tests {
     // Tests [@ANCHOR: fft_fixed_sparse_prefix]
     fn sparse_prefix_fft_is_bit_identical_to_the_dense_reference() {
         let mut seed = 7u64;
-        for &n in &[FFT_ENC, FFT_ENC_SB] {
-            for &nz in &[1usize, 2, 3, 11, 64, 100, 255, 257, n] {
-                for &mag_bits in &[10u32, 18, 19, 26, 34] {
-                    for &forward in &[true, false] {
-                        let mut re = vec![0i64; n];
-                        for v in re.iter_mut().take(nz) {
-                            *v = (lcg(&mut seed) % (1i64 << mag_bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
-                        }
-                        let mut im = vec![0i64; n];
-                        let (mut re_r, mut im_r) = (re.clone(), im.clone());
-                        fft_fixed_sparse_prefix(&mut re, &mut im, nz, forward);
-                        reference_fft(&mut re_r, &mut im_r, forward);
-                        assert_eq!(re, re_r, "n={n} nz={nz} bits={mag_bits} fwd={forward}");
-                        assert_eq!(im, im_r, "n={n} nz={nz} bits={mag_bits} fwd={forward}");
-                    }
-                }
-            }
-        }
+        prefix_case::<FFT_ENC>(&mut seed);
+        prefix_case::<FFT_ENC_SB>(&mut seed);
+        prefix_const_case::<FFT_ENC, 1>(&mut seed);
+        prefix_const_case::<FFT_ENC, 3>(&mut seed);
+        prefix_const_case::<FFT_ENC, 11>(&mut seed);
+        prefix_const_case::<FFT_ENC, 13>(&mut seed);
+        prefix_const_case::<FFT_ENC, 100>(&mut seed);
+        prefix_const_case::<FFT_ENC_SB, 11>(&mut seed);
     }
 
     /// Fast-path complex multiply and squared magnitude equal the exact

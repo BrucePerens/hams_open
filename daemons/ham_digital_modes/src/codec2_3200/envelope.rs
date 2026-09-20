@@ -189,7 +189,7 @@ pub fn sample_filter_phase(aw: &[Complex32], model: &Model) -> [Complex32; MAX_A
 }
 
 use super::fixed_fft::{
-    fft_fixed_sparse_prefix, rshift_round_i128, rshift_round_i64, ComplexQ23, FftScratch,
+    fft_fixed_sparse_prefix_forward, rshift_round_i128, rshift_round_i64, ComplexQ23, FftScratch,
 };
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::lpc::pi_q23;
@@ -253,10 +253,11 @@ fn mag_sq_q23(c: ComplexQ23) -> i64 {
 /// doc comment), first `SPEC_BINS` bins returned as `ComplexQ23`.
 // [@ANCHOR: lpc_spectrum_fixed]
 fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1], scratch: &mut FftScratch) {
-    scratch.re.fill(0);
-    scratch.im.fill(0);
-    scratch.re[..=LPC_ORD].copy_from_slice(ak_q23);
-    fft_fixed_sparse_prefix(&mut scratch.re, &mut scratch.im, LPC_ORD + 1, true);
+    fft_fixed_sparse_prefix_forward::<FFT_ENC, { LPC_ORD + 1 }>(
+        ak_q23,
+        &mut scratch.re,
+        &mut scratch.im,
+    );
 }
 
 /// `1e-6` in Q23 -- the same tiny floor `compute_harmonic_amplitudes`'s
