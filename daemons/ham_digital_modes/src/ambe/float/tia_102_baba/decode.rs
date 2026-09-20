@@ -7,26 +7,21 @@
 //!
 //! 1. **Golay-decode `c_hat_0`** to recover `u_hat_0` (never modulated) and its own corrected-error
 //!    count `epsilon_0`.
-//! 2. **FEC-decode `c_hat_1..c_hat_3` (Golay) and `c_hat_4..c_hat_6` (Hamming) directly** -- **no
-//!    demodulation step**, despite the spec's own theoretical IMBE encoder describing one (this
-//!    module used to call [`super::modulation::modulate_code_vectors`] here to undo it, matching
-//!    [`super::encode_frame`]'s own former modulation step). `docs/references/
-//!    AMBE_CHIP_VALIDATION_FINDINGS.md` section 23 already established, from direct GF(2) rank
-//!    analysis of ~2200 real chip-captured frames, that these blocks reach full rank as *plain* FEC
-//!    codewords on the real wire -- "the wire bits genuinely are the FEC codewords themselves," that
-//!    finding's own words -- meaning the real DVSI chip never applies the spec's theoretical
-//!    whitening/modulation stage at all. Demodulating here was silently corrupting
-//!    `u_hat_1..u_hat_6` on every real frame (confirmed directly: live chip data showed the
-//!    resulting `omega0_tilde`/per-harmonic voicing diverging substantially from real recorded
-//!    speech's own expected behavior), while individual blocks still happened to FEC-decode
-//!    "successfully" -- a modulated-then-corrected codeword still looks like a valid parameter set,
-//!    just the wrong one, which is why this went undetected until PCM was compared against the
-//!    chip's own decoded output for the first time. `nu_hat_7 = c_hat_7` (no FEC ever, unaffected
-//!    either way). **`c_hat_4..c_hat_6` are decoded with the chip's own Hamming labeling
-//!    ([`crate::ambe::dvsi_p25fec::fec::hamming_decode_chip`]), not the textbook one** -- section 23 of that same
-//!    findings document had recorded the difference, but this decoder kept the textbook code until a live
-//!    run showed it reporting false corrected errors in 576 of 600 clean chip Hamming words and recovering
-//!    different data for 377 of them (`tests/ambe_tia_102_baba_chip_hamming_labeling.rs`).
+//! 2. **Demodulate `c_hat_1..c_hat_6`** with the pseudo-random vectors seeded from the corrected
+//!    `u_hat_0` (Eq. 84-94, [`super::modulation`]), then FEC-decode `c_hat_1..c_hat_3` (Golay) and
+//!    `c_hat_4..c_hat_6` (Hamming, the standard's `g_H`); `u_hat_7 = c_hat_7` has no FEC. Steps 1-2 are
+//!    [`super::decode_code_vectors`]. This is the standard's wire layer and matches the mbelib and
+//!    kchmck `imbe.rs` decoders frame for frame
+//!    (`docs/references/tia_102_baba_cross_validation.md`).
+//!
+//!    **History, kept because it explains [`DecoderState::new_chip_wire`]**: this decoder used to skip
+//!    the demodulation and use the DVSI chip's Hamming labelling, because the codec was assumed to be
+//!    what the chip's `RATET(27)` setting produces. Live chip data (`docs/references/
+//!    AMBE_CHIP_VALIDATION_FINDINGS.md` section 23: the wire blocks are plain FEC codewords with a
+//!    different Hamming labelling; `tests/ambe_tia_102_baba_chip_hamming_labeling.rs`) showed that
+//!    setting is a different, proprietary codec, so those adaptations no longer belong in the
+//!    standard's decoder. [`DecoderState::new_chip_wire`] and [`DecoderState::new_chip`] keep the chip
+//!    framing for the chip-comparison tools.
 //! 3. Together with `epsilon_0`, the corrected-error counts from this step feed
 //!    [`super::error_estimation::estimate_errors`].
 //! 4. **Bootstrap `b_hat_0`** directly from `u_hat_0`/`u_hat_7` alone
@@ -59,8 +54,7 @@ use super::bit_prioritization::{
 use super::error_estimation::{
     estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
 };
-use super::fec::golay_decode;
-use crate::ambe::dvsi_p25fec::fec::hamming_decode_chip;
+use super::{decode_code_vectors, decode_code_vectors_chip};
 use super::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
     dequantize_fundamental_frequency_chip,
@@ -119,16 +113,25 @@ pub struct DecoderState {
     spectral_amplitudes_prev: Vec<f64>,
     error_rate_prev: f64,
     chip_pitch_map: bool,
+    /// Decode the DVSI chip's framing (no demodulation, chip Hamming labelling) instead of the standard's.
+    chip_wire: bool,
     forced_l_hat: Option<u32>,
     l_alpha: Option<f64>,
 }
 
 impl DecoderState {
-    /// A decoder using the real chip's log-scale pitch index (see
-    /// [`super::parameter_encoding::CHIP_B0_STEPS_PER_OCTAVE`]) instead of the TIA linear one, and accepting
-    /// `b0` up to 255.
+    /// A decoder for the DVSI chip's `RATET(27)` streams: the chip's log-scale pitch index (see
+    /// [`super::parameter_encoding::CHIP_B0_STEPS_PER_OCTAVE`]) instead of the TIA linear one, accepting
+    /// `b0` up to 255, and the chip's framing ([`Self::new_chip_wire`]).
     pub fn new_chip() -> Self {
-        Self { chip_pitch_map: true, ..Self::new() }
+        Self { chip_pitch_map: true, chip_wire: true, ..Self::new() }
+    }
+
+    /// The standard's linear pitch map, but the DVSI chip's framing of the eight code vectors (plain FEC
+    /// codewords with the chip's Hamming labelling, no Eq. 84-94 modulation). What [`Self::new`] did before
+    /// the standard's own wire layer was restored; kept for the chip-comparison tools.
+    pub fn new_chip_wire() -> Self {
+        Self { chip_wire: true, ..Self::new() }
     }
 
     /// Experiments only: decode every frame as if it carried `l_hat` harmonics regardless of `b0`.
@@ -150,6 +153,7 @@ impl DecoderState {
             spectral_amplitudes_prev: vec![1.0; l_hat_prev as usize],
             error_rate_prev: 0.0,
             chip_pitch_map: false,
+            chip_wire: false,
             forced_l_hat: None,
             l_alpha: None,
         }
@@ -177,24 +181,13 @@ impl DecoderState {
     /// `Some` and "looks fine" even when decode derived the wrong `L~`/`K~` for the frame.
     // [@ANCHOR: ambe:decode_parameters]
     pub fn decode_parameters(&mut self, c: [u32; 8]) -> Option<FrameOutcome> {
-        let (u0, epsilon_0) = golay_decode(c[0]);
-
-        // No demodulation -- see this module's own doc comment for why `c[1..6]` are FEC-decoded
-        // directly rather than XORed against `modulate_code_vectors(c, u0)` first.
-        let (u1, epsilon_1) = golay_decode(c[1]);
-        let (u2, epsilon_2) = golay_decode(c[2]);
-        let (u3, epsilon_3) = golay_decode(c[3]);
-        let (u4, epsilon_4) = hamming_decode_chip(c[4] as u16);
-        let (u5, epsilon_5) = hamming_decode_chip(c[5] as u16);
-        let (u6, epsilon_6) = hamming_decode_chip(c[6] as u16);
-        let u7 = c[7]; // No FEC (fec.rs's own doc comment): no decode, no error count.
-
-        let u_vectors: [u32; 8] = [
-            u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, u7,
-        ];
-        let corrected_error_counts = [
-            epsilon_0, epsilon_1, epsilon_2, epsilon_3, epsilon_4, epsilon_5, epsilon_6,
-        ];
+        // The standard's wire layer (demodulate with the corrected `u_hat_0`, textbook Hamming) or,
+        // for the chip-comparison tools only, the DVSI chip's framing; `u_hat_7` has no FEC either way.
+        let (u_vectors, corrected_error_counts) = if self.chip_wire {
+            decode_code_vectors_chip(c)
+        } else {
+            decode_code_vectors(c)
+        };
         let errors = estimate_errors(&corrected_error_counts, self.error_rate_prev);
         self.error_rate_prev = errors.rate;
 
@@ -495,6 +488,7 @@ mod tests {
             l_hat_prev: INITIAL_L_HAT_PREV,
             spectral_amplitudes_prev: vec![1.0; INITIAL_L_HAT_PREV as usize],
             chip_pitch_map: false,
+            chip_wire: false,
             forced_l_hat: None,
             l_alpha: None,
             error_rate_prev: 0.2, // 0.95*0.2 = 0.19, comfortably over the 0.0875 threshold

@@ -203,7 +203,7 @@ fn main() {
     }
 
     // Print a handful of real voicing patterns, normal vs band-reversed, for a direct look.
-    let mut params_decoder = DecoderState::new();
+    let mut params_decoder = DecoderState::new_chip_wire();
     let mut shown = 0;
     for channel_payload in &channel_payloads {
         let mut wire_bytes = [0u8; FRAME_BYTES];
@@ -226,8 +226,8 @@ fn main() {
     }
 
     // Full re-synthesis pass: normal vs band-reversed voicing, both compared to the real chip PCM.
-    let mut normal_decoder = DecoderState::new();
-    let mut reversed_decoder_params = DecoderState::new();
+    let mut normal_decoder = DecoderState::new_chip_wire();
+    let mut reversed_decoder_params = DecoderState::new_chip_wire();
     let mut reversed_synth = SynthesisState::new();
     let mut chip_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);
     let mut normal_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);

@@ -168,7 +168,7 @@ struct Params {
     b2: u32,
 }
 fn params_of(frames: &[[u32; 8]]) -> Vec<Option<Params>> {
-    let mut d = DecoderState::new();
+    let mut d = DecoderState::new_chip_wire();
     frames
         .iter()
         .map(|c| match d.decode_parameters(*c) {
@@ -229,7 +229,7 @@ fn main() {
     println!("chip encode -> chip decode: envelope corr vs input {:.4}", corr(&env_in, &env(&chip_chip)));
 
     for offset in [-160i32, -120, -80, -40, 0, 40, 80, 120, 160] {
-        let mut enc = Encoder::new();
+        let mut enc = Encoder::new_chip_wire();
         enc.set_center_offset(offset);
         enc.push_samples(&input);
         let mut ours: Vec<[u32; 8]> = Vec::new();
@@ -254,7 +254,7 @@ fn main() {
             println!("our_b0/chip_b0 at offset 80: {}", pairs.join(" "));
         }
         let ours_chip = chip_decode(&sock, &mut buf, &header, &ours);
-        let mut d = DecoderState::new();
+        let mut d = DecoderState::new_chip_wire();
         let ours_ours: Vec<f64> = ours.iter().flat_map(|c| d.decode_frame(*c).unwrap_or([0.0; 160])).collect();
         println!(
             "offset {offset:5}: frames {} both-decoded {both}; b0 within 2: {:.2}, L equal: {:.2}, b2 within 3: {:.2}, mean |voiced-fraction diff| {:.2}; envelope corr vs input: our-enc->chip-dec {:.4}, our-enc->our-dec {:.4}",

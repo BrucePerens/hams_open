@@ -170,7 +170,7 @@ fn main() {
         let signal: Vec<f64> = (0..160 * 40)
             .map(|i| (1..=8).map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin()).sum())
             .collect();
-        let mut enc = Encoder::new();
+        let mut enc = Encoder::new_chip_wire();
         enc.push_samples(&signal);
         let mut frames = Vec::new();
         while let Some(f) = enc.next_frame() {

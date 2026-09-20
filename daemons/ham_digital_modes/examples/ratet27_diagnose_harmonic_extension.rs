@@ -179,7 +179,7 @@ fn main() {
     // Decode-only pass (no synthesis needed for classification) to find fully-voiced frames and
     // their own l_hat/omega0_tilde, using a separate decoder instance driven only through
     // decode_parameters + advance_history (mirrors decode_frame's own history update exactly).
-    let mut params_decoder = DecoderState::new();
+    let mut params_decoder = DecoderState::new_chip_wire();
     // (frame index, l_hat, omega0_tilde, per-harmonic voiced, fraction voiced)
     let mut fully_voiced_frames: Vec<(usize, u32, f64, Vec<bool>)> = Vec::new();
     let mut voiced_fraction_histogram: Vec<f64> = Vec::new();
@@ -217,7 +217,7 @@ fn main() {
 
     // Full decode pass (chip PCM + float PCM), same two-pass-not-interleaved shape as the other
     // chip-comparison harnesses.
-    let mut float_decoder = DecoderState::new();
+    let mut float_decoder = DecoderState::new_chip_wire();
     let mut chip_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);
     let mut float_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);
     for channel_payload in &channel_payloads {

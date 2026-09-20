@@ -189,11 +189,11 @@ fn main() {
         channel_payloads.push(payload.to_vec());
     }
 
-    let mut decoder = DecoderState::new();
+    let mut decoder = DecoderState::new_chip_wire();
     let mut params_per_frame: Vec<Option<(u32, u32, f64, Vec<bool>)>> = Vec::new(); // (b0, l_hat, f0_hz, voiced)
     let mut chip_pcm: Vec<f64> = Vec::new();
     let mut float_pcm: Vec<f64> = Vec::new();
-    let mut params_decoder = DecoderState::new();
+    let mut params_decoder = DecoderState::new_chip_wire();
     for channel_payload in &channel_payloads {
         let mut wire_bytes = [0u8; FRAME_BYTES];
         wire_bytes.copy_from_slice(&channel_payload[channel_payload.len() - FRAME_BYTES..]);

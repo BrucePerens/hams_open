@@ -201,33 +201,73 @@ pub fn gain_vector_dct(r_hat: &[f64; 6]) -> [f64; 6] {
     g_hat
 }
 
-/// Wires bit prioritization ([`bit_prioritization::prioritize_bits`]) and forward error correction
-/// ([`fec`]) together: takes the eight prioritized bit vectors `u_hat_0..u_hat_7` and produces the
-/// final code vectors `c_hat_0..c_hat_7` -- this codec's own real final output (see this module's
-/// own doc comment on why bit-interleaving into an actual channel frame is a separate protocol
-/// layer's concern, not unfinished work here).
+/// Wires bit prioritization ([`bit_prioritization::prioritize_bits`]), forward error correction
+/// ([`fec`], Eq. 81-83) and bit modulation ([`modulation`], Eq. 84-94) together, exactly as
+/// TIA-102.BABA section 7.3-7.4 specifies: takes the eight prioritized bit vectors `u_hat_0..u_hat_7`
+/// and produces the final modulated code vectors `c_hat_0..c_hat_7` -- this codec's own real final
+/// output (bit-interleaving into an actual channel frame is the separate step of [`interleave`]).
 ///
-/// **No longer applies [`modulation::modulate_code_vectors`]'s own textbook whitening step.**
-/// `docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` section 23 already established, from direct
-/// GF(2) rank analysis of ~2200 real chip-captured frames, that 7 of 8 real wire sub-blocks
-/// (`g0`/`g1`/`g2`/`u4`/`u5`/`u6`, everything but the still-unresolved `g3`) reach *full rank* as
-/// plain FEC codewords -- "the wire bits genuinely are the FEC codewords themselves," that finding's
-/// own words, meaning the real DVSI chip does not mix in any data-dependent whitening/PRN the way
-/// this module's own `modulation.rs` (transcribed from the spec's theoretical IMBE encoder
-/// description) does. [`decode::DecoderState::decode_parameters`]'s own demodulation step -- and
-/// this function's own modulation step, until this round -- silently ignored that already-recorded
-/// finding, XORing a real chip-valid codeword with a nontrivial pseudo-random pattern before FEC
-/// decode/after FEC encode. Confirmed as the root cause of a real bug (not a hypothesis): live-chip
-/// data showed the resulting `omega0_tilde`/per-harmonic voicing decisions diverging substantially
-/// from what the same real frames should produce, corrupting synthesis input while individual
-/// blocks still happened to FEC-decode "successfully" (a modulated-then-corrected codeword still
-/// looks like a valid parameter set, just the wrong one).
+/// **This is the standard's wire layer.** `u_hat_0..u_hat_3` get the `[23,12]` Golay code,
+/// `u_hat_4..u_hat_6` the `[15,11]` Hamming code whose generator matrix is the standard's `g_H`
+/// (page 43 of the standard, the same parity rows as [`fec::hamming_encode`]), `u_hat_7` stays
+/// unprotected; then `nu_hat_1..nu_hat_6` are XORed with the pseudo-random modulation vectors seeded
+/// from `u_hat_0` ([`modulation::modulate_code_vectors`]; `nu_hat_0` and `nu_hat_7` are never
+/// modulated). The mbelib decoder and the kchmck `imbe.rs` decoder both use this layer, and
+/// `docs/references/tia_102_baba_cross_validation.md` records the frame-by-frame agreement.
+///
+/// **History**: until the cross-validation recorded in that document, this function and
+/// [`decode::DecoderState::decode_parameters`] used the DVSI chip's framing (chip Hamming labelling,
+/// no modulation) because the codec was assumed to be what the chip's `RATET(27)` setting produces.
+/// The chip's setting turned out to be a different proprietary codec, so the chip framing moved to
+/// [`encode_code_vectors_chip`] / [`decode::DecoderState::new_chip_wire`], kept only for the
+/// chip-comparison tools.
 ///
 /// `u` must already be [`bit_prioritization::prioritize_bits`]'s own output: `u[0..=3]` fit in 12
 /// bits, `u[4..=6]` in 11 bits, `u[7]` in 7 bits (this function doesn't re-check that, matching
 /// [`fec::golay_encode`]/[`fec::hamming_encode`]'s own "trust the caller's own bit width" contract).
 // [@ANCHOR: ambe_mod:encode_code_vectors]
 pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
+    let nu = [
+        fec::golay_encode(u[0] as u16),
+        fec::golay_encode(u[1] as u16),
+        fec::golay_encode(u[2] as u16),
+        fec::golay_encode(u[3] as u16),
+        fec::hamming_encode(u[4] as u16) as u32,
+        fec::hamming_encode(u[5] as u16) as u32,
+        fec::hamming_encode(u[6] as u16) as u32,
+        u[7],
+    ];
+    modulation::modulate_code_vectors(nu, u[0])
+}
+
+/// The receiver-side inverse of [`encode_code_vectors`]: Golay-decodes `c_hat_0` to get `u_hat_0`,
+/// uses it to demodulate `c_hat_1..c_hat_6` (Eq. 84-94; the demodulation is keyed off the *corrected*
+/// `u_hat_0`, exactly as the standard's section 7 describes), then FEC-decodes them. Returns the eight
+/// bit vectors `u_hat_0..u_hat_7` and the per-block corrected-error counts `epsilon_0..epsilon_6`
+/// that section 7.6 (Eq. 95-96) feeds into the error-rate estimate. Pure integer code: the fixed
+/// point decoder uses it directly.
+// [@ANCHOR: ambe_mod:decode_code_vectors]
+pub fn decode_code_vectors(c: [u32; 8]) -> ([u32; 8], [u32; 7]) {
+    let (u0, e0) = fec::golay_decode(c[0]);
+    let m = modulation::modulation_vectors(u0 as u32);
+    let (u1, e1) = fec::golay_decode(c[1] ^ m[1]);
+    let (u2, e2) = fec::golay_decode(c[2] ^ m[2]);
+    let (u3, e3) = fec::golay_decode(c[3] ^ m[3]);
+    let (u4, e4) = fec::hamming_decode((c[4] ^ m[4]) as u16);
+    let (u5, e5) = fec::hamming_decode((c[5] ^ m[5]) as u16);
+    let (u6, e6) = fec::hamming_decode((c[6] ^ m[6]) as u16);
+    (
+        [u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, c[7]],
+        [e0, e1, e2, e3, e4, e5, e6],
+    )
+}
+
+/// The DVSI chip's framing of the same eight vectors: plain FEC codewords with the chip's own
+/// Hamming labelling ([`crate::ambe::dvsi_p25fec::fec::hamming_encode_chip`]) and **no** modulation
+/// (`docs/references/AMBE_CHIP_VALIDATION_FINDINGS.md` section 23, from GF(2) rank analysis of ~2200
+/// real chip frames: "the wire bits genuinely are the FEC codewords themselves"). Not TIA-102.BABA;
+/// kept for the chip-comparison tools and their tests only.
+pub fn encode_code_vectors_chip(u: [u32; 8]) -> [u32; 8] {
     [
         fec::golay_encode(u[0] as u16),
         fec::golay_encode(u[1] as u16),
@@ -238,6 +278,23 @@ pub fn encode_code_vectors(u: [u32; 8]) -> [u32; 8] {
         crate::ambe::dvsi_p25fec::fec::hamming_encode_chip(u[6] as u16) as u32,
         u[7],
     ]
+}
+
+/// The inverse of [`encode_code_vectors_chip`] (no demodulation, chip Hamming labelling); see
+/// [`decode_code_vectors`] for the return convention.
+pub fn decode_code_vectors_chip(c: [u32; 8]) -> ([u32; 8], [u32; 7]) {
+    use crate::ambe::dvsi_p25fec::fec::hamming_decode_chip;
+    let (u0, e0) = fec::golay_decode(c[0]);
+    let (u1, e1) = fec::golay_decode(c[1]);
+    let (u2, e2) = fec::golay_decode(c[2]);
+    let (u3, e3) = fec::golay_decode(c[3]);
+    let (u4, e4) = hamming_decode_chip(c[4] as u16);
+    let (u5, e5) = hamming_decode_chip(c[5] as u16);
+    let (u6, e6) = hamming_decode_chip(c[6] as u16);
+    (
+        [u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, c[7]],
+        [e0, e1, e2, e3, e4, e5, e6],
+    )
 }
 
 /// The per-frame state that carries forward into the *next* call to [`encode_frame`] -- Eq. 41's
@@ -319,6 +376,20 @@ pub fn encode_frame(
     let (u, state) =
         encode_prioritized_bits(frame, omega0_hat, initial_pitch_error, previous_state, sync_bit)?;
     Some((encode_code_vectors(u), state))
+}
+
+/// [`encode_frame`] with the DVSI chip's framing ([`encode_code_vectors_chip`]) instead of the
+/// standard's, for the chip-comparison tools.
+pub fn encode_frame_chip_wire(
+    frame: &pitch_refinement::RefinementFrame,
+    omega0_hat: f64,
+    initial_pitch_error: f64,
+    previous_state: &FrameState,
+    sync_bit: bool,
+) -> Option<([u32; 8], FrameState)> {
+    let (u, state) =
+        encode_prioritized_bits(frame, omega0_hat, initial_pitch_error, previous_state, sync_bit)?;
+    Some((encode_code_vectors_chip(u), state))
 }
 
 /// The same pipeline as [`encode_frame`], stopping one stage earlier: returns the prioritized bit
@@ -504,6 +575,59 @@ mod tests {
         let c = encode_code_vectors(u);
         assert_eq!(c[0], fec::golay_encode(u[0] as u16));
         assert_eq!(c[7], u[7]);
+    }
+
+    /// The standard's wire layer, checked structurally: XORing `c_1..c_6` with the modulation vectors
+    /// seeded from `u_0` (Eq. 84-94) leaves textbook Golay/Hamming codewords, and `decode_code_vectors`
+    /// recovers every `u` with zero corrected errors.
+    #[test]
+    fn encode_code_vectors_is_modulated_textbook_fec_and_decode_code_vectors_inverts_it() {
+        let u = [0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010];
+        let c = encode_code_vectors(u);
+        let m = modulation::modulation_vectors(u[0]);
+        for i in 1..=3 {
+            assert_eq!(c[i] ^ m[i], fec::golay_encode(u[i] as u16), "c_{i} is not a modulated Golay codeword");
+        }
+        for i in 4..=6 {
+            assert_eq!(
+                c[i] ^ m[i],
+                fec::hamming_encode(u[i] as u16) as u32,
+                "c_{i} is not a modulated Hamming codeword"
+            );
+        }
+        assert_ne!(c[1], fec::golay_encode(u[1] as u16), "modulation must actually change c_1 for this u_0");
+        let (u_back, errors) = decode_code_vectors(c);
+        assert_eq!(u_back, u);
+        assert_eq!(errors, [0; 7]);
+    }
+
+    /// Correctable errors (3 per Golay block, 1 per Hamming block) are repaired and counted, including
+    /// an error in `c_0` itself (the demodulation must then be keyed off the corrected `u_0`).
+    #[test]
+    fn decode_code_vectors_corrects_up_to_capacity_in_every_block_including_c0() {
+        let u = [0x5A5u32, 0x3C3, 0xF0F, 0x0FF, 0x7A1, 0x2C4, 0x123, 0x55];
+        let mut c = encode_code_vectors(u);
+        c[0] ^= 0b101_0000_0000_0000_0001_0000; // 3 errors
+        c[1] ^= 0b11; // 2 errors
+        c[2] ^= 1 << 22; // 1 error
+        c[3] ^= 0b1_0000_0000_0000_0000_0100; // 2 errors
+        c[4] ^= 1 << 5;
+        c[5] ^= 1 << 14;
+        c[6] ^= 1;
+        let (u_back, errors) = decode_code_vectors(c);
+        assert_eq!(u_back, u);
+        assert_eq!(errors, [3, 2, 1, 2, 1, 1, 1]);
+    }
+
+    /// The chip framing stays available, and is genuinely different from the standard's.
+    #[test]
+    fn chip_wire_layer_round_trips_and_differs_from_the_standards() {
+        let u = [0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010];
+        let c = encode_code_vectors_chip(u);
+        assert_ne!(c, encode_code_vectors(u));
+        let (u_back, errors) = decode_code_vectors_chip(c);
+        assert_eq!(u_back, u);
+        assert_eq!(errors, [0; 7]);
     }
 
     /// A real, investigated (not hypothetical) property of this encoder's own closed-loop

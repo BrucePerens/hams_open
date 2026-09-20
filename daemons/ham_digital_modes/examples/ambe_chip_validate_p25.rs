@@ -18,7 +18,7 @@
 //! searches a small window of frame-index offsets between the two streams and reports the offset
 //! with the most bit agreement, rather than assuming naive index-for-index alignment.
 
-use ham_digital_modes::ambe::float::tia_102_baba::{encode_frame, pitch_refinement::RefinementFrame, FrameState};
+use ham_digital_modes::ambe::float::tia_102_baba::{encode_frame_chip_wire as encode_frame, pitch_refinement::RefinementFrame, FrameState};
 use std::net::UdpSocket;
 
 const SAMPLE_RATE: f64 = 8000.0;

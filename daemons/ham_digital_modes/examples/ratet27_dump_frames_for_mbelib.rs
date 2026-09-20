@@ -142,8 +142,8 @@ fn main() {
         payloads.push(payload.to_vec());
     }
 
-    let mut params_decoder = DecoderState::new();
-    let mut float_decoder = DecoderState::new();
+    let mut params_decoder = DecoderState::new_chip_wire();
+    let mut float_decoder = DecoderState::new_chip_wire();
     let mut lines = String::new();
     let mut chip_bytes: Vec<u8> = Vec::new();
     let mut float_bytes: Vec<u8> = Vec::new();

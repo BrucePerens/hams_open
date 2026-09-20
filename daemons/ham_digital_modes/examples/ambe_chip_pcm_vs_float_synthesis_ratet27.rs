@@ -218,7 +218,7 @@ fn main() {
     let pcm = read_wav_mono_i16("tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav");
     let n_frames = (pcm.len() / FRAME_SAMPLES).min(N_FRAMES);
 
-    let mut float_decoder = DecoderState::new();
+    let mut float_decoder = DecoderState::new_chip_wire();
     let mut chip_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);
     let mut float_pcm: Vec<f64> = Vec::with_capacity(n_frames * FRAME_SAMPLES);
     let mut float_decode_failures = 0usize;

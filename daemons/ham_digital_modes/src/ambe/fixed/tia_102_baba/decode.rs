@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Fixed-point port of [`super::super::float::tia_102_baba::decode`] -- the top-level bitstream decoder,
 //! turning a received 144-bit frame into a synthesized 20 ms PCM frame. See the float sibling's own
-//! doc comment for the full decode order and the reasoning behind each step (no demodulation of
-//! `c[1..6]`, the mute-before-repeat check order, etc.) -- unchanged here, since none of that
+//! doc comment for the full decode order and the reasoning behind each step (demodulation of
+//! `c[1..6]` per Eq. 84-94, the mute-before-repeat check order, etc.) -- unchanged here, since none of that
 //! reasoning is about numeric precision. The only things genuinely re-derived for fixed point are the
 //! pieces [`super::super::mod`]'s own doc comment already calls out: parameter dequantization and
 //! synthesis math. Everything else (Golay/Hamming FEC, bit prioritization/deprioritization, the
@@ -23,8 +23,7 @@ use crate::ambe::fixed::general::unvoiced_synthesis::N;
 use crate::ambe::float::tia_102_baba::bit_prioritization::{
     deprioritize_bits, extract_fundamental_frequency_quantizer, DeprioritizedBits,
 };
-use crate::ambe::float::tia_102_baba::fec::golay_decode;
-use crate::ambe::dvsi_p25fec::fec::hamming_decode_chip;
+use crate::ambe::float::tia_102_baba::{decode_code_vectors, decode_code_vectors_chip};
 use crate::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
 
 /// `round(1.0 * 65536)` -- Annex A's own `M~_l(-1) = 1` (unity, not silent) initial history value, in
@@ -62,9 +61,12 @@ pub struct DecoderState {
     l_hat_prev: u32,
     spectral_amplitudes_prev: Vec<i32>,
     error_rate_prev_q16: i32,
+    /// Decode the DVSI chip's framing instead of the standard's (see the float sibling's `new_chip_wire`).
+    chip_wire: bool,
 }
 
 impl DecoderState {
+    /// A decoder for the standard's wire layer (demodulation plus textbook FEC, Eq. 81-94).
     pub fn new() -> Self {
         let l_hat_prev = INITIAL_L_HAT_PREV;
         Self {
@@ -72,7 +74,14 @@ impl DecoderState {
             l_hat_prev,
             spectral_amplitudes_prev: vec![ONE_Q16_16; l_hat_prev as usize],
             error_rate_prev_q16: 0,
+            chip_wire: false,
         }
+    }
+
+    /// The DVSI chip's framing (plain FEC codewords, chip Hamming labelling, no modulation) for the
+    /// chip-comparison tools; the same choice as the float sibling's `DecoderState::new_chip_wire`.
+    pub fn new_chip_wire() -> Self {
+        Self { chip_wire: true, ..Self::new() }
     }
 
     /// The fixed-point equivalent of `DecoderState::advance_history`.
@@ -84,22 +93,13 @@ impl DecoderState {
     /// The fixed-point equivalent of `DecoderState::decode_parameters` -- see the float sibling's own
     /// doc comment for the full step-by-step derivation this mirrors exactly.
     pub fn decode_parameters(&mut self, c: [u32; 8]) -> Option<FrameOutcome> {
-        let (u0, epsilon_0) = golay_decode(c[0]);
-
-        let (u1, epsilon_1) = golay_decode(c[1]);
-        let (u2, epsilon_2) = golay_decode(c[2]);
-        let (u3, epsilon_3) = golay_decode(c[3]);
-        let (u4, epsilon_4) = hamming_decode_chip(c[4] as u16);
-        let (u5, epsilon_5) = hamming_decode_chip(c[5] as u16);
-        let (u6, epsilon_6) = hamming_decode_chip(c[6] as u16);
-        let u7 = c[7];
-
-        let u_vectors: [u32; 8] = [
-            u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, u7,
-        ];
-        let corrected_error_counts = [
-            epsilon_0, epsilon_1, epsilon_2, epsilon_3, epsilon_4, epsilon_5, epsilon_6,
-        ];
+        // Same wire layer choice as the float sibling: the standard's demodulate-then-FEC-decode, or
+        // (chip-comparison tools only) the DVSI chip's framing. Pure integer code either way.
+        let (u_vectors, corrected_error_counts) = if self.chip_wire {
+            decode_code_vectors_chip(c)
+        } else {
+            decode_code_vectors(c)
+        };
         let errors = estimate_errors_q16(&corrected_error_counts, self.error_rate_prev_q16);
         self.error_rate_prev_q16 = errors.rate_q16;
 

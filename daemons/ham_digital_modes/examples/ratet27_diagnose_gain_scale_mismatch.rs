@@ -157,8 +157,8 @@ fn main() {
     // the other calls decode_parameters directly to read b2/l_hat/voiced/R_M0 without re-deriving
     // them from decode_frame's own private state -- mirroring decode_frame's own history advance
     // exactly (advance_history) so both stay in lockstep frame to frame.
-    let mut float_pcm_decoder = DecoderState::new();
-    let mut float_param_decoder = DecoderState::new();
+    let mut float_pcm_decoder = DecoderState::new_chip_wire();
+    let mut float_param_decoder = DecoderState::new_chip_wire();
 
     let mut channel_payloads: Vec<Vec<u8>> = Vec::with_capacity(n_frames);
     for i in 0..n_frames {
