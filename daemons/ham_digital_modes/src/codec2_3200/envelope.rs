@@ -179,7 +179,9 @@ pub fn sample_filter_phase(aw: &[Complex32], model: &Model) -> [Complex32; MAX_A
     h
 }
 
-use super::fixed_fft::{fft_fixed_sparse_prefix, rshift_round_i128, rshift_round_i64, ComplexQ23};
+use super::fixed_fft::{
+    fft_fixed_sparse_prefix, rshift_round_i128, rshift_round_i64, ComplexQ23, FftScratch,
+};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::lpc::pi_q23;
 
@@ -241,15 +243,11 @@ fn mag_sq_q23(c: ComplexQ23) -> i64 {
 /// against `rustfft`'s own forward convention -- see that module's own
 /// doc comment), first `SPEC_BINS` bins returned as `ComplexQ23`.
 // [@ANCHOR: lpc_spectrum_fixed]
-fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1]) -> [ComplexQ23; SPEC_BINS] {
-    let mut re = [0i64; FFT_ENC];
-    let mut im = [0i64; FFT_ENC];
-    re[..=LPC_ORD].copy_from_slice(ak_q23);
-    fft_fixed_sparse_prefix(&mut re, &mut im, LPC_ORD + 1, true);
-    core::array::from_fn(|i| ComplexQ23 {
-        re: re[i],
-        im: im[i],
-    })
+fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1], scratch: &mut FftScratch) {
+    scratch.re.fill(0);
+    scratch.im.fill(0);
+    scratch.re[..=LPC_ORD].copy_from_slice(ak_q23);
+    fft_fixed_sparse_prefix(&mut scratch.re, &mut scratch.im, LPC_ORD + 1, true);
 }
 
 /// `1e-6` in Q23 -- the same tiny floor `compute_harmonic_amplitudes`'s
@@ -329,9 +327,26 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
     ak_q23: &[i64; LPC_ORD + 1],
     e_q23: i64,
     model: &mut ModelFixed,
-) -> [ComplexQ23; SPEC_BINS] {
-    let aw = lpc_spectrum_fixed(ak_q23);
-    let a2: [i64; SPEC_BINS] = core::array::from_fn(|i| mag_sq_q23(aw[i]) + eps_a2_q23());
+    scratch: &mut FftScratch,
+) -> [ComplexQ23; MAX_AMP + 1] {
+    // The spectrum stays in the scratch buffers: the phase samples at the
+    // harmonic bins (`h`, what synthesis needs) and the squared magnitudes
+    // are read out of it right away, so the full 257-bin spectrum is never
+    // copied into a 4 KB array of its own.
+    lpc_spectrum_fixed(ak_q23, scratch);
+    let h = sample_filter_phase_with(
+        |b| ComplexQ23 {
+            re: scratch.re[b],
+            im: scratch.im[b],
+        },
+        model,
+    );
+    let a2: [i64; SPEC_BINS] = core::array::from_fn(|i| {
+        mag_sq_q23(ComplexQ23 {
+            re: scratch.re[i],
+            im: scratch.im[i],
+        }) + eps_a2_q23()
+    });
 
     let mut ak_gamma_q23 = [0i64; LPC_ORD + 1];
     ak_gamma_q23[0] = ak_q23[0];
@@ -342,8 +357,16 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
         // exact-power-of-two multipliers).
         ak_gamma_q23[i] = (ak_q23[i] + (1i64 << (i - 1))) >> i;
     }
-    let awg = lpc_spectrum_fixed(&ak_gamma_q23);
-    let a2g: [i64; SPEC_BINS] = core::array::from_fn(|i| mag_sq_q23(awg[i]) + eps_a2_q23());
+    // The bandwidth-expanded spectrum is only ever used through its
+    // squared magnitude, so it is read straight out of the scratch buffers
+    // instead of being copied into a second 4 KB array.
+    lpc_spectrum_fixed(&ak_gamma_q23, scratch);
+    let a2g: [i64; SPEC_BINS] = core::array::from_fn(|i| {
+        mag_sq_q23(ComplexQ23 {
+            re: scratch.re[i],
+            im: scratch.im[i],
+        }) + eps_a2_q23()
+    });
 
     // The per-bin postfilter weight is needed twice below (once for the
     // whole-spectrum energy sums, once per harmonic band), and the
@@ -394,7 +417,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
         };
     }
 
-    aw
+    h
 }
 
 /// Fixed-point `apply_first_harmonic_correction`: `wo` compared directly
@@ -417,11 +440,10 @@ pub(crate) fn apply_first_harmonic_correction_fixed(model: &mut ModelFixed) {
     }
 }
 
-/// Fixed-point `sample_filter_phase`: `aw` (this same `compute_harmonic_
-/// amplitudes_fixed` call's own return value) in, `ComplexQ23` out.
-// [@ANCHOR: sample_filter_phase_fixed]
-pub(crate) fn sample_filter_phase_fixed(
-    aw: &[ComplexQ23],
+/// The phase-sampling step of `sample_filter_phase`: for each harmonic `m`
+/// the conjugate of the spectrum `bin(b)` at the bin nearest `m * wo`.
+fn sample_filter_phase_with(
+    bin: impl Fn(usize) -> ComplexQ23,
     model: &ModelFixed,
 ) -> [ComplexQ23; MAX_AMP + 1] {
     let mut h = [ComplexQ23::ZERO; MAX_AMP + 1];
@@ -430,9 +452,21 @@ pub(crate) fn sample_filter_phase_fixed(
     for m in 1..=model.l {
         let raw = m as i64 * k_q23;
         let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC / 2 - 1);
-        h[m] = aw[b].conj();
+        h[m] = bin(b).conj();
     }
     h
+}
+
+/// Fixed-point `sample_filter_phase` from a full spectrum array `aw`
+/// (the production path uses `sample_filter_phase_with` directly on the
+/// transform scratch, without materialising `aw`).
+// [@ANCHOR: sample_filter_phase_fixed]
+#[cfg(test)]
+pub(crate) fn sample_filter_phase_fixed(
+    aw: &[ComplexQ23],
+    model: &ModelFixed,
+) -> [ComplexQ23; MAX_AMP + 1] {
+    sample_filter_phase_with(|b| aw[b], model)
 }
 
 #[cfg(test)]
@@ -586,7 +620,12 @@ mod tests {
             let ak_q23 = lsp_to_lpc_fixed(&lsp_q23);
             let e_q23 = f32_to_q_exact_round(e, FRAC_BITS);
             let mut model_fixed = ModelFixed::new(wo_q23, true);
-            let _aw_fixed = compute_harmonic_amplitudes_fixed(&ak_q23, e_q23, &mut model_fixed);
+            let _aw_fixed = compute_harmonic_amplitudes_fixed(
+                &ak_q23,
+                e_q23,
+                &mut model_fixed,
+                &mut FftScratch::new(),
+            );
 
             assert_eq!(
                 model.l, model_fixed.l,

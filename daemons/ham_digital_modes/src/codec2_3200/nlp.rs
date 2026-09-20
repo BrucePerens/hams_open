@@ -230,6 +230,11 @@ pub struct NlpStateFixed {
     /// index (the only form `correct_sub_multiples_fixed` needs it in)
     /// rather than re-deriving it from Hz every call.
     prev_f0_bin_fixed: usize,
+    /// Pitch-estimator FFT buffers, kept here rather than as two 4 KB
+    /// arrays on the stack of every call. Fully rewritten by `fft_fixed`
+    /// each call, so they carry no state between frames.
+    fft_re: [i64; PE_FFT_SIZE],
+    fft_im: [i64; PE_FFT_SIZE],
 }
 
 impl Default for NlpStateFixed {
@@ -246,6 +251,8 @@ impl Default for NlpStateFixed {
             // instead of silently starting from bin 0.
             // 100 Hz / (SAMPLE_RATE / (PE_FFT_SIZE * NLP_DEC)) = 100 / 3.125 = 32.
             prev_f0_bin_fixed: 100 * PE_FFT_SIZE * NLP_DEC / SAMPLE_RATE as usize,
+            fft_re: [0; PE_FFT_SIZE],
+            fft_im: [0; PE_FFT_SIZE],
         }
     }
 }
@@ -467,22 +474,27 @@ pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
 
     state.sq_fixed.copy_within(N_SAMP..M_PITCH, 0);
 
-    let mut re = [0i64; PE_FFT_SIZE];
-    let mut im = [0i64; PE_FFT_SIZE];
     let hann = hann_window_q23();
     let mut windowed = [0i64; NDEC];
     for (i, &d) in decimated.iter().enumerate() {
         windowed[i] = rshift_round(d * hann[i], NLP_FRAC_BITS);
     }
 
-    fft_fixed(&windowed, &mut re, &mut im);
+    fft_fixed(&windowed, &mut state.fft_re, &mut state.fft_im);
 
+    // Only bins up to the highest searched pitch bin (`hi`, 128) are ever
+    // read: the global peak search stops there, and the sub-multiple check
+    // looks at bins at most 1.2 * hi / 2 + 1 (< 80). So the power spectrum
+    // is 129 bins, not the 257 of a full half spectrum.
     const HALF: usize = PE_FFT_SIZE / 2 + 1;
-    let power: [i128; HALF] =
+    const POWER_BINS: usize = PE_FFT_SIZE * NLP_DEC / P_MIN + 1;
+    const _: () = assert!(POWER_BINS <= HALF);
+    let (re, im) = (&state.fft_re, &state.fft_im);
+    let power: [i128; POWER_BINS] =
         core::array::from_fn(|i| re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128);
 
     let lo = (PE_FFT_SIZE * NLP_DEC / P_MAX).max(1);
-    let hi = (PE_FFT_SIZE * NLP_DEC / P_MIN).min(HALF - 1);
+    let hi = POWER_BINS - 1;
 
     let mut gmax: i128 = 0;
     let mut gmax_bin = lo;

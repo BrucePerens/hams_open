@@ -293,7 +293,7 @@ impl SynthesisState {
 }
 
 use super::envelope::{synth_k_q23, ModelFixed};
-use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23};
+use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23, FftScratch};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::trig_fixed::sin_cos_q23;
 
@@ -493,8 +493,8 @@ pub(crate) struct SynthesisStateFixed {
     ex_phase: u32,
     bg_est: i64,
     rng: u32,
-    ifft_re: [i64; FFT_ENC],
-    ifft_im: [i64; FFT_ENC],
+    /// Transform buffers, also lent to the envelope stage (see `FftScratch`).
+    pub(crate) scratch: FftScratch,
 }
 
 fn parzen_window_q23() -> &'static [i64; SAMPLES_PER_FRAME] {
@@ -508,8 +508,7 @@ impl Default for SynthesisStateFixed {
             ex_phase: 0,
             bg_est: 0,
             rng: 0xC0FFEE,
-            ifft_re: [0; FFT_ENC],
-            ifft_im: [0; FFT_ENC],
+            scratch: FftScratch::new(),
         }
     }
 }
@@ -519,24 +518,23 @@ impl SynthesisStateFixed {
         Self::default()
     }
 
-    /// Fixed-point `synthesize_subframe`. `aw`/`model` from `envelope::
-    /// compute_harmonic_amplitudes_fixed`/`ModelFixed`.
+    /// Fixed-point `synthesize_subframe`. `h` (the phase samples) and
+    /// `model` from `envelope::compute_harmonic_amplitudes_fixed`/`ModelFixed`.
     // [@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]
     pub(crate) fn synthesize_subframe_fixed(
         &mut self,
         model: &mut ModelFixed,
-        aw: &[ComplexQ23],
+        h: &[ComplexQ23; MAX_AMP + 1],
     ) -> [i16; N_SAMP] {
-        let h = super::envelope::sample_filter_phase_fixed(aw, model);
-        synthesize_phase_fixed(model, &h, &mut self.ex_phase, &mut self.rng);
+        synthesize_phase_fixed(model, h, &mut self.ex_phase, &mut self.rng);
         postfilter_fixed(model, &mut self.bg_est, &mut self.rng);
 
         self.sn_.copy_within(N_SAMP.., 0);
         self.sn_[N_SAMP - 1] = 0;
 
         for i in 0..FFT_ENC {
-            self.ifft_re[i] = 0;
-            self.ifft_im[i] = 0;
+            self.scratch.re[i] = 0;
+            self.scratch.im[i] = 0;
         }
         let k_q23 = synth_k_q23(model.wo);
         for l in 1..=model.l {
@@ -546,26 +544,26 @@ impl SynthesisStateFixed {
                 re: model.a[l],
                 im: 0,
             });
-            self.ifft_re[b] = bin.re;
-            self.ifft_im[b] = bin.im;
+            self.scratch.re[b] = bin.re;
+            self.scratch.im[b] = bin.im;
         }
         for k in 1..(FFT_ENC / 2) {
-            self.ifft_re[FFT_ENC - k] = self.ifft_re[k];
-            self.ifft_im[FFT_ENC - k] = -self.ifft_im[k];
+            self.scratch.re[FFT_ENC - k] = self.scratch.re[k];
+            self.scratch.im[FFT_ENC - k] = -self.scratch.im[k];
         }
 
-        fft_fixed(&mut self.ifft_re, &mut self.ifft_im, false);
+        fft_fixed(&mut self.scratch.re, &mut self.scratch.im, false);
 
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP - 1) {
-            let re = self.ifft_re[FFT_ENC - N_SAMP + 1 + i];
+            let re = self.scratch.re[FFT_ENC - N_SAMP + 1 + i];
             self.sn_[i] += ((re as i128 * parzen_window_q23()[i] as i128) >> FRAC_BITS) as i64;
         }
         #[allow(clippy::needless_range_loop)]
         for j in 0..(N_SAMP + 1) {
             let idx = N_SAMP - 1 + j;
             if idx < SAMPLES_PER_FRAME {
-                let re = self.ifft_re[j];
+                let re = self.scratch.re[j];
                 self.sn_[idx] = ((re as i128 * parzen_window_q23()[idx] as i128) >> FRAC_BITS) as i64;
             }
         }
@@ -749,7 +747,12 @@ mod tests {
             let ak_q23 = lsp_to_lpc_fixed(&lsp_q23);
             let e_q23 = f32_to_q_exact_round(e, FRAC_BITS);
             let mut model_fixed = ModelFixed::new(wo_q23, voiced);
-            let _aw_fixed = compute_harmonic_amplitudes_fixed(&ak_q23, e_q23, &mut model_fixed);
+            let _aw_fixed = compute_harmonic_amplitudes_fixed(
+                &ak_q23,
+                e_q23,
+                &mut model_fixed,
+                &mut FftScratch::new(),
+            );
             apply_first_harmonic_correction_fixed(&mut model_fixed);
 
             let (new_plain_bg, plain_decisions) = postfilter_step(

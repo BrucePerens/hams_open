@@ -658,9 +658,14 @@ impl DecoderFixed {
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc_fixed(&lsps);
             let mut model = envelope::ModelFixed::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes_fixed(&ak, e, &mut model);
+            let h = envelope::compute_harmonic_amplitudes_fixed(
+                &ak,
+                e,
+                &mut model,
+                &mut self.synth.scratch,
+            );
             envelope::apply_first_harmonic_correction_fixed(&mut model);
-            let sub = self.synth.synthesize_subframe_fixed(&mut model, &aw);
+            let sub = self.synth.synthesize_subframe_fixed(&mut model, &h);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
         }
 
@@ -731,12 +736,17 @@ impl DecoderFixed {
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc_fixed(&lsps);
             let mut model = envelope::ModelFixed::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes_fixed(&ak, e, &mut model);
+            let h = envelope::compute_harmonic_amplitudes_fixed(
+                &ak,
+                e,
+                &mut model,
+                &mut self.synth.scratch,
+            );
             envelope::apply_first_harmonic_correction_fixed(&mut model);
             // Populates model.phi[1..=l] as a side effect, reused
             // unchanged by the spectral bridge synthesis below -- same
             // reasoning as decode_16k's own float version.
-            let _sub = self.synth.synthesize_subframe_fixed(&mut model, &aw);
+            let _sub = self.synth.synthesize_subframe_fixed(&mut model, &h);
             let sub_sb = self.spectral_bridge.synthesize_subframe_sb_fixed(&model);
             let n = codec2_3200::spectral_bridge::N_SAMP_SB;
             out[i * n..(i + 1) * n].copy_from_slice(&sub_sb);

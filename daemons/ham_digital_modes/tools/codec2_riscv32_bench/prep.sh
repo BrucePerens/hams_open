@@ -59,13 +59,13 @@ def patch(f, pairs):
         s=s.replace(a,b,1)
     open(p,'w').write(s)
 patch('envelope.rs',[
- ("    let aw = lpc_spectrum_fixed(ak_q23);\n    let a2:", "    crate::prof::mark(15);\n    let aw = lpc_spectrum_fixed(ak_q23);\n    crate::prof::mark(6);\n    let a2:"),
+ ("    lpc_spectrum_fixed(ak_q23, scratch);\n    let h =", "    crate::prof::mark(15);\n    lpc_spectrum_fixed(ak_q23, scratch);\n    crate::prof::mark(6);\n    let h ="),
  ("    let mut ak_gamma_q23 = [0i64; LPC_ORD + 1];\n", "    crate::prof::mark(7);\n    let mut ak_gamma_q23 = [0i64; LPC_ORD + 1];\n"),
  ("    let mut pw_bin_q23", "    crate::prof::mark(8);\n    let mut pw_bin_q23"),
 ])
 patch('synthesis.rs',[
- ("        let h = super::envelope::sample_filter_phase_fixed(aw, model);\n        synthesize_phase_fixed(", "        crate::prof::mark(15);\n        let h = super::envelope::sample_filter_phase_fixed(aw, model);\n        synthesize_phase_fixed("),
+ ("        synthesize_phase_fixed(model, h,", "        crate::prof::mark(15);\n        synthesize_phase_fixed(model, h,"),
  ("        postfilter_fixed(model, &mut self.bg_est, &mut self.rng);\n", "        crate::prof::mark(11);\n        postfilter_fixed(model, &mut self.bg_est, &mut self.rng);\n        crate::prof::mark(12);\n"),
- ("        fft_fixed(&mut self.ifft_re, &mut self.ifft_im, false);\n", "        crate::prof::mark(13);\n        fft_fixed(&mut self.ifft_re, &mut self.ifft_im, false);\n        crate::prof::mark(14);\n"),
+ ("        fft_fixed(&mut self.scratch.re, &mut self.scratch.im, false);\n", "        crate::prof::mark(13);\n        fft_fixed(&mut self.scratch.re, &mut self.scratch.im, false);\n        crate::prof::mark(14);\n"),
 ])
 PY

@@ -19,11 +19,11 @@ impl DecoderFixed {
             let ak = lpc::lsp_to_lpc_fixed(&lsps);
             mark(1);
             let mut model = envelope::ModelFixed::new(wo, voiced);
-            let aw = envelope::compute_harmonic_amplitudes_fixed(&ak, e, &mut model);
+            let h = envelope::compute_harmonic_amplitudes_fixed(&ak, e, &mut model, &mut self.synth.scratch);
             mark(2);
             envelope::apply_first_harmonic_correction_fixed(&mut model);
             mark(3);
-            let sub = self.synth.synthesize_subframe_fixed(&mut model, &aw);
+            let sub = self.synth.synthesize_subframe_fixed(&mut model, &h);
             mark(4);
             out[i * N_SAMP..(i + 1) * N_SAMP].copy_from_slice(&sub);
         }

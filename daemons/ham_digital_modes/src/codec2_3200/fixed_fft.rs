@@ -1275,6 +1275,22 @@ pub(crate) fn fft_fixed_sparse_prefix(re: &mut [i64], im: &mut [i64], nz: usize,
     fft_stages_sparse(re, im, n, nz, forward);
 }
 
+/// Scratch buffers for one 512-point transform. Kept in a long-lived
+/// state struct (the decoder's synthesis state) and lent to whichever stage
+/// needs a transform next, instead of being two 4 KB arrays on the stack of
+/// every caller. Stages that use it start from whatever it holds, so each
+/// one initialises what it reads.
+pub(crate) struct FftScratch {
+    pub(crate) re: [i64; FFT_ENC],
+    pub(crate) im: [i64; FFT_ENC],
+}
+
+impl FftScratch {
+    pub(crate) const fn new() -> Self {
+        FftScratch { re: [0; FFT_ENC], im: [0; FFT_ENC] }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
