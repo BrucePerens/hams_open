@@ -44,7 +44,8 @@ substitution in unvoiced segments), so a negative offset is inherent to this cod
 
 Fixed and float agree to the fourth decimal in every mode.
 
-Real-time margin (release build, one core): float encoders 0.4 ms (TIA) to 1.3 ms (D-STAR) per 20 ms frame; fixed 0.7 ms.
+Real-time margin (release build, one core, per 20 ms frame): D-STAR float encode 0.92 ms and decode 0.27 ms, fixed encode 0.38 ms and
+decode 0.41 ms; TIA-102.BABA float encode 0.4-1.0 ms and decode 0.43 ms. Every encoder and decoder uses under 5% of one core.
 
 ## Agreement with the DVSI chip (tested against the real AMBE-3000R)
 
