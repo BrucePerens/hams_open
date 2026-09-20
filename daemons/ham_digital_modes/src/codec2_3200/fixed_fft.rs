@@ -120,7 +120,10 @@ pub(crate) fn rshift_round_i64(x: i64, n: u32) -> i64 {
 /// back to Q23. `|wr|, |wi| <= 2^23` (twiddle factors). When both
 /// operands are under 2^38 in magnitude the whole thing fits `i64`
 /// (|wr br - wi bi| < 2^23 * 2^39 = 2^62), otherwise the exact `i128`
-/// path runs. Bit-identical either way.
+/// path runs. Bit-identical either way. (Measured 2026-09-20: real speech
+/// and adversarial encoder input stay under 2^63 here, but decoding
+/// pseudo-random garbage bitstreams reaches 2^67 in the butterfly, which is
+/// why the exact `i128` path is kept rather than assuming `i64` suffices.)
 #[inline(always)]
 fn twiddle_mul(wr: i64, wi: i64, br: i64, bi: i64) -> (i64, i64) {
     if (br.unsigned_abs() | bi.unsigned_abs()) < (1u64 << 38) {
@@ -1085,13 +1088,18 @@ pub(crate) fn fft_fixed(re: &mut [i64], im: &mut [i64], forward: bool) {
     fft_stages(re, im, n, forward);
 }
 
+const MODE_CHECKED: u8 = 0;
+const MODE_I64: u8 = 1;
+const MODE_I32: u8 = 2;
+
 /// One radix-2 butterfly range: `lo[j] +/-= w_j * hi[j]` for the twiddles
-/// yielded by `tw`. `FAST` means the caller has proven every value in the
-/// whole transform is under 2^38 in magnitude, so plain `i64` products
-/// (|wr br - wi bi| < 2^62) are exact; otherwise each butterfly uses the
-/// checked [`twiddle_mul`].
+/// yielded by `tw`. `MODE` says how much the caller has proven about the
+/// whole transform: `MODE_I32` every value is under 2^29 (32-bit data,
+/// 32x32->64 products), `MODE_I64` every value is under 2^38 (plain `i64`
+/// products, |wr br - wi bi| < 2^62), `MODE_CHECKED` nothing (each
+/// butterfly uses the range-checked [`twiddle_mul`]).
 #[inline(always)]
-fn butterfly_range<'a, const FWD: bool, const FAST: bool>(
+fn butterfly_range<'a, const FWD: bool, const MODE: u8>(
     lr: &mut [i64],
     li: &mut [i64],
     hr: &mut [i64],
@@ -1106,7 +1114,23 @@ fn butterfly_range<'a, const FWD: bool, const FAST: bool>(
         .zip(tw)
     {
         let wi = if FWD { wi_fwd } else { -wi_fwd };
-        let (vr, vi) = if FAST {
+        if MODE == MODE_I32 {
+            // Every value in the transform is under 2^29 in magnitude, so
+            // it fits `i32`; each product is then a 32x32->64 multiply
+            // (two instructions on a 32-bit core) instead of a full
+            // 64x64 one. Same integer arithmetic, same result.
+            let (wr, wi) = (wr as i32 as i64, wi as i32 as i64);
+            let (yr, yi) = (*br as i32 as i64, *bi as i32 as i64);
+            let vr = ((wr * yr - wi * yi + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
+            let vi = ((wr * yi + wi * yr + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
+            let (xr, xi) = (*ar as i32, *ai as i32);
+            *ar = (xr + vr) as i64;
+            *ai = (xi + vi) as i64;
+            *br = (xr - vr) as i64;
+            *bi = (xi - vi) as i64;
+            continue;
+        }
+        let (vr, vi) = if MODE == MODE_I64 {
             let (wr, wi) = (wr as i32 as i64, wi as i32 as i64);
             (
                 rshift_round_i64(wr * *br - wi * *bi, FRAC_BITS),
@@ -1133,7 +1157,7 @@ fn butterfly_range<'a, const FWD: bool, const FAST: bool>(
 /// (forward) / `+j` (inverse) whose table entry is exactly `(0, -2^23)`,
 /// so those butterflies are add/subtract only. Bit-identical to the
 /// generic butterfly.
-fn fft_stages_dispatch<const FWD: bool, const FAST: bool>(
+fn fft_stages_dispatch<const FWD: bool, const MODE: u8>(
     re: &mut [i64],
     im: &mut [i64],
     n: usize,
@@ -1173,14 +1197,14 @@ fn fft_stages_dispatch<const FWD: bool, const FAST: bool>(
                         hr[q] = xr - vr;
                         hi[q] = xi - vi;
                         // Everything in between and above.
-                        butterfly_range::<FWD, FAST>(
+                        butterfly_range::<FWD, MODE>(
                             &mut lr[1..q],
                             &mut li[1..q],
                             &mut hr[1..q],
                             &mut hi[1..q],
                             twiddles.iter().skip(step).step_by(step),
                         );
-                        butterfly_range::<FWD, FAST>(
+                        butterfly_range::<FWD, MODE>(
                             &mut lr[q + 1..],
                             &mut li[q + 1..],
                             &mut hr[q + 1..],
@@ -1210,12 +1234,20 @@ fn fft_stages_sparse(re: &mut [i64], im: &mut [i64], n: usize, nz: usize, forwar
         .zip(im.iter())
         .map(|(&r, &i)| r.unsigned_abs().saturating_add(i.unsigned_abs()))
         .fold(0u64, |a, b| a.saturating_add(b));
-    let fast = sum < (1u64 << 37);
-    match (forward, fast) {
-        (true, true) => fft_stages_dispatch::<true, true>(re, im, n, nz),
-        (true, false) => fft_stages_dispatch::<true, false>(re, im, n, nz),
-        (false, true) => fft_stages_dispatch::<false, true>(re, im, n, nz),
-        (false, false) => fft_stages_dispatch::<false, false>(re, im, n, nz),
+    let mode = if sum < (1u64 << 29) {
+        MODE_I32
+    } else if sum < (1u64 << 37) {
+        MODE_I64
+    } else {
+        MODE_CHECKED
+    };
+    match (forward, mode) {
+        (true, MODE_I32) => fft_stages_dispatch::<true, MODE_I32>(re, im, n, nz),
+        (true, MODE_I64) => fft_stages_dispatch::<true, MODE_I64>(re, im, n, nz),
+        (true, _) => fft_stages_dispatch::<true, MODE_CHECKED>(re, im, n, nz),
+        (false, MODE_I32) => fft_stages_dispatch::<false, MODE_I32>(re, im, n, nz),
+        (false, MODE_I64) => fft_stages_dispatch::<false, MODE_I64>(re, im, n, nz),
+        (false, _) => fft_stages_dispatch::<false, MODE_CHECKED>(re, im, n, nz),
     }
 }
 
@@ -1523,7 +1555,7 @@ mod tests {
     fn optimized_fft_is_bit_identical_to_the_textbook_i128_loop() {
         let mut seed = 42u64;
         for &n in &[FFT_ENC, FFT_ENC_SB] {
-            for &mag_bits in &[8u32, 24, 30, 36, 40, 44] {
+            for &mag_bits in &[8u32, 17, 18, 19, 24, 30, 33, 34, 36, 40, 44] {
                 for &forward in &[true, false] {
                     let mut re: Vec<i64> = (0..n)
                         .map(|_| (lcg(&mut seed) % (1i64 << mag_bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 })
@@ -1547,7 +1579,7 @@ mod tests {
         let mut seed = 7u64;
         for &n in &[FFT_ENC, FFT_ENC_SB] {
             for &nz in &[1usize, 2, 3, 11, 64, 100, 255, 257, n] {
-                for &mag_bits in &[10u32, 26, 34] {
+                for &mag_bits in &[10u32, 18, 19, 26, 34] {
                     for &forward in &[true, false] {
                         let mut re = vec![0i64; n];
                         for v in re.iter_mut().take(nz) {

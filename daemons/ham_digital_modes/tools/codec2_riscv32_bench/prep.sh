@@ -11,6 +11,14 @@
 # The program reads the `minstret` counter (instructions retired) around each stage and prints
 # average instructions per 20 ms frame. This counts INSTRUCTIONS, not cycles: cycles per
 # instruction on a real core depend on multiplier latency, load/store wait states and flash cache.
+# For an instruction-class mix (ALU / multiply / load / store / branch), so that cycles can be
+# estimated from an assumed per-class latency table, run the 6-8 frame `small` build under Unicorn:
+#   cargo build --release --features small
+#   llvm-objcopy -O binary target/riscv32imc-unknown-none-elf/release/codec2_riscv32_bench bench.bin
+#   python3 -m venv v && v/bin/pip install unicorn
+#   v/bin/python mixcount.py bench.bin <addr of encode_profiled> <addr of decode_profiled> 8   # llvm-nm
+# (the encode phase count also includes the harness's own text formatting, so use the class
+# percentages, not the totals).
 # Its checksum equals the host build's `cargo run --release --example codec2_fixed_bench --
 # <wav> 1 100 200`, proving the 32-bit build is bit-identical.
 # Copies the codec2_3200 fixed-point sources (non-test parts) into src/codec2_3200 with no_std edits.
