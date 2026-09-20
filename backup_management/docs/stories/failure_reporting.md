@@ -56,3 +56,9 @@ The following internal mechanisms require full documentation expansion:
   
   Quaternary shutdown sleep:
   `[@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]`
+
+* Dispatch Failure To The Worker Queue:
+  When the RabbitMQ send that hands a backup job to the worker fails after the request commits (broker down,
+  no channel, broker rejection), the job is marked failed with a plain log line saying it was NOT run, so it
+  is never left "pending" forever. A job a worker has already taken is never overwritten.
+  `[@ANCHOR: backup_management:COMM_job_dispatch_failed]`
