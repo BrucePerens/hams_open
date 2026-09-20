@@ -161,7 +161,7 @@ fn main() {
         "tests/fixtures/osr_speech/OSR_us_000_0011_8k.wav",
     ];
 
-    let mut float_decoder = DecoderState::new();
+    let mut float_decoder = DecoderState::new_chip_wire();
     // The fixed side tracks its own parallel (l_hat_prev, previous_m_q16) history -- there is no
     // fixed-point DecoderState type yet (only reconstruct/prediction are ported so far, not the
     // full bit_prioritization-to-reconstruct pipeline as one struct), so this validator drives it

@@ -21,16 +21,16 @@ const REAL_CHIP_FRAMES: [[u32; 8]; 3] = [
 #[test]
 fn clean_chip_frames_report_zero_corrected_errors_in_float_and_fixed_decoders() {
     for (i, c) in REAL_CHIP_FRAMES.iter().enumerate() {
-        if let Some(FloatOutcome::Decoded(p)) = FloatDecoder::new().decode_parameters(*c) {
+        if let Some(FloatOutcome::Decoded(p)) = FloatDecoder::new_chip_wire().decode_parameters(*c) {
             assert_eq!(p.errors.total, 0, "float frame {i}: clean chip frame reported corrected errors");
         }
-        if let Some(FixedOutcome::Decoded(p)) = FixedDecoder::new().decode_parameters(*c) {
+        if let Some(FixedOutcome::Decoded(p)) = FixedDecoder::new_chip_wire().decode_parameters(*c) {
             assert_eq!(p.errors.total, 0, "fixed frame {i}: clean chip frame reported corrected errors");
         }
     }
     // At least the first frame must be a genuine decode (not a repeat/mute), so the loop above isn't vacuous.
-    assert!(matches!(FloatDecoder::new().decode_parameters(REAL_CHIP_FRAMES[0]), Some(FloatOutcome::Decoded(_))));
-    assert!(matches!(FixedDecoder::new().decode_parameters(REAL_CHIP_FRAMES[0]), Some(FixedOutcome::Decoded(_))));
+    assert!(matches!(FloatDecoder::new_chip_wire().decode_parameters(REAL_CHIP_FRAMES[0]), Some(FloatOutcome::Decoded(_))));
+    assert!(matches!(FixedDecoder::new_chip_wire().decode_parameters(REAL_CHIP_FRAMES[0]), Some(FixedOutcome::Decoded(_))));
 }
 
 /// The chip pitch map spans b0 0..=255, whose Eq. 47 harmonic count leaves Annex F/G's 9..=56 range at both ends; the

@@ -17,7 +17,7 @@ use super::pitch::{
     look_back_pitch_tracking, PitchAnalysisFrame,
 };
 use super::pitch_refinement::{refine_pitch, RefinementFrame};
-use super::{encode_frame, FrameState};
+use super::{encode_frame, encode_frame_chip_wire, FrameState};
 use std::collections::VecDeque;
 
 const FRAME_SAMPLES: usize = 160;
@@ -180,11 +180,26 @@ pub struct Encoder {
     last_frame: Option<[u32; 8]>,
     /// Frames for which analysis failed (degenerate pitch/`L_hat`) and the previous frame was repeated.
     pub failed_frames: usize,
+    /// Emit the DVSI chip's framing instead of the standard's (see [`super::encode_code_vectors_chip`]).
+    chip_wire: bool,
 }
 
 impl Encoder {
+    /// An encoder whose frames use the standard's wire layer (FEC plus modulation, Eq. 81-94).
     pub fn new() -> Self {
-        Self { analyzer: FrameAnalyzer::new(), state: FrameState::initial(), last_frame: None, failed_frames: 0 }
+        Self {
+            analyzer: FrameAnalyzer::new(),
+            state: FrameState::initial(),
+            last_frame: None,
+            failed_frames: 0,
+            chip_wire: false,
+        }
+    }
+
+    /// An encoder whose frames use the DVSI chip's framing (no modulation, chip Hamming labelling), for the
+    /// chip-comparison tools. The analysis and quantization are identical to [`Self::new`]'s.
+    pub fn new_chip_wire() -> Self {
+        Self { chip_wire: true, ..Self::new() }
     }
 
     /// Shifts every frame's analysis centre by `samples` (may be negative) relative to `k*160`.
@@ -199,7 +214,12 @@ impl Encoder {
     /// Encodes the next frame if enough lookahead has been pushed, else `None`.
     pub fn next_frame(&mut self) -> Option<[u32; 8]> {
         let a = self.analyzer.next_analysis()?;
-        match encode_frame(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false) {
+        let encoded = if self.chip_wire {
+            encode_frame_chip_wire(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false)
+        } else {
+            encode_frame(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false)
+        };
+        match encoded {
             Some((c, next_state)) => {
                 self.state = next_state;
                 self.last_frame = Some(c);

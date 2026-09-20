@@ -162,7 +162,7 @@ fn main() {
     const FFT_LEN: usize = 512;
     const SR: f64 = 8000.0;
     let half = FFT_LEN / 2;
-    let mut dec = DecoderState::new();
+    let mut dec = DecoderState::new_chip_wire();
     let mut chip_psd = vec![0.0; half];
     let mut float_psd = vec![0.0; half];
     let mut sub_chip = Vec::new();
@@ -191,7 +191,7 @@ fn main() {
         }
     }
     // Per-frame sub-fundamental energy, using a params-only decoder.
-    let mut pd = DecoderState::new();
+    let mut pd = DecoderState::new_chip_wire();
     let mut chip_all: Vec<Vec<f64>> = Vec::new();
     let _ = &mut chip_all;
     let mut sock_buf = [0u8; 1024];
@@ -214,8 +214,8 @@ fn main() {
         }
     }
     // Float sub-fundamental fraction: re-decode with a fresh decoder producing PCM.
-    let mut fd = DecoderState::new();
-    let mut pd2 = DecoderState::new();
+    let mut fd = DecoderState::new_chip_wire();
+    let mut pd2 = DecoderState::new_chip_wire();
     for p in payloads.iter() {
         let mut wb = [0u8; FRAME_BYTES];
         wb.copy_from_slice(&p[p.len() - FRAME_BYTES..]);

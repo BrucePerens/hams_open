@@ -41,8 +41,8 @@ fn main() {
         .collect();
     let alphas: Vec<Option<f64>> = std::env::var("L_ALPHAS").map(|v| v.split(',').map(|x| x.parse().ok()).collect()).unwrap_or_else(|_| vec![None]);
     for (name, chip_map, alpha) in [("TIA linear map", false, None)].into_iter().chain(alphas.iter().map(|&a| ("chip log map", true, a))) {
-        let mut d = if chip_map { DecoderState::new_chip() } else { DecoderState::new() };
-        let mut p = if chip_map { DecoderState::new_chip() } else { DecoderState::new() };
+        let mut d = if chip_map { DecoderState::new_chip() } else { DecoderState::new_chip_wire() };
+        let mut p = if chip_map { DecoderState::new_chip() } else { DecoderState::new_chip_wire() };
         d.set_l_alpha(alpha);
         p.set_l_alpha(alpha);
         let (mut decoded, mut repeat, mut mute) = (0, 0, 0);

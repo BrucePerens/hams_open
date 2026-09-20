@@ -307,7 +307,7 @@ impl Chip<'_> {
 }
 
 fn ours_repeated(c_base: &[u32; 8], c_mod: &[u32; 8]) -> ([f64; BANDS], [f64; BANDS]) {
-    let mut d = DecoderState::new();
+    let mut d = DecoderState::new_chip_wire();
     let mut run = |c: &[u32; 8]| -> Vec<Vec<f64>> {
         let mut frames = Vec::new();
         for _ in 0..REPS {

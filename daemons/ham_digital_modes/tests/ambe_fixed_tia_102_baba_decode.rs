@@ -275,7 +275,27 @@ fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_eve
     // 10 an earlier, unverified version of this test used, which never actually reached
     // `FrameOutcome::Mute` at all (a genuinely vacuous test, caught by re-deriving this from the real
     // recursion rather than assuming a small round number would be enough).
-    let bad_c = [0xFFFu32, 0xFFF, 0xFFF, 0xFFF, 0x7F, 0x555, 0x2AA, 0];
+    // The decoder demodulates c1..c6 with vectors seeded from the corrected u0 (Eq. 84-94), so the
+    // worst-case words are built in the demodulated domain and then modulated back with the same vectors.
+    // Hamming words: the first non-codewords found (any non-codeword of a perfect code is at distance 1).
+    let m = ham_digital_modes::ambe::float::tia_102_baba::modulation::modulation_vectors(
+        ham_digital_modes::ambe::general::fec::golay_decode(0xFFF).0 as u32,
+    );
+    let worst_hamming: Vec<u32> = (1u16..0x7FFF)
+        .filter(|&w| ham_digital_modes::ambe::general::fec::hamming_decode(w).1 == 1)
+        .take(3)
+        .map(|w| w as u32)
+        .collect();
+    let bad_c = [
+        0xFFFu32,
+        0xFFF ^ m[1],
+        0xFFF ^ m[2],
+        0xFFF ^ m[3],
+        worst_hamming[0] ^ m[4],
+        worst_hamming[1] ^ m[5],
+        worst_hamming[2] ^ m[6],
+        0,
+    ];
     const ITERATIONS: usize = 32;
 
     // A separate decoder, driven only through `decode_parameters`, verifies the sequence actually
