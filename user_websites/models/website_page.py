@@ -303,26 +303,41 @@ class WebsitePage(models.Model):
             "user_websites.user_websites_service_account"
         )
 
+        reporter_id = self.env.user.id
+        for owner_id, group_id, url in self._malicious_arch_violation_targets(
+            vals, records
+        ):
+            self._file_malicious_arch_report(
+                svc_uid, owner_id, group_id, url or "/unknown-page", reporter_id
+            )
+
+    def _malicious_arch_violation_targets(self, vals, records):
+        """Return one (owner_id, group_id, url) per account to strike.
+
+        Ownership given in ``vals`` wins and names a single target (unchanged
+        single-record behaviour). Otherwise the ``records`` are grouped by
+        their distinct (owner, group) and each gets ONE target keyed on its
+        first affected page's URL, so a batch over many pages of one owner
+        costs that owner one strike, and a multi-owner batch strikes each
+        owner once instead of only ``records[0]``'s.
+        """
         owner_id = vals.get("owner_user_id")
         group_id = vals.get("user_websites_group_id")
+        if owner_id or group_id or not records:
+            url = vals.get("url")
+            if not url and records:
+                url = records[0].url
+            return [(owner_id, group_id, url)]
+        targets = {}
+        for rec in records:
+            key = (rec.owner_user_id.id or False, rec.user_websites_group_id.id or False)
+            if key not in targets:
+                targets[key] = vals.get("url") or rec.url
+        return [(o, g, u) for (o, g), u in targets.items()]
 
-        if not owner_id and not group_id and records:
-            owner_id = (
-                records[0].owner_user_id.id if records[0].owner_user_id else False
-            )
-            group_id = (
-                records[0].user_websites_group_id.id
-                if records[0].user_websites_group_id
-                else False
-            )
-
-        url = vals.get("url")
-        if not url and records:
-            url = records[0].url
-
-        target_url = url or "/unknown-page"
-        reporter_id = self.env.user.id
-
+    def _file_malicious_arch_report(
+        self, svc_uid, owner_id, group_id, target_url, reporter_id
+    ):
         existing = (
             self.env["content.violation.report"]
             .with_user(svc_uid)
@@ -793,6 +808,25 @@ class WebsitePage(models.Model):
                     )
                     vals[arch_field] = sanitized_arch
                     if modified:
+                        if (
+                            len(
+                                {
+                                    (
+                                        r.owner_user_id.id,
+                                        r.user_websites_group_id.id,
+                                    )
+                                    for r in self
+                                }
+                            )
+                            > 1
+                        ):
+                            raise ValidationError(
+                                _(
+                                    "A page-content edit cannot span pages "
+                                    "belonging to different owners or groups. "
+                                    "Edit each owner's pages separately."
+                                )
+                            )
                         self._trigger_malicious_arch_violation(vals, records=self)
 
         # Identify URLs to invalidate before mutating

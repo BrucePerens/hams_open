@@ -236,7 +236,7 @@ This section ensures all module functions and their developer usage are thorough
 *   **`_serve_page()`**: Override to handle custom layout routing for user websites.
 *   **`_invalidate_cloudflare_cache()`**: Purges Cloudflare edge caches upon page modification.
 *   **`_sanitize_user_arch(arch_content)`**: XSS/SSTI sanitizer for user-submitted QWeb/HTML.
-*   **`_trigger_malicious_arch_violation(vals, records=None)`**: Automatically reports users and issues strikes upon payload detection.
+*   **`_trigger_malicious_arch_violation(vals, records=None)`**: Automatically reports users and issues strikes upon payload detection: one strike per distinct owner/group among `records` (keyed on that owner's first affected page URL). `write()` refuses a non-admin batch with a sanitizer-modified arch that spans more than one owner/group.
 *   **`_flush_redis_view_counters()`**: Cron method flushing Redis counts to Postgres.
 *   Standard ORM Overrides: **`create()`**, **`check_access()`**, **`write()`**, **`unlink()`** are heavily overridden to enforce `owner_user_id` proxies and quota limits.
 
