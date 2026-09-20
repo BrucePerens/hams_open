@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 #![allow(dead_code, static_mut_refs, unused_imports, unused_variables)]
-extern crate alloc;
 mod codec2_3200;
 mod prof;
 mod shim;
@@ -39,20 +38,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     let _ = writeln!(Uart, "PANIC: {}", info);
     exit(1)
 }
-struct Bump;
-static mut HEAP: [u8; 65536] = [0; 65536];
-static mut HP: usize = 0;
-unsafe impl alloc::alloc::GlobalAlloc for Bump {
-    unsafe fn alloc(&self, l: core::alloc::Layout) -> *mut u8 {
-        let a = (HP + l.align() - 1) & !(l.align() - 1);
-        HP = a + l.size();
-        if HP > HEAP.len() { return core::ptr::null_mut(); }
-        HEAP.as_mut_ptr().add(a)
-    }
-    unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
-}
-#[global_allocator]
-static A: Bump = Bump;
+
 
 
 extern "C" {
@@ -138,6 +124,6 @@ pub extern "C" fn main() -> ! {
     for i in 0..D_NAMES.len() { let _ = writeln!(u, "  dec {:<22} {:>9}", D_NAMES[i], unsafe { prof::ACC[i] } / (n as u64 - 1)); }
     let names = ["fft1", "a2", "fft2+a2g", "loop1(log/exp)", "harm loop", "synth:h+phase", "synth:postfilter", "synth:fill+sym(13)", "synth:ifft(14)"];
     for i in 6..15 { let _ = writeln!(u, "  fine[{}] {:>9}", i, unsafe { prof::ACC[i] } / (n as u64 - 1)); }
-    let _ = writeln!(u, "checksum {:08x}  static_heap_used {}", cksum, unsafe { HP });
+    let _ = writeln!(u, "checksum {:08x}", cksum);
     exit(0)
 }
