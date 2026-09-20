@@ -173,7 +173,7 @@ fn main() {
                 let parsed = parse_frame(logical);
                 let raw = extract_raw_parameters(parsed.d);
                 let kind = classify_b0(raw.b0);
-                let is_erasure = matches!(kind, FrameKind::Erasure);
+                let is_erasure = matches!(kind, FrameKind::Erasure | FrameKind::DetectedTone);
                 let tone_frame = tone_frame_bit(pkt) == 1;
                 let tone_idx = decode_tone_idx(parsed.d);
                 let decoded = tone_idx.and_then(dtmf_digit_from_tone_idx);
@@ -213,7 +213,7 @@ fn main() {
             let parsed = parse_frame(logical);
             let raw = extract_raw_parameters(parsed.d);
             let kind = classify_b0(raw.b0);
-            let is_erasure = matches!(kind, FrameKind::Erasure);
+            let is_erasure = matches!(kind, FrameKind::Erasure | FrameKind::DetectedTone);
             let tone_frame = tone_frame_bit(pkt) == 1;
             let tone_idx = decode_tone_idx(parsed.d);
             let frame_ok = is_erasure && tone_frame && tone_idx == Some(expected);
