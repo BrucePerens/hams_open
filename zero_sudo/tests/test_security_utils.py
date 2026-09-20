@@ -148,8 +148,12 @@ class TestSecurityUtils(HamsTransactionCase):
         self.env["ir.config_parameter"].set_param(key, distinct_value)
         self.env.registry.clear_cache()
 
+        # Any service account exercises the "caller is itself a service account" path;
+        # use zero_sudo's OWN mail_service_internal rather than user_websites' account, so
+        # this test needs no module beyond zero_sudo's declared dependencies (a bare
+        # `-u zero_sudo` never installs user_websites).
         some_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "user_websites.user_websites_service_account"
+            "zero_sudo.mail_service_internal"
         )
         self.assertTrue(
             self.env["res.users"].browse(some_svc).is_service_account,
@@ -827,6 +831,15 @@ class TestSecurityUtils(HamsTransactionCase):
                 "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
             }
         )
+
+        # Odoo's own res.users create() above legitimately calls registry.clear_cache()
+        # and clear_cache('stable') (res_users.py write() / ir.model.access
+        # call_cache_clearing_methods() on any group change) -- that is the fixture's
+        # setup, not _invalidate_model_cache()'s behaviour. Forget those calls so the
+        # not-called assertion at the end of this test covers exactly the
+        # _invalidate_model_cache() calls below (same strength as before: any call to
+        # registry.clear_cache from them still fails the test).
+        mock_clear_cache.reset_mock()
 
         # Portal user usually doesn't have write access to res.partner
         with self.assertRaises(AccessError):
