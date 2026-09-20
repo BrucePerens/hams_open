@@ -49,6 +49,18 @@ class TestCloudflareHeaders(HamsHttpCase):
             "Technical /web/ routes MUST NOT be cached aggressively.",
         )
 
+        # 1b. /web/static files are served by Odoo's _serve_static(), which never calls
+        # ir.http._post_dispatch, so this module cannot (and no longer tries to) set
+        # Cloudflare headers on them. Only /web/assets is reachable for the long-TTL branch.
+        response_static = self.url_open("/web/static/img/logo.png")
+        self.assertEqual(response_static.status_code, 200)
+        self.assertNotIn(
+            "Cloudflare-CDN-Cache-Control",
+            response_static.headers,
+            "_serve_static bypasses _post_dispatch; no CF header is expected here.",
+        )
+        self.assertIn("max-age", response_static.headers.get("Cache-Control", ""))
+
         # 2. Test Core Asset (MUST CACHE)
         # We isolate the method execution to completely bypass Werkzeug's LocalProxy environment
         # which crashes when testing raw middleware without an active HTTP thread.

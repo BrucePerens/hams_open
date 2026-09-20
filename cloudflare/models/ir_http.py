@@ -39,9 +39,13 @@ class IrHttp(models.AbstractModel):
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
         # as it bypasses Odoo ACLs and causes Edge Cache IDORs for private attachments.
         # # Verified by [@ANCHOR: test_cf_static_asset_caching]
-        if any(
-            path.startswith(prefix) for prefix in ("/web/static", "/web/assets")
-        ):  # fmt: skip
+        # Only /web/assets is reachable here. Odoo's odoo/http.py _serve_static()
+        # (which serves every /<module>/static/... file, including /web/static)
+        # returns its response WITHOUT calling ir.http._post_dispatch (that call
+        # only happens on the _serve_db/_serve_nodb paths), so a /web/static
+        # entry in this branch could never run. Odoo already sets a long
+        # Cache-Control on those responses itself.
+        if path.startswith("/web/assets"):  # fmt: skip
             # A transient error (500/404/etc.) must never be pinned at the edge for a
             # year -- only a genuinely successful (or not-modified) asset response is
             # long-TTL cacheable.

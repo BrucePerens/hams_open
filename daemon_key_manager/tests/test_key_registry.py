@@ -490,6 +490,58 @@ class TestKeyRegistry(RealTransactionCase):
         registry.with_user(self.manager_user.id).action_rotate_key()
         self.assertTrue(os.path.exists(env_file_path))
 
+    def test_rotated_key_bearer_json2_not_blocked_for_service_account(self):
+        """A daemon calls /json/2/... with the Bearer key this module
+        provisions, as a service account. zero_sudo's ir.http._authenticate
+        blocks any request whose request.session.uid is a service account
+        (except /jsonrpc and /xmlrpc/); Odoo's auth='bearer' only calls
+        request.update_env(user=uid) and never sets session.uid, so daemons
+        must not be blocked. Real key, real env file, real HTTP request."""
+        # Tests [@ANCHOR: zero_sudo:ir_http_authenticate]
+        env_file_path = "/opt/hams/etc/keys/bearer_json2.env"
+        self.test_env_paths.append(env_file_path)
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Bearer Json2 Test",
+                    "user_id": self.service_user.id,
+                    "env_file_path": env_file_path,
+                }
+            )
+        )
+        registry.with_user(self.manager_user.id).action_rotate_key()
+        key = None
+        with open(env_file_path, "r") as f:  # audit-ignore-path
+            for line in f:
+                if line.startswith("ODOO_RPC_KEY="):
+                    key = line.strip().split("=", 1)[1]
+        self.assertTrue(key, "The provisioned env file must carry the key.")
+        self.assertTrue(
+            self.env["ir.http"]._is_service_account_cached(self.service_user.id),
+            "Precondition: the user must really be a service account.",
+        )
+        # RealTransactionCase: the HTTP worker needs the committed key.
+        self.env.cr.commit()
+
+        response = self.url_open(
+            "/json/2/res.users/context_get",
+            data="{}",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "X-Odoo-Database": self.env.cr.dbname,
+            },
+            allow_redirects=False,
+        )
+        self.assertEqual(
+            response.status_code,
+            200,
+            msg=f"Bearer service account must not be blocked: {response.text[:300]}",
+        )
+        self.assertNotIn("Interactive Web UI access is denied", response.text)
+
     def test_rotation_safety_archived_user(self):
         """Test that keys cannot be rotated for archived service accounts."""
         # [@ANCHOR: COMM_test_rotation_safety_archived_user]
