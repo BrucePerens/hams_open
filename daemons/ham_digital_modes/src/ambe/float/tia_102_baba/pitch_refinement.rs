@@ -18,6 +18,7 @@
 //! complex-arithmetic crate would be solving a harder problem than this one actually has.
 
 use std::f64::consts::PI;
+use std::sync::OnceLock;
 
 use super::pitch::pitch_refinement_window;
 
@@ -60,11 +61,14 @@ impl Complex {
 /// direct consequence of the same fact the spec states explicitly, not a separate approximation.
 // [@ANCHOR: window_dft_16384]
 pub(crate) fn window_dft_16384(m: i32) -> f64 {
-    // The 16384-point transform is periodic in `m`; every residue is computed once into a table (about 3.6 million cosines
-    // the first time, which is what made every later call cost 221 cosines).
-    static TABLE: std::sync::OnceLock<Vec<f64>> = std::sync::OnceLock::new();
-    let table = TABLE.get_or_init(|| (0..16384).map(|r| window_dft_16384_direct(if r >= 8192 { r - 16384 } else { r })).collect());
-    table[m.rem_euclid(16384) as usize]
+    // `W_R` is even in `m`, and the pitch refinement, voicing and amplitude stages evaluate it thousands of times per
+    // frame at integer `m` in `-8191..=8192`, so the half-line `0..=8192` is tabulated once per process.
+    static TABLE: OnceLock<Vec<f64>> = OnceLock::new();
+    let table = TABLE.get_or_init(|| (0..=8192).map(window_dft_16384_direct).collect());
+    match table.get(m.unsigned_abs() as usize) {
+        Some(&v) => v,
+        None => window_dft_16384_direct(m),
+    }
 }
 
 fn window_dft_16384_direct(m: i32) -> f64 {
@@ -81,8 +85,6 @@ fn window_dft_16384_direct(m: i32) -> f64 {
 /// `pitch::PitchAnalysisFrame` already uses for `s_LPF`).
 pub struct RefinementFrame {
     sw: [Complex; 256],
-    /// Harmonic amplitudes already computed for this frame, keyed by the candidate frequency's bits and the harmonic number.
-    amplitude_cache: std::cell::RefCell<std::collections::HashMap<(u64, u32), Complex>>,
 }
 
 impl RefinementFrame {
@@ -92,10 +94,13 @@ impl RefinementFrame {
     /// `pitch::lowpass_filtered_sample` already has.
     // [@ANCHOR: RefinementFrame::new]
     pub fn new(raw: &[f64], center: usize) -> Self {
+        // `exp(-2 pi j m n / 256)` depends only on `m n mod 256`: tabulate the 256 twiddles once.
+        let twiddle: Vec<(f64, f64)> =
+            (0..256).map(|k| (-2.0 * PI * k as f64 / 256.0).sin_cos()).map(|(s, c)| (c, s)).collect();
+        let windowed: Vec<f64> = (-110i32..=110)
+            .map(|n| raw[(center as i32 + n) as usize] * pitch_refinement_window(n))
+            .collect();
         let mut sw = [Complex::ZERO; 256];
-        // The 256-point twiddles `exp(-2*pi*j*k/256)`, and the windowed samples, are computed once per frame.
-        let twiddle: Vec<(f64, f64)> = (0..256).map(|k| { let t = -2.0 * PI * k as f64 / 256.0; (t.cos(), t.sin()) }).collect();
-        let windowed: Vec<f64> = (-110i32..=110).map(|n| raw[(center as i32 + n) as usize] * pitch_refinement_window(n)).collect();
         for (i, slot) in sw.iter_mut().enumerate() {
             let m = i as i32 - 127;
             let mut acc = Complex::ZERO;
@@ -106,7 +111,7 @@ impl RefinementFrame {
             }
             *slot = acc;
         }
-        Self { sw, amplitude_cache: Default::default() }
+        Self { sw }
     }
 
     /// `S_w(m)` for `m` in `-127..=128`; returns `Complex::ZERO` outside that range (a real
@@ -129,16 +134,6 @@ impl RefinementFrame {
 /// frequency, weighted by the window's own spectral shape `W_R`.
 // [@ANCHOR: harmonic_amplitude]
 fn harmonic_amplitude(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
-    let key = (omega0.to_bits(), l);
-    if let Some(&cached) = frame.amplitude_cache.borrow().get(&key) {
-        return cached;
-    }
-    let value = harmonic_amplitude_uncached(frame, l, omega0);
-    frame.amplitude_cache.borrow_mut().insert(key, value);
-    value
-}
-
-fn harmonic_amplitude_uncached(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
     let a_l = (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0;
     let b_l = (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0;
     let m_lo = a_l.ceil() as i32;
@@ -163,26 +158,39 @@ fn harmonic_amplitude_uncached(frame: &RefinementFrame, l: u32, omega0: f64) -> 
 
 /// The synthetic spectrum `S_w(m, omega0)` (Eq. 25): for the DFT bin `m`, finds which harmonic band
 /// (if any, per Eq. 26-27) `m` falls into and returns that harmonic's own estimated contribution.
-// [@ANCHOR: synthetic_spectrum]
-pub(crate) fn synthetic_spectrum(
-    frame: &RefinementFrame,
-    m: i32,
+// [@ANCHOR: SyntheticSpectrum]
+pub(crate) struct SyntheticSpectrum<'a> {
+    frame: &'a RefinementFrame,
     omega0: f64,
     max_l: u32,
-) -> Complex {
-    for l in 0..=max_l {
-        let a_l = (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0;
-        let b_l = (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0;
-        let m_lo = a_l.ceil() as i32;
-        let m_hi = b_l.ceil() as i32;
-        if m >= m_lo && m < m_hi {
-            let amplitude = harmonic_amplitude(frame, l, omega0);
-            let wr_index = (64.0 * (m as f64) - (16384.0 / (2.0 * PI)) * (l as f64) * omega0 + 0.5)
-                .floor() as i32;
-            return amplitude.scale(window_dft_16384(wr_index));
-        }
+    /// `A_l(omega0)` per harmonic, computed on first use (a band's own bins all share one amplitude).
+    amplitudes: Vec<Option<Complex>>,
+}
+
+impl<'a> SyntheticSpectrum<'a> {
+    pub(crate) fn new(frame: &'a RefinementFrame, omega0: f64, max_l: u32) -> Self {
+        Self { frame, omega0, max_l, amplitudes: vec![None; max_l as usize + 1] }
     }
-    Complex::ZERO
+
+    /// `S_w(m, omega0)` for bin `m`.
+    pub(crate) fn at(&mut self, m: i32) -> Complex {
+        let omega0 = self.omega0;
+        for l in 0..=self.max_l {
+            let a_l = (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0;
+            let b_l = (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0;
+            let m_lo = a_l.ceil() as i32;
+            let m_hi = b_l.ceil() as i32;
+            if m >= m_lo && m < m_hi {
+                let frame = self.frame;
+                let amplitude =
+                    *self.amplitudes[l as usize].get_or_insert_with(|| harmonic_amplitude(frame, l, omega0));
+                let wr_index = (64.0 * (m as f64) - (16384.0 / (2.0 * PI)) * (l as f64) * omega0 + 0.5)
+                    .floor() as i32;
+                return amplitude.scale(window_dft_16384(wr_index));
+            }
+        }
+        Complex::ZERO
+    }
 }
 
 /// The pitch refinement error function `E_R(omega0)` (Eq. 24): sums the squared magnitude difference
@@ -193,14 +201,8 @@ pub fn refinement_error(frame: &RefinementFrame, omega0: f64) -> f64 {
     let l_estimate = (0.9254 * PI / omega0 - 0.5).floor();
     let upper_m = (l_estimate * (256.0 / (2.0 * PI)) * omega0).floor() as i32;
     let max_l = l_estimate.max(0.0) as u32 + 1;
-    (50..=upper_m)
-        .map(|m| {
-            let diff = frame
-                .sw_at(m)
-                .sub(synthetic_spectrum(frame, m, omega0, max_l));
-            diff.norm_sqr()
-        })
-        .sum()
+    let mut synthetic = SyntheticSpectrum::new(frame, omega0, max_l);
+    (50..=upper_m).map(|m| frame.sw_at(m).sub(synthetic.at(m)).norm_sqr()).sum()
 }
 
 /// Refines a half-sample-accuracy initial pitch estimate `p_hat_i` to quarter-sample accuracy
@@ -274,7 +276,7 @@ mod tests {
     // Tests [@ANCHOR: RefinementFrame::new]
     // Tests [@ANCHOR: RefinementFrame::sw_at]
     // Tests [@ANCHOR: harmonic_amplitude]
-    // Tests [@ANCHOR: synthetic_spectrum]
+    // Tests [@ANCHOR: SyntheticSpectrum]
     // Tests [@ANCHOR: refinement_error]
     fn refinement_error_is_minimized_at_the_true_fundamental_of_a_real_harmonic_signal() {
         // 8 kHz sample rate matches the spec's own stated domain ("P0 is measured in samples (at 8

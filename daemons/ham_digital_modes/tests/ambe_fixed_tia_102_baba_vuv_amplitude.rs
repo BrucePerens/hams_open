@@ -84,6 +84,7 @@ fn run(q16_omega0: bool, stats: &mut Stats) {
             }
             let analysis = FrameAnalysis {
                 omega0_hat: w0,
+                initial_pitch: 0.0,
                 initial_pitch_error: e_init_q16 as f64 / 65536.0,
                 refinement: fl_ref::RefinementFrame::new(&raw_f, c),
                 slot_samples: Vec::new(),

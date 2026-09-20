@@ -46,6 +46,8 @@ impl ErrorTable {
 /// frame's own windowed spectrum ready for voicing/amplitude analysis.
 pub struct FrameAnalysis {
     pub omega0_hat: f64,
+    /// The initial pitch estimate `P_hat_I` (samples, before refinement).
+    pub initial_pitch: f64,
     pub initial_pitch_error: f64,
     pub refinement: RefinementFrame,
     /// The 160 input samples of this frame's own 20 ms slot (`k*160..(k+1)*160`, zero padded past the input's end), for
@@ -164,7 +166,7 @@ impl FrameAnalyzer {
             self.raw.drain(..drop);
             self.trimmed += drop;
         }
-        Some(FrameAnalysis { omega0_hat, initial_pitch_error: e_initial, refinement, slot_samples })
+        Some(FrameAnalysis { omega0_hat, initial_pitch: p_initial, initial_pitch_error: e_initial, refinement, slot_samples })
     }
 }
 
@@ -174,12 +176,35 @@ impl Default for FrameAnalyzer {
     }
 }
 
+/// The standard's input high-pass filter (Eq. 3, section 5): `H(z) = (1 - z^-1) / (1 - 0.99 z^-1)`, removing any
+/// residual D.C. before analysis. Without it a constant offset in the input (common in recordings) makes quiet frames
+/// look strongly periodic at every lag, corrupting the pitch error function `E(P)` (found by comparing against the
+/// OP25 `imbe_vocoder` encoder, which applies it; see `docs/references/tia_102_baba_cross_validation.md`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HighPassFilter {
+    prev_input: f64,
+    prev_output: f64,
+}
+
+impl HighPassFilter {
+    pub fn step(&mut self, x: f64) -> f64 {
+        let y = x - self.prev_input + 0.99 * self.prev_output;
+        self.prev_input = x;
+        self.prev_output = y;
+        y
+    }
+}
+
 pub struct Encoder {
+    high_pass: HighPassFilter,
     analyzer: FrameAnalyzer,
     state: FrameState,
     last_frame: Option<[u32; 8]>,
     /// Frames for which analysis failed (degenerate pitch/`L_hat`) and the previous frame was repeated.
     pub failed_frames: usize,
+    /// The last frame's initial pitch estimate `P_hat_I`, refined fundamental `omega0_hat` and `E(P_hat_I)`, for
+    /// diagnostics (`examples/tia_102_baba_oracle_encode_dump.rs`).
+    pub last_analysis: Option<(f64, f64, f64)>,
     /// Emit the DVSI chip's framing instead of the standard's (see [`super::encode_code_vectors_chip`]).
     chip_wire: bool,
 }
@@ -188,10 +213,12 @@ impl Encoder {
     /// An encoder whose frames use the standard's wire layer (FEC plus modulation, Eq. 81-94).
     pub fn new() -> Self {
         Self {
+            high_pass: HighPassFilter::default(),
             analyzer: FrameAnalyzer::new(),
             state: FrameState::initial(),
             last_frame: None,
             failed_frames: 0,
+            last_analysis: None,
             chip_wire: false,
         }
     }
@@ -207,13 +234,17 @@ impl Encoder {
         self.analyzer.set_center_offset(samples);
     }
 
+    /// Feeds PCM to the encoder, applying the standard's input high-pass filter (Eq. 3) first.
     pub fn push_samples(&mut self, samples: &[f64]) {
-        self.analyzer.push_samples(samples);
+        // Rounded to whole sample values, as PCM hardware (and the fixed-point sibling) would output.
+        let filtered: Vec<f64> = samples.iter().map(|&x| (self.high_pass.step(x) + 0.5).floor()).collect();
+        self.analyzer.push_samples(&filtered);
     }
 
     /// Encodes the next frame if enough lookahead has been pushed, else `None`.
     pub fn next_frame(&mut self) -> Option<[u32; 8]> {
         let a = self.analyzer.next_analysis()?;
+        self.last_analysis = Some((a.initial_pitch, a.omega0_hat, a.initial_pitch_error));
         let encoded = if self.chip_wire {
             encode_frame_chip_wire(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false)
         } else {

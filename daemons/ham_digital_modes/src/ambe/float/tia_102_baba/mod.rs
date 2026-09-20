@@ -392,6 +392,62 @@ pub fn encode_frame_chip_wire(
     Some((encode_code_vectors_chip(u), state))
 }
 
+/// One frame's spectral amplitudes after prediction, block transforms and quantization (Eq. 54-64), and the amplitudes
+/// the decoder will reconstruct from them.
+pub struct QuantizedAmplitudes {
+    /// `b_hat_2`, the gain quantizer index.
+    pub b2: u8,
+    /// `b_hat_3..b_hat_7` with their bit widths.
+    pub gain_vector: [(u32, u8); 5],
+    /// The non-zero-width higher-order coefficients `b_hat_8..b_hat_{L+1}` with their bit widths.
+    pub higher_order: Vec<(u32, u8)>,
+    /// `M_tilde_l` for `1 <= l <= L`: this frame's quantizer values run back through dequantization, the "what the
+    /// decoder will have" history Eq. 54 needs for the *next* frame (Fig. 16's feedback block).
+    pub reconstructed: Vec<f64>,
+}
+
+/// The amplitude half of the encoder, from the (positive) spectral amplitude estimates `M_hat_l`, `1 <= l <= L`, and
+/// the previous frame's reconstructed amplitudes: prediction residual (Eq. 54-56), partition into the six blocks of
+/// Annex J, per-block DCT (Eq. 58-60), gain-vector DCT (Eq. 61) and quantization (Eq. 62-64). Split out of
+/// [`encode_prioritized_bits`] so the quantization can be driven with given amplitudes (the encoder cross-validation
+/// feeds the same amplitudes to this and to an external encoder's quantizer). `None` if `l_hat` is outside `9..=56`.
+pub fn quantize_spectral_amplitudes(
+    amplitudes: &[f64],
+    l_hat: u32,
+    l_hat_prev: u32,
+    previous_amplitudes: &[f64],
+) -> Option<QuantizedAmplitudes> {
+    let residuals: Vec<f64> = (1..=l_hat)
+        .map(|l| {
+            prediction::prediction_residual(l, amplitudes[(l - 1) as usize], l_hat, l_hat_prev, previous_amplitudes)
+        })
+        .collect();
+
+    let blocks = quantize::partition_into_blocks(&residuals, l_hat)?;
+    let dct_blocks: [Vec<f64>; 6] = std::array::from_fn(|i| quantize::block_dct(&blocks[i]));
+    // Each block's own DC term (Eq. 60's k=1 output) feeds the second-stage gain-vector DCT
+    // (Eq. 61, Fig. 18) -- R_hat_i == dct_blocks[i][0], never empty since every real Annex J block
+    // length is >= 1 (checked against tables::BLOCK_LENGTHS directly, not merely assumed).
+    let r_hat: [f64; 6] = std::array::from_fn(|i| dct_blocks[i][0]);
+    let g_hat = gain_vector_dct(&r_hat);
+
+    let b2 = tables::quantize_gain_index(g_hat[0]);
+    let gain_vector = quantize::quantize_gain_vector(&g_hat, l_hat)?;
+    let higher_order = quantize::quantize_higher_order_coefficients(&dct_blocks, l_hat)?;
+
+    let gain_values: [u32; 5] = std::array::from_fn(|i| gain_vector[i].0);
+    let higher_order_values: Vec<u32> = higher_order.iter().map(|&(v, _)| v).collect();
+    let reconstructed = reconstruct::reconstruct_spectral_amplitudes(
+        b2,
+        gain_values,
+        &higher_order_values,
+        l_hat,
+        l_hat_prev,
+        previous_amplitudes,
+    )?;
+    Some(QuantizedAmplitudes { b2, gain_vector, higher_order, reconstructed })
+}
+
 /// The same pipeline as [`encode_frame`], stopping one stage earlier: returns the prioritized bit
 /// vectors `u_hat_0..u_hat_7` (Fig. 22) themselves, before FEC ([`fec`]) and modulation
 /// ([`modulation`]) are applied -- exposed as its own function (rather than only reachable inside
@@ -433,34 +489,26 @@ pub fn encode_prioritized_bits(
         &previous_state.voiced,
     );
 
-    let spectral_amplitudes =
-        spectral_amplitude::estimate_spectral_amplitudes(frame, l_hat, k_hat, omega0_hat, &voiced);
+    // Eq. 54 takes `log2(M_hat_l)`, which is minus infinity (and, through the block DCT, NaN) for an amplitude of
+    // zero: digital silence, or a band with no energy at all. The standard does not say what to do; the OP25
+    // `imbe_vocoder` reference treats a non-positive amplitude as `log2 = 0`, i.e. `M = 1` (one PCM step), and so
+    // does this floor. It only matters below the resolution of 16-bit input.
+    let spectral_amplitudes: Vec<f64> =
+        spectral_amplitude::estimate_spectral_amplitudes(frame, l_hat, k_hat, omega0_hat, &voiced)
+            .into_iter()
+            .map(|m| m.max(1.0))
+            .collect();
 
-    let residuals: Vec<f64> = (1..=l_hat)
-        .map(|l| {
-            prediction::prediction_residual(
-                l,
-                spectral_amplitudes[(l - 1) as usize],
-                l_hat,
-                previous_state.l_hat,
-                &previous_state.spectral_amplitudes,
-            )
-        })
-        .collect();
-
-    let blocks = quantize::partition_into_blocks(&residuals, l_hat)?;
-    let dct_blocks: [Vec<f64>; 6] = std::array::from_fn(|i| quantize::block_dct(&blocks[i]));
-    // Each block's own DC term (Eq. 60's k=1 output) feeds the second-stage gain-vector DCT
-    // (Eq. 61, Fig. 18) -- R_hat_i == dct_blocks[i][0], never empty since every real Annex J block
-    // length is >= 1 (checked against tables::BLOCK_LENGTHS directly, not merely assumed).
-    let r_hat: [f64; 6] = std::array::from_fn(|i| dct_blocks[i][0]);
-    let g_hat = gain_vector_dct(&r_hat);
-
+    let quantized = quantize_spectral_amplitudes(
+        &spectral_amplitudes,
+        l_hat,
+        previous_state.l_hat,
+        &previous_state.spectral_amplitudes,
+    )?;
     let b0 = parameter_encoding::quantize_fundamental_frequency(omega0_hat);
     let b1 = parameter_encoding::encode_voicing_decisions(&voiced);
-    let b2 = tables::quantize_gain_index(g_hat[0]);
-    let gain_vector = quantize::quantize_gain_vector(&g_hat, l_hat)?;
-    let higher_order = quantize::quantize_higher_order_coefficients(&dct_blocks, l_hat)?;
+    let QuantizedAmplitudes { b2, gain_vector, higher_order, reconstructed: reconstructed_spectral_amplitudes } =
+        quantized;
 
     let u = bit_prioritization::prioritize_bits(
         b0,
@@ -470,20 +518,6 @@ pub fn encode_prioritized_bits(
         gain_vector,
         &higher_order,
         sync_bit,
-    )?;
-
-    // Real reconstructed history for the *next* frame's own prediction (Eq. 54 needs "what the
-    // decoder will have," not this frame's own unquantized estimate above) -- reruns this frame's
-    // own quantizer values back through dequantization and the inverse DCTs.
-    let gain_values: [u32; 5] = std::array::from_fn(|i| gain_vector[i].0);
-    let higher_order_values: Vec<u32> = higher_order.iter().map(|&(v, _)| v).collect();
-    let reconstructed_spectral_amplitudes = reconstruct::reconstruct_spectral_amplitudes(
-        b2,
-        gain_values,
-        &higher_order_values,
-        l_hat,
-        previous_state.l_hat,
-        &previous_state.spectral_amplitudes,
     )?;
 
     Some((
@@ -653,7 +687,9 @@ mod tests {
     ///   uniform amplitude scaling only shifts the coarse Annex E gain index `b2`, never the
     ///   shape-encoding coefficients that actually drive the cycle -- Eq. 54's own bias-correction
     ///   term is proven elsewhere in this module to cancel a constant level exactly) and for a
-    ///   harmonic-rich (sawtooth-like) stimulus too.
+    ///   harmonic-rich (sawtooth-like) stimulus too. (Update: since amplitudes are floored at one PCM
+    ///   step before the logarithm, harmonic 1 locks into an exact cycle of ten frames rather than
+    ///   two; the cycle length is a fine numerical detail, the exact repeat is the property.)
     /// - **One block does not settle into a short exact cycle**: block 4 (harmonics 13-15 for
     ///   `L=18`, the block with the smallest higher-order bit budget among the unvoiced blocks --
     ///   only 3+2 AC bits, Annex G) keeps producing a new value most frames, out to at least 400
@@ -720,26 +756,24 @@ mod tests {
         }
 
         // The one specific exact-cycle property direct investigation confirmed: by the tail of a
-        // long run, harmonic 1 (the dominant one) alternates between exactly two values, repeating
-        // bit-for-bit every other frame -- a real, stable period-2 limit cycle, not lingering
-        // transient drift.
-        let tail = &harmonic1_amplitudes[num_frames - 20..];
-        for i in 0..tail.len() - 2 {
-            assert!(
-                (tail[i] - tail[i + 2]).abs() < 1e-6,
-                "expected harmonic 1's reconstructed amplitude to have settled into an exact \
-                 period-2 cycle by the tail of a long run, but tail[{i}]={} and tail[{}]={} differ \
-                 by more than floating-point noise",
-                tail[i],
-                i + 2,
-                tail[i + 2]
-            );
-        }
+        // long run, harmonic 1 (the dominant one) repeats bit-for-bit with some short period -- a
+        // real, stable limit cycle, not lingering transient drift. Which period it is depends on
+        // fine numerical detail of the quantized closed loop: 2 originally, 10 once amplitudes were
+        // floored at one PCM step (the tone's empty harmonics used to sit near 0.07, so their
+        // log2 fell to about -4 instead of 0; see `encode_prioritized_bits`). Both are exact cycles,
+        // which is the property that matters; the period is only required to be short.
+        let tail = &harmonic1_amplitudes[num_frames - 40..];
+        let period = (1..=12)
+            .find(|&p| (0..tail.len() - p).all(|i| (tail[i] - tail[i + p]).abs() < 1e-6))
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected harmonic 1's reconstructed amplitude to have settled into an exact \
+                     cycle of at most 12 frames by the tail of a long run, tail is {tail:?}"
+                )
+            });
         assert!(
-            (tail[0] - tail[1]).abs() > 1.0,
-            "expected the two alternating values of harmonic 1's period-2 cycle to be genuinely \
-             distinct (not a false positive from a cycle that's actually already converged to one \
-             value), got {} and {}",
+            period > 1 && (tail[0] - tail[1]).abs() > 1.0,
+            "expected a genuinely alternating cycle, not a fixed point (period {period}), got {} and {}",
             tail[0],
             tail[1]
         );
