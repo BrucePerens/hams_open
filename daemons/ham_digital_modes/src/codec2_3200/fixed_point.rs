@@ -317,6 +317,35 @@ pub(crate) fn exp2_lut(y: f32) -> f32 {
     exp2_lut_generic_fixed(y, LOG2_LUT_BITS, exp2_lut_table_frac_q23())
 }
 
+/// Leading zero count of a nonzero `u32`, by two range steps and a 256-byte
+/// table: the compiler's own expansion of `leading_zeros` on a core without
+/// a count-leading-zeros instruction (RV32IMC, Cortex-M0/M3 class) is several
+/// times as long, and `log2_q23` runs it about a thousand times per frame.
+#[inline(always)]
+fn clz_nonzero(x: u32) -> u32 {
+    let (mut n, mut x) = (0u32, x);
+    if x < (1 << 16) {
+        n = 16;
+        x <<= 16;
+    }
+    if x < (1 << 24) {
+        n += 8;
+        x <<= 8;
+    }
+    n + CLZ8[(x >> 24) as usize] as u32
+}
+
+/// `CLZ8[b]` is the leading zero count of byte `b` (8 for zero).
+static CLZ8: [u8; 256] = {
+    let mut t = [8u8; 256];
+    let mut b = 1;
+    while b < 256 {
+        t[b] = (b as u8).leading_zeros() as u8;
+        b += 1;
+    }
+    t
+};
+
 /// Genuinely integer-in/integer-out sibling of `log2_lut` -- Q23 in
 /// (`x_q23`, must be positive), Q23 out (`log2(x)` in Q23, `i64`).
 /// `log2_lut`/`log2_lut_generic_fixed` above are already integer
@@ -357,7 +386,7 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
     // `x == mantissa * 2^shift` with the mantissa in `[2^23, 2^24)`.
     let (hi, lo) = ((x >> 32) as u32, x as u32);
     let (shift, mantissa): (i32, u32) = if hi != 0 {
-        let shift = 9 + (31 - hi.leading_zeros()) as i32; // bit position of the top set bit, minus 23
+        let shift = 9 + (31 - clz_nonzero(hi)) as i32; // bit position of the top set bit, minus 23
         let m = if shift >= 32 {
             hi >> (shift - 32)
         } else {
@@ -365,7 +394,7 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
         };
         (shift, m)
     } else {
-        let shift = (31 - lo.leading_zeros()) as i32 - 23;
+        let shift = (31 - clz_nonzero(lo)) as i32 - 23;
         (shift, if shift >= 0 { lo >> shift } else { lo << (-shift) })
     };
     let frac = mantissa & ((1 << 23) - 1); // [0, 2^23)
