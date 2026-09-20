@@ -71,10 +71,14 @@ fn tia_parity_first_150_frames() {
     let p = parity("TIA-102.BABA first 150 frames", 0, common::parity_frames());
     assert_eq!(p.count_mismatch, 0);
     assert!(p.frames >= 4 * (common::parity_frames().min(1000) - 2));
-    // Measured: 96.2% of code vectors identical, b0 and b1 always equal, decoded SNR 46.4 dB.
-    assert!(p.frac(p.identical) >= 0.95, "identical {}", p.frac(p.identical));
+    // Measured: 88.3% of code vectors identical, b0 and b1 always equal, decoded SNR 34.8 dB. (Was 96.2% and 46.4 dB
+    // before both encoders applied the standard's input high-pass filter, Eq. 3: with the DC offset gone the quiet
+    // opening frames sit at the noise floor, where a one-step difference in a higher-order coefficient quantizer
+    // between the float and integer arithmetic is more common, and the closed prediction loop carries it forward.
+    // The differing frames all differ only in the low-priority vectors u4..u6.)
+    assert!(p.frac(p.identical) >= 0.85, "identical {}", p.frac(p.identical));
     assert!(p.frac(p.b0_equal) >= 0.999 && p.frac(p.b1_equal) >= 0.999);
-    assert!(p.snr_db() >= 40.0, "decoded SNR {} dB", p.snr_db());
+    assert!(p.snr_db() >= 30.0, "decoded SNR {} dB", p.snr_db());
     assert!(p.min_envelope_corr() >= 0.9999);
 }
 
@@ -82,11 +86,13 @@ fn tia_parity_first_150_frames() {
 fn tia_parity_mid_file_window() {
     let p = parity("TIA-102.BABA frames 600..750", 600, 150);
     assert_eq!(p.count_mismatch, 0);
-    // Measured: 90.2% identical, b0 and b1 always equal, decoded SNR 68.3 dB (the closed prediction loop lets a
-    // codebook near-tie in one frame perturb the next few frames' choices).
-    assert!(p.frac(p.identical) >= 0.88, "identical {}", p.frac(p.identical));
-    assert!(p.frac(p.b0_equal) >= 0.999 && p.frac(p.b1_equal) >= 0.999);
-    assert!(p.snr_db() >= 55.0, "decoded SNR {} dB", p.snr_db());
+    // Measured: 95.0% identical, b1 always equal, b0 equal on 99.83% (one frame in 600 is a half-sample tie in the
+    // initial pitch estimate, which limits the decoded SNR over this window to 16.6 dB; before the input high-pass
+    // filter, Eq. 3, was added the measurement was 90.2% identical, all b0 equal, 68.3 dB). The closed prediction loop
+    // lets a codebook near-tie in one frame perturb the next few frames' choices.
+    assert!(p.frac(p.identical) >= 0.93, "identical {}", p.frac(p.identical));
+    assert!(p.frac(p.b0_equal) >= 0.998 && p.frac(p.b1_equal) >= 0.999);
+    assert!(p.snr_db() >= 15.0, "decoded SNR {} dB", p.snr_db());
     assert!(p.min_envelope_corr() >= 0.9999);
 }
 
