@@ -514,6 +514,39 @@ fn main() {
         println!("frame after the change:                          chip {} | ours {}", fmt(band_db(&chip_n)), fmt(band_db(&ours_n)));
         return;
     }
+    if std::env::args().nth(4).as_deref() == Some("xfade") {
+        // Crossfade shape: fine short-time RMS envelope (20-sample windows) around a gain step, chip vs ours.
+        let row: u32 = std::env::args().nth(5).and_then(|s| s.parse().ok()).unwrap_or(40);
+        let mut alt = base();
+        alt.b2 = row;
+        let (fb, fa) = (build_frame(pack_raw_parameters(&base())), build_frame(pack_raw_parameters(&alt)));
+        let mut seq = vec![fb; 10];
+        seq.extend(vec![fa; 4]);
+        seq.extend(vec![fb; 3]);
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let chip: Vec<f64> = seq.iter().flat_map(|&f| one(&sock, &mut buf, f)).collect();
+        let mut dec = DStarSynthesisDecoder::new();
+        let ours: Vec<f64> = seq.iter().flat_map(|&f| dec.decode_frame(f).unwrap_or([0.0; 160]).to_vec()).collect();
+        // Two-period (74-sample) windows, hop 10, amplitude relative to the settled level (frames 12-13).
+        let win = 74usize;
+        let env = |x: &[f64]| -> Vec<f64> { (1500..2000).step_by(10).map(|t| ((x[t..t + win].iter().map(|v| v * v).sum::<f64>() / win as f64).sqrt())).collect() };
+        let settled = |x: &[f64]| ((x[12 * 160..14 * 160].iter().map(|v| v * v).sum::<f64>() / 320.0).sqrt());
+        let (ec, eo) = (env(&chip), env(&ours));
+        let (sc, so) = (settled(&chip), settled(&ours));
+        println!("amplitude relative to settled, window start sample 1500.. step 10 (the step lands at sample 1600):");
+        println!("chip: {}", ec.iter().map(|v| format!("{:.2}", v / sc)).collect::<Vec<_>>().join(" "));
+        println!("ours: {}", eo.iter().map(|v| format!("{:.2}", v / so)).collect::<Vec<_>>().join(" "));
+        return;
+    }
     if std::env::args().nth(4).as_deref() == Some("ljump") {
         // Pitch (harmonic count) jump: settle on the flat base, switch b0 to a very different value for 8 frames, then
         // back. Frame RMS (dB) of chip and ours, to find how the chip's predictor handles a change of L.

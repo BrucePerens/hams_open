@@ -75,6 +75,16 @@
 //! ([`encode`]/[`quantize`]) performs the real inverse: nearest-codeword/nearest-scalar
 //! quantization into `b0..b8`, not full PCM analysis (no pitch estimation from audio) -- the same
 //! scope boundary `ambe_dstar::encode` already draws.
+//!
+//! ## Chip conformance (measured on the real chip)
+//!
+//! `examples/ambe_plus_2_field_scan.rs` mapped the chip's AMBE+2 half-rate decoder field by field: the pitch table
+//! matches to 0.3%, the harmonic count, the amplitude predictor weight `0.65`, the gain recursion
+//! `gamma = DG + 0.5*gamma_prev` and every quantizer table agree (per-field response slope near 1, correlation above
+//! 0.9). Envelope correlation against the chip's decoded speech is 0.966-0.986. The output carries the same small
+//! high-frequency lift as D-STAR ([`crate::ambe::float::mbe_synthesis::HIGH_LIFT_WEIGHT`]). Unlike D-STAR, no
+//! parameter formula here needed changing. Damaged-frame handling is selectable
+//! ([`crate::ambe::float::mbe_synthesis::ErrorPolicy`]); the chip's behaviour there is a defect and is opt-in.
 
 pub mod decode;
 pub mod encode;

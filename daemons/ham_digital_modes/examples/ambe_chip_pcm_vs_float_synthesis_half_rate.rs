@@ -258,6 +258,69 @@ fn main() {
         chip_pcm.extend(chip);
         float_pcm.extend(float);
     }
+    #[cfg(feature = "ambe_plus_2")]
+    if std::env::var("REPLAY").is_ok() && mode == "ambe_plus_2" {
+        // Static check: replay a real frame 12 times (steady state) to the chip and to a fresh decoder of ours and compare the
+        // power of the last 6 frames, for all-unvoiced frames and for mostly voiced ones. Separates a static level difference
+        // from inter-frame dynamics.
+        use ham_digital_modes::ambe::float::ambe_plus_2 as a2;
+        let power = |frames: &[Vec<f64>]| frames.iter().flat_map(|f| f.iter()).map(|x| x * x).sum::<f64>() / (frames.len() * FRAME_SAMPLES) as f64;
+        let mut classes: [Vec<(usize, f64)>; 2] = [Vec::new(), Vec::new()];
+        for payload in payloads.iter() {
+            let mut wire: u128 = 0;
+            for &byte in &payload[2..11] {
+                wire = (wire << 8) | byte as u128;
+            }
+            let logical = a2::interleave::interleaved_to_frame(wire);
+            let parsed = a2::parse_frame(logical);
+            let raw = a2::decode::extract_raw_parameters(parsed.d);
+            let mut st = a2::decode::DecoderState::initial();
+            if let a2::decode::DequantizedFrame::Speech(p) = a2::decode::dequantize(&raw, &mut st) {
+                let l = p.ml.len() - 1;
+                let voiced = p.voiced[1..].iter().filter(|&&v| v).count();
+                let mean_db = 20.0 * (p.ml[1..].iter().map(|m| m * m).sum::<f64>() / l as f64).sqrt().log10();
+                if mean_db < 2.0 {
+                    continue;
+                }
+                if voiced == 0 && classes[0].len() < 60 {
+                    classes[0].push((payloads.iter().position(|q| std::ptr::eq(q, payload)).unwrap(), l as f64));
+                } else if voiced * 10 >= l * 6 && classes[1].len() < 30 {
+                    classes[1].push((payloads.iter().position(|q| std::ptr::eq(q, payload)).unwrap(), l as f64));
+                }
+            }
+        }
+        for (name, list) in [("all-unvoiced", &classes[0]), ("mostly voiced", &classes[1])] {
+            let mut diffs = Vec::new();
+            for &(idx, l) in list {
+                let payload = &payloads[idx];
+                let pkt = build_channel(payload);
+                let mut chip_frames: Vec<Vec<f64>> = Vec::new();
+                for _ in 0..12 {
+                    let reply = loop {
+                        let n = send_recv_retrying(&sock, &mut buf, &pkt);
+                        if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                            break p.to_vec();
+                        }
+                    };
+                    chip_frames.push(parse_speech_payload(&reply).iter().map(|&s| s as f64).collect());
+                }
+                let mut wire: u128 = 0;
+                for &byte in &payload[2..11] {
+                    wire = (wire << 8) | byte as u128;
+                }
+                let logical = a2::interleave::interleaved_to_frame(wire);
+                let mut dec = a2::synthesis::AmbePlus2SynthesisDecoder::new();
+                let ours: Vec<Vec<f64>> = (0..12).map(|_| dec.decode_frame(logical).unwrap_or([0.0; 160]).to_vec()).collect();
+                let d = 10.0 * (power(&chip_frames[6..]) / power(&ours[6..]).max(1e-9)).log10();
+                diffs.push((l, d));
+            }
+            let mean = diffs.iter().map(|x| x.1).sum::<f64>() / diffs.len().max(1) as f64;
+            let sd = (diffs.iter().map(|x| (x.1 - mean).powi(2)).sum::<f64>() / diffs.len().max(1) as f64).sqrt();
+            let (lo, hi): (Vec<_>, Vec<_>) = diffs.iter().partition(|x| x.0 < 30.0);
+            let m = |v: &[&(f64, f64)]| v.iter().map(|x| x.1).sum::<f64>() / v.len().max(1) as f64;
+            println!("REPLAY {name}: {} frames, steady-state chip/ours {mean:+.2} dB (sd {sd:.2}); L<30: {:+.2} dB ({} frames), L>=30: {:+.2} dB ({} frames)", diffs.len(), m(&lo), lo.len(), m(&hi), hi.len());
+        }
+    }
     println!("mode={mode}: {n_frames} frames, {failures} float decode failures");
 
     let search_len = chip_pcm.len().min(float_pcm.len()) - 2 * MAX_LAG_SAMPLES as usize;

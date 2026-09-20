@@ -83,6 +83,23 @@
 //! `b0 in {126,127}`, and the dual-tone `index` recovered `128 + row + 4*col` exactly for every
 //! digit -- see [`decode::dtmf_digit_from_tone_index`] and `AMBE_CHIP_VALIDATION_FINDINGS.md`'s
 //! cross-mode DTX/DTMF section for the full chip trace.
+//!
+//! ## Where this decoder deliberately differs from mbelib (measured on the real chip)
+//!
+//! mbelib's D-STAR parameter formulas are guesses; the real chip's decoder was mapped with per-field oracle scans
+//! (`examples/dstar_field_scan.rs`), and this module follows the chip:
+//!
+//! | Quantity | mbelib | chip / this module |
+//! |---|---|---|
+//! | pitch | `2^(-4.3118 - 0.021336*(b0+0.5))` (46.9 steps per octave) | `2^(-4.258618 - 0.021766*b0)` (45.94 steps per octave, 0.2% fit error) |
+//! | harmonic count `L` | `AmbePlusLtable` | `floor(0.9254 * 4000 / f0)`, one fewer for most indices ([`tables::L_TABLE`]) |
+//! | amplitude predictor weight | `0.65` | `0.8` ([`decode::PREDICTOR_RHO`]) |
+//! | gain | `DG + 0.5*gamma_prev` | `2*DG`, no memory ([`decode::GAMMA_SCALE`], [`decode::GAMMA_MEMORY`]) |
+//!
+//! With these, envelope correlation against the chip's decoded speech is 0.995-0.998 (it was 0.84-0.94 with mbelib's
+//! values). The output also carries a small high-frequency lift ([`crate::ambe::float::mbe_synthesis::HIGH_LIFT_WEIGHT`]).
+//! How damaged frames are handled is selectable ([`crate::ambe::float::mbe_synthesis::ErrorPolicy`]); the chip's own
+//! behaviour there is a defect and is opt-in.
 
 pub mod decode;
 pub mod encode;
