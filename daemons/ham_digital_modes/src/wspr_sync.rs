@@ -2914,6 +2914,51 @@ mod tests {
         }
     }
 
+    /// Happy path for `extract_impossible_tone_evidence()`: on a clean,
+    /// noise-free transmission at a known alignment, the two "impossible"
+    /// tone bins per symbol must be near-silent compared with the real
+    /// winner tone `extract_symbol_evidence()` reports for the same
+    /// symbol. Also proves `evidence_to_symbol_values_windowed_clean_
+    /// reference()` runs on real extracted data and returns per-symbol
+    /// arrays whose `noise_stddev` is tiny on a clean signal while its
+    /// `amplitude` stays large.
+    #[test]
+    // Tests [@ANCHOR: extract_impossible_tone_evidence]
+    // Tests [@ANCHOR: evidence_to_symbol_values_windowed_clean_reference]
+    fn impossible_tone_evidence_is_near_silent_on_a_clean_signal() {
+        let symbols = wspr_encode_symbols("K6BP", "CM87", 30).unwrap();
+        let sample_rate = 12000u32;
+        let base_bin = (1500.0 / WSPR_SYMBOL_RATE_HZ).round() as usize;
+        let base_hz = (base_bin as f64) * WSPR_SYMBOL_RATE_HZ;
+        let audio = wspr_modulate(&symbols, base_hz, sample_rate);
+
+        let evidence = extract_symbol_evidence(&audio, sample_rate, base_hz, 0).unwrap();
+        let impossible = extract_impossible_tone_evidence(&audio, sample_rate, base_hz, 0)
+            .expect("clean fixture must be long enough for a full window");
+        for i in 0..WSPR_NUM_SYMBOLS {
+            let winner = evidence[i][0].max(evidence[i][1]);
+            assert!(winner > 0.0, "symbol {i}: real tone must have energy");
+            for (k, &m) in impossible[i].iter().enumerate() {
+                assert!(
+                    m.is_finite() && m < 0.2 * winner,
+                    "symbol {i} impossible bin {k}: {m} must be far below the real tone {winner}"
+                );
+            }
+        }
+
+        let (values, amplitude, noise_stddev) =
+            evidence_to_symbol_values_windowed_clean_reference(&evidence, &impossible, 20);
+        for i in 0..WSPR_NUM_SYMBOLS {
+            assert!(values[i].is_finite());
+            assert!(
+                noise_stddev[i] < 0.2 * amplitude[i],
+                "symbol {i}: clean signal must give noise_stddev {} well below amplitude {}",
+                noise_stddev[i],
+                amplitude[i]
+            );
+        }
+    }
+
     /// Confirms the fix didn't tighten the valid range: a `base_hz`
     /// exactly at (or safely under) the Nyquist frequency, and a
     /// `freq_hi_hz` exactly at Nyquist, must still work exactly as
