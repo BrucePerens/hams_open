@@ -91,6 +91,13 @@ impl FrameAnalyzer {
         self.real_samples += samples.len();
     }
 
+    /// [`Self::push_samples`] for samples already widened past 16 bits (the standard's input high-pass filter can
+    /// overshoot the 16-bit range).
+    pub fn push_samples_wide(&mut self, samples: &[i32]) {
+        self.raw.extend_from_slice(samples);
+        self.real_samples += samples.len();
+    }
+
     /// Marks the end of input and pads with silence so the last real frames complete.
     pub fn finish_input(&mut self) {
         if !self.finished {
@@ -173,7 +180,32 @@ impl Default for FrameAnalyzer {
 /// Streaming fixed-point TIA-102.BABA encoder: fixed-point sibling of the float `tia_102_baba::encoder::Encoder`
 /// (same surface, 16-bit PCM in, `[u32; 8]` code vectors out), composing [`FrameAnalyzer`] with
 /// [`super::encode::encode_frame`]. Two frames of look-ahead delay; [`Encoder::finish`] flushes with silence.
+/// The standard's input high-pass filter (Eq. 3, `H(z) = (1 - z^-1) / (1 - 0.99 z^-1)`), in integer arithmetic:
+/// the recursive state is kept in Q16 with the pole in Q30, so the output is the exact filter response rounded to
+/// an integer sample without accumulating rounding error. Fixed-point sibling of the float
+/// `tia_102_baba::encoder::HighPassFilter`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HighPassFilter {
+    prev_input: i64,
+    prev_output_q16: i64,
+}
+
+/// `0.99` in Q30 (`round(0.99 * 2^30)`).
+const HIGH_PASS_POLE_Q30: i64 = ((99i64 << 30) + 50) / 100;
+
+impl HighPassFilter {
+    pub fn step(&mut self, x: i32) -> i32 {
+        let x = x as i64;
+        let feedback = (self.prev_output_q16 * HIGH_PASS_POLE_Q30 + (1 << 29)) >> 30;
+        let y_q16 = ((x - self.prev_input) << 16) + feedback;
+        self.prev_input = x;
+        self.prev_output_q16 = y_q16;
+        ((y_q16 + (1 << 15)) >> 16) as i32
+    }
+}
+
 pub struct Encoder {
+    high_pass: HighPassFilter,
     analyzer: FrameAnalyzer,
     state: FrameState,
     last_frame: Option<[u32; 8]>,
@@ -183,7 +215,13 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new() -> Self {
-        Self { analyzer: FrameAnalyzer::new(), state: FrameState::initial(), last_frame: None, failed_frames: 0 }
+        Self {
+            high_pass: HighPassFilter::default(),
+            analyzer: FrameAnalyzer::new(),
+            state: FrameState::initial(),
+            last_frame: None,
+            failed_frames: 0,
+        }
     }
 
     /// Shifts every frame's analysis centre by `samples` (may be negative) relative to `k*160`.
@@ -191,8 +229,10 @@ impl Encoder {
         self.analyzer.set_center_offset(samples);
     }
 
+    /// Feeds PCM to the encoder, applying the standard's input high-pass filter (Eq. 3) first.
     pub fn push_samples(&mut self, samples: &[i16]) {
-        self.analyzer.push_samples(samples);
+        let filtered: Vec<i32> = samples.iter().map(|&s| self.high_pass.step(s as i32)).collect();
+        self.analyzer.push_samples_wide(&filtered);
     }
 
     /// Encodes the next frame if enough look-ahead has been pushed, else `None`.

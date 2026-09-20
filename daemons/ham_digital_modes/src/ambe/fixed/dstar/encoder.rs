@@ -17,11 +17,12 @@ use super::encode::{build_frame, build_tone_frame, mode_tables, pack_raw_paramet
 use super::tables_q16::{W0_TABLE_Q16_16, W0_TABLE_Q32};
 use crate::ambe::fixed::general::tone_detect::{detect_tone, volume_for_amplitude_q16, DetectedTone};
 use crate::ambe::fixed::mbe_encode::{analyze_and_quantize, AnalysisState};
-use crate::ambe::fixed::tia_102_baba::encoder::FrameAnalyzer;
+use crate::ambe::fixed::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::dstar::tables::L_TABLE;
 
 pub struct Encoder {
     analyzer: FrameAnalyzer,
+    high_pass: HighPassFilter,
     mirror: MbeDecoderState,
     analysis: AnalysisState,
 }
@@ -34,7 +35,7 @@ impl Encoder {
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
-        Self { analyzer, mirror: MbeDecoderState::initial(), analysis: AnalysisState::new() }
+        Self { analyzer, high_pass: HighPassFilter::default(), mirror: MbeDecoderState::initial(), analysis: AnalysisState::new() }
     }
 
     pub fn set_center_offset(&mut self, samples: i32) {
@@ -42,7 +43,9 @@ impl Encoder {
     }
 
     pub fn push_samples(&mut self, samples: &[i16]) {
-        self.analyzer.push_samples(samples);
+        // The standard's input high-pass filter (Eq. 3), as in the float encoder; the output is saturated back to 16 bits.
+        let filtered: Vec<i16> = samples.iter().map(|&s| self.high_pass.step(s as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
+        self.analyzer.push_samples(&filtered);
     }
 
     /// The next 72-bit logical frame if enough lookahead has been pushed.

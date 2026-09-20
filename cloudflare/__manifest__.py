@@ -31,6 +31,7 @@
         "views/purge_wizard_views.xml",
         "views/zone_settings_wizard_views.xml",
         "views/tunnel_views.xml",
+        "views/hostname_pending_delete_views.xml",
         "views/cloudflare_features_views.xml",
     ],
     "knowledge_docs": [

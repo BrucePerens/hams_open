@@ -32,8 +32,12 @@ fn encode_speech(frames: usize) -> Vec<u128> {
 /// Decodes `frames` on both sides, returning per-frame `(float, fixed)` PCM (`None` where both sides
 /// return `None`; the two sides returning different `Option`s fails the test).
 fn decode_both_opt(frames: &[u128]) -> Vec<Option<(Vec<f64>, Vec<f64>)>> {
-    let mut float = FloatDecoder::new();
-    let mut fixed = FixedDecoder::new();
+    decode_both_opt_with(frames, ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::default())
+}
+
+fn decode_both_opt_with(frames: &[u128], policy: ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy) -> Vec<Option<(Vec<f64>, Vec<f64>)>> {
+    let mut float = FloatDecoder::new().with_error_policy(policy);
+    let mut fixed = FixedDecoder::new().with_error_policy(policy);
     frames
         .iter()
         .enumerate()
@@ -47,6 +51,10 @@ fn decode_both_opt(frames: &[u128]) -> Vec<Option<(Vec<f64>, Vec<f64>)>> {
 
 fn decode_both(frames: &[u128]) -> Vec<(Vec<f64>, Vec<f64>)> {
     decode_both_opt(frames).into_iter().map(|p| p.expect("frame decoded")).collect()
+}
+
+fn decode_both_with(frames: &[u128], policy: ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy) -> Vec<(Vec<f64>, Vec<f64>)> {
+    decode_both_opt_with(frames, policy).into_iter().map(|p| p.expect("frame decoded")).collect()
 }
 
 fn concat_snr(pairs: &[(Vec<f64>, Vec<f64>)]) -> f64 {
@@ -233,7 +241,7 @@ fn bad_frame_policy_matches_float_repeat_three_times_then_mute_then_recover() {
     seq.push(corrupt(speech[10]));
     seq.push(speech[11]);
 
-    let pairs = decode_both(&seq);
+    let pairs = decode_both_with(&seq, ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::Clean);
     for (i, (fl, fx)) in pairs.iter().enumerate() {
         let float_silent = fl.iter().all(|&s| s == 0.0);
         let fixed_silent = fx.iter().all(|&s| s == 0.0);

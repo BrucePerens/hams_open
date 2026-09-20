@@ -171,6 +171,15 @@ fn dft_phase(m: i32, n: i32) -> u32 {
     ((m as i64) * (n as i64)).wrapping_mul(1i64 << 24) as u32
 }
 
+/// `(cos, sin)` in Q16.16 of the twiddle angle `2*pi*(m*n)/256`, from a table of the 256 distinct phases computed once with the
+/// very same `cos_q16`/`sin_q16` the per-term evaluation used, so results are bit-identical and the transforms below no longer
+/// evaluate trigonometry per term.
+fn twiddle_q16(m: i32, n: i32) -> (i32, i32) {
+    static TABLE: std::sync::OnceLock<Vec<(i32, i32)>> = std::sync::OnceLock::new();
+    let table = TABLE.get_or_init(|| (0..256).map(|k| { let phase = dft_phase(k, 1); (cos_q16(phase), sin_q16(phase)) }).collect());
+    table[((m as i64) * (n as i64)).rem_euclid(256) as usize]
+}
+
 /// `U_w(m)` (Eq. 118): the 256-point DFT of the current frame's own windowed noise sequence, for `m`
 /// in `-128..=127`.
 fn unvoiced_dft_q16(noise: &NoiseState) -> [ComplexQ16; 256] {
@@ -183,9 +192,7 @@ fn unvoiced_dft_q16(noise: &NoiseState) -> [ComplexQ16; 256] {
             let sample_q16 = u_n * (synthesis_window_q16(n) as i64); // plain int * Q16.16 = Q16.16.
             // Eq. 118's own twiddle is negative (-2*pi*m*n/256); negate via -m rather than negating
             // the whole phase, since dft_phase's own m*n product already handles negative operands.
-            let phase = dft_phase(-m, n);
-            let cos_val = cos_q16(phase);
-            let sin_val = sin_q16(phase);
+            let (cos_val, sin_val) = twiddle_q16(-m, n);
             acc = acc.add(ComplexQ16 {
                 re: mul_q16_i64(sample_q16, cos_val),
                 im: mul_q16_i64(sample_q16, sin_val),
@@ -295,8 +302,8 @@ fn unvoiced_time_domain_q16(spectrum: &[ComplexQ16; 256]) -> [i64; 256] {
         let mut acc = ComplexQ16::ZERO;
         for (j, &bin) in spectrum.iter().enumerate() {
             let m = j as i32 - 128;
-            let phase = dft_phase(m, n);
-            acc = acc.add(bin.mul_phasor(cos_q16(phase), sin_q16(phase)));
+            let (cos_val, sin_val) = twiddle_q16(m, n);
+            acc = acc.add(bin.mul_phasor(cos_val, sin_val));
         }
         *slot = acc.re / 256; // Eq. 125's own 1/256 normalization; only the real part is kept.
     }

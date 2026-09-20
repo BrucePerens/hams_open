@@ -74,7 +74,11 @@ pub fn encode_prioritized_bits(
 
     let (voiced, xi_max_q16) =
         determine_voicing(frame, pitch, initial_pitch_error_q16, previous_state.xi_max_q16, &previous_state.voiced);
-    let amplitudes = estimate_spectral_amplitudes_q16(frame, l_hat, k_hat, pitch, &voiced);
+    // Floor at one PCM step (log2 = 0), as the float sibling does: the logarithm of zero is undefined.
+    let amplitudes: Vec<i64> = estimate_spectral_amplitudes_q16(frame, l_hat, k_hat, pitch, &voiced)
+        .into_iter()
+        .map(|m| m.max(1 << 16))
+        .collect();
 
     let residuals: Vec<i32> = (1..=l_hat)
         .map(|l| {

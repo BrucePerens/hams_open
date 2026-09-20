@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0-or-later. -->
+<odoo>
+    <record id="view_cloudflare_hostname_pending_delete_list" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- A read-only list of a small bookkeeping model with two object
+             buttons; the buttons' own behaviour (and their admin gate) is
+             covered model-side, and this record's rendering is proven by the
+             render test cited below rather than by a browser tour that would
+             need a real Cloudflare call mocked anyway. -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_pending_delete_views_render] -->
+        <field name="name">cloudflare.hostname.pending.delete.list</field>
+        <field name="model">cloudflare.hostname.pending.delete</field>
+        <field name="arch" type="xml">
+            <list string="Pending Hostname Deletes" create="false" edit="false"
+                  decoration-danger="state == 'abandoned'"
+                  decoration-muted="state == 'done'">
+                <field name="domain_name"/>
+                <field name="cf_hostname_id"/>
+                <field name="website_id" optional="show"/>
+                <field name="state"/>
+                <field name="attempt_count"/>
+                <field name="last_attempt_at" optional="show"/>
+                <field name="next_attempt_at" optional="show"/>
+                <field name="last_error" optional="hide"/>
+                <button name="action_retry_now" type="object" icon="fa-refresh"
+                        string="Retry Now"
+                        confirm="Ask Cloudflare to delete this custom hostname again now?"/>
+                <button name="action_mark_abandoned" type="object" icon="fa-ban"
+                        string="Abandon"
+                        invisible="state == 'abandoned'"
+                        confirm="Stop retrying this hostname automatically? The record stays visible so you can retry it by hand later."/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_cloudflare_hostname_pending_delete_form" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_pending_delete_views_render] -->
+        <field name="name">cloudflare.hostname.pending.delete.form</field>
+        <field name="model">cloudflare.hostname.pending.delete</field>
+        <field name="arch" type="xml">
+            <form string="Pending Hostname Delete" create="false" edit="false">
+                <header>
+                    <button name="action_retry_now" type="object" string="Retry Now"
+                            class="btn-primary"
+                            confirm="Ask Cloudflare to delete this custom hostname again now?"/>
+                    <button name="action_mark_abandoned" type="object" string="Abandon"
+                            invisible="state == 'abandoned'"
+                            confirm="Stop retrying this hostname automatically? The record stays visible so you can retry it by hand later."/>
+                    <field name="state" widget="statusbar" statusbar_visible="pending,done,abandoned"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="domain_name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="cf_hostname_id" readonly="1"/>
+                            <field name="website_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="attempt_count" readonly="1"/>
+                            <field name="last_attempt_at" readonly="1"/>
+                            <field name="next_attempt_at" readonly="1"/>
+                        </group>
+                    </group>
+                    <separator string="Last Cloudflare Error"/>
+                    <group>
+                        <field name="last_error" nolabel="1" readonly="1"/>
+                    </group>
+                    <div class="text-muted mt-2">
+                        The local routing domain has already been deleted. This record exists
+                        only so the custom hostname left behind on Cloudflare's zone can be
+                        retried; no API token is stored here.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_cf_hostname_pending_delete" model="ir.actions.act_window">
+        <field name="name">Pending Hostname Deletes</field>
+        <field name="res_model">cloudflare.hostname.pending.delete</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_cloudflare_hostname_pending_delete_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_cloudflare_hostname_pending_delete_form')})]"/>
+    </record>
+
+    <menuitem id="menu_cf_hostname_pending_delete" name="Pending Hostname Deletes"
+              parent="menu_cloudflare_root" action="action_cf_hostname_pending_delete"
+              sequence="70"/>
+</odoo>

@@ -604,14 +604,16 @@ def execute_job(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         logger.info("Job %s finished: %s", job_id, final_state)
 
-    except (
-        OdooAPIError,
-        subprocess.SubprocessError,
-        OSError,
-        ValueError,
-        PermissionError,
-    ) as e:
-        logger.error(
+    except MemoryError:
+        # Genuinely fatal: the process cannot be trusted to keep consuming.
+        # Fail fast and let the supervisor restart it.
+        raise
+    except Exception as e:  # audit-ignore-catch-all: one job's unanticipated failure must fail that job only, not the consuming daemon; MemoryError is re-raised above  # fmt: skip
+        # Any other exception, expected (OdooAPIError, OSError, ...) or not
+        # (KeyError, AttributeError from a future edit), fails only THIS job.
+        # It is logged with its traceback and job context, reported to Odoo
+        # below, and the message is acked so the worker keeps consuming.
+        logger.exception(
             "Error processing job %s: %s: %s",
             job_id if "job_id" in locals() else "unknown",
             type(e).__name__,
@@ -647,11 +649,9 @@ def execute_job(ch, method, properties, body):
                     ids=[config_id],
                     message=err_msg,
                 )
-        except (
-            OdooAPIError,
-            json.JSONDecodeError,
-            urllib.error.URLError,
-        ) as inner_e:
+        except Exception as inner_e:  # audit-ignore-catch-all: failure-reporting must never kill the consuming daemon  # fmt: skip
+            # Reporting must never kill the daemon either (e.g. a body that
+            # is valid JSON but not an object raises AttributeError here).
             report_err_msg = """Failed to report failure back to Odoo: %s"""
             logger.exception(report_err_msg, inner_e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
