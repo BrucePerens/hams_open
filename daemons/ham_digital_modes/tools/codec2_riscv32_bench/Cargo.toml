@@ -24,3 +24,6 @@ profile = ["ham_digital_modes/codec2_profile"]
 small = []
 # Also build the 16 kHz spectral bridge (about 19 KB more decoder state) to measure its cost.
 bridge = ["ham_digital_modes/codec2_16k_bridge"]
+# Also run `decode_16k_fixed` (the 16 kHz spectral-bridge decode) over the same frames and report its
+# instructions per frame and its own checksum. Implies the bridge feature.
+decode16k = ["bridge"]

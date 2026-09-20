@@ -88,6 +88,12 @@ fn do_decode(dec: &mut DecoderFixed, fr: &[u8; BYTES_PER_FRAME]) -> [i16; SAMPLE
     dec.decode(fr)
 }
 
+#[cfg(feature = "decode16k")]
+#[inline(never)]
+fn do_decode_16k(dec: &mut DecoderFixed, fr: &[u8; BYTES_PER_FRAME]) -> [i16; 2 * SAMPLES_PER_FRAME] {
+    dec.decode_16k_fixed(fr)
+}
+
 #[no_mangle]
 pub extern "C" fn main() -> ! {
     let mut u = Uart;
@@ -134,5 +140,24 @@ pub extern "C" fn main() -> ! {
     let names = ["fft1", "a2", "fft2+a2g", "loop1(log/exp)", "harm loop", "synth:h+phase", "synth:postfilter", "synth:fill+sym(13)", "synth:ifft(14)"];
     for i in 6..15 { let _ = writeln!(u, "  fine[{}] {:>9}", i, unsafe { prof::ACC[i] } / (n as u64 - 1)); }
     let _ = writeln!(u, "checksum {:08x}", cksum);
+    #[cfg(feature = "decode16k")]
+    {
+        // 16 kHz spectral-bridge decode of the same bitstream, on a fresh decoder (the 8 kHz and 16 kHz
+        // entry points share inter-frame state, so they are never interleaved on one instance).
+        let mut dec16 = DecoderFixed::new();
+        let mut ck16: u32 = 0;
+        unsafe { prof::ACC = [0; 16]; }
+        let (mut first16, mut tot16, mut max16) = (0u32, 0u64, 0u32);
+        for f in 0..n {
+            let t0 = prof::instret();
+            let out = do_decode_16k(&mut dec16, &frames[f]);
+            let d = prof::instret().wrapping_sub(t0);
+            if f == 0 { first16 = d; unsafe { prof::ACC = [0; 16]; } } else { tot16 += d as u64; max16 = max16.max(d); }
+            for &s in &out { ck16 = ck16.wrapping_mul(16777619).wrapping_add(s as u16 as u32); }
+        }
+        let _ = writeln!(u, "DECODE16K first-frame {} instr; steady avg {} max {} instr/frame", first16, tot16 / (n as u64 - 1), max16);
+        for i in 6..15 { let _ = writeln!(u, "  fine16[{}] {:>9}", i, unsafe { prof::ACC[i] } / (n as u64 - 1)); }
+        let _ = writeln!(u, "checksum16k {:08x}", ck16);
+    }
     exit(0)
 }
