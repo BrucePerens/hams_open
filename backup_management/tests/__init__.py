@@ -6,6 +6,7 @@ from . import test_backup_board_controller
 from . import test_backup_crypto
 from . import test_backup_job
 from . import test_backup_rabbitmq_integration
+from . import test_backup_publish_failure
 from . import test_backup_security
 from . import test_backup_worker_real
 from . import test_multi_website

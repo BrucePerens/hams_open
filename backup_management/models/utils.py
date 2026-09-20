@@ -4,7 +4,7 @@
 import os
 import logging
 from odoo.exceptions import UserError
-from odoo import _
+from odoo import _, api
 
 _logger = logging.getLogger(__name__)
 
@@ -109,13 +109,41 @@ def validate_backup_path(path):
     if ".." in path.split(os.path.sep):
         raise UserError(_("Invalid path: directory traversal is not allowed."))
 
-def publish_to_rabbitmq(env, msg):
+def publish_to_rabbitmq(env, msg, job_id=None, svc_uid=None):
     """
     Publishes a message to RabbitMQ backup_tasks queue using the global connection pool.
+
+    pool.publish() returns True as soon as the send is queued for after the
+    commit, so it cannot say whether the broker took the message. When the
+    caller passes ``job_id`` (the backup.job this message starts) and
+    ``svc_uid`` (the service user allowed to write that job), the real
+    outcome is wired through ``on_result`` and a failed send marks the job
+    "failed" instead of leaving it "pending: Queued in RabbitMQ..." forever.
     """
+    on_result = None
+    if job_id and svc_uid:
+        registry = env.registry
+
+        def on_result(success):
+            if success:
+                return
+            # Runs after the originating transaction committed, so the write
+            # needs its own cursor.
+            with registry.cursor() as cr:
+                api.Environment(cr, svc_uid, {})["backup.job"].browse(
+                    job_id
+                )._mark_dispatch_failed()
+
     try:
         env["hams_rabbitmq.pool"].publish(
-            "", "backup_tasks", msg
+            "", "backup_tasks", msg, on_result=on_result
         )
     except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: backup_management:COMM_test_rmq_publish_failure]  # fmt: skip
         _logger.exception("Failed to publish backup task to RMQ pool: %s", e)
+        if on_result is not None:
+            try:
+                on_result(False)
+            except Exception:  # audit-ignore-catch-all: reporting must not mask the original failure
+                _logger.exception(
+                    "Could not mark backup job %s failed after a publish error", job_id
+                )

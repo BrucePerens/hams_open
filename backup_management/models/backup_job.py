@@ -2,7 +2,10 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import datetime
+import logging
 from odoo import models, fields
+
+_logger = logging.getLogger(__name__)
 
 
 class BackupJob(models.Model):
@@ -47,6 +50,27 @@ class BackupJob(models.Model):
             else:
                 record.output_log = text_chunk
 
+
+    # [@ANCHOR: backup_management:COMM_job_dispatch_failed]
+    def _mark_dispatch_failed(self):
+        """The RabbitMQ send for this job failed after the commit (see
+        utils.publish_to_rabbitmq). Only a job still "pending" is touched: a
+        worker that already picked it up owns the state from then on."""
+        for job in self:
+            if job.state != "pending":
+                continue
+            _logger.error(
+                "Backup job %s (config %s) could not be handed to RabbitMQ; marking it failed.",
+                job.id, job.config_id.id,
+            )
+            job.write(
+                {
+                    "state": "failed",
+                    "output_log": (job.output_log or "")
+                    + "\n[SYSTEM] Could not hand this job to the backup worker queue "
+                    "(RabbitMQ unavailable). It was NOT run. Trigger it again once the queue is back.",
+                }
+            )
 
     def _auto_refresh_status(self):
         """

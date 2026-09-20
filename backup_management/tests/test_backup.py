@@ -14,6 +14,16 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
+class _AcceptingChannel:
+    """Stub AMQP channel that accepts every publish and records it."""
+
+    def __init__(self):
+        self.sent = []
+
+    def basic_publish(self, **kwargs):
+        self.sent.append(kwargs)
+
+
 @tagged("post_install", "-at_install")
 class TestBackupManagement(RealTransactionCase):
     def tearDown(self):
@@ -130,6 +140,14 @@ class TestBackupManagement(RealTransactionCase):
         # Tests [@ANCHOR: backup_management:COMM_test_backup_orchestration]
 
         # Tests [@ANCHOR: backup_management:COMM_backup_trigger_execution]
+        # The commit below runs the real deferred RabbitMQ send. A failed send
+        # now fails the job (see publish_to_rabbitmq), so this test -- which is
+        # about orchestration, not the broker -- gives the pool an accepting
+        # stub channel instead of depending on a broker being reachable.
+        channel = _AcceptingChannel()
+        self.safe_patch_object(
+            type(self.env["hams_rabbitmq.pool"]), "_get_channel", return_value=channel
+        )
         res_kopia = self.config_kopia.action_trigger_backup()
         res_pg = self.config_pg.action_trigger_backup()
 
@@ -145,6 +163,7 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(res_pg.get("res_model"), "backup.job", msg_pg)
 
         self.env.cr.commit()
+        self.assertEqual(len(channel.sent), 2, "each trigger must publish one task")
 
         job_kopia = self.env["backup.job"].search(
             [("config_id", "=", self.config_kopia.id)], limit=1

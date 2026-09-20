@@ -172,8 +172,8 @@ class BackupRestoreWizard(models.TransientModel):
             }
         )
 
-        def publish_task(msg=payload):
-            publish_to_rabbitmq(self.env, msg)
+        def publish_task(msg=payload, job_id=job.id):
+            publish_to_rabbitmq(self.env, msg, job_id=job_id, svc_uid=svc_uid)
 
         self.env.cr.postcommit.add(publish_task)
 
