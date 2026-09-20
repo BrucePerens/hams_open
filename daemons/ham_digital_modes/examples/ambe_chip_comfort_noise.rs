@@ -13,7 +13,6 @@
 use ham_digital_modes::ambe::float::ambe_plus_2::decode::RawParameters as A2Raw;
 use ham_digital_modes::ambe::float::ambe_plus_2::encode::build_frame as a2_build;
 use ham_digital_modes::ambe::float::ambe_plus_2::interleave::frame_to_interleaved;
-use ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder;
 use std::net::UdpSocket;
 use std::time::Duration;
 

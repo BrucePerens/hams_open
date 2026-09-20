@@ -135,6 +135,11 @@ fn lowpass_filtered_sample(raw: &[f64], center: usize, n: i32) -> f64 {
 /// every call, since [`lowpass_filtered_sample`] itself does real work (a 21-tap FIR sum) per sample.
 pub struct PitchAnalysisFrame {
     s_lpf: [f64; 301],
+    /// `r(t)` for every integer `t` in `-160..=160` (Eq. 7), the sum every candidate pitch reads several times.
+    r_table: Vec<f64>,
+    /// The candidate-independent parts of `E(P)`: `sum((s_LPF*w_I)^2)` and `sum(w_I^4)`.
+    energy: f64,
+    w4: f64,
 }
 
 impl PitchAnalysisFrame {
@@ -150,7 +155,11 @@ impl PitchAnalysisFrame {
             let j = i as i32 - 150;
             *slot = lowpass_filtered_sample(raw, center, j);
         }
-        Self { s_lpf }
+        let mut frame = Self { s_lpf, r_table: Vec::new(), energy: 0.0, w4: 0.0 };
+        frame.r_table = (-160i32..=160).map(|t| frame.r_integer_direct(t)).collect();
+        frame.energy = (-150i32..=150).map(|j| { let v = frame.s_lpf_at(j) * initial_pitch_window(j); v * v }).sum();
+        frame.w4 = (-150i32..=150).map(|j| initial_pitch_window(j).powi(4)).sum();
+        frame
     }
 
     // [@ANCHOR: PitchAnalysisFrame::s_lpf_at]
@@ -166,6 +175,13 @@ impl PitchAnalysisFrame {
     /// -150..=150)`. `w_I(j)` itself never needs the zero-padded variant here (`j` never leaves
     /// `-150..=150`), but `w_I(j+t)` does, since `j+t` legitimately can.
     fn r_integer(&self, t: i32) -> f64 {
+        match self.r_table.get((t + 160) as usize) {
+            Some(&v) if (-160..=160).contains(&t) => v,
+            _ => self.r_integer_direct(t),
+        }
+    }
+
+    fn r_integer_direct(&self, t: i32) -> f64 {
         (-150i32..=150)
             .map(|j| {
                 let a = self.s_lpf_at(j) * initial_pitch_window(j).powi(2);
@@ -190,17 +206,10 @@ impl PitchAnalysisFrame {
     /// tracking (section 5.1.2, not yet implemented here), not by simply minimizing `E(P)` alone.
     // [@ANCHOR: PitchAnalysisFrame::error_function]
     pub fn error_function(&self, p: f64) -> f64 {
-        let s: f64 = (-150i32..=150)
-            .map(|j| {
-                let v = self.s_lpf_at(j) * initial_pitch_window(j);
-                v * v
-            })
-            .sum();
+        let s = self.energy;
         let n_max = (150.0 / p).floor() as i32;
         let r_sum: f64 = (-n_max..=n_max).map(|n| self.r(n as f64 * p)).sum();
-        let w4: f64 = (-150i32..=150)
-            .map(|j| initial_pitch_window(j).powi(4))
-            .sum();
+        let w4 = self.w4;
         let denominator = s * (1.0 - p * w4);
         if denominator.abs() < 1e-12 {
             return 1.0; // all-zero (silent) input: no pitch evidence, worst error instead of 0/0 = NaN

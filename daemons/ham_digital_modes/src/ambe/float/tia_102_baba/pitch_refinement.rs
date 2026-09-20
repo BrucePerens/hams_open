@@ -60,6 +60,14 @@ impl Complex {
 /// direct consequence of the same fact the spec states explicitly, not a separate approximation.
 // [@ANCHOR: window_dft_16384]
 pub(crate) fn window_dft_16384(m: i32) -> f64 {
+    // The 16384-point transform is periodic in `m`; every residue is computed once into a table (about 3.6 million cosines
+    // the first time, which is what made every later call cost 221 cosines).
+    static TABLE: std::sync::OnceLock<Vec<f64>> = std::sync::OnceLock::new();
+    let table = TABLE.get_or_init(|| (0..16384).map(|r| window_dft_16384_direct(if r >= 8192 { r - 16384 } else { r })).collect());
+    table[m.rem_euclid(16384) as usize]
+}
+
+fn window_dft_16384_direct(m: i32) -> f64 {
     let mut acc = 0.0;
     for n in -110i32..=110 {
         let theta = -2.0 * PI * (m as f64) * (n as f64) / 16384.0;
@@ -73,6 +81,8 @@ pub(crate) fn window_dft_16384(m: i32) -> f64 {
 /// `pitch::PitchAnalysisFrame` already uses for `s_LPF`).
 pub struct RefinementFrame {
     sw: [Complex; 256],
+    /// Harmonic amplitudes already computed for this frame, keyed by the candidate frequency's bits and the harmonic number.
+    amplitude_cache: std::cell::RefCell<std::collections::HashMap<(u64, u32), Complex>>,
 }
 
 impl RefinementFrame {
@@ -83,18 +93,20 @@ impl RefinementFrame {
     // [@ANCHOR: RefinementFrame::new]
     pub fn new(raw: &[f64], center: usize) -> Self {
         let mut sw = [Complex::ZERO; 256];
+        // The 256-point twiddles `exp(-2*pi*j*k/256)`, and the windowed samples, are computed once per frame.
+        let twiddle: Vec<(f64, f64)> = (0..256).map(|k| { let t = -2.0 * PI * k as f64 / 256.0; (t.cos(), t.sin()) }).collect();
+        let windowed: Vec<f64> = (-110i32..=110).map(|n| raw[(center as i32 + n) as usize] * pitch_refinement_window(n)).collect();
         for (i, slot) in sw.iter_mut().enumerate() {
             let m = i as i32 - 127;
             let mut acc = Complex::ZERO;
-            for n in -110i32..=110 {
-                let idx = (center as i32 + n) as usize;
-                let sample = raw[idx] * pitch_refinement_window(n);
-                let theta = -2.0 * PI * (m as f64) * (n as f64) / 256.0;
-                acc = acc.add(Complex::new(sample * theta.cos(), sample * theta.sin()));
+            for (j, &sample) in windowed.iter().enumerate() {
+                let n = j as i32 - 110;
+                let (c, s) = twiddle[(m * n).rem_euclid(256) as usize];
+                acc = acc.add(Complex::new(sample * c, sample * s));
             }
             *slot = acc;
         }
-        Self { sw }
+        Self { sw, amplitude_cache: Default::default() }
     }
 
     /// `S_w(m)` for `m` in `-127..=128`; returns `Complex::ZERO` outside that range (a real
@@ -117,6 +129,16 @@ impl RefinementFrame {
 /// frequency, weighted by the window's own spectral shape `W_R`.
 // [@ANCHOR: harmonic_amplitude]
 fn harmonic_amplitude(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
+    let key = (omega0.to_bits(), l);
+    if let Some(&cached) = frame.amplitude_cache.borrow().get(&key) {
+        return cached;
+    }
+    let value = harmonic_amplitude_uncached(frame, l, omega0);
+    frame.amplitude_cache.borrow_mut().insert(key, value);
+    value
+}
+
+fn harmonic_amplitude_uncached(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex {
     let a_l = (256.0 / (2.0 * PI)) * (l as f64 - 0.5) * omega0;
     let b_l = (256.0 / (2.0 * PI)) * (l as f64 + 0.5) * omega0;
     let m_lo = a_l.ceil() as i32;
