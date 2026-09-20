@@ -82,8 +82,8 @@ pub fn build_tone_frame(index: u32, volume: u32) -> u128 {
 /// Builds the full transmittable 72-bit logical frame (packed MSB-first into the low 72 bits of the
 /// return value, matching `decode::parse_frame`'s own input convention -- see `interleave.rs` for
 /// converting this into real 9-byte chip/wire data) from the 49-bit `d[]` layout: Golay-encodes
-/// `C0`'s 12 data bits (with a `0` spare bit appended as `C0`'s own LSB, per `mbe_eccAmbe3600x2400C0`
-/// -- `ambe_fr[0][0]` is the spare, not `ambe_fr[0][23]`), whitens and Golay-encodes `C1`'s 12 data
+/// `C0`'s 12 data bits (with the even-parity bit of the extended Golay code appended as `C0`'s own LSB, `ambe_fr[0][0]`, not
+/// `ambe_fr[0][23]`; mbelib leaves it unchecked), whitens and Golay-encodes `C1`'s 12 data
 /// bits using `C0`'s own data as the whitening seed, and carries `C2`/`C3` raw.
 pub fn build_frame(d: u64) -> u128 {
     let c0_data = ((d >> 37) & 0xFFF) as u16;
@@ -95,9 +95,12 @@ pub fn build_frame(d: u64) -> u128 {
     let c1_codeword = golay_encode(c1_data);
     let c1_whitened = super::whiten_c1(c1_codeword, c0_data);
 
-    // C0's 24-bit field is the 23-bit codeword (MSB-first) followed by a spare `0` bit as its own
-    // LSB -- shift left by 49, not 48, to leave that spare bit position open at the bottom.
+    // C0's 24-bit field is the 23-bit codeword (MSB-first) followed by the spare bit as its own LSB (shifted left by 49, not
+    // 48). The chip and JMBE treat C0 as an extended Golay code: every chip frame captured (200 of 200, both modes) has even
+    // parity over the 24 bits, so the spare bit is the parity of the codeword. Decoders here never check it.
+    let spare = (c0_codeword.count_ones() & 1) as u128;
     ((c0_codeword as u128) << 49)
+        | (spare << 48)
         | ((c1_whitened as u128) << 25)
         | ((c2 as u128) << 14)
         | (c3 as u128)
@@ -106,6 +109,14 @@ pub fn build_frame(d: u64) -> u128 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn c0_field_has_even_parity_like_the_chips_extended_golay_code() {
+        for d in [0u64, 1, 0x1_FFFF_FFFF_FFFF, 0x0123_4567_89AB, 0x1555_5555_5555, 0xAAAA_AAAA_AAA] {
+            let frame = build_frame(d & ((1u64 << 49) - 1));
+            assert_eq!(((frame >> 48) & 0xFF_FFFF).count_ones() % 2, 0, "d = {d:#x}");
+        }
+    }
     use crate::ambe::float::dstar::decode::{extract_raw_parameters, parse_frame};
 
     /// The real, end-to-end round trip this whole module exists for: pack a set of raw parameters
