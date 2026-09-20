@@ -94,7 +94,7 @@ the pitch map) is documented in `src/ambe/float/dstar/mod.rs`. The scans that fo
 `docs/references/tia_102_baba_cross_validation.md`: decoder against mbelib 1.3.0 and `imbe.rs` (1,200 speech and 8,649 sweep
 frames agree in every parameter), encoder against OP25 `imbe_vocoder` (bit-exact prioritization and packing on 2,880 frames;
 several real bugs found and fixed: default wire layer, missing input high-pass filter, error-function and amplitude floors).
-JMBE was read for its damaged-frame policy but not built.
+JMBE was built and run as an extra decoder (`tools/jmbe_cross_check/`, see `docs/references/tia_102_baba_cross_validation.md`).
 
 ## Level match to the chip (D-STAR and AMBE+2)
 
