@@ -440,6 +440,80 @@ fn main() {
         }
         return;
     }
+    if std::env::args().nth(4).as_deref() == Some("ljshape") {
+        // Harmonic-count change with a strongly tilted spectrum: settle on frame A (b0 = start), send one frame B (b0 = alt)
+        // with the same spectral-shape fields, and compare the band powers of the frames around the change, chip vs ours,
+        // averaged over repeated trials (noise excitation is random). `UNVOICED=1` for noise bands.
+        let alt_b0: u32 = std::env::args().nth(5).and_then(|s| s.parse().ok()).unwrap_or(90);
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let band_db = |frames: &[Vec<f64>]| -> [f64; 4] {
+            let mut power = [0.0f64; 4];
+            for f in frames {
+                let mut planner = FftPlanner::<f64>::new();
+                let fft = planner.plan_fft_forward(FFT_LEN);
+                let mut b: Vec<Complex64> = f.iter().enumerate().map(|(i, &s)| Complex64::new(s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 159.0).cos()), 0.0)).collect();
+                b.resize(FFT_LEN, Complex64::new(0.0, 0.0));
+                fft.process(&mut b);
+                for (k, c) in b[..FFT_LEN / 2].iter().enumerate() {
+                    let hz = k as f64 * 8000.0 / FFT_LEN as f64;
+                    power[((hz / 1000.0) as usize).min(3)] += c.norm_sqr();
+                }
+            }
+            power.map(|p| 10.0 * (p / frames.len() as f64 + 1e-9).log10())
+        };
+        // Most tilted PRBA24 row by our own decode of the base frame.
+        let mut best = (0.0f64, flat.0);
+        best.0 = -100.0;
+        for row in 0..PRBA24.len() as u32 {
+            let mut raw = base();
+            raw.b3 = row;
+            let mut dec = DStarSynthesisDecoder::new();
+            let f = build_frame(pack_raw_parameters(&raw));
+            let mut last = [0.0; 160];
+            for _ in 0..8 {
+                last = dec.decode_frame(f).unwrap_or([0.0; 160]);
+            }
+            let lo = band_db(&[last.to_vec()]);
+            let tilt = lo[0] - lo[3];
+            if (tilt - 25.0).abs() < (best.0 - 25.0).abs() && lo[0] < 90.0 {
+                best = (tilt, row);
+            }
+        }
+        let mut shaped = base();
+        shaped.b3 = best.1;
+        println!("tilted base: b3={} (our low-minus-high {:.1} dB)", best.1, best.0);
+        let mut alt = base();
+        alt.b3 = shaped.b3;
+        alt.b0 = alt_b0;
+        let (fa, fb) = (build_frame(pack_raw_parameters(&shaped)), build_frame(pack_raw_parameters(&alt)));
+        let trials = 10;
+        let (mut chip_t, mut ours_t, mut chip_n, mut ours_n) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for _ in 0..trials {
+            let mut seq = vec![fa; 8];
+            seq.push(fb);
+            seq.push(fb);
+            let chip: Vec<Vec<f64>> = seq.iter().map(|&f| one(&sock, &mut buf, f)).collect();
+            let mut dec = DStarSynthesisDecoder::new();
+            let ours: Vec<Vec<f64>> = seq.iter().map(|&f| dec.decode_frame(f).unwrap_or([0.0; 160]).to_vec()).collect();
+            chip_t.push(chip[8].clone());
+            ours_t.push(ours[8].clone());
+            chip_n.push(chip[9].clone());
+            ours_n.push(ours[9].clone());
+        }
+        let fmt = |v: [f64; 4]| v.iter().map(|x| format!("{x:.1}")).collect::<Vec<_>>().join(" ");
+        println!("frame at the change (dB in 0-1k 1-2k 2-3k 3-4k): chip {} | ours {}", fmt(band_db(&chip_t)), fmt(band_db(&ours_t)));
+        println!("frame after the change:                          chip {} | ours {}", fmt(band_db(&chip_n)), fmt(band_db(&ours_n)));
+        return;
+    }
     if std::env::args().nth(4).as_deref() == Some("ljump") {
         // Pitch (harmonic count) jump: settle on the flat base, switch b0 to a very different value for 8 frames, then
         // back. Frame RMS (dB) of chip and ours, to find how the chip's predictor handles a change of L.
