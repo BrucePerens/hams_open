@@ -248,29 +248,37 @@ pub fn look_ahead_pitch_tracking(
     future2_error_fn: impl Fn(f64) -> f64,
 ) -> (f64, f64) {
     // CE_F(p0) per Eq. 17: E(p0) + E1(P_hat_1) + E2(P_hat_2), where P_hat_1/P_hat_2 jointly
-    // minimize E1(P1)+E2(P2) subject to Eq. 14/16's own nested range constraints.
-    let ce_f_at = |p0: f64| -> f64 {
-        let (lo1, hi1) = (0.8 * p0, 1.2 * p0);
-        let best: f64 = candidate_pitches()
-            .filter(|&p1| p1 >= lo1 && p1 <= hi1)
-            .map(|p1| {
-                let e1 = future1_error_fn(p1);
-                let (lo2, hi2) = (0.8 * p1, 1.2 * p1);
-                let best_e2 = candidate_pitches()
-                    .filter(|&p2| p2 >= lo2 && p2 <= hi2)
-                    .map(&future2_error_fn)
-                    .fold(f64::INFINITY, f64::min);
-                e1 + best_e2
-            })
-            .fold(f64::INFINITY, f64::min);
-        error_fn(p0) + best
-    };
+    // minimize E1(P1)+E2(P2) subject to Eq. 14/16's own nested range constraints. The three error
+    // functions are sampled once, then the nested minimum is built bottom-up (the inner minimum over P2 depends only
+    // on P1, so it is shared by every P0 whose P1 range contains it).
+    let candidates: Vec<f64> = candidate_pitches().collect();
+    let sample = |f: &dyn Fn(f64) -> f64| -> Vec<f64> { candidates.iter().map(|&p| f(p)).collect() };
+    let (e0, e1, e2) = (sample(&error_fn), sample(&future1_error_fn), sample(&future2_error_fn));
+    // Candidate index range `0.8 P <= Q <= 1.2 P` for every candidate `P` (Eq. 14 and 16; contiguous).
+    let ranges: Vec<std::ops::RangeInclusive<usize>> = candidates
+        .iter()
+        .map(|&p| {
+            let (lo, hi) = (0.8 * p, 1.2 * p);
+            let inside: Vec<usize> = (0..candidates.len()).filter(|&i| candidates[i] >= lo && candidates[i] <= hi).collect();
+            inside[0]..=inside[inside.len() - 1]
+        })
+        .collect();
+    let best_e2: Vec<f64> =
+        ranges.iter().map(|r| r.clone().map(|i| e2[i]).fold(f64::INFINITY, f64::min)).collect();
+    let ce_f: Vec<f64> = ranges
+        .iter()
+        .enumerate()
+        .map(|(i0, r)| e0[i0] + r.clone().map(|i1| e1[i1] + best_e2[i1]).fold(f64::INFINITY, f64::min))
+        .collect();
+    let index_of = |p: f64| ((p - 21.0) / 0.5).round() as usize;
+    let ce_f_at = |p0: f64| -> f64 { ce_f[index_of(p0)] };
 
-    let p_hat_0 = candidate_pitches()
-        .map(|p0| (p0, ce_f_at(p0)))
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .expect("candidate_pitches is never empty")
-        .0;
+    let p_hat_0 = candidates
+        .iter()
+        .zip(&ce_f)
+        .min_by(|a, b| a.1.total_cmp(b.1))
+        .map(|(&p, _)| p)
+        .expect("candidate_pitches is never empty");
     let ce_f_p_hat_0 = ce_f_at(p_hat_0);
 
     // Sub-multiple check (the spec's own text after Eq. 17, and Eq. 18-20): try P_hat_0/2,

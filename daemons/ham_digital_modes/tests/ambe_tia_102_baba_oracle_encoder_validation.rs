@@ -14,7 +14,7 @@
 
 use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{deprioritize_bits, prioritize_bits};
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::tia_102_baba::encode_code_vectors;
+use ham_digital_modes::ambe::float::tia_102_baba::{encode_code_vectors, quantize_spectral_amplitudes};
 use ham_digital_modes::ambe::float::tia_102_baba::encoder::{Encoder, FrameAnalyzer};
 use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
 use ham_digital_modes::ambe::float::tia_102_baba::pitch::PitchAnalysisFrame;
@@ -158,6 +158,21 @@ fn silence_encodes_to_the_lowest_pitch_index_with_nothing_voiced() {
     }
 }
 
+/// Silence has zero spectral amplitude, whose logarithm (Eq. 54) is undefined. Amplitudes are floored at one PCM step
+/// (`log2 = 0`), which is how the oracle treats them: its gain index for silence is 17, and so is this crate's, where
+/// the unfloored `log2(0)` used to leave the quantizers on whatever NaN turned into (`b2 = 0`).
+#[test]
+fn silence_gain_index_matches_the_oracle() {
+    let mut enc = Encoder::new();
+    enc.push_samples(&vec![0.0; FRAMES * 160]);
+    let mut frames: Vec<[u32; 8]> = std::iter::from_fn(|| enc.next_frame()).collect();
+    frames.extend(enc.finish());
+    for (k, &c) in frames.iter().enumerate().skip(8) {
+        let Some(FrameOutcome::Decoded(p)) = DecoderState::new().decode_parameters(c) else { panic!("frame {k}") };
+        assert_eq!(p.bits.b2, 17, "frame {k}");
+    }
+}
+
 /// `(L, b0, b1, b2, gain elements b3..b7, higher-order b8..b_{L+1} with zero-width entries as 0, sync)` and the eight
 /// vectors the oracle's frame packer produced for the same values.
 const BIT_VECTORS: &[(&str, [u32; 8])] = &[
@@ -257,4 +272,76 @@ fn enhanced_amplitudes_equal_the_oracle_decoders_to_within_its_integer_resolutio
         }
         dec.advance_history(&p);
     }
+}
+
+/// Amplitude quantization from the initial state (`L(-1) = 30`, all `M(-1) = 1`), one frame per harmonic count:
+/// `(M_1..M_L, the oracle's b2 b3 .. b_{L+1}, this crate's)`. The oracle quantizer reads the very same integer
+/// amplitudes (as `4 M` in its 16-bit Q14.2 format). Everything upstream of the uniform quantizers agrees (prediction,
+/// blocks, DCTs, step sizes, Annex tables); the oracle's uniform quantizer *rounds* `C / step` to the nearest integer
+/// where Eq. 62-63 floor it, so its index is either ours or one above, and above in about a quarter of the
+/// coefficients (over 63000 indices of 2000 random frames: equal 72.4%, one above 27.6%, and 0.02% one below from
+/// its fixed-point arithmetic). The oracle's own dequantizer adds the half step back (as Eq. 67-68 do), so its
+/// quantizer is biased by half a step; ours, by the standard's floor, is not.
+const AMPLITUDE_QUANTIZATION: &[(&[u32], &[u32], &[u32])] = &[
+    (
+        &[73, 33, 51, 140, 49, 31, 81, 88, 77],
+        &[52, 471, 274, 296, 348, 238, 343, 88, 67],
+        &[52, 470, 274, 295, 348, 237, 343, 88, 66],
+    ),
+    (
+        &[30, 40, 10, 12, 10, 25, 27, 25, 27, 34, 17, 11, 14, 7, 6, 6],
+        &[40, 39, 26, 48, 21, 17, 29, 30, 11, 6, 7, 4, 4, 5, 4, 2],
+        &[40, 39, 25, 47, 20, 17, 28, 29, 11, 5, 6, 4, 4, 5, 4, 2],
+    ),
+    (
+        &[44, 79, 83, 61, 56, 56, 74, 10, 15, 35, 12, 15, 11, 18, 16, 5, 4, 9, 13, 6, 8, 3, 8],
+        &[41, 27, 9, 8, 7, 4, 6, 3, 7, 9, 4, 7, 2, 3, 4, 2, 3, 0, 3, 1, 2, 3, 0],
+        &[41, 26, 9, 8, 6, 4, 5, 3, 7, 8, 3, 6, 1, 3, 3, 2, 2, 0, 2, 1, 2, 2, 0],
+    ),
+    (
+        &[621, 187, 614, 176, 225, 163, 139, 134, 229, 90, 39, 33, 19, 33, 37, 14, 20, 71, 26, 15, 10, 32, 20, 11, 23, 18, 13, 4, 11, 2],
+        &[48, 15, 11, 11, 2, 3, 5, 4, 3, 3, 4, 3, 3, 1, 4, 3, 2, 0, 4, 0, 1, 1, 2, 1, 0, 1, 3, 1, 1, 0],
+        &[48, 15, 10, 11, 2, 3, 5, 3, 2, 3, 4, 3, 3, 1, 4, 3, 2, 0, 3, 0, 1, 1, 1, 0, 0, 0, 3, 0, 1, 0],
+    ),
+    (
+        &[1049, 1247, 1271, 1798, 358, 134, 522, 681, 134, 341, 371, 338, 449, 156, 308, 321, 220, 124, 103, 48, 143, 48, 173, 140, 69, 157, 212, 83, 107, 52, 37, 28, 34, 19, 74, 78, 111],
+        &[60, 15, 5, 5, 3, 3, 7, 0, 3, 2, 0, 5, 3, 3, 0, 0, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0],
+        &[60, 15, 4, 4, 3, 3, 7, 0, 3, 2, 0, 4, 3, 2, 0, 0, 5, 1, 1, 1, 1, 1, 1, 0, 1, 1, 2, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+    ),
+    (
+        &[44, 36, 23, 33, 11, 8, 19, 29, 20, 30, 15, 12, 8, 19, 21, 19, 12, 5, 4, 7, 12, 11, 12, 7, 5, 6, 5, 6, 9, 4, 8, 3, 2, 15, 5, 2, 4, 2, 4, 4, 1, 3, 2, 1, 3],
+        &[34, 14, 3, 5, 1, 2, 6, 2, 1, 1, 1, 0, 6, 2, 1, 1, 1, 1, 3, 3, 0, 1, 1, 1, 3, 3, 1, 1, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 3, 1, 1, 1, 0, 0, 0],
+        &[34, 14, 3, 4, 1, 1, 6, 2, 1, 1, 0, 0, 5, 2, 0, 1, 1, 1, 3, 3, 0, 0, 1, 1, 2, 3, 0, 1, 0, 0, 0, 2, 0, 1, 1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0],
+    ),
+    (
+        &[72, 129, 98, 120, 241, 34, 55, 101, 48, 37, 61, 17, 14, 26, 13, 24, 23, 20, 15, 9, 23, 7, 8, 2, 22, 4, 11, 4, 5, 3, 4, 2, 4, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        &[32, 7, 6, 2, 3, 2, 5, 1, 1, 1, 1, 0, 1, 0, 5, 3, 3, 1, 1, 0, 0, 0, 3, 3, 0, 0, 1, 1, 0, 0, 3, 2, 1, 1, 0, 0, 0, 0, 2, 1, 1, 1, 1, 0, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 0, 0],
+        &[32, 7, 6, 2, 3, 2, 5, 1, 0, 1, 1, 0, 0, 0, 5, 3, 2, 0, 0, 0, 0, 0, 2, 3, 0, 0, 1, 1, 0, 0, 3, 2, 0, 1, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 0, 0],
+    ),
+];
+
+#[test]
+fn amplitude_quantization_equals_the_oracles_except_that_it_floors_where_the_oracle_rounds() {
+    let mut above = 0;
+    let mut total = 0;
+    for &(amplitudes, oracle, expected) in AMPLITUDE_QUANTIZATION {
+        let l = amplitudes.len() as u32;
+        let m: Vec<f64> = amplitudes.iter().map(|&v| v as f64).collect();
+        let q = quantize_spectral_amplitudes(&m, l, 30, &[1.0; 30]).unwrap();
+        // b2, then b3..b7 (gain elements), then every higher-order slot with zero-width ones as 0.
+        let mut indices = vec![q.b2 as u32];
+        indices.extend(q.gain_vector.iter().map(|&(v, _)| v));
+        let mut hi = q.higher_order.iter();
+        for &w in higher_order_bit_allocation(l).unwrap() {
+            indices.push(if w > 0 { hi.next().unwrap().0 } else { 0 });
+        }
+        assert_eq!(indices, expected, "L = {l}: this crate's own indices changed");
+        assert_eq!(indices[0], oracle[0], "L = {l}: gain index b2");
+        for (k, (&ours, &theirs)) in indices.iter().zip(oracle).enumerate().skip(1) {
+            assert!(theirs == ours || theirs == ours + 1, "L = {l}, b{}: ours {ours}, oracle {theirs}", k + 2);
+            above += (theirs == ours + 1) as usize;
+            total += 1;
+        }
+    }
+    assert!(above * 6 > total, "the oracle's rounding should put it one above in about a quarter of the indices: {above}/{total}");
 }

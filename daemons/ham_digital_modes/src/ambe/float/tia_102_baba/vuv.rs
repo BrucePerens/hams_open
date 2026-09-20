@@ -32,7 +32,7 @@
 
 use std::f64::consts::PI;
 
-use super::pitch_refinement::{synthetic_spectrum, window_dft_16384, RefinementFrame};
+use super::pitch_refinement::{window_dft_16384, RefinementFrame, SyntheticSpectrum};
 
 /// `L_hat` (Eq. 31): the number of harmonics in the current segment, from the refined fundamental
 /// frequency `omega0_hat`.
@@ -83,9 +83,10 @@ pub fn voicing_measure(
 
     let mut error_energy = 0.0;
     let mut real_energy = 0.0;
+    let mut synthetic_spectrum = SyntheticSpectrum::new(frame, omega0_hat, l_hat);
     for m in m_lo..m_hi {
         let real = frame.sw_at(m);
-        let synthetic = synthetic_spectrum(frame, m, omega0_hat, l_hat);
+        let synthetic = synthetic_spectrum.at(m);
         error_energy += real.sub(synthetic).norm_sqr();
         real_energy += real.norm_sqr();
     }
