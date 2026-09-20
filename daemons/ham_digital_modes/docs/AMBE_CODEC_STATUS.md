@@ -117,7 +117,7 @@ The standard TIA-102.BABA decoder is unchanged (unvoiced gain 1.0).
   different and the frame energy differs by 2-3 dB standard deviation; the fine-scale (64-sample) log-envelope correlation is 0.988 with no
   timing offset. Unvoiced frames with many harmonics still come out about 1.7 dB louder than the chip's in the 100-500 Hz band.
 * Reserved D-STAR pitch codes 125 and 127 are invalid on the chip; normal operation decodes them leniently (a tone frame with a flipped uncoded bit is better decoded), and the chip-compatible policy reproduces the chip.
-* No DVSI test vectors were available; JMBE was not run.
+* No DVSI test vectors were available (and none will be).
 
 ## Where things are
 
