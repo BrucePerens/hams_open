@@ -182,16 +182,23 @@ impl Default for FrameAnalyzer {
 /// OP25 `imbe_vocoder` encoder, which applies it; see `docs/references/tia_102_baba_cross_validation.md`).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HighPassFilter {
-    prev_input: f64,
-    prev_output: f64,
+    prev_input: i64,
+    prev_output_q16: i64,
 }
 
+/// `0.99` in Q30 (`round(0.99 * 2^30)`), the same constant as the fixed-point sibling, whose integer arithmetic this
+/// filter reproduces exactly so that the float and fixed encoders see bit-identical filtered input.
+const HIGH_PASS_POLE_Q30: i64 = ((99i64 << 30) + 50) / 100;
+
 impl HighPassFilter {
+    /// One sample of the filter; `x` is a whole-number PCM value and the result is the rounded whole-number output.
     pub fn step(&mut self, x: f64) -> f64 {
-        let y = x - self.prev_input + 0.99 * self.prev_output;
+        let x = x.round() as i64;
+        let feedback = (self.prev_output_q16 * HIGH_PASS_POLE_Q30 + (1 << 29)) >> 30;
+        let y_q16 = ((x - self.prev_input) << 16) + feedback;
         self.prev_input = x;
-        self.prev_output = y;
-        y
+        self.prev_output_q16 = y_q16;
+        ((y_q16 + (1 << 15)) >> 16) as f64
     }
 }
 

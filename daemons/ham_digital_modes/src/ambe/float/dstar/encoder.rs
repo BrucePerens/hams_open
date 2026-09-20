@@ -12,11 +12,12 @@ use super::encode::{build_frame, build_tone_frame, pack_raw_parameters};
 use super::quantize::quantize_pitch;
 use super::tables;
 use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
-use crate::ambe::float::tia_102_baba::encoder::FrameAnalyzer;
+use crate::ambe::float::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::tone_detect::{detect_tone, volume_for_amplitude, DetectedTone};
 
 pub struct Encoder {
     analyzer: FrameAnalyzer,
+    high_pass: HighPassFilter,
     mirror: DStarDecoderState,
     analysis: AnalysisState,
 }
@@ -34,7 +35,7 @@ impl Encoder {
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
-        Self { analyzer, mirror: DStarDecoderState::initial(), analysis: AnalysisState::new() }
+        Self { analyzer, high_pass: HighPassFilter::default(), mirror: DStarDecoderState::initial(), analysis: AnalysisState::new() }
     }
 
     pub fn set_center_offset(&mut self, samples: i32) {
@@ -45,7 +46,9 @@ impl Encoder {
     /// If any sample is NaN or infinite: garbage input must fail loudly, not become a confident-looking frame.
     pub fn push_samples(&mut self, samples: &[f64]) {
         assert!(samples.iter().all(|s| s.is_finite()), "encoder input contains a non-finite sample");
-        self.analyzer.push_samples(samples);
+        // The standard's input high-pass filter (Eq. 3) removes DC offset, which otherwise corrupts the pitch estimate.
+        let filtered: Vec<f64> = samples.iter().map(|&x| (self.high_pass.step(x) + 0.5).floor()).collect();
+        self.analyzer.push_samples(&filtered);
     }
 
     /// The next 72-bit logical frame if enough lookahead has been pushed.
