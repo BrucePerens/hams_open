@@ -52,8 +52,13 @@ The output checksum (`f59f8fcd`) is identical to the host build and to the earli
 
 These count instructions, not cycles. The earlier harness (with inline-prevention edits) measured
 644,534 and 1,317,366 instructions and 7,756 / 11,284 bytes of stack, so the numbers agree to
-within about 0.1 percent. With the bridge feature on, decode measured 1,345,916 because inlining
-choices changed; that has not been investigated.
+within about 0.1 percent. With the bridge feature on, decode measures 1,345,916 instead of 1,318,784
+(2.1 percent more, measured 2026-09-20, same output checksum). The bridge code is not executed by 8 kHz decoding; the whole
+difference is in the inverse transform and two other transform-heavy stages (per-stage marks: inverse transform 449,293 to
+466,706, the other two about 5,000 each). The cause is the transform's runtime size dispatch (`fft_twiddles_q23` and
+`fft_bit_reverse_table` match on the size): with only one size compiled in, the compiler folds the match away and unrolls
+against constant tables; with two sizes it keeps the dispatch and generic slices. Building without the bridge, which an
+8 kHz-only image should do, avoids it. Making the transform generic over its size would remove it for the bridge build too.
 
 Flash (read-only) footprint:
 

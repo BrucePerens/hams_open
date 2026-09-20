@@ -21,10 +21,9 @@
 #   cargo build --release --features small
 #   llvm-objcopy -O binary target/riscv32imc-unknown-none-elf/release/codec2_riscv32_bench bench.bin
 #   python3 -m venv v && v/bin/pip install unicorn
-#   v/bin/python mixcount.py bench.bin <addr of encode> <addr of decode> 8   # llvm-nm
+#   v/bin/python mixcount.py bench.bin target/riscv32imc-unknown-none-elf/release/codec2_riscv32_bench 8
 # (the encode phase count also includes the harness's own text formatting, so use the class
-# percentages, not the totals). The functions are usually inlined into `main` by link-time
-# optimisation; use `--no-default-features` and a `#[inline(never)]` wrapper if you need addresses.
+# percentages, not the totals; the entry points are the out-of-line `do_encode`/`do_decode` wrappers in src/main.rs).
 # Its checksum equals the host build's `cargo run --release --example codec2_fixed_bench --
 # <wav> 1 100 200`, proving the 32-bit build is bit-identical.
 #

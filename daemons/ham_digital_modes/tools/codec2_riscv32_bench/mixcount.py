@@ -4,14 +4,29 @@
 Runs the flat binary of the bench (`llvm-objcopy -O binary`), classifies every executed instruction
 (ALU, multiply, divide, load, store, branch taken/not taken, jump) and splits the counts into the
 encode phase and the decode phase, so a cycle range can be computed from an assumed per-class latency
-table. Usage: mixcount.py bench.bin ENCODE_PROFILED_ADDR DECODE_PROFILED_ADDR FRAMES
+table. Usage: mixcount.py bench.bin bench.elf FRAMES
+The entry addresses of the harness's out-of-line `do_encode` / `do_decode` wrappers (src/main.rs) are read from the ELF with
+`llvm-nm`; the decode phase starts the first time `do_decode` is entered. The bench must be the `small` build (see prep.sh).
 """
+import re
+import subprocess
 import sys
 from unicorn import Uc, UC_ARCH_RISCV, UC_MODE_RISCV32, UC_HOOK_CODE, UC_HOOK_MEM_WRITE, UC_PROT_ALL
 from unicorn.riscv_const import UC_RISCV_REG_PC
 
 BASE = 0x80000000
-binf, enc_addr, dec_addr, frames = sys.argv[1], int(sys.argv[2], 16), int(sys.argv[3], 16), int(sys.argv[4])
+
+
+def symbol_address(elf, name):
+    out = subprocess.run(["llvm-nm", elf], capture_output=True, text=True, check=True).stdout
+    hits = [int(m.group(1), 16) for m in re.finditer(r"^([0-9a-f]+) [tT] \S*" + name + r"\S*$", out, re.M)]
+    if len(hits) != 1:
+        sys.exit(f"expected exactly one symbol matching {name!r} in {elf}, found {len(hits)}")
+    return hits[0]
+
+
+binf, elf, frames = sys.argv[1], sys.argv[2], int(sys.argv[3])
+enc_addr, dec_addr = symbol_address(elf, "do_encode"), symbol_address(elf, "do_decode")
 code = open(binf, "rb").read()
 
 uc = Uc(UC_ARCH_RISCV, UC_MODE_RISCV32)
