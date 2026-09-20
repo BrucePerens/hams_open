@@ -97,6 +97,10 @@ The core model defining monitoring checks.
     ```python
     on_duty_user = self.env["calendar.event"].get_current_on_duty_admin()
     ```
+    When shifts overlap (a hand-over overlap is deliberate, and nothing forbids a double
+    booking), the **most recently created** shift is the one that gets paged -- adding a new
+    shift is how you override an existing one. A platform-wide shift (no website) and a
+    website's own shift are ranked on that same one axis, with no precedence for either.
     [@ANCHOR: test_pager_notification]
 
 ### `pager.incident` (Models)
