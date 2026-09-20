@@ -30,6 +30,7 @@ fn nearest_row<const N: usize>(table: &[[f64; N]], target: &[f64; N]) -> u32 {
 /// index whose implied `w0` is closest, since `L_TABLE` itself (not a separate frequency table) is
 /// what a real decoder actually consults.
 pub fn quantize_pitch(w0: f64) -> u32 {
+    assert!(w0.is_finite() && w0 > 0.0, "pitch must be a finite positive frequency, got {w0}");
     let f0 = w0 / (2.0 * std::f64::consts::PI);
     let b0_estimate = super::decode::b0_from_f0(f0);
     b0_estimate.round().clamp(0.0, 125.0) as u32

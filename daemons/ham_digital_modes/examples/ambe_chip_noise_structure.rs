@@ -168,7 +168,7 @@ fn main() {
     let mut buf = [0u8; 1024];
     std::env::set_var("INIT", "2");
     let mk = |b0: u32, b2: u32, b3: u32, b4: u32| a2_build(&A2Raw { b0, b1: 16, b2, b3, b4, b5: 6, b6: 6, b7: 6, b8: 3 });
-    let cases: Vec<(&str, u128)> = vec![
+    let _cases: Vec<(&str, u128)> = vec![
         ("A: b0=70 gain 12 shape 200/60", mk(70, 12, 200, 60)),
         ("B: same, gain 18", mk(70, 18, 200, 60)),
         ("C: same shape, b0=44 (other L)", mk(44, 12, 200, 60)),

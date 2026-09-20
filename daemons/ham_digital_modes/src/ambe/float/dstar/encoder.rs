@@ -41,7 +41,10 @@ impl Encoder {
         self.analyzer.set_center_offset(samples);
     }
 
+    /// # Panics
+    /// If any sample is NaN or infinite: garbage input must fail loudly, not become a confident-looking frame.
     pub fn push_samples(&mut self, samples: &[f64]) {
+        assert!(samples.iter().all(|s| s.is_finite()), "encoder input contains a non-finite sample");
         self.analyzer.push_samples(samples);
     }
 
