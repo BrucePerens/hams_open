@@ -94,12 +94,12 @@
 //! Extrapolation is also always skipped for unvoiced sub-frames even
 //! when enabled -- see `extrapolate_amplitudes`'s own doc comment.
 
-use super::envelope::{synth_k_q23, ModelFixed};
+use super::envelope::ModelFixed;
 #[cfg(feature = "std")]
 use super::envelope::Model;
 use super::fixed_fft::{rshift_round_i128, ComplexQ23, SparseInverse};
 use super::fixed_point::{exp2_q23, log2_q23};
-use super::synthesis::{ear_protection_fixed, phase_increment_q32};
+use super::synthesis::{overlap_add_subframe, phase_increment_q32};
 #[cfg(feature = "std")]
 use super::synthesis::ear_protection;
 use super::trig_fixed::sin_cos_q23;
@@ -495,10 +495,7 @@ impl SpectralBridgeStateFixed {
         self.ex_phase_q32 = self.ex_phase_q32.wrapping_add(increment);
         let phi0_q32 = self.ex_phase_q32;
 
-        self.sn_.copy_within(N_SAMP_SB.., 0);
-        self.sn_[N_SAMP_SB - 1] = 0;
-
-        let k_q23 = synth_k_q23(model.wo);
+        let k_q23 = model.k_q23;
         let mut spectrum = SparseInverse::<FFT_ENC_SB>::new(&mut self.ifft_re, &mut self.ifft_im);
         for m in 1..=l2 {
             let raw = m as i64 * k_q23;
@@ -523,29 +520,11 @@ impl SpectralBridgeStateFixed {
         }
         spectrum.run::<N_SAMP_SB>();
 
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..(N_SAMP_SB - 1) {
-            let re = self.ifft_re[FFT_ENC_SB - N_SAMP_SB + 1 + i];
-            self.sn_[i] += ((re as i128 * parzen_window_sb_q23()[i] as i128) >> FRAC_BITS) as i64;
-        }
-        #[allow(clippy::needless_range_loop)]
-        for j in 0..(N_SAMP_SB + 1) {
-            let idx = N_SAMP_SB - 1 + j;
-            if idx < SAMPLES_PER_FRAME_SB {
-                let re = self.ifft_re[j];
-                self.sn_[idx] = ((re as i128 * parzen_window_sb_q23()[idx] as i128) >> FRAC_BITS) as i64;
-            }
-        }
-
-        let mut out: [i64; N_SAMP_SB] = core::array::from_fn(|i| self.sn_[i]);
-        ear_protection_fixed(&mut out);
-
-        // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
-        // exact rounding right shift, not a float divide -- see
-        // `synthesis.rs`'s own identical fix for the same reasoning.
-        core::array::from_fn(|i| {
-            rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
-        })
+        overlap_add_subframe::<FFT_ENC_SB, N_SAMP_SB, SAMPLES_PER_FRAME_SB>(
+            &mut self.sn_,
+            &self.ifft_re,
+            parzen_window_sb_q23(),
+        )
     }
 }
 

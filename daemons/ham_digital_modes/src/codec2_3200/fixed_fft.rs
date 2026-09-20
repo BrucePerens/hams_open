@@ -1086,13 +1086,13 @@ pub(crate) trait FftTables {
     const BITREV: &'static [u16];
 }
 
-impl FftTables for Size<FFT_ENC> {
+impl FftTables for Rate8k {
     const TW: &'static [(i32, i32)] = &TW_512;
     const BITREV: &'static [u16] = &BITREV_512;
 }
 
 #[cfg(feature = "codec2_16k_bridge")]
-impl FftTables for Size<FFT_ENC_SB> {
+impl FftTables for Rate16k {
     const TW: &'static [(i32, i32)] = &TW_1024;
     const BITREV: &'static [u16] = &BITREV_1024;
 }
@@ -1125,7 +1125,13 @@ const MODE_I32: u8 = 2;
 /// inputs, so it is bounded in magnitude by the sum of the input
 /// magnitudes (plus a small rounding allowance).
 const I32_SUM_LIMIT: u64 = 1 << 29;
-const I64_SUM_LIMIT: u64 = 1 << 37;
+///
+/// The 64-bit kernel needs every value under 2^39: a twiddle product is
+/// `|w| * |b|` with `|w| <= 2^23 (1 + 2^-23)` and `|b| <= sqrt(2) * 2^39`
+/// (a complex value with both components under 2^39), which stays under
+/// 2^62.6 and so fits `i64` with room for the rounding constant. (The
+/// original 64-bit path stopped one bit lower, at 2^37.)
+const I64_SUM_LIMIT: u64 = 1 << 39;
 
 #[inline(always)]
 fn mode_for_sum(sum: u64) -> u8 {
@@ -1218,7 +1224,7 @@ fn round_shift_neg((lo, hi): (u32, u32)) -> i64 {
 }
 
 /// [`block`] for the inverse direction in the 64-bit mode (all values under
-/// 2^37), without sign corrections in the multiplies. The twiddle for
+/// 2^39), without sign corrections in the multiplies. The twiddle for
 /// `j > half/2` is `-i` times the first-quadrant twiddle for `j - half/2`
 /// (see [`quadrant_symmetric`]) and multiplying the data by `+i` is an exact
 /// swap and negate, so every product uses an unsigned first-quadrant
@@ -1265,8 +1271,7 @@ fn block_inv_i64(re: &mut [i64], im: &mut [i64], tw: &[(i32, i32)], base: usize,
 /// forward-convention imaginary part; the inverse negates it). `MODE` says
 /// how much the caller has proven about the whole transform: `MODE_I32`
 /// every value is under 2^29 (32-bit data, 32x32->64 products), `MODE_I64`
-/// every value is under 2^37 (plain `i64` products, |wr br - wi bi| <
-/// 2^62), `MODE_CHECKED` nothing (each butterfly uses the range-checked
+/// every value is under 2^39 (64-bit products, |wr br - wi bi| < 2^63), `MODE_CHECKED` nothing (each butterfly uses the range-checked
 /// [`twiddle_mul`]). Same integer arithmetic in every mode, so the same
 /// result.
 #[inline(always)]
@@ -2389,6 +2394,37 @@ mod tests {
             sparse_inverse_trial::<N, NS>(&[(3, v), (3, ComplexQ23 { re: v.im, im: v.re })]);
             sparse_inverse_trial::<N, NS>(&[(N / 2 - 1, v)]);
         }
+    }
+
+    /// Constructive worst case at the 64-bit-kernel limit: many bins with
+    /// the same real value, so the transform's output at index 0 reaches
+    /// the whole input sum. Value sums just below and just above the
+    /// `I64_SUM_LIMIT` switch, at both sizes.
+    fn sparse_inverse_peak_case<const N: usize, const NS: usize>()
+    where
+        Size<N>: FftTables,
+    {
+        for &count in &[3usize, 10, 40, 100] {
+            for delta in [-64i64, -1, 0, 1, 64] {
+                // sum over the puts = 2 * count * |v| (mirror included)
+                let v = (((I64_SUM_LIMIT as i64) / (2 * count as i64)) + delta).max(1);
+                let bins: Vec<(usize, ComplexQ23)> = (0..count)
+                    .map(|k| (1 + k * ((N / 2 - 2) / count), ComplexQ23 { re: v, im: 0 }))
+                    .collect();
+                sparse_inverse_trial::<N, NS>(&bins);
+                let bins_neg: Vec<(usize, ComplexQ23)> = bins
+                    .iter()
+                    .map(|&(b, c)| (b, ComplexQ23 { re: -c.re / 2, im: c.re / 2 }))
+                    .collect();
+                sparse_inverse_trial::<N, NS>(&bins_neg);
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_harmonic_inverse_is_exact_at_the_limit_of_the_64_bit_kernel() {
+        sparse_inverse_peak_case::<FFT_ENC, 80>();
+        sparse_inverse_peak_case::<FFT_ENC_SB, 160>();
     }
 
     /// The sparse harmonic inverse (occupancy-flag block skipping, scattered

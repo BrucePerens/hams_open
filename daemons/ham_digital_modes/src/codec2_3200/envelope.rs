@@ -204,6 +204,9 @@ const FRAC_BITS: u32 = 23;
 /// `ComplexQ23`) genuinely integer, no `f32` anywhere.
 pub(crate) struct ModelFixed {
     pub(crate) wo: i64,
+    /// `synth_k_q23(wo)`, the harmonic-to-bin scale, computed once here:
+    /// it costs a 64-bit division and every stage of a sub-frame needs it.
+    pub(crate) k_q23: i64,
     pub(crate) l: usize,
     pub(crate) a: [i64; MAX_AMP + 1],
     pub(crate) phi: [ComplexQ23; MAX_AMP + 1],
@@ -232,6 +235,7 @@ impl ModelFixed {
         let l = ((pi_q23() / wo_q23.max(1)) as usize).min(MAX_AMP);
         ModelFixed {
             wo: wo_q23,
+            k_q23: synth_k_q23(wo_q23),
             l,
             a: [0; MAX_AMP + 1],
             phi: [ComplexQ23 {
@@ -408,7 +412,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
     }
     let gain_q23 = ((e_q23 as i128 * e_before_q23 as i128) / e_after_q23.max(1) as i128) as i64;
 
-    let k_q23 = synth_k_q23(model.wo);
+    let k_q23 = model.k_q23;
     #[allow(clippy::needless_range_loop)]
     for m in 1..=model.l {
         // am = round((m-0.5)*k), bm = round((m+0.5)*k): both rewritten
@@ -469,7 +473,7 @@ fn sample_filter_phase_with(
     model: &ModelFixed,
 ) -> [ComplexQ23; MAX_AMP + 1] {
     let mut h = [ComplexQ23::ZERO; MAX_AMP + 1];
-    let k_q23 = synth_k_q23(model.wo);
+    let k_q23 = model.k_q23;
     #[allow(clippy::needless_range_loop)]
     for m in 1..=model.l {
         let raw = m as i64 * k_q23;

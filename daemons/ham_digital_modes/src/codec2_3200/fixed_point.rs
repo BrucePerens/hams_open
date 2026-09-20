@@ -194,6 +194,7 @@ fn exp2_lut_generic(y: f32, bits: u32, table: &[f32]) -> f32 {
 /// bits, `y` here has no such free source -- it isn't an IEEE754-shaped
 /// value, just a real number needing an explicit floor/frac split).
 const EXP2_Y_EXTRA_BITS: u32 = 16;
+#[cfg(any(feature = "std", test))]
 const EXP2_Y_FRAC_BITS: u32 = LOG2_LUT_BITS + EXP2_Y_EXTRA_BITS;
 
 /// Q23-fractional-only sibling of `exp2_lut_table()`: stores

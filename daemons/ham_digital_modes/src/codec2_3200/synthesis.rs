@@ -307,7 +307,7 @@ impl SynthesisState {
     }
 }
 
-use super::envelope::{synth_k_q23, ModelFixed};
+use super::envelope::ModelFixed;
 use super::fixed_fft::{rshift_round_i128, ComplexQ23, FftScratch, SparseInverse};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::trig_fixed::sin_cos_q23;
@@ -547,10 +547,7 @@ impl SynthesisStateFixed {
         postfilter_fixed(model, &mut self.bg_est, &mut self.rng);
         profile_mark!(12);
 
-        self.sn_.copy_within(N_SAMP.., 0);
-        self.sn_[N_SAMP - 1] = 0;
-
-        let k_q23 = synth_k_q23(model.wo);
+        let k_q23 = model.k_q23;
         let mut spectrum = SparseInverse::<FFT_ENC>::new(&mut self.scratch.re, &mut self.scratch.im);
         for l in 1..=model.l {
             let raw = l as i64 * k_q23;
@@ -568,32 +565,75 @@ impl SynthesisStateFixed {
         spectrum.run::<N_SAMP>();
         profile_mark!(14);
 
-        #[allow(clippy::needless_range_loop)]
-        for i in 0..(N_SAMP - 1) {
-            let re = self.scratch.re[FFT_ENC - N_SAMP + 1 + i];
-            self.sn_[i] += ((re as i128 * parzen_window_q23()[i] as i128) >> FRAC_BITS) as i64;
-        }
-        #[allow(clippy::needless_range_loop)]
-        for j in 0..(N_SAMP + 1) {
-            let idx = N_SAMP - 1 + j;
-            if idx < SAMPLES_PER_FRAME {
-                let re = self.scratch.re[j];
-                self.sn_[idx] = ((re as i128 * parzen_window_q23()[idx] as i128) >> FRAC_BITS) as i64;
-            }
-        }
-
-        let mut out: [i64; N_SAMP] = core::array::from_fn(|i| self.sn_[i]);
-        ear_protection_fixed(&mut out);
-
-        // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
-        // exact rounding right shift, not a float divide -- the last `f32`
-        // this genuinely-fixed-point decode path used to touch on its way
-        // to a PCM sample, removed once it was noticed the division here
-        // was by a power of two the whole time.
-        core::array::from_fn(|i| {
-            rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
-        })
+        overlap_add_subframe::<FFT_ENC, N_SAMP, SAMPLES_PER_FRAME>(
+            &mut self.sn_,
+            &self.scratch.re,
+            parzen_window_q23(),
+        )
     }
+}
+
+/// `(x * w) >> 23` for a Q23 window value `w` (at most `2^23` in
+/// magnitude, checked at compile time for both windows below) and a
+/// transform output `x`: plain `i64` unless `x` is so large that the
+/// product could overflow it.
+#[inline(always)]
+fn mul_q23(x: i64, w: i64) -> i64 {
+    if x.unsigned_abs() < (1u64 << 40) {
+        (x * w) >> FRAC_BITS
+    } else {
+        ((x as i128 * w as i128) >> FRAC_BITS) as i64
+    }
+}
+
+const fn window_is_bounded(w: &[i64]) -> bool {
+    let mut i = 0;
+    while i < w.len() {
+        if w[i] > (1 << FRAC_BITS) || w[i] < -(1 << FRAC_BITS) {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+const _: () = assert!(window_is_bounded(&super::tables::SYNTH_PARZEN_Q23));
+#[cfg(feature = "codec2_16k_bridge")]
+const _: () = assert!(window_is_bounded(&super::tables::SB_PARZEN_Q23));
+
+/// The rate-independent tail of one synthesis sub-frame, monomorphised per
+/// rate (`N` transform size, `NS` samples per sub-frame, `SF = 2 * NS`
+/// overlap-add buffer): slides the buffer by one sub-frame, overlap-adds the
+/// real inverse-transform output (`re[N - NS + 1 ..]` into the buffer's
+/// first `NS - 1` entries, `re[..= NS]` into the entries from `NS - 1` on)
+/// under the window, then limits the level of the first `NS` samples and
+/// rounds them to 16-bit PCM.
+pub(crate) fn overlap_add_subframe<const N: usize, const NS: usize, const SF: usize>(
+    sn: &mut [i64; SF],
+    re: &[i64; N],
+    window: &[i64; SF],
+) -> [i16; NS] {
+    const { assert!(SF == 2 * NS && NS < N / 4) };
+    sn.copy_within(NS.., 0);
+    sn[NS - 1] = 0;
+    for i in 0..NS - 1 {
+        sn[i] += mul_q23(re[N - NS + 1 + i], window[i]);
+    }
+    for j in 0..=NS {
+        sn[NS - 1 + j] = mul_q23(re[j], window[NS - 1 + j]);
+    }
+
+    let mut out = [0i64; NS];
+    out.copy_from_slice(&sn[..NS]);
+    ear_protection_fixed(&mut out);
+
+    // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
+    // exact rounding right shift, not a float divide -- the last `f32`
+    // this genuinely-fixed-point decode path used to touch on its way
+    // to a PCM sample, removed once it was noticed the division here
+    // was by a power of two the whole time.
+    core::array::from_fn(|i| {
+        rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
+    })
 }
 
 #[cfg(test)]
