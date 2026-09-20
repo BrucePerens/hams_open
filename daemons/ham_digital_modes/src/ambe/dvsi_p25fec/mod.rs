@@ -13,4 +13,5 @@ pub mod dtmf;
 pub mod dtx;
 pub mod fec;
 pub mod frame;
+pub mod pitch_map;
 pub mod wire_format;

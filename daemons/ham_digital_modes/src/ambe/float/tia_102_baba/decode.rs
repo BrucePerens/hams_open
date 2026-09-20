@@ -55,9 +55,9 @@ use super::error_estimation::{
     estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
 };
 use super::{decode_code_vectors, decode_code_vectors_chip};
+use crate::ambe::dvsi_p25fec::pitch_map::dequantize_fundamental_frequency_chip;
 use super::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
-    dequantize_fundamental_frequency_chip,
 };
 use super::prediction::INITIAL_L_HAT_PREV;
 use super::reconstruct::reconstruct_spectral_amplitudes;
@@ -121,7 +121,7 @@ pub struct DecoderState {
 
 impl DecoderState {
     /// A decoder for the DVSI chip's `RATET(27)` streams: the chip's log-scale pitch index (see
-    /// [`super::parameter_encoding::CHIP_B0_STEPS_PER_OCTAVE`]) instead of the TIA linear one, accepting
+    /// [`crate::ambe::dvsi_p25fec::pitch_map::CHIP_B0_STEPS_PER_OCTAVE`]) instead of the TIA linear one, accepting
     /// `b0` up to 255, and the chip's framing ([`Self::new_chip_wire`]).
     pub fn new_chip() -> Self {
         Self { chip_pitch_map: true, chip_wire: true, ..Self::new() }

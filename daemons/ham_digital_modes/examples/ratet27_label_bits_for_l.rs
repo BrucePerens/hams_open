@@ -7,7 +7,8 @@
 //! Usage: `cargo run --release --example ratet27_label_bits_for_l -- <tia|chip> u0 u1 u2 u3 u4 u5 u6 u7`
 
 use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{deprioritize_bits, extract_fundamental_frequency_quantizer};
-use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::{dequantize_fundamental_frequency, dequantize_fundamental_frequency_chip};
+use ham_digital_modes::ambe::dvsi_p25fec::pitch_map::dequantize_fundamental_frequency_chip;
+use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency;
 use ham_digital_modes::ambe::float::tia_102_baba::quantize::higher_order_coefficient_positions;
 use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
 use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};

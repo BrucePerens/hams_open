@@ -7,7 +7,7 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_decode_pitch -- <host:port> [wav] [base_frame]`
 
-use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency_chip;
+use ham_digital_modes::ambe::dvsi_p25fec::pitch_map::dequantize_fundamental_frequency_chip;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::{golay_decode, golay_encode};
 use std::net::UdpSocket;
