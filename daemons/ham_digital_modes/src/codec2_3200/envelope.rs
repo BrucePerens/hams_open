@@ -179,7 +179,7 @@ pub fn sample_filter_phase(aw: &[Complex32], model: &Model) -> [Complex32; MAX_A
     h
 }
 
-use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23};
+use super::fixed_fft::{fft_fixed_sparse_prefix, rshift_round_i128, rshift_round_i64, ComplexQ23};
 use super::fixed_point::{exp2_q23, log2_q23};
 use super::lpc::pi_q23;
 
@@ -233,10 +233,7 @@ impl ModelFixed {
 }
 
 fn mag_sq_q23(c: ComplexQ23) -> i64 {
-    rshift_round_i128(
-        c.re as i128 * c.re as i128 + c.im as i128 * c.im as i128,
-        FRAC_BITS,
-    )
+    rshift_round_i128(c.mag_sq_raw(), FRAC_BITS)
 }
 
 /// Fixed-point `lpc_spectrum`: `ak_q23` zero-padded into an `FFT_ENC`
@@ -248,7 +245,7 @@ fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1]) -> [ComplexQ23; SPEC_BINS] {
     let mut re = [0i64; FFT_ENC];
     let mut im = [0i64; FFT_ENC];
     re[..=LPC_ORD].copy_from_slice(ak_q23);
-    fft_fixed(&mut re, &mut im, true);
+    fft_fixed_sparse_prefix(&mut re, &mut im, LPC_ORD + 1, true);
     std::array::from_fn(|i| ComplexQ23 {
         re: re[i],
         im: im[i],
@@ -303,9 +300,9 @@ const BOOST_BIN_THRESHOLD: usize = 64;
 /// wherever both need it, via the log-domain reduction in `BETA_Q23`'s
 /// own doc comment above.
 fn ratio_pow_term_q23(log2_a2g: i64, log2_a2: i64) -> i64 {
-    let exponent_q23 = ((log2_a2g as i128 * beta_q23() as i128
-        - log2_a2 as i128 * one_plus_beta_q23() as i128)
-        >> FRAC_BITS) as i64;
+    // `|log2_*| < 2^30` (log2 of a value below 2^63 in Q23) and both
+    // coefficients are under 2^24, so this fits `i64` exactly.
+    let exponent_q23 = (log2_a2g * beta_q23() - log2_a2 * one_plus_beta_q23()) >> FRAC_BITS;
     exp2_q23(exponent_q23)
 }
 
@@ -315,7 +312,10 @@ fn ratio_pow_term_q23(log2_a2g: i64, log2_a2: i64) -> i64 {
 /// factor of the scaling, so the explicit `<<FRAC_BITS` restores it).
 pub(crate) fn synth_k_q23(wo_q23: i64) -> i64 {
     let tau_q23 = 2 * pi_q23();
-    (((wo_q23 as i128 * FFT_ENC as i128) << FRAC_BITS) / tau_q23 as i128) as i64
+    // wo_q23 < 2^22 for every valid model (wo <= 2*pi/20 in Q23), so
+    // `wo * 512 << 23` stays under 2^54: plain `i64`.
+    debug_assert!(wo_q23.unsigned_abs() < (1 << 30));
+    ((wo_q23 * FFT_ENC as i64) << FRAC_BITS) / tau_q23
 }
 
 /// Fixed-point `compute_harmonic_amplitudes`: genuinely integer end to
@@ -349,13 +349,21 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
     let awg = lpc_spectrum_fixed(&ak_gamma_q23);
     let a2g: [i64; SPEC_BINS] = std::array::from_fn(|i| mag_sq_q23(awg[i]) + eps_a2_q23());
 
+    // The per-bin postfilter weight is needed twice below (once for the
+    // whole-spectrum energy sums, once per harmonic band), and the
+    // log2/exp2 evaluations behind it dominate this function's cost, so
+    // it is computed exactly once per bin and reused. Results are
+    // bit-identical to recomputing it.
+    let mut pw_bin_q23 = [0i64; FFT_ENC / 2];
     let mut e_before_q23: i64 = 0;
     let mut e_after_q23: i64 = 0;
     for i in 0..(FFT_ENC / 2) {
         let log2_a2 = log2_q23(a2[i]);
         let log2_a2g = log2_q23(a2g[i]);
         e_before_q23 += exp2_q23(-log2_a2);
-        e_after_q23 += ratio_pow_term_q23(log2_a2g, log2_a2);
+        let pw = ratio_pow_term_q23(log2_a2g, log2_a2);
+        pw_bin_q23[i] = pw;
+        e_after_q23 += pw;
     }
     let gain_q23 = ((e_q23 as i128 * e_before_q23 as i128) / e_after_q23.max(1) as i128) as i64;
 
@@ -372,11 +380,13 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
 
         let mut em_q23: i64 = 0;
         for i in am..bm {
-            let log2_a2 = log2_q23(a2[i]);
-            let log2_a2g = log2_q23(a2g[i]);
-            let mut pw_i = ratio_pow_term_q23(log2_a2g, log2_a2);
+            let mut pw_i = pw_bin_q23[i];
             if i < BOOST_BIN_THRESHOLD {
-                pw_i = rshift_round_i128(pw_i as i128 * boost_ratio_q23() as i128, FRAC_BITS);
+                pw_i = if pw_i.unsigned_abs() < (1 << 38) {
+                    rshift_round_i64(pw_i * boost_ratio_q23(), FRAC_BITS)
+                } else {
+                    rshift_round_i128(pw_i as i128 * boost_ratio_q23() as i128, FRAC_BITS)
+                };
             }
             em_q23 += pw_i;
         }

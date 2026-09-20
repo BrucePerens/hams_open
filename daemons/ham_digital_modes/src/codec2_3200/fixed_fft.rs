@@ -70,6 +70,20 @@ impl ComplexQ23 {
     /// same accumulate-then-narrow pattern this port uses throughout.
     // [@ANCHOR: ComplexQ23::mul]
     pub(crate) fn mul(self, other: ComplexQ23) -> ComplexQ23 {
+        // Fast path: when every component is under 2^30 in magnitude the
+        // products and their sums stay under 2^61, so plain `i64`
+        // arithmetic (a handful of instructions on a 32-bit core, versus
+        // a software 128-bit multiply) gives the identical result. Larger
+        // values (rare: extreme spectral peaks) take the exact `i128` path.
+        const LIM: u64 = 1 << 30;
+        if (self.re.unsigned_abs() | self.im.unsigned_abs() | other.re.unsigned_abs()
+            | other.im.unsigned_abs())
+            < LIM
+        {
+            let re = rshift_round_i64(self.re * other.re - self.im * other.im, FRAC_BITS);
+            let im = rshift_round_i64(self.re * other.im + self.im * other.re, FRAC_BITS);
+            return ComplexQ23 { re, im };
+        }
         let re = rshift_round_i128(
             self.re as i128 * other.re as i128 - self.im as i128 * other.im as i128,
             FRAC_BITS,
@@ -79,6 +93,46 @@ impl ComplexQ23 {
             FRAC_BITS,
         );
         ComplexQ23 { re, im }
+    }
+
+    /// Squared magnitude `re^2 + im^2` in Q46 (the raw, unshifted sum), as
+    /// `i128`-exact but computed with `u64` arithmetic whenever both
+    /// components are under 2^31 in magnitude (each square is then under
+    /// 2^62 and the sum under 2^63).
+    pub(crate) fn mag_sq_raw(self) -> i128 {
+        if (self.re.unsigned_abs() | self.im.unsigned_abs()) < (1u64 << 31) {
+            let (r, i) = (self.re.unsigned_abs(), self.im.unsigned_abs());
+            (r * r + i * i) as i128
+        } else {
+            self.re as i128 * self.re as i128 + self.im as i128 * self.im as i128
+        }
+    }
+}
+
+/// `(x + 2^(n-1)) >> n` for an `i64` value the caller has bounded away
+/// from overflow (|x| < 2^62).
+#[inline(always)]
+pub(crate) fn rshift_round_i64(x: i64, n: u32) -> i64 {
+    (x + (1i64 << (n - 1))) >> n
+}
+
+/// One radix-2 butterfly multiply, `(wr + j wi) * (br + j bi)` rounded
+/// back to Q23. `|wr|, |wi| <= 2^23` (twiddle factors). When both
+/// operands are under 2^38 in magnitude the whole thing fits `i64`
+/// (|wr br - wi bi| < 2^23 * 2^39 = 2^62), otherwise the exact `i128`
+/// path runs. Bit-identical either way.
+#[inline(always)]
+fn twiddle_mul(wr: i64, wi: i64, br: i64, bi: i64) -> (i64, i64) {
+    if (br.unsigned_abs() | bi.unsigned_abs()) < (1u64 << 38) {
+        (
+            rshift_round_i64(wr * br - wi * bi, FRAC_BITS),
+            rshift_round_i64(wr * bi + wi * br, FRAC_BITS),
+        )
+    } else {
+        (
+            rshift_round_i128(wr as i128 * br as i128 - wi as i128 * bi as i128, FRAC_BITS),
+            rshift_round_i128(wr as i128 * bi as i128 + wi as i128 * br as i128, FRAC_BITS),
+        )
     }
 }
 
@@ -1028,34 +1082,165 @@ pub(crate) fn fft_fixed(re: &mut [i64], im: &mut [i64], forward: bool) {
             im.swap(i, j);
         }
     }
+    fft_stages(re, im, n, forward);
+}
 
+/// One radix-2 butterfly range: `lo[j] +/-= w_j * hi[j]` for the twiddles
+/// yielded by `tw`. `FAST` means the caller has proven every value in the
+/// whole transform is under 2^38 in magnitude, so plain `i64` products
+/// (|wr br - wi bi| < 2^62) are exact; otherwise each butterfly uses the
+/// checked [`twiddle_mul`].
+#[inline(always)]
+fn butterfly_range<'a, const FWD: bool, const FAST: bool>(
+    lr: &mut [i64],
+    li: &mut [i64],
+    hr: &mut [i64],
+    hi: &mut [i64],
+    tw: impl Iterator<Item = &'a (i64, i64)>,
+) {
+    for ((((ar, ai), br), bi), &(wr, wi_fwd)) in lr
+        .iter_mut()
+        .zip(li.iter_mut())
+        .zip(hr.iter_mut())
+        .zip(hi.iter_mut())
+        .zip(tw)
+    {
+        let wi = if FWD { wi_fwd } else { -wi_fwd };
+        let (vr, vi) = if FAST {
+            let (wr, wi) = (wr as i32 as i64, wi as i32 as i64);
+            (
+                rshift_round_i64(wr * *br - wi * *bi, FRAC_BITS),
+                rshift_round_i64(wr * *bi + wi * *br, FRAC_BITS),
+            )
+        } else {
+            twiddle_mul(wr, wi, *br, *bi)
+        };
+        let (xr, xi) = (*ar, *ai);
+        *ar = xr + vr;
+        *ai = xi + vi;
+        *br = xr - vr;
+        *bi = xi - vi;
+    }
+}
+
+/// The butterfly stages proper, on data already in bit-reversed order,
+/// for a transform whose only nonzero natural-order inputs are the first
+/// `nz`. See [`fft_fixed_sparse_prefix`] for why blocks/half-blocks can
+/// be skipped or copied; `nz == n` is the ordinary dense transform.
+///
+/// Also exploits the two exactly-representable twiddles: `j == 0` is
+/// `1` (`(x * 2^23 + 2^22) >> 23 == x`) and `j == half/2` is `-j`
+/// (forward) / `+j` (inverse) whose table entry is exactly `(0, -2^23)`,
+/// so those butterflies are add/subtract only. Bit-identical to the
+/// generic butterfly.
+fn fft_stages_dispatch<const FWD: bool, const FAST: bool>(
+    re: &mut [i64],
+    im: &mut [i64],
+    n: usize,
+    nz: usize,
+) {
+    let bitrev = fft_bit_reverse_table(n);
     let twiddles = fft_twiddles_q23(n);
     let mut len = 2usize;
     while len <= n {
         let half = len / 2;
         let step = n / len;
+        let quarter = half / 2;
         let mut i = 0;
         while i < n {
-            for j in 0..half {
-                let (wr, wi_fwd) = twiddles[j * step];
-                let wi = if forward { wi_fwd } else { -wi_fwd };
-                let br = re[i + j + half];
-                let bi = im[i + j + half];
-                let vr =
-                    rshift_round_i128(wr as i128 * br as i128 - wi as i128 * bi as i128, FRAC_BITS);
-                let vi =
-                    rshift_round_i128(wr as i128 * bi as i128 + wi as i128 * br as i128, FRAC_BITS);
-                let ar = re[i + j];
-                let ai = im[i + j];
-                re[i + j] = ar + vr;
-                im[i + j] = ai + vi;
-                re[i + j + half] = ar - vr;
-                im[i + j + half] = ai - vi;
+            let c1 = bitrev[i];
+            if c1 < nz {
+                let (lr, hr) = re[i..i + len].split_at_mut(half);
+                let (li, hi) = im[i..i + len].split_at_mut(half);
+                if c1 + step >= nz {
+                    // Upper half is all zero: every butterfly is (a, a).
+                    hr.copy_from_slice(lr);
+                    hi.copy_from_slice(li);
+                } else {
+                    // j == 0: twiddle 1.
+                    let (xr, xi, yr, yi) = (lr[0], li[0], hr[0], hi[0]);
+                    lr[0] = xr + yr;
+                    li[0] = xi + yi;
+                    hr[0] = xr - yr;
+                    hi[0] = xi - yi;
+                    if half >= 2 {
+                        // j == half/2: twiddle -j (forward) / +j (inverse).
+                        let q = quarter;
+                        let (xr, xi, yr, yi) = (lr[q], li[q], hr[q], hi[q]);
+                        let (vr, vi) = if FWD { (yi, -yr) } else { (-yi, yr) };
+                        lr[q] = xr + vr;
+                        li[q] = xi + vi;
+                        hr[q] = xr - vr;
+                        hi[q] = xi - vi;
+                        // Everything in between and above.
+                        butterfly_range::<FWD, FAST>(
+                            &mut lr[1..q],
+                            &mut li[1..q],
+                            &mut hr[1..q],
+                            &mut hi[1..q],
+                            twiddles.iter().skip(step).step_by(step),
+                        );
+                        butterfly_range::<FWD, FAST>(
+                            &mut lr[q + 1..],
+                            &mut li[q + 1..],
+                            &mut hr[q + 1..],
+                            &mut hi[q + 1..],
+                            twiddles.iter().skip((q + 1) * step).step_by(step),
+                        );
+                    }
+                }
             }
             i += len;
         }
         len *= 2;
     }
+}
+
+fn fft_stages(re: &mut [i64], im: &mut [i64], n: usize, forward: bool) {
+    fft_stages_sparse(re, im, n, n, forward)
+}
+
+fn fft_stages_sparse(re: &mut [i64], im: &mut [i64], n: usize, nz: usize, forward: bool) {
+    // Every intermediate value is a partial DFT of the inputs, so it is
+    // bounded in magnitude by the sum of the input magnitudes (plus a
+    // small rounding allowance): one check up front decides whether the
+    // whole transform can use the unchecked `i64` butterfly.
+    let sum: u64 = re
+        .iter()
+        .zip(im.iter())
+        .map(|(&r, &i)| r.unsigned_abs().saturating_add(i.unsigned_abs()))
+        .fold(0u64, |a, b| a.saturating_add(b));
+    let fast = sum < (1u64 << 37);
+    match (forward, fast) {
+        (true, true) => fft_stages_dispatch::<true, true>(re, im, n, nz),
+        (true, false) => fft_stages_dispatch::<true, false>(re, im, n, nz),
+        (false, true) => fft_stages_dispatch::<false, true>(re, im, n, nz),
+        (false, false) => fft_stages_dispatch::<false, false>(re, im, n, nz),
+    }
+}
+
+/// Same transform as [`fft_fixed`] for an input whose only nonzero entries
+/// are `re[0..nz]` (real, `im` all zero on entry): bit-identical output,
+/// but butterflies whose inputs are known zeros are skipped or reduced
+/// to copies. In the bit-reversed decimation-in-time layout the block of
+/// `len` positions starting at `i` holds the sub-transform of the natural
+/// indices `c, c + n/len, ...` with `c = bitrev(i)`, so the block is all
+/// zero exactly when `c >= nz`, and its upper half (`c + n/len`) is all
+/// zero when `c + n/len >= nz`; a butterfly with a zero second input is
+/// just `(a, a)` because `w * 0` rounds to exactly 0.
+// [@ANCHOR: fft_fixed_sparse_prefix]
+pub(crate) fn fft_fixed_sparse_prefix(re: &mut [i64], im: &mut [i64], nz: usize, forward: bool) {
+    let n = re.len();
+    debug_assert!(n.is_power_of_two() && im.len() == n && nz <= n);
+    debug_assert!(im.iter().all(|&v| v == 0));
+    let bitrev = fft_bit_reverse_table(n);
+    // Bit-reverse permute the real part in place (`im` is all zero).
+    for (i, &j) in bitrev.iter().enumerate() {
+        if j > i {
+            re.swap(i, j);
+        }
+    }
+    fft_stages_sparse(re, im, n, nz, forward);
 }
 
 #[cfg(test)]
@@ -1280,5 +1465,121 @@ mod tests {
             max_abs_err / max_ref_mag < 1e-4,
             "FFT_ENC_SB inverse fft_fixed diverged from rustfft's plan_fft_inverse: max_abs_err={max_abs_err}, max_ref_mag={max_ref_mag}"
         );
+    }
+
+    /// Reference for the optimized butterflies: the original textbook
+    /// stage loop with `i128` products and no shortcuts whatsoever.
+    fn reference_fft(re: &mut [i64], im: &mut [i64], forward: bool) {
+        let n = re.len();
+        let bitrev = fft_bit_reverse_table(n);
+        for (i, &j) in bitrev.iter().enumerate() {
+            if j > i {
+                re.swap(i, j);
+                im.swap(i, j);
+            }
+        }
+        let twiddles = fft_twiddles_q23(n);
+        let mut len = 2usize;
+        while len <= n {
+            let half = len / 2;
+            let step = n / len;
+            let mut i = 0;
+            while i < n {
+                for j in 0..half {
+                    let (wr, wi_fwd) = twiddles[j * step];
+                    let wi = if forward { wi_fwd } else { -wi_fwd };
+                    let (br, bi) = (re[i + j + half], im[i + j + half]);
+                    let vr = rshift_round_i128(
+                        wr as i128 * br as i128 - wi as i128 * bi as i128,
+                        FRAC_BITS,
+                    );
+                    let vi = rshift_round_i128(
+                        wr as i128 * bi as i128 + wi as i128 * br as i128,
+                        FRAC_BITS,
+                    );
+                    let (ar, ai) = (re[i + j], im[i + j]);
+                    re[i + j] = ar + vr;
+                    im[i + j] = ai + vi;
+                    re[i + j + half] = ar - vr;
+                    im[i + j + half] = ai - vi;
+                }
+                i += len;
+            }
+            len *= 2;
+        }
+    }
+
+    fn lcg(seed: &mut u64) -> i64 {
+        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (*seed >> 16) as i64
+    }
+
+    /// The optimized dense transform (unchecked-`i64` fast path, exact
+    /// twiddle shortcuts) must equal the textbook `i128` loop bit for
+    /// bit, at both sizes, in both directions, on inputs small enough
+    /// for the fast path and large enough to force the checked path.
+    #[test]
+    // Tests [@ANCHOR: fft_fixed]
+    fn optimized_fft_is_bit_identical_to_the_textbook_i128_loop() {
+        let mut seed = 42u64;
+        for &n in &[FFT_ENC, FFT_ENC_SB] {
+            for &mag_bits in &[8u32, 24, 30, 36, 40, 44] {
+                for &forward in &[true, false] {
+                    let mut re: Vec<i64> = (0..n)
+                        .map(|_| (lcg(&mut seed) % (1i64 << mag_bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 })
+                        .collect();
+                    let mut im: Vec<i64> = (0..n).map(|_| lcg(&mut seed) % (1i64 << mag_bits)).collect();
+                    let (mut re_r, mut im_r) = (re.clone(), im.clone());
+                    fft_fixed(&mut re, &mut im, forward);
+                    reference_fft(&mut re_r, &mut im_r, forward);
+                    assert_eq!(re, re_r, "n={n} bits={mag_bits} fwd={forward}");
+                    assert_eq!(im, im_r, "n={n} bits={mag_bits} fwd={forward}");
+                }
+            }
+        }
+    }
+
+    /// `fft_fixed_sparse_prefix` (skipped/copied blocks) equals the dense
+    /// reference on real inputs with only the first `nz` entries set.
+    #[test]
+    // Tests [@ANCHOR: fft_fixed_sparse_prefix]
+    fn sparse_prefix_fft_is_bit_identical_to_the_dense_reference() {
+        let mut seed = 7u64;
+        for &n in &[FFT_ENC, FFT_ENC_SB] {
+            for &nz in &[1usize, 2, 3, 11, 64, 100, 255, 257, n] {
+                for &mag_bits in &[10u32, 26, 34] {
+                    for &forward in &[true, false] {
+                        let mut re = vec![0i64; n];
+                        for v in re.iter_mut().take(nz) {
+                            *v = (lcg(&mut seed) % (1i64 << mag_bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
+                        }
+                        let mut im = vec![0i64; n];
+                        let (mut re_r, mut im_r) = (re.clone(), im.clone());
+                        fft_fixed_sparse_prefix(&mut re, &mut im, nz, forward);
+                        reference_fft(&mut re_r, &mut im_r, forward);
+                        assert_eq!(re, re_r, "n={n} nz={nz} bits={mag_bits} fwd={forward}");
+                        assert_eq!(im, im_r, "n={n} nz={nz} bits={mag_bits} fwd={forward}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Fast-path complex multiply and squared magnitude equal the exact
+    /// `i128` forms on both sides of every fast-path threshold.
+    #[test]
+    fn complex_mul_and_mag_sq_fast_paths_match_the_i128_forms() {
+        let mut seed = 99u64;
+        for &bits in &[8u32, 20, 29, 30, 31, 32, 36, 40] {
+            for _ in 0..500 {
+                let mut r = || (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
+                let (a, b) = (ComplexQ23 { re: r(), im: r() }, ComplexQ23 { re: r(), im: r() });
+                let m = a.mul(b);
+                let re = rshift_round_i128(a.re as i128 * b.re as i128 - a.im as i128 * b.im as i128, FRAC_BITS);
+                let im = rshift_round_i128(a.re as i128 * b.im as i128 + a.im as i128 * b.re as i128, FRAC_BITS);
+                assert_eq!((m.re, m.im), (re, im), "mul bits={bits}");
+                assert_eq!(a.mag_sq_raw(), a.re as i128 * a.re as i128 + a.im as i128 * a.im as i128, "mag_sq bits={bits}");
+            }
+        }
     }
 }

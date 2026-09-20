@@ -165,6 +165,7 @@ fn rshift_round(x: i64, n: u32) -> i64 {
 // its own same-named `rshift_round_i128` (already anchored there as
 // `fixed_fft:rshift_round_i128`), a distinct function with the same
 // narrowing-with-debug_assert shape but its own separate callers.
+#[cfg(test)]
 fn rshift_round_i128(x: i128, n: u32) -> i64 {
     let shifted = (x + (1i128 << (n - 1))) >> n;
     debug_assert!(
@@ -227,6 +228,7 @@ fn fft_twiddles_q23() -> &'static [(i64, i64); PE_FFT_SIZE / 2] {
     })
 }
 
+#[cfg(test)]
 fn fft_bit_reverse_table() -> &'static [usize; PE_FFT_SIZE] {
     static TABLE: std::sync::OnceLock<[usize; PE_FFT_SIZE]> = std::sync::OnceLock::new();
     TABLE.get_or_init(|| {
@@ -310,13 +312,18 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
     let mut out = [0i64; NDEC];
     for (k, out_k) in out.iter_mut().enumerate() {
         let center = (k * NLP_DEC) as isize;
-        let mut acc: i128 = 0;
+        // `i64` accumulator: |sq| <= 2^30 + 1 (the DC notch output is
+        // `x[n] - 0.05 * sum(0.95^k x[n-1-k])` with `x` a squared `i16`,
+        // so it stays within `[-2^30, 2^30]`), |h| <= 2^23, 25 taps whose
+        // absolute sum is a small constant: the accumulator stays under
+        // 2^60. Bit-identical to the former `i128` accumulation.
+        let mut acc: i64 = 0;
         for (t, &coeff) in h.iter().enumerate() {
             let idx = center + t as isize - half;
             let idx = idx.clamp(0, M_PITCH as isize - 1) as usize;
-            acc += coeff as i128 * sq[idx] as i128;
+            acc += coeff * sq[idx];
         }
-        *out_k = rshift_round_i128(acc, NLP_FRAC_BITS);
+        *out_k = rshift_round(acc, NLP_FRAC_BITS);
     }
     out
 }
@@ -340,17 +347,27 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
 // "same-named functions in sibling files" caveat), even though today's
 // `.py`-only `check_claims_freshness.py`/`check_claims.py` don't scan
 // `.rs` files yet and so don't currently exploit it.
-fn fft_fixed(re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
-    let bitrev = fft_bit_reverse_table();
-    for (i, &j) in bitrev.iter().enumerate() {
-        if j > i {
-            re.swap(i, j);
-            im.swap(i, j);
+fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
+    // Only the first `NDEC` (=64) of the `PE_FFT_SIZE` (=512) inputs are
+    // nonzero and the imaginary part is zero. After the bit-reversal
+    // permutation the nonzero values sit at positions that are multiples
+    // of 8, so each of the first three butterfly stages (len 2, 4, 8)
+    // only ever adds/subtracts an exact zero: their whole effect is to
+    // copy every nonzero value across its own group of 8 positions
+    // (`w * 0` rounds to exactly 0). That is written out directly here,
+    // which is bit-identical to running those three stages.
+    debug_assert!(PE_FFT_SIZE == 8 * NDEC, "fft_fixed's stage skipping assumes PE_FFT_SIZE == 8 * NDEC");
+    let bits = NDEC.trailing_zeros();
+    for q in 0..NDEC {
+        let v = input[((q as u32).reverse_bits() >> (32 - bits)) as usize];
+        for k in 0..8 {
+            re[8 * q + k] = v;
+            im[8 * q + k] = 0;
         }
     }
 
     let twiddles = fft_twiddles_q23();
-    let mut len = 2usize;
+    let mut len = 16usize;
     while len <= PE_FFT_SIZE {
         let half = len / 2;
         let step = PE_FFT_SIZE / len;
@@ -360,14 +377,12 @@ fn fft_fixed(re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
                 let (wr, wi) = twiddles[j * step];
                 let br = re[i + j + half];
                 let bi = im[i + j + half];
-                let vr = rshift_round_i128(
-                    wr as i128 * br as i128 - wi as i128 * bi as i128,
-                    NLP_FRAC_BITS,
-                );
-                let vi = rshift_round_i128(
-                    wr as i128 * bi as i128 + wi as i128 * br as i128,
-                    NLP_FRAC_BITS,
-                );
+                // `i64` products: every value in this transform is a
+                // partial DFT of at most `NDEC` inputs each bounded by
+                // ~2^31 (see `decimate_fixed`), so |b| < 2^38; |w| = 2^23
+                // exactly, so |wr*br -/+ wi*bi| <= |w||b| < 2^61.
+                let vr = rshift_round(wr * br - wi * bi, NLP_FRAC_BITS);
+                let vi = rshift_round(wr * bi + wi * br, NLP_FRAC_BITS);
                 let ar = re[i + j];
                 let ai = im[i + j];
                 re[i + j] = ar + vr;
@@ -464,11 +479,12 @@ pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32 {
     let mut re = [0i64; PE_FFT_SIZE];
     let mut im = [0i64; PE_FFT_SIZE];
     let hann = hann_window_q23();
+    let mut windowed = [0i64; NDEC];
     for (i, &d) in decimated.iter().enumerate() {
-        re[i] = rshift_round(d * hann[i], NLP_FRAC_BITS);
+        windowed[i] = rshift_round(d * hann[i], NLP_FRAC_BITS);
     }
 
-    fft_fixed(&mut re, &mut im);
+    fft_fixed(&windowed, &mut re, &mut im);
 
     const HALF: usize = PE_FFT_SIZE / 2 + 1;
     let power: [i128; HALF] =
@@ -837,6 +853,84 @@ mod tests {
         }
     }
 
+    /// Reference: the original general 512-point transform (all inputs
+    /// possibly nonzero, `i128` products, generic bit reversal), kept as
+    /// the test oracle for the production `fft_fixed`, which exploits
+    /// the fact that only `NDEC` inputs are nonzero.
+    fn fft_fixed_full(re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
+        let bitrev = fft_bit_reverse_table();
+        for (i, &j) in bitrev.iter().enumerate() {
+            if j > i {
+                re.swap(i, j);
+                im.swap(i, j);
+            }
+        }
+        let twiddles = fft_twiddles_q23();
+        let mut len = 2usize;
+        while len <= PE_FFT_SIZE {
+            let half = len / 2;
+            let step = PE_FFT_SIZE / len;
+            let mut i = 0;
+            while i < PE_FFT_SIZE {
+                for j in 0..half {
+                    let (wr, wi) = twiddles[j * step];
+                    let br = re[i + j + half];
+                    let bi = im[i + j + half];
+                    let vr = rshift_round_i128(
+                        wr as i128 * br as i128 - wi as i128 * bi as i128,
+                        NLP_FRAC_BITS,
+                    );
+                    let vi = rshift_round_i128(
+                        wr as i128 * bi as i128 + wi as i128 * br as i128,
+                        NLP_FRAC_BITS,
+                    );
+                    let ar = re[i + j];
+                    let ai = im[i + j];
+                    re[i + j] = ar + vr;
+                    im[i + j] = ai + vi;
+                    re[i + j + half] = ar - vr;
+                    im[i + j + half] = ai - vi;
+                    }
+                i += len;
+            }
+            len *= 2;
+        }
+    }
+
+    /// The production transform (sparse input, `i64` products, three
+    /// stages skipped) must equal the original general `i128` transform
+    /// bit for bit, on full-scale and random sparse inputs.
+    #[test]
+    // Tests [@ANCHOR: nlp:fft_fixed]
+    fn production_fft_is_bit_identical_to_the_general_i128_transform() {
+        let mut seed = 12345u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) as i64
+        };
+        let bound = 1i64 << 31;
+        for case in 0..400 {
+            let mut input = [0i64; NDEC];
+            for v in input.iter_mut() {
+                *v = match case % 4 {
+                    0 => next() % bound,
+                    1 => if next() & 1 == 0 { bound } else { -bound },
+                    2 => bound,
+                    _ => (next() % 3 - 1) * bound,
+                };
+            }
+            let mut re = [0i64; PE_FFT_SIZE];
+            let mut im = [0i64; PE_FFT_SIZE];
+            fft_fixed(&input, &mut re, &mut im);
+            let mut re_ref = [0i64; PE_FFT_SIZE];
+            let mut im_ref = [0i64; PE_FFT_SIZE];
+            re_ref[..NDEC].copy_from_slice(&input);
+            fft_fixed_full(&mut re_ref, &mut im_ref);
+            assert_eq!(re, re_ref, "case {case}");
+            assert_eq!(im, im_ref, "case {case}");
+        }
+    }
+
     /// `fft_fixed` against `rustfft`'s own float FFT on the same real
     /// input, comparing the resulting *power spectra* (magnitude only,
     /// per this module's own established "ordinal comparisons only"
@@ -868,7 +962,7 @@ mod tests {
             re[i] = scaled.round() as i64;
         }
         let mut im = [0i64; PE_FFT_SIZE];
-        fft_fixed(&mut re, &mut im);
+        fft_fixed_full(&mut re, &mut im);
 
         let mut planner = FftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(PE_FFT_SIZE);
