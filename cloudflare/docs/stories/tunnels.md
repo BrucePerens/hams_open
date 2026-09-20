@@ -17,3 +17,15 @@ so that I can minimize the attack surface of my infrastructure.
 5. I open the tunnel record's own form and route list views to review its ingress rules `[@ANCHOR: COMM_cf_tunnel_views_render]`.
 
 6. When the daemon starts the tunnel, Odoo pushes the merged ingress configuration to Cloudflare: this tunnel's own routes plus any global route templates, sorted by sequence, with the SSH route and a mandatory catch-all rule always appended last `[@ANCHOR: COMM_cloudflare_tunnel_push_config_catch_all]`. If that push fails (a Cloudflare API error), the daemon still starts -- basic connectivity stays up while route provisioning retries later, rather than the whole tunnel refusing to start over a routing hiccup.
+
+## Scenario: One server fronting several websites
+
+I run hams.com, perens.com and postopen.org from the same Odoo server, each with its own Cloudflare tunnel. That is the ordinary case here, not an exotic one.
+
+7. A background job keeps **every** tunnel that has credentials running, not just the first one `[@ANCHOR: COMM_ensure_tunnel_running]`. Each website's tunnel gets its own `cloudflared` daemon, tracked under its own Cloudflare tunnel id, so one tunnel is never started twice, a tunnel whose daemon died is started again, and stopping or losing one tunnel never touches another's.
+
+8. Each tunnel is brought up on its own `[@ANCHOR: COMM_ensure_one_tunnel_running]`: a Cloudflare outage or a missing API token on one website is logged and stepped over, and the remaining websites still come up. The job reports a summary of what it started, what was already running, what it skipped and what failed.
+
+9. "Have this tunnel's routes been pushed yet" is recorded on the tunnel record itself. A deployment that predates this and carries the old single system-wide flag has it folded onto the one tunnel that flag was actually about, exactly once `[@ANCHOR: COMM_migrate_global_provisioned_flag]`, so an already-provisioned server is neither re-provisioned nor left unable to provision its other websites.
+
+10. Whether a given tunnel's daemon is currently up is a question the daemon layer answers per tunnel `[@ANCHOR: COMM_is_tunnel_daemon_running]`, which is what lets the job skip a healthy tunnel without spending a Cloudflare API call on it every few minutes.

@@ -156,7 +156,8 @@ impl PitchAnalysisFrame {
         let scaled = num << 16;
         let half = den.abs() >> 1;
         let q = if (scaled >= 0) == (den > 0) { (scaled.abs() + half) / den.abs() } else { -((scaled.abs() + half) / den.abs()) };
-        q.clamp(i32::MIN as i128, i32::MAX as i128) as i32
+        // Floored at zero like the float sibling (see its `error_function`).
+        q.clamp(0, i32::MAX as i128) as i32
     }
 
     /// `E(P)` for every candidate.
@@ -212,8 +213,8 @@ pub fn look_back_pitch_tracking(table: &ErrorTable, prev1: (usize, i32), prev2: 
     (best_idx, ce)
 }
 
-/// Look-ahead tracking (5.1.3, including the smallest-sub-multiple-first order and the positive
-/// reference guard of the float sibling): returns `(index of P_hat_F, CE_F)`.
+/// Look-ahead tracking (5.1.3, including the smallest-sub-multiple-first order and the multiplied-out
+/// ratio tests of the float sibling): returns `(index of P_hat_F, CE_F)`.
 pub fn look_ahead_pitch_tracking(t0: &ErrorTable, t1: &ErrorTable, t2: &ErrorTable) -> (usize, i32) {
     // best_e2[p1] = min E2(p2) over p2 in range(p1); best_e12[p0] = min over p1 in range(p0) of
     // E1(p1) + best_e2[p1]. Equivalent to the float sibling's nested minimisation.
@@ -249,7 +250,7 @@ pub fn look_ahead_pitch_tracking(t0: &ErrorTable, t1: &ErrorTable, t2: &ErrorTab
         let snapped2 = (2 * p2_0 + n) / (2 * n);
         let cand = (snapped2 - P2_BASE).clamp(0, CANDIDATES as i64 - 1) as usize;
         let ce = ce_f_at(cand);
-        let ratio_ok = |limit_q16: i64| ce_f_p_hat_0 > 0 && ce * ONE_Q16 <= limit_q16 * ce_f_p_hat_0;
+        let ratio_ok = |limit_q16: i64| ce * ONE_Q16 <= limit_q16 * ce_f_p_hat_0;
         let satisfies_18 = ce <= T_0_85 && ratio_ok(T_1_7);
         let satisfies_19 = ce <= T_0_4 && ratio_ok(T_3_5);
         let satisfies_20 = ce <= T_0_05;

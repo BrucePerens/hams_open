@@ -1,8 +1,6 @@
-//! Pitch estimation (TIA-102.BABA_2003.pdf section 5.1) -- not yet a working pitch estimator, just
-//! the two real, low-risk input tables that estimator needs (the analysis window and the lowpass
-//! filter), transcribed and independently verified. The actual error function (Eq. 5), look-back/
-//! look-ahead pitch tracking (5.1.2-5.1.4), and quarter-sample refinement (5.1.5, needing 256-pt and
-//! 16384-pt DFTs) are a materially larger undertaking -- real next step, not attempted in this pass.
+//! Pitch estimation (TIA-102.BABA_2003.pdf section 5.1): the analysis window and lowpass filter tables, the error
+//! function (Eq. 5), and the look-back and look-ahead tracking (5.1.2-5.1.4). Refinement (5.1.5) is in
+//! `pitch_refinement`.
 //!
 //! # Real transcription methodology for both tables below
 //!
@@ -96,23 +94,6 @@ pub fn lowpass_filter_tap(n: i32) -> f64 {
     LOWPASS_FILTER_TAPS_HALF[n.unsigned_abs() as usize]
 }
 
-/// `w_I(n)` per Annex B, but returning `0.0` for `|n| > 150` instead of panicking -- the spec's own
-/// explicit convention ("the window functions are assumed to be equal to zero outside the range
-/// given in the Annexes"), needed because Eq. 7's own `r(t)` sum legitimately evaluates `w_I(j+t)`
-/// for `j+t` outside `-150..=150` (`j` ranges up to 150 and `t` can itself be up to ~122). This is a
-/// real, different contract from [`initial_pitch_window`]'s own panic-on-out-of-range, not an
-/// inconsistency: that function's own doc comment reserves the panic for callers with no legitimate
-/// reason to evaluate outside the window (a real logic error), while this one exists specifically
-/// for the one real, spec-mandated case that does.
-// [@ANCHOR: initial_pitch_window_or_zero]
-fn initial_pitch_window_or_zero(n: i32) -> f64 {
-    if (-150..=150).contains(&n) {
-        initial_pitch_window(n)
-    } else {
-        0.0
-    }
-}
-
 /// The lowpass-filtered speech signal `s_LPF(n)` (Eq. 9): `sum(s(n-j) * h_LPF(j) for j in -10..=10)`.
 /// `raw` is the real speech signal; `center` is the sample index in `raw` corresponding to `n = 0`
 /// (the center of the current analysis frame). Panics (via array indexing) if `center as i32 + n`
@@ -130,17 +111,19 @@ fn lowpass_filtered_sample(raw: &[f64], center: usize, n: i32) -> f64 {
     acc
 }
 
-/// Precomputed `s_LPF(j)` for `j` in `-150..=150`, the one expensive input both `r(t)` (Eq. 7-8) and
-/// `E(P)` (Eq. 5) repeatedly read -- computed once per analysis frame rather than recomputed on
-/// every call, since [`lowpass_filtered_sample`] itself does real work (a 21-tap FIR sum) per sample.
+/// Per-frame precomputation for `E(P)` (Eq. 5): `s_LPF(j)` for `j` in `-150..=150` (a 21-tap FIR sum per sample, so
+/// computed once per frame), the frame energy `sum (s_LPF w_I)^2`, and `r(t)` (Eq. 7) for every integer lag the
+/// candidate set can reach. `r(-t) = r(t)` (shift `j` by `t`), so lags `0..=R_LAGS` are enough for every `n * P`
+/// in Eq. 5 and the linear interpolation of Eq. 8; tabulating them once turns the 203-candidate error table from
+/// roughly ten million multiply-adds into about fifty thousand.
 pub struct PitchAnalysisFrame {
-    s_lpf: [f64; 301],
-    /// `r(t)` for every integer `t` in `-160..=160` (Eq. 7), the sum every candidate pitch reads several times.
-    r_table: Vec<f64>,
-    /// The candidate-independent parts of `E(P)`: `sum((s_LPF*w_I)^2)` and `sum(w_I^4)`.
     energy: f64,
-    w4: f64,
+    r_table: Vec<f64>,
+    w4_sum: f64,
 }
+
+/// Highest integer lag Eq. 5 needs: `n * P <= 150` for `n = floor(150 / P)`, plus one for Eq. 8's upper neighbour.
+const R_LAGS: usize = 151;
 
 impl PitchAnalysisFrame {
     /// `raw` is the real speech signal; `center` is the sample index in `raw` corresponding to the
@@ -155,66 +138,55 @@ impl PitchAnalysisFrame {
             let j = i as i32 - 150;
             *slot = lowpass_filtered_sample(raw, center, j);
         }
-        let mut frame = Self { s_lpf, r_table: Vec::new(), energy: 0.0, w4: 0.0 };
-        frame.r_table = (-160i32..=160).map(|t| frame.r_integer_direct(t)).collect();
-        frame.energy = (-150i32..=150).map(|j| { let v = frame.s_lpf_at(j) * initial_pitch_window(j); v * v }).sum();
-        frame.w4 = (-150i32..=150).map(|j| initial_pitch_window(j).powi(4)).sum();
-        frame
-    }
-
-    // [@ANCHOR: PitchAnalysisFrame::s_lpf_at]
-    fn s_lpf_at(&self, j: i32) -> f64 {
-        if (-150..=150).contains(&j) {
-            self.s_lpf[(j + 150) as usize]
-        } else {
-            0.0
+        let mut energy = 0.0;
+        let mut w4_sum = 0.0;
+        // `a[i] = s_LPF(j) w_I(j)^2` with `j = i - 150`, the factor Eq. 7 multiplies at both `j` and `j + t`.
+        let mut a = [0.0f64; 301];
+        for (i, slot) in a.iter_mut().enumerate() {
+            let j = i as i32 - 150;
+            let w = initial_pitch_window(j);
+            let v = s_lpf[i] * w;
+            energy += v * v;
+            w4_sum += w.powi(4);
+            *slot = s_lpf[i] * w * w;
         }
+        // Eq. 7: the terms with `j + t` outside `-150..=150` vanish (`w_I` is zero there).
+        let r_table = (0..=R_LAGS).map(|t| (0..301 - t).map(|i| a[i] * a[i + t]).sum()).collect();
+        Self { energy, r_table, w4_sum }
     }
 
-    /// `r(t)` for integer `t` (Eq. 7): `sum(s_LPF(j)*w_I(j)^2*s_LPF(j+t)*w_I(j+t)^2 for j in
-    /// -150..=150)`. `w_I(j)` itself never needs the zero-padded variant here (`j` never leaves
-    /// `-150..=150`), but `w_I(j+t)` does, since `j+t` legitimately can.
-    fn r_integer(&self, t: i32) -> f64 {
-        match self.r_table.get((t + 160) as usize) {
-            Some(&v) if (-160..=160).contains(&t) => v,
-            _ => self.r_integer_direct(t),
-        }
-    }
-
-    fn r_integer_direct(&self, t: i32) -> f64 {
-        (-150i32..=150)
-            .map(|j| {
-                let a = self.s_lpf_at(j) * initial_pitch_window(j).powi(2);
-                let b = self.s_lpf_at(j + t) * initial_pitch_window_or_zero(j + t).powi(2);
-                a * b
-            })
-            .sum()
-    }
-
-    /// `r(t)` for any real `t` (Eq. 8): linear interpolation between the two nearest integers.
+    /// `r(t)` for any real `t >= 0` (Eq. 8): linear interpolation between the two nearest integer lags of the
+    /// table (`r` is even, so the sum over negative `n` in Eq. 5 is the mirror of the positive half).
     // [@ANCHOR: PitchAnalysisFrame::r]
     fn r(&self, t: f64) -> f64 {
         let t_floor = t.floor();
-        let r_floor = self.r_integer(t_floor as i32);
-        let r_ceil = self.r_integer(t_floor as i32 + 1);
+        let lag = t_floor as usize;
+        let r_floor = self.r_table[lag];
+        let r_ceil = self.r_table[(lag + 1).min(R_LAGS)];
         (1.0 + t_floor - t) * r_floor + (t - t_floor) * r_ceil
     }
 
     /// The pitch error function `E(P)` (Eq. 5), evaluated at candidate pitch period `p` (in samples).
     /// Smaller values indicate a better candidate; the real initial pitch estimate is chosen by
     /// comparing `E(P)` across the spec's own candidate set (`21, 21.5, ..., 122`) via pitch
-    /// tracking (section 5.1.2, not yet implemented here), not by simply minimizing `E(P)` alone.
+    /// tracking (section 5.1.2), not by simply minimizing `E(P)` alone.
     // [@ANCHOR: PitchAnalysisFrame::error_function]
     pub fn error_function(&self, p: f64) -> f64 {
-        let s = self.energy;
         let n_max = (150.0 / p).floor() as i32;
-        let r_sum: f64 = (-n_max..=n_max).map(|n| self.r(n as f64 * p)).sum();
-        let w4 = self.w4;
-        let denominator = s * (1.0 - p * w4);
+        // n = 0 contributes r(0); each n and -n contribute the same value.
+        let r_sum: f64 = self.r_table[0] + 2.0 * (1..=n_max).map(|n| self.r(n as f64 * p)).sum::<f64>();
+        let denominator = self.energy * (1.0 - p * self.w4_sum);
         if denominator.abs() < 1e-12 {
             return 1.0; // all-zero (silent) input: no pitch evidence, worst error instead of 0/0 = NaN
         }
-        (s - p * r_sum) / denominator
+        // Eq. 5 is an error ratio, so it lives in [0, 1] in theory; the linear interpolation of r(t) (Eq. 8) and the
+        // `1 - P sum(w^4)` normalisation let it stray slightly outside (a few thousandths below zero on a pure periodic
+        // signal, and above one on noise). The standard is silent on that. A negative value makes the look-ahead
+        // ratio tests (Eq. 18-19) ill-defined, so floor it at zero, as the OP25 `imbe_vocoder` reference does. That
+        // reference also caps E at 1; we do not: capping turns every noisy frame's candidates into exact ties, which the
+        // float and fixed-point trees then resolve differently (it bought only 6 points of initial-pitch agreement in
+        // unvoiced frames, none in voiced ones).
+        ((self.energy - p * r_sum) / denominator).max(0.0)
     }
 }
 
@@ -274,29 +246,37 @@ pub fn look_ahead_pitch_tracking(
     future2_error_fn: impl Fn(f64) -> f64,
 ) -> (f64, f64) {
     // CE_F(p0) per Eq. 17: E(p0) + E1(P_hat_1) + E2(P_hat_2), where P_hat_1/P_hat_2 jointly
-    // minimize E1(P1)+E2(P2) subject to Eq. 14/16's own nested range constraints.
-    let ce_f_at = |p0: f64| -> f64 {
-        let (lo1, hi1) = (0.8 * p0, 1.2 * p0);
-        let best: f64 = candidate_pitches()
-            .filter(|&p1| p1 >= lo1 && p1 <= hi1)
-            .map(|p1| {
-                let e1 = future1_error_fn(p1);
-                let (lo2, hi2) = (0.8 * p1, 1.2 * p1);
-                let best_e2 = candidate_pitches()
-                    .filter(|&p2| p2 >= lo2 && p2 <= hi2)
-                    .map(&future2_error_fn)
-                    .fold(f64::INFINITY, f64::min);
-                e1 + best_e2
-            })
-            .fold(f64::INFINITY, f64::min);
-        error_fn(p0) + best
-    };
+    // minimize E1(P1)+E2(P2) subject to Eq. 14/16's own nested range constraints. The three error
+    // functions are sampled once, then the nested minimum is built bottom-up (the inner minimum over P2 depends only
+    // on P1, so it is shared by every P0 whose P1 range contains it).
+    let candidates: Vec<f64> = candidate_pitches().collect();
+    let sample = |f: &dyn Fn(f64) -> f64| -> Vec<f64> { candidates.iter().map(|&p| f(p)).collect() };
+    let (e0, e1, e2) = (sample(&error_fn), sample(&future1_error_fn), sample(&future2_error_fn));
+    // Candidate index range `0.8 P <= Q <= 1.2 P` for every candidate `P` (Eq. 14 and 16; contiguous).
+    let ranges: Vec<std::ops::RangeInclusive<usize>> = candidates
+        .iter()
+        .map(|&p| {
+            let (lo, hi) = (0.8 * p, 1.2 * p);
+            let inside: Vec<usize> = (0..candidates.len()).filter(|&i| candidates[i] >= lo && candidates[i] <= hi).collect();
+            inside[0]..=inside[inside.len() - 1]
+        })
+        .collect();
+    let best_e2: Vec<f64> =
+        ranges.iter().map(|r| r.clone().map(|i| e2[i]).fold(f64::INFINITY, f64::min)).collect();
+    let ce_f: Vec<f64> = ranges
+        .iter()
+        .enumerate()
+        .map(|(i0, r)| e0[i0] + r.clone().map(|i1| e1[i1] + best_e2[i1]).fold(f64::INFINITY, f64::min))
+        .collect();
+    let index_of = |p: f64| ((p - 21.0) / 0.5).round() as usize;
+    let ce_f_at = |p0: f64| -> f64 { ce_f[index_of(p0)] };
 
-    let p_hat_0 = candidate_pitches()
-        .map(|p0| (p0, ce_f_at(p0)))
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .expect("candidate_pitches is never empty")
-        .0;
+    let p_hat_0 = candidates
+        .iter()
+        .zip(&ce_f)
+        .min_by(|a, b| a.1.total_cmp(b.1))
+        .map(|(&p, _)| p)
+        .expect("candidate_pitches is never empty");
     let ce_f_p_hat_0 = ce_f_at(p_hat_0);
 
     // Sub-multiple check (the spec's own text after Eq. 17, and Eq. 18-20): try P_hat_0/2,
@@ -317,9 +297,10 @@ pub fn look_ahead_pitch_tracking(
     // (`p_hat_0/2` first) and must be walked in reverse to test the smallest sub-multiple first.
     for &candidate in submultiples.iter().rev() {
         let ce_f_candidate = ce_f_at(candidate);
-        // The ratio tests only make sense against a positive reference error; a non-positive one can
-        // flip the inequality's sign and accept a strictly worse candidate, so they fail then.
-        let ratio_ok = |limit: f64| ce_f_p_hat_0 > 0.0 && ce_f_candidate / ce_f_p_hat_0 <= limit;
+        // The ratio tests in multiplied-out form: `E` is floored at zero, so the reference `CE_F(P_hat_0)` can be
+        // exactly zero (a perfectly periodic signal), where the quotient form is 0/0; the product form then accepts
+        // only a candidate that is itself zero, which is the right reading of "not more than 1.7 times as large".
+        let ratio_ok = |limit: f64| ce_f_candidate <= limit * ce_f_p_hat_0;
         let satisfies_18 = ce_f_candidate <= 0.85 && ratio_ok(1.7);
         let satisfies_19 = ce_f_candidate <= 0.4 && ratio_ok(3.5);
         let satisfies_20 = ce_f_candidate <= 0.05;
@@ -380,9 +361,7 @@ mod pitch_analysis_tests {
     #[test]
     // Tests [@ANCHOR: PitchAnalysisFrame::new]
     // Tests [@ANCHOR: PitchAnalysisFrame::error_function]
-    // Tests [@ANCHOR: PitchAnalysisFrame::s_lpf_at]
     // Tests [@ANCHOR: PitchAnalysisFrame::r]
-    // Tests [@ANCHOR: initial_pitch_window_or_zero]
     // Tests [@ANCHOR: lowpass_filtered_sample]
     fn error_function_is_minimized_near_the_true_period_or_a_real_harmonic_multiple() {
         // Real, measured behavior, not assumed: a perfectly periodic synthetic signal is

@@ -188,6 +188,13 @@ impl SynthesisState {
         let (omega0_tilde_q32, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
         self.synthesize_core(omega0_tilde_q32, &voiced, &final_amplitudes)
     }
+
+    /// A repeated frame with every amplitude multiplied by `scale_q16` (a fade); the stored last frame stays untouched.
+    pub fn synthesize_repeated_frame_scaled(&mut self, scale_q16: i32) -> Option<[i64; N]> {
+        let (omega0_tilde_q32, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
+        let scaled: Vec<i32> = final_amplitudes.iter().map(|&a| ((a as i64 * scale_q16 as i64) >> 16) as i32).collect();
+        self.synthesize_core(omega0_tilde_q32, &voiced, &scaled)
+    }
 }
 
 impl Default for SynthesisState {

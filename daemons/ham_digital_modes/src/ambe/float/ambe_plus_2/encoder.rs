@@ -9,7 +9,7 @@ use super::encode::{build_frame, build_tone_frame};
 use super::quantize::quantize_pitch;
 use super::tables;
 use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
-use crate::ambe::float::tia_102_baba::encoder::FrameAnalyzer;
+use crate::ambe::float::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
 
 /// The 12-bit level field a chip encoder writes for a tone of per-tone amplitude `amplitude` (measured 1 kHz sine
@@ -31,13 +31,14 @@ fn amplitude_field(amplitude: f64) -> u16 {
 
 pub struct Encoder {
     analyzer: FrameAnalyzer,
+    high_pass: HighPassFilter,
     mirror: DecoderState,
     analysis: AnalysisState,
 }
 
 impl Encoder {
     pub fn new() -> Self {
-        Self { analyzer: FrameAnalyzer::new(), mirror: DecoderState::initial(), analysis: AnalysisState::new() }
+        Self { analyzer: FrameAnalyzer::new(), high_pass: HighPassFilter::default(), mirror: DecoderState::initial(), analysis: AnalysisState::new() }
     }
 
     // The chip encoder parks entirely unvoiced frames on b0 92-93 (119 for the quietest noise), but copying that lowers the
@@ -51,7 +52,9 @@ impl Encoder {
     /// If any sample is NaN or infinite: garbage input must fail loudly, not become a confident-looking frame.
     pub fn push_samples(&mut self, samples: &[f64]) {
         assert!(samples.iter().all(|s| s.is_finite()), "encoder input contains a non-finite sample");
-        self.analyzer.push_samples(samples);
+        // The standard's input high-pass filter (Eq. 3) removes DC offset, which otherwise corrupts the pitch estimate.
+        let filtered: Vec<f64> = samples.iter().map(|&x| (self.high_pass.step(x) + 0.5).floor()).collect();
+        self.analyzer.push_samples(&filtered);
     }
 
     /// The next 72-bit logical frame if enough lookahead has been pushed.

@@ -4,6 +4,7 @@
 //! on a base-e or base-2 quantity, and `sqrt`). See [`super`]'s own doc comment for the numeric
 //! convention (Q16.16 unless stated otherwise) and the tolerance each primitive is held to.
 
+pub mod concealment;
 pub mod explog;
 mod explog_table;
 pub mod fixed_ops;

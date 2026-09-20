@@ -153,6 +153,16 @@ impl Default for NoiseState {
 /// `pitch_refinement::RefinementFrame`'s own `S_w(m)` (`-127..=128`) -- a real difference between the
 /// spec's own Eq. 29 and Eq. 118, not a copy-paste slip (each checked independently at 600 DPI).
 // [@ANCHOR: unvoiced_dft]
+/// `exp(2*pi*j*k/256)` for `k` in `0..256`, computed once: the two 256-point transforms below reduce every product `m*n` to
+/// this table instead of evaluating a sine and cosine per term.
+fn twiddles() -> &'static [(f64, f64); 256] {
+    static T: std::sync::OnceLock<[(f64, f64); 256]> = std::sync::OnceLock::new();
+    T.get_or_init(|| std::array::from_fn(|k| {
+        let theta = 2.0 * PI * k as f64 / 256.0;
+        (theta.cos(), theta.sin())
+    }))
+}
+
 fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256] {
     let mut uw = [Complex::ZERO; 256];
     for (i, slot) in uw.iter_mut().enumerate() {
@@ -161,8 +171,9 @@ fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256] {
         for n in -104i32..=104 {
             let sample =
                 noise.at(n).expect("noise window covers -104..=104") as f64 * synthesis_window(n);
-            let theta = -2.0 * PI * (m as f64) * (n as f64) / 256.0;
-            acc = acc.add(Complex::new(sample * theta.cos(), sample * theta.sin()));
+            let (c, s) = twiddles()[(m * n).rem_euclid(256) as usize];
+            // exp(-j*2*pi*m*n/256) = conj of the table entry
+            acc = acc.add(Complex::new(sample * c, -sample * s));
         }
         *slot = acc;
     }
@@ -192,6 +203,11 @@ fn band_edge_b(l: u32, omega0_tilde: f64) -> f64 {
 /// transcriptions it depends on.
 // [@ANCHOR: unvoiced_scaling_coefficient]
 pub fn unvoiced_scaling_coefficient() -> f64 {
+    static VALUE: std::sync::OnceLock<f64> = std::sync::OnceLock::new();
+    *VALUE.get_or_init(unvoiced_scaling_coefficient_uncached)
+}
+
+fn unvoiced_scaling_coefficient_uncached() -> f64 {
     let sum_w_r: f64 = (-110..=110).map(pitch_refinement_window).sum();
     let sum_w_s_sq: f64 = (-104..=104).map(|n| synthesis_window(n).powi(2)).sum();
     let sum_w_r_sq: f64 = (-110..=110)
@@ -292,8 +308,8 @@ fn unvoiced_time_domain(spectrum: &[Complex; 256]) -> [f64; 256] {
         let mut acc = Complex::ZERO;
         for (j, &bin) in spectrum.iter().enumerate() {
             let m = j as i32 - 128;
-            let theta = 2.0 * PI * (m as f64) * (n as f64) / 256.0;
-            acc = acc.add(bin.mul(Complex::new(theta.cos(), theta.sin())));
+            let (c, s) = twiddles()[(m * n).rem_euclid(256) as usize];
+            acc = acc.add(bin.mul(Complex::new(c, s)));
         }
         *slot = acc.scale(1.0 / 256.0).re;
     }

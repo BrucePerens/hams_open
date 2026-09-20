@@ -81,24 +81,25 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
                 "website_id": website.id,
             }
         )
-        # action_ensure_tunnel_running() is an @api.model method that
-        # always operates on self.env["cloudflare.tunnel"].search([],
-        # limit=1) regardless of what recordset it's called through --
-        # confirm that search actually resolves to the tunnel this test
-        # just created before relying on it, rather than silently testing
-        # whatever unrelated tunnel happened to be first.
-        self.assertEqual(
-            self.env["cloudflare.tunnel"].search([], limit=1),
+        # action_ensure_tunnel_running() is an @api.model method that now
+        # iterates EVERY cloudflare.tunnel record (2026-09-19, Bruce's
+        # multi-website answer) rather than operating on search([], limit=1).
+        # This test only cares about the one tunnel it created, so assert it
+        # is genuinely among the records that method will visit, and drive
+        # the per-tunnel helper directly for the actual assertions below --
+        # that keeps this test about the push-failure contract instead of
+        # about whatever other tunnels a combined test run left lying around.
+        self.assertIn(
             tunnel,
-            "test setup assumption: this must be the only/first tunnel "
-            "visible to action_ensure_tunnel_running()'s own search()",
+            self.env["cloudflare.tunnel"].search([], limit=10000),
+            "test setup assumption: this tunnel must be visible to "
+            "action_ensure_tunnel_running()'s own search()",
         )
-
-        utils = self.env["zero_sudo.security.utils"]
-        key = "cloudflare.tunnel.provisioned"
-        svc_uid = utils._get_service_uid("cloudflare.user_cloudflare_tunnel")
-        utils.with_user(svc_uid)._set_system_param(key, False)
-        self.env.registry.clear_cache()
+        self.assertFalse(
+            tunnel.routes_provisioned,
+            "test setup assumption: a freshly created tunnel starts "
+            "un-provisioned.",
+        )
 
         self.safe_patch(
             "odoo.addons.cloudflare.models.tunnel.get_cfd_tunnel_token",
@@ -108,15 +109,22 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
             "odoo.addons.cloudflare.models.tunnel.CloudflareTunnel.action_push_configuration",
             side_effect=RuntimeError("simulated Cloudflare API failure"),
         )
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.is_tunnel_daemon_running",
+            return_value=False,
+        )
         mock_start_daemon = self.safe_patch(
             "odoo.addons.cloudflare.models.tunnel.start_tunnel_daemon"
         )
 
-        self.env["cloudflare.tunnel"].action_ensure_tunnel_running()
+        outcome = self.env["cloudflare.tunnel"]._ensure_one_tunnel_running(tunnel)
 
-        mock_start_daemon.assert_called_once_with("faketoken")
+        self.assertEqual(outcome, "started")
+        mock_start_daemon.assert_called_once_with(
+            "faketoken", tunnel_key="cftun_provisioning_test"
+        )
         self.assertFalse(
-            utils.with_user(svc_uid)._get_system_param(key),
+            tunnel.routes_provisioned,
             "A failed push must not mark the tunnel as provisioned, or it "
             "would never retry.",
         )

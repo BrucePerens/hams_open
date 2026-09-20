@@ -237,11 +237,25 @@ class TestBridgeAndMisc(RealTransactionCase):
         fake_lib = mock_lib.return_value
         cf_daemon._lib = fake_lib
 
+        # No tunnel_key: the pre-existing single-tunnel calling convention,
+        # which still works and still files its state under DEFAULT_TUNNEL_KEY.
         cf_daemon.start_tunnel_daemon("fake-token-for-test")
         try:
             cf_daemon.stop_tunnel_daemon()
+            # The loop takes up to its own one-second pause to notice the stop
+            # event, so wait for the future rather than leaking a live daemon
+            # loop (and a live executor) into every later test in this run.
+            future = cf_daemon._tunnel_futures.get(cf_daemon.DEFAULT_TUNNEL_KEY)
+            if future is not None:
+                future.exception(timeout=5)
         finally:
-            cf_daemon._tunnel_future = None
+            executor = cf_daemon._tunnel_executors.pop(
+                cf_daemon.DEFAULT_TUNNEL_KEY, None
+            )
+            if executor is not None:
+                executor.shutdown(wait=False)
+            cf_daemon._tunnel_futures.pop(cf_daemon.DEFAULT_TUNNEL_KEY, None)
+            cf_daemon._tunnel_stop_events.pop(cf_daemon.DEFAULT_TUNNEL_KEY, None)
             cf_daemon._lib = None
         fake_lib.StopTunnel.assert_called_once()
 

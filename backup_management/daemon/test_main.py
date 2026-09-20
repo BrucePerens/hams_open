@@ -374,5 +374,84 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         self.assertNotIn("PGBACKREST_REPO1_S3_KEY", env)
 
 
+class TestUnexpectedExceptionIsolation(unittest.TestCase):
+    """An exception outside execute_job's expected types fails that one job."""
+
+    def _ch_method(self):
+        ch = MagicMock()
+        method = MagicMock()
+        method.delivery_tag = "tag-x"
+        return ch, method
+
+    def _s3_body(self):
+        return backup_worker.json.dumps(
+            {
+                "job_id": 41,
+                "engine": "pgbackrest",
+                "target_path": "stanza",
+                "config_id": 7,
+                "storage_type": "s3",
+            }
+        )
+
+    @patch("main._json2_call")
+    @patch("main._pgbackrest_s3_repo_args", side_effect=KeyError("bucket"))
+    @patch("main.shutil.which", return_value="/usr/bin/pgbackrest")
+    def test_01_unexpected_exception_fails_job_and_is_reported(
+        self, mock_which, mock_args, mock_json2
+    ):
+        ch, method = self._ch_method()
+        with self.assertLogs(backup_worker.logger, level="ERROR") as logs:
+            backup_worker.execute_job(ch, method, MagicMock(), self._s3_body())
+        # Daemon survives: the message is acked exactly once.
+        ch.basic_ack.assert_called_once_with(delivery_tag="tag-x")
+        # Logged with job context and the exception type.
+        self.assertTrue(any("job 41" in m and "KeyError" in m for m in logs.output))
+        # Recorded on the job and reported on the config.
+        calls = mock_json2.call_args_list
+        self.assertTrue(
+            any(
+                c.args[:2] == ("backup.job", "write")
+                and c.kwargs.get("vals") == {"state": "failed"}
+                for c in calls
+            )
+        )
+        self.assertTrue(
+            any(
+                c.args[:2] == ("backup.config", "report_backup_failure")
+                and "KeyError" in c.kwargs.get("message", "")
+                for c in calls
+            )
+        )
+
+    @patch("main._json2_call")
+    def test_02_non_object_json_body_does_not_kill_worker(self, mock_json2):
+        ch, method = self._ch_method()
+        # Valid JSON that is not an object: payload.get raises AttributeError.
+        backup_worker.execute_job(ch, method, MagicMock(), "[1, 2, 3]")
+        ch.basic_ack.assert_called_once_with(delivery_tag="tag-x")
+
+    @patch("main._json2_call", side_effect=KeyError("reporting broke"))
+    @patch("main._pgbackrest_s3_repo_args", side_effect=KeyError("bucket"))
+    @patch("main.shutil.which", return_value="/usr/bin/pgbackrest")
+    def test_03_failure_while_reporting_does_not_kill_worker(
+        self, mock_which, mock_args, mock_json2
+    ):
+        ch, method = self._ch_method()
+        backup_worker.execute_job(ch, method, MagicMock(), self._s3_body())
+        ch.basic_ack.assert_called_once_with(delivery_tag="tag-x")
+
+    @patch("main._json2_call")
+    @patch("main._pgbackrest_s3_repo_args", side_effect=MemoryError())
+    @patch("main.shutil.which", return_value="/usr/bin/pgbackrest")
+    def test_04_memory_error_still_fails_fast(
+        self, mock_which, mock_args, mock_json2
+    ):
+        ch, method = self._ch_method()
+        with self.assertRaises(MemoryError):
+            backup_worker.execute_job(ch, method, MagicMock(), self._s3_body())
+        ch.basic_ack.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

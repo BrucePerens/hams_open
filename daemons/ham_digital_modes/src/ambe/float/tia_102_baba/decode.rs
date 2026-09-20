@@ -117,6 +117,8 @@ pub struct DecoderState {
     chip_wire: bool,
     forced_l_hat: Option<u32>,
     l_alpha: Option<f64>,
+    fade_concealment: bool,
+    consecutive_repeats: u32,
 }
 
 impl DecoderState {
@@ -140,6 +142,13 @@ impl DecoderState {
     }
 
     /// Experiments only: harmonic count `round(alpha*pi/omega0)` clamped to 9..=56 instead of Eq. 47.
+    /// Measurement option, float only: replace the standard's flat repeat and comfort-noise mute with a repeat that fades to
+    /// 0.8 of the previous level each consecutive damaged frame. Off by default because it was not a clear win
+    /// (`examples/ambe_error_concealment_eval_tia.rs`).
+    pub fn set_fade_concealment(&mut self, on: bool) {
+        self.fade_concealment = on;
+    }
+
     pub fn set_l_alpha(&mut self, alpha: Option<f64>) {
         self.l_alpha = alpha;
     }
@@ -156,6 +165,8 @@ impl DecoderState {
             chip_wire: false,
             forced_l_hat: None,
             l_alpha: None,
+            fade_concealment: false,
+            consecutive_repeats: 0,
         }
     }
 
@@ -261,7 +272,14 @@ impl DecoderState {
     /// first frame still produces real output.
     // [@ANCHOR: ambe:decode_frame]
     pub fn decode_frame(&mut self, c: [u32; 8]) -> Option<[f64; N]> {
-        match self.decode_parameters(c)? {
+        let outcome = self.decode_parameters(c)?;
+        if matches!(outcome, FrameOutcome::Decoded(_)) {
+            self.consecutive_repeats = 0;
+        } else if self.fade_concealment {
+            self.consecutive_repeats += 1;
+            return self.synthesis.synthesize_repeated_frame_scaled(0.8f64.powi(self.consecutive_repeats as i32));
+        }
+        match outcome {
             FrameOutcome::Repeat => self.synthesis.synthesize_repeated_frame(),
             FrameOutcome::Mute => Some(self.synthesis.synthesize_comfort_frame()),
             FrameOutcome::Decoded(params) => {
@@ -491,6 +509,8 @@ mod tests {
             chip_wire: false,
             forced_l_hat: None,
             l_alpha: None,
+            fade_concealment: false,
+            consecutive_repeats: 0,
             error_rate_prev: 0.2, // 0.95*0.2 = 0.19, comfortably over the 0.0875 threshold
                                   // regardless of this frame's own corrected error count.
         };
