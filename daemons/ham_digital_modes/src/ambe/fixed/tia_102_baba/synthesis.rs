@@ -55,6 +55,8 @@ pub struct SynthesisState {
     first_frame: bool,
     last_final_amplitudes: Option<(i64, Vec<bool>, Vec<i32>)>,
     comfort_noise_seed: i64,
+    /// Q16.16 multiplier on the unvoiced half; 65536 (exactly 1.0, applied as a no-op) for the standard.
+    unvoiced_gain_q16: i64,
 }
 
 impl SynthesisState {
@@ -68,7 +70,12 @@ impl SynthesisState {
             first_frame: true,
             last_final_amplitudes: None,
             comfort_noise_seed: 3147,
+            unvoiced_gain_q16: 1 << 16,
         }
+    }
+
+    pub fn set_unvoiced_gain_q16(&mut self, gain_q16: i64) {
+        self.unvoiced_gain_q16 = gain_q16;
     }
 
     /// Section 7.8 (Frame Muting): `s~(n)` set to random noise uniformly distributed over
@@ -157,7 +164,12 @@ impl SynthesisState {
 
         let mut s = [0i64; N];
         for i in 0..N {
-            s[i] = s_uv[i] as i64 + s_v[i] as i64; // Eq. 142.
+            let uv = if self.unvoiced_gain_q16 == 1 << 16 {
+                s_uv[i] as i64
+            } else {
+                (s_uv[i] as i64 * self.unvoiced_gain_q16 + (1 << 15)) >> 16
+            };
+            s[i] = uv + s_v[i] as i64; // Eq. 142.
         }
         Some(s)
     }

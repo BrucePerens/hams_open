@@ -54,6 +54,9 @@ pub struct SynthesisState {
     /// (`advance_frame`'s single step), desynchronizing the noise sequence real unvoiced/voiced
     /// synthesis depends on for every frame *after* the muted one.
     comfort_noise_seed: i64,
+    /// Multiplier on the unvoiced half before the Eq. 142 sum: 1.0 for the standard; the D-STAR and AMBE+2 synthesizers
+    /// set the value measured against the chip.
+    unvoiced_gain: f64,
 }
 
 impl SynthesisState {
@@ -67,7 +70,12 @@ impl SynthesisState {
             first_frame: true,
             last_final_amplitudes: None,
             comfort_noise_seed: 3147,
+            unvoiced_gain: 1.0,
         }
+    }
+
+    pub fn set_unvoiced_gain(&mut self, gain: f64) {
+        self.unvoiced_gain = gain;
     }
 
     /// Section 7.8 (Frame Muting), transcribed from a 600 DPI render of page 63: "set the
@@ -161,7 +169,7 @@ impl SynthesisState {
 
         let mut s = [0.0; N];
         for i in 0..N {
-            s[i] = s_uv[i] + s_v[i]; // Eq. 142.
+            s[i] = self.unvoiced_gain * s_uv[i] + s_v[i]; // Eq. 142 (unvoiced_gain is 1.0 for the standard).
         }
         Some(s)
     }

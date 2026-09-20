@@ -96,10 +96,20 @@ frames agree in every parameter), encoder against OP25 `imbe_vocoder` (bit-exact
 several real bugs found and fixed: default wire layer, missing input high-pass filter, error-function and amplitude floors).
 JMBE was read for its damaged-frame policy but not built.
 
+## Level match to the chip (D-STAR and AMBE+2)
+
+Measured on the live chip with `ambe_chip_pcm_vs_float_synthesis_half_rate` over four real speakers (about 600 active frames per
+mode), frames grouped by spectral tilt, chip level minus ours in three bands (100-1000, 1000-2000, 2000-3800 Hz). The standard's
+synthesis was 1.1 to 1.7 dB louder than the chip on noise-like frames and about 1 dB louder in the top band on every kind of frame.
+Two constants in `float/mbe_synthesis.rs` (mirrored in the fixed-point tree) were fitted to remove that: the high-frequency lift
+weight 0.12 to 0.10 (its earlier value was fitted on synthetic harmonics) and a new gain of 0.87 on the unvoiced half only. The root-mean-square
+class-mean level error fell from 0.98 dB to 0.33 dB and the frame-energy correlation rose slightly (D-STAR 0.995 to 0.998, AMBE+2 0.978 to 0.990).
+The standard TIA-102.BABA decoder is unchanged (unvoiced gain 1.0).
+
 ## Known open items (all low impact)
 
-* Real unvoiced frames are about 1.4 dB louder than the chip's on average; the chip's frame crossfade and noise source differ
-  from the standard's (see `docs/references/AMBE_CHIP_NOISE_GENERATOR.md`: its noise generator has period 65,536 and is not identified).
+* The chip's frame crossfade and noise source differ from the standard's (see `docs/references/AMBE_CHIP_NOISE_GENERATOR.md`: its
+  noise generator has period 65,536 and is not identified), so unvoiced output cannot match the chip sample for sample.
 * The chip's predictor changes during repeated frames are not modelled in the chip-compatible error mode.
 * Reserved D-STAR pitch codes 125 and 127 are invalid on the chip; normal operation decodes them leniently (a tone frame with a flipped uncoded bit is better decoded), and the chip-compatible policy reproduces the chip.
 * No DVSI test vectors were available; JMBE was not run.

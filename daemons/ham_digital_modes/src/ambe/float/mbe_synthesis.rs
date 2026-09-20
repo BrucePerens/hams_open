@@ -73,7 +73,12 @@ impl ErrorPolicy {
 /// The chip's D-STAR and AMBE+2 output is flat against this synthesis below about 2.4 kHz and then rises to +3.2 dB at
 /// 3.6 kHz (measured per harmonic, at three different pitches, with `examples/dstar_field_scan.rs`; a real-speech
 /// long-term spectrum agrees), which this two-tap-zero filter reproduces within about 1 dB.
-pub const HIGH_LIFT_WEIGHT: f64 = 0.12;
+pub const HIGH_LIFT_WEIGHT: f64 = 0.10;
+
+/// Gain on the unvoiced (noise) half of the synthesis. With the lift above, this minimizes the difference in long-term band
+/// level (100-1000, 1000-2000, 2000-3800 Hz) between this decoder and the chip over 600+ frames of each of four real speakers
+/// (`AMBE_CODEC_STATUS.md`): the standard's synthesis was 1.1 to 1.7 dB louder than the chip on noise-like frames.
+pub const UNVOICED_GAIN: f64 = 0.87;
 
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,
@@ -95,7 +100,11 @@ impl MbeSynthesizer {
 impl MbeSynthesizer {
     pub fn new() -> Self {
         Self {
-            synthesis: SynthesisState::new(),
+            synthesis: {
+                let mut s = SynthesisState::new();
+                s.set_unvoiced_gain(UNVOICED_GAIN);
+                s
+            },
             error_rate_prev: 0.0,
             lift_history: [0.0; 2],
         }

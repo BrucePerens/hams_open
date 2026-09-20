@@ -11,8 +11,11 @@ use super::unvoiced_synthesis::N;
 use crate::ambe::fixed::tia_102_baba::error_estimation::estimate_errors_q16;
 use crate::ambe::fixed::tia_102_baba::synthesis::SynthesisState;
 
-/// `round(0.12 * 65536)`: the output's high-frequency lift weight, `float::mbe_synthesis::HIGH_LIFT_WEIGHT`.
-const HIGH_LIFT_WEIGHT_Q16_16: i64 = 7864;
+/// `round(0.10 * 65536)`: the output's high-frequency lift weight, `float::mbe_synthesis::HIGH_LIFT_WEIGHT`.
+const HIGH_LIFT_WEIGHT_Q16_16: i64 = 6554;
+
+/// `round(0.87 * 65536)`: the unvoiced gain, `float::mbe_synthesis::UNVOICED_GAIN`.
+const UNVOICED_GAIN_Q16_16: i64 = 57016;
 
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,
@@ -22,7 +25,9 @@ pub struct MbeSynthesizer {
 
 impl MbeSynthesizer {
     pub fn new() -> Self {
-        Self { synthesis: SynthesisState::new(), error_rate_prev_q16: 0, lift_history: [0; 2] }
+        let mut synthesis = SynthesisState::new();
+        synthesis.set_unvoiced_gain_q16(UNVOICED_GAIN_Q16_16);
+        Self { synthesis, error_rate_prev_q16: 0, lift_history: [0; 2] }
     }
 
     fn lift(&mut self, frame: [i64; N]) -> [i64; N] {
