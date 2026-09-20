@@ -1,8 +1,6 @@
-//! Pitch estimation (TIA-102.BABA_2003.pdf section 5.1) -- not yet a working pitch estimator, just
-//! the two real, low-risk input tables that estimator needs (the analysis window and the lowpass
-//! filter), transcribed and independently verified. The actual error function (Eq. 5), look-back/
-//! look-ahead pitch tracking (5.1.2-5.1.4), and quarter-sample refinement (5.1.5, needing 256-pt and
-//! 16384-pt DFTs) are a materially larger undertaking -- real next step, not attempted in this pass.
+//! Pitch estimation (TIA-102.BABA_2003.pdf section 5.1): the analysis window and lowpass filter tables, the error
+//! function (Eq. 5), and the look-back and look-ahead tracking (5.1.2-5.1.4). Refinement (5.1.5) is in
+//! `pitch_refinement`.
 //!
 //! # Real transcription methodology for both tables below
 //!

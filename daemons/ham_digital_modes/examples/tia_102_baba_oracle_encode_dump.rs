@@ -11,6 +11,10 @@
 //! U <u0..u7 hex, before FEC>
 //! ```
 //!
+//! Optional environment variables: `ORACLE_P` (evaluate the later stages at a given period instead of this crate's own
+//! estimate), `DUMP_E` (print the `E(P)` table), `DUMP_ER` (print the refinement errors), `DUMP_V` (print the voicing
+//! measures).
+//!
 //! Usage: `cargo run --release --example tia_102_baba_oracle_encode_dump -- <in.raw> <max_frames> [center_offset]`
 
 use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::deprioritize_bits;
