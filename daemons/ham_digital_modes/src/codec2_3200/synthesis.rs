@@ -21,7 +21,7 @@ use super::{BG_BETA, BG_MARGIN, BG_THRESH, FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER
 use rustfft::num_complex::Complex32;
 
 // [@ANCHOR: make_synthesis_window]
-fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
+pub(crate) fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME];
     let n0 = N_SAMP / 2;
     let n1 = 3 * N_SAMP / 2;
@@ -285,10 +285,10 @@ impl SynthesisState {
             }
         }
 
-        let mut out: [f32; N_SAMP] = std::array::from_fn(|i| self.sn_[i]);
+        let mut out: [f32; N_SAMP] = core::array::from_fn(|i| self.sn_[i]);
         ear_protection(&mut out);
 
-        std::array::from_fn(|i| out[i].clamp(-32767.0, 32767.0) as i16)
+        core::array::from_fn(|i| out[i].clamp(-32767.0, 32767.0) as i16)
     }
 }
 
@@ -369,36 +369,26 @@ fn synthesize_phase_fixed(
 }
 
 fn bg_thresh_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(BG_THRESH, FRAC_BITS))
+    super::tables::SYNTH_BG_THRESH_Q23
 }
 fn bg_beta_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(BG_BETA, FRAC_BITS))
+    super::tables::SYNTH_BG_BETA_Q23
 }
 fn one_minus_bg_beta_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(1.0 - BG_BETA, FRAC_BITS))
+    super::tables::SYNTH_ONE_MINUS_BG_BETA_Q23
 }
 fn bg_margin_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(BG_MARGIN, FRAC_BITS))
+    super::tables::SYNTH_BG_MARGIN_Q23
 }
 /// `10.0 / LOG2_10` in Q23 -- `e_db = 10*log2(x)/LOG2_10` becomes
 /// `log2_q23(x) * this constant`, rescaled.
 fn ten_over_log2_10_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(10.0 / std::f32::consts::LOG2_10, FRAC_BITS)
-    })
+    super::tables::SYNTH_TEN_OVER_LOG2_10_Q23
 }
 /// `LOG2_10 / 20.0` in Q23 -- `thresh = exp2((bg+MARGIN)/20*LOG2_10)`
 /// becomes `exp2_q23((bg_q23+margin_q23) * this constant)`, rescaled.
 fn log2_10_over_20_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(std::f32::consts::LOG2_10 / 20.0, FRAC_BITS)
-    })
+    super::tables::SYNTH_LOG2_10_OVER_20_Q23
 }
 
 /// Fixed-point `postfilter_step`: `a`/`bg_est`/return value all Q23,
@@ -469,8 +459,7 @@ fn postfilter_fixed(model: &mut ModelFixed, bg_est: &mut i64, rng: &mut u32) {
 }
 
 fn ear_protection_thresh_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(30000.0, FRAC_BITS))
+    super::tables::SYNTH_EAR_PROTECTION_THRESH_Q23
 }
 
 /// Fixed-point `ear_protection`: `gain = (thresh/max_abs)^2` computed
@@ -501,7 +490,6 @@ pub(crate) fn ear_protection_fixed(samples: &mut [i64]) {
 /// Fft<f32>>`, so there's no trait object or planner here at all.
 pub(crate) struct SynthesisStateFixed {
     sn_: [i64; SAMPLES_PER_FRAME],
-    parzen: [i64; SAMPLES_PER_FRAME],
     ex_phase: u32,
     bg_est: i64,
     rng: u32,
@@ -510,18 +498,13 @@ pub(crate) struct SynthesisStateFixed {
 }
 
 fn parzen_window_q23() -> &'static [i64; SAMPLES_PER_FRAME] {
-    static V: std::sync::OnceLock<[i64; SAMPLES_PER_FRAME]> = std::sync::OnceLock::new();
-    V.get_or_init(|| {
-        let pn = make_synthesis_window();
-        std::array::from_fn(|i| super::fixed_point::f32_to_q_exact_round(pn[i], FRAC_BITS))
-    })
+    &super::tables::SYNTH_PARZEN_Q23
 }
 
 impl Default for SynthesisStateFixed {
     fn default() -> Self {
         SynthesisStateFixed {
             sn_: [0; SAMPLES_PER_FRAME],
-            parzen: *parzen_window_q23(),
             ex_phase: 0,
             bg_est: 0,
             rng: 0xC0FFEE,
@@ -576,18 +559,18 @@ impl SynthesisStateFixed {
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP - 1) {
             let re = self.ifft_re[FFT_ENC - N_SAMP + 1 + i];
-            self.sn_[i] += ((re as i128 * self.parzen[i] as i128) >> FRAC_BITS) as i64;
+            self.sn_[i] += ((re as i128 * parzen_window_q23()[i] as i128) >> FRAC_BITS) as i64;
         }
         #[allow(clippy::needless_range_loop)]
         for j in 0..(N_SAMP + 1) {
             let idx = N_SAMP - 1 + j;
             if idx < SAMPLES_PER_FRAME {
                 let re = self.ifft_re[j];
-                self.sn_[idx] = ((re as i128 * self.parzen[idx] as i128) >> FRAC_BITS) as i64;
+                self.sn_[idx] = ((re as i128 * parzen_window_q23()[idx] as i128) >> FRAC_BITS) as i64;
             }
         }
 
-        let mut out: [i64; N_SAMP] = std::array::from_fn(|i| self.sn_[i]);
+        let mut out: [i64; N_SAMP] = core::array::from_fn(|i| self.sn_[i]);
         ear_protection_fixed(&mut out);
 
         // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
@@ -595,7 +578,7 @@ impl SynthesisStateFixed {
         // this genuinely-fixed-point decode path used to touch on its way
         // to a PCM sample, removed once it was noticed the division here
         // was by a power of two the whole time.
-        std::array::from_fn(|i| {
+        core::array::from_fn(|i| {
             rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
         })
     }
@@ -762,7 +745,7 @@ mod tests {
             apply_first_harmonic_correction(&mut model);
 
             let lsp_q23: [i64; LPC_ORD] =
-                std::array::from_fn(|j| f32_to_q_exact_round(lsp[j], COEF_FRAC_BITS));
+                core::array::from_fn(|j| f32_to_q_exact_round(lsp[j], COEF_FRAC_BITS));
             let ak_q23 = lsp_to_lpc_fixed(&lsp_q23);
             let e_q23 = f32_to_q_exact_round(e, FRAC_BITS);
             let mut model_fixed = ModelFixed::new(wo_q23, voiced);

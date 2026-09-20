@@ -127,6 +127,9 @@ pub mod nlp;
 pub mod quantise;
 pub mod spectral_bridge;
 pub mod synthesis;
+mod tables;
+#[cfg(test)]
+mod tables_gen;
 pub mod trig_fixed;
 pub mod voicing;
 pub mod window;
@@ -209,7 +212,7 @@ pub fn bw_gamma(i: usize) -> f32 {
 /// pathological input) -- evenly spaced across `[0, pi]`, matching the
 /// reference's own documented fallback for the same case.
 fn fallback_lsp() -> [f32; LPC_ORD] {
-    std::array::from_fn(|i| (std::f32::consts::PI / LPC_ORD as f32) * i as f32)
+    core::array::from_fn(|i| (std::f32::consts::PI / LPC_ORD as f32) * i as f32)
 }
 
 /// LSPs the reference's own decoder starts from before any real frame
@@ -217,7 +220,7 @@ fn fallback_lsp() -> [f32; LPC_ORD] {
 /// `fallback_lsp` (a fresh decoder has nothing better to interpolate the
 /// very first frame's own first sub-frame from).
 fn initial_lsps() -> [f32; LPC_ORD] {
-    std::array::from_fn(|i| (i as f32 * std::f32::consts::PI) / (LPC_ORD as f32 + 1.0))
+    core::array::from_fn(|i| (i as f32 * std::f32::consts::PI) / (LPC_ORD as f32 + 1.0))
 }
 
 /// Persistent per-decoder state: the previous frame's own decoded
@@ -371,16 +374,11 @@ impl Decoder {
 }
 
 fn w0_min_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| fixed_point::f32_to_q_exact_round(W0_MIN, lpc::COEF_FRAC_BITS))
+    tables::MOD_W0_MIN_Q23
 }
 
 fn initial_lsps_q23() -> [i64; LPC_ORD] {
-    static V: std::sync::OnceLock<[i64; LPC_ORD]> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        let lsps = initial_lsps();
-        std::array::from_fn(|i| fixed_point::f32_to_q_exact_round(lsps[i], lpc::COEF_FRAC_BITS))
-    })
+    tables::MOD_INITIAL_LSPS_Q23
 }
 
 /// Fixed-point sibling of `Decoder` -- genuinely integer end to end, no
@@ -515,7 +513,7 @@ mod tests {
     use super::*;
 
     fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
-        std::array::from_fn(|i| {
+        core::array::from_fn(|i| {
             let t = (t0 + i) as f32 / SAMPLE_RATE as f32;
             let v = 8000.0 * (std::f32::consts::TAU * f0 * t).sin()
                 + 3000.0 * (std::f32::consts::TAU * 2.0 * f0 * t).sin();

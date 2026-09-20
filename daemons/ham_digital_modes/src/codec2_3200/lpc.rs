@@ -38,7 +38,6 @@
 
 use super::fixed_point;
 use super::LPC_ORD;
-use std::sync::OnceLock;
 
 pub type Autocorr = [f32; LPC_ORD + 1];
 pub type LpcCoeffs = [f32; LPC_ORD + 1];
@@ -311,7 +310,7 @@ const LEVINSON_FRAC_BITS: u32 = 40;
 // [@ANCHOR: levinson_durbin_fixed]
 pub fn levinson_durbin_fixed(r: &Autocorr) -> LpcCoeffs {
     let (a_q, _fired) = levinson_durbin_fixed_core(r);
-    std::array::from_fn(|i| a_q[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
+    core::array::from_fn(|i| a_q[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
 }
 
 /// Round-to-nearest right shift (round-half-up in two's complement,
@@ -393,7 +392,7 @@ fn levinson_durbin_fixed_core(r: &Autocorr) -> (LpcCoeffsQ, [bool; LPC_ORD + 1])
     debug_assert!(r0 > 0.0, "levinson_durbin_fixed: r[0] must be positive (matches the float reference's own implicit assumption -- real captured speech never measured r[0] <= 0)");
 
     let r_norm_q: [i64; LPC_ORD + 1] =
-        std::array::from_fn(|j| f32_to_q64(r[j] / r0, LEVINSON_FRAC_BITS));
+        core::array::from_fn(|j| f32_to_q64(r[j] / r0, LEVINSON_FRAC_BITS));
 
     levinson_durbin_fixed_core_from_r_norm(&r_norm_q)
 }
@@ -482,7 +481,7 @@ fn levinson_durbin_fixed_core_from_r_norm(
     }
 
     let a_q23: LpcCoeffsQ =
-        std::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
+        core::array::from_fn(|i| rshift_round(a_q[i], LEVINSON_FRAC_BITS - COEF_FRAC_BITS));
     (a_q23, fired)
 }
 
@@ -545,7 +544,7 @@ fn r0_normalize_fixed(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
         r_norm_q[0] = 1i64 << LEVINSON_FRAC_BITS;
         return r_norm_q;
     }
-    std::array::from_fn(|j| div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128))
+    core::array::from_fn(|j| div_round_i128((r_q[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128))
 }
 
 /// The real, integer-in/integer-out entry point for a caller that
@@ -581,7 +580,7 @@ pub fn levinson_durbin_fixed_from_integer_r(
 /// from outside this module) to do it.
 // [@ANCHOR: dequantize_coef_q23]
 pub fn dequantize_coef_q23(a_q23: &[i64; LPC_ORD + 1]) -> LpcCoeffs {
-    std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
+    core::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32)
 }
 
 /// Q8.23 fixed-point for the Chebyshev coefficients below -- 8 integer
@@ -657,7 +656,7 @@ fn f32_to_q64(x: f32, frac_bits: u32) -> i64 {
 /// the real captured corpus.
 #[cfg(test)]
 fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i32 {
-    let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
+    let coef_q: [i32; 6] = core::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
     cheb_poly_eval_fixed_core(&coef_q, x)
 }
 
@@ -670,7 +669,11 @@ fn cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i32 {
 /// real, if secondary, efficiency win this split also happens to enable.
 // [@ANCHOR: cheb_poly_eval_fixed_core]
 fn cheb_poly_eval_fixed_core(coef_q: &[i32; 6], x: f32) -> i32 {
-    let x_q: i32 = f32_to_q(x, CHEB_FRAC_BITS);
+    cheb_poly_eval_q29(coef_q, f32_to_q(x, CHEB_FRAC_BITS))
+}
+
+/// The Chebyshev evaluation proper, with `x` already in Q29.
+fn cheb_poly_eval_q29(coef_q: &[i32; 6], x_q: i32) -> i32 {
 
     let mut t_prev2: i32 = 1i32 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
     let mut t_prev1: i32 = x_q; // T_1 = x, Q2.29
@@ -727,8 +730,8 @@ fn build_p_q_fixed(a_q23: &[i64; LPC_ORD + 1]) -> ([i32; 6], [i32; 6]) {
         q[i] *= 2;
     }
     (
-        std::array::from_fn(|i| p[i] as i32),
-        std::array::from_fn(|i| q[i] as i32),
+        core::array::from_fn(|i| p[i] as i32),
+        core::array::from_fn(|i| q[i] as i32),
     )
 }
 
@@ -807,11 +810,7 @@ const ACOS_LUT_SIZE: usize = (1 << ACOS_LUT_BITS) + 1;
 /// which runs once per LSP root, every frame.
 // [@ANCHOR: acos_lut_table_q23]
 fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
-    static TABLE: OnceLock<[i32; ACOS_LUT_SIZE]> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let levels = 1u32 << ACOS_LUT_BITS;
-        std::array::from_fn(|i| f32_to_q((i as f32 / levels as f32).acos(), COEF_FRAC_BITS))
-    })
+    &super::tables::LPC_ACOS_LUT_Q23
 }
 
 /// `pi` in the same Q23 format, computed once via the exact bit-
@@ -821,9 +820,8 @@ fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
 /// earlier this pass (an independently-computed value disagreeing with
 /// Rust's own real output at a rounding tie).
 // [@ANCHOR: pi_q23]
-pub(crate) fn pi_q23() -> i64 {
-    static PI_Q23: OnceLock<i64> = OnceLock::new();
-    *PI_Q23.get_or_init(|| fixed_point::f32_to_q_exact_round(std::f32::consts::PI, COEF_FRAC_BITS))
+pub(crate) const fn pi_q23() -> i64 {
+    super::tables::LPC_PI_Q23
 }
 
 /// Fixed-point `acos`: genuinely integer end to end, the same LUT shape
@@ -845,10 +843,19 @@ fn acos_lut_fixed(x: f32) -> f32 {
         (-1.0..=1.0).contains(&x),
         "acos_lut_fixed: x must be in [-1, 1], got {x}"
     );
-    let ax = x.abs();
+    let x_q23 = fixed_point::f32_to_q_exact_round(x.abs(), COEF_FRAC_BITS)
+        .clamp(0, 1i64 << COEF_FRAC_BITS);
+    let x_q23 = if x >= 0.0 { x_q23 } else { -x_q23 };
+    (acos_lut_q23(x_q23) as f32) / (1i64 << COEF_FRAC_BITS) as f32
+}
+
+/// `acos(x)` for `x` in Q23 (clamped to `[-1, 1]`), result in Q23 radians,
+/// by table lookup and linear interpolation. Integer end to end.
+// [@ANCHOR: acos_lut_q23]
+pub(crate) fn acos_lut_q23(x_q23: i64) -> i64 {
+    let one = 1i64 << COEF_FRAC_BITS;
+    let ax_q23 = x_q23.abs().min(one);
     let levels = 1i64 << ACOS_LUT_BITS;
-    let ax_q23 =
-        fixed_point::f32_to_q_exact_round(ax, COEF_FRAC_BITS).clamp(0, 1i64 << COEF_FRAC_BITS);
     let scaled_full = (ax_q23 as u64) * (levels as u64);
     let idx = ((scaled_full >> COEF_FRAC_BITS) as usize).min(levels as usize - 1);
     let frac_q23 = (scaled_full - ((idx as u64) << COEF_FRAC_BITS)) as i64;
@@ -856,12 +863,11 @@ fn acos_lut_fixed(x: f32) -> f32 {
     let t0 = table[idx] as i64;
     let t1 = table[idx + 1] as i64;
     let interp_q23 = t0 + ((frac_q23 * (t1 - t0)) >> COEF_FRAC_BITS);
-    let result_q23 = if x >= 0.0 {
+    if x_q23 >= 0 {
         interp_q23
     } else {
         pi_q23() - interp_q23
-    };
-    (result_q23 as f32) / (1i64 << COEF_FRAC_BITS) as f32
+    }
 }
 
 /// Resolution for `cos_q23` below -- same bit count `ACOS_LUT_BITS`
@@ -880,16 +886,7 @@ const COS_LUT_SIZE: usize = (1 << COS_LUT_BITS) + 1;
 /// q23`.
 // [@ANCHOR: cos_lut_table_q23]
 fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE] {
-    static TABLE: OnceLock<[i32; COS_LUT_SIZE]> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let levels = 1u32 << COS_LUT_BITS;
-        std::array::from_fn(|i| {
-            f32_to_q(
-                (i as f32 / levels as f32 * std::f32::consts::PI).cos(),
-                COEF_FRAC_BITS,
-            )
-        })
-    })
+    &super::tables::LPC_COS_LUT_Q23
 }
 
 /// Genuinely integer-in/integer-out `cos`: Q23 angle in, Q23 `cos`
@@ -934,6 +931,64 @@ pub(crate) fn cos_q23(angle_q23: i64) -> i64 {
 /// nothing further along the pipeline yet to hand a fixed-point angle
 /// to, but the conversion itself is no longer the boundary).
 // [@ANCHOR: lpc_to_lsp_from_integer_ak]
+/// `LSP_SEARCH_STEP` (0.01) in Q29.
+const LSP_SEARCH_STEP_Q29: i32 = 5_368_709;
+
+/// Integer twin of `find_next_root_from_q23`: `x` runs in Q29 instead of
+/// `f32`. Same 0.01 grid search from `x_start` downwards and the same six
+/// bisections; the grid and midpoints differ from the `f32` version only by
+/// that version's own rounding (about 1e-7), which moves a root by far less
+/// than one 25 Hz quantizer step.
+// [@ANCHOR: find_next_root_q29]
+pub(crate) fn find_next_root_q29(poly_q: &[i32; 6], x_start_q29: i32) -> Option<i32> {
+    let mut xl = x_start_q29;
+    let mut p_l = cheb_poly_eval_q29(poly_q, xl);
+    while xl >= -(1i32 << CHEB_FRAC_BITS) {
+        let xr = xl - LSP_SEARCH_STEP_Q29;
+        let p_r = cheb_poly_eval_q29(poly_q, xr);
+        if (p_r <= 0 && p_l >= 0) || (p_r >= 0 && p_l <= 0) {
+            let mut lo = xl;
+            let mut hi = xr;
+            let mut p_lo = p_l;
+            let mut mid = 0;
+            for _ in 0..LSP_BISECTIONS {
+                mid = (lo + hi) >> 1;
+                let p_mid = cheb_poly_eval_q29(poly_q, mid);
+                if p_mid.signum() * p_lo.signum() > 0 {
+                    lo = mid;
+                    p_lo = p_mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            return Some(mid);
+        }
+        xl = xr;
+        p_l = p_r;
+    }
+    None
+}
+
+/// Line spectral pair angles in Q23 radians from Q23 linear prediction
+/// coefficients, integer end to end (see `find_next_root_q29`).
+// [@ANCHOR: lpc_to_lsp_q23]
+pub fn lpc_to_lsp_q23_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[i64; LPC_ORD]> {
+    let (p, q) = build_p_q_fixed(a_q23);
+    let mut search_from = 1i32 << CHEB_FRAC_BITS;
+    let mut freq = [0i64; LPC_ORD];
+    let one = 1i64 << COEF_FRAC_BITS;
+    for (j, f) in freq.iter_mut().enumerate() {
+        let poly = if j & 1 == 1 { &q } else { &p };
+        let root = find_next_root_q29(poly, search_from)?;
+        let root_q23 = ((root as i64 + (1i64 << (CHEB_FRAC_BITS - COEF_FRAC_BITS - 1)))
+            >> (CHEB_FRAC_BITS - COEF_FRAC_BITS))
+            .clamp(-one, one);
+        *f = acos_lut_q23(root_q23);
+        search_from = root;
+    }
+    Some(freq)
+}
+
 pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LPC_ORD]> {
     let (p, q) = build_p_q_fixed(a_q23);
     let mut search_from = 1.0f32;
@@ -1016,7 +1071,7 @@ fn build_half_poly(
 /// the reference's own version is.
 // [@ANCHOR: lsp_to_lpc]
 pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs {
-    let cos_lsp: [f32; LPC_ORD] = std::array::from_fn(|i| lsp[i].cos());
+    let cos_lsp: [f32; LPC_ORD] = core::array::from_fn(|i| lsp[i].cos());
     let (p, _) = build_half_poly(&cos_lsp, 0, 1.0);
     let (q, _) = build_half_poly(&cos_lsp, 1, -1.0);
 
@@ -1087,7 +1142,7 @@ fn build_half_poly_q23(
 /// midpoint convention elsewhere, e.g. `interp::interpolate_lsp_fixed`).
 // [@ANCHOR: lsp_to_lpc_fixed]
 pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1] {
-    let cos_lsp_q23: [i64; LPC_ORD] = std::array::from_fn(|i| cos_q23(lsp_q23[i]));
+    let cos_lsp_q23: [i64; LPC_ORD] = core::array::from_fn(|i| cos_q23(lsp_q23[i]));
     let one_q23 = 1i64 << COEF_FRAC_BITS;
     let (p, _) = build_half_poly_q23(&cos_lsp_q23, 0, one_q23);
     let (q, _) = build_half_poly_q23(&cos_lsp_q23, 1, -one_q23);
@@ -1115,11 +1170,18 @@ pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1] {
 /// established elsewhere in this file).
 // [@ANCHOR: lpc_energy_fixed]
 pub fn lpc_energy_fixed(a_q23: &[i64; LPC_ORD + 1], r_q: &[i64; LPC_ORD + 1]) -> f32 {
+    // Float boundary (other codec modes, tests).
+    (lpc_energy_q23(a_q23, r_q) as f64 / (1i64 << COEF_FRAC_BITS) as f64) as f32
+}
+
+/// Frame energy `sum(a[i] * r[i])` in Q23, integer end to end.
+// [@ANCHOR: lpc_energy_q23]
+pub fn lpc_energy_q23(a_q23: &[i64; LPC_ORD + 1], r_q: &[i64; LPC_ORD + 1]) -> i64 {
     let mut sum: i64 = 0;
     for i in 0..=LPC_ORD {
         sum += ((a_q23[i] as i128 * r_q[i] as i128) >> COEF_FRAC_BITS) as i64;
     }
-    (sum as f64 / (1i64 << COEF_FRAC_BITS) as f64) as f32
+    sum
 }
 
 /// `super::bw_gamma(i)` (`0.994^i`), precomputed at Q8.23 -- a literal
@@ -1239,7 +1301,7 @@ pub(crate) mod tests {
             let mut ak = [0.0f32; LPC_ORD + 1];
             ak.copy_from_slice(ak_row);
             let mut a_q23: [i64; LPC_ORD + 1] =
-                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+                core::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
             apply_bw_gamma_fixed(&mut a_q23);
             let Some(lsp) = lpc_to_lsp_from_integer_ak(&a_q23) else {
                 continue;
@@ -1372,7 +1434,7 @@ pub(crate) mod tests {
             let mut ak = [0.0f32; LPC_ORD + 1];
             ak.copy_from_slice(ak_row);
             let mut a_q23: [i64; LPC_ORD + 1] =
-                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+                core::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
             apply_bw_gamma_fixed(&mut a_q23);
             let (p_q, q_q) = build_p_q_fixed(&a_q23);
             for i in 0..6 {
@@ -1473,7 +1535,7 @@ pub(crate) mod tests {
         // register width and confirm it actually produces sign errors.
         const COARSE_CHEB_FRAC_BITS: u32 = 8; // deliberately far below the validated 29
         fn coarse_cheb_poly_eval_fixed(coef: &[f32; 6], x: f32) -> i64 {
-            let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
+            let coef_q: [i32; 6] = core::array::from_fn(|i| f32_to_q(coef[i], COEF_FRAC_BITS));
             let x_q = f32_to_q(x, COARSE_CHEB_FRAC_BITS) as i64;
             let mut t_prev2: i64 = 1i64 << COARSE_CHEB_FRAC_BITS;
             let mut t_prev1: i64 = x_q;
@@ -1536,7 +1598,7 @@ pub(crate) mod tests {
             p.copy_from_slice(&pq_row[0..6]);
             q.copy_from_slice(&pq_row[6..12]);
             for poly in [&p, &q] {
-                let coef_q: [i32; 6] = std::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
+                let coef_q: [i32; 6] = core::array::from_fn(|i| f32_to_q(poly[i], COEF_FRAC_BITS));
                 let mut x = -1.0f32;
                 while x <= 1.0 {
                     let x_q = f32_to_q(x, CHEB_FRAC_BITS) as i64;
@@ -1656,7 +1718,7 @@ pub(crate) mod tests {
 
             let float_ak = lsp_to_lpc(&lsp);
             let lsp_q23: [i64; LPC_ORD] =
-                std::array::from_fn(|i| fixed_point::f32_to_q_exact_round(lsp[i], COEF_FRAC_BITS));
+                core::array::from_fn(|i| fixed_point::f32_to_q_exact_round(lsp[i], COEF_FRAC_BITS));
             let fixed_ak_q23 = lsp_to_lpc_fixed(&lsp_q23);
             for i in 0..=LPC_ORD {
                 let fixed_ak = fixed_ak_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32;
@@ -1775,8 +1837,8 @@ pub(crate) mod tests {
 
             let e_float = lpc_energy(&ak, &r);
             let a_q23: [i64; LPC_ORD + 1] =
-                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
-            let r_q: [i64; LPC_ORD + 1] = std::array::from_fn(|i| {
+                core::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+            let r_q: [i64; LPC_ORD + 1] = core::array::from_fn(|i| {
                 (r[i] as f64 * (1i64 << COEF_FRAC_BITS) as f64).round() as i64
             });
             let e_fixed = lpc_energy_fixed(&a_q23, &r_q);
@@ -1852,7 +1914,7 @@ pub(crate) mod tests {
             }
 
             let mut a_q23: [i64; LPC_ORD + 1] =
-                std::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
+                core::array::from_fn(|i| f32_to_q(ak[i], COEF_FRAC_BITS) as i64);
             apply_bw_gamma_fixed(&mut a_q23);
 
             for i in 0..=LPC_ORD {
@@ -2180,7 +2242,7 @@ mod levinson_durbin_fixed_tests {
         const R_FRAC_BITS: u32 = 43;
 
         fn quantize_r(r: &Autocorr) -> [i64; LPC_ORD + 1] {
-            std::array::from_fn(|j| (r[j] as f64 * (1i64 << R_FRAC_BITS) as f64).round() as i64)
+            core::array::from_fn(|j| (r[j] as f64 * (1i64 << R_FRAC_BITS) as f64).round() as i64)
         }
 
         // r0_normalize_fixed and levinson_durbin_fixed_core_from_r_norm
@@ -2195,7 +2257,7 @@ mod levinson_durbin_fixed_tests {
             let r_q = quantize_r(r);
             let r_norm_q = r0_normalize_fixed(&r_q);
             let (a_q23, fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
-            let ak = std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
+            let ak = core::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
             (ak, fired)
         }
 
@@ -2221,16 +2283,16 @@ mod levinson_durbin_fixed_tests {
                     continue;
                 }
                 apply_white_noise_correction(&mut r);
-                let r_q23: [i64; LPC_ORD + 1] = std::array::from_fn(|j| {
+                let r_q23: [i64; LPC_ORD + 1] = core::array::from_fn(|j| {
                     (r[j] as f64 * (1i64 << AUTOCORR_FRAC_BITS) as f64).round() as i64
                 });
                 let r0_q = r_q23[0];
-                let r_norm_q: [i64; LPC_ORD + 1] = std::array::from_fn(|j| {
+                let r_norm_q: [i64; LPC_ORD + 1] = core::array::from_fn(|j| {
                     div_round_i128((r_q23[j] as i128) << LEVINSON_FRAC_BITS, r0_q as i128)
                 });
                 let (a_q23, candidate_fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
                 let ak_candidate: LpcCoeffs =
-                    std::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
+                    core::array::from_fn(|i| a_q23[i] as f32 / (1i64 << COEF_FRAC_BITS) as f32);
                 let ak_float = levinson_durbin(&r);
                 let max_err = (0..=LPC_ORD)
                     .map(|i| (ak_float[i] - ak_candidate[i]).abs())

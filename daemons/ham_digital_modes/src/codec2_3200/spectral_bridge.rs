@@ -96,12 +96,11 @@
 
 use super::envelope::{synth_k_q23, Model, ModelFixed};
 use super::fixed_fft::{fft_fixed, rshift_round_i128, ComplexQ23};
-use super::fixed_point::{exp2_q23, f32_to_q_exact_round, log2_q23};
+use super::fixed_point::{exp2_q23, log2_q23};
 use super::synthesis::{ear_protection, ear_protection_fixed, phase_increment_q32};
 use super::trig_fixed::sin_cos_q23;
 use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLE_RATE};
 use rustfft::num_complex::Complex32;
-use std::sync::OnceLock;
 
 const FRAC_BITS: u32 = 23;
 
@@ -122,7 +121,7 @@ pub const FFT_ENC_SB: usize = 2 * FFT_ENC;
 pub const MAX_AMP_SB: usize = 2 * MAX_AMP;
 
 // [@ANCHOR: make_synthesis_window_sb]
-fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
+pub(crate) fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB] {
     let mut pn = [0.0f32; SAMPLES_PER_FRAME_SB];
     let n0 = N_SAMP_SB / 2;
     let n1 = 3 * N_SAMP_SB / 2;
@@ -327,16 +326,15 @@ impl SpectralBridgeState {
             }
         }
 
-        let mut out: [f32; N_SAMP_SB] = std::array::from_fn(|i| self.sn_[i]);
+        let mut out: [f32; N_SAMP_SB] = core::array::from_fn(|i| self.sn_[i]);
         ear_protection(&mut out);
 
-        std::array::from_fn(|i| out[i].clamp(-32767.0, 32767.0) as i16)
+        core::array::from_fn(|i| out[i].clamp(-32767.0, 32767.0) as i16)
     }
 }
 
 fn hz_per_rad_q23() -> i64 {
-    static V: OnceLock<i64> = OnceLock::new();
-    *V.get_or_init(|| f32_to_q_exact_round(SAMPLE_RATE as f32 / std::f32::consts::TAU, FRAC_BITS))
+    super::tables::SB_HZ_PER_RAD_Q23
 }
 
 /// `freq_hz(m)` (see the float `extrapolate_amplitudes`'s own closure)
@@ -439,11 +437,7 @@ pub(crate) fn extrapolate_amplitudes_fixed(
 }
 
 fn parzen_window_sb_q23() -> &'static [i64; SAMPLES_PER_FRAME_SB] {
-    static V: OnceLock<[i64; SAMPLES_PER_FRAME_SB]> = OnceLock::new();
-    V.get_or_init(|| {
-        let pn = make_synthesis_window_sb();
-        std::array::from_fn(|i| f32_to_q_exact_round(pn[i], FRAC_BITS))
-    })
+    &super::tables::SB_PARZEN_Q23
 }
 
 /// Fixed-point sibling of `SpectralBridgeState` -- genuinely integer
@@ -455,7 +449,6 @@ fn parzen_window_sb_q23() -> &'static [i64; SAMPLES_PER_FRAME_SB] {
 pub(crate) struct SpectralBridgeStateFixed {
     pub(crate) enabled: bool,
     sn_: [i64; SAMPLES_PER_FRAME_SB],
-    parzen: [i64; SAMPLES_PER_FRAME_SB],
     ex_phase_q32: u32,
     ifft_re: [i64; FFT_ENC_SB],
     ifft_im: [i64; FFT_ENC_SB],
@@ -466,7 +459,6 @@ impl Default for SpectralBridgeStateFixed {
         SpectralBridgeStateFixed {
             enabled: true,
             sn_: [0; SAMPLES_PER_FRAME_SB],
-            parzen: *parzen_window_sb_q23(),
             ex_phase_q32: 0,
             ifft_re: [0; FFT_ENC_SB],
             ifft_im: [0; FFT_ENC_SB],
@@ -535,24 +527,24 @@ impl SpectralBridgeStateFixed {
         #[allow(clippy::needless_range_loop)]
         for i in 0..(N_SAMP_SB - 1) {
             let re = self.ifft_re[FFT_ENC_SB - N_SAMP_SB + 1 + i];
-            self.sn_[i] += ((re as i128 * self.parzen[i] as i128) >> FRAC_BITS) as i64;
+            self.sn_[i] += ((re as i128 * parzen_window_sb_q23()[i] as i128) >> FRAC_BITS) as i64;
         }
         #[allow(clippy::needless_range_loop)]
         for j in 0..(N_SAMP_SB + 1) {
             let idx = N_SAMP_SB - 1 + j;
             if idx < SAMPLES_PER_FRAME_SB {
                 let re = self.ifft_re[j];
-                self.sn_[idx] = ((re as i128 * self.parzen[idx] as i128) >> FRAC_BITS) as i64;
+                self.sn_[idx] = ((re as i128 * parzen_window_sb_q23()[idx] as i128) >> FRAC_BITS) as i64;
             }
         }
 
-        let mut out: [i64; N_SAMP_SB] = std::array::from_fn(|i| self.sn_[i]);
+        let mut out: [i64; N_SAMP_SB] = core::array::from_fn(|i| self.sn_[i]);
         ear_protection_fixed(&mut out);
 
         // Q23 -> i16 PCM: FRAC_BITS is a power-of-two divisor, so this is an
         // exact rounding right shift, not a float divide -- see
         // `synthesis.rs`'s own identical fix for the same reasoning.
-        std::array::from_fn(|i| {
+        core::array::from_fn(|i| {
             rshift_round_i128(out[i] as i128, FRAC_BITS).clamp(-32767, 32767) as i16
         })
     }
@@ -561,6 +553,7 @@ impl SpectralBridgeStateFixed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
 
     fn synthetic_model(wo: f32, voiced: bool, tilt_db_per_khz: f32) -> Model {
         let mut model = Model::new(wo, voiced);

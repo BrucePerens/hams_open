@@ -17,7 +17,7 @@
 //! reference's own real, published approach since it's a genuinely
 //! good, well-motivated technique, not incidental.
 
-use super::{FFT_ENC, LPCPF_BETA, LPCPF_GAMMA, LPCPF_TWO_BETA, LPC_ORD, MAX_AMP, SAMPLE_RATE};
+use super::{FFT_ENC, LPCPF_GAMMA, LPCPF_TWO_BETA, LPC_ORD, MAX_AMP, SAMPLE_RATE};
 use rustfft::num_complex::Complex32;
 
 /// Sinusoidal-synthesis model parameters for one 10ms sub-frame: pitch
@@ -79,7 +79,7 @@ fn lpc_spectrum(ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS] {
         buf[i] = Complex32::new(a, 0.0);
     }
     let out = microfft::complex::cfft_512(&mut buf);
-    std::array::from_fn(|i| out[i])
+    core::array::from_fn(|i| out[i])
 }
 
 /// Computes `model.a[1..=model.l]` from `ak`/`e` (the real LPC energy),
@@ -95,7 +95,7 @@ pub fn compute_harmonic_amplitudes(
 ) -> [Complex32; SPEC_BINS] {
     let aw = lpc_spectrum(ak);
     let a2: [f32; SPEC_BINS] =
-        std::array::from_fn(|i| aw[i].re * aw[i].re + aw[i].im * aw[i].im + 1e-6);
+        core::array::from_fn(|i| aw[i].re * aw[i].re + aw[i].im * aw[i].im + 1e-6);
 
     let mut ak_gamma = [0.0f32; LPC_ORD + 1];
     ak_gamma[0] = ak[0];
@@ -106,7 +106,7 @@ pub fn compute_harmonic_amplitudes(
     }
     let awg = lpc_spectrum(&ak_gamma);
     let a2g: [f32; SPEC_BINS] =
-        std::array::from_fn(|i| awg[i].re * awg[i].re + awg[i].im * awg[i].im + 1e-6);
+        core::array::from_fn(|i| awg[i].re * awg[i].re + awg[i].im * awg[i].im + 1e-6);
 
     let mut e_before = 1e-12f32;
     let mut e_after = 1e-12f32;
@@ -246,7 +246,7 @@ fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1]) -> [ComplexQ23; SPEC_BINS] {
     let mut im = [0i64; FFT_ENC];
     re[..=LPC_ORD].copy_from_slice(ak_q23);
     fft_fixed_sparse_prefix(&mut re, &mut im, LPC_ORD + 1, true);
-    std::array::from_fn(|i| ComplexQ23 {
+    core::array::from_fn(|i| ComplexQ23 {
         re: re[i],
         im: im[i],
     })
@@ -261,8 +261,7 @@ fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1]) -> [ComplexQ23; SPEC_BINS] {
 /// independently-computed constant disagreeing with Rust's own real
 /// rounding) that hand arithmetic on Q23 literals repeats every time.
 fn eps_a2_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(1e-6, FRAC_BITS))
+    super::tables::ENVELOPE_EPS_A2_Q23
 }
 
 /// `LPCPF_BETA` (`0.2`) and `1.0 + LPCPF_BETA` (`1.2`) in Q23 -- the two
@@ -270,19 +269,16 @@ fn eps_a2_q23() -> i64 {
 /// reduces to in log domain: `r^(2*BETA) = (a2g/a2)^BETA`, so `r^(2*BETA)
 /// / a2 = a2g^BETA * a2^-(1+BETA)`.
 fn beta_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(LPCPF_BETA, FRAC_BITS))
+    super::tables::ENVELOPE_BETA_Q23
 }
 fn one_plus_beta_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(1.0 + LPCPF_BETA, FRAC_BITS))
+    super::tables::ENVELOPE_ONE_PLUS_BETA_Q23
 }
 
 /// `1.96` in Q23 -- the sub-1kHz boost `compute_harmonic_amplitudes`
 /// applies verbatim.
 fn boost_ratio_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(1.96, FRAC_BITS))
+    super::tables::ENVELOPE_BOOST_RATIO_Q23
 }
 
 /// Bin index below which a harmonic's own frequency (`i *
@@ -335,7 +331,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
     model: &mut ModelFixed,
 ) -> [ComplexQ23; SPEC_BINS] {
     let aw = lpc_spectrum_fixed(ak_q23);
-    let a2: [i64; SPEC_BINS] = std::array::from_fn(|i| mag_sq_q23(aw[i]) + eps_a2_q23());
+    let a2: [i64; SPEC_BINS] = core::array::from_fn(|i| mag_sq_q23(aw[i]) + eps_a2_q23());
 
     let mut ak_gamma_q23 = [0i64; LPC_ORD + 1];
     ak_gamma_q23[0] = ak_q23[0];
@@ -347,7 +343,7 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
         ak_gamma_q23[i] = (ak_q23[i] + (1i64 << (i - 1))) >> i;
     }
     let awg = lpc_spectrum_fixed(&ak_gamma_q23);
-    let a2g: [i64; SPEC_BINS] = std::array::from_fn(|i| mag_sq_q23(awg[i]) + eps_a2_q23());
+    let a2g: [i64; SPEC_BINS] = core::array::from_fn(|i| mag_sq_q23(awg[i]) + eps_a2_q23());
 
     // The per-bin postfilter weight is needed twice below (once for the
     // whole-spectrum energy sums, once per harmonic band), and the
@@ -405,14 +401,10 @@ pub(crate) fn compute_harmonic_amplitudes_fixed(
 /// against a precomputed Q23 threshold (`PI*150/4000`), no float
 /// anywhere.
 fn first_harmonic_wo_threshold_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(std::f32::consts::PI * 150.0 / 4000.0, FRAC_BITS)
-    })
+    super::tables::ENVELOPE_FIRST_HARMONIC_WO_THRESHOLD_Q23
 }
 fn first_harmonic_correction_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(0.032, FRAC_BITS))
+    super::tables::ENVELOPE_FIRST_HARMONIC_CORRECTION_Q23
 }
 
 // [@ANCHOR: apply_first_harmonic_correction_fixed]
@@ -590,7 +582,7 @@ mod tests {
             let _aw = compute_harmonic_amplitudes(&ak, e, &mut model);
 
             let lsp_q23: [i64; LPC_ORD] =
-                std::array::from_fn(|j| f32_to_q_exact_round(lsp[j], COEF_FRAC_BITS));
+                core::array::from_fn(|j| f32_to_q_exact_round(lsp[j], COEF_FRAC_BITS));
             let ak_q23 = lsp_to_lpc_fixed(&lsp_q23);
             let e_q23 = f32_to_q_exact_round(e, FRAC_BITS);
             let mut model_fixed = ModelFixed::new(wo_q23, true);

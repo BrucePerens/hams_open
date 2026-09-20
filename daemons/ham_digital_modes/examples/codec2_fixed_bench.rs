@@ -47,5 +47,30 @@ fn main() {
             }
         }
     }
+    // Cross-check value for the 32-bit RISC-V build (same 32-bit FNV-style hash the target
+    // program prints, over the frames selected by the optional `skip_frames count` arguments).
+    if let (Some(skip), Some(count)) = (args.get(3), args.get(4)) {
+        let (skip, count): (usize, usize) = (skip.parse().unwrap(), count.parse().unwrap());
+        let mut enc = EncoderFixed::new();
+        let mut dec = DecoderFixed::new();
+        let mut h = 0u32;
+        let mut frames = Vec::new();
+        for f in skip..skip + count {
+            let fr: [i16; SAMPLES_PER_FRAME] = samples[f * SAMPLES_PER_FRAME..(f + 1) * SAMPLES_PER_FRAME]
+                .try_into()
+                .unwrap();
+            let b = enc.encode(&fr);
+            for &x in &b {
+                h = h.wrapping_mul(16777619).wrapping_add(x as u32);
+            }
+            frames.push(b);
+        }
+        for b in &frames {
+            for &x in &dec.decode(b) {
+                h = h.wrapping_mul(16777619).wrapping_add(x as u16 as u32);
+            }
+        }
+        println!("cross-check hash (frames {skip}..{}): {h:08x}", skip + count);
+    }
     println!("frames={n} encode {:.1} us/frame, decode {:.1} us/frame, checksum {sum:016x}", best_enc * 1e6, best_dec * 1e6);
 }

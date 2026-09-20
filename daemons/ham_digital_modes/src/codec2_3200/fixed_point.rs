@@ -59,6 +59,7 @@
 //! widths for the surrounding fixed-point arithmetic are a separate,
 //! later engineering step, not attempted here).
 
+#[cfg(test)]
 use std::sync::OnceLock;
 
 /// LUT resolution used by the real `log2_lut`/`exp2_lut` below -- 8
@@ -71,17 +72,19 @@ use std::sync::OnceLock;
 const LOG2_LUT_BITS: u32 = 8;
 const LOG2_LUT_SIZE: usize = (1 << LOG2_LUT_BITS) + 1;
 
+#[cfg(test)]
 fn log2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
     static TABLE: OnceLock<[f32; LOG2_LUT_SIZE]> = OnceLock::new();
     TABLE.get_or_init(|| {
-        std::array::from_fn(|i| (1.0 + i as f32 / (1u32 << LOG2_LUT_BITS) as f32).log2())
+        core::array::from_fn(|i| (1.0 + i as f32 / (1u32 << LOG2_LUT_BITS) as f32).log2())
     })
 }
 
+#[cfg(test)]
 fn exp2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
     static TABLE: OnceLock<[f32; LOG2_LUT_SIZE]> = OnceLock::new();
     TABLE
-        .get_or_init(|| std::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2()))
+        .get_or_init(|| core::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2()))
 }
 
 /// Q23-quantized sibling of `log2_lut_table()` -- what `log2_lut()`'s
@@ -90,11 +93,7 @@ fn exp2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
 /// ordinary, single-step Q23 rounding noise, not a second source of
 /// disagreement with the float table other code still exercises.
 fn log2_lut_table_q23() -> &'static [i32; LOG2_LUT_SIZE] {
-    static TABLE: OnceLock<[i32; LOG2_LUT_SIZE]> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let f = log2_lut_table();
-        std::array::from_fn(|i| (f[i] * (1i64 << 23) as f32).round() as i32)
-    })
+    &super::tables::LOG2_LUT_Q23
 }
 
 /// `log2(x)` via IEEE754 exponent/mantissa split (exact, free -- just
@@ -202,11 +201,7 @@ const EXP2_Y_FRAC_BITS: u32 = LOG2_LUT_BITS + EXP2_Y_EXTRA_BITS;
 /// uses, so the final bit-reconstruction below needs no rescale, mirror
 /// image of `log2_lut_table_q23`.
 fn exp2_lut_table_frac_q23() -> &'static [i32; LOG2_LUT_SIZE] {
-    static TABLE: OnceLock<[i32; LOG2_LUT_SIZE]> = OnceLock::new();
-    TABLE.get_or_init(|| {
-        let f = exp2_lut_table();
-        std::array::from_fn(|i| ((f[i] - 1.0) * (1i64 << 23) as f32).round() as i32)
-    })
+    &super::tables::EXP2_LUT_FRAC_Q23
 }
 
 /// Exact `round(y * 2^frac_bits)` computed straight from `y`'s own

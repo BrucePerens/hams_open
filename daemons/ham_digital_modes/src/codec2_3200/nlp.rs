@@ -40,7 +40,7 @@ pub(crate) const LPF_TAPS: usize = 25;
 /// per original-rate sample (`0.5 / NLP_DEC` for anti-aliasing ahead of
 /// decimation by `NLP_DEC`).
 // [@ANCHOR: design_lowpass]
-fn design_lowpass(taps: usize, cutoff: f32) -> [f32; LPF_TAPS] {
+pub(crate) fn design_lowpass(taps: usize, cutoff: f32) -> [f32; LPF_TAPS] {
     let mut h = [0.0f32; LPF_TAPS];
     let center = (taps - 1) as f32 / 2.0;
     let mut sum = 0.0f32;
@@ -131,13 +131,6 @@ pub fn f0_to_wo(f0: f32) -> f32 {
 // the magnitude spectrum is ever used.
 const NLP_FRAC_BITS: u32 = 23;
 
-/// One-time float->Q23 conversion for table/constant construction (not a
-/// per-sample conversion) -- same convention `lpc.rs`'s own
-/// `acos_lut_table_q23`/`f32_to_q` use for building fixed tables from a
-/// float formula.
-fn f32_to_q23(x: f32) -> i64 {
-    (x as f64 * (1i64 << NLP_FRAC_BITS) as f64).round() as i64
-}
 
 /// Round-to-nearest right shift (matches `lpc.rs`'s own `rshift_round`).
 fn rshift_round(x: i64, n: u32) -> i64 {
@@ -188,44 +181,26 @@ fn rshift_round_i128_wide(x: i128, n: u32) -> i128 {
 }
 
 fn notch_a_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| f32_to_q23(NOTCH_A))
+    super::tables::NLP_NOTCH_A_Q23
 }
 
 fn cnlp_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| f32_to_q23(CNLP))
+    super::tables::NLP_CNLP_Q23
 }
 
 fn lowpass_coeffs_q23() -> &'static [i64; LPF_TAPS] {
-    static TABLE: std::sync::OnceLock<[i64; LPF_TAPS]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        let h = design_lowpass(LPF_TAPS, 0.5 / NLP_DEC as f32);
-        std::array::from_fn(|i| f32_to_q23(h[i]))
-    })
+    &super::tables::NLP_LOWPASS_Q23
 }
 
 fn hann_window_q23() -> &'static [i64; NDEC] {
-    static TABLE: std::sync::OnceLock<[i64; NDEC]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        std::array::from_fn(|i| {
-            let hann = 0.5 - 0.5 * (std::f32::consts::TAU * i as f32 / (NDEC - 1) as f32).cos();
-            f32_to_q23(hann)
-        })
-    })
+    &super::tables::NLP_HANN_Q23
 }
 
 /// `(cos(2*pi*k/PE_FFT_SIZE), sin(2*pi*k/PE_FFT_SIZE))` for `k` in
 /// `0..PE_FFT_SIZE/2` -- the only twiddle angles a radix-2 FFT of this
 /// size ever needs (`j*step` below always lands in this range).
 fn fft_twiddles_q23() -> &'static [(i64, i64); PE_FFT_SIZE / 2] {
-    static TABLE: std::sync::OnceLock<[(i64, i64); PE_FFT_SIZE / 2]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        std::array::from_fn(|k| {
-            let theta = std::f32::consts::TAU * k as f32 / PE_FFT_SIZE as f32;
-            (f32_to_q23(theta.cos()), f32_to_q23(theta.sin()))
-        })
-    })
+    &super::tables::NLP_TWIDDLES_Q23
 }
 
 #[cfg(test)]
@@ -233,7 +208,7 @@ fn fft_bit_reverse_table() -> &'static [usize; PE_FFT_SIZE] {
     static TABLE: std::sync::OnceLock<[usize; PE_FFT_SIZE]> = std::sync::OnceLock::new();
     TABLE.get_or_init(|| {
         let bits = PE_FFT_SIZE.trailing_zeros();
-        std::array::from_fn(|i| ((i as u32).reverse_bits() >> (32 - bits)) as usize)
+        core::array::from_fn(|i| ((i as u32).reverse_bits() >> (32 - bits)) as usize)
     })
 }
 
@@ -269,8 +244,8 @@ impl Default for NlpStateFixed {
             // itself uses (`prev_f0 / bin_to_hz`) -- keeps the two
             // implementations' first-frame continuity bias aligned
             // instead of silently starting from bin 0.
-            prev_f0_bin_fixed: (100.0 / (SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32))
-                as usize,
+            // 100 Hz / (SAMPLE_RATE / (PE_FFT_SIZE * NLP_DEC)) = 100 / 3.125 = 32.
+            prev_f0_bin_fixed: 100 * PE_FFT_SIZE * NLP_DEC / SAMPLE_RATE as usize,
         }
     }
 }
@@ -356,7 +331,7 @@ fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE
     // copy every nonzero value across its own group of 8 positions
     // (`w * 0` rounds to exactly 0). That is written out directly here,
     // which is bit-identical to running those three stages.
-    debug_assert!(PE_FFT_SIZE == 8 * NDEC, "fft_fixed's stage skipping assumes PE_FFT_SIZE == 8 * NDEC");
+    const _: () = assert!(PE_FFT_SIZE == 8 * NDEC, "fft_fixed's stage skipping assumes PE_FFT_SIZE == 8 * NDEC");
     let bits = NDEC.trailing_zeros();
     for q in 0..NDEC {
         let v = input[((q as u32).reverse_bits() >> (32 - bits)) as usize];
@@ -464,6 +439,18 @@ fn correct_sub_multiples_fixed(
 /// downstream need no changes at all.
 // [@ANCHOR: nlp_fixed]
 pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32 {
+    // Float boundary kept for the other codec modes and the tests: the
+    // 3200-bit-per-second encoder itself uses `nlp_fixed_bin` and never
+    // sees a float.
+    let bin_to_hz = SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32;
+    nlp_fixed_bin(state, sn) as f32 * bin_to_hz
+}
+
+/// The pitch estimator proper: returns the winning FFT bin (fundamental
+/// = `bin * SAMPLE_RATE / (PE_FFT_SIZE * NLP_DEC)` = `bin * 3.125` Hz),
+/// integer end to end.
+// [@ANCHOR: nlp_fixed_bin]
+pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
     let start = M_PITCH - N_SAMP;
     for (sn_i, sq_i) in sn[start..].iter().zip(state.sq_fixed[start..].iter_mut()) {
         let s = *sn_i as i64;
@@ -488,9 +475,8 @@ pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32 {
 
     const HALF: usize = PE_FFT_SIZE / 2 + 1;
     let power: [i128; HALF] =
-        std::array::from_fn(|i| re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128);
+        core::array::from_fn(|i| re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128);
 
-    let bin_to_hz = SAMPLE_RATE as f32 / (PE_FFT_SIZE * NLP_DEC) as f32;
     let lo = (PE_FFT_SIZE * NLP_DEC / P_MAX).max(1);
     let hi = (PE_FFT_SIZE * NLP_DEC / P_MIN).min(HALF - 1);
 
@@ -506,9 +492,8 @@ pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32 {
     let prev_f0_bin = state.prev_f0_bin_fixed;
     let cmax_bin = correct_sub_multiples_fixed(&power, gmax, gmax_bin, prev_f0_bin, lo);
 
-    let f0 = cmax_bin as f32 * bin_to_hz;
     state.prev_f0_bin_fixed = cmax_bin;
-    f0
+    cmax_bin
 }
 
 #[cfg(test)]

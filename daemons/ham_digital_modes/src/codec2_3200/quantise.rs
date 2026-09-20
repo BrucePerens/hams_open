@@ -46,18 +46,13 @@ pub fn decode_wo(index: u32) -> f32 {
 /// radians-per-sample angular frequency, `[0.039, 0.314]`, well within
 /// Q23's headroom).
 fn w0_min_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| super::fixed_point::f32_to_q_exact_round(W0_MIN, super::lpc::COEF_FRAC_BITS))
+    super::tables::QUANT_W0_MIN_Q23
 }
 
 /// One quantizer step, `(W0_MAX - W0_MIN) / 2^WO_BITS`, in the same Q23
 /// format as `w0_min_q23()`.
 fn w0_step_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        let step = (W0_MAX - W0_MIN) / (1u32 << WO_BITS) as f32;
-        super::fixed_point::f32_to_q_exact_round(step, super::lpc::COEF_FRAC_BITS)
-    })
+    super::tables::QUANT_W0_STEP_Q23
 }
 
 /// Fixed-point `decode_wo`: `index` is a plain integer count, so unlike
@@ -89,6 +84,24 @@ pub fn encode_energy(e_linear: f32) -> u32 {
 /// See `encode_energy`'s own doc comment for why this calls
 /// `fixed_point::exp2_lut` instead of plain `powf`.
 // [@ANCHOR: decode_energy]
+/// Integer energy quantizer: `e_q23` is the linear frame energy in Q23.
+/// Same mapping as `encode_energy` (dB = 10 log10 e, `E_BITS` levels over
+/// `[E_MIN_DB, E_MAX_DB]`, round to nearest, clamp) but computed with the
+/// integer `log2_q23`. It agrees with the float version except when the
+/// energy lies within about 1e-5 dB of a quantizer boundary
+/// (see `encode_energy_q23_agrees_with_the_float_quantizer_...`).
+// [@ANCHOR: encode_energy_q23]
+pub fn encode_energy_q23(e_q23: i64) -> u32 {
+    let log2_q23 = super::fixed_point::log2_q23(e_q23.max(1));
+    let e_db_q23 = (log2_q23 * super::tables::SYNTH_TEN_OVER_LOG2_10_Q23 + (1 << 22)) >> 23;
+    const LEVELS: i64 = 1 << E_BITS;
+    const MIN_Q23: i64 = (E_MIN_DB as i64) << 23;
+    const SPAN_Q23: i64 = ((E_MAX_DB - E_MIN_DB) as i64) << 23;
+    // floor(levels * (e_db - min) / span + 1/2), then clamp.
+    let num = (e_db_q23 - MIN_Q23) * LEVELS + SPAN_Q23 / 2;
+    (num.div_euclid(SPAN_Q23)).clamp(0, LEVELS - 1) as u32
+}
+
 pub fn decode_energy(index: u32) -> f32 {
     let e_db = dequantize_linear(index, E_MIN_DB, E_MAX_DB, E_BITS);
     super::fixed_point::exp2_lut(e_db / 10.0 * std::f32::consts::LOG2_10)
@@ -97,20 +110,13 @@ pub fn decode_energy(index: u32) -> f32 {
 /// `E_MIN_DB/10*LOG2_10` in Q23 -- the `y` `exp2_q23` would see for
 /// `index == 0`, precomputed the same one-time way `w0_min_q23()` is.
 fn energy_y_min_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(E_MIN_DB / 10.0 * std::f32::consts::LOG2_10, 23)
-    })
+    super::tables::QUANT_ENERGY_Y_MIN_Q23
 }
 
 /// One quantizer step's own contribution to `y` (`step_db/10*LOG2_10`),
 /// in Q23.
 fn energy_y_step_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        let step_db = (E_MAX_DB - E_MIN_DB) / (1u32 << E_BITS) as f32;
-        super::fixed_point::f32_to_q_exact_round(step_db / 10.0 * std::f32::consts::LOG2_10, 23)
-    })
+    super::tables::QUANT_ENERGY_Y_STEP_Q23
 }
 
 /// Fixed-point `decode_energy`: genuinely integer in/out (Q23 linear
@@ -239,10 +245,7 @@ const LSP_DIMS_Q16: [LspDimQ16; LPC_ORD] = {
 /// round` rather than a separately-typed literal, so there's no risk of
 /// the `BW_GAMMA_Q23`-style independent-computation mismatch.
 fn hz_per_rad_q16() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(4000.0 / std::f32::consts::PI, LSP_HZ_FRAC_BITS)
-    })
+    super::tables::QUANT_HZ_PER_RAD_Q16
 }
 
 // [@ANCHOR: lsp_dim_value_hz_q16]
@@ -286,10 +289,22 @@ fn lsp_dim_nearest_level_q16(dim: &LspDimQ16, target_q16: i64) -> u32 {
 /// extraction, not a float multiply).
 // [@ANCHOR: encode_lsps_delta_scalar_fixed]
 pub fn encode_lsps_delta_scalar_fixed(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
+    // Float boundary (other codec modes, tests): converts exactly (the
+    // values are Q23 integers below 2^24, exactly representable) and
+    // delegates.
+    let lsp_q23: [i64; LPC_ORD] =
+        core::array::from_fn(|i| (lsp[i] as f64 * (1i64 << 23) as f64).round() as i64);
+    encode_lsps_delta_scalar_q23(&lsp_q23)
+}
+
+/// `encode_lsps_delta_scalar_fixed` for line spectral pair angles already
+/// in Q23 radians: integer end to end.
+// [@ANCHOR: encode_lsps_delta_scalar_q23]
+pub fn encode_lsps_delta_scalar_q23(lsp_q23: &[i64; LPC_ORD]) -> [u32; LPC_ORD] {
     let mut indexes = [0u32; LPC_ORD];
     let mut last_q_hz_q16 = 0i64;
     for i in 0..LPC_ORD {
-        let angle_q23 = super::fixed_point::f32_to_q_exact_round(lsp[i], 23);
+        let angle_q23 = lsp_q23[i];
         let lsp_hz_q16 = (angle_q23 * hz_per_rad_q16()) >> 23;
         let target = if i == 0 {
             lsp_hz_q16
@@ -314,13 +329,7 @@ pub fn encode_lsps_delta_scalar_fixed(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD] {
 /// exact-bit-extraction way for the same reason (no independently
 /// typed literal to risk a rounding-tie mismatch against).
 fn rad_per_hz_q23() -> i64 {
-    static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
-    *V.get_or_init(|| {
-        super::fixed_point::f32_to_q_exact_round(
-            std::f32::consts::PI / 4000.0,
-            super::lpc::COEF_FRAC_BITS,
-        )
-    })
+    super::tables::QUANT_RAD_PER_HZ_Q23
 }
 
 /// Fixed-point `decode_lsps_delta_scalar`: same per-dimension

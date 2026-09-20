@@ -1,0 +1,20 @@
+# Standalone measurement harness (not part of the crate build): see README section in prep.sh.
+[workspace]
+
+[package]
+name = "codec2_riscv32_bench"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+libm = "0.2"
+microfft = { version = "0.6", features = ["size-512", "size-1024"] }
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = false
+[profile.dev]
+panic = "abort"
+[features]
+small = []

@@ -37,6 +37,7 @@ pub fn make_analysis_window() -> [f32; M_PITCH] {
 /// margin under `i32`'s 2^31 range: `0.0044 * 2^30 ~ 4.7e6`, far under
 /// `i32::MAX`) gives real headroom without wasting resolution the way a
 /// wider integer part would.
+#[cfg(test)]
 const WINDOW_FRAC_BITS: u32 = 30;
 
 /// `FIXED_POINT_ENCODER_IMPLEMENTATION_PUNCH_LIST.md`'s window.rs
@@ -53,8 +54,7 @@ const WINDOW_FRAC_BITS: u32 = 30;
 /// that boundary work lands.
 // [@ANCHOR: make_analysis_window_fixed]
 pub fn make_analysis_window_fixed() -> [i32; M_PITCH] {
-    let w = make_analysis_window();
-    std::array::from_fn(|i| (w[i] as f64 * (1i64 << WINDOW_FRAC_BITS) as f64).round() as i32)
+    super::tables::WINDOW_ANALYSIS_Q30
 }
 
 #[cfg(test)]

@@ -55,7 +55,7 @@ pub fn interp_energy(prev_e: f32, next_e: f32) -> f32 {
 }
 
 pub fn interpolate_lsp(prev: &[f32; LPC_ORD], next: &[f32; LPC_ORD]) -> [f32; LPC_ORD] {
-    std::array::from_fn(|i| prev[i] + 0.5 * (next[i] - prev[i]))
+    core::array::from_fn(|i| prev[i] + 0.5 * (next[i] - prev[i]))
 }
 
 /// Fixed-point `interp_wo`: `prev_wo`/`next_wo`/`w0_min` all in Q23
@@ -124,7 +124,7 @@ pub fn interp_energy_fixed(prev_e: i64, next_e: i64) -> i64 {
 /// Q23 (`lpc::COEF_FRAC_BITS`) -- same reasoning as `interp_wo_fixed`'s
 /// own midpoint for avoiding a subtraction-then-divide.
 pub fn interpolate_lsp_fixed(prev: &[i64; LPC_ORD], next: &[i64; LPC_ORD]) -> [i64; LPC_ORD] {
-    std::array::from_fn(|i| (prev[i] + next[i]) >> 1)
+    core::array::from_fn(|i| (prev[i] + next[i]) >> 1)
 }
 
 #[cfg(test)]
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn lsp_interpolation_is_the_elementwise_midpoint() {
         let prev = [0.0f32; LPC_ORD];
-        let next: [f32; LPC_ORD] = std::array::from_fn(|i| i as f32 * 2.0);
+        let next: [f32; LPC_ORD] = core::array::from_fn(|i| i as f32 * 2.0);
         let mid = interpolate_lsp(&prev, &next);
         for (i, &m) in mid.iter().enumerate() {
             assert!((m - i as f32).abs() < 1e-6);
@@ -294,7 +294,7 @@ mod tests {
     #[test]
     fn lsp_interpolation_fixed_is_the_elementwise_midpoint() {
         let prev = [0i64; LPC_ORD];
-        let next: [i64; LPC_ORD] = std::array::from_fn(|i| to_q23(i as f32 * 2.0));
+        let next: [i64; LPC_ORD] = core::array::from_fn(|i| to_q23(i as f32 * 2.0));
         let mid = interpolate_lsp_fixed(&prev, &next);
         for (i, &m) in mid.iter().enumerate() {
             assert!((from_q23(m) - i as f32).abs() < 1e-5);

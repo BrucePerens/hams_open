@@ -29,35 +29,11 @@ const TRIG_LUT_BITS: u32 = 12;
 const TRIG_LUT_SIZE: usize = (1 << TRIG_LUT_BITS) + 1;
 
 fn cos_table_q23() -> &'static [i32; TRIG_LUT_SIZE] {
-    static TABLE: std::sync::OnceLock<[i32; TRIG_LUT_SIZE]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        let levels = 1u32 << TRIG_LUT_BITS;
-        let mut t: [i32; TRIG_LUT_SIZE] = std::array::from_fn(|i| {
-            let angle = i as f32 / levels as f32 * std::f32::consts::TAU;
-            (angle.cos() as f64 * (1i64 << 23) as f64).round() as i32
-        });
-        // Force an exact seam at the wraparound point (angle == TAU ==
-        // angle == 0) rather than trusting f32 cos(TAU) to round to
-        // bit-identical the same as cos(0.0) -- it's extremely close
-        // either way, but an explicit exact match here is free and
-        // removes any doubt about a seam artifact at the table's own
-        // wraparound boundary.
-        t[levels as usize] = t[0];
-        t
-    })
+    &super::tables::TRIG_COS_Q23
 }
 
 fn sin_table_q23() -> &'static [i32; TRIG_LUT_SIZE] {
-    static TABLE: std::sync::OnceLock<[i32; TRIG_LUT_SIZE]> = std::sync::OnceLock::new();
-    TABLE.get_or_init(|| {
-        let levels = 1u32 << TRIG_LUT_BITS;
-        let mut t: [i32; TRIG_LUT_SIZE] = std::array::from_fn(|i| {
-            let angle = i as f32 / levels as f32 * std::f32::consts::TAU;
-            (angle.sin() as f64 * (1i64 << 23) as f64).round() as i32
-        });
-        t[levels as usize] = t[0];
-        t
-    })
+    &super::tables::TRIG_SIN_Q23
 }
 
 /// `(cos, sin)` of `angle_q32/2^32` turns, both Q23 -- genuinely

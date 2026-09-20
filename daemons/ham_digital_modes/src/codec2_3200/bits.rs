@@ -348,10 +348,10 @@ mod tests {
                 voiced1: v[1] != 0,
                 wo_index: v[2] as u32,
                 e_index: v[3] as u32,
-                lsp_indexes: std::array::from_fn(|i| v[4 + i] as u32),
+                lsp_indexes: core::array::from_fn(|i| v[4 + i] as u32),
             };
             let expected: [u8; super::super::BYTES_PER_FRAME] =
-                std::array::from_fn(|i| v[4 + LPC_ORD + i] as u8);
+                core::array::from_fn(|i| v[4 + LPC_ORD + i] as u8);
             let got = pack_frame(&fields, super::super::WO_BITS, super::super::E_BITS);
             assert_eq!(
                 got, expected,

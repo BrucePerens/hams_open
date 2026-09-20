@@ -1,0 +1,143 @@
+#![no_std]
+#![no_main]
+#![allow(dead_code, static_mut_refs, unused_imports, unused_variables)]
+extern crate alloc;
+mod codec2_3200;
+mod prof;
+mod shim;
+use codec2_3200::{DecoderFixed, EncoderFixed, SAMPLES_PER_FRAME, BYTES_PER_FRAME};
+use core::fmt::Write;
+
+core::arch::global_asm!(r#"
+.section .text.init
+.global _start
+_start:
+    la sp, __stack_top
+    la t0, __bss_start
+    la t1, __bss_end
+1:  bgeu t0, t1, 2f
+    sw zero, 0(t0)
+    addi t0, t0, 4
+    j 1b
+2:  call main
+3:  j 3b
+"#);
+
+struct Uart;
+impl Write for Uart {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for b in s.bytes() { unsafe { core::ptr::write_volatile(0x1000_0000 as *mut u8, b) }; }
+        Ok(())
+    }
+}
+fn exit(code: u32) -> ! {
+    unsafe { core::ptr::write_volatile(0x10_0000 as *mut u32, if code == 0 { 0x5555 } else { (code << 16) | 0x3333 }) };
+    loop {}
+}
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    let _ = writeln!(Uart, "PANIC: {}", info);
+    exit(1)
+}
+struct Bump;
+static mut HEAP: [u8; 65536] = [0; 65536];
+static mut HP: usize = 0;
+unsafe impl alloc::alloc::GlobalAlloc for Bump {
+    unsafe fn alloc(&self, l: core::alloc::Layout) -> *mut u8 {
+        let a = (HP + l.align() - 1) & !(l.align() - 1);
+        HP = a + l.size();
+        if HP > HEAP.len() { return core::ptr::null_mut(); }
+        HEAP.as_mut_ptr().add(a)
+    }
+    unsafe fn dealloc(&self, _: *mut u8, _: core::alloc::Layout) {}
+}
+#[global_allocator]
+static A: Bump = Bump;
+
+
+extern "C" {
+    static __bss_end: u8;
+    static __stack_top: u8;
+}
+/// Fill the unused part of the stack area with a pattern so the high-water mark can be read back.
+fn paint_stack() -> usize {
+    unsafe {
+        let lo = &__bss_end as *const u8 as usize;
+        let sp: usize;
+        core::arch::asm!("mv {0}, sp", out(reg) sp);
+        let mut p = lo;
+        while p + 4 <= sp - 256 {
+            core::ptr::write_volatile(p as *mut u32, 0xA5A5_A5A5);
+            p += 4;
+        }
+        sp
+    }
+}
+/// Bytes of stack used below the stack pointer `sp` that `paint_stack` returned, i.e. by the callees
+/// only (not by `main`'s own frame, which here holds the 28 KB decoder state being constructed).
+fn stack_high_water(sp: usize) -> usize {
+    unsafe {
+        let lo = &__bss_end as *const u8 as usize;
+        let mut p = lo;
+        while p + 4 <= sp && core::ptr::read_volatile(p as *const u32) == 0xA5A5_A5A5 {
+            p += 4;
+        }
+        sp - p
+    }
+}
+
+#[cfg(not(feature = "small"))]
+static SPEECH: &[u8] = include_bytes!("../speech.raw");
+#[cfg(feature = "small")]
+static SPEECH: &[u8] = include_bytes!("../speech_small.raw");
+const E_NAMES: [&str; 9] = ["nlp(x2)", "voicing(x2)", "encode_wo", "window+autocorr", "white+levinson", "lpc_energy", "bw+lpc_to_lsp", "quantise", "pack"];
+const D_NAMES: [&str; 5] = ["unpack+dequant+interp", "lsp_to_lpc(x2)", "harmonic_amps(x2)", "first_harm(x2)", "synth(x2)"];
+
+#[no_mangle]
+pub extern "C" fn main() -> ! {
+    let mut u = Uart;
+    let n = SPEECH.len() / 2 / SAMPLES_PER_FRAME;
+    let _ = writeln!(u, "sizeof EncoderFixed {} bytes, DecoderFixed {} bytes", core::mem::size_of::<EncoderFixed>(), core::mem::size_of::<DecoderFixed>());
+    let sp0 = paint_stack();
+    let mut enc = EncoderFixed::new();
+    let mut dec = DecoderFixed::new();
+    let mut frames = [[0u8; BYTES_PER_FRAME]; 200];
+    let mut cksum: u32 = 0;
+    // pass 1: encode
+    let mut first = 0u32;
+    let mut enc_tot = 0u64; let mut enc_max = 0u32;
+    for f in 0..n {
+        let mut fr = [0i16; SAMPLES_PER_FRAME];
+        for i in 0..SAMPLES_PER_FRAME {
+            let o = (f * SAMPLES_PER_FRAME + i) * 2;
+            fr[i] = i16::from_le_bytes([SPEECH[o], SPEECH[o + 1]]);
+        }
+        let t0 = prof::instret();
+        frames[f] = enc.encode_profiled(&fr);
+        let d = prof::instret().wrapping_sub(t0);
+        if f == 0 { first = d; unsafe { prof::ACC = [0; 16]; } } else { enc_tot += d as u64; enc_max = enc_max.max(d); }
+        for &b in &frames[f] { cksum = cksum.wrapping_mul(16777619).wrapping_add(b as u32); }
+    }
+    let _ = writeln!(u, "frames={} ", n);
+    let enc_stack = stack_high_water(sp0);
+    let _ = writeln!(u, "peak stack during encode {} bytes", enc_stack);
+    let sp1 = paint_stack();
+    let _ = writeln!(u, "ENCODE first-frame(incl table init) {} instr; steady avg {} max {} instr/frame", first, enc_tot / (n as u64 - 1), enc_max);
+    for i in 0..E_NAMES.len() { let _ = writeln!(u, "  enc {:<18} {:>9}", E_NAMES[i], unsafe { prof::ACC[i] } / (n as u64 - 1)); }
+    unsafe { prof::ACC = [0; 16]; }
+    let mut dfirst = 0u32; let mut dec_tot = 0u64; let mut dec_max = 0u32;
+    for f in 0..n {
+        let t0 = prof::instret();
+        let out = dec.decode_profiled(&frames[f]);
+        let d = prof::instret().wrapping_sub(t0);
+        if f == 0 { dfirst = d; unsafe { prof::ACC = [0; 16]; } } else { dec_tot += d as u64; dec_max = dec_max.max(d); }
+        for &s in &out { cksum = cksum.wrapping_mul(16777619).wrapping_add(s as u16 as u32); }
+    }
+    let _ = writeln!(u, "peak stack during decode {} bytes", stack_high_water(sp1));
+    let _ = writeln!(u, "DECODE first-frame {} instr; steady avg {} max {} instr/frame", dfirst, dec_tot / (n as u64 - 1), dec_max);
+    for i in 0..D_NAMES.len() { let _ = writeln!(u, "  dec {:<22} {:>9}", D_NAMES[i], unsafe { prof::ACC[i] } / (n as u64 - 1)); }
+    let names = ["fft1", "a2", "fft2+a2g", "loop1(log/exp)", "harm loop", "synth:h+phase", "synth:postfilter", "synth:fill+sym(13)", "synth:ifft(14)"];
+    for i in 6..15 { let _ = writeln!(u, "  fine[{}] {:>9}", i, unsafe { prof::ACC[i] } / (n as u64 - 1)); }
+    let _ = writeln!(u, "checksum {:08x}  static_heap_used {}", cksum, unsafe { HP });
+    exit(0)
+}

@@ -6,49 +6,31 @@
 //! kept live specifically to serve as that per-frame diff reference --
 //! Bruce's own recorded product decision).
 //!
-//! **Honest current state, not aspirational**: the entire windowing ->
-//! `autocorrelate` -> Levinson-Durbin -> `lpc_energy` -> bandwidth-
-//! expansion -> LSP conversion chain (`lpc::autocorrelate_fixed`,
-//! `lpc::apply_white_noise_correction_fixed`, `lpc::levinson_durbin_
-//! fixed_from_integer_r`, `lpc::lpc_energy_fixed`, `lpc::apply_bw_gamma_
-//! fixed`, `lpc::lpc_to_lsp_from_integer_ak`), plus `voicing::is_voiced_
-//! fixed`, are genuinely fixed-point today -- no `f32` touches the LPC
-//! analysis path anywhere in this struct, including the LSP frequencies
-//! themselves now (`lpc::lpc_to_lsp_from_integer_ak`'s own `acos()` call
-//! is a fixed-point LUT, `lpc::acos_lut_fixed`, as of this pass -- the
-//! LSP frequencies stay `f32`-typed only because `interp.rs`/
-//! `quantise.rs` downstream aren't migrated yet, not because the
-//! conversion itself still needs a genuine float transcendental call --
-//! the established "integer core, float boundary" pattern). `nlp::
-//! nlp_fixed` (the pitch estimator, including its own fixed-point radix-2
-//! FFT -- `nlp.rs`'s own `fft_fixed`) now runs directly on `sn` (this
-//! struct's own real `i16`-native sample history), no `f32` conversion
-//! at all; it returns `f0` (Hz) as `f32` only at that one final boundary
-//! (see `nlp.rs`'s own doc comment), so `nlp::f0_to_wo`/`quantise::
-//! encode_wo` immediately downstream need no changes of their own.
-//! `quantise::encode_energy` already routed through `fixed_point::
-//! log2_lut` (now genuinely integer) even before this pass;
-//! `quantise::encode_lsps_delta_scalar_fixed` is a fixed-point sibling
-//! wired in earlier, verified to produce byte-identical transmitted
-//! indices to the float version on the real captured LSP corpus.
-//! Re-derive this file's own real state directly by reading `encode()`
-//! below before trusting this comment -- per this project's own
-//! "keep-working-until-actually-done" discipline, a status claim can go
-//! stale the moment the next stage lands and this comment isn't updated
-//! to match.
+//! **Current state (2026-09-20)**: the whole encode path is integer, with
+//! no `f32`/`f64` at run time. Windowing, autocorrelation, Levinson-Durbin,
+//! bandwidth expansion, line spectral pair search (`lpc::lpc_to_lsp_q23_
+//! from_integer_ak`, integer root search over Q29 abscissae), the pitch
+//! estimator (`nlp::nlp_fixed_bin`, returns a bin index; the transmitted
+//! pitch index is a committed table lookup), the energy quantizer
+//! (`quantise::encode_energy_q23`) and the line spectral pair quantizer
+//! (`quantise::encode_lsps_delta_scalar_q23`) all take and return
+//! integers. Every table is a committed constant in `tables.rs`. The
+//! float versions of these boundaries still exist (other codec modes and
+//! the reference comparisons use them); the test `encode_integer_
+//! boundaries_agree_with_the_float_boundaries` measures how closely the
+//! integer path reproduces them. A status comment can go stale: re-derive
+//! this by reading `encode()` below.
 
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
-use super::{fallback_lsp, lpc, nlp, quantise, voicing, window};
+use super::{lpc, nlp, quantise, tables, voicing};
 
 pub struct EncoderFixed {
-    /// Raw sample history, `i16`-native -- no `f32` conversion happens
-    /// here at all; each not-yet-migrated stage below converts on its
-    /// own, at its own call site, so it's visible exactly where the real
-    /// float boundary still is.
+    /// Raw sample history, `i16`-native. The whole encode path is integer:
+    /// pitch, energy and line spectral pairs reach their quantizers as
+    /// integers (pitch bin, Q23 energy, Q23 radians); no `f32` or `f64` is
+    /// touched at run time, and every table is a committed constant in
+    /// `tables.rs`.
     sn: [i16; M_PITCH],
-    /// `window::make_analysis_window_fixed()`, Q0.30 -- feeds the real,
-    /// genuinely fixed-point autocorrelate/Levinson-Durbin chain below.
-    window_fixed: [i32; M_PITCH],
     nlp_state: nlp::NlpStateFixed,
     voicing_state: voicing::VoicingStateFixed,
 }
@@ -57,7 +39,6 @@ impl Default for EncoderFixed {
     fn default() -> Self {
         EncoderFixed {
             sn: [0; M_PITCH],
-            window_fixed: window::make_analysis_window_fixed(),
             nlp_state: nlp::NlpStateFixed::new(),
             voicing_state: voicing::VoicingStateFixed::new(),
         }
@@ -93,7 +74,7 @@ impl EncoderFixed {
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         self.shift_in(&speech[N_SAMP..]);
-        let f0 = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+        let f0_bin = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
         let voiced1 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
@@ -102,7 +83,7 @@ impl EncoderFixed {
         // nlp.rs's own doc comment on why that's still the right
         // boundary point rather than pushing the quantizer itself into
         // fixed point.
-        let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
+        let wo_index = tables::NLP_BIN_WO_INDEX[f0_bin] as u32;
 
         // Windowing + autocorrelate + Levinson-Durbin: MIGRATED, genuine
         // fixed-point, no f32 anywhere in this block. `wn_q[i] = sn[i] *
@@ -115,7 +96,7 @@ impl EncoderFixed {
         for ((w, &s), &win) in wn_q
             .iter_mut()
             .zip(self.sn.iter())
-            .zip(self.window_fixed.iter())
+            .zip(tables::WINDOW_ANALYSIS_Q30.iter())
         {
             *w = ((s as i64 * win as i64) >> 7) as i32;
         }
@@ -134,7 +115,7 @@ impl EncoderFixed {
         // (matches lpc_energy's own doc comment on real ordering), on
         // the pre-expansion a_q23 -- hence taking it before the
         // bandwidth-expansion step below mutates it in place.
-        let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
+        let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q);
 
         // bw_gamma + lpc_to_lsp: now fixed-point too, including the
         // acos() call itself (lpc::acos_lut_fixed). lsp stays f32-typed
@@ -142,7 +123,8 @@ impl EncoderFixed {
         // yet -- the established "integer core, float boundary"
         // pattern, now reached one stage later than before.
         lpc::apply_bw_gamma_fixed(&mut a_q23);
-        let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23).unwrap_or_else(fallback_lsp);
+        let lsp_q23 = lpc::lpc_to_lsp_q23_from_integer_ak(&a_q23)
+            .unwrap_or(tables::MOD_FALLBACK_LSP_Q23);
 
         // quantise::encode_energy already routes through fixed_point::
         // log2_lut (now genuinely integer, see that module). encode_
@@ -151,8 +133,8 @@ impl EncoderFixed {
         // indices to the float version on the real captured LSP corpus
         // (quantise.rs's own test) -- no tolerance, exact agreement.
 
-        let e_index = quantise::encode_energy(e);
-        let lsp_indexes = quantise::encode_lsps_delta_scalar_fixed(&lsp);
+        let e_index = quantise::encode_energy_q23(e_q23);
+        let lsp_indexes = quantise::encode_lsps_delta_scalar_q23(&lsp_q23);
 
         let fields = bits::FrameFields {
             voiced0,
@@ -172,7 +154,7 @@ mod tests {
     use crate::codec2_3200::Decoder;
 
     fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
-        std::array::from_fn(|i| {
+        core::array::from_fn(|i| {
             let t = (t0 + i) as f32 / super::super::SAMPLE_RATE as f32;
             let v = 8000.0 * (std::f32::consts::TAU * f0 * t).sin()
                 + 3000.0 * (std::f32::consts::TAU * 2.0 * f0 * t).sin();
@@ -195,7 +177,7 @@ mod tests {
         for (i, s) in encoder.sn.iter_mut().enumerate() {
             *s = i as i16;
         }
-        let new_samples: [i16; N_SAMP] = std::array::from_fn(|i| 1000 + i as i16);
+        let new_samples: [i16; N_SAMP] = core::array::from_fn(|i| 1000 + i as i16);
         encoder.shift_in(&new_samples);
 
         // The first M_PITCH - N_SAMP samples are now what used to be at
@@ -304,5 +286,110 @@ mod tests {
             corr > 0.99,
             "EncoderFixed's own bitstream diverged from floating_reference::Encoder's on identical input: correlation={corr} (expected > 0.99) -- since both now run the same windowing/autocorrelate/Levinson-Durbin chain (fixed-point vs float), a large drop here would mean a real bug in the fixed-point migration, not just an expected quantizer-index difference"
         );
+    }
+
+    impl EncoderFixed {
+        /// The encoder as it was before its float boundaries were made
+        /// integer: same integer core, but pitch, energy and line spectral
+        /// pairs cross an `f32` on the way to the quantizers. Test oracle
+        /// for `encode_integer_boundaries_agree_with_the_float_boundaries`.
+        fn encode_with_float_boundaries(
+            &mut self,
+            speech: &[i16; SAMPLES_PER_FRAME],
+        ) -> [u8; BYTES_PER_FRAME] {
+            self.shift_in(&speech[..N_SAMP]);
+            nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+            let voiced0 =
+                voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+            self.shift_in(&speech[N_SAMP..]);
+            let f0 = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+            let voiced1 =
+                voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+            let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
+            let mut wn_q = [0i32; M_PITCH];
+            for ((w, &s), &win) in wn_q.iter_mut().zip(self.sn.iter()).zip(tables::WINDOW_ANALYSIS_Q30.iter()) {
+                *w = ((s as i64 * win as i64) >> 7) as i32;
+            }
+            let r_q = lpc::autocorrelate_fixed(&wn_q);
+            let mut r_q_for_levinson = r_q;
+            lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
+            let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
+            let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
+            lpc::apply_bw_gamma_fixed(&mut a_q23);
+            let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23)
+                .unwrap_or_else(crate::codec2_3200::fallback_lsp);
+            let fields = bits::FrameFields {
+                voiced0,
+                voiced1,
+                wo_index,
+                e_index: quantise::encode_energy(e),
+                lsp_indexes: quantise::encode_lsps_delta_scalar_fixed(&lsp),
+            };
+            bits::pack_frame(&fields, WO_BITS, E_BITS)
+        }
+    }
+
+    fn read_wav(path: &str) -> Vec<i16> {
+        let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    }
+
+    /// The integer pitch/energy/line-spectral-pair boundaries must give
+    /// the same transmitted indices as the float boundaries they replaced,
+    /// except within a rounding whisker of a quantizer decision boundary.
+    /// Measured on the four real 8 kHz speech recordings under
+    /// `tests/fixtures/osr_speech/`: pitch index is identical by
+    /// construction (table of the float path); the energy and line
+    /// spectral pair indices may differ only by one level and only in a
+    /// tiny fraction of frames.
+    #[test]
+    // Tests [@ANCHOR: encode_energy_q23]
+    // Tests [@ANCHOR: lpc_to_lsp_q23]
+    // Tests [@ANCHOR: find_next_root_q29]
+    // Tests [@ANCHOR: nlp_fixed_bin]
+    fn encode_integer_boundaries_agree_with_the_float_boundaries() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/osr_speech");
+        let mut frames = 0usize;
+        let mut wo_diff = 0usize;
+        let mut e_diff = 0usize;
+        let mut lsp_frames_diff = 0usize;
+        let mut lsp_fields_diff = 0usize;
+        let mut max_step = 0i64;
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_none_or(|e| e != "wav") {
+                continue;
+            }
+            let samples = read_wav(path.to_str().unwrap());
+            let mut prod = EncoderFixed::new();
+            let mut oracle = EncoderFixed::new();
+            for chunk in samples.chunks_exact(SAMPLES_PER_FRAME) {
+                let frame: [i16; SAMPLES_PER_FRAME] = chunk.try_into().unwrap();
+                let a = bits::unpack_frame(&prod.encode(&frame), WO_BITS, E_BITS);
+                let b = bits::unpack_frame(&oracle.encode_with_float_boundaries(&frame), WO_BITS, E_BITS);
+                frames += 1;
+                assert_eq!((a.voiced0, a.voiced1), (b.voiced0, b.voiced1));
+                wo_diff += (a.wo_index != b.wo_index) as usize;
+                e_diff += (a.e_index != b.e_index) as usize;
+                if a.e_index != b.e_index {
+                    max_step = max_step.max((a.e_index as i64 - b.e_index as i64).abs());
+                }
+                let d = a.lsp_indexes.iter().zip(b.lsp_indexes.iter()).filter(|(x, y)| x != y).count();
+                lsp_fields_diff += d;
+                lsp_frames_diff += (d > 0) as usize;
+                for (x, y) in a.lsp_indexes.iter().zip(b.lsp_indexes.iter()) {
+                    max_step = max_step.max((*x as i64 - *y as i64).abs());
+                }
+            }
+        }
+        println!(
+            "{frames} frames: wo differs {wo_diff}, energy differs {e_diff}, lsp differs in {lsp_frames_diff} frames ({lsp_fields_diff} fields), max index step {max_step}"
+        );
+        assert_eq!(wo_diff, 0, "pitch index is table-derived from the float path and must be identical");
+        assert!(max_step <= 1, "an integer boundary moved an index by more than one level");
+        // Measured on 2026-09-20 (see the println above); thresholds leave headroom
+        // for the encoder's slow drift but would catch a real regression.
+        assert!(e_diff * 2000 <= frames, "energy index disagreed in {e_diff}/{frames} frames");
+        assert!(lsp_frames_diff * 500 <= frames, "lsp index disagreed in {lsp_frames_diff}/{frames} frames");
     }
 }
