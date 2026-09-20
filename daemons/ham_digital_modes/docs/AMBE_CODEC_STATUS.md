@@ -43,6 +43,11 @@ report voiced speech as a tone; decoders with damaged-frame handling; float and 
 * `ErrorPolicy::ChipCompatible` reproduces the chip (repeats when the first Golay block corrected 3 errors, never mutes, so
   garbage frames produce loud bursts); it is a defect of the chip and exists only as an opt-in for conformance tests. It is
   also selectable on all four synthesis decoders (float and fixed, D-STAR and AMBE+2).
+* TIA-102.BABA keeps the standard's own repeat and mute rules (sections 7.7 and 7.8). Its stronger error correction (four Golay
+  and three Hamming code vectors) leaves little to conceal: measured with `examples/ambe_error_concealment_eval_tia.rs`, the
+  standard's policy is within 0.05 dB of a fading repeat up to 5% bit errors. At 10% and in bursts a fade lowers loudness
+  excursions (worst 1%: 13.4 to 6.7 dB in bursts) but raises the envelope distance (2.90 to 3.68 dB) and mutes 4.6% of active
+  frames, so it is not a clear win and was not adopted.
 * Chip conventions that would lower quality (its pitch index on unvoiced frames, delayed mute on reserved pitch codes) are
   deliberately not copied.
 
