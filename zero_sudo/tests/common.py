@@ -555,26 +555,70 @@ def _patched_chrome_stop(self, *args, **kwargs):
 
 ChromeBrowser.stop = _patched_chrome_stop
 
-# 🚨 TRUNCATE READY CODE LOGS 🚨
-original_wait_ready = ChromeBrowser._wait_ready
+# 🚨 POLITE, TIMEOUT-TOLERANT READY WAIT 🚨
+# Odoo core's ChromeBrowser._wait_ready() re-issues Runtime.evaluate with no
+# pause while the ready code is falsy (~110k calls in 60s), and the last call
+# gets a ~0s timeout that escapes as a bare TimeoutError instead of returning
+# False. This is a line-for-line mirror of core (Odoo 19) with two changes:
+# a short sleep between polls, and a TimeoutError from one evaluate call
+# counts as "not ready yet". Same overall deadline, same True/False results.
+# It also truncates the logged ready code to 150 chars (the former wrapper's
+# job) directly, without mutating the shared logger.
+_WAIT_READY_POLL_INTERVAL = 0.1
 
 
 # [@ANCHOR: zero_sudo:patched_wait_ready]
 def _patched_wait_ready(self, ready_code=None, timeout=60, *args, **kwargs):
-    original_info = self._logger.info
+    timeout *= self.throttling_factor
+    ready_code = ready_code or "document.readyState === 'complete'"
+    logged_code = ready_code
+    if len(logged_code) > 150:
+        logged_code = logged_code[:150] + " ..."
+    self._logger.info('Evaluate ready code "%s"', logged_code)
+    start_time = time.time()
+    result = None
+    while True:
+        taken = time.time() - start_time
+        if taken > timeout:
+            break
 
-    def _patched_info(msg, *args, **kwargs):
-        if msg == 'Evaluate ready code "%s"' and args:
-            code = args[0]
-            if code and len(code) > 150:
-                args = (code[:150] + " ...",)
-        original_info(msg, *args, **kwargs)
+        try:
+            result = self._websocket_request(
+                "Runtime.evaluate",
+                params={
+                    "expression": "try { %s } catch {}" % ready_code,
+                    "awaitPromise": True,
+                },
+                timeout=timeout - taken,
+            )["result"]
+        except concurrent.futures.CancelledError:
+            exc = self._result.done() and self._result.exception()
+            if exc:
+                raise exc from None
+            result = "cancelled"
+        except TimeoutError:
+            # One evaluate got no answer in its slice of the budget: not
+            # ready yet. The deadline check above decides when to give up.
+            result = "timeout"
 
-    self._logger.info = _patched_info
-    try:
-        return original_wait_ready(self, ready_code, timeout)
-    finally:
-        self._logger.info = original_info
+        if result == {"type": "boolean", "value": True}:
+            time_to_ready = time.time() - start_time
+            if taken > 2:
+                self._logger.info(
+                    "The ready code tooks too much time : %s", time_to_ready
+                )
+            return True
+
+        remaining = timeout - (time.time() - start_time)
+        if remaining > 0:
+            time.sleep(min(_WAIT_READY_POLL_INTERVAL, remaining))  # audit-ignore-sleep
+
+    exc = self._result.done() and self._result.exception()
+    if exc:
+        raise exc from None
+    self.take_screenshot(prefix="sc_failed_ready_")
+    self._logger.info("Ready code last try result: %s", result)
+    return False
 
 
 ChromeBrowser._wait_ready = _patched_wait_ready
