@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Fixed-point voicing and amplitude analysis at a *given* (already quantized) pitch, for the D-STAR and
-//! AMBE+2 encoders: fixed-point sibling of `ambe::float::mbe_encode::analyze_at_pitch`. The
-//! quantization half of that float module is out of scope here.
+//! AMBE+2 encoders: fixed-point sibling of `ambe::float::mbe_encode::analyze_at_pitch`. The quantization half of that
+//! float module is `general::mbe_encode::quantize_speech`.
 
 use crate::ambe::fixed::general::fixed_ops::{div_q16, mul_q16, TWO_PI_Q16_16};
 use crate::ambe::fixed::general::mbe_encode::{

@@ -61,11 +61,10 @@
 //! `b0` is a 7-bit field (0..=127) but the pitch table (Annex A) only defines 120 real codes
 //! (0..=119); mbelib's real decode logic treats 120-127 as special frame types, reused here as
 //! [`decode::FrameKind`]: 120-123 = erasure, 124-125 = silence (fixed `L=14`, `w0=2*pi/32`),
-//! 126-127 = tone (a special pure-tone encoding with its own dedicated parameter table, Annex J --
-//! **not implemented here**, stubbed as [`decode::FrameKind::Tone`] with the raw frame data
-//! preserved, since decoding it needs Annex J's own formula-driven/tabulated `f0`/`l1`/`l2` lookup
-//! that `AMBE_PLUS_2_NOTES.md` already has recorded but this pass didn't wire up -- a real,
-//! disclosed gap, not a silent skip).
+//! 126-127 = tone frames (detected tones and DTMF, and the call-progress tones), decoded through the chip's own
+//! `TONE_IDX` field ([`decode::decode_tone_idx`], [`decode::classify_tone_idx`]) and synthesized by
+//! [`synthesis::AmbePlus2SynthesisDecoder`]; [`encode::build_tone_frame`] builds them and the [`encoder::Encoder`]
+//! emits them for detected tones. (An earlier version of this comment called them unimplemented.)
 //!
 //! # Scope, stated honestly
 //!
