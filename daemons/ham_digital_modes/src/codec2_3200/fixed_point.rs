@@ -350,15 +350,45 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
     // `.max(1)` -- fixing it here at the root protects every caller (envelope.rs,
     // spectral_bridge.rs, interp.rs, synthesis.rs's other call site) instead of only the one
     // that happened to add its own guard.
-    let x_q23 = x_q23.max(1);
-    let bits = 63 - x_q23.leading_zeros() as i32; // position of the top set bit
-    let shift = bits - 23; // x_q23 == mantissa_q23 * 2^shift, mantissa_q23 in [2^23, 2^24)
-    let mantissa_q23: i64 = if shift >= 0 {
-        x_q23 >> shift
+    let x = x_q23.max(1) as u64;
+    // 32-bit form of the normalisation (a 64-bit leading-zero count and
+    // variable 64-bit shift are several times dearer on a 32-bit core):
+    // `x == mantissa * 2^shift` with the mantissa in `[2^23, 2^24)`.
+    let (hi, lo) = ((x >> 32) as u32, x as u32);
+    let (shift, mantissa): (i32, u32) = if hi != 0 {
+        let shift = 9 + (31 - hi.leading_zeros()) as i32; // bit position of the top set bit, minus 23
+        let m = if shift >= 32 {
+            hi >> (shift - 32)
+        } else {
+            (lo >> shift) | (hi << (32 - shift))
+        };
+        (shift, m)
     } else {
-        x_q23 << (-shift)
+        let shift = (31 - lo.leading_zeros()) as i32 - 23;
+        (shift, if shift >= 0 { lo >> shift } else { lo << (-shift) })
     };
-    let mantissa_frac_q23 = (mantissa_q23 - (1i64 << 23)) as u64; // [0, 2^23)
+    let frac = mantissa & ((1 << 23) - 1); // [0, 2^23)
+    let idx = (frac >> (23 - LOG2_LUT_BITS)) as usize;
+    // Position inside the table cell, as a Q23 weight.
+    let frac_q23 = (frac & ((1 << (23 - LOG2_LUT_BITS)) - 1)) << LOG2_LUT_BITS;
+    let table = log2_lut_table_q23();
+    let t0 = table[idx];
+    // The table is non-decreasing (checked at compile time below), so the
+    // difference and the product are non-negative and unsigned arithmetic
+    // gives the same floor as the signed original.
+    let dt = table[idx + 1].wrapping_sub(t0) as u32;
+    let interp_q23 = t0 as i64 + ((frac_q23 as u64 * dt as u64) >> 23) as i64;
+    ((shift as i64) << 23) + interp_q23
+}
+
+/// Reference (the straightforward 64-bit form) for [`log2_q23`].
+#[cfg(test)]
+fn log2_q23_reference(x_q23: i64) -> i64 {
+    let x_q23 = x_q23.max(1);
+    let bits = 63 - x_q23.leading_zeros() as i32;
+    let shift = bits - 23;
+    let mantissa_q23: i64 = if shift >= 0 { x_q23 >> shift } else { x_q23 << (-shift) };
+    let mantissa_frac_q23 = (mantissa_q23 - (1i64 << 23)) as u64;
     let levels = 1u32 << LOG2_LUT_BITS;
     let scaled_full = mantissa_frac_q23 * levels as u64;
     let idx = ((scaled_full >> 23) as usize).min(levels as usize - 1);
@@ -369,6 +399,22 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
     let interp_q23 = t0 + ((frac_q23 * (t1 - t0)) >> 23);
     ((shift as i64) << 23) + interp_q23
 }
+
+const fn table_is_non_decreasing(t: &[i32; LOG2_LUT_SIZE]) -> bool {
+    let mut i = 0;
+    while i + 1 < LOG2_LUT_SIZE {
+        if t[i + 1] < t[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+const _: () = assert!(table_is_non_decreasing(&super::tables::LOG2_LUT_Q23));
+const _: () = assert!(table_is_non_decreasing(&super::tables::EXP2_LUT_FRAC_Q23));
+// The 32-bit interpolation products below need the weights to fit 32 bits.
+const _: () = assert!(super::tables::LOG2_LUT_Q23[LOG2_LUT_SIZE - 1] < (1 << 24));
+const _: () = assert!(super::tables::EXP2_LUT_FRAC_Q23[LOG2_LUT_SIZE - 1] < (1 << 24));
 
 /// Genuinely integer-in/integer-out sibling of `exp2_lut` -- Q23 in
 /// (`y_q23`, `2^y` where `y = y_q23 / 2^23`), Q23 out (`i64`). Mirrors
@@ -381,18 +427,17 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
 /// end.
 // [@ANCHOR: exp2_q23]
 pub(crate) fn exp2_q23(y_q23: i64) -> i64 {
-    let y_q = y_q23 << (EXP2_Y_FRAC_BITS - 23); // rescale Q23 -> Q(EXP2_Y_FRAC_BITS)
-    let floor_y = y_q >> EXP2_Y_FRAC_BITS;
-    let frac_full_q = y_q - (floor_y << EXP2_Y_FRAC_BITS);
-    let extra_bits = EXP2_Y_FRAC_BITS - LOG2_LUT_BITS;
-    let levels = 1i64 << LOG2_LUT_BITS;
-    let idx = ((frac_full_q >> extra_bits) as usize).min(levels as usize - 1);
-    let t_num = frac_full_q - ((idx as i64) << extra_bits);
+    // `y_q = y_q23 << 1` in Q24; every piece below is read off the low
+    // bits of `y_q23` directly, in 32-bit arithmetic.
+    let floor_y = y_q23 >> 23;
+    let frac = (y_q23 as u32) & ((1 << 23) - 1); // [0, 2^23) fractional part of y in Q23
+    let idx = (frac >> (23 - LOG2_LUT_BITS)) as usize;
+    let t_num = (frac & ((1 << (23 - LOG2_LUT_BITS)) - 1)) << 1; // weight, `EXP2_Y_EXTRA_BITS` bits
     let table = exp2_lut_table_frac_q23();
-    let t0 = table[idx] as i64;
-    let t1 = table[idx + 1] as i64;
-    let interp_frac_q23 = t0 + ((t_num * (t1 - t0)) >> extra_bits); // (2^frac - 1.0) in Q23, [0, 2^23)
-    let mantissa_q23 = (1i64 << 23) + interp_frac_q23; // 2^frac in Q23, [2^23, 2^24)
+    let t0 = table[idx];
+    let dt = table[idx + 1].wrapping_sub(t0) as u32; // non-negative, see the table check above
+    let interp_frac_q23 = t0 as u32 + ((t_num as u64 * dt as u64) >> EXP2_Y_EXTRA_BITS) as u32;
+    let mantissa_q23 = (1u32 << 23) + interp_frac_q23; // 2^frac in Q23, [2^23, 2^24)
     if floor_y >= 0 {
         // mantissa_q23 < 2^24, so this silently overflows i64 (a plain
         // bit shift, not a checked one -- Rust only panics on a shift
@@ -405,6 +450,35 @@ pub(crate) fn exp2_q23(y_q23: i64) -> i64 {
             floor_y < 39,
             "exp2_q23: floor(y)={floor_y} overflows i64 at Q23 -- caller's y domain exceeds this function's safe range"
         );
+        (mantissa_q23 as i64) << floor_y
+    } else {
+        // (mantissa + 2^(neg-1)) >> neg is 0 for every neg >= 25 (the
+        // mantissa is under 2^24), so the shift below never needs 64 bits.
+        let neg = (-floor_y).min(63) as u32;
+        if neg >= 25 {
+            0
+        } else {
+            ((mantissa_q23 + (1u32 << (neg - 1))) >> neg) as i64
+        }
+    }
+}
+
+/// Reference (the straightforward 64-bit form) for [`exp2_q23`].
+#[cfg(test)]
+fn exp2_q23_reference(y_q23: i64) -> i64 {
+    let y_q = y_q23 << (EXP2_Y_FRAC_BITS - 23);
+    let floor_y = y_q >> EXP2_Y_FRAC_BITS;
+    let frac_full_q = y_q - (floor_y << EXP2_Y_FRAC_BITS);
+    let extra_bits = EXP2_Y_FRAC_BITS - LOG2_LUT_BITS;
+    let levels = 1i64 << LOG2_LUT_BITS;
+    let idx = ((frac_full_q >> extra_bits) as usize).min(levels as usize - 1);
+    let t_num = frac_full_q - ((idx as i64) << extra_bits);
+    let table = exp2_lut_table_frac_q23();
+    let t0 = table[idx] as i64;
+    let t1 = table[idx + 1] as i64;
+    let interp_frac_q23 = t0 + ((t_num * (t1 - t0)) >> extra_bits);
+    let mantissa_q23 = (1i64 << 23) + interp_frac_q23;
+    if floor_y >= 0 {
         mantissa_q23 << floor_y
     } else {
         let neg = (-floor_y) as u32;
@@ -419,6 +493,68 @@ pub(crate) fn exp2_q23(y_q23: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The 32-bit forms of `log2_q23`/`exp2_q23` equal the straightforward
+    /// 64-bit originals bit for bit: at every table-cell boundary and edge
+    /// of the input range, and on a large pseudo-random sweep across all
+    /// magnitudes.
+    #[test]
+    // Tests [@ANCHOR: log2_q23]
+    // Tests [@ANCHOR: exp2_q23]
+    fn log2_and_exp2_q23_match_their_64_bit_reference_bit_for_bit() {
+        let mut seed = 0x1234_5678_9abc_def0u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed
+        };
+        let mut xs: Vec<i64> = vec![0, 1, 2, 3, i64::MAX, i64::MAX - 1, 1 << 23, (1 << 23) - 1, (1 << 24) - 1, 1 << 24];
+        for k in 0..63 {
+            for d in [-2i64, -1, 0, 1, 2] {
+                xs.push(((1i64 << k) + d).max(1));
+            }
+        }
+        // Every table cell boundary at several exponents.
+        for shift in [0u32, 1, 5, 9, 10, 20, 31, 32, 33, 39, 40] {
+            for cell in 0..=256i64 {
+                for d in [-1i64, 0, 1] {
+                    xs.push((((1i64 << 23) + (cell << 15) + d) << shift).max(1));
+                }
+            }
+        }
+        for _ in 0..200_000 {
+            let bits = next() % 63;
+            xs.push((next() >> 1 >> (63 - bits.max(1))) as i64 | 1);
+            xs.push((next() >> 1) as i64 >> (next() % 63));
+        }
+        for &x in &xs {
+            assert_eq!(log2_q23(x), log2_q23_reference(x), "log2_q23({x})");
+        }
+        let mut ys: Vec<i64> = vec![0, 1, -1, (1 << 23) - 1, 1 << 23, -(1 << 23), -(1 << 23) - 1];
+        for k in 0..38 {
+            for d in [-1i64, 0, 1] {
+                ys.push((1i64 << k) + d);
+                ys.push(-(1i64 << k) + d);
+            }
+        }
+        for cell in 0..=256i64 {
+            for whole in [-40i64, -25, -24, -23, -2, -1, 0, 1, 5, 20, 38] {
+                for d in [-1i64, 0, 1] {
+                    ys.push((whole << 23) + (cell << 15) + d);
+                }
+            }
+        }
+        for _ in 0..200_000 {
+            ys.push((next() >> 1) as i64 % (39 << 23) - (30 << 23));
+        }
+        // Far-negative inputs (underflow to zero) are reachable; large
+        // positive ones are not (debug_assert), so they stay below 39.
+        for _ in 0..1000 {
+            ys.push(-((next() >> 20) as i64));
+        }
+        for &y in &ys {
+            assert_eq!(exp2_q23(y), exp2_q23_reference(y), "exp2_q23({y})");
+        }
+    }
 
     macro_rules! fixture {
         ($name:literal) => {

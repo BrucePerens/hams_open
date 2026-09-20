@@ -1035,10 +1035,31 @@ const fn narrow_twiddles<const M: usize>(src: &[(i64, i64); M]) -> [(i32, i32); 
     out
 }
 
+/// The table's second quadrant is the first rotated by a quarter turn:
+/// `w[N/4 + m] == -i * w[m]`, i.e. `(wr, wi)` becomes `(wi, -wr)`, exactly as
+/// integers. The inverse-transform kernel relies on this to multiply by a
+/// first-quadrant twiddle (whose real and imaginary magnitudes are both
+/// positive, so the products are unsigned) after an exact rotation of the
+/// data by a quarter turn.
+const fn quadrant_symmetric<const M: usize>(t: &[(i32, i32); M]) -> bool {
+    let q = M / 2;
+    let mut m = 1;
+    while m < q {
+        if t[q + m].0 != t[m].1 || t[q + m].1 != -t[m].0 || t[m].0 <= 0 || t[m].1 >= 0 {
+            return false;
+        }
+        m += 1;
+    }
+    true
+}
+
 const TW_512: [(i32, i32); FFT_ENC / 2] = narrow_twiddles(&TWIDDLES_512_Q23);
+const _: () = assert!(quadrant_symmetric(&TW_512));
 static BITREV_512: [u16; FFT_ENC] = build_bit_reverse_table::<FFT_ENC>();
 #[cfg(feature = "codec2_16k_bridge")]
 const TW_1024: [(i32, i32); FFT_ENC_SB / 2] = narrow_twiddles(&TWIDDLES_1024_Q23);
+#[cfg(feature = "codec2_16k_bridge")]
+const _: () = assert!(quadrant_symmetric(&TW_1024));
 #[cfg(feature = "codec2_16k_bridge")]
 static BITREV_1024: [u16; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_SB>();
 
@@ -1143,6 +1164,101 @@ fn mul_round_i64(w1: i32, x1: i64, w2: i32, x2: i64) -> i64 {
     let out_lo = (lo >> FRAC_BITS) | ((hi as u32) << (32 - FRAC_BITS));
     let out_hi = hi >> FRAC_BITS;
     ((out_hi as i64) << 32) | out_lo as i64
+}
+
+/// `c * x` for an unsigned 24-bit `c` and an `i64` `x`, as the (low, high)
+/// 32-bit words of the low 64 bits of the product: one full 32x32->64
+/// unsigned product (`mul` + `mulhu`) for the low word of `x` and one
+/// 32-bit product for its high word. No sign corrections are needed
+/// because `c` is unsigned.
+#[inline(always)]
+fn umul_x(c: u32, x: i64) -> (u32, u32) {
+    let xl = x as u32;
+    let xh = (x >> 32) as u32;
+    let p = c as u64 * xl as u64;
+    (p as u32, ((p >> 32) as u32).wrapping_add(c.wrapping_mul(xh)))
+}
+
+/// The two exact 64-bit sums of an inverse-transform twiddle multiply with
+/// first-quadrant twiddle `(c, -s)` (`c`, `s` positive): `A = c*x - s*y`
+/// and `B = c*y + s*x` (the real and imaginary parts of `w * (x + j y)`
+/// before rounding), each as (low, high) words.
+#[inline(always)]
+fn twiddle_sums(c: u32, s: u32, x: i64, y: i64) -> ((u32, u32), (u32, u32)) {
+    let (cxl, cxh) = umul_x(c, x);
+    let (syl, syh) = umul_x(s, y);
+    let (cyl, cyh) = umul_x(c, y);
+    let (sxl, sxh) = umul_x(s, x);
+    let al = cxl.wrapping_sub(syl);
+    let ah = cxh.wrapping_sub(syh).wrapping_sub((cxl < syl) as u32);
+    let (bl, bc) = cyl.overflowing_add(sxl);
+    let bh = cyh.wrapping_add(sxh).wrapping_add(bc as u32);
+    ((al, ah), (bl, bh))
+}
+
+/// `(v + 2^22) >> 23` for a 64-bit value in (low, high) words whose result
+/// fits `i64` (arithmetic shift).
+#[inline(always)]
+fn round_shift((lo, hi): (u32, u32)) -> i64 {
+    let (l, c) = lo.overflowing_add(1 << (FRAC_BITS - 1));
+    let h = hi.wrapping_add(c as u32);
+    let out_lo = (l >> FRAC_BITS) | (h << (32 - FRAC_BITS));
+    let out_hi = (h as i32) >> FRAC_BITS;
+    ((out_hi as i64) << 32) | out_lo as i64
+}
+
+/// `(2^22 - v) >> 23`, i.e. the rounded shift of `-v`.
+#[inline(always)]
+fn round_shift_neg((lo, hi): (u32, u32)) -> i64 {
+    let l = (1u32 << (FRAC_BITS - 1)).wrapping_sub(lo);
+    let h = 0u32.wrapping_sub(hi).wrapping_sub((1u32 << (FRAC_BITS - 1) < lo) as u32);
+    let out_lo = (l >> FRAC_BITS) | (h << (32 - FRAC_BITS));
+    let out_hi = (h as i32) >> FRAC_BITS;
+    ((out_hi as i64) << 32) | out_lo as i64
+}
+
+/// [`block`] for the inverse direction in the 64-bit mode (all values under
+/// 2^37), without sign corrections in the multiplies. The twiddle for
+/// `j > half/2` is `-i` times the first-quadrant twiddle for `j - half/2`
+/// (see [`quadrant_symmetric`]) and multiplying the data by `+i` is an exact
+/// swap and negate, so every product uses an unsigned first-quadrant
+/// twiddle: for `j < q` the outputs are `(round(A), round(B))`, for
+/// `j = q + m` they are `(round(-B), round(A))`, with `A`, `B` the exact
+/// sums of [`twiddle_sums`] for twiddle `m`. Bit-identical to the generic
+/// butterfly.
+#[inline(always)]
+fn block_inv_i64(re: &mut [i64], im: &mut [i64], tw: &[(i32, i32)], base: usize, len: usize, step: usize) {
+    let half = len / 2;
+    let (lr, hr) = re[base..base + len].split_at_mut(half);
+    let (li, hi) = im[base..base + len].split_at_mut(half);
+    bf_one(&mut lr[0], &mut li[0], &mut hr[0], &mut hi[0]);
+    if half >= 2 {
+        let q = half / 2;
+        bf_quarter::<false>(&mut lr[q], &mut li[q], &mut hr[q], &mut hi[q]);
+        for m in 1..q {
+            let (wr, wif) = tw[m * step];
+            let (c, s) = (wr as u32, (-wif) as u32);
+            {
+                let (a, b) = twiddle_sums(c, s, hr[m], hi[m]);
+                let (vr, vi) = (round_shift(a), round_shift(b));
+                let (xr, xi) = (lr[m], li[m]);
+                lr[m] = xr + vr;
+                li[m] = xi + vi;
+                hr[m] = xr - vr;
+                hi[m] = xi - vi;
+            }
+            {
+                let j = q + m;
+                let (a, b) = twiddle_sums(c, s, hr[j], hi[j]);
+                let (vr, vi) = (round_shift_neg(b), round_shift(a));
+                let (xr, xi) = (lr[j], li[j]);
+                lr[j] = xr + vr;
+                li[j] = xi + vi;
+                hr[j] = xr - vr;
+                hi[j] = xi - vi;
+            }
+        }
+    }
 }
 
 /// One radix-2 butterfly on `(a, b)` with twiddle `(wr, wif)` (`wif` is the
@@ -1270,13 +1386,59 @@ fn stage_dense<const N: usize, const FWD: bool, const MODE: u8>(
     }
 }
 
+/// Length of the run of identical values that block `r` (residue `r`, at
+/// the stage where blocks have `len` positions) holds while its upper half
+/// is still all zero: the block's content is then just input `r` repeated,
+/// so it is written directly instead of being copied up stage by stage. The
+/// block exists (`r < N / len`) and has a zero upper half (`r + N / len >=
+/// nz`) exactly while `len <= N / max(nz - r, r + 1)`; this is the largest
+/// such power of two.
+const fn prefix_fill_len(n: usize, nz: usize, r: usize) -> usize {
+    let m = if nz - r > r + 1 { nz - r } else { r + 1 };
+    let q = n / m;
+    1 << (usize::BITS - 1 - q.leading_zeros())
+}
+
+struct FillLens<const N: usize, const NZ: usize>;
+
+impl<const N: usize, const NZ: usize> FillLens<N, NZ> {
+    const T: [u16; NZ] = {
+        let mut t = [0u16; NZ];
+        let mut r = 0;
+        while r < NZ {
+            t[r] = prefix_fill_len(N, NZ, r) as u16;
+            r += 1;
+        }
+        t
+    };
+}
+
+/// Places real input `v` for natural index `k` at its bit-reversed
+/// position, filling the `fill` positions of the block that stay constant
+/// (see [`prefix_fill_len`]); `im` is zero there.
+#[inline(always)]
+fn scatter_prefix<const N: usize>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    bitrev: &[u16],
+    k: usize,
+    fill: usize,
+    v: i64,
+) {
+    let p = bitrev[k] as usize;
+    re[p..p + fill].fill(v);
+    im[p..p + fill].fill(0);
+}
+
 /// One sparse-prefix stage. The natural-order input is nonzero only in
 /// `0..nz`; the block of `len` positions holding natural indices
 /// `r, r + step, ...` (`step = N / len`) sits at bit-reversed position
 /// `bitrev[r]` and is all zero exactly when `r >= nz`, and its upper half
 /// (`r + step`) is all zero when `r + step >= nz`. Zero blocks are never
-/// touched (nothing later reads them either, because their parent sees
-/// `hi_zero`), so the arrays do not have to be cleared beforehand.
+/// touched (nothing later reads them either, because their parent sees a
+/// zero upper half), and a block with a zero upper half is a run of one
+/// repeated input that [`scatter_prefix`] already wrote, so it is skipped
+/// too; the arrays do not have to be cleared beforehand.
 #[inline(always)]
 fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
     re: &mut [i64; N],
@@ -1290,7 +1452,9 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
     let blocks = if nz < step { nz } else { step };
     let mut r = 0;
     while r < blocks {
-        block::<FWD, MODE>(re, im, tw, bitrev[r] as usize, len, step, r + step >= nz);
+        if r + step < nz {
+            block::<FWD, MODE>(re, im, tw, bitrev[r] as usize, len, step, false);
+        }
         r += 1;
     }
 }
@@ -1428,9 +1592,7 @@ pub(crate) fn fft_fixed_sparse_prefix<const N: usize>(
     let tw = <Size<N> as FftTables>::TW;
     let mut sum = 0u64;
     for (k, &v) in input.iter().enumerate() {
-        let p = bitrev[k] as usize;
-        re[p] = v;
-        im[p] = 0;
+        scatter_prefix::<N>(re, im, bitrev, k, prefix_fill_len(N, nz, k), v);
         sum = sum.saturating_add(v.unsigned_abs());
     }
     match (forward, mode_for_sum(sum)) {
@@ -1464,9 +1626,7 @@ pub(crate) fn fft_fixed_sparse_prefix_forward<const N: usize, const NZ: usize>(
     }
     if sum < I32_SUM_LIMIT {
         for k in 0..NZ {
-            let p = bitrev[k] as usize;
-            re[p] = input[k];
-            im[p] = 0;
+            scatter_prefix::<N>(re, im, bitrev, k, FillLens::<N, NZ>::T[k] as usize, input[k]);
         }
         prefix_forward_i32_hot::<N, NZ>(re, im, tw, bitrev);
     } else {
@@ -1572,7 +1732,11 @@ fn stage_sparse<const N: usize, const MODE: u8>(
             re[base..base + half].fill(0);
             im[base..base + half].fill(0);
         }
-        block::<false, MODE>(re, im, tw, base, len, step, false);
+        if MODE == MODE_I64 {
+            block_inv_i64(re, im, tw, base, len, step);
+        } else {
+            block::<false, MODE>(re, im, tw, base, len, step, false);
+        }
     }
 }
 
@@ -1632,13 +1796,29 @@ fn final_stage_real<const N: usize, const NS: usize, const MODE: u8>(
     let (_, hi) = im.split_at(half);
     // j == 0: twiddle 1.
     lr[0] += hr[0];
-    for j in 1..=NS {
-        let v = twiddle_real_inverse::<MODE>(tw[j], hr[j], hi[j]);
-        lr[j] += v;
-    }
-    for j in half - NS + 1..half {
-        let v = twiddle_real_inverse::<MODE>(tw[j], hr[j], hi[j]);
-        hr[j] = lr[j] - v;
+    if MODE == MODE_I64 {
+        // Both ranges avoid the quarter-turn twiddle `j == N/4`: the lower
+        // is below it, the upper above it (see `block_inv_i64`).
+        const { assert!(NS < N / 4) };
+        for j in 1..=NS {
+            let (wr, wif) = tw[j];
+            let (a, _) = twiddle_sums(wr as u32, (-wif) as u32, hr[j], hi[j]);
+            lr[j] += round_shift(a);
+        }
+        for j in half - NS + 1..half {
+            let (wr, wif) = tw[j - N / 4];
+            let (_, b) = twiddle_sums(wr as u32, (-wif) as u32, hr[j], hi[j]);
+            hr[j] = lr[j] - round_shift_neg(b);
+        }
+    } else {
+        for j in 1..=NS {
+            let v = twiddle_real_inverse::<MODE>(tw[j], hr[j], hi[j]);
+            lr[j] += v;
+        }
+        for j in half - NS + 1..half {
+            let v = twiddle_real_inverse::<MODE>(tw[j], hr[j], hi[j]);
+            hr[j] = lr[j] - v;
+        }
     }
 }
 

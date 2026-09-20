@@ -244,6 +244,14 @@ impl ModelFixed {
 }
 
 fn mag_sq_q23(c: ComplexQ23) -> i64 {
+    // Both components under 2^31 (always, for a spectrum of LPC
+    // coefficients): each square is a 32x32->64 product and the sum fits
+    // `u64`, so the rounded shift is plain 64-bit arithmetic, not the
+    // 128-bit one. Same value.
+    if (c.re.unsigned_abs() | c.im.unsigned_abs()) < (1u64 << 31) {
+        let (r, i) = (c.re.unsigned_abs() as u32 as u64, c.im.unsigned_abs() as u32 as u64);
+        return ((r * r + i * i + (1u64 << (FRAC_BITS - 1))) >> FRAC_BITS) as i64;
+    }
     rshift_round_i128(c.mag_sq_raw(), FRAC_BITS)
 }
 
