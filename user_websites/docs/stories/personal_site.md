@@ -39,3 +39,13 @@ As a **Community Member**, I want to create and manage my own personal website a
 - Page edits are restricted to the owner or administrators ([@ANCHOR: mixin_proxy_ownership_write]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
 
 - URL slugs are cached in Redis for high-performance routing ([@ANCHOR: slug_cache_invalidation]). Verified by `[@ANCHOR: test_slug_cache_invalidation]`.
+
+## Creating Blog Posts
+
+Creating a blog post enforces the caller's real create access (a public user can no longer create a post
+owned by the shared public account), checks that the owner is plausible and that the blog post quota for
+the user or group is not exceeded, and, for ordinary users, drops every field outside a fixed allow-list
+(title, content, publish flag, owner, group, blog, website, meta and SEO fields). The record is then
+created through the module's service account, and the cache-invalidation notice and Cloudflare purge are
+sent for the new post's URLs.
+`[@ANCHOR: user_websites:COMM_blog_post_create]`

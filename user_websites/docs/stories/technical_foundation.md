@@ -61,3 +61,12 @@ The module provides several dropzones for UI extension:
 - **Toast Notifications:** Feedback is provided via native notifications ([@ANCHOR: toast_notifications_logic], [@ANCHOR: admin_toast_logic]).
 
 - **Violation Reporting:** Form submission is handled securely ([@ANCHOR: violation_report_logic]).
+
+## Domain List API for Certificate Maintenance
+
+`GET /api/v1/user_websites/domains` (public, no CSRF) returns `{"domains": [...]}` for the certificate
+automation: every `edge.routing.domain` name plus, when `ham_dns` is installed, every `ham.dns.zone` name,
+de-duplicated. Reads run as the module's service account and page through the tables by id, 5000 rows at a
+time, so no domain past the 5000th is silently left off (which would quietly stop its certificate renewing).
+A failure reading the DNS zones is logged and the routing domains are still returned.
+`[@ANCHOR: user_websites:COMM_api_domains]`
