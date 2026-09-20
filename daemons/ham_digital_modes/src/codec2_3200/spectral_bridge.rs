@@ -497,6 +497,7 @@ impl SpectralBridgeStateFixed {
 
         let k_q23 = model.k_q23;
         let mut spectrum = SparseInverse::<FFT_ENC_SB>::new(&mut self.ifft_re, &mut self.ifft_im);
+        #[allow(clippy::needless_range_loop)]
         for m in 1..=l2 {
             let raw = m as i64 * k_q23;
             let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC_SB / 2 - 1);

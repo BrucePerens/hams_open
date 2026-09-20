@@ -8,6 +8,7 @@
 #   ./prep.sh                                          # extracts the speech excerpt the bench encodes
 #   cargo build --release                              # (add --features small for a 6-frame build,
 #                                                      #  --features bridge to include the 16 kHz bridge,
+#                                                      #  --features decode16k to also time decode_16k_fixed (own checksum),
 #                                                      #  --no-default-features for no per-stage marks)
 #   qemu-system-riscv32 -M virt -m 64M -nographic -bios none -icount shift=0 \
 #       -kernel target/riscv32imc-unknown-none-elf/release/codec2_riscv32_bench

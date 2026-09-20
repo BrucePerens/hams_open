@@ -1,27 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Genuinely fixed-point, phase-correct radix-2 FFT for the decoder's
-//! own `FFT_ENC`=512-point transforms: `envelope.rs`'s forward analysis
-//! (`ak[]` -> `Aw[]`) and `synthesis.rs`'s inverse synthesis (a sparse
-//! harmonic spectrum -> time-domain samples). Also serves
-//! `spectral_bridge.rs`'s own doubled `FFT_ENC_SB`=1024-point inverse
-//! synthesis (`fft_fixed` takes a runtime size, not just `FFT_ENC` --
-//! see that function's own doc comment); this module imports
-//! `spectral_bridge::FFT_ENC_SB` for its cached-table lookup, so it now
-//! depends on that module even though this doc comment predates it.
+//! Genuinely fixed-point, phase-correct radix-2 FFT, generic over its size
+//! (`Size<N>`: `Rate8k` = 512 points for the decoder's `envelope.rs`
+//! forward analysis (`ak[]` -> `Aw[]`) and `synthesis.rs`'s inverse synthesis
+//! of a sparse harmonic spectrum, `Rate16k` = 1024 points for
+//! `spectral_bridge.rs`'s doubled-resolution inverse synthesis) plus the
+//! pitch estimator's 512-point transform of its 64 windowed samples. Each
+//! size and use is its own monomorphised, constant-table instance; there is
+//! no run-time size dispatch. See `docs/CODEC2_NO_STD.md` for the measured
+//! effect.
 //!
-//! Deliberately a separate implementation from `nlp.rs`'s own
-//! `fft_fixed`, even though both are the same radix-2 DIT butterfly
-//! shape at the same real point count (`PE_FFT_SIZE == FFT_ENC == 512`,
-//! a coincidence between the pitch estimator's own window size and the
-//! decoder's own spectrum size, not a structural relationship worth
-//! coupling the two to) -- `nlp.rs`'s own version only ever reads
-//! magnitude/power afterward (see that module's own doc comment), so
-//! its sign convention was deliberately left unpinned; this one needs
-//! genuinely phase-correct output (`envelope::sample_filter_phase`
-//! reads `Aw[b].conj()` directly, and `synthesis.rs`'s inverse FFT
-//! needs a real, correctly-scaled time-domain result), so the
-//! convention is pinned and verified directly against `rustfft`'s own
-//! complex output, not just a power spectrum.
+//! `nlp.rs`'s pitch estimator shares the transform machinery but keeps its
+//! own twiddle table (it differs from this module's in the last bit at some
+//! entries) and its inverse sign convention: it only reads magnitude
+//! afterward, whereas the decoder's uses need genuinely phase-correct output
+//! (`envelope::sample_filter_phase` reads `Aw[b].conj()` directly, and
+//! `synthesis.rs`'s inverse FFT needs a real, correctly-scaled time-domain
+//! result), so their convention is pinned and verified directly against
+//! `rustfft`'s own complex output, not just a power spectrum.
 //!
 //! Sign convention, verified by this module's own tests: `forward ==
 //! true` matches `rustfft`'s `plan_fft_forward` (the standard DFT,
@@ -1566,8 +1561,8 @@ fn stages_prefix_loop<const N: usize, const FWD: bool, const MODE: u8>(
 #[cfg(test)]
 #[inline(always)]
 fn bit_reverse_permute<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], bitrev: &[u16]) {
-    for i in 0..N {
-        let j = bitrev[i] as usize;
+    for (i, &j) in bitrev.iter().enumerate() {
+        let j = j as usize;
         if j > i {
             re.swap(i, j);
             im.swap(i, j);
@@ -1682,12 +1677,12 @@ pub(crate) fn fft_fixed_sparse_prefix_forward<const N: usize, const NZ: usize>(
     let bitrev = <Size<N> as FftTables>::BITREV;
     let tw = <Size<N> as FftTables>::TW;
     let mut sum = 0u64;
-    for k in 0..NZ {
-        sum = sum.saturating_add(input[k].unsigned_abs());
+    for &v in input {
+        sum = sum.saturating_add(v.unsigned_abs());
     }
     if sum < I32_SUM_LIMIT {
-        for k in 0..NZ {
-            scatter_prefix::<N>(re, im, bitrev, k, FillLens::<N, NZ>::T[k] as usize, input[k]);
+        for (k, &v) in input.iter().enumerate() {
+            scatter_prefix::<N>(re, im, bitrev, k, FillLens::<N, NZ>::T[k] as usize, v);
         }
         prefix_forward_i32_hot::<N, NZ>(re, im, tw, bitrev);
     } else {
@@ -1724,12 +1719,12 @@ pub(crate) fn pitch_fft_512<const NZ: usize>(
 ) {
     let bitrev = <Rate8k as FftTables>::BITREV;
     let mut sum = 0u64;
-    for k in 0..NZ {
-        sum = sum.saturating_add(input[k].unsigned_abs());
+    for &v in input {
+        sum = sum.saturating_add(v.unsigned_abs());
     }
     if sum < I64_SUM_LIMIT {
-        for k in 0..NZ {
-            scatter_prefix::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, input[k]);
+        for (k, &v) in input.iter().enumerate() {
+            scatter_prefix::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, v);
         }
         pitch_prefix_i64_hot::<NZ>(re, im, bitrev);
     } else {
@@ -1826,11 +1821,11 @@ fn stage_sparse<const N: usize, const MODE: u8>(
     let step = N / len;
     let out = 2 * N - 2 * step;
     let inp = 2 * N - 4 * step;
-    for r in 0..step {
+    for (r, &pos) in bitrev.iter().enumerate().take(step) {
         if !flag(flags, out + r) {
             continue;
         }
-        let base = bitrev[r] as usize;
+        let base = pos as usize;
         let half = len / 2;
         if !flag(flags, inp + r + step) {
             block::<false, MODE>(re, im, tw, base, len, step, true);

@@ -205,6 +205,7 @@ fn hann_window_q23() -> &'static [i64; NDEC] {
 /// `(cos(2*pi*k/PE_FFT_SIZE), sin(2*pi*k/PE_FFT_SIZE))` for `k` in
 /// `0..PE_FFT_SIZE/2` -- the only twiddle angles a radix-2 FFT of this
 /// size ever needs (`j*step` below always lands in this range).
+#[cfg(test)]
 fn fft_twiddles_q23() -> &'static [(i64, i64); PE_FFT_SIZE / 2] {
     &super::tables::NLP_TWIDDLES_Q23
 }

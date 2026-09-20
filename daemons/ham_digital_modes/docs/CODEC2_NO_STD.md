@@ -40,38 +40,87 @@ method calls such as `.sqrt()` because `core` does not have them.
 
 ## Measured on the QEMU RISC-V bench (`tools/codec2_riscv32_bench`)
 
-Real crate, `riscv32imc`, fat link-time optimization, opt-level 3, 200 frames of real speech.
-The output checksum (`f59f8fcd`) is identical to the host build and to the earlier copied-source harness.
+Real crate, `riscv32imc`, fat link-time optimization, opt-level 3, 200 frames of real speech,
+per-stage marks off (`--no-default-features`). The output checksums are identical to before the
+rate specialisation: `f59f8fcd` for the 8 kHz run (also the host build's) and `9f8929d7` for the 16 kHz
+(`decode_16k_fixed`) run, which the `decode16k` bench feature added. Steady average instructions per
+20 ms frame, measured 2026-09-20:
 
-| | Encode | Decode |
+| | Before | After |
 | --- | --- | --- |
-| Instructions per 20 ms frame (steady average) | 644,149 | 1,317,832 |
-| Worst frame | 649,867 | 1,360,876 |
-| State (struct size) | 11,424 bytes | 9,592 bytes (28,544 with `codec2_16k_bridge`) |
-| Stack, call tree below the caller | 7,820 bytes | 11,156 bytes |
+| Encode, 8 kHz | 644,149 | 507,554 |
+| Decode, 8 kHz, `codec2_16k_bridge` not compiled in | 1,317,832 | 712,234 |
+| Decode, 8 kHz, bridge compiled in (`--features bridge`, 16 kHz path not called) | 1,344,266 | 712,478 |
+| Decode, 16 kHz (`decode_16k_fixed`, `--features decode16k`) | 2,498,432 | 1,211,040 |
+| Worst frame (encode / decode 8 kHz / decode 16 kHz) | 649,867 / 1,360,876 / 2,602,565 | 512,871 / 770,915 / 1,333,775 |
+| State (struct size), encoder / decoder | 11,424 / 9,592 (28,544 with the bridge) | unchanged |
+| Stack, call tree below the caller, encode / decode | 7,820 / 11,156 | 8,096 / 11,140 (10,984 with the bridge) |
 
-These count instructions, not cycles. The earlier harness (with inline-prevention edits) measured
-644,534 and 1,317,366 instructions and 7,756 / 11,284 bytes of stack, so the numbers agree to
-within about 0.1 percent. With the bridge feature on, decode measures 1,345,916 instead of 1,318,784
-(2.1 percent more, measured 2026-09-20, same output checksum). The bridge code is not executed by 8 kHz decoding; the whole
-difference is in the inverse transform and two other transform-heavy stages (per-stage marks: inverse transform 449,293 to
-466,706, the other two about 5,000 each). The cause is the transform's runtime size dispatch (`fft_twiddles_q23` and
-`fft_bit_reverse_table` match on the size): with only one size compiled in, the compiler folds the match away and unrolls
-against constant tables; with two sizes it keeps the dispatch and generic slices. Building without the bridge, which an
-8 kHz-only image should do, avoids it. Making the transform generic over its size would remove it for the bridge build too.
+(With the `decode16k` harness, whose `main` inlines both decode entry points, the 8 kHz decode reads 721,558
+against 1,344,970 before; that difference is in how the harness is compiled, not in the codec.)
 
-Flash (read-only) footprint:
+These count instructions, not cycles. Compiling the bridge in no longer costs the 8 kHz decoder anything
+(before: 2.1 percent, from the run-time size dispatch in the transform).
 
-* Code: about 50 KB for encode, decode, the Fast Fourier Transform and pitch estimator (link-time
-  optimized, includes 128-bit and 64-bit integer division helpers of about 3.3 KB from
-  `compiler_builtins`; there are no floating-point or `libm` symbols).
-* Tables (32-bit target, `i64` entries are 8 bytes): about 81 KB: four 16,388-byte lookup tables
-  (`TRIG_COS_Q23`, `TRIG_SIN_Q23`, `LPC_ACOS_LUT_Q23`, `LPC_COS_LUT_Q23`, 65,552 bytes), the pitch
-  estimator's Fast Fourier Transform twiddles (4,096) and Hann/low-pass (712), the analysis and
-  synthesis windows (2,560), two 1,028-byte logarithm/exponential tables, the 512-point transform
-  twiddles (4,096) and bit-reversal table (2,048), and small constants.
-* `codec2_16k_bridge` adds about 14.8 KB: the 1024-point transform twiddles (8,192) and bit-reversal
-  table (4,096) and the 2,560-byte overlap window.
+### What changed (all bit-exact)
+
+The codec runs at exactly two sample rates, so everything that depends only on the rate is a compile-time
+constant of a monomorphised copy:
+
+* `fixed_fft.rs` is generic over the transform size through `Size<N>` (`Rate8k` = 512, `Rate16k` = 1024)
+  and an `FftTables` trait carrying the per-size twiddle and bit-reversal tables. There is no run-time
+  size `match` and no slice-length generics. Twiddles are `i32` pairs and the bit-reversal table `u16`, both
+  built at compile time from the checked-in tables.
+* The inverse transform of the harmonic spectrum (`SparseInverse`) scatters the harmonics straight to their
+  bit-reversed positions, keeps a bitmap of which blocks of each stage can be nonzero and never touches or
+  clears the rest, and in the last stage computes only the outputs the overlap-add reads (real parts at 160 of
+  512 / 320 of 1024 points). Its 64-bit multiply kernel uses unsigned first-quadrant twiddles (exactly
+  rotating the data for the upper quadrant), so it needs no sign corrections; the switch to the checked
+  128-bit path moved from a value sum of 2^37 to 2^39, the actual bound.
+* The forward transform of the 11 LPC coefficients is an instance specialised for exactly that input count: no
+  clearing, no permutation, and the runs of equal values that the first stages produce are written directly
+  instead of being copied up stage by stage. The pitch estimator's 64-input transform uses the same machinery
+  with its own twiddle table (which differs from the decoder's in the last bit at 124 entries, so it is kept).
+* The rate-independent tail of a sub-frame (`overlap_add_subframe<N, NS, SF>`) is shared by both rates; the
+  harmonic bin scale (`k_q23`, a 64-bit division) is computed once per sub-frame in `ModelFixed`.
+* `log2_q23` / `exp2_q23` run in 32-bit arithmetic with a table leading-zero count (these cores have no
+  count-leading-zeros instruction), swept bit for bit against the previous 64-bit forms by a test; the
+  LPC-spectrum magnitude and the pitch decimation filter use 32x32 products.
+
+Tests added, none removed or weakened: the sparse inverse against the textbook `i128` transform (random and
+structured harmonic layouts, empty, overwritten and one-sided spectra, exactly at the kernel limit, both
+sizes); the constant-input-count forward transform; `log2_q23`/`exp2_q23` against their 64-bit reference. The
+dense-transform tests now run through const-generic helpers at both sizes (same inputs and reference).
+
+### Flash footprint and the code-size versus speed trade
+
+Text plus read-only data, without the bench's 64,000 bytes of speech (the code figure includes the bench's own
+few KB of harness):
+
+| | Before | After |
+| --- | --- | --- |
+| 8 kHz image, code | 65,044 | 84,096 |
+| 8 kHz image, read-only data | 84,456 | 79,704 |
+| 8 kHz image, total | 149,500 | 163,800 (+9.6 percent) |
+| bridge and 16 kHz decode, code | 73,342 | 105,820 |
+| bridge and 16 kHz decode, read-only data | 99,968 | 88,752 |
+| bridge and 16 kHz decode, total | 173,310 | 194,570 (+12.3 percent) |
+
+Tables (32-bit target): four 16,388-byte lookup tables (`TRIG_COS_Q23`, `TRIG_SIN_Q23`, `LPC_ACOS_LUT_Q23`,
+`LPC_COS_LUT_Q23`, 65,552 bytes), the pitch estimator's transform twiddles (now 2,048 as `i32` pairs, was 4,096)
+and Hann/low-pass (712), the analysis and synthesis windows (2,560), two 1,028-byte logarithm/exponential
+tables, the 512-point transform twiddles (2,048, was 4,096) and bit-reversal table (1,024, was 2,048), the
+256-byte leading-zero table, and small constants. `codec2_16k_bridge` adds about 8.7 KB (was 14.8 KB): the
+1024-point twiddles (4,096) and bit-reversal table (2,048) and the 2,560-byte overlap window.
+
+Code grows by 19 KB (8 kHz) because the transforms are unrolled per stage and per size (largest pieces: sparse
+inverse 8.9 KB at 512 points and 9.1 KB at 1024, pitch transform 7.1 KB, forward LPC transform 3.4 KB, the
+compact any-mode fallbacks about 2.7 KB each) while the tables shrink by 4.7 KB (8 kHz) and 11.2 KB (bridge
+image). Total growth is under the 20 percent warning level. Choice made: every stage of the hot instances is
+its own unrolled copy. Sharing one run-time-length loop for the stages up to length 16 saves 3 KB but costs
+5 percent more decode instructions (752,433 against 717,184 in the same build), so it was not kept. The cold
+modes (inputs too large for the fast kernels, the test-only dense transform) use compact loops and are
+bit-identical.
 
 Shrinking candidates (not implemented, because none is bit-exact):
 
