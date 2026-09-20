@@ -44,10 +44,18 @@ impl DStarSynthesisDecoder {
         // mbelib's bad-frame policy (`mbe_processAmbe2400Dataf`): a speech frame with more than 3 corrected errors
         // reuses the previous frame's parameters without touching the predictor state, and after 3 such repeats in a
         // row the decoder mutes (silence) and reinitializes.
-        let is_speech = classify_b0(extract_raw_parameters(parsed.d).b0) == FrameKind::Speech;
-        if is_speech && self.error_policy.is_bad(parsed.epsilon_c0, parsed.epsilon_c1) {
+        let b0 = extract_raw_parameters(parsed.d).b0;
+        let is_speech = classify_b0(b0) == FrameKind::Speech;
+        // The chip treats the reserved pitch codes 125 and 127 as invalid frames (repeat three times, then near-silence). Normal
+        // operation stays lenient: a tone frame whose uncoded pitch bit flipped is better decoded as the tone.
+        let chip_invalid = self.error_policy == ErrorPolicy::ChipCompatible && matches!(b0, 125 | 127);
+        if (is_speech && self.error_policy.is_bad(parsed.epsilon_c0, parsed.epsilon_c1)) || chip_invalid {
             self.repeats += 1;
-            match self.error_policy.bad_frame_action(self.repeats) {
+            let action = match self.error_policy.bad_frame_action(self.repeats) {
+                BadFrameAction::Decode if chip_invalid => BadFrameAction::Mute,
+                other => other,
+            };
+            match action {
                 BadFrameAction::Repeat => return self.synth.synthesize_repeat(),
                 BadFrameAction::Mute => {
                     self.dequant = DStarDecoderState::initial();

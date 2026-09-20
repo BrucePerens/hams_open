@@ -75,7 +75,7 @@ JMBE was read for its damaged-frame policy but not built.
 * Real unvoiced frames are about 1.4 dB louder than the chip's on average; the chip's frame crossfade and noise source differ
   from the standard's (see `docs/references/AMBE_CHIP_NOISE_GENERATOR.md`: its noise generator has period 65,536 and is not identified).
 * The chip's predictor changes during repeated frames are not modelled in the chip-compatible error mode.
-* Reserved D-STAR pitch codes 125 and 127 are invalid on the chip but decoded by us (lenient, on purpose).
+* Reserved D-STAR pitch codes 125 and 127 are invalid on the chip; normal operation decodes them leniently (a tone frame with a flipped uncoded bit is better decoded), and the chip-compatible policy reproduces the chip.
 * No DVSI test vectors were available; JMBE was not run.
 
 ## Where things are
