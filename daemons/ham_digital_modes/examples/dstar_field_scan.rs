@@ -538,8 +538,8 @@ fn main() {
         let ours: Vec<f64> = seq.iter().flat_map(|&f| dec.decode_frame(f).unwrap_or([0.0; 160]).to_vec()).collect();
         // Two-period (74-sample) windows, hop 10, amplitude relative to the settled level (frames 12-13).
         let win = 74usize;
-        let env = |x: &[f64]| -> Vec<f64> { (1500..2000).step_by(10).map(|t| ((x[t..t + win].iter().map(|v| v * v).sum::<f64>() / win as f64).sqrt())).collect() };
-        let settled = |x: &[f64]| ((x[12 * 160..14 * 160].iter().map(|v| v * v).sum::<f64>() / 320.0).sqrt());
+        let env = |x: &[f64]| -> Vec<f64> { (1500..2000).step_by(10).map(|t| (x[t..t + win].iter().map(|v| v * v).sum::<f64>() / win as f64).sqrt()).collect() };
+        let settled = |x: &[f64]| (x[12 * 160..14 * 160].iter().map(|v| v * v).sum::<f64>() / 320.0).sqrt();
         let (ec, eo) = (env(&chip), env(&ours));
         let (sc, so) = (settled(&chip), settled(&ours));
         println!("amplitude relative to settled, window start sample 1500.. step 10 (the step lands at sample 1600):");

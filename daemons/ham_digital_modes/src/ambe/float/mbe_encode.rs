@@ -127,7 +127,7 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
             if h == 0 {
                 return 0.0;
             }
-            let m = target.ml[h].max(1e-3);
+            let m = target.ml[h].max(1e-30);
             let eff = if target.voiced[h] { m } else { m / unvc };
             eff.ln() / LN2_APPROX - pred[h]
         })
@@ -244,7 +244,8 @@ pub fn analyze_at_pitch(
     for h in 1..=l as usize {
         let band = (h.div_ceil(3)).clamp(1, k_hat);
         voiced[h] = padded[band - 1];
-        ml[h] = amplitudes[h - 1];
+        // A harmonic estimated as (nearly) silent is floored at -60 dB so its logarithm cannot swamp its block's coefficients.
+        ml[h] = amplitudes[h - 1].max(1e-3);
     }
     (voiced, ml)
 }

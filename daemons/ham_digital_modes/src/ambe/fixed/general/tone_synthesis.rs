@@ -44,11 +44,13 @@ pub fn dstar_tone_amplitude_q16(volume: u32) -> i64 {
     let n = y_q16 >> 16; // floor
     let frac = (y_q16 & 0xFFFF) as i32;
     let base = 3268i64 * exp2_q16(frac) as i64; // Q16.16, in [3268, 6536)
-    if n >= 0 {
+    let amplitude = if n >= 0 {
         base << n
     } else {
         (base + (1i64 << (-n - 1))) >> -n
-    }
+    };
+    // Clamped to the 16-bit full-scale peak, like the float sibling's `FULL_SCALE_PEAK` (the chip saturates near volume 238).
+    amplitude.min(32767 << 16)
 }
 
 /// The inverse of [`dstar_tone_amplitude_q16`]: the `volume` field for a desired per-tone peak amplitude (Q16.16 PCM

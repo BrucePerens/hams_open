@@ -135,21 +135,15 @@ mod tests {
         }
     }
 
-    /// `quantize_pitch`'s own inverse-formula check: for every real `b0`, recompute `w0` via
-    /// `decode::dequantize`'s own formula and confirm `quantize_pitch` recovers a `b0` whose own
-    /// implied `w0` matches the original to a real, meaningful tolerance (the two adjacent pitch
-    /// periods' own `f0` values are close enough together that floating-point rounding alone can
-    /// shift the nearest-integer choice by one at a boundary -- this test allows that, but no more).
+    /// `quantize_pitch` is the exact inverse of `decode::f0_from_b0`: every real `b0` is recovered
+    /// unchanged (the map is log-linear, so the nearest index of an exact table value is itself).
     #[test]
-    fn quantize_pitch_round_trips_within_one_index_of_every_real_b0() {
+    fn quantize_pitch_round_trips_exactly_for_every_real_b0() {
         for b0 in 0u32..126 {
             let f0 = crate::ambe::float::dstar::decode::f0_from_b0(b0);
             let w0 = f0 * 2.0 * std::f64::consts::PI;
             let recovered = quantize_pitch(w0);
-            assert!(
-                recovered.abs_diff(b0) <= 1,
-                "b0={b0}: w0={w0}, recovered={recovered}"
-            );
+            assert_eq!(recovered, b0, "b0={b0}: w0={w0}");
         }
     }
 }

@@ -51,7 +51,7 @@ pub const VUV: [[bool; 8]; 16] = [
 /// Higher-order-coefficient block lengths `J_1..J_4`, `AmbePlusLmprbl` in mbelib: indexed by `L~`
 /// (harmonic count, 0..57 -- entries below 9 are unused padding since `L~` is never below 9 per
 /// [`L_TABLE`]). Each of the four spectral blocks gets its own coefficient count, always summing to
-/// `L~ - 2` (the two elements each block's own PRBA-derived DC/first-AC pair already accounts for).
+/// exactly `L~` (checked for every `L~` from 9 to 56, in both modes; the longest block has 17 entries).
 pub const LMPRBL: [[u32; 4]; 57] = [
     [0, 0, 0, 0],
     [0, 0, 0, 0],

@@ -20,7 +20,16 @@ pub const DEFAULT_TONE_PEAK: f64 = 4000.0;
 /// exponential, `3268 * exp(0.04084 * (volume - 180))` (a factor of 1.8435 per 15 steps, measured at volumes 105-210
 /// with the same per-tone value for single tones and each tone of a DTMF pair; the chip saturates near 238).
 pub fn dstar_tone_amplitude(volume: u32) -> f64 {
-    3268.0 * (0.04084 * (volume as f64 - 180.0)).exp()
+    (3268.0 * (0.04084 * (volume as f64 - 180.0)).exp()).min(FULL_SCALE_PEAK)
+}
+
+/// Largest 16-bit PCM peak. Tone levels are clamped to it (the chip saturates near volume 238); speech synthesis output is
+/// not clamped, so consumers must convert to 16-bit with saturation ([`saturate_to_i16`]).
+pub const FULL_SCALE_PEAK: f64 = 32767.0;
+
+/// Converts one float PCM sample to 16 bits with rounding and saturation.
+pub fn saturate_to_i16(sample: f64) -> i16 {
+    sample.round().clamp(-32768.0, 32767.0) as i16
 }
 
 /// The inverse of [`dstar_tone_amplitude`]: the `volume` field for a desired per-tone amplitude.
@@ -85,6 +94,21 @@ impl Default for ToneSynthesizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dstar_tone_level_saturates_at_full_scale() {
+        assert!(dstar_tone_amplitude(230) < FULL_SCALE_PEAK);
+        assert_eq!(dstar_tone_amplitude(255), FULL_SCALE_PEAK);
+    }
+
+    #[test]
+    fn saturate_to_i16_rounds_and_clamps() {
+        assert_eq!(saturate_to_i16(1.4), 1);
+        assert_eq!(saturate_to_i16(-1.6), -2);
+        assert_eq!(saturate_to_i16(240_000.0), i16::MAX);
+        assert_eq!(saturate_to_i16(-240_000.0), i16::MIN);
+        assert_eq!(saturate_to_i16(f64::NAN), 0);
+    }
 
     fn dominant_hz(frame: &[f64; N]) -> f64 {
         // Goertzel-free brute force over 50..3500 Hz in 5 Hz steps.
