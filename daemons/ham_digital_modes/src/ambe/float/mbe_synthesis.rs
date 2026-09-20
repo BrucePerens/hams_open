@@ -22,7 +22,8 @@ use super::tia_102_baba::unvoiced_synthesis::N;
 /// How a decoder treats frames the channel decoder flags as damaged (`epsilon_c0`/`epsilon_c1` are the numbers of bit
 /// errors the two Golay blocks corrected).
 ///
-/// [`ErrorPolicy::Clean`] (the default) is mbelib's: a speech frame with more than 3 corrected errors in total repeats
+/// [`ErrorPolicy::Concealing`] (the default) is the audio-quality policy of [`crate::ambe::float::concealment`]; on a stream with no channel errors it decodes
+/// bit-for-bit like [`ErrorPolicy::Clean`]. [`ErrorPolicy::Clean`] is mbelib's: a speech frame with more than 3 corrected errors in total repeats
 /// the previous frame's parameters without touching the predictor, and after 3 repeats in a row the decoder mutes and
 /// restarts. [`ErrorPolicy::ChipCompatible`] reproduces what the real chip does, measured with
 /// `examples/{dstar,ambe_plus_2}_field_scan.rs ... errclass`: it repeats a frame whenever the first Golay block
@@ -32,9 +33,13 @@ use super::tia_102_baba::unvoiced_synthesis::N;
 /// normal operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorPolicy {
-    #[default]
+    /// mbelib's policy (repeat three times, then mute): kept for reference and for tests; not the default.
     Clean,
     ChipCompatible,
+    /// Audio-quality concealment ([`crate::ambe::float::concealment`]): graded, continuity-aware repair of the raw bits and a fading
+    /// repeat instead of a hard mute. Implemented in the D-STAR and AMBE+2 synthesis decoders.
+    #[default]
+    Concealing,
 }
 
 /// What to do with one damaged frame.
@@ -49,7 +54,7 @@ impl ErrorPolicy {
     /// Whether a speech frame with these corrected-error counts is treated as damaged.
     pub fn is_bad(self, epsilon_c0: u32, epsilon_c1: u32) -> bool {
         match self {
-            ErrorPolicy::Clean => epsilon_c0 + epsilon_c1 > 3,
+            ErrorPolicy::Clean | ErrorPolicy::Concealing => epsilon_c0 + epsilon_c1 > 3,
             ErrorPolicy::ChipCompatible => epsilon_c0 >= 3,
         }
     }
@@ -58,7 +63,7 @@ impl ErrorPolicy {
     pub fn bad_frame_action(self, consecutive_bad: u32) -> BadFrameAction {
         match (self, consecutive_bad <= 3) {
             (_, true) => BadFrameAction::Repeat,
-            (ErrorPolicy::Clean, false) => BadFrameAction::Mute,
+            (ErrorPolicy::Clean | ErrorPolicy::Concealing, false) => BadFrameAction::Mute,
             (ErrorPolicy::ChipCompatible, false) => BadFrameAction::Decode,
         }
     }
@@ -124,6 +129,12 @@ impl MbeSynthesizer {
     /// Repeats the previous frame's parameters (an erasure); `None` before any real frame has run.
     pub fn synthesize_repeat(&mut self) -> Option<[f64; N]> {
         let frame = self.synthesis.synthesize_repeated_frame()?;
+        Some(self.lift(frame))
+    }
+
+    /// Repeats the previous frame with its amplitudes scaled by `scale` (fading a run of damaged frames).
+    pub fn synthesize_repeat_scaled(&mut self, scale: f64) -> Option<[f64; N]> {
+        let frame = self.synthesis.synthesize_repeated_frame_scaled(scale)?;
         Some(self.lift(frame))
     }
 

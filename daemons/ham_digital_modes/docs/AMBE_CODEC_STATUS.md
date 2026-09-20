@@ -15,15 +15,36 @@ Common to all: streaming encoders (`push_samples`, `next_frame`, `finish`) that 
 report voiced speech as a tone; decoders with damaged-frame handling; float and fixed-point trees with the same behaviour
 (fixed-point uses no floating point at all: `tests/ambe_fixed_no_float_tokens.rs`).
 
-## Normal operation versus chip-conformance test mode
+## Damaged frames: normal operation versus chip-conformance test mode
 
-* The default damaged-frame policy is the clean one: a frame with more than 3 corrected errors repeats the previous
-  parameters, and the fourth repeat in a row mutes ([`ErrorPolicy::Clean`]).
-* The chip behaves differently (repeats when the first Golay block corrected 3 errors, never mutes, so garbage frames produce
-  loud bursts). That is a defect of the chip, so it exists only as an opt-in for conformance tests:
-  `with_error_policy(ErrorPolicy::ChipCompatible)` on the four synthesis decoders (float and fixed, D-STAR and AMBE+2).
-* Chip conventions that would lower quality (its parity of pitch index on unvoiced frames, delayed mute on reserved pitch codes)
-  are deliberately not copied.
+* **The default is `ErrorPolicy::Concealing`**, a policy designed for audio quality (`src/ambe/float/concealment.rs` and its fixed-point
+  port), not for compatibility with any reference decoder. On a stream with no channel errors it decodes bit-for-bit like the plain
+  decoder. When errors appear it (1) estimates the channel error rate from how many errors the Golay codes corrected, (2) for the raw
+  (unprotected) bits that matter most (in D-STAR the voicing pattern, low gain bits, low spectral-vector bits and the pitch's lowest
+  bit) considers each single-bit correction and picks the reading that best continues the previous frame (level, spectral shape,
+  voicing and pitch, with priors measured on real speech), paying a cost per flip that depends on the estimated error rate, and (3)
+  if even the best reading is implausible, repeats the previous frame with a fade (halving each frame) instead of muting, keeping the
+  predictor state, and resets only after 30 repeated frames. Which bits matter was measured (`examples/ambe_bit_sensitivity.rs`:
+  the top gain bits, the voicing pattern and the top pitch bits cost the most; the low higher-order coefficient bits almost nothing).
+* Measured with `examples/ambe_error_concealment_eval.rs` (real speech, random bit errors in the 72-bit wire frames, distance of the
+  spectral envelope from the error-free decode, D-STAR; the constants were tuned on one set of error patterns and confirmed on others
+  and on AMBE+2, where the same policy also beats both alternatives):
+
+| channel | clean policy (mbelib) | concealing (default) |
+|---|---|---|
+| 0.5% bit errors | 0.76 dB | 0.57 dB |
+| 1% | 1.02 dB | 0.99 dB |
+| 2% | 1.77 dB | 1.65 dB |
+| 5% | 4.98 dB (0.2% muted) | 3.65 dB |
+| 10% | 26.9 dB (24% of active frames muted) | 8.3 dB (2% muted) |
+| bursty, 3% average | 9.45 dB (8% muted) | 3.99 dB (1.3% muted) |
+
+* `ErrorPolicy::Clean` is mbelib's policy (repeat three frames, then mute), kept for reference and tests.
+* `ErrorPolicy::ChipCompatible` reproduces the chip (repeats when the first Golay block corrected 3 errors, never mutes, so
+  garbage frames produce loud bursts); it is a defect of the chip and exists only as an opt-in for conformance tests. It is
+  also selectable on all four synthesis decoders (float and fixed, D-STAR and AMBE+2).
+* Chip conventions that would lower quality (its pitch index on unvoiced frames, delayed mute on reserved pitch codes) are
+  deliberately not copied.
 
 ## Objective quality (encode real speech, decode, compare with the input)
 

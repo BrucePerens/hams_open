@@ -61,15 +61,14 @@ macro_rules! policy_tests {
             }
 
             #[test]
-            fn the_default_policy_is_clean() {
+            fn the_default_policy_is_concealing_which_fades_instead_of_muting() {
                 let (quiet, loud) = quiet_and_loud();
                 let bad = loud ^ THREE_C0_ERRORS ^ PLUS_TWO_C1_ERRORS;
                 let mut dec = <$decoder>::new();
                 decode(&mut dec, quiet);
-                for _ in 0..3 {
-                    decode(&mut dec, bad);
+                for _ in 0..4 {
+                    assert!(rms(&decode(&mut dec, bad)) > 0.0, "the default decoder does not mute after three repeats");
                 }
-                assert!(decode(&mut dec, bad).iter().all(|&s| s == 0.0), "default decoder mutes");
             }
         }
     };

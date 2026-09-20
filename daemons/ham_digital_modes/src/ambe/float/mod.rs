@@ -10,6 +10,7 @@
 #[cfg(feature = "ambe_plus_2")]
 pub mod ambe_plus_2;
 pub mod dstar;
+pub mod concealment;
 pub mod mbe_encode;
 pub mod mbe_synthesis;
 pub mod tia_102_baba;

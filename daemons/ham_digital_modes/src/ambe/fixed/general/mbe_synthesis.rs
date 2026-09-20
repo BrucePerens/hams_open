@@ -61,6 +61,12 @@ impl MbeSynthesizer {
         Some(self.lift(frame))
     }
 
+    /// Repeats the previous frame with its amplitudes scaled by `scale_q16` (fading a run of damaged frames).
+    pub fn synthesize_repeat_scaled(&mut self, scale_q16: i32) -> Option<[i64; N]> {
+        let frame = self.synthesis.synthesize_repeated_frame_scaled(scale_q16)?;
+        Some(self.lift(frame))
+    }
+
     /// A silence frame: all zeros.
     pub fn synthesize_silence(&self) -> [i64; N] {
         [0; N]
