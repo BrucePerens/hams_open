@@ -582,6 +582,12 @@ mod tests {
             ys.push(-((next() >> 20) as i64));
         }
         for &y in &ys {
+            // Positive results beyond the documented domain (floor(y) >= 39,
+            // where the shift would overflow `i64`) are a caller error that
+            // debug builds assert on; everything else must match.
+            if (y >> 23) >= 39 {
+                continue;
+            }
             assert_eq!(exp2_q23(y), exp2_q23_reference(y), "exp2_q23({y})");
         }
     }
