@@ -1036,11 +1036,10 @@ const fn narrow_twiddles<const M: usize>(src: &[(i64, i64); M]) -> [(i32, i32); 
 }
 
 /// The table's second quadrant is the first rotated by a quarter turn:
-/// `w[N/4 + m] == -i * w[m]`, i.e. `(wr, wi)` becomes `(wi, -wr)`, exactly as
-/// integers. The inverse-transform kernel relies on this to multiply by a
-/// first-quadrant twiddle (whose real and imaginary magnitudes are both
-/// positive, so the products are unsigned) after an exact rotation of the
-/// data by a quarter turn.
+/// `w[N/4 + m] == -i * w[m]`, i.e. `(wr, wif)` becomes `(wif, -wr)`, exactly
+/// as integers (true of the decoder's tables, not of the pitch estimator's).
+/// [`block_inv_i64`] can then multiply by a first-quadrant twiddle after an
+/// exact rotation of the data by a quarter turn, which is cheaper.
 const fn quadrant_symmetric<const M: usize>(t: &[(i32, i32); M]) -> bool {
     let q = M / 2;
     let mut m = 1;
@@ -1224,16 +1223,27 @@ fn round_shift_neg((lo, hi): (u32, u32)) -> i64 {
 }
 
 /// [`block`] for the inverse direction in the 64-bit mode (all values under
-/// 2^39), without sign corrections in the multiplies. The twiddle for
-/// `j > half/2` is `-i` times the first-quadrant twiddle for `j - half/2`
-/// (see [`quadrant_symmetric`]) and multiplying the data by `+i` is an exact
-/// swap and negate, so every product uses an unsigned first-quadrant
-/// twiddle: for `j < q` the outputs are `(round(A), round(B))`, for
-/// `j = q + m` they are `(round(-B), round(A))`, with `A`, `B` the exact
-/// sums of [`twiddle_sums`] for twiddle `m`. Bit-identical to the generic
-/// butterfly.
+/// 2^39), without sign corrections in the multiplies. The twiddle `(wr, wi)`
+/// of the inverse transform has `wi = -wif > 0` everywhere, `wr > 0` for
+/// `j < half/2` and `wr < 0` above it, so every product can use an unsigned
+/// magnitude. For `j < q` the exact product is `(A, B)` of
+/// [`twiddle_sums`] with `(c, s) = (wr, wi)`; for `j > q` it is `(-B', -A')`
+/// where `(A', B')` are the sums for `(c, s) = (-wr, wi)` with the data
+/// components swapped. Bit-identical to the generic butterfly, for any
+/// table with those signs (the decoder's and the pitch estimator's). With
+/// `SYM` the table must be [`quadrant_symmetric`] and the upper quadrant is
+/// computed from the first-quadrant entries by an exact quarter-turn
+/// rotation of the data, which needs no negated twiddle and one rounding
+/// of each sign.
 #[inline(always)]
-fn block_inv_i64(re: &mut [i64], im: &mut [i64], tw: &[(i32, i32)], base: usize, len: usize, step: usize) {
+fn block_inv_i64<const SYM: bool>(
+    re: &mut [i64],
+    im: &mut [i64],
+    tw: &[(i32, i32)],
+    base: usize,
+    len: usize,
+    step: usize,
+) {
     let half = len / 2;
     let (lr, hr) = re[base..base + len].split_at_mut(half);
     let (li, hi) = im[base..base + len].split_at_mut(half);
@@ -1241,22 +1251,46 @@ fn block_inv_i64(re: &mut [i64], im: &mut [i64], tw: &[(i32, i32)], base: usize,
     if half >= 2 {
         let q = half / 2;
         bf_quarter::<false>(&mut lr[q], &mut li[q], &mut hr[q], &mut hi[q]);
-        for m in 1..q {
-            let (wr, wif) = tw[m * step];
-            let (c, s) = (wr as u32, (-wif) as u32);
-            {
-                let (a, b) = twiddle_sums(c, s, hr[m], hi[m]);
+        if SYM {
+            // `j = q + m`: the inverse twiddle is `+i * w[m]`, so the exact
+            // product is `w[m] * (i * b)` = `w[m] * (-bi + j br)`. With the
+            // first-quadrant sums `(A, B)` of the unrotated data that is
+            // `(-B, A)`, and the rounding is applied to the exact sums.
+            // Both quadrants share one twiddle load per iteration.
+            for m in 1..q {
+                let (wr, wif) = tw[m * step];
+                let (c, sn) = (wr as u32, (-wif) as u32);
+                let (a, b) = twiddle_sums(c, sn, hr[m], hi[m]);
                 let (vr, vi) = (round_shift(a), round_shift(b));
                 let (xr, xi) = (lr[m], li[m]);
                 lr[m] = xr + vr;
                 li[m] = xi + vi;
                 hr[m] = xr - vr;
                 hi[m] = xi - vi;
-            }
-            {
                 let j = q + m;
-                let (a, b) = twiddle_sums(c, s, hr[j], hi[j]);
+                let (a, b) = twiddle_sums(c, sn, hr[j], hi[j]);
                 let (vr, vi) = (round_shift_neg(b), round_shift(a));
+                let (xr, xi) = (lr[j], li[j]);
+                lr[j] = xr + vr;
+                li[j] = xi + vi;
+                hr[j] = xr - vr;
+                hi[j] = xi - vi;
+            }
+        } else {
+            for j in 1..q {
+                let (wr, wif) = tw[j * step];
+                let (a, b) = twiddle_sums(wr as u32, (-wif) as u32, hr[j], hi[j]);
+                let (vr, vi) = (round_shift(a), round_shift(b));
+                let (xr, xi) = (lr[j], li[j]);
+                lr[j] = xr + vr;
+                li[j] = xi + vi;
+                hr[j] = xr - vr;
+                hi[j] = xi - vi;
+            }
+            for j in q + 1..half {
+                let (wr, wif) = tw[j * step];
+                let (a, b) = twiddle_sums((-wr) as u32, (-wif) as u32, hi[j], hr[j]);
+                let (vr, vi) = (round_shift_neg(b), round_shift_neg(a));
                 let (xr, xi) = (lr[j], li[j]);
                 lr[j] = xr + vr;
                 li[j] = xi + vi;
@@ -1458,7 +1492,11 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
     let mut r = 0;
     while r < blocks {
         if r + step < nz {
-            block::<FWD, MODE>(re, im, tw, bitrev[r] as usize, len, step, false);
+            if !FWD && MODE == MODE_I64 {
+                block_inv_i64::<false>(re, im, tw, bitrev[r] as usize, len, step);
+            } else {
+                block::<FWD, MODE>(re, im, tw, bitrev[r] as usize, len, step, false);
+            }
         }
         r += 1;
     }
@@ -1591,10 +1629,28 @@ pub(crate) fn fft_fixed_sparse_prefix<const N: usize>(
 ) where
     Size<N>: FftTables,
 {
+    prefix_general::<N>(
+        input,
+        re,
+        im,
+        forward,
+        <Size<N> as FftTables>::TW,
+        <Size<N> as FftTables>::BITREV,
+    );
+}
+
+/// The compact, any-mode form of the sparse-prefix transform for an
+/// arbitrary twiddle table (the decoder's, or the pitch estimator's).
+fn prefix_general<const N: usize>(
+    input: &[i64],
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    forward: bool,
+    tw: &[(i32, i32)],
+    bitrev: &[u16],
+) {
     let nz = input.len();
     debug_assert!(nz >= 1 && nz <= N);
-    let bitrev = <Size<N> as FftTables>::BITREV;
-    let tw = <Size<N> as FftTables>::TW;
     let mut sum = 0u64;
     for (k, &v) in input.iter().enumerate() {
         scatter_prefix::<N>(re, im, bitrev, k, prefix_fill_len(N, nz, k), v);
@@ -1637,6 +1693,53 @@ pub(crate) fn fft_fixed_sparse_prefix_forward<const N: usize, const NZ: usize>(
     } else {
         fft_fixed_sparse_prefix::<N>(input, re, im, true);
     }
+}
+
+/// The pitch estimator's twiddles (`(cos, +sin)` of `2 pi k / 512`, its own
+/// table, which differs from the decoder's in the last bit at some entries
+/// and so must be kept) in this module's `(wr, wif)` layout, where the
+/// inverse direction applies `wi = -wif`.
+const PITCH_TW_512: [(i32, i32); FFT_ENC / 2] = {
+    let src = &super::tables::NLP_TWIDDLES_Q23;
+    let mut out = [(0i32, 0i32); FFT_ENC / 2];
+    let mut i = 0;
+    while i < FFT_ENC / 2 {
+        assert!(src[i].0 == src[i].0 as i32 as i64 && src[i].1 == src[i].1 as i32 as i64);
+        out[i] = (src[i].0 as i32, -(src[i].1 as i32));
+        i += 1;
+    }
+    out
+};
+
+/// The pitch estimator's 512-point transform: real input `input[0..NZ]`
+/// (natural order), everything else zero, the estimator's own twiddle table
+/// and sign convention (the inverse direction in this module's terms).
+/// Runs in the 64-bit kernel, fully specialised for `NZ`, whenever the
+/// input's value sum allows it (always, for the estimator's windowed
+/// samples), and falls back to the general exact path otherwise.
+pub(crate) fn pitch_fft_512<const NZ: usize>(
+    input: &[i64; NZ],
+    re: &mut [i64; FFT_ENC],
+    im: &mut [i64; FFT_ENC],
+) {
+    let bitrev = <Rate8k as FftTables>::BITREV;
+    let mut sum = 0u64;
+    for k in 0..NZ {
+        sum = sum.saturating_add(input[k].unsigned_abs());
+    }
+    if sum < I64_SUM_LIMIT {
+        for k in 0..NZ {
+            scatter_prefix::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, input[k]);
+        }
+        pitch_prefix_i64_hot::<NZ>(re, im, bitrev);
+    } else {
+        prefix_general::<FFT_ENC>(input, re, im, false, &PITCH_TW_512, bitrev);
+    }
+}
+
+#[inline(never)]
+fn pitch_prefix_i64_hot<const NZ: usize>(re: &mut [i64; FFT_ENC], im: &mut [i64; FFT_ENC], bitrev: &[u16]) {
+    stages_prefix_hot::<FFT_ENC, false, MODE_I64>(re, im, &PITCH_TW_512, bitrev, NZ);
 }
 
 #[inline(never)]
@@ -1738,7 +1841,7 @@ fn stage_sparse<const N: usize, const MODE: u8>(
             im[base..base + half].fill(0);
         }
         if MODE == MODE_I64 {
-            block_inv_i64(re, im, tw, base, len, step);
+            block_inv_i64::<true>(re, im, tw, base, len, step);
         } else {
             block::<false, MODE>(re, im, tw, base, len, step, false);
         }

@@ -15,6 +15,7 @@
 //! directly, so they can't move out from under those builders. `f0_to_wo`
 //! also stays here, shared unchanged by both encoders.
 
+use super::fixed_fft;
 use super::{M_PITCH, NLP_DEC, N_SAMP, PE_FFT_SIZE, P_MAX, P_MIN, SAMPLE_RATE};
 
 /// Decimated buffer length: the full `M_PITCH`-sample pitch-history
@@ -336,55 +337,17 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
 // `.rs` files yet and so don't currently exploit it.
 fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {
     // Only the first `NDEC` (=64) of the `PE_FFT_SIZE` (=512) inputs are
-    // nonzero and the imaginary part is zero. After the bit-reversal
-    // permutation the nonzero values sit at positions that are multiples
-    // of 8, so each of the first three butterfly stages (len 2, 4, 8)
-    // only ever adds/subtracts an exact zero: their whole effect is to
-    // copy every nonzero value across its own group of 8 positions
-    // (`w * 0` rounds to exactly 0). That is written out directly here,
-    // which is bit-identical to running those three stages.
+    // nonzero and the imaginary part is zero: the shared transform in
+    // `fixed_fft.rs` handles exactly that shape (input scattered to its
+    // bit-reversed positions, the first three stages -- which only ever
+    // add/subtract an exact zero -- written out as a copy across each group
+    // of 8, no clearing of the buffers, one fully specialised 64-bit
+    // instance for this size and input count). This estimator's twiddles are
+    // `(cos, +sin)`, the inverse-transform sign convention there; the
+    // `nlp:fft_fixed` test below pins the result bit for bit against the
+    // general `i128` transform.
     const _: () = assert!(PE_FFT_SIZE == 8 * NDEC, "fft_fixed's stage skipping assumes PE_FFT_SIZE == 8 * NDEC");
-    let bits = NDEC.trailing_zeros();
-    for q in 0..NDEC {
-        let v = input[((q as u32).reverse_bits() >> (32 - bits)) as usize];
-        for k in 0..8 {
-            re[8 * q + k] = v;
-            im[8 * q + k] = 0;
-        }
-    }
-
-    let twiddles = fft_twiddles_q23();
-    let mut len = 16usize;
-    while len <= PE_FFT_SIZE {
-        let half = len / 2;
-        let step = PE_FFT_SIZE / len;
-        let mut i = 0;
-        while i < PE_FFT_SIZE {
-            for j in 0..half {
-                let (wr, wi) = twiddles[j * step];
-                let br = re[i + j + half];
-                let bi = im[i + j + half];
-                // `i64` products: every value in this transform is a
-                // partial DFT of at most `NDEC` inputs each bounded by
-                // ~2^31 (see `decimate_fixed`), so |b| < 2^38; |w| = 2^23
-                // exactly, so |wr*br -/+ wi*bi| <= |w||b| < 2^61.
-                // Measured (2026-09-20) on the four real speech recordings
-                // plus full-scale square waves, impulse trains, DC,
-                // white noise and a frequency sweep: the largest
-                // pre-shift value at these two sites is 2^56.
-                let vr = rshift_round(wr * br - wi * bi, NLP_FRAC_BITS);
-                let vi = rshift_round(wr * bi + wi * br, NLP_FRAC_BITS);
-                let ar = re[i + j];
-                let ai = im[i + j];
-                re[i + j] = ar + vr;
-                im[i + j] = ai + vi;
-                re[i + j + half] = ar - vr;
-                im[i + j + half] = ai - vi;
-            }
-            i += len;
-        }
-        len *= 2;
-    }
+    fixed_fft::pitch_fft_512::<NDEC>(input, re, im);
 }
 
 /// Fixed-point twin of `floating_reference::nlp::correct_sub_multiples`,
