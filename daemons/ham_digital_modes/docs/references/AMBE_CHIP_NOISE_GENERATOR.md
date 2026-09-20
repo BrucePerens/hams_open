@@ -60,8 +60,26 @@ bit-exact output and has no synchronization vectors.
   power-of-two recurrences (period 2, 4, 8, ... in the low bits) and for the sum-of-two-uniform hypothesis
   suggested by the kurtosis.
 
-## Status
+## Identified (2026-09-20): a 16-bit linear congruential generator
 
-Algorithm not identified. The tools and the determinism result are enough to continue if the recurrence ever
+The chip's noise source is `s[n+1] = (173 s[n] + 13849) mod 65536`, one step per output sample, output = the state read as a signed
+16-bit integer, followed by a small linear shaping filter. Evidence (`tools/chip_noise/`):
+
+* Two 900-frame captures of the muted path after `PKT_INIT` are bit-identical; folded modulo 65,536 they give one period
+  (`table_65536.i16`; the chip's own repeats differ by 1 in about 5% of samples, so the table is periodic only to that accuracy).
+* The autocorrelation fingerprint of the folded table (lag 32,768: -0.50, lag 16,384: -0.125, lags 8,192 to 2,048 near zero, lag 1,627:
+  -0.30, lag 2,839: +0.18) leaves only two multipliers, 173 and its inverse 25381. A search over all 32,768 odd increments for both
+  finds `a = 173, c = 13849` with a circular correlation of 0.866 against the table (next best offset 0.16; chance about 0.012).
+  Table index 0 corresponds to cycle state 33,635.
+* The remaining structure is a shaping filter: an 81-tap filter fitted on the aligned state reaches correlation 0.993 (residual
+  0.35 against rounding noise 0.29); its main tap is at -2 and 81% of its energy is within 3 taps of it. It was fitted on the same table, not
+  validated on a separate capture, and its dependence on frame parameters is not known.
+
+To reproduce sample-exact unvoiced output the synthesis window and this filter would still have to be reverse engineered; that is not
+planned, because the effect is inaudible phase. Our decoders keep the standard's generator (`u(n+1) = (171 u + 11213) mod 53125`).
+
+## Earlier status (kept for the record)
+
+Algorithm not identified at that time. The tools and the determinism result are enough to continue if the recurrence ever
 matters (for example for sample-exact conformance tests of unvoiced synthesis); the previous judgment was that it
 does not, because the impact is inaudible phase and about 1.4 dB of average unvoiced level.

@@ -109,7 +109,7 @@ The standard TIA-102.BABA decoder is unchanged (unvoiced gain 1.0).
 ## Known open items (all low impact)
 
 * The chip's frame crossfade and noise source differ from the standard's (see `docs/references/AMBE_CHIP_NOISE_GENERATOR.md`: its
-  noise generator has period 65,536 and is not identified), so unvoiced output cannot match the chip sample for sample.
+  noise generator is a 16-bit linear congruential generator, `173 s + 13849 mod 65536`, identified 2026-09-20), so unvoiced output cannot match the chip sample for sample.
 * Chip-compatible repeats now run the AMBE+2 gain recursion on the damaged frame (measured: the frames after a repeat decay as the
   recursion's 0.5 memory predicts). Still not modelled: the chip's first frame after a repeat is louder than ours (+11.5 dB against +7.1 dB
   in the probe) and each further repeat on the chip rises by about 1.5 dB; test mode only.
