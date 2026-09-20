@@ -1842,10 +1842,22 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
 
             if is_watchdog:
                 raise AssertionError(
-                    "Tour failed due to severed/unresponsive Chrome "
-                    "websocket (root cause not yet diagnosed -- see "
-                    "hams_com night_shift_todo/medium/"
-                    "tour-cdp-websocket-hang-root-cause-1c05ee76.md): "
+                    "[!] DIAGNOSTIC FOR AI: a Chrome DevTools command got "
+                    "no answer within its timeout. This is NOT evidence "
+                    "that the websocket is severed (it is almost never "
+                    "that: measured live, the receiver thread, socket and "
+                    "Chrome were all healthy). Odoo core's _wait_ready() "
+                    "busy-loops ~100k Runtime.evaluate calls while the "
+                    "ready code is falsy, and when its 60s budget runs out "
+                    "the last call gets a ~0s timeout and raises this "
+                    "TimeoutError instead of returning False. So the real "
+                    "cause is nearly always that the ready condition never "
+                    "became true: check the log just before this for the "
+                    "tour URL's HTTP status (a 404 / 'Template not found' "
+                    "warning) and for the tour module's own load line, "
+                    "before suspecting Chrome. Details: hams_com "
+                    "night_shift_todo/medium/"
+                    "tour-cdp-websocket-hang-root-cause-1c05ee76.md: "
                     f"{e!r}"
                 ) from None
             else:

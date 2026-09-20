@@ -76,3 +76,4 @@ def _monitored_test_execute(self, *args, **kwargs):
 
 
 TestCursor.execute = _monitored_test_execute
+from . import test_browser_js_timeout_message
