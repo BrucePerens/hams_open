@@ -167,6 +167,8 @@ fn main() {
 
     let mut dstar_dec = DStarSynthesisDecoder::new();
     let mut param_state = ham_digital_modes::ambe::float::dstar::decode::DStarDecoderState::initial();
+    #[cfg(feature = "ambe_plus_2")]
+    let mut a2_state = ham_digital_modes::ambe::float::ambe_plus_2::decode::DecoderState::initial();
     let param_range: Option<(usize, usize)> = std::env::var("PARAMS_RANGE").ok().and_then(|v| { let (a, b) = v.split_once(':')?; Some((a.parse().ok()?, b.parse().ok()?)) });
     #[cfg(feature = "ambe_plus_2")]
     let mut ap2_dec = ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder::new();
@@ -223,6 +225,30 @@ fn main() {
                     let mean_db = 20.0 * (p.ml[1..].iter().map(|m| m * m).sum::<f64>() / l as f64).sqrt().log10();
                     println!("frame {i}: b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} L={l} voiced={voiced}/{l} meanMl={mean_db:.1}dB chip_rms={:.0} ours_rms={:.0} err={}+{}", raw.b0, raw.b1, raw.b2, raw.b3, raw.b4, raw.b5, raw.b6, raw.b7, raw.b8, rms(&chip), rms(&float), parsed.epsilon_c0, parsed.epsilon_c1);
                 }
+            }
+        }
+        #[cfg(feature = "ambe_plus_2")]
+        if let (Some((a, b)), "ambe_plus_2") = (param_range, mode.as_str()) {
+            use ham_digital_modes::ambe::float::ambe_plus_2 as a2;
+            let mut wire: u128 = 0;
+            for &byte in frame_bytes {
+                wire = (wire << 8) | byte as u128;
+            }
+            let parsed = a2::parse_frame(a2::interleave::interleaved_to_frame(wire));
+            let raw = a2::decode::extract_raw_parameters(parsed.d);
+            let rms = |v: &[f64]| (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt();
+            let dq = a2::decode::dequantize(&raw, &mut a2_state);
+            if i >= a && i < b {
+                let kind = match &dq {
+                    a2::decode::DequantizedFrame::Speech(p) => {
+                        let l = p.ml.len() - 1;
+                        let voiced = p.voiced[1..].iter().filter(|&&v| v).count();
+                        let mean_db = 20.0 * (p.ml[1..].iter().map(|m| m * m).sum::<f64>() / l as f64).sqrt().log10();
+                        format!("speech L={l} voiced={voiced}/{l} meanMl={mean_db:.1}dB maxMl={:.1}dB", 20.0 * p.ml[1..].iter().cloned().fold(0.0f64, f64::max).log10())
+                    }
+                    _ => "non-speech".to_string(),
+                };
+                println!("frame {i}: b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} {kind} chip_rms={:.0} ours_rms={:.0}", raw.b0, raw.b1, raw.b2, raw.b3, raw.b4, raw.b5, raw.b6, raw.b7, raw.b8, rms(&chip), rms(&float));
             }
         }
         psd_add(&mut chip_psd, &chip);

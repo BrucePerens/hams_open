@@ -89,6 +89,23 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
 
 
 fn line_amplitudes_db(pcm: &[f64], f0_hz: f64, harmonics: usize) -> Vec<f64> {
+    if std::env::var("UNVOICED").is_ok() {
+        // Noise excitation: mean power in each harmonic's band [(k-0.5) f0, (k+0.5) f0] over the whole capture.
+        let seg = &pcm[pcm.len().saturating_sub(1920)..];
+        let mut planner = FftPlanner::<f64>::new();
+        let fft = planner.plan_fft_forward(FFT_LEN);
+        let mut buf: Vec<Complex64> = seg.iter().enumerate().map(|(i, &s)| Complex64::new(s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (seg.len() as f64 - 1.0)).cos()), 0.0)).collect();
+        buf.resize(FFT_LEN, Complex64::new(0.0, 0.0));
+        fft.process(&mut buf);
+        let power: Vec<f64> = buf[..FFT_LEN / 2].iter().map(|c| c.norm_sqr()).collect();
+        let bin = |hz: f64| hz * FFT_LEN as f64 / 8000.0;
+        return (1..=harmonics)
+            .map(|k| {
+                let (lo, hi) = (bin((k as f64 - 0.5) * f0_hz) as usize, (bin((k as f64 + 0.5) * f0_hz) as usize).min(FFT_LEN / 2 - 1));
+                10.0 * (power[lo..=hi].iter().sum::<f64>() / (hi - lo + 1) as f64 + 1e-9).log10()
+            })
+            .collect();
+    }
     // Hann-windowed 3 frames (480 samples), zero padded.
     let seg = &pcm[pcm.len() - 480..];
     let n = seg.len();
@@ -167,7 +184,7 @@ fn main() {
     let flat = (min_norm(&PRBA24, false), min_norm(&PRBA58, false), min_norm(&HOC_B5, false), min_norm(&HOC_B6, false), min_norm(&HOC_B7, false), min_norm(&HOC_B8, true));
     let b2_mid = (0..DG.len()).min_by(|&a, &b| (DG[a] - 0.0).abs().total_cmp(&(DG[b] - 0.0).abs())).unwrap() as u32;
     eprintln!("flat base: b2={b2_mid} b3..b8={flat:?}");
-    let base = || RawParameters { b0, b1: 15, b2: b2_mid, b3: flat.0, b4: flat.1, b5: flat.2, b6: flat.3, b7: flat.4, b8: flat.5 };
+    let base = || RawParameters { b0, b1: if std::env::var("UNVOICED").is_ok() { 0 } else { 15 }, b2: b2_mid, b3: flat.0, b4: flat.1, b5: flat.2, b6: flat.3, b7: flat.4, b8: flat.5 };
     if std::env::args().nth(4).as_deref() == Some("f0scan") {
         // The chip's true fundamental for every b0: least-squares slope of the measured harmonic peak frequencies
         // against harmonic number, over a long steady all-voiced flat frame.
@@ -219,6 +236,9 @@ fn main() {
         // All-unvoiced flat frame: band energy (dB, 200 Hz bands) of chip versus ours, to see where the chip's noise ends.
         let mut raw = base();
         raw.b1 = 0;
+        if let Some(v) = std::env::var("B2").ok().and_then(|v| v.parse().ok()) {
+            raw.b2 = v;
+        }
         let frame = build_frame(pack_raw_parameters(&raw));
         let (chip, ours) = (chip_steady(&sock, &mut buf, frame), ours_steady(frame));
         for (label, pcm) in [("chip", chip), ("ours", ours)] {
