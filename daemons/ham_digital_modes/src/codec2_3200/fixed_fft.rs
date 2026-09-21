@@ -1300,6 +1300,70 @@ fn block_inv_i64<const SYM: bool>(
     }
 }
 
+/// Which outputs of the pitch transform's last two stages are computed.
+/// `PRUNE_LAST` is the final stage of a
+/// transform of which only bins `0..=len/4` are read (only the lower
+/// output of each butterfly `j <= len/4`); `PRUNE_PENULTIMATE` is the stage
+/// before it (bins `0..=len/2` of each half-size result are read, which is
+/// every lower output plus the upper output of butterfly 0, output `len/2`).
+const PRUNE_LAST: u8 = 1;
+const PRUNE_PENULTIMATE: u8 = 2;
+
+/// [`block_inv_i64`] (non-symmetric table) with only the outputs that
+/// `PRUNE` keeps written. Every value written is computed by exactly the
+/// same arithmetic as in [`block_inv_i64`], so it is bit-identical; the
+/// other positions are left as they were (unspecified to the caller).
+#[inline(always)]
+fn block_inv_i64_pruned<const PRUNE: u8>(
+    re: &mut [i64],
+    im: &mut [i64],
+    tw: &[(i32, i32)],
+    base: usize,
+    len: usize,
+    step: usize,
+) {
+    let half = len / 2;
+    let q = half / 2;
+    let (lr, hr) = re[base..base + len].split_at_mut(half);
+    let (li, hi) = im[base..base + len].split_at_mut(half);
+    // j = 0: twiddle 1.
+    {
+        let (xr, xi, yr, yi) = (lr[0], li[0], hr[0], hi[0]);
+        lr[0] = xr + yr;
+        li[0] = xi + yi;
+        if PRUNE == PRUNE_PENULTIMATE {
+            hr[0] = xr - yr;
+            hi[0] = xi - yi;
+        }
+    }
+    // j = q: inverse quarter turn.
+    {
+        let (xr, xi, yr, yi) = (lr[q], li[q], hr[q], hi[q]);
+        let (vr, vi) = (-yi, yr);
+        lr[q] = xr + vr;
+        li[q] = xi + vi;
+    }
+    // Only the lower output is read for every j > 0. In the last stage
+    // only j <= q is read (bin 128 of 512 is j = q), so the butterflies
+    // above q are not run at all.
+    for j in 1..q {
+        let (wr, wif) = tw[j * step];
+        let (a, b) = twiddle_sums(wr as u32, (-wif) as u32, hr[j], hi[j]);
+        let (vr, vi) = (round_shift(a), round_shift(b));
+        lr[j] += vr;
+        li[j] += vi;
+    }
+    if PRUNE == PRUNE_PENULTIMATE {
+        for j in q + 1..half {
+            let (wr, wif) = tw[j * step];
+            let (a, b) = twiddle_sums((-wr) as u32, (-wif) as u32, hi[j], hr[j]);
+            let (vr, vi) = (round_shift_neg(b), round_shift_neg(a));
+            lr[j] += vr;
+            li[j] += vi;
+        }
+    }
+}
+
 /// One radix-2 butterfly on `(a, b)` with twiddle `(wr, wif)` (`wif` is the
 /// forward-convention imaginary part; the inverse negates it). `MODE` says
 /// how much the caller has proven about the whole transform: `MODE_I32`
@@ -1478,7 +1542,7 @@ fn scatter_prefix<const N: usize>(
 /// repeated input that [`scatter_prefix`] already wrote, so it is skipped
 /// too; the arrays do not have to be cleared beforehand.
 #[inline(always)]
-fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
+fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bool>(
     re: &mut [i64; N],
     im: &mut [i64; N],
     tw: &[(i32, i32)],
@@ -1491,7 +1555,11 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
     let mut r = 0;
     while r < blocks {
         if r + step < nz {
-            if !FWD && MODE == MODE_I64 {
+            if PRUNE && !FWD && MODE == MODE_I64 && len == N {
+                block_inv_i64_pruned::<PRUNE_LAST>(re, im, tw, bitrev[r] as usize, len, step);
+            } else if PRUNE && !FWD && MODE == MODE_I64 && len == N / 2 {
+                block_inv_i64_pruned::<PRUNE_PENULTIMATE>(re, im, tw, bitrev[r] as usize, len, step);
+            } else if !FWD && MODE == MODE_I64 {
                 block_inv_i64::<false>(re, im, tw, bitrev[r] as usize, len, step);
             } else {
                 block::<FWD, MODE>(re, im, tw, bitrev[r] as usize, len, step, false);
@@ -1502,7 +1570,7 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8>(
 }
 
 #[inline(always)]
-fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8>(
+fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bool>(
     re: &mut [i64; N],
     im: &mut [i64; N],
     tw: &[(i32, i32)],
@@ -1512,7 +1580,7 @@ fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8>(
     macro_rules! st {
         ($len:literal) => {
             if $len <= N {
-                stage_prefix::<N, FWD, MODE>(re, im, tw, bitrev, $len, nz);
+                stage_prefix::<N, FWD, MODE, PRUNE>(re, im, tw, bitrev, $len, nz);
             }
         };
     }
@@ -1556,7 +1624,7 @@ fn stages_prefix_loop<const N: usize, const FWD: bool, const MODE: u8>(
 ) {
     let mut len = 2usize;
     while len <= N {
-        stage_prefix::<N, FWD, MODE>(re, im, tw, bitrev, len, nz);
+        stage_prefix::<N, FWD, MODE, false>(re, im, tw, bitrev, len, nz);
         len *= 2;
     }
 }
@@ -1711,12 +1779,20 @@ const PITCH_TW_512_DATA: [(i32, i32); FFT_ENC / 2] = {
 };
 static PITCH_TW_512: [(i32, i32); FFT_ENC / 2] = PITCH_TW_512_DATA;
 
+/// Number of low output bins of [`pitch_fft_512`] that are computed
+/// (`0..PITCH_FFT_NEEDED_BINS`); the estimator reads nothing above bin 128.
+/// Higher entries of `re`/`im` are unspecified when the fast path ran.
+pub(crate) const PITCH_FFT_NEEDED_BINS: usize = FFT_ENC / 4 + 1;
+
 /// The pitch estimator's 512-point transform: real input `input[0..NZ]`
 /// (natural order), everything else zero, the estimator's own twiddle table
 /// and sign convention (the inverse direction in this module's terms).
 /// Runs in the 64-bit kernel, fully specialised for `NZ`, whenever the
 /// input's value sum allows it (always, for the estimator's windowed
-/// samples), and falls back to the general exact path otherwise.
+/// samples), and falls back to the general exact path otherwise. Only bins
+/// `0..PITCH_FFT_NEEDED_BINS` (0 to 128) of the result are meaningful: the
+/// last two stages skip everything those bins do not depend on, and every
+/// bin that is computed is bit-identical to the dense transform's.
 pub(crate) fn pitch_fft_512<const NZ: usize>(
     input: &[i64; NZ],
     re: &mut [i64; FFT_ENC],
@@ -1739,7 +1815,7 @@ pub(crate) fn pitch_fft_512<const NZ: usize>(
 
 #[inline(never)]
 fn pitch_prefix_i64_hot<const NZ: usize>(re: &mut [i64; FFT_ENC], im: &mut [i64; FFT_ENC], bitrev: &[u16]) {
-    stages_prefix_hot::<FFT_ENC, false, MODE_I64>(re, im, &PITCH_TW_512, bitrev, NZ);
+    stages_prefix_hot::<FFT_ENC, false, MODE_I64, true>(re, im, &PITCH_TW_512, bitrev, NZ);
 }
 
 #[inline(never)]
@@ -1749,7 +1825,7 @@ fn prefix_forward_i32_hot<const N: usize, const NZ: usize>(
     tw: &[(i32, i32)],
     bitrev: &[u16],
 ) {
-    stages_prefix_hot::<N, true, MODE_I32>(re, im, tw, bitrev, NZ);
+    stages_prefix_hot::<N, true, MODE_I32, false>(re, im, tw, bitrev, NZ);
 }
 
 /// Real part of `(wr + j wi) * (br + j bi)` rounded back to Q23, for the

@@ -484,6 +484,8 @@ pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
     const HALF: usize = PE_FFT_SIZE / 2 + 1;
     const POWER_BINS: usize = PE_FFT_SIZE * NLP_DEC / P_MIN + 1;
     const _: () = assert!(POWER_BINS <= HALF);
+    // The transform only computes its low bins (see `pitch_fft_512`).
+    const _: () = assert!(POWER_BINS <= fixed_fft::PITCH_FFT_NEEDED_BINS);
     let (re, im) = (&state.fft_re, &state.fft_im);
     let power: [i128; POWER_BINS] =
         core::array::from_fn(|i| re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128);
@@ -922,8 +924,57 @@ mod tests {
             let mut im_ref = [0i64; PE_FFT_SIZE];
             re_ref[..NDEC].copy_from_slice(&input);
             fft_fixed_full(&mut re_ref, &mut im_ref);
-            assert_eq!(re, re_ref, "case {case}");
-            assert_eq!(im, im_ref, "case {case}");
+            // The production transform computes only bins 0..=128 (the
+            // ones the estimator reads); compare exactly those.
+            let n = fixed_fft::PITCH_FFT_NEEDED_BINS;
+            assert_eq!(re[..n], re_ref[..n], "case {case}");
+            assert_eq!(im[..n], im_ref[..n], "case {case}");
+        }
+    }
+
+    /// The pruned transform's bins 0..=128 equal the dense general
+    /// transform's bit for bit: on random and full-scale windowed inputs,
+    /// on silence, on inputs at both sides of the 64-bit kernel's sum
+    /// limit (the fast pruned path and the dense fallback), and whatever
+    /// the output buffers held before.
+    #[test]
+    fn pruned_pitch_transform_bins_match_the_dense_transform() {
+        let mut seed = 987_654_321u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 20) as i64
+        };
+        let n = fixed_fft::PITCH_FFT_NEEDED_BINS;
+        assert_eq!(n, 129);
+        // 64 values whose absolute sum is just below / at 2^39.
+        let just_under = (1i64 << 39) / NDEC as i64 - 1;
+        let at_limit = (1i64 << 39) / NDEC as i64;
+        for case in 0..600 {
+            let mut input = [0i64; NDEC];
+            for (i, v) in input.iter_mut().enumerate() {
+                let sign = if next() & 1 == 0 { 1 } else { -1 };
+                *v = match case % 10 {
+                    0 => 0,
+                    1 => sign * ((1i64 << 31) - 1),
+                    2 => just_under,
+                    3 => at_limit,
+                    4 => -just_under,
+                    5 => sign * just_under,
+                    6 => sign * (next() % (1i64 << 33)),
+                    7 => if i == 0 { at_limit * NDEC as i64 } else { 0 },
+                    8 => sign * (next() % (1i64 << 12)),
+                    _ => sign * (next() % (1i64 << 24)),
+                };
+            }
+            let mut re = [0x5a5a_5a5ai64; PE_FFT_SIZE];
+            let mut im = [-0x1234_5678i64; PE_FFT_SIZE];
+            fft_fixed(&input, &mut re, &mut im);
+            let mut re_ref = [0i64; PE_FFT_SIZE];
+            let mut im_ref = [0i64; PE_FFT_SIZE];
+            re_ref[..NDEC].copy_from_slice(&input);
+            fft_fixed_full(&mut re_ref, &mut im_ref);
+            assert_eq!(re[..n], re_ref[..n], "case {case}");
+            assert_eq!(im[..n], im_ref[..n], "case {case}");
         }
     }
 

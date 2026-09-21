@@ -48,11 +48,11 @@ rate specialisation: `f59f8fcd` for the 8 kHz run (also the host build's) and `9
 
 | | Before | After |
 | --- | --- | --- |
-| Encode, 8 kHz | 644,149 | 507,554 |
+| Encode, 8 kHz | 644,149 | 478,024 |
 | Decode, 8 kHz, `codec2_16k_bridge` not compiled in | 1,317,832 | 712,234 |
 | Decode, 8 kHz, bridge compiled in (`--features bridge`, 16 kHz path not called) | 1,344,266 (1,345,916 with per-stage marks on) | 712,478 |
 | Decode, 16 kHz (`decode_16k_fixed`, `--features decode16k`) | 2,498,432 | 1,211,040 |
-| Worst frame (encode / decode 8 kHz / decode 16 kHz) | 649,867 / 1,360,876 / 2,602,565 | 512,871 / 770,915 / 1,333,775 |
+| Worst frame (encode / decode 8 kHz / decode 16 kHz) | 649,867 / 1,360,876 / 2,602,565 | 483,341 / 770,915 / 1,333,775 |
 | State (struct size), encoder / decoder | 11,424 / 9,592 (28,544 with the bridge) | unchanged |
 | Stack, call tree below the caller, encode / decode | 7,820 / 11,156 | 8,096 / 11,140 (10,984 with the bridge) |
 
@@ -81,6 +81,15 @@ constant of a monomorphised copy:
   clearing, no permutation, and the runs of equal values that the first stages produce are written directly
   instead of being copied up stage by stage. The pitch estimator's 64-input transform uses the same machinery
   with its own twiddle table (which differs from the decoder's in the last bit at 124 entries, so it is kept).
+* The pitch estimator's 512-point transform is pruned to the output bins it reads. The estimator uses only
+  bins 0 to 128 (`PITCH_FFT_NEEDED_BINS`). In a radix-2 decimation-in-time transform the last stage combines two
+  256-point results, so it now computes only the lower output of each butterfly with index 128 or below and
+  skips the other 127 butterflies (each a full complex multiply); the stage before it computes only the
+  lower outputs, plus the upper output of butterfly 0 (bin 128 of the second half-size result). Every bin that is
+  computed uses exactly the same arithmetic as before, so the estimator's results are bit-identical
+  (checksum unchanged); the entries of the output arrays above bin 128 are unspecified. This saved 29,530
+  encode instructions per frame (507,554 to 478,024) and made the image about 0.7 KB smaller. The
+  fallback for inputs beyond the 64-bit kernel's sum limit stays dense.
 * The rate-independent tail of a sub-frame (`overlap_add_subframe<N, NS, SF>`) is shared by both rates; the
   harmonic bin scale (`k_q23`, a 64-bit division) is computed once per sub-frame in `ModelFixed`.
 * `log2_q23` / `exp2_q23` run in 32-bit arithmetic with a table leading-zero count (these cores have no
