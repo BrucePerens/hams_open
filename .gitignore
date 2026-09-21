@@ -49,3 +49,7 @@ coverage_report/
 # A generated copy with no real secrets was already committed before this rule existed
 # (see git history); untracking it going forward here, not rewriting past history.
 pager_duty/daemon/pager_config.json
+
+# LLVM coverage raw profiles (instrumented runs without LLVM_PROFILE_FILE write default_*.profraw into the
+# current directory). Safety net only: tools set LLVM_PROFILE_FILE to a temp dir and remove it.
+*.profraw
