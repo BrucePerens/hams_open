@@ -274,13 +274,62 @@ mod tests {
         std::fs::write(path, render()).expect("write tables.rs");
     }
 
+    /// The numeric literals of a rendered table file, in order, and the text around them.
+    fn split_numbers(text: &str) -> (Vec<i64>, String) {
+        let (mut numbers, mut skeleton) = (Vec::new(), String::new());
+        let mut digits = String::new();
+        let flush = |digits: &mut String, numbers: &mut Vec<i64>, skeleton: &mut String| {
+            if !digits.is_empty() {
+                numbers.push(digits.parse().expect("integer literal"));
+                skeleton.push('#');
+                digits.clear();
+            }
+        };
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            // A '-' directly before a digit belongs to the number; identifiers such as `Q23` are not numbers.
+            let starts_number = c.is_ascii_digit() || (c == '-' && chars.peek().is_some_and(|d| d.is_ascii_digit()));
+            let in_identifier = skeleton.chars().last().is_some_and(|p| p.is_ascii_alphanumeric() || p == '_');
+            if digits.is_empty() && !starts_number || (digits.is_empty() && in_identifier) {
+                skeleton.push(c);
+            } else if c.is_ascii_digit() || (c == '-' && digits.is_empty()) {
+                digits.push(c);
+            } else {
+                flush(&mut digits, &mut numbers, &mut skeleton);
+                skeleton.push(c);
+            }
+        }
+        flush(&mut digits, &mut numbers, &mut skeleton);
+        (numbers, skeleton)
+    }
+
+    #[test]
+    fn split_numbers_separates_literals_from_identifiers_and_catches_changes() {
+        let (n, shape) = split_numbers("static Q23_TABLE: [i32; 3] = [1, -20, 300];");
+        assert_eq!(n, vec![3, 1, -20, 300]);
+        assert_eq!(shape, "static Q23_TABLE: [i32; #] = [#, #, #];");
+        let (n2, _) = split_numbers("static Q23_TABLE: [i32; 3] = [1, -21, 300];");
+        assert_ne!(n, n2);
+    }
+
+    /// The tables were generated once with single-precision trigonometry, which rounds the last bit differently on different C
+    /// libraries (found on 64-bit Arm Linux: about 200 entries of the cosine tables differ by exactly one in the last place
+    /// from x86-64's). The committed file is the source of truth at run time and every target produces the same codec output
+    /// from it, so this test checks the structure exactly and every number to within one unit in the last place.
     #[test]
     fn committed_tables_match_the_generator() {
-        let committed = include_str!("tables.rs");
+        let (committed_numbers, committed_shape) = split_numbers(include_str!("tables.rs"));
+        let (generated_numbers, generated_shape) = split_numbers(&render());
         assert!(
-            committed == render(),
-            "src/codec2_3200/tables.rs has drifted from tables_gen.rs; regenerate it with \
+            committed_shape == generated_shape && committed_numbers.len() == generated_numbers.len(),
+            "src/codec2_3200/tables.rs has drifted from tables_gen.rs (structure); regenerate it with \
              `cargo test --release --features ambe_plus_2 --lib tables_gen::tests::regenerate -- --ignored`"
         );
+        for (i, (a, b)) in committed_numbers.iter().zip(&generated_numbers).enumerate() {
+            assert!(
+                (a - b).abs() <= 1,
+                "table entry {i}: committed {a}, generated {b}; regenerate tables.rs if a formula changed"
+            );
+        }
     }
 }
