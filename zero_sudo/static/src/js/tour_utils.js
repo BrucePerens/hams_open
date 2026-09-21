@@ -8,14 +8,25 @@
 export const TourUtils = {
     safeSave: function (saveButtonTrigger, waitTrigger) {
         saveButtonTrigger = saveButtonTrigger || '.o_form_button_save';
-        waitTrigger = waitTrigger || '.o_form_button_create';
+        // `.o_form_saved` is the form renderer's own settled state
+        // (web form_compiler.js: `dirty ? o_form_dirty : !isNew ? o_form_saved`), so it
+        // appears only once the save RPC has resolved and the record is persisted and clean.
+        // The old default, `.o_form_button_create`, is the control panel's always-present
+        // "New" button: it matches immediately, before the save RPC returns, so the tour
+        // could finish with `.o_form_dirty` still set ("Tour finished with a dirty form view
+        // being open") whenever the box was slow enough for the save to lag. This is a
+        // native tour step (the engine's own trigger polling and timeout), not a sleep.
+        waitTrigger = waitTrigger || '.o_form_saved';
         return [
             {
                 content: "[MACRO] Click the save button",
                 trigger: saveButtonTrigger,
                 run: 'click',
             },
-            TourUtils.waitForElement(waitTrigger, "RPC resolution / Dirty Form safe save")
+            {
+                content: "[MACRO] Wait for the save RPC to resolve (form saved and clean)",
+                trigger: waitTrigger,
+            }
         ];
     },
 

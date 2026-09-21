@@ -120,7 +120,7 @@ High-performance atomic key-value update using an optimized Postgres procedure.
 The `TourUtils` object (`@zero_sudo/js/tour_utils`) provides centralized macros for Odoo UI Tours to guarantee architectural compliance and eliminate race conditions in headless browser testing.
 
 #### `safeSave(saveButtonTrigger, waitTrigger)`
-Generates a macro array to safely click a save button and explicitly wait for the subsequent RPC resolution or UI state change.
+Generates a step array that clicks a save button and then waits (a native tour step, no polling loop) for `.o_form_saved`, the form renderer's own "persisted and not dirty" class, so the tour cannot end or navigate while the save RPC is still in flight. Pass `waitTrigger` to wait on something else instead. (Do not wait on `.o_form_button_create`: the control panel's always-present New button matches before the save resolves.)
 
 #### `bypassDialogs()`
 Generates a macro to intercept and bypass native blocking dialogs (`window.alert`, `window.confirm`) during testing.
