@@ -18,6 +18,12 @@ CRATE=$HERE/..
 LIB_ONLY=0
 [ "${1:-}" = "--lib-only" ] && LIB_ONLY=1
 export CARGO_TARGET_DIR=${NO_STD_TARGET_DIR:-${CARGO_TARGET_DIR:-$CRATE/target}/no_std_check}
+# Cargo prefers CARGO_ENCODED_RUSTFLAGS over RUSTFLAGS, so under `cargo llvm-cov` (which sets it to
+# `-C instrument-coverage`, needing a profiler runtime bare-metal targets lack) the RUSTFLAGS below
+# would be silently ignored and the build would fail. Scrub every coverage/wrapper variable so this
+# check always builds the plain, uninstrumented no_std library, whatever runs it.
+unset CARGO_ENCODED_RUSTFLAGS RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER LLVM_PROFILE_FILE CARGO_LLVM_COV \
+  CARGO_LLVM_COV_TARGET_DIR CARGO_LLVM_COV_SHOW_ENV RUSTDOCFLAGS CARGO_ENCODED_RUSTDOCFLAGS
 export RUSTFLAGS="-D warnings"
 EXPECTED_CHECKSUM=f59f8fcd
 EXPECTED_CHECKSUM_1600=db5b738b   # Codec2 1600 fixed encoder + decoder, same excerpt, 100 frames of 40 ms
