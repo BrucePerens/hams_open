@@ -74,38 +74,88 @@ fn db(x: &[f64]) -> f64 {
 fn spectrum_db(x: &[f64]) -> Vec<f64> {
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(256);
-    let mut b: Vec<Complex64> = (0..256).map(|i| Complex64::new(if i < x.len() { x[i] * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 255.0).cos()) } else { 0.0 }, 0.0)).collect();
+    let mut b: Vec<Complex64> = (0..256)
+        .map(|i| {
+            Complex64::new(
+                if i < x.len() {
+                    x[i] * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 255.0).cos())
+                } else {
+                    0.0
+                },
+                0.0,
+            )
+        })
+        .collect();
     fft.process(&mut b);
     let edge = |k: usize| (3.0 * (122.0f64 / 3.0).powf(k as f64 / 16.0)).round() as usize;
-    (0..16).map(|k| { let (lo, hi) = (edge(k), edge(k + 1).max(edge(k) + 1)); 10.0 * (b[lo..hi].iter().map(|c| c.norm_sqr()).sum::<f64>() / (hi - lo) as f64 + 1e-3).log10() }).collect()
+    (0..16)
+        .map(|k| {
+            let (lo, hi) = (edge(k), edge(k + 1).max(edge(k) + 1));
+            10.0 * (b[lo..hi].iter().map(|c| c.norm_sqr()).sum::<f64>() / (hi - lo) as f64 + 1e-3)
+                .log10()
+        })
+        .collect()
 }
 
 fn main() {
-    let which = std::env::args().nth(1).unwrap_or_else(|| "dstar".to_string());
-    let n_frames: usize = std::env::args().nth(2).and_then(|s| s.parse().ok()).unwrap_or(300);
+    let which = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "dstar".to_string());
+    let n_frames: usize = std::env::args()
+        .nth(2)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300);
     let is_dstar = which == "dstar";
     let mut per_bit = vec![(0.0f64, 0.0f64, 0usize); 49];
     for f in FILES {
         let bytes = std::fs::read(f).unwrap();
-        let pcm: Vec<f64> = bytes[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).take(n_frames * 160).collect();
+        let pcm: Vec<f64> = bytes[44..]
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+            .take(n_frames * 160)
+            .collect();
         let (frames, decode): (Vec<u128>, Decoder) = if is_dstar {
-            use ham_digital_modes::ambe::float::dstar::{encoder::Encoder, synthesis::DStarSynthesisDecoder};
+            use ham_digital_modes::ambe::float::dstar::{
+                encoder::Encoder, synthesis::DStarSynthesisDecoder,
+            };
             let mut e = Encoder::new();
             e.push_samples(&pcm);
             let mut fr = Vec::new();
-            while let Some(x) = e.next_frame() { fr.push(x) }
+            while let Some(x) = e.next_frame() {
+                fr.push(x)
+            }
             fr.extend(e.finish());
-            (fr, Box::new(|fr: &[u128]| { let mut d = DStarSynthesisDecoder::new(); fr.iter().flat_map(|&x| d.decode_frame(x).unwrap_or([0.0; 160])).collect() }))
+            (
+                fr,
+                Box::new(|fr: &[u128]| {
+                    let mut d = DStarSynthesisDecoder::new();
+                    fr.iter()
+                        .flat_map(|&x| d.decode_frame(x).unwrap_or([0.0; 160]))
+                        .collect()
+                }),
+            )
         } else {
             #[cfg(feature = "ambe_plus_2")]
             {
-                use ham_digital_modes::ambe::float::ambe_plus_2::{encoder::Encoder, synthesis::AmbePlus2SynthesisDecoder};
+                use ham_digital_modes::ambe::float::ambe_plus_2::{
+                    encoder::Encoder, synthesis::AmbePlus2SynthesisDecoder,
+                };
                 let mut e = Encoder::new();
                 e.push_samples(&pcm);
                 let mut fr = Vec::new();
-                while let Some(x) = e.next_frame() { fr.push(x) }
+                while let Some(x) = e.next_frame() {
+                    fr.push(x)
+                }
                 fr.extend(e.finish());
-                (fr, Box::new(|fr: &[u128]| { let mut d = AmbePlus2SynthesisDecoder::new(); fr.iter().flat_map(|&x| d.decode_frame(x).unwrap_or([0.0; 160])).collect() }))
+                (
+                    fr,
+                    Box::new(|fr: &[u128]| {
+                        let mut d = AmbePlus2SynthesisDecoder::new();
+                        fr.iter()
+                            .flat_map(|&x| d.decode_frame(x).unwrap_or([0.0; 160]))
+                            .collect()
+                    }),
+                )
             }
             #[cfg(not(feature = "ambe_plus_2"))]
             panic!("build with --features ambe_plus_2")
@@ -114,25 +164,58 @@ fn main() {
         let parse = |fr: u128| ham_digital_modes::ambe::float::dstar::decode::parse_frame(fr).d;
         let reference = decode(&frames);
         for (bit, slot) in per_bit.iter_mut().enumerate() {
-            let flipped: Vec<u128> = frames.iter().enumerate().map(|(k, &fr)| if k % 3 == 0 { build_frame(parse(fr) ^ (1u64 << (48 - bit))) } else { fr }).collect();
+            let flipped: Vec<u128> = frames
+                .iter()
+                .enumerate()
+                .map(|(k, &fr)| {
+                    if k % 3 == 0 {
+                        build_frame(parse(fr) ^ (1u64 << (48 - bit)))
+                    } else {
+                        fr
+                    }
+                })
+                .collect();
             let out = decode(&flipped);
             for k in (0..frames.len()).step_by(3) {
-                let (r, o) = (&reference[k * 160..(k + 1) * 160], &out[k * 160..(k + 1) * 160]);
+                let (r, o) = (
+                    &reference[k * 160..(k + 1) * 160],
+                    &out[k * 160..(k + 1) * 160],
+                );
                 if db(r) < 30.0 || k * 160 + 256 > reference.len() {
                     continue;
                 }
-                let (sr, so) = (spectrum_db(&reference[k * 160..k * 160 + 256]), spectrum_db(&out[k * 160..k * 160 + 256]));
-                slot.0 += (sr.iter().zip(&so).map(|(a, b)| (a - b).powi(2)).sum::<f64>() / sr.len() as f64).sqrt();
+                let (sr, so) = (
+                    spectrum_db(&reference[k * 160..k * 160 + 256]),
+                    spectrum_db(&out[k * 160..k * 160 + 256]),
+                );
+                slot.0 += (sr
+                    .iter()
+                    .zip(&so)
+                    .map(|(a, b)| (a - b).powi(2))
+                    .sum::<f64>()
+                    / sr.len() as f64)
+                    .sqrt();
                 slot.1 += (db(o) - db(r) - 3.0).max(0.0);
                 slot.2 += 1;
             }
         }
     }
     println!("| data bit | field | protected | envelope distance dB | excess loudness dB |\n|---|---|---|---|---|");
-    let mut rows: Vec<(usize, f64, f64)> = per_bit.iter().enumerate().map(|(i, s)| (i, s.0 / s.2.max(1) as f64, s.1 / s.2.max(1) as f64)).collect();
+    let mut rows: Vec<(usize, f64, f64)> = per_bit
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (i, s.0 / s.2.max(1) as f64, s.1 / s.2.max(1) as f64))
+        .collect();
     rows.sort_by(|a, b| b.1.total_cmp(&a.1));
     for (i, lsd, exc) in rows {
-        let name = if is_dstar { field_dstar(i) } else { field_a2(i) };
-        println!("| d[{i}] | {name} | {} | {lsd:.2} | {exc:.2} |", if i < 24 { "Golay" } else { "raw" });
+        let name = if is_dstar {
+            field_dstar(i)
+        } else {
+            field_a2(i)
+        };
+        println!(
+            "| d[{i}] | {name} | {} | {lsd:.2} | {exc:.2} |",
+            if i < 24 { "Golay" } else { "raw" }
+        );
     }
 }

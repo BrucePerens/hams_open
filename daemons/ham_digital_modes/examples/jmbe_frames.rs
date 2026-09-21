@@ -1,6 +1,5 @@
 //! Emit wire frames as hex + our decoders' PCM for cross-checking with JMBE.
 //! `jmbe_frames <imbe|a2> <wav> <nframes> <outprefix> <ber> <seed>`
-use ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy;
 use std::io::Write;
 
 struct Lcg(u64);
@@ -63,6 +62,7 @@ fn main() {
     } else {
         #[cfg(feature = "ambe_plus_2")]
         {
+            use ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy;
             use ham_digital_modes::ambe::float::ambe_plus_2::{encoder::Encoder, interleave::*, synthesis::AmbePlus2SynthesisDecoder};
             let mut e = Encoder::new();
             e.push_samples(&pcm);

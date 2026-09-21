@@ -113,3 +113,35 @@ required-features = ["ambe_plus_2"]
 
 [[example]]
 name = "ambe_frame_statistics"
+
+[[example]]
+name = "ambe_chip_noise_capture"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_chip_validate_ambe_plus_2_dtmf"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_fixed_chip_validate_ambe_plus_2"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_fixed_generate_ambe_plus_2_tables"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "ambe_plus_2_erasure_frame_digit_correlation_scan"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "p25_ambe_plus_2_and_dstar_dtx_dtmf_probe"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "p25_ambe_plus_2_and_dstar_tone_frame_ground_truth"
+required-features = ["ambe_plus_2"]
+
+[[example]]
+name = "p25_ambe_plus_2_forced_tone_probe"
+required-features = ["ambe_plus_2"]

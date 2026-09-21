@@ -691,7 +691,6 @@ fn cheb_poly_eval_fixed_core(coef_q: &[i32; 6], x: f32) -> i32 {
 
 /// The Chebyshev evaluation proper, with `x` already in Q29.
 fn cheb_poly_eval_q29(coef_q: &[i32; 6], x_q: i32) -> i32 {
-
     let mut t_prev2: i32 = 1i32 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
     let mut t_prev1: i32 = x_q; // T_1 = x, Q2.29
 
@@ -863,8 +862,8 @@ fn acos_lut_fixed(x: f32) -> f32 {
         (-1.0..=1.0).contains(&x),
         "acos_lut_fixed: x must be in [-1, 1], got {x}"
     );
-    let x_q23 = fixed_point::f32_to_q_exact_round(x.abs(), COEF_FRAC_BITS)
-        .clamp(0, 1i64 << COEF_FRAC_BITS);
+    let x_q23 =
+        fixed_point::f32_to_q_exact_round(x.abs(), COEF_FRAC_BITS).clamp(0, 1i64 << COEF_FRAC_BITS);
     let x_q23 = if x >= 0.0 { x_q23 } else { -x_q23 };
     (acos_lut_q23(x_q23) as f32) / (1i64 << COEF_FRAC_BITS) as f32
 }
