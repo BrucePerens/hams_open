@@ -1,6 +1,7 @@
-# Codec2 3200 without the standard library (`no_std`)
+# Codec2 3200 and 1600 without the standard library (`no_std`)
 
-The fixed-point Codec2 3200 encoder (`EncoderFixed`) and decoder (`DecoderFixed`) build for 32-bit
+The fixed-point Codec2 3200 encoder (`EncoderFixed`) and decoder (`DecoderFixed`), and the fixed-point
+Codec2 1600 encoder and decoder (`codec2_1600::EncoderFixed`, `codec2_1600::DecoderFixed`), build for 32-bit
 microcontrollers that have no floating-point unit, no heap and no operating system. It uses only
 Rust's `core` library. `alloc` is not needed and not used.
 
@@ -23,15 +24,54 @@ unchanged: everything in the crate, with the standard library.
 
 | Feature | Default | Meaning |
 | --- | --- | --- |
-| `std` | on | Everything else in the crate: FT8, WSPR, PSK31, RTTY, D-STAR, the whole AMBE tree, Codec2 1600, the floating-point Codec2 3200 reference (`floating_reference`, `Decoder`, float adapters), and the dependencies they use (`libm`, `rustfft`, `microfft`). Also the vendored C library build in `build.rs`, which is skipped without `std`. |
+| `std` | on | Everything else in the crate: FT8, WSPR, PSK31, RTTY, D-STAR, the whole AMBE tree, the floating-point Codec2 1600 reference (`codec2_1600::Encoder`, `Decoder` and the float line spectral pair helpers), the floating-point Codec2 3200 reference (`floating_reference`, `Decoder`, float adapters), and the dependencies they use (`libm`, `rustfft`, `microfft`). Also the vendored C library build in `build.rs`, which is skipped without `std`. |
 | `codec2_16k_bridge` | on with `std` | The 16 kHz output "spectral bridge" (`DecoderFixed::decode_16k_fixed`, `spectral_bridge`), its tables and the 1024-point Fast Fourier Transform tables. |
 | `codec2_profile` | off | Per-stage instruction-count hooks used by the bench harness. Expands to nothing when off. |
 | `ambe_plus_2` | off | Unchanged (needs `std`). |
 
 Without `std` the crate contains `bits`, `encoder_fixed`, `envelope`, `fixed_fft`, `fixed_point`,
 `interp`, `lpc`, `nlp`, `quantise`, `synthesis`, `tables`, `trig_fixed`, `voicing`, `window` (the
-integer parts of each) and the integer decoder. Codec2 1600 stayed behind `std`: it is built on the
-floating-point line-spectral-pair code and was not worth converting.
+integer parts of each), the integer 3200 decoder, and the integer parts of `codec2_1600`
+(`bits`, `lsp_quantiser`, `lsp_post`, `EncoderFixed`, `DecoderFixed`).
+
+### Codec2 1600
+
+The 1600 mode shares almost its whole signal path with 3200, and it already had an integer encoder
+and decoder next to its floating-point ones, so it was converted rather than left behind:
+
+* The floating-point `Encoder` and `Decoder`, and the `f32` helpers of the line spectral pair
+  quantiser and post-processing (`encode_lsps_scalar`, `check_lsp_order`, ...), stay behind `std`.
+  They exist as the reference the integer versions are compared with. Making them `no_std` would
+  need the `libm` crate and software floating point (every `f32` operation becomes a library call
+  of tens to hundreds of instructions on a core with no floating-point unit) and would gain
+  nothing, since the integer versions do the same job.
+* `codec2_1600::EncoderFixed` used to cross into `f32` for the pitch, the frame energy and the
+  line spectral pairs. It now uses the same integer boundaries as the 3200 encoder
+  (`nlp_fixed_bin` with the committed pitch-index table, `encode_energy_q23`,
+  `lpc_to_lsp_q23_from_integer_ak`, and a Q23 scalar quantiser). The earlier form is kept as a
+  test reference: over 840 frames of real speech the two produce identical bytes
+  (`integer_encoder_matches_the_float_boundary_encoder`, which allows at most 5 percent of frames
+  to differ). The encoder also no longer runs the line spectral pair search for the first of its
+  two analysis passes, whose result was discarded.
+* The scalar-quantiser codebook, the Q23 conversion constants and the pitch/spectrum starting
+  values used to be computed at first use with `f32_to_q_exact_round` behind `OnceLock`. They are now
+  committed constants, and tests assert they equal the computed values.
+* `DecoderFixed::decode_16k_fixed` and its bridge state need `codec2_16k_bridge`, as in 3200.
+
+Measured on the QEMU bench with `--features mode1600` (same 200-frame excerpt, 100 frames of
+40 ms, host checksum `db5b738b`): encode 905,071 instructions per 40 ms frame (452,536 per 20 ms),
+decode 1,443,042 per 40 ms frame (721,521 per 20 ms). `tools/check_codec2_no_std.sh` builds and runs
+this harness too and fails on soft-float or math-library symbols or a checksum change.
+
+### The C interface and the floating-point Codec2 3200 reference
+
+`daemons/codec2_3200_capi` is a C-callable library (`libcodec2.so` / `.a`, built as `cdylib` and
+`staticlib`) for hosted programs. It uses `std` (its handle holds the floating-point 3200 `Decoder`,
+it relies on panics aborting through the C boundary, and it is linked with the default features), and
+it is unchanged. It was deliberately left `std`: a `no_std` static library would need its own panic
+handler and allocator-free handle management for a use (a C program on a microcontroller) that can call
+the Rust functions directly. `src/codec2_3200/floating_reference/` is the floating-point reference
+(`rustfft`, `microfft`, `libm`) and stays behind `std` for the same reason as the 1600 float code.
 
 Every item that contains floating point (there were 77 in the old inventory) is gated
 `#[cfg(feature = "std")]`. `tests/codec2_3200_fixed_no_float_tokens.rs` enforces that no ungated

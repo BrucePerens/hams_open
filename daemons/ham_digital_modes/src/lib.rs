@@ -18,7 +18,6 @@
 // Build/test with `cargo build/test --features ambe_plus_2`.
 #[cfg(feature = "std")]
 pub mod ambe;
-#[cfg(feature = "std")]
 pub mod codec2_1600;
 pub mod codec2_3200;
 #[cfg(feature = "std")]

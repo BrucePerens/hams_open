@@ -22,8 +22,8 @@
 /// header). Every one of the ten real tables happens to be evenly
 /// spaced, so this is `start + step*index`, not a lookup array.
 struct LspDim {
-    start_hz: f32,
-    step_hz: f32,
+    start_hz: i64,
+    step_hz: i64,
     levels: u32,
     log2m: u32,
 }
@@ -31,68 +31,70 @@ struct LspDim {
 /// The ten real per-dimension codebooks, `lsp1.txt` .. `lsp10.txt`.
 const LSP_CB: [LspDim; super::LPC_ORD] = [
     LspDim {
-        start_hz: 225.0,
-        step_hz: 25.0,
+        start_hz: 225,
+        step_hz: 25,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 325.0,
-        step_hz: 25.0,
+        start_hz: 325,
+        step_hz: 25,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 500.0,
-        step_hz: 50.0,
+        start_hz: 500,
+        step_hz: 50,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 700.0,
-        step_hz: 100.0,
+        start_hz: 700,
+        step_hz: 100,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 950.0,
-        step_hz: 100.0,
+        start_hz: 950,
+        step_hz: 100,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 1100.0,
-        step_hz: 100.0,
+        start_hz: 1100,
+        step_hz: 100,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 1500.0,
-        step_hz: 100.0,
+        start_hz: 1500,
+        step_hz: 100,
         levels: 16,
         log2m: 4,
     },
     LspDim {
-        start_hz: 2300.0,
-        step_hz: 100.0,
+        start_hz: 2300,
+        step_hz: 100,
         levels: 8,
         log2m: 3,
     },
     LspDim {
-        start_hz: 2500.0,
-        step_hz: 100.0,
+        start_hz: 2500,
+        step_hz: 100,
         levels: 8,
         log2m: 3,
     },
     LspDim {
-        start_hz: 2900.0,
-        step_hz: 200.0,
+        start_hz: 2900,
+        step_hz: 200,
         levels: 4,
         log2m: 2,
     },
 ];
 
+#[cfg(feature = "std")]
 const RAD_PER_HZ: f32 = std::f32::consts::PI / 4000.0;
+#[cfg(feature = "std")]
 const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
 
 /// Bit width of the `i`th LSP dimension's own index -- 4,4,4,4,4,4,4,3,3,2
@@ -109,8 +111,9 @@ pub fn lsp_bits(i: usize) -> u32 {
 /// by absolute difference is the same as nearest by squared error for a
 /// scalar), just without the O(m) search.
 // [@ANCHOR: quantise_dim]
+#[cfg(feature = "std")]
 fn quantise_dim(dim: &LspDim, target_hz: f32) -> u32 {
-    let idx = ((target_hz - dim.start_hz) / dim.step_hz).round();
+    let idx = ((target_hz - dim.start_hz as f32) / dim.step_hz as f32).round();
     idx.clamp(0.0, (dim.levels - 1) as f32) as u32
 }
 
@@ -118,53 +121,52 @@ fn quantise_dim(dim: &LspDim, target_hz: f32) -> u32 {
 /// finds the quantised LSP indexes -- one call per dimension, each
 /// dimension's own independent codebook.
 // [@ANCHOR: encode_lsps_scalar]
+#[cfg(feature = "std")]
 pub fn encode_lsps_scalar(lsp: &[f32; super::LPC_ORD]) -> [u32; super::LPC_ORD] {
-    std::array::from_fn(|i| quantise_dim(&LSP_CB[i], lsp[i] * HZ_PER_RAD))
+    core::array::from_fn(|i| quantise_dim(&LSP_CB[i], lsp[i] * HZ_PER_RAD))
 }
 
 /// From a vector of quantised LSP indexes, returns the quantised LSPs
 /// (radians) -- the real quantized value any compliant decoder must
 /// reproduce exactly, since this *is* the table, not a design choice.
 // [@ANCHOR: decode_lsps_scalar]
+#[cfg(feature = "std")]
 pub fn decode_lsps_scalar(indexes: &[u32; super::LPC_ORD]) -> [f32; super::LPC_ORD] {
-    std::array::from_fn(|i| {
+    core::array::from_fn(|i| {
         let dim = &LSP_CB[i];
-        let hz = dim.start_hz + dim.step_hz * indexes[i] as f32;
+        let hz = dim.start_hz as f32 + dim.step_hz as f32 * indexes[i] as f32;
         hz * RAD_PER_HZ
     })
 }
 
-use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
-use std::sync::OnceLock;
-
 const FRAC_BITS: u32 = 23;
 
-/// Per-dimension `(start_hz, step_hz)` in Q23 -- computed once via
-/// `f32_to_q_exact_round`, never hand-typed (every real value here is a
-/// small exact integer Hz count, so the conversion itself is exact, but
-/// the established rule in this crate is "always compute, never
-/// hand-type a Q23 constant" regardless of how simple the source value
-/// looks -- see `envelope.rs`'s own `BOOST_RATIO_Q23` lesson).
-fn lsp_cb_q23() -> &'static [(i64, i64); super::LPC_ORD] {
-    static V: OnceLock<[(i64, i64); super::LPC_ORD]> = OnceLock::new();
-    V.get_or_init(|| {
-        std::array::from_fn(|i| {
-            (
-                f32_to_q_exact_round(LSP_CB[i].start_hz, FRAC_BITS),
-                f32_to_q_exact_round(LSP_CB[i].step_hz, FRAC_BITS),
-            )
-        })
-    })
+/// Per-dimension `(start_hz, step_hz)` in Q23. Every value is a whole number of Hz, so the
+/// conversion is an exact shift (`fixed_tables_match_the_computed_values` checks this against
+/// `f32_to_q_exact_round`).
+const fn lsp_cb_q23() -> [(i64, i64); super::LPC_ORD] {
+    let mut out = [(0i64, 0i64); super::LPC_ORD];
+    let mut i = 0;
+    while i < super::LPC_ORD {
+        out[i] = (LSP_CB[i].start_hz << FRAC_BITS, LSP_CB[i].step_hz << FRAC_BITS);
+        i += 1;
+    }
+    out
 }
+static LSP_CB_Q23: [(i64, i64); super::LPC_ORD] = lsp_cb_q23();
+
+/// `4000 / pi` (hertz per radian) in Q23, the value `f32_to_q_exact_round` gives for the `f32` constant.
+const HZ_PER_RAD_Q23: i64 = 10680707072;
+
+/// `pi / 4000` (radians per hertz) in Q23, likewise.
+const RAD_PER_HZ_Q23: i64 = 6588;
 
 fn hz_per_rad_q23() -> i64 {
-    static V: OnceLock<i64> = OnceLock::new();
-    *V.get_or_init(|| f32_to_q_exact_round(HZ_PER_RAD, FRAC_BITS))
+    HZ_PER_RAD_Q23
 }
 
 fn rad_per_hz_q23() -> i64 {
-    static V: OnceLock<i64> = OnceLock::new();
-    *V.get_or_init(|| f32_to_q_exact_round(RAD_PER_HZ, FRAC_BITS))
+    RAD_PER_HZ_Q23
 }
 
 // [@ANCHOR: q_mul_q23]
@@ -197,8 +199,8 @@ fn quantise_dim_fixed(start_q23: i64, step_q23: i64, levels: u32, target_hz_q23:
 /// index, entirely in `i64` Q23 arithmetic -- no `f32` anywhere.
 // [@ANCHOR: encode_lsps_scalar_fixed]
 pub fn encode_lsps_scalar_fixed(lsp_q23: &[i64; super::LPC_ORD]) -> [u32; super::LPC_ORD] {
-    let cb = lsp_cb_q23();
-    std::array::from_fn(|i| {
+    let cb = &LSP_CB_Q23;
+    core::array::from_fn(|i| {
         let target_hz_q23 = q_mul_q23(lsp_q23[i], hz_per_rad_q23());
         quantise_dim_fixed(cb[i].0, cb[i].1, LSP_CB[i].levels, target_hz_q23)
     })
@@ -209,16 +211,28 @@ pub fn encode_lsps_scalar_fixed(lsp_q23: &[i64; super::LPC_ORD]) -> [u32; super:
 /// just never touching `f32`.
 // [@ANCHOR: decode_lsps_scalar_fixed]
 pub fn decode_lsps_scalar_fixed(indexes: &[u32; super::LPC_ORD]) -> [i64; super::LPC_ORD] {
-    let cb = lsp_cb_q23();
-    std::array::from_fn(|i| {
+    let cb = &LSP_CB_Q23;
+    core::array::from_fn(|i| {
         let hz_q23 = cb[i].0 + cb[i].1 * indexes[i] as i64;
         q_mul_q23(hz_q23, rad_per_hz_q23())
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
+    use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
+
+    #[test]
+    fn committed_q23_constants_match_the_computed_values() {
+        assert_eq!(HZ_PER_RAD_Q23, f32_to_q_exact_round(HZ_PER_RAD, FRAC_BITS));
+        assert_eq!(RAD_PER_HZ_Q23, f32_to_q_exact_round(RAD_PER_HZ, FRAC_BITS));
+        for (i, d) in LSP_CB.iter().enumerate() {
+            assert_eq!(LSP_CB_Q23[i].0, f32_to_q_exact_round(d.start_hz as f32, FRAC_BITS));
+            assert_eq!(LSP_CB_Q23[i].1, f32_to_q_exact_round(d.step_hz as f32, FRAC_BITS));
+        }
+    }
+
 
     #[test]
     // Tests [@ANCHOR: lsp_bits]
@@ -239,7 +253,7 @@ mod tests {
             let dim = &LSP_CB[i];
             for level in 0..dim.levels {
                 let indexes: [u32; super::super::LPC_ORD] =
-                    std::array::from_fn(|j| if j == i { level } else { 0 });
+                    core::array::from_fn(|j| if j == i { level } else { 0 });
                 let decoded = decode_lsps_scalar(&indexes);
                 let re_encoded = encode_lsps_scalar(&decoded);
                 assert_eq!(
@@ -270,7 +284,7 @@ mod tests {
         ];
         for (dim, level, expected_hz) in cases {
             let indexes: [u32; super::super::LPC_ORD] =
-                std::array::from_fn(|j| if j == dim { level } else { 0 });
+                core::array::from_fn(|j| if j == dim { level } else { 0 });
             let decoded = decode_lsps_scalar(&indexes);
             let got_hz = decoded[dim] * HZ_PER_RAD;
             assert!(
@@ -281,7 +295,7 @@ mod tests {
         // lsp10.txt's own 4 entries: 2900, 3100, 3300, 3500
         for (level, expected_hz) in [(0, 2900.0), (1, 3100.0), (2, 3300.0), (3, 3500.0)] {
             let indexes: [u32; super::super::LPC_ORD] =
-                std::array::from_fn(|j| if j == 9 { level } else { 0 });
+                core::array::from_fn(|j| if j == 9 { level } else { 0 });
             let decoded = decode_lsps_scalar(&indexes);
             let got_hz = decoded[9] * HZ_PER_RAD;
             assert!(
@@ -304,7 +318,7 @@ mod tests {
         for i in 0..super::super::LPC_ORD {
             for level in 0..LSP_CB[i].levels {
                 let indexes: [u32; super::super::LPC_ORD] =
-                    std::array::from_fn(|j| if j == i { level } else { 0 });
+                    core::array::from_fn(|j| if j == i { level } else { 0 });
                 let float_lsp = decode_lsps_scalar(&indexes);
                 let fixed_lsp = decode_lsps_scalar_fixed(&indexes);
                 let fixed_as_f32 = fixed_lsp[i] as f32 / (1i64 << FRAC_BITS) as f32;
@@ -328,7 +342,7 @@ mod tests {
         for i in 0..super::super::LPC_ORD {
             for level in 0..LSP_CB[i].levels {
                 let indexes: [u32; super::super::LPC_ORD] =
-                    std::array::from_fn(|j| if j == i { level } else { 0 });
+                    core::array::from_fn(|j| if j == i { level } else { 0 });
                 let decoded = decode_lsps_scalar_fixed(&indexes);
                 let re_encoded = encode_lsps_scalar_fixed(&decoded);
                 assert_eq!(

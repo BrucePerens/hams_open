@@ -27,3 +27,6 @@ bridge = ["ham_digital_modes/codec2_16k_bridge"]
 # Also run `decode_16k_fixed` (the 16 kHz spectral-bridge decode) over the same frames and report its
 # instructions per frame and its own checksum. Implies the bridge feature.
 decode16k = ["bridge"]
+# Also run the Codec2 1600 fixed encoder and decoder over the same excerpt (40 ms frames) and report
+# instructions per frame and its own checksum (`checksum1600`).
+mode1600 = []

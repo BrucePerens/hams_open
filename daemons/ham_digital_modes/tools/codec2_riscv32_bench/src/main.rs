@@ -159,5 +159,48 @@ pub extern "C" fn main() -> ! {
         for i in 6..15 { let _ = writeln!(u, "  fine16[{}] {:>9}", i, unsafe { prof::ACC[i] } / (n as u64 - 1)); }
         let _ = writeln!(u, "checksum16k {:08x}", ck16);
     }
+    #[cfg(feature = "mode1600")]
+    {
+        use ham_digital_modes::codec2_1600 as c;
+        // Codec2 1600 (40 ms frames) over the same speech excerpt, own checksum.
+        let m = SPEECH.len() / 2 / c::SAMPLES_PER_FRAME;
+        let mut e = c::EncoderFixed::new();
+        let mut d = c::DecoderFixed::new();
+        let mut fr8 = [[0u8; c::BYTES_PER_FRAME]; 100];
+        let mut ck: u32 = 0;
+        let (mut et, mut emax, mut dt, mut dmax) = (0u64, 0u32, 0u64, 0u32);
+        for f in 0..m {
+            let mut fr = [0i16; c::SAMPLES_PER_FRAME];
+            for i in 0..c::SAMPLES_PER_FRAME {
+                let o = (f * c::SAMPLES_PER_FRAME + i) * 2;
+                fr[i] = i16::from_le_bytes([SPEECH[o], SPEECH[o + 1]]);
+            }
+            let t0 = prof::instret();
+            fr8[f] = do_encode_1600(&mut e, &fr);
+            let x = prof::instret().wrapping_sub(t0);
+            if f > 0 { et += x as u64; emax = emax.max(x); }
+            for &b in &fr8[f] { ck = ck.wrapping_mul(16777619).wrapping_add(b as u32); }
+        }
+        for f in 0..m {
+            let t0 = prof::instret();
+            let out = do_decode_1600(&mut d, &fr8[f]);
+            let x = prof::instret().wrapping_sub(t0);
+            if f > 0 { dt += x as u64; dmax = dmax.max(x); }
+            for &s in &out { ck = ck.wrapping_mul(16777619).wrapping_add(s as u16 as u32); }
+        }
+        let _ = writeln!(u, "MODE1600 frames={} encode steady avg {} max {} instr/40ms frame; decode steady avg {} max {}", m, et / (m as u64 - 1), emax, dt / (m as u64 - 1), dmax);
+        let _ = writeln!(u, "checksum1600 {:08x}", ck);
+    }
     exit(0)
+}
+
+#[cfg(feature = "mode1600")]
+#[inline(never)]
+fn do_encode_1600(e: &mut ham_digital_modes::codec2_1600::EncoderFixed, fr: &[i16; 320]) -> [u8; 8] {
+    e.encode(fr)
+}
+#[cfg(feature = "mode1600")]
+#[inline(never)]
+fn do_decode_1600(d: &mut ham_digital_modes::codec2_1600::DecoderFixed, b: &[u8; 8]) -> [i16; 320] {
+    d.decode(b)
 }

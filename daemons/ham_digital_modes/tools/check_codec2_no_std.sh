@@ -20,6 +20,7 @@ LIB_ONLY=0
 export CARGO_TARGET_DIR=${NO_STD_TARGET_DIR:-${CARGO_TARGET_DIR:-$CRATE/target}/no_std_check}
 export RUSTFLAGS="-D warnings"
 EXPECTED_CHECKSUM=f59f8fcd
+EXPECTED_CHECKSUM_1600=db5b738b   # Codec2 1600 fixed encoder + decoder, same excerpt, 100 frames of 40 ms
 
 installed=$(rustup target list --installed 2>/dev/null || true)
 for t in riscv32imc-unknown-none-elf thumbv7m-none-eabi; do
@@ -55,5 +56,21 @@ if command -v qemu-system-riscv32 >/dev/null; then
   echo "checksum $EXPECTED_CHECKSUM matches the host build"
 else
   echo "qemu-system-riscv32 not installed: link check only"
+fi
+
+# Codec2 1600 (fixed encoder and decoder, also core-only): its own harness build, same two checks.
+(cd "$BENCH" && RUSTFLAGS="-D warnings -C link-arg=-Tlink.ld" cargo build --release --no-default-features \
+    --features mode1600 --target-dir "$CARGO_TARGET_DIR/bench1600" --target riscv32imc-unknown-none-elf)
+ELF1600=$CARGO_TARGET_DIR/bench1600/riscv32imc-unknown-none-elf/release/codec2_riscv32_bench
+BAD=$("$NM" "$ELF1600" | awk '{print $NF}' | grep -E '^(__[a-z]+[sd]f[0-9]|__(float|fix)[a-z]*[sd]?i|__(extend|trunc)[a-z]*f[a-z]*[0-9]|__(add|sub|mul|div|neg|cmp|eq|ne|lt|le|gt|ge|unord)[sd]f[0-9]|(sin|cos|tan|acos|asin|atan2?|sqrt|pow|exp2?|log2?|log10|floor|ceil|round|trunc|fabs|fmod)f?)$' || true)
+if [ -n "$BAD" ]; then
+  echo "FAIL: floating-point / math library symbols in the Codec2 1600 binary:"; echo "$BAD"; exit 1
+fi
+echo "no soft-float or math library symbols in the Codec2 1600 build"
+if command -v qemu-system-riscv32 >/dev/null; then
+  OUT=$(timeout 300 qemu-system-riscv32 -M virt -m 64M -nographic -bios none -icount shift=0 -kernel "$ELF1600")
+  echo "$OUT" | grep -E "MODE1600"
+  echo "$OUT" | grep -q "checksum1600 $EXPECTED_CHECKSUM_1600" || { echo "FAIL: 1600 checksum differs from $EXPECTED_CHECKSUM_1600"; exit 1; }
+  echo "checksum1600 $EXPECTED_CHECKSUM_1600 matches the host build"
 fi
 echo "OK"

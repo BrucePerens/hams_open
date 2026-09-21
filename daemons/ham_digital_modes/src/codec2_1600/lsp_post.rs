@@ -20,6 +20,7 @@ use crate::codec2_3200::LPC_ORD;
 /// since it's the real reference's own real behavior, not a bug to
 /// correct.
 // [@ANCHOR: check_lsp_order]
+#[cfg(feature = "std")]
 pub fn check_lsp_order(lsp: &mut [f32; LPC_ORD]) -> usize {
     let mut swaps = 0usize;
     let mut i = 1usize;
@@ -36,6 +37,7 @@ pub fn check_lsp_order(lsp: &mut [f32; LPC_ORD]) -> usize {
     swaps
 }
 
+#[cfg(feature = "std")]
 const HZ_TO_RAD: f32 = std::f32::consts::PI / 4000.0;
 
 /// Bandwidth expansion: prevents any two adjacent LSPs (indices 1..4
@@ -44,6 +46,7 @@ const HZ_TO_RAD: f32 = std::f32::consts::PI / 4000.0;
 /// ~12.5Hz are inaudible, so this is the real reference's own minimum
 /// separation floor, not a tunable choice made here.
 // [@ANCHOR: bw_expand_lsps]
+#[cfg(feature = "std")]
 pub fn bw_expand_lsps(lsp: &mut [f32; LPC_ORD], min_sep_low: f32, min_sep_high: f32) {
     for i in 1..4 {
         if (lsp[i] - lsp[i - 1]) < min_sep_low * HZ_TO_RAD {
@@ -62,6 +65,7 @@ pub fn bw_expand_lsps(lsp: &mut [f32; LPC_ORD], min_sep_low: f32, min_sep_high: 
 /// update only once per 40ms, so the three intermediate 10ms sub-frames
 /// need weights 0.25/0.5/0.75 instead of one single midpoint.
 // [@ANCHOR: interpolate_lsp_ver2]
+#[cfg(feature = "std")]
 pub fn interpolate_lsp_ver2(
     prev: &[f32; LPC_ORD],
     next: &[f32; LPC_ORD],
@@ -70,14 +74,12 @@ pub fn interpolate_lsp_ver2(
     std::array::from_fn(|i| (1.0 - weight) * prev[i] + weight * next[i])
 }
 
-use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
-use std::sync::OnceLock;
-
-const FRAC_BITS: u32 = 23;
+/// The nudge `check_lsp_order_fixed` applies (0.1 radian) in Q23, the value `f32_to_q_exact_round`
+/// gives for the `f32` constant.
+const SWAP_NUDGE_Q23: i64 = 838861;
 
 fn swap_nudge_q23() -> i64 {
-    static V: OnceLock<i64> = OnceLock::new();
-    *V.get_or_init(|| f32_to_q_exact_round(0.1, FRAC_BITS))
+    SWAP_NUDGE_Q23
 }
 
 /// Fixed-point sibling of `check_lsp_order`: identical logic (including
@@ -109,15 +111,19 @@ pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize {
 /// margins, so there's no real "wrong Hz value" case to guard against
 /// at runtime.
 pub fn min_sep_low_q23() -> i64 {
-    static V: OnceLock<i64> = OnceLock::new();
-    *V.get_or_init(|| f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS))
+    MIN_SEP_LOW_Q23
 }
+
+/// See `min_sep_low_q23`; the value `f32_to_q_exact_round` gives for `50.0 * HZ_TO_RAD`.
+const MIN_SEP_LOW_Q23: i64 = 329420;
+
+/// See `min_sep_high_q23`; the value `f32_to_q_exact_round` gives for `100.0 * HZ_TO_RAD`.
+const MIN_SEP_HIGH_Q23: i64 = 658840;
 
 /// `100.0 * (pi/4000)` in Q23 -- the real reference's own `min_sep_high`
 /// for the same call site `min_sep_low_q23` documents.
 pub fn min_sep_high_q23() -> i64 {
-    static V: OnceLock<i64> = OnceLock::new();
-    *V.get_or_init(|| f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS))
+    MIN_SEP_HIGH_Q23
 }
 
 /// Fixed-point sibling of `bw_expand_lsps`, entirely in `i64` Q23
@@ -153,12 +159,22 @@ pub fn interpolate_lsp_ver2_fixed(
         (1..=3).contains(&quarters),
         "quarters must be 1, 2, or 3 (0.25/0.5/0.75)"
     );
-    std::array::from_fn(|i| ((4 - quarters) * prev[i] + quarters * next[i] + 2) >> 2)
+    core::array::from_fn(|i| ((4 - quarters) * prev[i] + quarters * next[i] + 2) >> 2)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
+    use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
+    const FRAC_BITS: u32 = 23;
+
+    #[test]
+    fn committed_q23_constants_match_the_computed_values() {
+        assert_eq!(SWAP_NUDGE_Q23, f32_to_q_exact_round(0.1, FRAC_BITS));
+        assert_eq!(MIN_SEP_LOW_Q23, f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS));
+        assert_eq!(MIN_SEP_HIGH_Q23, f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS));
+    }
+
 
     #[test]
     fn check_lsp_order_leaves_an_already_ordered_vector_unchanged() {

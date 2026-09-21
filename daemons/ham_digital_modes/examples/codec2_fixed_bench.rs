@@ -72,5 +72,32 @@ fn main() {
         }
         println!("cross-check hash (frames {skip}..{}): {h:08x}", skip + count);
     }
+    // Codec2 1600 (40 ms frames) over the same excerpt, for the 32-bit build's `mode1600` feature:
+    // `... <wav> 1 100 200 1600` prints the same 32-bit hash the target program prints.
+    if let (Some(skip), Some(count), Some("1600")) = (args.get(3), args.get(4), args.get(5).map(String::as_str)) {
+        use ham_digital_modes::codec2_1600 as c;
+        let (skip, count): (usize, usize) = (skip.parse().unwrap(), count.parse().unwrap());
+        let start = skip * SAMPLES_PER_FRAME;
+        let frames_1600 = count * SAMPLES_PER_FRAME / c::SAMPLES_PER_FRAME;
+        let mut enc = c::EncoderFixed::new();
+        let mut dec = c::DecoderFixed::new();
+        let mut h = 0u32;
+        let mut frames = Vec::new();
+        for f in 0..frames_1600 {
+            let o = start + f * c::SAMPLES_PER_FRAME;
+            let fr: [i16; c::SAMPLES_PER_FRAME] = samples[o..o + c::SAMPLES_PER_FRAME].try_into().unwrap();
+            let b = enc.encode(&fr);
+            for &x in &b {
+                h = h.wrapping_mul(16777619).wrapping_add(x as u32);
+            }
+            frames.push(b);
+        }
+        for b in &frames {
+            for &x in &dec.decode(b) {
+                h = h.wrapping_mul(16777619).wrapping_add(x as u16 as u32);
+            }
+        }
+        println!("cross-check hash 1600 ({frames_1600} frames): {h:08x}");
+    }
     println!("frames={n} encode {:.1} us/frame, decode {:.1} us/frame, checksum {sum:016x}", best_enc * 1e6, best_dec * 1e6);
 }

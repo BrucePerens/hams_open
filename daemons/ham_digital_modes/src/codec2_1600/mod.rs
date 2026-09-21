@@ -99,16 +99,22 @@ pub mod bits;
 pub mod lsp_post;
 pub mod lsp_quantiser;
 
+#[cfg(feature = "std")]
 use crate::codec2_3200::floating_reference::{lpc as flpc, nlp as fnlp, voicing as fvoicing};
+#[cfg(feature = "std")]
+use crate::codec2_3200::{bw_gamma, window};
+#[cfg(feature = "codec2_16k_bridge")]
+use crate::codec2_3200;
 use crate::codec2_3200::{
-    self, bw_gamma, envelope, interp, lpc, nlp, quantise, synthesis, voicing, window, LPC_ORD,
-    M_PITCH, N_SAMP,
+    envelope, interp, lpc, nlp, quantise, synthesis, tables, voicing, LPC_ORD, M_PITCH,
+    N_SAMP,
 };
 
 /// LSPs to substitute when `lpc::lpc_to_lsp` fails to find all
 /// `LPC_ORD` roots -- same fallback `codec2_3200::fallback_lsp` uses
 /// (that function is private to its own module, so this is the same
 /// evenly-spaced-across-`[0,pi]` construction, not a re-export).
+#[cfg(feature = "std")]
 fn fallback_lsp() -> [f32; LPC_ORD] {
     std::array::from_fn(|i| (std::f32::consts::PI / LPC_ORD as f32) * i as f32)
 }
@@ -123,6 +129,7 @@ pub const SAMPLES_PER_FRAME: usize = 4 * N_SAMP;
 /// underlying analysis pipeline (pitch/voicing/LPC) is identical; this
 /// mode just runs it across four 10ms steps instead of two, and
 /// quantizes/transmits LSPs from only the last of them.
+#[cfg(feature = "std")]
 pub struct Encoder {
     sn: [f32; M_PITCH],
     analysis_window: [f32; M_PITCH],
@@ -130,6 +137,7 @@ pub struct Encoder {
     voicing_state: fvoicing::VoicingState,
 }
 
+#[cfg(feature = "std")]
 impl Default for Encoder {
     fn default() -> Self {
         Encoder {
@@ -149,6 +157,7 @@ impl Default for Encoder {
 /// because `e` falls out of the same analysis, matching the
 /// reference's own `speech_to_uq_lsps` call for that purpose).
 // [@ANCHOR: analyse_lsps_and_energy]
+#[cfg(feature = "std")]
 fn analyse_lsps_and_energy(
     sn: &[f32; M_PITCH],
     analysis_window: &[f32; M_PITCH],
@@ -173,6 +182,7 @@ fn analyse_lsps_and_energy(
     (lsp, e)
 }
 
+#[cfg(feature = "std")]
 impl Encoder {
     pub fn new() -> Self {
         Self::default()
@@ -245,6 +255,7 @@ impl Encoder {
 /// has been decoded -- same fallback `codec2_3200::initial_lsps` uses
 /// (its own function is private to that module, so this is the same
 /// evenly-spaced-across-`[0,pi]` construction, not a re-export).
+#[cfg(feature = "std")]
 fn initial_lsps() -> [f32; LPC_ORD] {
     std::array::from_fn(|i| (i as f32 * std::f32::consts::PI) / (LPC_ORD as f32 + 1.0))
 }
@@ -257,6 +268,7 @@ fn initial_lsps() -> [f32; LPC_ORD] {
 /// `codec2_3200::Decoder` carries -- see `decode_16k` below and
 /// `codec2_3200::spectral_bridge`'s own doc comment; `.enabled` toggles
 /// it (on by default), the ordinary `decode()` above never touches it.
+#[cfg(feature = "std")]
 pub struct Decoder {
     prev_wo: f32,
     prev_voiced: bool,
@@ -266,6 +278,7 @@ pub struct Decoder {
     pub spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeState,
 }
 
+#[cfg(feature = "std")]
 impl Default for Decoder {
     fn default() -> Self {
         Decoder {
@@ -279,6 +292,7 @@ impl Default for Decoder {
     }
 }
 
+#[cfg(feature = "std")]
 impl Decoder {
     pub fn new() -> Self {
         Self::default()
@@ -443,14 +457,16 @@ impl Decoder {
 
 const FRAC_BITS: u32 = 23;
 
-fn w0_min_q23() -> i64 {
+#[cfg(test)]
+fn w0_min_q23_computed() -> i64 {
     static V: std::sync::OnceLock<i64> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
         crate::codec2_3200::fixed_point::f32_to_q_exact_round(codec2_3200::W0_MIN, FRAC_BITS)
     })
 }
 
-fn initial_lsps_q23() -> [i64; LPC_ORD] {
+#[cfg(test)]
+fn initial_lsps_q23_computed() -> [i64; LPC_ORD] {
     static V: std::sync::OnceLock<[i64; LPC_ORD]> = std::sync::OnceLock::new();
     *V.get_or_init(|| {
         let lsps = initial_lsps();
@@ -460,21 +476,28 @@ fn initial_lsps_q23() -> [i64; LPC_ORD] {
     })
 }
 
+/// The lowest quantised pitch value in Q23, from the committed table (equal to the value
+/// computed from `W0_MIN` in the `std` build; a test keeps them in step).
+fn w0_min_q23() -> i64 {
+    tables::MOD_W0_MIN_Q23
+}
+
+/// The line spectral pairs a fresh decoder starts from, Q23, from the committed table.
+fn initial_lsps_q23() -> [i64; LPC_ORD] {
+    tables::MOD_INITIAL_LSPS_Q23
+}
+
 /// Persistent per-call fixed-point encoder state -- same shape as
-/// `codec2_3200::EncoderFixed`'s own (see that struct's own doc comment
-/// for the real, honest current state of what's genuinely fixed-point
-/// end to end): `nlp::NlpStateFixed`/`voicing::VoicingStateFixed` and
-/// the windowing->autocorrelate->Levinson-Durbin->energy->bandwidth-
-/// expansion->LSP chain are all genuinely `i64` fixed-point, no `f32`
-/// anywhere in that path; the one remaining `f32` boundary is the LSP
-/// array itself between `lpc::lpc_to_lsp_from_integer_ak` (whose own
-/// root-finding returns `f32` LSPs even though its internal `acos()`
-/// call is a fixed-point LUT) and this mode's own LSP quantizer --
-/// exactly the same boundary `codec2_3200::EncoderFixed`'s own doc
-/// comment documents and accepts, not a gap unique to this port.
+/// `codec2_3200::EncoderFixed`'s own. The whole path is integer, with no floating point at
+/// run time (so this builds `no_std`): windowing, autocorrelation, Levinson-Durbin, bandwidth
+/// expansion, the line spectral pair search (`lpc::lpc_to_lsp_q23_from_integer_ak`), the pitch
+/// estimator (`nlp::nlp_fixed_bin`, pitch index from a committed table), the energy quantiser
+/// (`quantise::encode_energy_q23`) and this mode's scalar line spectral pair quantiser
+/// (`lsp_quantiser::encode_lsps_scalar_fixed`). The float-boundary sibling this replaced is kept
+/// as a test reference; `tests::integer_encoder_matches_the_float_boundary_encoder`
+/// measures the difference.
 pub struct EncoderFixed {
     sn: [i16; M_PITCH],
-    window_fixed: [i32; M_PITCH],
     nlp_state: nlp::NlpStateFixed,
     voicing_state: voicing::VoicingStateFixed,
 }
@@ -483,36 +506,35 @@ impl Default for EncoderFixed {
     fn default() -> Self {
         EncoderFixed {
             sn: [0; M_PITCH],
-            window_fixed: window::make_analysis_window_fixed(),
             nlp_state: nlp::NlpStateFixed::new(),
             voicing_state: voicing::VoicingStateFixed::new(),
         }
     }
 }
 
-/// Fixed-point sibling of `analyse_lsps_and_energy`: the same real
-/// windowing->autocorrelate->white-noise-correction->Levinson-Durbin->
-/// energy->bandwidth-expansion->LSP-conversion chain
-/// `codec2_3200::EncoderFixed::encode` already validated, factored out
-/// here for the same reason its float sibling was (1600bps runs it
-/// twice per 40ms, quantizing only the second pass's own LSPs).
+/// One linear-prediction analysis pass over the current history window, integer end to end:
+/// the same windowing, autocorrelation, white-noise correction and Levinson-Durbin chain
+/// `codec2_3200::EncoderFixed::encode` uses. Returns the frame energy (Q23, before bandwidth
+/// expansion) and the prediction coefficients after bandwidth expansion. 1600bps runs it
+/// twice per 40ms frame but quantises the line spectral pairs of the second pass only, so the
+/// root search is separate (`lpc::lpc_to_lsp_q23_from_integer_ak`).
 // [@ANCHOR: analyse_lsps_and_energy_fixed]
-fn analyse_lsps_and_energy_fixed(
-    sn: &[i16; M_PITCH],
-    window_fixed: &[i32; M_PITCH],
-) -> ([f32; LPC_ORD], f32) {
+fn analyse_energy_and_ak_fixed(sn: &[i16; M_PITCH]) -> (i64, [i64; LPC_ORD + 1]) {
     let mut wn_q = [0i32; M_PITCH];
-    for ((w, &s), &win) in wn_q.iter_mut().zip(sn.iter()).zip(window_fixed.iter()) {
+    for ((w, &s), &win) in wn_q
+        .iter_mut()
+        .zip(sn.iter())
+        .zip(tables::WINDOW_ANALYSIS_Q30.iter())
+    {
         *w = ((s as i64 * win as i64) >> 7) as i32;
     }
     let r_q = lpc::autocorrelate_fixed(&wn_q);
     let mut r_q_for_levinson = r_q;
     lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
-    let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
-    let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
+    let mut a_q23 = lpc::levinson_durbin_q23_from_integer_r(&r_q_for_levinson);
+    let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q);
     lpc::apply_bw_gamma_fixed(&mut a_q23);
-    let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23).unwrap_or_else(fallback_lsp);
-    (lsp, e)
+    (e_q23, a_q23)
 }
 
 impl EncoderFixed {
@@ -532,31 +554,33 @@ impl EncoderFixed {
     // [@ANCHOR: codec2_1600:EncoderFixed::encode]
     pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
         self.shift_in(&speech[0..N_SAMP]);
-        nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+        let _ = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
         let voiced0 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         self.shift_in(&speech[N_SAMP..2 * N_SAMP]);
-        let f0_a = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+        let f0_bin_a = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
         let voiced1 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
-        let wo_index_a = quantise::encode_wo(nlp::f0_to_wo(f0_a));
-        let (_lsp_a_unused, e_a) = analyse_lsps_and_energy_fixed(&self.sn, &self.window_fixed);
-        let e_index_a = quantise::encode_energy(e_a);
+        let wo_index_a = tables::NLP_BIN_WO_INDEX[f0_bin_a] as u32;
+        let (e_a, _ak_a) = analyse_energy_and_ak_fixed(&self.sn);
+        let e_index_a = quantise::encode_energy_q23(e_a);
 
         self.shift_in(&speech[2 * N_SAMP..3 * N_SAMP]);
-        nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+        let _ = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
         let voiced2 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
 
         self.shift_in(&speech[3 * N_SAMP..4 * N_SAMP]);
-        let f0_b = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+        let f0_bin_b = nlp::nlp_fixed_bin(&mut self.nlp_state, &self.sn);
         let voiced3 =
             voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
-        let wo_index_b = quantise::encode_wo(nlp::f0_to_wo(f0_b));
-        let (lsp_b, e_b) = analyse_lsps_and_energy_fixed(&self.sn, &self.window_fixed);
-        let e_index_b = quantise::encode_energy(e_b);
-        let lsp_indexes = lsp_quantiser::encode_lsps_scalar(&lsp_b);
+        let wo_index_b = tables::NLP_BIN_WO_INDEX[f0_bin_b] as u32;
+        let (e_b, ak_b) = analyse_energy_and_ak_fixed(&self.sn);
+        let e_index_b = quantise::encode_energy_q23(e_b);
+        let lsp_b =
+            lpc::lpc_to_lsp_q23_from_integer_ak(&ak_b).unwrap_or(tables::MOD_FALLBACK_LSP_Q23);
+        let lsp_indexes = lsp_quantiser::encode_lsps_scalar_fixed(&lsp_b);
 
         bits::pack_frame_1600(&bits::FrameFields1600 {
             voiced0,
@@ -582,6 +606,7 @@ pub struct DecoderFixed {
     prev_lsps: [i64; LPC_ORD],
     prev_e: i64,
     synth: synthesis::SynthesisStateFixed,
+    #[cfg(feature = "codec2_16k_bridge")]
     pub(crate) spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeStateFixed,
 }
 
@@ -593,6 +618,7 @@ impl Default for DecoderFixed {
             prev_lsps: initial_lsps_q23(),
             prev_e: 1i64 << FRAC_BITS,
             synth: synthesis::SynthesisStateFixed::new(),
+            #[cfg(feature = "codec2_16k_bridge")]
             spectral_bridge: codec2_3200::spectral_bridge::SpectralBridgeStateFixed::new(),
         }
     }
@@ -677,6 +703,7 @@ impl DecoderFixed {
         out
     }
 
+    #[cfg(feature = "codec2_16k_bridge")]
     /// Fixed-point sibling of `Decoder::decode_16k` (this module's own
     /// float version) -- see that method's own doc comment for the
     /// design and the same warning about not interleaving
@@ -761,9 +788,147 @@ impl DecoderFixed {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
+
+    /// The encoder this module had before it went integer end to end: the same analysis, but pitch,
+    /// energy and line spectral pairs cross `f32` boundaries into the float quantisers. Kept only to
+    /// measure how the integer encoder differs.
+    struct FloatBoundaryEncoderFixed {
+        sn: [i16; M_PITCH],
+        window_fixed: [i32; M_PITCH],
+        nlp_state: nlp::NlpStateFixed,
+        voicing_state: voicing::VoicingStateFixed,
+    }
+
+    impl Default for FloatBoundaryEncoderFixed {
+        fn default() -> Self {
+            FloatBoundaryEncoderFixed {
+                sn: [0; M_PITCH],
+                window_fixed: window::make_analysis_window_fixed(),
+                nlp_state: nlp::NlpStateFixed::new(),
+                voicing_state: voicing::VoicingStateFixed::new(),
+            }
+        }
+    }
+
+    /// Fixed-point sibling of `analyse_lsps_and_energy`: the same real
+    /// windowing->autocorrelate->white-noise-correction->Levinson-Durbin->
+    /// energy->bandwidth-expansion->LSP-conversion chain
+    /// `codec2_3200::FloatBoundaryEncoderFixed::encode` already validated, factored out
+    /// here for the same reason its float sibling was (1600bps runs it
+    /// twice per 40ms, quantizing only the second pass's own LSPs).
+    fn analyse_lsps_and_energy_float_boundary(
+        sn: &[i16; M_PITCH],
+        window_fixed: &[i32; M_PITCH],
+    ) -> ([f32; LPC_ORD], f32) {
+        let mut wn_q = [0i32; M_PITCH];
+        for ((w, &s), &win) in wn_q.iter_mut().zip(sn.iter()).zip(window_fixed.iter()) {
+            *w = ((s as i64 * win as i64) >> 7) as i32;
+        }
+        let r_q = lpc::autocorrelate_fixed(&wn_q);
+        let mut r_q_for_levinson = r_q;
+        lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
+        let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
+        let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
+        lpc::apply_bw_gamma_fixed(&mut a_q23);
+        let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23).unwrap_or_else(fallback_lsp);
+        (lsp, e)
+    }
+
+    impl FloatBoundaryEncoderFixed {
+        pub fn new() -> Self {
+            Self::default()
+        }
+        fn shift_in(&mut self, new_samples: &[i16]) {
+            self.sn.copy_within(N_SAMP.., 0);
+            self.sn[M_PITCH - N_SAMP..].copy_from_slice(new_samples);
+        }
+
+        /// Same real frame structure as `Encoder::encode` (see this
+        /// module's own doc comment) -- this is `FloatBoundaryEncoderFixed`'s own
+        /// mirror.
+        pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
+            self.shift_in(&speech[0..N_SAMP]);
+            nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+            let voiced0 =
+                voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+
+            self.shift_in(&speech[N_SAMP..2 * N_SAMP]);
+            let f0_a = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+            let voiced1 =
+                voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+            let wo_index_a = quantise::encode_wo(nlp::f0_to_wo(f0_a));
+            let (_lsp_a_unused, e_a) = analyse_lsps_and_energy_float_boundary(&self.sn, &self.window_fixed);
+            let e_index_a = quantise::encode_energy(e_a);
+
+            self.shift_in(&speech[2 * N_SAMP..3 * N_SAMP]);
+            nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+            let voiced2 =
+                voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+
+            self.shift_in(&speech[3 * N_SAMP..4 * N_SAMP]);
+            let f0_b = nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
+            let voiced3 =
+                voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
+            let wo_index_b = quantise::encode_wo(nlp::f0_to_wo(f0_b));
+            let (lsp_b, e_b) = analyse_lsps_and_energy_float_boundary(&self.sn, &self.window_fixed);
+            let e_index_b = quantise::encode_energy(e_b);
+            let lsp_indexes = lsp_quantiser::encode_lsps_scalar(&lsp_b);
+
+            bits::pack_frame_1600(&bits::FrameFields1600 {
+                voiced0,
+                voiced1,
+                wo_index_a,
+                e_index_a,
+                voiced2,
+                voiced3,
+                wo_index_b,
+                e_index_b,
+                lsp_indexes,
+            })
+        }
+    }
+
+
+    /// Real speech through the integer encoder and the earlier float-boundary encoder. The two use
+    /// different pitch-bin, energy and line spectral pair arithmetic at the quantiser boundaries, so
+    /// a frame can differ by a quantiser step; the count is recorded and bounded.
+    #[test]
+    fn integer_encoder_matches_the_float_boundary_encoder() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav"
+        );
+        let data = std::fs::read(path).expect("speech fixture");
+        let samples: Vec<i16> = data[44..]
+            .chunks_exact(2)
+            .map(|c| i16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        let mut a = EncoderFixed::new();
+        let mut b = FloatBoundaryEncoderFixed::new();
+        let (mut frames, mut differing, mut bytes_differing) = (0usize, 0usize, 0usize);
+        for chunk in samples.chunks_exact(SAMPLES_PER_FRAME) {
+            let frame: [i16; SAMPLES_PER_FRAME] = chunk.try_into().unwrap();
+            let x = a.encode(&frame);
+            let y = b.encode(&frame);
+            frames += 1;
+            if x != y {
+                differing += 1;
+                bytes_differing += x.iter().zip(y.iter()).filter(|(p, q)| p != q).count();
+            }
+        }
+        eprintln!("1600 encoders: {frames} frames, {differing} differ, {bytes_differing} bytes");
+        assert!(frames > 100);
+        assert!(differing * 20 <= frames, "more than 5 percent of frames differ");
+    }
+
+    #[test]
+    fn committed_q23_constants_match_the_computed_values() {
+        assert_eq!(w0_min_q23(), w0_min_q23_computed());
+        assert_eq!(initial_lsps_q23(), initial_lsps_q23_computed());
+    }
 
     fn synthetic_speech_frame(f0: f32, t0: usize) -> [i16; SAMPLES_PER_FRAME] {
         std::array::from_fn(|i| {

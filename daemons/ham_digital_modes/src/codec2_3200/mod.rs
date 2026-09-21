@@ -150,7 +150,7 @@ pub mod quantise;
 #[cfg(feature = "codec2_16k_bridge")]
 pub mod spectral_bridge;
 pub mod synthesis;
-mod tables;
+pub(crate) mod tables;
 #[cfg(test)]
 mod tables_gen;
 pub mod trig_fixed;

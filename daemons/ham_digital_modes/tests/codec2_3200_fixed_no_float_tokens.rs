@@ -16,6 +16,10 @@
 
 use std::path::Path;
 
+/// The Codec2 1600 fixed path (`EncoderFixed`, `DecoderFixed`, the scalar line spectral pair
+/// quantiser and post-processing) is `no_std` too; its float reference (`Encoder`, `Decoder`) is gated.
+const FILES_1600: &[&str] = &["bits", "lsp_post", "lsp_quantiser", "mod"];
+
 const FILES: &[&str] = &[
     "bits", "encoder_fixed", "envelope", "fixed_fft", "fixed_point", "interp", "lpc", "mod", "nlp",
     "quantise", "spectral_bridge", "synthesis", "tables", "trig_fixed", "voicing", "window",
@@ -134,7 +138,9 @@ fn parse_items(src: &str) -> Vec<Item> {
         }
         if t.starts_with("#[") {
             // (Raw line: `code_only` blanks string literals such as "std".)
-            if t.contains("cfg(test)") || lines[i].contains("cfg(feature = \"std\")") {
+            if t.contains("cfg(test)")
+                || t.contains("cfg(all(test")
+                || lines[i].contains("cfg(feature = \"std\")") {
                 attrs_gate = true;
             }
             i += 1;
@@ -200,8 +206,8 @@ fn parse_items(src: &str) -> Vec<Item> {
     items
 }
 
-fn read_items(file: &str) -> Vec<Item> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/codec2_3200").join(format!("{file}.rs"));
+fn read_items(dir: &str, file: &str) -> Vec<Item> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(dir).join(format!("{file}.rs"));
     let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     parse_items(&src)
 }
@@ -209,12 +215,14 @@ fn read_items(file: &str) -> Vec<Item> {
 #[test]
 fn every_float_in_the_codec2_3200_fixed_files_is_in_the_inventory() {
     let mut unexpected: Vec<String> = Vec::new();
-    for file in FILES {
-        for item in read_items(file) {
-            if item.gated || !item.has_float {
-                continue;
+    for (dir, files) in [("codec2_3200", FILES), ("codec2_1600", FILES_1600)] {
+        for file in files {
+            for item in read_items(dir, file) {
+                if item.gated || !item.has_float {
+                    continue;
+                }
+                unexpected.push(format!("{dir}/{file}.rs: {}", item.key));
             }
-            unexpected.push(format!("{file}.rs: {}", item.key));
         }
     }
     assert!(
