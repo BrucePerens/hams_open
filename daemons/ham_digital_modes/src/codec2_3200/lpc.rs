@@ -1350,6 +1350,48 @@ pub(crate) mod tests {
 
     const HZ_PER_RAD: f32 = 4000.0 / std::f32::consts::PI;
 
+    /// The integer `acos` core: exact symmetry, fixed points, monotonic
+    /// decrease, and a dense sweep against `f64::acos` in the same Hz
+    /// units the quantizer cares about.
+    #[test]
+    // Tests [@ANCHOR: acos_lut_q23]
+    fn acos_lut_q23_is_symmetric_monotonic_and_close_to_float_acos() {
+        let one = 1i64 << COEF_FRAC_BITS;
+        assert_eq!(acos_lut_q23(one), 0, "acos(1) must be exactly 0");
+        assert_eq!(acos_lut_q23(-one), pi_q23(), "acos(-1) must be exactly pi");
+        // Out-of-domain input is clamped, not extrapolated.
+        assert_eq!(acos_lut_q23(2 * one), acos_lut_q23(one));
+        assert_eq!(acos_lut_q23(-2 * one), acos_lut_q23(-one));
+        let half_pi = pi_q23() / 2;
+        assert!(
+            (acos_lut_q23(0) - half_pi).abs() <= 2,
+            "acos(0) must be pi/2"
+        );
+
+        let mut prev = i64::MAX;
+        let mut max_err_hz = 0.0f64;
+        let step = one / 20_000;
+        let mut x = -one;
+        while x <= one {
+            let got = acos_lut_q23(x);
+            assert_eq!(
+                got + acos_lut_q23(-x),
+                pi_q23(),
+                "acos(x) + acos(-x) must equal pi exactly at x_q23 = {x}"
+            );
+            assert!(got <= prev, "acos must not increase with x (x_q23 = {x})");
+            prev = got;
+            let want = (x as f64 / one as f64).acos();
+            let err = (got as f64 / one as f64 - want).abs() * 4000.0 / std::f64::consts::PI;
+            max_err_hz = max_err_hz.max(err);
+            x += step;
+        }
+        assert!(
+            max_err_hz < 10.0,
+            "acos_lut_q23 diverged from float acos by {max_err_hz} Hz; expected under 10 Hz (well below the 25 Hz LSP step)"
+        );
+    }
+
     #[test]
     // Tests [@ANCHOR: acos_lut_fixed]
     fn acos_lut_fixed_matches_plain_float_acos_on_a_dense_sweep() {
@@ -1838,6 +1880,30 @@ pub(crate) mod tests {
     /// `the_8_bit_log2_lut_reproduces_the_plain_float_log10_quantizer_
     /// decision...with_zero_index_mismatches`) -- check the decision that
     /// actually matters, not an arbitrary tolerance on the raw value.
+    /// `lpc_energy_q23` is `sum(a[i] * r[i])` in Q23: hand-checkable
+    /// cases, plus agreement with the float-boundary `lpc_energy_fixed`.
+    #[test]
+    // Tests [@ANCHOR: lpc_energy_q23]
+    fn lpc_energy_q23_is_the_q23_dot_product_of_coefficients_and_autocorrelation() {
+        let one = 1i64 << COEF_FRAC_BITS;
+        let mut a = [0i64; LPC_ORD + 1];
+        let mut r = [0i64; LPC_ORD + 1];
+        // a = [1, 0, ...]: energy is r[0].
+        a[0] = one;
+        r[0] = 5 * one;
+        assert_eq!(lpc_energy_q23(&a, &r), 5 * one);
+        // Add a[1] = -0.5, r[1] = 3: 5 + (-0.5 * 3) = 3.5.
+        a[1] = -(one / 2);
+        r[1] = 3 * one;
+        assert_eq!(lpc_energy_q23(&a, &r), 7 * one / 2);
+        // Add a[10] = 0.25, r[10] = -2: 3.5 - 0.5 = 3.0 (last tap included).
+        a[LPC_ORD] = one / 4;
+        r[LPC_ORD] = -2 * one;
+        assert_eq!(lpc_energy_q23(&a, &r), 3 * one);
+        // The float-boundary wrapper is the same value scaled to f32.
+        assert_eq!(lpc_energy_fixed(&a, &r), 3.0);
+    }
+
     #[test]
     // Tests [@ANCHOR: lpc_energy_fixed]
     fn lpc_energy_fixed_and_lpc_energy_produce_the_same_real_quantizer_index() {

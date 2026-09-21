@@ -72,3 +72,42 @@ The spectral bridge synthesizes a higher-sample-rate frame from an already-decod
 `synthesize_subframe_sb` synthesizes one 10 ms sub-frame at the higher rate from the unchanged base model,
 using extrapolated amplitudes and its own tracked phase.
 *(Reference: `src/codec2_3200/spectral_bridge.rs` -> `[@ANCHOR: ham_digital_modes:make_synthesis_window_sb]`, `[@ANCHOR: SpectralBridgeState::synthesize_subframe_sb]`)*
+
+## Codec2 3200 integer encoder boundaries
+
+The 3200 bit-per-second encoder (`encoder_fixed.rs`) runs from samples to transmitted indices in integer
+arithmetic with no floating point; the float entry points (`encode_energy`, `nlp_fixed`, `lpc_energy_fixed`,
+`encode_lsps_delta_scalar_fixed`) remain for the other codec modes and the tests, and delegate to the
+integer cores below.
+
+- `nlp_fixed_bin` is the pitch estimator proper. It squares the new samples, notches out DC, decimates,
+  applies a Hann window, transforms, and searches the power spectrum for the strongest bin between the
+  minimum and maximum pitch. It returns the winning FFT bin (fundamental = `bin * 3.125` Hz) rather than a
+  frequency, then checks sub-multiples of the peak. Only the 129 bins that can be read are computed.
+  *(Reference: `src/codec2_3200/nlp.rs` -> `[@ANCHOR: nlp_fixed_bin]`)*
+- `fft_fixed_sparse_prefix` is the same transform as `fft_fixed` for an input whose only nonzero entries are
+  the first few real samples (`re[i] = input[i]`, `im` zero). The output is bit-identical, but the input is
+  scattered straight to bit-reversed positions and butterfly blocks that only see known zeros are skipped or
+  reduced to copies, so neither array needs clearing first.
+  *(Reference: `src/codec2_3200/fixed_fft.rs` -> `[@ANCHOR: fft_fixed_sparse_prefix]`)*
+- `lpc_energy_q23` is the frame energy, the sum of `a[i] * r[i]` over the linear prediction coefficients and
+  autocorrelation, in Q23 with each product truncated by a right shift back to Q23 before summing.
+  *(Reference: `src/codec2_3200/lpc.rs` -> `[@ANCHOR: lpc_energy_q23]`)*
+- `encode_energy_q23` maps that linear energy to the transmitted energy index: `10 log10` via an integer
+  base-2 logarithm, then the same uniform `E_BITS`-level quantiser over the decibel range as `encode_energy`,
+  round to nearest and clamped. It can differ from the float quantiser only for energies within about 1e-5 dB
+  of a quantiser boundary.
+  *(Reference: `src/codec2_3200/quantise.rs` -> `[@ANCHOR: encode_energy_q23]`)*
+- `acos_lut_q23` returns `acos(x)` for `x` in Q23 (clamped to `[-1, 1]`) as Q23 radians, by a table lookup
+  with linear interpolation on `|x|`, reflecting negative `x` as `pi - acos(|x|)`.
+  *(Reference: `src/codec2_3200/lpc.rs` -> `[@ANCHOR: acos_lut_q23]`)*
+- `find_next_root_q29` finds the next root of one of the two Chebyshev-form line spectral polynomials: a
+  0.01-step grid search downward from a start value in Q29, then six bisections once the sign changes. It
+  returns `None` when no root remains. `lpc_to_lsp_q23` runs it alternately on the two polynomials, converts
+  each root to Q23, and takes `acos_lut_q23` of it, giving the ten line spectral pair angles in Q23
+  radians, or `None` if any root is not found.
+  *(Reference: `src/codec2_3200/lpc.rs` -> `[@ANCHOR: find_next_root_q29]`, `[@ANCHOR: lpc_to_lsp_q23]`)*
+- `encode_lsps_delta_scalar_q23` quantises those angles: each is converted to Hz in Q16, differenced against
+  the previous quantised value (the first is not), snapped to the nearest level of that dimension's table, and
+  the quantised value is accumulated for the next difference.
+  *(Reference: `src/codec2_3200/quantise.rs` -> `[@ANCHOR: encode_lsps_delta_scalar_q23]`)*

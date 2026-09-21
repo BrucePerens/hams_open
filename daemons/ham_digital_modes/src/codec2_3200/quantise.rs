@@ -375,6 +375,44 @@ pub fn decode_lsps_delta_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD
 pub(crate) mod tests {
     use super::*;
 
+    /// The integer line-spectral-pair quantizer: same indices as its
+    /// float-boundary wrapper, all in range, and decoding them lands
+    /// within a quantizer step of the input angles.
+    #[test]
+    // Tests [@ANCHOR: encode_lsps_delta_scalar_q23]
+    fn encode_lsps_delta_scalar_q23_matches_the_wrapper_and_round_trips_within_a_step() {
+        let hz_to_q23 =
+            |hz: f64| (hz * std::f64::consts::PI / 4000.0 * (1i64 << 23) as f64).round() as i64;
+        // Strictly increasing, speech-like angles between 300 Hz and 3700 Hz.
+        let hz: [f64; LPC_ORD] = [
+            300.0, 600.0, 900.0, 1300.0, 1700.0, 2100.0, 2500.0, 2900.0, 3300.0, 3700.0,
+        ];
+        let lsp_q23: [i64; LPC_ORD] = core::array::from_fn(|i| hz_to_q23(hz[i]));
+        let indexes = encode_lsps_delta_scalar_q23(&lsp_q23);
+        for (i, &idx) in indexes.iter().enumerate() {
+            assert!(
+                idx < LSP_LEVELS,
+                "index {idx} out of range at dimension {i}"
+            );
+        }
+        // Deterministic: same input, same output.
+        assert_eq!(indexes, encode_lsps_delta_scalar_q23(&lsp_q23));
+        // The float-boundary wrapper feeds the same integers in.
+        let lsp_f32: [f32; LPC_ORD] =
+            core::array::from_fn(|i| lsp_q23[i] as f32 / (1i64 << 23) as f32);
+        assert_eq!(indexes, encode_lsps_delta_scalar_fixed(&lsp_f32));
+        // Decoding reproduces each angle to within one quantizer step.
+        let back = decode_lsps_delta_scalar_fixed(&indexes);
+        for i in 0..LPC_ORD {
+            let err_hz = (back[i] - lsp_q23[i]).abs() as f64 * 4000.0
+                / (std::f64::consts::PI * (1i64 << 23) as f64);
+            assert!(
+                err_hz <= 50.0,
+                "dimension {i}: decoded {err_hz} Hz away from the input"
+            );
+        }
+    }
+
     #[test]
     fn integer_energy_bounds_match_the_float_constants() {
         // `encode_energy_q23` uses integer copies (-10, 40) so it builds without floating point.
