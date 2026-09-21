@@ -533,6 +533,25 @@ impl SynthesisStateFixed {
         Self::default()
     }
 
+    /// The first half of [`Self::synthesize_subframe_fixed`]: fills in the harmonic phases
+    /// (`model.phi`) and applies the postfilter to the amplitudes (`model.a`), advancing the
+    /// phase, noise-estimate and random-number state. Everything the 16 kHz spectral bridge
+    /// reads from the model comes from here; the inverse transform and overlap-add of the
+    /// 8 kHz synthesis are not needed for it (`decode_16k_fixed` used to run them and throw the
+    /// samples away).
+    #[inline(always)]
+    pub(crate) fn prepare_subframe_fixed(
+        &mut self,
+        model: &mut ModelFixed,
+        h: &[ComplexQ23; MAX_AMP + 1],
+    ) {
+        profile_mark!(15);
+        synthesize_phase_fixed(model, h, &mut self.ex_phase, &mut self.rng);
+        profile_mark!(11);
+        postfilter_fixed(model, &mut self.bg_est, &mut self.rng);
+        profile_mark!(12);
+    }
+
     /// Fixed-point `synthesize_subframe`. `h` (the phase samples) and
     /// `model` from `envelope::compute_harmonic_amplitudes_fixed`/`ModelFixed`.
     // [@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]
@@ -541,11 +560,7 @@ impl SynthesisStateFixed {
         model: &mut ModelFixed,
         h: &[ComplexQ23; MAX_AMP + 1],
     ) -> [i16; N_SAMP] {
-        profile_mark!(15);
-        synthesize_phase_fixed(model, h, &mut self.ex_phase, &mut self.rng);
-        profile_mark!(11);
-        postfilter_fixed(model, &mut self.bg_est, &mut self.rng);
-        profile_mark!(12);
+        self.prepare_subframe_fixed(model, h);
 
         let k_q23 = model.k_q23;
         let mut spectrum = SparseInverse::<FFT_ENC>::new(&mut self.scratch.re, &mut self.scratch.im);

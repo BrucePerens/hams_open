@@ -74,7 +74,13 @@ fn stack_high_water(sp: usize) -> usize {
 static SPEECH: &[u8] = include_bytes!("../speech.raw");
 #[cfg(feature = "small")]
 static SPEECH: &[u8] = include_bytes!("../speech_small.raw");
-const E_NAMES: [&str; 9] = ["nlp(x2)", "voicing(x2)", "encode_wo", "window+autocorr", "white+levinson", "lpc_energy", "bw+lpc_to_lsp", "quantise", "pack"];
+// Encode marks. Marks 2, 5, 9 and 10 sit inside the pitch estimator (`nlp_fixed_bin`, called twice per
+// frame): 9 = notch filter, 10 = decimation filter, 2 = history shift and Hann window, 5 = the 512-point
+// transform, 0 = power spectrum, peak search and sub-multiple check. Mark 1 = voicing, 3 = window and
+// autocorrelation, 4 = white-noise correction and Levinson-Durbin, 6 = line spectral pair search
+// (with bandwidth expansion), 7 = quantisers, 8 = packing. (The former "encode_wo" and "lpc_energy"
+// marks, a few hundred instructions each, now read as part of neighbours.)
+const E_NAMES: [&str; 11] = ["nlp: power+peak", "voicing(x2)", "nlp: shift+window", "window+autocorr", "white+levinson", "nlp: 512-pt transform", "bw+lpc_to_lsp", "quantise", "pack", "nlp: notch filter", "nlp: decimation"];
 const D_NAMES: [&str; 5] = ["unpack+dequant+interp", "lsp_to_lpc(x2)", "harmonic_amps(x2)", "first_harm(x2)", "synth(x2)"];
 
 // Kept out of line so the stack high-water mark below includes the codec's whole call tree (with

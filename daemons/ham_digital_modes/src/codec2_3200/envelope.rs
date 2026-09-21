@@ -248,6 +248,13 @@ impl ModelFixed {
 }
 
 fn mag_sq_q23(c: ComplexQ23) -> i64 {
+    // The transform of real linear-prediction coefficients keeps both components in `i32` (the
+    // 32-bit kernel guarantees it): two signed 32x32->64 squares whose sum stays under 2^63.
+    let (r32, i32_) = (c.re as i32, c.im as i32);
+    if r32 as i64 == c.re && i32_ as i64 == c.im {
+        let sum = (r32 as i64 * r32 as i64) as u64 + (i32_ as i64 * i32_ as i64) as u64;
+        return ((sum + (1u64 << (FRAC_BITS - 1))) >> FRAC_BITS) as i64;
+    }
     // Both components under 2^31 (always, for a spectrum of LPC
     // coefficients): each square is a 32x32->64 product and the sum fits
     // `u64`, so the rounded shift is plain 64-bit arithmetic, not the
@@ -498,6 +505,30 @@ pub(crate) fn sample_filter_phase_fixed(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `mag_sq_q23` (fast 32-bit path, 64-bit path, exact 128-bit path) against the plain
+    /// 128-bit definition, at the edges of each path and on random values.
+    #[test]
+    fn mag_sq_q23_matches_the_128_bit_definition() {
+        let reference = |re: i64, im: i64| -> i64 {
+            ((re as i128 * re as i128 + im as i128 * im as i128 + (1i128 << (FRAC_BITS - 1)))
+                >> FRAC_BITS) as i64
+        };
+        let mut seed = 0xfeed_beef_1234_5678u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed
+        };
+        let mut vals: Vec<i64> = vec![0, 1, -1, i32::MAX as i64, i32::MIN as i64, i32::MAX as i64 + 1, i32::MIN as i64 - 1, (1 << 31) - 1, -(1 << 31), 1 << 31, 1 << 40, -(1 << 40), (1 << 45) + 12345];
+        for _ in 0..3000 {
+            vals.push((next() as i64) >> (next() % 60 + 4));
+        }
+        for &re in &vals {
+            for &im in vals.iter().step_by(37) {
+                assert_eq!(mag_sq_q23(ComplexQ23 { re, im }), reference(re, im), "({re}, {im})");
+            }
+        }
+    }
     use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
     use crate::codec2_3200::lpc::{lsp_to_lpc, lsp_to_lpc_fixed, COEF_FRAC_BITS};
     use crate::codec2_3200::quantise::{decode_wo, decode_wo_fixed};

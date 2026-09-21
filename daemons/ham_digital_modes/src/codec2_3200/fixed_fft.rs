@@ -1047,8 +1047,25 @@ const fn quadrant_symmetric<const M: usize>(t: &[(i32, i32); M]) -> bool {
     true
 }
 
+/// Every entry other than the first (exactly `1`) and the quarter turn (exactly `-j`), which the
+/// butterflies never multiply by, is strictly under `2^23` in magnitude in both components,
+/// which lets the 32-bit butterfly pre-scale a twiddle by `2^8` inside an `i32`.
+const fn twiddles_below_unity<const M: usize>(t: &[(i32, i32); M]) -> bool {
+    let mut m = 1;
+    while m < M {
+        if m != M / 2
+            && (t[m].0.unsigned_abs() >= 1 << FRAC_BITS || t[m].1.unsigned_abs() >= 1 << FRAC_BITS)
+        {
+            return false;
+        }
+        m += 1;
+    }
+    true
+}
+
 const TW_512_DATA: [(i32, i32); FFT_ENC / 2] = narrow_twiddles(&TWIDDLES_512_Q23);
 const _: () = assert!(quadrant_symmetric(&TW_512_DATA));
+const _: () = assert!(twiddles_below_unity(&TW_512_DATA));
 // `static`, so there is exactly one copy in flash however many sites use it.
 static TW_512: [(i32, i32); FFT_ENC / 2] = TW_512_DATA;
 static BITREV_512: [u16; FFT_ENC] = build_bit_reverse_table::<FFT_ENC>();
@@ -1058,6 +1075,8 @@ const TW_1024_DATA: [(i32, i32); FFT_ENC_SB / 2] = narrow_twiddles(&TWIDDLES_102
 static TW_1024: [(i32, i32); FFT_ENC_SB / 2] = TW_1024_DATA;
 #[cfg(feature = "codec2_16k_bridge")]
 const _: () = assert!(quadrant_symmetric(&TW_1024_DATA));
+#[cfg(feature = "codec2_16k_bridge")]
+const _: () = assert!(twiddles_below_unity(&TW_1024_DATA));
 #[cfg(feature = "codec2_16k_bridge")]
 static BITREV_1024: [u16; FFT_ENC_SB] = build_bit_reverse_table::<FFT_ENC_SB>();
 
@@ -1398,6 +1417,29 @@ fn block_inv_i64_pruned<const PRUNE: u8, const MODE: u8>(
 /// every value is under 2^39 (64-bit products, |wr br - wi bi| < 2^63), `MODE_CHECKED` nothing (each butterfly uses the range-checked
 /// [`twiddle_mul`]). Same integer arithmetic in every mode, so the same
 /// result.
+/// Rounded Q23 complex product of twiddle `(wr, wi)` and `(yr, yi)`, values under 2^29: plain form
+/// (a 64-bit host multiplies 64 bits in one instruction).
+#[inline(always)]
+fn i32_twiddle_plain(wr: i32, wi: i32, yr: i32, yi: i32) -> (i32, i32) {
+    let (wr, wi, yr, yi) = (wr as i64, wi as i64, yr as i64, yi as i64);
+    (
+        ((wr * yr - wi * yi + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32,
+        ((wr * yi + wi * yr + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32,
+    )
+}
+
+/// Same integers as [`i32_twiddle_plain`], scaled so that the rounded result is the high word of
+/// the 64-bit sum (fewer instructions on a 32-bit core).
+#[inline(always)]
+fn i32_twiddle_scaled(wr: i32, wi: i32, yr: i32, yi: i32) -> (i32, i32) {
+    let (w8r, w8i) = ((wr << 8) as i64, (wi << 8) as i64);
+    let (y2r, y2i) = (yr.wrapping_shl(1) as i64, yi.wrapping_shl(1) as i64);
+    (
+        ((w8r * y2r - w8i * y2i + (1i64 << 31)) >> 32) as i32,
+        ((w8r * y2i + w8i * y2r + (1i64 << 31)) >> 32) as i32,
+    )
+}
+
 #[inline(always)]
 fn bf<const FWD: bool, const MODE: u8>(
     ar: &mut i64,
@@ -1408,13 +1450,18 @@ fn bf<const FWD: bool, const MODE: u8>(
 ) {
     let wi = if FWD { wif } else { -wif };
     if MODE == MODE_I32 {
-        // Every value is under 2^29 in magnitude, so it fits `i32`; each
-        // product is then a 32x32->64 multiply (two instructions on a
-        // 32-bit core) instead of a full 64x64 one.
-        let (wr, wi) = (wr as i64, wi as i64);
-        let (yr, yi) = (*br as i32 as i64, *bi as i32 as i64);
-        let vr = ((wr * yr - wi * yi + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
-        let vi = ((wr * yi + wi * yr + (1 << (FRAC_BITS - 1))) >> FRAC_BITS) as i32;
+        // Every value is under 2^29 in magnitude, so it fits `i32`. The twiddle is strictly
+        // under 2^23 (see `twiddles_below_unity`), so `w << 8` fits `i32`, and `y << 1` fits
+        // because |y| < 2^30. Each product is then `2^9` times the Q23 product, a signed
+        // 32x32->64 multiply (`mul` + `mulh` on a 32-bit core), and the rounded Q23 result
+        // `(w y + 2^22) >> 23` is exactly the high word of the scaled sum plus `2^31`: no
+        // cross-word shift is needed. Bit-identical to the unscaled form.
+        let (yr, yi) = (*br as i32, *bi as i32);
+        let (vr, vi) = if super::fixed_point::NATIVE_64_BIT {
+            i32_twiddle_plain(wr, wi, yr, yi)
+        } else {
+            i32_twiddle_scaled(wr, wi, yr, yi)
+        };
         let (xr, xi) = (*ar as i32, *ai as i32);
         *ar = (xr + vr) as i64;
         *ai = (xi + vi) as i64;
@@ -1562,6 +1609,27 @@ fn scatter_prefix<const N: usize>(
     let p = bitrev[k] as usize;
     re[p..p + fill].fill(v);
     im[p..p + fill].fill(0);
+}
+
+/// [`scatter_prefix`] for the pitch estimator, whose runs are all short (8 entries): the imaginary
+/// zeros are stored inline. A `fill(0)` becomes a call to `memset`, whose call overhead dominates
+/// on a core without an optimised library; `zero` is opaque to the optimiser on purpose, because a
+/// loop that stores a literal zero is turned back into that call.
+#[inline(always)]
+fn scatter_prefix_short<const N: usize>(
+    re: &mut [i64; N],
+    im: &mut [i64; N],
+    bitrev: &[u16],
+    k: usize,
+    fill: usize,
+    v: i64,
+) {
+    let p = bitrev[k] as usize;
+    re[p..p + fill].fill(v);
+    let zero = core::hint::black_box(0i64);
+    for x in &mut im[p..p + fill] {
+        *x = zero;
+    }
 }
 
 /// One sparse-prefix stage. The natural-order input is nonzero only in
@@ -1847,7 +1915,7 @@ fn pitch_fft_512_kernel<const NZ: usize, const K: u8>(
     }
     if sum < I64_SUM_LIMIT {
         for (k, &v) in input.iter().enumerate() {
-            scatter_prefix::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, v);
+            scatter_prefix_short::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, v);
         }
         pitch_prefix_i64_hot::<NZ, K>(re, im, bitrev);
     } else {
@@ -2183,6 +2251,33 @@ impl FftScratch {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn i32_twiddle_kernels_agree_bit_for_bit() {
+        let mut seed = 0x0dd_ba11u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 20) as i64
+        };
+        let lim = (1i64 << 29) + 64;
+        let mut ys = vec![0i64, 1, -1, lim, -lim, lim - 1, 1 - lim];
+        for _ in 0..4000 {
+            ys.push(next().rem_euclid(2 * lim + 1) - lim);
+        }
+        let mut ws = vec![(0i64, -(1i64 << 23) + 1), ((1 << 23) - 1, 0), (-(1 << 23) + 1, (1 << 23) - 1)];
+        for _ in 0..200 {
+            ws.push((next().rem_euclid(1 << 24) - (1 << 23) + 1, next().rem_euclid(1 << 24) - (1 << 23) + 1));
+        }
+        for &(wr, wi) in &ws {
+            for w in ys.windows(2) {
+                let (yr, yi) = (w[0] as i32, w[1] as i32);
+                assert_eq!(
+                    i32_twiddle_plain(wr as i32, wi as i32, yr, yi),
+                    i32_twiddle_scaled(wr as i32, wi as i32, yr, yi)
+                );
+            }
+        }
+    }
     use rustfft::num_complex::Complex32;
     use rustfft::FftPlanner;
 

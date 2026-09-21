@@ -302,7 +302,11 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
     // The 32x32->64 products below (two multiplies on a 32-bit core rather
     // than a full 64x64 one) need every sample under 2^31 in magnitude,
     // which the DC notch guarantees; checked once per call anyway.
-    let fits_i32 = sq.iter().fold(0u64, |m, &v| m | v.unsigned_abs()) < (1u64 << 31);
+    let magnitude_bits = sq.iter().fold(0u64, |m, &v| m | v.unsigned_abs());
+    let fits_i32 = magnitude_bits < (1u64 << 31);
+    // The fast path adds the two samples that share a coefficient before the multiply
+    // (the filter is symmetric), which needs every sample under 2^30 so that the sum fits `i32`.
+    let fits_pair = magnitude_bits < (1u64 << 30);
     let mut out = [0i64; NDEC];
     for (k, out_k) in out.iter_mut().enumerate() {
         let center = k * NLP_DEC;
@@ -312,7 +316,17 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
         // absolute sum is a small constant: the accumulator stays under
         // 2^60. Bit-identical to the former `i128` accumulation.
         let mut acc: i64 = 0;
-        if fits_i32 && center >= half && center + half < M_PITCH {
+        if fits_pair && center >= half && center + half < M_PITCH {
+            // Interior output, no edge clamping. The coefficients are symmetric and several are
+            // zero, so the nine distinct nonzero pairs and the centre tap are all that is
+            // needed: `h[c+d] * x[c+d] + h[c-d] * x[c-d] = h[c+d] * (x[c+d] + x[c-d])` exactly
+            // (an integer identity, nothing rounds before the final shift).
+            acc = LOWPASS_CENTER as i64 * (sq[center] as i32 as i64);
+            for &(d, coeff) in LOWPASS_PAIRS.iter() {
+                let pair = (sq[center - d as usize] as i32).wrapping_add(sq[center + d as usize] as i32);
+                acc += coeff as i64 * pair as i64;
+            }
+        } else if fits_i32 && center >= half && center + half < M_PITCH {
             // Interior output: no edge clamping needed.
             let base = center - half;
             for (t, &coeff) in h.iter().enumerate() {
@@ -329,6 +343,23 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
     }
     out
 }
+
+/// The centre tap of the low-pass filter (`NLP_LOWPASS_Q23[12]`) and the distinct nonzero pairs
+/// `(distance from the centre, coefficient)`: the filter is symmetric with six zero taps, so the
+/// interior decimation needs 10 products, not 25. Checked against the table by
+/// `lowpass_pairs_reproduce_the_committed_filter`.
+const LOWPASS_CENTER: i32 = 1669323;
+const LOWPASS_PAIRS: [(u8, i32); 9] = [
+    (11, 2419),
+    (9, -25411),
+    (8, -78962),
+    (7, -133771),
+    (6, -130136),
+    (4, 292806),
+    (3, 718913),
+    (2, 1178757),
+    (1, 1535028),
+];
 
 const fn window_fits_i32(w: &[i64]) -> bool {
     let mut i = 0;
@@ -376,6 +407,87 @@ fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE
     fixed_fft::pitch_fft_512::<NDEC>(input, re, im);
 }
 
+/// `re^2 + im^2` as an exact `i128`: the estimator's power of one spectrum bin.
+#[inline(always)]
+fn power_bin(re: i64, im: i64) -> i128 {
+    if super::fixed_point::NATIVE_64_BIT {
+        power_bin_native(re, im)
+    } else {
+        power_bin_split(re, im)
+    }
+}
+
+/// [`power_bin`] for a 64-bit core: the plain 128-bit products.
+fn power_bin_native(re: i64, im: i64) -> i128 {
+    re as i128 * re as i128 + im as i128 * im as i128
+}
+
+/// The square of a 64-bit magnitude as (low, high) 64-bit words, from three 32x32->64
+/// products (a core with 32-bit multiplies cannot do better; the compiler's own 128-bit
+/// multiply is several times as long).
+#[inline(always)]
+fn square_words(x: u64) -> (u64, u64) {
+    let (h, l) = (x >> 32, x & 0xffff_ffff);
+    let (ll, hl, hh) = (l * l, h * l, h * h);
+    // x^2 = ll + 2^33 hl + 2^64 hh
+    let (lo, carry) = ll.overflowing_add(hl << 33);
+    (lo, hh + (hl >> 31) + carry as u64)
+}
+
+/// [`power_bin`] for a 32-bit core: squares from 32-bit limbs.
+fn power_bin_split(re: i64, im: i64) -> i128 {
+    let (rl, rh) = square_words(re.unsigned_abs());
+    let (il, ih) = square_words(im.unsigned_abs());
+    let (lo, carry) = rl.overflowing_add(il);
+    let hi = rh + ih + carry as u64;
+    (((hi as u128) << 64) | lo as u128) as i128
+}
+
+/// Read access to the estimator's power spectrum, so that the production path can keep it in
+/// the transform's own (already finished) output arrays instead of copying 129 `i128` values
+/// (2 KB, several instructions per byte on a core without an optimised `memcpy`) into an array.
+trait PowerSource {
+    fn len(&self) -> usize;
+    fn at(&self, i: usize) -> i128;
+}
+
+impl PowerSource for [i128] {
+    fn len(&self) -> usize {
+        <[i128]>::len(self)
+    }
+    fn at(&self, i: usize) -> i128 {
+        self[i]
+    }
+}
+
+#[cfg(test)]
+impl PowerSource for Vec<i128> {
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+    fn at(&self, i: usize) -> i128 {
+        self[i]
+    }
+}
+
+/// The power spectrum stored as two 64-bit words per bin (low word, high word), which is where the
+/// estimator puts it, in place of the real and imaginary parts it was computed from.
+struct SplitPower<'a> {
+    lo: &'a [i64],
+    hi: &'a [i64],
+    bins: usize,
+}
+
+impl PowerSource for SplitPower<'_> {
+    fn len(&self) -> usize {
+        self.bins
+    }
+    #[inline(always)]
+    fn at(&self, i: usize) -> i128 {
+        (((self.hi[i] as u64 as u128) << 64) | self.lo[i] as u64 as u128) as i128
+    }
+}
+
 /// Fixed-point twin of `floating_reference::nlp::correct_sub_multiples`,
 /// operating on the `i128` power spectrum directly -- same comparisons,
 /// same structure. `0.8`/`1.2` become exact integer ratios (`8/10`,
@@ -386,8 +498,8 @@ fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE
 /// range, see
 /// `sub_multiple_bounds_match_the_float_formula_across_the_real_bin_range`).
 // [@ANCHOR: correct_sub_multiples_fixed]
-fn correct_sub_multiples_fixed(
-    power: &[i128],
+fn correct_sub_multiples_fixed<P: PowerSource + ?Sized>(
+    power: &P,
     gmax: i128,
     gmax_bin: usize,
     prev_f0_bin: usize,
@@ -415,7 +527,8 @@ fn correct_sub_multiples_fixed(
 
         let mut lmax: i128 = 0;
         let mut lmax_bin = bmin;
-        for (bin, &p) in power.iter().enumerate().take(bmax + 1).skip(bmin) {
+        for bin in bmin..=bmax {
+            let p = power.at(bin);
             if p > lmax {
                 lmax = p;
                 lmax_bin = bin;
@@ -425,8 +538,8 @@ fn correct_sub_multiples_fixed(
         if lmax > thresh
             && lmax_bin > 0
             && lmax_bin < power.len() - 1
-            && lmax > power[lmax_bin - 1]
-            && lmax > power[lmax_bin + 1]
+            && lmax > power.at(lmax_bin - 1)
+            && lmax > power.at(lmax_bin + 1)
         {
             cmax_bin = lmax_bin;
         }
@@ -465,7 +578,9 @@ pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
         *sq_i = notch + 1;
     }
 
+    profile_mark!(9);
     let decimated = decimate_fixed(&state.sq_fixed);
+    profile_mark!(10);
 
     state.sq_fixed.copy_within(N_SAMP..M_PITCH, 0);
 
@@ -475,7 +590,9 @@ pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
         windowed[i] = rshift_round(d * hann[i], NLP_FRAC_BITS);
     }
 
+    profile_mark!(2);
     fft_fixed(&windowed, &mut state.fft_re, &mut state.fft_im);
+    profile_mark!(5);
 
     // Only bins up to the highest searched pitch bin (`hi`, 128) are ever
     // read: the global peak search stops there, and the sub-multiple check
@@ -486,16 +603,26 @@ pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
     const _: () = assert!(POWER_BINS <= HALF);
     // The transform only computes its low bins (see `pitch_fft_512`).
     const _: () = assert!(POWER_BINS <= fixed_fft::PITCH_FFT_NEEDED_BINS);
-    let (re, im) = (&state.fft_re, &state.fft_im);
-    let power: [i128; POWER_BINS] =
-        core::array::from_fn(|i| re[i] as i128 * re[i] as i128 + im[i] as i128 * im[i] as i128);
+    // Each bin's power replaces its own real and imaginary parts (low and high 64-bit word), so
+    // there is no separate array to fill and copy.
+    for i in 0..POWER_BINS {
+        let p = power_bin(state.fft_re[i], state.fft_im[i]) as u128;
+        state.fft_re[i] = p as u64 as i64;
+        state.fft_im[i] = (p >> 64) as u64 as i64;
+    }
+    let power = SplitPower {
+        lo: &state.fft_re,
+        hi: &state.fft_im,
+        bins: POWER_BINS,
+    };
 
     let lo = (PE_FFT_SIZE * NLP_DEC / P_MAX).max(1);
     let hi = POWER_BINS - 1;
 
     let mut gmax: i128 = 0;
     let mut gmax_bin = lo;
-    for (bin, &p) in power.iter().enumerate().take(hi + 1).skip(lo) {
+    for bin in lo..=hi {
+        let p = power.at(bin);
         if p > gmax {
             gmax = p;
             gmax_bin = bin;
@@ -512,6 +639,80 @@ pub fn nlp_fixed_bin(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn power_bin_kernels_agree_bit_for_bit() {
+        let mut seed = 0x1234_5678_9abc_def1u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed
+        };
+        let mut vals: Vec<i64> = vec![0, 1, -1, 2, i64::MAX, i64::MIN, i64::MIN + 1, 1 << 31, -(1 << 31), (1 << 32) - 1, 1 << 32, (1 << 32) + 1];
+        for k in 0..63 {
+            vals.push(1i64 << k);
+            vals.push(-(1i64 << k) + 1);
+            vals.push((1i64 << k) - 1);
+        }
+        for _ in 0..20000 {
+            vals.push((next() as i64) >> (next() % 64));
+        }
+        for (a, &re) in vals.iter().enumerate() {
+            for &im in vals.iter().skip(a % 7).step_by(11) {
+                assert_eq!(power_bin_split(re, im), power_bin_native(re, im), "({re}, {im})");
+            }
+        }
+    }
+
+    #[test]
+    fn lowpass_pairs_reproduce_the_committed_filter() {
+        let mut rebuilt = [0i64; LPF_TAPS];
+        let half = (LPF_TAPS - 1) / 2;
+        rebuilt[half] = LOWPASS_CENTER as i64;
+        for &(d, c) in LOWPASS_PAIRS.iter() {
+            rebuilt[half + d as usize] = c as i64;
+            rebuilt[half - d as usize] = c as i64;
+        }
+        assert_eq!(rebuilt, super::super::tables::NLP_LOWPASS_Q23);
+    }
+
+    /// The decimation fast paths (pair-folded and plain 32-bit products) equal the clamped
+    /// general form on random and extreme histories, including values right at the 2^30 limit
+    /// of the pair-folded path and above it.
+    #[test]
+    fn decimate_fast_paths_match_the_general_form_bit_for_bit() {
+        fn reference(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
+            let h = lowpass_coeffs_q23();
+            let half = (LPF_TAPS - 1) / 2;
+            core::array::from_fn(|k| {
+                let mut acc: i128 = 0;
+                for (t, &coeff) in h.iter().enumerate() {
+                    let idx = (k * NLP_DEC + t) as isize - half as isize;
+                    let idx = idx.clamp(0, M_PITCH as isize - 1) as usize;
+                    acc += coeff as i128 * sq[idx] as i128;
+                }
+                ((acc + (1i128 << (NLP_FRAC_BITS - 1))) >> NLP_FRAC_BITS) as i64
+            })
+        }
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 11) as i64
+        };
+        for limit_bits in [8u32, 20, 29, 30, 31, 33] {
+            for _ in 0..40 {
+                let mut sq = [0i64; M_PITCH];
+                for v in sq.iter_mut() {
+                    let m = 1i64 << limit_bits;
+                    *v = next().rem_euclid(2 * m + 1) - m;
+                }
+                if limit_bits == 30 {
+                    sq[100] = -(1 << 30);
+                    sq[101] = (1 << 30) - 1;
+                }
+                assert_eq!(decimate_fixed(&sq), reference(&sq), "limit 2^{limit_bits}");
+            }
+        }
+    }
     use crate::codec2_3200::floating_reference::nlp::tests::{
         estimate_synthetic_pitch, estimate_synthetic_pitch_at_amp, REALISTIC_AMP,
     };

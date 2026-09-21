@@ -770,10 +770,11 @@ impl DecoderFixed {
                 &mut self.synth.scratch,
             );
             envelope::apply_first_harmonic_correction_fixed(&mut model);
-            // Populates model.phi[1..=l] as a side effect, reused
-            // unchanged by the spectral bridge synthesis below -- same
-            // reasoning as decode_16k's own float version.
-            let _sub = self.synth.synthesize_subframe_fixed(&mut model, &h);
+            // Populates model.phi[1..=l] and applies the postfilter, both reused unchanged by
+            // the spectral bridge synthesis below. The 8 kHz inverse transform and overlap-add
+            // are skipped (their samples were never used here; see `codec2_3200::DecoderFixed::
+            // decode_16k_fixed`).
+            self.synth.prepare_subframe_fixed(&mut model, &h);
             let sub_sb = self.spectral_bridge.synthesize_subframe_sb_fixed(&model);
             let n = codec2_3200::spectral_bridge::N_SAMP_SB;
             out[i * n..(i + 1) * n].copy_from_slice(&sub_sb);

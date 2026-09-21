@@ -141,6 +141,50 @@ structured harmonic layouts, empty, overwritten and one-sided spectra, exactly a
 sizes); the constant-input-count forward transform; `log2_q23`/`exp2_q23` against their 64-bit reference. The
 dense-transform tests now run through const-generic helpers at both sizes (same inputs and reference).
 
+### Second round (2026-09-20, all bit-exact): removing avoidable work
+
+Re-profiled with the per-stage marks (`tools/codec2_riscv32_bench`), host `callgrind`, and a Unicorn
+call-site profile of the library helpers (`memset`, `memcpy`, `memmove`, 128-bit division; on this
+core they cost one to three instructions per byte). Same checksums as before: `f59f8fcd` (8 kHz),
+`9f8929d7` (16 kHz decode), host `9ba18e2006300778`, `db5b738b` (Codec2 1600 harness).
+
+| QEMU riscv32imc, instructions per 20 ms frame | Before | After |
+| --- | --- | --- |
+| Encode, 8 kHz | 478,024 | 434,423 |
+| Decode, 8 kHz | 712,234 | 702,576 |
+| Decode, 16 kHz (`decode_16k_fixed`) | 1,211,040 | 967,881 |
+| Host (callgrind, whole run divided by frames), encode / decode | about 188k / 356k | about 154k / 351k |
+
+* **16 kHz decode, -20 percent.** `decode_16k_fixed` ran the whole 8 kHz synthesis (512-point inverse
+  transform and overlap-add) and threw the samples away, using only the harmonic phases and the
+  postfilter it computes first. It now calls `SynthesisStateFixed::prepare_subframe_fixed` (those two
+  steps) only. Output is identical. Consequence: the 8 kHz overlap-add memory is not advanced by the 16 kHz
+  method, which was already documented as not to be mixed with `decode` on one decoder.
+* **Pitch estimator, -9 percent of encode.** The 25-tap decimation filter is symmetric with six zero
+  taps, so the interior outputs add the two samples that share a coefficient before multiplying
+  (10 products, not 25; exact integer identity; used when every sample is under 2^30, else the old
+  paths run). The power spectrum is computed in place over the transform's own output arrays (low
+  and high 64-bit word of each bin) instead of a 2 KB `i128` array that was built and copied. On a 32-bit
+  core the 128-bit squares are built from three 32-bit products (`power_bin_split`, tested against
+  `power_bin_native`, which 64-bit hosts use). The imaginary zero fill of the short runs is stored inline
+  instead of through `memset`.
+* **32-bit forward transform kernel.** The butterfly of the linear-prediction spectrum scales the twiddle by
+  2^8 and the data by 2, so the rounded result is the high word of the 64-bit sum (`i32_twiddle_scaled`;
+  a test checks it against the plain form; 64-bit hosts keep the plain form, which is faster there).
+  About 1.4 percent of decode.
+* Measured and rejected (under 3 percent, or not bit-exact): computing only the lower half of the last
+  forward stage (about 4 percent of that transform); real-input first stage (about 2 percent of encode);
+  pair-folded autocorrelation (no exact form); real-input half-size transforms (rounding differs, not
+  bit-exact); radix-4 stages (different rounding points, not bit-exact); pitch transform in 32-bit
+  data (only valid for quiet frames).
+
+Still open, each measured but not done: 128-bit divisions in Levinson-Durbin and the reciprocal
+normalisation, about 21 per frame at roughly 1.2k instructions each (26k, 6 percent of encode); a
+Möller-Granlund reciprocal division would remove most of it. 32-bit storage for the forward-transform
+data would save about 4 percent of decode at the price of 4 KB more state. The pitch-history shift and
+the envelope's array copies (`ModelFixed`, `h`, `pw_bin`) cost about 25k per frame together (`memmove` and
+`memcpy` byte loops); a ring buffer and out-parameters would remove them.
+
 ### Flash footprint and the code-size versus speed trade
 
 Text plus read-only data, without the bench's 64,000 bytes of speech (the code figure still includes the bench's own
