@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # This software is released under the AGPL-3.0-or-later License.
+import shutil
 import tempfile
 import time
 import pika
@@ -41,6 +42,7 @@ class TestTddBatch1(RealTransactionCase):
                         env_vars["ODOO_SERVICE_PASSWORD"] = line.strip().split("=", 1)[1]
 
         self.scripts_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.scripts_dir, ignore_errors=True)
         env_vars["BACKUP_WORKER_SCRIPTS_DIR"] = self.scripts_dir
         
         self.daemon_proc = daemon_utils._start_daemon_process(daemon_script, env_vars=env_vars)

@@ -33,6 +33,7 @@ import os
 import socket
 import ssl
 import subprocess
+import shutil
 import tempfile
 import threading
 import urllib.error
@@ -88,6 +89,7 @@ class TestSsrfSafeFetch(HamsTransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls._cert_dir = tempfile.mkdtemp(prefix="ssrf_safe_fetch_test_certs_")
+        cls.addClassCleanup(shutil.rmtree, cls._cert_dir, ignore_errors=True)
         cls.cert_path = os.path.join(cls._cert_dir, "cert.pem")
         cls.key_path = os.path.join(cls._cert_dir, "key.pem")
         cls.test_hostname = "ssrf-safe-fetch-test.invalid"
