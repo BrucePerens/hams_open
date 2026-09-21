@@ -12,6 +12,7 @@ import contextlib
 import ctypes
 import glob
 import itertools
+import json
 import logging
 import os
 import pathlib
@@ -32,7 +33,7 @@ import fcntl
 import socket
 from unittest.mock import MagicMock, patch
 from cryptography.fernet import Fernet
-from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, HOST, BaseCase
+from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, ChromeBrowserException, HOST, BaseCase
 import odoo.tests.common
 import odoo
 from odoo import fields
@@ -502,6 +503,73 @@ odoo.tests.common.Opener.__init__ = _patched_opener_init
 original_chrome_init = ChromeBrowser.__init__
 
 
+# Opt-in live V8 coverage collection (hams_shared/tools/run_js_coverage.py maps the records).
+# HAMS_JS_COVERAGE_DIR=<dir> makes each browser enable precise coverage as soon as it starts, over
+# the browser's own DevTools session (`_websocket_request`), and write one JSON record from a
+# `browser.cleanup` callback when it shuts down. Unset, nothing here runs. Coverage is best effort: a failure logs a warning and never
+# fails the test.
+def _js_coverage_start(browser):
+    if not os.environ.get("HAMS_JS_COVERAGE_DIR"):
+        return
+    try:
+        browser._websocket_request("Profiler.enable")
+        # The Debugger domain must be on for Debugger.getScriptSource, which returns a bundle's
+        # exact text with no HTTP request (a url_open from a cleanup callback breaks
+        # browser_js's registry test lock).
+        browser._websocket_request("Debugger.enable")
+        browser._websocket_request(
+            "Profiler.startPreciseCoverage",
+            params={"callCount": True, "detailed": True},
+        )
+        browser._hams_js_coverage_on = True  # burn-ignore-introspection: flag on Odoo core's ChromeBrowser, not a hams model
+        # browser_js() closes `browser.cleanup` (an ExitStack), not `stop()`. Callbacks run last
+        # in, first out, so this runs before the websocket is closed.
+        browser.cleanup.callback(_js_coverage_write, browser)
+        _logger.info("JS coverage: precise coverage started")
+    except (TimeoutError, OSError, AttributeError) as e:
+        _logger.warning("JS coverage: could not start (%s)", repr(e))
+
+
+def _js_coverage_write(browser):
+    out_dir = os.environ.get("HAMS_JS_COVERAGE_DIR")
+    if not out_dir or not getattr(browser, "_hams_js_coverage_on", False):  # burn-ignore-introspection
+        return
+    browser._hams_js_coverage_on = False  # burn-ignore-introspection
+    try:
+        taken = browser._websocket_request("Profiler.takePreciseCoverage")
+        scripts = [
+            {"url": r["url"], "scriptId": r["scriptId"], "functions": r["functions"]}
+            for r in (taken or {}).get("result", [])
+            if "/web/assets/" in r.get("url", "")
+        ]
+        bundles = {}
+        kept = []
+        for script in scripts:
+            try:
+                source = browser._websocket_request(
+                    "Debugger.getScriptSource", params={"scriptId": script.pop("scriptId")}
+                )
+            except ChromeBrowserException as e:
+                # A script of a page the tour already navigated away from: Chrome reports its
+                # coverage but no longer has its source ("No script for id"). Known limitation:
+                # only the last document's bundles are recorded.
+                _logger.info("JS coverage: skipping a script with no source (%s)", e)
+                continue
+            bundles[script["url"]] = source["scriptSource"]
+            kept.append(script)
+        scripts = kept
+        if not scripts:
+            return  # a browser that never loaded an asset bundle: nothing to map
+        os.makedirs(out_dir, exist_ok=True)
+        test_id = browser.test_case.id()
+        record_path = os.path.join(out_dir, f"{test_id}-{time.time_ns()}.json")
+        with open(record_path, "w", encoding="utf-8") as f:
+            json.dump({"test": test_id, "scripts": scripts, "bundles": bundles}, f)
+        _logger.info("JS coverage: wrote %s (%s bundle scripts)", record_path, len(scripts))
+    except (TimeoutError, OSError, AttributeError, KeyError, ValueError) as e:
+        _logger.warning("JS coverage: could not collect (%s)", repr(e))
+
+
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
@@ -511,6 +579,7 @@ def _patched_chrome_init(self, *args, **kwargs):
     for attempt in range(retries):
         try:
             original_chrome_init(self, *args, **kwargs)
+            _js_coverage_start(self)
             return
         except Exception as e:  # audit-ignore-catch-all
             _logger.warning(
