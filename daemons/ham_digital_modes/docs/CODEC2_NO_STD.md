@@ -143,6 +143,48 @@ Shrinking candidates (not implemented, because none is bit-exact):
   that accuracy was not measured.
 * `LPC_ACOS_LUT_Q23` is steep near 1 and does not halve.
 
+## Two kernel sets: 32-bit cores and 64-bit hosts
+
+Several of the speedups above are tuned for a core that has no count-leading-zeros instruction
+and no 64-bit multiplier (riscv32imc, ESP32 class). On a 64-bit host they are slower than the
+plain form, and after the rate specialisation and pitch pruning work the host encoder took about
+60 percent more instructions per frame than before it (measured 2026-09-20). The cause was one
+function: the pitch estimator's 512-point transform (`pitch_prefix_i64_hot`), whose products were
+split into 32-bit halves. On a 64-bit core that is roughly three times the instructions of one
+multiply.
+
+Each affected kernel now exists in two forms, and every target compiles both:
+
+* **Split form** (32-bit halves, table-based leading-zero count): `MODE_I64` in
+  `src/codec2_3200/fixed_fft.rs` and `log2_q23_split32` in `src/codec2_3200/fixed_point.rs`.
+* **Native form** (plain 64-bit products, hardware `leading_zeros`): `MODE_I64_NATIVE` and
+  `log2_q23_native`.
+
+The choice is one constant, `NATIVE_64_BIT = cfg!(target_pointer_width = "64")`. Targets with
+64-bit pointers (x86-64, aarch64) get the native form. Every 32-bit target (riscv32imc,
+thumbv7m, 32-bit ARM) keeps the split form, so the QEMU counts are unchanged (478,024 encode and
+712,234 decode instructions per frame, checksum f59f8fcd). The condition is the width of the
+multiplier, not the presence of a leading-zero instruction: Cortex-M3 has one, but its 64-bit
+products still cost several instructions, and it is not a measured target.
+
+Unit tests run both forms on the same inputs and assert identical integers
+(`butterfly_kernels_agree_bit_for_bit`, `pitch_transform_matches_the_dense_reference_in_both_64_bit_kernels`,
+the sparse inverse trials in `fixed_fft.rs`, and the sweep in
+`log2_and_exp2_q23_match_their_64_bit_reference_bit_for_bit`), so neither form can rot.
+
+Host measurements (x86-64, Intel i7-1360P, `examples/codec2_fixed_bench`, checksum
+`9ba18e2006300778` in all cases). Instruction counts come from `valgrind --tool=callgrind`
+(`perf` is not installed here) and are the primary figure; they do not depend on machine load.
+Wall-clock times are the minimum over 100 passes taken while the machine was quiet, but the box
+is shared and its load average was around 30 for most of the session, so wall-clock numbers moved
+by a factor of two or more between runs and only the ratios are meaningful.
+
+| Build | Encode instr/frame | Decode instr/frame | Encode us | Decode us |
+| --- | --- | --- | --- | --- |
+| before the rate specialisation (242d598a) | 213,000 | 673,000 | (not taken quiet) | (not taken quiet) |
+| origin/main before this change (b22e9b3b) | 300,000 | 460,000 | 18.1 | 29.2 |
+| with the native kernels | 188,000 | 356,000 | 12.6 | 25.7 |
+
 ## Remaining work for a real ESP32 image
 
 * Memory map and linker script, start-up code, and a `panic` handler for the real chip (the bench's

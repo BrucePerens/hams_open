@@ -363,6 +363,23 @@ static CLZ8: [u8; 256] = {
 /// analogue of an IEEE754 exponent extraction.
 // [@ANCHOR: log2_q23]
 pub(crate) fn log2_q23(x_q23: i64) -> i64 {
+    if NATIVE_64_BIT {
+        log2_q23_native(x_q23)
+    } else {
+        log2_q23_split32(x_q23)
+    }
+}
+
+/// True on a target whose registers, multiplier and leading-zero count are 64 bits wide
+/// (`target_pointer_width = "64"`: x86-64, aarch64, ...). Those targets run the plain 64-bit
+/// forms of the kernels; the 32-bit targets (riscv32imc, Cortex-M, ESP32 class) run the
+/// forms that split every wide operation into 32-bit halves. Both forms of every kernel are
+/// compiled on every target and are tested against each other, so they cannot drift apart.
+pub(crate) const NATIVE_64_BIT: bool = cfg!(target_pointer_width = "64");
+
+/// [`log2_q23`] for a 32-bit core: normalisation in 32-bit halves with a table-based
+/// leading-zero count.
+fn log2_q23_split32(x_q23: i64) -> i64 {
     debug_assert!(
         x_q23 >= 0,
         "log2_q23: x_q23 must be non-negative, got {x_q23}"
@@ -411,9 +428,9 @@ pub(crate) fn log2_q23(x_q23: i64) -> i64 {
     ((shift as i64) << 23) + interp_q23
 }
 
-/// Reference (the straightforward 64-bit form) for [`log2_q23`].
-#[cfg(test)]
-fn log2_q23_reference(x_q23: i64) -> i64 {
+/// [`log2_q23`] for a 64-bit core: the straightforward 64-bit form, with the hardware
+/// leading-zero count and 64-bit shifts and products.
+fn log2_q23_native(x_q23: i64) -> i64 {
     let x_q23 = x_q23.max(1);
     let bits = 63 - x_q23.leading_zeros() as i32;
     let shift = bits - 23;
@@ -557,7 +574,9 @@ mod tests {
             xs.push((next() >> 1) as i64 >> (next() % 63));
         }
         for &x in &xs {
-            assert_eq!(log2_q23(x), log2_q23_reference(x), "log2_q23({x})");
+            let want = log2_q23_native(x);
+            assert_eq!(log2_q23_split32(x), want, "log2_q23_split32({x})");
+            assert_eq!(log2_q23(x), want, "log2_q23({x})");
         }
         let mut ys: Vec<i64> = vec![0, 1, -1, (1 << 23) - 1, 1 << 23, -(1 << 23), -(1 << 23) - 1];
         for k in 0..38 {

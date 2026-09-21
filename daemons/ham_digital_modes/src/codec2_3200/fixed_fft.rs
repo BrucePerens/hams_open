@@ -1117,6 +1117,18 @@ where
 const MODE_CHECKED: u8 = 0;
 const MODE_I64: u8 = 1;
 const MODE_I32: u8 = 2;
+/// Same value bound as `MODE_I64` (every value under 2^39), but the products are plain
+/// native 64-bit multiplies: one instruction each on a core with a 64-bit multiplier. It
+/// computes exactly the same integers as `MODE_I64`; see [`I64_KERNEL`].
+const MODE_I64_NATIVE: u8 = 3;
+
+/// The kernel that the "values under 2^39" case runs on this target. A 64-bit core multiplies
+/// two 64-bit numbers in one instruction, so it takes the plain form (`MODE_I64_NATIVE`); a
+/// 32-bit core (no 64-bit multiply, e.g. the riscv32imc and ESP32-class targets) takes the
+/// split-into-32-bit-halves form (`MODE_I64`), which needs fewer of its slower multiplies.
+/// Both forms are compiled on every target and tested against each other, and both give the
+/// same result bit for bit.
+const I64_KERNEL: u8 = if super::fixed_point::NATIVE_64_BIT { MODE_I64_NATIVE } else { MODE_I64 };
 
 /// Largest value sum (of `|re| + |im|` over the whole transform) that still
 /// allows each mode. Every intermediate value is a partial DFT of the
@@ -1136,7 +1148,7 @@ fn mode_for_sum(sum: u64) -> u8 {
     if sum < I32_SUM_LIMIT {
         MODE_I32
     } else if sum < I64_SUM_LIMIT {
-        MODE_I64
+        I64_KERNEL
     } else {
         MODE_CHECKED
     }
@@ -1314,7 +1326,7 @@ const PRUNE_PENULTIMATE: u8 = 2;
 /// same arithmetic as in [`block_inv_i64`], so it is bit-identical; the
 /// other positions are left as they were (unspecified to the caller).
 #[inline(always)]
-fn block_inv_i64_pruned<const PRUNE: u8>(
+fn block_inv_i64_pruned<const PRUNE: u8, const MODE: u8>(
     re: &mut [i64],
     im: &mut [i64],
     tw: &[(i32, i32)],
@@ -1346,6 +1358,21 @@ fn block_inv_i64_pruned<const PRUNE: u8>(
     // Only the lower output is read for every j > 0. In the last stage
     // only j <= q is read (bin 128 of 512 is j = q), so the butterflies
     // above q are not run at all.
+    if MODE == MODE_I64_NATIVE {
+        // Plain products: `w * (x + j y)` with the inverse twiddle `(wr, -wif)`.
+        let top = if PRUNE == PRUNE_PENULTIMATE { half } else { q };
+        for j in 1..top {
+            if j == q {
+                continue;
+            }
+            let (wr, wif) = tw[j * step];
+            let (wr, wif) = (wr as i64, wif as i64);
+            let (x, y) = (hr[j], hi[j]);
+            lr[j] += rshift_round_i64(wr * x + wif * y, FRAC_BITS);
+            li[j] += rshift_round_i64(wr * y - wif * x, FRAC_BITS);
+        }
+        return;
+    }
     for j in 1..q {
         let (wr, wif) = tw[j * step];
         let (a, b) = twiddle_sums(wr as u32, (-wif) as u32, hr[j], hi[j]);
@@ -1395,7 +1422,12 @@ fn bf<const FWD: bool, const MODE: u8>(
         *bi = (xi - vi) as i64;
         return;
     }
-    let (vr, vi) = if MODE == MODE_I64 {
+    let (vr, vi) = if MODE == MODE_I64_NATIVE {
+        (
+            rshift_round_i64(wr as i64 * *br - wi as i64 * *bi, FRAC_BITS),
+            rshift_round_i64(wr as i64 * *bi + wi as i64 * *br, FRAC_BITS),
+        )
+    } else if MODE == MODE_I64 {
         (
             mul_round_i64(wr, *br, -wi, *bi),
             mul_round_i64(wr, *bi, wi, *br),
@@ -1555,10 +1587,10 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bo
     let mut r = 0;
     while r < blocks {
         if r + step < nz {
-            if PRUNE && !FWD && MODE == MODE_I64 && len == N {
-                block_inv_i64_pruned::<PRUNE_LAST>(re, im, tw, bitrev[r] as usize, len, step);
-            } else if PRUNE && !FWD && MODE == MODE_I64 && len == N / 2 {
-                block_inv_i64_pruned::<PRUNE_PENULTIMATE>(re, im, tw, bitrev[r] as usize, len, step);
+            if PRUNE && !FWD && (MODE == MODE_I64 || MODE == MODE_I64_NATIVE) && len == N {
+                block_inv_i64_pruned::<PRUNE_LAST, MODE>(re, im, tw, bitrev[r] as usize, len, step);
+            } else if PRUNE && !FWD && (MODE == MODE_I64 || MODE == MODE_I64_NATIVE) && len == N / 2 {
+                block_inv_i64_pruned::<PRUNE_PENULTIMATE, MODE>(re, im, tw, bitrev[r] as usize, len, step);
             } else if !FWD && MODE == MODE_I64 {
                 block_inv_i64::<false>(re, im, tw, bitrev[r] as usize, len, step);
             } else {
@@ -1673,10 +1705,10 @@ where
     let mode = mode_for_sum(sum_abs::<N>(re, im));
     match (forward, mode) {
         (true, MODE_I32) => stages_dense_loop::<N, true, MODE_I32>(re, im, tw),
-        (true, MODE_I64) => stages_dense_loop::<N, true, MODE_I64>(re, im, tw),
+        (true, I64_KERNEL) => stages_dense_loop::<N, true, I64_KERNEL>(re, im, tw),
         (true, _) => stages_dense_loop::<N, true, MODE_CHECKED>(re, im, tw),
         (false, MODE_I32) => stages_dense_loop::<N, false, MODE_I32>(re, im, tw),
-        (false, MODE_I64) => stages_dense_loop::<N, false, MODE_I64>(re, im, tw),
+        (false, I64_KERNEL) => stages_dense_loop::<N, false, I64_KERNEL>(re, im, tw),
         (false, _) => stages_dense_loop::<N, false, MODE_CHECKED>(re, im, tw),
     }
 }
@@ -1725,10 +1757,10 @@ fn prefix_general<const N: usize>(
     }
     match (forward, mode_for_sum(sum)) {
         (true, MODE_I32) => stages_prefix_loop::<N, true, MODE_I32>(re, im, tw, bitrev, nz),
-        (true, MODE_I64) => stages_prefix_loop::<N, true, MODE_I64>(re, im, tw, bitrev, nz),
+        (true, I64_KERNEL) => stages_prefix_loop::<N, true, I64_KERNEL>(re, im, tw, bitrev, nz),
         (true, _) => stages_prefix_loop::<N, true, MODE_CHECKED>(re, im, tw, bitrev, nz),
         (false, MODE_I32) => stages_prefix_loop::<N, false, MODE_I32>(re, im, tw, bitrev, nz),
-        (false, MODE_I64) => stages_prefix_loop::<N, false, MODE_I64>(re, im, tw, bitrev, nz),
+        (false, I64_KERNEL) => stages_prefix_loop::<N, false, I64_KERNEL>(re, im, tw, bitrev, nz),
         (false, _) => stages_prefix_loop::<N, false, MODE_CHECKED>(re, im, tw, bitrev, nz),
     }
 }
@@ -1798,6 +1830,16 @@ pub(crate) fn pitch_fft_512<const NZ: usize>(
     re: &mut [i64; FFT_ENC],
     im: &mut [i64; FFT_ENC],
 ) {
+    pitch_fft_512_kernel::<NZ, I64_KERNEL>(input, re, im);
+}
+
+/// [`pitch_fft_512`] with the "values under 2^39" kernel named (`MODE_I64` or
+/// `MODE_I64_NATIVE`); the tests run both on the same inputs.
+fn pitch_fft_512_kernel<const NZ: usize, const K: u8>(
+    input: &[i64; NZ],
+    re: &mut [i64; FFT_ENC],
+    im: &mut [i64; FFT_ENC],
+) {
     let bitrev = <Rate8k as FftTables>::BITREV;
     let mut sum = 0u64;
     for &v in input {
@@ -1807,15 +1849,19 @@ pub(crate) fn pitch_fft_512<const NZ: usize>(
         for (k, &v) in input.iter().enumerate() {
             scatter_prefix::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, v);
         }
-        pitch_prefix_i64_hot::<NZ>(re, im, bitrev);
+        pitch_prefix_i64_hot::<NZ, K>(re, im, bitrev);
     } else {
         prefix_general::<FFT_ENC>(input, re, im, false, &PITCH_TW_512, bitrev);
     }
 }
 
 #[inline(never)]
-fn pitch_prefix_i64_hot<const NZ: usize>(re: &mut [i64; FFT_ENC], im: &mut [i64; FFT_ENC], bitrev: &[u16]) {
-    stages_prefix_hot::<FFT_ENC, false, MODE_I64, true>(re, im, &PITCH_TW_512, bitrev, NZ);
+fn pitch_prefix_i64_hot<const NZ: usize, const K: u8>(
+    re: &mut [i64; FFT_ENC],
+    im: &mut [i64; FFT_ENC],
+    bitrev: &[u16],
+) {
+    stages_prefix_hot::<FFT_ENC, false, K, true>(re, im, &PITCH_TW_512, bitrev, NZ);
 }
 
 #[inline(never)]
@@ -1840,6 +1886,8 @@ fn twiddle_real_inverse<const MODE: u8>((wr, wif): (i32, i32), br: i64, bi: i64)
         } else {
             rshift_round_i128(wr as i128 * br as i128 - wi as i128 * bi as i128, FRAC_BITS)
         }
+    } else if MODE == MODE_I64_NATIVE {
+        rshift_round_i64(wr as i64 * br + wif as i64 * bi, FRAC_BITS)
     } else {
         mul_round_i64(wr, br, wif, bi)
     }
@@ -2007,12 +2055,12 @@ fn final_stage_real<const N: usize, const NS: usize, const MODE: u8>(
 }
 
 #[inline(never)]
-fn final_stage_real_hot<const N: usize, const NS: usize>(
+fn final_stage_real_hot<const N: usize, const NS: usize, const K: u8>(
     re: &mut [i64; N],
     im: &[i64; N],
     tw: &[(i32, i32)],
 ) {
-    final_stage_real::<N, NS, MODE_I64>(re, im, tw);
+    final_stage_real::<N, NS, K>(re, im, tw);
 }
 
 #[inline(never)]
@@ -2025,15 +2073,15 @@ fn final_stage_real_checked<const N: usize, const NS: usize>(
 }
 
 #[inline(never)]
-fn sparse_inverse_hot<const N: usize, const NS: usize>(
+fn sparse_inverse_hot<const N: usize, const NS: usize, const K: u8>(
     re: &mut [i64; N],
     im: &mut [i64; N],
     tw: &[(i32, i32)],
     bitrev: &[u16],
     flags: &[u32; FLAG_WORDS],
 ) {
-    stages_sparse_hot::<N, MODE_I64>(re, im, tw, bitrev, flags);
-    final_stage_real_hot::<N, NS>(re, im, tw);
+    stages_sparse_hot::<N, K>(re, im, tw, bitrev, flags);
+    final_stage_real_hot::<N, NS, K>(re, im, tw);
 }
 
 /// Inverse transform of a sparse, conjugate-symmetric (real output)
@@ -2085,7 +2133,13 @@ where
 
     /// Runs the transform; see the type's documentation for what is valid
     /// afterwards.
-    pub(crate) fn run<const NS: usize>(mut self) {
+    pub(crate) fn run<const NS: usize>(self) {
+        self.run_kernel::<NS, I64_KERNEL>();
+    }
+
+    /// [`run`](Self::run) with the "values under 2^39" kernel named
+    /// (`MODE_I64` or `MODE_I64_NATIVE`); the tests run both.
+    fn run_kernel<const NS: usize, const K: u8>(mut self) {
         let bitrev = <Size<N> as FftTables>::BITREV;
         let tw = <Size<N> as FftTables>::TW;
         fold_flags::<N>(&mut self.flags);
@@ -2102,7 +2156,7 @@ where
             self.im[N / 2..].fill(0);
         }
         if self.sum < I64_SUM_LIMIT {
-            sparse_inverse_hot::<N, NS>(self.re, self.im, tw, bitrev, &self.flags);
+            sparse_inverse_hot::<N, NS, K>(self.re, self.im, tw, bitrev, &self.flags);
         } else {
             stages_sparse_loop::<N, MODE_CHECKED>(self.re, self.im, tw, bitrev, &self.flags);
             final_stage_real_checked::<N, NS>(self.re, self.im, tw);
@@ -2518,6 +2572,19 @@ mod tests {
         }
         reference_fft::<N>(&mut re_ref, &mut im_ref, false);
 
+        // Both forms of the 64-bit-range kernel (32-bit halves and native 64-bit products)
+        // must give the reference's answer, on every target.
+        check_sparse_inverse::<N, NS, MODE_I64>(bins, &re_ref);
+        check_sparse_inverse::<N, NS, MODE_I64_NATIVE>(bins, &re_ref);
+        check_sparse_inverse::<N, NS, I64_KERNEL>(bins, &re_ref);
+    }
+
+    fn check_sparse_inverse<const N: usize, const NS: usize, const K: u8>(
+        bins: &[(usize, ComplexQ23)],
+        re_ref: &[i64; N],
+    ) where
+        Size<N>: FftTables,
+    {
         // Garbage in the buffers on entry: nothing may depend on it.
         let mut re = [0x1357_9bdfi64; N];
         let mut im = [-0x2468_ace0i64; N];
@@ -2525,12 +2592,97 @@ mod tests {
         for &(b, v) in bins {
             sp.put(b, v);
         }
-        sp.run::<NS>();
+        sp.run_kernel::<NS, K>();
         for j in 0..=NS {
-            assert_eq!(re[j], re_ref[j], "n={N} lower output {j}, {} bins", bins.len());
+            assert_eq!(re[j], re_ref[j], "n={N} kernel={K} lower output {j}, {} bins", bins.len());
         }
         for j in N - NS + 1..N {
-            assert_eq!(re[j], re_ref[j], "n={N} upper output {j}, {} bins", bins.len());
+            assert_eq!(re[j], re_ref[j], "n={N} kernel={K} upper output {j}, {} bins", bins.len());
+        }
+    }
+
+    /// The pitch estimator's pruned transform, in both forms of the 64-bit-range kernel,
+    /// against the dense textbook transform with the estimator's twiddles: bins `0..=128`
+    /// must match bit for bit, including near the value limit.
+    #[test]
+    fn pitch_transform_matches_the_dense_reference_in_both_64_bit_kernels() {
+        fn one<const K: u8>(input: &[i64; 64]) {
+            let mut re = [0x5a5a_5a5ai64; FFT_ENC];
+            let mut im = [-0x1234_5678i64; FFT_ENC];
+            pitch_fft_512_kernel::<64, K>(input, &mut re, &mut im);
+            // Dense oracle: the inverse-direction transform with the estimator's table.
+            let mut rr = [0i64; FFT_ENC];
+            let mut ri = [0i64; FFT_ENC];
+            rr[..64].copy_from_slice(input);
+            prefix_general_dense_pitch(&mut rr, &mut ri);
+            for b in 0..PITCH_FFT_NEEDED_BINS {
+                assert_eq!((re[b], im[b]), (rr[b], ri[b]), "kernel={K} bin {b}");
+            }
+        }
+        let mut seed = 31u64;
+        for &bits in &[8u32, 20, 28, 33, 36, 38] {
+            for _ in 0..20 {
+                let mut input = [0i64; 64];
+                for v in input.iter_mut() {
+                    *v = (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
+                }
+                one::<MODE_I64>(&input);
+                one::<MODE_I64_NATIVE>(&input);
+            }
+        }
+        // Constructive peak just under the kernel limit (all inputs equal, same sign).
+        let v = (I64_SUM_LIMIT / 64 - 1) as i64;
+        one::<MODE_I64>(&[v; 64]);
+        one::<MODE_I64_NATIVE>(&[v; 64]);
+        one::<MODE_I64>(&[-v; 64]);
+        one::<MODE_I64_NATIVE>(&[-v; 64]);
+    }
+
+    /// The estimator's transform computed the slow, general way (checked kernel, whole
+    /// transform, no pruning), for the test above.
+    fn prefix_general_dense_pitch(re: &mut [i64; FFT_ENC], im: &mut [i64; FFT_ENC]) {
+        let bitrev = <Rate8k as FftTables>::BITREV;
+        let input: Vec<i64> = re[..64].to_vec();
+        for (k, &v) in input.iter().enumerate() {
+            scatter_prefix::<FFT_ENC>(re, im, bitrev, k, prefix_fill_len(FFT_ENC, 64, k), v);
+        }
+        stages_prefix_loop::<FFT_ENC, false, MODE_CHECKED>(re, im, &PITCH_TW_512, bitrev, 64);
+    }
+
+    /// Every butterfly form of the 64-bit-range kernel (32-bit halves, native products, and
+    /// the range-checked reference) computes the same integers.
+    #[test]
+    fn butterfly_kernels_agree_bit_for_bit() {
+        let mut seed = 5150u64;
+        for &bits in &[8u32, 24, 33, 37, 38] {
+            for _ in 0..2000 {
+                let tw = ((lcg(&mut seed) % (1 << 23)) as i32, -((lcg(&mut seed) % (1 << 23)) as i32));
+                let tw = if lcg(&mut seed) & 1 == 0 { tw } else { (-tw.0, tw.1) };
+                let mut r = || (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
+                let (a0, b0) = ((r(), r()), (r(), r()));
+                for fwd in [false, true] {
+                    let run = |f: fn(&mut i64, &mut i64, &mut i64, &mut i64, (i32, i32))| {
+                        let (mut ar, mut ai, mut br, mut bi) = (a0.0, a0.1, b0.0, b0.1);
+                        f(&mut ar, &mut ai, &mut br, &mut bi, tw);
+                        (ar, ai, br, bi)
+                    };
+                    let (split, native, checked) = if fwd {
+                        (
+                            run(bf::<true, MODE_I64>),
+                            run(bf::<true, MODE_I64_NATIVE>),
+                            run(bf::<true, MODE_CHECKED>),
+                        )
+                    } else {
+                        (
+                            run(bf::<false, MODE_I64>),
+                            run(bf::<false, MODE_I64_NATIVE>),
+                            run(bf::<false, MODE_CHECKED>),
+                        )
+                    };
+                    assert_eq!(split, checked, "split vs checked, bits={bits} fwd={fwd}");
+                    assert_eq!(native, checked, "native vs checked, bits={bits} fwd={fwd}");
+                }
+            }
         }
     }
 
