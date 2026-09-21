@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # hams_shared is a real git submodule (see .gitmodules), and
           # actions/checkout defaults submodules to false -- without this,
