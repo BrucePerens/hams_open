@@ -29,6 +29,7 @@ import-based testing possible at all.
 """
 
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -38,6 +39,7 @@ import install_oca_storage as script
 class ReplaceInFileTests(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp_dir, ignore_errors=True)
         self.path = os.path.join(self.tmp_dir, "sample.py")
 
     def test_applies_all_replacements_in_order(self):
@@ -81,6 +83,7 @@ class ReplaceInFileTests(unittest.TestCase):
 class ReplaceRegexTests(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp_dir, ignore_errors=True)
         self.path = os.path.join(self.tmp_dir, "view.xml")
 
     def test_injects_a_name_field_after_each_matched_record_tag(self):
