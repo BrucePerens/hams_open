@@ -118,7 +118,7 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
 
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let out_dir = std::env::args().nth(2).unwrap_or_else(|| "/tmp".to_string());
+    let out_dir = std::env::args().nth(2).unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
     let wav = std::env::args()
         .nth(3)
         .unwrap_or_else(|| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string());

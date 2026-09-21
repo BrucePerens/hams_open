@@ -25,7 +25,7 @@ fn corr(a: &[f64], b: &[f64]) -> f64 {
 }
 
 fn main() {
-    let dir = std::env::args().nth(1).unwrap_or_else(|| "/tmp".to_string());
+    let dir = std::env::args().nth(1).unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
     let frames: Vec<[u32; 8]> = std::fs::read_to_string(format!("{dir}/ratet27_frames.txt"))
         .unwrap()
         .lines()

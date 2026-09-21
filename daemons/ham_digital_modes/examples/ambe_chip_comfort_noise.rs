@@ -168,5 +168,5 @@ fn main() {
     for (i, fr) in pcm.chunks(160).enumerate().take(frames) {
         println!("frame {i}: {}", fr.iter().take(40).map(|x| x.to_string()).collect::<Vec<_>>().join(" "));
     }
-    std::fs::write("/tmp/comfort_noise.txt", pcm.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
+    std::fs::write(std::env::temp_dir().join("comfort_noise.txt"), pcm.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
 }

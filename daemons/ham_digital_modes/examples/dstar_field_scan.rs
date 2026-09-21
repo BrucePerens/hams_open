@@ -157,7 +157,7 @@ fn ours_steady(frame: u128) -> Vec<f64> {
 
 fn main() {
     let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let out_path = std::env::args().nth(2).unwrap_or_else(|| "/tmp/dstar_field_scan.tsv".to_string());
+    let out_path = std::env::args().nth(2).unwrap_or_else(|| std::env::temp_dir().join("dstar_field_scan.tsv").to_string_lossy().into_owned());
     let b0: u32 = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(44);
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();

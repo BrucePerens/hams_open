@@ -351,7 +351,7 @@ fn main() {
         let (i, c, f) = (sum(&in_psd), sum(&chip_psd), sum(&float_psd));
         println!("{:>4.0}-{:<5.0} {:>8.1} {:>8.1} {:>8.1} {:>+10.1} {:>+10.1}", w[0], w[1], db(i), db(c), db(f), db(c) - db(f), db(c) - db(i));
     }
-    let dir = std::env::var("AMBE_WAV_OUT_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    let dir = std::env::var("AMBE_WAV_OUT_DIR").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
     // One hex-encoded captured channel payload per line, so offline analysis can replay the exact
     // frames without touching the (shared) chip again.
     let hex: String = payloads.iter().map(|p| p.iter().map(|b| format!("{b:02x}")).collect::<String>() + "\n").collect();

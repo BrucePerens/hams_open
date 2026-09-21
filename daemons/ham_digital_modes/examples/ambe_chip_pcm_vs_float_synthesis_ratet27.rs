@@ -378,7 +378,7 @@ fn main() {
         best_frame_lag as f64 * 20.0
     );
 
-    let out_dir = std::env::var("AMBE_RATET27_WAV_OUT_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    let out_dir = std::env::var("AMBE_RATET27_WAV_OUT_DIR").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
     write_wav_mono_i16(&format!("{out_dir}/ratet27_chip_decoded.wav"), &chip_pcm);
     write_wav_mono_i16(&format!("{out_dir}/ratet27_float_decoded.wav"), &float_pcm);
     println!(

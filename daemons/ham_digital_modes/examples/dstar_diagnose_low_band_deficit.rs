@@ -33,12 +33,12 @@ fn psd_low(frames: &[[f64; 160]]) -> (f64, f64) {
 }
 
 fn main() {
-    let hex = std::fs::read_to_string("/tmp/dstar_channel_payloads.hex").expect("run the harness first");
+    let hex = std::fs::read_to_string(std::env::temp_dir().join("dstar_channel_payloads.hex")).expect("run the harness first");
     let payloads: Vec<Vec<u8>> = hex
         .lines()
         .map(|l| (0..l.len() / 2).map(|i| u8::from_str_radix(&l[2 * i..2 * i + 2], 16).unwrap()).collect())
         .collect();
-    let wav = std::fs::read("/tmp/dstar_chip_decoded.wav").expect("chip wav");
+    let wav = std::fs::read(std::env::temp_dir().join("dstar_chip_decoded.wav")).expect("chip wav");
     let chip: Vec<f64> = wav[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).collect();
     let chip_frames: Vec<[f64; 160]> = chip.chunks_exact(160).map(|c| c.try_into().unwrap()).collect();
 
