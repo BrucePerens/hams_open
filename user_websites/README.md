@@ -147,7 +147,7 @@ DO NOT USE user_websites_settings_dropzone. All settings views must now inherit 
 
 * **`GET /api/v1/user_websites/pending_reports`**: Returns a JSON object `{'count': int}` of unhandled violation reports. Restricted to administrators `[@ANCHOR: api_pending_reports]`. Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
 
-* **GDPR Actions:** Privacy dashboard `/my/privacy` `[@ANCHOR: controller_my_privacy_dashboard]`. Data exports `/my/privacy/export` `[@ANCHOR: UX_GDPR_EXPORT]`. Data erasure via background cascading unlinks `/my/privacy/delete_content` `[@ANCHOR: UX_GDPR_ERASURE]`.
+* **GDPR Actions:** Privacy dashboard `/my/privacy` `[@ANCHOR: controller_my_privacy_dashboard]`. Data exports `/my/privacy/export` `[@ANCHOR: UX_GDPR_EXPORT]`. Data erasure via background cascading unlinks `/my/privacy/delete_content` `[@ANCHOR: UX_GDPR_ERASURE]`, then redirects to the public confirmation `/privacy/erased` `[@ANCHOR: user_websites:COMM_privacy_erased]`.
 
 ### 🚨 Privilege Deprecation & Cross-Module Execution (CRITICAL)
 In adherence to the Micro-Service Account Pattern (ADR-0062), the `user_websites` internal service account (`user_websites.user_websites_service_account`) has been stripped of omnipotent ERP privileges. It **can no longer create or delete** core identity records (`res.users`, `res.partner`). Furthermore, it retains only microscopic read-only access (`1,0,0,0`) to framework tables like `discuss.channel`, `res.company`, and `res.partner.bank` strictly to satisfy Odoo's internal ORM cascade requirements (The Framework ACL Tax - ADR-0064).

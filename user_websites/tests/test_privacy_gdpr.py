@@ -7,7 +7,6 @@ from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
 from odoo.exceptions import AccessError
-from urllib.parse import unquote
 from datetime import timedelta
 import json
 
@@ -269,6 +268,39 @@ class TestPrivacyGDPR(HamsHttpCase):
         record = self.env["ham.gdpr.export.token"].with_user(svc_uid).search([("token", "=", token)], limit=1)
         self.assertFalse(record.consumed, "A rejected caller must not consume the token.")
 
+    def test_02b_privacy_erased_public_page(self):
+        """The erasure confirmation is public, static, and reflects nothing."""
+        # [@ANCHOR: user_websites:test_privacy_erased_public_page]
+
+        # Tests [@ANCHOR: user_websites:COMM_privacy_erased]
+        self.authenticate(None, None)
+        plain = self.url_open("/privacy/erased")
+        self.assertEqual(plain.status_code, 200)
+        self.assertIn("Your data has been erased", plain.text)
+        self.assertIn("user_websites_erasure_confirmed", plain.text)
+        probe = self.url_open(
+            "/privacy/erased?login=%s&email=x@example.com&redirect=https://evil.example/"
+            % self.user_privacy.login
+        )
+        self.assertEqual(probe.status_code, 200)
+        # The site-wide layout embeds the current URL (escaped) in the report
+        # form, so compare only this page's own content block.
+        def content_block(html):
+            start = html.index('id="user_websites_erasure_confirmed"')
+            return html[start : html.index("Return to the home page", start)]
+
+        self.assertEqual(
+            content_block(plain.text),
+            content_block(probe.text),
+            "The confirmation content must not depend on any request input.",
+        )
+        for needle in (self.user_privacy.login, self.user_privacy.name, "evil.example"):
+            self.assertNotIn(needle, content_block(probe.text))
+            self.assertNotIn(needle, plain.text)
+        self.assertEqual(
+            self.url_open("/privacy/erased", allow_redirects=False).status_code, 200
+        )
+
     def test_02_right_to_erasure(self):
         """Verify the user can permanently hard-delete their authored content and opt-out of directories."""
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
@@ -296,18 +328,13 @@ class TestPrivacyGDPR(HamsHttpCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        # Erasure now also deactivates the account (ham_onboarding's
-        # _execute_gdpr_erasure, folded into this same call chain), so the
-        # session is invalid by the time the browser follows the controller's
-        # redirect to /my/home?erased=1 -- it bounces once more to the login
-        # page with that original URL percent-encoded in ?redirect=. Decode
-        # before checking, rather than a literal "erased=1" substring match.
-        self.assertIn(
-            "erased=1",
-            unquote(response.url),
-            "Must safely redirect upon deletion (directly, or via a login "
-            "bounce if the erasure also deactivated the session).",
+        # The account is deactivated by the erasure, so the redirect must land
+        # on the public confirmation page, not bounce to the login form.
+        self.assertTrue(
+            response.url.endswith("/privacy/erased"),
+            "Erasure must redirect to the public confirmation page.",
         )
+        self.assertIn("Your data has been erased", response.text)
         self.user_privacy.invalidate_recordset(["active"])
         self.assertFalse(
             self.user_privacy.active,

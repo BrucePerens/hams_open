@@ -195,6 +195,27 @@
         </t>
     </template>
 
+    <template id="privacy_erased" name="Privacy: Content Erased">
+        <!-- Tested by [@ANCHOR: user_websites:test_privacy_erased_public_page] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure">
+                <div class="container mt-5 mb-5">
+                    <div class="row">
+                        <div class="col-12 col-lg-8 mx-auto">
+                            <div id="user_websites_erasure_confirmed" class="alert alert-success" role="alert">
+                                <h2 class="fw-bold">Your data has been erased</h2>
+                                <p>We have permanently erased your personal website pages and blog posts from our servers, removed you from the public community directory, deactivated your account, and anonymized your remaining identifying information.</p>
+                            </div>
+                            <p>This is permanent and cannot be undone. Amateur radio contacts and other on-air activity records are not deleted, because they were already public over the air; only your ownership of them was anonymized.</p>
+                            <p>If you have questions about this erasure, please <a href="/contactus">contact us</a> and mention that your request concerns privacy (GDPR).</p>
+                            <a href="/" class="btn btn-primary">Return to the home page</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
     <template id="template_default_home" name="User Website Home Master Layout">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">

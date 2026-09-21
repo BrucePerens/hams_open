@@ -527,7 +527,20 @@ class UserWebsitesController(http.Controller):
     def privacy_delete_content(self, **kwargs):
         user = request.env.user
         user._execute_gdpr_erasure()
-        return request.redirect("/my/home?erased=1")
+        # The account is deactivated by now, so any auth="user" landing page
+        # would bounce to the login form and the person would never see that
+        # the erasure happened. Land on the public, static confirmation page.
+        return request.redirect("/privacy/erased")
+
+    @http.route("/privacy/erased", type="http", auth="public", website=True)
+    # [@ANCHOR: user_websites:COMM_privacy_erased]
+    def privacy_erased(self, **kwargs):
+        # # Tested by [@ANCHOR: user_websites:test_privacy_erased_public_page]
+        # Public on purpose: the erased account's session is gone. The page is
+        # identical for everyone and takes no input (query string ignored,
+        # nothing reflected, no redirect target), so it cannot be used to
+        # probe whether an account ever existed.
+        return request.render("user_websites.privacy_erased", {})
 
     @http.route(
         "/website/submit_appeal",

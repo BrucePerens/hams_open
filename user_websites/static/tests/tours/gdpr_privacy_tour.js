@@ -10,6 +10,8 @@ import { TourUtils } from "@zero_sudo/js/tour_utils";
 // Tests [@ANCHOR: UX_GDPR_EXPORT]
 
 // Tests [@ANCHOR: UX_GDPR_ERASURE]
+
+// Tests [@ANCHOR: user_websites:COMM_privacy_erased]
 registry.category("web_tour.tours").add("gdpr_privacy_tour", {
     steps: () => [
         { trigger: 'h2', content: 'Wait for: Wait for Privacy Header', run: function() {} },
@@ -31,6 +33,28 @@ registry.category("web_tour.tours").add("gdpr_privacy_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
-        { trigger: 'body', content: 'Wait for page reload to hydrate DOM', run: function() {} }
+        {
+            content: "Wait for the public erasure confirmation page (lazy JS loaded) and the document load event",
+            trigger: 'body:not(.o_lazy_js_waiting) #user_websites_erasure_confirmed',
+            run: async () => {
+                if (document.readyState !== "complete") {
+                    await new Promise((resolve) =>
+                        window.addEventListener("load", resolve, { once: true })
+                    );
+                }
+            },
+        },
+        {
+            content: "Confirmation states the erasure is permanent and is not the login page",
+            trigger: '#user_websites_erasure_confirmed',
+            run: function () {
+                if (!document.querySelector("#user_websites_erasure_confirmed").textContent.includes("permanently erased")) {
+                    throw new Error("Erasure confirmation text is missing");
+                }
+                if (document.querySelector("form.oe_login_form")) {
+                    throw new Error("Landed on the login page instead of the confirmation");
+                }
+            },
+        },
     ],
 });
