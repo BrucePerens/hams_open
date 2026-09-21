@@ -3,38 +3,19 @@
 
 # -*- coding: utf-8 -*-
 import asyncio
+import importlib
 import json
-import unittest
 from unittest.mock import MagicMock
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
-# Utilize implicit namespace packages, same convention
-# test_generalized_monitor.py already established -- but wrapped in a
-# try/except, unlike that file: a real, pre-existing environment bug was
-# found while building this (three overlapping mcp-1.28.0/1.28.1/2.0.0
-# dist-info directories under /usr/local/lib/python3.13/dist-packages,
-# leaving mcp.server.fastmcp.tools.tool_manager unable to import
-# LifespanContextT from mcp.shared.context -- a real ImportError under the
-# odoo user's own Python, confirmed NOT present under a plain user-local
-# install of the same nominal version). Recorded, not fixed, in
-# night_shift_todo.md -- the version choice is Bruce's own call, not
-# something to force-reinstall around. A bare top-level import here would
-# take pager_duty's ENTIRE test suite down with it (a single broken
-# optional dependency crashing Odoo's own test collection for every other,
-# unrelated test in this module) until that's resolved -- skipUnless below
-# means TestPagerMcpServerModule below skips cleanly instead, and starts
-# passing on its own the moment the environment is fixed, no test change
-# needed.
-try:  # burn-ignore-skiptest-soft-dependency: environment-specific mcp package conflict, see comment above
-    import odoo.addons.pager_duty.daemon.pager_mcp_server as pager_mcp_server
-
-    _MCP_IMPORT_ERROR = None
-except ImportError as _e:  # audit-ignore-catch-all
-    pager_mcp_server = None
-    _MCP_IMPORT_ERROR = _e
+# Set by TestPagerMcpServerModule.setUpClass. The adapter is imported when its tests start, not at
+# module level: a module-level import that fails (a broken `mcp` package) would abort loading of
+# every test in the database, whereas here it errors loudly, only in the tests that need it. There
+# is no try/except and no skip: a missing or broken dependency fails those tests.
+pager_mcp_server = None
 
 
 @tagged("post_install", "-at_install")
@@ -133,16 +114,18 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
 
 
 @tagged("post_install", "-at_install")
-@unittest.skipIf(
-    pager_mcp_server is None,
-    f"mcp package not importable in this environment (see this file's own top-of-file note): {_MCP_IMPORT_ERROR}",
-)
 class TestPagerMcpServerModule(HamsTransactionCase):
     """The thin RPC-adapter layer in daemon/pager_mcp_server.py -- mocks
     OdooClient.execute() (real ORM/ACL coverage lives in
     TestPagerMcpTriageModelMethods above), confirming each tool calls the
     right model method with the right arguments, and that
     set_incident_status is genuinely not exposed as a tool."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        global pager_mcp_server
+        pager_mcp_server = importlib.import_module("odoo.addons.pager_duty.daemon.pager_mcp_server")
 
     def test_05_exactly_the_three_non_destructive_tools_are_registered(self):
         # Tests [@ANCHOR: pager_mcp_triage_tools]

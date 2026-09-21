@@ -11,7 +11,7 @@ The entry addresses of the harness's out-of-line `do_encode` / `do_decode` wrapp
 import re
 import subprocess
 import sys
-from unicorn import Uc, UC_ARCH_RISCV, UC_MODE_RISCV32, UC_HOOK_CODE, UC_HOOK_MEM_WRITE, UC_PROT_ALL
+from unicorn import UcError, Uc, UC_ARCH_RISCV, UC_MODE_RISCV32, UC_HOOK_CODE, UC_HOOK_MEM_WRITE, UC_PROT_ALL
 from unicorn.riscv_const import UC_RISCV_REG_PC
 
 BASE = 0x80000000
@@ -101,7 +101,7 @@ uc.hook_add(UC_HOOK_CODE, hook)
 uc.hook_add(UC_HOOK_MEM_WRITE, memw)
 try:
     uc.emu_start(BASE, BASE + 0x1000000, timeout=0, count=0)
-except Exception as e:
+except UcError as e:
     print("emulation ended:", e)
 for ph in ("enc", "dec"):
     c = counts[ph]

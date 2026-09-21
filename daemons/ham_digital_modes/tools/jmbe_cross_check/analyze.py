@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """analyze.py <outdir>: JMBE vs our decoders. Envelope corr, band levels, error-concealment stats."""
-import sys, numpy as np, scipy.signal as ss, warnings
+import os, sys, numpy as np, scipy.signal as ss, warnings
 warnings.filterwarnings("ignore")
 D = sys.argv[1]
 rd = lambda p: np.fromfile(p, dtype='<i2').astype(float)
@@ -26,8 +26,7 @@ for m in ("imbe","a2"):
     print(f"=== {m} ===")
     ours=rd(f"{D}/{m}.ours.clean.raw"); j=rd(f"{D}/{m}.jmbe.clean.raw")
     if m=="a2":
-        try: j=rd(f"{D}/a2.jmbe.clean.raw")
-        except Exception: pass
+        if os.path.exists(f"{D}/a2.jmbe.clean.raw"): j=rd(f"{D}/a2.jmbe.clean.raw")
     n=min(len(ours),len(j)); ours,j=ours[:n],j[:n]
     c20=np.corrcoef(env(ours),env(j))[0,1]; c10,lag=best_corr(ours,j)
     print(f"clean: env corr (20ms, lag0)={c20:.4f}; 10ms-hop best={c10:.4f} at lag {lag}; RMS ours={np.sqrt((ours**2).mean()):.0f} jmbe={np.sqrt((j**2).mean()):.0f} ({20*np.log10(np.sqrt((ours**2).mean())/np.sqrt((j**2).mean())):+.2f} dB)")
