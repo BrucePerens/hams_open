@@ -171,24 +171,63 @@ def _install_postgres_procedures(env):
 
 
 def _claim_info_alias(env):
-    """Claim the "info" mail alias for pager.incident, but only if nothing
-    else already has. Same collision this codebase already worked around
-    for hams_helpdesk: stock Odoo's own crm module ships a built-in
-    (non-demo) "info" alias on its default Sales Team
-    (crm/data/crm_team_data.xml), and mail.alias.alias_name is globally
-    unique, so a plain data/mail_alias_data.xml <record> for "info" would
-    hard-crash this module's own install the instant crm is present.
-    info@hams.com now routes to pager_duty (not hams_helpdesk.ticket) per
-    Bruce's own direction -- hams_helpdesk no longer claims it.
+    """Claim the "info" mail alias for pager.incident. Same collision this
+    codebase already worked around for hams_helpdesk: stock Odoo's own crm
+    module ships a built-in (non-demo) "info" alias on its default Sales
+    Team (crm/data/crm_team_data.xml), and mail.alias.alias_name is
+    globally unique, so a plain data/mail_alias_data.xml <record> for
+    "info" would hard-crash this module's own install the instant crm is
+    present. info@hams.com routes to pager_duty (not hams_helpdesk.ticket
+    or crm's default Sales Team) per Bruce's own direction -- hams_helpdesk
+    no longer claims it.
+
+    Real bug found live on hams1, 2026-09-22: crm was installed before
+    this hook ever ran (post_init_hook only fires on a fresh module
+    install, so an already-installed pager_duty never got a second
+    chance), so crm's own team_sales_department claimed "info" first and
+    this function's original "skip if anything already has it" logic
+    silently left info@hams.com routing to crm.lead instead of
+    pager.incident -- exactly the documented risk, now real, and it broke
+    the SES inbound-mail daemon outright: crm.lead's own message_new()
+    path reads crm.pls_fields (a core system parameter), which the
+    daemon's narrowly-scoped mail_ingest_service_internal account is
+    correctly forbidden from reading, so every info@ email crashed
+    ingestion instead of creating a lead. Specifically detects and
+    reclaims exactly this one collision (crm's default Sales Team, not
+    just "whoever has it") rather than unconditionally stealing the
+    alias from an unrelated customization.
     """
     # [@ANCHOR: pager_duty_info_alias_claim]
-    if env["mail.alias"].search_count([("alias_name", "=", "info")]):
-        _logger.warning(
-            "pager_duty: the 'info' mail alias already belongs to another "
-            "record (e.g. crm's default Sales Team); info@hams.com will NOT "
-            "route to pager.incident."
-        )
-        return
+    existing = env["mail.alias"].search([("alias_name", "=", "info")], limit=1)
+    if existing:
+        sales_team = env.ref("sales_team.team_sales_department", raise_if_not_found=False)
+        crm_team_model = env.ref("crm.model_crm_team", raise_if_not_found=False)
+        if (
+            sales_team
+            and crm_team_model
+            and existing.alias_parent_model_id == crm_team_model
+            and existing.alias_parent_thread_id == sales_team.id
+        ):
+            _logger.warning(
+                "pager_duty: reclaiming the 'info' mail alias from crm's "
+                "default Sales Team (id %s) for pager.incident, per Bruce's "
+                "own direction that info@hams.com routes here.",
+                sales_team.id,
+            )
+            # Release it through crm.team's own field first -- this is the
+            # same code path Odoo itself uses to manage this alias, so it
+            # correctly clears alias_parent_model_id/alias_parent_thread_id
+            # too, not just alias_name.
+            sales_team.write({"alias_name": False})
+        else:
+            _logger.warning(
+                "pager_duty: the 'info' mail alias already belongs to another "
+                "record (parent model id %s, thread id %s); info@hams.com "
+                "will NOT route to pager.incident.",
+                existing.alias_parent_model_id.id if existing.alias_parent_model_id else None,
+                existing.alias_parent_thread_id,
+            )
+            return
     env["mail.alias"].create(
         {
             "alias_name": "info",

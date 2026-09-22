@@ -78,6 +78,9 @@ class TestPagerDutyHooks(HamsTransactionCase):
         # data file would hard-crash this module's entire install the moment
         # crm is present. This reproduces that collision directly against
         # the hook that guards against it, without needing crm installed.
+        # An UNRELATED owner (not crm's own default Sales Team specifically)
+        # must still be left alone -- only that one, documented, Bruce-decided
+        # collision gets reclaimed (see the next test).
         self.env["mail.alias"].search([("alias_name", "=", "info")]).unlink()
         other_model = self.env.ref("base.model_res_partner")
         self.env["mail.alias"].create(
@@ -87,3 +90,43 @@ class TestPagerDutyHooks(HamsTransactionCase):
         aliases = self.env["mail.alias"].search([("alias_name", "=", "info")])
         self.assertEqual(len(aliases), 1)
         self.assertEqual(aliases.alias_model_id, other_model)
+
+    def test_reclaims_info_alias_from_crms_default_sales_team(self):
+        # Tests [@ANCHOR: pager_duty_info_alias_claim]
+        # Real bug found live on hams1, 2026-09-22: crm was installed before
+        # this hook ever got a chance to run (post_init_hook only fires on a
+        # fresh module install), so crm's own default Sales Team claimed
+        # "info" first and the old "skip if anything already has it" logic
+        # left info@hams.com silently routing to crm.lead -- which broke
+        # the SES inbound-mail daemon outright (crm.lead's own message_new()
+        # reads a core system parameter the daemon's service account is
+        # correctly forbidden from reading). Needs crm actually installed to
+        # exercise the real collision this hook now specifically detects.
+        sales_team = self.env.ref("sales_team.team_sales_department", raise_if_not_found=False)
+        if not sales_team:
+            self.skipTest(  # burn-ignore-skiptest-soft-dependency: real optional-module gate -- crm is not a pager_duty dependency (auto_install: False), and this test exercises the specific collision that only exists when it's installed, matching _claim_info_alias()'s own graceful degradation when it isn't.
+                "crm is not installed in this test database"
+            )
+        self.env["mail.alias"].search([("alias_name", "=", "info")]).unlink()
+        sales_team.write({"alias_name": "info"})
+        self.assertEqual(
+            self.env["mail.alias"].search([("alias_name", "=", "info")]).alias_model_id,
+            self.env.ref("crm.model_crm_team"),
+            "the test setup itself must reproduce crm's real claim before reclaiming it",
+        )
+
+        _claim_info_alias(self.env)
+
+        alias = self.env["mail.alias"].search([("alias_name", "=", "info")])
+        self.assertEqual(len(alias), 1)
+        self.assertEqual(
+            alias.alias_model_id,
+            self.env.ref("pager_duty.model_pager_incident"),
+            "info@hams.com must route to pager.incident, not stay with crm's "
+            "default Sales Team",
+        )
+        self.assertFalse(
+            sales_team.alias_name,
+            "reclaiming must release crm's own alias_name field too, not just "
+            "overwrite the shared mail.alias row underneath it",
+        )
