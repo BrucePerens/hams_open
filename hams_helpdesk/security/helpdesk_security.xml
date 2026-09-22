@@ -53,5 +53,23 @@
             <field name="active" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager')])]"/>
         </record>
+
+        <!-- AI Ticket Triage Service Account, 2026-09-22: a dedicated, single-purpose account for
+        the AI-context MCP server that reads new tickets and posts an internal (admin-only, mail.mt_note)
+        note with its analysis -- not user_helpdesk_service, matching this codebase's own convention of
+        one narrow service account per feature (see docs/proposals/GENERALIZED_AI_CONTEXT_MCP_SERVER.md).
+        group_helpdesk_manager because reading every new ticket regardless of assignment needs the
+        manager-scope ir.rule (rule_helpdesk_ticket_manager), not the user-scope one (which only sees
+        tickets assigned to self or unassigned). -->
+        <record id="user_ai_triage_service" model="res.users">
+            <field name="name">AI Ticket Triage Service Account</field>
+            <field name="login">ai_triage_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager')])]"/>
+        </record>
     </data>
 </odoo>
