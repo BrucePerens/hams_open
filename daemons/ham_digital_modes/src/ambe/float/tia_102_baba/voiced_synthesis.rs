@@ -100,6 +100,13 @@ pub struct VoicedState {
     l_hat_prev: u32,
     voiced_prev: [bool; MAX_HARMONICS],
     amplitudes_prev: [f64; MAX_HARMONICS],
+    /// Shape of Eq. 135's `a_l(n)` amplitude interpolation, as a function of `t = n/N` in `[0,1]`
+    /// (`shape(0) = 0`, `shape(1) = 1` is the caller's responsibility -- not enforced here since
+    /// enforcing it would cost a per-sample check for no real benefit). Identity (`|t| t`) for the
+    /// standard, matching Eq. 135 exactly; D-STAR and AMBE+2 may set a different shape via
+    /// [`Self::set_amplitude_interpolation_shape`] -- see `super::super::mbe_synthesis`'s own doc
+    /// comment for why (measured against the chip, not a TIA-102.BABA change).
+    amplitude_interp_shape: fn(f64) -> f64,
 }
 
 impl VoicedState {
@@ -111,7 +118,16 @@ impl VoicedState {
             l_hat_prev: 30,
             voiced_prev: [false; MAX_HARMONICS],
             amplitudes_prev: [0.0; MAX_HARMONICS],
+            amplitude_interp_shape: |t| t,
         }
+    }
+
+    /// Overrides Eq. 135's linear amplitude interpolation with a different shape of `t = n/N`.
+    /// Never called by [`super::synthesis::SynthesisState::new`] itself (which leaves the spec's
+    /// own linear identity in place) -- only by a caller that wants a mode-specific departure from
+    /// the standard, exactly like [`super::synthesis::SynthesisState::set_unvoiced_gain`].
+    pub fn set_amplitude_interpolation_shape(&mut self, shape: fn(f64) -> f64) {
+        self.amplitude_interp_shape = shape;
     }
 
     /// Synthesizes the current frame's own voiced speech component `s_v(n)` (Eq. 127-141), advancing
@@ -220,7 +236,10 @@ impl VoicedState {
                             // Eq. 134-135: continuous-phase interpolation (delta_omega_l hoisted
                             // above the sample loop -- it's a per-harmonic constant, see this
                             // function's own doc comment).
-                            let a_l_n = was_amp + (n / N as f64) * (is_amp - was_amp); // Eq. 135.
+                            // Eq. 135, with `t = n/N` passed through `amplitude_interp_shape`
+                            // (identity for the standard; see that field's own doc comment).
+                            let t = (self.amplitude_interp_shape)(n / N as f64);
+                            let a_l_n = was_amp + t * (is_amp - was_amp);
                             let theta_l_n = theta(
                                 n,
                                 phi_prev[idx],

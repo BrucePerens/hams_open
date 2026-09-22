@@ -78,6 +78,12 @@ impl SynthesisState {
         self.unvoiced_gain = gain;
     }
 
+    /// Pass-through to [`VoicedState::set_amplitude_interpolation_shape`] -- see that method's own
+    /// doc comment. Not called for the standard's own default construction.
+    pub fn set_voiced_amplitude_interpolation_shape(&mut self, shape: fn(f64) -> f64) {
+        self.voiced.set_amplitude_interpolation_shape(shape);
+    }
+
     /// Section 7.8 (Frame Muting), transcribed from a 600 DPI render of page 63: "set the
     /// synthetic speech signal, s~(n), to random noise which is uniformly distributed over the
     /// interval [-5, 5]" -- a real, literal spec requirement, not a design choice like
