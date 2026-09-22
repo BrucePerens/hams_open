@@ -170,15 +170,24 @@ func StartTunnel(tunnelKey *C.char, token *C.char, binPath *C.char) {
 	// odoo.service's own ReadWritePaths) rather than /tmp, since PrivateTmp=
 	// on that unit makes /tmp private per-service-restart and hard for an
 	// operator to find.
+	// Bug fix (2026-09-22): this used to log the OpenFile error and fall
+	// through to cmd.Start() anyway with Stdout/Stderr left nil -- Go's
+	// exec.Cmd treats a nil Stdout/Stderr as "discard to /dev/null", not
+	// "inherit the parent's", so this never actually reintroduced the
+	// journald-socket crash above -- but it DID mean a broken log path
+	// silently started an undiagnosable tunnel (no way to see why it's
+	// unhealthy) instead of failing loudly, the same class of mistake this
+	// whole file's history is now about. Fail the start instead.
 	logPath := fmt.Sprintf("/var/log/odoo/cloudflared-%s.log", key)
 	logFile, logErr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if logErr != nil {
-		log.Printf("StartTunnel(%s): could not open %s for the subprocess's output: %v", key, logPath, logErr)
-	} else {
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
-		defer logFile.Close()
+		tunnelMu.Unlock()
+		log.Printf("StartTunnel(%s): refusing to start -- could not open %s for the subprocess's output: %v", key, logPath, logErr)
+		return
 	}
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	defer logFile.Close()
 	if err := cmd.Start(); err != nil {
 		tunnelMu.Unlock()
 		log.Printf("StartTunnel(%s): failed to start cloudflared binary %s: %v", key, bin, err)
