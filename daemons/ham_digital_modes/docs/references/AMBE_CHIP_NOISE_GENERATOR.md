@@ -72,8 +72,29 @@ The chip's noise source is `s[n+1] = (173 s[n] + 13849) mod 65536`, one step per
   finds `a = 173, c = 13849` with a circular correlation of 0.866 against the table (next best offset 0.16; chance about 0.012).
   Table index 0 corresponds to cycle state 33,635.
 * The remaining structure is a shaping filter: an 81-tap filter fitted on the aligned state reaches correlation 0.993 (residual
-  0.35 against rounding noise 0.29); its main tap is at -2 and 81% of its energy is within 3 taps of it. It was fitted on the same table, not
-  validated on a separate capture, and its dependence on frame parameters is not known.
+  0.35 against rounding noise 0.29); its main tap is dominant and most of its energy is within a few taps of it. Its dependence
+  on frame parameters is still not known.
+
+## Shaping filter validated (2026-09-22): not overfit, held-out correlation matches in-sample
+
+The filter above was originally fitted and evaluated on the same 65,536-sample table, with no independent check. Two things
+were done to close that gap (`tools/chip_noise/fit_and_validate_shaping_filter.py`, `fir_coef_81tap.json`):
+
+* **Confirmed a fresh capture is not independent data.** The muted/comfort-noise path is a deterministic, full-period
+  16-bit generator: a brand-new 900-frame capture (`examples/ambe_chip_noise_table_capture.rs`) matched `table_65536.i16`
+  at correlation 0.9999999 once phase-aligned (the chip's own repeats still differ by about 5% of samples run to run,
+  matching the original finding). So "capture it again" cannot serve as an overfitting check -- there is only one table to
+  discover, at any phase.
+* **A genuine check instead needs a held-out split within that one table.** Fit the 81-tap filter on the even-indexed
+  samples only, then evaluate it on the odd-indexed samples it never saw: train correlation 0.99299, held-out correlation
+  0.99297, a gap of only 0.00002. **The filter is not meaningfully overfit** -- an 81-tap linear filter genuinely explains
+  the chip's muted-noise output at held-out positions almost as well as at the positions it was fit on, not just the
+  positions it was allowed to memorize.
+
+The fitted coefficients are saved in `fir_coef_81tap.json` (indexed by lag, with the LCG seed/alignment convention needed
+to reproduce them) so a future session doesn't have to re-derive `resid64.npy` (not kept from the original investigation)
+from scratch. Its dependence on frame parameters (gain/pitch/spectral shape) is still not known -- this validation only
+covers the muted/comfort-noise path the filter was identified from.
 
 To reproduce sample-exact unvoiced output the synthesis window and this filter would still have to be reverse engineered; that is not
 planned, because the effect is inaudible phase. Our decoders keep the standard's generator (`u(n+1) = (171 u + 11213) mod 53125`).
