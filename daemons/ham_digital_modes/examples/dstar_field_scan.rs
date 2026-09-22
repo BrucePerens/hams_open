@@ -547,6 +547,77 @@ fn main() {
         println!("ours: {}", eo.iter().map(|v| format!("{:.2}", v / so)).collect::<Vec<_>>().join(" "));
         return;
     }
+    if std::env::args().nth(4).as_deref() == Some("xfade_fine") {
+        // Sample-accurate crossfade shape: same gain step as "xfade", but the envelope is a
+        // moving-average of |sample| with a ~1-pitch-period window (40 samples at the default b0=44,
+        // period ~37.2) and hop 1, instead of the coarser 74-sample/hop-10 short-time RMS above. The
+        // wider window there smooths the true transition shape into an apparent S-curve regardless of
+        // whether the underlying transition is sharp or gradual; this is meant to separate "genuinely
+        // gradual" from "sharp step smoothed by the analysis window."
+        let row: u32 = std::env::args().nth(5).and_then(|s| s.parse().ok()).unwrap_or(40);
+        let env_win: usize = std::env::args().nth(6).and_then(|s| s.parse().ok()).unwrap_or(40);
+        let mut alt = base();
+        alt.b2 = row;
+        let (fb, fa) = (build_frame(pack_raw_parameters(&base())), build_frame(pack_raw_parameters(&alt)));
+        let mut seq = vec![fb; 10];
+        seq.extend(vec![fa; 4]);
+        seq.extend(vec![fb; 3]);
+        let one = |sock: &UdpSocket, buf: &mut [u8; 1024], frame: u128| -> Vec<f64> {
+            let mut payload = vec![0x01u8, 72];
+            payload.extend_from_slice(&frame_to_wire_bytes(frame));
+            loop {
+                let n = send_recv_retrying(sock, buf, &build_channel(&payload));
+                if let Some((TYPE_SPEECH, p)) = parse_packet(&buf[..n]) {
+                    return parse_speech_payload(p).iter().map(|&s| s as f64).collect();
+                }
+            }
+        };
+        let chip: Vec<f64> = seq.iter().flat_map(|&f| one(&sock, &mut buf, f)).collect();
+        let mut dec = DStarSynthesisDecoder::new();
+        let ours: Vec<f64> = seq.iter().flat_map(|&f| dec.decode_frame(f).unwrap_or([0.0; 160]).to_vec()).collect();
+        // Envelope: mean |sample| over a sliding window, hop 1, reported for t in 1550..1750 (the
+        // step is at sample 1600). Settled levels from well before/after the step, same env metric.
+        let env_at = |x: &[f64], t: usize| -> f64 { x[t..t + env_win].iter().map(|v| v.abs()).sum::<f64>() / env_win as f64 };
+        let range: Vec<usize> = (1550..1750).collect();
+        let (ec, eo): (Vec<f64>, Vec<f64>) = (
+            range.iter().map(|&t| env_at(&chip, t)).collect(),
+            range.iter().map(|&t| env_at(&ours, t)).collect(),
+        );
+        let before_c = env_at(&chip, 1200);
+        let after_c = (1900..2100).map(|t| env_at(&chip, t)).sum::<f64>() / 200.0;
+        let before_o = env_at(&ours, 1200);
+        let after_o = (1900..2100).map(|t| env_at(&ours, t)).sum::<f64>() / 200.0;
+        // Interpolated sample position where the normalized envelope first crosses 0.5, and the
+        // 10%-90% rise span (a shape metric independent of where the crossing sits).
+        let crossing = |env: &[f64], before: f64, after: f64, frac: f64| -> Option<f64> {
+            let target = before + frac * (after - before);
+            let rising = after > before;
+            for (i, w) in env.windows(2).enumerate() {
+                let (a, b) = (w[0], w[1]);
+                if (rising && a <= target && b >= target) || (!rising && a >= target && b <= target) {
+                    if (b - a).abs() < 1e-12 {
+                        continue;
+                    }
+                    return Some(i as f64 + (target - a) / (b - a));
+                }
+            }
+            None
+        };
+        let report = |name: &str, env: &[f64], before: f64, after: f64| {
+            let c50 = crossing(env, before, after, 0.5).map(|frac_idx| range[0] as f64 + frac_idx);
+            let c10 = crossing(env, before, after, 0.1).map(|frac_idx| range[0] as f64 + frac_idx);
+            let c90 = crossing(env, before, after, 0.9).map(|frac_idx| range[0] as f64 + frac_idx);
+            println!(
+                "{name}: before={before:.0} after={after:.0} 10%@{c10:?} 50%@{c50:?} 90%@{c90:?} rise(10-90)={:?}",
+                c10.zip(c90).map(|(a, b)| b - a)
+            );
+        };
+        report("chip", &ec, before_c, after_c);
+        report("ours", &eo, before_o, after_o);
+        println!("chip env: {}", ec.iter().map(|v| format!("{v:.0}")).collect::<Vec<_>>().join(" "));
+        println!("ours env: {}", eo.iter().map(|v| format!("{v:.0}")).collect::<Vec<_>>().join(" "));
+        return;
+    }
     if std::env::args().nth(4).as_deref() == Some("ljump") {
         // Pitch (harmonic count) jump: settle on the flat base, switch b0 to a very different value for 8 frames, then
         // back. Frame RMS (dB) of chip and ours, to find how the chip's predictor handles a change of L.
