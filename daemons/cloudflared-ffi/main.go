@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -152,7 +153,48 @@ func StartTunnel(tunnelKey *C.char, token *C.char, binPath *C.char) {
 		log.Printf("StartTunnel(%s): already running in this process, refusing to start a second one", key)
 		return
 	}
+
+	// Bug fix (2026-09-22), confirmed live on hams1: Odoo's cron scheduler does
+	// not pin a recurring job to one dedicated worker process -- "Ensure Tunnel
+	// Daemon Running" landed on a DIFFERENT worker on every single 5-minute
+	// tick (7 different PIDs across 7 ticks, observed directly in the log).
+	// tunnelMu and tunnelCmds above are process-local globals, so every one of
+	// those workers has its OWN empty map and sees "not running" -- each one
+	// started a real, independent cloudflared subprocess for the SAME tunnel,
+	// accumulating one more connector every five minutes forever. This was
+	// already a documented gap (cloudflare_daemon.py's own comment: "it does
+	// NOT close the equivalent race ACROSS Odoo worker PROCESSES ... closing
+	// that would need a cross-process primitive (a DB row, a file lock, a PID
+	// file)") but harmless while StartTunnel was a no-op stub; it stopped being
+	// harmless the moment StartTunnel started actually connecting. A kernel
+	// flock() is that cross-process primitive: exclusive and non-blocking, so
+	// a second worker's attempt fails fast instead of piling up. It must be
+	// held by the SUBPROCESS's lifetime, not this function's -- if it were
+	// only held by this (Python-worker-hosted) process's own fd, the lock
+	// would release the moment THIS Odoo worker exits or gets recycled even
+	// though the cloudflared child it started keeps running orphaned, letting
+	// the very next cron tick "helpfully" start a duplicate. Passed via
+	// cmd.ExtraFiles (Go's exec.Cmd defaults every fd it opens itself to
+	// close-on-exec) so the child inherits its own copy of the same open file
+	// description the flock is held against; the lock is then only released
+	// once BOTH copies close, i.e. once the real tunnel process has actually
+	// exited.
+	lockPath := fmt.Sprintf("/var/log/odoo/cloudflared-%s.lock", key)
+	lockFile, lockErr := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	if lockErr != nil {
+		tunnelMu.Unlock()
+		log.Printf("StartTunnel(%s): refusing to start -- could not open lock file %s: %v", key, lockPath, lockErr)
+		return
+	}
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lockFile.Close()
+		tunnelMu.Unlock()
+		log.Printf("StartTunnel(%s): another process already holds a live tunnel for this key, not starting a second one", key)
+		return
+	}
+
 	cmd := exec.Command(bin, "tunnel", "--no-autoupdate", "run", "--token", tokenStr) // burn-ignore-cloudflared-ingress
+	cmd.ExtraFiles = []*os.File{lockFile}
 	// Bug fix (2026-09-22), confirmed live on hams1: this used to be
 	// `cmd.Stdout = os.Stdout; cmd.Stderr = os.Stderr`. When this library is
 	// loaded into odoo.service (a systemd unit), the PARENT process's fd 1/2
@@ -181,6 +223,7 @@ func StartTunnel(tunnelKey *C.char, token *C.char, binPath *C.char) {
 	logPath := fmt.Sprintf("/var/log/odoo/cloudflared-%s.log", key)
 	logFile, logErr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if logErr != nil {
+		lockFile.Close() // releases the flock -- no subprocess was started to hold it
 		tunnelMu.Unlock()
 		log.Printf("StartTunnel(%s): refusing to start -- could not open %s for the subprocess's output: %v", key, logPath, logErr)
 		return
@@ -188,7 +231,14 @@ func StartTunnel(tunnelKey *C.char, token *C.char, binPath *C.char) {
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	defer logFile.Close()
+	// lockFile is deliberately NOT deferred alongside logFile: it must stay open
+	// (and the flock held) even if THIS function's own goroutine/process exits
+	// before cmd.Wait() returns, since the child's own inherited copy (via
+	// ExtraFiles above) is what keeps the lock alive for as long as the real
+	// tunnel process runs. Closed explicitly below, only once cmd.Wait() has
+	// actually returned.
 	if err := cmd.Start(); err != nil {
+		lockFile.Close() // cmd.Start() failed -- no child exists to hold its own copy
 		tunnelMu.Unlock()
 		log.Printf("StartTunnel(%s): failed to start cloudflared binary %s: %v", key, bin, err)
 		return
@@ -201,6 +251,7 @@ func StartTunnel(tunnelKey *C.char, token *C.char, binPath *C.char) {
 	// a return from this function as "the tunnel exited, pause a second and
 	// restart it" -- so this must not return until the real tunnel process does.
 	_ = cmd.Wait()
+	lockFile.Close()
 
 	tunnelMu.Lock()
 	delete(tunnelCmds, key)
