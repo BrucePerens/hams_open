@@ -15,6 +15,14 @@ use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
 /// The 12-bit level field a chip encoder writes for a tone of per-tone amplitude `amplitude` (measured 1 kHz sine
 /// captures: amplitude 250/500/1000/2000/4000/8000/16000 -> 0x715/0x725/0xea2/0xed2/0xf12/0xf62/0xfa2). The chip's own
 /// decoder ignores this field, so the mapping is by interpolation in log2(amplitude) over those points.
+///
+/// Re-confirmed live against the chip 2026-09-22 (`examples/ambe_tone_level_probe`, level field
+/// swept 0-4095 for a single tone, DTMF and a call-progress tone): decode RMS stays flat to well
+/// under 1 dB across the whole sweep, versus the ~36 dB range a real response would show. Neither
+/// the chip's decoder nor [`super::synthesis::AmbePlus2SynthesisDecoder`] (which always uses the
+/// fixed [`super::super::tone_synthesis::AMBE_PLUS_2_TONE_RMS`]) is sensitive to this field's exact
+/// value, so there is no chip-oracle signal to fit a more precise mapping against -- a closed-form
+/// curve would be neither more nor less "correct" than this interpolation. Not planned further.
 fn amplitude_field(amplitude: f64) -> u16 {
     const POINTS: [(f64, f64); 7] = [(250.0, 0x715 as f64), (500.0, 0x725 as f64), (1000.0, 0xea2 as f64), (2000.0, 0xed2 as f64), (4000.0, 0xf12 as f64), (8000.0, 0xf62 as f64), (16000.0, 0xfa2 as f64)];
     let x = amplitude.max(1.0).log2();
