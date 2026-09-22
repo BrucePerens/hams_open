@@ -1,13 +1,43 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
-from odoo import models, fields, api
-from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+from odoo import models, fields, api, _
+from odoo.addons.distributed_redis_cache.redis_cache import (
+    distributed_cache,
+    notify_model_invalidation,
+)
+from odoo.exceptions import UserError
 import logging
 from cryptography.fernet import InvalidToken
+
+# Fields whose value _get_cloudflare_credentials() (a @distributed_cache()'d
+# method) reads, directly or via the encrypted-field compute chain above it.
+# A plain website.write() bypasses that decorator entirely -- it has no idea
+# these particular fields feed a cross-worker Redis-backed cache with a 24h
+# TTL (see redis_cache.py's `r.setex(cache_key, 86400, ...)`), so without the
+# explicit bust below, a credential change here is invisible to every OTHER
+# worker (and to a fresh `odoo shell` once Redis is reachable) for up to a
+# day, or until the process restarts -- exactly the kind of "looks like it
+# worked, silently didn't" failure this module's own write path already got
+# fixed for once (see _crypt_field's history above).
+_CLOUDFLARE_CREDENTIAL_FIELDS = frozenset({
+    "cloudflare_api_token",
+    "cloudflare_api_token_crypt",
+    "cloudflare_zone_id",
+    "cloudflare_account_id",
+    "cloudflare_turnstile_secret",
+    "cloudflare_turnstile_secret_crypt",
+})
 
 
 class WebsiteCloudflare(models.Model):
     _inherit = "website"
+
+    # [@ANCHOR: cloudflare:COMM_website_write_busts_credential_cache]
+    def write(self, vals):
+        result = super().write(vals)
+        if _CLOUDFLARE_CREDENTIAL_FIELDS & vals.keys():
+            notify_model_invalidation(self.env, "website")
+        return result
 
     cloudflare_ip_ban_ids = fields.One2many("cloudflare.ip.ban", "website_id")
     cloudflare_tunnel_ids = fields.One2many("cloudflare.tunnel", "website_id")
@@ -79,8 +109,34 @@ class WebsiteCloudflare(models.Model):
     # [@ANCHOR: cloudflare:COMM_crypt_field]
     def _crypt_field(self, value, decrypt=False):
         f = self._get_fernet()
-        if not f or not value:
+        if not value:
             return False
+        if not f:
+            # Bug fix (2026-09-22, per Bruce -- "things should not fail
+            # silently"): this used to fold "no deployment-wide crypto
+            # secret configured" into the same `return False` as "no value
+            # to encrypt". `_get_or_create_fernet` already logs the real
+            # cause loudly (ERROR), but that log line was the only trace --
+            # `website.write({"cloudflare_api_token": ...})` raised nothing
+            # and looked like it succeeded while silently discarding the
+            # value, and a later read of an already-stored token looked
+            # identical to "never configured" instead of "can't decrypt
+            # right now". Encrypt (the write path) now fails loudly since
+            # there is a real value the caller expects stored. Decrypt (the
+            # read path) uses the same "***ERROR***" sentinel already used
+            # a few lines below for a corrupted/rotated key (InvalidToken),
+            # which is the established convention this module's callers
+            # (e.g. `_get_cloudflare_credentials`) already know to check
+            # for, rather than inventing a second distinct failure shape.
+            if decrypt:
+                return "***ERROR***"
+            raise UserError(_(
+                "Cannot store this Cloudflare secret: no deployment-wide "
+                "cryptographic secret is configured (HAMS_CRYPTO_KEY, "
+                "/var/lib/odoo/hams_crypto.secret, or a non-default "
+                "admin_passwd). Configure one before saving Cloudflare "
+                "credentials."
+            ))
         try:
             if decrypt:
                 return f.decrypt(value.encode("utf-8")).decode("utf-8")

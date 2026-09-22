@@ -84,8 +84,8 @@ extern "C" {
 
 extern int StartLocalSimulator(int targetPort);
 extern void StopLocalSimulator(void);
-extern void StartTunnel(char* token);
-extern void StopTunnel(void);
+extern void StartTunnel(char* tunnelKey, char* token, char* binPath);
+extern void StopTunnel(char* tunnelKey);
 
 #ifdef __cplusplus
 }

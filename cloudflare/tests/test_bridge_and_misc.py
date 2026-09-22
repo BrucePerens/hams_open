@@ -11,7 +11,9 @@ get_current_website_id() real (non-mocked) implementation,
 res_config_settings.py's action_deploy_cf_waf()/action_pull_cf_waf(),
 and tunnel_route.py's _compute_name().
 """
+import os
 from unittest.mock import MagicMock
+from cryptography.fernet import Fernet
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.cloudflare.utils import cloudflare_daemon as cf_daemon
@@ -142,15 +144,28 @@ class TestBridgeAndMisc(RealTransactionCase):
 
     def test_trigger_edge_purge_static_assets_enqueues_on_mtime_increase(self):
         # Tests [@ANCHOR: cloudflare:COMM_trigger_edge_purge_static_assets]
+        #
+        # Bug fix (2026-09-22): this write() used to rely on no crypto
+        # secret being configured in this RealTransactionCase-based class
+        # (unlike HamsTransactionCase, which provisions one in
+        # setUpClass()) -- _crypt_field() silently discarded the token into
+        # a `False` write with no error, so the missing-secret case and a
+        # successful write were indistinguishable, and this test happened
+        # to pass either way. Now that a missing crypto secret raises
+        # instead of failing silently (per website.py's `_crypt_field`),
+        # give this write a real key the same way HamsTransactionCase does,
+        # so it actually round-trips instead of erroring.
+        os.environ.setdefault("HAMS_CRYPTO_KEY", Fernet.generate_key().decode("utf-8"))
         self.website.write({"cloudflare_api_token": "tok", "cloudflare_zone_id": "zone"})
         self.safe_patch(
             "odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_fernet",
             return_value=None,
         )
-        # With no real crypto secret configured, _get_cloudflare_credentials()
-        # returns falsy tokens either way -- mock it directly instead so this
-        # test only has to prove the mtime-comparison/purge-enqueue logic,
-        # not the (already separately covered) encryption chain.
+        # With the real encryption/credentials chain covered by the write()
+        # above, mock _get_cloudflare_credentials directly for the rest of
+        # this test so it only has to prove the mtime-comparison/purge-
+        # enqueue logic, not the (already separately covered) encryption
+        # chain.
         self.safe_patch(
             "odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_cloudflare_credentials",
             return_value=("tok", "zone"),

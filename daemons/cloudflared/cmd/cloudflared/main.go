@@ -1,7 +1,5 @@
 package main
 
-import "C"
-
 import (
 	"fmt"
 	"os"
@@ -232,21 +230,7 @@ func handleServiceMode(c *cli.Context, shutdownC chan struct{}) error {
 	return nil
 }
 
-//export StartTunnel
-func StartTunnel(token *C.char) {
-	// Prevent urfave/cli from calling os.Exit, which would crash Python
-	cli.OsExiter = func(code int) {
-		fmt.Printf("cloudflared cli.OsExiter intercepted exit code %d\n", code)
-	}
-	os.Args = []string{"cloudflared", "tunnel", "--no-autoupdate", "run", "--token", C.GoString(token)}
-	go mainOriginal()
-}
 
-//export StopTunnel
-func StopTunnel() {
-	if graceShutdownC != nil {
-		close(graceShutdownC)
-	}
+func main() {
+	mainOriginal()
 }
-
-func main() {}

@@ -24,6 +24,14 @@ _SO_PATH = os.path.join(
     '../../daemons/cloudflared-ffi/libcloudflared.so'
 )
 
+# The real, working `cloudflared` binary built from daemons/cloudflared (see that
+# directory's own main.go for why StartTunnel below needs it as a subprocess rather
+# than an in-process call). Same relative-path convention as _SO_PATH above.
+_BIN_PATH = os.path.join(
+    os.path.dirname(__file__),
+    '../../daemons/cloudflared/cloudflared'
+)
+
 _lib = None
 
 # The key every piece of per-tunnel state below is filed under when a caller
@@ -73,11 +81,11 @@ def _get_lib():
         raise RuntimeError(f"Failed to load libcloudflared.so: {e}")
 
     # Define the argument types for the C functions
-    _lib.StartTunnel.argtypes = [ctypes.c_char_p]
+    _lib.StartTunnel.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
     _lib.StartLocalSimulator.argtypes = [ctypes.c_int]
     _lib.StartLocalSimulator.restype = ctypes.c_int
     _lib.StopLocalSimulator.argtypes = []
-    _lib.StopTunnel.argtypes = []
+    _lib.StopTunnel.argtypes = [ctypes.c_char_p]
     return _lib
 
 # Bug fix (bug-hunt, review_tier 1, 2026-09-09): the "is it already running"
@@ -141,6 +149,7 @@ def start_tunnel_daemon(token, tunnel_key=DEFAULT_TUNNEL_KEY):
             return False
 
         lib = _get_lib()
+        bin_path = os.path.abspath(_BIN_PATH).encode('utf-8')
         # A fresh Event per start, rather than .clear() on a shared one: a
         # stop_tunnel_daemon() for THIS key must not be able to reach into a
         # later start's loop, and a stop for ANOTHER key must not reach into
@@ -160,7 +169,7 @@ def start_tunnel_daemon(token, tunnel_key=DEFAULT_TUNNEL_KEY):
                     # WebSocket upgrades proxied through the simulator exercise
                     # the identical native pass-through this call performs.
                     # # Verified by [@ANCHOR: COMM_test_websocket_traffic]
-                    lib.StartTunnel(token.encode('utf-8'))
+                    lib.StartTunnel(tunnel_key.encode('utf-8'), token.encode('utf-8'), bin_path)
                 except Exception as e:  # audit-ignore-catch-all
                     _logger.exception(
                         "Cloudflare tunnel daemon %s crashed: %s", tunnel_key, e
@@ -199,14 +208,16 @@ def stop_tunnel_daemon(tunnel_key=None):
     every one this process started when `tunnel_key` is None (the default,
     and the behavior every pre-existing caller already relied on).
 
-    The native library's own `StopTunnel()` takes no tunnel handle -- there is
-    exactly one, process-wide -- so it is only called for a stop-ALL. Stopping
-    a single tunnel therefore signals just that tunnel's own Python loop and
-    deliberately leaves the native call alone, because making it here would
-    reach into every OTHER tunnel's daemon, which is precisely what must not
-    happen on a multi-tunnel server. Giving the FFI a per-tunnel handle is a
-    real follow-on, recorded in this function's own claim, not something this
-    Python layer can fake.
+    Bug fix (2026-09-22): the native library's `StopTunnel()` used to take no
+    tunnel handle -- there was exactly one native tunnel, process-wide, by
+    construction (StartTunnel never actually started anything real, so a
+    single global slot was never exercised) -- so a single-tunnel stop only
+    ever signalled that tunnel's own Python loop and left the native call
+    alone, "because making it here would reach into every OTHER tunnel's
+    daemon". Now that StartTunnel runs each tunnel as its own real subprocess
+    keyed by `tunnel_key` (daemons/cloudflared-ffi/main.go), StopTunnel takes
+    that same key and only ever reaches the one subprocess named by it, so a
+    single-tunnel stop can and does signal the real native process too.
     """
     if tunnel_key is not None:
         stop_event = _tunnel_stop_events.get(tunnel_key)
@@ -215,13 +226,15 @@ def stop_tunnel_daemon(tunnel_key=None):
                 "Stopping native Cloudflare tunnel daemon for %s...", tunnel_key
             )
             stop_event.set()
+        if _lib:
+            _lib.StopTunnel(tunnel_key.encode('utf-8'))
         return
 
     if _lib:
         _logger.info("Stopping every native Cloudflare tunnel daemon...")
-        for stop_event in list(_tunnel_stop_events.values()):
+        for key, stop_event in list(_tunnel_stop_events.items()):
             stop_event.set()
-        _lib.StopTunnel()
+            _lib.StopTunnel(key.encode('utf-8'))
 
 # [@ANCHOR: cloudflare:COMM_start_tunnel_simulator]
 def start_tunnel_simulator(target_port):
