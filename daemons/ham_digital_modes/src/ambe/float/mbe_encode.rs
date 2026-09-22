@@ -87,8 +87,21 @@ fn nearest<const N: usize>(table: &[[f64; N]], target: &[f64; N], used: usize, o
     best.1 as u32
 }
 
+/// # Panics
+/// If any of `target.ml[1..=l]` is non-finite: a NaN amplitude would otherwise be silently floored
+/// by `f64::max(1e-6)` below (`f64::max` returns its other argument when one side is NaN) and quantized
+/// into a confident-looking speech frame instead of failing loudly, matching
+/// [`super::dstar::quantize::quantize_pitch`]/[`super::ambe_plus_2::quantize::quantize_pitch`]'s own
+/// finiteness check on the pitch half of this same encode path (bug-hunt 2026-09-19, claims
+/// `mbe_quantize_speech.md`/`float_quantize_pitch_and_tables.md`; the pitch half was fixed the same
+/// day in `d1bc1ea4`, this amplitude half was not).
 pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTables) -> QuantizedSpeech {
     let l = target.l as usize;
+    assert!(
+        target.ml[1..=l].iter().all(|m| m.is_finite()),
+        "spectral amplitude must be finite, got {:?}",
+        target.ml[1..=l].to_vec()
+    );
 
     // b1: the V/UV pattern agreeing best with the target, weighted by amplitude.
     let jl_of = |harmonic: usize| ((harmonic as f64 * 16.0 * target.vuv_f0) as usize).min(7);
