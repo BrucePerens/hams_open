@@ -182,7 +182,6 @@ compliance/hooks.py
 daemon_key_manager/data/documentation.html
 daemon_key_manager/data/cron.xml
 daemon_key_manager/docs/journeys/api_key_lifecycle.md
-daemon_key_manager/docs/journeys/container_bootstrapping.md
 daemon_key_manager/docs/stories/daemon_registration.md
 daemon_key_manager/docs/stories/force_provisioning.md
 daemon_key_manager/docs/stories/key_rotation.md

@@ -66,18 +66,6 @@ updates:
         update-types:
           - "minor"
           - "patch"
-  - package-ecosystem: "docker"
-    directory: "/daemons/cloudflared"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
   - package-ecosystem: "cargo"
     directory: "/daemons/codec2_3200_capi"
     schedule:

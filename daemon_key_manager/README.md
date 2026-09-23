@@ -101,7 +101,6 @@ ODOO_RPC_KEY=12345abcd...
 * [Manual Force Provisioning](docs/stories/force_provisioning.md)
 * [Automated 60-Day Key Rotation](docs/stories/key_rotation.md)
 * [Lifecycle of a Daemon API Key](docs/journeys/api_key_lifecycle.md)
-* [Bootstrapping a Containerized Environment](docs/journeys/container_bootstrapping.md)
 * [Zero-Sudo Refactoring Story](docs/stories/zero_sudo_refactoring.md)
 
 ---
