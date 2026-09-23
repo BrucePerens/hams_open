@@ -6,7 +6,7 @@ from . import user_websites_owned_mixin
 from . import blog_blog
 from . import blog_post
 from . import content_violation_appeal
-from . import content_violation_report
+from . import content_violation_report_moderation
 from . import ham_gdpr_export_token
 from . import res_config_settings
 from . import res_users

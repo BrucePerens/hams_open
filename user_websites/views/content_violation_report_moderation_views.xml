@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- content.violation.report's own model/views/actions now live in
+         content_moderation (extracted 2026-09-23). This file only adds
+         back what is genuinely user_websites-specific: surfacing those
+         shared actions under this module's own "User Websites" app menu
+         (content_moderation itself deliberately defines no menu of its own,
+         see that module's own views file, so each consuming module
+         places its own convenience entry, rather than this base module
+         guessing where every future consumer's admins will look for it),
+         and re-adding the content_group_id column/field this module's own
+         content_violation_report_moderation.py extends the model with,
+         onto the shared kanban/form views via ordinary view inheritance. -->
+
+    <record id="view_content_violation_report_kanban_group_field" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering]
+             (that test's get_view() call on content.violation.report merges every matching
+             inherited view, including this one, so an XML/xpath error here would fail it even
+             though its own assertions don't name content_group_id specifically). -->
+        <!-- burn-ignore-tour: Justified exception. A pure additive field-only view-inheritance
+             snippet (re-adds the one field this module's own content_group_id extension needs on
+             a shared base-module view), not a standalone user-facing screen; the base kanban/
+             list/form this extends is already covered by violation_report_tour.js and
+             moderation_appeal_tour.js. -->
+        <field name="name">content.violation.report.kanban.user_websites.group_field</field>
+        <field name="model">content.violation.report</field>
+        <field name="inherit_id" ref="content_moderation.view_content_violation_report_kanban"/>
+        <field name="arch" type="xml">
+            <!-- Appended, not inserted "after" the owner <field>, on purpose:
+                 that <field> sits nested inside its own conditional
+                 <span t-if="record.content_owner_id.raw_value">, and
+                 "after" would land the group badge inside that same span
+                 rather than as its own sibling badge. Targeting the
+                 wrapping div by its (unique, class-identified) container
+                 and appending inside it puts the new badge where the
+                 original single-module template had it: a sibling badge
+                 next to the owner one, both inside oe_kanban_bottom_left. -->
+            <xpath expr="//div[hasclass('oe_kanban_bottom_left')]" position="inside">
+                <span t-if="record.content_group_id.raw_value" class="badge text-bg-info ms-1">
+                    <i class="fa fa-users" title="Content Group" aria-label="Content Group" role="img"/> <field name="content_group_id"/>
+                </span>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_content_violation_report_list_group_field" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+        <!-- burn-ignore-tour: Justified exception. Same reasoning as
+             view_content_violation_report_kanban_group_field above, this
+             file's own first record. -->
+        <field name="name">content.violation.report.list.user_websites.group_field</field>
+        <field name="model">content.violation.report</field>
+        <field name="inherit_id" ref="content_moderation.view_content_violation_report_list"/>
+        <field name="arch" type="xml">
+            <field name="content_owner_id" position="after">
+                <field name="content_group_id"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_content_violation_report_form_group_field" model="ir.ui.view">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+        <!-- burn-ignore-tour: Justified exception. Same reasoning as
+             view_content_violation_report_kanban_group_field above, this
+             file's own first record. -->
+        <field name="name">content.violation.report.form.user_websites.group_field</field>
+        <field name="model">content.violation.report</field>
+        <field name="inherit_id" ref="content_moderation.view_content_violation_report_form"/>
+        <field name="arch" type="xml">
+            <field name="content_owner_id" position="after">
+                <field name="content_group_id" readonly="1"/>
+            </field>
+        </field>
+    </record>
+
+    <menuitem id="menu_content_violation_report"
+              name="Moderation"
+              parent="menu_user_websites_root"
+              action="content_moderation.action_content_violation_report"
+              groups="content_moderation.group_content_moderation_moderator"
+              sequence="30"/>
+
+    <menuitem id="menu_my_content_violation_report"
+              name="My Reports"
+              parent="menu_user_websites_root"
+              action="content_moderation.action_my_content_violation_report"
+              groups="base.group_portal"
+              sequence="31"/>
+</odoo>

@@ -3,7 +3,7 @@
 <odoo>
 
     <record id="view_content_violation_report_kanban" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: user_websites:test_user_websites_backend_views_rendering] -->
         <field name="name">content.violation.report.kanban</field>
         <field name="model">content.violation.report</field>
         <field name="arch" type="xml">
@@ -34,9 +34,6 @@
                                     <span t-if="record.content_owner_id.raw_value" class="badge text-bg-warning">
                                         <i class="fa fa-user" title="Content Owner" aria-label="Content Owner" role="img"/> <field name="content_owner_id"/>
                                     </span>
-                                    <span t-if="record.content_group_id.raw_value" class="badge text-bg-info ms-1">
-                                        <i class="fa fa-users" title="Content Group" aria-label="Content Group" role="img"/> <field name="content_group_id"/>
-                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -47,7 +44,7 @@
     </record>
 
     <record id="view_content_violation_report_list" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: user_websites:test_user_websites_backend_views_rendering] -->
         <field name="name">content.violation.report.list</field>
         <field name="model">content.violation.report</field>
         <field name="arch" type="xml">
@@ -55,7 +52,6 @@
                 <field name="create_date"/>
                 <field name="target_url"/>
                 <field name="content_owner_id"/>
-                <field name="content_group_id"/>
                 <field name="state" widget="badge"
                        decoration-danger="state=='new'"
                        decoration-warning="state=='under_review'"
@@ -66,15 +62,15 @@
     </record>
 
     <record id="view_content_violation_report_form" model="ir.ui.view">
-        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: user_websites:test_user_websites_backend_views_rendering] -->
         <field name="name">content.violation.report.form</field>
         <field name="model">content.violation.report</field>
         <field name="arch" type="xml">
             <form string="Violation Report">
                 <header>
-                    <button name="action_mark_under_review" string="Reviewing" type="object" class="oe_highlight" invisible="not id or state != 'new'" groups="user_websites.group_user_websites_administrator"/>
-                    <button name="action_take_action_and_strike" string="Take Action &amp; Strike User" type="object" class="btn-danger" invisible="not id or state in ('action_taken', 'dismissed')" confirm="This will add a strike to the user's account. Continue?" groups="user_websites.group_user_websites_administrator"/>
-                    <button name="action_dismiss" string="Dismiss Report" type="object" class="btn-secondary" invisible="not id or state in ('action_taken', 'dismissed')" groups="user_websites.group_user_websites_administrator"/>
+                    <button name="action_mark_under_review" string="Reviewing" type="object" class="oe_highlight" invisible="not id or state != 'new'" groups="content_moderation.group_content_moderation_moderator"/>
+                    <button name="action_take_action_and_strike" string="Take Action &amp; Strike User" type="object" class="btn-danger" invisible="not id or state in ('action_taken', 'dismissed')" confirm="This will add a strike to the user's account. Continue?" groups="content_moderation.group_content_moderation_moderator"/>
+                    <button name="action_dismiss" string="Dismiss Report" type="object" class="btn-secondary" invisible="not id or state in ('action_taken', 'dismissed')" groups="content_moderation.group_content_moderation_moderator"/>
                     <field name="state" widget="statusbar" statusbar_visible="new,under_review,action_taken,dismissed"/>
                 </header>
                 <sheet>
@@ -92,7 +88,6 @@
                         <group>
                             <separator string="Target Details"/>
                             <field name="content_owner_id" readonly="1"/>
-                            <field name="content_group_id" readonly="1"/>
                         </group>
                     </group>
                     <notebook>
@@ -121,13 +116,6 @@
         </field>
     </record>
 
-    <menuitem id="menu_content_violation_report"
-              name="Moderation"
-              parent="menu_user_websites_root"
-              action="action_content_violation_report"
-              groups="user_websites.group_user_websites_administrator"
-              sequence="30"/>
-
     <record id="action_my_content_violation_report" model="ir.actions.act_window">
         <field name="name">My Reports</field>
         <field name="res_model">content.violation.report</field>
@@ -139,11 +127,4 @@
             </p>
         </field>
     </record>
-
-    <menuitem id="menu_my_content_violation_report"
-              name="My Reports"
-              parent="menu_user_websites_root"
-              action="action_my_content_violation_report"
-              groups="base.group_portal"
-              sequence="31"/>
 </odoo>

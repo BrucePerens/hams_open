@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record model="ir.module.category" id="module_category_content_moderation">
+            <field name="name">Content Moderation</field>
+            <field name="description">Access to the generic content-violation report/track/enforce pipeline.</field>
+            <field name="sequence">41</field>
+        </record>
+
+        <record model="res.groups.privilege" id="privilege_content_moderation">
+            <field name="name">Content Moderation Access</field>
+            <field name="category_id" ref="module_category_content_moderation"/>
+        </record>
+
+        <!-- The "may see and resolve every report, regardless of company"
+             role. Deliberately unconditional ([(1, '=', 1)] below), mirroring
+             the equivalent role this replaces in user_websites
+             (group_user_websites_administrator's own content-violation
+             rule): a platform-wide moderation-staff role is a real,
+             cross-company product decision there, not an artifact of this
+             extraction, so it is preserved as-is rather than narrowed. -->
+        <record id="group_content_moderation_moderator" model="res.groups">
+            <field name="name">Moderator</field>
+            <field name="privilege_id" ref="privilege_content_moderation"/>
+        </record>
+
+        <!-- Capability-only group for service/automation accounts that need
+             to read and write reports (e.g. a controller resolving and
+             creating a report on a public submitter's behalf). Deliberately
+             NOT implied by group_content_moderation_moderator and NOT given
+             the moderator's own unconditional rule below, see
+             content_violation_report_service_account_rule's own comment for
+             exactly why (this mirrors a real, previously-shipped-and-fixed
+             bug in user_websites: a service account that shared the
+             unconditional admin rule leaked every company's reports into a
+             per-company .with_company() count(), since Odoo OR-combines
+             same-model group-matching rule domains). A consuming module
+             wires its own service account into this group via `implied_ids`
+             (see user_websites_security.xml's own noupdate="0" block for the
+             pattern this extraction preserved). -->
+        <record id="group_content_moderation_service_account" model="res.groups">
+            <field name="name">Service Account: Content Moderation</field>
+        </record>
+
+        <record id="content_violation_report_user_rule" model="ir.rule">
+            <field name="name">Content Violation Report User Rule</field>
+            <field name="model_id" ref="model_content_violation_report"/>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="domain_force">[('reported_by_user_id', '=', user.id)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <record id="content_violation_report_multi_company_rule" model="ir.rule">
+            <field name="name">Content Violation Report Multi-Company Rule</field>
+            <field name="model_id" ref="model_content_violation_report"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <record id="content_violation_report_moderator_rule" model="ir.rule">
+            <field name="name">Content Violation Report Moderator Rule</field>
+            <field name="model_id" ref="model_content_violation_report"/>
+            <field name="groups" eval="[(4, ref('group_content_moderation_moderator'))]"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- Bug-hunt fix, carried over from user_websites (2026-09-09, fixed
+             there before this extraction, preserved here rather than
+             re-introduced): the service account must NOT share the
+             moderator's own unconditional [(1,'=',1)] rule above: Odoo
+             OR-combines same-model group-matching rule domains, so sharing
+             it would OR-dominate content_violation_report_multi_company_rule's
+             own company_id scoping, and a with_company(company)-scoped
+             count()/search() call (e.g. a "notify admins of my company's
+             backlog" cron a consuming module adds) would see every
+             company's reports regardless of which one it named. The service
+             account gets its own rule, scoped exactly like an ordinary
+             user's. -->
+        <record id="content_violation_report_service_account_rule" model="ir.rule">
+            <field name="name">Content Violation Report Service Account Rule</field>
+            <field name="model_id" ref="model_content_violation_report"/>
+            <field name="groups" eval="[(4, ref('group_content_moderation_service_account'))]"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+    </data>
+</odoo>

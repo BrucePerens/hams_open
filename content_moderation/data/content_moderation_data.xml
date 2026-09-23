@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Moved verbatim from user_websites/data/user_websites_data.xml
+             during the 2026-09-23 extraction. Not currently consumed by any
+             create()/write() path on this model (name defaults to
+             self._description, not to this sequence): pre-existing,
+             unrelated to the extraction, moved as-is rather than silently
+             dropped. -->
+        <record id="seq_content_violation_report" model="ir.sequence">
+            <field name="name">Content Violation Report</field>
+            <field name="code">content.violation.report</field>
+            <field name="prefix">RPT/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>

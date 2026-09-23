@@ -28,6 +28,7 @@ This module enables:
         "knowledge",
         "compliance",
         "cloudflare",
+        "content_moderation",
     ],
     "external_dependencies": {
         "python": ["markupsafe"],
@@ -46,7 +47,7 @@ This module enables:
         "views/user_websites_group_views.xml",
         "views/website_page_views.xml",
         "views/blog_post_views.xml",
-        "views/content_violation_report_views.xml",
+        "views/content_violation_report_moderation_views.xml",
         "views/content_violation_appeal_views.xml",
         # Templates
         "views/user_websites_templates.xml",

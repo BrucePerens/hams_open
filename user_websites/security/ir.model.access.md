@@ -4,23 +4,16 @@ This CSV file is a critical part of Odoo's security system. It defines the base 
 
 Here's a breakdown of the rules in this file:
 
-- **`access_content_violation_report_admin`**
-  - **Group:** User Websites Administrator
-  - **Model:** `content.violation.report`
-  - **Permissions:** Full access (Read, Write, Create, Delete).
-  - **Purpose:** Allows administrators to manage all aspects of content violation reports.
-
-- **`access_content_violation_report_user`**
-  - **Group:** Internal User (logged-in users)
-  - **Model:** `content.violation.report`
-  - **Permissions:** Read, Write, Create (but not Delete).
-  - **Purpose:** Allows any logged-in user to submit a new report and view existing ones, but they cannot delete them.
-
-- **`access_content_violation_report_public`**
-  - **Group:** Public User (not logged in)
-  - **Model:** `content.violation.report`
-  - **Permissions:** Read, Write, Create (but not Delete).
-  - **Purpose:** Allows non-logged-in users (guests) to submit new reports.
+- **`content.violation.report`'s own `access_content_violation_report_*` rows** --
+  moved to `content_moderation/security/ir.model.access.csv` on 2026-09-23,
+  when that model was extracted out of this module into its own generic
+  `content_moderation` module (see that module's own `ir.model.access.md`).
+  `access_content_violation_report_admin` became
+  `access_content_violation_report_moderator`, re-pointed at
+  `content_moderation.group_content_moderation_moderator` (this module's
+  own `group_user_websites_administrator` is wired into that group via
+  `implied_ids`, in `security/user_websites_security.xml`'s own
+  `noupdate="0"` block, so nothing changes for an existing Administrator).
 
 - **`access_res_users_admin`**
   - **Group:** User Websites Administrator

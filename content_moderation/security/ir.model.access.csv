@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_content_violation_report_mail_svc,content.violation.report mail svc,model_content_violation_report,zero_sudo.group_mail_service,1,1,0,0
+access_content_violation_report_moderator,content.violation.report moderator,model_content_violation_report,group_content_moderation_moderator,1,1,1,1
+access_content_violation_report_user,content.violation.report user,model_content_violation_report,base.group_portal,1,0,1,0
+access_content_violation_report_public,content.violation.report public,model_content_violation_report,base.group_public,0,0,1,0
+access_content_violation_report_svc,content.violation.report svc,model_content_violation_report,group_content_moderation_service_account,1,1,1,1

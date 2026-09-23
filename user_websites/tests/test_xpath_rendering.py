@@ -299,22 +299,28 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
         )
         self.assertIn("reason", v2["arch"])
 
+        # content.violation.report's own views moved to content_moderation
+        # on 2026-09-23 (that module now owns the model); get_view() still
+        # returns the merged arch, including user_websites' own
+        # content_group_id extension added via view inheritance
+        # (views/content_violation_report_moderation_views.xml), so these
+        # assertions are unchanged.
         v3 = self.env["content.violation.report"].get_view(
             view_id=self.env.ref(
-                "user_websites.view_content_violation_report_kanban"
+                "content_moderation.view_content_violation_report_kanban"
             ).id,
             view_type="kanban",
         )
         self.assertIn("target_url", v3["arch"])
 
         v4 = self.env["content.violation.report"].get_view(
-            view_id=self.env.ref("user_websites.view_content_violation_report_list").id,
+            view_id=self.env.ref("content_moderation.view_content_violation_report_list").id,
             view_type="list",
         )
         self.assertIn("content_owner_id", v4["arch"])
 
         v5 = self.env["content.violation.report"].get_view(
-            view_id=self.env.ref("user_websites.view_content_violation_report_form").id,
+            view_id=self.env.ref("content_moderation.view_content_violation_report_form").id,
             view_type="form",
         )
         self.assertIn("reported_by_email", v5["arch"])

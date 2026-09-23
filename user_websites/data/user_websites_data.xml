@@ -27,17 +27,13 @@
         </record>
     </data>
     <data noupdate="1">
-        <record id="seq_content_violation_report" model="ir.sequence">
-            <field name="name">Content Violation Report</field>
-            <field name="code">content.violation.report</field>
-            <field name="prefix">RPT/</field>
-            <field name="padding">5</field>
-            <field name="company_id" eval="False"/>
-        </record>
+        <!-- seq_content_violation_report moved to content_moderation's own
+             data/content_moderation_data.xml on 2026-09-23 (the model it's
+             keyed to moved there too). -->
 
         <record id="email_template_content_violation" model="mail.template">
             <field name="name">Content Violation Report</field>
-            <field name="model_id" ref="user_websites.model_content_violation_report"/>
+            <field name="model_id" ref="content_moderation.model_content_violation_report"/>
             <field name="subject">Content Violation Report: {{ object.target_url }}</field>
             <field name="email_from">{{ (object.reported_by_user_id.email or object.reported_by_email) }}</field>
             <field name="email_to">{{ object.env['zero_sudo.security.utils']._get_system_param('user_websites.company_abuse_email') or user.company_id.email or 'abuse@yourcompany.com' }}</field>
@@ -74,7 +70,7 @@
 
             <!-- audit-ignore-cron: Tested by [@ANCHOR: test_cron_pending_reports] -->
             <field name="name">User Websites: Notify Admins of Pending Reports</field>
-            <field name="model_id" ref="user_websites.model_content_violation_report"/>
+            <field name="model_id" ref="content_moderation.model_content_violation_report"/>
             <field name="user_id" ref="user_websites.user_websites_service_account"/>
             <field name="state">code</field>
             <field name="code">model._cron_notify_pending_reports()</field>
