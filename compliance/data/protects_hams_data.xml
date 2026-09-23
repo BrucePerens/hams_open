@@ -71,6 +71,15 @@
                             policy. Your radio stays usable unless there's a specifically-flagged
                             safety reason for it not to be.</p>
 
+                            <h3 class="mt-4">We are not exposed to a ransomware pay-to-recover scenario</h3>
+                            <p>Our production data is backed up off-site to storage that cannot be
+                            deleted or overwritten by anyone -- including our own regular operating
+                            credentials -- for the length of its retention period, and we maintain
+                            the tooling to rebuild the whole system from source on new infrastructure
+                            if we ever had to. Restoring from a backup is a routinely tested, working
+                            capability, not an assumption.</p>
+                            <p><a href="/backup-policy">Read the full Backup and Data Resilience Policy &#8594;</a></p>
+
                             <h3 class="mt-4">Everything above, together</h3>
                             <p>None of these protections depend on trusting hams.com's servers to
                             stay honest or uncompromised forever: the frequency interlock lives on
