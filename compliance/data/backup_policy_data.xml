@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+
+        <template id="backup_policy_template" name="Backup and Data Resilience Policy">
+            <!-- [@ANCHOR: compliance:backup_policy_page] -->
+            <t t-call="website.layout">
+                <div id="wrap" class="oe_structure oe_empty">
+                    <section class="s_text_block pt40 pb40">
+                        <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
+                            <h1 class="mb-4 fw-bold">Backup and Data Resilience Policy</h1>
+
+                            <p>We publish this page for one reason: not because any law requires it,
+                            but because we want every member to be able to check for themselves that
+                            hams.com is not exposed to the kind of incident that struck the American
+                            Radio Relay League in May 2024, when a ransomware attack encrypted ARRL's
+                            systems and ARRL ultimately paid a reported $1 million ransom to obtain a
+                            working decryption tool. We have designed our own backup and recovery
+                            posture specifically so that outcome -- paying an attacker to get our own
+                            data back -- is not a decision we could ever be forced into, regardless of
+                            what happens to our production servers.</p>
+
+                            <h3 class="mt-4">Immutable, off-site, undeletable backups</h3>
+                            <p>Our production database and file storage are backed up daily to a
+                            recognized off-site cloud storage provider, independent of the
+                            infrastructure that runs hams.com itself. Every backup is written with
+                            that provider's own Object Lock feature enabled, in Governance mode, for
+                            a period matching our full retention window. In practice that means: once
+                            a backup is written, it cannot be deleted, overwritten, or encrypted by
+                            anyone -- including hams.com's own regular operating credentials -- until
+                            its own retention period has run out on its own. The everyday credential
+                            our backup system uses to do its job day to day is deliberately never
+                            given the one special permission that could remove that protection early;
+                            only a separate credential, held apart from the automated system and used
+                            only for a genuine, deliberate exception, could do that. A ransomware
+                            attacker who fully compromised our production servers, or even our
+                            regular backup credentials, still could not reach back and destroy our
+                            off-site backup history.</p>
+
+                            <h3 class="mt-4">We can rebuild from source, not just restore a database</h3>
+                            <p>hams.com's own application source code is itself kept under version
+                            control with its own full history, separate from the production servers
+                            it runs on. We maintain the infrastructure and tooling necessary to
+                            provision a completely new server from scratch, install our software from
+                            that source, and restore the most recent backup onto it -- a full
+                            wipe-and-reinstall, not merely a database rollback on the same
+                            (potentially still-compromised) machine. If our production infrastructure
+                            were ever destroyed or rendered untrustworthy outright, rebuilding does
+                            not depend on that infrastructure surviving.</p>
+
+                            <h3 class="mt-4">Restore verification is a routine part of the system, not a one-time test</h3>
+                            <p>A backup nobody has ever actually restored from is a hope, not a plan.
+                            Our backup system includes a standing restore-drill capability, run on a
+                            regular schedule against a non-production target, that performs a real
+                            restore from a real backup and validates the result -- not just a
+                            checksum on the backup file, but an actual, working restore. This is a
+                            routine, ongoing feature of the system, not a one-off exercise we ran once
+                            when it was built.</p>
+
+                            <h3 class="mt-4">Status</h3>
+                            <p>This is our real policy, and the architecture described above -- an
+                            off-site, immutable, Object-Locked backup target reachable through a
+                            credential that cannot itself remove that protection -- is what we have
+                            deliberately built toward. As with every page in this section, we would
+                            rather tell you plainly where we are than round up: the specific off-site
+                            storage account and its immutability settings are in the final stage of
+                            being provisioned as this page is published, and this page will be updated
+                            the moment the first Object-Locked off-site backup and its own restore
+                            drill have both actually run for real, not just been designed.</p>
+
+                            <p><a href="/protects-hams">&#8592; Back to How Hams.com Protects Hams</a></p>
+                        </div>
+                    </section>
+                </div>
+            </t>
+        </template>
+
+        <record id="backup_policy_page" model="website.page">
+            <field name="url">/backup-policy</field>
+            <field name="is_published">True</field>
+            <field name="view_id" ref="backup_policy_template"/>
+            <field name="track">True</field>
+        </record>
+
+        <record id="doc_backup_policy" model="compliance.document">
+            <field name="name">Backup and Data Resilience Policy</field>
+            <field name="description">How we back up hams.com off-site, why those backups can't be deleted or encrypted by an attacker (or by us, before their retention period ends), and why we could rebuild the whole system from source if we ever had to -- published so members can verify we are not exposed to the kind of ransomware incident ARRL suffered in 2024.</field>
+            <field name="url">/backup-policy</field>
+            <field name="sequence">60</field>
+        </record>
+
+    </data>
+</odoo>

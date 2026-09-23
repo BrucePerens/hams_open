@@ -150,6 +150,34 @@ class TestCompliancePagesHttp(HamsHttpCase):
             .mapped("url")
         )
         self.assertIn("/protects-hams", registered_urls)
+        self.assertIn('href="/backup-policy"', response.text)
+
+    def test_backup_policy_page_reachable_and_registered(self):
+        """
+        The Backup and Data Resilience Policy page must resolve publicly (no
+        login required), be registered in the shared compliance.document
+        registry the same as every other legal/trust page, and actually
+        name the real ARRL ransomware incident it exists to contrast against
+        -- this page's whole purpose is a checkable claim, not a vague
+        reassurance.
+        """
+        # Tests [@ANCHOR: compliance:backup_policy_page]
+        response = self.url_open("/backup-policy")
+        msg_status = f"[!] DIAGNOSTIC FOR AI: Page /backup-policy should be reachable (200 OK). Got {response.status_code}."
+        self.assertEqual(response.status_code, 200, msg_status)
+        self.assertIn("Backup and Data Resilience Policy", response.text)
+        self.assertIn("American Radio Relay League", response.text)
+        self.assertIn("$1 million", response.text)
+        self.assertIn('href="/protects-hams"', response.text)
+
+        public_uid = self.env.ref("base.public_user").id
+        registered_urls = (
+            self.env["compliance.document"]
+            .with_user(public_uid)
+            .search([])
+            .mapped("url")
+        )
+        self.assertIn("/backup-policy", registered_urls)
 
     def test_compliance_index_route_lists_only_active_documents(self):
         """Verify the actual /compliance HTTP route, not just its template."""
