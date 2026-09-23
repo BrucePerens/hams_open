@@ -59,6 +59,42 @@ class TestManualUIEnhancements(HamsTransactionCase):
         article.body = False
         self.assertEqual(article.body_snippet, "")
 
+    def test_01c_body_snippet_never_leaks_a_multiline_html_comment_or_pseudo_markdown(self):
+        # Tests [@ANCHOR: knowledge:COMM_compute_body_snippet]
+        # Real bug found doing overnight usability testing, 2026-09-22: at least three real
+        # knowledge articles' search-result snippets showed a full internal maintainer-only
+        # review-status HTML comment, plus "**"/"/.../ " decoration for headings/emphasis,
+        # both visible to any reader on a public search page. Traced into Odoo core's own
+        # html2plaintext(): it deliberately renders <h1>/<em> as "**...**"/"/.../ " (a real
+        # feature for HTML-email plaintext fallbacks, not a bug on its own), and its final
+        # tag-stripping regex (`re.sub('<.*?>', ' ', html)`) has no re.DOTALL, so it can
+        # never fully match an HTML comment whose own content spans more than one line --
+        # exactly what a real multi-line maintainer comment looks like. This article
+        # reproduces the real shape (a heading, an <em> byline, then a two-line comment)
+        # that the actual affected articles had, confirmed directly against their real
+        # stored `body` content before this fix.
+        article = self.env["knowledge.article"].create(
+            {
+                "name": "Multiline Comment Leak Test",
+                "body": (
+                    "<h1>Using This Software</h1>\n"
+                    "<!-- [@ANCHOR: doc_inject_example] -->\n"
+                    '<p class="text-muted small"><em>Copyright hams.com. All Rights Reserved.</em></p>\n'
+                    "<!-- Review status: drafted 2026-09-01, not yet reviewed by the maintainer.\n"
+                    "Checked against how this module actually behaves directly. -->\n\n"
+                    "<h2>What this covers</h2>\n"
+                    "<p>Some real reader-facing content.</p>"
+                ),
+            }
+        )
+        self.assertNotIn("Review status", article.body_snippet)
+        self.assertNotIn("<!--", article.body_snippet)
+        self.assertNotIn("-->", article.body_snippet)
+        self.assertNotIn("**", article.body_snippet)
+        self.assertNotIn("/Copyright", article.body_snippet)
+        self.assertIn("Using This Software", article.body_snippet)
+        self.assertIn("Copyright hams.com", article.body_snippet)
+
     def test_02_ui_enhancements_rendering(self):
         # [@ANCHOR: test_manual_ui_rendering]
 

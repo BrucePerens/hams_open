@@ -3,6 +3,8 @@
 # -*- coding: utf-8 -*-
 import logging
 
+import lxml.html
+
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tools import html2plaintext
@@ -10,6 +12,44 @@ import re
 import unicodedata
 
 _logger = logging.getLogger(__name__)
+
+
+def _plain_text_preview(html_body):
+    """Real plain text for a search-result preview: no leaked markup, no leaked comments.
+
+    Real bug found doing overnight usability testing, 2026-09-22: at least three articles'
+    search-result snippets showed literal "**"/"/.../ " decoration and a full internal
+    maintainer-only review-status HTML comment, both visible to any reader. `article.body`
+    is genuine, well-formed HTML for these articles (confirmed directly against the actual
+    stored rows, not assumed) -- the bug is not a missing markdown-to-HTML conversion step.
+
+    Root cause, traced into Odoo core itself: `_compute_body_snippet` called
+    `odoo.tools.html2plaintext()` directly on `body`. That function deliberately renders
+    `<h1>`/`<h2>` as `**...**`, `<strong>`/`<b>`/`<h3>` as `*...*`, and `<em>` as `/.../` --
+    a real, intentional feature for rendering an HTML email's plaintext fallback readably,
+    not a bug on its own, but wrong for a search-snippet's plain-text preview, which wants
+    the words with no decoration at all. Its final tag-stripping pass,
+    `re.sub('<.*?>', ' ', html)`, is also missing `re.DOTALL`: `.` never matches a newline,
+    so any HTML comment whose own text spans multiple lines (exactly what the real
+    maintainer review-status comments in these articles do) can never be matched by that
+    single-line pattern and survives verbatim in the output -- confirmed directly against
+    the real stored body of the affected article, not synthesized. `lxml.html`'s own
+    `text_content()` extracts plain text straight from the parsed DOM tree instead of a
+    regex pass over re-serialized markup: no per-tag decoration to strip afterward, and
+    comments (regardless of how many lines their content spans) are never part of the DOM's
+    text content in the first place, so there is nothing to leak.
+    """
+    if not html_body:
+        return ""
+    try:
+        tree = lxml.html.fromstring(html_body)
+    except (TypeError, ValueError, lxml.etree.ParserError, lxml.etree.XMLSyntaxError):  # audit-ignore-catch-all
+        # Matches this module's own established fallback posture for malformed body
+        # content (see compile_markdown_body's identical guard in controllers/main.py) --
+        # degrade to Odoo's own (imperfect, but not crash-prone) html2plaintext rather than
+        # let a single malformed article break its own search-result listing entirely.
+        return html2plaintext(html_body)
+    return tree.text_content()
 
 
 class KnowledgeArticle(models.Model):
@@ -221,7 +261,7 @@ class KnowledgeArticle(models.Model):
     def _compute_body_snippet(self):
         for article in self:
             if article.body:
-                clean_text = html2plaintext(article.body)
+                clean_text = _plain_text_preview(article.body)
                 clean_text = " ".join(clean_text.split())
                 article.body_snippet = clean_text[:300]
             else:
