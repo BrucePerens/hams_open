@@ -578,11 +578,15 @@ class UserWebsitesController(http.Controller):
 
         return request.redirect("/my/home?appeal_submitted=1")
 
+    # sitemap=False: an admin-only JSON API, not public content -- real bug found
+    # live in production, 2026-09-23: `website=True` alone made it sitemap-eligible
+    # by default, listing an internal moderation endpoint in the public sitemap.
     @http.route(
         "/api/v1/user_websites/pending_reports",
         type="http",
         auth="public",
         website=True,
+        sitemap=False,
     )
     # [@ANCHOR: user_websites:COMM_pending_reports]
     def pending_reports(self, **kwargs):
