@@ -1,4 +1,4 @@
-cloudflare==2.14.3
+cloudflare==5.7.0
 flaky==3.8.1
 pytest==9.1.1
 pytest-asyncio==1.4.0
