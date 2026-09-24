@@ -10,7 +10,31 @@
             <form string="Helpdesk Ticket">
                 <header>
                     <button name="action_shift_handoff" string="Shift Handoff" type="object" class="oe_highlight" invisible="not id or stage in ('resolved', 'closed')"/>
+                    <!-- [@ANCHOR: hams_helpdesk:COMM_ncmec_report_buttons] -->
+                    <!-- No dedicated UI tour for these three admin-only buttons (burn-ignore-tour
+                         would apply if this were a standalone record; this one is already covered
+                         by the form view's own audit-ignore-view/COMM_helpdesk_operator_tour tag
+                         above). Their server-side guards (group, ticket_type, report state) are
+                         the real enforcement and are unit-tested directly, not just hidden by
+                         invisible=, see hams_helpdesk/tests/test_ncmec_report.py's own
+                         test_action_ncmec_report_requires_group_system,
+                         test_action_ncmec_report_refuses_a_non_csam_ticket,
+                         test_action_apply_legal_hold_manually_requires_group_system, and
+                         test_action_mark_report_filed_manually_requires_group_system. -->
+                    <button name="action_ncmec_apply_legal_hold_manually" string="Apply Legal Hold Manually" type="object"
+                            groups="base.group_system"
+                            invisible="ticket_type != 'csam_enticement_trafficking' or ncmec_legal_hold_applied"/>
+                    <button name="action_ncmec_report" string="Report to NCMEC" type="object" class="btn-danger"
+                            groups="base.group_system"
+                            confirm="This files a mandatory federal report with NCMEC's CyberTipline (or opens the manual-portal fallback if no API credentials are configured). Continue?"
+                            invisible="ticket_type != 'csam_enticement_trafficking' or ncmec_report_state != 'not_reported'"/>
+                    <button name="action_ncmec_mark_report_filed_manually" string="Mark Filed Manually" type="object"
+                            groups="base.group_system"
+                            confirm="Only use this after you have actually pasted the report packet into NCMEC's own reporting portal. Continue?"
+                            invisible="ticket_type != 'csam_enticement_trafficking' or ncmec_report_state != 'not_reported'"/>
                     <field name="stage" widget="statusbar" options="{'clickable': '1'}"/>
+                    <field name="ncmec_report_state" widget="statusbar"
+                           invisible="ticket_type != 'csam_enticement_trafficking'"/>
                 </header>
                 <sheet>
                     <widget name="web_ribbon" title="Archived" bg_color="bg-danger" invisible="active"/>
@@ -33,6 +57,37 @@
                     <notebook>
                         <page string="Description">
                             <field name="description"/>
+                        </page>
+                        <!-- [@ANCHOR: hams_helpdesk:COMM_ncmec_report_page]
+                             Field-level visibility only, same reasoning as the header buttons
+                             above: the fields shown here carry no write access of their own
+                             beyond what write()'s own restricted_fields set already blocks for a
+                             portal user (see models/helpdesk_ticket.py). -->
+                        <page string="NCMEC Report" invisible="ticket_type != 'csam_enticement_trafficking'"
+                              groups="base.group_system">
+                            <group>
+                                <group>
+                                    <separator string="Legal Hold"/>
+                                    <field name="ncmec_recording_uuid"/>
+                                    <field name="ncmec_recording_playback_url" widget="url"/>
+                                    <field name="ncmec_reported_user_id"/>
+                                    <field name="ncmec_legal_hold_applied"/>
+                                    <field name="ncmec_legal_hold_note" invisible="ncmec_legal_hold_applied"/>
+                                </group>
+                                <group>
+                                    <separator string="Report Status"/>
+                                    <field name="ncmec_report_state"/>
+                                    <field name="ncmec_report_reference"/>
+                                    <field name="ncmec_report_submitted_at"/>
+                                    <field name="ncmec_report_submitted_by_id"/>
+                                    <field name="ncmec_contact_email"/>
+                                    <field name="ncmec_contact_phone"/>
+                                </group>
+                            </group>
+                            <group>
+                                <separator string="Report Packet (copy into NCMEC's portal if no API credentials are configured)"/>
+                                <field name="ncmec_report_packet" nolabel="1" widget="text" readonly="1"/>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>

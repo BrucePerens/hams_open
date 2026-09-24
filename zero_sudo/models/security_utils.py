@@ -910,6 +910,24 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # accompanies) instead of masking it with an unrelated KeyError.
             "hams_base.compliance_org_name",
             "hams_base.compliance_mailing_address",
+            # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: the
+            # NCMEC CyberTipline mandatory-reporting workflow (hams_helpdesk/models/
+            # helpdesk_ticket.py). Same category as pager_duty.domain_api_identity above --
+            # genuinely sensitive (username/password are real API credentials, once
+            # configured), but hams_open has no per-service-account-scoped secret mechanism of
+            # its own (unlike hams_com's ham_base._SERVICE_ALLOWED_KEYS), so this whitelist is
+            # the whole gate. Unset by default (no real NCMEC credentials exist yet for this
+            # deployment), matching the established "unset by default, warn and no-op" shape
+            # ham_communications_consent's own qso_recording_root already uses.
+            "hams_helpdesk.ncmec_api_base_url",
+            "hams_helpdesk.ncmec_api_username",
+            "hams_helpdesk.ncmec_api_password",
+            # Not secrets -- hams.com's own designated NCMEC reporting-contact info
+            # (admin@hams.com / +1 510-473-7367, per Bruce's own answer, "for now"), seeded by
+            # hams_helpdesk/data/ncmec_report_data.xml and read at report-packet-assembly time
+            # so it can be updated later without a code change.
+            "hams_helpdesk.ncmec_contact_email",
+            "hams_helpdesk.ncmec_contact_phone",
         ]
 
     @api.model

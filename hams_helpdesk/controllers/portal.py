@@ -5,6 +5,20 @@ from odoo import http
 from odoo.http import request
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
 
+# docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8. models/
+# helpdesk_ticket.py's own _CSAM_TICKET_TYPE, not imported directly (this controller has no
+# other reason to import that model's Python module, and the two already drift-check against
+# each other structurally: this set is a subset of the model's own real selection values,
+# re-validated against it below, so a stale/renamed value here would simply stop being offered
+# rather than silently breaking). Found live during this same phase's own review: portal_
+# ticket_new/portal_ticket_submit below validate an untrusted ticket_type only by checking
+# membership in the model's FULL selection list -- with no exclusion, any logged-in portal user
+# could pick this category from the public /my/tickets/new dropdown (or POST it directly,
+# bypassing the dropdown entirely) and trigger the forced-Critical-priority, notify-every-
+# helpdesk-manager path meant for a trusted internal flag (bot self-reporting, the Official
+# Observer, or _ncmec_report_ticket_for_recording), not for an ordinary member's own report.
+_PORTAL_EXCLUDED_TICKET_TYPES = {"csam_enticement_trafficking"}
+
 
 class HelpdeskPortal(CustomerPortal):
 
@@ -156,9 +170,13 @@ class HelpdeskPortal(CustomerPortal):
         # Validated against the model's own real selection values here, not trusted blindly
         # from a query string -- an unrecognized value falls back to the field's own
         # "general" default rather than being passed through to the template/create() call.
-        valid_types = dict(
-            request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection
-        )
+        full_selection = request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection
+        portal_selection = [
+            (value, label)
+            for value, label in full_selection
+            if value not in _PORTAL_EXCLUDED_TICKET_TYPES
+        ]
+        valid_types = dict(portal_selection)
         requested_type = kw.get("ticket_type")
         default_ticket_type = requested_type if requested_type in valid_types else "general"
         return request.render(
@@ -167,7 +185,7 @@ class HelpdeskPortal(CustomerPortal):
                 "page_name": "ticket_new",
                 "default_callsign": callsign,
                 "default_ticket_type": default_ticket_type,
-                "ticket_type_selection": request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection,
+                "ticket_type_selection": portal_selection,
             },
         )
 
@@ -191,9 +209,11 @@ class HelpdeskPortal(CustomerPortal):
         # a portal POST body is caller-controlled, so re-check here too rather than
         # trusting the hidden form field wasn't tampered with; an unrecognized value
         # falls back to the model field's own "general" default.
-        valid_ticket_types = dict(
-            request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection
-        )
+        valid_ticket_types = {
+            value: label
+            for value, label in request.env["hams_helpdesk.ticket"]._fields["ticket_type"].selection
+            if value not in _PORTAL_EXCLUDED_TICKET_TYPES
+        }
         if ticket_type not in valid_ticket_types:
             ticket_type = "general"
 

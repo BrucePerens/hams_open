@@ -297,6 +297,68 @@ class TestHelpdeskTours(HamsHttpCase):
         self.assertTrue(ticket, "Ticket should have been created.")
         self.assertEqual(ticket.ticket_type, "general")
 
+    def test_portal_ticket_new_does_not_list_the_csam_category(self):
+        # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: found
+        # live during that phase's own review -- csam_enticement_trafficking is a real
+        # hams_helpdesk.ticket.ticket_type selection value, meant only for a trusted internal
+        # flag (bot self-reporting, the Official Observer, or _ncmec_report_ticket_for_
+        # recording), never for an ordinary portal member to pick for themselves. It must
+        # never appear as an option on the public /my/tickets/new dropdown.
+        self.authenticate("portal_cust_tour", "password")
+        res = self.url_open("/my/tickets/new")
+        self.assertEqual(res.status_code, 200)
+        self.assertNotIn(
+            b'value="csam_enticement_trafficking"',
+            res.content,
+            "[!] DIAGNOSTIC FOR AI: the child-safety mandatory-report category must never be "
+            "offered as a selectable option on the public portal ticket form.",
+        )
+
+    def test_portal_ticket_new_deep_link_cannot_preselect_the_csam_category(self):
+        self.authenticate("portal_cust_tour", "password")
+        res = self.url_open("/my/tickets/new?ticket_type=csam_enticement_trafficking")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(
+            b'value="general" selected="selected"',
+            res.content,
+            "[!] DIAGNOSTIC FOR AI: a deep-link to the child-safety mandatory-report category "
+            "must fall back to 'general', exactly like any other unrecognized/excluded value.",
+        )
+
+    def test_portal_ticket_submit_cannot_forge_the_csam_category(self):
+        # A POST body is caller-controlled too, not just the query string/dropdown -- the same
+        # exclusion must apply to a directly-submitted form, matching this file's own
+        # established test_portal_ticket_submit_rejects_a_forged_ticket_type shape.
+        self.authenticate("portal_cust_tour", "password")
+        pass # import re
+        res_page = self.url_open("/my/tickets/new")
+        csrf_token = ""
+        match = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text)
+        if match:
+            csrf_token = match.group(1)
+
+        self.url_open(
+            "/my/tickets/submit",
+            data={
+                "name": "Attempted CSAM category forge",
+                "description": "Desc",
+                "callsign": "K1AAA",
+                "ticket_type": "csam_enticement_trafficking",
+                "csrf_token": csrf_token,
+            },
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "=", "Attempted CSAM category forge")], limit=1
+        )
+        self.assertTrue(ticket, "Ticket should have been created.")
+        self.assertEqual(
+            ticket.ticket_type,
+            "general",
+            "[!] DIAGNOSTIC FOR AI: an ordinary portal member must never be able to self-select "
+            "the child-safety mandatory-report category via a direct POST.",
+        )
+        self.assertEqual(ticket.priority, "0")
+
     def test_tickets_card_visible_on_my_account_with_zero_tickets(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_prepare_home_portal_values]
         # Found live 2026-08-29 as a Prospective Ham persona looking for

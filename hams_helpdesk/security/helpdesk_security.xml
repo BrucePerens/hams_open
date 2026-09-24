@@ -20,6 +20,26 @@
             <field name="user_ids" eval="[(4, ref('base.user_admin')), (4, ref('base.user_root'))]"/>
         </record>
 
+        <!-- Privilege-separation fix (found live 2026-09-23 by hams_shared/tools/
+        check_burn_list.py's own CRITICAL SERVICE-ACCOUNT PRIVILEGE rule, while building the
+        unrelated NCMEC mandatory-reporting workflow, fixed here rather than left blocking
+        test.py's own pre-flight linter gate for every future run): user_ai_triage_service
+        below used to share group_helpdesk_manager with user_helpdesk_service verbatim, which
+        gave it full ticket create/unlink plus every other group_helpdesk_manager grant
+        (shift_handoff, etc.) it has no documented need for, "separately named" bought no
+        real privilege reduction. Its own comment already states the real job: read every new
+        ticket regardless of assignment, post an internal analysis note. That needs the
+        manager-scope ir.rule's "see all companies' tickets" domain (rule_helpdesk_ticket_
+        manager's own domain_force, reused verbatim below rather than duplicated, so the two
+        domains can never drift apart) plus read+write on hams_helpdesk.ticket, nothing else.
+        Matches pager_duty/security/security.xml's own group_pager_incident_creator precedent
+        for this exact "narrower group for a single-purpose service account" shape. -->
+        <record id="group_helpdesk_ai_triage_service" model="res.groups">
+            <field name="name">Helpdesk AI Triage Service Account Group</field>
+            <field name="privilege_id" ref="privilege_helpdesk"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
         <record id="rule_helpdesk_ticket_user" model="ir.rule">
             <field name="name">Helpdesk Ticket User</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
@@ -32,6 +52,13 @@
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
             <field name="domain_force">[('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('group_helpdesk_manager'))]"/>
+        </record>
+
+        <record id="rule_helpdesk_ticket_ai_triage" model="ir.rule">
+            <field name="name">Helpdesk Ticket AI Triage Service</field>
+            <field name="model_id" ref="model_hams_helpdesk_ticket"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('group_helpdesk_ai_triage_service'))]"/>
         </record>
 
         <record id="rule_helpdesk_ticket_portal" model="ir.rule">
@@ -58,9 +85,10 @@
         the AI-context MCP server that reads new tickets and posts an internal (admin-only, mail.mt_note)
         note with its analysis, not user_helpdesk_service, matching this codebase's own convention of
         one narrow service account per feature (see docs/proposals/GENERALIZED_AI_CONTEXT_MCP_SERVER.md).
-        group_helpdesk_manager because reading every new ticket regardless of assignment needs the
-        manager-scope ir.rule (rule_helpdesk_ticket_manager), not the user-scope one (which only sees
-        tickets assigned to self or unassigned). -->
+        group_helpdesk_ai_triage_service (not group_helpdesk_manager, see that group's own 2026-09-23
+        privilege-separation comment above): reading every new ticket regardless of assignment needs a
+        manager-shaped "see all companies' tickets" ir.rule domain, but nothing here needs manager's
+        full create/unlink/shift_handoff grants too. -->
         <record id="user_ai_triage_service" model="res.users">
             <field name="name">AI Ticket Triage Service Account</field>
             <field name="login">ai_triage_service_internal</field>
@@ -69,7 +97,7 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager')])]"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_ai_triage_service')])]"/>
         </record>
     </data>
 </odoo>

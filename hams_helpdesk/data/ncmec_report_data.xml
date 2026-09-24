@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<!-- docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8:
+     hams.com's own designated NCMEC CyberTipline reporting-contact info, "for now" per Bruce's
+     own answer, a real ir.config_parameter value the report-packet assembly
+     (models/helpdesk_ticket.py's own _ncmec_assemble_report_packet) reads at report-creation
+     time, not a hardcoded string, so it can be updated later without a code change.
+
+     Deliberately noupdate="1" (like this module's own mail_alias_data.xml): a production admin
+     who has since changed either value must not have that change silently reverted by a later
+     module upgrade. NOT whitelisted for write via zero_sudo (only read, see
+     zero_sudo/models/security_utils.py's own _get_param_read_whitelist): changing hams.com's own
+     designated NCMEC contact is a real operational decision, made directly in Settings by an
+     administrator, not something any automated flow should be able to rewrite.
+
+     hams_helpdesk.ncmec_api_base_url/_username/_password are deliberately NOT seeded here at
+     all, unset by default is the whole point (see models/helpdesk_ticket.py's own
+     _NCMEC_PARAM_BASE_URL comment): hams.com does not have real NCMEC API credentials as of this
+     writing, and an unset base URL is what keeps action_ncmec_report on the manual-portal-
+     paste-in fallback path until a real deployment explicitly configures one. -->
+<odoo>
+    <data noupdate="1">
+        <record id="ncmec_contact_email_param" model="ir.config_parameter">
+            <field name="key">hams_helpdesk.ncmec_contact_email</field>
+            <field name="value">admin@hams.com</field>
+        </record>
+        <record id="ncmec_contact_phone_param" model="ir.config_parameter">
+            <field name="key">hams_helpdesk.ncmec_contact_phone</field>
+            <field name="value">+1 510-473-7367</field>
+        </record>
+    </data>
+</odoo>
