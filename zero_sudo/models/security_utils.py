@@ -928,6 +928,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # so it can be updated later without a code change.
             "hams_helpdesk.ncmec_contact_email",
             "hams_helpdesk.ncmec_contact_phone",
+            # Not a secret either -- where action_ncmec_report emails the assembled packet while
+            # no real NCMEC API credentials exist (Bruce's own 2026-09-24 instruction to keep
+            # the report action working now rather than block on that). Defaults to his own
+            # address in code; listed here so it can be reconfigured later without a code change.
+            "hams_helpdesk.ncmec_fallback_report_email",
         ]
 
     @api.model
