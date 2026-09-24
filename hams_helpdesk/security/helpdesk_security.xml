@@ -45,7 +45,7 @@
             forgets to add is visible to external AI by default, the wrong failure mode for
             anything that could touch child safety. This group's own module now DOES define
             a csam_enticement_trafficking category (see helpdesk_ticket.py's own
-            _CSAM_TICKET_TYPE, added by this same NCMEC-reporting-workflow branch) -- and it
+            _CSAM_TICKET_TYPE, added by this same NCMEC-reporting-workflow branch), and it
             is deliberately never added to the allow-list below. The allow-list is the
             reverse of a ban-list: external AI sees NO ticket category by default, and a
             category becomes visible to it only once someone deliberately adds it here.
@@ -53,7 +53,7 @@
             two ordinary categories that existed before this branch, 'general' and
             'hams_local_relay', neither of which is sensitive. Whoever later wants
             csam_enticement_trafficking visible to external AI is responsible for deciding
-            that deliberately, on its own merits -- it is not anticipated or hardcoded here,
+            that deliberately, on its own merits; it is not anticipated or hardcoded here,
             and per the proposal's own reasoning (an external AI vendor's own abuse-detection
             systems could flag hams.com's own account as the party transmitting apparent
             CSAM), it is not expected to ever join this list.
