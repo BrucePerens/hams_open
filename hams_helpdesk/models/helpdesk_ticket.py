@@ -7,6 +7,7 @@ from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import (
     urlopen_ssrf_safe as _urlopen_ssrf_safe,
 )
 import base64
+import html
 import logging
 import urllib.error
 import urllib.request
@@ -45,6 +46,16 @@ _NCMEC_PARAM_USERNAME = "hams_helpdesk.ncmec_api_username"
 _NCMEC_PARAM_PASSWORD = "hams_helpdesk.ncmec_api_password"
 _NCMEC_PARAM_CONTACT_EMAIL = "hams_helpdesk.ncmec_contact_email"
 _NCMEC_PARAM_CONTACT_PHONE = "hams_helpdesk.ncmec_contact_phone"
+# Bruce's own explicit instruction, 2026-09-24: override the "legal review blocks launch" gate
+# docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md's Implementation Phase 9 otherwise
+# states ("we will modify the software as required by legal review but we need it working
+# now"). Real, unreviewed API credentials still don't exist (see the comment block below), so
+# action_ncmec_report's fallback -- instead of just blocking an admin with an error -- emails
+# the assembled packet to this address so the report is actually, functionally routed to a
+# human who can act on it today. Configurable rather than a hardcoded literal, matching every
+# other NCMEC_PARAM here; defaults to Bruce's own address since he is, as of this writing, the
+# only admin.
+_NCMEC_PARAM_FALLBACK_EMAIL = "hams_helpdesk.ncmec_fallback_report_email"
 
 # NCMEC's real CyberTipline Reporting API (confirmed directly against NCMEC's own published
 # technical documentation, https://report.cybertip.org/ispws/documentation, 2026-09-23): HTTP
@@ -222,6 +233,14 @@ class HelpdeskTicket(models.Model):
     ncmec_report_state = fields.Selection(
         [
             ("not_reported", "Not Reported"),
+            # Real bug caught in review, 2026-09-24: this used to be conflated with
+            # report_submitted (the state a REAL NCMEC filing produces), which permanently
+            # blocked action_ncmec_report/action_ncmec_mark_report_filed_manually from ever
+            # running again -- meaning once the email fallback fired, there was no path left to
+            # record that the incident was ALSO actually, really filed with NCMEC. A distinct,
+            # non-terminal state fixes that: see the double-filing guard comments on both of
+            # those methods below for exactly what each state still allows.
+            ("emailed_fallback", "Emailed To Reporting Contact (Not Yet Filed With NCMEC)"),
             ("report_submitted", "Report Submitted"),
             ("report_confirmed", "Report Confirmed"),
         ],
@@ -230,7 +249,8 @@ class HelpdeskTicket(models.Model):
         required=True,
         tracking=True,
         help="Prevents double-filing the same incident (section G's own requirement): once this "
-        "is report_submitted or report_confirmed, action_ncmec_report refuses to submit again.",
+        "is report_submitted or report_confirmed, action_ncmec_report refuses to submit again. "
+        "emailed_fallback is deliberately NOT terminal -- see this field's own selection list.",
     )
     ncmec_report_reference = fields.Char(
         string="NCMEC Report Reference",
@@ -884,14 +904,17 @@ class HelpdeskTicket(models.Model):
         same reason action_ncmec_apply_legal_hold_manually is: filing a federal mandatory report
         is not an ordinary helpdesk-manager action. Refuses outright (server-side, not just a
         disabled/hidden button -- section G's own explicit "inert, not just hidden" requirement)
-        once ncmec_report_state is no longer 'not_reported', so this can never double-file the
-        same incident."""
+        once ncmec_report_state is report_submitted or report_confirmed -- the two states a REAL
+        NCMEC filing produces -- so this can never double-file the same incident with NCMEC
+        itself. emailed_fallback is deliberately NOT one of those two: it means a human was
+        emailed the packet, not that NCMEC was actually told, so this must still be callable
+        from that state (e.g. once real API credentials get configured, or to resend)."""
         self.ensure_one()
         if not (self.env.su or self.env.user.has_group("base.group_system")):
             raise AccessError(_("Only an administrator can file an NCMEC report."))
         if self.ticket_type != _CSAM_TICKET_TYPE:
             raise UserError(_("This ticket is not a child-safety mandatory-report ticket."))
-        if self.ncmec_report_state != "not_reported":
+        if self.ncmec_report_state in ("report_submitted", "report_confirmed"):
             raise UserError(
                 _("This incident was already reported to NCMEC (status: %s).")
                 % dict(self._fields["ncmec_report_state"]._description_selection(self.env)).get(
@@ -903,20 +926,73 @@ class HelpdeskTicket(models.Model):
         base_url = utils._get_system_param(_NCMEC_PARAM_BASE_URL, "")
         if not base_url:
             # No real API credentials configured -- see this module's own top-of-file comment
-            # on NCMEC's real CyberTipline Reporting API for why this is the honest default
-            # today (credentials must be requested from NCMEC directly; hams.com does not have
-            # them yet). The packet is already assembled and visible on the form
-            # (ncmec_report_packet) -- an admin copies it into NCMEC's own reporting portal,
-            # then calls action_ncmec_mark_report_filed_manually below once that's done.
-            raise UserError(
-                _(
-                    "No NCMEC API credentials are configured (hams_helpdesk.ncmec_api_base_url "
-                    "is unset). Copy the report packet below into NCMEC's own CyberTipline "
-                    "reporting portal (https://report.cybertip.org) and then use 'Mark Filed "
-                    "Manually' to record that this incident has been reported."
-                )
-            )
+            # on NCMEC's real CyberTipline Reporting API for why (credentials must be requested
+            # from NCMEC directly; hams.com does not have them yet), and on Bruce's own
+            # 2026-09-24 instruction to keep this working regardless. Email the already-assembled
+            # packet to a real human (_NCMEC_PARAM_FALLBACK_EMAIL) rather than just blocking the
+            # admin with an error -- the packet is also still shown read-only on the form either
+            # way, so a portal-paste is always available as a manual alternative too, and
+            # action_ncmec_mark_report_filed_manually below still exists for recording NCMEC's own
+            # reference once that portal step happens.
+            self._ncmec_email_report_fallback()
+            return
         self._ncmec_submit_report_via_api(base_url)
+
+    # [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
+    # Verified by [@ANCHOR: test_action_ncmec_report_without_credentials_emails_the_fallback_contact]
+    def _ncmec_email_report_fallback(self):
+        """The working default while no real NCMEC API credentials exist: send the already
+        assembled report packet as a real email, so filing this mandatory report doesn't dead-end
+        on an error an admin has to notice and act on manually. Not a substitute for actually
+        filing with NCMEC -- ncmec_report_state goes to emailed_fallback, not report_submitted
+        (that state is reserved for a real filing, see its own field comment), and
+        ncmec_report_reference records that this was an email fallback, not a real NCMEC-issued
+        reference, so nothing here could be mistaken for a completed filing later."""
+        self.ensure_one()
+        utils = self.env["zero_sudo.security.utils"]
+        fallback_email = utils._get_system_param(_NCMEC_PARAM_FALLBACK_EMAIL, "bruce@perens.com")
+        # No .sudo()/service-account elevation needed: mail.mail's own ir.model.access.csv
+        # (access_mail_mail_system, stock Odoo) already grants full CRUD to base.group_system,
+        # and action_ncmec_report already refused to reach here unless the calling user is in
+        # that group (or su), checked at the top of that method.
+        #
+        # ncmec_report_packet is built from plain Char/Text fields (ticket name, callsign, etc.)
+        # that are not HTML-escaped at the source -- interpolating it into body_html unescaped
+        # would be a stored-HTML-injection path into an outbound email carrying sensitive
+        # child-safety content (caught in review, 2026-09-24: any internal user with ticket-create
+        # rights can set an arbitrary ticket name/type via backend or RPC, not just the portal
+        # controller, which is the only caller that restricts the CSAM category). html.escape()
+        # first, same stdlib convention ham_base/models/res_users_impersonate.py already uses.
+        escaped_packet = html.escape(self.ncmec_report_packet or "")
+        mail = self.env["mail.mail"].create(
+            {
+                "subject": _(
+                    "MANDATORY CHILD-SAFETY REPORT -- helpdesk ticket #%(ticket_id)s needs "
+                    "filing with NCMEC",
+                    ticket_id=self.id,
+                ),
+                "email_to": fallback_email,
+                "body_html": _(
+                    "<p>No NCMEC API credentials are configured yet, so this report could not "
+                    "be filed automatically. It needs to be filed with NCMEC's CyberTipline "
+                    "(https://report.cybertip.org) as soon as possible.</p><pre>%(packet)s</pre>",
+                    packet=escaped_packet,
+                ),
+            }
+        )
+        mail.send()
+        self.write(
+            {
+                "ncmec_report_state": "emailed_fallback",
+                "ncmec_report_reference": _(
+                    "Emailed to %(email)s (no NCMEC API credentials configured) -- not yet "
+                    "filed with NCMEC itself.",
+                    email=fallback_email,
+                ),
+                "ncmec_report_submitted_at": fields.Datetime.now(),
+                "ncmec_report_submitted_by_id": self.env.user.id,
+            }
+        )
 
     # [@ANCHOR: hams_helpdesk:COMM_ncmec_submit_report_via_api]
     def _ncmec_submit_report_via_api(self, base_url):
@@ -1025,17 +1101,19 @@ class HelpdeskTicket(models.Model):
         """The fallback half of the "Report" button flow (section G): after an admin has
         copied ncmec_report_packet into NCMEC's own reporting portal by hand (no API
         credentials configured -- see action_ncmec_report), this records that the incident has
-        been reported, with the same double-file guard action_ncmec_report itself uses. The
-        real NCMEC-issued reference (if the portal gives one) is typed into ncmec_report_
-        reference directly on the form afterward -- an ordinary field edit, not a separate
-        wizard, matching this ticket model's own existing preference for plain field edits over
-        wizards where a value has no other structure to validate."""
+        been reported, with the same double-file guard action_ncmec_report itself uses (see that
+        method's own docstring on why emailed_fallback is deliberately not one of the two states
+        this refuses on -- an admin who was emailed the packet and then filed it by hand must
+        still be able to call this). The real NCMEC-issued reference (if the portal gives one)
+        is typed into ncmec_report_reference directly on the form afterward -- an ordinary field
+        edit, not a separate wizard, matching this ticket model's own existing preference for
+        plain field edits over wizards where a value has no other structure to validate."""
         self.ensure_one()
         if not (self.env.su or self.env.user.has_group("base.group_system")):
             raise AccessError(_("Only an administrator can mark an NCMEC report as filed."))
         if self.ticket_type != _CSAM_TICKET_TYPE:
             raise UserError(_("This ticket is not a child-safety mandatory-report ticket."))
-        if self.ncmec_report_state != "not_reported":
+        if self.ncmec_report_state in ("report_submitted", "report_confirmed"):
             raise UserError(
                 _("This incident was already reported to NCMEC (status: %s).")
                 % dict(self._fields["ncmec_report_state"]._description_selection(self.env)).get(
