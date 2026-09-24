@@ -314,6 +314,44 @@ class HelpdeskTicket(models.Model):
             self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
             self.with_env(hd_env).message_post(body=_("Ticket closed by customer."))
 
+    # [@ANCHOR: hams_helpdesk:COMM_mcp_post_internal_note]
+    def mcp_post_internal_note(self, note):
+        """Posts ``note`` to this ticket's own chatter as an internal
+        (admin-only, mail.mt_note) note, for the external-AI ticket-triage
+        MCP server's post_internal_note tool
+        (daemons/hams_ticket_triage_mcp/main.py in hams_com). Mirrors
+        pager_duty's pager.incident.mcp_add_note(): message_post()'s
+        default ``_mail_post_access = 'write'`` (see mail.thread) would
+        otherwise require write access to this model, so the narrowly
+        scoped calling account (group_ai_triage_external_service, see
+        security/helpdesk_security.xml) never gets write access at all --
+        this method elevates internally to hams_helpdesk.user_helpdesk_service,
+        the same account _automated_routing_and_notification() and
+        action_portal_close() above already elevate to for their own
+        message_post() calls.
+
+        The ``self.read(["ticket_type"])`` below is not incidental -- it
+        runs BEFORE the elevation, so it is evaluated under the CALLING
+        identity's own env, which forces exactly the same ir.rule
+        (rule_helpdesk_ticket_ai_triage_external_allowlist) and
+        ir.model.access check that already govern which tickets that
+        identity can list/read. If this ticket's ticket_type isn't on the
+        rule's allow-list -- or the caller isn't in
+        group_ai_triage_external_service (or any other group this model
+        grants read access to) at all -- this raises AccessError and
+        nothing is posted. That keeps "which tickets external AI may
+        touch" defined in exactly one place, the ir.rule domain, instead
+        of duplicating an allow-list of ticket_type values here that could
+        drift out of sync with it.
+        """
+        # [@ANCHOR: hams_helpdesk:mcp_post_internal_note]
+        self.ensure_one()
+        self.read(["ticket_type"])
+        utils = self.env["zero_sudo.security.utils"]
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        self.with_env(hd_env).message_post(body=note, subtype_xmlid="mail.mt_note")
+        return True
+
     def message_new(self, msg_dict, custom_values=None):
         """Overrides mail.thread's own default so a ticket created from an
         inbound email (see ingest_inbound_email() below) actually gets
