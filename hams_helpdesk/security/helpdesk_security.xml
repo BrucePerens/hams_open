@@ -20,24 +20,67 @@
             <field name="user_ids" eval="[(4, ref('base.user_admin')), (4, ref('base.user_root'))]"/>
         </record>
 
-        <!-- Privilege-separation fix (found live 2026-09-23 by hams_shared/tools/
-        check_burn_list.py's own CRITICAL SERVICE-ACCOUNT PRIVILEGE rule, while building the
-        unrelated NCMEC mandatory-reporting workflow, fixed here rather than left blocking
-        test.py's own pre-flight linter gate for every future run): user_ai_triage_service
-        below used to share group_helpdesk_manager with user_helpdesk_service verbatim, which
-        gave it full ticket create/unlink plus every other group_helpdesk_manager grant
-        (shift_handoff, etc.) it has no documented need for, "separately named" bought no
-        real privilege reduction. Its own comment already states the real job: read every new
-        ticket regardless of assignment, post an internal analysis note. That needs the
-        manager-scope ir.rule's "see all companies' tickets" domain (rule_helpdesk_ticket_
-        manager's own domain_force, reused verbatim below rather than duplicated, so the two
-        domains can never drift apart) plus read+write on hams_helpdesk.ticket, nothing else.
-        Matches pager_duty/security/security.xml's own group_pager_incident_creator precedent
-        for this exact "narrower group for a single-purpose service account" shape. -->
-        <record id="group_helpdesk_ai_triage_service" model="res.groups">
-            <field name="name">Helpdesk AI Triage Service Account Group</field>
+        <record id="group_ai_triage_external_service" model="res.groups">
+            <!-- External-AI ticket-triage allow-list, 2026-09-23. Full reasoning:
+            hams_com's docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md section G
+            ("External-AI visibility into hams_helpdesk tickets is allow-listed, not
+            ban-listed") and the to-do this closes,
+            night_shift_todo/medium/duplicate-service-account-privilege-helpdesk-security-af9e1c30.md
+            (both in hams_com).
+
+            Why this group exists at all: user_ai_triage_service's real backend is Google's
+            Gemini API (via the `agy` CLI / daemons/hams_ticket_triage_mcp in hams_com), a
+            genuine external, third-party cloud AI, not a local/on-device model, and it
+            used to share group_helpdesk_manager with user_helpdesk_service, giving the two
+            differently-named, differently-trusted accounts identical grants (no real
+            privilege separation; flagged by hams_shared/tools/check_burn_list.py). This
+            group replaces that shared grant with one scoped to exactly what an
+            external-AI-facing account needs: read-only access to hams_helpdesk.ticket (see
+            ir.model.access.csv), gated further by rule_helpdesk_ticket_ai_triage_external_allowlist
+            below on the specific ticket categories external AI is allowed to see at all.
+
+            Why allow-list, not ban-list: a ban-list (block specific sensitive categories,
+            allow everything else by default) requires remembering to add every future
+            sensitive category to the ban list the moment it's created, and a category someone
+            forgets to add is visible to external AI by default, the wrong failure mode for
+            anything that could touch child safety. This group's own module now DOES define
+            a csam_enticement_trafficking category (see helpdesk_ticket.py's own
+            _CSAM_TICKET_TYPE, added by this same NCMEC-reporting-workflow branch) -- and it
+            is deliberately never added to the allow-list below. The allow-list is the
+            reverse of a ban-list: external AI sees NO ticket category by default, and a
+            category becomes visible to it only once someone deliberately adds it here.
+            Today's allow-list (rule_helpdesk_ticket_ai_triage_external_allowlist) covers the
+            two ordinary categories that existed before this branch, 'general' and
+            'hams_local_relay', neither of which is sensitive. Whoever later wants
+            csam_enticement_trafficking visible to external AI is responsible for deciding
+            that deliberately, on its own merits -- it is not anticipated or hardcoded here,
+            and per the proposal's own reasoning (an external AI vendor's own abuse-detection
+            systems could flag hams.com's own account as the party transmitting apparent
+            CSAM), it is not expected to ever join this list.
+
+            Why privilege_helpdesk (not a new privilege category): pager_duty/security/
+            security.xml already establishes the precedent that one privilege category can
+            hold several non-hierarchical, narrowly-scoped groups side by side:
+            privilege_pager_duty holds group_pager_admin, group_pager_service,
+            group_pager_mcp_triage_service (the direct model for this group) and
+            group_pager_incident_creator, none of which imply one another. This group follows
+            that same shape under privilege_helpdesk rather than introducing a whole new
+            privilege category for a single group.
+
+            Deliberately NOT implied by / implying group_helpdesk_user or
+            group_helpdesk_manager: those groups' own ir.rule
+            (rule_helpdesk_ticket_user / rule_helpdesk_ticket_manager) would OR together with
+            this group's rule on the same model (Odoo ir.rule records for the SAME user are
+            OR'ed, not AND'ed, across every group that user is in; see
+            pager_check_website_company_rule's own comment in pager_duty/security/security.xml
+            for the same gotcha already caught there once), which would silently defeat the
+            allow-list the moment this group's user also picked up either of those. Base
+            internal-user status (base.group_user) is granted directly on the service-account
+            user record below instead, exactly matching how
+            pager_duty.user_pager_mcp_triage_service is defined, not via implied_ids on this
+            group. -->
+            <field name="name">AI Ticket Triage External Service Account Group</field>
             <field name="privilege_id" ref="privilege_helpdesk"/>
-            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
         </record>
 
         <record id="rule_helpdesk_ticket_user" model="ir.rule">
@@ -54,18 +97,27 @@
             <field name="groups" eval="[(4, ref('group_helpdesk_manager'))]"/>
         </record>
 
-        <record id="rule_helpdesk_ticket_ai_triage" model="ir.rule">
-            <field name="name">Helpdesk Ticket AI Triage Service</field>
-            <field name="model_id" ref="model_hams_helpdesk_ticket"/>
-            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
-            <field name="groups" eval="[(4, ref('group_helpdesk_ai_triage_service'))]"/>
-        </record>
-
         <record id="rule_helpdesk_ticket_portal" model="ir.rule">
             <field name="name">Helpdesk Ticket Portal</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
             <field name="domain_force">[('company_id', 'in', company_ids), ('partner_id', '=', user.partner_id.id), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+        </record>
+
+        <record id="rule_helpdesk_ticket_ai_triage_external_allowlist" model="ir.rule">
+            <!-- The actual enforcement point for the allow-list described on
+            group_ai_triage_external_service above: a group alone controls whether the
+            external-AI service account can see hams_helpdesk.ticket at all (see
+            ir.model.access.csv), not which records within it. This domain is what keeps
+            excluded categories out of its query results even if that account's model-level
+            access were ever accidentally widened some other way. Update THIS list, and only
+            this list, when a category is deliberately approved for external-AI visibility;
+            csam_enticement_trafficking is never added (see group_ai_triage_external_service's
+            own comment above). -->
+            <field name="name">Helpdesk Ticket AI Triage External Allowlist</field>
+            <field name="model_id" ref="model_hams_helpdesk_ticket"/>
+            <field name="domain_force">[('company_id', 'in', company_ids), ('ticket_type', 'in', ['general', 'hams_local_relay'])]</field>
+            <field name="groups" eval="[(4, ref('group_ai_triage_external_service'))]"/>
         </record>
     </data>
     <data>
@@ -84,11 +136,21 @@
         <!-- AI Ticket Triage Service Account, 2026-09-22: a dedicated, single-purpose account for
         the AI-context MCP server that reads new tickets and posts an internal (admin-only, mail.mt_note)
         note with its analysis, not user_helpdesk_service, matching this codebase's own convention of
-        one narrow service account per feature (see docs/proposals/GENERALIZED_AI_CONTEXT_MCP_SERVER.md).
-        group_helpdesk_ai_triage_service (not group_helpdesk_manager, see that group's own 2026-09-23
-        privilege-separation comment above): reading every new ticket regardless of assignment needs a
-        manager-shaped "see all companies' tickets" ir.rule domain, but nothing here needs manager's
-        full create/unlink/shift_handoff grants too. -->
+        one narrow service account per feature (see docs/proposals/GENERALIZED_AI_CONTEXT_MCP_SERVER.md,
+        in hams_com).
+
+        Revised 2026-09-23: was group_helpdesk_manager (identical to user_helpdesk_service's own
+        grant, the duplicate-service-account-privilege finding check_burn_list.py flagged; see
+        night_shift_todo/medium/duplicate-service-account-privilege-helpdesk-security-af9e1c30.md
+        in hams_com). This account's real backend is Google's Gemini API, a genuine external/cloud
+        AI, so it now gets group_ai_triage_external_service instead; see that group's own long
+        comment above for the full allow-list rationale. base.group_user is listed directly here
+        (not via implied_ids on the group itself) to match pager_duty.user_pager_mcp_triage_service's
+        own definition exactly. A (6, 0, ...) replace, not (4, ...) add: on an upgrade of an
+        existing database this actively drops the old group_helpdesk_manager membership rather
+        than leaving it behind, matching user_pager_incident_creator's own comment in
+        pager_duty/security/security.xml for the same reasoning. This record deliberately stays in
+        this non-noupdate <data> block so that drop actually takes effect on -u. -->
         <record id="user_ai_triage_service" model="res.users">
             <field name="name">AI Ticket Triage Service Account</field>
             <field name="login">ai_triage_service_internal</field>
@@ -97,7 +159,7 @@
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
-            <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_ai_triage_service')])]"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_ai_triage_external_service'), ref('base.group_user')])]"/>
         </record>
     </data>
 </odoo>
