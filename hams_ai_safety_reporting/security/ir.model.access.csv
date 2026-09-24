@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hams_helpdesk_ticket_ai_safety_reporting,hams_helpdesk.ticket ai safety reporting service,hams_helpdesk.model_hams_helpdesk_ticket,group_ai_safety_reporting_service,0,0,1,0
