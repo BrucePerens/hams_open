@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<odoo>
+    <data noupdate="1">
+        <record id="group_ai_safety_reporting_service" model="res.groups">
+            <!-- AI safety self-reporting service account, 2026-09-24. Full design context:
+            docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md (hams_com), section G, Phase 7
+            item 1 ("bot self-reporting"). A safety-classification daemon
+            (daemons/hams_simulated_bots, hams_com) runs an LLM pass over bot QSO transcripts
+            and, when it flags self-harm, sexual content, or an uncivil interaction, files a
+            hams_helpdesk.ticket (ticket_type='ai_safety_concern', see helpdesk_ticket.py) over
+            the JSON-2 RPC API, authenticated as this account.
+
+            Named "ai_safety_reporting", not "bot_reporting" or anything bot-specific: Phase 7
+            item 2 (the "Official Observer" agent, a distinct feature, not built by this module)
+            is expected to reuse this exact same reporting path later. Hardcoding "bot" into
+            this identifier would misdescribe that second caller.
+
+            Why privilege_helpdesk (not a new privilege category): reuses the existing
+            hams_helpdesk.privilege_helpdesk category, the same reasoning hams_helpdesk's own
+            group_ai_triage_external_service already gives for reusing it instead of inventing a
+            new one (see hams_helpdesk/security/helpdesk_security.xml), and the same
+            "privilege_helpdesk holds several non-hierarchical, narrowly-scoped groups side by
+            side" precedent pager_duty/security/security.xml establishes for privilege_pager_duty.
+
+            Why a brand-new group rather than reusing group_ai_triage_external_service: that
+            group is READ-only and allow-list scoped for an external triage AI reading existing
+            tickets; this account's job is the opposite shape (CREATE-only, never read, write, or
+            unlink; it has no business seeing any ticket, including its own, once filed). Base
+            internal-user status (base.group_user) is granted directly on the service-account
+            user record below, not via implied_ids on this group, matching every other narrow
+            service-account group in this codebase (group_ai_triage_external_service,
+            pager_duty.user_pager_mcp_triage_service, and others). Deliberately NOT implied
+            by/implying group_helpdesk_user or group_helpdesk_manager: those groups' own ir.rule
+            (rule_helpdesk_ticket_user / rule_helpdesk_ticket_manager) would OR together with
+            rule_helpdesk_ticket_ai_safety_reporting_creator below on the same model (Odoo
+            ir.rule records for the SAME user are OR'ed, not AND'ed, across every group that user
+            is in), which would silently defeat this account's category scoping the moment it
+            also picked up either of those. -->
+            <field name="name">AI Safety Reporting Service Account Group</field>
+            <field name="privilege_id" ref="hams_helpdesk.privilege_helpdesk"/>
+        </record>
+
+        <record id="rule_helpdesk_ticket_ai_safety_reporting_creator" model="ir.rule">
+            <!-- Defense-in-depth beyond the create-only ir.model.access grant (see
+            ir.model.access.csv): an unconditional domain_force, matching pager_duty's own
+            pager_incident_website_rule_creator precedent, WOULD be `[(1, '=', 1)]`. Instead,
+            this codebase's own "narrowest useful grant" ethos (e.g. the CSAM allow-list rule in
+            hams_helpdesk/security/helpdesk_security.xml) calls for scoping the domain to only
+            the ticket_type values this account is meant to create, so it structurally cannot
+            create any OTHER ticket_type even if a caller-side bug tried to pass one.
+            Verified this is actually enforceable, not just declared: Odoo's ir.rule create-time
+            check validates domain_force against the record's post-insert state (see
+            test_service_account_cannot_create_a_general_ticket in
+            tests/test_ai_safety_reporting.py, which proves both the positive create() case for
+            ai_safety_concern and the negative case for 'general'/the default). Includes
+            csam_enticement_trafficking alongside ai_safety_concern: this account's real-world
+            caller, the safety-classification daemon, can flag any of the four
+            SafetyClassification categories, and a genuine CSAM/enticement/trafficking flag must
+            still be filed as _CSAM_TICKET_TYPE (hams_helpdesk's own mandatory NCMEC-reporting
+            workflow, see helpdesk_ticket.py there) rather than folded into the general
+            ai_safety_concern category.
+
+            Known real gap, found 2026-09-24 by this module's own tests (see
+            test_service_account_creating_a_csam_ticket_currently_fails_on_the_core_write_
+            requirement in tests/test_ai_safety_reporting.py for the full account): this rule's
+            domain DOES allow a csam_enticement_trafficking create for this account, but
+            hams_helpdesk.ticket.create()'s own pre-existing NCMEC packet-assembly step still
+            fails it with an unrelated AccessError, because that step writes to the ticket under
+            the ambient (calling) identity rather than an elevated service account, and this is
+            the first genuinely create-only caller of create() for this ticket_type. That is a
+            hams_helpdesk-side gap, not a flaw in this rule's own domain: the domain is left as
+            written (not narrowed to just ai_safety_concern) so that fixing the write requirement
+            on the hams_helpdesk side is sufficient on its own, with no matching change needed
+            here. -->
+            <field name="name">Helpdesk Ticket AI Safety Reporting Creator</field>
+            <field name="model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="domain_force">[('ticket_type', 'in', ['ai_safety_concern', 'csam_enticement_trafficking'])]</field>
+            <field name="groups" eval="[(4, ref('group_ai_safety_reporting_service'))]"/>
+        </record>
+    </data>
+    <data>
+        <!-- AI Safety Reporting Service Account. Deliberately in this non-noupdate <data> block,
+        not the noupdate="1" block above, so that a (6, 0, ...) group-membership fix on this
+        record actually takes effect on an existing database when the module is upgraded (-u),
+        matching hams_helpdesk.user_ai_triage_service's own comment in
+        hams_helpdesk/security/helpdesk_security.xml for exactly why. -->
+        <record id="user_ai_safety_reporting_service" model="res.users">
+            <field name="name">AI Safety Reporting Service Account</field>
+            <field name="login">ai_safety_reporting_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_ai_safety_reporting_service'), ref('base.group_user')])]"/>
+        </record>
+    </data>
+</odoo>
