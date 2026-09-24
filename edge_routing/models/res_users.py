@@ -4,11 +4,9 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
-from odoo import models, fields, api
+from odoo import models, fields
 
-import logging
 
-_logger = logging.getLogger(__name__)
 class ResUsersEdgeRouting(models.Model):
     name = fields.Char(string="Name", required=True)
     """
@@ -19,89 +17,30 @@ class ResUsersEdgeRouting(models.Model):
     _name = "res.users"
     _inherit = ["res.users", "edge.routing.mixin"]
 
-    # [@ANCHOR: edge_routing:COMM_res_users_get_record_by_slug]
-    @api.model
-    def get_record_by_slug(self, slug):
-        # Not @distributed_cache()'d, unlike the mixin's own base
-        # implementation: the login-fallback branch below resolves against
-        # res.users.login, and routing_mixin.write()'s cache-invalidation
-        # hook only fires on website_slug/name changes (it has no way to
-        # know which slugs a login change could affect). Caching this
-        # method would let a stale 404 (or a stale hit) for a slug that
-        # matches a changed or newly-created login survive for the full
-        # 24h Redis TTL.
-        res = super().get_record_by_slug(slug)
-        if not res and slug:
-            # Virtual Slug Fallback: Check if the URL matches their unique login (e.g. Callsign)
-            #
-            # Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid,
-            # 2026-09-12): this override used to accept the same
-            # caller-supplied `override_svc_uid` the base mixin method did,
-            # with the same zero-validation impersonation gap. Removed for
-            # the same reason (see routing_mixin.py's own get_record_by_slug).
-            if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-                if self.env.cr.fetchone():
-                    try:
-                        # bug-hunt (2026-09-09): savepoint is load-
-                        # bearing -- _get_service_uid()'s SQL-backed uid
-                        # lookup does a real Postgres `RAISE EXCEPTION`
-                        # (zero_sudo_get_service_uid() in
-                        # zero_sudo/data/postgres_procedures.xml) on a
-                        # missing/disabled/non-service account, which
-                        # aborts the current transaction. Without a
-                        # savepoint to roll back to, the `target_env =
-                        # self.env` fallback below is caught here fine,
-                        # but the `target_env["res.users"].search(...)`
-                        # call a few lines down would then raise
-                        # `InFailedSqlTransaction` uncaught, since every
-                        # statement on a poisoned transaction fails
-                        # until rolled back. Class 20, one level deeper.
-                        with self.env.cr.savepoint():
-                            target_env = self.env["zero_sudo.security.utils"]._get_service_env(
-                                "edge_routing.edge_routing_service_account"
-                            )
-                    except Exception as e:  # audit-ignore-catch-all
-                        # bug-hunt (2026-09-09): _get_service_env() raises
-                        # AccessError (not KeyError/ValueError) on a bad
-                        # xml_id, plus a possible psycopg2 error from the
-                        # SQL-backed uid lookup -- narrowed to the wrong
-                        # types, this fallback never actually caught a
-                        # real resolution failure. Class 20.
-                        _logger.warning("Failed to access website settings: %s", e)
-                        target_env = self.env
-                else:
-                    target_env = self.env
-            else:
-                target_env = self.env
-
-            # bug-hunt (2026-09-09): was `("login", "=ilike",
-            # str(slug).lower())`. Odoo's `=ilike` (unlike bare `ilike`)
-            # passes its operand to SQL `ILIKE` verbatim -- no wildcard-
-            # wrapping AND no escaping of `%`/`_` (confirmed against
-            # odoo/orm/fields.py's `condition_to_sql`: `need_wildcard = '='
-            # not in operator`). `slug` here is attacker/visitor-controlled
-            # (a raw URL path segment) -- a request for `/a%/blog` sets
-            # `slug = "a%"`, matching ANY user whose `login` starts with
-            # "a" instead of failing to find an exact match. Unlike
-            # `website_slug` (DB-constrained to `^[a-z0-9\-]+$`, fixed
-            # above by switching to plain `=`), `res.users.login` is NOT
-            # charset/case-constrained -- a real login can be a mixed-case
-            # email or callsign, so case-insensitivity must stay. Escaping
-            # `%`/`_` (and a literal backslash, PostgreSQL's own default
-            # LIKE/ILIKE escape character) in the value neutralizes the
-            # wildcard injection while preserving exact, case-insensitive
-            # matching for every real login.
-            escaped_slug = (
-                str(slug).lower()
-                .replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_")
-            )
-            user = (
-                target_env["res.users"]
-                .with_context(active_test=False)
-                .search([("login", "=ilike", escaped_slug)], limit=1)
-            )
-            return user.id if user else False
-        return res
+    # get_record_by_slug() used to be overridden here to add a fallback
+    # that matched the URL slug against res.users.login when no
+    # website_slug matched. Removed (2026-09-24): every real human
+    # account's login is now an email address (see git history for
+    # "invite flow must set login=email"), which turned that fallback
+    # into a live PII exposure -- a public, unauthenticated route that
+    # let anyone probe hams.com/<email> to learn whether an account
+    # exists for that address and get redirected to its profile. Worse,
+    # SWL (Short Wave Listener) accounts never get a website_slug at all
+    # (see ham_onboarding/models/res_users_invite.py's
+    # _activate_invited_member, which only sets it in the
+    # operator_type == "ham" branch), so an SWL's email-shaped login was
+    # the ONLY thing this fallback could ever match for them -- the
+    # fallback existing at all left SWL accounts effectively unprotected
+    # by it.
+    #
+    # res.users now resolves purely through edge.routing.mixin's own
+    # get_record_by_slug() (website_slug only), inherited unmodified.
+    # Real ham accounts get a real website_slug from their callsign at
+    # signup or invite redemption; SWL and service/system accounts are
+    # simply not reachable by a public vanity-URL guess, which is the
+    # safer default -- no vanity URL for them, rather than a leaky
+    # fallback. This also means the mixin's own @distributed_cache()
+    # now covers res.users too: the old override was deliberately left
+    # uncached because the login-fallback branch wasn't covered by
+    # write()'s website_slug/name-only cache-invalidation hook, and that
+    # reason no longer applies.
