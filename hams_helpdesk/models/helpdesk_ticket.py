@@ -327,13 +327,30 @@ class HelpdeskTicket(models.Model):
 
         # [@ANCHOR: hams_helpdesk:COMM_ncmec_packet_and_legal_hold]
         # Verified by [@ANCHOR: test_csam_ticket_creation_assembles_packet_and_forces_priority]
+        # Verified by [@ANCHOR: test_csam_ticket_creation_by_a_create_only_account_still_assembles_the_packet]
         # Per-ticket, not per-vals: _CSAM_TICKET_TYPE tickets need their packet assembled and the
         # linked recording's legal hold attempted the moment they exist as real rows (their own
         # ids, e.g., are part of the packet text) -- both read-only of self, so doing this after
         # super().create() returns cannot change tickets' own length/order/contents contract.
+        #
+        # _ncmec_assemble_report_packet() runs under the elevated hams_helpdesk.user_helpdesk_
+        # service identity, not create()'s own ambient caller -- found live, 2026-09-24, while
+        # standing up Phase 7's narrow, create-only ai_safety_reporting_service_internal account
+        # (docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md section G): every prior caller
+        # of create() for this ticket_type already happened to hold broad write access, so this
+        # method's own self.write() (purely ticket fields -- see its own docstring) never failed
+        # before. A genuinely create-only account has no write access at all, so without this
+        # elevation a CSAM ticket from bot self-reporting or the Official Observer would raise
+        # here, inside create() itself, which is far worse than a merely-incomplete packet.
+        # _ncmec_apply_recording_legal_hold_best_effort() is NOT elevated the same way here --
+        # its own docstring explains at length why it deliberately stays on the ambient caller
+        # for the cross-repo (ham_communications_consent) legal-hold call specifically; it does
+        # its own narrower, internal elevation for the ticket-field writes only.
+        utils = self.env["zero_sudo.security.utils"]
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
         ncmec_tickets = tickets.filtered(lambda t: t.ticket_type == _CSAM_TICKET_TYPE)
         for ticket in ncmec_tickets:
-            ticket._ncmec_assemble_report_packet()
+            ticket.with_env(hd_env)._ncmec_assemble_report_packet()
             ticket._ncmec_apply_recording_legal_hold_best_effort()
 
         return tickets
@@ -814,16 +831,18 @@ class HelpdeskTicket(models.Model):
     # Verified by [@ANCHOR: test_legal_hold_best_effort_succeeds_when_call_succeeds]
     def _ncmec_apply_recording_legal_hold_best_effort(self):
         """Attempts to apply the legal hold "before, not after, a human reviewer confirms it"
-        (section G, verbatim) -- in the AMBIENT env this runs under (whatever created the
-        ticket), never a newly-minted service account of hams_helpdesk's own. That's a
-        deliberate choice, not an oversight: ham_communications_consent's own action_apply_
-        legal_hold is documented (comm_consent_qso_recording.py) as restricted to base.
-        group_system "until that phase adds its own scoped grant" -- and granting that scoped
-        access is a change to ham_communications_consent's own ir.model.access.csv, which lives
-        in hams_com. This phase cannot make that grant (out of scope: no hams_com edits), and
-        hams_open minting its OWN service-account identity here would be hollow -- hams_com has
-        never been asked to empower an identity hams_open invents unilaterally, so it would only
-        ever hit the exact same AccessError a moment later.
+        (section G, verbatim) -- the actual cross-repo call (_ncmec_recording_model_installed's
+        registry check and _ncmec_attempt_legal_hold_call's search()+action_apply_legal_hold())
+        runs in the AMBIENT env this method is called under, never a newly-minted service
+        account of hams_helpdesk's own. That's a deliberate choice, not an oversight: ham_
+        communications_consent's own action_apply_legal_hold is documented (comm_consent_qso_
+        recording.py) as restricted to base.group_system "until that phase adds its own scoped
+        grant" -- and granting that scoped access is a change to ham_communications_consent's
+        own ir.model.access.csv, which lives in hams_com. This phase cannot make that grant (out
+        of scope: no hams_com edits), and hams_open minting its OWN service-account identity for
+        THAT specific call would be hollow -- hams_com has never been asked to empower an
+        identity hams_open invents unilaterally, so it would only ever hit the exact same
+        AccessError a moment later, under a different name.
 
         So the realistic outcome TODAY, for a ticket created via the ordinary hams_helpdesk
         service account (group_helpdesk_manager, not base.group_system), is the graceful-
@@ -836,12 +855,23 @@ class HelpdeskTicket(models.Model):
         The proper long-term fix -- a scoped ham_communications_consent service-account grant
         for whatever identity Phase 7 (hams_com) eventually creates tickets as -- is real,
         concrete follow-up work on the hams_com side, not something this hams_open-only phase
-        can complete itself."""
+        can complete itself.
+
+        The TICKET-side bookkeeping below (ncmec_legal_hold_note, ncmec_legal_hold_applied) is a
+        different matter -- purely a hams_helpdesk-owned field, no cross-repo permission
+        question at all -- so it elevates to hams_helpdesk.user_helpdesk_service, the same
+        identity _ncmec_assemble_report_packet already uses (see create()'s own comment on why:
+        a genuinely create-only account, e.g. Phase 7's ai_safety_reporting_service_internal,
+        has no write access of its own, and this note-taking must still succeed for it, even
+        though the actual legal-hold attempt itself is correctly expected to fail for that
+        identity too, for the unrelated cross-repo reason above)."""
         self.ensure_one()
         if not self.ncmec_recording_uuid:
             return
+        utils = self.env["zero_sudo.security.utils"]
+        ticket_service = self.with_env(utils._get_service_env("hams_helpdesk.user_helpdesk_service"))
         if not self._ncmec_recording_model_installed():
-            self.ncmec_legal_hold_note = _(
+            ticket_service.ncmec_legal_hold_note = _(
                 "ham_communications_consent is not installed in this deployment -- apply the "
                 "legal hold directly on the recording once it is."
             )
@@ -854,7 +884,7 @@ class HelpdeskTicket(models.Model):
         try:
             applied = self._ncmec_attempt_legal_hold_call(_QSO_RECORDING_MODEL)
         except AccessError as e:
-            self.ncmec_legal_hold_note = _(
+            ticket_service.ncmec_legal_hold_note = _(
                 "Automatic legal hold failed (%s) -- an administrator must apply it manually "
                 "(see the Apply Legal Hold Manually button)."
             ) % e
@@ -866,12 +896,12 @@ class HelpdeskTicket(models.Model):
             )
             return
         if not applied:
-            self.ncmec_legal_hold_note = _(
+            ticket_service.ncmec_legal_hold_note = _(
                 "No QSO recording row found for uuid %s yet -- it may still be mid-ingest; "
                 "retry once it appears."
             ) % self.ncmec_recording_uuid
             return
-        self.write({"ncmec_legal_hold_applied": True, "ncmec_legal_hold_note": False})
+        ticket_service.write({"ncmec_legal_hold_applied": True, "ncmec_legal_hold_note": False})
 
     # [@ANCHOR: hams_helpdesk:COMM_ncmec_action_apply_legal_hold_manually]
     # Verified by [@ANCHOR: test_action_apply_legal_hold_manually_requires_group_system]

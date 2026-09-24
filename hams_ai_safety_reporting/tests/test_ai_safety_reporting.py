@@ -56,11 +56,7 @@ class TestAiSafetyReporting(HamsTransactionCase):
     # [@ANCHOR: test_ai_safety_reporting_service_account_can_create_ai_safety_concern_ticket]
     def test_service_account_can_create_ai_safety_concern_ticket(self):
         """Positive control for this module's actual, immediate real-world use (Phase 7 item 1:
-        self_harm / sexual_content / uncivil, via ai_safety_concern). See
-        test_service_account_creating_a_csam_ticket_currently_fails_on_the_core_write_requirement
-        below for why the fourth SafetyClassification category (CSAM) -- also allow-listed in
-        rule_helpdesk_ticket_ai_safety_reporting_creator's domain -- is NOT covered by an
-        equivalent positive test here."""
+        self_harm / sexual_content / uncivil, via ai_safety_concern)."""
         Ticket = self.env["hams_helpdesk.ticket"].with_user(self.svc_uid)
         ai_ticket = Ticket.create(
             {
@@ -72,51 +68,41 @@ class TestAiSafetyReporting(HamsTransactionCase):
         self.env.flush_all()
         self.assertEqual(ai_ticket.ticket_type, "ai_safety_concern")
 
-    # [@ANCHOR: test_ai_safety_reporting_service_account_csam_create_blocked_by_core_write_requirement]
-    def test_service_account_creating_a_csam_ticket_currently_fails_on_the_core_write_requirement(
-        self,
-    ):
-        """Real, verified finding (2026-09-24), not a design choice made here: a create-only
-        account cannot actually complete create() for a csam_enticement_trafficking ticket
-        today, even though rule_helpdesk_ticket_ai_safety_reporting_creator's own domain
-        deliberately allows it (see that rule's comment). The block is NOT the ir.rule -- no
-        "Access Denied by record rules for operation: create" is raised, the row is inserted --
-        it's hams_helpdesk.ticket.create()'s own pre-existing, already-merged NCMEC
-        packet-assembly step (COMM_ncmec_packet_and_legal_hold in helpdesk_ticket.py): for ANY
-        _CSAM_TICKET_TYPE ticket, create() unconditionally calls
-        ticket._ncmec_assemble_report_packet(), which ends in a plain self.write(...) under the
-        AMBIENT (calling) identity, not an elevated service account -- so it requires the
-        CALLER to already hold write access on hams_helpdesk.ticket. Every caller that has ever
-        exercised this path before (base.user_admin, hams_helpdesk.user_helpdesk_service, ad hoc
-        test users in group_helpdesk_manager) already held that write access, so this
-        requirement was never visible until a genuinely create-only caller -- this module's own
-        account, exactly as specified -- tried it.
+    # [@ANCHOR: test_ai_safety_reporting_service_account_can_create_csam_ticket]
+    def test_service_account_can_create_a_csam_ticket(self):
+        """Real, verified-then-fixed finding (2026-09-24): a create-only account could not
+        actually complete create() for a csam_enticement_trafficking ticket, even though
+        rule_helpdesk_ticket_ai_safety_reporting_creator's own domain deliberately allows it --
+        the block was hams_helpdesk.ticket.create()'s own NCMEC packet-assembly and legal-hold
+        steps (COMM_ncmec_packet_and_legal_hold in helpdesk_ticket.py) writing ticket fields
+        under the caller's own AMBIENT identity rather than an elevated service account. Every
+        caller that had ever exercised this path before (base.user_admin,
+        hams_helpdesk.user_helpdesk_service, ad hoc test users in group_helpdesk_manager)
+        already held write access on hams_helpdesk.ticket, so the requirement was invisible
+        until a genuinely create-only caller -- this module's own account -- tried it.
 
-        This is a real gap between this account's two explicit design requirements (create-only,
-        vs. able to create a csam_enticement_trafficking ticket) and is reported upstream rather
-        than silently patched here: fixing it means touching hams_helpdesk's own legally-mandated
-        CSAM/NCMEC reporting code (e.g. elevating _ncmec_assemble_report_packet's and
-        _ncmec_apply_recording_legal_hold_best_effort's own ticket-field writes to the existing
-        hams_helpdesk.user_helpdesk_service account, the same pattern
-        _automated_routing_and_notification already uses a few lines below in the same create()
-        flow, while leaving the cross-module ham_communications_consent legal-hold call itself in
-        the ambient env exactly as its own docstring requires) -- a change outside this module's
-        own scope and worth a deliberate decision, not an unreviewed side effect of adding a new
-        caller. See this task's own final report for the recommended fix. The rule's domain
-        still deliberately includes csam_enticement_trafficking (not narrowed to just
-        ai_safety_concern) so that fixing the write requirement on the hams_helpdesk side is
-        enough on its own to make this test's own create() call start succeeding, with no
-        matching change needed here."""
+        Fixed in helpdesk_ticket.py itself (not here): _ncmec_assemble_report_packet() now runs
+        under hams_helpdesk.user_helpdesk_service (elevated by create() before calling it), and
+        _ncmec_apply_recording_legal_hold_best_effort() elevates its own ticket-field writes
+        (ncmec_legal_hold_note/ncmec_legal_hold_applied) to the same identity internally, while
+        deliberately leaving the actual cross-repo ham_communications_consent legal-hold call on
+        the caller's ambient identity, exactly as that method's own docstring requires (that
+        specific AccessError is a separate, real, and correctly-still-open cross-repo permission
+        gap -- see its own docstring -- not something a create-only account creating the ticket
+        should be blocked by)."""
         Ticket = self.env["hams_helpdesk.ticket"].with_user(self.svc_uid)
-        with self.assertRaises(AccessError):
-            Ticket.create(
-                {
-                    "name": "AI safety flag: apparent CSAM",
-                    "description": "<p>transcript excerpt / playback link</p>",
-                    "ticket_type": "csam_enticement_trafficking",
-                }
-            )
-            self.env.flush_all()
+        csam_ticket = Ticket.create(
+            {
+                "name": "AI safety flag: apparent CSAM",
+                "description": "<p>transcript excerpt / playback link</p>",
+                "ticket_type": "csam_enticement_trafficking",
+            }
+        )
+        self.env.flush_all()
+        self.assertEqual(csam_ticket.ticket_type, "csam_enticement_trafficking")
+        # The packet-assembly step's own write succeeded (the actual fix under test) --
+        # confirmed by the packet existing at all, not just by create() not raising.
+        self.assertIn("NCMEC CyberTipline Report Packet", csam_ticket.ncmec_report_packet)
 
     # [@ANCHOR: test_ai_safety_reporting_service_account_cannot_create_other_categories]
     def test_service_account_cannot_create_a_general_ticket(self):
