@@ -31,6 +31,29 @@ redis_pool = redis.ConnectionPool(
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 
+# [@ANCHOR: user_websites:report_violation_redirect_target]
+# Verified by [@ANCHOR: test_report_violation_redirects_back_to_reported_page]
+def _report_violation_redirect_target(reported_url, query_param):
+    """Where to send the visitor back after a report_violation() submission.
+
+    Deliberately uses only the PATH (and existing query string) of `reported_url`, never its
+    scheme/host -- `reported_url` comes from an untrusted POST field (or the Referer header),
+    so echoing it back verbatim as a redirect target would be an open redirect. A bare path is
+    always same-origin by construction, and Odoo's own request.redirect() resolves it against
+    the current site regardless of what host `reported_url` claimed.
+    """
+    path = "/"
+    if reported_url:
+        try:
+            parsed_path = urlparse(reported_url).path
+        except ValueError:
+            parsed_path = ""
+        if parsed_path:
+            path = parsed_path
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}{query_param}"
+
+
 class UserWebsitesController(http.Controller):
 
     @http.route(
@@ -53,7 +76,9 @@ class UserWebsitesController(http.Controller):
             url = request.httprequest.headers.get("Referer")
 
         if not url or not description:
-            return request.redirect("/?error=missing_fields")
+            return request.redirect(
+                _report_violation_redirect_target(url, "error=missing_fields")
+            )
 
         # Enforce max length on description
         if len(description) > 5000:
@@ -90,9 +115,13 @@ class UserWebsitesController(http.Controller):
             env_svc["content.violation.report"].create(create_vals)
         except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_tour_violation_report]
             _logger.warning("Report creation failed: %s", e)
-            return request.redirect("/?error=creation_failed")
+            return request.redirect(
+                _report_violation_redirect_target(url, "error=creation_failed")
+            )
 
-        return request.redirect("/?report_submitted=1")
+        return request.redirect(
+            _report_violation_redirect_target(url, "report_submitted=1")
+        )
 
     @http.route(
         ["/<string:website_slug>/blog", "/<string:website_slug>/blog/page/<int:page>"],

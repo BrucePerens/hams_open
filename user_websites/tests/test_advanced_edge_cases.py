@@ -106,17 +106,25 @@ class TestAdvancedEdgeCases(HamsHttpCase):
 
     def test_03_report_violation_missing_referrer(self):
         """
-        Ensure the report submission form safely redirects to '/' if the
-        HTTP Referrer header is missing or stripped by the browser.
+        Ensure the report submission form safely redirects back to the reported page (not a
+        hardcoded '/') when the `url` form field is a real page and the HTTP Referrer header
+        is missing or stripped by the browser -- the report-submission flow must not depend
+        on Referer alone, and a visitor should land back where they were, not stranded on the
+        homepage. [@ANCHOR: test_report_violation_redirects_back_to_reported_page]
         """
         self.authenticate(None, None)
+
+        # A real, resolvable page (this test class's own fixture user's blog route, confirmed
+        # to exist by test_02 above) rather than a fabricated path, so following the redirect
+        # below actually lands on a real 200 page instead of a 404.
+        reported_path = f"/{self.user_empty.website_slug}/blog"
 
         # We manually construct a request with NO headers to simulate a stripped Referrer
         response = self.url_open(
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
-                "url": "/some/test/url",
+                "url": reported_path,
                 "reason": "Harassment or bullying",
                 "description": "Testing stripped referrer",
                 "email": "ghost@example.com",
@@ -125,8 +133,15 @@ class TestAdvancedEdgeCases(HamsHttpCase):
             method="POST",
         )
 
-        # The controller should catch the missing referrer and redirect to /?report_submitted=1
+        # The controller must redirect back to the reported page itself, not '/'.
         self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            reported_path,
+            response.url,
+            "A report submission must redirect back to the reported page, not strand the "
+            "visitor on the homepage.",
+        )
+        self.assertIn("report_submitted=1", response.url)
 
         report = self.env["content.violation.report"].search(
             [("reported_by_email", "=", "ghost@example.com")], limit=1
