@@ -832,34 +832,59 @@ class WebsitePage(models.Model):
         # Identify URLs to invalidate before mutating
         pages_to_invalidate = [p.url for p in self if p.url]
 
+        # [@ANCHOR: user_websites:website_page_write_reentrancy_guard]
+        # Verified by [@ANCHOR: test_website_page_write_signals_cache_invalidation_once_on_publish_toggle]
+        # website_published is a compute/inverse field (stock Odoo's
+        # WebsitePublishedMultiMixin): writing it makes _inverse_website_published()
+        # do `record.is_published = record.website_published`, and assigning a plain
+        # stored field on a recordset goes through the ORM's own public write() --
+        # i.e. THIS method, again, recursively, for the SAME logical toggle. Without
+        # this guard, both the outer call (vals={'website_published': ...}) and the
+        # inner recursive one (vals={'is_published': ...}) matched the invalidation
+        # condition below and fired it twice. The flag is only ever set True on the
+        # super().write() call immediately below, so it's absent (falsy) on this
+        # method's own first, outer entry and present only on the recursive re-entry
+        # triggered from inside that same super().write() call.
+        already_invalidating = self.env.context.get(
+            "_website_page_cache_invalidation_in_progress"
+        )
+
         try:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )
             # ADR-0001: All service account mutations must include appropriate context
-            self_svc = self.with_user(svc_uid).with_context(mail_notrack=True)
+            self_svc = self.with_user(svc_uid).with_context(
+                mail_notrack=True,
+                _website_page_cache_invalidation_in_progress=True,
+            )
 
             res = super(WebsitePage, self_svc).write(vals)
         except AccessError as e:
             _logger.debug(
                 "Service account not found during page write bypass: %s", e
             )
-            res = super(WebsitePage, self).write(vals)
+            res = super(
+                WebsitePage,
+                self.with_context(_website_page_cache_invalidation_in_progress=True),
+            ).write(vals)
 
-        # Targeted DB NOTIFY invalidation (O(1) line eviction instead of global clear)
-        if "url" in vals or "website_published" in vals or "is_published" in vals:
-            utils = self.env["zero_sudo.security.utils"]
-            urls_to_notify = list(pages_to_invalidate)
-            if "url" in vals and vals["url"] not in urls_to_notify:
-                urls_to_notify.append(vals["url"])
-            if urls_to_notify:
-                # _notify_cache_invalidation() itself delegates to
-                # distributed_redis_cache's notify_model_invalidation() (local
-                # + Redis eviction at postcommit, plus the cross-worker
-                # pg_notify), so nothing further is needed here.
-                utils._notify_cache_invalidation("website.page", urls_to_notify)
+        if not already_invalidating:
+            # Targeted DB NOTIFY invalidation (O(1) line eviction instead of global clear)
+            if "url" in vals or "website_published" in vals or "is_published" in vals:
+                utils = self.env["zero_sudo.security.utils"]
+                urls_to_notify = list(pages_to_invalidate)
+                if "url" in vals and vals["url"] not in urls_to_notify:
+                    urls_to_notify.append(vals["url"])
+                if urls_to_notify:
+                    # _notify_cache_invalidation() itself delegates to
+                    # distributed_redis_cache's notify_model_invalidation() (local
+                    # + Redis eviction at postcommit, plus the cross-worker
+                    # pg_notify), so nothing further is needed here.
+                    utils._notify_cache_invalidation("website.page", urls_to_notify)
 
-        self._invalidate_cloudflare_cache()
+            self._invalidate_cloudflare_cache()
+
         return res
 
     # [@ANCHOR: user_websites:COMM_website_page_unlink]
