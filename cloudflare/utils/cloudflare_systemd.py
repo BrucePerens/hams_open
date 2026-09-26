@@ -32,6 +32,7 @@ Design, settled 2026-09-26:
 """
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -41,9 +42,42 @@ _logger = logging.getLogger(__name__)
 # under cloudflare/utils/, and the real cloudflared binary built from the vendored source lives at
 # the repo root's daemons/cloudflared/cloudflared, wherever this particular checkout happens to be
 # (a different absolute path on the dev box vs. production).
-_BIN_PATH = os.path.join(
+#
+# Found live on hams1, 2026-09-26: this vendored-tree path had gone stale -- something had
+# replaced daemons/cloudflared/ with a source-only checkout (no compiled binary) at some point,
+# and the only reason the tunnel was still up at all was a single already-running process holding
+# the old binary open via a now-deleted inode. Any restart of that one process would have taken
+# the tunnel down with no way for either the old or new supervisor to bring it back. Resolving the
+# binary at call time (not import time) and falling back to a PATH-installed `cloudflared` (e.g.
+# the official apt package) means a missing vendored build no longer silently produces a unit that
+# can never start -- it produces either a working fallback or a clearly logged failure instead.
+_VENDORED_BIN_PATH = os.path.join(
     os.path.dirname(__file__), "../../daemons/cloudflared/cloudflared"
 )
+
+
+def _resolve_cloudflared_bin():
+    """Returns the best available cloudflared binary path: the vendored build if it actually
+    exists and is executable, else whatever `cloudflared` is on PATH, else the vendored path
+    anyway (so the resulting exec failure is loud and points at the real cause)."""
+    vendored = os.path.abspath(_VENDORED_BIN_PATH)
+    if os.access(vendored, os.X_OK):
+        return vendored
+    on_path = shutil.which("cloudflared")
+    if on_path:
+        _logger.warning(
+            "Vendored cloudflared binary not found/executable at %s; falling back to "
+            "PATH-installed cloudflared at %s.",
+            vendored,
+            on_path,
+        )
+        return on_path
+    _logger.error(
+        "No usable cloudflared binary found: vendored path %s is missing or not executable, "
+        "and no `cloudflared` is on PATH. The rendered systemd unit will fail to start.",
+        vendored,
+    )
+    return vendored
 _UNIT_TEMPLATE_PATH = os.path.join(
     os.path.dirname(__file__),
     "../../daemons/cloudflared-ffi/packaging/cloudflared@.service.template",
@@ -144,7 +178,7 @@ def _ensure_unit_installed():
     # when an earlier version of this template's own explanatory comment (which happened to
     # mention the placeholder's name in {curly braces} too) got silently rewritten by .format()
     # right alongside the real ExecStart line.
-    rendered = template.replace("{cloudflared_bin}", os.path.abspath(_BIN_PATH))
+    rendered = template.replace("{cloudflared_bin}", _resolve_cloudflared_bin())
 
     unit_path = os.path.join(_USER_UNIT_DIR, _UNIT_NAME_TEMPLATE)
     existing = None
