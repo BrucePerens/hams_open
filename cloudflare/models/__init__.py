@@ -17,6 +17,7 @@ from . import res_config_settings
 from . import tenant_key
 from . import tunnel
 from . import tunnel_route
+from . import trusted_ip_ranges
 from . import tunnel_wizard
 from . import turnstile
 from . import waf

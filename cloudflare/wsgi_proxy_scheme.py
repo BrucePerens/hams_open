@@ -31,34 +31,98 @@ comparable "patch a stock Odoo/Werkzeug internal for a cross-cutting reason" cas
 formal WSGI-middleware extension point for Odoo addons, so this is the only way to run code this
 early, before Odoo's own routing/dispatch (and therefore before every reader of
 `request.httprequest.scheme`) ever sees the request.
+
+Trusting the peer: loopback (this deployment's own Cloudflare Tunnel case -- `cloudflared` and
+Odoo run on the same host, so the peer is always 127.0.0.1/::1) is checked first and needs no
+database or cache access at all, exactly as before. For a self-hosted admin running Cloudflare
+WITHOUT Tunnel (Cloudflare's edge connecting to the origin directly over the network), the peer is
+instead checked against `cloudflare.trusted_ip_ranges`'s admin-configurable allow-list (Settings ->
+Cloudflare), read from Redis with no `env` needed (see that module's own docstring for why) since
+no Odoo `env`/cursor exists yet at this point in the request. Redis being unreachable, or the admin
+never having configured anything, both fall back to that module's own baked-in Cloudflare-range
+snapshot -- this hook never simply trusts an unrecognized peer.
 """
+import ipaddress
 import json
 import logging
+import threading
+import time
 
 import odoo.http
+from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
+from .models.trusted_ip_ranges import (
+    DEFAULT_CLOUDFLARE_IPV4_RANGES,
+    DEFAULT_CLOUDFLARE_IPV6_RANGES,
+    REDIS_KEY,
+)
 
 _logger = logging.getLogger(__name__)
 
 _TRUSTED_LOOPBACK_ADDRS = ("127.0.0.1", "::1")  # burn-ignore-tunnel-peer-check
+
+# Re-reading Redis on every single request would add a network round trip to the hot path for
+# every non-Tunnel visitor; a short TTL keeps a settings change or cron refresh visible within a
+# minute without that per-request cost. Module-level and per-worker-process on purpose -- each
+# pre-forked Odoo worker (real production runs with workers>0) keeps its own independent copy.
+_RANGES_CACHE_TTL_SECONDS = 60
+_ranges_cache_lock = threading.Lock()
+_ranges_cache = {"networks": (), "loaded_at": 0.0}
+
+
+def _default_trusted_networks():
+    return tuple(
+        ipaddress.ip_network(cidr)
+        for cidr in DEFAULT_CLOUDFLARE_IPV4_RANGES + DEFAULT_CLOUDFLARE_IPV6_RANGES
+    )
+
+
+def _get_cached_trusted_networks():
+    now = time.monotonic()
+    with _ranges_cache_lock:
+        if now - _ranges_cache["loaded_at"] < _RANGES_CACHE_TTL_SECONDS:
+            return _ranges_cache["networks"]
+    networks = _default_trusted_networks()
+    try:
+        raw = get_redis_connection().get(REDIS_KEY)
+        if raw:
+            networks = tuple(ipaddress.ip_network(cidr) for cidr in json.loads(raw))
+    except Exception as e:  # audit-ignore-catch-all
+        # Redis down, key missing/expired, or malformed content -- fall back to the baked-in
+        # default rather than let a cache-refresh failure block every non-Tunnel request.
+        _logger.info("Using default Cloudflare trusted IP ranges (Redis unavailable: %s)", e)
+    with _ranges_cache_lock:
+        _ranges_cache["networks"] = networks
+        _ranges_cache["loaded_at"] = now
+    return networks
+
+
+def _is_trusted_cf_peer(remote_addr):
+    # [@ANCHOR: cloudflare:is_trusted_cf_peer]
+    if remote_addr in _TRUSTED_LOOPBACK_ADDRS:
+        return True
+    try:
+        peer = ipaddress.ip_address(remote_addr)
+    except ValueError:
+        return False
+    return any(peer in network for network in _get_cached_trusted_networks())
+
 
 _original_application_call = odoo.http.Application.__call__
 
 
 def _patched_application_call(self, environ, start_response, *args, **kwargs):
     # [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
-    # Only trust CF-Visitor when the connection's real transport peer is loopback --
-    # cloudflared and Odoo run on the same host on this deployment (see
-    # cloudflare/models/edge_context.py's own get_request_context(), which applies the
-    # identical "CF-* headers are only genuine from loopback" check for the same reason:
-    # this deployment is Tunnel-only, so a direct, non-tunneled request could otherwise forge
-    # any CF-* header it likes). A forged CF-Visitor on a direct connection can only make this
-    # code wrongly believe an actually-plain-HTTP connection is HTTPS; the practical effect
-    # would be the browser on the other end rejecting the resulting Secure-flagged cookie
-    # outright (browsers refuse to store a Secure cookie set over a response that didn't
-    # itself arrive over HTTPS) -- not a real vulnerability, but there is no reason to skip
-    # the same trust check this codebase already established for every other CF-* header.
+    # Trust CF-Visitor only from a peer that is either loopback (this deployment's own Tunnel
+    # case) or in the admin-configured Cloudflare IP allow-list (the non-Tunnel case) -- see
+    # cloudflare/models/edge_context.py's own get_request_context(), which applies the identical
+    # trust check for the same reason: an untrusted peer could otherwise forge any CF-* header it
+    # likes. A forged CF-Visitor from a trusted-looking-but-wrong peer can only make this code
+    # wrongly believe an actually-plain-HTTP connection is HTTPS; the practical effect would be
+    # the browser on the other end rejecting the resulting Secure-flagged cookie outright
+    # (browsers refuse to store a Secure cookie set over a response that didn't itself arrive
+    # over HTTPS) -- not a real vulnerability, but there is no reason to skip this check.
     if (
-        environ.get("REMOTE_ADDR") in _TRUSTED_LOOPBACK_ADDRS
+        _is_trusted_cf_peer(environ.get("REMOTE_ADDR"))
         and not environ.get("HTTP_X_FORWARDED_PROTO")
     ):
         cf_visitor_raw = environ.get("HTTP_CF_VISITOR")
