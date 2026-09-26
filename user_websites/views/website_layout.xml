@@ -23,11 +23,33 @@
         </xpath>
 
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_layout] -->
-        <xpath expr="//footer" position="before"> 
+        <xpath expr="//footer" position="before">
             <t t-set="is_user_content" t-value="False"/>
             <t t-set="is_owner" t-value="False"/>
 
-            <t t-if="profile_user or profile_group">
+            <!-- [@ANCHOR: report_violation_scoped_to_personal_website_content]
+                 profile_user/profile_group (set generically by layout_inherit_user_navbar for
+                 ANY main_object carrying user_websites.owned.mixin) are not specific to a
+                 personal website: many unrelated models adopt that mixin purely for
+                 ownership/claim tracking (event.event, ham.repeater, ham.classifieds listings,
+                 training progress records, and more). Without this extra check, the
+                 report-violation widget (meant for flagging an abusive personal operator
+                 website) leaked onto every page type that happens to use the mixin, with a
+                 help link pointing at personal-website documentation that has nothing to do
+                 with the page it appears on.
+
+                 A real personal-website page is one of two shapes: main_object is one of the
+                 content models user_websites itself defines (website.page, blog.blog,
+                 blog.post), or, on the "profile home"/"blog listing" routes in
+                 controllers/main.py, main_object IS the profile owner record itself
+                 (main_object = profile_user or profile_group, set explicitly by those
+                 controllers). Checking main_object._name against a fixed model list alone
+                 would have wrongly hidden the widget on that second shape (main_object there
+                 is res.users/user.websites.group, not a content sub-model); checking identity
+                 against profile_user/profile_group instead ties the gate to the actual
+                 semantic relationship rather than a duplicated, driftable model-name list.
+                 Verified by [@ANCHOR: test_report_violation_scoped_to_personal_website] -->
+            <t t-if="(profile_user or profile_group) and main_object and (main_object._name in ('website.page', 'blog.blog', 'blog.post') or main_object == profile_user or main_object == profile_group)">
                 <t t-set="is_user_content" t-value="True"/>
                 <t t-if="profile_user and profile_user.id == uid">
                     <t t-set="is_owner" t-value="True"/>
