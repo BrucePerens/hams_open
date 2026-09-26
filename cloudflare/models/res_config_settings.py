@@ -23,6 +23,57 @@ class ResConfigSettings(models.TransientModel):
         related="website_id.cloudflare_turnstile_secret", readonly=False
     )
 
+    # [@ANCHOR: cloudflare:COMM_trusted_ip_ranges_settings_fields]
+    # Admin-supplied additions on top of the auto-fetched list below; never touched by the daily
+    # refresh cron (see trusted_ip_ranges.py's own docstring for why they're kept separate).
+    # `config_parameter=` is Odoo's own built-in read/write-through to ir.config_parameter, so no
+    # manual get_values()/set_values() plumbing is needed for this field specifically.
+    # Char, not Text: res.config.settings._get_classified_fields() only accepts
+    # boolean/integer/float/char/selection/many2one/datetime for a settings-screen field --
+    # Text raises there. Char has no fixed size in Odoo/Postgres unless size= is given, so it
+    # still holds the full multi-line CIDR list without truncation.
+    cloudflare_trusted_ip_ranges_custom = fields.Char(
+        string="Additional Trusted IP Ranges",
+        config_parameter="cloudflare.trusted_ip_ranges_custom",
+    )
+    cloudflare_trusted_ip_ranges_auto = fields.Char(
+        string="Auto-Fetched Cloudflare IP Ranges",
+        compute="_compute_cloudflare_trusted_ip_ranges_display",
+    )
+    cloudflare_trusted_ip_ranges_last_refreshed = fields.Char(
+        string="Last Refreshed",
+        compute="_compute_cloudflare_trusted_ip_ranges_display",
+    )
+
+    def _compute_cloudflare_trusted_ip_ranges_display(self):
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "cloudflare.user_cloudflare_trusted_ip"
+        )
+        icp = self.env["ir.config_parameter"].with_user(svc_uid)
+        for record in self:
+            record.cloudflare_trusted_ip_ranges_auto = (
+                icp.get_param("cloudflare.trusted_ip_ranges_auto")
+                or _("(not yet refreshed -- using the built-in default snapshot)")
+            )
+            record.cloudflare_trusted_ip_ranges_last_refreshed = icp.get_param(
+                "cloudflare.trusted_ip_ranges_last_refreshed"
+            ) or _("Never")
+
+    def set_values(self):
+        super().set_values()
+        # Publish the custom-ranges edit to Redis immediately, so it takes effect for the
+        # env-less WSGI hook (wsgi_proxy_scheme.py) right away instead of waiting for the
+        # next daily cron tick or that hook's own up-to-60s cache TTL to naturally expire.
+        self.env["cloudflare.trusted_ip_utils"]._publish_trusted_ip_ranges_to_redis()
+
+    # [@ANCHOR: cloudflare:COMM_action_refresh_cloudflare_trusted_ip_ranges]
+    def action_refresh_cloudflare_trusted_ip_ranges(self):
+        self.env["cloudflare.trusted_ip_utils"]._cron_refresh_cloudflare_ip_ranges()
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
+
     # [@ANCHOR: cloudflare:COMM_action_deploy_cf_waf]
     def action_deploy_cf_waf(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

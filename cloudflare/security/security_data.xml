@@ -21,6 +21,11 @@
         <record id="group_cloudflare_service" model="res.groups">
             <field name="name">Cloudflare Edge Service Account (Deprecated)</field>
         </record>
+
+        <!-- Trusted IP Ranges Service -->
+        <record id="group_cloudflare_trusted_ip" model="res.groups">
+            <field name="name">Cloudflare Edge: Trusted IP Ranges Service</field>
+        </record>
     </data>
     <data>
         <record id="user_cloudflare_purge" model="res.users">
@@ -65,6 +70,17 @@
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="False"/>
             <field name="group_ids" eval="[(6, 0, [])]"/>
+        </record>
+
+        <record id="user_cloudflare_trusted_ip" model="res.users">
+            <field name="name">Cloudflare Trusted IP Ranges Service</field>
+            <field name="login">cloudflare_trusted_ip_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('cloudflare.group_cloudflare_trusted_ip')])]"/>
         </record>
     </data>
 

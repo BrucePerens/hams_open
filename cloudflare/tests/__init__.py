@@ -20,4 +20,5 @@ from . import test_domain_custom_hostname
 from . import test_hostname_pending_delete
 from . import test_tenant_key
 from . import test_wsgi_proxy_scheme
+from . import test_trusted_ip_ranges
 from . import tunnel_simulator
