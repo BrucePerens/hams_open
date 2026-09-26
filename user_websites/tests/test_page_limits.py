@@ -341,3 +341,32 @@ class TestPageLimits(RealTransactionCase):
             1,
             "unlink() must signal website.page cache invalidation exactly once.",
         )
+
+    def test_08_page_website_published_toggle_signals_cache_invalidation_once(self):
+        # Tests [@ANCHOR: user_websites:website_page_write_reentrancy_guard]
+        """A website_published toggle still signalled cache invalidation twice after
+        test_07 above closed the triplicate case: website_published is a compute/inverse
+        field (stock Odoo), and its own inverse method assigns is_published on the same
+        recordset, which re-enters write() recursively for the same logical toggle --
+        once for vals={'website_published': ...} and again for vals={'is_published': ...}.
+        Exactly one signal is required either way."""
+        page = self.env["website.page"].create(
+            {
+                "url": "/publish-toggle-signal-test",
+                "name": "Publish Toggle Signal Test",
+                "type": "qweb",
+                "owner_user_id": self.user_limited.id,
+                "website_published": False,
+            }
+        )
+        self.env.flush_all()
+
+        self.assertEqual(
+            self._count_cache_signals(
+                "website.page",
+                lambda: page.write({"website_published": True}),
+            ),
+            1,
+            "Toggling website_published must signal website.page cache invalidation "
+            "exactly once, not once per recursive is_published re-entry.",
+        )
