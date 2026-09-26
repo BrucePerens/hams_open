@@ -11,7 +11,11 @@ from ..utils.cloudflare_api import (
     list_cfd_tunnels,
     update_cfd_tunnel_configuration,
 )
-from ..utils.cloudflare_daemon import is_tunnel_daemon_running, start_tunnel_daemon
+from ..utils.cloudflare_systemd import (
+    is_tunnel_daemon_running,
+    start_tunnel_daemon,
+    stop_tunnel_daemon,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -190,6 +194,14 @@ class CloudflareTunnel(models.Model):
 
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
+                # 2026-09-26: now that a tunnel's cloudflared instance is a real, persistent
+                # systemd --user unit (Restart=always, survives Odoo restarts) rather than an
+                # in-process Python loop that quietly stopped existing once its own worker
+                # process ended, deleting the tunnel record here without also stopping that
+                # unit would leave it running forever against a Cloudflare-side tunnel that
+                # was JUST deleted above -- a real, permanent orphan this refactor makes newly
+                # possible, not a pre-existing gap being left alone.
+                stop_tunnel_daemon(tunnel.cf_tunnel_id)
                 # ADR-0001: Headless Mutation Context
                 tunnel.unlink()
             else:

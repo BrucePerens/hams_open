@@ -17,12 +17,9 @@ Every test here drives the real method with a STUB daemon starter, so what is
 asserted is which tunnels the method decided to act on -- never a real
 `cloudflared`, a real thread, or a real Cloudflare call.
 """
-from concurrent.futures import Future
-
 from cryptography.fernet import Fernet
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.addons.cloudflare.utils import cloudflare_daemon as cf_daemon
 from odoo.addons.cloudflare.models.tunnel import (
     LEGACY_PROVISIONED_MIGRATED,
     LEGACY_PROVISIONED_PARAM,
@@ -330,39 +327,5 @@ class TestTunnelMultiWebsite(HamsTransactionCase):
         token.assert_not_called()
         migrate.assert_not_called()
 
-    def test_10_each_tunnel_key_is_tracked_independently_in_the_daemon_layer(self):
-        # Tests [@ANCHOR: COMM_is_tunnel_daemon_running]
-        """The daemon layer answers "is this one running?" per key.
-
-        Exercised against the real module state rather than a mock, with no
-        daemon ever started: an unknown key must read as not-running, and a
-        key whose recorded future has finished must read as not-running too,
-        which is what makes a DIED daemon get restarted instead of being
-        mistaken for a healthy one.
-        """
-        self.assertFalse(cf_daemon.is_tunnel_daemon_running("cftun-never-seen"))
-
-        finished = Future()
-        finished.set_result(None)
-        live = Future()
-        cf_daemon._tunnel_futures["cftun-test-dead"] = finished
-        cf_daemon._tunnel_futures["cftun-test-live"] = live
-        try:
-            self.assertFalse(
-                cf_daemon.is_tunnel_daemon_running("cftun-test-dead"),
-                "A finished daemon loop MUST read as not running, so the next "
-                "'ensure' restarts it.",
-            )
-            self.assertTrue(
-                cf_daemon.is_tunnel_daemon_running("cftun-test-live"),
-                "A live daemon loop MUST read as running, so the next "
-                "'ensure' leaves it alone.",
-            )
-            self.assertFalse(
-                cf_daemon.is_tunnel_daemon_running("cftun-test-live-typo"),
-                "Keys MUST NOT bleed into one another.",
-            )
-        finally:
-            live.set_result(None)
-            cf_daemon._tunnel_futures.pop("cftun-test-dead", None)
-            cf_daemon._tunnel_futures.pop("cftun-test-live", None)
+    # test_10 (per-key daemon tracking) moved to test_cloudflare_systemd.py, which now owns
+    # is_tunnel_daemon_running()'s real coverage against the systemd-backed implementation.

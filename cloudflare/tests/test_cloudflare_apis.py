@@ -306,6 +306,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
             "odoo.addons.cloudflare.models.tunnel.delete_cfd_tunnel"
         )
         mock_delete.return_value = (True, "Success")
+        mock_stop_daemon = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.stop_tunnel_daemon"
+        )
         website = self.env["website"].get_current_website()
         website.write(
             {"cloudflare_account_id": "acc123", "cloudflare_api_token": "tok123"}
@@ -315,6 +318,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
         )
         tunnel.action_delete_tunnel()
         self.assertFalse(tunnel.exists())
+        mock_stop_daemon.assert_called_once_with("t1")
 
     def test_06_purge_urls(self):
         # [@ANCHOR: COMM_test_purge_urls_api]
