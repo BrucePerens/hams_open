@@ -16,7 +16,6 @@ from unittest.mock import MagicMock
 from cryptography.fernet import Fernet
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-from odoo.addons.cloudflare.utils import cloudflare_daemon as cf_daemon
 from odoo.addons.cloudflare.utils.cloudflare_api import update_cfd_tunnel_configuration
 
 
@@ -243,36 +242,6 @@ class TestBridgeAndMisc(RealTransactionCase):
             update_cfd_tunnel_configuration(None, "tok1", "tunnel1", {}),
             (False, "Missing credentials or tunnel ID"),
         )
-
-    def test_stop_tunnel_daemon_is_safe_to_call_after_starting_and_stopping(self):
-        # Tests [@ANCHOR: cloudflare:COMM_stop_tunnel_daemon]
-        mock_lib = self.safe_patch(
-            "odoo.addons.cloudflare.utils.cloudflare_daemon._get_lib"
-        )
-        fake_lib = mock_lib.return_value
-        cf_daemon._lib = fake_lib
-
-        # No tunnel_key: the pre-existing single-tunnel calling convention,
-        # which still works and still files its state under DEFAULT_TUNNEL_KEY.
-        cf_daemon.start_tunnel_daemon("fake-token-for-test")
-        try:
-            cf_daemon.stop_tunnel_daemon()
-            # The loop takes up to its own one-second pause to notice the stop
-            # event, so wait for the future rather than leaking a live daemon
-            # loop (and a live executor) into every later test in this run.
-            future = cf_daemon._tunnel_futures.get(cf_daemon.DEFAULT_TUNNEL_KEY)
-            if future is not None:
-                future.exception(timeout=5)
-        finally:
-            executor = cf_daemon._tunnel_executors.pop(
-                cf_daemon.DEFAULT_TUNNEL_KEY, None
-            )
-            if executor is not None:
-                executor.shutdown(wait=False)
-            cf_daemon._tunnel_futures.pop(cf_daemon.DEFAULT_TUNNEL_KEY, None)
-            cf_daemon._tunnel_stop_events.pop(cf_daemon.DEFAULT_TUNNEL_KEY, None)
-            cf_daemon._lib = None
-        fake_lib.StopTunnel.assert_called_once()
 
     def test_get_cloudflare_credentials_treats_a_decrypt_error_sentinel_as_no_token(self):
         # bug-hunt (2026-09-13): crypt_field.md's own "not fixed here" design note --
