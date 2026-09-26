@@ -97,13 +97,29 @@ odoo.tests.common.HttpCase.extra_allowed_fetch_hosts = ()
 # [@ANCHOR: zero_sudo:patched_handle_request_paused]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
+# Verified by [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
 def _patched_handle_request_paused(self, *args, **kwargs):
     params = kwargs if kwargs else (args[0] if args else {})
     url = params.get("request", {}).get("url", "")
     _logger.info("Fetch intercept: %s", url)
-    allowed_hosts = (HOST,) + tuple(self.test_case.extra_allowed_fetch_hosts or ())
+    # The real Odoo test server's own allowlist entry is matched by exact host:port, not host
+    # alone -- a bare `url.startswith(f"http://{HOST}")` also matches any other local service on
+    # the same loopback address but a DIFFERENT port (e.g. a relay daemon's own config UI),
+    # silently defeating the whole point of this check (only the real test server should be
+    # reachable during a test run). extra_allowed_fetch_hosts entries are unchanged: they're a
+    # deliberate, test-author-controlled opt-in for a specific hermetic stand-in the test itself
+    # spins up and tears down (see that constant's own comment), not "the real server", so they
+    # keep the original bare-host prefix match.
+    real_server_port = self.test_case.http_port()
+    real_server_origins = (
+        (f"http://{HOST}:{real_server_port}", f"https://{HOST}:{real_server_port}")
+        if real_server_port
+        else ()
+    )
+    extra_hosts = tuple(self.test_case.extra_allowed_fetch_hosts or ())
     if (
-        any(url.startswith(f"http://{h}") or url.startswith(f"https://{h}") for h in allowed_hosts)
+        url.startswith(real_server_origins)
+        or any(url.startswith(f"http://{h}") or url.startswith(f"https://{h}") for h in extra_hosts)
         or url.startswith("data:")
         or url.startswith("about:")
     ):

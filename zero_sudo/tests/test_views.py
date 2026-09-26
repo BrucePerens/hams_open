@@ -121,12 +121,17 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
     trip) or disabling the safety net outright.
     """
 
-    def _fake_browser(self, extra_allowed_fetch_hosts=()):
+    def _fake_browser(self, extra_allowed_fetch_hosts=(), http_port=8069):
         # A bare object, not a real ChromeBrowser: only `.test_case` (read by
         # the function under test) and `._websocket_send` (asserted against
-        # below) are ever touched.
+        # below) are ever touched. `http_port` is a plain callable, matching
+        # the real HttpCase.http_port() classmethod's own calling convention
+        # (`self.test_case.http_port()`), since the function under test now
+        # calls it to build the real-server allowlist entry by exact port.
         test_case = SimpleNamespace(
-            fetch_proxy=None, extra_allowed_fetch_hosts=extra_allowed_fetch_hosts
+            fetch_proxy=None,
+            extra_allowed_fetch_hosts=extra_allowed_fetch_hosts,
+            http_port=lambda: http_port,
         )
         browser = SimpleNamespace(test_case=test_case, _websocket_send=MagicMock())
         return browser
@@ -182,3 +187,31 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
             "allow-everything switch -- only the specific listed host(s) "
             "should ever bypass the safety net.",
         )
+
+    # [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
+    # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
+    def test_05_real_server_allowlist_checks_port_not_just_host(self):
+        """Real bug: a bare `url.startswith(f"http://{HOST}")` also matched a
+        completely different local service sharing the same loopback address
+        on a different port (e.g. hams_local_relay's own config UI on
+        127.0.0.1:7388), silently defeating the point of this safety net --
+        only the real Odoo test server should ever be reachable during a
+        test run."""
+        browser = self._fake_browser(http_port=8069)
+        self._call(browser, f"http://{HOST}:7388/config")
+        cmd = browser._websocket_send.call_args[0][0]
+        self.assertEqual(
+            cmd,
+            "Fetch.failRequest",
+            "[!] DIAGNOSTIC FOR AI: a request to the real server's HOST but "
+            "a DIFFERENT port must not be let through -- only the real "
+            "test server's own port is the real server.",
+        )
+
+    # [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
+    # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
+    def test_06_real_server_allowlist_still_passes_the_real_port(self):
+        browser = self._fake_browser(http_port=8069)
+        self._call(browser, f"http://{HOST}:8069/web/session/get_session_info")
+        cmd = browser._websocket_send.call_args[0][0]
+        self.assertEqual(cmd, "Fetch.continueRequest")
