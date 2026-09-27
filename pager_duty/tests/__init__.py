@@ -25,3 +25,4 @@ from . import test_schedule_edge_cases
 from . import test_synthetic_spooler
 from . import test_ui_tours
 from . import test_hooks
+from . import test_check_github_pat_expiry

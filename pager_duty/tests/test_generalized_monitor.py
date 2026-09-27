@@ -876,3 +876,47 @@ class TestMonitorExhaustive(HamsTransactionCase):
         with self.assertRaises(_StopLoop):
             generalized_monitor.log_tail_thread(mock_client, check)
         self.assertIn("Log Tail Test Check", generalized_monitor.THREAD_TIMEOUTS)
+
+    def test_22_extract_severity_prefix(self):
+        # Tests [@ANCHOR: pager_duty:extract_severity_prefix]
+        """The standalone parser both polling_thread() call sites use to pull a synthetic
+        script's own graduated severity back out of execute_check()'s message string."""
+        severity, msg = generalized_monitor.extract_severity_prefix(
+            "[SEVERITY:critical] Synthetic failure (Code 1): token expires in 1 days"
+        )
+        self.assertEqual(severity, "critical")
+        self.assertEqual(msg, "Synthetic failure (Code 1): token expires in 1 days")
+
+        # No prefix at all -- every check type except a graduated synthetic one, and every
+        # synthetic script that predates this feature -- must fall back to the same "high"
+        # every failing check has always paged at, with the message completely untouched.
+        severity, msg = generalized_monitor.extract_severity_prefix("plain failure message")
+        self.assertEqual(severity, "high")
+        self.assertEqual(msg, "plain failure message")
+
+    def test_23_synthetic_check_extracts_graduated_severity_from_stderr(self):
+        # Tests [@ANCHOR: daemon_verify_dependencies]
+        """A synthetic script's own SEVERITY: line on stderr (check_github_pat_expiry.py's own
+        convention) must survive execute_check() as a "[SEVERITY:xxx]" prefix on the returned
+        message, and a script that never prints one must be completely unaffected."""
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
+
+        mock_run.return_value.returncode = 1
+        mock_run.return_value.stderr = "SEVERITY:critical\nGitHub PAT expires in 1 days (...)"
+        success, msg = generalized_monitor.execute_check(
+            {"type": "synthetic", "script": "/bin/false"}
+        )
+        self.assertFalse(success)
+        self.assertTrue(msg.startswith("[SEVERITY:critical] "))
+
+        # A plain failure with no SEVERITY marker (check_cloudflare_token_expiry.py's own
+        # existing shape, and every synthetic script written before this feature existed) must
+        # come back with no prefix at all, so extract_severity_prefix() falls back to "high".
+        mock_run.return_value.stderr = "Cloudflare API token expires in 5 days (...)"
+        success, msg = generalized_monitor.execute_check(
+            {"type": "synthetic", "script": "/bin/false"}
+        )
+        self.assertFalse(success)
+        self.assertFalse(msg.startswith("[SEVERITY:"))

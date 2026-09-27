@@ -311,6 +311,45 @@ def fallback_notify(source, msg, severity):
         logger.critical(f"SMTP Fallback completely failed: {e}")
 
 
+# [@ANCHOR: pager_duty:severity_for_days_left]
+# Graduated thresholds, in days, ordered from least to most urgent -- the first one a credential's
+# remaining lifetime falls under (days_left <= threshold) wins. Shared by every expiring-credential
+# synthetic check in this codebase (check_github_pat_expiry.py, check_cloudflare_token_expiry.py)
+# so they escalate identically rather than each hand-rolling its own ladder.
+SEVERITY_THRESHOLDS_DAYS = (
+    (2, "critical"),
+    (7, "high"),
+    (14, "medium"),
+    (30, "low"),
+)
+
+
+def severity_for_days_left(days_left):
+    """Returns the graduated severity name for `days_left` remaining until some credential
+    expires, or None if it's healthy (past every threshold)."""
+    for threshold, severity in SEVERITY_THRESHOLDS_DAYS:
+        if days_left <= threshold:
+            return severity
+    return None
+
+
+# [@ANCHOR: pager_duty:extract_severity_prefix]
+_SEVERITY_PREFIX_RE = re.compile(r"^\[SEVERITY:(low|medium|high|critical)\] (.*)$", re.DOTALL)
+
+
+def extract_severity_prefix(msg, default="high"):
+    """The other half of the "synthetic" check type's graduated-severity extension (see
+    execute_check()'s own comment on the ctype == "synthetic" branch): pulls a
+    "[SEVERITY:xxx] " prefix a synthetic script chose to attach back off of `msg`, returning
+    `(severity, cleaned_msg)`. A message with no such prefix (every check type except a
+    graduated synthetic one, and every synthetic script that predates this feature) returns
+    `default` unchanged and the message untouched -- this is purely additive."""
+    match = _SEVERITY_PREFIX_RE.match(msg)
+    if not match:
+        return default, msg
+    return match.group(1), match.group(2)
+
+
 def report(client, source, msg, severity="high", website_id=False):
     # [@ANCHOR: daemon_report_incident]
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
@@ -862,10 +901,28 @@ def execute_check(check, client=None):
                 timeout=60,
             )
             if res.returncode != 0:
-                return (
-                    False,
-                    f"Synthetic failure (Code {res.returncode}): {res.stderr[:100]}",
+                message = f"Synthetic failure (Code {res.returncode}): {res.stderr[:100]}"
+                # Graduated-severity extension, 2026-09-22: a synthetic script that wants finer
+                # control than the flat "high" every other failing check gets (e.g. an
+                # expiring-credential check whose urgency genuinely grows as the deadline
+                # approaches) can print a bare "SEVERITY:<low|medium|high|critical>" line to
+                # stderr, alongside its usual failure message (stderr, not stdout, matching
+                # where every synthetic script's own diagnostic output already goes -- see
+                # check_github_pat_expiry.py). Searched against the FULL res.stderr, not the
+                # truncated 100-char slice used for the display message above, so the marker is
+                # found regardless of how long the rest of the message is. Encoded as a
+                # "[SEVERITY:xxx]" prefix on the returned message so this function's own return
+                # shape (a 2-tuple) doesn't have to change for every other check type -- see
+                # extract_severity_prefix()'s own docstring for the other half. A script that
+                # never prints this (every synthetic check written before this existed,
+                # including check_cloudflare_token_expiry.py) is completely unaffected: no
+                # marker means the default "high" at the report() call site, unchanged.
+                severity_match = re.search(
+                    r"^SEVERITY:(low|medium|high|critical)$", res.stderr, re.MULTILINE | re.IGNORECASE
                 )
+                if severity_match:
+                    message = f"[SEVERITY:{severity_match.group(1).lower()}] {message}"
+                return False, message
             return True, "OK"
         except (
             ConnectionError,
@@ -1369,7 +1426,8 @@ def polling_thread(client, check):
                 f"[{name}] Startup grace period active. Suppressing failure: {msg}"
             )
         else:
-            report(client, name, msg, "high", website_id=website_id)
+            severity, clean_msg = extract_severity_prefix(msg)
+            report(client, name, clean_msg, severity, website_id=website_id)
             remedy = check.get("remediate")
             if clean_loops > 0 and remedy and os.path.exists(remedy):
                 logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")
@@ -1444,7 +1502,8 @@ def polling_thread(client, check):
                     f"[{name}] Startup grace period active. Suppressing failure: {msg}"
                 )
             else:
-                report(client, name, msg, "high", website_id=website_id)
+                severity, clean_msg = extract_severity_prefix(msg)
+                report(client, name, clean_msg, severity, website_id=website_id)
                 remedy = check.get("remediate")
                 if clean_loops > 0 and remedy and os.path.exists(remedy):
                     logger.info(
