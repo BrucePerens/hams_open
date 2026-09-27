@@ -40,10 +40,18 @@ import sys
 import urllib.error
 import urllib.request
 
+from odoo.addons.pager_duty.daemon.generalized_monitor import severity_for_days_left
+
 DEFAULT_CREDENTIALS_PATH = "/opt/hams/etc/relay_cert_renew/cloudflare.ini"
 # A token this close to expiring should page well before it's too late to
 # generate and roll a replacement by hand -- matches the "ssl" check type's
 # own default `critical` threshold (14 days) for the same kind of decision.
+# Superseded in practice by severity_for_days_left()'s own graduated ladder
+# (added 2026-09-22, shared with check_github_pat_expiry.py) -- kept as the
+# HAMS_CLOUDFLARE_TOKEN_WARN_DAYS-overridable single threshold this script's
+# own tests and any existing override already depend on; days_left <= this
+# is still when main() starts reporting a failure at all, graduated severity
+# just decides how urgently once it does.
 DEFAULT_WARN_DAYS = 30
 # Not a secret -- a Cloudflare account identifier, not a credential (doesn't
 # match any of MASTER_01_SECURITY_ZERO_SUDO.md's own restricted-substring
