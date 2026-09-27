@@ -2,7 +2,9 @@
 
 # -*- coding: utf-8 -*-
 import base64
+from datetime import timedelta
 
+from odoo import fields
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -91,6 +93,76 @@ class TestMailIngestIncident(HamsTransactionCase):
         self.assertEqual(incident.helpdesk_ticket_model, "hams_helpdesk.ticket")
         linked_ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
         self.assertTrue(linked_ticket.exists())
+
+    def test_info_email_with_on_duty_admin_posts_assignment_note_as_request_user(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
+        """The exact production path of the 2026-09-27 incident (hams1,
+        12 AccessErrors on every info@hams.com mail): the ingest daemon's
+        RPC call -> info@ -> pager.incident.message_new() -> helpdesk
+        ticket create() -> _automated_routing_and_notification() ->
+        message_post(partner_ids=[on-duty admin's partner]) -> Odoo core's
+        Many2many.write_real() re-checking res.partner read as
+        env.transaction.default_env.uid, the RPC caller. See
+        hams_helpdesk/security/mail_ingest_security.xml for the mechanism
+        and hams_helpdesk/tests/test_mail_ingest.py's test_06 for the
+        module-local variant. The on-duty admin is a real is_pager_duty
+        shift (get_current_on_duty_admin()), and the transaction's default
+        env is set to the ingest account exactly as odoo/service/model.py
+        does for every RPC call -- nothing here is mocked.
+        """
+        on_duty = self.env["res.users"].create(
+            {
+                "name": "On Duty Admin For Ingest Test",
+                "login": "on_duty_admin_ingest_test",
+                "group_ids": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("pager_duty.group_pager_admin").id,
+                            self.env.ref("hams_helpdesk.group_helpdesk_manager").id,
+                        ],
+                    )
+                ],
+            }
+        )
+        now = fields.Datetime.now()
+        self.env["calendar.event"].create(
+            {
+                "name": "Ingest regression shift",
+                "start": now - timedelta(hours=1),
+                "stop": now + timedelta(hours=1),
+                "is_pager_duty": True,
+                "user_id": on_duty.id,
+            }
+        )
+
+        ingest_env = self.env(user=self.ingest_user.id)
+        transaction = self.env.transaction
+        previous_default_env = transaction.default_env
+        transaction.default_env = ingest_env
+        self.addCleanup(setattr, transaction, "default_env", previous_default_env)
+
+        raw = self._raw_email("info@hams.com", subject="Needs an on-duty reply")
+        ingest_env["hams_helpdesk.ticket"].ingest_inbound_email(
+            base64.b64encode(raw).decode("ascii")
+        )
+
+        incident = self.env["pager.incident"].search(
+            [("name", "ilike", "Needs an on-duty reply")], limit=1
+        )
+        self.assertTrue(incident, "Expected the info@ email to create a pager.incident.")
+        ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
+        self.assertTrue(ticket.exists(), "Expected the linked helpdesk ticket.")
+        self.assertEqual(ticket.user_id, on_duty)
+        assignment_note = ticket.message_ids.filtered(
+            lambda message: on_duty.partner_id in message.partner_ids
+        )
+        self.assertTrue(
+            assignment_note,
+            "The on-duty assignment note must have been posted -- in production "
+            "this exact message_post(partner_ids=...) raised the AccessError.",
+        )
 
     def test_postmaster_email_creates_pager_incident(self):
         raw = self._raw_email(
