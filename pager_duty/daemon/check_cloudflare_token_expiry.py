@@ -150,10 +150,16 @@ def main():
     days_left = (expiry_dt - datetime.datetime.now(datetime.timezone.utc)).days
 
     if days_left <= warn_days:
-        print(
-            f"Cloudflare API token expires in {days_left} days ({expires_on})",
-            file=sys.stderr,
-        )
+        # Same graduated-severity contract as check_github_pat_expiry.py: a bare
+        # "SEVERITY:<level>" line on stderr, read by generalized_monitor.py's
+        # execute_check(). Past the ladder's last rung (only reachable with a
+        # HAMS_CLOUDFLARE_TOKEN_WARN_DAYS override above 30) no line is printed
+        # and the monitor keeps its flat default, exactly as before.
+        severity = severity_for_days_left(days_left)
+        message = f"Cloudflare API token expires in {days_left} days ({expires_on})"
+        if severity:
+            message = f"SEVERITY:{severity}\n{message}"
+        print(message, file=sys.stderr)
         return 1
 
     print(f"token healthy, expires in {days_left} days ({expires_on})")
