@@ -6,6 +6,35 @@
             <field name="name">Inbound Mail Ingest Service</field>
             <field name="comment">Internal system group for the SES-to-S3-to-Odoo inbound mail polling daemon. See docs/proposals/EMAIL_SEND_RECEIVE.md.</field>
         </record>
+
+        <!-- ir.model.access.csv's access_res_partner_mail_ingest row (res.partner, read-only)
+             exists because of a real production failure on 2026-09-27 (12 occurrences, every
+             inbound mail to info@hams.com, hams1 odoo-server.log 15:35-15:40 UTC):
+             "AccessError: Failed to write field mail.message.partner_ids / You are not allowed
+             to access 'Contact' (res.partner) records", reported against THIS account's uid even
+             though the failing message_post() ran under hams_helpdesk.user_helpdesk_service via
+             zero_sudo's with_user() elevation. Root cause is Odoo 19 core, not this codebase's
+             elevation chain (which was re-verified hop by hop and is correct):
+             odoo/orm/fields_relational.py Many2many.write_real() calls _check_sudo_commands(),
+             and for a comodel that sets _allow_sudo_commands = False (res.partner does, in
+             base/models/res_partner.py) it re-runs the "read" access check on the linked
+             partners as comodel.sudo(False).with_user(comodel.env.transaction.default_env.uid)
+            , i.e. as the ORIGINAL request user of the whole transaction, which is whatever
+             account made the RPC call (odoo/service/model.py sets transaction.default_env to
+             the caller's env for every RPC; odoo/http.py does the same for HTTP requests).
+             Every with_user()/sudo() applied later in the call chain is discarded for that one
+             check. So when this daemon's account calls ingest_inbound_email(), any
+             message_post(partner_ids=...) anywhere downstream (here: hams_helpdesk.ticket.
+             _automated_routing_and_notification()'s assignment note) requires that THIS account
+             can read res.partner. Reproduced exactly on a dev database by setting
+             env.transaction.default_env to this account's env before calling
+             ingest_inbound_email(); a plain `odoo shell` or a TransactionCase never reproduces
+             it because there the transaction's default env is the superuser, which is also why
+             two earlier "fixes" (an OdooBot grant, hams_open #473) changed nothing in
+             production. Read-only is sufficient: the check is a read check on partners that
+             already exist. See tests/test_mail_ingest.py's
+             test_06_partner_ids_check_runs_as_the_request_user for the regression test that
+             mirrors the real RPC dispatcher. -->
     </data>
 
     <data noupdate="0">
