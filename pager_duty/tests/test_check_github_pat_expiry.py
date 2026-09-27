@@ -2,7 +2,9 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import contextlib
 import datetime
+import io
 import os
 import tempfile
 from unittest.mock import MagicMock
@@ -101,9 +103,6 @@ class TestGithubPatExpiryCheck(HamsTransactionCase):
         """Real integration point with generalized_monitor.py's own execute_check(): the marker
         must land on stderr (where every synthetic script's diagnostic output already goes), not
         stdout, or the severity extraction there silently never matches."""
-        import io
-        import contextlib
-
         _write_token(self.token_path)
         soon = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=5))
         self._patch_urlopen(soon.strftime("%Y-%m-%d %H:%M:%S UTC"))

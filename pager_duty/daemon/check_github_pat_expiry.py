@@ -34,7 +34,16 @@ import sys
 import urllib.error
 import urllib.request
 
-from odoo.addons.pager_duty.daemon.generalized_monitor import severity_for_days_left
+# generalized_monitor.py lives in this same daemon/ directory. Reached via a
+# sys.path hop, never the odoo.addons namespace: hams_shared/tools/
+# check_burn_list.py's "CRITICAL DAEMON DECOUPLING" rule bans `from odoo`
+# in any daemon/ directory, and the `odoo` package is not importable in
+# this script's real standalone process anyway (same precedent as
+# pager_synthetic_spooler.py's hop to zero_sudo/daemon).
+_DAEMON_DIR = os.path.dirname(os.path.abspath(__file__))
+if _DAEMON_DIR not in sys.path:
+    sys.path.insert(0, _DAEMON_DIR)
+from generalized_monitor import severity_for_days_left  # noqa: E402
 
 DEFAULT_TOKEN_PATH = "/opt/hams/etc/keys/github_pat_ticket_triage.token"
 
