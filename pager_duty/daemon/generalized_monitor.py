@@ -1627,9 +1627,29 @@ def log_tail_thread(client, check):
             continue
 
 
+# [@ANCHOR: pager_duty:daemon_resolve_config_path]
+def resolve_config_path(environ=None):
+    """The configuration file this daemon reads, resolved by the same rule pager_check.PagerCheck._get_config_path writes by.
+
+    The writer prefers the system configuration directory (the `pager_duty.config_dir` parameter, default /opt/hams/etc) when
+    the Odoo worker can write there, and falls back to the file next to this daemon otherwise. The daemon used to read only the
+    file next to itself, so as soon as the system directory became writable every "Push to JSON" wrote a file nothing read and
+    the administrator was told "Export Successful". Order here: PAGER_CONFIG_PATH (an explicit file), then pager_config.json in
+    PAGER_CONFIG_DIR (default /opt/hams/etc) if it exists, then the file next to this daemon."""
+    environ = os.environ if environ is None else environ
+    explicit = environ.get("PAGER_CONFIG_PATH")
+    if explicit:
+        return explicit
+    system_path = os.path.join(environ.get("PAGER_CONFIG_DIR", "/opt/hams/etc"), "pager_config.json")
+    if os.path.exists(system_path):
+        return system_path
+    return os.path.join(os.path.dirname(__file__), "pager_config.json")
+
+
 if __name__ == "__main__":
     # [@ANCHOR: daemon_main_loop]
-    config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
+    config_path = resolve_config_path()
+    logger.info(f"Reading configuration from {config_path}")
 
     if not os.path.exists(config_path):
         msg = f"Configuration file not found at {config_path}. Halting."

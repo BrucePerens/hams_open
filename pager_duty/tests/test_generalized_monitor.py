@@ -7,6 +7,7 @@ import json
 from odoo import fields
 import os
 import socket
+import tempfile
 import time
 from unittest.mock import MagicMock
 
@@ -975,3 +976,20 @@ class TestMonitorExhaustive(HamsTransactionCase):
         )
         self.assertFalse(success)
         self.assertFalse(msg.startswith("[SEVERITY:"))
+
+    def test_resolve_config_path_prefers_an_explicit_file_then_the_system_directory_then_the_daemon_directory(self):
+        # Tests [@ANCHOR: pager_duty:daemon_resolve_config_path]
+        # The Odoo side writes to the system configuration directory once the worker can write there; the daemon must read the
+        # same file, or every "Push to JSON" is reported as a success that nothing ever reads.
+        beside_daemon = os.path.join(os.path.dirname(generalized_monitor.__file__), "pager_config.json")
+        with tempfile.TemporaryDirectory() as system_dir:
+            environ = {"PAGER_CONFIG_DIR": system_dir}
+            self.assertEqual(generalized_monitor.resolve_config_path(environ), beside_daemon)
+            system_file = os.path.join(system_dir, "pager_config.json")
+            with open(system_file, "w", encoding="utf-8") as f:
+                f.write("{}")
+            self.assertEqual(generalized_monitor.resolve_config_path(environ), system_file)
+            explicit = os.path.join(system_dir, "other.json")
+            self.assertEqual(
+                generalized_monitor.resolve_config_path({**environ, "PAGER_CONFIG_PATH": explicit}), explicit
+            )
