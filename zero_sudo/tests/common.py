@@ -94,6 +94,21 @@ odoo.tests.common.HttpCase.fetch_proxy = None
 odoo.tests.common.HttpCase.extra_allowed_fetch_hosts = ()
 
 
+def _url_is_at_origin(url, origin, allow_any_port=False):
+    """True when `url` begins with `origin` AND the origin ends at a real authority boundary.
+
+    A bare `url.startswith(origin)` is a string-prefix test, and a prefix is not an authority:
+    "http://127.0.0.1:8069" is a prefix of "http://127.0.0.1:80699/x" (another service on another
+    port), and "http://127.0.0.1:8069@example.com/" begins with it too but its host is example.com
+    (everything before the "@" is userinfo). The character after the origin must therefore start the
+    path, query or fragment, or end the URL. `allow_any_port` additionally accepts ":" for a bare
+    host that is meant to match on any port."""
+    if not url.startswith(origin):
+        return False
+    rest = url[len(origin):]
+    return rest == "" or rest[0] in ("/", "?", "#") or (allow_any_port and rest[0] == ":")
+
+
 # [@ANCHOR: zero_sudo:patched_handle_request_paused]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
@@ -118,8 +133,12 @@ def _patched_handle_request_paused(self, *args, **kwargs):
     )
     extra_hosts = tuple(self.test_case.extra_allowed_fetch_hosts or ())
     if (
-        url.startswith(real_server_origins)
-        or any(url.startswith(f"http://{h}") or url.startswith(f"https://{h}") for h in extra_hosts)
+        any(_url_is_at_origin(url, origin) for origin in real_server_origins)
+        or any(
+            _url_is_at_origin(url, f"{scheme}://{h}", allow_any_port=True)
+            for h in extra_hosts
+            for scheme in ("http", "https")
+        )
         or url.startswith("data:")
         or url.startswith("about:")
     ):
