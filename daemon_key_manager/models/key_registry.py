@@ -259,17 +259,35 @@ class DaemonKeyRegistry(models.Model):
         for reg in registries:
             _logger.info("Synchronously provisioning key for daemon: %s", reg.name)
             try:
-                reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
+                # A savepoint per daemon: a failure part-way through one registry undoes that registry's own
+                # database changes (the old key is restored) without touching the daemons that already succeeded.
+                with self.env.cr.savepoint():
+                    reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
             except (UserError, ValidationError, AccessError, OSError) as e:
                 _logger.error("Failed to provision key for daemon %s: %s", reg.name, e)
                 failures.append(reg.name)
 
         if failures:
+            # Return, do not raise. Raising here used to roll back the whole transaction, including the rotations
+            # that had succeeded -- but their new keys were already written to their key files, so the files and the
+            # database disagreed and those daemons were refused (found live on hams1, 2026-09-23: the event and
+            # AI-triage services stayed unauthorised for days after one unrelated daemon failed). A failure is
+            # reported in the result instead, and the caller commits what succeeded. The systemd bootstrap script
+            # turns a non-success result into a failed unit.
             msg = _(
                 "Provisioned keys for %(ok)d daemon(s); FAILED for: %(failed)s. "
                 "Check the server log for each failure's own real error."
             )
-            raise UserError(msg % {"ok": len(registries) - len(failures), "failed": ", ".join(failures)})
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Some keys were not provisioned"),
+                    "message": msg % {"ok": len(registries) - len(failures), "failed": ", ".join(failures)},
+                    "sticky": True,
+                    "type": "danger",
+                },
+            }
 
         return {
             "type": "ir.actions.client",

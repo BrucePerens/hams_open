@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="1">
+    <data noupdate="0">
+        <!-- Odoo 19 refuses to run a server action for a user who lacks WRITE access to the action's model, unless the
+             action names a group the user belongs to. This job runs as its own narrow service account, which has no write
+             access to the model (by design: it only reads and deletes), so on hams.com it was refused every day ("Forbidden
+             server action ... does not have access to ...", 7 consecutive failures by 2026-09-28) and never ran. Naming the
+             service's own group on the job lets it run without widening the account's rights. This block is noupdate="0" so
+             an upgrade applies the group to the existing row; an interval an administrator changed is reset too. -->
         <record id="cron_check_bloat" model="ir.cron">
             <!-- audit-ignore-cron: Tested by [@ANCHOR: COMM_test_dba_cron] -->
             <field name="name">DBA: Check Autovacuum Bloat</field>
             <field name="model_id" ref="model_database_table_stat"/>
             <field name="user_id" ref="user_database_management_service"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_database_management_manager')])]"/>
             <field name="state">code</field>
             <field name="code">model.cron_check_bloat()</field>
             <field name="interval_number">1</field>
