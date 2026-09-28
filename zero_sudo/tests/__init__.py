@@ -13,6 +13,7 @@ from . import real_transaction
 from . import test_integration
 from . import test_json_rpc_client
 from . import test_security_utils
+from . import test_service_account_security_notices
 from . import test_session_cookie_hardening
 from . import test_ssrf_safe_fetch
 from . import test_tdd_fixes

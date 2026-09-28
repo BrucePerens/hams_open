@@ -165,9 +165,12 @@ class TestCompliancePagesHttp(HamsHttpCase):
         response = self.url_open("/backup-policy")
         msg_status = f"[!] DIAGNOSTIC FOR AI: Page /backup-policy should be reachable (200 OK). Got {response.status_code}."
         self.assertEqual(response.status_code, 200, msg_status)
-        self.assertIn("Backup and Data Resilience Policy", response.text)
-        self.assertIn("American Radio Relay League", response.text)
-        self.assertIn("$1 million", response.text)
+        # The template wraps its paragraph in the XML, so "American Radio Relay League" is split across a line break
+        # and a run of indentation in the served HTML; a browser shows one space. Compare the text a reader sees.
+        visible = " ".join(response.text.split())
+        self.assertIn("Backup and Data Resilience Policy", visible)
+        self.assertIn("American Radio Relay League", visible)
+        self.assertIn("$1 million", visible)
         self.assertIn('href="/protects-hams"', response.text)
 
         public_uid = self.env.ref("base.public_user").id
