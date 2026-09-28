@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import re
-from odoo.tests.common import tagged
+from odoo.tests.common import JsonRpcException, tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
@@ -216,4 +216,130 @@ class TestZeroSudoControllers(RealTransactionCase):
             log_entry,
             msg="[!] DIAGNOSTIC FOR AI: Security log entry was not created for "
             "the blocked /web/session/authenticate attempt.",
+        )
+
+    def test_04_json_session_authenticate_wrong_password_writes_no_log_row(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
+        """Regression test for a real 2026-09-27 bug-hunt finding.
+
+        `/web/session/authenticate` is `auth="none"`. Between 2026-09-16 and
+        this fix, the interceptor's pre-`super()` branch short-circuited on a
+        LOGIN match alone -- the password was never examined -- and on that
+        path it created a COMMITTED `zero_sudo.security.log` row and returned
+        `{"uid": None}`. Every service-account login in this project is
+        declared in public XML in this same repository, so any anonymous
+        caller could name one and drive unlimited audit rows into the
+        production database, unthrottled (returning before `super()` also
+        skips `res.users._assert_can_auth`'s per-IP login cooldown) and
+        retained for 90 days by `zero_sudo.security.log.autovacuum`. It also
+        destroyed the row's meaning: a real credential compromise became
+        indistinguishable from a background scan.
+
+        This asserts the discriminating half: a service-account login with a
+        WRONG password must fail with core's own AccessDenied and leave NO
+        log row behind. `test_03` above asserts the other half -- a CORRECT
+        password still gets the denial AND the audit row -- so the pair fails
+        if either the check or the logging regresses.
+        """
+        login = "test_service_json_wrong_password"
+        user = self.env["res.users"].create(
+            {
+                "name": "Test Service JSON Wrong Password",
+                "login": login,
+                "password": "the_real_password",
+                "is_service_account": False,
+                "active": True,
+                "lang": "en_US",
+            }
+        )
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor] # fmt: skip
+            "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
+        )
+        self.env.cr.commit()
+
+        with self.assertRaises(
+            JsonRpcException,
+            msg="[!] DIAGNOSTIC FOR AI: a service-account login with the WRONG "
+            "password must fail with core's own AccessDenied, not be accepted "
+            "as a blockable login attempt -- this route is auth='none', so "
+            "anything it does before verifying the credential is something an "
+            "anonymous caller can drive at will.",
+        ):
+            self.make_jsonrpc_request(
+                "/web/session/authenticate",
+                {
+                    "db": self.env.cr.dbname,
+                    "login": login,
+                    "password": "definitely_not_the_real_password",
+                },
+            )
+
+        self.env.cr.commit()
+        self.env.invalidate_all()
+        self.assertFalse(
+            self.env["zero_sudo.security.log"].search(
+                [("user_id", "=", user.id)], limit=1
+            ),
+            msg="[!] DIAGNOSTIC FOR AI: an unauthenticated caller who merely "
+            "NAMED a service account (those logins are public XML in this "
+            "repo) must not be able to write a committed security-log row. "
+            "A `service_account_blocked` row has to keep meaning 'someone "
+            "actually held this account's credentials'.",
+        )
+
+    def test_05_blocked_login_records_the_real_client_ip_not_the_tunnel_peer(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
+        # ---
+        # Tests [@ANCHOR: zero_sudo:COMM_web_login_interceptor]
+        """Regression test for a real 2026-09-27 bug-hunt finding: both
+        interceptors recorded `request.httprequest.remote_addr` as the audit
+        log's `ip_address`. This deployment is Cloudflare-Tunnel-only with
+        cloudflared on the same host as the Odoo HTTP server, so the real
+        transport peer of every external request is loopback -- the column
+        recorded `127.0.0.1` for every attacker, and the one audit log this
+        module maintains could not answer the only question it exists to
+        answer. `zero_sudo.security.utils._get_trusted_client_ip()` (already
+        instantiated on the line above each of these `create()` calls) has
+        resolved this correctly since 2026-09-11; it was never wired up here.
+
+        Discriminating: the request below comes from loopback (the test
+        client IS local), so the pre-fix code would record `127.0.0.1` and
+        this assertion would fail.
+        """
+        login = "test_service_json_client_ip"
+        password = "test_password"
+        user = self.env["res.users"].create(
+            {
+                "name": "Test Service JSON Client IP",
+                "login": login,
+                "password": password,
+                "is_service_account": False,
+                "active": True,
+                "lang": "en_US",
+            }
+        )
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor] # fmt: skip
+            "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
+        )
+        self.env.cr.commit()
+
+        self.make_jsonrpc_request(
+            "/web/session/authenticate",
+            {"db": self.env.cr.dbname, "login": login, "password": password},
+            headers={"CF-Connecting-IP": "203.0.113.77"},
+        )
+
+        self.env.cr.commit()
+        self.env.invalidate_all()
+        log_entry = self.env["zero_sudo.security.log"].search(
+            [("user_id", "=", user.id), ("reason", "=", "service_account_blocked")],
+            limit=1,
+        )
+        self.assertTrue(log_entry, "[!] DIAGNOSTIC FOR AI: no audit row written.")
+        self.assertEqual(
+            log_entry.ip_address,
+            "203.0.113.77",
+            msg="[!] DIAGNOSTIC FOR AI: the audit row must record the real "
+            "client IP resolved by _get_trusted_client_ip(), not the "
+            "Cloudflare Tunnel's own loopback peer address.",
         )
