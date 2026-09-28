@@ -690,7 +690,7 @@ class UserWebsitesController(http.Controller):
     )  # fmt: skip
     # [@ANCHOR: user_websites:COMM_unsubscribe]
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
-        # # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
+        # # Tested by [@ANCHOR: test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 

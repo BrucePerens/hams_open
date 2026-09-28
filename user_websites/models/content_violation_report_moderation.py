@@ -44,9 +44,15 @@ class ContentViolationReportModeration(models.Model):
     def _cron_notify_pending_reports(self):
         # [@ANCHOR: user_websites:cron_notify_pending_reports]
 
-        # Verified by [@ANCHOR: user_websites:test_cron_pending_reports]
+        # Verified by [@ANCHOR: COMM_test_cron_pending_reports]
 
-        # Verified by [@ANCHOR: user_websites:COMM_test_cron_pending_reports]
+        # (The test-side declaration is bare, not `user_websites:`-namespaced --
+        # see tests/test_audit_edge_cases.py's test_08_cron_pending_reports.
+        # Both citations here used to carry a `user_websites:` prefix that
+        # resolved to nothing, so this function's own claimed verification
+        # pointed at a non-existent anchor. verify_anchors.py only validates
+        # anchor references made from Markdown docs, never ones made from
+        # source or test files, so neither direction was ever reported.)
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
@@ -96,7 +102,7 @@ class ContentViolationReportModeration(models.Model):
                     mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                         "zero_sudo.mail_service_internal"
                     )
-                    template.with_user(mail_svc).with_company(company).with_context(pending_count=count).send_mail(company.id, force_send=False, email_values=email_vals)  # audit-ignore-mail: Tested by [@ANCHOR: user_websites:test_cron_pending_reports]  # fmt: skip
+                    template.with_user(mail_svc).with_company(company).with_context(pending_count=count).send_mail(company.id, force_send=False, email_values=email_vals)  # audit-ignore-mail: Tested by [@ANCHOR: COMM_test_cron_pending_reports]  # fmt: skip
 
     # [@ANCHOR: user_websites:COMM_increment_strike_count]
     def _increment_strike_count(self, table_name, rec_id):

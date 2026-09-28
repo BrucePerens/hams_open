@@ -291,6 +291,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         )
 
     def test_02_invalid_unsubscribe_token(self):
+        # Tests [@ANCHOR: user_websites:COMM_unsubscribe]
         """
         Ensure that malicious actors cannot spoof the unsubscription URL to
         force-remove other users from mailing lists.
@@ -318,19 +319,19 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         )
 
 
-def test_03_subscribe_to_site(self):
-    # [@ANCHOR: test_subscribe_to_site]
+    def test_03_subscribe_to_site(self):
+        # [@ANCHOR: test_subscribe_to_site]
 
-    # [@ANCHOR: test_subscription_creation]
+        # [@ANCHOR: test_subscription_creation]
 
-    # Tests [@ANCHOR: UX_SUBSCRIBE]
-    """
-    Verify that users can subscribe to a site.
-    """
-    self.authenticate(self.follower.login, self.follower.login)
-    response = self.url_open(
-        f"/{self.creator.website_slug}/subscribe",
-        data={"csrf_token": odoo.http.Request.csrf_token(self)},
-        method="POST",
-    )
-    self.assertEqual(response.status_code, 200)
+        # Tests [@ANCHOR: UX_SUBSCRIBE]
+        """
+        Verify that users can subscribe to a site.
+        """
+        self.authenticate(self.follower.login, self.follower.login)
+        response = self.url_open(
+            f"/{self.creator.website_slug}/subscribe",
+            data={"csrf_token": odoo.http.Request.csrf_token(self)},
+            method="POST",
+        )
+        self.assertEqual(response.status_code, 200)
