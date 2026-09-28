@@ -727,7 +727,7 @@ class TestSesWebhook(HamsHttpCase):
         """The URL regex fixes the host name; the fetch itself must also refuse an address the server can reach but a
         caller should not (the cloud metadata address here) (real validator, no mock, and no connection is ever made)."""
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
-        with self.assertRaises((SSRFValidationError, OSError)):
+        with self.assertRaises(SSRFValidationError):
             _REAL_FETCH_SNS_SIGNING_CERT("https://169.254.169.254/SimpleNotificationService-linklocal000000000000.pem")
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
 
