@@ -140,10 +140,9 @@ class TestWsgiProxyScheme(HamsTransactionCase):
         self.assertEqual(result["wsgi.url_scheme"], "https")
 
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
-    def test_05_existing_x_forwarded_proto_is_never_overridden(self):
-        """If something upstream already set a real X-Forwarded-Proto, this fix must not
-        second-guess it -- CF-Visitor is a fallback for this deployment's own gap, not a
-        general override."""
+    def test_05_existing_x_forwarded_proto_wins_over_cf_visitor(self):
+        """An X-Forwarded-Proto from a trusted peer is authoritative: CF-Visitor is only the fallback
+        for when it is absent, and the header itself is left as it arrived."""
         environ = {
             "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
             "HTTP_CF_VISITOR": '{"scheme":"https"}',
@@ -153,3 +152,41 @@ class TestWsgiProxyScheme(HamsTransactionCase):
         result = self._call(environ)
         self.assertEqual(result["wsgi.url_scheme"], "http")
         self.assertEqual(result["HTTP_X_FORWARDED_PROTO"], "http")
+
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    def test_06_real_edge_sends_both_headers_and_https_is_applied(self):
+        """The real Cloudflare edge sends Cf-Visitor AND X-Forwarded-Proto together (captured off
+        hams.com's loopback, 2026-09-28). Odoo's ProxyFix ignores the latter without
+        X-Forwarded-Host, so the scheme has to be applied here; before this fix the session cookie
+        went out without Secure on the live site."""
+        environ = {
+            "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
+            "HTTP_CF_VISITOR": '{"scheme":"https"}',
+            "HTTP_X_FORWARDED_PROTO": "https",
+            "wsgi.url_scheme": "http",
+        }
+        result = self._call(environ)
+        self.assertEqual(result["wsgi.url_scheme"], "https")
+        self.assertEqual(result["HTTP_X_FORWARDED_PROTO"], "https")
+
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    def test_07_x_forwarded_proto_alone_and_a_comma_list_are_applied(self):
+        alone = self._call({"REMOTE_ADDR": "127.0.0.1", "HTTP_X_FORWARDED_PROTO": "https", "wsgi.url_scheme": "http"})  # burn-ignore-ssrf-test-value
+        self.assertEqual(alone["wsgi.url_scheme"], "https")
+        chained = self._call({"REMOTE_ADDR": "127.0.0.1", "HTTP_X_FORWARDED_PROTO": "https, http", "wsgi.url_scheme": "http"})  # burn-ignore-ssrf-test-value
+        self.assertEqual(chained["wsgi.url_scheme"], "https")
+
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    def test_08_untrusted_peer_x_forwarded_proto_is_ignored(self):
+        environ = {"REMOTE_ADDR": "203.0.113.7", "HTTP_X_FORWARDED_PROTO": "https", "wsgi.url_scheme": "http"}  # burn-ignore-ssrf-test-value
+        self.assertEqual(self._call(environ)["wsgi.url_scheme"], "http")
+
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    def test_09_garbage_x_forwarded_proto_falls_back_to_cf_visitor(self):
+        environ = {
+            "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
+            "HTTP_X_FORWARDED_PROTO": "gopher",
+            "HTTP_CF_VISITOR": '{"scheme":"https"}',
+            "wsgi.url_scheme": "http",
+        }
+        self.assertEqual(self._call(environ)["wsgi.url_scheme"], "https")

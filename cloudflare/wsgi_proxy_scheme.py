@@ -32,6 +32,11 @@ formal WSGI-middleware extension point for Odoo addons, so this is the only way 
 early, before Odoo's own routing/dispatch (and therefore before every reader of
 `request.httprequest.scheme`) ever sees the request.
 
+Correction, 2026-09-28: capturing a real request off hams.com's loopback showed the real edge sends
+`X-Forwarded-Proto: https` as well as `Cf-Visitor` (the local simulator sends only the latter).
+Odoo's ProxyFix does not read it without `X-Forwarded-Host`, so it is applied here too, and it wins
+over CF-Visitor when both are present.
+
 Trusting the peer: loopback (this deployment's own Cloudflare Tunnel case -- `cloudflared` and
 Odoo run on the same host, so the peer is always 127.0.0.1/::1) is checked first and needs no
 database or cache access at all, exactly as before. For a self-hosted admin running Cloudflare
@@ -121,20 +126,25 @@ def _patched_application_call(self, environ, start_response, *args, **kwargs):
     # the browser on the other end rejecting the resulting Secure-flagged cookie outright
     # (browsers refuse to store a Secure cookie set over a response that didn't itself arrive
     # over HTTPS) -- not a real vulnerability, but there is no reason to skip this check.
-    if (
-        _is_trusted_cf_peer(environ.get("REMOTE_ADDR"))
-        and not environ.get("HTTP_X_FORWARDED_PROTO")
-    ):
-        cf_visitor_raw = environ.get("HTTP_CF_VISITOR")
-        if cf_visitor_raw:
-            scheme = None
-            try:
-                scheme = json.loads(cf_visitor_raw).get("scheme")
-            except (ValueError, AttributeError) as e:
-                _logger.info("Ignoring malformed CF-Visitor header %r: %s", cf_visitor_raw, e)
-            if scheme in ("http", "https"):
-                environ["wsgi.url_scheme"] = scheme
-                environ["HTTP_X_FORWARDED_PROTO"] = scheme
+    if _is_trusted_cf_peer(environ.get("REMOTE_ADDR")):
+        # A real Cloudflare edge (found live on hams.com, 2026-09-28) sends BOTH `Cf-Visitor` and
+        # `X-Forwarded-Proto`. Odoo's own ProxyFix only acts on X-Forwarded-Proto when
+        # X-Forwarded-Host is also present, and it never is, so the header alone leaves
+        # `wsgi.url_scheme` at "http". An earlier version skipped this whole block whenever
+        # X-Forwarded-Proto existed ("never override an upstream value") and therefore did nothing on
+        # the real edge. The upstream value still wins over CF-Visitor, but it has to be applied.
+        forwarded = (environ.get("HTTP_X_FORWARDED_PROTO") or "").split(",")[0].strip().lower()
+        scheme = forwarded if forwarded in ("http", "https") else None
+        if scheme is None:
+            cf_visitor_raw = environ.get("HTTP_CF_VISITOR")
+            if cf_visitor_raw:
+                try:
+                    scheme = json.loads(cf_visitor_raw).get("scheme")
+                except (ValueError, AttributeError) as e:
+                    _logger.info("Ignoring malformed CF-Visitor header %r: %s", cf_visitor_raw, e)
+        if scheme in ("http", "https"):
+            environ["wsgi.url_scheme"] = scheme
+            environ.setdefault("HTTP_X_FORWARDED_PROTO", scheme)
     return _original_application_call(self, environ, start_response, *args, **kwargs)
 
 
