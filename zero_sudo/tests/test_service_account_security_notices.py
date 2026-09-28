@@ -12,7 +12,8 @@ from . import common
 @tagged("post_install", "-at_install")
 class TestServiceAccountSecurityNotices(common.HamsTransactionCase):
     def _security_mails(self, user):
-        return self.env["mail.mail"].search([("recipient_ids", "in", user.partner_id.ids)])
+        # Odoo addresses these notices with email_to (no recipient partner), so match on the address.
+        return self.env["mail.mail"].search([("email_to", "ilike", user.login)])
 
     def _make(self, login, service):
         return self.env["res.users"].create({

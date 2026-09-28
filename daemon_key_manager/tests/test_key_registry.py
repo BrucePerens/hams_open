@@ -421,6 +421,42 @@ class TestKeyRegistry(RealTransactionCase):
         ).action_force_provision_all()
         self.assertTrue(os.path.exists(env_file_path))
 
+    def test_a_failing_daemon_does_not_undo_or_hide_the_daemons_that_succeeded(self):
+        # [@ANCHOR: COMM_test_force_provisioning_partial_failure]
+
+        # Tests [@ANCHOR: COMM_force_provision_error_handling]
+        # Found live on hams1, 2026-09-23: one daemon's failure raised UserError at the end, which rolled back the whole
+        # transaction, including the API keys of the daemons that HAD succeeded -- whose key files were already
+        # written. Files and database then disagreed and those daemons were refused for days.
+        good_path = "/opt/hams/etc/keys/partial_ok.env"
+        bad_path = "/opt/hams/etc/keys/partial_bad.env"
+        self.test_env_paths.extend([good_path, bad_path])
+        for path in (good_path, bad_path):
+            if os.path.exists(path):
+                os.remove(path)
+        registry_model = self.env["daemon.key.registry"].with_user(self.manager_user.id)
+        registry_model.create(
+            {"name": "Partial OK", "user_id": self.service_user.id, "env_file_path": good_path}
+        )
+        archived = self.env["res.users"].create(
+            {"name": "Archived Service", "login": "archived_partial_svc", "is_service_account": True, "active": False}
+        )
+        registry_model.create({"name": "Partial Bad", "user_id": archived.id, "env_file_path": bad_path})
+
+        result = registry_model.action_force_provision_all()  # must not raise
+
+        self.assertEqual(result["params"]["type"], "danger")
+        self.assertIn("Partial Bad", result["params"]["message"])
+        self.assertNotIn("Partial OK", result["params"]["message"].split("FAILED for:")[1])
+        self.assertTrue(os.path.exists(good_path), "the daemon that could be provisioned still is")
+        self.assertFalse(os.path.exists(bad_path))
+        self.assertTrue(
+            self.env["res.users.apikeys"].search_count(
+                [("user_id", "=", self.service_user.id), ("name", "=", "Partial OK_key")]
+            ),
+            "the successful daemon's key is in the database, in step with its file",
+        )
+
     def test_ui_rendering(self):
         """Test UI view rendering."""
         # [@ANCHOR: COMM_test_ui_rendering]
