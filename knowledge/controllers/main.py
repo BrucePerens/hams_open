@@ -52,7 +52,18 @@ class ManualLibraryController(http.Controller):
         # Avoid compiling if it contains complex native Odoo UI snippets (tables, deep divs)
         try:
             tree = lxml.html.fromstring(html_body)
-            has_complex_html = bool(tree.xpath("//div | //table | //section | //article | //img"))
+            # Headings, lists, code blocks and the like mean the body is already
+            # real HTML (an installed documentation file or an editor-made
+            # article). Only plain paragraphs of typed or pasted text can be
+            # markdown; re-parsing structured HTML through html2plaintext
+            # produced garbled output.
+            has_complex_html = bool(
+                tree.xpath(
+                    "//div | //table | //section | //article | //img"
+                    " | //h1 | //h2 | //h3 | //h4 | //h5 | //h6"
+                    " | //ul | //ol | //pre | //blockquote | //hr | //dl"
+                )
+            )
         except (TypeError, ValueError, lxml.etree.ParserError, lxml.etree.XMLSyntaxError): # audit-ignore-catch-all
             has_complex_html = False
 
@@ -110,22 +121,26 @@ class ManualLibraryController(http.Controller):
         if not is_internal:
             base_domain += ["|", ("is_published", "=", True), ("member_ids", "in", user_id)]
 
+        # Manual Administrators may read every article, including internal
+        # documentation whose permission is "none" (see the documentation
+        # installer in zero_sudo), so they get the unrestricted list.
+        is_manager = request.env.user.has_group("knowledge.group_manual_manager")
+
         # Combined domain to fetch all relevant root articles in one go
-        combined_domain = base_domain + [
-            "|",
-            ("internal_permission", "in", ("read", "write")),
-            "|",
-            ("member_ids", "in", [user_id]),
-            "&",
-            ("internal_permission", "=", "none"),
-            ("create_uid", "=", user_id),
-        ]
+        combined_domain = list(base_domain)
+        if not is_manager:
+            combined_domain += [
+                "|",
+                ("internal_permission", "in", ("read", "write")),
+                "|",
+                ("member_ids", "in", [user_id]),
+                "&",
+                ("internal_permission", "=", "none"),
+                ("create_uid", "=", user_id),
+            ]
 
         all_roots = request.env["knowledge.article"].search(combined_domain, limit=5000)
 
-        workspace_articles = all_roots.filtered(
-            lambda a: a.internal_permission in ("read", "write")
-        )
         shared_articles = all_roots.filtered(
             lambda a: a.internal_permission == "none" 
             and a.member_ids 
@@ -136,6 +151,14 @@ class ManualLibraryController(http.Controller):
             and a.create_uid.id == user_id
             and not a.member_ids
         )
+        if is_manager:
+            # Internal documentation that is neither shared nor private to
+            # this administrator still belongs in the main list for them.
+            workspace_articles = all_roots - shared_articles - private_articles
+        else:
+            workspace_articles = all_roots.filtered(
+                lambda a: a.internal_permission in ("read", "write")
+            )
 
         return workspace_articles, shared_articles, private_articles
 

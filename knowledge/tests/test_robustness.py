@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
+from odoo.addons.knowledge.controllers.main import ManualLibraryController
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import urllib.parse
 
@@ -234,6 +235,48 @@ class TestManualRobustness(HamsHttpCase):
             "The markdown compiler must sanitize its output -- a live "
             "<script> tag must never reach the rendered page.",
         )
+
+    def test_08b_structured_html_is_not_reparsed_as_markdown(self):
+        """An article that is already real HTML must render as stored.
+
+        Installed documentation is stored as HTML. Bullet-looking text in it
+        matched a markdown signature and the body was rebuilt from its plain
+        text, garbling headings and lists.
+        """
+        body = (
+            "<h2>Getting started</h2>"
+            "<ul><li>- first step</li><li>second step</li></ul>"
+            "<p>See <b>**this**</b> note.</p>"
+        )
+        compiled = ManualLibraryController()._compile_markdown(body)
+        self.assertEqual(str(compiled), body)
+
+    def test_08c_administrator_sees_admin_only_articles(self):
+        """Admin-only documentation reaches Manual Administrators alone."""
+        article = self.env["knowledge.article"].create(
+            {
+                "name": "Admin Only Runbook Copy",
+                "body": "<p>Restore procedure</p>",
+                "internal_permission": "none",
+                "is_published": False,
+            }
+        )
+        self.env["res.users"].create(
+            {
+                "name": "Ordinary Member",
+                "login": "member_robust",
+                "password": "member_robust",
+                "email": "member_robust@test.com",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        self.authenticate("member_robust", "member_robust")
+        self.assertEqual(self.url_open(article.website_url).status_code, 404)
+
+        self.authenticate("admin", "admin")
+        response = self.url_open(article.website_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Admin Only Runbook Copy", response.content)
 
     def test_09_markdown_compiler_deeply_nested_list_falls_back_gracefully(self):
         """
