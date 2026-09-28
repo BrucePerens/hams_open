@@ -30,9 +30,9 @@
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_gain_scale_mismatch -- <host:port>`
 
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::float::tia_102_baba::enhancement::energy;
-use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::general::fec::golay_decode;
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -107,8 +107,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -140,13 +147,17 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -191,20 +202,28 @@ fn main() {
 
         let n = send_recv_retrying(&sock, &mut buf, &build_channel(channel_payload));
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decoded PCM) response");
+        assert_eq!(
+            ptype, TYPE_SPEECH,
+            "expected a SPEECH (decoded PCM) response"
+        );
         let chip_frame_pcm = parse_speech_payload(payload);
-        let chip_rms = (chip_frame_pcm.iter().map(|&s| (s as f64) * (s as f64)).sum::<f64>()
+        let chip_rms = (chip_frame_pcm
+            .iter()
+            .map(|&s| (s as f64) * (s as f64))
+            .sum::<f64>()
             / FRAME_SAMPLES as f64)
             .sqrt();
 
         let float_frame_pcm = float_pcm_decoder.decode_frame(c);
         let float_rms = match &float_frame_pcm {
-            Some(pcm) => {
-                (pcm.iter().map(|&s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt()
-            }
+            Some(pcm) => (pcm.iter().map(|&s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt(),
             None => 0.0,
         };
-        let ratio = if chip_rms > 1.0 { float_rms / chip_rms } else { f64::NAN };
+        let ratio = if chip_rms > 1.0 {
+            float_rms / chip_rms
+        } else {
+            f64::NAN
+        };
 
         // Per `prioritize_bits` (step 2): b2's own top 3 bits live at u0's bits 5..3, right after
         // b0's top 6 bits (11..6). If the TIA Fig. 22 layout holds for u0, this alone should show a
@@ -271,7 +290,10 @@ fn main() {
     // RMS) among Decoded frames only, and compare each group's own mean b2/l_hat/voiced_frac/R_M0 --
     // the advisor's own discriminating test: if a field's mean flips between groups in a way that
     // tracks the ratio flip, that field is where the residual gap lives.
-    let decoded: Vec<&Row> = rows.iter().filter(|r| r.outcome == "Decoded" && r.ratio.is_finite()).collect();
+    let decoded: Vec<&Row> = rows
+        .iter()
+        .filter(|r| r.outcome == "Decoded" && r.ratio.is_finite())
+        .collect();
     let louder: Vec<&&Row> = decoded.iter().filter(|r| r.ratio > 2.0).collect();
     let quieter: Vec<&&Row> = decoded.iter().filter(|r| r.ratio < 0.7).collect();
     let mean = |xs: &[&&Row], f: fn(&Row) -> f64| -> f64 {
@@ -301,7 +323,8 @@ fn main() {
         decoded.len(),
         mean(&decoded.iter().collect::<Vec<_>>(), |r| r.b2 as f64),
         mean(&decoded.iter().collect::<Vec<_>>(), |r| r.l_hat as f64),
-        mean(&decoded.iter().collect::<Vec<_>>(), |r| r.voiced_frac * 100.0),
+        mean(&decoded.iter().collect::<Vec<_>>(), |r| r.voiced_frac
+            * 100.0),
         mean(&decoded.iter().collect::<Vec<_>>(), |r| r.r_m0),
     );
 
@@ -342,15 +365,19 @@ fn main() {
         );
         let b2_min = xs.iter().cloned().fold(f64::INFINITY, f64::min);
         let b2_max = xs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        println!("-- b2 range on loud (chip_rms>500) frames: {b2_min}..={b2_max} (of 0..=63 possible)");
+        println!(
+            "-- b2 range on loud (chip_rms>500) frames: {b2_min}..={b2_max} (of 0..=63 possible)"
+        );
     }
     // The advisor's alternative hypothesis for the weak b2/chip_rms correlation above: Eq. 115/116's
     // own amplitude-smoothing clamp (tau_M resets to 20480 every clean frame, verified correct
     // against the spec) compresses b2's real range on loud frames, on *both* the chip's encoder and
     // this crate's decoder alike -- so correlating b2 against chip_rms on *moderate* frames, where
     // the clamp isn't active, should recover a real correlation if TIA's layout is actually correct.
-    let moderate_decoded: Vec<&&Row> =
-        decoded.iter().filter(|r| r.chip_rms > 200.0 && r.chip_rms < 800.0).collect();
+    let moderate_decoded: Vec<&&Row> = decoded
+        .iter()
+        .filter(|r| r.chip_rms > 200.0 && r.chip_rms < 800.0)
+        .collect();
     if moderate_decoded.len() > 3 {
         let xs: Vec<f64> = moderate_decoded.iter().map(|r| r.b2 as f64).collect();
         let ys: Vec<f64> = moderate_decoded.iter().map(|r| r.chip_rms.log2()).collect();
@@ -370,9 +397,19 @@ fn main() {
     // mean they're not comparable via the same correlation metric as real speech at all).
     println!("\n-- Channel payload header bytes, loud vs quiet frames --");
     for r in rows.iter().filter(|r| r.chip_rms > 1000.0).take(5) {
-        println!("frame {} (chip_rms={:.0}, LOUD): header={:02x?}", r.idx, r.chip_rms, r.header_bytes);
+        println!(
+            "frame {} (chip_rms={:.0}, LOUD): header={:02x?}",
+            r.idx, r.chip_rms, r.header_bytes
+        );
     }
-    for r in rows.iter().filter(|r| r.chip_rms < 100.0 && r.chip_rms > 0.0).take(5) {
-        println!("frame {} (chip_rms={:.0}, QUIET): header={:02x?}", r.idx, r.chip_rms, r.header_bytes);
+    for r in rows
+        .iter()
+        .filter(|r| r.chip_rms < 100.0 && r.chip_rms > 0.0)
+        .take(5)
+    {
+        println!(
+            "frame {} (chip_rms={:.0}, QUIET): header={:02x?}",
+            r.idx, r.chip_rms, r.header_bytes
+        );
     }
 }

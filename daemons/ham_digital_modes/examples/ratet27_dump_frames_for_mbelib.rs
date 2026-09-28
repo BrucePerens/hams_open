@@ -8,8 +8,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_dump_frames_for_mbelib -- <host:port> [out_dir] [wav]`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -83,8 +83,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -115,19 +122,24 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
-
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let out_dir = std::env::args().nth(2).unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let out_dir = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
     let wav = std::env::args()
         .nth(3)
         .unwrap_or_else(|| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -171,8 +183,12 @@ fn main() {
             chip_bytes.extend_from_slice(&s.to_le_bytes());
         }
         match float_decoder.decode_frame(c) {
-            Some(f) => f.iter().for_each(|&x| float_bytes.extend_from_slice(&(x as f32).to_le_bytes())),
-            None => (0..FRAME_SAMPLES).for_each(|_| float_bytes.extend_from_slice(&0f32.to_le_bytes())),
+            Some(f) => f
+                .iter()
+                .for_each(|&x| float_bytes.extend_from_slice(&(x as f32).to_le_bytes())),
+            None => {
+                (0..FRAME_SAMPLES).for_each(|_| float_bytes.extend_from_slice(&0f32.to_le_bytes()))
+            }
         }
     }
     std::fs::write(format!("{out_dir}/ratet27_frames.txt"), lines).unwrap();

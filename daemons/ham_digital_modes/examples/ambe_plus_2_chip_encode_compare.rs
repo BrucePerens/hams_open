@@ -14,9 +14,13 @@
 //!
 //! Usage: `cargo run --release --features ambe_plus_2 --example ambe_plus_2_chip_encode_compare -- [host:port] [wav] [n_frames]`
 
-use ham_digital_modes::ambe::float::ambe_plus_2::decode::{dequantize, extract_raw_parameters, DecoderState, DequantizedFrame};
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+    dequantize, extract_raw_parameters, DecoderState, DequantizedFrame,
+};
 use ham_digital_modes::ambe::float::ambe_plus_2::encoder::Encoder;
-use ham_digital_modes::ambe::float::ambe_plus_2::interleave::{frame_to_interleaved, interleaved_to_frame};
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::{
+    frame_to_interleaved, interleaved_to_frame,
+};
 use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder;
 use std::net::UdpSocket;
@@ -77,7 +81,10 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 }
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
-    payload[2..2 + count * 2].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
+    payload[2..2 + count * 2]
+        .chunks_exact(2)
+        .map(|b| i16::from_be_bytes([b[0], b[1]]))
+        .collect()
 }
 fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usize {
     for attempt in 0..8 {
@@ -97,13 +104,19 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE");
     assert_eq!(&data[36..40], b"data");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn corr(a: &[f64], b: &[f64]) -> f64 {
     let n = a.len().min(b.len());
     let (a, b) = (&a[..n], &b[..n]);
-    let (ma, mb) = (a.iter().sum::<f64>() / n as f64, b.iter().sum::<f64>() / n as f64);
+    let (ma, mb) = (
+        a.iter().sum::<f64>() / n as f64,
+        b.iter().sum::<f64>() / n as f64,
+    );
     let (mut c, mut va, mut vb) = (0.0, 0.0, 0.0);
     for (x, y) in a.iter().zip(b) {
         c += (x - ma) * (y - mb);
@@ -115,18 +128,37 @@ fn corr(a: &[f64], b: &[f64]) -> f64 {
 /// Best envelope correlation over lags of up to +-4 frames (hop 20 samples), so alignment choices are judged by quality
 /// rather than by how much decoder delay happens to line up with the input.
 fn best_lag_corr(input: &[f64], decoded: &[f64]) -> (f64, i32) {
-    let e = |x: &[f64]| -> Vec<f64> { x.windows(FRAME_SAMPLES).step_by(20).map(|w| (w.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt()).collect() };
+    let e = |x: &[f64]| -> Vec<f64> {
+        x.windows(FRAME_SAMPLES)
+            .step_by(20)
+            .map(|w| (w.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt())
+            .collect()
+    };
     let (a, b) = (e(input), e(decoded));
     let mut best = (f64::NEG_INFINITY, 0);
     for lag in -32i32..=32 {
-        let (x, y): (Vec<f64>, Vec<f64>) = a.iter().enumerate().filter_map(|(i, &v)| { let j = i as i32 + lag; (j >= 0 && (j as usize) < b.len()).then(|| (v, b[j as usize])) }).unzip();
-        if x.len() > 50 { let c = corr(&x, &y); if c > best.0 { best = (c, lag * 20); } }
+        let (x, y): (Vec<f64>, Vec<f64>) = a
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &v)| {
+                let j = i as i32 + lag;
+                (j >= 0 && (j as usize) < b.len()).then(|| (v, b[j as usize]))
+            })
+            .unzip();
+        if x.len() > 50 {
+            let c = corr(&x, &y);
+            if c > best.0 {
+                best = (c, lag * 20);
+            }
+        }
     }
     best
 }
 
 fn env(x: &[f64]) -> Vec<f64> {
-    x.chunks_exact(FRAME_SAMPLES).map(|c| (c.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt()).collect()
+    x.chunks_exact(FRAME_SAMPLES)
+        .map(|c| (c.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt())
+        .collect()
 }
 
 struct P {
@@ -142,7 +174,11 @@ fn params(frames: &[u128]) -> Vec<Option<P>> {
             let d = parse_frame(f).d;
             let raw = extract_raw_parameters(d);
             match dequantize(&raw, &mut st) {
-                DequantizedFrame::Speech(_) => Some(P { b0: raw.b0, b1: raw.b1, b2: raw.b2 }),
+                DequantizedFrame::Speech(_) => Some(P {
+                    b0: raw.b0,
+                    b1: raw.b1,
+                    b2: raw.b2,
+                }),
                 _ => None,
             }
         })
@@ -167,23 +203,35 @@ fn chip_decode(sock: &UdpSocket, buf: &mut [u8; 1024], frames: &[u128]) -> Vec<f
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let wav = std::env::args().nth(2).unwrap_or_else(|| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string());
-    let n_frames: usize = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(150);
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let wav = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string());
+    let n_frames: usize = std::env::args()
+        .nth(3)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(150);
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
-    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC])).unwrap();
+    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC]))
+        .unwrap();
     let n = sock.recv(&mut buf).unwrap();
     parse_packet(&buf[..n]).unwrap();
-    sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
     while sock.recv(&mut buf).is_ok() {}
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
     let pcm = read_wav_mono_i16(&wav);
     let n_frames = n_frames.min(pcm.len() / FRAME_SAMPLES);
-    let input: Vec<f64> = pcm[..n_frames * FRAME_SAMPLES].iter().map(|&s| s as f64).collect();
+    let input: Vec<f64> = pcm[..n_frames * FRAME_SAMPLES]
+        .iter()
+        .map(|&s| s as f64)
+        .collect();
 
     let mut chip_frames: Vec<u128> = Vec::new();
     for i in 0..n_frames {
@@ -202,7 +250,10 @@ fn main() {
     let chip_chip = chip_decode(&sock, &mut buf, &chip_frames);
     let chip_params = params(&chip_frames);
     let env_in = env(&input);
-    println!("chip encode -> chip decode: envelope corr vs input {:.4}", corr(&env_in, &env(&chip_chip)));
+    println!(
+        "chip encode -> chip decode: envelope corr vs input {:.4}",
+        corr(&env_in, &env(&chip_chip))
+    );
 
     for offset in [-160i32, -120, -80, -40, 0, 40, 80, 120, 160] {
         let mut enc = Encoder::new();
@@ -216,7 +267,17 @@ fn main() {
         ours.truncate(n_frames);
         let our_params = params(&ours);
         if let Ok(path) = std::env::var("DUMP_B0") {
-            let lines: Vec<String> = our_params.iter().zip(chip_params.iter()).map(|(a, b)| format!("{} {}", a.as_ref().map_or(-1, |x| x.b0 as i32), b.as_ref().map_or(-1, |x| x.b0 as i32))).collect();
+            let lines: Vec<String> = our_params
+                .iter()
+                .zip(chip_params.iter())
+                .map(|(a, b)| {
+                    format!(
+                        "{} {}",
+                        a.as_ref().map_or(-1, |x| x.b0 as i32),
+                        b.as_ref().map_or(-1, |x| x.b0 as i32)
+                    )
+                })
+                .collect();
             std::fs::write(format!("{path}.{offset}"), lines.join("\n")).unwrap();
         }
         let (mut both, mut b0_close, mut b1_eq, mut b2_close) = (0usize, 0usize, 0usize, 0usize);
@@ -232,13 +293,36 @@ fn main() {
         let mut d = AmbePlus2SynthesisDecoder::new();
         if std::env::var("DEBUG_NONE").is_ok() {
             let mut dd = AmbePlus2SynthesisDecoder::new();
-            let nones = ours.iter().filter(|&&f| dd.decode_frame(f).is_none()).count();
+            let nones = ours
+                .iter()
+                .filter(|&&f| dd.decode_frame(f).is_none())
+                .count();
             let mut dd = AmbePlus2SynthesisDecoder::new();
-            let rms: f64 = (ours.iter().flat_map(|&f| dd.decode_frame(f).unwrap_or([0.0; 160])).map(|x| x * x).sum::<f64>() / (ours.len() * 160) as f64).sqrt();
-            let tone_frames = ours.iter().filter(|&&f| matches!(dequantize(&extract_raw_parameters(parse_frame(f).d), &mut DecoderState::initial()), DequantizedFrame::Tone { .. })).count();
+            let rms: f64 = (ours
+                .iter()
+                .flat_map(|&f| dd.decode_frame(f).unwrap_or([0.0; 160]))
+                .map(|x| x * x)
+                .sum::<f64>()
+                / (ours.len() * 160) as f64)
+                .sqrt();
+            let tone_frames = ours
+                .iter()
+                .filter(|&&f| {
+                    matches!(
+                        dequantize(
+                            &extract_raw_parameters(parse_frame(f).d),
+                            &mut DecoderState::initial()
+                        ),
+                        DequantizedFrame::Tone { .. }
+                    )
+                })
+                .count();
             eprintln!("offset {offset}: tone frames {tone_frames}; our decoder returned None for {nones} of {} frames, rms {rms:.0}", ours.len());
         }
-        let ours_ours: Vec<f64> = ours.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect();
+        let ours_ours: Vec<f64> = ours
+            .iter()
+            .flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160]))
+            .collect();
         if std::env::var("DEBUG_NONE").is_ok() {
             let rms = |v: &[f64]| (v.iter().map(|x| x * x).sum::<f64>() / v.len() as f64).sqrt();
             eprintln!("offset {offset}: rms chip-dec {:.0} our-dec {:.0}; env corr chip-dec vs our-dec {:.4}", rms(&ours_chip), rms(&ours_ours), corr(&env(&ours_chip), &env(&ours_ours)));

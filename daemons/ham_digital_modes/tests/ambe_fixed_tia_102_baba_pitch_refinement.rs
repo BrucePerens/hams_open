@@ -16,7 +16,10 @@ use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement as fl;
 use std::f64::consts::PI;
 
 fn env_usize(name: &str, default: usize) -> usize {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 #[test]
@@ -32,12 +35,15 @@ fn fixed_pitch_refinement_matches_float_on_real_speech() {
         let raw_f: Vec<f64> = pcm.iter().map(|&s| s as f64).collect();
         let mut centers = common::frame_centers(raw_f.len(), 200);
         centers.truncate(max_frames + 2);
-        let tables: Vec<fx_pitch::ErrorTable> =
-            centers.iter().map(|&c| fx_pitch::PitchAnalysisFrame::new(&raw_i, c).error_table()).collect();
+        let tables: Vec<fx_pitch::ErrorTable> = centers
+            .iter()
+            .map(|&c| fx_pitch::PitchAnalysisFrame::new(&raw_i, c).error_table())
+            .collect();
         let mut hist = [(fx_pitch::DEFAULT_PITCH_INDEX, 0i32); 2];
         for k in 0..centers.len().saturating_sub(2) {
             let (ib, cb) = fx_pitch::look_back_pitch_tracking(&tables[k], hist[0], hist[1]);
-            let (jf, cf) = fx_pitch::look_ahead_pitch_tracking(&tables[k], &tables[k + 1], &tables[k + 2]);
+            let (jf, cf) =
+                fx_pitch::look_ahead_pitch_tracking(&tables[k], &tables[k + 1], &tables[k + 2]);
             let idx = fx_pitch::choose_initial_pitch_estimate(ib, cb, jf, cf);
             hist = [(idx, tables[k].at(idx)), hist[0]];
             if k % stride != 0 {
@@ -58,7 +64,8 @@ fn fixed_pitch_refinement_matches_float_on_real_speech() {
             }
             // E_R at the float side's chosen period, both implementations.
             let e_float = fl::refinement_error(&ff, omega_float);
-            let e_fixed = fx::refinement_error(&xf, &fx::Pitch::from_p8(p8_float as u32)) as f64 / 2f64.powi(60);
+            let e_fixed = fx::refinement_error(&xf, &fx::Pitch::from_p8(p8_float as u32)) as f64
+                / 2f64.powi(60);
             if e_float > 1.0 {
                 worst_err_rel = worst_err_rel.max(((e_fixed - e_float) / e_float).abs());
                 err_pairs += 1;
@@ -90,7 +97,11 @@ fn integer_band_arithmetic_matches_the_real_definitions() {
         for l in 0..=57i32 {
             let a = 1024 * (2 * l as i64 - 1);
             let expected = (a as f64 / p8 as f64).ceil() as i32;
-            assert_eq!(fx::Pitch::from_p8(p8).band_start(l), expected, "p8={p8} l={l}");
+            assert_eq!(
+                fx::Pitch::from_p8(p8).band_start(l),
+                expected,
+                "p8={p8} l={l}"
+            );
         }
     }
     // The 16384-point window DFT index stays inside the table for every reachable bin.

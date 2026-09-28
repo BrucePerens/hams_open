@@ -163,7 +163,9 @@ pub enum ToneKind {
 /// quantization step (31.25Hz) below the true stimulus frequency.
 pub fn classify_tone_index(index: u32) -> ToneKind {
     match index {
-        5..=122 => ToneKind::Single { hz: index as f64 * 31.25 },
+        5..=122 => ToneKind::Single {
+            hz: index as f64 * 31.25,
+        },
         128..=163 => ToneKind::Dual,
         _ => ToneKind::Invalid,
     }
@@ -481,8 +483,8 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::general::fec::golay_encode;
     use crate::ambe::float::dstar::whiten_c1;
+    use crate::ambe::general::fec::golay_encode;
 
     /// A real, self-consistent round trip: build a frame from known C0/C1/C2/C3 values (Golay-encode
     /// C0's own data, whiten and Golay-encode C1's), pack it, and confirm `parse_frame` recovers the
@@ -587,7 +589,11 @@ mod tests {
     #[test]
     fn classify_b0_matches_mbelib_exactly_not_the_wider_ambe_plus_2_range() {
         for b0 in 0u32..126 {
-            assert_eq!(classify_b0(b0), FrameKind::Speech, "b0={b0} must not classify as Tone");
+            assert_eq!(
+                classify_b0(b0),
+                FrameKind::Speech,
+                "b0={b0} must not classify as Tone"
+            );
         }
         assert_eq!(classify_b0(126), FrameKind::Tone);
         assert_eq!(classify_b0(127), FrameKind::Tone);
@@ -629,10 +635,21 @@ mod tests {
             let wire_bytes: [u8; 9] = bytes.try_into().unwrap();
             let frame = crate::ambe::float::dstar::interleave::wire_bytes_to_frame(&wire_bytes);
             let parsed = parse_frame(frame);
-            assert_eq!(parsed.epsilon_c0, 0, "{label}: C0 must decode with zero errors");
-            assert_eq!(parsed.epsilon_c1, 0, "{label}: C1 must decode with zero errors");
+            assert_eq!(
+                parsed.epsilon_c0, 0,
+                "{label}: C0 must decode with zero errors"
+            );
+            assert_eq!(
+                parsed.epsilon_c1, 0,
+                "{label}: C1 must decode with zero errors"
+            );
             let raw = extract_raw_parameters(parsed.d);
-            assert_eq!(classify_b0(raw.b0), FrameKind::Tone, "{label}: b0={} must classify as Tone", raw.b0);
+            assert_eq!(
+                classify_b0(raw.b0),
+                FrameKind::Tone,
+                "{label}: b0={} must classify as Tone",
+                raw.b0
+            );
             let tone = decode_tone(parsed.d);
             assert_eq!(
                 dtmf_digit_from_tone_index(tone.index),

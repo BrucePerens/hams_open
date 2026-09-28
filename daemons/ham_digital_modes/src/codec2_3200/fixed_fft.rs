@@ -71,7 +71,9 @@ impl ComplexQ23 {
         // a software 128-bit multiply) gives the identical result. Larger
         // values (rare: extreme spectral peaks) take the exact `i128` path.
         const LIM: u64 = 1 << 30;
-        if (self.re.unsigned_abs() | self.im.unsigned_abs() | other.re.unsigned_abs()
+        if (self.re.unsigned_abs()
+            | self.im.unsigned_abs()
+            | other.re.unsigned_abs()
             | other.im.unsigned_abs())
             < LIM
         {
@@ -1147,7 +1149,11 @@ const MODE_I64_NATIVE: u8 = 3;
 /// split-into-32-bit-halves form (`MODE_I64`), which needs fewer of its slower multiplies.
 /// Both forms are compiled on every target and tested against each other, and both give the
 /// same result bit for bit.
-const I64_KERNEL: u8 = if super::fixed_point::NATIVE_64_BIT { MODE_I64_NATIVE } else { MODE_I64 };
+const I64_KERNEL: u8 = if super::fixed_point::NATIVE_64_BIT {
+    MODE_I64_NATIVE
+} else {
+    MODE_I64
+};
 
 /// Largest value sum (of `|re| + |im|` over the whole transform) that still
 /// allows each mode. Every intermediate value is a partial DFT of the
@@ -1182,7 +1188,10 @@ fn mul_w_x(w: i32, x: i64) -> (u32, i32) {
     let xl = x as u32;
     let xh = (x >> 32) as i32;
     let p = w as i64 * xl as i64; // signed 32 x unsigned 32: one `mul` + one `mulhsu`
-    ((p as u32), ((p >> 32) as i32).wrapping_add(w.wrapping_mul(xh)))
+    (
+        (p as u32),
+        ((p >> 32) as i32).wrapping_add(w.wrapping_mul(xh)),
+    )
 }
 
 /// `(w1 * x1 + w2 * x2 + 2^22) >> 23` for 24-bit `w1`, `w2` and `i64`
@@ -1211,7 +1220,10 @@ fn umul_x(c: u32, x: i64) -> (u32, u32) {
     let xl = x as u32;
     let xh = (x >> 32) as u32;
     let p = c as u64 * xl as u64;
-    (p as u32, ((p >> 32) as u32).wrapping_add(c.wrapping_mul(xh)))
+    (
+        p as u32,
+        ((p >> 32) as u32).wrapping_add(c.wrapping_mul(xh)),
+    )
 }
 
 /// The two exact 64-bit sums of an inverse-transform twiddle multiply with
@@ -1246,7 +1258,9 @@ fn round_shift((lo, hi): (u32, u32)) -> i64 {
 #[inline(always)]
 fn round_shift_neg((lo, hi): (u32, u32)) -> i64 {
     let l = (1u32 << (FRAC_BITS - 1)).wrapping_sub(lo);
-    let h = 0u32.wrapping_sub(hi).wrapping_sub((1u32 << (FRAC_BITS - 1) < lo) as u32);
+    let h = 0u32
+        .wrapping_sub(hi)
+        .wrapping_sub((1u32 << (FRAC_BITS - 1) < lo) as u32);
     let out_lo = (l >> FRAC_BITS) | (h << (32 - FRAC_BITS));
     let out_hi = (h as i32) >> FRAC_BITS;
     ((out_hi as i64) << 32) | out_lo as i64
@@ -1657,8 +1671,16 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bo
         if r + step < nz {
             if PRUNE && !FWD && (MODE == MODE_I64 || MODE == MODE_I64_NATIVE) && len == N {
                 block_inv_i64_pruned::<PRUNE_LAST, MODE>(re, im, tw, bitrev[r] as usize, len, step);
-            } else if PRUNE && !FWD && (MODE == MODE_I64 || MODE == MODE_I64_NATIVE) && len == N / 2 {
-                block_inv_i64_pruned::<PRUNE_PENULTIMATE, MODE>(re, im, tw, bitrev[r] as usize, len, step);
+            } else if PRUNE && !FWD && (MODE == MODE_I64 || MODE == MODE_I64_NATIVE) && len == N / 2
+            {
+                block_inv_i64_pruned::<PRUNE_PENULTIMATE, MODE>(
+                    re,
+                    im,
+                    tw,
+                    bitrev[r] as usize,
+                    len,
+                    step,
+                );
             } else if !FWD && MODE == MODE_I64 {
                 block_inv_i64::<false>(re, im, tw, bitrev[r] as usize, len, step);
             } else {
@@ -1915,7 +1937,14 @@ fn pitch_fft_512_kernel<const NZ: usize, const K: u8>(
     }
     if sum < I64_SUM_LIMIT {
         for (k, &v) in input.iter().enumerate() {
-            scatter_prefix_short::<FFT_ENC>(re, im, bitrev, k, FillLens::<FFT_ENC, NZ>::T[k] as usize, v);
+            scatter_prefix_short::<FFT_ENC>(
+                re,
+                im,
+                bitrev,
+                k,
+                FillLens::<FFT_ENC, NZ>::T[k] as usize,
+                v,
+            );
         }
         pitch_prefix_i64_hot::<NZ, K>(re, im, bitrev);
     } else {
@@ -2177,7 +2206,12 @@ where
     Size<N>: FftTables,
 {
     pub(crate) fn new(re: &'a mut [i64; N], im: &'a mut [i64; N]) -> Self {
-        SparseInverse { re, im, flags: [0; FLAG_WORDS], sum: 0 }
+        SparseInverse {
+            re,
+            im,
+            flags: [0; FLAG_WORDS],
+            sum: 0,
+        }
     }
 
     /// Sets bin `b` (`1 <= b < N / 2`) and its mirror. A later `put` at the
@@ -2244,7 +2278,10 @@ pub(crate) struct FftScratch {
 
 impl FftScratch {
     pub(crate) const fn new() -> Self {
-        FftScratch { re: [0; FFT_ENC], im: [0; FFT_ENC] }
+        FftScratch {
+            re: [0; FFT_ENC],
+            im: [0; FFT_ENC],
+        }
     }
 }
 
@@ -2256,7 +2293,9 @@ mod tests {
     fn i32_twiddle_kernels_agree_bit_for_bit() {
         let mut seed = 0x0dd_ba11u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (seed >> 20) as i64
         };
         let lim = (1i64 << 29) + 64;
@@ -2264,9 +2303,16 @@ mod tests {
         for _ in 0..4000 {
             ys.push(next().rem_euclid(2 * lim + 1) - lim);
         }
-        let mut ws = vec![(0i64, -(1i64 << 23) + 1), ((1 << 23) - 1, 0), (-(1 << 23) + 1, (1 << 23) - 1)];
+        let mut ws = vec![
+            (0i64, -(1i64 << 23) + 1),
+            ((1 << 23) - 1, 0),
+            (-(1 << 23) + 1, (1 << 23) - 1),
+        ];
         for _ in 0..200 {
-            ws.push((next().rem_euclid(1 << 24) - (1 << 23) + 1, next().rem_euclid(1 << 24) - (1 << 23) + 1));
+            ws.push((
+                next().rem_euclid(1 << 24) - (1 << 23) + 1,
+                next().rem_euclid(1 << 24) - (1 << 23) + 1,
+            ));
         }
         for &(wr, wi) in &ws {
             for w in ys.windows(2) {
@@ -2547,7 +2593,9 @@ mod tests {
     }
 
     fn lcg(seed: &mut u64) -> i64 {
-        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (*seed >> 16) as i64
     }
 
@@ -2560,7 +2608,8 @@ mod tests {
                 let mut re = [0i64; N];
                 let mut im = [0i64; N];
                 for k in 0..N {
-                    re[k] = (lcg(seed) % (1i64 << mag_bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 };
+                    re[k] =
+                        (lcg(seed) % (1i64 << mag_bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 };
                     im[k] = lcg(seed) % (1i64 << mag_bits);
                 }
                 let (mut re_r, mut im_r) = (re, im);
@@ -2593,7 +2642,8 @@ mod tests {
                 for &forward in &[true, false] {
                     let mut input = [0i64; N];
                     for v in input.iter_mut().take(nz) {
-                        *v = (lcg(seed) % (1i64 << mag_bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 };
+                        *v = (lcg(seed) % (1i64 << mag_bits))
+                            * if lcg(seed) & 1 == 0 { 1 } else { -1 };
                     }
                     let mut re = [0x5a5a_5a5ai64; N];
                     let mut im = [-0x1234_5678i64; N];
@@ -2689,10 +2739,20 @@ mod tests {
         }
         sp.run_kernel::<NS, K>();
         for j in 0..=NS {
-            assert_eq!(re[j], re_ref[j], "n={N} kernel={K} lower output {j}, {} bins", bins.len());
+            assert_eq!(
+                re[j],
+                re_ref[j],
+                "n={N} kernel={K} lower output {j}, {} bins",
+                bins.len()
+            );
         }
         for j in N - NS + 1..N {
-            assert_eq!(re[j], re_ref[j], "n={N} kernel={K} upper output {j}, {} bins", bins.len());
+            assert_eq!(
+                re[j],
+                re_ref[j],
+                "n={N} kernel={K} upper output {j}, {} bins",
+                bins.len()
+            );
         }
     }
 
@@ -2719,7 +2779,8 @@ mod tests {
             for _ in 0..20 {
                 let mut input = [0i64; 64];
                 for v in input.iter_mut() {
-                    *v = (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
+                    *v = (lcg(&mut seed) % (1i64 << bits))
+                        * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
                 }
                 one::<MODE_I64>(&input);
                 one::<MODE_I64_NATIVE>(&input);
@@ -2751,9 +2812,18 @@ mod tests {
         let mut seed = 5150u64;
         for &bits in &[8u32, 24, 33, 37, 38] {
             for _ in 0..2000 {
-                let tw = ((lcg(&mut seed) % (1 << 23)) as i32, -((lcg(&mut seed) % (1 << 23)) as i32));
-                let tw = if lcg(&mut seed) & 1 == 0 { tw } else { (-tw.0, tw.1) };
-                let mut r = || (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
+                let tw = (
+                    (lcg(&mut seed) % (1 << 23)) as i32,
+                    -((lcg(&mut seed) % (1 << 23)) as i32),
+                );
+                let tw = if lcg(&mut seed) & 1 == 0 {
+                    tw
+                } else {
+                    (-tw.0, tw.1)
+                };
+                let mut r = || {
+                    (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 }
+                };
                 let (a0, b0) = ((r(), r()), (r(), r()));
                 for fwd in [false, true] {
                     let run = |f: fn(&mut i64, &mut i64, &mut i64, &mut i64, (i32, i32))| {
@@ -2795,7 +2865,13 @@ mod tests {
                 let bins: Vec<(usize, ComplexQ23)> = (0..count)
                     .map(|_| {
                         let b = 1 + (lcg(seed) as usize) % (N / 2 - 1);
-                        (b, ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) })
+                        (
+                            b,
+                            ComplexQ23 {
+                                re: rnd(seed, mag_bits),
+                                im: rnd(seed, mag_bits),
+                            },
+                        )
                     })
                     .collect();
                 sparse_inverse_trial::<N, NS>(&bins);
@@ -2806,17 +2882,36 @@ mod tests {
             for parity in 0..2usize {
                 let bins: Vec<(usize, ComplexQ23)> = (1..N / 2 - 1)
                     .filter(|b| b % 2 == parity && b % 6 == 1 + parity)
-                    .map(|b| (b, ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) }))
+                    .map(|b| {
+                        (
+                            b,
+                            ComplexQ23 {
+                                re: rnd(seed, mag_bits),
+                                im: rnd(seed, mag_bits),
+                            },
+                        )
+                    })
                     .collect();
                 sparse_inverse_trial::<N, NS>(&bins);
             }
             let comb: Vec<(usize, ComplexQ23)> = (1..)
                 .map(|l| ((l * 37 + 8) / 10, l))
                 .take_while(|&(b, _)| b < N / 2)
-                .map(|(b, _)| (b, ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) }))
+                .map(|(b, _)| {
+                    (
+                        b,
+                        ComplexQ23 {
+                            re: rnd(seed, mag_bits),
+                            im: rnd(seed, mag_bits),
+                        },
+                    )
+                })
                 .collect();
             sparse_inverse_trial::<N, NS>(&comb);
-            let v = ComplexQ23 { re: rnd(seed, mag_bits), im: rnd(seed, mag_bits) };
+            let v = ComplexQ23 {
+                re: rnd(seed, mag_bits),
+                im: rnd(seed, mag_bits),
+            };
             sparse_inverse_trial::<N, NS>(&[(3, v), (3, ComplexQ23 { re: v.im, im: v.re })]);
             sparse_inverse_trial::<N, NS>(&[(N / 2 - 1, v)]);
         }
@@ -2840,7 +2935,15 @@ mod tests {
                 sparse_inverse_trial::<N, NS>(&bins);
                 let bins_neg: Vec<(usize, ComplexQ23)> = bins
                     .iter()
-                    .map(|&(b, c)| (b, ComplexQ23 { re: -c.re / 2, im: c.re / 2 }))
+                    .map(|&(b, c)| {
+                        (
+                            b,
+                            ComplexQ23 {
+                                re: -c.re / 2,
+                                im: c.re / 2,
+                            },
+                        )
+                    })
                     .collect();
                 sparse_inverse_trial::<N, NS>(&bins_neg);
             }
@@ -2872,13 +2975,28 @@ mod tests {
         let mut seed = 99u64;
         for &bits in &[8u32, 20, 29, 30, 31, 32, 36, 40] {
             for _ in 0..500 {
-                let mut r = || (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 };
-                let (a, b) = (ComplexQ23 { re: r(), im: r() }, ComplexQ23 { re: r(), im: r() });
+                let mut r = || {
+                    (lcg(&mut seed) % (1i64 << bits)) * if lcg(&mut seed) & 1 == 0 { 1 } else { -1 }
+                };
+                let (a, b) = (
+                    ComplexQ23 { re: r(), im: r() },
+                    ComplexQ23 { re: r(), im: r() },
+                );
                 let m = a.mul(b);
-                let re = rshift_round_i128(a.re as i128 * b.re as i128 - a.im as i128 * b.im as i128, FRAC_BITS);
-                let im = rshift_round_i128(a.re as i128 * b.im as i128 + a.im as i128 * b.re as i128, FRAC_BITS);
+                let re = rshift_round_i128(
+                    a.re as i128 * b.re as i128 - a.im as i128 * b.im as i128,
+                    FRAC_BITS,
+                );
+                let im = rshift_round_i128(
+                    a.re as i128 * b.im as i128 + a.im as i128 * b.re as i128,
+                    FRAC_BITS,
+                );
                 assert_eq!((m.re, m.im), (re, im), "mul bits={bits}");
-                assert_eq!(a.mag_sq_raw(), a.re as i128 * a.re as i128 + a.im as i128 * a.im as i128, "mag_sq bits={bits}");
+                assert_eq!(
+                    a.mag_sq_raw(),
+                    a.re as i128 * a.re as i128 + a.im as i128 * a.im as i128,
+                    "mag_sq bits={bits}"
+                );
             }
         }
     }

@@ -21,8 +21,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_harmonicity_oracle -- <host:port>`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -97,8 +97,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -129,7 +136,6 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
-
 const FFT_LEN: usize = 4096;
 const SAMPLE_RATE: f64 = 8000.0;
 
@@ -158,7 +164,9 @@ fn bin(hz: f64) -> usize {
 /// `(k+0.5)*f0`.
 fn harmonicity_db(mag: &[f64], f0: f64, k: u32) -> f64 {
     let kf = k as f64;
-    let peak = (bin(kf * f0 - 0.2 * f0)..=bin(kf * f0 + 0.2 * f0)).map(|b| mag[b]).fold(0.0, f64::max);
+    let peak = (bin(kf * f0 - 0.2 * f0)..=bin(kf * f0 + 0.2 * f0))
+        .map(|b| mag[b])
+        .fold(0.0, f64::max);
     let trough = (bin((kf + 0.5) * f0 - 0.15 * f0)..=bin((kf + 0.5) * f0 + 0.15 * f0))
         .map(|b| mag[b])
         .fold(f64::INFINITY, f64::min);
@@ -166,19 +174,26 @@ fn harmonicity_db(mag: &[f64], f0: f64, k: u32) -> f64 {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
     let pcm = read_wav_mono_i16("tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav");
     let n_frames = (pcm.len() / FRAME_SAMPLES).min(N_FRAMES);
-    let input_pcm: Vec<f64> = pcm[..n_frames * FRAME_SAMPLES].iter().map(|&s| s as f64).collect();
+    let input_pcm: Vec<f64> = pcm[..n_frames * FRAME_SAMPLES]
+        .iter()
+        .map(|&s| s as f64)
+        .collect();
 
     let mut channel_payloads: Vec<Vec<u8>> = Vec::with_capacity(n_frames);
     for i in 0..n_frames {
@@ -228,8 +243,11 @@ fn main() {
     let mut band_records: Vec<(Vec<bool>, Vec<bool>, Vec<bool>)> = Vec::new();
 
     for i in 1..n_frames.saturating_sub(1) {
-        let (Some(a), Some(b), Some(c)) = (&params_per_frame[i - 1], &params_per_frame[i], &params_per_frame[i + 1])
-        else {
+        let (Some(a), Some(b), Some(c)) = (
+            &params_per_frame[i - 1],
+            &params_per_frame[i],
+            &params_per_frame[i + 1],
+        ) else {
             continue;
         };
         let (b0_prev, b0_cur, b0_next) = (a.0 as i32, b.0 as i32, c.0 as i32);
@@ -270,7 +288,11 @@ fn main() {
                 })
                 .collect()
         };
-        band_records.push((decoded_band, classify(&mag_chip, 22.0), classify(&mag_in, 18.0)));
+        band_records.push((
+            decoded_band,
+            classify(&mag_chip, 22.0),
+            classify(&mag_in, 18.0),
+        ));
     }
 
     println!("{frames_used} stable-pitch frames used (b0 within +-2 across 3 frames, f0>=95Hz, l_hat>=20)");
@@ -291,10 +313,21 @@ fn main() {
     }
 
     // Agreement of decoded band voicing (under each hypothesis) with chip-/input-derived voicing.
-    println!("\nband-voicing agreement over {} frames (bands 1..=min(k_hat,8)):", band_records.len());
+    println!(
+        "\nband-voicing agreement over {} frames (bands 1..=min(k_hat,8)):",
+        band_records.len()
+    );
     for (name, oracle_idx) in [("chip-output", 1usize), ("input-speech", 2usize)] {
         println!("oracle = {name}");
-        for hyp in ["normal", "reversed", "inverted(complement)", "shift+1", "shift-1", "shift+2", "shift-2"] {
+        for hyp in [
+            "normal",
+            "reversed",
+            "inverted(complement)",
+            "shift+1",
+            "shift-1",
+            "shift+2",
+            "shift-2",
+        ] {
             let (mut agree, mut total) = (0usize, 0usize);
             for rec in &band_records {
                 let oracle = if oracle_idx == 1 { &rec.1 } else { &rec.2 };
@@ -320,13 +353,21 @@ fn main() {
                     }
                 }
             }
-            println!("  {hyp:22} agreement {:.3} ({agree}/{total})", agree as f64 / total.max(1) as f64);
+            println!(
+                "  {hyp:22} agreement {:.3} ({agree}/{total})",
+                agree as f64 / total.max(1) as f64
+            );
         }
         let base_rate: f64 = {
             let (mut t, mut n) = (0usize, 0usize);
             for rec in &band_records {
                 let o = if oracle_idx == 1 { &rec.1 } else { &rec.2 };
-                for band in 0..o.len().min(8) { n += 1; if o[band] { t += 1; } }
+                for band in 0..o.len().min(8) {
+                    n += 1;
+                    if o[band] {
+                        t += 1;
+                    }
+                }
             }
             t as f64 / n.max(1) as f64
         };

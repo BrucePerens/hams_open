@@ -54,8 +54,18 @@ pub(super) fn all_values() -> Vec<Value> {
 
     // ---- scalars: envelope ----
     s(&mut v, "ENVELOPE_EPS_A2_Q23", "1e-6, Q23", q(1e-6, 23));
-    s(&mut v, "ENVELOPE_BETA_Q23", "LPCPF_BETA, Q23", q(LPCPF_BETA, 23));
-    s(&mut v, "ENVELOPE_ONE_PLUS_BETA_Q23", "1 + LPCPF_BETA, Q23", q(1.0 + LPCPF_BETA, 23));
+    s(
+        &mut v,
+        "ENVELOPE_BETA_Q23",
+        "LPCPF_BETA, Q23",
+        q(LPCPF_BETA, 23),
+    );
+    s(
+        &mut v,
+        "ENVELOPE_ONE_PLUS_BETA_Q23",
+        "1 + LPCPF_BETA, Q23",
+        q(1.0 + LPCPF_BETA, 23),
+    );
     s(&mut v, "ENVELOPE_BOOST_RATIO_Q23", "1.96, Q23", q(1.96, 23));
     s(
         &mut v,
@@ -63,17 +73,57 @@ pub(super) fn all_values() -> Vec<Value> {
         "PI * 150 / 4000, Q23",
         q(PI * 150.0 / 4000.0, 23),
     );
-    s(&mut v, "ENVELOPE_FIRST_HARMONIC_CORRECTION_Q23", "0.032, Q23", q(0.032, 23));
+    s(
+        &mut v,
+        "ENVELOPE_FIRST_HARMONIC_CORRECTION_Q23",
+        "0.032, Q23",
+        q(0.032, 23),
+    );
     // ---- scalars: synthesis ----
-    s(&mut v, "SYNTH_BG_THRESH_Q23", "BG_THRESH, Q23", q(BG_THRESH, 23));
+    s(
+        &mut v,
+        "SYNTH_BG_THRESH_Q23",
+        "BG_THRESH, Q23",
+        q(BG_THRESH, 23),
+    );
     s(&mut v, "SYNTH_BG_BETA_Q23", "BG_BETA, Q23", q(BG_BETA, 23));
-    s(&mut v, "SYNTH_ONE_MINUS_BG_BETA_Q23", "1 - BG_BETA, Q23", q(1.0 - BG_BETA, 23));
-    s(&mut v, "SYNTH_BG_MARGIN_Q23", "BG_MARGIN, Q23", q(BG_MARGIN, 23));
-    s(&mut v, "SYNTH_TEN_OVER_LOG2_10_Q23", "10 / log2(10), Q23", q(10.0 / LOG2_10, 23));
-    s(&mut v, "SYNTH_LOG2_10_OVER_20_Q23", "log2(10) / 20, Q23", q(LOG2_10 / 20.0, 23));
-    s(&mut v, "SYNTH_EAR_PROTECTION_THRESH_Q23", "30000, Q23", q(30000.0, 23));
+    s(
+        &mut v,
+        "SYNTH_ONE_MINUS_BG_BETA_Q23",
+        "1 - BG_BETA, Q23",
+        q(1.0 - BG_BETA, 23),
+    );
+    s(
+        &mut v,
+        "SYNTH_BG_MARGIN_Q23",
+        "BG_MARGIN, Q23",
+        q(BG_MARGIN, 23),
+    );
+    s(
+        &mut v,
+        "SYNTH_TEN_OVER_LOG2_10_Q23",
+        "10 / log2(10), Q23",
+        q(10.0 / LOG2_10, 23),
+    );
+    s(
+        &mut v,
+        "SYNTH_LOG2_10_OVER_20_Q23",
+        "log2(10) / 20, Q23",
+        q(LOG2_10 / 20.0, 23),
+    );
+    s(
+        &mut v,
+        "SYNTH_EAR_PROTECTION_THRESH_Q23",
+        "30000, Q23",
+        q(30000.0, 23),
+    );
     // ---- scalars: quantiser ----
-    s(&mut v, "QUANT_W0_MIN_Q23", "W0_MIN, Q23", q(W0_MIN, COEF_FRAC_BITS));
+    s(
+        &mut v,
+        "QUANT_W0_MIN_Q23",
+        "W0_MIN, Q23",
+        q(W0_MIN, COEF_FRAC_BITS),
+    );
     s(
         &mut v,
         "QUANT_W0_STEP_Q23",
@@ -90,17 +140,45 @@ pub(super) fn all_values() -> Vec<Value> {
         &mut v,
         "QUANT_ENERGY_Y_STEP_Q23",
         "(E_MAX_DB - E_MIN_DB) / 2^E_BITS / 10 * log2(10), Q23",
-        q((E_MAX_DB - E_MIN_DB) / (1u32 << E_BITS) as f32 / 10.0 * LOG2_10, 23),
+        q(
+            (E_MAX_DB - E_MIN_DB) / (1u32 << E_BITS) as f32 / 10.0 * LOG2_10,
+            23,
+        ),
     );
-    s(&mut v, "QUANT_HZ_PER_RAD_Q16", "4000 / PI, Q16", q(4000.0 / PI, 16));
-    s(&mut v, "QUANT_RAD_PER_HZ_Q23", "PI / 4000, Q23", q(PI / 4000.0, COEF_FRAC_BITS));
+    s(
+        &mut v,
+        "QUANT_HZ_PER_RAD_Q16",
+        "4000 / PI, Q16",
+        q(4000.0 / PI, 16),
+    );
+    s(
+        &mut v,
+        "QUANT_RAD_PER_HZ_Q23",
+        "PI / 4000, Q23",
+        q(PI / 4000.0, COEF_FRAC_BITS),
+    );
     // ---- scalars: nlp ----
-    s(&mut v, "NLP_NOTCH_A_Q23", "NOTCH_A, Q23", q_f64(nlp::NOTCH_A, 23));
+    s(
+        &mut v,
+        "NLP_NOTCH_A_Q23",
+        "NOTCH_A, Q23",
+        q_f64(nlp::NOTCH_A, 23),
+    );
     s(&mut v, "NLP_CNLP_Q23", "CNLP, Q23", q_f64(nlp::CNLP, 23));
     // ---- scalars: misc ----
     s(&mut v, "LPC_PI_Q23", "PI, Q23", q(PI, COEF_FRAC_BITS));
-    s(&mut v, "MOD_W0_MIN_Q23", "W0_MIN, Q23", q(W0_MIN, COEF_FRAC_BITS));
-    s(&mut v, "SB_HZ_PER_RAD_Q23", "SAMPLE_RATE / TAU, Q23", q(SAMPLE_RATE as f32 / TAU, 23));
+    s(
+        &mut v,
+        "MOD_W0_MIN_Q23",
+        "W0_MIN, Q23",
+        q(W0_MIN, COEF_FRAC_BITS),
+    );
+    s(
+        &mut v,
+        "SB_HZ_PER_RAD_Q23",
+        "SAMPLE_RATE / TAU, Q23",
+        q(SAMPLE_RATE as f32 / TAU, 23),
+    );
 
     // ---- arrays ----
     let lpf = nlp::design_lowpass(nlp::LPF_TAPS, 0.5 / NLP_DEC as f32);
@@ -115,7 +193,12 @@ pub(super) fn all_values() -> Vec<Value> {
         "i64",
         "Hann window over the decimated block, Q23.",
         (0..nlp::NDEC)
-            .map(|i| q_f64(0.5 - 0.5 * (TAU * i as f32 / (nlp::NDEC - 1) as f32).cos(), 23))
+            .map(|i| {
+                q_f64(
+                    0.5 - 0.5 * (TAU * i as f32 / (nlp::NDEC - 1) as f32).cos(),
+                    23,
+                )
+            })
             .collect(),
     ));
     v.push(Value::Pairs(
@@ -148,13 +231,19 @@ pub(super) fn all_values() -> Vec<Value> {
         "LOG2_LUT_Q23",
         "i32",
         "log2(1 + i/256), Q23.",
-        log2_f.iter().map(|&f| (f * (1i64 << 23) as f32).round() as i64).collect(),
+        log2_f
+            .iter()
+            .map(|&f| (f * (1i64 << 23) as f32).round() as i64)
+            .collect(),
     ));
     v.push(Value::Array(
         "EXP2_LUT_FRAC_Q23",
         "i32",
         "2^(i/256) - 1, Q23.",
-        exp2_f.iter().map(|&f| ((f - 1.0) * (1i64 << 23) as f32).round() as i64).collect(),
+        exp2_f
+            .iter()
+            .map(|&f| ((f - 1.0) * (1i64 << 23) as f32).round() as i64)
+            .collect(),
     ));
     let trig = |f: fn(f32) -> f32| -> Vec<i64> {
         let levels = 1u32 << TRIG_LUT_BITS;
@@ -167,27 +256,63 @@ pub(super) fn all_values() -> Vec<Value> {
         t[levels as usize] = t[0];
         t
     };
-    v.push(Value::Array("TRIG_COS_Q23", "i32", "cos(TAU * i / 4096), Q23.", trig(f32::cos)));
-    v.push(Value::Array("TRIG_SIN_Q23", "i32", "sin(TAU * i / 4096), Q23.", trig(f32::sin)));
+    v.push(Value::Array(
+        "TRIG_COS_Q23",
+        "i32",
+        "cos(TAU * i / 4096), Q23.",
+        trig(f32::cos),
+    ));
+    v.push(Value::Array(
+        "TRIG_SIN_Q23",
+        "i32",
+        "sin(TAU * i / 4096), Q23.",
+        trig(f32::sin),
+    ));
     let acos_lut: Vec<i64> = (0..TRIG_LUT_SIZE)
-        .map(|i| q_f64((i as f32 / (1u32 << TRIG_LUT_BITS) as f32).acos(), COEF_FRAC_BITS))
+        .map(|i| {
+            q_f64(
+                (i as f32 / (1u32 << TRIG_LUT_BITS) as f32).acos(),
+                COEF_FRAC_BITS,
+            )
+        })
         .collect();
-    v.push(Value::Array("LPC_ACOS_LUT_Q23", "i32", "acos(i / 4096), Q23.", acos_lut));
+    v.push(Value::Array(
+        "LPC_ACOS_LUT_Q23",
+        "i32",
+        "acos(i / 4096), Q23.",
+        acos_lut,
+    ));
     let cos_lut: Vec<i64> = (0..TRIG_LUT_SIZE)
-        .map(|i| q_f64((i as f32 / (1u32 << TRIG_LUT_BITS) as f32 * PI).cos(), COEF_FRAC_BITS))
+        .map(|i| {
+            q_f64(
+                (i as f32 / (1u32 << TRIG_LUT_BITS) as f32 * PI).cos(),
+                COEF_FRAC_BITS,
+            )
+        })
         .collect();
-    v.push(Value::Array("LPC_COS_LUT_Q23", "i32", "cos(PI * i / 4096), Q23.", cos_lut));
+    v.push(Value::Array(
+        "LPC_COS_LUT_Q23",
+        "i32",
+        "cos(PI * i / 4096), Q23.",
+        cos_lut,
+    ));
     v.push(Value::Array(
         "SYNTH_PARZEN_Q23",
         "i64",
         "Synthesis overlap-add window, Q23.",
-        synthesis::make_synthesis_window().iter().map(|&p| q(p, 23)).collect(),
+        synthesis::make_synthesis_window()
+            .iter()
+            .map(|&p| q(p, 23))
+            .collect(),
     ));
     v.push(Value::Array(
         "SB_PARZEN_Q23",
         "i64",
         "Spectral-bridge overlap-add window, Q23.",
-        spectral_bridge::make_synthesis_window_sb().iter().map(|&p| q(p, 23)).collect::<Vec<_>>(),
+        spectral_bridge::make_synthesis_window_sb()
+            .iter()
+            .map(|&p| q(p, 23))
+            .collect::<Vec<_>>(),
     ));
     debug_assert_eq!(SAMPLES_PER_FRAME_SB, 320);
     v.push(Value::Array(
@@ -240,10 +365,21 @@ pub(super) fn render() -> String {
     for val in all_values() {
         match val {
             Value::Scalar(name, doc, x) => {
-                writeln!(out, "/// {doc}\n{}pub(crate) const {name}: i64 = {x};", gate(name)).unwrap();
+                writeln!(
+                    out,
+                    "/// {doc}\n{}pub(crate) const {name}: i64 = {x};",
+                    gate(name)
+                )
+                .unwrap();
             }
             Value::Array(name, ty, doc, xs) => {
-                writeln!(out, "/// {doc}\n{}pub(crate) static {name}: [{ty}; {}] = [", gate(name), xs.len()).unwrap();
+                writeln!(
+                    out,
+                    "/// {doc}\n{}pub(crate) static {name}: [{ty}; {}] = [",
+                    gate(name),
+                    xs.len()
+                )
+                .unwrap();
                 for chunk in xs.chunks(8) {
                     let line: Vec<String> = chunk.iter().map(|x| x.to_string()).collect();
                     writeln!(out, "    {},", line.join(", ")).unwrap();
@@ -251,9 +387,16 @@ pub(super) fn render() -> String {
                 out.push_str("];\n");
             }
             Value::Pairs(name, doc, xs) => {
-                writeln!(out, "/// {doc}\n{}pub(crate) static {name}: [(i64, i64); {}] = [", gate(name), xs.len()).unwrap();
+                writeln!(
+                    out,
+                    "/// {doc}\n{}pub(crate) static {name}: [(i64, i64); {}] = [",
+                    gate(name),
+                    xs.len()
+                )
+                .unwrap();
                 for chunk in xs.chunks(4) {
-                    let line: Vec<String> = chunk.iter().map(|(a, b)| format!("({a}, {b})")).collect();
+                    let line: Vec<String> =
+                        chunk.iter().map(|(a, b)| format!("({a}, {b})")).collect();
                     writeln!(out, "    {},", line.join(", ")).unwrap();
                 }
                 out.push_str("];\n");
@@ -288,8 +431,12 @@ mod tests {
         let mut chars = text.chars().peekable();
         while let Some(c) = chars.next() {
             // A '-' directly before a digit belongs to the number; identifiers such as `Q23` are not numbers.
-            let starts_number = c.is_ascii_digit() || (c == '-' && chars.peek().is_some_and(|d| d.is_ascii_digit()));
-            let in_identifier = skeleton.chars().last().is_some_and(|p| p.is_ascii_alphanumeric() || p == '_');
+            let starts_number = c.is_ascii_digit()
+                || (c == '-' && chars.peek().is_some_and(|d| d.is_ascii_digit()));
+            let in_identifier = skeleton
+                .chars()
+                .last()
+                .is_some_and(|p| p.is_ascii_alphanumeric() || p == '_');
             if digits.is_empty() && !starts_number || (digits.is_empty() && in_identifier) {
                 skeleton.push(c);
             } else if c.is_ascii_digit() || (c == '-' && digits.is_empty()) {

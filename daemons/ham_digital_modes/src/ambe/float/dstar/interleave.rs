@@ -40,8 +40,8 @@ const D_W: [usize; 72] = [
 ];
 const D_X: [usize; 72] = [
     10, 22, 11, 9, 10, 22, 11, 23, 8, 20, 9, 21, 10, 8, 9, 21, 8, 6, 7, 19, 8, 20, 9, 7, 6, 18, 7,
-    5, 6, 18, 7, 19, 4, 16, 5, 17, 6, 4, 5, 17, 4, 2, 3, 15, 4, 16, 5, 3, 2, 14, 3, 1, 2, 14, 3, 15,
-    0, 12, 1, 13, 2, 0, 1, 13, 0, 12, 10, 11, 0, 12, 1, 13,
+    5, 6, 18, 7, 19, 4, 16, 5, 17, 6, 4, 5, 17, 4, 2, 3, 15, 4, 16, 5, 3, 2, 14, 3, 1, 2, 14, 3,
+    15, 0, 12, 1, 13, 2, 0, 1, 13, 0, 12, 10, 11, 0, 12, 1, 13,
 ];
 
 /// Converts 9 raw CHAND bytes (chip wire order: bytes as received, each byte's bits LSB-first) into
@@ -104,7 +104,10 @@ mod tests {
         for (block, &len) in BLOCK_LENS.iter().enumerate() {
             assert_eq!(seen_cols[block].len(), len, "block {block} column count");
             for col in 0..len {
-                assert!(seen_cols[block].contains(&col), "block {block} missing column {col}");
+                assert!(
+                    seen_cols[block].contains(&col),
+                    "block {block} missing column {col}"
+                );
             }
         }
     }

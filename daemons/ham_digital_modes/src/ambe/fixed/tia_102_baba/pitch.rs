@@ -98,14 +98,22 @@ impl PitchAnalysisFrame {
             peak = peak.max(sum.unsigned_abs());
         }
         if peak == 0 {
-            return Self { s_energy: 0, autocorr: [0; 151], silent: true };
+            return Self {
+                s_energy: 0,
+                autocorr: [0; 151],
+                silent: true,
+            };
         }
         // Block-normalise: peak into [2^21, 2^22).
         let bits = 64 - peak.leading_zeros() as i32;
         let shift = bits - 22;
         let mut s = [0i64; 301];
         for (dst, &src) in s.iter_mut().zip(acc.iter()) {
-            *dst = if shift >= 0 { (src + ((1i64 << shift) >> 1)) >> shift } else { src << (-shift) };
+            *dst = if shift >= 0 {
+                (src + ((1i64 << shift) >> 1)) >> shift
+            } else {
+                src << (-shift)
+            };
         }
         let mut s_energy = 0i64;
         let mut a = [0i64; 301];
@@ -123,7 +131,11 @@ impl PitchAnalysisFrame {
             }
             *slot = sum;
         }
-        Self { s_energy, autocorr, silent: false }
+        Self {
+            s_energy,
+            autocorr,
+            silent: false,
+        }
     }
 
     /// `E(P)` for candidate index `idx` (Q16.16). All-zero input scores the worst error, 1.0, as the
@@ -155,7 +167,11 @@ impl PitchAnalysisFrame {
         }
         let scaled = num << 16;
         let half = den.abs() >> 1;
-        let q = if (scaled >= 0) == (den > 0) { (scaled.abs() + half) / den.abs() } else { -((scaled.abs() + half) / den.abs()) };
+        let q = if (scaled >= 0) == (den > 0) {
+            (scaled.abs() + half) / den.abs()
+        } else {
+            -((scaled.abs() + half) / den.abs())
+        };
         // Floored at zero like the float sibling (see its `error_function`).
         q.clamp(0, i32::MAX as i128) as i32
     }
@@ -197,7 +213,11 @@ fn tracking_range(ref_idx: usize) -> std::ops::RangeInclusive<usize> {
 
 /// Look-back tracking (5.1.2): returns `(index of P_hat_B, CE_B)`. `prev1`/`prev2` are the previous
 /// two frames' final `(pitch index, E)`; the defaults are `(DEFAULT_PITCH_INDEX, 0)`.
-pub fn look_back_pitch_tracking(table: &ErrorTable, prev1: (usize, i32), prev2: (usize, i32)) -> (usize, i32) {
+pub fn look_back_pitch_tracking(
+    table: &ErrorTable,
+    prev1: (usize, i32),
+    prev2: (usize, i32),
+) -> (usize, i32) {
     let (prev_idx, prev_err) = prev1;
     let (_, prev_err_older) = prev2;
     let mut best_idx = 0usize;
@@ -209,22 +229,33 @@ pub fn look_back_pitch_tracking(table: &ErrorTable, prev1: (usize, i32), prev2: 
             best_err = e;
         }
     }
-    let ce = (best_err as i64 + prev_err as i64 + prev_err_older as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    let ce = (best_err as i64 + prev_err as i64 + prev_err_older as i64)
+        .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     (best_idx, ce)
 }
 
 /// Look-ahead tracking (5.1.3, including the smallest-sub-multiple-first order and the multiplied-out
 /// ratio tests of the float sibling): returns `(index of P_hat_F, CE_F)`.
-pub fn look_ahead_pitch_tracking(t0: &ErrorTable, t1: &ErrorTable, t2: &ErrorTable) -> (usize, i32) {
+pub fn look_ahead_pitch_tracking(
+    t0: &ErrorTable,
+    t1: &ErrorTable,
+    t2: &ErrorTable,
+) -> (usize, i32) {
     // best_e2[p1] = min E2(p2) over p2 in range(p1); best_e12[p0] = min over p1 in range(p0) of
     // E1(p1) + best_e2[p1]. Equivalent to the float sibling's nested minimisation.
     let mut best_e2 = [0i64; CANDIDATES];
     for (p1, slot) in best_e2.iter_mut().enumerate() {
-        *slot = tracking_range(p1).map(|c| t2.at(c) as i64).min().unwrap_or(i64::MAX / 4);
+        *slot = tracking_range(p1)
+            .map(|c| t2.at(c) as i64)
+            .min()
+            .unwrap_or(i64::MAX / 4);
     }
     let mut best_e12 = [0i64; CANDIDATES];
     for (p0, slot) in best_e12.iter_mut().enumerate() {
-        *slot = tracking_range(p0).map(|c| t1.at(c) as i64 + best_e2[c]).min().unwrap_or(i64::MAX / 4);
+        *slot = tracking_range(p0)
+            .map(|c| t1.at(c) as i64 + best_e2[c])
+            .min()
+            .unwrap_or(i64::MAX / 4);
     }
     let ce_f_at = |p0: usize| -> i64 { t0.at(p0) as i64 + best_e12[p0] };
 
@@ -258,7 +289,10 @@ pub fn look_ahead_pitch_tracking(t0: &ErrorTable, t1: &ErrorTable, t2: &ErrorTab
             return (cand, ce.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
         }
     }
-    (p_hat_0, ce_f_p_hat_0.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+    (
+        p_hat_0,
+        ce_f_p_hat_0.clamp(i32::MIN as i64, i32::MAX as i64) as i32,
+    )
 }
 
 /// 5.1.4: choose between the backward and forward estimates; returns the pitch index.

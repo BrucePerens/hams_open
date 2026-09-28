@@ -171,10 +171,15 @@ mod tests {
     #[test]
     fn committed_q23_constants_match_the_computed_values() {
         assert_eq!(SWAP_NUDGE_Q23, f32_to_q_exact_round(0.1, FRAC_BITS));
-        assert_eq!(MIN_SEP_LOW_Q23, f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS));
-        assert_eq!(MIN_SEP_HIGH_Q23, f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS));
+        assert_eq!(
+            MIN_SEP_LOW_Q23,
+            f32_to_q_exact_round(50.0 * HZ_TO_RAD, FRAC_BITS)
+        );
+        assert_eq!(
+            MIN_SEP_HIGH_Q23,
+            f32_to_q_exact_round(100.0 * HZ_TO_RAD, FRAC_BITS)
+        );
     }
-
 
     #[test]
     fn check_lsp_order_leaves_an_already_ordered_vector_unchanged() {

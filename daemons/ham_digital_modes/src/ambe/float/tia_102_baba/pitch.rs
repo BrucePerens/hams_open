@@ -151,8 +151,14 @@ impl PitchAnalysisFrame {
             *slot = s_lpf[i] * w * w;
         }
         // Eq. 7: the terms with `j + t` outside `-150..=150` vanish (`w_I` is zero there).
-        let r_table = (0..=R_LAGS).map(|t| (0..301 - t).map(|i| a[i] * a[i + t]).sum()).collect();
-        Self { energy, r_table, w4_sum }
+        let r_table = (0..=R_LAGS)
+            .map(|t| (0..301 - t).map(|i| a[i] * a[i + t]).sum())
+            .collect();
+        Self {
+            energy,
+            r_table,
+            w4_sum,
+        }
     }
 
     /// `r(t)` for any real `t >= 0` (Eq. 8): linear interpolation between the two nearest integer lags of the
@@ -174,7 +180,8 @@ impl PitchAnalysisFrame {
     pub fn error_function(&self, p: f64) -> f64 {
         let n_max = (150.0 / p).floor() as i32;
         // n = 0 contributes r(0); each n and -n contribute the same value.
-        let r_sum: f64 = self.r_table[0] + 2.0 * (1..=n_max).map(|n| self.r(n as f64 * p)).sum::<f64>();
+        let r_sum: f64 =
+            self.r_table[0] + 2.0 * (1..=n_max).map(|n| self.r(n as f64 * p)).sum::<f64>();
         let denominator = self.energy * (1.0 - p * self.w4_sum);
         if denominator.abs() < 1e-12 {
             return 1.0; // all-zero (silent) input: no pitch evidence, worst error instead of 0/0 = NaN
@@ -250,23 +257,37 @@ pub fn look_ahead_pitch_tracking(
     // functions are sampled once, then the nested minimum is built bottom-up (the inner minimum over P2 depends only
     // on P1, so it is shared by every P0 whose P1 range contains it).
     let candidates: Vec<f64> = candidate_pitches().collect();
-    let sample = |f: &dyn Fn(f64) -> f64| -> Vec<f64> { candidates.iter().map(|&p| f(p)).collect() };
-    let (e0, e1, e2) = (sample(&error_fn), sample(&future1_error_fn), sample(&future2_error_fn));
+    let sample =
+        |f: &dyn Fn(f64) -> f64| -> Vec<f64> { candidates.iter().map(|&p| f(p)).collect() };
+    let (e0, e1, e2) = (
+        sample(&error_fn),
+        sample(&future1_error_fn),
+        sample(&future2_error_fn),
+    );
     // Candidate index range `0.8 P <= Q <= 1.2 P` for every candidate `P` (Eq. 14 and 16; contiguous).
     let ranges: Vec<std::ops::RangeInclusive<usize>> = candidates
         .iter()
         .map(|&p| {
             let (lo, hi) = (0.8 * p, 1.2 * p);
-            let inside: Vec<usize> = (0..candidates.len()).filter(|&i| candidates[i] >= lo && candidates[i] <= hi).collect();
+            let inside: Vec<usize> = (0..candidates.len())
+                .filter(|&i| candidates[i] >= lo && candidates[i] <= hi)
+                .collect();
             inside[0]..=inside[inside.len() - 1]
         })
         .collect();
-    let best_e2: Vec<f64> =
-        ranges.iter().map(|r| r.clone().map(|i| e2[i]).fold(f64::INFINITY, f64::min)).collect();
+    let best_e2: Vec<f64> = ranges
+        .iter()
+        .map(|r| r.clone().map(|i| e2[i]).fold(f64::INFINITY, f64::min))
+        .collect();
     let ce_f: Vec<f64> = ranges
         .iter()
         .enumerate()
-        .map(|(i0, r)| e0[i0] + r.clone().map(|i1| e1[i1] + best_e2[i1]).fold(f64::INFINITY, f64::min))
+        .map(|(i0, r)| {
+            e0[i0]
+                + r.clone()
+                    .map(|i1| e1[i1] + best_e2[i1])
+                    .fold(f64::INFINITY, f64::min)
+        })
         .collect();
     let index_of = |p: f64| ((p - 21.0) / 0.5).round() as usize;
     let ce_f_at = |p0: f64| -> f64 { ce_f[index_of(p0)] };

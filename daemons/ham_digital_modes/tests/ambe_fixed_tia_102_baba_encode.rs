@@ -15,8 +15,16 @@ type Frame = [u32; 8];
 
 fn view(frame: Frame) -> FrameView {
     match DecoderState::new().decode_parameters(frame) {
-        Some(FrameOutcome::Decoded(p)) => FrameView { tone: false, b0: p.bits.b0, b1: p.bits.b1 },
-        _ => FrameView { tone: false, b0: u32::MAX, b1: u32::MAX },
+        Some(FrameOutcome::Decoded(p)) => FrameView {
+            tone: false,
+            b0: p.bits.b0,
+            b1: p.bits.b1,
+        },
+        _ => FrameView {
+            tone: false,
+            b0: u32::MAX,
+            b1: u32::MAX,
+        },
     }
 }
 
@@ -76,7 +84,11 @@ fn tia_parity_first_150_frames() {
     // opening frames sit at the noise floor, where a one-step difference in a higher-order coefficient quantizer
     // between the float and integer arithmetic is more common, and the closed prediction loop carries it forward.
     // The differing frames differ mostly in the low-priority vectors u4..u6.)
-    assert!(p.frac(p.identical) >= 0.90, "identical {}", p.frac(p.identical));
+    assert!(
+        p.frac(p.identical) >= 0.90,
+        "identical {}",
+        p.frac(p.identical)
+    );
     assert!(p.frac(p.b0_equal) >= 0.999 && p.frac(p.b1_equal) >= 0.999);
     assert!(p.snr_db() >= 45.0, "decoded SNR {} dB", p.snr_db());
     assert!(p.min_envelope_corr() >= 0.9999);
@@ -91,7 +103,11 @@ fn tia_parity_mid_file_window() {
     // correlation to 0.99989; before the input high-pass filter, Eq. 3, was added the measurement was 90.2% identical,
     // all b0 equal, 68.3 dB). The closed prediction loop lets a codebook near-tie in one frame perturb the next few
     // frames' choices.
-    assert!(p.frac(p.identical) >= 0.92, "identical {}", p.frac(p.identical));
+    assert!(
+        p.frac(p.identical) >= 0.92,
+        "identical {}",
+        p.frac(p.identical)
+    );
     assert!(p.frac(p.b0_equal) >= 0.998 && p.frac(p.b1_equal) >= 0.999);
     assert!(p.snr_db() >= 15.0, "decoded SNR {} dB", p.snr_db());
     assert!(p.min_envelope_corr() >= 0.9998);
@@ -110,11 +126,17 @@ fn fixed_frames_decode_with_the_fixed_decoder() {
     for (k, &c) in frames.iter().enumerate().take(140) {
         let y = dec.decode_frame(c).expect("fixed decode");
         output_energy += y.iter().map(|&s| (s as f64 / 65536.0).powi(2)).sum::<f64>();
-        input_energy += pcm[k * 160..(k + 1) * 160].iter().map(|&s| (s as f64).powi(2)).sum::<f64>();
+        input_energy += pcm[k * 160..(k + 1) * 160]
+            .iter()
+            .map(|&s| (s as f64).powi(2))
+            .sum::<f64>();
     }
     let ratio_db = 10.0 * (output_energy / input_energy).log10();
     println!("fixed decode level vs input: {ratio_db:.2} dB");
-    assert!(ratio_db.abs() < 6.0, "decoded level {ratio_db} dB from the input's");
+    assert!(
+        ratio_db.abs() < 6.0,
+        "decoded level {ratio_db} dB from the input's"
+    );
 }
 
 /// Eq. 45's integer `b_hat_0` matches the float formula for every refined period the analyzer can produce.
@@ -131,12 +153,18 @@ fn quantizer_b0_matches_the_float_formula_for_every_period() {
         let fixed = Pitch::from_p8(p8).quantizer_b0();
         let float = quantize_fundamental_frequency(omega0);
         if p8 % 4 == 0 {
-            assert_eq!(fixed as i64, (p8 as i64 / 4 - 39).max(0), "exact value at p8 = {p8}");
+            assert_eq!(
+                fixed as i64,
+                (p8 as i64 / 4 - 39).max(0),
+                "exact value at p8 = {p8}"
+            );
             differ_on_boundary += usize::from(fixed != float);
         } else {
             differ_off_boundary += usize::from(fixed != float);
         }
     }
-    println!("b0 differs from the float formula only at exact boundaries: {differ_on_boundary} of them");
+    println!(
+        "b0 differs from the float formula only at exact boundaries: {differ_on_boundary} of them"
+    );
     assert_eq!(differ_off_boundary, 0);
 }

@@ -90,7 +90,9 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
     let mut state = seed;
     (0..FRAME_SAMPLES)
         .map(|_| {
-            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((state >> 33) as f64 / (1u64 << 31) as f64) - 1.0;
             (unit * peak) as i16
         })
@@ -115,19 +117,26 @@ fn read_g0_and_voice_active(buf: &[u8], n: usize) -> (u16, u16) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_ecmode(DTX_ENABLE_BIT | TD_ENABLE_BIT)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(DTX_ENABLE_BIT | TD_ENABLE_BIT))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_chanfmt(0b01)).expect("send CHANFMT config");
+    sock.send(&build_control_chanfmt(0b01))
+        .expect("send CHANFMT config");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -151,7 +160,11 @@ fn main() {
     let mut agree = 0usize;
     let mut disagree = 0usize;
     for &peak in &noise_peaks {
-        let samples = if peak == 0.0 { vec![0i16; FRAME_SAMPLES] } else { lcg_noise(42, peak) };
+        let samples = if peak == 0.0 {
+            vec![0i16; FRAME_SAMPLES]
+        } else {
+            lcg_noise(42, peak)
+        };
         for _ in 0..SETTLING_FRAMES {
             let n = send_recv_retrying(&sock, &mut buf, &build_speech(&samples));
             parse_packet(&buf[..n]).expect("valid packet");
@@ -183,13 +196,19 @@ fn main() {
     for i in 0..CAPTURE_FRAMES {
         let n = send_recv_retrying(&sock, &mut buf, &build_speech(&moderate));
         let (g0, voice_active) = read_g0_and_voice_active(&buf, n);
-        println!("  settled frame {i}: g0={g0:5} g0_says_silence={} VOICE_ACTIVE={voice_active}", g0 == DTX_SILENCE_G0);
+        println!(
+            "  settled frame {i}: g0={g0:5} g0_says_silence={} VOICE_ACTIVE={voice_active}",
+            g0 == DTX_SILENCE_G0
+        );
     }
     let loud = lcg_noise(99, 9000.0);
     for i in 0..8 {
         let n = send_recv_retrying(&sock, &mut buf, &build_speech(&loud));
         let (g0, voice_active) = read_g0_and_voice_active(&buf, n);
-        println!("  switch frame {i}: g0={g0:5} g0_says_silence={} VOICE_ACTIVE={voice_active}", g0 == DTX_SILENCE_G0);
+        println!(
+            "  switch frame {i}: g0={g0:5} g0_says_silence={} VOICE_ACTIVE={voice_active}",
+            g0 == DTX_SILENCE_G0
+        );
     }
 
     println!("\n-- Pass (c): does a very long (600-frame) sustained moderate signal ever settle to g0=3841? --");
@@ -199,7 +218,9 @@ fn main() {
         let (g0, voice_active) = read_g0_and_voice_active(&buf, n);
         if g0 == DTX_SILENCE_G0 && silence_seen_at.is_none() {
             silence_seen_at = Some(i);
-            println!("  g0 first read DTX_SILENCE_G0 (3841) at frame {i}, VOICE_ACTIVE={voice_active}");
+            println!(
+                "  g0 first read DTX_SILENCE_G0 (3841) at frame {i}, VOICE_ACTIVE={voice_active}"
+            );
         }
     }
     if silence_seen_at.is_none() {

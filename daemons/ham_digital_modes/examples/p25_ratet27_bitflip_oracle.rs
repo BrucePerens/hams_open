@@ -101,7 +101,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 // A voiced tone plus a fixed, repeatable pseudo-random noise floor -- meant to give the encoder
@@ -124,17 +126,23 @@ fn test_tone_plus_noise(freq: f64, noise_amplitude: i16) -> Vec<i16> {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     // "tone" (default) or "tone_noise" -- the latter adds a fixed, repeatable noise floor to give
     // the encoder real broadband/unvoiced spectral content a pure tone alone has essentially none
     // of, in case the tone-only run misses unprotected bits controlling unvoiced-band parameters.
-    let signal_kind = std::env::args().nth(2).unwrap_or_else(|| "tone".to_string());
+    let signal_kind = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "tone".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
     println!("RATEP(P25 FEC) config ack: type={ptype:#04x} payload={payload:02x?}");
@@ -160,16 +168,26 @@ fn main() {
             r = buf[..n].to_vec();
         }
     }
-    println!("captured reference frame R (raw packet, {} bytes): {r:02x?}", r.len());
-    assert!(r.len() >= BITS_OFFSET + TOTAL_BYTES, "captured packet too short to hold 144 bits");
+    println!(
+        "captured reference frame R (raw packet, {} bytes): {r:02x?}",
+        r.len()
+    );
+    assert!(
+        r.len() >= BITS_OFFSET + TOTAL_BYTES,
+        "captured packet too short to hold 144 bits"
+    );
 
-    let send_channel_get_pcm = |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
-        sock.send(raw_packet).expect("send channel");
-        let n = sock.recv(buf).expect("recv speech");
-        let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
-        payload[2..].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
-    };
+    let send_channel_get_pcm =
+        |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
+            sock.send(raw_packet).expect("send channel");
+            let n = sock.recv(buf).expect("recv speech");
+            let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
+            payload[2..]
+                .chunks_exact(2)
+                .map(|b| i16::from_be_bytes([b[0], b[1]]))
+                .collect()
+        };
 
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(FRAME_SAMPLES);
@@ -177,7 +195,10 @@ fn main() {
     // magnitude, which is dominated by the fundamental peak and can mask subtler effects.
     const DB_FLOOR: f64 = 1.0; // avoids log(0); dwarfed by any real signal component
     let db_spectrum = |samples: &[i16]| -> Vec<f64> {
-        let mut buf: Vec<Complex64> = samples.iter().map(|&s| Complex64::new(s as f64, 0.0)).collect();
+        let mut buf: Vec<Complex64> = samples
+            .iter()
+            .map(|&s| Complex64::new(s as f64, 0.0))
+            .collect();
         fft.process(&mut buf);
         buf[..FRAME_SAMPLES / 2 + 1]
             .iter()
@@ -209,13 +230,18 @@ fn main() {
         let pcm = send_channel_get_pcm(&sock, &mut buf, &r);
         let distance = spectral_distance(&baseline_spectrum, &db_spectrum(&pcm));
         floor_distances.push(distance);
-        println!("noise-floor calibration {}/8: spectral distance={distance:.2} dB", i + 1);
+        println!(
+            "noise-floor calibration {}/8: spectral distance={distance:.2} dB",
+            i + 1
+        );
     }
     let noise_floor = floor_distances.iter().cloned().fold(0.0_f64, f64::max);
     let threshold = (noise_floor * 5.0).max(10.0);
     println!("\nnoise floor (max of 8 repeats): {noise_floor:.2} dB; using changed-decode threshold = {threshold:.2} dB");
 
-    println!("\n--- single-bit-flip sensitivity scan across all {TOTAL_BITS} wire bit positions ---");
+    println!(
+        "\n--- single-bit-flip sensitivity scan across all {TOTAL_BITS} wire bit positions ---"
+    );
     let mut changed_positions = Vec::new();
     let mut all_distances = Vec::new();
     for k in 0..TOTAL_BITS {

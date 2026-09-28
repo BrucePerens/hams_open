@@ -157,10 +157,12 @@ impl Default for NoiseState {
 /// this table instead of evaluating a sine and cosine per term.
 fn twiddles() -> &'static [(f64, f64); 256] {
     static T: std::sync::OnceLock<[(f64, f64); 256]> = std::sync::OnceLock::new();
-    T.get_or_init(|| std::array::from_fn(|k| {
-        let theta = 2.0 * PI * k as f64 / 256.0;
-        (theta.cos(), theta.sin())
-    }))
+    T.get_or_init(|| {
+        std::array::from_fn(|k| {
+            let theta = 2.0 * PI * k as f64 / 256.0;
+            (theta.cos(), theta.sin())
+        })
+    })
 }
 
 fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256] {
@@ -502,8 +504,11 @@ mod tests {
         let noise = NoiseState::new();
         let voiced = vec![false; 40];
         let amplitudes = vec![100.0; 40];
-        let spectrum = unvoiced_spectrum(&noise, 0.09703761092169245, &voiced, &amplitudes, 146.0).unwrap();
-        assert!(spectrum.iter().all(|c| c.re.is_finite() && c.im.is_finite()));
+        let spectrum =
+            unvoiced_spectrum(&noise, 0.09703761092169245, &voiced, &amplitudes, 146.0).unwrap();
+        assert!(spectrum
+            .iter()
+            .all(|c| c.re.is_finite() && c.im.is_finite()));
     }
 
     #[test]

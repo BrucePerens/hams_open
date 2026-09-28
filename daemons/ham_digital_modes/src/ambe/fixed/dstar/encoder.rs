@@ -12,10 +12,15 @@
 //! the measured agreement with the float encoder on real speech.
 
 use super::decode::dequantize;
-use crate::ambe::fixed::general::mbe_speech::MbeDecoderState;
-use super::encode::{build_frame, build_tone_frame, mode_tables, pack_raw_parameters, quantize_pitch_p8, RawParameters};
+use super::encode::{
+    build_frame, build_tone_frame, mode_tables, pack_raw_parameters, quantize_pitch_p8,
+    RawParameters,
+};
 use super::tables_q16::{W0_TABLE_Q16_16, W0_TABLE_Q32};
-use crate::ambe::fixed::general::tone_detect::{detect_tone, volume_for_amplitude_q16, DetectedTone};
+use crate::ambe::fixed::general::mbe_speech::MbeDecoderState;
+use crate::ambe::fixed::general::tone_detect::{
+    detect_tone, volume_for_amplitude_q16, DetectedTone,
+};
 use crate::ambe::fixed::mbe_encode::{analyze_and_quantize, AnalysisState};
 use crate::ambe::fixed::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::dstar::tables::L_TABLE;
@@ -35,7 +40,12 @@ impl Encoder {
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
-        Self { analyzer, high_pass: HighPassFilter::default(), mirror: MbeDecoderState::initial(), analysis: AnalysisState::new() }
+        Self {
+            analyzer,
+            high_pass: HighPassFilter::default(),
+            mirror: MbeDecoderState::initial(),
+            analysis: AnalysisState::new(),
+        }
     }
 
     pub fn set_center_offset(&mut self, samples: i32) {
@@ -44,7 +54,14 @@ impl Encoder {
 
     pub fn push_samples(&mut self, samples: &[i16]) {
         // The standard's input high-pass filter (Eq. 3), as in the float encoder; the output is saturated back to 16 bits.
-        let filtered: Vec<i16> = samples.iter().map(|&s| self.high_pass.step(s as i32).clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
+        let filtered: Vec<i16> = samples
+            .iter()
+            .map(|&s| {
+                self.high_pass
+                    .step(s as i32)
+                    .clamp(i16::MIN as i32, i16::MAX as i32) as i16
+            })
+            .collect();
         self.analyzer.push_samples(&filtered);
     }
 
@@ -57,7 +74,10 @@ impl Encoder {
                 DetectedTone::Dtmf { row, col } => 128 + row as u32 + 4 * col as u32,
                 DetectedTone::Single { index, .. } => index,
             };
-            return Some(build_tone_frame(index, volume_for_amplitude_q16(det.amplitude_q16)));
+            return Some(build_tone_frame(
+                index,
+                volume_for_amplitude_q16(det.amplitude_q16),
+            ));
         }
         let b0 = quantize_pitch_p8(a.p8);
         let l = L_TABLE[b0 as usize];
@@ -70,7 +90,17 @@ impl Encoder {
             &self.mirror,
             &mut self.analysis,
         );
-        let raw = RawParameters { b0, b1: q.b1, b2: q.b2, b3: q.b3, b4: q.b4, b5: q.b5, b6: q.b6, b7: q.b7, b8: q.b8 };
+        let raw = RawParameters {
+            b0,
+            b1: q.b1,
+            b2: q.b2,
+            b3: q.b3,
+            b4: q.b4,
+            b5: q.b5,
+            b6: q.b6,
+            b7: q.b7,
+            b8: q.b8,
+        };
         let d = pack_raw_parameters(&raw);
         dequantize(d, &mut self.mirror);
         Some(build_frame(d))

@@ -46,22 +46,27 @@ struct Stats {
 }
 
 fn run(q16_omega0: bool, stats: &mut Stats) {
-    let max_frames: usize =
-        std::env::var("MAX_FRAMES_PER_FILE").ok().and_then(|v| v.parse().ok()).unwrap_or(500);
+    let max_frames: usize = std::env::var("MAX_FRAMES_PER_FILE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
     for path in common::OSR_FILES {
         let pcm = common::read_wav_mono_i16(path);
         let raw_i: Vec<i32> = pcm.iter().map(|&s| s as i32).collect();
         let raw_f: Vec<f64> = pcm.iter().map(|&s| s as f64).collect();
         let mut centers = common::frame_centers(raw_f.len(), 200);
         centers.truncate(max_frames + 2);
-        let tables: Vec<fx_pitch::ErrorTable> =
-            centers.iter().map(|&c| fx_pitch::PitchAnalysisFrame::new(&raw_i, c).error_table()).collect();
+        let tables: Vec<fx_pitch::ErrorTable> = centers
+            .iter()
+            .map(|&c| fx_pitch::PitchAnalysisFrame::new(&raw_i, c).error_table())
+            .collect();
         let mut hist = [(fx_pitch::DEFAULT_PITCH_INDEX, 0i32); 2];
         let mut fx_state = fx_mbe::AnalysisState::new();
         let mut fl_state = fl_mbe::AnalysisState::new();
         for k in 0..centers.len().saturating_sub(2) {
             let (ib, cb) = fx_pitch::look_back_pitch_tracking(&tables[k], hist[0], hist[1]);
-            let (jf, cf) = fx_pitch::look_ahead_pitch_tracking(&tables[k], &tables[k + 1], &tables[k + 2]);
+            let (jf, cf) =
+                fx_pitch::look_ahead_pitch_tracking(&tables[k], &tables[k + 1], &tables[k + 2]);
             let idx = fx_pitch::choose_initial_pitch_estimate(ib, cb, jf, cf);
             let e_init_q16 = tables[k].at(idx);
             hist = [(idx, e_init_q16), hist[0]];
@@ -90,7 +95,8 @@ fn run(q16_omega0: bool, stats: &mut Stats) {
                 slot_samples: Vec::new(),
             };
             let (fl_voiced, fl_ml) = fl_mbe::analyze_at_pitch(&analysis, w0, l, &mut fl_state);
-            let (fx_voiced, fx_ml) = fx_mbe::analyze_at_pitch(&xf, e_init_q16, &pitch, l, &mut fx_state);
+            let (fx_voiced, fx_ml) =
+                fx_mbe::analyze_at_pitch(&xf, e_init_q16, &pitch, l, &mut fx_state);
 
             stats.frames += 1;
             let mut identical = true;
@@ -153,9 +159,16 @@ fn fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0() {
     assert!(s.frames >= 300);
     assert_eq!(s.l_mismatch, 0);
     let voiced_share = s.voiced_count as f64 / s.harmonics as f64;
-    assert!((0.05..0.95).contains(&voiced_share), "degenerate voicing mix {voiced_share}");
+    assert!(
+        (0.05..0.95).contains(&voiced_share),
+        "degenerate voicing mix {voiced_share}"
+    );
     assert!(s.voicing_same as f64 / s.harmonics as f64 >= 0.99);
-    assert!(s.amp_db_worst < 0.5, "worst amplitude error {} dB", s.amp_db_worst);
+    assert!(
+        s.amp_db_worst < 0.5,
+        "worst amplitude error {} dB",
+        s.amp_db_worst
+    );
     assert!(s.amp_small_abs_worst < 0.01);
 }
 
@@ -167,7 +180,11 @@ fn fixed_voicing_and_amplitudes_match_float_on_real_speech_q16_omega0() {
     assert!(s.frames >= 300);
     assert_eq!(s.l_mismatch, 0);
     assert!(s.voicing_same as f64 / s.harmonics as f64 >= 0.99);
-    assert!(s.amp_db_worst < 0.5, "worst amplitude error {} dB", s.amp_db_worst);
+    assert!(
+        s.amp_db_worst < 0.5,
+        "worst amplitude error {} dB",
+        s.amp_db_worst
+    );
 }
 
 /// Eq. 41 and 42 at hand-computed values (the same cases as the float sibling's own unit tests).
@@ -185,9 +202,12 @@ fn xi_max_update_and_energy_dependent_function_match_the_equations() {
     assert_eq!(update_xi_max(q16(20000.0), 0), XI_MAX_FLOOR_Q16);
 
     let base = (0.0025 * 20000.0 + 20000.0) / (0.01 * 20000.0 + 20000.0);
-    let m = energy_dependent_function_q30(q16(20000.0), q16(20000.0), q16(100.0), q16(10.0)) as f64 / 2f64.powi(30);
+    let m = energy_dependent_function_q30(q16(20000.0), q16(20000.0), q16(100.0), q16(10.0)) as f64
+        / 2f64.powi(30);
     assert!((m - base).abs() < 1e-8, "{m} vs {base}");
-    let m2 = energy_dependent_function_q30(q16(20000.0), q16(20000.0), q16(10.0), q16(100.0)) as f64 / 2f64.powi(30);
+    let m2 = energy_dependent_function_q30(q16(20000.0), q16(20000.0), q16(10.0), q16(100.0))
+        as f64
+        / 2f64.powi(30);
     let expected2 = base * (10.0f64 / 500.0).sqrt();
     assert!((m2 - expected2).abs() < 1e-8, "{m2} vs {expected2}");
 }
@@ -202,6 +222,9 @@ fn harmonics_count_matches_eq31() {
     // Same results from an arbitrary omega0 form of the same periods.
     for p in [60.0f64, 122.0, 21.0] {
         let q = (2.0 * PI / p * 2f64.powi(30)).round() as i64;
-        assert_eq!(Pitch::from_omega0_q30(q).harmonics_count(), harmonics_count(q as f64 / 2f64.powi(30)));
+        assert_eq!(
+            Pitch::from_omega0_q30(q).harmonics_count(),
+            harmonics_count(q as f64 / 2f64.powi(30))
+        );
     }
 }

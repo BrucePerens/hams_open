@@ -86,10 +86,14 @@ fn sawtooth(freq: f64, amp: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
@@ -97,7 +101,8 @@ fn main() {
     // touched, exactly matching how p25_ratet27_capture_g0_long_settling_amplitude.rs (and the
     // original section 23 sweep) captured their own data, so this reproduces the same starting
     // state rather than assuming what it was.
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -129,8 +134,9 @@ fn main() {
             let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
             assert_eq!(ptype, TYPE_CHANNEL);
             let pkt = &buf[..n];
-            let bits_bytes: &[u8; FRAME_BYTES] =
-                pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES].try_into().unwrap();
+            let bits_bytes: &[u8; FRAME_BYTES] = pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES]
+                .try_into()
+                .unwrap();
             let frame = decode_frame(bits_bytes);
             g0_vals.push(frame.g0.value);
             u4_vals.push(frame.u4.value);
@@ -142,19 +148,22 @@ fn main() {
     capture(&sock, &mut buf, "untouched_default");
 
     println!("\n-- Condition 2: ECMODE_IN explicitly set to 0x0000 --");
-    sock.send(&build_control_ecmode(0x0000)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(0x0000))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
     capture(&sock, &mut buf, "explicit_zero");
 
     println!("\n-- Condition 3: ECMODE_IN explicitly set to 1<<8 (bit 8 forced on) --");
-    sock.send(&build_control_ecmode(1 << 8)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(1 << 8))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
     capture(&sock, &mut buf, "bit8_forced_on");
 
     // Reset to a known-clean state for whatever uses the chip next.
-    sock.send(&build_control_ecmode(0x0000)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(0x0000))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
 }

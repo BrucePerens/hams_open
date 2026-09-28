@@ -14,7 +14,9 @@
 //! range, never yet observed)?
 //!
 //! Usage: `cargo run --release --features ambe_plus_2 --example p25_ambe_plus_2_forced_tone_probe -- <host:port>`
-use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, decode_tone_idx, extract_raw_parameters};
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+    classify_b0, decode_tone_idx, extract_raw_parameters,
+};
 use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
 use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use std::net::UdpSocket;
@@ -107,20 +109,27 @@ fn channel_bits(pkt: &[u8]) -> &[u8] {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC)).expect("send RATET config");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC))
+        .expect("send RATET config");
     let n = sock.recv(&mut buf).expect("RATET config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_ecmode(TS_ENABLE_BIT)).expect("send ECMODE config (TS_ENABLE)");
+    sock.send(&build_control_ecmode(TS_ENABLE_BIT))
+        .expect("send ECMODE config (TS_ENABLE)");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_chanfmt(0b01)).expect("send CHANFMT config");
+    sock.send(&build_control_chanfmt(0b01))
+        .expect("send CHANFMT config");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -162,10 +171,12 @@ fn main() {
     }
 
     // Reset to a known-clean state.
-    sock.send(&build_control_ecmode(0)).expect("send ECMODE reset");
+    sock.send(&build_control_ecmode(0))
+        .expect("send ECMODE reset");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_chanfmt(0b00)).expect("send CHANFMT reset");
+    sock.send(&build_control_chanfmt(0b00))
+        .expect("send CHANFMT reset");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 }

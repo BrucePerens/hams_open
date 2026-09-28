@@ -24,8 +24,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_voicing_bit_order -- <host:port>`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::float::tia_102_baba::synthesis::SynthesisState;
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -100,8 +100,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -180,13 +187,17 @@ fn reverse_band_order(voiced_per_harmonic: &[bool], l_hat: u32, k_hat: u32) -> V
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -213,9 +224,16 @@ fn main() {
             let voiced_count = params.voiced.iter().filter(|&&v| v).count();
             let frac = voiced_count as f64 / params.voiced.len().max(1) as f64;
             if (0.3..=0.9).contains(&frac) && params.l_hat >= 8 && shown < 8 {
-                let normal: String = params.voiced.iter().map(|&v| if v { '1' } else { '0' }).collect();
+                let normal: String = params
+                    .voiced
+                    .iter()
+                    .map(|&v| if v { '1' } else { '0' })
+                    .collect();
                 let reversed = reverse_band_order(&params.voiced, params.l_hat, params.k_hat);
-                let reversed_str: String = reversed.iter().map(|&v| if v { '1' } else { '0' }).collect();
+                let reversed_str: String = reversed
+                    .iter()
+                    .map(|&v| if v { '1' } else { '0' })
+                    .collect();
                 println!("l_hat={}, k_hat={}", params.l_hat, params.k_hat);
                 println!("  normal:   [{normal}]");
                 println!("  reversed: [{reversed_str}]");
@@ -240,7 +258,10 @@ fn main() {
 
         let n = send_recv_retrying(&sock, &mut buf, &build_channel(channel_payload));
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decoded PCM) response");
+        assert_eq!(
+            ptype, TYPE_SPEECH,
+            "expected a SPEECH (decoded PCM) response"
+        );
         let chip_frame_pcm = parse_speech_payload(payload);
         chip_pcm.extend(chip_frame_pcm.iter().map(|&s| s as f64));
 
@@ -251,7 +272,8 @@ fn main() {
 
         match reversed_decoder_params.decode_parameters(c) {
             Some(FrameOutcome::Decoded(params)) => {
-                let reversed_voiced = reverse_band_order(&params.voiced, params.l_hat, params.k_hat);
+                let reversed_voiced =
+                    reverse_band_order(&params.voiced, params.l_hat, params.k_hat);
                 match reversed_synth.synthesize_frame(
                     &params.reconstructed_amplitudes,
                     params.omega0_tilde,
@@ -263,12 +285,10 @@ fn main() {
                 }
                 reversed_decoder_params.advance_history(&params);
             }
-            Some(FrameOutcome::Repeat) => {
-                match reversed_synth.synthesize_repeated_frame() {
-                    Some(frame_pcm) => reversed_pcm.extend(frame_pcm.iter().copied()),
-                    None => reversed_pcm.extend(std::iter::repeat_n(0.0, FRAME_SAMPLES)),
-                }
-            }
+            Some(FrameOutcome::Repeat) => match reversed_synth.synthesize_repeated_frame() {
+                Some(frame_pcm) => reversed_pcm.extend(frame_pcm.iter().copied()),
+                None => reversed_pcm.extend(std::iter::repeat_n(0.0, FRAME_SAMPLES)),
+            },
             Some(FrameOutcome::Mute) => {
                 reversed_pcm.extend(reversed_synth.synthesize_comfort_frame().iter().copied());
             }
@@ -287,6 +307,9 @@ fn main() {
     );
     println!(
         "chip-vs-reversed-voicing envelope correlation: {:.4}",
-        correlation(&chip_envelope[..len_reversed], &reversed_envelope[..len_reversed])
+        correlation(
+            &chip_envelope[..len_reversed],
+            &reversed_envelope[..len_reversed]
+        )
     );
 }

@@ -18,8 +18,15 @@ pub fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let full = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), path);
     let data = std::fs::read(&full).unwrap_or_else(|e| panic!("{full}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{full}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{full}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{full}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 /// Analysis centres `k*160 + 200` for every frame whose two look-ahead frames still fit with
@@ -39,7 +46,10 @@ pub const PARITY_FRAMES: usize = 150;
 
 /// [`PARITY_FRAMES`], or the `PARITY_MAX_FRAMES` environment variable when set (for wider one-off measurements).
 pub fn parity_frames() -> usize {
-    std::env::var("PARITY_MAX_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(PARITY_FRAMES)
+    std::env::var("PARITY_MAX_FRAMES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(PARITY_FRAMES)
 }
 
 /// What the parity comparison needs to know about a logical frame.
@@ -75,7 +85,10 @@ impl Parity {
         10.0 * (self.signal_energy / self.error_energy.max(1e-9)).log10()
     }
     pub fn min_envelope_corr(&self) -> f64 {
-        self.envelope_corr.iter().cloned().fold(f64::INFINITY, f64::min)
+        self.envelope_corr
+            .iter()
+            .cloned()
+            .fold(f64::INFINITY, f64::min)
     }
     pub fn report(&self, name: &str) {
         println!(
@@ -132,12 +145,16 @@ pub fn compare_streams<T: Copy + PartialEq>(
             p.b0_within_1 += usize::from(a.b0.abs_diff(b.b0) <= 1);
             p.b1_equal += usize::from(a.b1 == b.b1);
         }
-        let (x, y) = (dec_fx(fixed[i]).unwrap_or([0.0; 160]), dec_fl(float[i]).unwrap_or([0.0; 160]));
+        let (x, y) = (
+            dec_fx(fixed[i]).unwrap_or([0.0; 160]),
+            dec_fl(float[i]).unwrap_or([0.0; 160]),
+        );
         for k in 0..160 {
             p.signal_energy += y[k] * y[k];
             p.error_energy += (x[k] - y[k]) * (x[k] - y[k]);
         }
-        let db = |v: &[f64; 160]| 10.0 * (v.iter().map(|s| s * s).sum::<f64>() / 160.0 + 1.0).log10();
+        let db =
+            |v: &[f64; 160]| 10.0 * (v.iter().map(|s| s * s).sum::<f64>() / 160.0 + 1.0).log10();
         env_fx.push(db(&x));
         env_fl.push(db(&y));
     }

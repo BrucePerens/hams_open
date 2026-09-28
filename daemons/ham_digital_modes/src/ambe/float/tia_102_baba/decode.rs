@@ -54,8 +54,6 @@ use super::bit_prioritization::{
 use super::error_estimation::{
     estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
 };
-use super::{decode_code_vectors, decode_code_vectors_chip};
-use crate::ambe::dvsi_p25fec::pitch_map::dequantize_fundamental_frequency_chip;
 use super::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
 };
@@ -65,6 +63,8 @@ use super::synthesis::SynthesisState;
 use super::tables::{gain_bit_allocation, higher_order_bit_allocation};
 use super::unvoiced_synthesis::N;
 use super::vuv::{frequency_bands_count, harmonics_count};
+use super::{decode_code_vectors, decode_code_vectors_chip};
+use crate::ambe::dvsi_p25fec::pitch_map::dequantize_fundamental_frequency_chip;
 
 /// Everything [`DecoderState::decode_parameters`] recovers from a non-repeat frame, exposed on its
 /// own (rather than only fed straight into synthesis) so a caller -- notably this module's own
@@ -126,14 +126,21 @@ impl DecoderState {
     /// [`crate::ambe::dvsi_p25fec::pitch_map::CHIP_B0_STEPS_PER_OCTAVE`]) instead of the TIA linear one, accepting
     /// `b0` up to 255, and the chip's framing ([`Self::new_chip_wire`]).
     pub fn new_chip() -> Self {
-        Self { chip_pitch_map: true, chip_wire: true, ..Self::new() }
+        Self {
+            chip_pitch_map: true,
+            chip_wire: true,
+            ..Self::new()
+        }
     }
 
     /// The standard's linear pitch map, but the DVSI chip's framing of the eight code vectors (plain FEC
     /// codewords with the chip's Hamming labelling, no Eq. 84-94 modulation). What [`Self::new`] did before
     /// the standard's own wire layer was restored; kept for the chip-comparison tools.
     pub fn new_chip_wire() -> Self {
-        Self { chip_wire: true, ..Self::new() }
+        Self {
+            chip_wire: true,
+            ..Self::new()
+        }
     }
 
     /// Experiments only: decode every frame as if it carried `l_hat` harmonics regardless of `b0`.
@@ -277,7 +284,9 @@ impl DecoderState {
             self.consecutive_repeats = 0;
         } else if self.fade_concealment {
             self.consecutive_repeats += 1;
-            return self.synthesis.synthesize_repeated_frame_scaled(0.8f64.powi(self.consecutive_repeats as i32));
+            return self
+                .synthesis
+                .synthesize_repeated_frame_scaled(0.8f64.powi(self.consecutive_repeats as i32));
         }
         match outcome {
             FrameOutcome::Repeat => self.synthesis.synthesize_repeated_frame(),
@@ -431,8 +440,10 @@ mod tests {
     ) {
         let frame = build_synthetic_voiced_frame();
 
-        let symbols = crate::ambe::float::tia_102_baba::interleave::interleave_to_dibit_symbols(frame.c);
-        let recovered_c = crate::ambe::float::tia_102_baba::interleave::deinterleave_from_dibit_symbols(symbols);
+        let symbols =
+            crate::ambe::float::tia_102_baba::interleave::interleave_to_dibit_symbols(frame.c);
+        let recovered_c =
+            crate::ambe::float::tia_102_baba::interleave::deinterleave_from_dibit_symbols(symbols);
         assert_eq!(
             recovered_c, frame.c,
             "a clean interleave/deinterleave round trip must recover the exact code vectors"

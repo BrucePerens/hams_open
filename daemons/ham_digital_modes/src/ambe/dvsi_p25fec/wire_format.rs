@@ -90,10 +90,20 @@ const fn natural_range(block: Block) -> (usize, usize) {
 pub fn block_for_natural(n: usize) -> (Block, usize) {
     assert!(n < TOTAL_BITS, "natural position {n} out of range");
     if n < 92 {
-        (Block::Golay { index: (n / 23) as u8 }, n % 23)
+        (
+            Block::Golay {
+                index: (n / 23) as u8,
+            },
+            n % 23,
+        )
     } else if n < 137 {
         let offset = n - 92;
-        (Block::Hamming { index: (offset / 15) as u8 }, offset % 15)
+        (
+            Block::Hamming {
+                index: (offset / 15) as u8,
+            },
+            offset % 15,
+        )
     } else {
         (Block::Raw, n - 137)
     }
@@ -126,7 +136,10 @@ mod tests {
             assert!(!seen[n], "natural position {n} hit twice (from wire {m})");
             seen[n] = true;
         }
-        assert!(seen.iter().all(|&s| s), "not every natural position was covered");
+        assert!(
+            seen.iter().all(|&s| s),
+            "not every natural position was covered"
+        );
     }
 
     #[test]
@@ -154,27 +167,36 @@ mod tests {
         ];
         for block in blocks {
             for wire in block_wire_members(block) {
-                assert!(!seen[wire], "wire bit {wire} claimed by more than one block");
+                assert!(
+                    !seen[wire],
+                    "wire bit {wire} claimed by more than one block"
+                );
                 seen[wire] = true;
             }
         }
-        assert!(seen.iter().all(|&s| s), "some wire bit not claimed by any block");
+        assert!(
+            seen.iter().all(|&s| s),
+            "some wire bit not claimed by any block"
+        );
     }
 
     /// `u4`'s wire membership, found by a pure black-box anchor-127 sweep against the real chip with
     /// **no interleave table or transform assumed at all** (`AMBE_CHIP_VALIDATION_FINDINGS.md`
     /// section 18). This is the ground truth the transform is checked against, not derived from it.
-    const U4_CHIP_CONFIRMED: [usize; 15] =
-        [8, 20, 32, 44, 56, 68, 80, 92, 103, 104, 115, 116, 127, 128, 139];
+    const U4_CHIP_CONFIRMED: [usize; 15] = [
+        8, 20, 32, 44, 56, 68, 80, 92, 103, 104, 115, 116, 127, 128, 139,
+    ];
 
     /// `u5`'s wire membership, found the same way (section 20), independently of the transform's own
     /// prediction (which happened to match it exactly, zero mismatches).
-    const U5_CHIP_CONFIRMED: [usize; 15] =
-        [9, 10, 21, 22, 33, 45, 57, 69, 81, 93, 105, 117, 129, 140, 141];
+    const U5_CHIP_CONFIRMED: [usize; 15] = [
+        9, 10, 21, 22, 33, 45, 57, 69, 81, 93, 105, 117, 129, 140, 141,
+    ];
 
     /// `u6`'s wire membership (section 21), same technique, same zero-mismatch outcome.
-    const U6_CHIP_CONFIRMED: [usize; 15] =
-        [11, 23, 34, 35, 46, 47, 58, 59, 70, 82, 94, 106, 118, 130, 142];
+    const U6_CHIP_CONFIRMED: [usize; 15] = [
+        11, 23, 34, 35, 46, 47, 58, 59, 70, 82, 94, 106, 118, 130, 142,
+    ];
 
     /// `c7`'s wire membership (section 20): the 7 unprotected raw bits, each independently
     /// identifiable because raw bits show their own distinct effect rather than pairing up like
@@ -184,7 +206,10 @@ mod tests {
     fn assert_same_set(mut a: Vec<usize>, mut b: Vec<usize>, label: &str) {
         a.sort_unstable();
         b.sort_unstable();
-        assert_eq!(a, b, "{label}: computed membership does not match chip-confirmed set");
+        assert_eq!(
+            a, b,
+            "{label}: computed membership does not match chip-confirmed set"
+        );
     }
 
     #[test]
@@ -216,7 +241,11 @@ mod tests {
 
     #[test]
     fn c7_computed_membership_matches_the_chip_confirmed_set_with_zero_mismatches() {
-        assert_same_set(block_wire_members(Block::Raw), C7_CHIP_CONFIRMED.to_vec(), "c7");
+        assert_same_set(
+            block_wire_members(Block::Raw),
+            C7_CHIP_CONFIRMED.to_vec(),
+            "c7",
+        );
     }
 
     /// `g0`'s wire membership was directly predicted by the transform and its *boundaries* confirmed

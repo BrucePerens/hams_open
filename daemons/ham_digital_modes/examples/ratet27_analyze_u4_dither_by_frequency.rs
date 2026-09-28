@@ -39,13 +39,18 @@ fn hex_to_wire_bits(hexstr: &str) -> [bool; 144] {
 }
 
 fn main() {
-    let dataset = std::env::args().nth(1).unwrap_or_else(|| "rms_normalized_pitch_sweep_57to444hz.tsv".to_string());
-    let label_prefix = std::env::args().nth(2).unwrap_or_else(|| "rmsnorm_".to_string());
+    let dataset = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "rms_normalized_pitch_sweep_57to444hz.tsv".to_string());
+    let label_prefix = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "rmsnorm_".to_string());
     let data_path = format!(
         "{}/docs/references/ratet27_captures/{dataset}",
         env!("CARGO_MANIFEST_DIR")
     );
-    let text = std::fs::read_to_string(&data_path).unwrap_or_else(|e| panic!("read {data_path}: {e}"));
+    let text =
+        std::fs::read_to_string(&data_path).unwrap_or_else(|e| panic!("read {data_path}: {e}"));
 
     let mut by_freq: BTreeMap<u32, Vec<u16>> = BTreeMap::new();
     for line in text.lines() {
@@ -53,20 +58,29 @@ fn main() {
         if parts.len() != 3 {
             continue;
         }
-        let freq: u32 = parts[0].trim_start_matches(label_prefix.as_str()).parse().expect("freq label");
+        let freq: u32 = parts[0]
+            .trim_start_matches(label_prefix.as_str())
+            .parse()
+            .expect("freq label");
         let wire_bits = hex_to_wire_bits(parts[2]);
         let (u4, _distance) = decode_block(&wire_bits, Block::Hamming { index: 0 });
         by_freq.entry(freq).or_default().push(u4);
     }
 
-    println!("{:>5}  {:>5}  {:>10}  {:>18}  {:>8}  divides_160", "freq", "Lhat", "distinct_u4", "gaps", "n_vals");
+    println!(
+        "{:>5}  {:>5}  {:>10}  {:>18}  {:>8}  divides_160",
+        "freq", "Lhat", "distinct_u4", "gaps", "n_vals"
+    );
     for (&freq, vals) in &by_freq {
         let omega0 = 2.0 * PI * (freq as f64) / SAMPLE_RATE;
         let lhat = harmonics_count(omega0);
         let mut distinct: Vec<u16> = vals.clone();
         distinct.sort_unstable();
         distinct.dedup();
-        let gaps: Vec<i32> = distinct.windows(2).map(|w| w[1] as i32 - w[0] as i32).collect();
+        let gaps: Vec<i32> = distinct
+            .windows(2)
+            .map(|w| w[1] as i32 - w[0] as i32)
+            .collect();
         let period = SAMPLE_RATE / freq as f64;
         let divides = (FRAME_SAMPLES as f64 / period).fract().abs() < 1e-6;
         println!(

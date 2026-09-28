@@ -260,7 +260,10 @@ fn mag_sq_q23(c: ComplexQ23) -> i64 {
     // `u64`, so the rounded shift is plain 64-bit arithmetic, not the
     // 128-bit one. Same value.
     if (c.re.unsigned_abs() | c.im.unsigned_abs()) < (1u64 << 31) {
-        let (r, i) = (c.re.unsigned_abs() as u32 as u64, c.im.unsigned_abs() as u32 as u64);
+        let (r, i) = (
+            c.re.unsigned_abs() as u32 as u64,
+            c.im.unsigned_abs() as u32 as u64,
+        );
         return ((r * r + i * i + (1u64 << (FRAC_BITS - 1))) >> FRAC_BITS) as i64;
     }
     rshift_round_i128(c.mag_sq_raw(), FRAC_BITS)
@@ -516,16 +519,36 @@ mod tests {
         };
         let mut seed = 0xfeed_beef_1234_5678u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             seed
         };
-        let mut vals: Vec<i64> = vec![0, 1, -1, i32::MAX as i64, i32::MIN as i64, i32::MAX as i64 + 1, i32::MIN as i64 - 1, (1 << 31) - 1, -(1 << 31), 1 << 31, 1 << 40, -(1 << 40), (1 << 45) + 12345];
+        let mut vals: Vec<i64> = vec![
+            0,
+            1,
+            -1,
+            i32::MAX as i64,
+            i32::MIN as i64,
+            i32::MAX as i64 + 1,
+            i32::MIN as i64 - 1,
+            (1 << 31) - 1,
+            -(1 << 31),
+            1 << 31,
+            1 << 40,
+            -(1 << 40),
+            (1 << 45) + 12345,
+        ];
         for _ in 0..3000 {
             vals.push((next() as i64) >> (next() % 60 + 4));
         }
         for &re in &vals {
             for &im in vals.iter().step_by(37) {
-                assert_eq!(mag_sq_q23(ComplexQ23 { re, im }), reference(re, im), "({re}, {im})");
+                assert_eq!(
+                    mag_sq_q23(ComplexQ23 { re, im }),
+                    reference(re, im),
+                    "({re}, {im})"
+                );
             }
         }
     }

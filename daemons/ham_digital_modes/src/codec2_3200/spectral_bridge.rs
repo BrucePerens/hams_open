@@ -94,14 +94,14 @@
 //! Extrapolation is also always skipped for unvoiced sub-frames even
 //! when enabled -- see `extrapolate_amplitudes`'s own doc comment.
 
-use super::envelope::ModelFixed;
 #[cfg(feature = "std")]
 use super::envelope::Model;
+use super::envelope::ModelFixed;
 use super::fixed_fft::{rshift_round_i128, ComplexQ23, SparseInverse};
 use super::fixed_point::{exp2_q23, log2_q23};
-use super::synthesis::{overlap_add_subframe, phase_increment_q32};
 #[cfg(feature = "std")]
 use super::synthesis::ear_protection;
+use super::synthesis::{overlap_add_subframe, phase_increment_q32};
 use super::trig_fixed::sin_cos_q23;
 use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLE_RATE};
 #[cfg(feature = "std")]

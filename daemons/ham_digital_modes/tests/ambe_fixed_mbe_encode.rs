@@ -117,17 +117,30 @@ struct Trial {
 
 fn random_trial(mode: &Mode, rng: &mut Rng, realistic: bool) -> Trial {
     let l = 9 + rng.below(48) as u32;
-    let b0 = mode.l_table.iter().position(|&x| x == l).expect("L in table") as u32;
+    let b0 = mode
+        .l_table
+        .iter()
+        .position(|&x| x == l)
+        .expect("L in table") as u32;
     let f0 = (mode.f0)(b0);
     let lu = l as usize;
 
     let tilt = rng.range(-3.0, 1.0);
     let base = rng.range(6.0, 10.0);
-    let (r1, r2, p1, p2) = (rng.range(0.0, 1.5), rng.range(0.0, 1.0), rng.range(0.0, 6.3), rng.range(0.0, 6.3));
+    let (r1, r2, p1, p2) = (
+        rng.range(0.0, 1.5),
+        rng.range(0.0, 1.0),
+        rng.range(0.0, 6.3),
+        rng.range(0.0, 6.3),
+    );
     let mut ml = vec![0.0; lu + 1];
     for (h, slot) in ml.iter_mut().enumerate().skip(1) {
         let t = h as f64 / lu as f64;
-        let lg = base + tilt * t + r1 * (6.0 * t + p1).sin() + r2 * (17.0 * t + p2).sin() + rng.range(-0.3, 0.3);
+        let lg = base
+            + tilt * t
+            + r1 * (6.0 * t + p1).sin()
+            + r2 * (17.0 * t + p2).sin()
+            + rng.range(-0.3, 0.3);
         *slot = 2f64.powf(lg.clamp(0.0, 12.5));
     }
     let cutoff = rng.below(lu + 3);
@@ -184,11 +197,30 @@ fn random_trial(mode: &Mode, rng: &mut Rng, realistic: bool) -> Trial {
 
 fn float_quantize(t: &Trial, tables: &OwnedTables) -> fx::QuantizedSpeech {
     let q = fl::quantize_speech(
-        &fl::SpeechTarget { l: t.l, w0: t.w0, vuv_f0: t.vuv_f0, voiced: &t.voiced, ml: &t.ml },
-        &fl::PrevState { l: t.prev_l, log2_ml: &t.prev_log2, gamma: t.prev_gamma },
+        &fl::SpeechTarget {
+            l: t.l,
+            w0: t.w0,
+            vuv_f0: t.vuv_f0,
+            voiced: &t.voiced,
+            ml: &t.ml,
+        },
+        &fl::PrevState {
+            l: t.prev_l,
+            log2_ml: &t.prev_log2,
+            gamma: t.prev_gamma,
+        },
         &tables.view(),
     );
-    fx::QuantizedSpeech { b1: q.b1, b2: q.b2, b3: q.b3, b4: q.b4, b5: q.b5, b6: q.b6, b7: q.b7, b8: q.b8 }
+    fx::QuantizedSpeech {
+        b1: q.b1,
+        b2: q.b2,
+        b3: q.b3,
+        b4: q.b4,
+        b5: q.b5,
+        b6: q.b6,
+        b7: q.b7,
+        b8: q.b8,
+    }
 }
 
 fn fixed_quantize(mode: &Mode, t: &Trial) -> (fx::QuantizedSpeech, Vec<i32>) {
@@ -199,8 +231,18 @@ fn fixed_quantize(mode: &Mode, t: &Trial) -> (fx::QuantizedSpeech, Vec<i32>) {
     let log2_target = fx::target_log2_ml_q16(w0_q16, &t.voiced, &ml_q16);
     let prev_q16: Vec<i32> = t.prev_log2.iter().map(|&v| q16(v)).collect();
     let q = fx::quantize_speech(
-        &fx::SpeechTarget { l: t.l, vuv_f0_q16, voiced: &t.voiced, ml_q16: &ml_q16, log2_ml_q16: &log2_target },
-        &fx::PrevState { l: t.prev_l, log2_ml_q16: &prev_q16, gamma_q16: q16(t.prev_gamma) },
+        &fx::SpeechTarget {
+            l: t.l,
+            vuv_f0_q16,
+            voiced: &t.voiced,
+            ml_q16: &ml_q16,
+            log2_ml_q16: &log2_target,
+        },
+        &fx::PrevState {
+            l: t.prev_l,
+            log2_ml_q16: &prev_q16,
+            gamma_q16: q16(t.prev_gamma),
+        },
         &mode.fixed_tables,
     );
     (q, log2_target)
@@ -228,7 +270,11 @@ fn float_second(t: &Trial, tables: &OwnedTables, first: &fx::QuantizedSpeech, wh
         2 => {
             // The D-STAR gain table repeats its last value (rows 62 and 63), so poison every row equal to the winner.
             let winner = poisoned.dg[first.b2 as usize];
-            poisoned.dg.iter_mut().filter(|v| **v == winner).for_each(|v| *v = FAR);
+            poisoned
+                .dg
+                .iter_mut()
+                .filter(|v| **v == winner)
+                .for_each(|v| *v = FAR);
         }
         3 => poisoned.prba24[first.b3 as usize] = [FAR; 3],
         4 => poisoned.prba58[first.b4 as usize] = [FAR; 4],
@@ -274,7 +320,13 @@ fn run(mode: &Mode, seed: u64, realistic: bool) {
                 per_field_diff[k] += 1;
                 if k >= 1 && float_second(&t, &mode.float_tables, &qf, k + 1) != fxd[k] {
                     non_neighbour += 1;
-                    eprintln!("{}: b{} fixed {} float {} is not float's second-nearest", mode.name, k + 1, fxd[k], ff[k]);
+                    eprintln!(
+                        "{}: b{} fixed {} float {} is not float's second-nearest",
+                        mode.name,
+                        k + 1,
+                        fxd[k],
+                        ff[k]
+                    );
                 }
             }
         }
@@ -295,7 +347,10 @@ fn run(mode: &Mode, seed: u64, realistic: bool) {
     }
 
     let n = TRIALS as f64;
-    let (float_rms, fixed_rms) = ((float_sq / count as f64).sqrt(), (fixed_sq / count as f64).sqrt());
+    let (float_rms, fixed_rms) = (
+        (float_sq / count as f64).sqrt(),
+        (fixed_sq / count as f64).sqrt(),
+    );
     eprintln!(
         "{} (realistic={}): b1 same {:.2}%, b2..b8 all same {:.2}%, all 8 same {:.2}%, per-field diffs {:?}, non-neighbour diffs {}, \
          recon RMS (log2 units) float {:.4} fixed {:.4}, mean |fixed-float recon| {:.5}",
@@ -310,14 +365,44 @@ fn run(mode: &Mode, seed: u64, realistic: bool) {
         fixed_rms,
         cross_abs / count as f64
     );
-    assert!(b1_same as f64 / n >= mode.min_b1, "{}: b1 agreement {}", mode.name, b1_same as f64 / n);
-    assert!(all_rest_same as f64 / n >= mode.min_rest_exact, "{}: b2..b8 agreement {}", mode.name, all_rest_same as f64 / n);
-    assert!(all_same as f64 / n >= 0.95, "{}: overall agreement {}", mode.name, all_same as f64 / n);
-    assert_eq!(non_neighbour, 0, "{}: every disagreement must be a near-tie (float's second-nearest row)", mode.name);
+    assert!(
+        b1_same as f64 / n >= mode.min_b1,
+        "{}: b1 agreement {}",
+        mode.name,
+        b1_same as f64 / n
+    );
+    assert!(
+        all_rest_same as f64 / n >= mode.min_rest_exact,
+        "{}: b2..b8 agreement {}",
+        mode.name,
+        all_rest_same as f64 / n
+    );
+    assert!(
+        all_same as f64 / n >= 0.95,
+        "{}: overall agreement {}",
+        mode.name,
+        all_same as f64 / n
+    );
+    assert_eq!(
+        non_neighbour, 0,
+        "{}: every disagreement must be a near-tie (float's second-nearest row)",
+        mode.name
+    );
     if realistic {
-        assert!(fixed_rms < 0.6, "{}: representable targets should reconstruct closely, fixed RMS {}", mode.name, fixed_rms);
+        assert!(
+            fixed_rms < 0.6,
+            "{}: representable targets should reconstruct closely, fixed RMS {}",
+            mode.name,
+            fixed_rms
+        );
     }
-    assert!(fixed_rms <= float_rms * 1.02 + 0.005, "{}: fixed reconstruction error {} vs float {}", mode.name, fixed_rms, float_rms);
+    assert!(
+        fixed_rms <= float_rms * 1.02 + 0.005,
+        "{}: fixed reconstruction error {} vs float {}",
+        mode.name,
+        fixed_rms,
+        float_rms
+    );
 }
 
 mod dstar_mode {
@@ -329,18 +414,48 @@ mod dstar_mode {
     use ham_digital_modes::ambe::float::dstar::tables;
 
     fn raw(b0: u32, q: &fx::QuantizedSpeech) -> RawParameters {
-        RawParameters { b0, b1: q.b1, b2: q.b2, b3: q.b3, b4: q.b4, b5: q.b5, b6: q.b6, b7: q.b7, b8: q.b8 }
+        RawParameters {
+            b0,
+            b1: q.b1,
+            b2: q.b2,
+            b3: q.b3,
+            b4: q.b4,
+            b5: q.b5,
+            b6: q.b6,
+            b7: q.b7,
+            b8: q.b8,
+        }
     }
 
-    fn float_recon(b0: u32, q: &fx::QuantizedSpeech, prev_l: u32, prev: &[f64], gamma: f64) -> Vec<f64> {
-        let mut st = DStarDecoderState { l: prev_l, log2_ml: prev.to_vec(), gamma };
+    fn float_recon(
+        b0: u32,
+        q: &fx::QuantizedSpeech,
+        prev_l: u32,
+        prev: &[f64],
+        gamma: f64,
+    ) -> Vec<f64> {
+        let mut st = DStarDecoderState {
+            l: prev_l,
+            log2_ml: prev.to_vec(),
+            gamma,
+        };
         let d = ham_digital_modes::ambe::float::dstar::encode::pack_raw_parameters(&raw(b0, q));
         float_decode::dequantize(d, &mut st);
         st.log2_ml
     }
 
-    fn fixed_recon(b0: u32, q: &fx::QuantizedSpeech, prev_l: u32, prev: &[i32], gamma: i32) -> Vec<i32> {
-        let mut st = MbeDecoderState { l: prev_l, log2_ml_q16: prev.to_vec(), gamma_q16: gamma };
+    fn fixed_recon(
+        b0: u32,
+        q: &fx::QuantizedSpeech,
+        prev_l: u32,
+        prev: &[i32],
+        gamma: i32,
+    ) -> Vec<i32> {
+        let mut st = MbeDecoderState {
+            l: prev_l,
+            log2_ml_q16: prev.to_vec(),
+            gamma_q16: gamma,
+        };
         let d = fixed_encode::pack_raw_parameters(&raw(b0, q));
         fixed_decode::dequantize(d, &mut st);
         st.log2_ml_q16
@@ -359,7 +474,12 @@ mod dstar_mode {
                 prba24: tables::PRBA24.to_vec(),
                 prba58: tables::PRBA58.to_vec(),
                 lmprbl: tables::LMPRBL.to_vec(),
-                hoc: [tables::HOC_B5.to_vec(), tables::HOC_B6.to_vec(), tables::HOC_B7.to_vec(), tables::HOC_B8.to_vec()],
+                hoc: [
+                    tables::HOC_B5.to_vec(),
+                    tables::HOC_B6.to_vec(),
+                    tables::HOC_B7.to_vec(),
+                    tables::HOC_B8.to_vec(),
+                ],
                 even: true,
                 rho: float_decode::PREDICTOR_RHO,
                 gamma_scale: float_decode::GAMMA_SCALE,
@@ -394,17 +514,47 @@ mod ambe_plus_2_mode {
     use ham_digital_modes::ambe::float::ambe_plus_2::tables;
 
     fn raw(b0: u32, q: &fx::QuantizedSpeech) -> RawParameters {
-        RawParameters { b0, b1: q.b1, b2: q.b2, b3: q.b3, b4: q.b4, b5: q.b5, b6: q.b6, b7: q.b7, b8: q.b8 }
+        RawParameters {
+            b0,
+            b1: q.b1,
+            b2: q.b2,
+            b3: q.b3,
+            b4: q.b4,
+            b5: q.b5,
+            b6: q.b6,
+            b7: q.b7,
+            b8: q.b8,
+        }
     }
 
-    fn float_recon(b0: u32, q: &fx::QuantizedSpeech, prev_l: u32, prev: &[f64], gamma: f64) -> Vec<f64> {
-        let mut st = DecoderState { l: prev_l, log2_ml: prev.to_vec(), gamma };
+    fn float_recon(
+        b0: u32,
+        q: &fx::QuantizedSpeech,
+        prev_l: u32,
+        prev: &[f64],
+        gamma: f64,
+    ) -> Vec<f64> {
+        let mut st = DecoderState {
+            l: prev_l,
+            log2_ml: prev.to_vec(),
+            gamma,
+        };
         float_decode::dequantize(&raw(b0, q), &mut st);
         st.log2_ml
     }
 
-    fn fixed_recon(b0: u32, q: &fx::QuantizedSpeech, prev_l: u32, prev: &[i32], gamma: i32) -> Vec<i32> {
-        let mut st = MbeDecoderState { l: prev_l, log2_ml_q16: prev.to_vec(), gamma_q16: gamma };
+    fn fixed_recon(
+        b0: u32,
+        q: &fx::QuantizedSpeech,
+        prev_l: u32,
+        prev: &[i32],
+        gamma: i32,
+    ) -> Vec<i32> {
+        let mut st = MbeDecoderState {
+            l: prev_l,
+            log2_ml_q16: prev.to_vec(),
+            gamma_q16: gamma,
+        };
         fixed_decode::dequantize(&raw(b0, q), &mut st);
         st.log2_ml_q16
     }
@@ -422,7 +572,12 @@ mod ambe_plus_2_mode {
                 prba24: tables::PRBA24.to_vec(),
                 prba58: tables::PRBA58.to_vec(),
                 lmprbl: tables::LMPRBL.to_vec(),
-                hoc: [tables::HOC_B5.to_vec(), tables::HOC_B6.to_vec(), tables::HOC_B7.to_vec(), tables::HOC_B8.to_vec()],
+                hoc: [
+                    tables::HOC_B5.to_vec(),
+                    tables::HOC_B6.to_vec(),
+                    tables::HOC_B7.to_vec(),
+                    tables::HOC_B8.to_vec(),
+                ],
                 even: false,
                 rho: 0.65,
                 gamma_scale: 1.0,
@@ -449,9 +604,20 @@ mod ambe_plus_2_mode {
     #[test]
     fn tone_level_field_matches_float_mapping() {
         // The float `amplitude_field` is private to the encoder; its documented chip points are the ground truth.
-        for (a, field) in [(250i64, 0x715u16), (500, 0x725), (1000, 0xea2), (2000, 0xed2), (4000, 0xf12), (8000, 0xf62), (16000, 0xfa2)] {
+        for (a, field) in [
+            (250i64, 0x715u16),
+            (500, 0x725),
+            (1000, 0xea2),
+            (2000, 0xed2),
+            (4000, 0xf12),
+            (8000, 0xf62),
+            (16000, 0xfa2),
+        ] {
             let got = fixed_encode::amplitude_field_q16(a << 16);
-            assert!((got as i32 - field as i32).abs() <= 1, "amplitude {a}: {got:#x} vs {field:#x}");
+            assert!(
+                (got as i32 - field as i32).abs() <= 1,
+                "amplitude {a}: {got:#x} vs {field:#x}"
+            );
         }
         assert_eq!(fixed_encode::amplitude_field_q16(10 << 16), 0x715);
         assert_eq!(fixed_encode::amplitude_field_q16(30000 << 16), 0xfa2);
@@ -466,13 +632,21 @@ fn log2_target_helper_matches_float_formula() {
         let w0 = rng.range(0.05, 0.32);
         let voiced: Vec<bool> = (0..=l).map(|_| rng.unit() < 0.5).collect();
         let ml: Vec<f64> = (0..=l).map(|_| 2f64.powf(rng.range(-3.0, 12.0))).collect();
-        let got = fx::target_log2_ml_q16(q16(w0), &voiced, &ml.iter().map(|&m| q16(m)).collect::<Vec<_>>());
+        let got = fx::target_log2_ml_q16(
+            q16(w0),
+            &voiced,
+            &ml.iter().map(|&m| q16(m)).collect::<Vec<_>>(),
+        );
         let unvc = 0.2046 / w0.sqrt();
         for h in 1..=l {
             let m = ml[h].max(1e-3);
             let want = (if voiced[h] { m } else { m / unvc }).ln() / 0.693;
             let err = (got[h] as f64 / 65536.0 - want).abs();
-            assert!(err < 2e-3 + 1e-4 * want.abs(), "h {h} got {} want {want}", got[h] as f64 / 65536.0);
+            assert!(
+                err < 2e-3 + 1e-4 * want.abs(),
+                "h {h} got {} want {want}",
+                got[h] as f64 / 65536.0
+            );
         }
     }
 }

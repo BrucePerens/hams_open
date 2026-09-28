@@ -122,7 +122,11 @@ impl ToneSynthesizer {
 
     /// [`Self::synthesize`] for whole-hertz frequencies (the DTMF and call-progress tables).
     pub fn synthesize_hz(&mut self, freqs_hz: &[u32], peak_q16: i64) -> [i64; N] {
-        let q16: Vec<i32> = freqs_hz.iter().take(2).map(|&hz| (hz as i32) << 16).collect();
+        let q16: Vec<i32> = freqs_hz
+            .iter()
+            .take(2)
+            .map(|&hz| (hz as i32) << 16)
+            .collect();
         self.synthesize(&q16, peak_q16)
     }
 
@@ -132,7 +136,13 @@ impl ToneSynthesizer {
     }
 
     pub fn dtmf(&mut self, row: u8, col: u8, peak_q16: i64) -> [i64; N] {
-        self.synthesize_hz(&[DTMF_ROW_HZ[(row & 3) as usize], DTMF_COL_HZ[(col & 3) as usize]], peak_q16)
+        self.synthesize_hz(
+            &[
+                DTMF_ROW_HZ[(row & 3) as usize],
+                DTMF_COL_HZ[(col & 3) as usize],
+            ],
+            peak_q16,
+        )
     }
 }
 
@@ -151,7 +161,10 @@ mod tests {
         // Chip peaks measured at volumes 120/150/180/210: 283, 961, 3268, 11105.
         for (v, peak) in [(120u32, 283i64), (150, 961), (180, 3268), (210, 11105)] {
             let a = dstar_tone_amplitude_q16(v) >> 16;
-            assert!((a - peak).abs() * 25 < peak, "volume {v}: model {a} vs chip {peak}");
+            assert!(
+                (a - peak).abs() * 25 < peak,
+                "volume {v}: model {a} vs chip {peak}"
+            );
         }
         assert_eq!(dstar_tone_amplitude_q16(180) >> 16, 3268);
     }
@@ -159,9 +172,16 @@ mod tests {
     #[test]
     fn dstar_tone_volume_inverts_the_amplitude_curve() {
         for v in 60u32..=230 {
-            assert_eq!(dstar_tone_volume_for_amplitude_q16(dstar_tone_amplitude_q16(v)), v, "volume {v}");
+            assert_eq!(
+                dstar_tone_volume_for_amplitude_q16(dstar_tone_amplitude_q16(v)),
+                v,
+                "volume {v}"
+            );
         }
-        assert_eq!(dstar_tone_volume_for_amplitude_q16(0), dstar_tone_volume_for_amplitude_q16(1 << 16));
+        assert_eq!(
+            dstar_tone_volume_for_amplitude_q16(0),
+            dstar_tone_volume_for_amplitude_q16(1 << 16)
+        );
         assert_eq!(dstar_tone_volume_for_amplitude_q16(i64::MAX >> 8), 255);
     }
 

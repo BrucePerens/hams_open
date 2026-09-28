@@ -61,7 +61,9 @@
 //! Usage: `cargo run --release --example ratet27_bit_flip_semantic_probe -- <host:port>`
 
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::general::fec::{golay_decode, golay_encode, hamming_decode, hamming_encode};
+use ham_digital_modes::ambe::general::fec::{
+    golay_decode, golay_encode, hamming_decode, hamming_encode,
+};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -74,15 +76,15 @@ const FRAME_SAMPLES: usize = 160;
 const FRAME_BYTES: usize = 18;
 const N_PRIME: usize = 20; // real priming frames before the flipped test frame.
 const N_FOLLOWUP: usize = 3; // real unmodified frames sent after the flip, to integrate the
-                              // predictive decoder's tail (rho ~0.7) and average over the
-                              // amplitude-smoothing clamp's own frame-to-frame state.
-// Frame 111 (chip_rms ~395, inside the l_hat=30-41 stable voiced stretch spanning frames 104-127)
-// -- deliberately a *moderate*, not loud, frame: Eq. 115/116's own amplitude-smoothing clamp resets
-// tau_M to a fixed 20480 every clean frame and easily fires on loud frames (gamma_M ~0.3-0.6),
-// which both compresses a gain bit's RMS effect and makes flipping it *down* release the clamp
-// nonlinearly -- exactly the kind of confound that made the first (loud-frame) run of this probe
-// unreadable. A moderate frame keeps the clamp inactive so a real gain bit's effect on RMS isn't
-// swamped by that nonlinearity.
+                             // predictive decoder's tail (rho ~0.7) and average over the
+                             // amplitude-smoothing clamp's own frame-to-frame state.
+                             // Frame 111 (chip_rms ~395, inside the l_hat=30-41 stable voiced stretch spanning frames 104-127)
+                             // -- deliberately a *moderate*, not loud, frame: Eq. 115/116's own amplitude-smoothing clamp resets
+                             // tau_M to a fixed 20480 every clean frame and easily fires on loud frames (gamma_M ~0.3-0.6),
+                             // which both compresses a gain bit's RMS effect and makes flipping it *down* release the clamp
+                             // nonlinearly -- exactly the kind of confound that made the first (loud-frame) run of this probe
+                             // unreadable. A moderate frame keeps the clamp inactive so a real gain bit's effect on RMS isn't
+                             // swamped by that nonlinearity.
 const START_FRAME: usize = 91; // START_FRAME + N_PRIME (20) = 111, the moderate target frame.
 const LENGTHS: [u8; 8] = [12, 12, 12, 12, 11, 11, 11, 7];
 
@@ -147,8 +149,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_wire_bits(bytes: &[u8; FRAME_BYTES]) -> [bool; 144] {
     let mut bits = [false; 144];
@@ -195,7 +204,9 @@ fn write_block(wire_bits: &mut [bool; 144], block: Block, value: u32) {
 fn block_for_index(index: usize) -> Block {
     match index {
         0..=3 => Block::Golay { index: index as u8 },
-        4..=6 => Block::Hamming { index: (index - 4) as u8 },
+        4..=6 => Block::Hamming {
+            index: (index - 4) as u8,
+        },
         7 => Block::Raw,
         _ => unreachable!(),
     }
@@ -227,13 +238,17 @@ fn rms(pcm: &[f64]) -> f64 {
     (pcm.iter().map(|&s| s * s).sum::<f64>() / pcm.len() as f64).sqrt()
 }
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -281,7 +296,12 @@ fn main() {
             let n = send_recv_retrying(&sock, &mut buf, &build_channel(p));
             let (ptype, resp_payload) = parse_packet(&buf[..n]).expect("valid packet");
             assert_eq!(ptype, TYPE_SPEECH);
-            frames.push(parse_speech_payload(resp_payload).iter().map(|&s| s as f64).collect());
+            frames.push(
+                parse_speech_payload(resp_payload)
+                    .iter()
+                    .map(|&s| s as f64)
+                    .collect(),
+            );
         }
         frames
     };
@@ -303,7 +323,10 @@ fn main() {
     // making it a poor discriminator (see this file's own doc comment on the first, inconclusive
     // run). RMS, summed signed across the target frame and its real follow-ups, is not immune to
     // dither either, but is a far more direct readout of a gain-field bit's actual effect.
-    println!("{:>5} {:>4} {:>4} {:>12}", "block", "bit", "MSB#", "sum(log2ratio)");
+    println!(
+        "{:>5} {:>4} {:>4} {:>12}",
+        "block", "bit", "MSB#", "sum(log2ratio)"
+    );
     for (block_idx, &width) in LENGTHS.iter().enumerate() {
         for bit in (0..width).rev() {
             let msb_pos = width - 1 - bit; // 0 = MSB, matching this crate's own u-vector convention.

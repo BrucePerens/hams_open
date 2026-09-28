@@ -91,7 +91,9 @@ fn run_scenario(frames: &[(f64, Vec<bool>, Vec<f64>)]) -> (Vec<f64>, Vec<f64>) {
         }
         let omega0_q32 = to_q32(*omega0);
         let omega0_fair = from_q32(omega0_q32);
-        let float_frame = float_state.synthesize(&float_noise, omega0_fair, voiced, amplitudes).unwrap();
+        let float_frame = float_state
+            .synthesize(&float_noise, omega0_fair, voiced, amplitudes)
+            .unwrap();
         let amplitudes_q16: Vec<i32> = amplitudes.iter().map(|&a| to_q16(a)).collect();
         let fixed_frame = fixed_state
             .synthesize(&fixed_noise, omega0_q32, voiced, &amplitudes_q16)
@@ -107,12 +109,16 @@ fn synthesize_matches_float_for_a_steady_fully_voiced_tone() {
     let omega0 = dequantize_fundamental_frequency(100);
     let voiced = vec![true; 16];
     let amplitudes: Vec<f64> = (1..=16).map(|i| 300.0 + 40.0 * i as f64).collect();
-    let frames: Vec<_> = (0..6).map(|_| (omega0, voiced.clone(), amplitudes.clone())).collect();
+    let frames: Vec<_> = (0..6)
+        .map(|_| (omega0, voiced.clone(), amplitudes.clone()))
+        .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "steady fully voiced tone SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "steady fully voiced tone SNR too low: {snr} dB"
+    );
 }
-
 
 #[test]
 fn synthesize_matches_float_across_a_small_pitch_change_continuous_phase_branch() {
@@ -123,11 +129,20 @@ fn synthesize_matches_float_across_a_small_pitch_change_continuous_phase_branch(
     let b0_values = [95u32, 96, 97, 96, 95];
     let frames: Vec<_> = b0_values
         .iter()
-        .map(|&b0| (dequantize_fundamental_frequency(b0), voiced.clone(), amplitudes.clone()))
+        .map(|&b0| {
+            (
+                dequantize_fundamental_frequency(b0),
+                voiced.clone(),
+                amplitudes.clone(),
+            )
+        })
         .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "small pitch change (continuous-phase) SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "small pitch change (continuous-phase) SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -137,13 +152,28 @@ fn synthesize_matches_float_across_a_large_pitch_jump_eq133_branch() {
     let voiced = vec![true; 16];
     let amplitudes: Vec<f64> = (1..=16).map(|i| 350.0 + 25.0 * i as f64).collect();
     let frames = vec![
-        (dequantize_fundamental_frequency(60), voiced.clone(), amplitudes.clone()),
-        (dequantize_fundamental_frequency(150), voiced.clone(), amplitudes.clone()),
-        (dequantize_fundamental_frequency(60), voiced.clone(), amplitudes.clone()),
+        (
+            dequantize_fundamental_frequency(60),
+            voiced.clone(),
+            amplitudes.clone(),
+        ),
+        (
+            dequantize_fundamental_frequency(150),
+            voiced.clone(),
+            amplitudes.clone(),
+        ),
+        (
+            dequantize_fundamental_frequency(60),
+            voiced.clone(),
+            amplitudes.clone(),
+        ),
     ];
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "large pitch jump (Eq. 133) SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "large pitch jump (Eq. 133) SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -161,7 +191,10 @@ fn synthesize_matches_float_for_voicing_transitions() {
     ];
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "voicing transitions SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "voicing transitions SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -169,10 +202,15 @@ fn synthesize_matches_float_for_a_quiet_voiced_frame() {
     let omega0 = dequantize_fundamental_frequency(130);
     let voiced = vec![true; 12];
     let amplitudes: Vec<f64> = (1..=12).map(|i| 0.5 + 0.3 * i as f64).collect();
-    let frames: Vec<_> = (0..4).map(|_| (omega0, voiced.clone(), amplitudes.clone())).collect();
+    let frames: Vec<_> = (0..4)
+        .map(|_| (omega0, voiced.clone(), amplitudes.clone()))
+        .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "quiet voiced frame SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "quiet voiced frame SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -197,11 +235,20 @@ fn synthesize_matches_float_for_many_harmonics_including_dithered_range() {
     let amplitudes: Vec<f64> = (1..=l_hat).map(|i| 20.0 + 2.0 * i as f64).collect();
     let frames: Vec<_> = b0_values
         .iter()
-        .map(|&b0| (dequantize_fundamental_frequency(b0), voiced.clone(), amplitudes.clone()))
+        .map(|&b0| {
+            (
+                dequantize_fundamental_frequency(b0),
+                voiced.clone(),
+                amplitudes.clone(),
+            )
+        })
         .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "many-harmonic dithered-range SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "many-harmonic dithered-range SNR too low: {snr} dB"
+    );
 }
 
 /// A very loud, maximum-harmonic-count frame -- individual amplitudes chosen so a real, constructive
@@ -243,7 +290,9 @@ fn synthesize_rejects_a_length_mismatch() {
     let noise = FixedNoiseState::new();
     let voiced = vec![true; 5];
     let amplitudes = vec![to_q16(100.0); 6];
-    assert!(state.synthesize(&noise, to_q32(0.1), &voiced, &amplitudes).is_none());
+    assert!(state
+        .synthesize(&noise, to_q32(0.1), &voiced, &amplitudes)
+        .is_none());
 }
 
 #[test]
@@ -252,7 +301,9 @@ fn synthesize_rejects_more_harmonics_than_max_harmonics() {
     let noise = FixedNoiseState::new();
     let voiced = vec![true; fixed_v::MAX_HARMONICS + 1];
     let amplitudes = vec![to_q16(100.0); fixed_v::MAX_HARMONICS + 1];
-    assert!(state.synthesize(&noise, to_q32(0.1), &voiced, &amplitudes).is_none());
+    assert!(state
+        .synthesize(&noise, to_q32(0.1), &voiced, &amplitudes)
+        .is_none());
 }
 
 /// A realistic long call: 200 frames (4 real seconds) of a sustained vowel with a gentle vibrato-like
@@ -274,12 +325,19 @@ fn synthesize_matches_float_across_a_long_run_with_naturally_varying_pitch() {
         .map(|i| {
             let phase = 2.0 * std::f64::consts::PI * i as f64 / 37.0;
             let b0 = (90.0 + 8.0 * phase.sin()).round() as u32;
-            (dequantize_fundamental_frequency(b0), voiced.clone(), amplitudes.clone())
+            (
+                dequantize_fundamental_frequency(b0),
+                voiced.clone(),
+                amplitudes.clone(),
+            )
         })
         .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "long run with naturally varying pitch SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "long run with naturally varying pitch SNR too low: {snr} dB"
+    );
 }
 
 /// Characterizes, rather than chases, the one bounded gap between this port and its float sibling that

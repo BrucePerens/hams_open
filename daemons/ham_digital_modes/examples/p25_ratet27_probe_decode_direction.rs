@@ -78,18 +78,29 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 512], pkt: &[u8]) -> usiz
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -107,8 +118,15 @@ fn main() {
             captured_channel_payloads.push(payload.to_vec());
         }
     }
-    println!("Captured {} real TYPE_CHANNEL payloads from real speech.", captured_channel_payloads.len());
-    println!("First payload ({} bytes): {:02x?}", captured_channel_payloads[0].len(), captured_channel_payloads[0]);
+    println!(
+        "Captured {} real TYPE_CHANNEL payloads from real speech.",
+        captured_channel_payloads.len()
+    );
+    println!(
+        "First payload ({} bytes): {:02x?}",
+        captured_channel_payloads[0].len(),
+        captured_channel_payloads[0]
+    );
 
     println!("\n-- Sending each captured channel payload back to the chip as an outgoing TYPE_CHANNEL packet --");
     for (i, payload) in captured_channel_payloads.iter().enumerate() {
@@ -123,10 +141,15 @@ fn main() {
                     &resp_payload[..resp_payload.len().min(24)]
                 );
                 if ptype == TYPE_SPEECH {
-                    println!("  -> looks like PCM! declared sample count byte(s): {resp_payload:02x?}");
+                    println!(
+                        "  -> looks like PCM! declared sample count byte(s): {resp_payload:02x?}"
+                    );
                 }
             }
-            None => println!("frame {i}: sent TYPE_CHANNEL -> got an unparseable response ({n} bytes): {:02x?}", &buf[..n.min(32)]),
+            None => println!(
+                "frame {i}: sent TYPE_CHANNEL -> got an unparseable response ({n} bytes): {:02x?}",
+                &buf[..n.min(32)]
+            ),
         }
     }
 }

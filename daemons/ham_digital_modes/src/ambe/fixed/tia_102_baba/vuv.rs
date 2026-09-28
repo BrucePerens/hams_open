@@ -20,7 +20,9 @@
 //! quantisation of `S_w` (Q10) and the harmonic amplitudes (Q16); measured agreement on real speech
 //! is stated in `tests/ambe_fixed_tia_102_baba_vuv_amplitude.rs`.
 
-use super::pitch_refinement::{spectrum_error_and_energy, window_dft_16384_q22, Pitch, RefinementFrame};
+use super::pitch_refinement::{
+    spectrum_error_and_energy, window_dft_16384_q22, Pitch, RefinementFrame,
+};
 use crate::ambe::fixed::general::isqrt::isqrt_u64;
 
 /// `20000` in Q16: the spec's floor on `xi_max` (Eq. 41).
@@ -127,7 +129,13 @@ fn ratio_q30(err: i128, real: i128) -> i64 {
 
 /// The band voicing measure `D_k` (Eq. 35/36) in Q30. A band with no spectral energy counts as
 /// maximally unvoiced (1.0), as in the float sibling.
-pub fn voicing_measure_q30(frame: &RefinementFrame, k: u32, l_hat: u32, pitch: &Pitch, is_highest_band: bool) -> i64 {
+pub fn voicing_measure_q30(
+    frame: &RefinementFrame,
+    k: u32,
+    l_hat: u32,
+    pitch: &Pitch,
+    is_highest_band: bool,
+) -> i64 {
     let m_lo = pitch.band_start(3 * k as i32 - 2);
     let upper_l = if is_highest_band { l_hat } else { 3 * k };
     let m_hi = pitch.band_start(upper_l as i32 + 1);
@@ -160,7 +168,13 @@ pub fn determine_voicing(
         .map(|k| {
             let d_k = voicing_measure_q30(frame, k, l_hat, pitch, k == k_hat);
             let previous = previous_v.get((k - 1) as usize).copied().unwrap_or(false);
-            let theta = voicing_threshold_q30(k, pitch.omega0_q30(), initial_pitch_error_q16, previous, m_xi);
+            let theta = voicing_threshold_q30(
+                k,
+                pitch.omega0_q30(),
+                initial_pitch_error_q16,
+                previous,
+                m_xi,
+            );
             d_k < theta
         })
         .collect();

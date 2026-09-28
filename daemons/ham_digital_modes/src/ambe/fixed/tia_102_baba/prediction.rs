@@ -16,7 +16,8 @@ pub const INITIAL_L_HAT_PREV: u32 = 30;
 /// `rho` (Eq. 55) in Q16.16, via [`PREDICTION_COEFFICIENT_Q16_16`]'s exact table lookup. Clamps to
 /// the nearest valid `L` rather than panicking on an out-of-spec value.
 pub fn prediction_coefficient_q16(l_hat_curr: u32) -> i32 {
-    let index = (l_hat_curr.saturating_sub(9) as usize).min(PREDICTION_COEFFICIENT_Q16_16.len() - 1);
+    let index =
+        (l_hat_curr.saturating_sub(9) as usize).min(PREDICTION_COEFFICIENT_Q16_16.len() - 1);
     PREDICTION_COEFFICIENT_Q16_16[index]
 }
 
@@ -58,8 +59,13 @@ fn predicted_and_bias_correction_q16(
 
     let predicted_q16 = mul_q16(
         rho_q16,
-        mul_q16(65536 - delta_l_q16, previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_l))
-            + mul_q16(delta_l_q16, previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_l + 1)),
+        mul_q16(
+            65536 - delta_l_q16,
+            previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_l),
+        ) + mul_q16(
+            delta_l_q16,
+            previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_l + 1),
+        ),
     );
 
     let mut bias_sum_q16: i64 = 0;
@@ -67,8 +73,13 @@ fn predicted_and_bias_correction_q16(
         let k_hat_lambda_q16 = harmonic_index_ratio_q16(lambda, l_hat_prev, l_hat_curr);
         let floor_k_lambda = (k_hat_lambda_q16 >> 16).max(0) as u32;
         let delta_lambda_q16 = k_hat_lambda_q16 - ((floor_k_lambda as i32) << 16);
-        let term = mul_q16(65536 - delta_lambda_q16, previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_lambda))
-            + mul_q16(delta_lambda_q16, previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_lambda + 1));
+        let term = mul_q16(
+            65536 - delta_lambda_q16,
+            previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_lambda),
+        ) + mul_q16(
+            delta_lambda_q16,
+            previous_log2_amplitude_q16(previous_m_q16, l_hat_prev, floor_k_lambda + 1),
+        );
         bias_sum_q16 += term as i64;
     }
     let bias_sum_q16 = bias_sum_q16 as i32;

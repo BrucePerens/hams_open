@@ -184,7 +184,12 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 ///   inspect `b0`, so it decodes a Call Progress frame's `TONE_IDX` the same way as any other. `0xFF`
 ///   (inactive/invalid) was not tested.
 pub fn decode_tone_idx(d: u64) -> Option<u8> {
-    let low_copies = [bits(d, 16, 4), bits(d, 24, 4), bits(d, 32, 4), bits(d, 40, 4)];
+    let low_copies = [
+        bits(d, 16, 4),
+        bits(d, 24, 4),
+        bits(d, 32, 4),
+        bits(d, 40, 4),
+    ];
     let mut low = 0u8;
     for bit_idx in 0..4 {
         let mask = 1u32 << (3 - bit_idx);
@@ -234,7 +239,12 @@ pub fn dtmf_digit_from_tone_idx(tone_idx: u8) -> Option<(u8, u8)> {
 
 /// The inverse of [`dtmf_digit_from_tone_idx`]: the `TONE_IDX` (`0x80 | nibble`) for a DTMF `(row, col)`.
 pub fn dtmf_tone_idx(row: u8, col: u8) -> u8 {
-    const NIBBLE: [[u8; 4]; 4] = [[0x1, 0x2, 0x3, 0xA], [0x4, 0x5, 0x6, 0xB], [0x7, 0x8, 0x9, 0xC], [0xE, 0x0, 0xF, 0xD]];
+    const NIBBLE: [[u8; 4]; 4] = [
+        [0x1, 0x2, 0x3, 0xA],
+        [0x4, 0x5, 0x6, 0xB],
+        [0x7, 0x8, 0x9, 0xC],
+        [0xE, 0x0, 0xF, 0xD],
+    ];
     0x80 | NIBBLE[row as usize & 3][col as usize & 3]
 }
 
@@ -256,9 +266,14 @@ pub enum CallProgressTone {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ToneIdentity {
     /// A DTMF digit, as `(row, column)` per [`dtmf_digit_from_tone_idx`]'s own layout.
-    Dtmf { row: u8, col: u8 },
+    Dtmf {
+        row: u8,
+        col: u8,
+    },
     /// A single tone's frequency in Hz, `tone_idx as f64 * 31.25`.
-    SingleTone { hz: f64 },
+    SingleTone {
+        hz: f64,
+    },
     CallProgress(CallProgressTone),
     /// A `TONE_IDX` value outside every documented sub-range -- not necessarily invalid, just not
     /// one this crate has identified a meaning for yet.
@@ -272,7 +287,9 @@ pub fn classify_tone_idx(tone_idx: u8) -> ToneIdentity {
         return ToneIdentity::Dtmf { row, col };
     }
     match tone_idx {
-        0x05..=0x7A => ToneIdentity::SingleTone { hz: tone_idx as f64 * 31.25 },
+        0x05..=0x7A => ToneIdentity::SingleTone {
+            hz: tone_idx as f64 * 31.25,
+        },
         0xA0 => ToneIdentity::CallProgress(CallProgressTone::Dial),
         0xA1 => ToneIdentity::CallProgress(CallProgressTone::Ring),
         0xA2 => ToneIdentity::CallProgress(CallProgressTone::Busy),
@@ -324,12 +341,17 @@ pub enum DequantizedFrame {
     Erasure,
     /// mbelib's own fixed silence-frame parameters (`L=14`, `w0 = 2*pi/32`, fully unvoiced) --
     /// carried here rather than discarded, since a real caller synthesizing audio still needs them.
-    Silence { l: u32, w0: f64 },
+    Silence {
+        l: u32,
+        w0: f64,
+    },
     /// `b0` in `{120, 122, 126, 127}` -- any tone-bearing frame kind (see [`FrameKind::DetectedTone`],
     /// [`FrameKind::CallProgress`], [`FrameKind::Tone`]). The caller decodes the actual tone/digit via
     /// `decode_tone_idx(d)` on the same frame's `d` (not carried in `raw` itself, since `TONE_IDX`
     /// lives outside the `b0..b8` scatter).
-    Tone { raw: RawParameters },
+    Tone {
+        raw: RawParameters,
+    },
 }
 
 /// Dequantizes `RawParameters` into real synthesis-ready parameters (or a special-frame result),
@@ -406,7 +428,8 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
     for block in 0..4usize {
         for k in 3..=ji[block] {
             if k <= 6 {
-                cik[block + 1][k as usize] = hoc_tables[block][hoc_indices[block] as usize][(k - 3) as usize];
+                cik[block + 1][k as usize] =
+                    hoc_tables[block][hoc_indices[block] as usize][(k - 3) as usize];
             }
         }
     }
@@ -493,8 +516,8 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ambe::general::fec::golay_encode;
     use crate::ambe::float::dstar::whiten_c1;
+    use crate::ambe::general::fec::golay_encode;
 
     /// The `b0..b8` scatter must be a genuine bijection over all 49 bits of `d[]` -- every index
     /// used by exactly one parameter, exactly once (`mod.rs`'s own doc comment claims this
@@ -504,7 +527,10 @@ mod tests {
     fn dtmf_tone_idx_inverts_dtmf_digit_from_tone_idx() {
         for row in 0..4u8 {
             for col in 0..4u8 {
-                assert_eq!(dtmf_digit_from_tone_idx(dtmf_tone_idx(row, col)), Some((row, col)));
+                assert_eq!(
+                    dtmf_digit_from_tone_idx(dtmf_tone_idx(row, col)),
+                    Some((row, col))
+                );
             }
         }
     }
@@ -544,7 +570,11 @@ mod tests {
         assert!(
             seen.iter().all(|&s| s),
             "not every d[] bit is covered: {:?}",
-            seen.iter().enumerate().filter(|(_, &s)| !s).map(|(i, _)| i).collect::<Vec<_>>()
+            seen.iter()
+                .enumerate()
+                .filter(|(_, &s)| !s)
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>()
         );
     }
 
@@ -556,15 +586,15 @@ mod tests {
     #[test]
     fn extract_raw_parameters_round_trips_through_the_shared_frame_layer() {
         let original = RawParameters {
-            b0: 0b101_0110,   // 7 bits, < 120 so a real speech frame
-            b1: 0b1_0110,     // 5 bits
-            b2: 0b0_1101,     // 5 bits
+            b0: 0b101_0110,    // 7 bits, < 120 so a real speech frame
+            b1: 0b1_0110,      // 5 bits
+            b2: 0b0_1101,      // 5 bits
             b3: 0b1_0110_1100, // 9 bits
-            b4: 0b101_1010,   // 7 bits
-            b5: 0b0_1101,     // 5 bits
-            b6: 0b0110,       // 4 bits
-            b7: 0b1001,       // 4 bits
-            b8: 0b101,        // 3 bits
+            b4: 0b101_1010,    // 7 bits
+            b5: 0b0_1101,      // 5 bits
+            b6: 0b0110,        // 4 bits
+            b7: 0b1001,        // 4 bits
+            b8: 0b101,         // 3 bits
         };
         assert!(original.b0 < 120);
 
@@ -610,7 +640,11 @@ mod tests {
             let mut state = DecoderState::initial();
             match dequantize(&raw, &mut state) {
                 DequantizedFrame::Speech(params) => {
-                    assert!((9..=56).contains(&params.l), "b0={b0}: l={} out of range", params.l);
+                    assert!(
+                        (9..=56).contains(&params.l),
+                        "b0={b0}: l={} out of range",
+                        params.l
+                    );
                     for (h, &m) in params.ml.iter().enumerate().skip(1) {
                         assert!(m.is_finite() && m >= 0.0, "b0={b0}, harmonic {h}: Ml={m}");
                     }
@@ -622,7 +656,10 @@ mod tests {
                     assert!(w0.is_finite() && w0 > 0.0);
                 }
                 DequantizedFrame::Tone { raw: r } => {
-                    assert!(b0 == 120 || b0 == 122 || (126..=127).contains(&b0), "b0={b0}");
+                    assert!(
+                        b0 == 120 || b0 == 122 || (126..=127).contains(&b0),
+                        "b0={b0}"
+                    );
                     assert_eq!(r.b0, b0);
                 }
             }
@@ -681,9 +718,19 @@ mod tests {
             let logical = super::super::interleave::interleaved_to_frame(hex_to_wire(hex));
             let parsed = super::super::parse_frame(logical);
             let raw = extract_raw_parameters(parsed.d);
-            assert_eq!(classify_b0(raw.b0), FrameKind::DetectedTone, "digit {label}: b0={}", raw.b0);
-            let tone_idx = decode_tone_idx(parsed.d).unwrap_or_else(|| panic!("digit {label}: decode_tone_idx returned None"));
-            assert_eq!(tone_idx & 0xF0, 0x80, "digit {label}: tone_idx=0x{tone_idx:x} not in DTMF range");
+            assert_eq!(
+                classify_b0(raw.b0),
+                FrameKind::DetectedTone,
+                "digit {label}: b0={}",
+                raw.b0
+            );
+            let tone_idx = decode_tone_idx(parsed.d)
+                .unwrap_or_else(|| panic!("digit {label}: decode_tone_idx returned None"));
+            assert_eq!(
+                tone_idx & 0xF0,
+                0x80,
+                "digit {label}: tone_idx=0x{tone_idx:x} not in DTMF range"
+            );
             assert_eq!(
                 dtmf_digit_from_tone_idx(tone_idx),
                 Some((row, col)),
@@ -691,9 +738,21 @@ mod tests {
             );
             // Every field besides TONE_IDX's own copies is a confirmed hard constant across all 16
             // real captures at this fixed amplitude -- assert it rather than merely note it.
-            assert_eq!(bits(parsed.d, 4, 12), 0x0f38, "digit {label}: amplitude field changed");
-            assert_eq!(bits(parsed.d, 36, 4), 0x8, "digit {label}: constrained 3rd high-nibble copy changed");
-            assert_eq!(bits(parsed.d, 44, 5), 0b10000, "digit {label}: tail changed");
+            assert_eq!(
+                bits(parsed.d, 4, 12),
+                0x0f38,
+                "digit {label}: amplitude field changed"
+            );
+            assert_eq!(
+                bits(parsed.d, 36, 4),
+                0x8,
+                "digit {label}: constrained 3rd high-nibble copy changed"
+            );
+            assert_eq!(
+                bits(parsed.d, 44, 5),
+                0b10000,
+                "digit {label}: tail changed"
+            );
         }
     }
 
@@ -701,10 +760,20 @@ mod tests {
     fn real_chip_capture_single_tones_decode_correctly_via_tone_idx() {
         for (f0_hz, d, expected) in REAL_SINGLE_TONE_CAPTURES {
             let raw = extract_raw_parameters(d);
-            assert_eq!(classify_b0(raw.b0), FrameKind::DetectedTone, "f0={f0_hz}: b0={}", raw.b0);
-            let tone_idx = decode_tone_idx(d).unwrap_or_else(|| panic!("f0={f0_hz}: decode_tone_idx returned None"));
+            assert_eq!(
+                classify_b0(raw.b0),
+                FrameKind::DetectedTone,
+                "f0={f0_hz}: b0={}",
+                raw.b0
+            );
+            let tone_idx = decode_tone_idx(d)
+                .unwrap_or_else(|| panic!("f0={f0_hz}: decode_tone_idx returned None"));
             assert_eq!(tone_idx, expected, "f0={f0_hz}: tone_idx=0x{tone_idx:x}");
-            assert_eq!(dtmf_digit_from_tone_idx(tone_idx), None, "f0={f0_hz}: not a DTMF value");
+            assert_eq!(
+                dtmf_digit_from_tone_idx(tone_idx),
+                None,
+                "f0={f0_hz}: not a DTMF value"
+            );
         }
     }
 
@@ -754,11 +823,19 @@ mod tests {
             (0x8F, (3, 2)),
         ];
         for (tone_idx, pair) in expected {
-            assert_eq!(dtmf_digit_from_tone_idx(tone_idx), Some(pair), "tone_idx=0x{tone_idx:x}");
+            assert_eq!(
+                dtmf_digit_from_tone_idx(tone_idx),
+                Some(pair),
+                "tone_idx=0x{tone_idx:x}"
+            );
         }
         // Anything outside the DTMF sub-range must not be misread as a digit.
         for outside in [0x05u8, 0x7A, 0xA0, 0xA1, 0xA2, 0xFF, 0x00, 0x90] {
-            assert_eq!(dtmf_digit_from_tone_idx(outside), None, "tone_idx=0x{outside:x}");
+            assert_eq!(
+                dtmf_digit_from_tone_idx(outside),
+                None,
+                "tone_idx=0x{outside:x}"
+            );
         }
     }
 
@@ -776,12 +853,30 @@ mod tests {
 
     #[test]
     fn classify_tone_idx_covers_every_documented_subrange() {
-        assert_eq!(classify_tone_idx(0x81), ToneIdentity::Dtmf { row: 0, col: 0 });
-        assert_eq!(classify_tone_idx(0x08), ToneIdentity::SingleTone { hz: 8.0 * 31.25 });
-        assert_eq!(classify_tone_idx(0xA0), ToneIdentity::CallProgress(CallProgressTone::Dial));
-        assert_eq!(classify_tone_idx(0xA1), ToneIdentity::CallProgress(CallProgressTone::Ring));
-        assert_eq!(classify_tone_idx(0xA2), ToneIdentity::CallProgress(CallProgressTone::Busy));
-        assert_eq!(classify_tone_idx(0xFF), ToneIdentity::CallProgress(CallProgressTone::Inactive));
+        assert_eq!(
+            classify_tone_idx(0x81),
+            ToneIdentity::Dtmf { row: 0, col: 0 }
+        );
+        assert_eq!(
+            classify_tone_idx(0x08),
+            ToneIdentity::SingleTone { hz: 8.0 * 31.25 }
+        );
+        assert_eq!(
+            classify_tone_idx(0xA0),
+            ToneIdentity::CallProgress(CallProgressTone::Dial)
+        );
+        assert_eq!(
+            classify_tone_idx(0xA1),
+            ToneIdentity::CallProgress(CallProgressTone::Ring)
+        );
+        assert_eq!(
+            classify_tone_idx(0xA2),
+            ToneIdentity::CallProgress(CallProgressTone::Busy)
+        );
+        assert_eq!(
+            classify_tone_idx(0xFF),
+            ToneIdentity::CallProgress(CallProgressTone::Inactive)
+        );
         assert_eq!(classify_tone_idx(0x00), ToneIdentity::Reserved(0x00));
     }
 
@@ -794,16 +889,42 @@ mod tests {
     fn forced_dtmf_readback_matches_the_rate_column_mismatch_explanation() {
         // (sent TONE_IDX, real chip readback) -- examples/p25_ambe_plus_2_forced_tone_probe.rs.
         const FORCED_SWEEP: [(u8, u8); 16] = [
-            (0x80, 0x81), (0x81, 0x84), (0x82, 0x87), (0x83, 0x8e), (0x84, 0x82), (0x85, 0x85),
-            (0x86, 0x88), (0x87, 0x80), (0x88, 0x83), (0x89, 0x86), (0x8a, 0x89), (0x8b, 0x8f),
-            (0x8c, 0x8a), (0x8d, 0x8b), (0x8e, 0x8c), (0x8f, 0x8d),
+            (0x80, 0x81),
+            (0x81, 0x84),
+            (0x82, 0x87),
+            (0x83, 0x8e),
+            (0x84, 0x82),
+            (0x85, 0x85),
+            (0x86, 0x88),
+            (0x87, 0x80),
+            (0x88, 0x83),
+            (0x89, 0x86),
+            (0x8a, 0x89),
+            (0x8b, 0x8f),
+            (0x8c, 0x8a),
+            (0x8d, 0x8b),
+            (0x8e, 0x8c),
+            (0x8f, 0x8d),
         ];
         // Table 104's "Rate Index 0-32" column: TONE_IDX -> digit nibble.
         let col_0_32 = |idx: u8| -> u8 {
             match idx {
-                0x80 => 0x1, 0x81 => 0x4, 0x82 => 0x7, 0x83 => 0xE, 0x84 => 0x2, 0x85 => 0x5,
-                0x86 => 0x8, 0x87 => 0x0, 0x88 => 0x3, 0x89 => 0x6, 0x8a => 0x9, 0x8b => 0xF,
-                0x8c => 0xA, 0x8d => 0xB, 0x8e => 0xC, 0x8f => 0xD,
+                0x80 => 0x1,
+                0x81 => 0x4,
+                0x82 => 0x7,
+                0x83 => 0xE,
+                0x84 => 0x2,
+                0x85 => 0x5,
+                0x86 => 0x8,
+                0x87 => 0x0,
+                0x88 => 0x3,
+                0x89 => 0x6,
+                0x8a => 0x9,
+                0x8b => 0xF,
+                0x8c => 0xA,
+                0x8d => 0xB,
+                0x8e => 0xC,
+                0x8f => 0xD,
                 _ => unreachable!(),
             }
         };

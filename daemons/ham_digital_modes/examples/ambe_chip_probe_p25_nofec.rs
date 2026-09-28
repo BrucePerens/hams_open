@@ -91,7 +91,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 
@@ -187,12 +189,16 @@ fn spearman(xs: &[f64], ys: &[f64]) -> f64 {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
-    sock.send(&build_control_ratep(RATEP_P25_NOFEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_NOFEC))
+        .expect("send RATEP config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATEP config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
@@ -219,19 +225,27 @@ fn main() {
         }
         println!(
             "{freq:>6}Hz: num_bits={num_bits} frame={} stable={stable_across_capture}",
-            last_frame.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            last_frame
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
         );
         settled.push((freq, last_frame, num_bits));
     }
 
-    println!("\n--- Bit-diff between frequency pairs (localizes where pitch information lives) ---");
+    println!(
+        "\n--- Bit-diff between frequency pairs (localizes where pitch information lives) ---"
+    );
     for i in 0..settled.len() {
         for j in (i + 1)..settled.len() {
             let (fa, ba, na) = &settled[i];
             let (fb, bb, nb) = &settled[j];
             assert_eq!(na, nb, "frame sizes must match to diff");
             let diff = bit_diff_positions(ba, bb, *na);
-            println!("{fa:>6}Hz vs {fb:>6}Hz: {} bits differ at positions {diff:?}", diff.len());
+            println!(
+                "{fa:>6}Hz vs {fb:>6}Hz: {} bits differ at positions {diff:?}",
+                diff.len()
+            );
         }
     }
 
@@ -240,10 +254,16 @@ fn main() {
     // about whether Gray coding could explain the earlier multi-bit-per-step pattern.
     println!("\n--- Per-field (u0..u7) values and correlation with true frequency ---");
     let true_freqs: Vec<f64> = settled.iter().map(|(f, _, _)| *f).collect();
-    let per_frame_fields: Vec<[u32; 8]> = settled.iter().map(|(_, frame, _)| extract_fields(frame)).collect();
+    let per_frame_fields: Vec<[u32; 8]> = settled
+        .iter()
+        .map(|(_, frame, _)| extract_fields(frame))
+        .collect();
     for field in 0..8 {
         let plain: Vec<f64> = per_frame_fields.iter().map(|f| f[field] as f64).collect();
-        let gray: Vec<f64> = per_frame_fields.iter().map(|f| gray_to_binary(f[field]) as f64).collect();
+        let gray: Vec<f64> = per_frame_fields
+            .iter()
+            .map(|f| gray_to_binary(f[field]) as f64)
+            .collect();
         println!(
             "u{field}: plain={plain:?} pearson={:.3} spearman={:.3}  |  gray-decoded={gray:?} pearson={:.3} spearman={:.3}",
             correlation(&true_freqs, &plain),

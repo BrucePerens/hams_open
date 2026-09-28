@@ -137,7 +137,6 @@ pub fn f0_to_wo(f0: f32) -> f32 {
 // the magnitude spectrum is ever used.
 const NLP_FRAC_BITS: u32 = 23;
 
-
 /// Round-to-nearest right shift (matches `lpc.rs`'s own `rshift_round`).
 fn rshift_round(x: i64, n: u32) -> i64 {
     (x + (1i64 << (n - 1))) >> n
@@ -323,7 +322,8 @@ fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC] {
             // (an integer identity, nothing rounds before the final shift).
             acc = LOWPASS_CENTER as i64 * (sq[center] as i32 as i64);
             for &(d, coeff) in LOWPASS_PAIRS.iter() {
-                let pair = (sq[center - d as usize] as i32).wrapping_add(sq[center + d as usize] as i32);
+                let pair =
+                    (sq[center - d as usize] as i32).wrapping_add(sq[center + d as usize] as i32);
                 acc += coeff as i64 * pair as i64;
             }
         } else if fits_i32 && center >= half && center + half < M_PITCH {
@@ -403,7 +403,10 @@ fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE
     // `(cos, +sin)`, the inverse-transform sign convention there; the
     // `nlp:fft_fixed` test below pins the result bit for bit against the
     // general `i128` transform.
-    const _: () = assert!(PE_FFT_SIZE == 8 * NDEC, "fft_fixed's stage skipping assumes PE_FFT_SIZE == 8 * NDEC");
+    const _: () = assert!(
+        PE_FFT_SIZE == 8 * NDEC,
+        "fft_fixed's stage skipping assumes PE_FFT_SIZE == 8 * NDEC"
+    );
     fixed_fft::pitch_fft_512::<NDEC>(input, re, im);
 }
 
@@ -644,10 +647,25 @@ mod tests {
     fn power_bin_kernels_agree_bit_for_bit() {
         let mut seed = 0x1234_5678_9abc_def1u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             seed
         };
-        let mut vals: Vec<i64> = vec![0, 1, -1, 2, i64::MAX, i64::MIN, i64::MIN + 1, 1 << 31, -(1 << 31), (1 << 32) - 1, 1 << 32, (1 << 32) + 1];
+        let mut vals: Vec<i64> = vec![
+            0,
+            1,
+            -1,
+            2,
+            i64::MAX,
+            i64::MIN,
+            i64::MIN + 1,
+            1 << 31,
+            -(1 << 31),
+            (1 << 32) - 1,
+            1 << 32,
+            (1 << 32) + 1,
+        ];
         for k in 0..63 {
             vals.push(1i64 << k);
             vals.push(-(1i64 << k) + 1);
@@ -658,7 +676,11 @@ mod tests {
         }
         for (a, &re) in vals.iter().enumerate() {
             for &im in vals.iter().skip(a % 7).step_by(11) {
-                assert_eq!(power_bin_split(re, im), power_bin_native(re, im), "({re}, {im})");
+                assert_eq!(
+                    power_bin_split(re, im),
+                    power_bin_native(re, im),
+                    "({re}, {im})"
+                );
             }
         }
     }
@@ -695,7 +717,9 @@ mod tests {
         }
         let mut seed = 0x9e37_79b9_7f4a_7c15u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (seed >> 11) as i64
         };
         for limit_bits in [8u32, 20, 29, 30, 31, 33] {
@@ -1089,7 +1113,7 @@ mod tests {
                     im[i + j] = ai + vi;
                     re[i + j + half] = ar - vr;
                     im[i + j + half] = ai - vi;
-                    }
+                }
                 i += len;
             }
             len *= 2;
@@ -1104,7 +1128,9 @@ mod tests {
     fn production_fft_is_bit_identical_to_the_general_i128_transform() {
         let mut seed = 12345u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (seed >> 33) as i64
         };
         let bound = 1i64 << 31;
@@ -1113,7 +1139,13 @@ mod tests {
             for v in input.iter_mut() {
                 *v = match case % 4 {
                     0 => next() % bound,
-                    1 => if next() & 1 == 0 { bound } else { -bound },
+                    1 => {
+                        if next() & 1 == 0 {
+                            bound
+                        } else {
+                            -bound
+                        }
+                    }
                     2 => bound,
                     _ => (next() % 3 - 1) * bound,
                 };
@@ -1142,7 +1174,9 @@ mod tests {
     fn pruned_pitch_transform_bins_match_the_dense_transform() {
         let mut seed = 987_654_321u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (seed >> 20) as i64
         };
         let n = fixed_fft::PITCH_FFT_NEEDED_BINS;
@@ -1162,7 +1196,13 @@ mod tests {
                     4 => -just_under,
                     5 => sign * just_under,
                     6 => sign * (next() % (1i64 << 33)),
-                    7 => if i == 0 { at_limit * NDEC as i64 } else { 0 },
+                    7 => {
+                        if i == 0 {
+                            at_limit * NDEC as i64
+                        } else {
+                            0
+                        }
+                    }
                     8 => sign * (next() % (1i64 << 12)),
                     _ => sign * (next() % (1i64 << 24)),
                 };

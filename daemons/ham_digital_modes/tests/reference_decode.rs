@@ -89,20 +89,28 @@ impl Channel {
 /// Runs `ft8sim` once in `work_dir` (deleting any earlier `.wav` there first,
 /// so a stale file from a previous draw is never picked up) and returns the
 /// path of the freshly written 12 kHz mono WAV.
-fn run_ft8sim(
-    message: &str,
-    snr_db: i32,
-    channel: Channel,
-    work_dir: &Path,
-) -> std::path::PathBuf {
+fn run_ft8sim(message: &str, snr_db: i32, channel: Channel, work_dir: &Path) -> std::path::PathBuf {
     for entry in std::fs::read_dir(work_dir).unwrap().filter_map(|e| e.ok()) {
-        if entry.path().extension().map(|x| x == "wav").unwrap_or(false) {
+        if entry
+            .path()
+            .extension()
+            .map(|x| x == "wav")
+            .unwrap_or(false)
+        {
             std::fs::remove_file(entry.path()).unwrap();
         }
     }
     let (fdop, delay) = channel.fdop_and_delay();
     let out = Command::new("ft8sim")
-        .args([message, "1500.0", "0.0", fdop, delay, "1", &snr_db.to_string()])
+        .args([
+            message,
+            "1500.0",
+            "0.0",
+            fdop,
+            delay,
+            "1",
+            &snr_db.to_string(),
+        ])
         .current_dir(work_dir)
         .output()
         .expect("ft8sim must run");

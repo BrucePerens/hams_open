@@ -108,13 +108,18 @@ struct Blocks {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -136,7 +141,8 @@ fn main() {
     let samples = sawtooth(200.0, 6000.0);
 
     let run_with_ecmode = |sock: &UdpSocket, buf: &mut [u8; 512], ecmode_in: u16| -> Vec<Blocks> {
-        sock.send(&build_control_ecmode(ecmode_in)).expect("send ECMODE config");
+        sock.send(&build_control_ecmode(ecmode_in))
+            .expect("send ECMODE config");
         let n = sock.recv(buf).expect("ECMODE config response");
         parse_packet(&buf[..n]).expect("valid packet");
         for _ in 0..SETTLING_FRAMES {
@@ -164,7 +170,16 @@ fn main() {
             let (u5, _) = decode_block(&wire_frame_bits, Block::Hamming { index: 1 });
             let (u6, _) = decode_block(&wire_frame_bits, Block::Hamming { index: 2 });
             let (c7, _) = decode_block(&wire_frame_bits, Block::Raw);
-            results.push(Blocks { g0, g1, g2, g3: g3 as u8, u4, u5, u6, c7 });
+            results.push(Blocks {
+                g0,
+                g1,
+                g2,
+                g3: g3 as u8,
+                u4,
+                u5,
+                u6,
+                c7,
+            });
         }
         results
     };

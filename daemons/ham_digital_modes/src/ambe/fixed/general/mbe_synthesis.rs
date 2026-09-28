@@ -27,14 +27,19 @@ impl MbeSynthesizer {
     pub fn new() -> Self {
         let mut synthesis = SynthesisState::new();
         synthesis.set_unvoiced_gain_q16(UNVOICED_GAIN_Q16_16);
-        Self { synthesis, error_rate_prev_q16: 0, lift_history: [0; 2] }
+        Self {
+            synthesis,
+            error_rate_prev_q16: 0,
+            lift_history: [0; 2],
+        }
     }
 
     fn lift(&mut self, frame: [i64; N]) -> [i64; N] {
         let mut out = frame;
         for (o, &x) in out.iter_mut().zip(frame.iter()) {
             let second_difference = x - 2 * self.lift_history[0] + self.lift_history[1];
-            *o = x.saturating_add((second_difference.saturating_mul(HIGH_LIFT_WEIGHT_Q16_16)) >> 16);
+            *o =
+                x.saturating_add((second_difference.saturating_mul(HIGH_LIFT_WEIGHT_Q16_16)) >> 16);
             self.lift_history = [x, self.lift_history[0]];
         }
         out
@@ -54,9 +59,14 @@ impl MbeSynthesizer {
         if voiced.len() != ml_q16.len() || voiced.len() < 2 {
             return None;
         }
-        let errors = estimate_errors_q16(&[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0], self.error_rate_prev_q16);
+        let errors = estimate_errors_q16(
+            &[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0],
+            self.error_rate_prev_q16,
+        );
         self.error_rate_prev_q16 = errors.rate_q16;
-        let frame = self.synthesis.synthesize_frame(&ml_q16[1..], w0_q32, &voiced[1..], &errors)?;
+        let frame = self
+            .synthesis
+            .synthesize_frame(&ml_q16[1..], w0_q32, &voiced[1..], &errors)?;
         Some(self.lift(frame))
     }
 

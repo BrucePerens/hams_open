@@ -7,7 +7,9 @@
 //!
 //! Usage: `cargo run --release --example dstar_tone_detect_probe -- [host:port]`
 
-use ham_digital_modes::ambe::float::dstar::decode::{classify_b0, decode_tone, extract_raw_parameters, parse_frame, FrameKind};
+use ham_digital_modes::ambe::float::dstar::decode::{
+    classify_b0, decode_tone, extract_raw_parameters, parse_frame, FrameKind,
+};
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use ham_digital_modes::ambe::float::tone_synthesis::{DTMF_COL_HZ, DTMF_ROW_HZ};
 use std::net::UdpSocket;
@@ -56,7 +58,10 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 }
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
-    payload[2..2 + count * 2].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
+    payload[2..2 + count * 2]
+        .chunks_exact(2)
+        .map(|b| i16::from_be_bytes([b[0], b[1]]))
+        .collect()
 }
 fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usize {
     for attempt in 0..8 {
@@ -76,9 +81,11 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE");
     assert_eq!(&data[36..40], b"data");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
-
 
 fn run(sock: &UdpSocket, buf: &mut [u8; 1024], name: &str, freqs: &[f64], amp: f64) {
     let (mut tone_frames, mut total) = (0usize, 0usize);
@@ -87,7 +94,10 @@ fn run(sock: &UdpSocket, buf: &mut [u8; 1024], name: &str, freqs: &[f64], amp: f
         let frame: Vec<i16> = (0..FRAME_SAMPLES)
             .map(|i| {
                 let t = (f * FRAME_SAMPLES + i) as f64 / 8000.0;
-                freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * t).sin()).sum::<f64>() as i16
+                freqs
+                    .iter()
+                    .map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * t).sin())
+                    .sum::<f64>() as i16
             })
             .collect();
         let payload = loop {
@@ -113,7 +123,9 @@ fn run(sock: &UdpSocket, buf: &mut [u8; 1024], name: &str, freqs: &[f64], amp: f
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
@@ -125,7 +137,8 @@ fn main() {
     sock.send(&control(FIELD_RATEP, &body)).unwrap();
     let n = sock.recv(&mut buf).unwrap();
     parse_packet(&buf[..n]).unwrap();
-    sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
     while sock.recv(&mut buf).is_ok() {}
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
@@ -138,10 +151,27 @@ fn main() {
         return;
     }
     for amp in [500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0] {
-        run(&sock, &mut buf, "DTMF 5", &[DTMF_ROW_HZ[1], DTMF_COL_HZ[1]], amp);
+        run(
+            &sock,
+            &mut buf,
+            "DTMF 5",
+            &[DTMF_ROW_HZ[1], DTMF_COL_HZ[1]],
+            amp,
+        );
     }
-    for (r, c, name) in [(0, 0, "DTMF 1"), (3, 1, "DTMF 0"), (3, 3, "DTMF D"), (2, 2, "DTMF 9")] {
-        run(&sock, &mut buf, name, &[DTMF_ROW_HZ[r], DTMF_COL_HZ[c]], 4000.0);
+    for (r, c, name) in [
+        (0, 0, "DTMF 1"),
+        (3, 1, "DTMF 0"),
+        (3, 3, "DTMF D"),
+        (2, 2, "DTMF 9"),
+    ] {
+        run(
+            &sock,
+            &mut buf,
+            name,
+            &[DTMF_ROW_HZ[r], DTMF_COL_HZ[c]],
+            4000.0,
+        );
     }
     for hz in [300.0, 500.0, 1000.0, 1500.0, 2000.0, 3000.0] {
         for amp in [1000.0, 4000.0, 12000.0] {

@@ -48,8 +48,8 @@
 //!   remains unresolved (see `AMBE_CHIP_VALIDATION_FINDINGS.md` sections 23-29 for the full
 //!   experimental record, including several tested-and-refuted semantic hypotheses).
 
-use crate::ambe::general::fec::golay_decode;
 use super::wire_format::{block_wire_members, Block};
+use crate::ambe::general::fec::golay_decode;
 
 /// The real DVSI chip's Hamming(15,11) parity submatrix for RATET(27)'s `u4`/`u5`/`u6` blocks, in
 /// natural-offset order (row `i` is the codeword this block's chip encoder produces when only data
@@ -60,8 +60,9 @@ use super::wire_format::{block_wire_members, Block};
 /// assignment from `fec.rs`'s own `HAMMING_PARITY`, though the same underlying 11 nonzero 4-bit
 /// column values (confirmed by the `chip_hamming_parity_uses_the_same_15_nonzero_columns_as_fec_rs`
 /// test below) -- i.e. the same abstract [15,11,3] Hamming code, differently labeled.
-pub const HAMMING_PARITY_CHIP: [u8; 11] =
-    [0b1001, 0b1101, 0b1111, 0b1110, 0b0111, 0b1010, 0b0101, 0b1011, 0b1100, 0b0110, 0b0011];
+pub const HAMMING_PARITY_CHIP: [u8; 11] = [
+    0b1001, 0b1101, 0b1111, 0b1110, 0b0111, 0b1010, 0b0101, 0b1011, 0b1100, 0b0110, 0b0011,
+];
 
 /// Encodes 11 data bits (low 11 bits of `data`, MSB-first -- bit 10 is natural offset 0) into this
 /// chip's real 15-bit Hamming codeword, systematic (`data` in the high 11 bits, parity in the low
@@ -178,9 +179,9 @@ pub fn decode_block(wire_frame_bits: &[bool; 144], block: Block) -> (u16, u32) {
 
 #[cfg(test)]
 mod tests {
+    use super::super::wire_format::block_for_natural;
     use super::*;
     use crate::ambe::general::fec::golay_encode;
-    use super::super::wire_format::block_for_natural;
 
     #[test]
     fn hamming_encode_chip_of_zero_is_zero() {
@@ -248,8 +249,10 @@ mod tests {
     fn assert_weight3_relationship(wire_triple: (usize, usize, usize), block_start: usize) {
         use super::super::wire_format::natural_position;
         let (a, b, c) = wire_triple;
-        let offsets: Vec<usize> =
-            [a, b, c].iter().map(|&w| natural_position(w) - block_start).collect();
+        let offsets: Vec<usize> = [a, b, c]
+            .iter()
+            .map(|&w| natural_position(w) - block_start)
+            .collect();
         let xor = chip_column(offsets[0]) ^ chip_column(offsets[1]) ^ chip_column(offsets[2]);
         assert_eq!(xor, 0, "triple {wire_triple:?} (block start {block_start}) not a valid codeword under HAMMING_PARITY_CHIP");
     }
@@ -283,8 +286,15 @@ mod tests {
 
     #[test]
     fn all_7_confirmed_u5_weight3_triples_are_valid_codewords_under_the_chip_generator() {
-        let triples =
-            [(9, 10, 21), (9, 22, 93), (9, 33, 117), (9, 45, 57), (9, 69, 129), (9, 81, 105), (9, 140, 141)];
+        let triples = [
+            (9, 10, 21),
+            (9, 22, 93),
+            (9, 33, 117),
+            (9, 45, 57),
+            (9, 69, 129),
+            (9, 81, 105),
+            (9, 140, 141),
+        ];
         for t in triples {
             assert_weight3_relationship(t, 107);
         }
@@ -292,8 +302,15 @@ mod tests {
 
     #[test]
     fn all_7_confirmed_u6_weight3_triples_are_valid_codewords_under_the_chip_generator() {
-        let triples =
-            [(11, 23, 118), (11, 34, 94), (11, 35, 82), (11, 46, 70), (11, 47, 59), (11, 58, 130), (11, 106, 142)];
+        let triples = [
+            (11, 23, 118),
+            (11, 34, 94),
+            (11, 35, 82),
+            (11, 46, 70),
+            (11, 47, 59),
+            (11, 58, 130),
+            (11, 106, 142),
+        ];
         for t in triples {
             assert_weight3_relationship(t, 122);
         }
@@ -392,7 +409,10 @@ mod tests {
     fn g3_decode_recovers_every_real_captured_codeword_with_zero_distance() {
         for &codeword in &REAL_CAPTURED_G3_CODEWORDS {
             let (_data, distance) = g3_decode(codeword);
-            assert_eq!(distance, 0, "codeword=0b{codeword:023b} not in G3_GENERATOR's span");
+            assert_eq!(
+                distance, 0,
+                "codeword=0b{codeword:023b} not in G3_GENERATOR's span"
+            );
         }
     }
 
@@ -415,9 +435,11 @@ mod tests {
     fn block_for_natural_still_agrees_with_block_wire_members_round_trip() {
         // Cross-module sanity: every wire member of a block, run through block_for_natural, must
         // report that same block back.
-        for (block, _) in
-            [(Block::Golay { index: 0 }, 0), (Block::Hamming { index: 1 }, 0), (Block::Raw, 0)]
-        {
+        for (block, _) in [
+            (Block::Golay { index: 0 }, 0),
+            (Block::Hamming { index: 1 }, 0),
+            (Block::Raw, 0),
+        ] {
             for wire in block_wire_members(block) {
                 use super::super::wire_format::natural_position;
                 let (found_block, _offset) = block_for_natural(natural_position(wire));

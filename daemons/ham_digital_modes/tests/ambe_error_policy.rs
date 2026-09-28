@@ -86,10 +86,30 @@ mod dstar_frames {
     use ham_digital_modes::ambe::float::dstar::encode::{build_frame, pack_raw_parameters};
 
     pub fn quiet() -> u128 {
-        build_frame(pack_raw_parameters(&RawParameters { b0: 40, b1: 15, b2: 12, b3: 100, b4: 50, b5: 3, b6: 4, b7: 5, b8: 2 }))
+        build_frame(pack_raw_parameters(&RawParameters {
+            b0: 40,
+            b1: 15,
+            b2: 12,
+            b3: 100,
+            b4: 50,
+            b5: 3,
+            b6: 4,
+            b7: 5,
+            b8: 2,
+        }))
     }
     pub fn loud() -> u128 {
-        build_frame(pack_raw_parameters(&RawParameters { b0: 40, b1: 15, b2: 40, b3: 100, b4: 50, b5: 3, b6: 4, b7: 5, b8: 2 }))
+        build_frame(pack_raw_parameters(&RawParameters {
+            b0: 40,
+            b1: 15,
+            b2: 40,
+            b3: 100,
+            b4: 50,
+            b5: 3,
+            b6: 4,
+            b7: 5,
+            b8: 2,
+        }))
     }
 }
 
@@ -114,10 +134,30 @@ mod ambe_plus_2_frames {
     use ham_digital_modes::ambe::float::ambe_plus_2::encode::build_frame;
 
     pub fn quiet() -> u128 {
-        build_frame(&RawParameters { b0: 40, b1: 31, b2: 8, b3: 100, b4: 50, b5: 3, b6: 4, b7: 5, b8: 2 })
+        build_frame(&RawParameters {
+            b0: 40,
+            b1: 31,
+            b2: 8,
+            b3: 100,
+            b4: 50,
+            b5: 3,
+            b6: 4,
+            b7: 5,
+            b8: 2,
+        })
     }
     pub fn loud() -> u128 {
-        build_frame(&RawParameters { b0: 40, b1: 31, b2: 26, b3: 100, b4: 50, b5: 3, b6: 4, b7: 5, b8: 2 })
+        build_frame(&RawParameters {
+            b0: 40,
+            b1: 31,
+            b2: 26,
+            b3: 100,
+            b4: 50,
+            b5: 3,
+            b6: 4,
+            b7: 5,
+            b8: 2,
+        })
     }
 }
 
@@ -158,17 +198,35 @@ mod ambe_plus_2_repeat_gain_memory {
     #[test]
     fn chip_compatible_repeat_raises_the_next_frame_float() {
         use ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder as D;
-        let (settled, repeated, after) = levels(D::new().with_error_policy(ErrorPolicy::ChipCompatible), |d, f| d.decode_frame(f).unwrap().to_vec());
-        assert!(repeated < 1.3 * settled, "the repeat itself is the previous frame: {repeated} vs {settled}");
-        assert!(after > 1.1 * settled, "next frame {after} vs settled {settled}");
+        let (settled, repeated, after) = levels(
+            D::new().with_error_policy(ErrorPolicy::ChipCompatible),
+            |d, f| d.decode_frame(f).unwrap().to_vec(),
+        );
+        assert!(
+            repeated < 1.3 * settled,
+            "the repeat itself is the previous frame: {repeated} vs {settled}"
+        );
+        assert!(
+            after > 1.1 * settled,
+            "next frame {after} vs settled {settled}"
+        );
     }
 
     #[test]
     fn chip_compatible_repeat_raises_the_next_frame_fixed() {
         use ham_digital_modes::ambe::fixed::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder as D;
-        let (settled, repeated, after) = levels(D::new().with_error_policy(ErrorPolicy::ChipCompatible), |d, f| fixed_to_f64(&d.decode_frame(f).unwrap()));
-        assert!(repeated < 1.3 * settled, "the repeat itself is the previous frame: {repeated} vs {settled}");
-        assert!(after > 1.1 * settled, "next frame {after} vs settled {settled}");
+        let (settled, repeated, after) = levels(
+            D::new().with_error_policy(ErrorPolicy::ChipCompatible),
+            |d, f| fixed_to_f64(&d.decode_frame(f).unwrap()),
+        );
+        assert!(
+            repeated < 1.3 * settled,
+            "the repeat itself is the previous frame: {repeated} vs {settled}"
+        );
+        assert!(
+            after > 1.1 * settled,
+            "next frame {after} vs settled {settled}"
+        );
     }
 }
 
@@ -180,20 +238,42 @@ mod dstar_reserved_codes {
     use ham_digital_modes::ambe::float::dstar::encode::{build_frame, pack_raw_parameters};
 
     fn frame(b0: u32) -> u128 {
-        build_frame(pack_raw_parameters(&RawParameters { b0, b1: 15, b2: 30, b3: 100, b4: 50, b5: 3, b6: 4, b7: 5, b8: 2 }))
+        build_frame(pack_raw_parameters(&RawParameters {
+            b0,
+            b1: 15,
+            b2: 30,
+            b3: 100,
+            b4: 50,
+            b5: 3,
+            b6: 4,
+            b7: 5,
+            b8: 2,
+        }))
     }
 
     #[test]
     fn chip_compatible_repeats_then_mutes_reserved_pitch_code_125_and_clean_decodes_it() {
         use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
         let (normal, reserved) = (frame(40), frame(125));
-        for (policy, expect_mute_on_fourth) in [(ErrorPolicy::Clean, false), (ErrorPolicy::ChipCompatible, true)] {
+        for (policy, expect_mute_on_fourth) in [
+            (ErrorPolicy::Clean, false),
+            (ErrorPolicy::ChipCompatible, true),
+        ] {
             let mut dec = DStarSynthesisDecoder::new().with_error_policy(policy);
             dec.decode_frame(normal).unwrap();
-            let outputs: Vec<[f64; 160]> = (0..4).map(|_| dec.decode_frame(reserved).unwrap()).collect();
-            assert_eq!(outputs[3].iter().all(|&s| s == 0.0), expect_mute_on_fourth, "{policy:?}");
+            let outputs: Vec<[f64; 160]> = (0..4)
+                .map(|_| dec.decode_frame(reserved).unwrap())
+                .collect();
+            assert_eq!(
+                outputs[3].iter().all(|&s| s == 0.0),
+                expect_mute_on_fourth,
+                "{policy:?}"
+            );
             if expect_mute_on_fourth {
-                assert!(outputs[..3].iter().all(|o| o.iter().any(|&s| s != 0.0)), "the first three repeat");
+                assert!(
+                    outputs[..3].iter().all(|o| o.iter().any(|&s| s != 0.0)),
+                    "the first three repeat"
+                );
             }
         }
     }
@@ -204,8 +284,13 @@ mod dstar_reserved_codes {
         let (normal, reserved) = (frame(40), frame(125));
         let mut dec = DStarSynthesisDecoder::new().with_error_policy(ErrorPolicy::ChipCompatible);
         dec.decode_frame(normal).unwrap();
-        let out: Vec<_> = (0..4).map(|_| dec.decode_frame(reserved).unwrap()).collect();
-        assert!(out[3].iter().all(|&s| s == 0), "the fourth reserved frame mutes");
+        let out: Vec<_> = (0..4)
+            .map(|_| dec.decode_frame(reserved).unwrap())
+            .collect();
+        assert!(
+            out[3].iter().all(|&s| s == 0),
+            "the fourth reserved frame mutes"
+        );
         assert!(out[0].iter().any(|&s| s != 0));
     }
 }

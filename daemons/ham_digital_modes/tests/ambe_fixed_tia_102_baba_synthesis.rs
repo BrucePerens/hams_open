@@ -32,10 +32,20 @@ fn from_q16_i64(v: i64) -> f64 {
 }
 
 fn zero_errors() -> FrameErrors {
-    FrameErrors { total: 0, rate: 0.0, golay_init: 0, hamming_init: 0 }
+    FrameErrors {
+        total: 0,
+        rate: 0.0,
+        golay_init: 0,
+        hamming_init: 0,
+    }
 }
 fn zero_errors_q16() -> FrameErrorsQ16 {
-    FrameErrorsQ16 { total: 0, rate_q16: 0, golay_init: 0, hamming_init: 0 }
+    FrameErrorsQ16 {
+        total: 0,
+        rate_q16: 0,
+        golay_init: 0,
+        hamming_init: 0,
+    }
 }
 
 fn snr_db(float_pcm: &[f64], fixed_pcm: &[f64]) -> f64 {
@@ -85,10 +95,15 @@ fn synthesize_frame_matches_float_for_a_steady_voiced_tone() {
     let omega0 = dequantize_fundamental_frequency(100);
     let voiced = vec![true; 16];
     let amplitudes: Vec<f64> = (1..=16).map(|i| 100.0 + 15.0 * i as f64).collect();
-    let frames: Vec<_> = (0..5).map(|_| (omega0, voiced.clone(), amplitudes.clone())).collect();
+    let frames: Vec<_> = (0..5)
+        .map(|_| (omega0, voiced.clone(), amplitudes.clone()))
+        .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "steady voiced tone SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "steady voiced tone SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -96,10 +111,15 @@ fn synthesize_frame_matches_float_for_a_fully_unvoiced_frame() {
     let omega0 = dequantize_fundamental_frequency(100);
     let voiced = vec![false; 16];
     let amplitudes: Vec<f64> = (1..=16).map(|i| 80.0 + 5.0 * i as f64).collect();
-    let frames: Vec<_> = (0..4).map(|_| (omega0, voiced.clone(), amplitudes.clone())).collect();
+    let frames: Vec<_> = (0..4)
+        .map(|_| (omega0, voiced.clone(), amplitudes.clone()))
+        .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "fully unvoiced frame SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "fully unvoiced frame SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -107,7 +127,9 @@ fn synthesize_frame_matches_float_for_a_mixed_voicing_pattern() {
     let omega0 = dequantize_fundamental_frequency(90);
     let voiced: Vec<bool> = (0..20).map(|i| i % 3 != 0).collect();
     let amplitudes: Vec<f64> = (1..=20).map(|i| 50.0 + 6.0 * i as f64).collect();
-    let frames: Vec<_> = (0..4).map(|_| (omega0, voiced.clone(), amplitudes.clone())).collect();
+    let frames: Vec<_> = (0..4)
+        .map(|_| (omega0, voiced.clone(), amplitudes.clone()))
+        .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
     assert!(snr >= MIN_SNR_DB, "mixed voicing SNR too low: {snr} dB");
@@ -148,7 +170,10 @@ fn synthesize_repeated_frame_reuses_the_last_real_frames_own_final_parameters() 
     for _ in 0..3 {
         let frame = state.synthesize_repeated_frame().unwrap();
         for &sample in &frame {
-            assert!(sample.abs() < (1i64 << 40), "unreasonably large repeated-frame sample: {sample}");
+            assert!(
+                sample.abs() < (1i64 << 40),
+                "unreasonably large repeated-frame sample: {sample}"
+            );
         }
     }
 }
@@ -220,10 +245,15 @@ fn synthesize_frame_matches_float_when_gamma_m_actually_engages() {
     let l_hat = 30usize;
     let voiced: Vec<bool> = (0..l_hat).map(|i| i % 3 == 0).collect();
     let amplitudes = vec![800.0; l_hat];
-    let frames: Vec<_> = (0..4).map(|_| (omega0, voiced.clone(), amplitudes.clone())).collect();
+    let frames: Vec<_> = (0..4)
+        .map(|_| (omega0, voiced.clone(), amplitudes.clone()))
+        .collect();
     let (float_pcm, fixed_pcm) = run_scenario(&frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "gamma_M-engaged scenario SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "gamma_M-engaged scenario SNR too low: {snr} dB"
+    );
 }
 
 /// Every test above uses a clean error record (`total: 0, rate: 0.0`), which takes
@@ -254,8 +284,18 @@ fn synthesize_frame_matches_float_with_a_moderate_error_record() {
     let l_hat = 20usize;
     let voiced: Vec<bool> = (0..l_hat).map(|i| i % 3 != 0).collect();
     let amplitudes: Vec<f64> = (1..=l_hat).map(|i| 40.0 + 5.0 * i as f64).collect();
-    let errors = FrameErrors { total: 5, rate: 0.01, golay_init: 0, hamming_init: 0 };
-    let errors_q16 = FrameErrorsQ16 { total: 5, rate_q16: to_q16(0.01), golay_init: 0, hamming_init: 0 };
+    let errors = FrameErrors {
+        total: 5,
+        rate: 0.01,
+        golay_init: 0,
+        hamming_init: 0,
+    };
+    let errors_q16 = FrameErrorsQ16 {
+        total: 5,
+        rate_q16: to_q16(0.01),
+        golay_init: 0,
+        hamming_init: 0,
+    };
     let b0_values = [90u32, 91, 90, 89];
 
     let mut float_state = FloatSynthesisState::new();
@@ -277,6 +317,8 @@ fn synthesize_frame_matches_float_with_a_moderate_error_record() {
         fixed_pcm.extend(fixed_frame.iter().map(|&s| from_q16_i64(s)));
     }
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "moderate error record SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "moderate error record SNR too low: {snr} dB"
+    );
 }
-

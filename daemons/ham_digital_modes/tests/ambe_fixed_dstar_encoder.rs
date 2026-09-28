@@ -13,13 +13,19 @@ mod common;
 
 use common::{compare_streams, FrameView, Parity};
 use ham_digital_modes::ambe::fixed::dstar::encoder::Encoder as FixedEncoder;
-use ham_digital_modes::ambe::float::dstar::decode::{classify_b0, decode_tone, extract_raw_parameters, parse_frame, FrameKind};
+use ham_digital_modes::ambe::float::dstar::decode::{
+    classify_b0, decode_tone, extract_raw_parameters, parse_frame, FrameKind,
+};
 use ham_digital_modes::ambe::float::dstar::encoder::Encoder as FloatEncoder;
 use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
 
 fn view(frame: u128) -> FrameView {
     let raw = extract_raw_parameters(parse_frame(frame).d);
-    FrameView { tone: classify_b0(raw.b0) != FrameKind::Speech, b0: raw.b0, b1: raw.b1 }
+    FrameView {
+        tone: classify_b0(raw.b0) != FrameKind::Speech,
+        b0: raw.b0,
+        b1: raw.b1,
+    }
 }
 
 fn encode_fixed(pcm: &[i16], flush: bool) -> Vec<u128> {
@@ -80,13 +86,23 @@ fn speech_parity_with_the_float_encoder_first_150_frames() {
     let p = parity("D-STAR first 150 frames", 0, common::parity_frames());
     assert_eq!(p.count_mismatch, 0);
     assert!(p.frames >= 4 * (common::parity_frames().min(1000) - 2));
-    assert_eq!(p.tone_frames_fixed, 0, "no speech frame may be emitted as a tone frame");
-    assert_eq!(p.tone_frames_float, 0, "no speech frame may be emitted as a tone frame");
+    assert_eq!(
+        p.tone_frames_fixed, 0,
+        "no speech frame may be emitted as a tone frame"
+    );
+    assert_eq!(
+        p.tone_frames_float, 0,
+        "no speech frame may be emitted as a tone frame"
+    );
     // Measured after the encoders gained the standard's input high-pass filter and the amplitude floor of 1.0 (found by the
     // OP25 cross-validation): 91.6% identical frames, b0 and b1 100% equal, envelope correlation above 0.9997. The opening
     // frames are near-silent, so many harmonic targets sit exactly at the floor, and the resulting exact ties in the
     // amplitude codebook searches are broken differently by the float and fixed arithmetic.
-    assert!(p.frac(p.identical) >= 0.90, "identical frames {}", p.frac(p.identical));
+    assert!(
+        p.frac(p.identical) >= 0.90,
+        "identical frames {}",
+        p.frac(p.identical)
+    );
     assert!(p.frac(p.b0_within_1) >= 0.999 && p.frac(p.b0_equal) >= 0.99);
     assert!(p.frac(p.b1_equal) >= 0.99);
     // One near-tie codebook decision out of ~600 frames differs (99.83% identical); that alone limits the decoded SNR to
@@ -104,7 +120,11 @@ fn speech_parity_with_the_float_encoder_mid_file_window() {
     assert_eq!(p.count_mismatch, 0);
     assert_eq!(p.tone_frames_fixed, 0);
     assert_eq!(p.tone_frames_float, 0);
-    assert!(p.frac(p.identical) >= 0.95, "identical frames {}", p.frac(p.identical));
+    assert!(
+        p.frac(p.identical) >= 0.95,
+        "identical frames {}",
+        p.frac(p.identical)
+    );
     assert!(p.frac(p.b0_within_1) >= 0.999 && p.frac(p.b0_equal) >= 0.99);
     assert!(p.frac(p.b1_equal) >= 0.99);
     assert!(p.snr_db() >= 25.0, "decoded SNR {} dB", p.snr_db());
@@ -113,7 +133,13 @@ fn speech_parity_with_the_float_encoder_mid_file_window() {
 
 fn sine(freqs: &[f64], amp: f64, frames: usize) -> Vec<i16> {
     (0..160 * frames)
-        .map(|i| freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()).sum::<f64>().round() as i16)
+        .map(|i| {
+            freqs
+                .iter()
+                .map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin())
+                .sum::<f64>()
+                .round() as i16
+        })
         .collect()
 }
 
@@ -121,20 +147,36 @@ fn sine(freqs: &[f64], amp: f64, frames: usize) -> Vec<i16> {
 fn tone_round_trip_dtmf_and_one_kilohertz() {
     // The float encoder's chip-measured cases: DTMF '5' at 4000 -> index 133, volume 186; 1 kHz at 12000 -> index 32,
     // volume 213.
-    for (pcm, index, volume) in [(sine(&[770.0, 1336.0], 4000.0, 12), 133u32, 186u32), (sine(&[1000.0], 12000.0, 12), 32, 213)] {
+    for (pcm, index, volume) in [
+        (sine(&[770.0, 1336.0], 4000.0, 12), 133u32, 186u32),
+        (sine(&[1000.0], 12000.0, 12), 32, 213),
+    ] {
         // Frames before the flush only: the padded tail frames are partly silence, not tone.
         let frames = encode_fixed(&pcm, false);
         assert!(frames.len() >= 8);
-        assert_eq!(frames, encode_float(&pcm, false), "tone frames should be identical to the float encoder's");
+        assert_eq!(
+            frames,
+            encode_float(&pcm, false),
+            "tone frames should be identical to the float encoder's"
+        );
         for &f in &frames {
             let d = parse_frame(f).d;
             assert_eq!(classify_b0(extract_raw_parameters(d).b0), FrameKind::Tone);
             let t = decode_tone(d);
             assert_eq!(t.index, index);
-            assert!((t.volume as i32 - volume as i32).abs() <= 1, "volume {} vs {}", t.volume, volume);
+            assert!(
+                (t.volume as i32 - volume as i32).abs() <= 1,
+                "volume {} vs {}",
+                t.volume,
+                volume
+            );
         }
         let mut dec = DStarSynthesisDecoder::new();
-        let last = frames.iter().map(|&f| dec.decode_frame(f).unwrap()).last().unwrap();
+        let last = frames
+            .iter()
+            .map(|&f| dec.decode_frame(f).unwrap())
+            .last()
+            .unwrap();
         assert!(last.iter().any(|&s| s.abs() > 100.0));
     }
 }

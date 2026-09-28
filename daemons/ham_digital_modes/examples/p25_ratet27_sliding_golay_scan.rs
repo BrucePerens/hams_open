@@ -56,7 +56,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 
@@ -81,7 +83,11 @@ fn frame_to_bits(bytes: &[u8; 18], reverse_bytes: bool, lsb_first: bool) -> [u8;
     let mut bits = [0u8; TOTAL_BITS];
     for (i, &byte) in b.iter().enumerate() {
         for bit in 0..8 {
-            bits[i * 8 + bit] = if lsb_first { (byte >> bit) & 1 } else { (byte >> (7 - bit)) & 1 };
+            bits[i * 8 + bit] = if lsb_first {
+                (byte >> bit) & 1
+            } else {
+                (byte >> (7 - bit)) & 1
+            };
         }
     }
     bits
@@ -95,12 +101,16 @@ fn extract(bits: &[u8; TOTAL_BITS], start: usize, len: usize) -> u32 {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let mut buf = [0u8; 512];
     let n = sock.recv(&mut buf).expect("RATEP config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
@@ -128,7 +138,11 @@ fn main() {
         let set: std::collections::HashSet<[u8; 18]> = frames.into_iter().collect();
         set.into_iter().collect()
     };
-    println!("{} unique captured frames across {} frequencies", unique.len(), TEST_FREQS_HZ.len());
+    println!(
+        "{} unique captured frames across {} frequencies",
+        unique.len(),
+        TEST_FREQS_HZ.len()
+    );
 
     let golay_bm = build_golay_bitmap();
 
@@ -136,9 +150,15 @@ fn main() {
     let mut best: Vec<(usize, bool, bool, usize)> = Vec::new();
     for &reverse_bytes in &[false, true] {
         for &lsb_first in &[false, true] {
-            let bitstreams: Vec<[u8; TOTAL_BITS]> = unique.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+            let bitstreams: Vec<[u8; TOTAL_BITS]> = unique
+                .iter()
+                .map(|f| frame_to_bits(f, reverse_bytes, lsb_first))
+                .collect();
             for start in 0..=(TOTAL_BITS - 23) {
-                let count = bitstreams.iter().filter(|b| golay_valid(&golay_bm, extract(b, start, 23))).count();
+                let count = bitstreams
+                    .iter()
+                    .filter(|b| golay_valid(&golay_bm, extract(b, start, 23)))
+                    .count();
                 if count > unique.len() / 2 {
                     best.push((start, reverse_bytes, lsb_first, count));
                 }
@@ -152,9 +172,15 @@ fn main() {
         let mut overall_best = (0usize, false, false, 0usize);
         for &reverse_bytes in &[false, true] {
             for &lsb_first in &[false, true] {
-                let bitstreams: Vec<[u8; TOTAL_BITS]> = unique.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+                let bitstreams: Vec<[u8; TOTAL_BITS]> = unique
+                    .iter()
+                    .map(|f| frame_to_bits(f, reverse_bytes, lsb_first))
+                    .collect();
                 for start in 0..=(TOTAL_BITS - 23) {
-                    let count = bitstreams.iter().filter(|b| golay_valid(&golay_bm, extract(b, start, 23))).count();
+                    let count = bitstreams
+                        .iter()
+                        .filter(|b| golay_valid(&golay_bm, extract(b, start, 23)))
+                        .count();
                     if count > overall_best.3 {
                         overall_best = (start, reverse_bytes, lsb_first, count);
                     }
@@ -163,7 +189,11 @@ fn main() {
         }
         println!(
             "  best single position anyway: start={} reverse_bytes={} lsb_first={}: {}/{} ({:.1}%)",
-            overall_best.0, overall_best.1, overall_best.2, overall_best.3, unique.len(),
+            overall_best.0,
+            overall_best.1,
+            overall_best.2,
+            overall_best.3,
+            unique.len(),
             100.0 * overall_best.3 as f64 / unique.len() as f64
         );
     } else {

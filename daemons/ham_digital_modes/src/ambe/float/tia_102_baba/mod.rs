@@ -257,7 +257,9 @@ pub fn decode_code_vectors(c: [u32; 8]) -> ([u32; 8], [u32; 7]) {
     let (u5, e5) = fec::hamming_decode((c[5] ^ m[5]) as u16);
     let (u6, e6) = fec::hamming_decode((c[6] ^ m[6]) as u16);
     (
-        [u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, c[7]],
+        [
+            u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, c[7],
+        ],
         [e0, e1, e2, e3, e4, e5, e6],
     )
 }
@@ -292,7 +294,9 @@ pub fn decode_code_vectors_chip(c: [u32; 8]) -> ([u32; 8], [u32; 7]) {
     let (u5, e5) = hamming_decode_chip(c[5] as u16);
     let (u6, e6) = hamming_decode_chip(c[6] as u16);
     (
-        [u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, c[7]],
+        [
+            u0 as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, c[7],
+        ],
         [e0, e1, e2, e3, e4, e5, e6],
     )
 }
@@ -373,8 +377,13 @@ pub fn encode_frame(
     previous_state: &FrameState,
     sync_bit: bool,
 ) -> Option<([u32; 8], FrameState)> {
-    let (u, state) =
-        encode_prioritized_bits(frame, omega0_hat, initial_pitch_error, previous_state, sync_bit)?;
+    let (u, state) = encode_prioritized_bits(
+        frame,
+        omega0_hat,
+        initial_pitch_error,
+        previous_state,
+        sync_bit,
+    )?;
     Some((encode_code_vectors(u), state))
 }
 
@@ -387,8 +396,13 @@ pub fn encode_frame_chip_wire(
     previous_state: &FrameState,
     sync_bit: bool,
 ) -> Option<([u32; 8], FrameState)> {
-    let (u, state) =
-        encode_prioritized_bits(frame, omega0_hat, initial_pitch_error, previous_state, sync_bit)?;
+    let (u, state) = encode_prioritized_bits(
+        frame,
+        omega0_hat,
+        initial_pitch_error,
+        previous_state,
+        sync_bit,
+    )?;
     Some((encode_code_vectors_chip(u), state))
 }
 
@@ -419,7 +433,13 @@ pub fn quantize_spectral_amplitudes(
 ) -> Option<QuantizedAmplitudes> {
     let residuals: Vec<f64> = (1..=l_hat)
         .map(|l| {
-            prediction::prediction_residual(l, amplitudes[(l - 1) as usize], l_hat, l_hat_prev, previous_amplitudes)
+            prediction::prediction_residual(
+                l,
+                amplitudes[(l - 1) as usize],
+                l_hat,
+                l_hat_prev,
+                previous_amplitudes,
+            )
         })
         .collect();
 
@@ -445,7 +465,12 @@ pub fn quantize_spectral_amplitudes(
         l_hat_prev,
         previous_amplitudes,
     )?;
-    Some(QuantizedAmplitudes { b2, gain_vector, higher_order, reconstructed })
+    Some(QuantizedAmplitudes {
+        b2,
+        gain_vector,
+        higher_order,
+        reconstructed,
+    })
 }
 
 /// The same pipeline as [`encode_frame`], stopping one stage earlier: returns the prioritized bit
@@ -507,8 +532,12 @@ pub fn encode_prioritized_bits(
     )?;
     let b0 = parameter_encoding::quantize_fundamental_frequency(omega0_hat);
     let b1 = parameter_encoding::encode_voicing_decisions(&voiced);
-    let QuantizedAmplitudes { b2, gain_vector, higher_order, reconstructed: reconstructed_spectral_amplitudes } =
-        quantized;
+    let QuantizedAmplitudes {
+        b2,
+        gain_vector,
+        higher_order,
+        reconstructed: reconstructed_spectral_amplitudes,
+    } = quantized;
 
     let u = bit_prioritization::prioritize_bits(
         b0,
@@ -616,11 +645,17 @@ mod tests {
     /// recovers every `u` with zero corrected errors.
     #[test]
     fn encode_code_vectors_is_modulated_textbook_fec_and_decode_code_vectors_inverts_it() {
-        let u = [0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010];
+        let u = [
+            0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010,
+        ];
         let c = encode_code_vectors(u);
         let m = modulation::modulation_vectors(u[0]);
         for i in 1..=3 {
-            assert_eq!(c[i] ^ m[i], fec::golay_encode(u[i] as u16), "c_{i} is not a modulated Golay codeword");
+            assert_eq!(
+                c[i] ^ m[i],
+                fec::golay_encode(u[i] as u16),
+                "c_{i} is not a modulated Golay codeword"
+            );
         }
         for i in 4..=6 {
             assert_eq!(
@@ -629,7 +664,11 @@ mod tests {
                 "c_{i} is not a modulated Hamming codeword"
             );
         }
-        assert_ne!(c[1], fec::golay_encode(u[1] as u16), "modulation must actually change c_1 for this u_0");
+        assert_ne!(
+            c[1],
+            fec::golay_encode(u[1] as u16),
+            "modulation must actually change c_1 for this u_0"
+        );
         let (u_back, errors) = decode_code_vectors(c);
         assert_eq!(u_back, u);
         assert_eq!(errors, [0; 7]);
@@ -656,7 +695,9 @@ mod tests {
     /// The chip framing stays available, and is genuinely different from the standard's.
     #[test]
     fn chip_wire_layer_round_trips_and_differs_from_the_standards() {
-        let u = [0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010];
+        let u = [
+            0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010,
+        ];
         let c = encode_code_vectors_chip(u);
         assert_ne!(c, encode_code_vectors(u));
         let (u_back, errors) = decode_code_vectors_chip(c);
