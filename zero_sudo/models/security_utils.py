@@ -845,6 +845,15 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # provisioning for this tunnel yet"), not a secret -- same
             # category as cloudflare.last_static_mtime immediately above.
             "cloudflare.tunnel.provisioned",
+            # The trusted-peer allow-list (cloudflare/models/trusted_ip_ranges.py): public CIDR ranges,
+            # an admin-entered addition list, and a timestamp -- configuration, not secrets, the same
+            # category as the cloudflare.* keys above. cloudflare reads and writes them as its own service
+            # account, so where ham_base's ir.config_parameter override is installed (hams.com), a key
+            # missing from this list made every Settings save (set_values() republishes the list) and the
+            # daily refresh cron raise "Service accounts MUST NOT read core system parameters".
+            "cloudflare.trusted_ip_ranges_auto",
+            "cloudflare.trusted_ip_ranges_custom",
+            "cloudflare.trusted_ip_ranges_last_refreshed",
             "pager_duty.helpdesk_model",
             "user_websites.company_abuse_email",
             "user_websites.max_sites_per_user",
@@ -944,6 +953,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "user_websites_seo.docs_installed",
             "cloudflare.last_static_mtime",
             "cloudflare.tunnel.provisioned",
+            # Written by cloudflare's daily refresh cron as its own service account (the admin-entered
+            # "custom" list is written by the administrator through Settings, not by a service account).
+            "cloudflare.trusted_ip_ranges_auto",
+            "cloudflare.trusted_ip_ranges_last_refreshed",
             "caching.safe_quota_mb",
             "user_websites.last_digest_id",
             # Real TLS certificate/key material for

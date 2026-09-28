@@ -1450,3 +1450,24 @@ class TestSecurityUtils(HamsTransactionCase):
             "written from inside a transaction that later rolls back would otherwise leak "
             "into every later call in this same worker process).",
         )
+
+    def test_17_the_cloudflare_trusted_peer_parameters_are_whitelisted_for_their_service_account(self):
+        """cloudflare's Settings save and daily refresh cron read (and, for the refresh, write) these keys
+        as a service account. Where ham_base's ir.config_parameter override is installed, a key missing
+        from these lists raises AccessError, which broke every Settings save. The custom list is written
+        by an administrator, not a service account, so it is readable but deliberately not writable."""
+        # Tests [@ANCHOR: zero_sudo:get_param_read_whitelist]
+
+        # Tests [@ANCHOR: zero_sudo:get_param_write_whitelist]
+        utils = self.env["zero_sudo.security.utils"]
+        read = set(utils._get_param_read_whitelist())
+        write = set(utils._get_param_write_whitelist())
+        for key in (
+            "cloudflare.trusted_ip_ranges_auto",
+            "cloudflare.trusted_ip_ranges_custom",
+            "cloudflare.trusted_ip_ranges_last_refreshed",
+        ):
+            self.assertIn(key, read, key)
+        self.assertIn("cloudflare.trusted_ip_ranges_auto", write)
+        self.assertIn("cloudflare.trusted_ip_ranges_last_refreshed", write)
+        self.assertNotIn("cloudflare.trusted_ip_ranges_custom", write)
