@@ -28,6 +28,7 @@
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_synthesis_mismatch -- <host:port>`
 
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{
     deprioritize_bits, extract_fundamental_frequency_quantizer,
 };
@@ -35,11 +36,12 @@ use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOu
 use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
 };
-use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
-use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
-use ham_digital_modes::ambe::float::tia_102_baba::voiced_synthesis::VoicedState;
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
+    gain_bit_allocation, higher_order_bit_allocation,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::unvoiced_synthesis::NoiseState;
+use ham_digital_modes::ambe::float::tia_102_baba::voiced_synthesis::VoicedState;
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
 use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 use std::f64::consts::PI;
 use std::net::UdpSocket;
@@ -114,7 +116,10 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 }
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -177,18 +182,26 @@ fn estimate_pitch(samples: &[f64]) -> (usize, f64, f64) {
             best_period = period;
         }
     }
-    let hz = if best_period > 0 { 8000.0 / best_period as f64 } else { 0.0 };
+    let hz = if best_period > 0 {
+        8000.0 / best_period as f64
+    } else {
+        0.0
+    };
     (best_period, best_norm, hz)
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -248,8 +261,16 @@ fn main() {
             let (u5, _) = hamming_decode(c[5] as u16);
             let (u6, _) = hamming_decode(c[6] as u16);
             let u7 = c[7];
-            let u_vectors_nodemod: [u32; 8] =
-                [u0_nodemod as u32, u1 as u32, u2 as u32, u3 as u32, u4 as u32, u5 as u32, u6 as u32, u7];
+            let u_vectors_nodemod: [u32; 8] = [
+                u0_nodemod as u32,
+                u1 as u32,
+                u2 as u32,
+                u3 as u32,
+                u4 as u32,
+                u5 as u32,
+                u6 as u32,
+                u7,
+            ];
             let b0_nodemod = extract_fundamental_frequency_quantizer(&u_vectors_nodemod);
             let omega0_nodemod = dequantize_fundamental_frequency(b0_nodemod);
             let l_nodemod = harmonics_count(omega0_nodemod);
@@ -260,14 +281,22 @@ fn main() {
             // deprioritize_bits(u_vectors, ...) which consumes u1..u6. Compute voicing under the
             // no-demod u_vectors and compare against what decode_parameters actually produced.
             let k_hat_nodemod = frequency_bands_count(l_nodemod);
-            let gain_widths: [u8; 5] =
-                std::array::from_fn(|idx| gain_bit_allocation(l_nodemod, idx as u32 + 2).map(|(w, _)| w).unwrap_or(0));
+            let gain_widths: [u8; 5] = std::array::from_fn(|idx| {
+                gain_bit_allocation(l_nodemod, idx as u32 + 2)
+                    .map(|(w, _)| w)
+                    .unwrap_or(0)
+            });
             let higher_widths: Vec<u8> = higher_order_bit_allocation(l_nodemod)
                 .map(|w| w.iter().copied().filter(|&w| w > 0).collect())
                 .unwrap_or_default();
-            let voiced_nodemod = deprioritize_bits(u_vectors_nodemod, k_hat_nodemod, gain_widths, &higher_widths)
-                .map(|bits| decode_voicing_decisions_per_harmonic(bits.b1, k_hat_nodemod, l_nodemod))
-                .map(|v| v.iter().filter(|&&b| b).count());
+            let voiced_nodemod = deprioritize_bits(
+                u_vectors_nodemod,
+                k_hat_nodemod,
+                gain_widths,
+                &higher_widths,
+            )
+            .map(|bits| decode_voicing_decisions_per_harmonic(bits.b1, k_hat_nodemod, l_nodemod))
+            .map(|v| v.iter().filter(|&&b| b).count());
 
             println!(
                 "  [no-demod hypothesis] u0={u0_nodemod} b0={b0_nodemod} L~={l_nodemod} \
@@ -281,15 +310,24 @@ fn main() {
                 float_decoder.advance_history(&params);
                 let voiced_count = params.voiced.iter().filter(|&&v| v).count();
                 let omega0_hz = params.omega0_tilde * 8000.0 / (2.0 * PI);
-                let implied_period = if params.omega0_tilde > 0.0 { 2.0 * PI / params.omega0_tilde } else { 0.0 };
+                let implied_period = if params.omega0_tilde > 0.0 {
+                    2.0 * PI / params.omega0_tilde
+                } else {
+                    0.0
+                };
                 let amp_sum: f64 = params.reconstructed_amplitudes.iter().sum();
-                let amp_max = params.reconstructed_amplitudes.iter().cloned().fold(0.0, f64::max);
+                let amp_max = params
+                    .reconstructed_amplitudes
+                    .iter()
+                    .cloned()
+                    .fold(0.0, f64::max);
 
                 // Check: chip PCM's own actual pitch AND our own float PCM's own actual pitch
                 // (estimator-validation control), from a wider window centered on this frame
                 // (autocorrelation needs more than 160 samples for periods up to 133 samples).
                 let window_start = (i.saturating_sub(1)) * FRAME_SAMPLES;
-                let window_end = ((i + 2) * FRAME_SAMPLES).min(chip_pcm_all.len().min(float_pcm_all.len()));
+                let window_end =
+                    ((i + 2) * FRAME_SAMPLES).min(chip_pcm_all.len().min(float_pcm_all.len()));
                 let (period, norm, hz) = if window_end > window_start {
                     estimate_pitch(&chip_pcm_all[window_start..window_end])
                 } else {
@@ -333,7 +371,9 @@ fn main() {
     // omega0/amplitude held steady, exercises the steady-state (true,true) continuous-phase branch
     // (Eq. 134-135) which is what real sustained voiced speech mostly uses.
     let _ = voiced_state.synthesize(&noise, test_omega0, &voiced, &amplitudes);
-    let s_v = voiced_state.synthesize(&noise, test_omega0, &voiced, &amplitudes).unwrap();
+    let s_v = voiced_state
+        .synthesize(&noise, test_omega0, &voiced, &amplitudes)
+        .unwrap();
     let peak = s_v.iter().cloned().fold(0.0, f64::max);
     let trough = s_v.iter().cloned().fold(0.0, f64::min);
     let (period, norm, hz) = estimate_pitch(&s_v);

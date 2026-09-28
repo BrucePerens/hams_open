@@ -60,14 +60,19 @@ fn run(offset: i32, max_samples: usize, stats: &mut Stats) {
         if fx_frames.len() != fl_frames.len() {
             stats.count_mismatch += 1;
         }
-        let (mut fx_state, mut fl_state) = (fx_mbe::AnalysisState::new(), fl_mbe::AnalysisState::new());
+        let (mut fx_state, mut fl_state) =
+            (fx_mbe::AnalysisState::new(), fl_mbe::AnalysisState::new());
         for (xa, fa) in fx_frames.iter().zip(fl_frames.iter()) {
             stats.frames += 1;
             let p8_float = (2.0 * PI / fa.omega0_hat * 8.0).round() as i64;
             let same_period = p8_float == xa.p8 as i64;
             stats.p8_same += usize::from(same_period);
-            stats.slot_same +=
-                usize::from(xa.slot_samples.iter().zip(fa.slot_samples.iter()).all(|(&a, &b)| a as f64 == b));
+            stats.slot_same += usize::from(
+                xa.slot_samples
+                    .iter()
+                    .zip(fa.slot_samples.iter())
+                    .all(|(&a, &b)| a as f64 == b),
+            );
             // E(P_hat_I) can differ by more than rounding when the two sides pick initial pitches a
             // half-sample apart (which the refinement search can still resolve to the same period).
             let e_fx = xa.initial_pitch_error_q16 as f64 / 65536.0;
@@ -80,7 +85,8 @@ fn run(offset: i32, max_samples: usize, stats: &mut Stats) {
                 stats.harmonics += 1;
                 stats.voicing_same += usize::from(fl_v[h] == fx_v[h]);
                 if fl_v[h] == fx_v[h] && fl_m[h] > 1.0 && same_period {
-                    let db = (20.0 * ((fx_m[h] as f64 / 65536.0).max(1e-9) / fl_m[h]).log10()).abs();
+                    let db =
+                        (20.0 * ((fx_m[h] as f64 / 65536.0).max(1e-9) / fl_m[h]).log10()).abs();
                     stats.amp_db_worst = stats.amp_db_worst.max(db);
                 }
             }
@@ -90,7 +96,10 @@ fn run(offset: i32, max_samples: usize, stats: &mut Stats) {
 
 #[test]
 fn streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech() {
-    let seconds: usize = std::env::var("MAX_SECONDS").ok().and_then(|v| v.parse().ok()).unwrap_or(5);
+    let seconds: usize = std::env::var("MAX_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(5);
     let mut stats = Stats::default();
     for offset in [0, -37] {
         run(offset, seconds * 8000, &mut stats);

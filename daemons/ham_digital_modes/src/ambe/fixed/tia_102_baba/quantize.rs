@@ -10,13 +10,15 @@
 //! decoder). Block lengths, bit allocations and positions are integers, reused from the float tables.
 
 use super::reconstruct_tables::{
-    GAIN_BIT_ALLOCATION_STEP_Q16_16, GAIN_QUANTIZER_LEVELS_Q16_16, HIGHER_ORDER_COEFFICIENT_SIGMA_Q16_16,
-    HIGHER_ORDER_STEP_MULTIPLIER_Q16_16,
+    GAIN_BIT_ALLOCATION_STEP_Q16_16, GAIN_QUANTIZER_LEVELS_Q16_16,
+    HIGHER_ORDER_COEFFICIENT_SIGMA_Q16_16, HIGHER_ORDER_STEP_MULTIPLIER_Q16_16,
 };
 use crate::ambe::fixed::general::fixed_ops::mul_q16;
 use crate::ambe::fixed::general::trig::cos_pi_frac;
 use crate::ambe::float::tia_102_baba::quantize::higher_order_coefficient_positions;
-use crate::ambe::float::tia_102_baba::tables::{block_lengths_for_l, gain_vector_bits, higher_order_bit_allocation};
+use crate::ambe::float::tia_102_baba::tables::{
+    block_lengths_for_l, gain_vector_bits, higher_order_bit_allocation,
+};
 
 /// Splits `l` residuals into Annex J's six blocks; `None` for an `l` outside `9..=56` or a wrong residual count.
 pub fn partition_into_blocks_q16(residuals_q16: &[i32], l: u32) -> Option<[Vec<i32>; 6]> {
@@ -43,7 +45,8 @@ pub fn block_dct_q16(c_q16: &[i32]) -> Vec<i32> {
         .map(|k| {
             let mut sum = 0i64; // Q32
             for (idx, &c) in c_q16.iter().enumerate() {
-                sum += c as i64 * cos_pi_frac(k as i64 - 1, 2 * (idx as i64 + 1) - 1, j as i64) as i64;
+                sum +=
+                    c as i64 * cos_pi_frac(k as i64 - 1, 2 * (idx as i64 + 1) - 1, j as i64) as i64;
             }
             ((sum / j as i64) >> 16) as i32
         })
@@ -96,14 +99,20 @@ pub fn quantize_gain_vector_q16(g_hat_q16: &[i32; 6], l: u32) -> Option<[(u32, u
     for (idx, element) in (2..=6u32).enumerate() {
         let bits = gain_vector_bits(l, element)?;
         let step = GAIN_BIT_ALLOCATION_STEP_Q16_16[l_index][idx];
-        out[idx] = (saturating_uniform_quantize_q16(g_hat_q16[(element - 1) as usize], bits, step), bits);
+        out[idx] = (
+            saturating_uniform_quantize_q16(g_hat_q16[(element - 1) as usize], bits, step),
+            bits,
+        );
     }
     Some(out)
 }
 
 /// Eq. 63: quantizes every transmitted higher-order coefficient (zero-bit allocations are skipped), in the flat
 /// `[C_1,2, ..., C_6,J6]` order, each paired with its bit width.
-pub fn quantize_higher_order_coefficients_q16(dct_blocks_q16: &[Vec<i32>; 6], l: u32) -> Option<Vec<(u32, u8)>> {
+pub fn quantize_higher_order_coefficients_q16(
+    dct_blocks_q16: &[Vec<i32>; 6],
+    l: u32,
+) -> Option<Vec<(u32, u8)>> {
     let bit_allocation = higher_order_bit_allocation(l)?;
     let positions = higher_order_coefficient_positions(l)?;
     if bit_allocation.len() != positions.len() {
@@ -143,7 +152,18 @@ mod tests {
     fn saturating_quantizer_follows_eq_62() {
         // 3 bits, step 1.0: indices -4..=3 map to 0..=7, saturating outside.
         let q = |v_q16: i32| saturating_uniform_quantize_q16(v_q16, 3, 65536);
-        assert_eq!((q(-10 << 16), q(-4 << 16), q(-(7 << 15)), q(0), q(64880), q(3 << 16), q(9 << 16)), (0, 0, 0, 4, 4, 7, 7));
+        assert_eq!(
+            (
+                q(-10 << 16),
+                q(-4 << 16),
+                q(-(7 << 15)),
+                q(0),
+                q(64880),
+                q(3 << 16),
+                q(9 << 16)
+            ),
+            (0, 0, 0, 4, 4, 7, 7)
+        );
         assert_eq!(q(-655), 3); // floor(-0.01) = -1
     }
 

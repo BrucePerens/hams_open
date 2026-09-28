@@ -95,8 +95,10 @@ impl RefinementFrame {
     // [@ANCHOR: RefinementFrame::new]
     pub fn new(raw: &[f64], center: usize) -> Self {
         // `exp(-2 pi j m n / 256)` depends only on `m n mod 256`: tabulate the 256 twiddles once.
-        let twiddle: Vec<(f64, f64)> =
-            (0..256).map(|k| (-2.0 * PI * k as f64 / 256.0).sin_cos()).map(|(s, c)| (c, s)).collect();
+        let twiddle: Vec<(f64, f64)> = (0..256)
+            .map(|k| (-2.0 * PI * k as f64 / 256.0).sin_cos())
+            .map(|(s, c)| (c, s))
+            .collect();
         let windowed: Vec<f64> = (-110i32..=110)
             .map(|n| raw[(center as i32 + n) as usize] * pitch_refinement_window(n))
             .collect();
@@ -169,7 +171,12 @@ pub(crate) struct SyntheticSpectrum<'a> {
 
 impl<'a> SyntheticSpectrum<'a> {
     pub(crate) fn new(frame: &'a RefinementFrame, omega0: f64, max_l: u32) -> Self {
-        Self { frame, omega0, max_l, amplitudes: vec![None; max_l as usize + 1] }
+        Self {
+            frame,
+            omega0,
+            max_l,
+            amplitudes: vec![None; max_l as usize + 1],
+        }
     }
 
     /// `S_w(m, omega0)` for bin `m`.
@@ -182,9 +189,10 @@ impl<'a> SyntheticSpectrum<'a> {
             let m_hi = b_l.ceil() as i32;
             if m >= m_lo && m < m_hi {
                 let frame = self.frame;
-                let amplitude =
-                    *self.amplitudes[l as usize].get_or_insert_with(|| harmonic_amplitude(frame, l, omega0));
-                let wr_index = (64.0 * (m as f64) - (16384.0 / (2.0 * PI)) * (l as f64) * omega0 + 0.5)
+                let amplitude = *self.amplitudes[l as usize]
+                    .get_or_insert_with(|| harmonic_amplitude(frame, l, omega0));
+                let wr_index = (64.0 * (m as f64) - (16384.0 / (2.0 * PI)) * (l as f64) * omega0
+                    + 0.5)
                     .floor() as i32;
                 return amplitude.scale(window_dft_16384(wr_index));
             }
@@ -202,7 +210,9 @@ pub fn refinement_error(frame: &RefinementFrame, omega0: f64) -> f64 {
     let upper_m = (l_estimate * (256.0 / (2.0 * PI)) * omega0).floor() as i32;
     let max_l = l_estimate.max(0.0) as u32 + 1;
     let mut synthetic = SyntheticSpectrum::new(frame, omega0, max_l);
-    (50..=upper_m).map(|m| frame.sw_at(m).sub(synthetic.at(m)).norm_sqr()).sum()
+    (50..=upper_m)
+        .map(|m| frame.sw_at(m).sub(synthetic.at(m)).norm_sqr())
+        .sum()
 }
 
 /// Refines a half-sample-accuracy initial pitch estimate `p_hat_i` to quarter-sample accuracy

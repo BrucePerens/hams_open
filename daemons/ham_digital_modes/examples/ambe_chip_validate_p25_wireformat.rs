@@ -54,10 +54,10 @@
 //! `ambe_chip_validate_*` harnesses -- never touches the serial/USB layer directly, so the chip's
 //! known UART-BREAK lockup hazard (see the findings doc section 6) cannot be triggered by this tool.
 
-use ham_digital_modes::ambe::general::fec::{golay_encode, hamming_encode};
 use ham_digital_modes::ambe::float::tia_102_baba::modulation::modulation_vectors;
 use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::RefinementFrame;
 use ham_digital_modes::ambe::float::tia_102_baba::{encode_frame as ambe_encode_frame, FrameState};
+use ham_digital_modes::ambe::general::fec::{golay_encode, hamming_encode};
 use std::collections::HashSet;
 use std::f64::consts::PI;
 use std::fs;
@@ -294,7 +294,11 @@ fn frame_to_bits(frame: &[u8; 18], reverse_bytes: bool, lsb_first: bool) -> [u8;
     let mut bits = [0u8; 144];
     for (i, &byte) in bytes.iter().enumerate() {
         for b in 0..8 {
-            bits[i * 8 + b] = if lsb_first { (byte >> b) & 1 } else { (byte >> (7 - b)) & 1 };
+            bits[i * 8 + b] = if lsb_first {
+                (byte >> b) & 1
+            } else {
+                (byte >> (7 - b)) & 1
+            };
         }
     }
     bits
@@ -310,7 +314,8 @@ fn extract(bits: &[u8; 144], start: usize, len: usize) -> u32 {
     v
 }
 
-const BYTE_BIT_HYPOTHESES: [(bool, bool); 4] = [(false, false), (false, true), (true, false), (true, true)];
+const BYTE_BIT_HYPOTHESES: [(bool, bool); 4] =
+    [(false, false), (false, true), (true, false), (true, true)];
 
 fn hypothesis_name(reverse_bytes: bool, lsb_first: bool) -> &'static str {
     match (reverse_bytes, lsb_first) {
@@ -358,17 +363,25 @@ fn hamming_valid(bm: &[u64], cw: u32) -> bool {
 /// falsification test. Returns `None` if `c0` itself isn't even a valid codeword (the cheap, common
 /// case -- `c0` is never whitened per Eq. 86, so a valid `c0` is meaningful all by itself). Otherwise
 /// returns `(raw_c1c2c3_all_valid, dewhitened_c1c2c3_all_valid, dewhitened_all_seven_valid)`.
-fn score_candidate(c: [u32; 8], golay_bm: &[u64], hamming_bm: &[u64]) -> Option<(bool, bool, bool)> {
+fn score_candidate(
+    c: [u32; 8],
+    golay_bm: &[u64],
+    hamming_bm: &[u64],
+) -> Option<(bool, bool, bool)> {
     if !golay_valid(golay_bm, c[0]) {
         return None;
     }
     let u0 = (c[0] >> 11) & 0x0FFF;
-    let raw4 = golay_valid(golay_bm, c[1]) && golay_valid(golay_bm, c[2]) && golay_valid(golay_bm, c[3]);
+    let raw4 =
+        golay_valid(golay_bm, c[1]) && golay_valid(golay_bm, c[2]) && golay_valid(golay_bm, c[3]);
     let m = modulation_vectors(u0);
     let (d1, d2, d3) = (c[1] ^ m[1], c[2] ^ m[2], c[3] ^ m[3]);
     let dew4 = golay_valid(golay_bm, d1) && golay_valid(golay_bm, d2) && golay_valid(golay_bm, d3);
     let (h4, h5, h6) = (c[4] ^ m[4], c[5] ^ m[5], c[6] ^ m[6]);
-    let dew7 = dew4 && hamming_valid(hamming_bm, h4) && hamming_valid(hamming_bm, h5) && hamming_valid(hamming_bm, h6);
+    let dew7 = dew4
+        && hamming_valid(hamming_bm, h4)
+        && hamming_valid(hamming_bm, h5)
+        && hamming_valid(hamming_bm, h6);
     Some((raw4, dew4, dew7))
 }
 
@@ -377,20 +390,31 @@ fn score_candidate(c: [u32; 8], golay_bm: &[u64], hamming_bm: &[u64]) -> Option<
 // ---------------------------------------------------------------------------------------------
 
 fn sliding_window_diagnostic(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: &[u64]) {
-    println!("\n-- Sliding-window diagnostic ({} unique frames) --", unique_frames.len());
+    println!(
+        "\n-- Sliding-window diagnostic ({} unique frames) --",
+        unique_frames.len()
+    );
     for &(reverse_bytes, lsb_first) in &BYTE_BIT_HYPOTHESES {
-        let bitstreams: Vec<[u8; 144]> =
-            unique_frames.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+        let bitstreams: Vec<[u8; 144]> = unique_frames
+            .iter()
+            .map(|f| frame_to_bits(f, reverse_bytes, lsb_first))
+            .collect();
         let mut best_golay = (0usize, 0usize);
         for offset in 0..=(144 - 23) {
-            let count = bitstreams.iter().filter(|b| golay_valid(golay_bm, extract(b, offset, 23))).count();
+            let count = bitstreams
+                .iter()
+                .filter(|b| golay_valid(golay_bm, extract(b, offset, 23)))
+                .count();
             if count > best_golay.1 {
                 best_golay = (offset, count);
             }
         }
         let mut best_hamming = (0usize, 0usize);
         for offset in 0..=(144 - 15) {
-            let count = bitstreams.iter().filter(|b| hamming_valid(hamming_bm, extract(b, offset, 15))).count();
+            let count = bitstreams
+                .iter()
+                .filter(|b| hamming_valid(hamming_bm, extract(b, offset, 15)))
+                .count();
             if count > best_hamming.1 {
                 best_hamming = (offset, count);
             }
@@ -440,7 +464,11 @@ struct PermHit {
     total: usize,
 }
 
-fn permutation_search(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: &[u64]) -> Vec<PermHit> {
+fn permutation_search(
+    unique_frames: &[[u8; 18]],
+    golay_bm: &[u64],
+    hamming_bm: &[u64],
+) -> Vec<PermHit> {
     let frames: Vec<[u8; 18]> = if unique_frames.len() > MAX_FRAMES_FOR_PERMUTATION_SEARCH {
         unique_frames[..MAX_FRAMES_FOR_PERMUTATION_SEARCH].to_vec()
     } else {
@@ -457,7 +485,10 @@ fn permutation_search(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: 
     let mut hits = Vec::new();
     let start = Instant::now();
     for &(reverse_bytes, lsb_first) in &BYTE_BIT_HYPOTHESES {
-        let bitstreams: Vec<[u8; 144]> = frames.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+        let bitstreams: Vec<[u8; 144]> = frames
+            .iter()
+            .map(|f| frame_to_bits(f, reverse_bytes, lsb_first))
+            .collect();
         for perm in &perms {
             let mut id_start = [0u32; 8];
             let mut offset = 0u32;
@@ -473,7 +504,9 @@ fn permutation_search(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: 
                 if !golay_valid(golay_bm, c0) {
                     continue;
                 }
-                let c: [u32; 8] = std::array::from_fn(|id| extract(bits, id_start[id] as usize, BLOCK_SIZES[id] as usize));
+                let c: [u32; 8] = std::array::from_fn(|id| {
+                    extract(bits, id_start[id] as usize, BLOCK_SIZES[id] as usize)
+                });
                 if let Some((r4, d4, d7)) = score_candidate(c, golay_bm, hamming_bm) {
                     if r4 {
                         raw4 += 1;
@@ -500,9 +533,15 @@ fn permutation_search(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: 
         }
     }
     let elapsed = start.elapsed();
-    println!("  search took {:.2}s ({} hits above threshold)", elapsed.as_secs_f64(), hits.len());
+    println!(
+        "  search took {:.2}s ({} hits above threshold)",
+        elapsed.as_secs_f64(),
+        hits.len()
+    );
     if elapsed > Duration::from_secs(180) {
-        eprintln!("  WARNING: permutation search took over 3 minutes -- see task's speed constraint.");
+        eprintln!(
+            "  WARNING: permutation search took over 3 minutes -- see task's speed constraint."
+        );
     }
     hits.sort_by(|a, b| (b.dew4, b.raw4).cmp(&(a.dew4, a.raw4)));
     hits
@@ -518,22 +557,24 @@ fn permutation_search(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: 
 // table *values* like this is fine; the interleave-application logic below is freshly written, not
 // copied from dsd's own C source.
 const DSD_IW: [u8; 72] = [
-    0, 2, 4, 1, 3, 5, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2,
-    5, 1, 3, 6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 7, 0, 2, 5, 1, 3, 7, 0, 2, 5, 1, 4, 7, 0, 3, 5, 2, 4, 7,
+    0, 2, 4, 1, 3, 5, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2,
+    4, 1, 3, 6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 7, 0, 2, 5, 1, 3, 7, 0, 2, 5, 1,
+    4, 7, 0, 3, 5, 2, 4, 7,
 ];
 const DSD_IX: [u8; 72] = [
-    22, 20, 10, 20, 18, 0, 20, 18, 8, 18, 16, 13, 18, 16, 6, 16, 14, 11, 16, 14, 4, 14, 12, 9, 14, 12, 2, 12, 10, 7,
-    12, 10, 0, 10, 8, 5, 10, 8, 13, 8, 6, 3, 8, 6, 11, 6, 4, 1, 6, 4, 9, 4, 2, 6, 4, 2, 7, 2, 0, 4, 2, 0, 5, 0, 13,
-    2, 0, 21, 3, 21, 11, 0,
+    22, 20, 10, 20, 18, 0, 20, 18, 8, 18, 16, 13, 18, 16, 6, 16, 14, 11, 16, 14, 4, 14, 12, 9, 14,
+    12, 2, 12, 10, 7, 12, 10, 0, 10, 8, 5, 10, 8, 13, 8, 6, 3, 8, 6, 11, 6, 4, 1, 6, 4, 9, 4, 2, 6,
+    4, 2, 7, 2, 0, 4, 2, 0, 5, 0, 13, 2, 0, 21, 3, 21, 11, 0,
 ];
 const DSD_IY: [u8; 72] = [
-    1, 3, 5, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 5, 1, 3,
-    6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 7, 0, 2, 5, 1, 4, 7, 0, 3, 5, 2, 4, 7, 1, 3, 5,
+    1, 3, 5, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3, 6, 0, 2, 4, 1, 3,
+    6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 6, 0, 2, 5, 1, 3, 7, 0, 2, 5, 1, 4, 7, 0,
+    3, 5, 2, 4, 7, 1, 3, 5,
 ];
 const DSD_IZ: [u8; 72] = [
-    21, 19, 1, 21, 19, 9, 19, 17, 14, 19, 17, 7, 17, 15, 12, 17, 15, 5, 15, 13, 10, 15, 13, 3, 13, 11, 8, 13, 11, 1,
-    11, 9, 6, 11, 9, 14, 9, 7, 4, 9, 7, 12, 7, 5, 2, 7, 5, 10, 5, 3, 0, 5, 3, 8, 3, 1, 5, 3, 1, 6, 1, 14, 3, 1, 22,
-    4, 22, 12, 1, 22, 20, 2,
+    21, 19, 1, 21, 19, 9, 19, 17, 14, 19, 17, 7, 17, 15, 12, 17, 15, 5, 15, 13, 10, 15, 13, 3, 13,
+    11, 8, 13, 11, 1, 11, 9, 6, 11, 9, 14, 9, 7, 4, 9, 7, 12, 7, 5, 2, 7, 5, 10, 5, 3, 0, 5, 3, 8,
+    3, 1, 5, 3, 1, 6, 1, 14, 3, 1, 22, 4, 22, 12, 1, 22, 20, 2,
 ];
 
 /// Groups a 144-bit stream into 72 "dibits" (consecutive bit pairs) and scatters them into an
@@ -559,10 +600,15 @@ fn apply_dsd_interleave(bits: &[u8; 144], bit1_is_first: bool) -> [u32; 8] {
 }
 
 fn dsd_interleave_test(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: &[u64]) {
-    println!("\n-- dsd/mbelib real P25 Phase 1 IMBE OTA interleave test ({} unique frames) --", unique_frames.len());
+    println!(
+        "\n-- dsd/mbelib real P25 Phase 1 IMBE OTA interleave test ({} unique frames) --",
+        unique_frames.len()
+    );
     for &(reverse_bytes, lsb_first) in &BYTE_BIT_HYPOTHESES {
-        let bitstreams: Vec<[u8; 144]> =
-            unique_frames.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+        let bitstreams: Vec<[u8; 144]> = unique_frames
+            .iter()
+            .map(|f| frame_to_bits(f, reverse_bytes, lsb_first))
+            .collect();
         for &bit1_is_first in &[false, true] {
             let mut raw4 = 0usize;
             let mut dew4 = 0usize;
@@ -643,10 +689,15 @@ fn apply_tia_interleave(bits: &[u8; 144]) -> [u32; 8] {
 }
 
 fn tia_interleave_test(unique_frames: &[[u8; 18]], golay_bm: &[u64], hamming_bm: &[u64]) {
-    println!("\n-- Real TIA-102.BAAA-A Table 5-1 interleave test ({} unique frames) --", unique_frames.len());
+    println!(
+        "\n-- Real TIA-102.BAAA-A Table 5-1 interleave test ({} unique frames) --",
+        unique_frames.len()
+    );
     for &(reverse_bytes, lsb_first) in &BYTE_BIT_HYPOTHESES {
-        let bitstreams: Vec<[u8; 144]> =
-            unique_frames.iter().map(|f| frame_to_bits(f, reverse_bytes, lsb_first)).collect();
+        let bitstreams: Vec<[u8; 144]> = unique_frames
+            .iter()
+            .map(|f| frame_to_bits(f, reverse_bytes, lsb_first))
+            .collect();
         let mut raw4 = 0usize;
         let mut dew4 = 0usize;
         let mut dew7 = 0usize;
@@ -701,35 +752,57 @@ fn main() {
         println!("Replaying captured frames from {path}");
         tagged_frames = load_capture(path).unwrap_or_else(|e| panic!("failed to load {path}: {e}"));
     } else {
-        let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189".to_string());
+        let host = args
+            .get(1)
+            .cloned()
+            .unwrap_or_else(|| "192.168.10.189".to_string());
         let port: u16 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(2460);
         let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-        sock.connect((host.as_str(), port)).unwrap_or_else(|e| panic!("connect to {host}:{port}: {e}"));
+        sock.connect((host.as_str(), port))
+            .unwrap_or_else(|e| panic!("connect to {host}:{port}: {e}"));
         sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
         // Primary capture: the task-confirmed P25 FEC RATEP word.
-        sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+        sock.send(&build_control_ratep(RATEP_P25_FEC))
+            .expect("send RATEP config");
         let mut buf = [0u8; 256];
         let n = sock.recv(&mut buf).expect("RATEP config response");
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
         println!("RATEP(P25 FEC) config ack: type={ptype:#04x} payload={payload:02x?}");
-        let primary = capture_all(&sock, "ratep_p25_fec", &PRIMARY_TONES_HZ, &PRIMARY_AMPLITUDES);
+        let primary = capture_all(
+            &sock,
+            "ratep_p25_fec",
+            &PRIMARY_TONES_HZ,
+            &PRIMARY_AMPLITUDES,
+        );
         println!("Captured {} frames under RATEP(P25 FEC).", primary.len());
 
         // Secondary capture: RATET index 27 -- same 144-bit rate, different config path, checked in
         // case the two configs yield a different wire layout (a real, separate finding either way).
-        sock.send(&build_control_ratet(RATET_INDEX_27)).expect("send RATET config");
+        sock.send(&build_control_ratet(RATET_INDEX_27))
+            .expect("send RATET config");
         let n = sock.recv(&mut buf).expect("RATET config response");
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
         println!("RATET(27) config ack: type={ptype:#04x} payload={payload:02x?}");
-        let secondary = capture_all(&sock, "ratet_27", &SECONDARY_TONES_HZ, &SECONDARY_AMPLITUDES);
+        let secondary = capture_all(
+            &sock,
+            "ratet_27",
+            &SECONDARY_TONES_HZ,
+            &SECONDARY_AMPLITUDES,
+        );
         println!("Captured {} frames under RATET(27).", secondary.len());
 
-        save_capture(&save_path, &[("ratep_p25_fec", &primary), ("ratet_27", &secondary)])
-            .unwrap_or_else(|e| eprintln!("warning: failed to save capture to {save_path}: {e}"));
+        save_capture(
+            &save_path,
+            &[("ratep_p25_fec", &primary), ("ratet_27", &secondary)],
+        )
+        .unwrap_or_else(|e| eprintln!("warning: failed to save capture to {save_path}: {e}"));
         println!("Saved capture to {save_path} (replay with --replay {save_path}).");
 
-        for (tag, frame) in primary.into_iter().map(|f| ("ratep_p25_fec".to_string(), f)) {
+        for (tag, frame) in primary
+            .into_iter()
+            .map(|f| ("ratep_p25_fec".to_string(), f))
+        {
             tagged_frames.push((tag, frame));
         }
         for (tag, frame) in secondary.into_iter().map(|f| ("ratet_27".to_string(), f)) {
@@ -741,11 +814,20 @@ fn main() {
     let hamming_bm = build_hamming_bitmap();
 
     for tag in ["ratep_p25_fec", "ratet_27", "selftest_own_encoder"] {
-        let raw: Vec<[u8; 18]> = tagged_frames.iter().filter(|(t, _)| t == tag).map(|(_, f)| *f).collect();
+        let raw: Vec<[u8; 18]> = tagged_frames
+            .iter()
+            .filter(|(t, _)| t == tag)
+            .map(|(_, f)| *f)
+            .collect();
         if raw.is_empty() {
             continue;
         }
-        let unique: Vec<[u8; 18]> = raw.iter().copied().collect::<HashSet<_>>().into_iter().collect();
+        let unique: Vec<[u8; 18]> = raw
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
         println!(
             "\n=========================================================\nConfig: {tag} -- {} frames captured, {} unique\n=========================================================",
             raw.len(),

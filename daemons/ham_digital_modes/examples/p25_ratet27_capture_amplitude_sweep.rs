@@ -63,13 +63,18 @@ fn sawtooth(freq: f64, amp: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 

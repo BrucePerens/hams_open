@@ -39,7 +39,10 @@ fn harmonics_count_from_b0_matches_the_float_sibling_exactly_for_every_b0() {
 fn harmonics_count_from_b0_stays_within_the_specs_own_9_to_56_range() {
     for b0 in 0..=B0_MAX {
         let l_hat = harmonics_count_from_b0(b0);
-        assert!((9..=56).contains(&l_hat), "b0={b0}: L~={l_hat} out of range 9..=56");
+        assert!(
+            (9..=56).contains(&l_hat),
+            "b0={b0}: L~={l_hat} out of range 9..=56"
+        );
     }
 }
 

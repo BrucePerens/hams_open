@@ -55,8 +55,16 @@ fn sin_cos_q16_hit_the_four_cardinal_angles_exactly_at_full_scale() {
 fn sin_q16_never_exceeds_full_scale_magnitude() {
     for i in 0..10_000u32 {
         let phase = i.wrapping_mul(u32::MAX / 10_000);
-        assert!(sin_q16(phase).abs() <= 65536, "phase={phase}: sin_q16={}", sin_q16(phase));
-        assert!(cos_q16(phase).abs() <= 65536, "phase={phase}: cos_q16={}", cos_q16(phase));
+        assert!(
+            sin_q16(phase).abs() <= 65536,
+            "phase={phase}: sin_q16={}",
+            sin_q16(phase)
+        );
+        assert!(
+            cos_q16(phase).abs() <= 65536,
+            "phase={phase}: cos_q16={}",
+            cos_q16(phase)
+        );
     }
 }
 
@@ -71,7 +79,10 @@ fn sin_q16_squared_plus_cos_q16_squared_is_approximately_one() {
         let c = cos_q16(phase) as i64;
         let sum_sq = (s * s + c * c) >> 16; // back to Q16.16 after squaring doubled the scale
         let one = 1i64 << 16;
-        assert!((sum_sq - one).abs() <= 8, "phase={phase}: sin^2+cos^2={sum_sq}, expected {one}");
+        assert!(
+            (sum_sq - one).abs() <= 8,
+            "phase={phase}: sin^2+cos^2={sum_sq}, expected {one}"
+        );
     }
 }
 
@@ -152,13 +163,20 @@ fn exp2_q16_degrades_gracefully_rather_than_incorrectly_at_extreme_magnitudes() 
         // that (the round-to-nearest threshold) has no closer representable value than 0, so
         // rounding down to exactly 0 is the *correct* fixed-point answer, not underflow-as-bug.
         if expected_real < 0.5 / 65536.0 {
-            assert_eq!(actual_real, 0.0, "y_real={y_real}: expected_real={expected_real} rounds to 0 in Q16.16");
+            assert_eq!(
+                actual_real, 0.0,
+                "y_real={y_real}: expected_real={expected_real} rounds to 0 in Q16.16"
+            );
             continue;
         }
         // Likewise, a true result above i32::MAX's own Q16.16 range (~32768.0) genuinely cannot be
         // represented -- saturating to i32::MAX is the correct answer, not a large relative error.
         if expected_real > i32::MAX as f64 / 65536.0 {
-            assert_eq!(actual, i32::MAX, "y_real={y_real}: expected_real={expected_real} saturates in Q16.16");
+            assert_eq!(
+                actual,
+                i32::MAX,
+                "y_real={y_real}: expected_real={expected_real} saturates in Q16.16"
+            );
             continue;
         }
         let relative_error = ((actual_real - expected_real) / expected_real).abs();

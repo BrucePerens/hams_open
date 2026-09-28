@@ -8,9 +8,9 @@
 //! relative to the noise peaks already tested, and whether `g3` correlates with it.
 //!
 //! Usage: `cargo run --release --example p25_ratet27_probe_dtx_voice_active -- <host:port>`
-use ham_digital_modes::ambe::general::fec::golay_decode;
 use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::general::fec::golay_decode;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -82,7 +82,9 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
     let mut state = seed;
     (0..FRAME_SAMPLES)
         .map(|_| {
-            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((state >> 33) as f64 / (1u64 << 31) as f64) - 1.0;
             (unit * peak) as i16
         })
@@ -91,21 +93,28 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
-    sock.send(&build_control_ecmode(DTX_ENABLE_BIT | TD_ENABLE_BIT)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(DTX_ENABLE_BIT | TD_ENABLE_BIT))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
-    sock.send(&build_control_chanfmt(0b01)).expect("send CHANFMT config");
+    sock.send(&build_control_chanfmt(0b01))
+        .expect("send CHANFMT config");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -127,7 +136,11 @@ fn main() {
     let noise_peaks: [f64; 10] = [0.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 75.0, 100.0, 150.0];
 
     for &peak in &noise_peaks {
-        let samples = if peak == 0.0 { vec![0i16; FRAME_SAMPLES] } else { lcg_noise(42, peak) };
+        let samples = if peak == 0.0 {
+            vec![0i16; FRAME_SAMPLES]
+        } else {
+            lcg_noise(42, peak)
+        };
         for _ in 0..SETTLING_FRAMES {
             let n = send_recv_retrying(&sock, &mut buf, &build_speech(&samples));
             parse_packet(&buf[..n]).expect("valid packet");
@@ -159,9 +172,7 @@ fn main() {
                 }
             }
             let (g3, _) = golay_decode(g3_received);
-            println!(
-                "peak={peak:6.1} frame={i} VOICE_ACTIVE={voice_active} g0={g0:5} g3={g3:5}"
-            );
+            println!("peak={peak:6.1} frame={i} VOICE_ACTIVE={voice_active} g0={g0:5} g3={g3:5}");
         }
     }
 }

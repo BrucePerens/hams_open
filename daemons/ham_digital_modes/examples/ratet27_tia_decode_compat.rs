@@ -11,8 +11,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_tia_decode_compat -- <host:port>`
 
-use ham_digital_modes::ambe::float::tia_102_baba::encoder::Encoder;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::encoder::Encoder;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -86,8 +86,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -118,9 +125,17 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
-
 fn c_to_wire_bytes(c: &[u32; 8]) -> [u8; FRAME_BYTES] {
-    let blocks = [Block::Golay { index: 0 }, Block::Golay { index: 1 }, Block::Golay { index: 2 }, Block::Golay { index: 3 }, Block::Hamming { index: 0 }, Block::Hamming { index: 1 }, Block::Hamming { index: 2 }, Block::Raw];
+    let blocks = [
+        Block::Golay { index: 0 },
+        Block::Golay { index: 1 },
+        Block::Golay { index: 2 },
+        Block::Golay { index: 3 },
+        Block::Hamming { index: 0 },
+        Block::Hamming { index: 1 },
+        Block::Hamming { index: 2 },
+        Block::Raw,
+    ];
     let mut bits = [false; 144];
     for (i, &block) in blocks.iter().enumerate() {
         let members = block_wire_members(block);
@@ -143,7 +158,12 @@ fn period_of(x: &[f64]) -> (usize, f64) {
     let r0: f64 = x.iter().map(|v| v * v).sum::<f64>().max(1e-9);
     let mut best = (0usize, f64::NEG_INFINITY);
     for lag in 18..=140usize {
-        let r: f64 = x[..x.len() - lag].iter().zip(&x[lag..]).map(|(a, b)| a * b).sum::<f64>() / r0;
+        let r: f64 = x[..x.len() - lag]
+            .iter()
+            .zip(&x[lag..])
+            .map(|(a, b)| a * b)
+            .sum::<f64>()
+            / r0;
         if r > best.1 {
             best = (lag, r);
         }
@@ -152,7 +172,9 @@ fn period_of(x: &[f64]) -> (usize, f64) {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
@@ -168,7 +190,14 @@ fn main() {
     println!("input period | TIA-encoder frames -> chip decoder: output period (autocorr, ac) ");
     for period in [40.0f64, 50.0, 60.0, 70.0, 90.0] {
         let signal: Vec<f64> = (0..160 * 40)
-            .map(|i| (1..=8).map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin()).sum())
+            .map(|i| {
+                (1..=8)
+                    .map(|h| {
+                        1500.0 / h as f64
+                            * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin()
+                    })
+                    .sum()
+            })
             .collect();
         let mut enc = Encoder::new_chip_wire();
         enc.push_samples(&signal);

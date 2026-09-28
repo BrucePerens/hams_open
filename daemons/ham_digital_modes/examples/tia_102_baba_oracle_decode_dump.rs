@@ -8,8 +8,8 @@
 //! Usage: `cargo run --release --example tia_102_baba_oracle_decode_dump -- <dump.txt> <out.params> <out.raw16>`
 
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
 use ham_digital_modes::ambe::float::tia_102_baba::encode_code_vectors;
+use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
 use std::fmt::Write as _;
 
 fn main() {
@@ -26,8 +26,13 @@ fn main() {
             pcm_state = DecoderState::new();
             continue;
         }
-        let Some(rest) = line.strip_prefix("U ") else { continue };
-        let v: Vec<u32> = rest.split_whitespace().map(|x| u32::from_str_radix(x, 16).unwrap()).collect();
+        let Some(rest) = line.strip_prefix("U ") else {
+            continue;
+        };
+        let v: Vec<u32> = rest
+            .split_whitespace()
+            .map(|x| u32::from_str_radix(x, 16).unwrap())
+            .collect();
         let c = encode_code_vectors(std::array::from_fn(|i| v[i]));
         match params_state.decode_parameters(c) {
             Some(FrameOutcome::Decoded(p)) => {
@@ -37,7 +42,8 @@ fn main() {
                 }
                 params.push('\n');
                 let _ = write!(params, "F {k} MENH");
-                for &m in &enhance_spectral_amplitudes(&p.reconstructed_amplitudes, p.omega0_tilde) {
+                for &m in &enhance_spectral_amplitudes(&p.reconstructed_amplitudes, p.omega0_tilde)
+                {
                     let _ = write!(params, " {m:.5}");
                 }
                 params.push('\n');

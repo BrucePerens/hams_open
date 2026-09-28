@@ -65,18 +65,25 @@ fn rms_normalized_sawtooth(freq: f64) -> Vec<i16> {
         .collect();
     let rms: f64 = (raw.iter().map(|&x| x * x).sum::<f64>() / raw.len() as f64).sqrt();
     let scale = TARGET_RMS / rms;
-    raw.iter().map(|&x| (x * scale).clamp(-32000.0, 32000.0) as i16).collect()
+    raw.iter()
+        .map(|&x| (x * scale).clamp(-32000.0, 32000.0) as i16)
+        .collect()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
@@ -98,9 +105,12 @@ fn main() {
     // Three matched-5Hz-spacing test points around the 202.6Hz L_hat 18->17 boundary, plus two
     // more boundary regions for replication (155.4Hz L_hat 24->23, 271.2Hz L_hat 13->12).
     let test_points: [f64; 9] = [
-        195.0, 200.0, 205.0, // around 202.6 boundary: (195,200) same L_hat=18; (200,205) crosses
-        150.0, 155.0, 160.0, // around 155.4 boundary: (150,155) same L_hat=24; (155,160) crosses
-        266.0, 271.0, 276.0, // around 271.2 boundary: (266,271) same L_hat=13; (271,276) crosses
+        195.0, 200.0,
+        205.0, // around 202.6 boundary: (195,200) same L_hat=18; (200,205) crosses
+        150.0, 155.0,
+        160.0, // around 155.4 boundary: (150,155) same L_hat=24; (155,160) crosses
+        266.0, 271.0,
+        276.0, // around 271.2 boundary: (266,271) same L_hat=13; (271,276) crosses
     ];
 
     for &freq in &test_points {

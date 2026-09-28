@@ -93,11 +93,13 @@ fn main() {
         .unwrap_or_else(|| "tools/chip_noise/table_65536_fresh.i16".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC])).unwrap();
+    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC]))
+        .unwrap();
     let n = sock.recv(&mut buf).unwrap();
     parse_packet(&buf[..n]).unwrap();
     // PKT_INIT (0x0B), decoder flag (bit 1 -> value 2): synchronizes the noise generator (finding 1
@@ -106,7 +108,8 @@ fn main() {
     sock.send(&control(0x0B, &[0x02])).unwrap();
     let n = sock.recv(&mut buf).unwrap();
     println!("PKT_INIT response: {:02x?}", &buf[..n.min(12)]);
-    sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
     while sock.recv(&mut buf).is_ok() {}
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 

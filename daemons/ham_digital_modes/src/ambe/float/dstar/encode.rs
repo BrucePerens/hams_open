@@ -112,9 +112,20 @@ mod tests {
 
     #[test]
     fn c0_field_has_even_parity_like_the_chips_extended_golay_code() {
-        for d in [0u64, 1, 0x1_FFFF_FFFF_FFFF, 0x0123_4567_89AB, 0x1555_5555_5555, 0x0AAA_AAAA_AAAA] {
+        for d in [
+            0u64,
+            1,
+            0x1_FFFF_FFFF_FFFF,
+            0x0123_4567_89AB,
+            0x1555_5555_5555,
+            0x0AAA_AAAA_AAAA,
+        ] {
             let frame = build_frame(d & ((1u64 << 49) - 1));
-            assert_eq!(((frame >> 48) & 0xFF_FFFF).count_ones() % 2, 0, "d = {d:#x}");
+            assert_eq!(
+                ((frame >> 48) & 0xFF_FFFF).count_ones() % 2,
+                0,
+                "d = {d:#x}"
+            );
         }
     }
     use crate::ambe::float::dstar::decode::{extract_raw_parameters, parse_frame};
@@ -201,7 +212,10 @@ mod tests {
 #[cfg(test)]
 mod tone_tests {
     use super::*;
-    use crate::ambe::float::dstar::decode::{classify_b0, classify_tone_index, decode_tone, dtmf_digit_from_tone_index, parse_frame, FrameKind, ToneKind};
+    use crate::ambe::float::dstar::decode::{
+        classify_b0, classify_tone_index, decode_tone, dtmf_digit_from_tone_index, parse_frame,
+        FrameKind, ToneKind,
+    };
 
     #[test]
     fn every_tone_index_and_volume_round_trips() {
@@ -209,14 +223,19 @@ mod tone_tests {
             for &volume in &[0u32, 1, 37, 128, 255] {
                 let d = pack_tone_parameters(index, volume);
                 let payload = decode_tone(d);
-                assert_eq!((payload.index, payload.volume), (index, volume), "index {index} volume {volume}");
+                assert_eq!(
+                    (payload.index, payload.volume),
+                    (index, volume),
+                    "index {index} volume {volume}"
+                );
             }
         }
     }
 
     #[test]
     fn a_built_tone_frame_is_error_free_classified_as_a_tone_and_decodes() {
-        for (index, expect_single_hz) in [(6u32, Some(187.5)), (32, Some(1000.0)), (144 - 16, None)] {
+        for (index, expect_single_hz) in [(6u32, Some(187.5)), (32, Some(1000.0)), (144 - 16, None)]
+        {
             let frame = build_tone_frame(index, 200);
             let parsed = parse_frame(frame);
             assert_eq!(parsed.epsilon_c0 + parsed.epsilon_c1, 0);
@@ -226,7 +245,9 @@ mod tone_tests {
             assert_eq!(payload.index, index);
             match (classify_tone_index(payload.index), expect_single_hz) {
                 (ToneKind::Single { hz }, Some(want)) => assert!((hz - want).abs() < 1e-9),
-                (ToneKind::Dual, None) => assert!(dtmf_digit_from_tone_index(payload.index).is_some()),
+                (ToneKind::Dual, None) => {
+                    assert!(dtmf_digit_from_tone_index(payload.index).is_some())
+                }
                 other => panic!("unexpected classification {other:?}"),
             }
         }

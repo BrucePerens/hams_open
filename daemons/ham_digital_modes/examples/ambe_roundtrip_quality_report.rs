@@ -18,7 +18,10 @@ const FILES: [&str; 4] = [
 
 fn read_wav(path: &str) -> Vec<i16> {
     let bytes = std::fs::read(path).expect("wav");
-    bytes[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    bytes[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn frame_db(x: &[f64]) -> f64 {
@@ -29,10 +32,21 @@ fn spectrum_db(x: &[f64]) -> Vec<f64> {
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(256);
     let mut b: Vec<Complex64> = (0..256)
-        .map(|i| Complex64::new(if i < x.len() { x[i] * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 255.0).cos()) } else { 0.0 }, 0.0))
+        .map(|i| {
+            Complex64::new(
+                if i < x.len() {
+                    x[i] * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 255.0).cos())
+                } else {
+                    0.0
+                },
+                0.0,
+            )
+        })
         .collect();
     fft.process(&mut b);
-    (3..122).map(|k| 10.0 * (b[k].norm_sqr() + 1e-3).log10()).collect()
+    (3..122)
+        .map(|k| 10.0 * (b[k].norm_sqr() + 1e-3).log10())
+        .collect()
 }
 
 /// (log-energy correlation, log-spectral distance dB, level offset dB) after searching lags of up to +-400 samples.
@@ -51,7 +65,10 @@ fn metrics(input: &[f64], output: &[f64]) -> (f64, f64, f64) {
         if a.len() < 20 {
             continue;
         }
-        let (ma, mb) = (a.iter().sum::<f64>() / a.len() as f64, b.iter().sum::<f64>() / b.len() as f64);
+        let (ma, mb) = (
+            a.iter().sum::<f64>() / a.len() as f64,
+            b.iter().sum::<f64>() / b.len() as f64,
+        );
         let (mut c, mut va, mut vb) = (0.0, 0.0, 0.0);
         for (x, y) in a.iter().zip(&b) {
             c += (x - ma) * (y - mb);
@@ -70,8 +87,17 @@ fn metrics(input: &[f64], output: &[f64]) -> (f64, f64, f64) {
         if j < 0 || j as usize + 256 > output.len() || frame_db(&input[i..i + 160]) < 30.0 {
             continue;
         }
-        let (si, so) = (spectrum_db(&input[i..i + 256]), spectrum_db(&output[j as usize..j as usize + 256]));
-        lsd += (si.iter().zip(&so).map(|(x, y)| (x - y).powi(2)).sum::<f64>() / si.len() as f64).sqrt();
+        let (si, so) = (
+            spectrum_db(&input[i..i + 256]),
+            spectrum_db(&output[j as usize..j as usize + 256]),
+        );
+        lsd += (si
+            .iter()
+            .zip(&so)
+            .map(|(x, y)| (x - y).powi(2))
+            .sum::<f64>()
+            / si.len() as f64)
+            .sqrt();
         off += frame_db(&output[j as usize..j as usize + 160]) - frame_db(&input[i..i + 160]);
         n += 1;
     }
@@ -93,7 +119,10 @@ fn dstar_float(pcm: &[i16]) -> Vec<f64> {
     }
     frames.extend(e.finish());
     let mut d = float::dstar::synthesis::DStarSynthesisDecoder::new();
-    frames.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect()
+    frames
+        .iter()
+        .flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160]))
+        .collect()
 }
 fn dstar_fixed(pcm: &[i16]) -> Vec<f64> {
     let mut e = fixed::dstar::encoder::Encoder::new();
@@ -104,7 +133,10 @@ fn dstar_fixed(pcm: &[i16]) -> Vec<f64> {
     }
     frames.extend(e.finish());
     let mut d = fixed::dstar::synthesis::DStarSynthesisDecoder::new();
-    frames.iter().flat_map(|&f| q16(&d.decode_frame(f).unwrap_or([0; 160]))).collect()
+    frames
+        .iter()
+        .flat_map(|&f| q16(&d.decode_frame(f).unwrap_or([0; 160])))
+        .collect()
 }
 #[cfg(feature = "ambe_plus_2")]
 fn a2_float(pcm: &[i16]) -> Vec<f64> {
@@ -116,7 +148,10 @@ fn a2_float(pcm: &[i16]) -> Vec<f64> {
     }
     frames.extend(e.finish());
     let mut d = float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder::new();
-    frames.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect()
+    frames
+        .iter()
+        .flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160]))
+        .collect()
 }
 #[cfg(feature = "ambe_plus_2")]
 fn a2_fixed(pcm: &[i16]) -> Vec<f64> {
@@ -128,7 +163,10 @@ fn a2_fixed(pcm: &[i16]) -> Vec<f64> {
     }
     frames.extend(e.finish());
     let mut d = fixed::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder::new();
-    frames.iter().flat_map(|&f| q16(&d.decode_frame(f).unwrap_or([0; 160]))).collect()
+    frames
+        .iter()
+        .flat_map(|&f| q16(&d.decode_frame(f).unwrap_or([0; 160])))
+        .collect()
 }
 fn tia_float(pcm: &[i16]) -> Vec<f64> {
     let mut e = float::tia_102_baba::encoder::Encoder::new();
@@ -139,7 +177,10 @@ fn tia_float(pcm: &[i16]) -> Vec<f64> {
     }
     frames.extend(e.finish());
     let mut d = float::tia_102_baba::decode::DecoderState::new();
-    frames.iter().flat_map(|&c| d.decode_frame(c).unwrap_or([0.0; 160])).collect()
+    frames
+        .iter()
+        .flat_map(|&c| d.decode_frame(c).unwrap_or([0.0; 160]))
+        .collect()
 }
 fn tia_fixed(pcm: &[i16]) -> Vec<f64> {
     let mut e = fixed::tia_102_baba::encoder::Encoder::new();
@@ -150,15 +191,29 @@ fn tia_fixed(pcm: &[i16]) -> Vec<f64> {
     }
     frames.extend(e.finish());
     let mut d = fixed::tia_102_baba::decode::DecoderState::new();
-    frames.iter().flat_map(|&c| q16(&d.decode_frame(c).unwrap_or([0; 160]))).collect()
+    frames
+        .iter()
+        .flat_map(|&c| q16(&d.decode_frame(c).unwrap_or([0; 160])))
+        .collect()
 }
 
 fn main() {
-    let frames: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(600);
+    let frames: usize = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(600);
     #[allow(unused_mut)]
-    let mut codecs: Vec<Codec> = vec![("D-STAR float", dstar_float), ("D-STAR fixed", dstar_fixed), ("TIA-102.BABA float", tia_float), ("TIA-102.BABA fixed", tia_fixed)];
+    let mut codecs: Vec<Codec> = vec![
+        ("D-STAR float", dstar_float),
+        ("D-STAR fixed", dstar_fixed),
+        ("TIA-102.BABA float", tia_float),
+        ("TIA-102.BABA fixed", tia_fixed),
+    ];
     #[cfg(feature = "ambe_plus_2")]
-    codecs.extend([("AMBE+2 float", a2_float as fn(&[i16]) -> Vec<f64>), ("AMBE+2 fixed", a2_fixed)]);
+    codecs.extend([
+        ("AMBE+2 float", a2_float as fn(&[i16]) -> Vec<f64>),
+        ("AMBE+2 fixed", a2_fixed),
+    ]);
     println!("| codec | speaker | energy corr | spectral distance dB | level offset dB |\n|---|---|---|---|---|");
     for (name, f) in &codecs {
         let mut sums = (0.0, 0.0, 0.0);
@@ -168,9 +223,17 @@ fn main() {
             let input: Vec<f64> = pcm.iter().map(|&s| s as f64).collect();
             let out = f(pcm);
             let (c, l, o) = metrics(&input, &out);
-            println!("| {name} | {} | {c:.4} | {l:.2} | {o:+.2} |", ["0010", "0011", "0030", "0031"][k]);
+            println!(
+                "| {name} | {} | {c:.4} | {l:.2} | {o:+.2} |",
+                ["0010", "0011", "0030", "0031"][k]
+            );
             sums = (sums.0 + c, sums.1 + l, sums.2 + o);
         }
-        println!("| **{name}** | mean | {:.4} | {:.2} | {:+.2} |", sums.0 / 4.0, sums.1 / 4.0, sums.2 / 4.0);
+        println!(
+            "| **{name}** | mean | {:.4} | {:.2} | {:+.2} |",
+            sums.0 / 4.0,
+            sums.1 / 4.0,
+            sums.2 / 4.0
+        );
     }
 }

@@ -48,8 +48,16 @@ const CONFIRMED_PLUS_UNVERIFIED_32: [usize; 6] = [8, 32, 68, 92, 103, 127];
 fn raw_k_to_bits_index(k: usize, reverse_bytes: bool, lsb_first: bool) -> usize {
     let source_byte = k / 8;
     let k_bit_from_msb = k % 8;
-    let byte_out = if reverse_bytes { 17 - source_byte } else { source_byte };
-    let bitpos_out = if lsb_first { 7 - k_bit_from_msb } else { k_bit_from_msb };
+    let byte_out = if reverse_bytes {
+        17 - source_byte
+    } else {
+        source_byte
+    };
+    let bitpos_out = if lsb_first {
+        7 - k_bit_from_msb
+    } else {
+        k_bit_from_msb
+    };
     byte_out * 8 + bitpos_out
 }
 
@@ -68,7 +76,11 @@ fn block_and_index_natural(j: usize, index_reversed: bool) -> (usize, usize) {
     for (block, &size) in BLOCK_SIZES.iter().enumerate() {
         if j < acc + size {
             let offset = j - acc;
-            let index = if index_reversed { offset } else { size - 1 - offset };
+            let index = if index_reversed {
+                offset
+            } else {
+                size - 1 - offset
+            };
             return (block, index);
         }
         acc += size;
@@ -76,7 +88,10 @@ fn block_and_index_natural(j: usize, index_reversed: bool) -> (usize, usize) {
     unreachable!("j={j} out of range");
 }
 
-fn check_all_same_hamming_block(positions: &[usize], mapper: impl Fn(usize) -> (usize, usize)) -> Option<(usize, Vec<usize>)> {
+fn check_all_same_hamming_block(
+    positions: &[usize],
+    mapper: impl Fn(usize) -> (usize, usize),
+) -> Option<(usize, Vec<usize>)> {
     let mapped: Vec<(usize, usize)> = positions.iter().map(|&k| mapper(k)).collect();
     let block0 = mapped[0].0;
     if (4..=6).contains(&block0) && mapped.iter().all(|&(b, _)| b == block0) {
@@ -92,7 +107,9 @@ fn main() {
 
     for &dibit_swap in &[false, true] {
         for &index_reversed in &[false, true] {
-            for &(reverse_bytes, lsb_first) in &[(false, false), (false, true), (true, false), (true, true)] {
+            for &(reverse_bytes, lsb_first) in
+                &[(false, false), (false, true), (true, false), (true, true)]
+            {
                 let mapper = |k: usize| -> (usize, usize) {
                     let j = raw_k_to_bits_index(k, reverse_bytes, lsb_first);
                     block_and_index_table(j, dibit_swap, index_reversed)
@@ -103,14 +120,25 @@ fn main() {
                         "[TIA table] dibit_swap={dibit_swap:<5} index_reversed={index_reversed:<5} reverse_bytes={reverse_bytes:<5} lsb_first={lsb_first:<5} -> ALL 5 IN BLOCK {block}, indices={indices:?}   <=== MATCH"
                     );
                     let with32 = mapper(32);
-                    println!("    bit 32 (unverified sweep hint) -> block={}, index={}{}", with32.0, with32.1, if with32.0 == block { "  (also in this block!)" } else { "" });
+                    println!(
+                        "    bit 32 (unverified sweep hint) -> block={}, index={}{}",
+                        with32.0,
+                        with32.1,
+                        if with32.0 == block {
+                            "  (also in this block!)"
+                        } else {
+                            ""
+                        }
+                    );
                 }
             }
         }
     }
 
     for &index_reversed in &[false, true] {
-        for &(reverse_bytes, lsb_first) in &[(false, false), (false, true), (true, false), (true, true)] {
+        for &(reverse_bytes, lsb_first) in
+            &[(false, false), (false, true), (true, false), (true, true)]
+        {
             let mapper = |k: usize| -> (usize, usize) {
                 let j = raw_k_to_bits_index(k, reverse_bytes, lsb_first);
                 block_and_index_natural(j, index_reversed)
@@ -121,7 +149,16 @@ fn main() {
                     "[natural order] index_reversed={index_reversed:<5} reverse_bytes={reverse_bytes:<5} lsb_first={lsb_first:<5} -> ALL 5 IN BLOCK {block}, indices={indices:?}   <=== MATCH"
                 );
                 let with32 = mapper(32);
-                println!("    bit 32 (unverified sweep hint) -> block={}, index={}{}", with32.0, with32.1, if with32.0 == block { "  (also in this block!)" } else { "" });
+                println!(
+                    "    bit 32 (unverified sweep hint) -> block={}, index={}{}",
+                    with32.0,
+                    with32.1,
+                    if with32.0 == block {
+                        "  (also in this block!)"
+                    } else {
+                        ""
+                    }
+                );
             }
         }
     }
@@ -132,12 +169,17 @@ fn main() {
         println!("Falling back to per-position block/index dump across all conventions, for manual inspection:\n");
         for &dibit_swap in &[false, true] {
             for &index_reversed in &[false, true] {
-                for &(reverse_bytes, lsb_first) in &[(false, false), (false, true), (true, false), (true, true)] {
+                for &(reverse_bytes, lsb_first) in
+                    &[(false, false), (false, true), (true, false), (true, true)]
+                {
                     let mapper = |k: usize| -> (usize, usize) {
                         let j = raw_k_to_bits_index(k, reverse_bytes, lsb_first);
                         block_and_index_table(j, dibit_swap, index_reversed)
                     };
-                    let mapped: Vec<(usize, usize)> = CONFIRMED_PLUS_UNVERIFIED_32.iter().map(|&k| mapper(k)).collect();
+                    let mapped: Vec<(usize, usize)> = CONFIRMED_PLUS_UNVERIFIED_32
+                        .iter()
+                        .map(|&k| mapper(k))
+                        .collect();
                     println!(
                         "[TIA table] swap={dibit_swap:<5} idxrev={index_reversed:<5} revb={reverse_bytes:<5} lsb={lsb_first:<5} -> {:?}",
                         CONFIRMED_PLUS_UNVERIFIED_32.iter().zip(mapped.iter()).map(|(&k, &(b, i))| format!("{k}->({b},{i})")).collect::<Vec<_>>()

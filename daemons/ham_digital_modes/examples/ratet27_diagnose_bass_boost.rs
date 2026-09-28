@@ -12,8 +12,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_bass_boost -- <host:port>`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -88,8 +88,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -137,14 +144,17 @@ fn bin_for_hz(hz: f64, fft_len: usize, sample_rate: f64) -> usize {
     ((hz * fft_len as f64 / sample_rate).round() as usize).min(fft_len / 2)
 }
 
-
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send");
     let n = sock.recv(&mut buf).expect("resp");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -174,12 +184,29 @@ fn main() {
         let c = wire_bytes_to_c(&wb);
         let n = send_recv_retrying(&sock, &mut buf, &build_channel(p));
         let (_, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        let chip: Vec<f64> = parse_speech_payload(payload).iter().map(|&s| s as f64).collect();
+        let chip: Vec<f64> = parse_speech_payload(payload)
+            .iter()
+            .map(|&s| s as f64)
+            .collect();
         // Parameters (for f0) come from a separate params pass below; decode_frame gives float PCM.
-        let float = dec.decode_frame(c).map(|f| f.to_vec()).unwrap_or_else(|| vec![0.0; FRAME_SAMPLES]);
-        let input: Vec<f64> = pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES].iter().map(|&s| s as f64).collect();
+        let float = dec
+            .decode_frame(c)
+            .map(|f| f.to_vec())
+            .unwrap_or_else(|| vec![0.0; FRAME_SAMPLES]);
+        let input: Vec<f64> = pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES]
+            .iter()
+            .map(|&s| s as f64)
+            .collect();
         let hann = |v: &[f64]| -> Vec<f64> {
-            v.iter().enumerate().map(|(k, &s)| s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * k as f64 / (v.len() as f64 - 1.0)).cos())).collect()
+            v.iter()
+                .enumerate()
+                .map(|(k, &s)| {
+                    s * (0.5
+                        - 0.5
+                            * (2.0 * std::f64::consts::PI * k as f64 / (v.len() as f64 - 1.0))
+                                .cos())
+                })
+                .collect()
         };
         let cm = fft_magnitude(&hann(&chip), FFT_LEN);
         let fm = fft_magnitude(&hann(&float), FFT_LEN);
@@ -204,7 +231,10 @@ fn main() {
             let f0 = params.omega0_tilde * SR / (2.0 * std::f64::consts::PI);
             let n = send_recv_retrying(&sock, &mut sock_buf, &build_channel(p));
             let (_, payload) = parse_packet(&sock_buf[..n]).expect("valid packet");
-            let chip: Vec<f64> = parse_speech_payload(payload).iter().map(|&s| s as f64).collect();
+            let chip: Vec<f64> = parse_speech_payload(payload)
+                .iter()
+                .map(|&s| s as f64)
+                .collect();
             let cm = fft_magnitude(&chip, FFT_LEN);
             let total: f64 = cm[..half].iter().map(|m| m * m).sum();
             let cut = bin_for_hz(0.8 * f0, FFT_LEN, SR);
@@ -223,7 +253,9 @@ fn main() {
         let f0 = if let Some(FrameOutcome::Decoded(params)) = pd2.decode_parameters(c) {
             pd2.advance_history(&params);
             Some(params.omega0_tilde * SR / (2.0 * std::f64::consts::PI))
-        } else { None };
+        } else {
+            None
+        };
         let pcm_f = fd.decode_frame(c);
         if let (Some(f0), Some(pcm_f)) = (f0, pcm_f) {
             let fm = fft_magnitude(&pcm_f, FFT_LEN);
@@ -236,17 +268,35 @@ fn main() {
     }
 
     println!("Long-term average power spectrum (dB, relative), per band:");
-    println!("{:>12} {:>9} {:>9} {:>9} {:>11} {:>11}", "band Hz", "input", "chip", "float", "chip/float", "chip/input");
-    let edges = [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 4000.0];
+    println!(
+        "{:>12} {:>9} {:>9} {:>9} {:>11} {:>11}",
+        "band Hz", "input", "chip", "float", "chip/float", "chip/input"
+    );
+    let edges = [
+        0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 700.0, 1000.0, 1500.0, 2000.0, 3000.0, 4000.0,
+    ];
     let band = |psd: &[f64], lo: f64, hi: f64| -> f64 {
         let a = bin_for_hz(lo, FFT_LEN, SR);
         let b = bin_for_hz(hi, FFT_LEN, SR).max(a + 1);
         psd[a..b.min(half)].iter().sum::<f64>()
     };
     for w in edges.windows(2) {
-        let (i, c, f) = (band(&in_psd, w[0], w[1]), band(&chip_psd, w[0], w[1]), band(&float_psd, w[0], w[1]));
+        let (i, c, f) = (
+            band(&in_psd, w[0], w[1]),
+            band(&chip_psd, w[0], w[1]),
+            band(&float_psd, w[0], w[1]),
+        );
         let db = |x: f64| 10.0 * x.max(1e-12).log10();
-        println!("{:>5.0}-{:<5.0} {:>9.1} {:>9.1} {:>9.1} {:>+11.1} {:>+11.1}", w[0], w[1], db(i), db(c), db(f), db(c) - db(f), db(c) - db(i));
+        println!(
+            "{:>5.0}-{:<5.0} {:>9.1} {:>9.1} {:>9.1} {:>+11.1} {:>+11.1}",
+            w[0],
+            w[1],
+            db(i),
+            db(c),
+            db(f),
+            db(c) - db(f),
+            db(c) - db(i)
+        );
     }
     let avg = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
     println!("\nEnergy below 0.8*f0 (fraction of frame): chip {:.4}, float {:.4} over {} / {} decoded frames",

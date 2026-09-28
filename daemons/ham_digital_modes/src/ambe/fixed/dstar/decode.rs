@@ -17,7 +17,7 @@ use crate::ambe::fixed::general::mbe_speech::{
     dequantize_speech, MbeDecoderState, RawSpeechParameters, SpeechParameters, SpeechTables,
 };
 use crate::ambe::float::dstar::decode::FrameKind;
-use crate::ambe::float::dstar::tables::{L_TABLE, LMPRBL, VUV};
+use crate::ambe::float::dstar::tables::{LMPRBL, L_TABLE, VUV};
 
 // Already pure integer in the float sibling -- reused directly, not duplicated.
 pub use crate::ambe::float::dstar::decode::{
@@ -34,14 +34,18 @@ pub enum ToneKind {
     Invalid,
     /// `hz_q16` is exact, not approximated -- `index * HZ_PER_INDEX_Q16_16` has no rounding error
     /// beyond `HZ_PER_INDEX_Q16_16`'s own (exact) representation of `31.25`.
-    Single { hz_q16: i32 },
+    Single {
+        hz_q16: i32,
+    },
     Dual,
 }
 
 /// The fixed-point equivalent of `ambe::float::dstar::decode::classify_tone_index`.
 pub fn classify_tone_index(index: u32) -> ToneKind {
     match index {
-        5..=122 => ToneKind::Single { hz_q16: (index as i32) * HZ_PER_INDEX_Q16_16 },
+        5..=122 => ToneKind::Single {
+            hz_q16: (index as i32) * HZ_PER_INDEX_Q16_16,
+        },
         128..=163 => ToneKind::Dual,
         _ => ToneKind::Invalid,
     }

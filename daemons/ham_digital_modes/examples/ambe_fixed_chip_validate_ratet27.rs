@@ -36,12 +36,12 @@
 //!
 //! Usage: `cargo run --release --example ambe_fixed_chip_validate_ratet27 -- <host:port>`
 
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::fixed::tia_102_baba::enhancement::enhance_spectral_amplitudes_q16;
 use ham_digital_modes::ambe::fixed::tia_102_baba::prediction::INITIAL_L_HAT_PREV as FIXED_INITIAL_L_HAT_PREV;
 use ham_digital_modes::ambe::fixed::tia_102_baba::reconstruct::reconstruct_spectral_amplitudes_q16;
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
-use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -102,8 +102,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 512], pkt: &[u8]) -> usiz
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 /// Extracts `decode_parameters`'s own `c_hat_0..c_hat_7` domain -- the 8 raw, pre-FEC-decode code
 /// vectors -- directly from the DVSI chip's raw UDP wire bytes (MSB-first bits per byte, the same
@@ -146,13 +153,17 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -210,7 +221,8 @@ fn main() {
                     r_m0_min = r_m0_min.min(r_m0);
                     r_m0_max = r_m0_max.max(r_m0);
                     r_m0_sum += r_m0;
-                    let gain_values: [u32; 5] = std::array::from_fn(|idx| params.bits.gain_vector[idx].0);
+                    let gain_values: [u32; 5] =
+                        std::array::from_fn(|idx| params.bits.gain_vector[idx].0);
                     let higher_order_values: Vec<u32> =
                         params.bits.higher_order.iter().map(|&(v, _)| v).collect();
 
@@ -238,8 +250,11 @@ fn main() {
                                     fixed_amplitudes.len()
                                 ));
                             } else {
-                                for (h, (&float_ml, &fixed_ml_q16)) in
-                                    params.reconstructed_amplitudes.iter().zip(fixed_amplitudes.iter()).enumerate()
+                                for (h, (&float_ml, &fixed_ml_q16)) in params
+                                    .reconstructed_amplitudes
+                                    .iter()
+                                    .zip(fixed_amplitudes.iter())
+                                    .enumerate()
                                 {
                                     let fixed_ml = fixed_ml_q16 as f64 / 65536.0;
                                     let rel_err = if float_ml.abs() > 1e-9 {
@@ -265,9 +280,12 @@ fn main() {
                             // synthetic sweep can't fully stand in for (it can't reproduce the exact
                             // amplitude *shapes* a real predictive decode stream produces).
                             let omega0_q32 = (params.omega0_tilde * 4294967296.0).round() as i64;
-                            let float_enhanced =
-                                enhance_spectral_amplitudes(&params.reconstructed_amplitudes, params.omega0_tilde);
-                            let fixed_enhanced = enhance_spectral_amplitudes_q16(&fixed_amplitudes, omega0_q32);
+                            let float_enhanced = enhance_spectral_amplitudes(
+                                &params.reconstructed_amplitudes,
+                                params.omega0_tilde,
+                            );
+                            let fixed_enhanced =
+                                enhance_spectral_amplitudes_q16(&fixed_amplitudes, omega0_q32);
                             if float_enhanced.len() == fixed_enhanced.len() {
                                 enh_frames_checked += 1;
                                 for (&float_e, &fixed_e_q16) in
@@ -295,7 +313,10 @@ fn main() {
                             fixed_prev_m_q16 = fixed_amplitudes;
                         }
                         None => {
-                            hard_failures.push(format!("{path} frame {i}: fixed reconstruction returned None (l_hat={})", params.l_hat));
+                            hard_failures.push(format!(
+                                "{path} frame {i}: fixed reconstruction returned None (l_hat={})",
+                                params.l_hat
+                            ));
                         }
                     }
                 }
@@ -320,7 +341,11 @@ fn main() {
         "Non-decoded frame indices (per-file, {} total): {:?}{}",
         non_decoded_indices.len(),
         &non_decoded_indices[..non_decoded_indices.len().min(40)],
-        if non_decoded_indices.len() > 40 { ", ..." } else { "" }
+        if non_decoded_indices.len() > 40 {
+            ", ..."
+        } else {
+            ""
+        }
     );
     println!("Worst Ml relative error observed: {worst_ml_rel_err:.6} (tolerance {ML_RELATIVE_TOLERANCE})");
     if hard_failures.is_empty() {

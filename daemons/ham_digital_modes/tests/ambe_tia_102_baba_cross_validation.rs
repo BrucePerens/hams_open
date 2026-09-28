@@ -30,10 +30,16 @@ fn voicing_expansion_above_36_harmonics_follows_eq_50_and_51() {
     let l = 54;
     let k = 12;
     let only_band_1 = decode_voicing_decisions_per_harmonic(0x800, k, l);
-    let voiced: Vec<usize> = (0..l as usize).filter(|&i| only_band_1[i]).map(|i| i + 1).collect();
+    let voiced: Vec<usize> = (0..l as usize)
+        .filter(|&i| only_band_1[i])
+        .map(|i| i + 1)
+        .collect();
     assert_eq!(voiced, vec![1, 2, 3]);
     let only_band_12 = decode_voicing_decisions_per_harmonic(0x001, k, l);
-    let voiced: Vec<usize> = (0..l as usize).filter(|&i| only_band_12[i]).map(|i| i + 1).collect();
+    let voiced: Vec<usize> = (0..l as usize)
+        .filter(|&i| only_band_12[i])
+        .map(|i| i + 1)
+        .collect();
     assert_eq!(voiced, (34..=54).collect::<Vec<usize>>());
 }
 
@@ -66,15 +72,38 @@ fn decoder_matches_mbelib_on_golden_frames() {
             panic!("golden frame {i}: not decoded");
         };
         assert_eq!((p.l_hat, p.k_hat), (g.l, g.k), "frame {i}");
-        assert!((p.omega0_tilde - g.w0).abs() < 1e-7, "frame {i}: w0 {} vs {}", p.omega0_tilde, g.w0);
-        let v: String = p.voiced.iter().map(|&b| if b { '1' } else { '0' }).collect();
+        assert!(
+            (p.omega0_tilde - g.w0).abs() < 1e-7,
+            "frame {i}: w0 {} vs {}",
+            p.omega0_tilde,
+            g.w0
+        );
+        let v: String = p
+            .voiced
+            .iter()
+            .map(|&b| if b { '1' } else { '0' })
+            .collect();
         assert_eq!(v, g.voiced, "frame {i}: voicing");
-        let log2: Vec<f64> = p.reconstructed_amplitudes.iter().map(|m| m.log2()).collect();
+        let log2: Vec<f64> = p
+            .reconstructed_amplitudes
+            .iter()
+            .map(|m| m.log2())
+            .collect();
         for (j, want) in g.log2_head.iter().enumerate() {
-            assert!((log2[j] - want).abs() < 2e-4, "frame {i}: log2 M_{} = {} vs {}", j + 1, log2[j], want);
+            assert!(
+                (log2[j] - want).abs() < 2e-4,
+                "frame {i}: log2 M_{} = {} vs {}",
+                j + 1,
+                log2[j],
+                want
+            );
         }
         let sum: f64 = log2.iter().sum();
-        assert!((sum - g.log2_sum).abs() < 2e-3 * (1.0 + g.log2_sum.abs() / 50.0), "frame {i}: checksum {sum} vs {}", g.log2_sum);
+        assert!(
+            (sum - g.log2_sum).abs() < 2e-3 * (1.0 + g.log2_sum.abs() / 50.0),
+            "frame {i}: checksum {sum} vs {}",
+            g.log2_sum
+        );
         dec.advance_history(&p);
     }
 }

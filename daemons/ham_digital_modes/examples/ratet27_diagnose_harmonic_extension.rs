@@ -28,8 +28,8 @@
 //!
 //! Usage: `cargo run --release --example ratet27_diagnose_harmonic_extension -- <host:port>`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use rustfft::{num_complex::Complex64, FftPlanner};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -104,8 +104,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -154,13 +161,17 @@ fn bin_for_hz(hz: f64, fft_len: usize, sample_rate: f64) -> usize {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -194,7 +205,12 @@ fn main() {
             // Predominantly voiced (>=70% of harmonics), not requiring every single one -- real
             // speech rarely has literally every harmonic voiced even in strongly-voiced frames.
             if frac >= 0.7 && params.l_hat >= 8 {
-                fully_voiced_frames.push((i, params.l_hat, params.omega0_tilde, params.voiced.clone()));
+                fully_voiced_frames.push((
+                    i,
+                    params.l_hat,
+                    params.omega0_tilde,
+                    params.voiced.clone(),
+                ));
             }
             params_decoder.advance_history(&params);
         }
@@ -210,9 +226,16 @@ fn main() {
     }
     println!(
         "voiced-fraction histogram: min={:.2} max={:.2} mean={:.2}",
-        voiced_fraction_histogram.iter().cloned().fold(f64::INFINITY, f64::min),
-        voiced_fraction_histogram.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-        voiced_fraction_histogram.iter().sum::<f64>() / voiced_fraction_histogram.len().max(1) as f64
+        voiced_fraction_histogram
+            .iter()
+            .cloned()
+            .fold(f64::INFINITY, f64::min),
+        voiced_fraction_histogram
+            .iter()
+            .cloned()
+            .fold(f64::NEG_INFINITY, f64::max),
+        voiced_fraction_histogram.iter().sum::<f64>()
+            / voiced_fraction_histogram.len().max(1) as f64
     );
 
     // Full decode pass (chip PCM + float PCM), same two-pass-not-interleaved shape as the other
@@ -227,7 +250,10 @@ fn main() {
 
         let n = send_recv_retrying(&sock, &mut buf, &build_channel(channel_payload));
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decoded PCM) response");
+        assert_eq!(
+            ptype, TYPE_SPEECH,
+            "expected a SPEECH (decoded PCM) response"
+        );
         let chip_frame_pcm = parse_speech_payload(payload);
         chip_pcm.extend(chip_frame_pcm.iter().map(|&s| s as f64));
 
@@ -265,8 +291,14 @@ fn main() {
         if total_chip <= 1e-9 || total_float <= 1e-9 {
             continue;
         }
-        let above_chip: f64 = chip_mag[cutoff_bin..nyquist_bin].iter().map(|&m| m * m).sum();
-        let above_float: f64 = float_mag[cutoff_bin..nyquist_bin].iter().map(|&m| m * m).sum();
+        let above_chip: f64 = chip_mag[cutoff_bin..nyquist_bin]
+            .iter()
+            .map(|&m| m * m)
+            .sum();
+        let above_float: f64 = float_mag[cutoff_bin..nyquist_bin]
+            .iter()
+            .map(|&m| m * m)
+            .sum();
         chip_above_frac.push(above_chip / total_chip);
         float_above_frac.push(above_float / total_float);
 
@@ -284,10 +316,12 @@ fn main() {
                 continue;
             }
             // A small window around the line bin (+-1) to tolerate quantization of bin_for_hz.
-            let chip_line: f64 = ((line_bin.saturating_sub(1))..=(line_bin + 1).min(nyquist_bin - 1))
+            let chip_line: f64 = ((line_bin.saturating_sub(1))
+                ..=(line_bin + 1).min(nyquist_bin - 1))
                 .map(|b| chip_mag[b])
                 .fold(0.0, f64::max);
-            let float_line: f64 = ((line_bin.saturating_sub(1))..=(line_bin + 1).min(nyquist_bin - 1))
+            let float_line: f64 = ((line_bin.saturating_sub(1))
+                ..=(line_bin + 1).min(nyquist_bin - 1))
                 .map(|b| float_mag[b])
                 .fold(0.0, f64::max);
             if float_line > 1e-6 {
@@ -307,7 +341,13 @@ fn main() {
         float_between_frac.push(between_float_energy / total_float);
     }
 
-    let avg = |v: &[f64]| if v.is_empty() { f64::NAN } else { v.iter().sum::<f64>() / v.len() as f64 };
+    let avg = |v: &[f64]| {
+        if v.is_empty() {
+            f64::NAN
+        } else {
+            v.iter().sum::<f64>() / v.len() as f64
+        }
+    };
 
     println!("\n--- Energy above L_hat*omega0 (as a fraction of total frame energy) ---");
     println!("chip:  mean = {:.5}", avg(&chip_above_frac));
@@ -323,7 +363,12 @@ fn main() {
     println!("\n--- Per-harmonic magnitude ratio (chip/float), by relative harmonic number k ---");
     for (i, ratios) in ratio_by_relative_harmonic.iter().enumerate() {
         if !ratios.is_empty() {
-            println!("k={}: n={}, mean ratio={:.3}", i + 1, ratios.len(), avg(ratios));
+            println!(
+                "k={}: n={}, mean ratio={:.3}",
+                i + 1,
+                ratios.len(),
+                avg(ratios)
+            );
         }
     }
 }

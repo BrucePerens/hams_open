@@ -57,7 +57,10 @@ const INFINITY_SENTINEL_Q16_16: i32 = i32::MAX;
 /// 2^16` (16 fractional bits), so the sum is shifted right by `32 - 16 = 16`, not divided all the
 /// way down to a plain integer.
 pub fn energy_q16(spectral_amplitudes_q16: &[i32]) -> i64 {
-    let sum: i128 = spectral_amplitudes_q16.iter().map(|&m| (m as i128) * (m as i128)).sum();
+    let sum: i128 = spectral_amplitudes_q16
+        .iter()
+        .map(|&m| (m as i128) * (m as i128))
+        .sum();
     (sum >> 16) as i64
 }
 
@@ -123,7 +126,10 @@ fn weight_q16(m_l_q16: i32, l: i32, omega0_q32: i64, r_m0: i64, r_m1: i64) -> i3
 }
 
 /// The fixed-point equivalent of `enhance_spectral_amplitudes` (Eq. 105-110).
-pub fn enhance_spectral_amplitudes_q16(spectral_amplitudes_q16: &[i32], omega0_q32: i64) -> Vec<i32> {
+pub fn enhance_spectral_amplitudes_q16(
+    spectral_amplitudes_q16: &[i32],
+    omega0_q32: i64,
+) -> Vec<i32> {
     let l_hat = spectral_amplitudes_q16.len() as u32;
     let r_m0 = energy_q16(spectral_amplitudes_q16);
 
@@ -187,22 +193,26 @@ pub fn adaptive_voicing_threshold_q16(errors: &FrameErrorsQ16, s_e: i64) -> i32 
     } else if errors.rate_q16 <= POINT_0125_Q16_16 && errors.hamming_init == 0 {
         const FORTY_FIVE_POINT_255_Q16_16: i32 = 2965832; // round(45.255 * 65536)
         const TWO_SEVEN_SEVEN_POINT_26_Q16_16: i32 = 18170511; // round(277.26 * 65536)
-        // log2(V_M) = log2(45.255) + 0.375*log2(s_e) - 277.26*rate*log2(e)
-        //                                                ^^^^^^^^^^^^^^^^^ log2(exp(277.26*rate))
+                                                               // log2(V_M) = log2(45.255) + 0.375*log2(s_e) - 277.26*rate*log2(e)
+                                                               //                                                ^^^^^^^^^^^^^^^^^ log2(exp(277.26*rate))
         let log2_v_m_q16 = log2_q16(FORTY_FIVE_POINT_255_Q16_16)
             + mul_q16(24576, log2_q16_i64(s_e)) // 24576 = 0.375
             - mul_q16(mul_q16(TWO_SEVEN_SEVEN_POINT_26_Q16_16, errors.rate_q16), LOG2_E_Q16_16);
         exp2_q16(log2_v_m_q16)
     } else {
         const ONE_POINT_414_Q16_16: i32 = 92668; // round(1.414 * 65536)
-        // log2(V_M) = log2(1.414) + 0.375*log2(s_e)
+                                                 // log2(V_M) = log2(1.414) + 0.375*log2(s_e)
         let log2_v_m_q16 = log2_q16(ONE_POINT_414_Q16_16) + mul_q16(24576, log2_q16_i64(s_e));
         exp2_q16(log2_v_m_q16)
     }
 }
 
 /// `v_bar_l` (Eq. 113).
-pub fn smooth_voicing_decision_q16(enhanced_m_l_q16: i32, decoded_voiced: bool, v_m_q16: i32) -> bool {
+pub fn smooth_voicing_decision_q16(
+    enhanced_m_l_q16: i32,
+    decoded_voiced: bool,
+    v_m_q16: i32,
+) -> bool {
     enhanced_m_l_q16 > v_m_q16 || decoded_voiced
 }
 

@@ -81,7 +81,11 @@ impl MbeDecoderState {
     /// starting point is low-stakes here (this recursion's own gain term is a frame-to-frame
     /// difference, not an absolute value).
     pub fn initial() -> Self {
-        MbeDecoderState { l: 9, log2_ml_q16: vec![0; 10], gamma_q16: 0 }
+        MbeDecoderState {
+            l: 9,
+            log2_ml_q16: vec![0; 10],
+            gamma_q16: 0,
+        }
     }
 }
 
@@ -103,7 +107,10 @@ pub struct SpeechParameters {
 fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
     // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (read when L grows).
     let idx = if idx == 0 { 1 } else { idx };
-    log2_ml_q16.get(idx).copied().unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0))
+    log2_ml_q16
+        .get(idx)
+        .copied()
+        .unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0))
 }
 
 /// The fixed-point equivalent of `ambe_plus_2::decode::dequantize`/`dstar::decode::dequantize`'s own
@@ -149,7 +156,8 @@ pub fn dequantize_speech(
     }
 
     let delta_gamma_q16 = tables.dg_q16[raw.b2 as usize];
-    let gamma_q16 = (((delta_gamma_q16 as i64 * tables.gamma_scale_q16) >> 16) + ((state.gamma_q16 as i64 * tables.gamma_memory_q16) >> 16))
+    let gamma_q16 = (((delta_gamma_q16 as i64 * tables.gamma_scale_q16) >> 16)
+        + ((state.gamma_q16 as i64 * tables.gamma_memory_q16) >> 16))
         .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
     // PRBA -> Gm -> Ri: an 8-point cosine sum (mbelib's own real `Gm`/`Ri` construction). `gm[0]`
@@ -160,7 +168,9 @@ pub fn dequantize_speech(
     // `am=2` unconditionally (only `m=1`, already excluded, ever used `am=1`).
     let prba24 = tables.prba24_q16[raw.b3 as usize];
     let prba58 = tables.prba58_q16[raw.b4 as usize];
-    let gm: [i32; 9] = [0, 0, prba24[0], prba24[1], prba24[2], prba58[0], prba58[1], prba58[2], prba58[3]];
+    let gm: [i32; 9] = [
+        0, 0, prba24[0], prba24[1], prba24[2], prba58[0], prba58[1], prba58[2], prba58[3],
+    ];
 
     let mut ri = [0i32; 9];
     for (i, slot) in ri.iter_mut().enumerate().skip(1) {
@@ -186,13 +196,18 @@ pub fn dequantize_speech(
     cik[4][2] = mul_q16(rconst_q16, ri[7] - ri[8]);
 
     let ji = tables.lmprbl[l_usize];
-    let hoc_tables: [&[[i32; 4]]; 4] =
-        [tables.hoc_b5_q16, tables.hoc_b6_q16, tables.hoc_b7_q16, tables.hoc_b8_q16];
+    let hoc_tables: [&[[i32; 4]]; 4] = [
+        tables.hoc_b5_q16,
+        tables.hoc_b6_q16,
+        tables.hoc_b7_q16,
+        tables.hoc_b8_q16,
+    ];
     let hoc_indices = [raw.b5, raw.b6, raw.b7, raw.b8];
     for block in 0..4usize {
         for k in 3..=ji[block] {
             if k <= 6 {
-                cik[block + 1][k as usize] = hoc_tables[block][hoc_indices[block] as usize][(k - 3) as usize];
+                cik[block + 1][k as usize] =
+                    hoc_tables[block][hoc_indices[block] as usize][(k - 3) as usize];
             }
         }
     }
@@ -251,17 +266,27 @@ pub fn dequantize_speech(
         let delta = delta_l_q16[h] as i64;
         let one_minus_delta = 65536 - delta;
         let ik = int_kl[h];
-        let c1 = (tables.rho_q16 * one_minus_delta * (prev_at(&state.log2_ml_q16, ik) as i64)) >> 32;
+        let c1 =
+            (tables.rho_q16 * one_minus_delta * (prev_at(&state.log2_ml_q16, ik) as i64)) >> 32;
         let c2 = (tables.rho_q16 * delta * (prev_at(&state.log2_ml_q16, ik + 1) as i64)) >> 32;
-        log2_ml_q16[h] =
-            (tl[h] as i64 + c1 + c2 - sum43_scaled_q16 + big_gamma_q16 as i64) as i32;
+        log2_ml_q16[h] = (tl[h] as i64 + c1 + c2 - sum43_scaled_q16 + big_gamma_q16 as i64) as i32;
         let exp2_val = exp2_q16(log2_ml_q16[h]);
-        ml_q16[h] = if voiced[h] { exp2_val } else { mul_q16(unvc_q16, exp2_val) };
+        ml_q16[h] = if voiced[h] {
+            exp2_val
+        } else {
+            mul_q16(unvc_q16, exp2_val)
+        };
     }
 
     state.l = l;
     state.log2_ml_q16 = log2_ml_q16.clone();
     state.gamma_q16 = gamma_q16;
 
-    SpeechParameters { l, w0_q16, w0_q32, voiced, ml_q16 }
+    SpeechParameters {
+        l,
+        w0_q16,
+        w0_q32,
+        voiced,
+        ml_q16,
+    }
 }

@@ -52,7 +52,10 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 }
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
-    payload[2..2 + count * 2].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
+    payload[2..2 + count * 2]
+        .chunks_exact(2)
+        .map(|b| i16::from_be_bytes([b[0], b[1]]))
+        .collect()
 }
 fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usize {
     for attempt in 0..8 {
@@ -72,11 +75,11 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE");
     assert_eq!(&data[36..40], b"data");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
-
-
-
 
 fn frame_to_wire_bytes(frame: u128) -> [u8; 9] {
     let wire = frame_to_interleaved(frame);
@@ -84,7 +87,8 @@ fn frame_to_wire_bytes(frame: u128) -> [u8; 9] {
 }
 
 fn configure(sock: &UdpSocket, buf: &mut [u8; 1024]) {
-    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC])).unwrap();
+    sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC]))
+        .unwrap();
     let n = sock.recv(buf).unwrap();
     parse_packet(&buf[..n]).unwrap();
     if let Ok(v) = std::env::var("INIT") {
@@ -94,7 +98,8 @@ fn configure(sock: &UdpSocket, buf: &mut [u8; 1024]) {
         let n = sock.recv(buf).unwrap();
         println!("PKT_INIT {flags:#x} response: {:02x?}", &buf[..n.min(12)]);
     }
-    sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
     while sock.recv(buf).is_ok() {}
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 }
@@ -115,21 +120,39 @@ fn decode(sock: &UdpSocket, buf: &mut [u8; 1024], frames: &[u128]) -> Vec<Vec<f6
         .collect()
 }
 
-
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let out = std::env::args().nth(2).unwrap();
-    let nframes: usize = std::env::args().nth(3).map(|v| v.parse().unwrap()).unwrap_or(900);
+    let nframes: usize = std::env::args()
+        .nth(3)
+        .map(|v| v.parse().unwrap())
+        .unwrap_or(900);
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
     std::env::set_var("INIT", "2");
-    let frame = a2_build(&A2Raw { b0: 124, b1: 16, b2: 12, b3: 200, b4: 60, b5: 6, b6: 6, b7: 6, b8: 3 });
+    let frame = a2_build(&A2Raw {
+        b0: 124,
+        b1: 16,
+        b2: 12,
+        b3: 200,
+        b4: 60,
+        b5: 6,
+        b6: 6,
+        b7: 6,
+        b8: 3,
+    });
     configure(&sock, &mut buf);
     let seq = vec![frame; nframes];
     let fr = decode(&sock, &mut buf, &seq);
     let mut bytes = Vec::new();
-    for f in &fr { for &s in f { bytes.extend_from_slice(&(s as i16).to_le_bytes()); } }
+    for f in &fr {
+        for &s in f {
+            bytes.extend_from_slice(&(s as i16).to_le_bytes());
+        }
+    }
     std::fs::write(out, bytes).unwrap();
 }

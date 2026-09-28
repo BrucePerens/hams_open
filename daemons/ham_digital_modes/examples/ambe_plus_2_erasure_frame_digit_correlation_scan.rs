@@ -161,8 +161,14 @@ fn scan(label: &str, target: &[f64], d_values: &[u64; 16]) {
     println!("-- scanning against {label} --");
     let mut best: Option<(usize, bool, f64)> = None;
     for start in 0..(D_BITS - 6) {
-        let plain: Vec<f64> = d_values.iter().map(|&d| window_value(d, start, 7) as f64).collect();
-        let gray: Vec<f64> = d_values.iter().map(|&d| gray_to_binary(window_value(d, start, 7)) as f64).collect();
+        let plain: Vec<f64> = d_values
+            .iter()
+            .map(|&d| window_value(d, start, 7) as f64)
+            .collect();
+        let gray: Vec<f64> = d_values
+            .iter()
+            .map(|&d| gray_to_binary(window_value(d, start, 7)) as f64)
+            .collect();
         if distinct_count(&plain) < MIN_DISTINCT_VALUES {
             continue;
         }

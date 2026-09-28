@@ -11,7 +11,9 @@ use super::decode::{dequantize, DStarDecoderState, RawParameters};
 use super::encode::{build_frame, build_tone_frame, pack_raw_parameters};
 use super::quantize::quantize_pitch;
 use super::tables;
-use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
+use crate::ambe::float::mbe_encode::{
+    analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget,
+};
 use crate::ambe::float::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::tone_detect::{detect_tone, volume_for_amplitude, DetectedTone};
 
@@ -35,7 +37,12 @@ impl Encoder {
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
-        Self { analyzer, high_pass: HighPassFilter::default(), mirror: DStarDecoderState::initial(), analysis: AnalysisState::new() }
+        Self {
+            analyzer,
+            high_pass: HighPassFilter::default(),
+            mirror: DStarDecoderState::initial(),
+            analysis: AnalysisState::new(),
+        }
     }
 
     pub fn set_center_offset(&mut self, samples: i32) {
@@ -45,9 +52,15 @@ impl Encoder {
     /// # Panics
     /// If any sample is NaN or infinite: garbage input must fail loudly, not become a confident-looking frame.
     pub fn push_samples(&mut self, samples: &[f64]) {
-        assert!(samples.iter().all(|s| s.is_finite()), "encoder input contains a non-finite sample");
+        assert!(
+            samples.iter().all(|s| s.is_finite()),
+            "encoder input contains a non-finite sample"
+        );
         // The standard's input high-pass filter (Eq. 3) removes DC offset, which otherwise corrupts the pitch estimate.
-        let filtered: Vec<f64> = samples.iter().map(|&x| (self.high_pass.step(x) + 0.5).floor()).collect();
+        let filtered: Vec<f64> = samples
+            .iter()
+            .map(|&x| (self.high_pass.step(x) + 0.5).floor())
+            .collect();
         self.analyzer.push_samples(&filtered);
     }
 
@@ -73,18 +86,43 @@ impl Encoder {
             prba24: &tables::PRBA24,
             prba58: &tables::PRBA58,
             lmprbl: &tables::LMPRBL,
-            hoc: [&tables::HOC_B5, &tables::HOC_B6, &tables::HOC_B7, &tables::HOC_B8],
+            hoc: [
+                &tables::HOC_B5,
+                &tables::HOC_B6,
+                &tables::HOC_B7,
+                &tables::HOC_B8,
+            ],
             hoc_b8_even_only: true,
             rho: crate::ambe::float::dstar::decode::PREDICTOR_RHO,
             gamma_scale: crate::ambe::float::dstar::decode::GAMMA_SCALE,
             gamma_memory: crate::ambe::float::dstar::decode::GAMMA_MEMORY,
         };
         let q = quantize_speech(
-            &SpeechTarget { l, w0, vuv_f0: f0, voiced: &voiced, ml: &ml },
-            &PrevState { l: self.mirror.l, log2_ml: &self.mirror.log2_ml, gamma: self.mirror.gamma },
+            &SpeechTarget {
+                l,
+                w0,
+                vuv_f0: f0,
+                voiced: &voiced,
+                ml: &ml,
+            },
+            &PrevState {
+                l: self.mirror.l,
+                log2_ml: &self.mirror.log2_ml,
+                gamma: self.mirror.gamma,
+            },
             &mode,
         );
-        let raw = RawParameters { b0, b1: q.b1, b2: q.b2, b3: q.b3, b4: q.b4, b5: q.b5, b6: q.b6, b7: q.b7, b8: q.b8 };
+        let raw = RawParameters {
+            b0,
+            b1: q.b1,
+            b2: q.b2,
+            b3: q.b3,
+            b4: q.b4,
+            b5: q.b5,
+            b6: q.b6,
+            b7: q.b7,
+            b8: q.b8,
+        };
         let d = pack_raw_parameters(&raw);
         dequantize(d, &mut self.mirror);
         Some(build_frame(d))
@@ -120,7 +158,10 @@ mod tests {
         let signal: Vec<f64> = (0..160 * 30)
             .map(|i| {
                 (1..=8)
-                    .map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin())
+                    .map(|h| {
+                        1500.0 / h as f64
+                            * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin()
+                    })
                     .sum()
             })
             .collect();
@@ -137,14 +178,27 @@ mod tests {
         let mut checked = 0;
         for (i, &frame) in frames.iter().enumerate() {
             let parsed = parse_frame(frame);
-            assert_eq!(parsed.epsilon_c0 + parsed.epsilon_c1, 0, "a freshly built frame must be error free");
+            assert_eq!(
+                parsed.epsilon_c0 + parsed.epsilon_c1,
+                0,
+                "a freshly built frame must be error free"
+            );
             if let DequantizedFrame::Speech(p) = dequantize(parsed.d, &mut state) {
                 if (6..24).contains(&i) {
                     let p_est = 2.0 * std::f64::consts::PI / p.w0;
-                    assert!((p_est / period - 1.0).abs() < 0.05, "frame {i}: decoded period {p_est}");
+                    assert!(
+                        (p_est / period - 1.0).abs() < 0.05,
+                        "frame {i}: decoded period {p_est}"
+                    );
                     // The strongest harmonics (1-8) should carry real energy.
-                    let peak = p.ml[1..=8.min(p.l as usize)].iter().cloned().fold(0.0, f64::max);
-                    assert!(peak > 100.0, "frame {i}: peak harmonic amplitude {peak} implausibly small");
+                    let peak = p.ml[1..=8.min(p.l as usize)]
+                        .iter()
+                        .cloned()
+                        .fold(0.0, f64::max);
+                    assert!(
+                        peak > 100.0,
+                        "frame {i}: peak harmonic amplitude {peak} implausibly small"
+                    );
                     checked += 1;
                 }
             }
@@ -154,15 +208,27 @@ mod tests {
 
     #[test]
     fn dtmf_and_single_tones_are_emitted_as_tone_frames_with_the_chips_index_and_level() {
-        use crate::ambe::float::dstar::decode::{classify_b0, decode_tone, extract_raw_parameters, FrameKind};
+        use crate::ambe::float::dstar::decode::{
+            classify_b0, decode_tone, extract_raw_parameters, FrameKind,
+        };
         let sine = |freqs: &[f64], amp: f64| -> Vec<f64> {
             (0..160 * 12)
-                .map(|i| freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()).sum())
+                .map(|i| {
+                    freqs
+                        .iter()
+                        .map(|&hz| {
+                            amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()
+                        })
+                        .sum()
+                })
                 .collect()
         };
         // Measured on the chip: DTMF '5' (770 + 1336 Hz) at amplitude 4000 -> index 133, volume 186;
         // 1 kHz at amplitude 12000 -> index 32, volume 213.
-        for (signal, index, volume) in [(sine(&[770.0, 1336.0], 4000.0), 133u32, 186u32), (sine(&[1000.0], 12000.0), 32, 213)] {
+        for (signal, index, volume) in [
+            (sine(&[770.0, 1336.0], 4000.0), 133u32, 186u32),
+            (sine(&[1000.0], 12000.0), 32, 213),
+        ] {
             let mut enc = Encoder::new();
             enc.push_samples(&signal);
             let mut frames = Vec::new();
@@ -175,7 +241,12 @@ mod tests {
                 assert_eq!(classify_b0(extract_raw_parameters(d).b0), FrameKind::Tone);
                 let t = decode_tone(d);
                 assert_eq!(t.index, index);
-                assert!((t.volume as i32 - volume as i32).abs() <= 1, "volume {} vs {}", t.volume, volume);
+                assert!(
+                    (t.volume as i32 - volume as i32).abs() <= 1,
+                    "volume {} vs {}",
+                    t.volume,
+                    volume
+                );
             }
         }
     }

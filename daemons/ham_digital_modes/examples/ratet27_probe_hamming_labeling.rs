@@ -13,12 +13,22 @@ use ham_digital_modes::ambe::dvsi_p25fec::fec::hamming_decode_chip;
 use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 
 fn main() {
-    let path = std::env::args().nth(1).unwrap_or_else(|| std::env::temp_dir().join("ratet27_frames.txt").to_string_lossy().into_owned());
+    let path = std::env::args().nth(1).unwrap_or_else(|| {
+        std::env::temp_dir()
+            .join("ratet27_frames.txt")
+            .to_string_lossy()
+            .into_owned()
+    });
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
     let (mut frames, mut golay_err_frames) = (0usize, 0usize);
-    let (mut textbook_err_words, mut chip_err_words, mut differing_data_words, mut words) = (0usize, 0usize, 0usize, 0usize);
+    let (mut textbook_err_words, mut chip_err_words, mut differing_data_words, mut words) =
+        (0usize, 0usize, 0usize, 0usize);
     for line in text.lines() {
-        let c: Vec<u32> = line.split_whitespace().take(8).map(|t| u32::from_str_radix(t, 16).unwrap()).collect();
+        let c: Vec<u32> = line
+            .split_whitespace()
+            .take(8)
+            .map(|t| u32::from_str_radix(t, 16).unwrap())
+            .collect();
         frames += 1;
         if (0..4).any(|i| golay_decode(c[i]).1 != 0) {
             golay_err_frames += 1;

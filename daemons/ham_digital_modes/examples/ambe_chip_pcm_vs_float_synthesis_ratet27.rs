@@ -46,8 +46,8 @@
 //!
 //! Usage: `cargo run --release --example ambe_chip_pcm_vs_float_synthesis_ratet27 -- <host:port>`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -124,14 +124,24 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 /// Writes a minimal mono 16-bit 8kHz PCM WAV -- so both decoded streams can be listened to directly,
 /// a far richer diagnostic than any single correlation number for telling "garbage" apart from
 /// "recognizable speech that's merely out of sync" apart from "wrong scale but otherwise correct".
 fn write_wav_mono_i16(path: &str, samples: &[f64]) {
-    let pcm: Vec<i16> = samples.iter().map(|&s| s.round().clamp(-32768.0, 32767.0) as i16).collect();
+    let pcm: Vec<i16> = samples
+        .iter()
+        .map(|&s| s.round().clamp(-32768.0, 32767.0) as i16)
+        .collect();
     let data_len = (pcm.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + pcm.len() * 2);
     out.extend_from_slice(b"RIFF");
@@ -205,13 +215,17 @@ fn correlation(a: &[f64], b: &[f64]) -> f64 {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -251,7 +265,10 @@ fn main() {
 
         let n = send_recv_retrying(&sock, &mut buf, &build_channel(channel_payload));
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decoded PCM) response");
+        assert_eq!(
+            ptype, TYPE_SPEECH,
+            "expected a SPEECH (decoded PCM) response"
+        );
         let chip_frame_pcm = parse_speech_payload(payload);
         chip_pcm.extend(chip_frame_pcm.iter().map(|&s| s as f64));
 
@@ -278,9 +295,15 @@ fn main() {
     let search_len = chip_pcm.len().min(float_pcm.len()) - (2 * MAX_LAG_SAMPLES as usize);
     for lag in -MAX_LAG_SAMPLES..=MAX_LAG_SAMPLES {
         let (chip_slice, float_slice) = if lag >= 0 {
-            (&chip_pcm[lag as usize..lag as usize + search_len], &float_pcm[..search_len])
+            (
+                &chip_pcm[lag as usize..lag as usize + search_len],
+                &float_pcm[..search_len],
+            )
         } else {
-            (&chip_pcm[..search_len], &float_pcm[(-lag) as usize..(-lag) as usize + search_len])
+            (
+                &chip_pcm[..search_len],
+                &float_pcm[(-lag) as usize..(-lag) as usize + search_len],
+            )
         };
         let c = correlation(chip_slice, float_slice);
         if c > best_corr {
@@ -301,7 +324,8 @@ fn main() {
     let mut voiced_corrs = Vec::new();
     let mut other_corrs = Vec::new();
     let offset = best_lag.unsigned_abs() as usize;
-    let usable_frames = ((chip_pcm.len().min(float_pcm.len()) - offset) / FRAME_SAMPLES).saturating_sub(1);
+    let usable_frames =
+        ((chip_pcm.len().min(float_pcm.len()) - offset) / FRAME_SAMPLES).saturating_sub(1);
     for i in 0..usable_frames {
         let (chip_start, float_start) = if best_lag >= 0 {
             (offset + i * FRAME_SAMPLES, i * FRAME_SAMPLES)
@@ -318,7 +342,13 @@ fn main() {
             other_corrs.push(corr);
         }
     }
-    let avg = |v: &[f64]| if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 };
+    let avg = |v: &[f64]| {
+        if v.is_empty() {
+            0.0
+        } else {
+            v.iter().sum::<f64>() / v.len() as f64
+        }
+    };
     println!(
         "Higher-energy (RMS > 200, predominantly voiced/loud) segments: {} frames, mean correlation {:.4}",
         voiced_corrs.len(),
@@ -346,10 +376,19 @@ fn main() {
     let envelope_len = chip_envelope.len().min(float_envelope.len());
     println!(
         "Frame-level RMS envelope correlation (phase-insensitive, no lag applied): {:.4}",
-        correlation(&chip_envelope[..envelope_len], &float_envelope[..envelope_len])
+        correlation(
+            &chip_envelope[..envelope_len],
+            &float_envelope[..envelope_len]
+        )
     );
-    println!("First 15 frame RMS values -- chip: {:?}", &chip_envelope[..15.min(chip_envelope.len())]);
-    println!("First 15 frame RMS values -- float: {:?}", &float_envelope[..15.min(float_envelope.len())]);
+    println!(
+        "First 15 frame RMS values -- chip: {:?}",
+        &chip_envelope[..15.min(chip_envelope.len())]
+    );
+    println!(
+        "First 15 frame RMS values -- float: {:?}",
+        &float_envelope[..15.min(float_envelope.len())]
+    );
 
     // A frame-level (not sample-level) lag search over the envelopes themselves -- much cheaper and
     // more robust than a raw-sample search, and directly tests whether the near-zero raw-sample
@@ -362,9 +401,15 @@ fn main() {
     if env_search_len > 10 {
         for lag in -MAX_FRAME_LAG..=MAX_FRAME_LAG {
             let (chip_slice, float_slice) = if lag >= 0 {
-                (&chip_envelope[lag as usize..lag as usize + env_search_len], &float_envelope[..env_search_len])
+                (
+                    &chip_envelope[lag as usize..lag as usize + env_search_len],
+                    &float_envelope[..env_search_len],
+                )
             } else {
-                (&chip_envelope[..env_search_len], &float_envelope[(-lag) as usize..(-lag) as usize + env_search_len])
+                (
+                    &chip_envelope[..env_search_len],
+                    &float_envelope[(-lag) as usize..(-lag) as usize + env_search_len],
+                )
             };
             let c = correlation(chip_slice, float_slice);
             if c > best_frame_corr {
@@ -378,7 +423,8 @@ fn main() {
         best_frame_lag as f64 * 20.0
     );
 
-    let out_dir = std::env::var("AMBE_RATET27_WAV_OUT_DIR").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    let out_dir = std::env::var("AMBE_RATET27_WAV_OUT_DIR")
+        .unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
     write_wav_mono_i16(&format!("{out_dir}/ratet27_chip_decoded.wav"), &chip_pcm);
     write_wav_mono_i16(&format!("{out_dir}/ratet27_float_decoded.wav"), &float_pcm);
     println!(

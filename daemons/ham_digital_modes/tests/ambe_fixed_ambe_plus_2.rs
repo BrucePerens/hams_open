@@ -9,7 +9,9 @@
 use ham_digital_modes::ambe::fixed::ambe_plus_2::decode as fixed_decode;
 use ham_digital_modes::ambe::fixed::general::mbe_speech::MbeDecoderState;
 use ham_digital_modes::ambe::float::ambe_plus_2::decode as float_decode;
-use ham_digital_modes::ambe::float::ambe_plus_2::decode::{DecoderState, DequantizedFrame, RawParameters};
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+    DecoderState, DequantizedFrame, RawParameters,
+};
 
 /// `Ml`'s own documented tolerance from `ambe::fixed`'s module doc comment: within 1% of the
 /// floating-point sibling's own output for the same input bits.
@@ -22,9 +24,29 @@ const ML_RELATIVE_TOLERANCE: f64 = 0.01;
 const W0_RELATIVE_TOLERANCE: f64 = 3e-3;
 
 #[allow(clippy::too_many_arguments)] // mirrors RawParameters' own 9 fields one-for-one; a builder
-                                      // would be more ceremony than the 9 short-lived call sites need
-fn raw(b0: u32, b1: u32, b2: u32, b3: u32, b4: u32, b5: u32, b6: u32, b7: u32, b8: u32) -> RawParameters {
-    RawParameters { b0, b1, b2, b3, b4, b5, b6, b7, b8 }
+                                     // would be more ceremony than the 9 short-lived call sites need
+fn raw(
+    b0: u32,
+    b1: u32,
+    b2: u32,
+    b3: u32,
+    b4: u32,
+    b5: u32,
+    b6: u32,
+    b7: u32,
+    b8: u32,
+) -> RawParameters {
+    RawParameters {
+        b0,
+        b1,
+        b2,
+        b3,
+        b4,
+        b5,
+        b6,
+        b7,
+        b8,
+    }
 }
 
 /// A representative sweep of real parameter combinations -- spanning low/mid/high `L` (via `b0`),
@@ -68,7 +90,10 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
             let fixed_result = fixed_decode::dequantize(raw_params, &mut fixed_state);
 
             match (float_result, fixed_result) {
-                (DequantizedFrame::Speech(float_params), fixed_decode::DequantizedFrame::Speech(fixed_params)) => {
+                (
+                    DequantizedFrame::Speech(float_params),
+                    fixed_decode::DequantizedFrame::Speech(fixed_params),
+                ) => {
                     assert_eq!(
                         float_params.l, fixed_params.l,
                         "frame {frame_idx}, raw={raw_params:?}: L mismatch"
@@ -85,8 +110,12 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
                         "frame {frame_idx}, raw={raw_params:?}: voiced decisions differ"
                     );
                     assert_eq!(float_params.ml.len(), fixed_params.ml_q16.len());
-                    for (h, (&float_ml, &fixed_ml_q16)) in
-                        float_params.ml.iter().zip(fixed_params.ml_q16.iter()).enumerate().skip(1)
+                    for (h, (&float_ml, &fixed_ml_q16)) in float_params
+                        .ml
+                        .iter()
+                        .zip(fixed_params.ml_q16.iter())
+                        .enumerate()
+                        .skip(1)
                     {
                         let fixed_ml = fixed_ml_q16 as f64 / 65536.0;
                         let rel_err = if float_ml.abs() > 1e-9 {

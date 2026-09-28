@@ -16,12 +16,12 @@ use crate::ambe::fixed::general::mbe_speech::{
     dequantize_speech, MbeDecoderState, RawSpeechParameters, SpeechParameters, SpeechTables,
 };
 use crate::ambe::float::ambe_plus_2::decode::FrameKind;
-use crate::ambe::float::ambe_plus_2::tables::{L_TABLE, LMPRBL, VUV};
+use crate::ambe::float::ambe_plus_2::tables::{LMPRBL, L_TABLE, VUV};
 
 // Already pure integer in the float sibling -- reused directly, not duplicated.
 pub use crate::ambe::float::ambe_plus_2::decode::{
-    classify_b0, classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx, extract_raw_parameters,
-    CallProgressTone, RawParameters, ToneIdentity,
+    classify_b0, classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx,
+    extract_raw_parameters, CallProgressTone, RawParameters, ToneIdentity,
 };
 
 /// The fixed-point equivalent of `ambe::float::ambe_plus_2::decode::DequantizedFrame`.
@@ -29,11 +29,16 @@ pub enum DequantizedFrame {
     Speech(SpeechParameters),
     /// `b0=121` or `123` only -- see `FrameKind::Erasure`'s own doc comment (float sibling).
     Erasure,
-    Silence { l: u32, w0_q16: i32 },
+    Silence {
+        l: u32,
+        w0_q16: i32,
+    },
     /// `b0` in `{120, 122, 126, 127}` -- decode the actual tone/digit via `decode_tone_idx(d)` on
     /// the frame's own `d`, exactly as the float sibling's own `DequantizedFrame::Tone` doc comment
     /// describes (that decode is already pure integer and needs no fixed-point port).
-    Tone { raw: RawParameters },
+    Tone {
+        raw: RawParameters,
+    },
 }
 
 /// `w0 = 2*pi/32` (mbelib's own fixed silence-frame frequency) as Q16.16 -- `32` is a power of two,
@@ -69,7 +74,10 @@ pub fn dequantize(raw: &RawParameters, state: &mut MbeDecoderState) -> Dequantiz
             state.l = l;
             state.gamma_q16 = 0;
             state.log2_ml_q16 = vec![0; l as usize + 1];
-            return DequantizedFrame::Silence { l, w0_q16: SILENCE_W0_Q16_16 };
+            return DequantizedFrame::Silence {
+                l,
+                w0_q16: SILENCE_W0_Q16_16,
+            };
         }
         FrameKind::Speech => {}
     }

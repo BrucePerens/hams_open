@@ -62,7 +62,10 @@ impl ComplexQ16 {
     const ZERO: ComplexQ16 = ComplexQ16 { re: 0, im: 0 };
 
     fn add(self, other: Self) -> Self {
-        Self { re: self.re + other.re, im: self.im + other.im }
+        Self {
+            re: self.re + other.re,
+            im: self.im + other.im,
+        }
     }
 
     /// Complex multiply by an `i32` Q16.16 unit phasor (`cos_val + j*sin_val`), the shape every DFT
@@ -115,7 +118,10 @@ pub struct NoiseState {
 
 impl NoiseState {
     pub fn new() -> Self {
-        let mut state = Self { last: 3147, window: VecDeque::with_capacity(209) };
+        let mut state = Self {
+            last: 3147,
+            window: VecDeque::with_capacity(209),
+        };
         for _ in 0..209 {
             state.step();
         }
@@ -176,7 +182,14 @@ fn dft_phase(m: i32, n: i32) -> u32 {
 /// evaluate trigonometry per term.
 fn twiddle_q16(m: i32, n: i32) -> (i32, i32) {
     static TABLE: std::sync::OnceLock<Vec<(i32, i32)>> = std::sync::OnceLock::new();
-    let table = TABLE.get_or_init(|| (0..256).map(|k| { let phase = dft_phase(k, 1); (cos_q16(phase), sin_q16(phase)) }).collect());
+    let table = TABLE.get_or_init(|| {
+        (0..256)
+            .map(|k| {
+                let phase = dft_phase(k, 1);
+                (cos_q16(phase), sin_q16(phase))
+            })
+            .collect()
+    });
     table[((m as i64) * (n as i64)).rem_euclid(256) as usize]
 }
 
@@ -190,8 +203,8 @@ fn unvoiced_dft_q16(noise: &NoiseState) -> [ComplexQ16; 256] {
         for n in -104i32..=104 {
             let u_n = noise.at(n).expect("noise window covers -104..=104");
             let sample_q16 = u_n * (synthesis_window_q16(n) as i64); // plain int * Q16.16 = Q16.16.
-            // Eq. 118's own twiddle is negative (-2*pi*m*n/256); negate via -m rather than negating
-            // the whole phase, since dft_phase's own m*n product already handles negative operands.
+                                                                     // Eq. 118's own twiddle is negative (-2*pi*m*n/256); negate via -m rather than negating
+                                                                     // the whole phase, since dft_phase's own m*n product already handles negative operands.
             let (cos_val, sin_val) = twiddle_q16(-m, n);
             acc = acc.add(ComplexQ16 {
                 re: mul_q16_i64(sample_q16, cos_val),
@@ -261,13 +274,18 @@ fn unvoiced_spectrum_q16(
             continue; // Degenerate (unreachable for any real pitch period) zero-width band.
         }
 
-        let power_q16: i64 =
-            (a..b).map(|eta| uw[bin_index(eta)].norm_sqr_q16()).sum::<i64>() / (b - a) as i64;
+        let power_q16: i64 = (a..b)
+            .map(|eta| uw[bin_index(eta)].norm_sqr_q16())
+            .sum::<i64>()
+            / (b - a) as i64;
         if power_q16 == 0 {
             continue; // No noise energy in this band (degenerate input); leave it zeroed.
         }
 
-        let gm_q16 = mul_q16_i64(spectral_amplitudes_q16[(l - 1) as usize] as i64, gamma_w_q16);
+        let gm_q16 = mul_q16_i64(
+            spectral_amplitudes_q16[(l - 1) as usize] as i64,
+            gamma_w_q16,
+        );
         let sqrt_power_q16 = sqrt_wide_q16(power_q16);
         if sqrt_power_q16 == 0 {
             continue;
@@ -327,7 +345,9 @@ pub struct UnvoicedState {
 
 impl UnvoicedState {
     pub fn new() -> Self {
-        Self { previous_time_domain_q16: [0; 256] }
+        Self {
+            previous_time_domain_q16: [0; 256],
+        }
     }
 
     /// Synthesizes the current frame's own unvoiced speech component `s_uv(n)` (Eq. 117-126) as

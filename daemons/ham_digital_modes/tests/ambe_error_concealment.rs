@@ -6,7 +6,10 @@ use ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy;
 
 fn read_wav(path: &str) -> Vec<f64> {
     let bytes = std::fs::read(path).unwrap();
-    bytes[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).collect()
+    bytes[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+        .collect()
 }
 
 fn rms(x: &[f64]) -> f64 {
@@ -15,7 +18,9 @@ fn rms(x: &[f64]) -> f64 {
 
 /// Deterministic pseudo-random word source.
 fn lcg(state: &mut u64) -> u64 {
-    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    *state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     *state >> 33
 }
 
@@ -38,13 +43,19 @@ macro_rules! concealment_tests {
 
             fn decode(frames: &[u128], policy: ErrorPolicy) -> Vec<f64> {
                 let mut d = <$decoder>::new().with_error_policy(policy);
-                frames.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect()
+                frames
+                    .iter()
+                    .flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160]))
+                    .collect()
             }
 
             #[test]
             fn a_clean_stream_decodes_exactly_like_the_clean_policy() {
                 let fr = frames();
-                assert_eq!(decode(&fr, ErrorPolicy::Clean), decode(&fr, ErrorPolicy::Concealing));
+                assert_eq!(
+                    decode(&fr, ErrorPolicy::Clean),
+                    decode(&fr, ErrorPolicy::Concealing)
+                );
             }
 
             #[test]
@@ -62,25 +73,42 @@ macro_rules! concealment_tests {
                 let before = (94..100).map(level).fold(0.0, f64::max);
                 assert!(before > 50.0, "test segment should be speech ({before})");
                 let ruined: Vec<f64> = (100..106).map(level).collect();
-                assert!(ruined.iter().all(|&l| l <= before * 1.5), "no burst louder than the speech before: {ruined:?} vs {before}");
-                assert!(ruined[0] > 0.0, "the first damaged frame still sounds (repeat), not a mute");
+                assert!(
+                    ruined.iter().all(|&l| l <= before * 1.5),
+                    "no burst louder than the speech before: {ruined:?} vs {before}"
+                );
+                assert!(
+                    ruined[0] > 0.0,
+                    "the first damaged frame still sounds (repeat), not a mute"
+                );
                 // After the burst the stream recovers to normal speech.
-                assert!((108..118).map(level).fold(0.0, f64::max) > 20.0, "recovers after the burst");
+                assert!(
+                    (108..118).map(level).fold(0.0, f64::max) > 20.0,
+                    "recovers after the burst"
+                );
             }
         }
     };
 }
 
-concealment_tests!(dstar, ham_digital_modes::ambe::float::dstar::encoder::Encoder, ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder);
+concealment_tests!(
+    dstar,
+    ham_digital_modes::ambe::float::dstar::encoder::Encoder,
+    ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder
+);
 #[cfg(feature = "ambe_plus_2")]
-concealment_tests!(ambe_plus_2, ham_digital_modes::ambe::float::ambe_plus_2::encoder::Encoder, ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder);
+concealment_tests!(
+    ambe_plus_2,
+    ham_digital_modes::ambe::float::ambe_plus_2::encoder::Encoder,
+    ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder
+);
 
 /// The fixed-point concealment against the float one.
 mod fixed_point {
     use super::*;
     use ham_digital_modes::ambe::fixed::dstar::synthesis::DStarSynthesisDecoder as FixedDecoder;
-    use ham_digital_modes::ambe::float::concealment::ConcealParams as FloatParams;
     use ham_digital_modes::ambe::fixed::general::concealment::ConcealParams as FixedParams;
+    use ham_digital_modes::ambe::float::concealment::ConcealParams as FloatParams;
     use ham_digital_modes::ambe::float::dstar::encoder::Encoder;
     use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder as FloatDecoder;
 
@@ -122,7 +150,9 @@ mod fixed_point {
         let fr = frames();
         let run = |policy| {
             let mut d = FixedDecoder::new().with_error_policy(policy);
-            fr.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0; 160])).collect::<Vec<i64>>()
+            fr.iter()
+                .flat_map(|&f| d.decode_frame(f).unwrap_or([0; 160]))
+                .collect::<Vec<i64>>()
         };
         assert_eq!(run(ErrorPolicy::Clean), run(ErrorPolicy::Concealing));
     }
@@ -145,7 +175,10 @@ mod fixed_point {
         for &f in &fr {
             let o = fl.decode_frame(f).unwrap_or([0.0; 160]);
             let x = fx.decode_frame(f).unwrap_or([0; 160]);
-            let (rl, rx) = (rms(&o), rms(&x.iter().map(|&v| v as f64 / 65536.0).collect::<Vec<_>>()));
+            let (rl, rx) = (
+                rms(&o),
+                rms(&x.iter().map(|&v| v as f64 / 65536.0).collect::<Vec<_>>()),
+            );
             a.push((rl + 1.0).ln());
             b.push((rx + 1.0).ln());
             n += 1;
@@ -154,7 +187,11 @@ mod fixed_point {
             }
         }
         // The two implementations make (nearly) the same accept/repeat decisions, so frame energies track each other.
-        assert!(agree_energy as f64 / n as f64 > 0.95, "frame energy agreement {}", agree_energy as f64 / n as f64);
+        assert!(
+            agree_energy as f64 / n as f64 > 0.95,
+            "frame energy agreement {}",
+            agree_energy as f64 / n as f64
+        );
     }
 
     #[test]
@@ -166,7 +203,17 @@ mod fixed_point {
             *f ^= noise & ((1u128 << 72) - 1);
         }
         let mut d = FixedDecoder::new().with_error_policy(ErrorPolicy::Concealing);
-        let out: Vec<f64> = fr.iter().map(|&f| rms(&d.decode_frame(f).unwrap_or([0; 160]).iter().map(|&v| v as f64 / 65536.0).collect::<Vec<_>>())).collect();
+        let out: Vec<f64> = fr
+            .iter()
+            .map(|&f| {
+                rms(&d
+                    .decode_frame(f)
+                    .unwrap_or([0; 160])
+                    .iter()
+                    .map(|&v| v as f64 / 65536.0)
+                    .collect::<Vec<_>>())
+            })
+            .collect();
         let before = out[94..100].iter().cloned().fold(0.0, f64::max);
         assert!(before > 50.0);
         assert!(out[100] > 0.0, "the first damaged frame still sounds");

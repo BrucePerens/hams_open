@@ -111,7 +111,11 @@ mod tests {
         for eighths in 168u32..=976 {
             let period = eighths as f64 / 8.0;
             let expected = eighths / 4 - 39; // floor(2 * eighths / 8 - 39)
-            assert_eq!(quantize_fundamental_frequency(2.0 * PI / period), expected, "period {period}");
+            assert_eq!(
+                quantize_fundamental_frequency(2.0 * PI / period),
+                expected,
+                "period {period}"
+            );
         }
     }
 

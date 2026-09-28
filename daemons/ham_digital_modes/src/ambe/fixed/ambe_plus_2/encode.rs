@@ -4,14 +4,19 @@
 //! speech-quantizer table set and [`amplitude_field_q16`], the integer version of the float encoder's 12-bit tone
 //! level mapping (interpolation in log2 over the seven chip-measured points).
 
-use super::tables_q16::{DG_Q16_16, HOC_B5_Q16_16, HOC_B6_Q16_16, HOC_B7_Q16_16, HOC_B8_Q16_16, PRBA24_Q16_16, PRBA58_Q16_16};
+use super::tables_q16::{
+    DG_Q16_16, HOC_B5_Q16_16, HOC_B6_Q16_16, HOC_B7_Q16_16, HOC_B8_Q16_16, PRBA24_Q16_16,
+    PRBA58_Q16_16,
+};
 use crate::ambe::fixed::general::explog::log2_q16_i64;
 use crate::ambe::fixed::general::fixed_ops::div_q16;
 use crate::ambe::fixed::general::mbe_encode::ModeTables;
 use crate::ambe::float::ambe_plus_2::tables::{LMPRBL, VUV};
 
 pub use crate::ambe::float::ambe_plus_2::decode::{dtmf_tone_idx, RawParameters};
-pub use crate::ambe::float::ambe_plus_2::encode::{build_frame, build_tone_frame, pack_raw_parameters, pack_tone_parameters};
+pub use crate::ambe::float::ambe_plus_2::encode::{
+    build_frame, build_tone_frame, pack_raw_parameters, pack_tone_parameters,
+};
 
 /// AMBE+2's Q16.16 quantizer tables.
 pub fn mode_tables() -> ModeTables<'static> {
@@ -21,7 +26,12 @@ pub fn mode_tables() -> ModeTables<'static> {
         prba24_q16: &PRBA24_Q16_16,
         prba58_q16: &PRBA58_Q16_16,
         lmprbl: &LMPRBL,
-        hoc_q16: [&HOC_B5_Q16_16, &HOC_B6_Q16_16, &HOC_B7_Q16_16, &HOC_B8_Q16_16],
+        hoc_q16: [
+            &HOC_B5_Q16_16,
+            &HOC_B6_Q16_16,
+            &HOC_B7_Q16_16,
+            &HOC_B8_Q16_16,
+        ],
         hoc_b8_even_only: false,
         rho_q16: crate::ambe::fixed::general::mbe_speech::POINT_65_Q16_16,
         gamma_scale_q16: crate::ambe::fixed::general::mbe_speech::GAMMA_SCALE_1_Q16_16,
@@ -32,7 +42,15 @@ pub fn mode_tables() -> ModeTables<'static> {
 /// The 12-bit tone level field for a per-tone amplitude (Q16.16 PCM units); integer port of the float
 /// `amplitude_field` (same seven chip points, same clamping quirks below 250 and above 16000).
 pub fn amplitude_field_q16(amplitude_q16: i64) -> u16 {
-    const POINTS: [(i64, i32); 7] = [(250, 0x715), (500, 0x725), (1000, 0xea2), (2000, 0xed2), (4000, 0xf12), (8000, 0xf62), (16000, 0xfa2)];
+    const POINTS: [(i64, i32); 7] = [
+        (250, 0x715),
+        (500, 0x725),
+        (1000, 0xea2),
+        (2000, 0xed2),
+        (4000, 0xf12),
+        (8000, 0xf62),
+        (16000, 0xfa2),
+    ];
     let x = log2_q16_i64(amplitude_q16.max(1 << 16)) as i64;
     let lg = |a: i64| log2_q16_i64(a << 16) as i64;
     let (mut lo, mut hi) = (POINTS[0], POINTS[POINTS.len() - 1]);
@@ -65,5 +83,8 @@ pub fn quantize_pitch_p8(p8: u32) -> u32 {
 
 /// The table pitch of `b0` as the fixed decoder uses it: `(f0 in cycles/sample Q16.16, omega0 in radians/sample Q32)`.
 pub fn table_pitch(b0: u32) -> (i32, i64) {
-    (super::tables_q16::W0_TABLE_Q16_16[b0 as usize], super::tables_q16::W0_TABLE_Q32[b0 as usize])
+    (
+        super::tables_q16::W0_TABLE_Q16_16[b0 as usize],
+        super::tables_q16::W0_TABLE_Q32[b0 as usize],
+    )
 }

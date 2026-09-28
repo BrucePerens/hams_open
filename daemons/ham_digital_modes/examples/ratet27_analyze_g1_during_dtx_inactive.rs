@@ -43,7 +43,10 @@ fn main() {
         let wire_bits = hex_to_wire_bits(parts[2]);
         let (g0, _) = decode_block(&wire_bits, Block::Golay { index: 0 });
         let (g1, _) = decode_block(&wire_bits, Block::Golay { index: 1 });
-        by_label.entry(parts[0].to_string()).or_default().push((g0, g1));
+        by_label
+            .entry(parts[0].to_string())
+            .or_default()
+            .push((g0, g1));
     }
 
     // Labels are named by this project's own capture convention: "dtx{on,off}_{silence,tone,noise1,
@@ -52,21 +55,32 @@ fn main() {
     // active/inactive by content name alone -- see the g0~3957-yet-g1-high overlap noted below).
     println!(
         "{:22}  {:>8}  {:>28}",
-        "label", "n", format!("frames_reaching_g1_high(>= {G1_HIGH_CLUSTER_FLOOR})")
+        "label",
+        "n",
+        format!("frames_reaching_g1_high(>= {G1_HIGH_CLUSTER_FLOOR})")
     );
     for (label, vals) in &by_label {
-        let reaching = vals.iter().filter(|&&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR).count();
+        let reaching = vals
+            .iter()
+            .filter(|&&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR)
+            .count();
         println!("{label:22}  {:8}  {reaching}/{}", vals.len(), vals.len());
     }
 
     let fraction_reaching_high = |labels: &[&str]| -> (usize, usize) {
         labels.iter().fold((0, 0), |(hit, total), l| {
-            let Some(vals) = by_label.get(*l) else { return (hit, total) };
-            let h = vals.iter().filter(|&&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR).count();
+            let Some(vals) = by_label.get(*l) else {
+                return (hit, total);
+            };
+            let h = vals
+                .iter()
+                .filter(|&&(_, g1)| g1 >= G1_HIGH_CLUSTER_FLOOR)
+                .count();
             (hit + h, total + vals.len())
         })
     };
-    let (inactive_hit, inactive_total) = fraction_reaching_high(&["dtxon_silence", "dtxon_lowlevelnoise"]);
+    let (inactive_hit, inactive_total) =
+        fraction_reaching_high(&["dtxon_silence", "dtxon_lowlevelnoise"]);
     let (active_hit, active_total) = fraction_reaching_high(&["dtxon_tone", "dtxoff_tone"]);
     println!(
         "\nConfirmed-inactive labels reaching the g1 high cluster: {inactive_hit}/{inactive_total} (expect 0/{inactive_total} -- inactive should never reach it)\nConfirmed-active labels reaching the g1 high cluster: {active_hit}/{active_total} (a real but partial signal, not every frame)"

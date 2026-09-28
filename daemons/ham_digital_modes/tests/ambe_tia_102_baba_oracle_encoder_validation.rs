@@ -12,14 +12,20 @@
 //! * The decoder's enhanced amplitudes equal the oracle decoder's (the oracle stores them times four).
 //! * Silence encodes to the lowest pitch index and no voiced band, as in the oracle.
 
-use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{deprioritize_bits, prioritize_bits};
+use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{
+    deprioritize_bits, prioritize_bits,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
-use ham_digital_modes::ambe::float::tia_102_baba::{encode_code_vectors, quantize_spectral_amplitudes};
 use ham_digital_modes::ambe::float::tia_102_baba::encoder::{Encoder, FrameAnalyzer};
 use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
 use ham_digital_modes::ambe::float::tia_102_baba::pitch::PitchAnalysisFrame;
-use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
+    gain_bit_allocation, higher_order_bit_allocation,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::vuv::frequency_bands_count;
+use ham_digital_modes::ambe::float::tia_102_baba::{
+    encode_code_vectors, quantize_spectral_amplitudes,
+};
 use std::f64::consts::PI;
 
 const FRAMES: usize = 30;
@@ -32,7 +38,8 @@ fn harmonic_signal(period: f64) -> Vec<f64> {
             let mut x = 0.0;
             let mut h = 1;
             while (h as f64) < period / 2.0 {
-                x += 6000.0 / h as f64 * (2.0 * PI * h as f64 * t as f64 / period + 0.3 * (h * h) as f64).sin();
+                x += 6000.0 / h as f64
+                    * (2.0 * PI * h as f64 * t as f64 / period + 0.3 * (h * h) as f64).sin();
                 h += 1;
             }
             x.round()
@@ -41,7 +48,9 @@ fn harmonic_signal(period: f64) -> Vec<f64> {
 }
 
 fn pulse_train(period: usize) -> Vec<f64> {
-    (0..FRAMES * 160).map(|t| if t % period == 0 { 20000.0 } else { 0.0 }).collect()
+    (0..FRAMES * 160)
+        .map(|t| if t % period == 0 { 20000.0 } else { 0.0 })
+        .collect()
 }
 
 /// `(b0, L, voiced-band count)` of every frame the encoder produces for `pcm`.
@@ -54,7 +63,9 @@ fn encode(pcm: &[f64]) -> Vec<(u32, u32, usize)> {
     frames
         .iter()
         .map(|&c| match DecoderState::new().decode_parameters(c) {
-            Some(FrameOutcome::Decoded(p)) => (p.bits.b0, p.l_hat, p.voiced.iter().filter(|&&v| v).count()),
+            Some(FrameOutcome::Decoded(p)) => {
+                (p.bits.b0, p.l_hat, p.voiced.iter().filter(|&&v| v).count())
+            }
             _ => panic!("encoder produced an undecodable frame"),
         })
         .collect()
@@ -76,8 +87,15 @@ fn steady_state_b0_and_l_match_the_oracle_on_synthetic_signals() {
     ];
     for (name, pcm, b0, l) in cases {
         let frames = encode(&pcm);
-        let agree = frames[14..28].iter().filter(|&&(fb0, fl, _)| fb0 == b0 && fl == l).count();
-        assert!(agree >= 13, "{name}: only {agree} of 14 steady frames give b0 {b0}, L {l}: {:?}", &frames[14..28]);
+        let agree = frames[14..28]
+            .iter()
+            .filter(|&&(fb0, fl, _)| fb0 == b0 && fl == l)
+            .count();
+        assert!(
+            agree >= 13,
+            "{name}: only {agree} of 14 steady frames give b0 {b0}, L {l}: {:?}",
+            &frames[14..28]
+        );
     }
 }
 
@@ -85,7 +103,10 @@ fn steady_state_b0_and_l_match_the_oracle_on_synthetic_signals() {
 fn median_initial_pitch_error(pcm: &[f64]) -> f64 {
     let mut analyzer = FrameAnalyzer::new();
     analyzer.push_samples(pcm);
-    let mut errors: Vec<f64> = std::iter::from_fn(|| analyzer.next_analysis()).skip(4).map(|a| a.initial_pitch_error).collect();
+    let mut errors: Vec<f64> = std::iter::from_fn(|| analyzer.next_analysis())
+        .skip(4)
+        .map(|a| a.initial_pitch_error)
+        .collect();
     errors.sort_by(|a, b| a.total_cmp(b));
     errors[errors.len() / 2]
 }
@@ -116,16 +137,31 @@ fn a_dc_offset_does_not_make_noise_look_periodic() {
     let plain = median_initial_pitch_error(&noisy);
     let offset_unfiltered = median_initial_pitch_error(&with_dc);
     assert!(plain > 0.6, "noise alone: E {plain}");
-    assert!(offset_unfiltered < 0.3, "noise with an offset, unfiltered: E {offset_unfiltered}");
+    assert!(
+        offset_unfiltered < 0.3,
+        "noise with an offset, unfiltered: E {offset_unfiltered}"
+    );
 
     // The encoder's filter removes the offset, so it codes the offset noise like the noise alone: the same b0 in nearly
     // every frame and about the same number of voiced bands.
     let (clean_frames, dc_frames) = (encode(&noisy), encode(&with_dc));
-    let same_pitch = clean_frames.iter().zip(&dc_frames).skip(4).filter(|(a, b)| a.0 == b.0).count();
-    assert!(same_pitch + 4 >= clean_frames.len() - 3, "b0 differs in {} frames", clean_frames.len() - 4 - same_pitch);
+    let same_pitch = clean_frames
+        .iter()
+        .zip(&dc_frames)
+        .skip(4)
+        .filter(|(a, b)| a.0 == b.0)
+        .count();
+    assert!(
+        same_pitch + 4 >= clean_frames.len() - 3,
+        "b0 differs in {} frames",
+        clean_frames.len() - 4 - same_pitch
+    );
     let voiced = |f: &[(u32, u32, usize)]| f.iter().skip(4).map(|x| x.2).sum::<usize>() as f64;
     let (a, b) = (voiced(&clean_frames), voiced(&dc_frames));
-    assert!((a - b).abs() <= 0.1 * a.max(b), "voiced bands: {a} without the offset, {b} with it");
+    assert!(
+        (a - b).abs() <= 0.1 * a.max(b),
+        "voiced bands: {a} without the offset, {b} with it"
+    );
 }
 
 #[test]
@@ -139,7 +175,11 @@ fn the_error_function_is_never_negative() {
         let frame = PitchAnalysisFrame::new(&raw, center);
         for i in 0..203 {
             let e = frame.error_function(21.0 + 0.5 * i as f64);
-            assert!(e >= 0.0 && e.is_finite(), "E({}) = {e}", 21.0 + 0.5 * i as f64);
+            assert!(
+                e >= 0.0 && e.is_finite(),
+                "E({}) = {e}",
+                21.0 + 0.5 * i as f64
+            );
         }
     }
 }
@@ -153,7 +193,11 @@ fn silence_encodes_to_the_lowest_pitch_index_with_nothing_voiced() {
     let expected_b0 = [118, 86, 61, 41, 25, 12, 2];
     let expected_l = [36, 28, 23, 18, 14, 12, 9];
     for (k, &(b0, l, voiced)) in frames.iter().enumerate() {
-        let (eb0, el) = if k < 7 { (expected_b0[k], expected_l[k]) } else { (0, 9) };
+        let (eb0, el) = if k < 7 {
+            (expected_b0[k], expected_l[k])
+        } else {
+            (0, 9)
+        };
         assert_eq!((b0, l, voiced), (eb0, el, 0), "frame {k}");
     }
 }
@@ -168,7 +212,9 @@ fn silence_gain_index_matches_the_oracle() {
     let mut frames: Vec<[u32; 8]> = std::iter::from_fn(|| enc.next_frame()).collect();
     frames.extend(enc.finish());
     for (k, &c) in frames.iter().enumerate().skip(8) {
-        let Some(FrameOutcome::Decoded(p)) = DecoderState::new().decode_parameters(c) else { panic!("frame {k}") };
+        let Some(FrameOutcome::Decoded(p)) = DecoderState::new().decode_parameters(c) else {
+            panic!("frame {k}")
+        };
         assert_eq!(p.bits.b2, 17, "frame {k}");
     }
 }
@@ -200,16 +246,24 @@ const BIT_VECTORS: &[(&str, [u32; 8])] = &[
 #[test]
 fn bit_prioritization_matches_the_oracle_packer_and_unpacker() {
     for &(line, expected) in BIT_VECTORS {
-        let v: Vec<u32> = line.split_whitespace().map(|t| t.parse().unwrap()).collect();
+        let v: Vec<u32> = line
+            .split_whitespace()
+            .map(|t| t.parse().unwrap())
+            .collect();
         let (l, b0, b1, b2) = (v[0], v[1], v[2], v[3]);
         let k = frequency_bands_count(l);
-        let gain_widths: [u8; 5] = std::array::from_fn(|i| gain_bit_allocation(l, i as u32 + 2).unwrap().0);
+        let gain_widths: [u8; 5] =
+            std::array::from_fn(|i| gain_bit_allocation(l, i as u32 + 2).unwrap().0);
         let ho_widths = higher_order_bit_allocation(l).unwrap();
         let gain: [(u32, u8); 5] = std::array::from_fn(|i| (v[4 + i], gain_widths[i]));
         let hoc_values = &v[9..v.len() - 1];
         assert_eq!(hoc_values.len(), ho_widths.len(), "line for L = {l}");
-        let higher_order: Vec<(u32, u8)> =
-            ho_widths.iter().zip(hoc_values).filter(|(&w, _)| w > 0).map(|(&w, &x)| (x, w)).collect();
+        let higher_order: Vec<(u32, u8)> = ho_widths
+            .iter()
+            .zip(hoc_values)
+            .filter(|(&w, _)| w > 0)
+            .map(|(&w, &x)| (x, w))
+            .collect();
         let sync = *v.last().unwrap() == 1;
 
         let u = prioritize_bits(b0, b1, k, b2, gain, &higher_order, sync).unwrap();
@@ -217,7 +271,10 @@ fn bit_prioritization_matches_the_oracle_packer_and_unpacker() {
 
         let nonzero: Vec<u8> = ho_widths.iter().copied().filter(|&w| w > 0).collect();
         let back = deprioritize_bits(expected, k, gain_widths, &nonzero).unwrap();
-        assert_eq!((back.b0, back.b1, back.b2, back.sync_bit), (b0, b1, b2, sync));
+        assert_eq!(
+            (back.b0, back.b1, back.b2, back.sync_bit),
+            (b0, b1, b2, sync)
+        );
         assert_eq!(back.gain_vector, gain);
         assert_eq!(back.higher_order, higher_order);
     }
@@ -229,29 +286,29 @@ const ORACLE_DECODE_CHAIN: [([u32; 8], [u32; 32]); 4] = [
     (
         [0x67e, 0x7f8, 0xcd, 0xf42, 0x7ff, 0x400, 0x91, 0x3b],
         [
-            2263, 1262, 1261, 977, 756, 1193, 587, 762, 676, 696, 1259, 923, 556, 1062, 734, 1235, 786, 488, 959, 575,
-            846, 1455, 521, 488, 556, 851, 535, 364, 767, 1220, 783, 642,
+            2263, 1262, 1261, 977, 756, 1193, 587, 762, 676, 696, 1259, 923, 556, 1062, 734, 1235,
+            786, 488, 959, 575, 846, 1455, 521, 488, 556, 851, 535, 364, 767, 1220, 783, 642,
         ],
     ),
     (
         [0x67e, 0x7ec, 0x9d, 0xba0, 0x7ff, 0x4a0, 0x6de, 0x6b],
         [
-            4268, 2246, 1760, 2014, 1339, 1398, 619, 1234, 815, 602, 1865, 672, 673, 854, 776, 976, 323, 467, 855, 739,
-            1364, 677, 445, 348, 447, 585, 823, 449, 362, 650, 759, 389,
+            4268, 2246, 1760, 2014, 1339, 1398, 619, 1234, 815, 602, 1865, 672, 673, 854, 776, 976,
+            323, 467, 855, 739, 1364, 677, 445, 348, 447, 585, 823, 449, 362, 650, 759, 389,
         ],
     ),
     (
         [0x67e, 0x7f8, 0xc0, 0x4c2, 0x7ff, 0x41b, 0x56e, 0x5b],
         [
-            7162, 2548, 2147, 1829, 1114, 1343, 971, 788, 680, 684, 1648, 958, 1280, 640, 762, 891, 545, 840, 485, 609,
-            969, 299, 678, 619, 655, 523, 981, 500, 418, 381, 342, 534,
+            7162, 2548, 2147, 1829, 1114, 1343, 971, 788, 680, 684, 1648, 958, 1280, 640, 762, 891,
+            545, 840, 485, 609, 969, 299, 678, 619, 655, 523, 981, 500, 418, 381, 342, 534,
         ],
     ),
     (
         [0x67e, 0x6fc, 0x4cd, 0xfa4, 0x7ff, 0x400, 0x90, 0x3b],
         [
-            9919, 2966, 3093, 2521, 2101, 2486, 982, 1105, 882, 911, 1696, 865, 635, 740, 574, 1265, 590, 492, 654, 458,
-            705, 571, 335, 293, 346, 448, 931, 349, 506, 595, 264, 256,
+            9919, 2966, 3093, 2521, 2101, 2486, 982, 1105, 882, 911, 1696, 865, 635, 740, 574,
+            1265, 590, 492, 654, 458, 705, 571, 335, 293, 346, 448, 931, 349, 506, 595, 264, 256,
         ],
     ),
 ];
@@ -261,14 +318,20 @@ fn enhanced_amplitudes_equal_the_oracle_decoders_to_within_its_integer_resolutio
     let mut dec = DecoderState::new();
     for (n, (frame, oracle)) in ORACLE_DECODE_CHAIN.iter().enumerate() {
         let c = encode_code_vectors(*frame);
-        let Some(FrameOutcome::Decoded(p)) = dec.decode_parameters(c) else { panic!("frame {n} did not decode") };
+        let Some(FrameOutcome::Decoded(p)) = dec.decode_parameters(c) else {
+            panic!("frame {n} did not decode")
+        };
         assert_eq!(p.l_hat, 32);
         let enhanced = enhance_spectral_amplitudes(&p.reconstructed_amplitudes, p.omega0_tilde);
         for (l, (&ours, &theirs)) in enhanced.iter().zip(oracle.iter()).enumerate() {
             let expected = theirs as f64 / 4.0;
             // The oracle stores 4 M as a 16-bit integer: half a unit of resolution on 4 M, plus its rounding.
             let tolerance = 0.02 * expected + 0.5;
-            assert!((ours - expected).abs() <= tolerance, "frame {n}, harmonic {}: ours {ours}, oracle {expected}", l + 1);
+            assert!(
+                (ours - expected).abs() <= tolerance,
+                "frame {n}, harmonic {}: ours {ours}, oracle {expected}",
+                l + 1
+            );
         }
         dec.advance_history(&p);
     }
@@ -294,29 +357,73 @@ const AMPLITUDE_QUANTIZATION: &[(&[u32], &[u32], &[u32])] = &[
         &[40, 39, 25, 47, 20, 17, 28, 29, 11, 5, 6, 4, 4, 5, 4, 2],
     ),
     (
-        &[44, 79, 83, 61, 56, 56, 74, 10, 15, 35, 12, 15, 11, 18, 16, 5, 4, 9, 13, 6, 8, 3, 8],
-        &[41, 27, 9, 8, 7, 4, 6, 3, 7, 9, 4, 7, 2, 3, 4, 2, 3, 0, 3, 1, 2, 3, 0],
-        &[41, 26, 9, 8, 6, 4, 5, 3, 7, 8, 3, 6, 1, 3, 3, 2, 2, 0, 2, 1, 2, 2, 0],
+        &[
+            44, 79, 83, 61, 56, 56, 74, 10, 15, 35, 12, 15, 11, 18, 16, 5, 4, 9, 13, 6, 8, 3, 8,
+        ],
+        &[
+            41, 27, 9, 8, 7, 4, 6, 3, 7, 9, 4, 7, 2, 3, 4, 2, 3, 0, 3, 1, 2, 3, 0,
+        ],
+        &[
+            41, 26, 9, 8, 6, 4, 5, 3, 7, 8, 3, 6, 1, 3, 3, 2, 2, 0, 2, 1, 2, 2, 0,
+        ],
     ),
     (
-        &[621, 187, 614, 176, 225, 163, 139, 134, 229, 90, 39, 33, 19, 33, 37, 14, 20, 71, 26, 15, 10, 32, 20, 11, 23, 18, 13, 4, 11, 2],
-        &[48, 15, 11, 11, 2, 3, 5, 4, 3, 3, 4, 3, 3, 1, 4, 3, 2, 0, 4, 0, 1, 1, 2, 1, 0, 1, 3, 1, 1, 0],
-        &[48, 15, 10, 11, 2, 3, 5, 3, 2, 3, 4, 3, 3, 1, 4, 3, 2, 0, 3, 0, 1, 1, 1, 0, 0, 0, 3, 0, 1, 0],
+        &[
+            621, 187, 614, 176, 225, 163, 139, 134, 229, 90, 39, 33, 19, 33, 37, 14, 20, 71, 26,
+            15, 10, 32, 20, 11, 23, 18, 13, 4, 11, 2,
+        ],
+        &[
+            48, 15, 11, 11, 2, 3, 5, 4, 3, 3, 4, 3, 3, 1, 4, 3, 2, 0, 4, 0, 1, 1, 2, 1, 0, 1, 3, 1,
+            1, 0,
+        ],
+        &[
+            48, 15, 10, 11, 2, 3, 5, 3, 2, 3, 4, 3, 3, 1, 4, 3, 2, 0, 3, 0, 1, 1, 1, 0, 0, 0, 3, 0,
+            1, 0,
+        ],
     ),
     (
-        &[1049, 1247, 1271, 1798, 358, 134, 522, 681, 134, 341, 371, 338, 449, 156, 308, 321, 220, 124, 103, 48, 143, 48, 173, 140, 69, 157, 212, 83, 107, 52, 37, 28, 34, 19, 74, 78, 111],
-        &[60, 15, 5, 5, 3, 3, 7, 0, 3, 2, 0, 5, 3, 3, 0, 0, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0],
-        &[60, 15, 4, 4, 3, 3, 7, 0, 3, 2, 0, 4, 3, 2, 0, 0, 5, 1, 1, 1, 1, 1, 1, 0, 1, 1, 2, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0],
+        &[
+            1049, 1247, 1271, 1798, 358, 134, 522, 681, 134, 341, 371, 338, 449, 156, 308, 321,
+            220, 124, 103, 48, 143, 48, 173, 140, 69, 157, 212, 83, 107, 52, 37, 28, 34, 19, 74,
+            78, 111,
+        ],
+        &[
+            60, 15, 5, 5, 3, 3, 7, 0, 3, 2, 0, 5, 3, 3, 0, 0, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 0,
+            0, 0, 0, 0, 1, 1, 1, 1, 0,
+        ],
+        &[
+            60, 15, 4, 4, 3, 3, 7, 0, 3, 2, 0, 4, 3, 2, 0, 0, 5, 1, 1, 1, 1, 1, 1, 0, 1, 1, 2, 0,
+            0, 0, 0, 0, 1, 1, 0, 0, 0,
+        ],
     ),
     (
-        &[44, 36, 23, 33, 11, 8, 19, 29, 20, 30, 15, 12, 8, 19, 21, 19, 12, 5, 4, 7, 12, 11, 12, 7, 5, 6, 5, 6, 9, 4, 8, 3, 2, 15, 5, 2, 4, 2, 4, 4, 1, 3, 2, 1, 3],
-        &[34, 14, 3, 5, 1, 2, 6, 2, 1, 1, 1, 0, 6, 2, 1, 1, 1, 1, 3, 3, 0, 1, 1, 1, 3, 3, 1, 1, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 3, 1, 1, 1, 0, 0, 0],
-        &[34, 14, 3, 4, 1, 1, 6, 2, 1, 1, 0, 0, 5, 2, 0, 1, 1, 1, 3, 3, 0, 0, 1, 1, 2, 3, 0, 1, 0, 0, 0, 2, 0, 1, 1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0],
+        &[
+            44, 36, 23, 33, 11, 8, 19, 29, 20, 30, 15, 12, 8, 19, 21, 19, 12, 5, 4, 7, 12, 11, 12,
+            7, 5, 6, 5, 6, 9, 4, 8, 3, 2, 15, 5, 2, 4, 2, 4, 4, 1, 3, 2, 1, 3,
+        ],
+        &[
+            34, 14, 3, 5, 1, 2, 6, 2, 1, 1, 1, 0, 6, 2, 1, 1, 1, 1, 3, 3, 0, 1, 1, 1, 3, 3, 1, 1,
+            0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 3, 1, 1, 1, 0, 0, 0,
+        ],
+        &[
+            34, 14, 3, 4, 1, 1, 6, 2, 1, 1, 0, 0, 5, 2, 0, 1, 1, 1, 3, 3, 0, 0, 1, 1, 2, 3, 0, 1,
+            0, 0, 0, 2, 0, 1, 1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0,
+        ],
     ),
     (
-        &[72, 129, 98, 120, 241, 34, 55, 101, 48, 37, 61, 17, 14, 26, 13, 24, 23, 20, 15, 9, 23, 7, 8, 2, 22, 4, 11, 4, 5, 3, 4, 2, 4, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        &[32, 7, 6, 2, 3, 2, 5, 1, 1, 1, 1, 0, 1, 0, 5, 3, 3, 1, 1, 0, 0, 0, 3, 3, 0, 0, 1, 1, 0, 0, 3, 2, 1, 1, 0, 0, 0, 0, 2, 1, 1, 1, 1, 0, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 0, 0],
-        &[32, 7, 6, 2, 3, 2, 5, 1, 0, 1, 1, 0, 0, 0, 5, 3, 2, 0, 0, 0, 0, 0, 2, 3, 0, 0, 1, 1, 0, 0, 3, 2, 0, 1, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 0, 0],
+        &[
+            72, 129, 98, 120, 241, 34, 55, 101, 48, 37, 61, 17, 14, 26, 13, 24, 23, 20, 15, 9, 23,
+            7, 8, 2, 22, 4, 11, 4, 5, 3, 4, 2, 4, 1, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1,
+        ],
+        &[
+            32, 7, 6, 2, 3, 2, 5, 1, 1, 1, 1, 0, 1, 0, 5, 3, 3, 1, 1, 0, 0, 0, 3, 3, 0, 0, 1, 1, 0,
+            0, 3, 2, 1, 1, 0, 0, 0, 0, 2, 1, 1, 1, 1, 0, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 0, 0,
+        ],
+        &[
+            32, 7, 6, 2, 3, 2, 5, 1, 0, 1, 1, 0, 0, 0, 5, 3, 2, 0, 0, 0, 0, 0, 2, 3, 0, 0, 1, 1, 0,
+            0, 3, 2, 0, 1, 0, 0, 0, 0, 2, 1, 1, 0, 0, 0, 0, 0, 0, 2, 1, 1, 1, 0, 0, 0, 0, 0,
+        ],
     ),
 ];
 
@@ -335,10 +442,17 @@ fn amplitude_quantization_equals_the_oracles_except_that_it_floors_where_the_ora
         for &w in higher_order_bit_allocation(l).unwrap() {
             indices.push(if w > 0 { hi.next().unwrap().0 } else { 0 });
         }
-        assert_eq!(indices, expected, "L = {l}: this crate's own indices changed");
+        assert_eq!(
+            indices, expected,
+            "L = {l}: this crate's own indices changed"
+        );
         assert_eq!(indices[0], oracle[0], "L = {l}: gain index b2");
         for (k, (&ours, &theirs)) in indices.iter().zip(oracle).enumerate().skip(1) {
-            assert!(theirs == ours || theirs == ours + 1, "L = {l}, b{}: ours {ours}, oracle {theirs}", k + 2);
+            assert!(
+                theirs == ours || theirs == ours + 1,
+                "L = {l}, b{}: ours {ours}, oracle {theirs}",
+                k + 2
+            );
             above += (theirs == ours + 1) as usize;
             total += 1;
         }

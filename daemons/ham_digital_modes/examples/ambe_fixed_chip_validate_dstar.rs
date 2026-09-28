@@ -9,8 +9,10 @@
 
 use ham_digital_modes::ambe::fixed::dstar::decode as fixed_decode;
 use ham_digital_modes::ambe::fixed::general::mbe_speech::MbeDecoderState;
-use ham_digital_modes::ambe::float::dstar::decode::{classify_b0, DStarDecoderState, DequantizedFrame, FrameKind};
 use ham_digital_modes::ambe::float::dstar::decode as float_decode;
+use ham_digital_modes::ambe::float::dstar::decode::{
+    classify_b0, DStarDecoderState, DequantizedFrame, FrameKind,
+};
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -70,18 +72,29 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 512], pkt: &[u8]) -> usiz
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_DSTAR)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_DSTAR))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -122,7 +135,8 @@ fn main() {
             let frame = wire_bytes_to_frame(&wire_bytes);
             let parsed = ham_digital_modes::ambe::float::dstar::decode::parse_frame(frame);
             total_frames += 1;
-            let raw = ham_digital_modes::ambe::float::dstar::decode::extract_raw_parameters(parsed.d);
+            let raw =
+                ham_digital_modes::ambe::float::dstar::decode::extract_raw_parameters(parsed.d);
 
             if classify_b0(raw.b0) == FrameKind::Tone {
                 continue; // Tone frames: already pure-integer, not this validator's concern.
@@ -132,14 +146,24 @@ fn main() {
             let float_result = float_decode::dequantize(parsed.d, &mut float_state);
             let fixed_result = fixed_decode::dequantize(parsed.d, &mut fixed_state);
             match (float_result, fixed_result) {
-                (DequantizedFrame::Speech(float_params), fixed_decode::DequantizedFrame::Speech(fixed_params)) => {
+                (
+                    DequantizedFrame::Speech(float_params),
+                    fixed_decode::DequantizedFrame::Speech(fixed_params),
+                ) => {
                     if float_params.l != fixed_params.l {
-                        hard_failures.push(format!("{path} frame {i}: L mismatch (float={}, fixed={})", float_params.l, fixed_params.l));
+                        hard_failures.push(format!(
+                            "{path} frame {i}: L mismatch (float={}, fixed={})",
+                            float_params.l, fixed_params.l
+                        ));
                         continue;
                     }
                     let mut frame_had_boundary_issue = float_params.voiced != fixed_params.voiced;
-                    for (_h, (&float_ml, &fixed_ml_q16)) in
-                        float_params.ml.iter().zip(fixed_params.ml_q16.iter()).enumerate().skip(1)
+                    for (_h, (&float_ml, &fixed_ml_q16)) in float_params
+                        .ml
+                        .iter()
+                        .zip(fixed_params.ml_q16.iter())
+                        .enumerate()
+                        .skip(1)
                     {
                         let fixed_ml = fixed_ml_q16 as f64 / 65536.0;
                         let rel_err = if float_ml.abs() > 1e-9 {
@@ -157,7 +181,9 @@ fn main() {
                         boundary_frames.push(format!("{path} frame {i}"));
                     }
                 }
-                _ => hard_failures.push(format!("{path} frame {i}: frame-kind mismatch despite matching classify_b0")),
+                _ => hard_failures.push(format!(
+                    "{path} frame {i}: frame-kind mismatch despite matching classify_b0"
+                )),
             }
         }
     }
@@ -181,7 +207,12 @@ fn main() {
              recorded speech."
         );
     } else {
-        eprintln!("\nFAIL: {} hard failure(s), {:.3}% boundary-crossing rate (limit {:.1}%):", hard_failures.len(), boundary_rate * 100.0, MAX_ACCEPTABLE_BOUNDARY_RATE * 100.0);
+        eprintln!(
+            "\nFAIL: {} hard failure(s), {:.3}% boundary-crossing rate (limit {:.1}%):",
+            hard_failures.len(),
+            boundary_rate * 100.0,
+            MAX_ACCEPTABLE_BOUNDARY_RATE * 100.0
+        );
         for m in hard_failures.iter().take(20) {
             eprintln!("  hard failure: {m}");
         }

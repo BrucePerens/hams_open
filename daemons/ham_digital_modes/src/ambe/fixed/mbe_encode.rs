@@ -24,7 +24,10 @@ pub struct AnalysisState {
 
 impl AnalysisState {
     pub fn new() -> Self {
-        Self { xi_max_q16: XI_MAX_INITIAL_Q16, prev_bands: Vec::new() }
+        Self {
+            xi_max_q16: XI_MAX_INITIAL_Q16,
+            prev_bands: Vec::new(),
+        }
     }
 }
 
@@ -45,8 +48,13 @@ pub fn analyze_at_pitch(
     l: u32,
     state: &mut AnalysisState,
 ) -> (Vec<bool>, Vec<i64>) {
-    let (bands, xi_max) =
-        determine_voicing(refinement, pitch, initial_pitch_error_q16, state.xi_max_q16, &state.prev_bands);
+    let (bands, xi_max) = determine_voicing(
+        refinement,
+        pitch,
+        initial_pitch_error_q16,
+        state.xi_max_q16,
+        &state.prev_bands,
+    );
     state.xi_max_q16 = xi_max;
     state.prev_bands = bands.clone();
     let k_hat = frequency_bands_count(l) as usize;
@@ -74,7 +82,13 @@ pub fn analyze_frame_at_pitch(
     l: u32,
     state: &mut AnalysisState,
 ) -> (Vec<bool>, Vec<i64>) {
-    analyze_at_pitch(&frame.refinement, frame.initial_pitch_error_q16, pitch, l, state)
+    analyze_at_pitch(
+        &frame.refinement,
+        frame.initial_pitch_error_q16,
+        pitch,
+        l,
+        state,
+    )
 }
 
 /// Analysis and quantization of one frame at an already-chosen pitch, shared by the D-STAR and AMBE+2 streaming
@@ -96,10 +110,19 @@ pub fn analyze_and_quantize(
     let vuv_f0_q16 = div_q16(w0_q16, TWO_PI_Q16_16);
     let pitch = Pitch::from_omega0_q30(w0_q32 >> 2);
     let (voiced, ml) = analyze_frame_at_pitch(frame, &pitch, l, state);
-    let ml_q16: Vec<i32> = ml.iter().map(|&m| m.clamp(0, i32::MAX as i64) as i32).collect();
+    let ml_q16: Vec<i32> = ml
+        .iter()
+        .map(|&m| m.clamp(0, i32::MAX as i64) as i32)
+        .collect();
     let log2_ml_q16 = target_log2_ml_q16(w0_q16, &voiced, &ml_q16);
     quantize_speech(
-        &SpeechTarget { l, vuv_f0_q16, voiced: &voiced, ml_q16: &ml_q16, log2_ml_q16: &log2_ml_q16 },
+        &SpeechTarget {
+            l,
+            vuv_f0_q16,
+            voiced: &voiced,
+            ml_q16: &ml_q16,
+            log2_ml_q16: &log2_ml_q16,
+        },
         &PrevState::from_decoder_state(prev),
         tables,
     )

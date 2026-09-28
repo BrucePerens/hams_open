@@ -82,8 +82,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -114,7 +121,6 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
-
 fn main() {
     let host = std::env::args().nth(1).unwrap();
     let wav = std::env::args().nth(2).unwrap();
@@ -130,7 +136,11 @@ fn main() {
     let widths = [12usize, 12, 12, 12, 11, 11, 11, 7];
     let mut out = String::new();
     for i in 0..pcm.len() / FRAME_SAMPLES {
-        let n = send_recv_retrying(&sock, &mut buf, &build_speech(&pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES]));
+        let n = send_recv_retrying(
+            &sock,
+            &mut buf,
+            &build_speech(&pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES]),
+        );
         let (_, payload) = parse_packet(&buf[..n]).unwrap();
         let mut wb = [0u8; FRAME_BYTES];
         wb.copy_from_slice(&payload[payload.len() - FRAME_BYTES..]);
@@ -145,7 +155,9 @@ fn main() {
             hamming_decode_chip(c[6] as u16).0 as u32,
             c[7],
         ];
-        let line: Vec<String> = (0..8).map(|k| format!("{:0w$b}", u[k], w = widths[k])).collect();
+        let line: Vec<String> = (0..8)
+            .map(|k| format!("{:0w$b}", u[k], w = widths[k]))
+            .collect();
         out.push_str(&line.join(" "));
         out.push('\n');
     }

@@ -111,7 +111,10 @@ impl MbeSynthesizer {
     }
 
     fn errors_for(&mut self, epsilon_c0: u32, epsilon_c1: u32) -> FrameErrors {
-        let errors = estimate_errors(&[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0], self.error_rate_prev);
+        let errors = estimate_errors(
+            &[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0],
+            self.error_rate_prev,
+        );
         self.error_rate_prev = errors.rate;
         errors
     }
@@ -131,7 +134,9 @@ impl MbeSynthesizer {
             return None;
         }
         let errors = self.errors_for(epsilon_c0, epsilon_c1);
-        let frame = self.synthesis.synthesize_frame(&ml[1..], w0, &voiced[1..], &errors)?;
+        let frame = self
+            .synthesis
+            .synthesize_frame(&ml[1..], w0, &voiced[1..], &errors)?;
         Some(self.lift(frame))
     }
 

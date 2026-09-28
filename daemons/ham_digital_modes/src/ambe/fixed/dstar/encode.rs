@@ -4,13 +4,18 @@
 //! functions or in `RawParameters`), so it is re-exported unchanged instead of duplicated. What this module adds is
 //! the fixed-point speech quantizer's D-STAR table set.
 
+use super::tables_q16::{
+    DG_Q16_16, HOC_B5_Q16_16, HOC_B6_Q16_16, HOC_B7_Q16_16, HOC_B8_Q16_16, PRBA24_Q16_16,
+    PRBA58_Q16_16,
+};
 use crate::ambe::fixed::general::explog::log2_q16_i64;
-use super::tables_q16::{DG_Q16_16, HOC_B5_Q16_16, HOC_B6_Q16_16, HOC_B7_Q16_16, HOC_B8_Q16_16, PRBA24_Q16_16, PRBA58_Q16_16};
 use crate::ambe::fixed::general::mbe_encode::ModeTables;
 use crate::ambe::float::dstar::tables::{LMPRBL, VUV};
 
 pub use crate::ambe::float::dstar::decode::RawParameters;
-pub use crate::ambe::float::dstar::encode::{build_frame, build_tone_frame, pack_raw_parameters, pack_tone_parameters};
+pub use crate::ambe::float::dstar::encode::{
+    build_frame, build_tone_frame, pack_raw_parameters, pack_tone_parameters,
+};
 
 /// D-STAR's Q16.16 quantizer tables (`b8` even-only).
 pub fn mode_tables() -> ModeTables<'static> {
@@ -20,7 +25,12 @@ pub fn mode_tables() -> ModeTables<'static> {
         prba24_q16: &PRBA24_Q16_16,
         prba58_q16: &PRBA58_Q16_16,
         lmprbl: &LMPRBL,
-        hoc_q16: [&HOC_B5_Q16_16, &HOC_B6_Q16_16, &HOC_B7_Q16_16, &HOC_B8_Q16_16],
+        hoc_q16: [
+            &HOC_B5_Q16_16,
+            &HOC_B6_Q16_16,
+            &HOC_B7_Q16_16,
+            &HOC_B8_Q16_16,
+        ],
         hoc_b8_even_only: true,
         rho_q16: crate::ambe::fixed::general::mbe_speech::POINT_80_Q16_16,
         gamma_scale_q16: crate::ambe::fixed::general::mbe_speech::GAMMA_SCALE_2_Q16_16,
@@ -44,5 +54,8 @@ pub fn quantize_pitch_p8(p8: u32) -> u32 {
 
 /// The table pitch of `b0` as the fixed decoder uses it: `(f0 in cycles/sample Q16.16, omega0 in radians/sample Q32)`.
 pub fn table_pitch(b0: u32) -> (i32, i64) {
-    (super::tables_q16::W0_TABLE_Q16_16[b0 as usize], super::tables_q16::W0_TABLE_Q32[b0 as usize])
+    (
+        super::tables_q16::W0_TABLE_Q16_16[b0 as usize],
+        super::tables_q16::W0_TABLE_Q32[b0 as usize],
+    )
 }

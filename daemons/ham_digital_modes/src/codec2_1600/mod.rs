@@ -99,15 +99,14 @@ pub mod bits;
 pub mod lsp_post;
 pub mod lsp_quantiser;
 
+#[cfg(feature = "codec2_16k_bridge")]
+use crate::codec2_3200;
 #[cfg(feature = "std")]
 use crate::codec2_3200::floating_reference::{lpc as flpc, nlp as fnlp, voicing as fvoicing};
 #[cfg(feature = "std")]
 use crate::codec2_3200::{bw_gamma, window};
-#[cfg(feature = "codec2_16k_bridge")]
-use crate::codec2_3200;
 use crate::codec2_3200::{
-    envelope, interp, lpc, nlp, quantise, synthesis, tables, voicing, LPC_ORD, M_PITCH,
-    N_SAMP,
+    envelope, interp, lpc, nlp, quantise, synthesis, tables, voicing, LPC_ORD, M_PITCH, N_SAMP,
 };
 
 /// LSPs to substitute when `lpc::lpc_to_lsp` fails to find all
@@ -861,7 +860,8 @@ mod tests {
             let voiced1 =
                 voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
             let wo_index_a = quantise::encode_wo(nlp::f0_to_wo(f0_a));
-            let (_lsp_a_unused, e_a) = analyse_lsps_and_energy_float_boundary(&self.sn, &self.window_fixed);
+            let (_lsp_a_unused, e_a) =
+                analyse_lsps_and_energy_float_boundary(&self.sn, &self.window_fixed);
             let e_index_a = quantise::encode_energy(e_a);
 
             self.shift_in(&speech[2 * N_SAMP..3 * N_SAMP]);
@@ -892,7 +892,6 @@ mod tests {
         }
     }
 
-
     /// Real speech through the integer encoder and the earlier float-boundary encoder. The two use
     /// different pitch-bin, energy and line spectral pair arithmetic at the quantiser boundaries, so
     /// a frame can differ by a quantiser step; the count is recorded and bounded.
@@ -922,7 +921,10 @@ mod tests {
         }
         eprintln!("1600 encoders: {frames} frames, {differing} differ, {bytes_differing} bytes");
         assert!(frames > 100);
-        assert!(differing * 20 <= frames, "more than 5 percent of frames differ");
+        assert!(
+            differing * 20 <= frames,
+            "more than 5 percent of frames differ"
+        );
     }
 
     #[test]

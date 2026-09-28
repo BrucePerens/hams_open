@@ -9,9 +9,9 @@
 //!
 //! Usage: `cargo run --release --example ratet27_chip_encode_compare -- <host:port> [wav] [n_frames]`
 
+use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::float::tia_102_baba::encoder::Encoder;
-use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -85,8 +85,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -116,7 +123,6 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
         raw(Block::Raw),
     ]
 }
-
 
 fn c_to_wire_bytes(c: &[u32; 8]) -> [u8; FRAME_BYTES] {
     let blocks = [
@@ -148,7 +154,10 @@ fn c_to_wire_bytes(c: &[u32; 8]) -> [u8; FRAME_BYTES] {
 fn corr(a: &[f64], b: &[f64]) -> f64 {
     let n = a.len().min(b.len());
     let (a, b) = (&a[..n], &b[..n]);
-    let (ma, mb) = (a.iter().sum::<f64>() / n as f64, b.iter().sum::<f64>() / n as f64);
+    let (ma, mb) = (
+        a.iter().sum::<f64>() / n as f64,
+        b.iter().sum::<f64>() / n as f64,
+    );
     let (mut c, mut va, mut vb) = (0.0, 0.0, 0.0);
     for (x, y) in a.iter().zip(b) {
         c += (x - ma) * (y - mb);
@@ -158,7 +167,9 @@ fn corr(a: &[f64], b: &[f64]) -> f64 {
     c / (va.sqrt() * vb.sqrt()).max(1e-12)
 }
 fn env(x: &[f64]) -> Vec<f64> {
-    x.chunks_exact(FRAME_SAMPLES).map(|c| (c.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt()).collect()
+    x.chunks_exact(FRAME_SAMPLES)
+        .map(|c| (c.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt())
+        .collect()
 }
 
 struct Params {
@@ -173,8 +184,14 @@ fn params_of(frames: &[[u32; 8]]) -> Vec<Option<Params>> {
         .iter()
         .map(|c| match d.decode_parameters(*c) {
             Some(FrameOutcome::Decoded(p)) => {
-                let v = p.voiced.iter().filter(|&&x| x).count() as f64 / p.voiced.len().max(1) as f64;
-                let r = Some(Params { b0: p.bits.b0 as i32, l_hat: p.l_hat, voiced_frac: v, b2: p.bits.b2 });
+                let v =
+                    p.voiced.iter().filter(|&&x| x).count() as f64 / p.voiced.len().max(1) as f64;
+                let r = Some(Params {
+                    b0: p.bits.b0 as i32,
+                    l_hat: p.l_hat,
+                    voiced_frac: v,
+                    b2: p.bits.b2,
+                });
                 d.advance_history(&p);
                 r
             }
@@ -183,7 +200,12 @@ fn params_of(frames: &[[u32; 8]]) -> Vec<Option<Params>> {
         .collect()
 }
 
-fn chip_decode(sock: &UdpSocket, buf: &mut [u8; 1024], header: &[u8], frames: &[[u32; 8]]) -> Vec<f64> {
+fn chip_decode(
+    sock: &UdpSocket,
+    buf: &mut [u8; 1024],
+    header: &[u8],
+    frames: &[[u32; 8]],
+) -> Vec<f64> {
     let mut pcm = Vec::new();
     for c in frames {
         let mut payload = header.to_vec();
@@ -197,11 +219,19 @@ fn chip_decode(sock: &UdpSocket, buf: &mut [u8; 1024], header: &[u8], frames: &[
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let wav = std::env::args().nth(2).unwrap_or_else(|| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string());
-    let n_frames: usize = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(150);
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let wav = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav".to_string());
+    let n_frames: usize = std::env::args()
+        .nth(3)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(150);
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
     sock.send(&build_control_ratep(RATEP_P25_FEC)).unwrap();
@@ -210,13 +240,20 @@ fn main() {
 
     let pcm = read_wav_mono_i16(&wav);
     let n_frames = n_frames.min(pcm.len() / FRAME_SAMPLES);
-    let input: Vec<f64> = pcm[..n_frames * FRAME_SAMPLES].iter().map(|&s| s as f64).collect();
+    let input: Vec<f64> = pcm[..n_frames * FRAME_SAMPLES]
+        .iter()
+        .map(|&s| s as f64)
+        .collect();
 
     // Chip encode, then chip decode of its own frames.
     let mut chip_frames: Vec<[u32; 8]> = Vec::new();
     let mut header = Vec::new();
     for i in 0..n_frames {
-        let n = send_recv_retrying(&sock, &mut buf, &build_speech(&pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES]));
+        let n = send_recv_retrying(
+            &sock,
+            &mut buf,
+            &build_speech(&pcm[i * FRAME_SAMPLES..(i + 1) * FRAME_SAMPLES]),
+        );
         let (_, payload) = parse_packet(&buf[..n]).unwrap();
         let mut wb = [0u8; FRAME_BYTES];
         wb.copy_from_slice(&payload[payload.len() - FRAME_BYTES..]);
@@ -226,7 +263,10 @@ fn main() {
     let chip_chip = chip_decode(&sock, &mut buf, &header, &chip_frames);
     let chip_params = params_of(&chip_frames);
     let env_in = env(&input);
-    println!("chip encode -> chip decode: envelope corr vs input {:.4}", corr(&env_in, &env(&chip_chip)));
+    println!(
+        "chip encode -> chip decode: envelope corr vs input {:.4}",
+        corr(&env_in, &env(&chip_chip))
+    );
 
     for offset in [-160i32, -120, -80, -40, 0, 40, 80, 120, 160] {
         let mut enc = Encoder::new_chip_wire();
@@ -239,7 +279,8 @@ fn main() {
         ours.extend(enc.finish());
         ours.truncate(n_frames);
         let our_params = params_of(&ours);
-        let (mut both, mut b0_close, mut l_eq, mut b2_close, mut vf_sum) = (0usize, 0usize, 0usize, 0usize, 0.0);
+        let (mut both, mut b0_close, mut l_eq, mut b2_close, mut vf_sum) =
+            (0usize, 0usize, 0usize, 0usize, 0.0);
         for (a, b) in our_params.iter().zip(chip_params.iter()) {
             if let (Some(a), Some(b)) = (a, b) {
                 both += 1;
@@ -250,12 +291,22 @@ fn main() {
             }
         }
         if std::env::var("SHOW_B0").is_ok() && offset == 80 {
-            let pairs: Vec<String> = our_params.iter().zip(chip_params.iter()).enumerate().filter_map(|(i, (a, b))| Some(format!("{i}:{}/{}", a.as_ref()?.b0, b.as_ref()?.b0))).collect();
+            let pairs: Vec<String> = our_params
+                .iter()
+                .zip(chip_params.iter())
+                .enumerate()
+                .filter_map(|(i, (a, b))| {
+                    Some(format!("{i}:{}/{}", a.as_ref()?.b0, b.as_ref()?.b0))
+                })
+                .collect();
             println!("our_b0/chip_b0 at offset 80: {}", pairs.join(" "));
         }
         let ours_chip = chip_decode(&sock, &mut buf, &header, &ours);
         let mut d = DecoderState::new_chip_wire();
-        let ours_ours: Vec<f64> = ours.iter().flat_map(|c| d.decode_frame(*c).unwrap_or([0.0; 160])).collect();
+        let ours_ours: Vec<f64> = ours
+            .iter()
+            .flat_map(|c| d.decode_frame(*c).unwrap_or([0.0; 160]))
+            .collect();
         println!(
             "offset {offset:5}: frames {} both-decoded {both}; b0 within 2: {:.2}, L equal: {:.2}, b2 within 3: {:.2}, mean |voiced-fraction diff| {:.2}; envelope corr vs input: our-enc->chip-dec {:.4}, our-enc->our-dec {:.4}",
             ours.len(),

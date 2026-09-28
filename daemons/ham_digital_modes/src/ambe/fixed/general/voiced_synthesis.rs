@@ -28,7 +28,9 @@
 //! symmetric-around-zero representative for free.
 
 use super::fixed_ops::mul_q16;
-use super::trig::{cos_q16, phase_from_radians_q16, phase_from_radians_q32, radians_q32_from_phase};
+use super::trig::{
+    cos_q16, phase_from_radians_q16, phase_from_radians_q32, radians_q32_from_phase,
+};
 use super::unvoiced_synthesis::{synthesis_window_q16, NoiseState, N};
 
 /// The largest harmonic index `psi_l`/`phi_l` are ever tracked for (Eq. 139's own stated range).
@@ -76,7 +78,13 @@ fn phase_dither_q16(noise: &NoiseState, l: u32) -> i32 {
 /// literal `floor` form performs is done here via the exact phase round trip
 /// (`phase_from_radians_q16` then `radians_from_phase_q16`) rather than a hand-rolled floor -- the
 /// same reduction, reusing an already-exact primitive instead of a second implementation of it.
-fn delta_omega_q32(phi_prev_q32: i64, phi_curr_q32: i64, omega0_prev_q32: i64, omega0_curr_q32: i64, l: u32) -> i64 {
+fn delta_omega_q32(
+    phi_prev_q32: i64,
+    phi_curr_q32: i64,
+    omega0_prev_q32: i64,
+    omega0_curr_q32: i64,
+    l: u32,
+) -> i64 {
     let increment_q32 = frame_increment_q32(omega0_prev_q32, omega0_curr_q32, l);
     let delta_phi_q32 = phi_curr_q32 - phi_prev_q32 - increment_q32;
     let wrapped_q32 = radians_q32_from_phase(phase_from_radians_q32(delta_phi_q32));
@@ -88,7 +96,11 @@ fn delta_omega_q32(phi_prev_q32: i64, phi_curr_q32: i64, omega0_prev_q32: i64, o
     // came from a separate, larger scale error `trig::phase_from_radians_q16` had at the time (fixed
     // since, see `trig::PI_Q48`) rather than from this term's own truncation alone.
     let half = N as i64 / 2;
-    let rounded = if wrapped_q32 >= 0 { wrapped_q32 + half } else { wrapped_q32 - half };
+    let rounded = if wrapped_q32 >= 0 {
+        wrapped_q32 + half
+    } else {
+        wrapped_q32 - half
+    };
     rounded / N as i64
 }
 
@@ -98,7 +110,14 @@ fn delta_omega_q32(phi_prev_q32: i64, phi_curr_q32: i64, omega0_prev_q32: i64, o
 /// to 159 make the quadratic `n*n` term's own numerator large enough that narrowing early would risk
 /// exactly the kind of intermediate overflow this crate's own established discipline checks for,
 /// even though the final angle itself is always a bounded, ordinary-sized radian value.
-fn theta_q32_i64(n: i32, phi_prev_q32: i64, omega0_prev_q32: i64, omega0_curr_q32: i64, delta_omega_q32: i64, l: u32) -> i64 {
+fn theta_q32_i64(
+    n: i32,
+    phi_prev_q32: i64,
+    omega0_prev_q32: i64,
+    omega0_curr_q32: i64,
+    delta_omega_q32: i64,
+    l: u32,
+) -> i64 {
     let l_i = l as i64;
     let n_i = n as i64;
     let term1 = phi_prev_q32;
@@ -156,7 +175,12 @@ impl VoicedState {
             let idx = (l - 1) as usize;
             phi_prev_phase[idx] = self.phi_phase[idx];
 
-            let psi_new_phase = psi_update_q32(self.psi_phase[idx], self.omega0_prev_q32, omega0_curr_q32, l);
+            let psi_new_phase = psi_update_q32(
+                self.psi_phase[idx],
+                self.omega0_prev_q32,
+                omega0_curr_q32,
+                l,
+            );
 
             let phi_new_phase = if l <= quarter_l_hat_curr {
                 psi_new_phase
@@ -164,7 +188,8 @@ impl VoicedState {
                 // (l_uv_curr / l_hat_curr) * phase_dither(l) -- a fraction (<=1) of a bounded angle,
                 // itself always bounded, so plain Q16.16 radian arithmetic (not phase-native) is
                 // exact here; only the final addition to psi_new needs the phase conversion.
-                let ratio_q16 = super::fixed_ops::div_q16((l_uv_curr as i32) << 16, (l_hat_curr as i32) << 16);
+                let ratio_q16 =
+                    super::fixed_ops::div_q16((l_uv_curr as i32) << 16, (l_hat_curr as i32) << 16);
                 let dither_term_q16 = mul_q16(ratio_q16, phase_dither_q16(noise, l));
                 psi_new_phase.wrapping_add(phase_from_radians_q16(dither_term_q16))
             } else {
@@ -182,12 +207,21 @@ impl VoicedState {
             let was_voiced = self.voiced_prev[idx];
             let was_amp_q16 = self.amplitudes_prev_q16[idx];
             let is_voiced = l <= l_hat_curr && voiced[idx];
-            let is_amp_q16 = if l <= l_hat_curr { spectral_amplitudes_q16[idx] } else { 0 };
+            let is_amp_q16 = if l <= l_hat_curr {
+                spectral_amplitudes_q16[idx]
+            } else {
+                0
+            };
 
             let phi_prev_q32 = radians_q32_from_phase(phi_prev_phase[idx]);
             let phi_curr_q32 = radians_q32_from_phase(phi_curr_phase[idx]);
-            let delta_omega_l_q32 =
-                delta_omega_q32(phi_prev_q32, phi_curr_q32, self.omega0_prev_q32, omega0_curr_q32, l);
+            let delta_omega_l_q32 = delta_omega_q32(
+                phi_prev_q32,
+                phi_curr_q32,
+                self.omega0_prev_q32,
+                omega0_curr_q32,
+                l,
+            );
 
             for (n, slot) in s_v.iter_mut().enumerate() {
                 let n_i = n as i32;
@@ -204,7 +238,8 @@ impl VoicedState {
                     }
                     (false, true) => {
                         // Eq. 132.
-                        let angle = omega0_curr_q32 * (l as i64) * (n_shifted as i64) + phi_curr_q32;
+                        let angle =
+                            omega0_curr_q32 * (l as i64) * (n_shifted as i64) + phi_curr_q32;
                         let cos_val = cos_q16(phase_from_radians_q32(angle));
                         let w = synthesis_window_q16(n_shifted);
                         mul_q16(mul_q16(w, is_amp_q16), cos_val) as i64
@@ -215,10 +250,12 @@ impl VoicedState {
                         let big_jump = l >= 8 || omega0_diff >= threshold;
                         if big_jump {
                             // Eq. 133: both halves synthesized independently and summed.
-                            let angle_prev = self.omega0_prev_q32 * (l as i64) * (n_i as i64) + phi_prev_q32;
+                            let angle_prev =
+                                self.omega0_prev_q32 * (l as i64) * (n_i as i64) + phi_prev_q32;
                             let cos_prev = cos_q16(phase_from_radians_q32(angle_prev));
                             let w_prev = synthesis_window_q16(n_i);
-                            let angle_curr = omega0_curr_q32 * (l as i64) * (n_shifted as i64) + phi_curr_q32;
+                            let angle_curr =
+                                omega0_curr_q32 * (l as i64) * (n_shifted as i64) + phi_curr_q32;
                             let cos_curr = cos_q16(phase_from_radians_q32(angle_curr));
                             let w_curr = synthesis_window_q16(n_shifted);
                             (mul_q16(mul_q16(w_prev, was_amp_q16), cos_prev) as i64)
@@ -226,7 +263,8 @@ impl VoicedState {
                         } else {
                             // Eq. 134-135: continuous-phase interpolation.
                             let a_l_n_q16 = was_amp_q16 as i64
-                                + ((n_i as i64) * (is_amp_q16 as i64 - was_amp_q16 as i64)) / N as i64;
+                                + ((n_i as i64) * (is_amp_q16 as i64 - was_amp_q16 as i64))
+                                    / N as i64;
                             let theta_l_n = theta_q32_i64(
                                 n_i,
                                 phi_prev_q32,
@@ -249,7 +287,11 @@ impl VoicedState {
         for l in 1..=MAX_HARMONICS as u32 {
             let idx = (l - 1) as usize;
             self.voiced_prev[idx] = l <= l_hat_curr && voiced[idx];
-            self.amplitudes_prev_q16[idx] = if l <= l_hat_curr { spectral_amplitudes_q16[idx] } else { 0 };
+            self.amplitudes_prev_q16[idx] = if l <= l_hat_curr {
+                spectral_amplitudes_q16[idx]
+            } else {
+                0
+            };
         }
 
         // Saturate rather than let `as i32` silently wrap: `s_v` sums up to `MAX_HARMONICS` (56)
@@ -304,7 +346,13 @@ mod tests {
         // phi_prev); then phi_prev=-2.0, phi_curr=2.0, omega0_prev=2*pi/40, omega0_curr=2*pi/200,
         // l=6 (a large omega0 jump).
         let cases = [
-            (19661i64 << 16, 268698i64 << 16, 4118i64 << 16, 3922i64 << 16, 1u32),
+            (
+                19661i64 << 16,
+                268698i64 << 16,
+                4118i64 << 16,
+                3922i64 << 16,
+                1u32,
+            ),
             (19661 << 16, 268698 << 16, 4118 << 16, 3922 << 16, 7u32),
             (386662 << 16, 13107 << 16, 6863 << 16, 7100 << 16, 3u32),
             (-131072 << 16, 131072 << 16, 10294 << 16, 2059 << 16, 6u32),
@@ -312,20 +360,21 @@ mod tests {
         for (phi_prev, phi_curr, omega0_prev, omega0_curr, l) in cases {
             let d_omega = delta_omega_q32(phi_prev, phi_curr, omega0_prev, omega0_curr, l);
             let theta_n = theta_q32_i64(N as i32, phi_prev, omega0_prev, omega0_curr, d_omega, l);
-            let phase_diff = phase_from_radians_q32(theta_n).wrapping_sub(phase_from_radians_q32(phi_curr));
+            let phase_diff =
+                phase_from_radians_q32(theta_n).wrapping_sub(phase_from_radians_q32(phi_curr));
             let signed_diff = phase_diff as i32; // nearest-to-zero representative of the wrap distance.
-            // `delta_omega_q16` is itself rounded to the nearest Q16.16 unit (a genuine, expected
-            // quantization step -- see `delta_omega_q16`'s own doc comment), and that rounding error
-            // is multiplied by `n` (up to `N`) inside `theta_q16_i64`, so the worst case here is
-            // `~0.5/65536 * N` radians of residual phase error, not zero -- measured directly across
-            // these four cases at `~504287..681343` (of `u32::MAX`), i.e. up to `~0.01` radians,
-            // `~0.16%` of a full turn (this tolerance was loosened further, to `1u32 << 21`, back when
-            // `trig::phase_from_radians_q16`'s own pi constant carried an additional, larger scale
-            // error that also fed into this same residual -- see `trig::PI_Q48`'s own doc comment;
-            // with that fixed, `delta_omega_q16`'s rounding is the only mechanism left, and the
-            // measured worst case has real headroom under the tolerance below without needing to be
-            // that loose). Not the exact-to-`1e-9` invariant the float sibling's own analogous test
-            // holds to.
+                                                 // `delta_omega_q16` is itself rounded to the nearest Q16.16 unit (a genuine, expected
+                                                 // quantization step -- see `delta_omega_q16`'s own doc comment), and that rounding error
+                                                 // is multiplied by `n` (up to `N`) inside `theta_q16_i64`, so the worst case here is
+                                                 // `~0.5/65536 * N` radians of residual phase error, not zero -- measured directly across
+                                                 // these four cases at `~504287..681343` (of `u32::MAX`), i.e. up to `~0.01` radians,
+                                                 // `~0.16%` of a full turn (this tolerance was loosened further, to `1u32 << 21`, back when
+                                                 // `trig::phase_from_radians_q16`'s own pi constant carried an additional, larger scale
+                                                 // error that also fed into this same residual -- see `trig::PI_Q48`'s own doc comment;
+                                                 // with that fixed, `delta_omega_q16`'s rounding is the only mechanism left, and the
+                                                 // measured worst case has real headroom under the tolerance below without needing to be
+                                                 // that loose). Not the exact-to-`1e-9` invariant the float sibling's own analogous test
+                                                 // holds to.
             assert!(
                 signed_diff.unsigned_abs() < (1u32 << 20),
                 "phi_prev={phi_prev} phi_curr={phi_curr} l={l}: theta_n phase differs from phi_curr by {signed_diff} (of u32::MAX={})",

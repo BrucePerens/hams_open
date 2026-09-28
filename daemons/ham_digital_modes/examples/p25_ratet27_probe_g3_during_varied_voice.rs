@@ -8,8 +8,8 @@
 //! silence/voice amplitude threshold (peak 50-75, section 28).
 //!
 //! Usage: `cargo run --release --example p25_ratet27_probe_g3_during_varied_voice -- <host:port>`
-use ham_digital_modes::ambe::general::fec::golay_decode;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::general::fec::golay_decode;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -82,7 +82,9 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
     let mut state = seed;
     (0..FRAME_SAMPLES)
         .map(|_| {
-            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((state >> 33) as f64 / (1u64 << 31) as f64) - 1.0;
             (unit * peak) as i16
         })
@@ -100,25 +102,39 @@ fn sawtooth(freq: f64, amp: f64) -> Vec<i16> {
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_ecmode(DTX_ENABLE_BIT | TD_ENABLE_BIT)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(DTX_ENABLE_BIT | TD_ENABLE_BIT))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_chanfmt(0b01)).expect("send CHANFMT config");
+    sock.send(&build_control_chanfmt(0b01))
+        .expect("send CHANFMT config");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -147,7 +163,10 @@ fn main() {
     let speech = read_wav_mono_i16("tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav");
     for chunk in 0..5 {
         let start = chunk * 2000;
-        stimuli.push((format!("speech_chunk{chunk}"), speech[start..start + FRAME_SAMPLES].to_vec()));
+        stimuli.push((
+            format!("speech_chunk{chunk}"),
+            speech[start..start + FRAME_SAMPLES].to_vec(),
+        ));
     }
 
     for (label, samples) in &stimuli {

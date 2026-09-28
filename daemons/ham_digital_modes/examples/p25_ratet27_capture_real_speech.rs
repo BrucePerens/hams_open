@@ -53,14 +53,26 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let wav_path = args.get(2).expect("usage: <host:port> <wav_path> [frame_limit]");
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let wav_path = args
+        .get(2)
+        .expect("usage: <host:port> <wav_path> [frame_limit]");
     let frame_limit: Option<usize> = args.get(3).map(|s| s.parse().unwrap());
 
     let pcm = read_wav_mono_i16(wav_path);
@@ -68,11 +80,13 @@ fn main() {
     let n_frames = frame_limit.map_or(n_frames, |lim| lim.min(n_frames));
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 

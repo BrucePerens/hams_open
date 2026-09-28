@@ -20,13 +20,18 @@ use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::prioritize
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 use ham_digital_modes::ambe::float::tia_102_baba::encoder::Encoder;
 use ham_digital_modes::ambe::float::tia_102_baba::enhancement::enhance_spectral_amplitudes;
-use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
+    gain_bit_allocation, higher_order_bit_allocation,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
 use ham_digital_modes::ambe::float::tia_102_baba::{encode_code_vectors, parameter_encoding};
 use std::fmt::Write as _;
 
 fn fmt_frame(c: &[u32; 8]) -> String {
-    format!("{:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x}\n", c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7])
+    format!(
+        "{:x} {:x} {:x} {:x} {:x} {:x} {:x} {:x}\n",
+        c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]
+    )
 }
 
 /// Dumps our decoded parameters for one frame in the scratch driver's line format.
@@ -34,7 +39,11 @@ fn dump_ours(out: &mut String, idx: usize, dec: &mut DecoderState, chip_c: [u32;
     match dec.decode_parameters(chip_c) {
         Some(FrameOutcome::Decoded(p)) => {
             let b = &p.bits;
-            let _ = write!(out, "F {idx} errs {} flags [] b0 {} b1 {:x} b2 {}", p.errors.total, b.b0, b.b1, b.b2);
+            let _ = write!(
+                out,
+                "F {idx} errs {} flags [] b0 {} b1 {:x} b2 {}",
+                p.errors.total, b.b0, b.b1, b.b2
+            );
             let _ = writeln!(out, " w0 {:.9} L {} K {}", p.omega0_tilde, p.l_hat, p.k_hat);
             out.push_str("V ");
             for &v in &p.voiced {
@@ -70,8 +79,15 @@ fn dump_ours(out: &mut String, idx: usize, dec: &mut DecoderState, chip_c: [u32;
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn speech(wav: &str, n_frames: usize, prefix: &str, noisy: bool) {
@@ -98,7 +114,11 @@ fn speech(wav: &str, n_frames: usize, prefix: &str, noisy: bool) {
             // Flip up to the correction capacity in each block (Golay 3, Hamming 1), at most 5 flips in the whole
             // frame so an external decoder's own "too many errors, repeat" rule does not trigger.
             let widths = [23u32, 23, 23, 23, 15, 15, 15];
-            let hamming_cap = if std::env::var("XVAL_NO_HAMMING_ERRORS").is_ok() { 0 } else { 1 };
+            let hamming_cap = if std::env::var("XVAL_NO_HAMMING_ERRORS").is_ok() {
+                0
+            } else {
+                1
+            };
             let caps = [3usize, 3, 3, 3, hamming_cap, hamming_cap, hamming_cap];
             let mut budget = 5usize;
             for (blk, (&w, &cap)) in widths.iter().zip(caps.iter()).enumerate() {
@@ -121,7 +141,11 @@ fn speech(wav: &str, n_frames: usize, prefix: &str, noisy: bool) {
     std::fs::write(format!("{prefix}.frames"), frames_txt).unwrap();
     std::fs::write(format!("{prefix}.ours"), ours_txt).unwrap();
     std::fs::write(format!("{prefix}.ours.f32"), pcm_out).unwrap();
-    eprintln!("{wav}: {} frames (encoder failed_frames = {})", frames.len(), enc.failed_frames);
+    eprintln!(
+        "{wav}: {} frames (encoder failed_frames = {})",
+        frames.len(),
+        enc.failed_frames
+    );
 }
 
 /// Deterministic xorshift for reproducible sweeps.
@@ -136,19 +160,39 @@ impl Rng {
 }
 
 /// Builds a `u` vector set from raw quantizer indices, respecting Annex F/G widths for `l_hat`.
-fn frame_from_indices(b0: u32, b1: u32, b2: u32, gain: [u32; 5], hoc: &[u32], sync: bool) -> Option<[u32; 8]> {
+fn frame_from_indices(
+    b0: u32,
+    b1: u32,
+    b2: u32,
+    gain: [u32; 5],
+    hoc: &[u32],
+    sync: bool,
+) -> Option<[u32; 8]> {
     let omega0 = parameter_encoding::dequantize_fundamental_frequency(b0);
     let l_hat = harmonics_count(omega0);
     let k_hat = frequency_bands_count(l_hat);
     let gw: [u8; 5] = std::array::from_fn(|i| gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
-    let hw: Vec<u8> = higher_order_bit_allocation(l_hat)?.iter().copied().filter(|&w| w > 0).collect();
-    let gain_vector: [(u32, u8); 5] = std::array::from_fn(|i| (gain[i] & ((1u32 << gw[i]) - 1), gw[i]));
+    let hw: Vec<u8> = higher_order_bit_allocation(l_hat)?
+        .iter()
+        .copied()
+        .filter(|&w| w > 0)
+        .collect();
+    let gain_vector: [(u32, u8); 5] =
+        std::array::from_fn(|i| (gain[i] & ((1u32 << gw[i]) - 1), gw[i]));
     let hoc_vec: Vec<(u32, u8)> = hw
         .iter()
         .enumerate()
         .map(|(i, &w)| (hoc.get(i).copied().unwrap_or(0) & ((1u32 << w) - 1), w))
         .collect();
-    prioritize_bits(b0, b1 & ((1u32 << k_hat) - 1), k_hat, b2, gain_vector, &hoc_vec, sync)
+    prioritize_bits(
+        b0,
+        b1 & ((1u32 << k_hat) - 1),
+        k_hat,
+        b2,
+        gain_vector,
+        &hoc_vec,
+        sync,
+    )
 }
 
 fn sweep(prefix: &str) {
@@ -191,12 +235,20 @@ fn sweep(prefix: &str) {
     //    b2, each gain element and each higher-order coefficient, everything else at a mid value.
     for target_l in [9u32, 20, 37, 56] {
         let b0 = (0u32..=207)
-            .find(|&b| harmonics_count(parameter_encoding::dequantize_fundamental_frequency(b)) == target_l)
+            .find(|&b| {
+                harmonics_count(parameter_encoding::dequantize_fundamental_frequency(b)) == target_l
+            })
             .expect("an L this small/large must exist");
         let omega0 = parameter_encoding::dequantize_fundamental_frequency(b0);
         let l_hat = harmonics_count(omega0);
-        let gw: [u8; 5] = std::array::from_fn(|i| gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
-        let hw: Vec<u8> = higher_order_bit_allocation(l_hat).unwrap().iter().copied().filter(|&w| w > 0).collect();
+        let gw: [u8; 5] =
+            std::array::from_fn(|i| gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
+        let hw: Vec<u8> = higher_order_bit_allocation(l_hat)
+            .unwrap()
+            .iter()
+            .copied()
+            .filter(|&w| w > 0)
+            .collect();
         let mid_gain: [u32; 5] = std::array::from_fn(|i| 1u32 << (gw[i] - 1));
         let mid_hoc: Vec<u32> = hw.iter().map(|&w| 1u32 << (w - 1)).collect();
         for b2 in 0u32..64 {
@@ -251,24 +303,50 @@ fn sweep(prefix: &str) {
 /// Prints this crate's quantizer tables in a fixed text form for diffing against an external decoder's tables.
 fn tables() {
     use ham_digital_modes::ambe::float::tia_102_baba::tables::{
-        block_lengths_for_l, higher_order_coefficient_sigma, higher_order_step_multiplier, GAIN_QUANTIZER_LEVELS,
+        block_lengths_for_l, higher_order_coefficient_sigma, higher_order_step_multiplier,
+        GAIN_QUANTIZER_LEVELS,
     };
-    println!("B2 {}", GAIN_QUANTIZER_LEVELS.iter().map(|v| format!("{v:.6}")).collect::<Vec<_>>().join(" "));
+    println!(
+        "B2 {}",
+        GAIN_QUANTIZER_LEVELS
+            .iter()
+            .map(|v| format!("{v:.6}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
     println!(
         "QUANTSTEP {}",
-        (1u8..=10).map(|b| format!("{:.4}", higher_order_step_multiplier(b).unwrap())).collect::<Vec<_>>().join(" ")
+        (1u8..=10)
+            .map(|b| format!("{:.4}", higher_order_step_multiplier(b).unwrap()))
+            .collect::<Vec<_>>()
+            .join(" ")
     );
     println!(
         "STANDDEV {}",
-        (2u32..=10).map(|k| format!("{:.4}", higher_order_coefficient_sigma(k).unwrap())).collect::<Vec<_>>().join(" ")
+        (2u32..=10)
+            .map(|k| format!("{:.4}", higher_order_coefficient_sigma(k).unwrap()))
+            .collect::<Vec<_>>()
+            .join(" ")
     );
     for l in 9u32..=56 {
-        let ba: Vec<String> =
-            (2..=6).map(|m| { let (w, s) = gain_bit_allocation(l, m).unwrap(); format!("{w}:{s:.6}") }).collect();
+        let ba: Vec<String> = (2..=6)
+            .map(|m| {
+                let (w, s) = gain_bit_allocation(l, m).unwrap();
+                format!("{w}:{s:.6}")
+            })
+            .collect();
         println!("BA {l} {}", ba.join(" "));
-        let ho: Vec<String> = higher_order_bit_allocation(l).unwrap().iter().map(|w| w.to_string()).collect();
+        let ho: Vec<String> = higher_order_bit_allocation(l)
+            .unwrap()
+            .iter()
+            .map(|w| w.to_string())
+            .collect();
         println!("HOBA {l} {}", ho.join(" "));
-        let bl: Vec<String> = block_lengths_for_l(l).unwrap().iter().map(|w| w.to_string()).collect();
+        let bl: Vec<String> = block_lengths_for_l(l)
+            .unwrap()
+            .iter()
+            .map(|w| w.to_string())
+            .collect();
         println!("JI {l} {}", bl.join(" "));
     }
 }
@@ -280,20 +358,75 @@ fn golden(prefix: &str) {
     let frames_txt = std::cell::RefCell::new(String::new());
     let emit = |b0: u32, b1: u32, b2: u32, gain: [u32; 5], hoc: &[u32], sync: bool| {
         let u = frame_from_indices(b0, b1, b2, gain, hoc, sync).expect("valid indices");
-        frames_txt.borrow_mut().push_str(&fmt_frame(&encode_code_vectors(u)));
+        frames_txt
+            .borrow_mut()
+            .push_str(&fmt_frame(&encode_code_vectors(u)));
     };
     // Chain 1: L changes 54 -> 9 -> 23 -> 21, exercising Eq. 75-79's prediction across harmonic-count changes
     // (L = 23 is also the Annex F row an external decoder's table gets wrong).
-    emit(199, 0x800, 37, [21, 17, 5, 9, 3], &[300, 100, 60, 30, 7, 3, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1], false);
-    emit(1, 0x005, 28, [400, 250, 200, 100, 120], &[380, 200, 90], true);
-    emit(61, 0x0a5, 29, [12, 9, 7, 6, 5], &[7, 3, 5, 2, 9, 1, 4, 1, 3, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1], false);
-    emit(55, 0x3c, 28, [15, 11, 4, 5, 6], &[2, 3, 1, 4, 2, 3, 1, 2, 1, 3, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1], true);
+    emit(
+        199,
+        0x800,
+        37,
+        [21, 17, 5, 9, 3],
+        &[
+            300, 100, 60, 30, 7, 3, 2, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1,
+            1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1,
+        ],
+        false,
+    );
+    emit(
+        1,
+        0x005,
+        28,
+        [400, 250, 200, 100, 120],
+        &[380, 200, 90],
+        true,
+    );
+    emit(
+        61,
+        0x0a5,
+        29,
+        [12, 9, 7, 6, 5],
+        &[
+            7, 3, 5, 2, 9, 1, 4, 1, 3, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1,
+        ],
+        false,
+    );
+    emit(
+        55,
+        0x3c,
+        28,
+        [15, 11, 4, 5, 6],
+        &[2, 3, 1, 4, 2, 3, 1, 2, 1, 3, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1],
+        true,
+    );
     frames_txt.borrow_mut().push_str("RESET\n");
     // Chain 2: the largest harmonic count (L = 56) from the initial state, saturated and extreme indices.
-    emit(207, 0x001, 63, [31, 0, 7, 0, 3], &[1023, 0, 511, 255, 127, 63, 31, 15, 7, 3, 1, 0, 1, 2, 3, 1, 0, 1, 2, 1, 2, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], false);
+    emit(
+        207,
+        0x001,
+        63,
+        [31, 0, 7, 0, 3],
+        &[
+            1023, 0, 511, 255, 127, 63, 31, 15, 7, 3, 1, 0, 1, 2, 3, 1, 0, 1, 2, 1, 2, 1, 0, 1, 0,
+            1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+        ],
+        false,
+    );
     frames_txt.borrow_mut().push_str("RESET\n");
     // Chain 3: L = 40 (above the 36-harmonic band boundary of Eq. 50) with a mixed voicing pattern.
-    emit(120, 0x2a5, 30, [9, 7, 6, 3, 2], &[4, 2, 3, 1, 2, 2, 1, 1, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1], true);
+    emit(
+        120,
+        0x2a5,
+        30,
+        [9, 7, 6, 3, 2],
+        &[
+            4, 2, 3, 1, 2, 2, 1, 1, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0,
+            1, 1, 0, 1, 1,
+        ],
+        true,
+    );
     std::fs::write(format!("{prefix}.frames"), frames_txt.into_inner()).unwrap();
 }
 

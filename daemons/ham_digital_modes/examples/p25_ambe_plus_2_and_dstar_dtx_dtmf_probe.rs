@@ -28,14 +28,16 @@
 //! implementation directly rather than a private copy of the same logic.
 //!
 //! Usage: `cargo run --release --features ambe_plus_2 --example p25_ambe_plus_2_and_dstar_dtx_dtmf_probe -- <host:port>`
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+    classify_b0, extract_raw_parameters, FrameKind,
+};
+use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use ham_digital_modes::ambe::float::dstar::decode::{
     decode_tone as dstar_decode_tone, extract_raw_parameters as dstar_extract_raw,
     parse_frame as dstar_parse_frame,
 };
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
-use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind};
-use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
-use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use std::net::UdpSocket;
 use std::time::Duration;
 
@@ -52,8 +54,8 @@ const CAPTURE_FRAMES: usize = 8;
 
 const DTX_ENABLE_BIT: u16 = 1 << 11;
 const TD_ENABLE_BIT: u16 = 1 << 12; // on-by-default per section 25/36 -- must be re-set explicitly
-                                     // whenever this tool writes ECMODE_IN at all, since a full
-                                     // 16-bit register write with DTX_ENABLE alone silently clears it.
+                                    // whenever this tool writes ECMODE_IN at all, since a full
+                                    // 16-bit register write with DTX_ENABLE alone silently clears it.
 const RATEP_DSTAR: [u16; 6] = [0x0130, 0x0763, 0x4000, 0x0000, 0x0000, 0x0048];
 const RATET_HALF_RATE_FEC: u8 = 33;
 
@@ -165,14 +167,16 @@ fn hex(frame: &(Vec<u8>, usize)) -> String {
 }
 
 fn set_ecmode(sock: &UdpSocket, buf: &mut [u8; 256], ecmode_in: u16) {
-    sock.send(&build_control_ecmode(ecmode_in)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(ecmode_in))
+        .expect("send ECMODE config");
     let n = sock.recv(buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
 }
 
 fn probe_ambe_plus_2(sock: &UdpSocket) {
     println!("\n=== AMBE+2 half-rate (RATET {RATET_HALF_RATE_FEC}), DTX/DTMF probe ===");
-    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC)).expect("send RATET config");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC))
+        .expect("send RATET config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATET config response");
     parse_packet(&buf[..n]).expect("valid packet");
@@ -213,14 +217,25 @@ fn probe_ambe_plus_2(sock: &UdpSocket) {
 
     let rows = [697.0, 770.0, 852.0, 941.0];
     let cols = [1209.0, 1336.0, 1477.0, 1633.0];
-    let digit_names = [["1", "2", "3", "A"], ["4", "5", "6", "B"], ["7", "8", "9", "C"], ["*", "0", "#", "D"]];
+    let digit_names = [
+        ["1", "2", "3", "A"],
+        ["4", "5", "6", "B"],
+        ["7", "8", "9", "C"],
+        ["*", "0", "#", "D"],
+    ];
     println!("-- 16 DTMF digits, DTX_ENABLE + TD_ENABLE both explicitly on, all {CAPTURE_FRAMES} captured frames each --");
     for (ri, &row) in rows.iter().enumerate() {
         for (ci, &col) in cols.iter().enumerate() {
             let samples = dtmf_tone(row, col, 9000.0);
             let frames = capture(sock, &samples);
-            let decoded: Vec<Option<(u32, FrameKind, u32, u32)>> = frames.iter().map(decode_full).collect();
-            println!("  digit {}: {:?} hex={}", digit_names[ri][ci], decoded, hex(&frames[0]));
+            let decoded: Vec<Option<(u32, FrameKind, u32, u32)>> =
+                frames.iter().map(decode_full).collect();
+            println!(
+                "  digit {}: {:?} hex={}",
+                digit_names[ri][ci],
+                decoded,
+                hex(&frames[0])
+            );
         }
     }
 
@@ -235,7 +250,8 @@ fn probe_ambe_plus_2(sock: &UdpSocket) {
         for (ci, &col) in cols.iter().enumerate() {
             let samples = dtmf_tone(row, col, 9000.0);
             let frames = capture(sock, &samples);
-            let decoded: Vec<Option<(u32, FrameKind, u32, u32)>> = frames.iter().map(decode_full).collect();
+            let decoded: Vec<Option<(u32, FrameKind, u32, u32)>> =
+                frames.iter().map(decode_full).collect();
             println!("  digit {}: {:?}", digit_names[ri][ci], decoded);
         }
     }
@@ -245,7 +261,8 @@ fn probe_ambe_plus_2(sock: &UdpSocket) {
 
 fn probe_dstar(sock: &UdpSocket) {
     println!("\n=== D-STAR (RATEP custom), DTX/DTMF probe ===");
-    sock.send(&build_control_ratep(RATEP_DSTAR)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_DSTAR))
+        .expect("send RATEP config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
@@ -263,7 +280,15 @@ fn probe_dstar(sock: &UdpSocket) {
         let parsed = dstar_parse_frame(frame);
         let raw = dstar_extract_raw(parsed.d);
         let tone = dstar_decode_tone(parsed.d);
-        Some((raw.b0, raw.b1, raw.b2, tone.index, tone.volume, parsed.epsilon_c0, parsed.epsilon_c1))
+        Some((
+            raw.b0,
+            raw.b1,
+            raw.b2,
+            tone.index,
+            tone.volume,
+            parsed.epsilon_c0,
+            parsed.epsilon_c1,
+        ))
     };
 
     let silence = vec![0i16; FRAME_SAMPLES];
@@ -289,14 +314,24 @@ fn probe_dstar(sock: &UdpSocket) {
 
     let rows = [697.0, 770.0, 852.0, 941.0];
     let cols = [1209.0, 1336.0, 1477.0, 1633.0];
-    let digit_names = [["1", "2", "3", "A"], ["4", "5", "6", "B"], ["7", "8", "9", "C"], ["*", "0", "#", "D"]];
+    let digit_names = [
+        ["1", "2", "3", "A"],
+        ["4", "5", "6", "B"],
+        ["7", "8", "9", "C"],
+        ["*", "0", "#", "D"],
+    ];
     println!("-- 16 DTMF digits, DTX_ENABLE + TD_ENABLE both explicitly on, all {CAPTURE_FRAMES} captured frames each --");
     for (ri, &row) in rows.iter().enumerate() {
         for (ci, &col) in cols.iter().enumerate() {
             let samples = dtmf_tone(row, col, 9000.0);
             let frames = capture(sock, &samples);
             let decoded: Vec<Option<DstarToneCapture>> = frames.iter().map(decode_full).collect();
-            println!("  digit {}: {:?} hex={}", digit_names[ri][ci], decoded, hex(&frames[0]));
+            println!(
+                "  digit {}: {:?} hex={}",
+                digit_names[ri][ci],
+                decoded,
+                hex(&frames[0])
+            );
         }
     }
 
@@ -321,10 +356,14 @@ fn probe_dstar(sock: &UdpSocket) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
     probe_ambe_plus_2(&sock);

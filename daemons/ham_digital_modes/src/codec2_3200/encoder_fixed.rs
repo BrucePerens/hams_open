@@ -136,8 +136,8 @@ impl EncoderFixed {
         // yet -- the established "integer core, float boundary"
         // pattern, now reached one stage later than before.
         lpc::apply_bw_gamma_fixed(&mut a_q23);
-        let lsp_q23 = lpc::lpc_to_lsp_q23_from_integer_ak(&a_q23)
-            .unwrap_or(tables::MOD_FALLBACK_LSP_Q23);
+        let lsp_q23 =
+            lpc::lpc_to_lsp_q23_from_integer_ak(&a_q23).unwrap_or(tables::MOD_FALLBACK_LSP_Q23);
         profile_mark!(6);
 
         // quantise::encode_energy already routes through fixed_point::
@@ -324,7 +324,11 @@ mod tests {
                 voicing::is_voiced_fixed(&mut self.voicing_state, &self.sn[M_PITCH - N_SAMP..]);
             let wo_index = quantise::encode_wo(nlp::f0_to_wo(f0));
             let mut wn_q = [0i32; M_PITCH];
-            for ((w, &s), &win) in wn_q.iter_mut().zip(self.sn.iter()).zip(tables::WINDOW_ANALYSIS_Q30.iter()) {
+            for ((w, &s), &win) in wn_q
+                .iter_mut()
+                .zip(self.sn.iter())
+                .zip(tables::WINDOW_ANALYSIS_Q30.iter())
+            {
                 *w = ((s as i64 * win as i64) >> 7) as i32;
             }
             let r_q = lpc::autocorrelate_fixed(&wn_q);
@@ -348,7 +352,10 @@ mod tests {
 
     fn read_wav(path: &str) -> Vec<i16> {
         let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
-        data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+        data[44..]
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .collect()
     }
 
     /// The integer pitch/energy/line-spectral-pair boundaries must give
@@ -383,7 +390,11 @@ mod tests {
             for chunk in samples.chunks_exact(SAMPLES_PER_FRAME) {
                 let frame: [i16; SAMPLES_PER_FRAME] = chunk.try_into().unwrap();
                 let a = bits::unpack_frame(&prod.encode(&frame), WO_BITS, E_BITS);
-                let b = bits::unpack_frame(&oracle.encode_with_float_boundaries(&frame), WO_BITS, E_BITS);
+                let b = bits::unpack_frame(
+                    &oracle.encode_with_float_boundaries(&frame),
+                    WO_BITS,
+                    E_BITS,
+                );
                 frames += 1;
                 assert_eq!((a.voiced0, a.voiced1), (b.voiced0, b.voiced1));
                 wo_diff += (a.wo_index != b.wo_index) as usize;
@@ -391,7 +402,12 @@ mod tests {
                 if a.e_index != b.e_index {
                     max_step = max_step.max((a.e_index as i64 - b.e_index as i64).abs());
                 }
-                let d = a.lsp_indexes.iter().zip(b.lsp_indexes.iter()).filter(|(x, y)| x != y).count();
+                let d = a
+                    .lsp_indexes
+                    .iter()
+                    .zip(b.lsp_indexes.iter())
+                    .filter(|(x, y)| x != y)
+                    .count();
                 lsp_fields_diff += d;
                 lsp_frames_diff += (d > 0) as usize;
                 for (x, y) in a.lsp_indexes.iter().zip(b.lsp_indexes.iter()) {
@@ -402,11 +418,23 @@ mod tests {
         println!(
             "{frames} frames: wo differs {wo_diff}, energy differs {e_diff}, lsp differs in {lsp_frames_diff} frames ({lsp_fields_diff} fields), max index step {max_step}"
         );
-        assert_eq!(wo_diff, 0, "pitch index is table-derived from the float path and must be identical");
-        assert!(max_step <= 1, "an integer boundary moved an index by more than one level");
+        assert_eq!(
+            wo_diff, 0,
+            "pitch index is table-derived from the float path and must be identical"
+        );
+        assert!(
+            max_step <= 1,
+            "an integer boundary moved an index by more than one level"
+        );
         // Measured on 2026-09-20 (see the println above); thresholds leave headroom
         // for the encoder's slow drift but would catch a real regression.
-        assert!(e_diff * 2000 <= frames, "energy index disagreed in {e_diff}/{frames} frames");
-        assert!(lsp_frames_diff * 500 <= frames, "lsp index disagreed in {lsp_frames_diff}/{frames} frames");
+        assert!(
+            e_diff * 2000 <= frames,
+            "energy index disagreed in {e_diff}/{frames} frames"
+        );
+        assert!(
+            lsp_frames_diff * 500 <= frames,
+            "lsp index disagreed in {lsp_frames_diff}/{frames} frames"
+        );
     }
 }

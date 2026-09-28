@@ -64,7 +64,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn sine(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 fn sawtooth(freq: f64) -> Vec<i16> {
@@ -93,7 +95,9 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
     let mut state = seed;
     (0..FRAME_SAMPLES)
         .map(|_| {
-            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((state >> 33) as f64 / (1u64 << 31) as f64) - 1.0; // roughly [-1,1)
             (unit * peak) as i16
         })
@@ -102,14 +106,19 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 

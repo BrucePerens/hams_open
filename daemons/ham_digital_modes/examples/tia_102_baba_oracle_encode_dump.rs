@@ -18,17 +18,23 @@
 //! Usage: `cargo run --release --example tia_102_baba_oracle_encode_dump -- <in.raw> <max_frames> [center_offset]`
 
 use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::deprioritize_bits;
+use ham_digital_modes::ambe::float::tia_102_baba::decode_code_vectors;
 use ham_digital_modes::ambe::float::tia_102_baba::encoder::Encoder;
+use ham_digital_modes::ambe::float::tia_102_baba::encoder::HighPassFilter;
 use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::{
     decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency,
 };
-use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
-use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
-use ham_digital_modes::ambe::float::tia_102_baba::decode_code_vectors;
 use ham_digital_modes::ambe::float::tia_102_baba::pitch::PitchAnalysisFrame;
-use ham_digital_modes::ambe::float::tia_102_baba::encoder::HighPassFilter;
-use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::{refinement_error, RefinementFrame};
-use ham_digital_modes::ambe::float::tia_102_baba::vuv::{energy_dependent_function, update_xi_max, voicing_measure, voicing_threshold, xi_hf, xi_lf};
+use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::{
+    refinement_error, RefinementFrame,
+};
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
+    gain_bit_allocation, higher_order_bit_allocation,
+};
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::{
+    energy_dependent_function, update_xi_max, voicing_measure, voicing_threshold, xi_hf, xi_lf,
+};
+use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
 use std::fmt::Write as _;
 
 fn main() {
@@ -36,7 +42,10 @@ fn main() {
     let data = std::fs::read(&args[1]).expect("input");
     let max_frames: usize = args[2].parse().unwrap();
     let offset: i32 = args.get(3).map(|s| s.parse().unwrap()).unwrap_or(0);
-    let pcm: Vec<f64> = data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).collect();
+    let pcm: Vec<f64> = data
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+        .collect();
     let mut enc = Encoder::new();
     enc.set_center_offset(offset);
     enc.push_samples(&pcm);
@@ -51,7 +60,13 @@ fn main() {
     // oracle's own fundamental frequency instead of ours.
     let oracle_p: Vec<f64> = std::env::var("ORACLE_P")
         .ok()
-        .map(|f| std::fs::read_to_string(f).unwrap().lines().map(|l| l.trim().parse().unwrap()).collect())
+        .map(|f| {
+            std::fs::read_to_string(f)
+                .unwrap()
+                .lines()
+                .map(|l| l.trim().parse().unwrap())
+                .collect()
+        })
         .unwrap_or_default();
     let mut xi_max_state = 20000.0f64;
     let mut prev_v: Vec<bool> = Vec::new();
@@ -68,7 +83,13 @@ fn main() {
         let ho_all = higher_order_bit_allocation(l).unwrap();
         let hw: Vec<u8> = ho_all.iter().copied().filter(|&w| w > 0).collect();
         let d = deprioritize_bits(u, kk, gw, &hw).expect("deprioritize");
-        let _ = writeln!(out, "F {k} pitchQ1 {} ep {} w0 {:.6} L {l} K {kk}", (2.0 * p_i).round() as i64, (e * 4096.0).round() as i64, w0);
+        let _ = writeln!(
+            out,
+            "F {k} pitchQ1 {} ep {} w0 {:.6} L {l} K {kk}",
+            (2.0 * p_i).round() as i64,
+            (e * 4096.0).round() as i64,
+            w0
+        );
         out.push_str("V ");
         for v in decode_voicing_decisions_per_harmonic(d.b1, kk, l) {
             out.push(if v { '1' } else { '0' });
@@ -79,7 +100,11 @@ fn main() {
         }
         let mut hi = d.higher_order.iter();
         for &w in ho_all {
-            let v = if w > 0 { hi.next().map(|x| x.0).unwrap_or(0) } else { 0 };
+            let v = if w > 0 {
+                hi.next().map(|x| x.0).unwrap_or(0)
+            } else {
+                0
+            };
             let _ = write!(out, " {v}");
         }
         if std::env::var("DUMP_E").is_ok() {
@@ -88,7 +113,11 @@ fn main() {
             out.push_str("\nE");
             for i in 0..203 {
                 let p = 21.0 + 0.5 * i as f64;
-                let _ = write!(out, " {}", (frame.error_function(p) * 4096.0).round() as i64);
+                let _ = write!(
+                    out,
+                    " {}",
+                    (frame.error_function(p) * 4096.0).round() as i64
+                );
             }
         }
         if std::env::var("DUMP_ER").is_ok() {
@@ -96,12 +125,19 @@ fn main() {
             out.push_str("\nR");
             for i in -9..=9 {
                 let p = p_i + i as f64 / 8.0;
-                let _ = write!(out, " {:.6e}", refinement_error(&rf, 2.0 * std::f64::consts::PI / p));
+                let _ = write!(
+                    out,
+                    " {:.6e}",
+                    refinement_error(&rf, 2.0 * std::f64::consts::PI / p)
+                );
             }
         }
         if std::env::var("DUMP_V").is_ok() {
             let rf = RefinementFrame::new(&raw, 200 + k * 160 + offset as usize);
-            let w0v = oracle_p.get(k + 2).map(|p| 2.0 * std::f64::consts::PI / p).unwrap_or(*w0);
+            let w0v = oracle_p
+                .get(k + 2)
+                .map(|p| 2.0 * std::f64::consts::PI / p)
+                .unwrap_or(*w0);
             let (lf, hf) = (xi_lf(&rf), xi_hf(&rf));
             xi_max_state = update_xi_max(xi_max_state, lf + hf);
             let m = energy_dependent_function(xi_max_state, lf + hf, lf, hf);
@@ -116,7 +152,14 @@ fn main() {
             }
             prev_v = cur;
         }
-        let _ = writeln!(out, "\nU {}", u.iter().map(|x| format!("{x:x}")).collect::<Vec<_>>().join(" "));
+        let _ = writeln!(
+            out,
+            "\nU {}",
+            u.iter()
+                .map(|x| format!("{x:x}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
     }
     print!("{out}");
 }

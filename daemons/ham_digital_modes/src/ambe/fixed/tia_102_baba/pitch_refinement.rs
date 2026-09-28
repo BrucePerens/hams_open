@@ -94,12 +94,20 @@ pub struct Pitch {
 impl Pitch {
     /// From a period of `p8 / 8` samples.
     pub fn from_p8(p8: u32) -> Self {
-        Self { n: 2048, d: p8 as i128, omega0_q30: omega0_q30_from_p8(p8) as i64 }
+        Self {
+            n: 2048,
+            d: p8 as i128,
+            omega0_q30: omega0_q30_from_p8(p8) as i64,
+        }
     }
 
     /// From `omega0` in radians per sample, Q30 (must be positive).
     pub fn from_omega0_q30(omega0_q30: i64) -> Self {
-        Self { n: omega0_q30 as i128 * BINS_PER_RADIAN_Q40, d: 1i128 << 70, omega0_q30 }
+        Self {
+            n: omega0_q30 as i128 * BINS_PER_RADIAN_Q40,
+            d: 1i128 << 70,
+            omega0_q30,
+        }
     }
 
     /// From `omega0` in radians per sample, Q16.16 (the decoders' own convention; only 16 fractional
@@ -138,7 +146,9 @@ impl Pitch {
     /// `b_hat_0 = floor(4 pi / omega0 - 39)` (Eq. 45), clamped below at 0 like the float `as u32` cast
     /// (`4 pi / omega0 = 512 / u = 512 d / n`; exact integer arithmetic).
     pub fn quantizer_b0(&self) -> u32 {
-        (512 * self.d - 39 * self.n).div_euclid(self.n).clamp(0, u32::MAX as i128) as u32
+        (512 * self.d - 39 * self.n)
+            .div_euclid(self.n)
+            .clamp(0, u32::MAX as i128) as u32
     }
 
     /// `L_hat = floor(0.9254 * floor(pi / omega0 + 1/4))` (Eq. 31).
@@ -172,10 +182,16 @@ impl RefinementFrame {
                 re += x * COS_256_Q30[k] as i64;
                 im -= x * COS_256_Q30[(k + 192) & 255] as i64;
             }
-            let bin = Cplx { re: (re + (1 << 29)) >> 30, im: (im + (1 << 29)) >> 30 };
+            let bin = Cplx {
+                re: (re + (1 << 29)) >> 30,
+                im: (im + (1 << 29)) >> 30,
+            };
             sw[(m + 127) as usize] = bin;
             if (1..=127).contains(&m) {
-                sw[(-m + 127) as usize] = Cplx { re: bin.re, im: -bin.im };
+                sw[(-m + 127) as usize] = Cplx {
+                    re: bin.re,
+                    im: -bin.im,
+                };
             }
         }
         Self { sw }
@@ -216,7 +232,10 @@ pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) ->
     if den == 0 {
         return Cplx::ZERO;
     }
-    Cplx { re: ((num_re << 28) / den) as i64, im: ((num_im << 28) / den) as i64 }
+    Cplx {
+        re: ((num_re << 28) / den) as i64,
+        im: ((num_im << 28) / den) as i64,
+    }
 }
 
 /// Over the bins `m_start <= m < m_end`: returns `(err, real)` with `real = sum |S_w(m)|^2` and
@@ -230,7 +249,10 @@ pub fn spectrum_error_and_energy(
     m_start: i32,
     m_end: i32,
 ) -> (i128, i128) {
-    let to_q30 = |c: Cplx| Cplx { re: c.re << 20, im: c.im << 20 };
+    let to_q30 = |c: Cplx| Cplx {
+        re: c.re << 20,
+        im: c.im << 20,
+    };
     let mut real = 0i128;
     for m in m_start..m_end {
         real += to_q30(frame.sw_at(m)).norm_sqr();
@@ -245,9 +267,15 @@ pub fn spectrum_error_and_energy(
         let amp = harmonic_amplitude_q16(frame, l as u32, pitch);
         for m in s..e {
             let wr = window_dft_16384_q22(pitch.window_index(m, l));
-            let syn = Cplx { re: (amp.re * wr) >> 8, im: (amp.im * wr) >> 8 }; // Q16 * Q22 = Q38 -> Q30
+            let syn = Cplx {
+                re: (amp.re * wr) >> 8,
+                im: (amp.im * wr) >> 8,
+            }; // Q16 * Q22 = Q38 -> Q30
             let real_bin = to_q30(frame.sw_at(m));
-            let diff = Cplx { re: real_bin.re - syn.re, im: real_bin.im - syn.im };
+            let diff = Cplx {
+                re: real_bin.re - syn.re,
+                im: real_bin.im - syn.im,
+            };
             err += diff.norm_sqr() - real_bin.norm_sqr();
         }
     }

@@ -50,7 +50,9 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
     let mut state = seed;
     (0..FRAME_SAMPLES)
         .map(|_| {
-            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((state >> 33) as f64 / (1u64 << 31) as f64) - 1.0;
             (unit * peak) as i16
         })
@@ -59,15 +61,20 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let count: usize = args.get(2).map(|s| s.parse().unwrap()).unwrap_or(200);
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
@@ -86,10 +93,15 @@ fn main() {
         unreachable!()
     };
 
-    let peaks = [500.0, 1500.0, 3000.0, 5000.0, 7000.0, 9000.0, 12000.0, 16000.0];
+    let peaks = [
+        500.0, 1500.0, 3000.0, 5000.0, 7000.0, 9000.0, 12000.0, 16000.0,
+    ];
     for i in 0..count {
         let peak = peaks[i % peaks.len()];
-        let samples = lcg_noise(0xC2B2AE3D27D4EB4F_u64.wrapping_add(i as u64 * 2654435761), peak);
+        let samples = lcg_noise(
+            0xC2B2AE3D27D4EB4F_u64.wrapping_add(i as u64 * 2654435761),
+            peak,
+        );
         let n = send_recv_retrying(&sock, &mut buf, &build_speech(&samples));
         let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
         assert_eq!(ptype, TYPE_CHANNEL);

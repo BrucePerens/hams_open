@@ -7,7 +7,9 @@
 //! Regenerate with: `cargo run --release --example ambe_fixed_generate_tia_102_baba_pitch_tables >
 //! src/ambe/fixed/tia_102_baba/pitch_tables.rs`
 
-use ham_digital_modes::ambe::float::tia_102_baba::pitch::{initial_pitch_window, lowpass_filter_tap};
+use ham_digital_modes::ambe::float::tia_102_baba::pitch::{
+    initial_pitch_window, lowpass_filter_tap,
+};
 
 fn main() {
     println!("// SPDX-License-Identifier: LGPL-3.0-or-later");
@@ -17,7 +19,10 @@ fn main() {
     println!("/// Annex B window `w_I(n)`, `n = 0..=150`, Q31 (`round(w * 2^31)`; the window peaks near 0.092).");
     println!("pub const INITIAL_WINDOW_Q31: [i32; 151] = [");
     for n in 0..=150 {
-        println!("    {},", (initial_pitch_window(n) * 2f64.powi(31)).round() as i64);
+        println!(
+            "    {},",
+            (initial_pitch_window(n) * 2f64.powi(31)).round() as i64
+        );
     }
     println!("];");
     println!();
@@ -25,18 +30,27 @@ fn main() {
     println!("/// rounded Q31 table, so the small tail values keep their precision.");
     println!("pub const INITIAL_WINDOW_SQ_Q40: [i64; 151] = [");
     for n in 0..=150 {
-        println!("    {},", (initial_pitch_window(n).powi(2) * 2f64.powi(40)).round() as i64);
+        println!(
+            "    {},",
+            (initial_pitch_window(n).powi(2) * 2f64.powi(40)).round() as i64
+        );
     }
     println!("];");
     println!();
     let w4: f64 = (-150..=150).map(|n| initial_pitch_window(n).powi(4)).sum();
     println!("/// `sum over n=-150..=150 of w_I(n)^4`, Q40.");
-    println!("pub const INITIAL_WINDOW_FOURTH_SUM_Q40: i64 = {};", (w4 * 2f64.powi(40)).round() as i64);
+    println!(
+        "pub const INITIAL_WINDOW_FOURTH_SUM_Q40: i64 = {};",
+        (w4 * 2f64.powi(40)).round() as i64
+    );
     println!();
     println!("/// Annex D lowpass filter `h_LPF(n)`, `n = 0..=10`, Q30.");
     println!("pub const LOWPASS_Q30: [i32; 11] = [");
     for n in 0..=10 {
-        println!("    {},", (lowpass_filter_tap(n) * 2f64.powi(30)).round() as i64);
+        println!(
+            "    {},",
+            (lowpass_filter_tap(n) * 2f64.powi(30)).round() as i64
+        );
     }
     println!("];");
 }

@@ -8,7 +8,9 @@
 //!
 //! Usage: `cargo run --release --example dstar_offline_variants -- <dir> [<dir>...]`
 
-use ham_digital_modes::ambe::float::dstar::decode::{dequantize, parse_frame, DStarDecoderState, DequantizedFrame};
+use ham_digital_modes::ambe::float::dstar::decode::{
+    dequantize, parse_frame, DStarDecoderState, DequantizedFrame,
+};
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
 use ham_digital_modes::ambe::float::tia_102_baba::synthesis::SynthesisState;
@@ -16,14 +18,22 @@ use rustfft::{num_complex::Complex64, FftPlanner};
 
 fn read_wav(path: &str) -> Vec<f64> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+        .collect()
 }
 fn env(x: &[f64]) -> Vec<f64> {
-    x.chunks_exact(160).map(|c| (c.iter().map(|s| s * s).sum::<f64>() / 160.0).sqrt()).collect()
+    x.chunks_exact(160)
+        .map(|c| (c.iter().map(|s| s * s).sum::<f64>() / 160.0).sqrt())
+        .collect()
 }
 fn corr(a: &[f64], b: &[f64]) -> f64 {
     let n = a.len().min(b.len()) as f64;
-    let (ma, mb) = (a.iter().take(n as usize).sum::<f64>() / n, b.iter().take(n as usize).sum::<f64>() / n);
+    let (ma, mb) = (
+        a.iter().take(n as usize).sum::<f64>() / n,
+        b.iter().take(n as usize).sum::<f64>() / n,
+    );
     let (mut c, mut va, mut vb) = (0.0, 0.0, 0.0);
     for (x, y) in a.iter().zip(b) {
         c += (x - ma) * (y - mb);
@@ -39,7 +49,12 @@ fn power_spectrum(seg: &[f64]) -> Vec<f64> {
     let mut buf: Vec<Complex64> = seg
         .iter()
         .enumerate()
-        .map(|(i, &s)| Complex64::new(s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos()), 0.0))
+        .map(|(i, &s)| {
+            Complex64::new(
+                s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos()),
+                0.0,
+            )
+        })
         .collect();
     buf.resize(4096, Complex64::new(0.0, 0.0));
     fft.process(&mut buf);
@@ -59,7 +74,9 @@ fn main() {
         let (mut pcm_a, mut pcm_b) = (Vec::new(), Vec::new());
         let mut f0s = Vec::new();
         for line in hex.lines() {
-            let bytes: Vec<u8> = (0..line.len() / 2).map(|i| u8::from_str_radix(&line[2 * i..2 * i + 2], 16).unwrap()).collect();
+            let bytes: Vec<u8> = (0..line.len() / 2)
+                .map(|i| u8::from_str_radix(&line[2 * i..2 * i + 2], 16).unwrap())
+                .collect();
             let mut wire = [0u8; 9];
             wire.copy_from_slice(&bytes[bytes.len() - 9..]);
             let frame = wire_bytes_to_frame(&wire);
@@ -87,7 +104,11 @@ fn main() {
         );
         for i in 1..f0s.len().saturating_sub(1) {
             let Some(f0) = f0s[i] else { continue };
-            if f0s[i - 1].is_none() || f0s[i + 1].is_none() || (f0s[i - 1].unwrap() / f0 - 1.0).abs() > 0.03 || (f0s[i + 1].unwrap() / f0 - 1.0).abs() > 0.03 {
+            if f0s[i - 1].is_none()
+                || f0s[i + 1].is_none()
+                || (f0s[i - 1].unwrap() / f0 - 1.0).abs() > 0.03
+                || (f0s[i + 1].unwrap() / f0 - 1.0).abs() > 0.03
+            {
                 continue;
             }
             let span = |x: &[f64]| power_spectrum(&x[(i - 1) * 160..(i + 2) * 160]);
@@ -95,7 +116,10 @@ fn main() {
             for (v, pcm) in [(0usize, &pcm_a), (1usize, &pcm_b)] {
                 let po = span(pcm);
                 for k in 1..=16usize {
-                    let (lo, hi) = (((k as f64 - 0.3) * f0 * 4096.0 / 8000.0) as usize, ((k as f64 + 0.3) * f0 * 4096.0 / 8000.0) as usize);
+                    let (lo, hi) = (
+                        ((k as f64 - 0.3) * f0 * 4096.0 / 8000.0) as usize,
+                        ((k as f64 + 0.3) * f0 * 4096.0 / 8000.0) as usize,
+                    );
                     if hi >= 2048 {
                         continue;
                     }
@@ -108,6 +132,10 @@ fn main() {
     }
     println!("k | chip/shipping dB | chip/raw-params dB");
     for k in 1..=16 {
-        println!("{k:2} | {:6.1} | {:6.1}", sums[0][k] / counts[0][k].max(1) as f64, sums[1][k] / counts[1][k].max(1) as f64);
+        println!(
+            "{k:2} | {:6.1} | {:6.1}",
+            sums[0][k] / counts[0][k].max(1) as f64,
+            sums[1][k] / counts[1][k].max(1) as f64
+        );
     }
 }

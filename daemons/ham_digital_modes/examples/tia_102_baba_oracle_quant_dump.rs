@@ -61,7 +61,11 @@ fn main() {
                 v.exp2().round().clamp(1.0, 8000.0)
             })
             .collect();
-        let (pl, pm) = if chain { (prev_l, prev_m.clone()) } else { (INITIAL_L_HAT_PREV, vec![1.0; INITIAL_L_HAT_PREV as usize]) };
+        let (pl, pm) = if chain {
+            (prev_l, prev_m.clone())
+        } else {
+            (INITIAL_L_HAT_PREV, vec![1.0; INITIAL_L_HAT_PREV as usize])
+        };
         let q = quantize_spectral_amplitudes(&m, l, pl, &pm).expect("quantize");
         let _ = write!(sa_txt, "{l}");
         for v in &m {
@@ -74,7 +78,11 @@ fn main() {
         }
         let mut hi = q.higher_order.iter();
         for &w in higher_order_bit_allocation(l).unwrap() {
-            let v = if w > 0 { hi.next().map(|x| x.0).unwrap_or(0) } else { 0 };
+            let v = if w > 0 {
+                hi.next().map(|x| x.0).unwrap_or(0)
+            } else {
+                0
+            };
             let _ = write!(q_txt, " {v}");
         }
         q_txt.push('\n');

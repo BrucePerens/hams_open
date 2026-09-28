@@ -21,11 +21,11 @@
 //! 0.00074 dB) wherever the period and voicing agree. Each side carried its own tracking history, so a
 //! rare half-sample tie in the initial pitch also shifts later frames' look-back window.
 
+use super::encode::{encode_frame, FrameState};
 use super::pitch::{
     choose_initial_pitch_estimate, look_ahead_pitch_tracking, look_back_pitch_tracking, ErrorTable,
     PitchAnalysisFrame, DEFAULT_PITCH_INDEX,
 };
-use super::encode::{encode_frame, FrameState};
 use super::pitch_refinement::{refine_pitch, Pitch, RefinementFrame};
 use std::collections::VecDeque;
 
@@ -83,7 +83,8 @@ impl FrameAnalyzer {
     }
 
     fn center(&self, k: usize) -> usize {
-        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64).max(MARGIN as i64) as usize
+        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64).max(MARGIN as i64)
+            as usize
     }
 
     pub fn push_samples(&mut self, samples: &[i16]) {
@@ -101,7 +102,8 @@ impl FrameAnalyzer {
     /// Marks the end of input and pads with silence so the last real frames complete.
     pub fn finish_input(&mut self) {
         if !self.finished {
-            self.raw.extend(std::iter::repeat_n(0, 3 * FRAME_SAMPLES + 2 * MARGIN));
+            self.raw
+                .extend(std::iter::repeat_n(0, 3 * FRAME_SAMPLES + 2 * MARGIN));
             self.finished = true;
         }
     }
@@ -132,9 +134,16 @@ impl FrameAnalyzer {
         self.table(k + 1);
         self.table(k + 2);
         let find = |tables: &VecDeque<(usize, ErrorTable)>, idx: usize| -> usize {
-            tables.iter().position(|(i, _)| *i == idx).expect("table for this frame was just built")
+            tables
+                .iter()
+                .position(|(i, _)| *i == idx)
+                .expect("table for this frame was just built")
         };
-        let (i0, i1, i2) = (find(&self.tables, k), find(&self.tables, k + 1), find(&self.tables, k + 2));
+        let (i0, i1, i2) = (
+            find(&self.tables, k),
+            find(&self.tables, k + 1),
+            find(&self.tables, k + 2),
+        );
         let (t0, t1, t2) = (&self.tables[i0].1, &self.tables[i1].1, &self.tables[i2].1);
 
         let (idx_b, ce_b) = look_back_pitch_tracking(t0, self.prev_first, self.prev_second);
@@ -231,14 +240,23 @@ impl Encoder {
 
     /// Feeds PCM to the encoder, applying the standard's input high-pass filter (Eq. 3) first.
     pub fn push_samples(&mut self, samples: &[i16]) {
-        let filtered: Vec<i32> = samples.iter().map(|&s| self.high_pass.step(s as i32)).collect();
+        let filtered: Vec<i32> = samples
+            .iter()
+            .map(|&s| self.high_pass.step(s as i32))
+            .collect();
         self.analyzer.push_samples_wide(&filtered);
     }
 
     /// Encodes the next frame if enough look-ahead has been pushed, else `None`.
     pub fn next_frame(&mut self) -> Option<[u32; 8]> {
         let a = self.analyzer.next_analysis()?;
-        match encode_frame(&a.refinement, &a.pitch, a.initial_pitch_error_q16, &self.state, false) {
+        match encode_frame(
+            &a.refinement,
+            &a.pitch,
+            a.initial_pitch_error_q16,
+            &self.state,
+            false,
+        ) {
             Some((c, next_state)) => {
                 self.state = next_state;
                 self.last_frame = Some(c);

@@ -72,7 +72,11 @@ pub struct PrevState<'a> {
 
 impl<'a> PrevState<'a> {
     pub fn from_decoder_state(state: &'a MbeDecoderState) -> Self {
-        Self { l: state.l, log2_ml_q16: &state.log2_ml_q16, gamma_q16: state.gamma_q16 }
+        Self {
+            l: state.l,
+            log2_ml_q16: &state.log2_ml_q16,
+            gamma_q16: state.gamma_q16,
+        }
     }
 }
 
@@ -109,10 +113,18 @@ pub fn target_log2_ml_q16(w0_q16: i32, voiced: &[bool], ml_q16: &[i32]) -> Vec<i
 fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i64 {
     // mbelib sets the previous frame's log2Ml[0] to log2Ml[1].
     let idx = if idx == 0 { 1 } else { idx };
-    log2_ml_q16.get(idx).copied().unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0)) as i64
+    log2_ml_q16
+        .get(idx)
+        .copied()
+        .unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0)) as i64
 }
 
-fn nearest<const N: usize>(table: &[[i32; N]], target: &[i32; N], used: usize, only_even: bool) -> u32 {
+fn nearest<const N: usize>(
+    table: &[[i32; N]],
+    target: &[i32; N],
+    used: usize,
+    only_even: bool,
+) -> u32 {
     let mut best = (i64::MAX, 0usize);
     for (i, row) in table.iter().enumerate() {
         if only_even && i % 2 == 1 {
@@ -138,7 +150,11 @@ fn voicing_slot(h: usize, f0_q16: i32) -> usize {
 }
 
 /// Fixed-point `quantize_speech`; see the module doc and the float sibling for the algorithm.
-pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTables) -> QuantizedSpeech {
+pub fn quantize_speech(
+    target: &SpeechTarget,
+    prev: &PrevState,
+    tables: &ModeTables,
+) -> QuantizedSpeech {
     let l = target.l as usize;
     let l64 = l as i64;
 
@@ -168,17 +184,32 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
         let ik = (f_q16 >> 16).max(0) as usize;
         let delta = f_q16 - ((ik as i64) << 16);
         let one_minus_delta = 65536 - delta;
-        let (p0, p1) = (prev_at(prev.log2_ml_q16, ik), prev_at(prev.log2_ml_q16, ik + 1));
+        let (p0, p1) = (
+            prev_at(prev.log2_ml_q16, ik),
+            prev_at(prev.log2_ml_q16, ik + 1),
+        );
         sum43 += one_minus_delta * p0 + delta * p1;
-        *slot = ((tables.rho_q16 * one_minus_delta * p0) >> 32) + ((tables.rho_q16 * delta * p1) >> 32);
+        *slot =
+            ((tables.rho_q16 * one_minus_delta * p0) >> 32) + ((tables.rho_q16 * delta * p1) >> 32);
     }
     let sum43_scaled = (((sum43 >> 16) * tables.rho_q16) >> 16) / l64;
 
     // x = target log2Ml - pred; its mean sets the gain, the zero-mean remainder is Tl.
-    let x: Vec<i64> = (0..=l).map(|h| if h == 0 { 0 } else { target.log2_ml_q16[h] as i64 - pred[h] }).collect();
+    let x: Vec<i64> = (0..=l)
+        .map(|h| {
+            if h == 0 {
+                0
+            } else {
+                target.log2_ml_q16[h] as i64 - pred[h]
+            }
+        })
+        .collect();
     let mean_x = x[1..=l].iter().sum::<i64>() / l64;
     let gamma_target = mean_x + sum43_scaled + (log2_q16((l as i32) << 16) >> 1) as i64;
-    let delta_target = (((gamma_target - ((prev.gamma_q16 as i64 * tables.gamma_memory_q16) >> 16)) as i128) << 16) / tables.gamma_scale_q16 as i128;
+    let delta_target = (((gamma_target - ((prev.gamma_q16 as i64 * tables.gamma_memory_q16) >> 16))
+        as i128)
+        << 16)
+        / tables.gamma_scale_q16 as i128;
     let delta_target = delta_target as i64;
     let (mut b2_dist, mut b2_idx) = (i64::MAX, 0usize);
     for (i, &dg) in tables.dg_q16.iter().enumerate() {
@@ -189,7 +220,9 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     }
 
     // Zero-mean Tl split into four blocks and DCT'd.
-    let tl: Vec<i64> = (0..=l).map(|h| if h == 0 { 0 } else { x[h] - mean_x }).collect();
+    let tl: Vec<i64> = (0..=l)
+        .map(|h| if h == 0 { 0 } else { x[h] - mean_x })
+        .collect();
     let ji = tables.lmprbl[l];
     let mut cik = [[0i32; 18]; 5];
     let mut start = 1usize;
@@ -217,7 +250,9 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     }
     let mut gm = [0i32; 9];
     for (m, slot) in gm.iter_mut().enumerate().skip(2) {
-        let sum: i64 = (1..=8usize).map(|i| ri[i] as i64 * cos_pi_frac(m as i64 - 1, 2 * i as i64 - 1, 8) as i64).sum();
+        let sum: i64 = (1..=8usize)
+            .map(|i| ri[i] as i64 * cos_pi_frac(m as i64 - 1, 2 * i as i64 - 1, 8) as i64)
+            .sum();
         *slot = (sum >> 19) as i32; // >> 16 for the cosine's Q16.16, / 8 for the transform
     }
     let b3 = nearest(tables.prba24_q16, &[gm[2], gm[3], gm[4]], 3, false);
@@ -228,9 +263,22 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     for block in 0..4 {
         let j_len = ji[block] as usize;
         let used = j_len.saturating_sub(2).min(4);
-        let tgt = [cik[block + 1][3], cik[block + 1][4], cik[block + 1][5], cik[block + 1][6]];
-        hoc_idx[block] =
-            if used == 0 { 0 } else { nearest(tables.hoc_q16[block], &tgt, used, block == 3 && tables.hoc_b8_even_only) };
+        let tgt = [
+            cik[block + 1][3],
+            cik[block + 1][4],
+            cik[block + 1][5],
+            cik[block + 1][6],
+        ];
+        hoc_idx[block] = if used == 0 {
+            0
+        } else {
+            nearest(
+                tables.hoc_q16[block],
+                &tgt,
+                used,
+                block == 3 && tables.hoc_b8_even_only,
+            )
+        };
     }
 
     QuantizedSpeech {
