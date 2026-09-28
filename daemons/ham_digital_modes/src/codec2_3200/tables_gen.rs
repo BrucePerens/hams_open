@@ -352,7 +352,9 @@ pub(super) fn render() -> String {
          //! GENERATED FILE -- do not edit by hand. Produced by `tables_gen.rs`\n\
          //! (`cargo test --release --features ambe_plus_2 --lib tables_gen::regenerate -- --ignored`);\n\
          //! `tables_gen::tests::committed_tables_match_the_generator` fails if this drifts.\n\
-         //! Contains no floating point: every value is an integer constant.\n\n",
+         //! Contains no floating point: every value is an integer constant.\n\n\
+         // rustfmt would reflow this file, and the test compares its layout with this generator's output.\n\
+         #![cfg_attr(rustfmt, rustfmt::skip)]\n\n",
     );
     // The 16 kHz spectral-bridge tables are only compiled when that feature is on.
     let gate = |name: &str| {
