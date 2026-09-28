@@ -175,10 +175,10 @@ def _remove_env_file(tunnel_key):
     if not path.startswith(_KEYS_DIR.rstrip(os.sep) + os.sep):
         _logger.error("Refusing to remove a token file outside %s (resolved path: %s)", _KEYS_DIR, path)
         return
+    if not os.path.lexists(path):
+        return
     try:
         os.remove(path)
-    except FileNotFoundError:
-        pass
     except OSError as e:
         _logger.warning("Could not remove the token file for tunnel %s: %s", tunnel_key, e)
 
