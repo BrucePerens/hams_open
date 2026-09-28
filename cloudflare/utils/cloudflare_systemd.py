@@ -167,6 +167,22 @@ def _write_secure_file(path, content, mandatory_prefix):
         raise
 
 
+def _remove_env_file(tunnel_key):
+    """Removes a stopped tunnel's run-token file, if there is one. The file holds a live credential and
+    `start_tunnel_daemon` writes it afresh on every start, so nothing needs it once the unit is disabled. A key that
+    would resolve outside the keys directory is refused, the same boundary `_write_secure_file` enforces."""
+    path = os.path.realpath(_env_file_path(tunnel_key))
+    if not path.startswith(_KEYS_DIR.rstrip(os.sep) + os.sep):
+        _logger.error("Refusing to remove a token file outside %s (resolved path: %s)", _KEYS_DIR, path)
+        return
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+    except OSError as e:
+        _logger.warning("Could not remove the token file for tunnel %s: %s", tunnel_key, e)
+
+
 # [@ANCHOR: cloudflare:ensure_unit_installed]
 def _ensure_unit_installed():
     """Renders the template unit with this host's own resolved cloudflared binary path and
@@ -246,6 +262,8 @@ def stop_tunnel_daemon(tunnel_key=None):
             _logger.error(
                 "Failed to stop Cloudflare tunnel unit for %s: %s", tunnel_key, output
             )
+            return
+        _remove_env_file(tunnel_key)
         return
 
     success, output = _run_systemctl(
@@ -257,4 +275,6 @@ def stop_tunnel_daemon(tunnel_key=None):
     for line in output.splitlines():
         unit = line.split()[0] if line.split() else ""
         if unit.startswith("cloudflared@") and unit.endswith(".service"):
-            _run_systemctl("disable", "--now", unit)
+            disabled, _ = _run_systemctl("disable", "--now", unit)
+            if disabled:
+                _remove_env_file(unit[len("cloudflared@"):-len(".service")])
