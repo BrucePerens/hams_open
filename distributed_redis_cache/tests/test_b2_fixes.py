@@ -309,8 +309,11 @@ class TestB2Fixes(HamsTransactionCase):
         })
         settings.set_values()
 
-        self.assertNotIn(
-            dbname, redis_pool._db_configs,
+        # The stale tuple must be gone. The entry is either absent, or already rebuilt from the freshly saved
+        # settings: with the cloudflare module installed in the same database its own set_values() publishes the
+        # trusted address list to Redis straight after this one, and that call resolves the new configuration.
+        self.assertIn(
+            redis_pool._db_configs.get(dbname), (None, ("fresh-host", 6380, "fresh-pass")),
             "Saving Redis settings must invalidate this worker's cached "
             "connection config, not leave the stale tuple in place.",
         )
