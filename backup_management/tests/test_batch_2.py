@@ -173,3 +173,51 @@ class TestBatch2Fixes(HamsTransactionCase):
         # longer says where the data actually went.
         self.assertIn(expected_dest, job.output_log)
 
+    def test_restore_payload_carries_the_s3_b2_storage_routing_fields(self):
+        # Bug-hunt fix (2026-09-27, tier-1 pass): producer/consumer payload-schema
+        # drift. daemon/main.py's kopia branch is keyed on cmd[0] == "kopia" AND
+        # config.get("storage_type") in ("s3", "b2") -- that is what sets
+        # KOPIA_CONFIG_PATH to this backup.config's OWN per-config repository.config
+        # and calls _ensure_kopia_s3_repository() before running the command. It
+        # covers restore_cmd jobs by design, but action_restore's payload never
+        # carried storage_type/bucket_name/endpoint_url/access_key/secret_key at
+        # all, so storage_type came back absent, defaulted to "local", and every
+        # restore of an off-site S3/B2 backup ran against kopia's single GLOBAL
+        # default config instead of the bucket the snapshot actually lives in.
+        # Asserts on the real payload dict sent to RabbitMQ, so it fails if any of
+        # the five fields goes missing again.
+        s3_config = self.env["backup.config"].create({
+            "name": "Config S3 Restore",
+            "engine": "kopia",
+            "target_path": "/var/lib/odoo/backups/test_kopia_s3",
+            "storage_type": "s3",
+            "bucket_name": "hams-offsite-bucket",
+            "endpoint_url": "https://s3.us-west-002.backblazeb2.com",
+            "access_key": "AKIAEXAMPLEONLY",
+        })
+        snap = self.env["backup.snapshot"].create({
+            "config_id": s3_config.id,
+            "snapshot_id": "snap_s3_restore",
+        })
+        wizard = self.env["backup.restore.wizard"].create({
+            "snapshot_id": snap.id,
+            "restore_target_path": "/var/lib/odoo/backups/test_kopia_s3",
+        })
+        mock_pub = self.safe_patch(
+            "odoo.addons.backup_management.models.restore_wizard.publish_to_rabbitmq"
+        )
+        wizard.action_restore()
+        self.env.cr.postcommit.run()
+
+        mock_pub.assert_called_once()
+        payload = json.loads(mock_pub.call_args[0][1])
+        self.assertEqual(payload["storage_type"], "s3")
+        self.assertEqual(payload["bucket_name"], "hams-offsite-bucket")
+        self.assertEqual(
+            payload["endpoint_url"], "https://s3.us-west-002.backblazeb2.com"
+        )
+        self.assertEqual(payload["access_key"], "AKIAEXAMPLEONLY")
+        # Present as a key even when unset, so the daemon's own
+        # config.get("secret_key") branch is reached rather than silently absent.
+        self.assertIn("secret_key", payload)
+

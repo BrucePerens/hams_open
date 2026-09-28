@@ -4,7 +4,7 @@ import logging
 from odoo import http, tools
 from odoo.http import request
 import werkzeug.exceptions
-from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
+from odoo.addons.distributed_redis_cache.redis_pool import redis, get_redis_connection
 
 _logger = logging.getLogger(__name__)
 
@@ -20,10 +20,29 @@ class ServiceWorkerController(http.Controller):
         Serves the Service Worker script from the root scope.
         Injects mtime (invalidation) and max file size (quota).
         """
-        # Use Redis for JS content cache
+        # Use Redis for JS content cache.
+        #
+        # Bug-hunt fix (2026-09-27, tier-1 pass): both Redis calls below used to
+        # be unguarded. Redis here is a CACHE in front of a file on disk that is
+        # the real source of truth -- every other get_redis_connection() call
+        # site in this codebase (redis_cache.py's @distributed_cache read and
+        # write, invalidate_model_cache, poll_and_clear_local_cache,
+        # distributed_cache_config.check_redis_status) wraps its Redis call in
+        # `except redis.RedisError` and degrades to the local/disk path. This
+        # one did not, so an unreachable Redis turned the site's public,
+        # unauthenticated, root-scope /sw.js into an HTTP 500 for every visitor
+        # -- while the rest of the site kept serving normally, which is exactly
+        # the inconsistency that makes it hard to diagnose. Degrade the same way
+        # the siblings do: serve the template straight off disk, skip the cache
+        # write, log it once per request at warning level.
         content = None
         r = get_redis_connection(request.env)
-        cached_js = r.get("caching_sw_js_content")
+        try:
+            cached_js = r.get("caching_sw_js_content")
+        except redis.RedisError as e:
+            _logger.warning("Redis unavailable serving /sw.js, reading from disk: %s", e)
+            cached_js = None
+            r = None
         if cached_js:
             content = cached_js.decode('utf-8') if isinstance(cached_js, bytes) else cached_js
 
@@ -31,9 +50,13 @@ class ServiceWorkerController(http.Controller):
             try:
                 with tools.file_open("caching/static/src/sw/sw.js", "r") as f:
                     content = f.read()
-                r.setex("caching_sw_js_content", 86400, content)
             except FileNotFoundError:
                 raise werkzeug.exceptions.NotFound()
+            if r is not None:
+                try:
+                    r.setex("caching_sw_js_content", 86400, content)
+                except redis.RedisError as e:
+                    _logger.warning("Could not cache /sw.js template in Redis: %s", e)
 
         # Multi-Website Awareness: Get params
         website = request.website or request.env['website'].get_current_website()

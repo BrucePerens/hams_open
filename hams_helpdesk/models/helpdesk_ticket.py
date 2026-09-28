@@ -519,8 +519,43 @@ class HelpdeskTicket(models.Model):
                 # ncmec_legal_hold_applied (defeating the 2258A preservation hold).
                 "ncmec_report_state",
                 "ncmec_legal_hold_applied",
+                # bug-hunt (2026-09-27, tier-1 pass): ticket_type was missing, and it is the
+                # field the WHOLE _CSAM_TICKET_TYPE workflow keys off. controllers/portal.py's
+                # own _PORTAL_EXCLUDED_TICKET_TYPES keeps a portal user from *creating* a
+                # csam_enticement_trafficking ticket, but that guard lives in the HTTP
+                # controller, not on the model -- an ordinary portal user could create a normal
+                # ticket through the form and then set ticket_type over plain RPC afterwards,
+                # in either direction:
+                #   * -> csam_enticement_trafficking: defeats the controller exclusion outright
+                #     and puts a self-authored ticket into the category admins treat as a
+                #     federal 2258A duty (action_ncmec_report's own
+                #     `if self.ticket_type != _CSAM_TICKET_TYPE` guards then pass for it).
+                #   * away from csam_enticement_trafficking on a real report whose partner_id
+                #     is that same user (a normal case -- see _ncmec_assemble_report_packet,
+                #     which resolves the REPORTED user from partner_id): the ticket drops out
+                #     of every csam filter AND of _ncmec_report_ticket_for_recording's dedup
+                #     search, and simultaneously enters
+                #     rule_helpdesk_ticket_ai_triage_external_allowlist's domain
+                #     (['general', 'hams_local_relay']), exposing the assembled packet --
+                #     reported-user identity and recording playback URL -- to the external,
+                #     Gemini-backed triage account that group_ai_triage_external_service's own
+                #     comment says must never see this category.
+                "ticket_type",
+                # Same shape: archiving the ticket removes it from every default (active_test)
+                # search, including that same dedup search and the admin list views.
+                "active",
             }
-            if any(f in vals for f in restricted_fields):
+            # Every ncmec_* field, not just the two named above: the assembled packet
+            # (ncmec_report_packet), its evidence pointer (ncmec_recording_uuid,
+            # ncmec_recording_playback_url), the reported user, and the filing record
+            # (ncmec_report_reference/_submitted_at/_submitted_by_id) are all plain fields
+            # with no groups= of their own, so naming only two of them left the same
+            # "fabricate or destroy the mandatory-report trail" threat fully open through the
+            # rest. A prefix rule instead of an enumeration so a field added to this workflow
+            # later is covered by default rather than by remembering to extend a list.
+            if any(f in vals for f in restricted_fields) or any(
+                f.startswith("ncmec_") for f in vals
+            ):
                 raise AccessError(
                     _(
                         "Portal users are not authorized to modify administrative fields."

@@ -271,6 +271,79 @@ class TestHelpdeskCore(HamsTransactionCase):
             ticket_as_portal.write({"partner_id": self.manager_partner.id})
             self.env.flush_all()
 
+    def test_05c_portal_cannot_change_ticket_type_or_ncmec_fields(self):
+        # Tests [@ANCHOR: helpdesk_micro_privilege]
+        # bug-hunt (2026-09-27, tier-1 pass): ticket_type, active, and every ncmec_* field
+        # except ncmec_report_state/ncmec_legal_hold_applied were missing from write()'s
+        # restricted_fields, with no field-level groups= of their own. controllers/portal.py's
+        # _PORTAL_EXCLUDED_TICKET_TYPES only guards the CREATE path (an HTTP controller, not the
+        # model), so an ordinary portal user could submit a normal ticket through the form and
+        # then flip it over plain RPC -- into csam_enticement_trafficking (defeating that
+        # exclusion), or, on a real report whose partner_id is that same user, out of it, which
+        # both hides it from every csam filter/dedup search and drops it into
+        # rule_helpdesk_ticket_ai_triage_external_allowlist's ['general','hams_local_relay']
+        # domain, exposing the assembled packet to the external Gemini-backed triage account.
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Ticket Type Escalation Probe",
+                "partner_id": self.portal_user.partner_id.id,
+                "stage": "new",
+                "ticket_type": "general",
+            }
+        )
+        ticket_as_portal = ticket.with_user(self.portal_user)
+
+        with self.assertRaises(
+            AccessError,
+            msg="Portal user MUST NOT be able to move a ticket INTO the NCMEC category.",
+        ):
+            ticket_as_portal.write({"ticket_type": "csam_enticement_trafficking"})
+            self.env.flush_all()
+
+        # And the other direction: declassifying a real mandatory-report ticket.
+        csam_ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "CSAM Declassification Probe",
+                "partner_id": self.portal_user.partner_id.id,
+                "stage": "new",
+                "ticket_type": "csam_enticement_trafficking",
+            }
+        )
+        csam_as_portal = csam_ticket.with_user(self.portal_user)
+        with self.assertRaises(
+            AccessError,
+            msg="Portal user MUST NOT be able to move a ticket OUT of the NCMEC category.",
+        ):
+            csam_as_portal.write({"ticket_type": "general"})
+            self.env.flush_all()
+
+        with self.assertRaises(
+            AccessError,
+            msg="Portal user MUST NOT be able to archive a mandatory-report ticket.",
+        ):
+            csam_as_portal.write({"active": False})
+            self.env.flush_all()
+
+        # Every ncmec_* field, not only the two that were already named -- the assembled
+        # packet and its evidence pointer carry the same "fabricate or destroy the report
+        # trail" risk as ncmec_report_state itself.
+        for field_name, value in (
+            ("ncmec_report_packet", "rewritten by the reported user"),
+            ("ncmec_recording_uuid", "0" * 32),
+            ("ncmec_report_reference", "FAKE-REFERENCE-1"),
+            ("ncmec_reported_user_id", False),
+        ):
+            with self.assertRaises(
+                AccessError,
+                msg=f"Portal user MUST NOT be able to write {field_name}.",
+            ):
+                csam_as_portal.write({field_name: value})
+                self.env.flush_all()
+
+        # Unrestricted fields still work, so this is a targeted narrowing, not a lockout.
+        ticket_as_portal.write({"description": "Still writable by the customer"})
+        self.assertIn("Still writable by the customer", ticket.description)
+
     def test_06_callsign_population(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_onchange_partner_id]
         """Verify the callsign field is automatically populated from the partner."""
