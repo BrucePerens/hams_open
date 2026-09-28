@@ -2,6 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import os
 import stat
+import tempfile
 from unittest.mock import MagicMock
 
 from odoo.tests.common import tagged
@@ -145,3 +146,29 @@ class TestCloudflareSystemd(HamsTransactionCase):
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+    # Tests [@ANCHOR: cloudflare:cloudflare_systemd] (secure file writing)
+    def test_11_write_secure_file_refuses_a_sibling_directory_sharing_the_prefix(self):
+        """A string-prefix test is not a directory boundary: "/x/keys_evil/f" starts with "/x/keys"."""
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = os.path.join(tmp, "keys")
+            sibling = os.path.join(tmp, "keys_evil", "cloudflared-x.env")
+            with self.assertRaises(ValueError):
+                cf_systemd._write_secure_file(sibling, "TOKEN=secret\n", prefix)
+            self.assertFalse(os.path.exists(os.path.dirname(sibling)))
+
+    def test_12_write_secure_file_refuses_a_traversal_that_lands_in_the_sibling(self):
+        # The realistic shape: a key that resolves out of the keys directory through "..".
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = os.path.join(tmp, "keys")
+            traversal = os.path.join(prefix, "cloudflared-x", "..", "..", "keys_evil", "y.env")
+            with self.assertRaises(ValueError):
+                cf_systemd._write_secure_file(traversal, "TOKEN=secret\n", prefix)
+
+    def test_13_write_secure_file_still_writes_inside_the_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = os.path.join(tmp, "keys")
+            path = os.path.join(prefix, "cloudflared-ok.env")
+            cf_systemd._write_secure_file(path, "TOKEN=ok\n", prefix)
+            with open(path) as f:
+                self.assertEqual(f.read(), "TOKEN=ok\n")

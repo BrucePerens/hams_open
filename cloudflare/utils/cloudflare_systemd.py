@@ -143,7 +143,9 @@ def _write_secure_file(path, content, mandatory_prefix):
     still-valid content even when the later permission-fixup fails, so this always writes a
     brand-new, correctly-permissioned temp file first and swaps it in atomically."""
     path = os.path.realpath(path)
-    if not path.startswith(mandatory_prefix):
+    # A string prefix is not a directory boundary: "/opt/hams/etc/keys_evil/f" starts with
+    # "/opt/hams/etc/keys", and a key containing ".." resolves there. Require the separator.
+    if not path.startswith(mandatory_prefix.rstrip(os.sep) + os.sep):
         raise ValueError(
             "Refusing to write outside %s (resolved path: %s)" % (mandatory_prefix, path)
         )
