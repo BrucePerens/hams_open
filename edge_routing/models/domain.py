@@ -110,7 +110,7 @@ class EdgeRoutingDomain(models.Model):
             # `api_identity` at all, so EVERY sync since pager_duty's own
             # shared-secret gate went in was refused. The receiving route
             # (pager_duty/controllers/domain_api.py,
-            # [@ANCHOR: pager_duty:update_domains]) is `auth="public"` and
+            # the pager_duty:update_domains anchor) is `auth="public"` and
             # gated solely on `hmac.compare_digest(api_identity,
             # <pager_duty.domain_api_identity>)`; with the field absent it
             # returns {"status": "error", "message": "Unauthorized"} -- and

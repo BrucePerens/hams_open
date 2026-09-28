@@ -18,7 +18,7 @@ import secrets
 
 # Tests [@ANCHOR: COMM_should_poll_for_invalidation]
 
-from odoo import fields, tools
+from odoo import tools
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, LRU_LOCK

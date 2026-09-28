@@ -77,5 +77,5 @@ def _monitored_test_execute(self, *args, **kwargs):
 
 
 TestCursor.execute = _monitored_test_execute
-from . import test_browser_js_timeout_message
-from . import test_wait_ready_polling
+from . import test_browser_js_timeout_message  # noqa: E402  (after the cursor monitor above)
+from . import test_wait_ready_polling  # noqa: E402

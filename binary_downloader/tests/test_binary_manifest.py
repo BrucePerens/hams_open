@@ -826,7 +826,7 @@ class TestBinaryManifest(HamsTransactionCase):
         mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
 
         tar_checksum = hashlib.sha256(b"data").hexdigest()
-        manifest = self.env["binary.manifest"].create(
+        self.env["binary.manifest"].create(
             {
                 "name": "interrupted",
                 "url": "https://example.com/interrupted.tar.gz",

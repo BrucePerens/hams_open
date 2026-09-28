@@ -116,7 +116,7 @@ class TestDomainPush(HamsTransactionCase):
         # Regression for the bug-hunt finding of 2026-09-27: this POST used to
         # carry only {"domains": [...]} and no `api_identity` at all, so
         # pager_duty's own auth="public" + hmac.compare_digest gate
-        # ([@ANCHOR: pager_duty:update_domains]) refused every single sync.
+        # (the pager_duty:update_domains anchor) refused every single sync.
         # The refusal arrives inside an HTTP 200 JSON-RPC envelope, so neither
         # raise_for_status() nor the surrounding "don't fail the cron" except
         # noticed -- the domain list silently never reached
