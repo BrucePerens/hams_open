@@ -2,7 +2,7 @@ import re
 import os
 
 data_path = os.path.join(os.path.dirname(__file__), 'ecmode_bit_sweep_output.txt')
-sections = {}
+sections: dict = {}
 cur = None
 with open(data_path) as f:
     for line in f:

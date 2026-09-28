@@ -9,10 +9,10 @@ def gen_v(a):
     return v
 for a in (173,25381):
     v=gen_v(a)
-    best=[]
+    best: list = []
     for tgt,name in ((r,'resid'),(t,'raw')):
         Ft=np.conj(np.fft.rfft(tgt));nt=np.sqrt((tgt**2).sum())
-        top=(0,0,0)
+        top: tuple = (0,0,0)
         for c0 in range(1,M,2*128):
             cs=np.arange(c0,c0+256,2)
             o=((cs[:,None]*v[None,:])&0xFFFF).astype(np.int64)

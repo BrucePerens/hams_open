@@ -55,8 +55,7 @@ def gf2_rref(rows, n_cols):
             break
     return rows[:rank], pivots, rank
 
-g3_rows = list({tuple(f[69:69+23]) for f in frames})
-g3_rows = [list(r) for r in g3_rows]
+g3_rows = [list(r) for r in {tuple(f[69:69+23]) for f in frames}]
 rref, pivots, rank = gf2_rref(g3_rows, 23)
 print(f"g3: {len(g3_rows)} distinct rows, rank={rank}, pivot_cols={pivots}")
 print("RREF basis:")

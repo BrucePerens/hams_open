@@ -36,7 +36,7 @@ uc.mem_map(0x100000, 0x1000, UC_PROT_ALL)     # test finisher
 uc.mem_write(BASE, code)
 
 CLASSES = ["alu", "mul", "div", "load", "store", "branch", "jump", "csr"]
-cache = {}
+cache: dict = {}
 
 def classify(insn16, insn32):
     if insn16 & 3 != 3:
@@ -65,10 +65,10 @@ def classify(insn16, insn32):
         return "mul" if ((insn32 >> 12) & 7) < 4 else "div"
     return "alu"
 
-counts = {"enc": {}, "dec": {}}
+counts: dict = {"enc": {}, "dec": {}}
 phase = "enc"
 pending_branch = None   # (class, addr, size)
-state = {"phase": "enc", "prev": None, "n": 0}
+state: dict = {"phase": "enc", "prev": None, "n": 0}
 def bump(ph, k):
     d = counts[ph]; d[k] = d.get(k, 0) + 1
 
