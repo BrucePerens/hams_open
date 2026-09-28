@@ -23,7 +23,11 @@ Description=Cloudflare Tunnel (%i)
 [Service]
 Type=simple
 EnvironmentFile=/opt/hams/etc/keys/cloudflared-%i.env
-ExecStart={cloudflared_bin} tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+# The run token is deliberately NOT passed as `--token <value>`: an argument is world-readable through
+# /proc/<pid>/cmdline and `ps` for every local account (this host's /proc has no hidepid). cloudflared reads
+# the same value from its TUNNEL_TOKEN environment variable, which EnvironmentFile= above supplies and which
+# only the unit's own user (and root) can read from /proc/<pid>/environ.
+ExecStart={cloudflared_bin} tunnel --no-autoupdate run
 Restart=always
 RestartSec=5
 StandardOutput=journal
