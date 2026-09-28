@@ -208,7 +208,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
             "test server's own port is the real server.",
         )
 
-    # [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_06_real_server_allowlist_still_passes_the_real_port(self):
         browser = self._fake_browser(http_port=8069)
@@ -216,7 +215,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
         cmd = browser._websocket_send.call_args[0][0]
         self.assertEqual(cmd, "Fetch.continueRequest")
 
-    # [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_07_a_port_that_merely_starts_with_the_real_port_is_not_the_real_server(self):
         """The same missing-boundary bug the host:port fix left behind: "http://127.0.0.1:8069" is a
@@ -231,7 +229,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
             "different service; the allowlist must match the whole authority, not a string prefix.",
         )
 
-    # [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_08_userinfo_cannot_smuggle_a_foreign_host_past_the_prefix_check(self):
         """"http://127.0.0.1:8069@example.com/" begins with the allowed origin but its host is
