@@ -36,6 +36,8 @@ class ResUsersZeroSudo(models.Model):
         groups="base.group_system",
     )
 
+    # [@ANCHOR: zero_sudo:service_accounts_among_self]
+    # Verified by [@ANCHOR: test_a_mixed_set_notifies_only_the_person]
     def _service_accounts_among_self(self):
         """The service accounts in `self`. Read with SQL for the reason write() gives below: is_service_account is
         groups="base.group_system", so filtering through the ORM raises AccessError for a narrower caller."""

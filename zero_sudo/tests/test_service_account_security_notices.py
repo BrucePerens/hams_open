@@ -38,7 +38,8 @@ class TestServiceAccountSecurityNotices(common.HamsTransactionCase):
         person._notify_security_setting_update("Security Update: Login Changed", "Your login was changed")
         self.assertEqual(len(self._security_mails(person)) - len(before), 1)
 
-    # Tests [@ANCHOR: zero_sudo:service_account_security_notice_suppressed]
+    # [@ANCHOR: test_a_mixed_set_notifies_only_the_person]
+    # Tests [@ANCHOR: zero_sudo:service_accounts_among_self]
     def test_a_mixed_set_notifies_only_the_person(self):
         service = self._make("svc_mixed_test@example.com", True)
         person = self._make("person_mixed_test@example.com", False)
