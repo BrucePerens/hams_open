@@ -98,6 +98,45 @@ class TestCloudflareSystemd(HamsTransactionCase):
         )
         self.assertIn("XDG_RUNTIME_DIR", call_kwargs["env"])
 
+    # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
+    def test_06b_stopping_a_tunnel_removes_its_run_token_file(self):
+        # The file holds a live credential; start_tunnel_daemon writes it again on every start, so a stopped or
+        # deleted tunnel has no use for it.
+        path = cf_systemd._env_file_path("cftun-remove-test")
+        cf_systemd._write_secure_file(path, "TUNNEL_TOKEN=secret\n", cf_systemd._KEYS_DIR)
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        self._mock_run(returncode=0)
+        cf_systemd.stop_tunnel_daemon("cftun-remove-test")
+        self.assertFalse(os.path.exists(path))
+
+    # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
+    def test_06c_the_token_file_stays_when_the_unit_could_not_be_disabled(self):
+        # A still-running unit with Restart=always needs the file to restart with.
+        path = cf_systemd._env_file_path("cftun-keep-test")
+        cf_systemd._write_secure_file(path, "TUNNEL_TOKEN=secret\n", cf_systemd._KEYS_DIR)
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        self._mock_run(returncode=1, stderr="Failed to disable unit")
+        cf_systemd.stop_tunnel_daemon("cftun-keep-test")
+        self.assertTrue(os.path.exists(path))
+
+    # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
+    def test_06d_a_key_that_resolves_outside_the_keys_directory_is_never_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            keys_dir = os.path.join(tmp, "keys")
+            os.makedirs(keys_dir)
+            victim = os.path.join(tmp, "victim.env")
+            with open(victim, "w") as f:
+                f.write("x")
+            self.safe_patch_object(cf_systemd, "_KEYS_DIR", keys_dir)
+            self._mock_run(returncode=0)
+            cf_systemd.stop_tunnel_daemon("../victim")
+            self.assertTrue(os.path.exists(victim))
+
+    # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
+    def test_06e_stopping_a_tunnel_that_has_no_token_file_is_quiet(self):
+        self._mock_run(returncode=0)
+        cf_systemd.stop_tunnel_daemon("cftun-never-started")  # must not raise
+
     def test_07_stop_tunnel_daemon_without_key_disables_every_discovered_unit(self):
         # No in-memory registry of "keys this process started" any more -- discovery goes
         # through `systemctl --user list-units`, which is authoritative regardless of which
