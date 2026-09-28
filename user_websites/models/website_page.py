@@ -833,7 +833,7 @@ class WebsitePage(models.Model):
         pages_to_invalidate = [p.url for p in self if p.url]
 
         # [@ANCHOR: user_websites:website_page_write_reentrancy_guard]
-        # Verified by [@ANCHOR: test_website_page_write_signals_cache_invalidation_once_on_publish_toggle]
+        # Verified by [@ANCHOR: COMM_test_page_publish_toggle_signals_once]
         # website_published is a compute/inverse field (stock Odoo's
         # WebsitePublishedMultiMixin): writing it makes _inverse_website_published()
         # do `record.is_published = record.website_published`, and assigning a plain

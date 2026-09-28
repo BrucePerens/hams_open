@@ -343,6 +343,8 @@ class TestPageLimits(RealTransactionCase):
         )
 
     def test_08_page_website_published_toggle_signals_cache_invalidation_once(self):
+        # [@ANCHOR: COMM_test_page_publish_toggle_signals_once]
+
         # Tests [@ANCHOR: user_websites:website_page_write_reentrancy_guard]
         """A website_published toggle still signalled cache invalidation twice after
         test_07 above closed the triplicate case: website_published is a compute/inverse
