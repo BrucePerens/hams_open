@@ -856,8 +856,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertIn(99, generalized_monitor.THREAD_HEARTBEATS)
         self.assertEqual(generalized_monitor.THREAD_NAMES[99], "Polling Thread Test Check")
 
+    # [@ANCHOR: test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state]
     def test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state(self):
-        # Tests [@ANCHOR: pager_duty:polling_thread]
+        # Tests [@ANCHOR: pager_duty:check_key]
         # A check name is unique only per website, so two websites can each have "Disk". Keyed by name they shared one
         # heartbeat, one timeout and one failing flag.
         website_a = {"id": 11, "name": "Disk", "website_id": 1, "type": "system", "target": "disk", "interval": 60}
@@ -879,8 +880,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertIn(12, generalized_monitor.THREAD_HEARTBEATS)
         self.assertNotIn("Disk", generalized_monitor.THREAD_HEARTBEATS)
 
+    # [@ANCHOR: test_20c_a_parent_failing_on_one_website_does_not_suppress_or_clear_the_other_websites_state]
     def test_20c_a_parent_failing_on_one_website_does_not_suppress_or_clear_the_other_websites_state(self):
-        # Tests [@ANCHOR: pager_duty:polling_thread]
+        # Tests [@ANCHOR: pager_duty:parent_suppresses]
         gm = generalized_monitor
         self.addCleanup(gm.FAILING_CHECKS.clear)
         self.addCleanup(gm.FAILING_NAMES.clear)
@@ -895,8 +897,9 @@ class TestMonitorExhaustive(HamsTransactionCase):
         gm.FAILING_CHECKS.discard(12)  # website B's Disk passing must not clear A's failure
         self.assertTrue(gm.parent_suppresses(child_of_a))
 
+    # [@ANCHOR: test_20d_a_config_from_before_parent_id_still_matches_the_parent_by_name]
     def test_20d_a_config_from_before_parent_id_still_matches_the_parent_by_name(self):
-        # Tests [@ANCHOR: pager_duty:polling_thread]
+        # Tests [@ANCHOR: pager_duty:parent_suppresses]
         gm = generalized_monitor
         self.addCleanup(gm.FAILING_NAMES.clear)
         gm.FAILING_NAMES.clear()

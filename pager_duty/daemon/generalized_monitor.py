@@ -263,11 +263,16 @@ THREAD_NAMES = {}
 FAILING_NAMES = set()
 
 
+# [@ANCHOR: pager_duty:check_key]
+# Verified by [@ANCHOR: test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state]
 def check_key(check):
     """The key this check's daemon state lives under: its record id, else its name (an older config file)."""
     return check.get("id") or check.get("name", "Unknown")
 
 
+# [@ANCHOR: pager_duty:parent_suppresses]
+# Verified by [@ANCHOR: test_20c_a_parent_failing_on_one_website_does_not_suppress_or_clear_the_other_websites_state]
+# Verified by [@ANCHOR: test_20d_a_config_from_before_parent_id_still_matches_the_parent_by_name]
 def parent_suppresses(check):
     """True when this check's parent is currently failing. A `parent_id` (the parent's record id) is matched by id, so
     a same-named check on another website cannot suppress it; an older config with only the parent's name is matched
