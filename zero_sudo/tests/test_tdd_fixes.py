@@ -9,6 +9,7 @@ from . import common
 from odoo.exceptions import AccessError, UserError
 from odoo import _
 
+import http.client
 import os
 import sys
 from odoo.tests.common import tagged
@@ -463,6 +464,72 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.safe_patch("urllib.request.urlopen", mock_urlopen)
         with self.assertRaises(UserError):
             daemon_utils._poll_health_check("file:///etc/passwd", timeout=1, interval=0.1)
+
+    def test_poll_health_check_retries_a_daemon_that_is_not_answering_yet(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
+        # Regression test for a real 2026-09-27 bug-hunt finding: this loop
+        # only caught `urllib.error.URLError`, which covers "connection
+        # refused" (the daemon has not bound its port yet) but NOT the two
+        # things a daemon that HAS bound its port but is still initialising
+        # actually does. Confirmed empirically against a real loopback
+        # socket: `urllib.request`'s `do_open` wraps only `h.request(...)` in
+        # its `except OSError: raise URLError(err)`, while the following
+        # `h.getresponse()` is outside it -- so "accepted the connection and
+        # never answered" surfaces as a bare `TimeoutError` and "accepted the
+        # connection then closed it" as `http.client.RemoteDisconnected`,
+        # neither of which is a `URLError`. The poller aborted on the first
+        # one and propagated a raw exception instead of polling on.
+        #
+        # Discriminating in both directions: each scenario raises the
+        # transient error ONCE and then succeeds, so the pre-fix code fails
+        # with the raw exception, and code that swallowed errors without
+        # retrying would never see the 200 either.
+        daemon_utils = self.env["zero_sudo.daemon.utils"]
+
+        class MockResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        for label, transient in (
+            ("accepted but never answered", TimeoutError("timed out")),
+            (
+                "accepted then closed without a response",
+                http.client.RemoteDisconnected(
+                    "Remote end closed connection without response"
+                ),
+            ),
+        ):
+            with self.subTest(daemon_state=label):
+                calls = []
+
+                def mock_urlopen(*args, _transient=transient, **kwargs):
+                    calls.append(1)
+                    if len(calls) == 1:
+                        raise _transient
+                    return MockResponse()
+
+                self.safe_patch("urllib.request.urlopen", mock_urlopen)
+                self.assertTrue(
+                    daemon_utils._poll_health_check(
+                        "http://127.0.0.1:8080/health",  # burn-ignore-ssrf-test-value
+                        timeout=5,
+                        interval=0.05,
+                    ),
+                    msg="[!] DIAGNOSTIC FOR AI: a daemon that is merely slow "
+                    "to answer must be polled again, not turned into a raw "
+                    "exception out of _poll_health_check.",
+                )
+                self.assertEqual(
+                    len(calls),
+                    2,
+                    msg="[!] DIAGNOSTIC FOR AI: the transient failure must be "
+                    "followed by a real retry that observes the 200.",
+                )
 
     def test_stop_daemon_process_survives_toctou_exit(self):
         # Tests [@ANCHOR: zero_sudo:stop_daemon_process]

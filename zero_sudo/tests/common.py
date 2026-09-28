@@ -456,8 +456,20 @@ def _patched_save_test_file(
 
         # Prevent Permission Denied by forcing relative paths like 'chrome_logs' into host_tmp
         if directory and not os.path.isabs(directory):
-            directory = os.path.abspath(os.path.join(host_tmp, directory))
-            if not directory.startswith(os.path.abspath(host_tmp)):
+            # bug-hunt (2026-09-27): a bare `.startswith(base)` matches by
+            # string PREFIX with no path-separator boundary, so a relative
+            # `directory` of "../test_evil" resolves to "/opt/hams/test_evil",
+            # which starts with "/opt/hams/test" and sailed through the guard
+            # that exists to stop exactly that. This module already has the
+            # correct shape and a unit test for it -- see
+            # `zero_sudo.ir.module.module._is_path_within_module_dir`, written
+            # by this same campaign on 2026-09-13 against the identical
+            # "<base>_evil sibling directory" bug; this is that check.
+            base_dir = os.path.abspath(host_tmp)
+            directory = os.path.abspath(os.path.join(base_dir, directory))
+            if not (
+                directory == base_dir or directory.startswith(base_dir + os.sep)
+            ):
                 raise ValueError("Path traversal detected")
 
         filepath = pathlib.Path(directory) / filename
@@ -542,7 +554,19 @@ def _js_coverage_start(browser):
         # in, first out, so this runs before the websocket is closed.
         browser.cleanup.callback(_js_coverage_write, browser)
         _logger.info("JS coverage: precise coverage started")
-    except (TimeoutError, OSError, AttributeError) as e:
+    # bug-hunt (2026-09-27): `ChromeBrowserException` belongs in this tuple.
+    # `_websocket_request()` hands back a Future whose exception the receiver
+    # thread sets with `f.set_exception(ChromeBrowserException(res["error"]
+    # ["message"]))` for ANY CDP error reply (confirmed in odoo/tests/
+    # common.py's own `_receive`), so an error from `Profiler.enable`,
+    # `Debugger.enable` or `Profiler.startPreciseCoverage` escaped this
+    # handler entirely -- contradicting this helper's own documented contract
+    # ("Coverage is best effort: a failure logs a warning and never fails the
+    # test") and, worse, landing in `_patched_chrome_init`'s `except
+    # Exception`, which then retried `original_chrome_init` on an already
+    # fully-constructed `self` (see that function's own claim for the
+    # orphaned-ExitStack/receiver-thread race that retry path opens).
+    except (TimeoutError, OSError, AttributeError, ChromeBrowserException) as e:
         _logger.warning("JS coverage: could not start (%s)", repr(e))
 
 
@@ -595,8 +619,6 @@ def _patched_chrome_init(self, *args, **kwargs):
     for attempt in range(retries):
         try:
             original_chrome_init(self, *args, **kwargs)
-            _js_coverage_start(self)
-            return
         except Exception as e:  # audit-ignore-catch-all
             _logger.warning(
                 "TRACING: Headless Chrome failed to start (attempt %s/%s): %s",
@@ -607,6 +629,23 @@ def _patched_chrome_init(self, *args, **kwargs):
             if attempt == retries - 1:
                 raise e
             time.sleep(2)  # audit-ignore-sleep
+            continue
+        # bug-hunt (2026-09-27): Chrome is up; this is deliberately OUTSIDE
+        # the try above. `_js_coverage_start` used to sit inside it, so any
+        # exception it raised (see its own note on `ChromeBrowserException`)
+        # was read as "Chrome failed to start" and re-ran
+        # `original_chrome_init` on this SAME, already fully-constructed
+        # `self` -- reassigning `self.cleanup` to a fresh empty `ExitStack`
+        # and orphaning the live Chrome process and the running `_receiver`
+        # thread the first pass had registered in the old one. That thread
+        # keeps reading the dead websocket and eventually runs core's own
+        # `del self.ws` against the attribute the SUCCEEDING attempt just
+        # wrote, after which every guarded `_websocket_send`/
+        # `_websocket_request` silently returns `None` for the rest of that
+        # browser's life. Opt-in coverage bookkeeping must never be able to
+        # reach that path.
+        _js_coverage_start(self)
+        return
 
 
 ChromeBrowser.__init__ = _patched_chrome_init

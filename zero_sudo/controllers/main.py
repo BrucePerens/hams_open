@@ -47,6 +47,23 @@ class ZeroSudoHome(Home):
             if res and res[0]:
                 # Log the blocked attempt before logging out
                 # We assume the facility account context for logging
+                #
+                # bug-hunt (2026-09-27): the IP recorded here is
+                # `_get_trusted_client_ip()`, not the raw
+                # `request.httprequest.remote_addr` this used to pass.
+                # This deployment is Cloudflare-Tunnel-only, with
+                # cloudflared on the same host as the Odoo HTTP server, so
+                # the transport peer of a real external request is
+                # loopback; `remote_addr` recorded `127.0.0.1` for every
+                # attacker, making the `ip_address` column of the one audit
+                # log this module maintains unable to answer the only
+                # question it exists to answer. `zero_sudo.security.utils`
+                # -- already instantiated on the line above for the service
+                # env -- has carried the correct resolver for this since
+                # 2026-09-11; it was simply never wired up here. It
+                # degrades to exactly `remote_addr` whenever the peer is
+                # NOT loopback, so this is never worse than what it
+                # replaces.
                 utils = request.env["zero_sudo.security.utils"]
                 facility_env = utils._get_service_env(
                     "zero_sudo.odoo_facility_service_internal"
@@ -55,7 +72,7 @@ class ZeroSudoHome(Home):
                     {
                         "user_id": request.session.uid,
                         "login": attempted_login,
-                        "ip_address": request.httprequest.remote_addr,
+                        "ip_address": utils._get_trusted_client_ip(),
                         "user_agent": request.httprequest.user_agent.string,
                         "reason": "service_account_blocked",
                     }
@@ -137,6 +154,43 @@ class ZeroSudoSession(Session):
             )
             res = request.env.cr.fetchone()
             if res and res[1]:
+                # bug-hunt (2026-09-27): verify the credential through Odoo
+                # core's OWN authentication path -- `Session.authenticate()`
+                # in odoo/http.py, which is exactly what
+                # `super().authenticate()` calls, including
+                # `res.users._assert_can_auth`'s per-source-IP login cooldown
+                # -- BEFORE writing anything at all.
+                #
+                # This is deliberately NOT `super().authenticate()`: super()
+                # goes on to build `session_info()`, which is the entire
+                # reason the 2026-09-16 pre-check above exists (see that
+                # note). Calling the session-level primitive directly gets
+                # the credential check without ever reaching session_info().
+                #
+                # Why this matters: `/web/session/authenticate` is
+                # `auth="none"`. The 2026-09-16 revision returned
+                # `{"uid": None}` (and wrote a committed
+                # `zero_sudo.security.log` row) purely on a LOGIN match,
+                # with the password never examined. Every service-account
+                # login in this project is declared in public XML in this
+                # very repository, so any anonymous caller could name one
+                # and drive an unlimited number of committed audit rows --
+                # unthrottled, because returning before super() also skips
+                # core's own login cooldown, and retained for 90 days by
+                # `zero_sudo.security.log.autovacuum`. It also destroyed the
+                # row's meaning: `service_account_blocked` stopped implying
+                # "someone actually held this account's credentials" and
+                # started meaning "someone typed this name," so a real
+                # credential compromise became indistinguishable from a
+                # background scan in the one log built to tell them apart.
+                #
+                # A wrong password now raises core's own `AccessDenied` from
+                # inside `session.authenticate()`, exactly as an unmatched
+                # login already does, which `retrying()` rolls back -- no
+                # row, no commit. A CORRECT password lands here, which is
+                # the event this interceptor exists to record and deny.
+                credential = {"login": login, "password": password, "type": "password"}
+                request.session.authenticate(request.env, credential)
                 utils = request.env["zero_sudo.security.utils"]
                 facility_env = utils._get_service_env(
                     "zero_sudo.odoo_facility_service_internal"
@@ -145,11 +199,12 @@ class ZeroSudoSession(Session):
                     {
                         "user_id": res[0],
                         "login": login,
-                        "ip_address": request.httprequest.remote_addr,
+                        "ip_address": utils._get_trusted_client_ip(),
                         "user_agent": request.httprequest.user_agent.string,
                         "reason": "service_account_blocked",
                     }
                 )
+                request.session.logout()
                 return {"uid": None}
 
         result = super().authenticate(db, login, password, base_location=base_location)
@@ -165,6 +220,8 @@ class ZeroSudoSession(Session):
             res = request.env.cr.fetchone()
             if res and res[0]:
                 blocked_uid = request.session.uid
+                # bug-hunt (2026-09-27): real client IP, not the tunnel's
+                # loopback peer -- see ZeroSudoHome.web_login's own note.
                 utils = request.env["zero_sudo.security.utils"]
                 facility_env = utils._get_service_env(
                     "zero_sudo.odoo_facility_service_internal"
@@ -173,7 +230,7 @@ class ZeroSudoSession(Session):
                     {
                         "user_id": blocked_uid,
                         "login": login,
-                        "ip_address": request.httprequest.remote_addr,
+                        "ip_address": utils._get_trusted_client_ip(),
                         "user_agent": request.httprequest.user_agent.string,
                         "reason": "service_account_blocked",
                     }
