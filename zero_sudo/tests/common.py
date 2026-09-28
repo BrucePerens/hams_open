@@ -629,6 +629,24 @@ def _js_coverage_write(browser):
         _logger.warning("JS coverage: could not collect (%s)", repr(e))
 
 
+# [@ANCHOR: zero_sudo:tear_down_partly_built_browser]
+def _tear_down_partly_built_browser(browser):
+    """Undo what a failed `ChromeBrowser.__init__` registered, so the retry starts from a clean object.
+
+    Core's `__init__` assigns `self.cleanup = ExitStack()` and registers the profile directory, the Chrome process, the
+    websocket and a receiver thread into it one at a time, and has no error handling of its own. A retry on the same object
+    used to overwrite `cleanup` with a fresh stack, orphaning the first attempt's resources; that attempt's receiver thread
+    then ran core's `del self.ws` against the succeeding attempt's healthy socket, after which every CDP call silently did
+    nothing for the rest of the browser's life. Closing the stack first runs exactly the teardown core itself registered."""
+    cleanup = vars(browser).pop("cleanup", None)
+    if cleanup is not None:
+        try:
+            cleanup.close()
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.warning("TRACING: teardown of a partly-built headless Chrome raised: %s", repr(e))
+    vars(browser).pop("ws", None)
+
+
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
@@ -645,6 +663,7 @@ def _patched_chrome_init(self, *args, **kwargs):
                 retries,
                 repr(e),
             )
+            _tear_down_partly_built_browser(self)
             if attempt == retries - 1:
                 raise e
             time.sleep(2)  # audit-ignore-sleep
