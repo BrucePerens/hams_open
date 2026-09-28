@@ -169,6 +169,29 @@ class BackupRestoreWizard(models.TransientModel):
                 # restore -- previously never included, so every restore of
                 # a password-protected Kopia snapshot ran with no password.
                 "kopia_password": self.snapshot_id.config_id.kopia_password,
+                # Bug-hunt fix (2026-09-27, tier-1 pass): producer/consumer
+                # payload-schema drift, the same shape already fixed once for
+                # this module in 932a3ebd. When real S3/B2 support landed in
+                # the worker (959a7c4e), daemon/main.py's kopia branch became
+                # keyed on `config.get("storage_type")`: for an s3/b2 config it
+                # sets KOPIA_CONFIG_PATH to that backup.config's OWN per-config
+                # repository.config and calls _ensure_kopia_s3_repository()
+                # before running the command. That branch is keyed on
+                # `cmd[0] == "kopia"`, so it covers restore_cmd jobs too -- but
+                # ONLY if the payload actually carries the storage fields, and
+                # this restore payload never did. `storage_type` came back
+                # absent, defaulted to "local", and every restore of an S3/B2
+                # backup ran against kopia's single GLOBAL default config
+                # instead of the bucket the snapshot actually lives in (in
+                # practice: "repository not connected", i.e. off-site restore
+                # simply did not work). Same five fields _publish_to_worker()
+                # already sends for a backup job, and _redact_payload() in the
+                # daemon already covers access_key/secret_key in its own logs.
+                "storage_type": self.snapshot_id.config_id.storage_type,
+                "bucket_name": self.snapshot_id.config_id.bucket_name,
+                "endpoint_url": self.snapshot_id.config_id.endpoint_url,
+                "access_key": self.snapshot_id.config_id.access_key,
+                "secret_key": self.snapshot_id.config_id.secret_key,
             }
         )
 
