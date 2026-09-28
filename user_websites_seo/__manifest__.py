@@ -30,6 +30,7 @@ Inherits website.seo.metadata onto user profiles to restore the QWeb SEO widget.
     "knowledge_docs": [
         {
             "name": "User Websites SEO Guide",
+            "public": True,
             "path": "data/documentation.html",
             "icon": "🔍",
             "category": "workspace",

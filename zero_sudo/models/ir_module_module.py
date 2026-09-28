@@ -11,7 +11,18 @@ import hashlib
 import logging
 import os
 
+import markdown
+from odoo.tools import html_sanitize
+
 _logger = logging.getLogger(__name__)
+
+# Documents under these directories are internal engineering documentation.
+INTERNAL_DOC_DIRECTORIES = frozenset({"stories", "journeys", "runbooks"})
+
+# Folded into every installed document's hash. Bump it when the conversion or
+# the visibility policy below changes, so already-installed articles refresh
+# even though their files did not change.
+DOC_INSTALL_VERSION = b"\0doc-install-v2"
 
 
 class Module(models.Model):
@@ -125,6 +136,25 @@ class Module(models.Model):
             )
 
     @api.model
+    def _markdown_doc_to_html(self, text):
+        """Convert a markdown documentation file to sanitized HTML.
+
+        The article body is an HTML field. Storing the raw markdown text there
+        made the website viewer guess at it later, and any literal angle
+        bracket text in the file (a heading written as `<h2>` in prose, an
+        example tag) became a real element and defeated the guess. Converting
+        once, when the article is installed, gives every reader real HTML.
+        """
+        rendered = markdown.markdown(text, extensions=["fenced_code", "tables", "toc"])
+        return html_sanitize(rendered)
+
+    @api.model
+    def _is_internal_doc_path(self, path):
+        """True for stories, journeys and runbooks, which are never public."""
+        parts = [part.lower() for part in path.replace("\\", "/").split("/")]
+        return any(part in INTERNAL_DOC_DIRECTORIES for part in parts[:-1])
+
+    @api.model
     # [@ANCHOR: zero_sudo:is_path_within_module_dir]
     def _is_path_within_module_dir(self, base_dir, resolved_path):
         # bug-hunt (2026-09-13): a bare .startswith(base_dir) matches by
@@ -159,8 +189,10 @@ class Module(models.Model):
             full_path = f"{module_name}/{path}"
             with tools.file_open(full_path, "rb") as f:
                 content_bytes = f.read()
-                content_hash = hashlib.sha256(content_bytes).hexdigest()
                 doc_body = content_bytes.decode("utf-8")
+                content_hash = hashlib.sha256(content_bytes + DOC_INSTALL_VERSION).hexdigest()
+                if path.lower().endswith(".md"):
+                    doc_body = self._markdown_doc_to_html(doc_body)
         except OSError as e:
             _logger.error(
                 "Failed to load doc file %s for module %s: %s", path, module_name, e
@@ -176,6 +208,14 @@ class Module(models.Model):
         # knowledge_docs manifest entry for a doc to appear in the public/anonymous
         # website help sidebar -- see night_shift_todo.md, internal-doc-exposure fix.
         is_public = bool(doc_info.get("public", False))
+        if is_public and self._is_internal_doc_path(path):
+            _logger.error(
+                "Knowledge document %s (%s) is a story, journey or runbook and "
+                'cannot be "public"; installing it as admin-only.',
+                name,
+                module_name,
+            )
+            is_public = False
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
         existing_hash = existing_hashes.get(hash_key) if existing_hashes is not None else utils._get_kv(hash_key)
@@ -190,7 +230,10 @@ class Module(models.Model):
 
         vals["is_published"] = is_public
         vals["category"] = category
-        vals["internal_permission"] = "read"
+        # Public documents are readable by every visitor. Everything else is
+        # internal documentation: "none" hides it from every ordinary
+        # internal user, leaving it to Manual Administrators only.
+        vals["internal_permission"] = "read" if is_public else "none"
         vals["icon"] = icon
 
         # bug-hunt (2026-09-13): article identity is looked up by this

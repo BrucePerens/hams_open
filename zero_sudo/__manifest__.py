@@ -24,7 +24,7 @@
     # hams_shared/tools/check_dependency_cycles.py for the established convention.
     "depends_cycle": ["distributed_redis_cache"],
     "external_dependencies": {
-        "python": ["psycopg2", "requests"]
+        "python": ["markdown", "psycopg2", "requests"]
     },
     "assets": {
         "web.assets_backend": [
