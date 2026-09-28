@@ -53,6 +53,19 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     http_request_key = ""
     http_request_allow_all = False
 
+    def authenticate(self, user, password, *args, **kwargs):
+        """Signs in, then commits this test's cursor.
+
+        Signing in records a login-log row that references the user, and the transaction that inserted it stays open for the rest
+        of the test, holding a key-share lock on the user's row. A browser tour that later rewrites that user's login (an account
+        erasure does; `login` is a unique column, so that is a key update) then waits on the lock for the full thirty seconds
+        and the confirmation page never loads in time. Found 2026-09-28 in `user_websites`' GDPR privacy tour, which failed only
+        when the full set of modules was installed (an extra module inserts on login); committing here releases the lock for
+        every real-transaction test that signs in, not just that one."""
+        session = super().authenticate(user, password, *args, **kwargs)
+        self.env.cr.commit()
+        return session
+
     @classmethod
     def setUpClass(cls):
         # A real, physically-committed cursor, NOT cls.registry.cursor(): under
