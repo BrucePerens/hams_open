@@ -143,6 +143,50 @@ class TestPagerSecurity(HamsTransactionCase):
         ):
             self.env["pager.check"].with_user(self.user_std).rpc_ensure_executable("ping")
 
+    def test_02c_rpc_ensure_executable_rejects_an_unrelated_service_account(self):
+        # Bug-hunt refresh, 2026-09-27: the caller gate added by test_02b also accepted a bare
+        # `user.is_service_account`, i.e. EVERY service account in the database, not just the
+        # groups ir.model.access.csv actually grants pager.check access to. The clearest
+        # counterexample is this module's own pager_incident_creator account, whose group
+        # membership was deliberately narrowed away from group_pager_service (security.xml)
+        # exactly so that the account fed by externally-triggered, lower-trust input could no
+        # longer reach pager.check -- the is_service_account disjunct handed that back for this
+        # one elevated, binary-provisioning RPC.
+        creator = self.env.ref("pager_duty.user_pager_incident_creator")
+        self.assertTrue(
+            creator.is_service_account,
+            "test premise: pager_incident_creator must really be a service account, "
+            "otherwise this test proves nothing about the is_service_account disjunct",
+        )
+        self.assertFalse(
+            creator.has_group("pager_duty.group_pager_service"),
+            "test premise: pager_incident_creator must NOT hold group_pager_service",
+        )
+        self.assertFalse(creator.has_group("pager_duty.group_pager_admin"))
+        self.assertFalse(creator.has_group("base.group_system"))
+        with self.assertRaises(
+            AccessError,
+            msg="[!] DIAGNOSTIC FOR AI: a service account with no pager_duty group of its own "
+            "must not be able to trigger binary provisioning under the elevated "
+            "binary_downloader service account just because it is a service account.",
+        ):
+            self.env["pager.check"].with_user(creator).rpc_ensure_executable("ping")
+
+    def test_02d_rpc_ensure_executable_still_allows_the_real_daemon_account(self):
+        # The other half of test_02c: narrowing the gate must not lock out the one account
+        # that actually calls this RPC. generalized_monitor.py's
+        # verify_and_install_dependencies() authenticates as pager_service_internal
+        # (pager-os-monitor.service pins ODOO_USER, and get_odoo_client defaults to the same
+        # login), which holds group_pager_service.
+        svc = self.env.ref("pager_duty.user_pager_service_internal")
+        self.assertTrue(svc.has_group("pager_duty.group_pager_service"))
+        with mute_logger("odoo.addons.pager_duty.models.pager_check"):
+            res = self.env["pager.check"].with_user(svc).rpc_ensure_executable("ping")
+        # Whatever binary_downloader itself does or doesn't do in this database, the caller
+        # gate must not be what stops it.
+        self.assertIsInstance(res, dict)
+        self.assertNotIn("Only Pager Duty admins", res.get("message") or "")
+
     def test_03_documentation_injection(self):
         """
         Verify that documentation is correctly injected during post_init_hook.
