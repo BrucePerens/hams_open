@@ -249,9 +249,34 @@ def verify_and_install_dependencies(client, checks):
                 sys.exit(1)
 
 
+# All three are keyed by check_key(check): the check's record id, which is unique across the whole exported
+# config. A check name is only unique per website (pager.check UNIQUE(name, website_id)), so two websites can each
+# have a check called "Disk"; keyed by name they shared one heartbeat (a hung thread for one site was hidden by the
+# healthy thread for the other), one timeout, and one failing flag (one site's failure suppressed, or cleared, the
+# other site's children). Config files written before the id was exported carry names only, and fall back to them.
 THREAD_HEARTBEATS = {}
 THREAD_TIMEOUTS = {}
 FAILING_CHECKS = set()
+# key -> name, for log lines only.
+THREAD_NAMES = {}
+# Names of failing checks. Used only to resolve `parent` in an older config file that has no `parent_id`.
+FAILING_NAMES = set()
+
+
+def check_key(check):
+    """The key this check's daemon state lives under: its record id, else its name (an older config file)."""
+    return check.get("id") or check.get("name", "Unknown")
+
+
+def parent_suppresses(check):
+    """True when this check's parent is currently failing. A `parent_id` (the parent's record id) is matched by id, so
+    a same-named check on another website cannot suppress it; an older config with only the parent's name is matched
+    by name, as before."""
+    parent_id = check.get("parent_id")
+    if parent_id:
+        return parent_id in FAILING_CHECKS
+    parent = check.get("parent")
+    return bool(parent) and parent in FAILING_NAMES
 
 
 # [@ANCHOR: pager_duty:is_in_maintenance]
@@ -1406,21 +1431,24 @@ def execute_check(check, client=None):
 def polling_thread(client, check):
     name = check.get("name", "Unknown")
     check_id = check.get("id")
+    key = check_key(check)
+    THREAD_NAMES[key] = name
     website_id = check.get("website_id")
     interval = int(check.get("interval", 60))
     grace = int(check.get("grace", 0))
     thread_start_time = time.time()
 
-    THREAD_TIMEOUTS[name] = max(300, interval * 3)
+    THREAD_TIMEOUTS[key] = max(300, interval * 3)
     logger.info(
         f"Starting polling thread for [{name}] every {interval}s (Grace: {grace}s)"
     )
 
-    THREAD_HEARTBEATS[name] = time.time()
+    THREAD_HEARTBEATS[key] = time.time()
     success, msg = execute_check(check, client)
     clean_loops = 1 if success else 0
     if not success:
-        FAILING_CHECKS.add(name)
+        FAILING_CHECKS.add(key)
+        FAILING_NAMES.add(name)
         if time.time() - thread_start_time < grace:
             logger.info(
                 f"[{name}] Startup grace period active. Suppressing failure: {msg}"
@@ -1440,21 +1468,22 @@ def polling_thread(client, check):
                 ) as e:  # audit-ignore-catch-all
                     logger.error(f"Remediation failed: {e}")
     else:
-        FAILING_CHECKS.discard(name)
+        FAILING_CHECKS.discard(key)
+        FAILING_NAMES.discard(name)
 
     jitter = secrets.SystemRandom().uniform(0, interval)
     logger.info(f"[{name}] Applying startup jitter: sleeping for {jitter:.1f}s")
     time.sleep(jitter)  # audit-ignore-sleep
 
     while True:
-        THREAD_HEARTBEATS[name] = time.time()
+        THREAD_HEARTBEATS[key] = time.time()
         parent = check.get("parent")
 
         if is_in_maintenance(check):
             time.sleep(interval)  # audit-ignore-sleep
             continue
 
-        if parent and parent in FAILING_CHECKS:
+        if parent_suppresses(check):
             logger.debug(f"[{name}] Suppressed due to parent '{parent}' failure.")
             time.sleep(interval)  # audit-ignore-sleep
             continue
@@ -1496,7 +1525,8 @@ def polling_thread(client, check):
                 logger.warning(f"[{name}] Failed to update status in Odoo: {e}")
 
         if not success:
-            FAILING_CHECKS.add(name)
+            FAILING_CHECKS.add(key)
+            FAILING_NAMES.add(name)
             if time.time() - thread_start_time < grace:
                 logger.info(
                     f"[{name}] Startup grace period active. Suppressing failure: {msg}"
@@ -1519,7 +1549,8 @@ def polling_thread(client, check):
                         logger.error(f"Remediation failed: {e}")
             clean_loops = 0
         else:
-            FAILING_CHECKS.discard(name)
+            FAILING_CHECKS.discard(key)
+            FAILING_NAMES.discard(name)
             clean_loops += 1
             if clean_loops == 3:
                 auto_resolve(client, name, website_id=website_id)
@@ -1529,13 +1560,15 @@ def polling_thread(client, check):
 # [@ANCHOR: pager_duty:log_tail_thread]
 def log_tail_thread(client, check):
     name = check.get("name", "Log Monitor")
+    key = check_key(check) if check.get("id") else name
+    THREAD_NAMES[key] = name
     website_id = check.get("website_id")
     filepath = parse_env(check.get("target", ""))
     regex_str = parse_env(check.get("regex", ""))
     grace = int(check.get("grace", 0))
     thread_start_time = time.time()
 
-    THREAD_TIMEOUTS[name] = 120
+    THREAD_TIMEOUTS[key] = 120
     logger.info(
         f"Starting log tail thread for [{name}] on {filepath} (Grace: {grace}s)"
     )
@@ -1543,7 +1576,7 @@ def log_tail_thread(client, check):
     cur_inode = None
     f = None
     while True:
-        THREAD_HEARTBEATS[name] = time.time()
+        THREAD_HEARTBEATS[key] = time.time()
         try:
             stat_obj = os.stat(filepath)
             new_inode = stat_obj.st_ino
@@ -1736,11 +1769,11 @@ if __name__ == "__main__":
         while True:
             time.sleep(10)  # audit-ignore-sleep
             now = time.time()
-            for t_name, last_beat in THREAD_HEARTBEATS.items():
+            for t_name, last_beat in list(THREAD_HEARTBEATS.items()):
                 timeout = THREAD_TIMEOUTS.get(t_name, 300)
                 if now - last_beat > timeout:
                     logger.critical(
-                        f"WATCHDOG: Thread '{t_name}' hung for {now - last_beat:.1f}s (Timeout: {timeout}s)! Force restarting daemon."
+                        f"WATCHDOG: Thread '{THREAD_NAMES.get(t_name, t_name)}' (key {t_name}) hung for {now - last_beat:.1f}s (Timeout: {timeout}s)! Force restarting daemon."
                     )
                     os._exit(1)
     except KeyboardInterrupt:

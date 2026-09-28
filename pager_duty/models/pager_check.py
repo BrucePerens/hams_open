@@ -505,6 +505,9 @@ class PagerCheck(models.Model):
             if check.grace_period:
                 check_dict["grace"] = check.grace_period
             if check.parent_check_id:
+                # The daemon matches the parent by id (a name is only unique per website). The name stays for
+                # a daemon or a config file from before parent_id existed.
+                check_dict["parent_id"] = check.parent_check_id.id
                 check_dict["parent"] = check.parent_check_id.name
             if check.maintenance_start:
                 check_dict["maint_start"] = check.maintenance_start.strftime("%Y-%m-%d %H:%M:%S")
