@@ -6,7 +6,6 @@ import functools
 import logging
 import json
 import re
-import urllib.request
 from datetime import datetime, timedelta, timezone
 
 from cryptography import x509
@@ -16,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 from odoo import http
 from odoo.http import request
+from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import urlopen_ssrf_safe
 
 _logger = logging.getLogger(__name__)
 
@@ -137,12 +137,13 @@ def _build_string_to_sign(payload):
 def _fetch_sns_signing_cert(signing_cert_url):
     """Fetches and caches (by URL) an AWS SNS signing certificate's raw PEM bytes.
 
-    Deliberately has NO host/SSRF check of its own -- the caller (`_verify_sns_signature`) MUST
-    validate `signing_cert_url` against `_SNS_SIGNING_CERT_URL_RE` before ever calling this. Kept
-    as its own small function, separate from the SubscribeURL fetch in `receive_sns_webhook`
-    (which goes through `urllib.request.urlopen` directly and is asserted on by existing tests),
-    specifically so tests can patch this one function in isolation without disturbing that
-    unrelated assertion or fighting `lru_cache`'s memoization across unrelated test cases.
+    The caller (`_verify_sns_signature`) MUST validate `signing_cert_url` against
+    `_SNS_SIGNING_CERT_URL_RE` before ever calling this; the fetch itself goes through
+    `urlopen_ssrf_safe`, which additionally refuses a private, loopback or link-local address and
+    re-checks every redirect hop. Kept as its own small function, separate from the SubscribeURL
+    fetch in `receive_sns_webhook` (which is asserted on by existing tests), specifically so tests
+    can patch this one function in isolation without disturbing that unrelated assertion or
+    fighting `lru_cache`'s memoization across unrelated test cases.
 
     `lru_cache` does not memoize a raised exception -- a transient fetch failure is retried on the
     next call rather than being "stuck" returning a cached error forever.
@@ -160,8 +161,9 @@ def _fetch_sns_signing_cert(signing_cert_url):
     parses again, which is cheap and keeps this function's own job purely "fetch a valid cert."
     """
     # Host/path pre-validated by the caller (_verify_sns_signature, against
-    # _SNS_SIGNING_CERT_URL_RE) before this function is ever reached.
-    with urllib.request.urlopen(signing_cert_url, timeout=10) as resp:
+    # _SNS_SIGNING_CERT_URL_RE) before this function is ever reached. The regex fixes the name, not the address, so the
+    # fetch itself also refuses a private or loopback address and re-checks every redirect hop.
+    with urlopen_ssrf_safe(signing_cert_url, "ses_webhook_sns_signing_cert", https_only=True, timeout=10) as resp:
         cert_pem = resp.read()
     x509.load_pem_x509_certificate(cert_pem)
     return cert_pem
@@ -358,7 +360,11 @@ class SesWebhookController(http.Controller):
                     # connection and never responds hung this worker
                     # indefinitely (the same unbounded-hang bug class fixed
                     # in several other daemons this session).
-                    urllib.request.urlopen(subscribe_url, timeout=10)
+                    # The regex fixes the host name, not the address it resolves to; this fetch also refuses a private or
+                    # loopback address and re-checks every redirect hop. `with` closes the response, which the plain
+                    # urlopen() call here used to leave open.
+                    with urlopen_ssrf_safe(subscribe_url, "ses_webhook_sns_subscribe", https_only=True, timeout=10):
+                        pass
                     _logger.info("Successfully confirmed SNS subscription for domain %s.", domain.name)
                     log_vals.update({'status': 'success'})
                 elif subscribe_url:

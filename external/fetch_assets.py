@@ -42,8 +42,10 @@ def download_file(url, dest_path, expected_hash):
     # [@ANCHOR: external:HTTP_NO_MASKING]
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"})
     
+    # audit-ignore-outbound-fetch: developer-run script; every URL is a pinned entry of this file's own asset tables and the
+    # download is refused unless its sha256 matches, so no caller or record field ever chooses the host
     # [@ANCHOR: external:HTTP_NO_HEAD]
-    with urllib.request.urlopen(req, timeout=10) as response:
+    with urllib.request.urlopen(req, timeout=10) as response:  # audit-ignore-outbound-fetch
         tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(dest_path))
         try:
             with os.fdopen(tmp_fd, "wb") as out_file:
@@ -86,7 +88,8 @@ def download_and_transform_file(url, dest_path, transform_fn, expected_hash):
 
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"})
 
-    with urllib.request.urlopen(req, timeout=10) as response:
+    # audit-ignore-outbound-fetch: same pinned, hash-checked asset tables as download_file() above
+    with urllib.request.urlopen(req, timeout=10) as response:  # audit-ignore-outbound-fetch
         raw = response.read()
 
     content = transform_fn(raw)
