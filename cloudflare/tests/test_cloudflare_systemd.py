@@ -58,7 +58,8 @@ class TestCloudflareSystemd(HamsTransactionCase):
             env_path = cf_systemd._env_file_path("cftun-write-test")
             with open(env_path) as f:
                 content = f.read()
-            self.assertIn("CLOUDFLARE_TUNNEL_TOKEN=fake-token-xyz", content)
+            self.assertEqual(content.count("TUNNEL_TOKEN=fake-token-xyz"), 1)
+            self.assertNotIn("CLOUDFLARE_TUNNEL_TOKEN", content)
             self.assertEqual(stat.S_IMODE(os.stat(env_path).st_mode), 0o600)
             call_args, call_kwargs = mock_run.call_args
             self.assertEqual(
@@ -172,3 +173,16 @@ class TestCloudflareSystemd(HamsTransactionCase):
             cf_systemd._write_secure_file(path, "TOKEN=ok\n", prefix)
             with open(path) as f:
                 self.assertEqual(f.read(), "TOKEN=ok\n")
+
+    # Tests [@ANCHOR: cloudflare:start_tunnel_daemon]
+    def test_14_the_unit_never_puts_the_run_token_on_the_command_line(self):
+        """An argument is readable by every local account through /proc/<pid>/cmdline and ps. The token
+        must reach cloudflared through its TUNNEL_TOKEN environment variable (EnvironmentFile=) instead."""
+        with open(cf_systemd._UNIT_TEMPLATE_PATH) as f:
+            template = f.read()
+        exec_lines = [l for l in template.splitlines() if l.startswith("ExecStart=")]
+        self.assertEqual(len(exec_lines), 1)
+        self.assertNotIn("--token", exec_lines[0])
+        self.assertNotIn("${", exec_lines[0])
+        self.assertNotIn("TOKEN", exec_lines[0])
+        self.assertTrue(any(l.startswith("EnvironmentFile=") for l in template.splitlines()))
