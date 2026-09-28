@@ -278,6 +278,10 @@ odoo.tests.common.ChromeBrowser._spawn_chrome = _patched_spawn_chrome
 _logger = logging.getLogger(__name__)
 
 _active_werkzeug_threads = set()
+# Threads that ignored the injected SystemExit (blocked in a call that releases the GIL, so the exception is never raised in them).
+# They are reported once and then skipped: waiting on a thread already proven un-interruptible made every later test's teardown
+# pay the full timeout again. They stay in `_active_werkzeug_threads` until they really return, so the diagnostics still see them.
+_abandoned_werkzeug_threads = set()
 _original_process_request_thread = (
     werkzeug.serving.ThreadedWSGIServer.process_request_thread
 )
@@ -299,6 +303,7 @@ def _patched_process_request_thread(self, request, client_address, *args, **kwar
         )
     finally:
         _active_werkzeug_threads.discard(t)
+        _abandoned_werkzeug_threads.discard(t)
         if _HAMS_TRACE_PG_THREADS:
             _logger.warning(
                 "[PGTRACE] thread-discard name=%s ident=%s active_count=%d",
@@ -321,7 +326,7 @@ def wait_for_werkzeug_threads(timeout=5.0):
         )
     start_time = time.time()
     for t in list(_active_werkzeug_threads):
-        if t is threading.current_thread():
+        if t is threading.current_thread() or t in _abandoned_werkzeug_threads:
             continue
         remaining = timeout - (time.time() - start_time)
         if remaining > 0:
@@ -352,9 +357,20 @@ def wait_for_werkzeug_threads(timeout=5.0):
                         )
                     else:
                         _logger.warning(
-                            "Successfully sent SystemExit to Werkzeug thread %s.",
+                            "Sent SystemExit to Werkzeug thread %s (recorded, not yet delivered).",
                             t.name,
                         )
+                        # The return code only says CPython recorded the pending exception; it is raised in the thread when it
+                        # next runs Python bytecode, which a thread blocked in a C call never does. Check, do not assume.
+                        t.join(0.5)
+                        if t.is_alive():
+                            _logger.error(
+                                "Werkzeug thread %s is still alive after SystemExit was sent: it is blocked in a call that "
+                                "does not run Python code (typically a socket read on a connection the browser stopped "
+                                "servicing). It will not be waited on again; it may still write to the database.",
+                                t.name,
+                            )
+                            _abandoned_werkzeug_threads.add(t)
             except Exception as e:  # audit-ignore-catch-all
                 _logger.error(
                     "Exception while trying to kill Werkzeug thread %s: %s", t.name, e
