@@ -337,6 +337,7 @@ self.addEventListener('message', (event) => {
         const port = event.ports && event.ports[0];
         cleanupStaleCaches().then(() => {
             if (port) port.postMessage({ ok: true });
+            return undefined;
         }).catch((err) => {
             if (port) port.postMessage({ ok: false, message: String(err && err.message) });
         });
