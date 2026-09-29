@@ -21,7 +21,9 @@ fn decoder_fixed_output_on_pseudo_random_bitstreams_is_unchanged() {
     for k in 0..30_000u32 {
         let mut b = [0u8; 8];
         for x in b.iter_mut() {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             *x = (seed >> 56) as u8;
         }
         if k % 5 == 0 {
@@ -37,5 +39,8 @@ fn decoder_fixed_output_on_pseudo_random_bitstreams_is_unchanged() {
             d = DecoderFixed::new();
         }
     }
-    assert_eq!(h, 0xaafb64f670c425b9, "DecoderFixed output changed: hash {h:016x}");
+    assert_eq!(
+        h, 0xaafb64f670c425b9,
+        "DecoderFixed output changed: hash {h:016x}"
+    );
 }

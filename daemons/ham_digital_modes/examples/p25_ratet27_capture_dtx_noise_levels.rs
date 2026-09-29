@@ -70,7 +70,9 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
     let mut state = seed;
     (0..FRAME_SAMPLES)
         .map(|_| {
-            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let unit = ((state >> 33) as f64 / (1u64 << 31) as f64) - 1.0;
             (unit * peak) as i16
         })
@@ -79,17 +81,23 @@ fn lcg_noise(seed: u64, peak: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
-    sock.send(&build_control_ecmode(DTX_ENABLE_BIT)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(DTX_ENABLE_BIT))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -113,7 +121,11 @@ fn main() {
     let noise_peaks: [f64; 8] = [0.0, 10.0, 25.0, 50.0, 100.0, 150.0, 200.0, 300.0];
 
     for &peak in &noise_peaks {
-        let samples = if peak == 0.0 { vec![0i16; FRAME_SAMPLES] } else { lcg_noise(42, peak) };
+        let samples = if peak == 0.0 {
+            vec![0i16; FRAME_SAMPLES]
+        } else {
+            lcg_noise(42, peak)
+        };
         for _ in 0..SETTLING_FRAMES {
             let n = send_recv_retrying(&sock, &mut buf, &build_speech(&samples));
             parse_packet(&buf[..n]).expect("valid packet");

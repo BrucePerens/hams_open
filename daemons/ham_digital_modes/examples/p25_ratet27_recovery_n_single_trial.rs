@@ -73,7 +73,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 fn digital_silence() -> Vec<i16> {
@@ -82,18 +84,23 @@ fn digital_silence() -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let recovery_n: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
     // "both" (default) exercises encoder+decoder during recovery; "decode_only" matches the
     // originally-successful test (decode-side silence only, no live re-encoding).
     let mode = args.get(3).cloned().unwrap_or_else(|| "both".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
@@ -113,7 +120,8 @@ fn main() {
     let silence_samples = digital_silence();
     let mut silence_r: Vec<u8> = Vec::new();
     for i in 0..SETTLING_FRAMES {
-        sock.send(&build_speech(&silence_samples)).expect("send speech");
+        sock.send(&build_speech(&silence_samples))
+            .expect("send speech");
         let n = sock.recv(&mut buf).expect("recv channel");
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
         assert_eq!(ptype, TYPE_CHANNEL);
@@ -123,13 +131,17 @@ fn main() {
         }
     }
 
-    let send_channel_get_pcm = |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
-        sock.send(raw_packet).expect("send channel");
-        let n = sock.recv(buf).expect("recv speech");
-        let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
-        payload[2..].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
-    };
+    let send_channel_get_pcm =
+        |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
+            sock.send(raw_packet).expect("send channel");
+            let n = sock.recv(buf).expect("recv speech");
+            let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
+            payload[2..]
+                .chunks_exact(2)
+                .map(|b| i16::from_be_bytes([b[0], b[1]]))
+                .collect()
+        };
     let send_speech_get_channel = |sock: &UdpSocket, buf: &mut [u8; 512], samples: &[i16]| {
         sock.send(&build_speech(samples)).expect("send speech");
         let n = sock.recv(buf).expect("recv channel");
@@ -141,9 +153,15 @@ fn main() {
     let fft = planner.plan_fft_forward(FRAME_SAMPLES);
     const DB_FLOOR: f64 = 1.0;
     let db_spectrum = |samples: &[i16]| -> Vec<f64> {
-        let mut buf: Vec<Complex64> = samples.iter().map(|&s| Complex64::new(s as f64, 0.0)).collect();
+        let mut buf: Vec<Complex64> = samples
+            .iter()
+            .map(|&s| Complex64::new(s as f64, 0.0))
+            .collect();
         fft.process(&mut buf);
-        buf[..FRAME_SAMPLES / 2 + 1].iter().map(|c| 20.0 * (c.norm().max(DB_FLOOR)).log10()).collect()
+        buf[..FRAME_SAMPLES / 2 + 1]
+            .iter()
+            .map(|c| 20.0 * (c.norm().max(DB_FLOOR)).log10())
+            .collect()
     };
     let spectral_distance = |a: &[f64], b: &[f64]| -> f64 {
         let sum_sq: f64 = a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum();

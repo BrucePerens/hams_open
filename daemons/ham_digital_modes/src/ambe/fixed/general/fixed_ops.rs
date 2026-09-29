@@ -17,7 +17,11 @@ pub const TWO_PI_Q16_16: i32 = 411775;
 /// before the final shift, the same idiom [`super::explog::exp2_q16`] uses).
 pub fn mul_q16(a: i32, b: i32) -> i32 {
     let product = (a as i64) * (b as i64);
-    let rounded = if product >= 0 { product + (1 << 15) } else { product - (1 << 15) };
+    let rounded = if product >= 0 {
+        product + (1 << 15)
+    } else {
+        product - (1 << 15)
+    };
     (rounded >> 16) as i32
 }
 
@@ -43,7 +47,11 @@ pub fn div_q16(a: i32, b: i32) -> i32 {
 /// point whatsoever" rule is about `f32`/`f64`, not integer width).
 pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64 {
     let product = (a as i128) * (b_q16 as i128);
-    let rounded = if product >= 0 { product + (1i128 << 15) } else { product - (1i128 << 15) };
+    let rounded = if product >= 0 {
+        product + (1i128 << 15)
+    } else {
+        product - (1i128 << 15)
+    };
     (rounded >> 16) as i64
 }
 
@@ -61,7 +69,11 @@ pub fn div_q16_i64(a: i64, b: i64) -> i32 {
         return if a >= 0 { i32::MAX } else { i32::MIN };
     }
     let max_abs = a.unsigned_abs().max(b.unsigned_abs());
-    let bits = if max_abs == 0 { 0 } else { 64 - max_abs.leading_zeros() as i32 };
+    let bits = if max_abs == 0 {
+        0
+    } else {
+        64 - max_abs.leading_zeros() as i32
+    };
     let shift = (bits - 47).max(0);
     let a_s = a >> shift;
     let b_s = b >> shift;

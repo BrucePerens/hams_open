@@ -33,7 +33,11 @@ pub fn log2_q16_i64(x: i64) -> i32 {
     // Normalize so the leading 1 sits at bit 30, exactly as `log2_q16` does for its own `u32` input
     // -- the same table and interpolation window apply regardless of how many bits `x` started with.
     let shift = 30i32 - msb as i32;
-    let normalized: u64 = if shift >= 0 { xu << shift } else { xu >> (-shift) };
+    let normalized: u64 = if shift >= 0 {
+        xu << shift
+    } else {
+        xu >> (-shift)
+    };
     let frac_bits = (normalized & ((1u64 << 30) - 1)) as u32;
     let index = (frac_bits >> 22) as usize;
     let sub_frac = (frac_bits & ((1 << 22) - 1)) as i64;
@@ -63,7 +67,11 @@ pub fn log2_q16(x: i32) -> i32 {
     // Normalize `xu` so its leading 1 sits at bit 30, maximizing the precision of the 30-bit
     // fraction the table lookup below reads from.
     let shift = 30i32 - msb as i32;
-    let normalized = if shift >= 0 { xu << shift } else { xu >> (-shift) };
+    let normalized = if shift >= 0 {
+        xu << shift
+    } else {
+        xu >> (-shift)
+    };
     let frac_bits = normalized & ((1u32 << 30) - 1); // the 30-bit fraction below the implicit leading 1
     let index = (frac_bits >> 22) as usize; // top 8 bits of that fraction -> table index, 0..255
     let sub_frac = (frac_bits & ((1 << 22) - 1)) as i64; // remaining 22 bits, for interpolation

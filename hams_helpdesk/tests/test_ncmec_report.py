@@ -295,14 +295,87 @@ class TestNcmecReport(HamsTransactionCase):
         with self.assertRaises(UserError):
             ticket.with_user(self.system_user).action_ncmec_report()
 
-    def test_action_ncmec_report_without_credentials_explains_manual_fallback(self):
+    def test_action_ncmec_report_without_credentials_emails_the_fallback_contact(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
+        # Real behavior change, 2026-09-24, per Bruce's own instruction to override the "legal
+        # review blocks launch" gate and keep filing working now: this used to just raise a
+        # UserError telling an admin to paste the packet into NCMEC's portal by hand. Now it
+        # actually emails the packet -- hams_helpdesk.ncmec_api_base_url is unset by default
+        # (never seeded by this module's own data XML, on purpose), so this is the real,
+        # no-patching-needed behavior a fresh deployment gets today.
         ticket = self._create_csam_ticket()
-        # hams_helpdesk.ncmec_api_base_url is unset by default (never seeded by this module's
-        # own data XML, on purpose) -- the real, no-patching-needed behavior.
-        with self.assertRaises(UserError) as cm:
+        before_mail_count = self.env["mail.mail"].with_user(self.system_user).search_count([])
+        ticket.with_user(self.system_user).action_ncmec_report()
+        ticket.invalidate_recordset()
+        # emailed_fallback, NOT report_submitted -- that state is reserved for a real NCMEC
+        # filing (real API call or action_ncmec_mark_report_filed_manually). Real bug caught in
+        # review, 2026-09-24: reusing report_submitted here made this permanently terminal,
+        # with no path left to ever record a real filing afterward. See the next two tests.
+        self.assertEqual(ticket.ncmec_report_state, "emailed_fallback")
+        self.assertIn("bruce@perens.com", ticket.ncmec_report_reference)
+        self.assertTrue(ticket.ncmec_report_submitted_at)
+        self.assertEqual(ticket.ncmec_report_submitted_by_id, self.system_user)
+        mails = self.env["mail.mail"].with_user(self.system_user).search([], order="id desc", limit=1)
+        self.assertEqual(self.env["mail.mail"].with_user(self.system_user).search_count([]), before_mail_count + 1)
+        self.assertEqual(mails.email_to, "bruce@perens.com")
+        self.assertIn(str(ticket.id), mails.subject)
+        self.assertIn(ticket.ncmec_report_packet or "", mails.body_html)
+
+    def test_action_ncmec_report_email_fallback_is_not_terminal(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
+        # Real bug caught in review, 2026-09-24: the email fallback must NOT permanently block
+        # the normal "Report"/"Mark Filed Manually" actions the way a real NCMEC filing does --
+        # an admin who was emailed the packet still needs to be able to actually file it (or
+        # have the system do so, once real API credentials exist) afterward.
+        ticket = self._create_csam_ticket()
+        ticket.with_user(self.system_user).action_ncmec_report()
+        self.assertEqual(ticket.ncmec_report_state, "emailed_fallback")
+        # Calling action_ncmec_report again must not raise -- it just emails the fallback again,
+        # since credentials are still unset.
+        ticket.with_user(self.system_user).action_ncmec_report()
+        self.assertEqual(ticket.ncmec_report_state, "emailed_fallback")
+        # And the manual-mark-filed path (an admin who filed the emailed packet by hand with
+        # NCMEC's own portal) must still be reachable from emailed_fallback.
+        ticket.with_user(self.system_user).action_ncmec_mark_report_filed_manually()
+        self.assertEqual(ticket.ncmec_report_state, "report_submitted")
+        # NOW it's terminal, same as a real API filing.
+        with self.assertRaises(UserError):
             ticket.with_user(self.system_user).action_ncmec_report()
-        self.assertIn("NCMEC's own CyberTipline reporting portal", str(cm.exception))
-        self.assertEqual(ticket.ncmec_report_state, "not_reported")
+        with self.assertRaises(UserError):
+            ticket.with_user(self.system_user).action_ncmec_mark_report_filed_manually()
+
+    def test_action_ncmec_report_email_fallback_escapes_html_in_the_packet(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
+        # Real stored-HTML-injection vector caught in review, 2026-09-24: ncmec_report_packet is
+        # built from plain, unescaped Char/Text fields (ticket name, callsign, etc.), any of
+        # which an internal user with ticket-create rights can set via backend/RPC (not just the
+        # portal controller, which is the only caller that restricts the CSAM category) -- so a
+        # malicious ticket name must not become live HTML/script in the outbound email.
+        payload = "<script>alert(document.cookie)</script>"
+        ticket = self._create_csam_ticket(name=payload)
+        ticket.with_user(self.system_user).action_ncmec_report()
+        mails = self.env["mail.mail"].with_user(self.system_user).search([], order="id desc", limit=1)
+        self.assertNotIn("<script>", mails.body_html)
+        self.assertIn("&lt;script&gt;", mails.body_html)
+
+    def test_action_ncmec_report_fallback_email_uses_the_configured_address(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils),
+            "_get_system_param",
+            lambda self, key, default=None: (
+                "reports@example.org"
+                if key == "hams_helpdesk.ncmec_fallback_report_email"
+                else default
+            ),
+            create=True,
+        )
+        ticket = self._create_csam_ticket()
+        ticket.with_user(self.system_user).action_ncmec_report()
+        mails = self.env["mail.mail"].with_user(self.system_user).search([], order="id desc", limit=1)
+        self.assertEqual(mails.email_to, "reports@example.org")
+        self.assertIn("reports@example.org", ticket.ncmec_report_reference)
 
     def test_action_ncmec_report_refuses_a_second_submission(self):
         ticket = self._create_csam_ticket()

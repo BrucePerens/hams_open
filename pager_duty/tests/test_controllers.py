@@ -76,7 +76,7 @@ class TestPagerControllers(HamsHttpCase):
 
     def test_02b_search_logs_poll_reports_job_state(self):
         # Tests [@ANCHOR: pager_duty:search_logs_poll]
-        admin = self.env["res.users"].create(
+        self.env["res.users"].create(
             {
                 "name": "Log Poll Admin",
                 "login": "log_poll_admin",

@@ -7,10 +7,12 @@
 //!
 //! `cargo run --release --example ambe_error_concealment_eval [frames-per-speaker]` (D-STAR; the AMBE+2 decoders share the policy code).
 
-use ham_digital_modes::ambe::float::dstar::encoder::Encoder;
-use ham_digital_modes::ambe::float::dstar::interleave::{frame_to_wire_bytes as ds_to_wire, wire_bytes_to_frame as ds_from_wire};
-use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
 use ham_digital_modes::ambe::float::concealment::ConcealParams;
+use ham_digital_modes::ambe::float::dstar::encoder::Encoder;
+use ham_digital_modes::ambe::float::dstar::interleave::{
+    frame_to_wire_bytes as ds_to_wire, wire_bytes_to_frame as ds_from_wire,
+};
+use ham_digital_modes::ambe::float::dstar::synthesis::DStarSynthesisDecoder;
 use ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy;
 use rustfft::{num_complex::Complex64, FftPlanner};
 
@@ -24,7 +26,10 @@ const FILES: [&str; 4] = [
 struct Lcg(u64);
 impl Lcg {
     fn unit(&mut self) -> f64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (self.0 >> 11) as f64 / (1u64 << 53) as f64
     }
 }
@@ -39,10 +44,27 @@ fn db(x: &[f64]) -> f64 {
 fn spectrum_db(x: &[f64]) -> Vec<f64> {
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(256);
-    let mut b: Vec<Complex64> = (0..256).map(|i| Complex64::new(if i < x.len() { x[i] * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 255.0).cos()) } else { 0.0 }, 0.0)).collect();
+    let mut b: Vec<Complex64> = (0..256)
+        .map(|i| {
+            Complex64::new(
+                if i < x.len() {
+                    x[i] * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / 255.0).cos())
+                } else {
+                    0.0
+                },
+                0.0,
+            )
+        })
+        .collect();
     fft.process(&mut b);
     let edge = |k: usize| (3.0 * (122.0f64 / 3.0).powf(k as f64 / 16.0)).round() as usize;
-    (0..16).map(|k| { let (lo, hi) = (edge(k), edge(k + 1).max(edge(k) + 1)); 10.0 * (b[lo..hi].iter().map(|c| c.norm_sqr()).sum::<f64>() / (hi - lo) as f64 + 1e-3).log10() }).collect()
+    (0..16)
+        .map(|k| {
+            let (lo, hi) = (edge(k), edge(k + 1).max(edge(k) + 1));
+            10.0 * (b[lo..hi].iter().map(|c| c.norm_sqr()).sum::<f64>() / (hi - lo) as f64 + 1e-3)
+                .log10()
+        })
+        .collect()
 }
 
 fn is_a2() -> bool {
@@ -53,7 +75,10 @@ fn frame_to_wire_bytes(frame: u128) -> [u8; 9] {
     if is_a2() {
         #[cfg(feature = "ambe_plus_2")]
         {
-            let wire = ham_digital_modes::ambe::float::ambe_plus_2::interleave::frame_to_interleaved(frame);
+            let wire =
+                ham_digital_modes::ambe::float::ambe_plus_2::interleave::frame_to_interleaved(
+                    frame,
+                );
             return std::array::from_fn(|i| ((wire >> (8 * (8 - i))) & 0xFF) as u8);
         }
     }
@@ -68,7 +93,9 @@ fn wire_bytes_to_frame(b: &[u8; 9]) -> u128 {
             for &x in b {
                 wire = (wire << 8) | x as u128;
             }
-            return ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame(wire);
+            return ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame(
+                wire,
+            );
         }
     }
     ds_from_wire(b)
@@ -78,8 +105,16 @@ fn corrupt(frame: u128, ber: f64, burst: bool, rng: &mut Lcg, in_burst: &mut boo
     let mut bytes = frame_to_wire_bytes(frame);
     let p = if burst {
         // Two-state channel: bad state flips 25% of bits, entered so the long-run error rate matches `ber`.
-        if *in_burst { *in_burst = rng.unit() > 0.15 } else { *in_burst = rng.unit() < ber / 0.25 * 0.15 / (1.0 - ber / 0.25) }
-        if *in_burst { 0.25 } else { 0.0 }
+        if *in_burst {
+            *in_burst = rng.unit() > 0.15
+        } else {
+            *in_burst = rng.unit() < ber / 0.25 * 0.15 / (1.0 - ber / 0.25)
+        }
+        if *in_burst {
+            0.25
+        } else {
+            0.0
+        }
     } else {
         ber
     };
@@ -98,7 +133,9 @@ fn params_from_env() -> ConcealParams {
     let mut p = ConcealParams::default();
     if let Ok(v) = std::env::var("CP") {
         for kv in v.split(',') {
-            let Some((k, x)) = kv.split_once('=') else { continue };
+            let Some((k, x)) = kv.split_once('=') else {
+                continue;
+            };
             let x: f64 = x.parse().unwrap();
             match k {
                 "level" => p.level_scale_db = x,
@@ -123,35 +160,70 @@ fn params_from_env() -> ConcealParams {
 fn decode(frames: &[u128], policy: ErrorPolicy) -> Vec<f64> {
     #[cfg(feature = "ambe_plus_2")]
     if is_a2() {
-        let mut d = ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder::new().with_error_policy(policy).with_conceal_params(params_from_env());
-        return frames.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect();
+        let mut d =
+            ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder::new(
+            )
+            .with_error_policy(policy)
+            .with_conceal_params(params_from_env());
+        return frames
+            .iter()
+            .flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160]))
+            .collect();
     }
-    let mut d = DStarSynthesisDecoder::new().with_error_policy(policy).with_conceal_params(params_from_env());
-    frames.iter().flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160])).collect()
+    let mut d = DStarSynthesisDecoder::new()
+        .with_error_policy(policy)
+        .with_conceal_params(params_from_env());
+    frames
+        .iter()
+        .flat_map(|&f| d.decode_frame(f).unwrap_or([0.0; 160]))
+        .collect()
 }
 
 fn main() {
-    let n_frames: usize = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(400);
-    let policies: Vec<(&str, ErrorPolicy)> = vec![("Clean (mbelib)", ErrorPolicy::Clean), ("ChipCompatible", ErrorPolicy::ChipCompatible), ("Concealing", ErrorPolicy::Concealing)];
-    let channels: [(&str, f64, bool); 7] = [("BER 0%", 0.0, false), ("BER 0.5%", 0.005, false), ("BER 1%", 0.01, false), ("BER 2%", 0.02, false), ("BER 5%", 0.05, false), ("BER 10%", 0.10, false), ("bursty 3%", 0.03, true)];
+    let n_frames: usize = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(400);
+    let policies: Vec<(&str, ErrorPolicy)> = vec![
+        ("Clean (mbelib)", ErrorPolicy::Clean),
+        ("ChipCompatible", ErrorPolicy::ChipCompatible),
+        ("Concealing", ErrorPolicy::Concealing),
+    ];
+    let channels: [(&str, f64, bool); 7] = [
+        ("BER 0%", 0.0, false),
+        ("BER 0.5%", 0.005, false),
+        ("BER 1%", 0.01, false),
+        ("BER 2%", 0.02, false),
+        ("BER 5%", 0.05, false),
+        ("BER 10%", 0.10, false),
+        ("bursty 3%", 0.03, true),
+    ];
     println!("| channel | policy | envelope distance dB | mean excess loudness dB | worst-1% excess dB | muted active frames |\n|---|---|---|---|---|---|");
     let mut clean_frames: Vec<Vec<u128>> = Vec::new();
     for f in FILES {
         let bytes = std::fs::read(f).unwrap();
-        let pcm: Vec<f64> = bytes[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).take(n_frames * 160).collect();
+        let pcm: Vec<f64> = bytes[44..]
+            .chunks_exact(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+            .take(n_frames * 160)
+            .collect();
         let mut fr = Vec::new();
         #[cfg(feature = "ambe_plus_2")]
         if is_a2() {
             let mut e = ham_digital_modes::ambe::float::ambe_plus_2::encoder::Encoder::new();
             e.push_samples(&pcm);
-            while let Some(x) = e.next_frame() { fr.push(x) }
+            while let Some(x) = e.next_frame() {
+                fr.push(x)
+            }
             fr.extend(e.finish());
             clean_frames.push(fr);
             continue;
         }
         let mut e = Encoder::new();
         e.push_samples(&pcm);
-        while let Some(x) = e.next_frame() { fr.push(x) }
+        while let Some(x) = e.next_frame() {
+            fr.push(x)
+        }
         fr.extend(e.finish());
         clean_frames.push(fr);
     }
@@ -162,17 +234,27 @@ fn main() {
             if only.as_deref().is_some_and(|o| !pname.starts_with(o)) {
                 continue;
             }
-            let (mut lsd_sum, mut lsd_n, mut exc_sum, mut exc_n, mut muted, mut active) = (0.0, 0usize, 0.0, 0usize, 0usize, 0usize);
+            let (mut lsd_sum, mut lsd_n, mut exc_sum, mut exc_n, mut muted, mut active) =
+                (0.0, 0usize, 0.0, 0usize, 0usize, 0usize);
             let mut excursions: Vec<f64> = Vec::new();
             for (k, frames) in clean_frames.iter().enumerate() {
                 let reference = decode(frames, ErrorPolicy::Clean);
-                let seed: u64 = std::env::var("SEED").ok().and_then(|v| v.parse().ok()).unwrap_or(0);
+                let seed: u64 = std::env::var("SEED")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
                 let mut rng = Lcg(1000 + k as u64 * 7 + (ber * 1e4) as u64 + seed * 1_000_003);
                 let mut in_burst = false;
-                let damaged: Vec<u128> = frames.iter().map(|&f| corrupt(f, ber, burst, &mut rng, &mut in_burst)).collect();
+                let damaged: Vec<u128> = frames
+                    .iter()
+                    .map(|&f| corrupt(f, ber, burst, &mut rng, &mut in_burst))
+                    .collect();
                 let out = decode(&damaged, *policy);
                 for i in 0..frames.len() {
-                    let (r, o) = (&reference[i * 160..(i + 1) * 160], &out[i * 160..(i + 1) * 160]);
+                    let (r, o) = (
+                        &reference[i * 160..(i + 1) * 160],
+                        &out[i * 160..(i + 1) * 160],
+                    );
                     let (dr, dob) = (db(r), db(o));
                     let excess = (dob - dr - 3.0).max(0.0);
                     excursions.push(excess);
@@ -180,10 +262,21 @@ fn main() {
                     exc_n += 1;
                     if dr > 30.0 {
                         active += 1;
-                        if dob < dr - 25.0 { muted += 1; }
+                        if dob < dr - 25.0 {
+                            muted += 1;
+                        }
                         if i * 160 + 256 <= reference.len() {
-                            let (sr, so) = (spectrum_db(&reference[i * 160..i * 160 + 256]), spectrum_db(&out[i * 160..i * 160 + 256]));
-                            lsd_sum += (sr.iter().zip(&so).map(|(a, b)| (a - b).powi(2)).sum::<f64>() / sr.len() as f64).sqrt();
+                            let (sr, so) = (
+                                spectrum_db(&reference[i * 160..i * 160 + 256]),
+                                spectrum_db(&out[i * 160..i * 160 + 256]),
+                            );
+                            lsd_sum += (sr
+                                .iter()
+                                .zip(&so)
+                                .map(|(a, b)| (a - b).powi(2))
+                                .sum::<f64>()
+                                / sr.len() as f64)
+                                .sqrt();
                             lsd_n += 1;
                         }
                     }
@@ -191,7 +284,11 @@ fn main() {
             }
             excursions.sort_by(|a, b| a.total_cmp(b));
             let worst = excursions[(excursions.len() as f64 * 0.99) as usize];
-            let (dist, exc, mut_pct) = (lsd_sum / lsd_n.max(1) as f64, exc_sum / exc_n.max(1) as f64, 100.0 * muted as f64 / active.max(1) as f64);
+            let (dist, exc, mut_pct) = (
+                lsd_sum / lsd_n.max(1) as f64,
+                exc_sum / exc_n.max(1) as f64,
+                100.0 * muted as f64 / active.max(1) as f64,
+            );
             println!("| {cname} | {pname} | {dist:.2} | {exc:.2} | {worst:.1} | {mut_pct:.1}% |");
             // Weighted objective: damage on the clean channel counts extra (concealment must not hurt good links).
             // Weights favour the error rates links actually run at: any loss at 0-2% is heavily penalized.

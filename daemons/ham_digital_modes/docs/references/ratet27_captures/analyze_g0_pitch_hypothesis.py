@@ -57,7 +57,7 @@ def extract_block(natural_bits, start, length):
 # Frequency -> hex, from the sibling committed capture file (all_stimuli_2687frames.tsv), which
 # includes every sine/sawtooth/noise/speech/dual-tone/chirp frame captured this session.
 import os
-freqs_hex = {}
+freqs_hex: dict = {}
 data_path = os.path.join(os.path.dirname(__file__), 'all_stimuli_2687frames.tsv')
 with open(data_path) as f:
     for line in f:
@@ -138,5 +138,5 @@ print(f"\nUsable (>=125Hz): {len(usable)} points")
 print(f"Pearson(g0_data, freq)      = {pearson(freqs_u, g0_u):.3f}")
 print(f"Pearson(g0_data, log(freq)) = {pearson(log_freqs, g0_u):.3f}")
 print(f"Pearson(g0_data, 1/freq)    = {pearson(inv_freqs, g0_u):.3f}")
-for f, g in zip(freqs_u, g0_u):
-    print(f"  freq={f:6.0f}  g0_data={g:5d}  log(freq)={math.log(f):.3f}  omega0=2pi*f/8000={2*math.pi*f/8000:.4f}")
+for freq_hz, g in zip(freqs_u, g0_u):
+    print(f"  freq={freq_hz:6.0f}  g0_data={g:5d}  log(freq)={math.log(freq_hz):.3f}  omega0=2pi*f/8000={2*math.pi*freq_hz/8000:.4f}")

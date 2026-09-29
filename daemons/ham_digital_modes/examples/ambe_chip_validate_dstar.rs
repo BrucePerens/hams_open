@@ -107,24 +107,38 @@ fn encode_frame(sock: &UdpSocket, samples: &[i16]) -> Option<[u8; 9]> {
 fn test_tone(freq: u32) -> Vec<i16> {
     let period = (SAMPLE_RATE / freq as f64).round() as usize;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n % period) as f64 / period as f64).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n % period) as f64 / period as f64).sin())
+                as i16
+        })
         .collect()
 }
 
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
 
-    sock.send(&build_control_ratep(RATEP_DSTAR)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_DSTAR))
+        .expect("send RATEP config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATEP config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
@@ -151,7 +165,11 @@ fn main() {
             }
         }
         let in_voice_range = VOICE_RANGE_HZ.contains(&freq);
-        let tag = if in_voice_range { "voice range" } else { "above AMBE's designed pitch range" };
+        let tag = if in_voice_range {
+            "voice range"
+        } else {
+            "above AMBE's designed pitch range"
+        };
         println!("{freq:>5}Hz ({tag}): {exact}/{total} frames Golay-decoded with zero errors on C0 and C1");
         if in_voice_range && exact != total {
             any_failures_in_range = true;

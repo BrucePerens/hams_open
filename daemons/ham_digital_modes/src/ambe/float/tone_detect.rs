@@ -14,9 +14,15 @@ pub const FRAME: usize = 160;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DetectedTone {
-    Dtmf { row: u8, col: u8 },
+    Dtmf {
+        row: u8,
+        col: u8,
+    },
     /// `index = round(f / 31.25)`, `hz` the measured frequency.
-    Single { index: u32, hz: f64 },
+    Single {
+        index: u32,
+        hz: f64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -53,7 +59,14 @@ fn explained_fraction(x: &[f64], hzs: &[f64]) -> (f64, Vec<f64>) {
     let total: f64 = x.iter().map(|v| v * v).sum();
     let amps: Vec<f64> = hzs.iter().map(|&hz| fit_sinusoid(x, hz)).collect();
     let explained: f64 = amps.iter().map(|a| a * a / 2.0 * x.len() as f64).sum();
-    (if total > 0.0 { (explained / total).min(1.5) } else { 0.0 }, amps)
+    (
+        if total > 0.0 {
+            (explained / total).min(1.5)
+        } else {
+            0.0
+        },
+        amps,
+    )
 }
 
 /// Fraction of a frame's energy one sinusoid must explain to count as a single tone. `0.9` mistook voiced speech whose
@@ -65,7 +78,9 @@ pub const SINGLE_TONE_MIN_EXPLAINED_FRACTION: f64 = 0.99;
 pub const LOW_TONE_MIN_EXPLAINED_FRACTION: f64 = 0.999;
 
 pub fn volume_for_amplitude(amplitude: f64) -> u32 {
-    (186.0 + 17.0 * (amplitude.max(1.0) / 4000.0).log2()).round().clamp(0.0, 255.0) as u32
+    (186.0 + 17.0 * (amplitude.max(1.0) / 4000.0).log2())
+        .round()
+        .clamp(0.0, 255.0) as u32
 }
 
 /// Detects a tone in one 160-sample frame, or `None` for anything else (speech, silence, noise).
@@ -79,15 +94,33 @@ pub fn detect_tone(frame: &[f64]) -> Option<Detection> {
     }
 
     // DTMF: strongest row and column.
-    let row_amps: Vec<f64> = DTMF_ROW_HZ.iter().map(|&hz| fit_sinusoid(frame, hz)).collect();
-    let col_amps: Vec<f64> = DTMF_COL_HZ.iter().map(|&hz| fit_sinusoid(frame, hz)).collect();
-    let arg_max = |v: &[f64]| v.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).map(|(i, _)| i).unwrap();
+    let row_amps: Vec<f64> = DTMF_ROW_HZ
+        .iter()
+        .map(|&hz| fit_sinusoid(frame, hz))
+        .collect();
+    let col_amps: Vec<f64> = DTMF_COL_HZ
+        .iter()
+        .map(|&hz| fit_sinusoid(frame, hz))
+        .collect();
+    let arg_max = |v: &[f64]| {
+        v.iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(i, _)| i)
+            .unwrap()
+    };
     let (r, c) = (arg_max(&row_amps), arg_max(&col_amps));
     let (ra, ca) = (row_amps[r], col_amps[c]);
     if ra > 100.0 && ca > 100.0 && (ra / ca).max(ca / ra) < 3.0 {
         let (frac, _) = explained_fraction(frame, &[DTMF_ROW_HZ[r], DTMF_COL_HZ[c]]);
         if frac > 0.85 {
-            return Some(Detection { tone: DetectedTone::Dtmf { row: r as u8, col: c as u8 }, amplitude: (ra + ca) / 2.0 });
+            return Some(Detection {
+                tone: DetectedTone::Dtmf {
+                    row: r as u8,
+                    col: c as u8,
+                },
+                amplitude: (ra + ca) / 2.0,
+            });
         }
     }
 
@@ -117,9 +150,13 @@ pub fn detect_tone(frame: &[f64]) -> Option<Detection> {
         // The chip reports single tones from 400 Hz up, plus 200 Hz. Below 400 Hz voiced speech is itself nearly a pure
         // sinusoid (a vowel's fundamental at 150-390 Hz explains 90-100% of a frame), so only a very pure, exactly-200 Hz
         // component counts there.
-        let in_range = (13..=122).contains(&index) || (index == 6 && (hz - 200.0).abs() < 3.0 && frac > LOW_TONE_MIN_EXPLAINED_FRACTION);
+        let in_range = (13..=122).contains(&index)
+            || (index == 6 && (hz - 200.0).abs() < 3.0 && frac > LOW_TONE_MIN_EXPLAINED_FRACTION);
         if in_range {
-            return Some(Detection { tone: DetectedTone::Single { index, hz }, amplitude: amp });
+            return Some(Detection {
+                tone: DetectedTone::Single { index, hz },
+                amplitude: amp,
+            });
         }
     }
     None
@@ -131,7 +168,12 @@ mod tests {
 
     fn sines(freqs: &[f64], amp: f64, offset: usize) -> Vec<f64> {
         (0..FRAME)
-            .map(|i| freqs.iter().map(|&hz| amp * (2.0 * PI * hz * (offset + i) as f64 / 8000.0).sin()).sum())
+            .map(|i| {
+                freqs
+                    .iter()
+                    .map(|&hz| amp * (2.0 * PI * hz * (offset + i) as f64 / 8000.0).sin())
+                    .sum()
+            })
             .collect()
     }
 
@@ -142,8 +184,18 @@ mod tests {
             for c in 0..4usize {
                 let x = sines(&[DTMF_ROW_HZ[r], DTMF_COL_HZ[c]], 4000.0, 37);
                 let d = detect_tone(&x).expect("digit detected");
-                assert_eq!(d.tone, DetectedTone::Dtmf { row: r as u8, col: c as u8 });
-                assert!((d.amplitude / 4000.0 - 1.0).abs() < 0.05, "amplitude {}", d.amplitude);
+                assert_eq!(
+                    d.tone,
+                    DetectedTone::Dtmf {
+                        row: r as u8,
+                        col: c as u8
+                    }
+                );
+                assert!(
+                    (d.amplitude / 4000.0 - 1.0).abs() < 0.05,
+                    "amplitude {}",
+                    d.amplitude
+                );
                 assert!((volume_for_amplitude(d.amplitude) as i32 - 186).abs() <= 1);
             }
         }
@@ -151,9 +203,19 @@ mod tests {
 
     #[test]
     fn single_tone_index_and_levels_match_the_chip() {
-        for (hz, index) in [(500.0, 16u32), (1000.0, 32), (2000.0, 64), (3800.0, 122), (400.0, 13)] {
+        for (hz, index) in [
+            (500.0, 16u32),
+            (1000.0, 32),
+            (2000.0, 64),
+            (3800.0, 122),
+            (400.0, 13),
+        ] {
             let d = detect_tone(&sines(&[hz], 4000.0, 11)).expect("tone detected");
-            assert!(matches!(d.tone, DetectedTone::Single { index: i, .. } if i == index), "{hz} Hz -> {:?}", d.tone);
+            assert!(
+                matches!(d.tone, DetectedTone::Single { index: i, .. } if i == index),
+                "{hz} Hz -> {:?}",
+                d.tone
+            );
         }
         assert_eq!(volume_for_amplitude(500.0), 135);
         assert_eq!(volume_for_amplitude(1000.0), 152);

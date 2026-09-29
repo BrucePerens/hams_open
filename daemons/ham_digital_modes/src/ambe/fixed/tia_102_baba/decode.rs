@@ -10,11 +10,12 @@
 //! integer/bitwise arithmetic in the float sibling already and is reused directly via the imports
 //! below, not duplicated.
 
-use super::error_estimation::{estimate_errors_q16, should_mute_frame_q16, should_repeat_frame_q16, FrameErrorsQ16};
+use super::error_estimation::{
+    estimate_errors_q16, should_mute_frame_q16, should_repeat_frame_q16, FrameErrorsQ16,
+};
 use super::parameter_encoding::{
-    decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency_q16, dequantize_fundamental_frequency_q32,
-    frequency_bands_count,
-    harmonics_count_from_b0,
+    decode_voicing_decisions_per_harmonic, dequantize_fundamental_frequency_q16,
+    dequantize_fundamental_frequency_q32, frequency_bands_count, harmonics_count_from_b0,
 };
 use super::prediction::INITIAL_L_HAT_PREV;
 use super::reconstruct::reconstruct_spectral_amplitudes_q16;
@@ -23,8 +24,8 @@ use crate::ambe::fixed::general::unvoiced_synthesis::N;
 use crate::ambe::float::tia_102_baba::bit_prioritization::{
     deprioritize_bits, extract_fundamental_frequency_quantizer, DeprioritizedBits,
 };
-use crate::ambe::float::tia_102_baba::{decode_code_vectors, decode_code_vectors_chip};
 use crate::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
+use crate::ambe::float::tia_102_baba::{decode_code_vectors, decode_code_vectors_chip};
 
 /// `round(1.0 * 65536)` -- Annex A's own `M~_l(-1) = 1` (unity, not silent) initial history value, in
 /// Q16.16.
@@ -81,7 +82,10 @@ impl DecoderState {
     /// The DVSI chip's framing (plain FEC codewords, chip Hamming labelling, no modulation) for the
     /// chip-comparison tools; the same choice as the float sibling's `DecoderState::new_chip_wire`.
     pub fn new_chip_wire() -> Self {
-        Self { chip_wire: true, ..Self::new() }
+        Self {
+            chip_wire: true,
+            ..Self::new()
+        }
     }
 
     /// The fixed-point equivalent of `DecoderState::advance_history`.

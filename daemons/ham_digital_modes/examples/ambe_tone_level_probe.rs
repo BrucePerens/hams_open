@@ -64,7 +64,10 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 }
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
-    payload[2..2 + count * 2].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
+    payload[2..2 + count * 2]
+        .chunks_exact(2)
+        .map(|b| i16::from_be_bytes([b[0], b[1]]))
+        .collect()
 }
 fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usize {
     for attempt in 0..8 {
@@ -84,9 +87,11 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE");
     assert_eq!(&data[36..40], b"data");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
-
 
 fn chip_frame_stats(sock: &UdpSocket, buf: &mut [u8; 1024], wire: [u8; 9]) -> (f64, f64) {
     let mut last = Vec::new();
@@ -101,7 +106,10 @@ fn chip_frame_stats(sock: &UdpSocket, buf: &mut [u8; 1024], wire: [u8; 9]) -> (f
             }
         };
         if r == 5 {
-            last = parse_speech_payload(&reply).iter().map(|&s| s as f64).collect();
+            last = parse_speech_payload(&reply)
+                .iter()
+                .map(|&s| s as f64)
+                .collect();
         }
     }
     let peak = last.iter().fold(0.0f64, |m, &s| m.max(s.abs()));
@@ -120,8 +128,12 @@ fn ours_stats(frames: &[u128], mut decode: impl FnMut(u128) -> Option<[f64; 160]
 }
 
 fn main() {
-    let mode = std::env::args().nth(1).unwrap_or_else(|| "dstar".to_string());
-    let host = std::env::args().nth(2).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let mode = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "dstar".to_string());
+    let host = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
@@ -138,7 +150,8 @@ fn main() {
     sock.send(&config).unwrap();
     let n = sock.recv(&mut buf).unwrap();
     parse_packet(&buf[..n]).unwrap();
-    sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
+    sock.set_read_timeout(Some(Duration::from_millis(300)))
+        .unwrap();
     while sock.recv(&mut buf).is_ok() {}
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
@@ -156,7 +169,13 @@ fn main() {
         for amp in [250.0f64, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0] {
             let mut last_payload = Vec::new();
             for f in 0..8usize {
-                let frame: Vec<i16> = (0..160).map(|i| (amp * (2.0 * std::f64::consts::PI * 1000.0 * (f * 160 + i) as f64 / 8000.0).sin()) as i16).collect();
+                let frame: Vec<i16> = (0..160)
+                    .map(|i| {
+                        (amp * (2.0 * std::f64::consts::PI * 1000.0 * (f * 160 + i) as f64
+                            / 8000.0)
+                            .sin()) as i16
+                    })
+                    .collect();
                 let n = send_recv_retrying(&sock, &mut buf, &build_speech(&frame));
                 let (_, p) = parse_packet(&buf[..n]).unwrap();
                 last_payload = p.to_vec();
@@ -166,7 +185,8 @@ fn main() {
                 wire = (wire << 8) | b as u128;
             }
             let d = parse_frame(interleaved_to_frame(wire)).d;
-            let (cp, cr) = chip_frame_stats(&sock, &mut buf, last_payload[2..11].try_into().unwrap());
+            let (cp, cr) =
+                chip_frame_stats(&sock, &mut buf, last_payload[2..11].try_into().unwrap());
             println!("input sine amp {amp:6.0}: d[4..16)={:#05x} tone_idx-ish d[16..20)={:#x}; chip decode peak/rms {cp:.0}/{cr:.0}", (d >> 33) & 0xFFF, (d >> 29) & 0xF);
         }
     }
@@ -191,7 +211,11 @@ fn main() {
             let w = frame_to_interleaved(f);
             std::array::from_fn(|i| ((w >> (8 * (8 - i))) & 0xFF) as u8)
         };
-        for (name, idx, cp) in [("1kHz", 32u8, false), ("DTMF 5", 0x85, false), ("dial", 0xA0, true)] {
+        for (name, idx, cp) in [
+            ("1kHz", 32u8, false),
+            ("DTMF 5", 0x85, false),
+            ("dial", 0xA0, true),
+        ] {
             for amp in (0u16..=4095).step_by(256).chain([4095]) {
                 let frame = ap2_tone_frame(idx, cp, amp);
                 let (cpk, cr) = chip_frame_stats(&sock, &mut buf, wire_of(frame));

@@ -284,6 +284,83 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
                 self.assertIn(b'id="userNavbarNav"', response.content)
                 self.assertIn(b"Navbar owner Member", response.content)
 
+    def test_07c_report_violation_scoped_to_personal_website_content(self):
+        # [@ANCHOR: test_report_violation_scoped_to_personal_website]
+
+        # Tests [@ANCHOR: report_violation_scoped_to_personal_website_content]
+        """The report-violation widget is meant for flagging an abusive personal operator
+        website (blog.post here) -- it must render for a non-owner visitor, and must NOT
+        render for the owner viewing their own page. Regression coverage for the fix itself:
+        before it, ANY main_object carrying user_websites.owned.mixin (not just real
+        personal-website content) rendered this widget, including models from other modules
+        entirely unrelated to personal websites (event.event in hams_com, for one real
+        example) -- this test only proves the ALLOWED case still works correctly; the
+        excluded-model case can't be reproduced from hams_open alone, since every model here
+        that uses the mixin genuinely is personal-website content.
+        """
+        owner, other = [
+            self.env["res.users"].create(
+                {
+                    "name": f"Report Violation {tag} Member",
+                    "login": f"report-violation-{tag}-member",
+                    "password": f"report-violation-{tag}-member",
+                    "email": f"report-violation-{tag}@example.com",
+                    "website_slug": f"report-violation-{tag}-member",
+                    "group_ids": [
+                        (
+                            6,
+                            0,
+                            [
+                                self.env.ref("base.group_portal").id,
+                                self.env.ref(
+                                    "user_websites.group_user_websites_user"
+                                ).id,
+                            ],
+                        )
+                    ],
+                }
+            )
+            for tag in ("owner", "other")
+        ]
+        website = self.env["website"].get_current_website()
+        blog = self.env["blog.blog"].create(
+            {
+                "name": "Report Violation Owner Blog",
+                "website_id": website.id,
+                "owner_user_id": owner.id,
+            }
+        )
+        post = self.env["blog.post"].create(
+            {
+                "name": "Report Violation Owner Post",
+                "blog_id": blog.id,
+                "is_published": True,
+                "website_id": website.id,
+                "owner_user_id": owner.id,
+            }
+        )
+        url = post.website_url
+
+        self.authenticate(other.login, other.login)
+        response = self.url_open(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            b"user-websites-report-container",
+            response.content,
+            "A non-owner visitor must see the report-violation widget on real personal "
+            "website content (a blog post).",
+        )
+
+        self.authenticate(owner.login, owner.login)
+        owner_response = self.url_open(url)
+        self.assertEqual(owner_response.status_code, 200)
+        self.assertNotIn(
+            b"user-websites-report-container",
+            owner_response.content,
+            "The owner viewing their own page must not see a widget for reporting "
+            "themselves.",
+        )
+
     def test_08_backend_views_rendering(self):
         # [@ANCHOR: test_user_websites_backend_views_rendering]
         """Verify that standard backend views compile without error."""

@@ -15,10 +15,10 @@
 //! Usage: `RATET=<n> cargo run --release --example ratet27_layout_scan -- <host:port>` (without `RATET`, the P25-FEC
 //! RATEP words are used).
 
-use ham_digital_modes::ambe::float::tia_102_baba::interleave::deinterleave_from_dibit_symbols;
-use ham_digital_modes::ambe::float::tia_102_baba::modulation::modulate_code_vectors;
 use ham_digital_modes::ambe::dvsi_p25fec::fec::hamming_decode_chip;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
+use ham_digital_modes::ambe::float::tia_102_baba::interleave::deinterleave_from_dibit_symbols;
+use ham_digital_modes::ambe::float::tia_102_baba::modulation::modulate_code_vectors;
 use ham_digital_modes::ambe::general::fec::{golay_decode, hamming_decode};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -93,8 +93,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -125,14 +132,17 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
-
 fn errors(c: &[u32; 8], chip_hamming: bool) -> u32 {
     let mut e = 0;
     for &x in &c[..4] {
         e += golay_decode(x).1;
     }
     for &x in &c[4..7] {
-        e += if chip_hamming { hamming_decode_chip(x as u16).1 } else { hamming_decode(x as u16).1 };
+        e += if chip_hamming {
+            hamming_decode_chip(x as u16).1
+        } else {
+            hamming_decode(x as u16).1
+        };
     }
     e
 }
@@ -141,20 +151,33 @@ fn dibits(bytes: &[u8], msb_first: bool) -> [(bool, bool); 72] {
     let mut bits = Vec::new();
     for &b in bytes {
         for i in 0..8 {
-            bits.push(if msb_first { (b >> (7 - i)) & 1 == 1 } else { (b >> i) & 1 == 1 });
+            bits.push(if msb_first {
+                (b >> (7 - i)) & 1 == 1
+            } else {
+                (b >> i) & 1 == 1
+            });
         }
     }
     std::array::from_fn(|i| (bits[2 * i], bits[2 * i + 1]))
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
     if let Ok(idx) = std::env::var("RATET") {
-        let pkt = vec![0x61_u8, 0x00, 0x02, TYPE_CONTROL, 0x09, idx.parse().unwrap()];
+        let pkt = vec![
+            0x61_u8,
+            0x00,
+            0x02,
+            TYPE_CONTROL,
+            0x09,
+            idx.parse().unwrap(),
+        ];
         sock.send(&pkt).unwrap();
     } else {
         sock.send(&build_control_ratep(RATEP_P25_FEC)).unwrap();
@@ -163,11 +186,32 @@ fn main() {
     println!("rate config reply: {:02x?}", &buf[..n]);
     let mut totals = [0u32; 8];
     let mut frames = 0;
-    let names = ["chip layout (this crate)", "OTA msb-first, no demod", "OTA msb-first, demod", "OTA lsb-first, no demod", "OTA lsb-first, demod", "chip layout, TIA hamming", "-", "-"];
+    let names = [
+        "chip layout (this crate)",
+        "OTA msb-first, no demod",
+        "OTA msb-first, demod",
+        "OTA lsb-first, no demod",
+        "OTA lsb-first, demod",
+        "chip layout, TIA hamming",
+        "-",
+        "-",
+    ];
     for period in [45.0f64, 60.0, 80.0] {
         for f in 0..14usize {
             let frame: Vec<i16> = (0..FRAME_SAMPLES)
-                .map(|i| (1..=8).map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * (f * FRAME_SAMPLES + i) as f64 / period).sin()).sum::<f64>() as i16)
+                .map(|i| {
+                    (1..=8)
+                        .map(|h| {
+                            1500.0 / h as f64
+                                * (2.0
+                                    * std::f64::consts::PI
+                                    * h as f64
+                                    * (f * FRAME_SAMPLES + i) as f64
+                                    / period)
+                                    .sin()
+                        })
+                        .sum::<f64>() as i16
+                })
                 .collect();
             let n = send_recv_retrying(&sock, &mut buf, &build_speech(&frame));
             let (_, payload) = parse_packet(&buf[..n]).unwrap();
@@ -195,6 +239,11 @@ fn main() {
     }
     println!("total FEC errors over {frames} frames (a true layout gives ~0; random data gives ~{} per frame):", 3 * 4 + 3);
     for k in 0..6 {
-        println!("  {:28} {:5}  ({:.2} per frame)", names[k], totals[k], totals[k] as f64 / frames as f64);
+        println!(
+            "  {:28} {:5}  ({:.2} per frame)",
+            names[k],
+            totals[k],
+            totals[k] as f64 / frames as f64
+        );
     }
 }

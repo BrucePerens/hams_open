@@ -8,7 +8,9 @@ use super::decode::{dequantize, DecoderState, RawParameters};
 use super::encode::{build_frame, build_tone_frame};
 use super::quantize::quantize_pitch;
 use super::tables;
-use crate::ambe::float::mbe_encode::{analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget};
+use crate::ambe::float::mbe_encode::{
+    analyze_at_pitch, quantize_speech, AnalysisState, ModeTables, PrevState, SpeechTarget,
+};
 use crate::ambe::float::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
 
@@ -24,7 +26,15 @@ use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
 /// value, so there is no chip-oracle signal to fit a more precise mapping against -- a closed-form
 /// curve would be neither more nor less "correct" than this interpolation. Not planned further.
 fn amplitude_field(amplitude: f64) -> u16 {
-    const POINTS: [(f64, f64); 7] = [(250.0, 0x715 as f64), (500.0, 0x725 as f64), (1000.0, 0xea2 as f64), (2000.0, 0xed2 as f64), (4000.0, 0xf12 as f64), (8000.0, 0xf62 as f64), (16000.0, 0xfa2 as f64)];
+    const POINTS: [(f64, f64); 7] = [
+        (250.0, 0x715 as f64),
+        (500.0, 0x725 as f64),
+        (1000.0, 0xea2 as f64),
+        (2000.0, 0xed2 as f64),
+        (4000.0, 0xf12 as f64),
+        (8000.0, 0xf62 as f64),
+        (16000.0, 0xfa2 as f64),
+    ];
     let x = amplitude.max(1.0).log2();
     let (mut lo, mut hi) = (POINTS[0], POINTS[POINTS.len() - 1]);
     for w in POINTS.windows(2) {
@@ -46,7 +56,12 @@ pub struct Encoder {
 
 impl Encoder {
     pub fn new() -> Self {
-        Self { analyzer: FrameAnalyzer::new(), high_pass: HighPassFilter::default(), mirror: DecoderState::initial(), analysis: AnalysisState::new() }
+        Self {
+            analyzer: FrameAnalyzer::new(),
+            high_pass: HighPassFilter::default(),
+            mirror: DecoderState::initial(),
+            analysis: AnalysisState::new(),
+        }
     }
 
     // The chip encoder parks entirely unvoiced frames on b0 92-93 (119 for the quietest noise), but copying that lowers the
@@ -59,9 +74,15 @@ impl Encoder {
     /// # Panics
     /// If any sample is NaN or infinite: garbage input must fail loudly, not become a confident-looking frame.
     pub fn push_samples(&mut self, samples: &[f64]) {
-        assert!(samples.iter().all(|s| s.is_finite()), "encoder input contains a non-finite sample");
+        assert!(
+            samples.iter().all(|s| s.is_finite()),
+            "encoder input contains a non-finite sample"
+        );
         // The standard's input high-pass filter (Eq. 3) removes DC offset, which otherwise corrupts the pitch estimate.
-        let filtered: Vec<f64> = samples.iter().map(|&x| (self.high_pass.step(x) + 0.5).floor()).collect();
+        let filtered: Vec<f64> = samples
+            .iter()
+            .map(|&x| (self.high_pass.step(x) + 0.5).floor())
+            .collect();
         self.analyzer.push_samples(&filtered);
     }
 
@@ -73,7 +94,11 @@ impl Encoder {
                 DetectedTone::Dtmf { row, col } => super::decode::dtmf_tone_idx(row, col),
                 DetectedTone::Single { index, .. } => index as u8,
             };
-            return Some(build_tone_frame(tone_idx, false, amplitude_field(det.amplitude)));
+            return Some(build_tone_frame(
+                tone_idx,
+                false,
+                amplitude_field(det.amplitude),
+            ));
         }
         let b0 = quantize_pitch(a.omega0_hat);
         let l = tables::L_TABLE[b0 as usize];
@@ -87,18 +112,43 @@ impl Encoder {
             prba24: &tables::PRBA24,
             prba58: &tables::PRBA58,
             lmprbl: &tables::LMPRBL,
-            hoc: [&tables::HOC_B5, &tables::HOC_B6, &tables::HOC_B7, &tables::HOC_B8],
+            hoc: [
+                &tables::HOC_B5,
+                &tables::HOC_B6,
+                &tables::HOC_B7,
+                &tables::HOC_B8,
+            ],
             hoc_b8_even_only: false,
             rho: 0.65,
             gamma_scale: 1.0,
             gamma_memory: 0.5,
         };
         let q = quantize_speech(
-            &SpeechTarget { l, w0, vuv_f0: f0, voiced: &voiced, ml: &ml },
-            &PrevState { l: self.mirror.l, log2_ml: &self.mirror.log2_ml, gamma: self.mirror.gamma },
+            &SpeechTarget {
+                l,
+                w0,
+                vuv_f0: f0,
+                voiced: &voiced,
+                ml: &ml,
+            },
+            &PrevState {
+                l: self.mirror.l,
+                log2_ml: &self.mirror.log2_ml,
+                gamma: self.mirror.gamma,
+            },
             &mode,
         );
-        let raw = RawParameters { b0, b1: q.b1, b2: q.b2, b3: q.b3, b4: q.b4, b5: q.b5, b6: q.b6, b7: q.b7, b8: q.b8 };
+        let raw = RawParameters {
+            b0,
+            b1: q.b1,
+            b2: q.b2,
+            b3: q.b3,
+            b4: q.b4,
+            b5: q.b5,
+            b6: q.b6,
+            b7: q.b7,
+            b8: q.b8,
+        };
         dequantize(&raw, &mut self.mirror);
         Some(build_frame(&raw))
     }
@@ -132,7 +182,10 @@ mod tests {
         let signal: Vec<f64> = (0..160 * 30)
             .map(|i| {
                 (1..=8)
-                    .map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin())
+                    .map(|h| {
+                        1500.0 / h as f64
+                            * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin()
+                    })
                     .sum()
             })
             .collect();
@@ -154,9 +207,18 @@ mod tests {
             if let DequantizedFrame::Speech(p) = dequantize(&raw, &mut state) {
                 if (6..24).contains(&i) {
                     let p_est = 2.0 * std::f64::consts::PI / p.w0;
-                    assert!((p_est / period - 1.0).abs() < 0.05, "frame {i}: decoded period {p_est}");
-                    let peak = p.ml[1..=8.min(p.l as usize)].iter().cloned().fold(0.0, f64::max);
-                    assert!(peak > 100.0, "frame {i}: peak harmonic amplitude {peak} implausibly small");
+                    assert!(
+                        (p_est / period - 1.0).abs() < 0.05,
+                        "frame {i}: decoded period {p_est}"
+                    );
+                    let peak = p.ml[1..=8.min(p.l as usize)]
+                        .iter()
+                        .cloned()
+                        .fold(0.0, f64::max);
+                    assert!(
+                        peak > 100.0,
+                        "frame {i}: peak harmonic amplitude {peak} implausibly small"
+                    );
                     checked += 1;
                 }
             }
@@ -166,10 +228,19 @@ mod tests {
 
     #[test]
     fn dtmf_and_single_tones_are_emitted_as_tone_frames() {
-        use crate::ambe::float::ambe_plus_2::decode::{classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx, ToneIdentity};
+        use crate::ambe::float::ambe_plus_2::decode::{
+            classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx, ToneIdentity,
+        };
         let sine = |freqs: &[f64], amp: f64| -> Vec<f64> {
             (0..160 * 12)
-                .map(|i| freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()).sum())
+                .map(|i| {
+                    freqs
+                        .iter()
+                        .map(|&hz| {
+                            amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()
+                        })
+                        .sum()
+                })
                 .collect()
         };
         let mut enc = Encoder::new();
@@ -182,7 +253,9 @@ mod tests {
         enc.push_samples(&sine(&[1000.0], 4000.0));
         while let Some(f) = enc.next_frame() {
             let idx = decode_tone_idx(parse_frame(f).d).expect("tone frame");
-            assert!(matches!(classify_tone_idx(idx), ToneIdentity::SingleTone { hz } if (hz - 1000.0).abs() < 16.0));
+            assert!(
+                matches!(classify_tone_idx(idx), ToneIdentity::SingleTone { hz } if (hz - 1000.0).abs() < 16.0)
+            );
         }
     }
 }

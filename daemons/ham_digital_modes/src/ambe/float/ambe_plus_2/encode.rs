@@ -92,22 +92,28 @@ mod tests {
     #[test]
     fn pack_and_build_frame_round_trips_a_full_set_of_raw_parameters() {
         let original = RawParameters {
-            b0: 0b010_1101, // 7 bits, < 120
-            b1: 0b0_1011,   // 5 bits
-            b2: 0b1_0110,   // 5 bits
+            b0: 0b010_1101,    // 7 bits, < 120
+            b1: 0b0_1011,      // 5 bits
+            b2: 0b1_0110,      // 5 bits
             b3: 0b0_1011_0110, // 9 bits
-            b4: 0b011_0101, // 7 bits
-            b5: 0b1_0011,   // 5 bits
-            b6: 0b0101,     // 4 bits
-            b7: 0b1010,     // 4 bits
-            b8: 0b011,      // 3 bits
+            b4: 0b011_0101,    // 7 bits
+            b5: 0b1_0011,      // 5 bits
+            b6: 0b0101,        // 4 bits
+            b7: 0b1010,        // 4 bits
+            b8: 0b011,         // 3 bits
         };
         assert!(original.b0 < 120);
 
         let frame = build_frame(&original);
         let parsed = parse_frame(frame);
-        assert_eq!(parsed.epsilon_c0, 0, "cleanly built C0 must decode with zero errors");
-        assert_eq!(parsed.epsilon_c1, 0, "cleanly built, whitened C1 must decode with zero errors");
+        assert_eq!(
+            parsed.epsilon_c0, 0,
+            "cleanly built C0 must decode with zero errors"
+        );
+        assert_eq!(
+            parsed.epsilon_c1, 0,
+            "cleanly built, whitened C1 must decode with zero errors"
+        );
 
         let recovered = extract_raw_parameters(parsed.d);
         assert_eq!(recovered, original);
@@ -144,9 +150,17 @@ mod tests {
                 let frame = build_tone_frame(tone_idx, call_progress, 0x555);
                 let parsed = parse_frame(frame);
                 assert_eq!(parsed.epsilon_c0 + parsed.epsilon_c1, 0);
-                assert_eq!(decode_tone_idx(parsed.d), Some(tone_idx), "tone_idx {tone_idx:#x}");
+                assert_eq!(
+                    decode_tone_idx(parsed.d),
+                    Some(tone_idx),
+                    "tone_idx {tone_idx:#x}"
+                );
                 let raw = extract_raw_parameters(parsed.d);
-                let expected = if call_progress { FrameKind::CallProgress } else { FrameKind::DetectedTone };
+                let expected = if call_progress {
+                    FrameKind::CallProgress
+                } else {
+                    FrameKind::DetectedTone
+                };
                 assert_eq!(classify_b0(raw.b0), expected);
             }
         }

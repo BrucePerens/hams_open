@@ -15,7 +15,9 @@
 use std::path::{Path, PathBuf};
 
 fn rust_files_under(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read_dir {}: {e}", dir.display())) {
+    for entry in
+        std::fs::read_dir(dir).unwrap_or_else(|e| panic!("read_dir {}: {e}", dir.display()))
+    {
         let entry = entry.expect("dir entry");
         let path = entry.path();
         if path.is_dir() {
@@ -61,15 +63,25 @@ fn src_ambe_fixed_contains_no_floating_point_tokens_in_real_code() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ambe/fixed");
     let mut files = Vec::new();
     rust_files_under(&root, &mut files);
-    assert!(!files.is_empty(), "expected to find .rs files under {}", root.display());
+    assert!(
+        !files.is_empty(),
+        "expected to find .rs files under {}",
+        root.display()
+    );
 
     let mut violations = Vec::new();
     for path in &files {
-        let content = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        let content = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
         for (line_no, line) in content.lines().enumerate() {
             let code = strip_line_comments(line);
             if code.contains("f32") || code.contains("f64") || contains_bare_float_literal(code) {
-                violations.push(format!("{}:{}: {}", path.display(), line_no + 1, line.trim()));
+                violations.push(format!(
+                    "{}:{}: {}",
+                    path.display(),
+                    line_no + 1,
+                    line.trim()
+                ));
             }
         }
     }

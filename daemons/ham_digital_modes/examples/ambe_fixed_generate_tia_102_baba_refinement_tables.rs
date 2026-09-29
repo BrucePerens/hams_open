@@ -30,21 +30,32 @@ fn main() {
     println!("/// Refinement window `w_R(n)`, `n = 0..=110` (symmetric), Q30 (the centre tap is exactly 1.0).");
     println!("pub const REFINEMENT_WINDOW_Q30: [i32; 111] = [");
     for n in 0..=110 {
-        println!("    {},", (pitch_refinement_window(n) * 2f64.powi(30)).round() as i64);
+        println!(
+            "    {},",
+            (pitch_refinement_window(n) * 2f64.powi(30)).round() as i64
+        );
     }
     println!("];");
     println!();
     println!("/// `cos(2*pi*k/256)`, `k = 0..=255`, Q30; `sin(2*pi*k/256)` is `COS_256_Q30[(k + 192) % 256]`.");
     println!("pub const COS_256_Q30: [i32; 256] = [");
     for k in 0..256 {
-        println!("    {},", ((2.0 * PI * k as f64 / 256.0).cos() * 2f64.powi(30)).round() as i64);
+        println!(
+            "    {},",
+            ((2.0 * PI * k as f64 / 256.0).cos() * 2f64.powi(30)).round() as i64
+        );
     }
     println!("];");
     println!();
     println!("/// Half range of [`WINDOW_DFT_16384_Q22`]: it holds `W_R(m)` for `m = -{WR_HALF_RANGE}..={WR_HALF_RANGE}`.");
     println!("pub const WINDOW_DFT_HALF_RANGE: i32 = {WR_HALF_RANGE};");
-    println!("/// `W_R(m)`, the 16384-point DFT of the refinement window (real, symmetric in `m`), Q22.");
-    println!("pub const WINDOW_DFT_16384_Q22: [i32; {}] = [", 2 * WR_HALF_RANGE + 1);
+    println!(
+        "/// `W_R(m)`, the 16384-point DFT of the refinement window (real, symmetric in `m`), Q22."
+    );
+    println!(
+        "pub const WINDOW_DFT_16384_Q22: [i32; {}] = [",
+        2 * WR_HALF_RANGE + 1
+    );
     for m in -WR_HALF_RANGE..=WR_HALF_RANGE {
         let v = (window_dft_16384(m) * 2f64.powi(22)).round();
         assert!(v.abs() < 2f64.powi(31));

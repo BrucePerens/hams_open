@@ -59,7 +59,10 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 }
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
-    payload[2..2 + count * 2].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
+    payload[2..2 + count * 2]
+        .chunks_exact(2)
+        .map(|b| i16::from_be_bytes([b[0], b[1]]))
+        .collect()
 }
 fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usize {
     for attempt in 0..8 {
@@ -79,10 +82,11 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE");
     assert_eq!(&data[36..40], b"data");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
-
-
 
 fn wire_bytes_to_a2_frame(b: &[u8; 9]) -> u128 {
     let mut wire: u128 = 0;
@@ -95,7 +99,10 @@ fn wire_bytes_to_a2_frame(b: &[u8; 9]) -> u128 {
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> f64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((self.0 >> 33) as f64 / (1u64 << 31) as f64) * 2.0 - 1.0
     }
 }
@@ -124,7 +131,20 @@ fn describe_dstar(wb: &[u8; 9], st: &mut ds::DStarDecoderState) -> String {
     let raw = ds::extract_raw_parameters(parsed.d);
     let kind = ds::classify_b0(raw.b0);
     let _ = ds::dequantize(parsed.d, st);
-    format!("{kind:?} b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} err={}+{}", raw.b0, raw.b1, raw.b2, raw.b3, raw.b4, raw.b5, raw.b6, raw.b7, raw.b8, parsed.epsilon_c0, parsed.epsilon_c1)
+    format!(
+        "{kind:?} b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} err={}+{}",
+        raw.b0,
+        raw.b1,
+        raw.b2,
+        raw.b3,
+        raw.b4,
+        raw.b5,
+        raw.b6,
+        raw.b7,
+        raw.b8,
+        parsed.epsilon_c0,
+        parsed.epsilon_c1
+    )
 }
 
 fn describe_a2(wb: &[u8; 9], st: &mut a2::DecoderState) -> String {
@@ -137,20 +157,43 @@ fn describe_a2(wb: &[u8; 9], st: &mut a2::DecoderState) -> String {
         a2::DequantizedFrame::Silence { .. } => "Silence".to_string(),
         a2::DequantizedFrame::Tone { .. } => "Tone".to_string(),
     };
-    format!("{kind} b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} err={}+{}", raw.b0, raw.b1, raw.b2, raw.b3, raw.b4, raw.b5, raw.b6, raw.b7, raw.b8, parsed.epsilon_c0, parsed.epsilon_c1)
+    format!(
+        "{kind} b0={} b1={} b2={} b3={} b4={} b5={} b6={} b7={} b8={} err={}+{}",
+        raw.b0,
+        raw.b1,
+        raw.b2,
+        raw.b3,
+        raw.b4,
+        raw.b5,
+        raw.b6,
+        raw.b7,
+        raw.b8,
+        parsed.epsilon_c0,
+        parsed.epsilon_c1
+    )
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
     let signals: Vec<(String, Vec<i16>)> = {
-        let mut v = vec![("digital silence".to_string(), vec![0i16; FRAME_SAMPLES * 12])];
+        let mut v = vec![(
+            "digital silence".to_string(),
+            vec![0i16; FRAME_SAMPLES * 12],
+        )];
         for amp in [2.0, 8.0, 30.0, 150.0, 1000.0] {
             let mut rng = Lcg(12345);
-            v.push((format!("white noise amplitude {amp}"), (0..FRAME_SAMPLES * 12).map(|_| (rng.next() * amp) as i16).collect()));
+            v.push((
+                format!("white noise amplitude {amp}"),
+                (0..FRAME_SAMPLES * 12)
+                    .map(|_| (rng.next() * amp) as i16)
+                    .collect(),
+            ));
         }
         v
     };
@@ -162,21 +205,34 @@ fn main() {
             }
             sock.send(&control(FIELD_RATEP, &body)).unwrap();
         } else {
-            sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC])).unwrap();
+            sock.send(&control(FIELD_RATET, &[RATET_HALF_RATE_FEC]))
+                .unwrap();
         }
         let n = sock.recv(&mut buf).unwrap();
         parse_packet(&buf[..n]).unwrap();
-        sock.set_read_timeout(Some(Duration::from_millis(300))).unwrap();
+        sock.set_read_timeout(Some(Duration::from_millis(300)))
+            .unwrap();
         while sock.recv(&mut buf).is_ok() {}
         sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
         println!("=== {mode}");
         for (name, pcm) in &signals {
             println!("-- {name}");
             let frames = encode_frames(&sock, &mut buf, pcm);
-            let (mut sd, mut sa) = (ds::DStarDecoderState::initial(), a2::DecoderState::initial());
+            let (mut sd, mut sa) = (
+                ds::DStarDecoderState::initial(),
+                a2::DecoderState::initial(),
+            );
             for (i, wb) in frames.iter().enumerate() {
-                let text = if mode == "dstar" { describe_dstar(wb, &mut sd) } else { describe_a2(wb, &mut sa) };
-                println!("  {i:2} {} {}", wb.iter().map(|b| format!("{b:02x}")).collect::<String>(), text);
+                let text = if mode == "dstar" {
+                    describe_dstar(wb, &mut sd)
+                } else {
+                    describe_a2(wb, &mut sa)
+                };
+                println!(
+                    "  {i:2} {} {}",
+                    wb.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+                    text
+                );
             }
         }
     }

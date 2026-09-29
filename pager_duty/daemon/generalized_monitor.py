@@ -249,9 +249,39 @@ def verify_and_install_dependencies(client, checks):
                 sys.exit(1)
 
 
+# All three are keyed by check_key(check): the check's record id, which is unique across the whole exported
+# config. A check name is only unique per website (pager.check UNIQUE(name, website_id)), so two websites can each
+# have a check called "Disk"; keyed by name they shared one heartbeat (a hung thread for one site was hidden by the
+# healthy thread for the other), one timeout, and one failing flag (one site's failure suppressed, or cleared, the
+# other site's children). Config files written before the id was exported carry names only, and fall back to them.
 THREAD_HEARTBEATS = {}
 THREAD_TIMEOUTS = {}
 FAILING_CHECKS = set()
+# key -> name, for log lines only.
+THREAD_NAMES = {}
+# Names of failing checks. Used only to resolve `parent` in an older config file that has no `parent_id`.
+FAILING_NAMES = set()
+
+
+# [@ANCHOR: pager_duty:check_key]
+# Verified by [@ANCHOR: test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state]
+def check_key(check):
+    """The key this check's daemon state lives under: its record id, else its name (an older config file)."""
+    return check.get("id") or check.get("name", "Unknown")
+
+
+# [@ANCHOR: pager_duty:parent_suppresses]
+# Verified by [@ANCHOR: test_20c_a_parent_failing_on_one_website_does_not_suppress_or_clear_the_other_websites_state]
+# Verified by [@ANCHOR: test_20d_a_config_from_before_parent_id_still_matches_the_parent_by_name]
+def parent_suppresses(check):
+    """True when this check's parent is currently failing. A `parent_id` (the parent's record id) is matched by id, so
+    a same-named check on another website cannot suppress it; an older config with only the parent's name is matched
+    by name, as before."""
+    parent_id = check.get("parent_id")
+    if parent_id:
+        return parent_id in FAILING_CHECKS
+    parent = check.get("parent")
+    return bool(parent) and parent in FAILING_NAMES
 
 
 # [@ANCHOR: pager_duty:is_in_maintenance]
@@ -309,6 +339,45 @@ def fallback_notify(source, msg, severity):
         logger.info("Successfully dispatched SMTP fallback email.")
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
         logger.critical(f"SMTP Fallback completely failed: {e}")
+
+
+# [@ANCHOR: pager_duty:severity_for_days_left]
+# Graduated thresholds, in days, ordered from least to most urgent -- the first one a credential's
+# remaining lifetime falls under (days_left <= threshold) wins. Shared by every expiring-credential
+# synthetic check in this codebase (check_github_pat_expiry.py, check_cloudflare_token_expiry.py)
+# so they escalate identically rather than each hand-rolling its own ladder.
+SEVERITY_THRESHOLDS_DAYS = (
+    (2, "critical"),
+    (7, "high"),
+    (14, "medium"),
+    (30, "low"),
+)
+
+
+def severity_for_days_left(days_left):
+    """Returns the graduated severity name for `days_left` remaining until some credential
+    expires, or None if it's healthy (past every threshold)."""
+    for threshold, severity in SEVERITY_THRESHOLDS_DAYS:
+        if days_left <= threshold:
+            return severity
+    return None
+
+
+# [@ANCHOR: pager_duty:extract_severity_prefix]
+_SEVERITY_PREFIX_RE = re.compile(r"^\[SEVERITY:(low|medium|high|critical)\] (.*)$", re.DOTALL)
+
+
+def extract_severity_prefix(msg, default="high"):
+    """The other half of the "synthetic" check type's graduated-severity extension (see
+    execute_check()'s own comment on the ctype == "synthetic" branch): pulls a
+    "[SEVERITY:xxx] " prefix a synthetic script chose to attach back off of `msg`, returning
+    `(severity, cleaned_msg)`. A message with no such prefix (every check type except a
+    graduated synthetic one, and every synthetic script that predates this feature) returns
+    `default` unchanged and the message untouched -- this is purely additive."""
+    match = _SEVERITY_PREFIX_RE.match(msg)
+    if not match:
+        return default, msg
+    return match.group(1), match.group(2)
 
 
 def report(client, source, msg, severity="high", website_id=False):
@@ -862,10 +931,28 @@ def execute_check(check, client=None):
                 timeout=60,
             )
             if res.returncode != 0:
-                return (
-                    False,
-                    f"Synthetic failure (Code {res.returncode}): {res.stderr[:100]}",
+                message = f"Synthetic failure (Code {res.returncode}): {res.stderr[:100]}"
+                # Graduated-severity extension, 2026-09-22: a synthetic script that wants finer
+                # control than the flat "high" every other failing check gets (e.g. an
+                # expiring-credential check whose urgency genuinely grows as the deadline
+                # approaches) can print a bare "SEVERITY:<low|medium|high|critical>" line to
+                # stderr, alongside its usual failure message (stderr, not stdout, matching
+                # where every synthetic script's own diagnostic output already goes -- see
+                # check_github_pat_expiry.py). Searched against the FULL res.stderr, not the
+                # truncated 100-char slice used for the display message above, so the marker is
+                # found regardless of how long the rest of the message is. Encoded as a
+                # "[SEVERITY:xxx]" prefix on the returned message so this function's own return
+                # shape (a 2-tuple) doesn't have to change for every other check type -- see
+                # extract_severity_prefix()'s own docstring for the other half. A script that
+                # never prints this (every synthetic check written before this existed,
+                # including check_cloudflare_token_expiry.py) is completely unaffected: no
+                # marker means the default "high" at the report() call site, unchanged.
+                severity_match = re.search(
+                    r"^SEVERITY:(low|medium|high|critical)$", res.stderr, re.MULTILINE | re.IGNORECASE
                 )
+                if severity_match:
+                    message = f"[SEVERITY:{severity_match.group(1).lower()}] {message}"
+                return False, message
             return True, "OK"
         except (
             ConnectionError,
@@ -1349,27 +1436,31 @@ def execute_check(check, client=None):
 def polling_thread(client, check):
     name = check.get("name", "Unknown")
     check_id = check.get("id")
+    key = check_key(check)
+    THREAD_NAMES[key] = name
     website_id = check.get("website_id")
     interval = int(check.get("interval", 60))
     grace = int(check.get("grace", 0))
     thread_start_time = time.time()
 
-    THREAD_TIMEOUTS[name] = max(300, interval * 3)
+    THREAD_TIMEOUTS[key] = max(300, interval * 3)
     logger.info(
         f"Starting polling thread for [{name}] every {interval}s (Grace: {grace}s)"
     )
 
-    THREAD_HEARTBEATS[name] = time.time()
+    THREAD_HEARTBEATS[key] = time.time()
     success, msg = execute_check(check, client)
     clean_loops = 1 if success else 0
     if not success:
-        FAILING_CHECKS.add(name)
+        FAILING_CHECKS.add(key)
+        FAILING_NAMES.add(name)
         if time.time() - thread_start_time < grace:
             logger.info(
                 f"[{name}] Startup grace period active. Suppressing failure: {msg}"
             )
         else:
-            report(client, name, msg, "high", website_id=website_id)
+            severity, clean_msg = extract_severity_prefix(msg)
+            report(client, name, clean_msg, severity, website_id=website_id)
             remedy = check.get("remediate")
             if clean_loops > 0 and remedy and os.path.exists(remedy):
                 logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")
@@ -1382,21 +1473,22 @@ def polling_thread(client, check):
                 ) as e:  # audit-ignore-catch-all
                     logger.error(f"Remediation failed: {e}")
     else:
-        FAILING_CHECKS.discard(name)
+        FAILING_CHECKS.discard(key)
+        FAILING_NAMES.discard(name)
 
     jitter = secrets.SystemRandom().uniform(0, interval)
     logger.info(f"[{name}] Applying startup jitter: sleeping for {jitter:.1f}s")
     time.sleep(jitter)  # audit-ignore-sleep
 
     while True:
-        THREAD_HEARTBEATS[name] = time.time()
+        THREAD_HEARTBEATS[key] = time.time()
         parent = check.get("parent")
 
         if is_in_maintenance(check):
             time.sleep(interval)  # audit-ignore-sleep
             continue
 
-        if parent and parent in FAILING_CHECKS:
+        if parent_suppresses(check):
             logger.debug(f"[{name}] Suppressed due to parent '{parent}' failure.")
             time.sleep(interval)  # audit-ignore-sleep
             continue
@@ -1438,13 +1530,15 @@ def polling_thread(client, check):
                 logger.warning(f"[{name}] Failed to update status in Odoo: {e}")
 
         if not success:
-            FAILING_CHECKS.add(name)
+            FAILING_CHECKS.add(key)
+            FAILING_NAMES.add(name)
             if time.time() - thread_start_time < grace:
                 logger.info(
                     f"[{name}] Startup grace period active. Suppressing failure: {msg}"
                 )
             else:
-                report(client, name, msg, "high", website_id=website_id)
+                severity, clean_msg = extract_severity_prefix(msg)
+                report(client, name, clean_msg, severity, website_id=website_id)
                 remedy = check.get("remediate")
                 if clean_loops > 0 and remedy and os.path.exists(remedy):
                     logger.info(
@@ -1460,7 +1554,8 @@ def polling_thread(client, check):
                         logger.error(f"Remediation failed: {e}")
             clean_loops = 0
         else:
-            FAILING_CHECKS.discard(name)
+            FAILING_CHECKS.discard(key)
+            FAILING_NAMES.discard(name)
             clean_loops += 1
             if clean_loops == 3:
                 auto_resolve(client, name, website_id=website_id)
@@ -1470,13 +1565,15 @@ def polling_thread(client, check):
 # [@ANCHOR: pager_duty:log_tail_thread]
 def log_tail_thread(client, check):
     name = check.get("name", "Log Monitor")
+    key = check_key(check) if check.get("id") else name
+    THREAD_NAMES[key] = name
     website_id = check.get("website_id")
     filepath = parse_env(check.get("target", ""))
     regex_str = parse_env(check.get("regex", ""))
     grace = int(check.get("grace", 0))
     thread_start_time = time.time()
 
-    THREAD_TIMEOUTS[name] = 120
+    THREAD_TIMEOUTS[key] = 120
     logger.info(
         f"Starting log tail thread for [{name}] on {filepath} (Grace: {grace}s)"
     )
@@ -1484,7 +1581,7 @@ def log_tail_thread(client, check):
     cur_inode = None
     f = None
     while True:
-        THREAD_HEARTBEATS[name] = time.time()
+        THREAD_HEARTBEATS[key] = time.time()
         try:
             stat_obj = os.stat(filepath)
             new_inode = stat_obj.st_ino
@@ -1530,9 +1627,29 @@ def log_tail_thread(client, check):
             continue
 
 
+# [@ANCHOR: pager_duty:daemon_resolve_config_path]
+def resolve_config_path(environ=None):
+    """The configuration file this daemon reads, resolved by the same rule pager_check.PagerCheck._get_config_path writes by.
+
+    The writer prefers the system configuration directory (the `pager_duty.config_dir` parameter, default /opt/hams/etc) when
+    the Odoo worker can write there, and falls back to the file next to this daemon otherwise. The daemon used to read only the
+    file next to itself, so as soon as the system directory became writable every "Push to JSON" wrote a file nothing read and
+    the administrator was told "Export Successful". Order here: PAGER_CONFIG_PATH (an explicit file), then pager_config.json in
+    PAGER_CONFIG_DIR (default /opt/hams/etc) if it exists, then the file next to this daemon."""
+    environ = os.environ if environ is None else environ
+    explicit = environ.get("PAGER_CONFIG_PATH")
+    if explicit:
+        return explicit
+    system_path = os.path.join(environ.get("PAGER_CONFIG_DIR", "/opt/hams/etc"), "pager_config.json")
+    if os.path.exists(system_path):
+        return system_path
+    return os.path.join(os.path.dirname(__file__), "pager_config.json")
+
+
 if __name__ == "__main__":
     # [@ANCHOR: daemon_main_loop]
-    config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
+    config_path = resolve_config_path()
+    logger.info(f"Reading configuration from {config_path}")
 
     if not os.path.exists(config_path):
         msg = f"Configuration file not found at {config_path}. Halting."
@@ -1677,11 +1794,11 @@ if __name__ == "__main__":
         while True:
             time.sleep(10)  # audit-ignore-sleep
             now = time.time()
-            for t_name, last_beat in THREAD_HEARTBEATS.items():
+            for t_name, last_beat in list(THREAD_HEARTBEATS.items()):
                 timeout = THREAD_TIMEOUTS.get(t_name, 300)
                 if now - last_beat > timeout:
                     logger.critical(
-                        f"WATCHDOG: Thread '{t_name}' hung for {now - last_beat:.1f}s (Timeout: {timeout}s)! Force restarting daemon."
+                        f"WATCHDOG: Thread '{THREAD_NAMES.get(t_name, t_name)}' (key {t_name}) hung for {now - last_beat:.1f}s (Timeout: {timeout}s)! Force restarting daemon."
                     )
                     os._exit(1)
     except KeyboardInterrupt:

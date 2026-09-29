@@ -148,7 +148,10 @@ const fn lsp_cb_q23() -> [(i64, i64); super::LPC_ORD] {
     let mut out = [(0i64, 0i64); super::LPC_ORD];
     let mut i = 0;
     while i < super::LPC_ORD {
-        out[i] = (LSP_CB[i].start_hz << FRAC_BITS, LSP_CB[i].step_hz << FRAC_BITS);
+        out[i] = (
+            LSP_CB[i].start_hz << FRAC_BITS,
+            LSP_CB[i].step_hz << FRAC_BITS,
+        );
         i += 1;
     }
     out
@@ -228,11 +231,16 @@ mod tests {
         assert_eq!(HZ_PER_RAD_Q23, f32_to_q_exact_round(HZ_PER_RAD, FRAC_BITS));
         assert_eq!(RAD_PER_HZ_Q23, f32_to_q_exact_round(RAD_PER_HZ, FRAC_BITS));
         for (i, d) in LSP_CB.iter().enumerate() {
-            assert_eq!(LSP_CB_Q23[i].0, f32_to_q_exact_round(d.start_hz as f32, FRAC_BITS));
-            assert_eq!(LSP_CB_Q23[i].1, f32_to_q_exact_round(d.step_hz as f32, FRAC_BITS));
+            assert_eq!(
+                LSP_CB_Q23[i].0,
+                f32_to_q_exact_round(d.start_hz as f32, FRAC_BITS)
+            );
+            assert_eq!(
+                LSP_CB_Q23[i].1,
+                f32_to_q_exact_round(d.step_hz as f32, FRAC_BITS)
+            );
         }
     }
-
 
     #[test]
     // Tests [@ANCHOR: lsp_bits]

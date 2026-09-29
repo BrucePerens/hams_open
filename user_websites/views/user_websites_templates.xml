@@ -241,7 +241,28 @@
             <div id="user_websites_dropzone_blog_header"></div>
             <div class="container mt-5">
                 <t t-set="entity_name" t-value="profile_user.name if profile_user else (profile_group.name if profile_group else '')"/>
-                <h1 class="mb-4"><t t-out="entity_name"/>'s Blog</h1>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1 class="mb-0"><t t-out="entity_name"/>'s Blog</h1>
+                    <!-- Real gap found live 2026-09-29: this page never had any way for the
+                         owner to add a post, see create_blog_post()'s own comment
+                         (controllers/main.py) for the full story. -->
+                    <t t-if="is_owner">
+                        <div class="d-flex align-items-center">
+                            <form t-attf-action="/#{resolved_slug}/create_blog_post" method="post">
+                                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa fa-plus me-2" aria-hidden="true"/>New Post
+                                </button>
+                            </form>
+                            <!-- Matches placeholder_page's own help_hash pattern (see below in this
+                                 file): UX_CREATE_BLOG_POST is already documented in
+                                 user_websites/docs/stories/personal_site.md, README.md,
+                                 docs/journeys/onboarding.md and hams_shared/docs/modules/user_websites.md,
+                                 this just wires the existing anchor into the new button's own template. -->
+                            <a href="/user-websites/documentation#UX_CREATE_BLOG_POST" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a>
+                        </div>
+                    </t>
+                </div>
                 <t t-if="not posts">
                     <p class="text-muted">No posts available yet.</p>
                 </t>

@@ -17,9 +17,9 @@
 //! the chip's decoded `g0`, that's direct, concrete evidence for the `u0=g0` hypothesis.
 //!
 //! Usage: `cargo run --release --example ratet27_compare_textbook_u_vectors_to_chip -- <host:port> <freq_hz>`
-use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::RefinementFrame;
 use ham_digital_modes::ambe::dvsi_p25fec::fec::decode_block;
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::Block;
+use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::RefinementFrame;
 use ham_digital_modes::ambe::float::tia_102_baba::{encode_prioritized_bits, FrameState};
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -69,21 +69,28 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn sine(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let freq: f64 = args.get(2).map(|s| s.parse().unwrap()).unwrap_or(200.0);
 
     // --- Real chip side ---
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
@@ -105,7 +112,10 @@ fn main() {
     }
     let (chip_g0_data, g0_distance) = decode_block(&wire_frame_bits, Block::Golay { index: 0 });
     println!("chip g0: data=0b{chip_g0_data:012b} (0x{chip_g0_data:03x}) corrected_distance={g0_distance}");
-    println!("chip g0 top 6 bits (bits 11..6): 0b{:06b}", chip_g0_data >> 6);
+    println!(
+        "chip g0 top 6 bits (bits 11..6): 0b{:06b}",
+        chip_g0_data >> 6
+    );
 
     // --- This crate's own textbook side, exact pitch (not estimated) ---
     let omega0_exact = 2.0 * std::f64::consts::PI * freq / SAMPLE_RATE;
@@ -124,7 +134,10 @@ fn main() {
     match result {
         Some((u, _next_state)) => {
             println!("textbook u_hat_0: data=0b{:012b} (0x{:03x})", u[0], u[0]);
-            println!("textbook u_hat_0 top 6 bits (bits 11..6): 0b{:06b}", u[0] >> 6);
+            println!(
+                "textbook u_hat_0 top 6 bits (bits 11..6): 0b{:06b}",
+                u[0] >> 6
+            );
             let top6_chip = u32::from(chip_g0_data >> 6);
             let top6_textbook = u[0] >> 6;
             println!(

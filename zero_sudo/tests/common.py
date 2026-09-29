@@ -94,16 +94,51 @@ odoo.tests.common.HttpCase.fetch_proxy = None
 odoo.tests.common.HttpCase.extra_allowed_fetch_hosts = ()
 
 
+def _url_is_at_origin(url, origin, allow_any_port=False):
+    """True when `url` begins with `origin` AND the origin ends at a real authority boundary.
+
+    A bare `url.startswith(origin)` is a string-prefix test, and a prefix is not an authority:
+    "http://127.0.0.1:8069" is a prefix of "http://127.0.0.1:80699/x" (another service on another
+    port), and "http://127.0.0.1:8069@example.com/" begins with it too but its host is example.com
+    (everything before the "@" is userinfo). The character after the origin must therefore start the
+    path, query or fragment, or end the URL. `allow_any_port` additionally accepts ":" for a bare
+    host that is meant to match on any port."""
+    if not url.startswith(origin):
+        return False
+    rest = url[len(origin):]
+    return rest == "" or rest[0] in ("/", "?", "#") or (allow_any_port and rest[0] == ":")
+
+
 # [@ANCHOR: zero_sudo:patched_handle_request_paused]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
+# Verified by [@ANCHOR: zero_sudo:test_real_server_allowlist_is_port_specific]
 def _patched_handle_request_paused(self, *args, **kwargs):
     params = kwargs if kwargs else (args[0] if args else {})
     url = params.get("request", {}).get("url", "")
     _logger.info("Fetch intercept: %s", url)
-    allowed_hosts = (HOST,) + tuple(self.test_case.extra_allowed_fetch_hosts or ())
+    # The real Odoo test server's own allowlist entry is matched by exact host:port, not host
+    # alone -- a bare `url.startswith(f"http://{HOST}")` also matches any other local service on
+    # the same loopback address but a DIFFERENT port (e.g. a relay daemon's own config UI),
+    # silently defeating the whole point of this check (only the real test server should be
+    # reachable during a test run). extra_allowed_fetch_hosts entries are unchanged: they're a
+    # deliberate, test-author-controlled opt-in for a specific hermetic stand-in the test itself
+    # spins up and tears down (see that constant's own comment), not "the real server", so they
+    # keep the original bare-host prefix match.
+    real_server_port = self.test_case.http_port()
+    real_server_origins = (
+        (f"http://{HOST}:{real_server_port}", f"https://{HOST}:{real_server_port}")
+        if real_server_port
+        else ()
+    )
+    extra_hosts = tuple(self.test_case.extra_allowed_fetch_hosts or ())
     if (
-        any(url.startswith(f"http://{h}") or url.startswith(f"https://{h}") for h in allowed_hosts)
+        any(_url_is_at_origin(url, origin) for origin in real_server_origins)
+        or any(
+            _url_is_at_origin(url, f"{scheme}://{h}", allow_any_port=True)
+            for h in extra_hosts
+            for scheme in ("http", "https")
+        )
         or url.startswith("data:")
         or url.startswith("about:")
     ):
@@ -243,6 +278,10 @@ odoo.tests.common.ChromeBrowser._spawn_chrome = _patched_spawn_chrome
 _logger = logging.getLogger(__name__)
 
 _active_werkzeug_threads = set()
+# Threads that ignored the injected SystemExit (blocked in a call that releases the GIL, so the exception is never raised in them).
+# They are reported once and then skipped: waiting on a thread already proven un-interruptible made every later test's teardown
+# pay the full timeout again. They stay in `_active_werkzeug_threads` until they really return, so the diagnostics still see them.
+_abandoned_werkzeug_threads = set()
 _original_process_request_thread = (
     werkzeug.serving.ThreadedWSGIServer.process_request_thread
 )
@@ -264,6 +303,7 @@ def _patched_process_request_thread(self, request, client_address, *args, **kwar
         )
     finally:
         _active_werkzeug_threads.discard(t)
+        _abandoned_werkzeug_threads.discard(t)
         if _HAMS_TRACE_PG_THREADS:
             _logger.warning(
                 "[PGTRACE] thread-discard name=%s ident=%s active_count=%d",
@@ -286,7 +326,7 @@ def wait_for_werkzeug_threads(timeout=5.0):
         )
     start_time = time.time()
     for t in list(_active_werkzeug_threads):
-        if t is threading.current_thread():
+        if t is threading.current_thread() or t in _abandoned_werkzeug_threads:
             continue
         remaining = timeout - (time.time() - start_time)
         if remaining > 0:
@@ -317,9 +357,20 @@ def wait_for_werkzeug_threads(timeout=5.0):
                         )
                     else:
                         _logger.warning(
-                            "Successfully sent SystemExit to Werkzeug thread %s.",
+                            "Sent SystemExit to Werkzeug thread %s (recorded, not yet delivered).",
                             t.name,
                         )
+                        # The return code only says CPython recorded the pending exception; it is raised in the thread when it
+                        # next runs Python bytecode, which a thread blocked in a C call never does. Check, do not assume.
+                        t.join(0.5)
+                        if t.is_alive():
+                            _logger.error(
+                                "Werkzeug thread %s is still alive after SystemExit was sent: it is blocked in a call that "
+                                "does not run Python code (typically a socket read on a connection the browser stopped "
+                                "servicing). It will not be waited on again; it may still write to the database.",
+                                t.name,
+                            )
+                            _abandoned_werkzeug_threads.add(t)
             except Exception as e:  # audit-ignore-catch-all
                 _logger.error(
                     "Exception while trying to kill Werkzeug thread %s: %s", t.name, e
@@ -440,8 +491,20 @@ def _patched_save_test_file(
 
         # Prevent Permission Denied by forcing relative paths like 'chrome_logs' into host_tmp
         if directory and not os.path.isabs(directory):
-            directory = os.path.abspath(os.path.join(host_tmp, directory))
-            if not directory.startswith(os.path.abspath(host_tmp)):
+            # bug-hunt (2026-09-27): a bare `.startswith(base)` matches by
+            # string PREFIX with no path-separator boundary, so a relative
+            # `directory` of "../test_evil" resolves to "/opt/hams/test_evil",
+            # which starts with "/opt/hams/test" and sailed through the guard
+            # that exists to stop exactly that. This module already has the
+            # correct shape and a unit test for it -- see
+            # `zero_sudo.ir.module.module._is_path_within_module_dir`, written
+            # by this same campaign on 2026-09-13 against the identical
+            # "<base>_evil sibling directory" bug; this is that check.
+            base_dir = os.path.abspath(host_tmp)
+            directory = os.path.abspath(os.path.join(base_dir, directory))
+            if not (
+                directory == base_dir or directory.startswith(base_dir + os.sep)
+            ):
                 raise ValueError("Path traversal detected")
 
         filepath = pathlib.Path(directory) / filename
@@ -526,7 +589,19 @@ def _js_coverage_start(browser):
         # in, first out, so this runs before the websocket is closed.
         browser.cleanup.callback(_js_coverage_write, browser)
         _logger.info("JS coverage: precise coverage started")
-    except (TimeoutError, OSError, AttributeError) as e:
+    # bug-hunt (2026-09-27): `ChromeBrowserException` belongs in this tuple.
+    # `_websocket_request()` hands back a Future whose exception the receiver
+    # thread sets with `f.set_exception(ChromeBrowserException(res["error"]
+    # ["message"]))` for ANY CDP error reply (confirmed in odoo/tests/
+    # common.py's own `_receive`), so an error from `Profiler.enable`,
+    # `Debugger.enable` or `Profiler.startPreciseCoverage` escaped this
+    # handler entirely -- contradicting this helper's own documented contract
+    # ("Coverage is best effort: a failure logs a warning and never fails the
+    # test") and, worse, landing in `_patched_chrome_init`'s `except
+    # Exception`, which then retried `original_chrome_init` on an already
+    # fully-constructed `self` (see that function's own claim for the
+    # orphaned-ExitStack/receiver-thread race that retry path opens).
+    except (TimeoutError, OSError, AttributeError, ChromeBrowserException) as e:
         _logger.warning("JS coverage: could not start (%s)", repr(e))
 
 
@@ -570,6 +645,24 @@ def _js_coverage_write(browser):
         _logger.warning("JS coverage: could not collect (%s)", repr(e))
 
 
+# [@ANCHOR: zero_sudo:tear_down_partly_built_browser]
+def _tear_down_partly_built_browser(browser):
+    """Undo what a failed `ChromeBrowser.__init__` registered, so the retry starts from a clean object.
+
+    Core's `__init__` assigns `self.cleanup = ExitStack()` and registers the profile directory, the Chrome process, the
+    websocket and a receiver thread into it one at a time, and has no error handling of its own. A retry on the same object
+    used to overwrite `cleanup` with a fresh stack, orphaning the first attempt's resources; that attempt's receiver thread
+    then ran core's `del self.ws` against the succeeding attempt's healthy socket, after which every CDP call silently did
+    nothing for the rest of the browser's life. Closing the stack first runs exactly the teardown core itself registered."""
+    cleanup = vars(browser).pop("cleanup", None)
+    if cleanup is not None:
+        try:
+            cleanup.close()
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.warning("TRACING: teardown of a partly-built headless Chrome raised: %s", repr(e))
+    vars(browser).pop("ws", None)
+
+
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
@@ -579,8 +672,6 @@ def _patched_chrome_init(self, *args, **kwargs):
     for attempt in range(retries):
         try:
             original_chrome_init(self, *args, **kwargs)
-            _js_coverage_start(self)
-            return
         except Exception as e:  # audit-ignore-catch-all
             _logger.warning(
                 "TRACING: Headless Chrome failed to start (attempt %s/%s): %s",
@@ -588,9 +679,27 @@ def _patched_chrome_init(self, *args, **kwargs):
                 retries,
                 repr(e),
             )
+            _tear_down_partly_built_browser(self)
             if attempt == retries - 1:
                 raise e
             time.sleep(2)  # audit-ignore-sleep
+            continue
+        # bug-hunt (2026-09-27): Chrome is up; this is deliberately OUTSIDE
+        # the try above. `_js_coverage_start` used to sit inside it, so any
+        # exception it raised (see its own note on `ChromeBrowserException`)
+        # was read as "Chrome failed to start" and re-ran
+        # `original_chrome_init` on this SAME, already fully-constructed
+        # `self` -- reassigning `self.cleanup` to a fresh empty `ExitStack`
+        # and orphaning the live Chrome process and the running `_receiver`
+        # thread the first pass had registered in the old one. That thread
+        # keeps reading the dead websocket and eventually runs core's own
+        # `del self.ws` against the attribute the SUCCEEDING attempt just
+        # wrote, after which every guarded `_websocket_send`/
+        # `_websocket_request` silently returns `None` for the rest of that
+        # browser's life. Opt-in coverage bookkeeping must never be able to
+        # reach that path.
+        _js_coverage_start(self)
+        return
 
 
 ChromeBrowser.__init__ = _patched_chrome_init

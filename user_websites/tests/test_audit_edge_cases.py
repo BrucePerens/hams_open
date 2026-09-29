@@ -185,8 +185,6 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         # Tests [@ANCHOR: slug_cache_invalidation_unlink]
 
-        # Tests [@ANCHOR: edge_routing:COMM_res_users_get_record_by_slug]
-
         # Tests [@ANCHOR: edge_routing:COMM_mixin_get_record_by_slug]
         """
         BDD: Given ADR-0049 Cache Verification
@@ -340,7 +338,7 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         # Tests [@ANCHOR: ir_cron_notify_pending_reports]
 
-        # Tests [@ANCHOR: cron_notify_pending_reports]
+        # Tests [@ANCHOR: user_websites:cron_notify_pending_reports]
         """
         Prove that the cron correctly summarizes pending reports and emails the admin,
         without crashing and using the correct template model.
@@ -384,7 +382,7 @@ class TestAuditEdgeCases(RealTransactionCase):
             template.send_mail(self.env.company.id, force_send=False)  # audit-ignore-mail: Tested by [@ANCHOR: test_cron_pending_reports]
 
     def test_09_cron_pending_reports_ignores_out_of_scope_company(self):
-        # Tests [@ANCHOR: cron_notify_pending_reports]
+        # Tests [@ANCHOR: user_websites:cron_notify_pending_reports]
         """
         Bug-hunt regression (2026-09-09): the cron used to iterate EVERY
         company in the database (res.company.search([], limit=10000))
@@ -441,7 +439,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         )
 
     def test_10_cron_pending_report_count_does_not_leak_across_companies(self):
-        # Tests [@ANCHOR: cron_notify_pending_reports]
+        # Tests [@ANCHOR: user_websites:cron_notify_pending_reports]
         """
         Bug-hunt regression (2026-09-09): content_violation_report_admin_rule
         used to grant the service account an unconditional [(1, '=', 1)]

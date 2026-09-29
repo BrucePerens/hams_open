@@ -83,8 +83,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -115,7 +122,6 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
-
 fn u_of(c: &[u32; 8]) -> [u32; 8] {
     [
         golay_decode(c[0]).0 as u32,
@@ -132,7 +138,13 @@ fn u_of(c: &[u32; 8]) -> [u32; 8] {
 fn steady_u(sock: &UdpSocket, buf: &mut [u8; 1024], signal: impl Fn(usize) -> f64) -> [u32; 8] {
     let mut last = [0u32; 8];
     for f in 0..10usize {
-        let frame: Vec<i16> = (0..FRAME_SAMPLES).map(|i| signal(f * FRAME_SAMPLES + i).round().clamp(-32768.0, 32767.0) as i16).collect();
+        let frame: Vec<i16> = (0..FRAME_SAMPLES)
+            .map(|i| {
+                signal(f * FRAME_SAMPLES + i)
+                    .round()
+                    .clamp(-32768.0, 32767.0) as i16
+            })
+            .collect();
         let n = send_recv_retrying(sock, buf, &build_speech(&frame));
         let (_, payload) = parse_packet(&buf[..n]).unwrap();
         let mut wb = [0u8; FRAME_BYTES];
@@ -143,9 +155,16 @@ fn steady_u(sock: &UdpSocket, buf: &mut [u8; 1024], signal: impl Fn(usize) -> f6
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let mode = std::env::args().nth(2).unwrap_or_else(|| "level".to_string());
-    let period: f64 = std::env::args().nth(3).and_then(|s| s.parse().ok()).unwrap_or(60.0);
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let mode = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "level".to_string());
+    let period: f64 = std::env::args()
+        .nth(3)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(60.0);
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
     sock.connect(&host).unwrap();
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
@@ -161,20 +180,49 @@ fn main() {
         let (label, sig): (String, Box<dyn Fn(usize) -> f64>) = match mode.as_str() {
             "level" => {
                 let a = 60.0 * 2f64.powf(k as f64 / 2.0);
-                (format!("level {:6.0}", a), Box::new(move |t| (1..=harmonics).map(|h| a / h as f64 * (w * h as f64 * t as f64).sin()).sum()))
+                (
+                    format!("level {:6.0}", a),
+                    Box::new(move |t| {
+                        (1..=harmonics)
+                            .map(|h| a / h as f64 * (w * h as f64 * t as f64).sin())
+                            .sum()
+                    }),
+                )
             }
             "tilt" => {
                 let slope = -0.5 + 0.15 * k as f64; // amplitude ~ h^slope
-                (format!("tilt {slope:+.2}"), Box::new(move |t| (1..=harmonics).map(|h| 1500.0 * (h as f64).powf(slope) / (harmonics as f64).powf(0.5) * (w * h as f64 * t as f64).sin()).sum()))
+                (
+                    format!("tilt {slope:+.2}"),
+                    Box::new(move |t| {
+                        (1..=harmonics)
+                            .map(|h| {
+                                1500.0 * (h as f64).powf(slope) / (harmonics as f64).powf(0.5)
+                                    * (w * h as f64 * t as f64).sin()
+                            })
+                            .sum()
+                    }),
+                )
             }
             _ => {
                 // one harmonic boosted by 12 dB
                 let boost = 1 + k % harmonics;
-                (format!("boost h{boost}"), Box::new(move |t| (1..=harmonics).map(|h| (if h == boost { 4.0 } else { 1.0 }) * 700.0 / h as f64 * (w * h as f64 * t as f64).sin()).sum()))
+                (
+                    format!("boost h{boost}"),
+                    Box::new(move |t| {
+                        (1..=harmonics)
+                            .map(|h| {
+                                (if h == boost { 4.0 } else { 1.0 }) * 700.0 / h as f64
+                                    * (w * h as f64 * t as f64).sin()
+                            })
+                            .sum()
+                    }),
+                )
             }
         };
         let u = steady_u(&sock, &mut buf, &sig);
-        let bits: Vec<String> = (0..8).map(|i| format!("{:0width$b}", u[i], width = widths[i])).collect();
+        let bits: Vec<String> = (0..8)
+            .map(|i| format!("{:0width$b}", u[i], width = widths[i]))
+            .collect();
         println!("{label} | {}", bits.join(" "));
     }
 }

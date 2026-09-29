@@ -70,10 +70,18 @@ const LN2_APPROX: f64 = 0.693;
 fn prev_at(prev: &PrevState, idx: usize) -> f64 {
     // mbelib sets the previous frame's log2Ml[0] to log2Ml[1].
     let idx = if idx == 0 { 1 } else { idx };
-    prev.log2_ml.get(idx).copied().unwrap_or_else(|| *prev.log2_ml.last().unwrap_or(&0.0))
+    prev.log2_ml
+        .get(idx)
+        .copied()
+        .unwrap_or_else(|| *prev.log2_ml.last().unwrap_or(&0.0))
 }
 
-fn nearest<const N: usize>(table: &[[f64; N]], target: &[f64; N], used: usize, only_even: bool) -> u32 {
+fn nearest<const N: usize>(
+    table: &[[f64; N]],
+    target: &[f64; N],
+    used: usize,
+    only_even: bool,
+) -> u32 {
     let mut best = (f64::INFINITY, 0usize);
     for (i, row) in table.iter().enumerate() {
         if only_even && i % 2 == 1 {
@@ -95,7 +103,11 @@ fn nearest<const N: usize>(table: &[[f64; N]], target: &[f64; N], used: usize, o
 /// finiteness check on the pitch half of this same encode path (bug-hunt 2026-09-19, claims
 /// `mbe_quantize_speech.md`/`float_quantize_pitch_and_tables.md`; the pitch half was fixed the same
 /// day in `d1bc1ea4`, this amplitude half was not).
-pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTables) -> QuantizedSpeech {
+pub fn quantize_speech(
+    target: &SpeechTarget,
+    prev: &PrevState,
+    tables: &ModeTables,
+) -> QuantizedSpeech {
     let l = target.l as usize;
     assert!(
         target.ml[1..=l].iter().all(|m| m.is_finite()),
@@ -110,7 +122,11 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
         let score: f64 = (1..=l)
             .map(|h| {
                 let w = target.ml[h].max(1e-6);
-                if row[jl_of(h)] == target.voiced[h] { w } else { -w }
+                if row[jl_of(h)] == target.voiced[h] {
+                    w
+                } else {
+                    -w
+                }
             })
             .sum();
         if score > b1.0 {
@@ -152,12 +168,18 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
         .dg
         .iter()
         .enumerate()
-        .min_by(|a, b| (a.1 - delta_target).abs().total_cmp(&(b.1 - delta_target).abs()))
+        .min_by(|a, b| {
+            (a.1 - delta_target)
+                .abs()
+                .total_cmp(&(b.1 - delta_target).abs())
+        })
         .map(|(i, _)| i)
         .unwrap_or(0);
 
     // Zero-mean Tl, split into the four blocks and DCT'd.
-    let tl: Vec<f64> = (0..=l).map(|h| if h == 0 { 0.0 } else { x[h] - mean_x }).collect();
+    let tl: Vec<f64> = (0..=l)
+        .map(|h| if h == 0 { 0.0 } else { x[h] - mean_x })
+        .collect();
     let ji = tables.lmprbl[l];
     let mut cik = [[0.0f64; 18]; 5];
     let mut start = 1usize;
@@ -167,7 +189,8 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
             let mut sum = 0.0;
             for j in 1..=j_len {
                 if start + j - 1 <= l {
-                    sum += tl[start + j - 1] * (PI * (k as f64 - 1.0) * (j as f64 - 0.5) / j_len as f64).cos();
+                    sum += tl[start + j - 1]
+                        * (PI * (k as f64 - 1.0) * (j as f64 - 0.5) / j_len as f64).cos();
                 }
             }
             cik[block + 1][k] = sum / j_len as f64;
@@ -184,7 +207,9 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     }
     let mut gm = [0.0f64; 9];
     for (m, slot) in gm.iter_mut().enumerate().skip(1) {
-        let sum: f64 = (1..=8).map(|i| ri[i] * (PI * (m as f64 - 1.0) * (i as f64 - 0.5) / 8.0).cos()).sum();
+        let sum: f64 = (1..=8)
+            .map(|i| ri[i] * (PI * (m as f64 - 1.0) * (i as f64 - 0.5) / 8.0).cos())
+            .sum();
         *slot = sum / 8.0;
     }
     let b3 = nearest(tables.prba24, &[gm[2], gm[3], gm[4]], 3, false);
@@ -195,8 +220,22 @@ pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTab
     for block in 0..4 {
         let j_len = ji[block] as usize;
         let used = j_len.saturating_sub(2).min(4);
-        let tgt = [cik[block + 1][3], cik[block + 1][4], cik[block + 1][5], cik[block + 1][6]];
-        hoc_idx[block] = if used == 0 { 0 } else { nearest(tables.hoc[block], &tgt, used, block == 3 && tables.hoc_b8_even_only) };
+        let tgt = [
+            cik[block + 1][3],
+            cik[block + 1][4],
+            cik[block + 1][5],
+            cik[block + 1][6],
+        ];
+        hoc_idx[block] = if used == 0 {
+            0
+        } else {
+            nearest(
+                tables.hoc[block],
+                &tgt,
+                used,
+                block == 3 && tables.hoc_b8_even_only,
+            )
+        };
     }
 
     QuantizedSpeech {
@@ -219,7 +258,10 @@ pub struct AnalysisState {
 
 impl AnalysisState {
     pub fn new() -> Self {
-        Self { xi_max: 20000.0, prev_bands: Vec::new() }
+        Self {
+            xi_max: 20000.0,
+            prev_bands: Vec::new(),
+        }
     }
 }
 
@@ -242,7 +284,13 @@ pub fn analyze_at_pitch(
     use crate::ambe::float::tia_102_baba::spectral_amplitude::estimate_spectral_amplitudes;
     use crate::ambe::float::tia_102_baba::vuv::{determine_voicing, frequency_bands_count};
 
-    let (bands, xi_max) = determine_voicing(&frame.refinement, w0, frame.initial_pitch_error, state.xi_max, &state.prev_bands);
+    let (bands, xi_max) = determine_voicing(
+        &frame.refinement,
+        w0,
+        frame.initial_pitch_error,
+        state.xi_max,
+        &state.prev_bands,
+    );
     state.xi_max = xi_max;
     state.prev_bands = bands.clone();
     let k_hat = frequency_bands_count(l) as usize;

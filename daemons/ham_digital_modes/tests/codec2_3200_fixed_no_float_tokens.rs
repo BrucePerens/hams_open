@@ -21,8 +21,22 @@ use std::path::Path;
 const FILES_1600: &[&str] = &["bits", "lsp_post", "lsp_quantiser", "mod"];
 
 const FILES: &[&str] = &[
-    "bits", "encoder_fixed", "envelope", "fixed_fft", "fixed_point", "interp", "lpc", "mod", "nlp",
-    "quantise", "spectral_bridge", "synthesis", "tables", "trig_fixed", "voicing", "window",
+    "bits",
+    "encoder_fixed",
+    "envelope",
+    "fixed_fft",
+    "fixed_point",
+    "interp",
+    "lpc",
+    "mod",
+    "nlp",
+    "quantise",
+    "spectral_bridge",
+    "synthesis",
+    "tables",
+    "trig_fixed",
+    "voicing",
+    "window",
 ];
 
 /// Removes string literal contents and `//` comments from one line.
@@ -89,7 +103,8 @@ fn has_float_token(code: &str) -> bool {
                 return true;
             }
             const INT_SUFFIXES: [&str; 12] = [
-                "usize", "isize", "u128", "i128", "u64", "i64", "u32", "i32", "u16", "i16", "u8", "i8",
+                "usize", "isize", "u128", "i128", "u64", "i64", "u32", "i32", "u16", "i16", "u8",
+                "i8",
             ];
             let base = INT_SUFFIXES
                 .iter()
@@ -140,14 +155,17 @@ fn parse_items(src: &str) -> Vec<Item> {
             // (Raw line: `code_only` blanks string literals such as "std".)
             if t.contains("cfg(test)")
                 || t.contains("cfg(all(test")
-                || lines[i].contains("cfg(feature = \"std\")") {
+                || lines[i].contains("cfg(feature = \"std\")")
+            {
                 attrs_gate = true;
             }
             i += 1;
             continue;
         }
         // Item header: `pub(crate) const fn foo`, `impl<T> X for Y {`, `struct S`, ...
-        let mut words = t.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).filter(|w| !w.is_empty());
+        let mut words = t
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .filter(|w| !w.is_empty());
         let mut kind = String::new();
         let mut name = String::new();
         let mut all_words = Vec::new();
@@ -157,8 +175,10 @@ fn parse_items(src: &str) -> Vec<Item> {
         let mut idx = 0;
         while idx < all_words.len() {
             let w = all_words[idx].as_str();
-            if matches!(w, "pub" | "crate" | "super" | "in" | "unsafe" | "async" | "extern" | "self")
-                || (w == "const" && all_words.get(idx + 1).map(String::as_str) == Some("fn"))
+            if matches!(
+                w,
+                "pub" | "crate" | "super" | "in" | "unsafe" | "async" | "extern" | "self"
+            ) || (w == "const" && all_words.get(idx + 1).map(String::as_str) == Some("fn"))
             {
                 idx += 1;
                 continue;
@@ -168,7 +188,10 @@ fn parse_items(src: &str) -> Vec<Item> {
         }
         if kind == "impl" {
             let head = t.split('{').next().unwrap_or("").trim();
-            let head = head.trim_start_matches("pub ").trim_start_matches("impl").trim();
+            let head = head
+                .trim_start_matches("pub ")
+                .trim_start_matches("impl")
+                .trim();
             let head = if let Some(rest) = head.strip_prefix('<') {
                 rest.split_once('>').map_or(rest, |x| x.1).trim()
             } else {
@@ -199,7 +222,11 @@ fn parse_items(src: &str) -> Vec<Item> {
             }
             j += 1;
         }
-        items.push(Item { key: format!("{kind} {name}"), gated: attrs_gate, has_float });
+        items.push(Item {
+            key: format!("{kind} {name}"),
+            gated: attrs_gate,
+            has_float,
+        });
         attrs_gate = false;
         i = j + 1;
     }
@@ -207,8 +234,12 @@ fn parse_items(src: &str) -> Vec<Item> {
 }
 
 fn read_items(dir: &str, file: &str) -> Vec<Item> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(dir).join(format!("{file}.rs"));
-    let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("src")
+        .join(dir)
+        .join(format!("{file}.rs"));
+    let src =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
     parse_items(&src)
 }
 
@@ -243,5 +274,7 @@ fn the_scanner_itself_recognizes_floats_and_ignores_integers() {
     assert!(!has_float_token("let a = 0x1e5;"));
     assert!(!has_float_token("let b = t.0 + 12;"));
     assert!(!has_float_token("let c = 1u64 << 23;"));
-    assert!(!has_float_token(&code_only("let s = \"1.5 f32\"; // 2.5 f64")));
+    assert!(!has_float_token(&code_only(
+        "let s = \"1.5 f32\"; // 2.5 f64"
+    )));
 }

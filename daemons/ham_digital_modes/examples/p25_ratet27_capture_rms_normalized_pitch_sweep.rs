@@ -70,18 +70,25 @@ fn rms_normalized_sawtooth(freq: f64) -> Vec<i16> {
         .collect();
     let rms: f64 = (raw.iter().map(|&x| x * x).sum::<f64>() / raw.len() as f64).sqrt();
     let scale = TARGET_RMS / rms;
-    raw.iter().map(|&x| (x * scale).clamp(-32000.0, 32000.0) as i16).collect()
+    raw.iter()
+        .map(|&x| (x * scale).clamp(-32000.0, 32000.0) as i16)
+        .collect()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
@@ -103,8 +110,12 @@ fn main() {
     let mut freq: f64 = 60.0;
     while freq <= 440.0 {
         let samples = rms_normalized_sawtooth(freq);
-        let actual_rms: f64 =
-            (samples.iter().map(|&s| (s as f64) * (s as f64)).sum::<f64>() / samples.len() as f64).sqrt();
+        let actual_rms: f64 = (samples
+            .iter()
+            .map(|&s| (s as f64) * (s as f64))
+            .sum::<f64>()
+            / samples.len() as f64)
+            .sqrt();
         eprintln!("freq={freq} actual_rms={actual_rms:.1}");
         for _ in 0..SETTLING_FRAMES {
             let n = send_recv_retrying(&sock, &mut buf, &build_speech(&samples));

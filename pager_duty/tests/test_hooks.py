@@ -103,7 +103,9 @@ class TestPagerDutyHooks(HamsTransactionCase):
         # correctly forbidden from reading). Needs crm actually installed to
         # exercise the real collision this hook now specifically detects.
         sales_team = self.env.ref("sales_team.team_sales_department", raise_if_not_found=False)
-        if not sales_team:
+        # The team record alone is not proof crm is installed: sales_team ships it without crm, and
+        # crm.team only gains `alias_name` (mail.alias.mixin) when crm itself is loaded.
+        if not sales_team or "alias_name" not in self.env["crm.team"]._fields:
             self.skipTest(  # burn-ignore-skiptest-soft-dependency: real optional-module gate -- crm is not a pager_duty dependency (auto_install: False), and this test exercises the specific collision that only exists when it's installed, matching _claim_info_alias()'s own graceful degradation when it isn't.
                 "crm is not installed in this test database"
             )

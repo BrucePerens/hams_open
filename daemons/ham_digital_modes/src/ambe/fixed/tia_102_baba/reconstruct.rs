@@ -8,14 +8,16 @@
 
 use super::prediction;
 use super::reconstruct_tables::{
-    GAIN_BIT_ALLOCATION_STEP_Q16_16, GAIN_QUANTIZER_LEVELS_Q16_16, HIGHER_ORDER_COEFFICIENT_SIGMA_Q16_16,
-    HIGHER_ORDER_STEP_MULTIPLIER_Q16_16,
+    GAIN_BIT_ALLOCATION_STEP_Q16_16, GAIN_QUANTIZER_LEVELS_Q16_16,
+    HIGHER_ORDER_COEFFICIENT_SIGMA_Q16_16, HIGHER_ORDER_STEP_MULTIPLIER_Q16_16,
 };
 use crate::ambe::fixed::general::explog::exp2_q16;
 use crate::ambe::fixed::general::fixed_ops::mul_q16;
 use crate::ambe::fixed::general::trig::cos_pi_frac;
 use crate::ambe::float::tia_102_baba::quantize::higher_order_coefficient_positions;
-use crate::ambe::float::tia_102_baba::tables::{block_lengths_for_l, gain_vector_bits, higher_order_bit_allocation};
+use crate::ambe::float::tia_102_baba::tables::{
+    block_lengths_for_l, gain_vector_bits, higher_order_bit_allocation,
+};
 
 /// The fixed-point equivalent of `dequantize_uniform` (Eq. 68/71's shared bin-center formula):
 /// `0` if `bits == 0`, otherwise `step_size * (quantizer_value - 2^(bits-1) + 0.5)`.
@@ -37,7 +39,8 @@ pub fn reconstruct_gain_vector_q16(b2: u8, gain_values: [u32; 5], l: u32) -> Opt
     for (idx, element) in (2..=6u32).enumerate() {
         let bits = gain_vector_bits(l, element)?;
         let step_size_q16 = GAIN_BIT_ALLOCATION_STEP_Q16_16[l_index][(element - 2) as usize];
-        g_hat[(element - 1) as usize] = dequantize_uniform_q16(gain_values[idx], bits, step_size_q16);
+        g_hat[(element - 1) as usize] =
+            dequantize_uniform_q16(gain_values[idx], bits, step_size_q16);
     }
     Some(g_hat)
 }
@@ -126,12 +129,16 @@ pub fn reconstruct_spectral_amplitudes_q16(
     let g_hat = reconstruct_gain_vector_q16(b2, gain_values, l_hat_curr)?;
     let r_hat = inverse_gain_vector_dct_q16(&g_hat);
 
-    let mut blocks = reconstruct_higher_order_coefficients_q16(higher_order_quantized_values, l_hat_curr)?;
+    let mut blocks =
+        reconstruct_higher_order_coefficients_q16(higher_order_quantized_values, l_hat_curr)?;
     for (i, block) in blocks.iter_mut().enumerate() {
         block[0] = r_hat[i];
     }
 
-    let t_hat: Vec<i32> = blocks.iter().flat_map(|block| inverse_block_dct_q16(block)).collect();
+    let t_hat: Vec<i32> = blocks
+        .iter()
+        .flat_map(|block| inverse_block_dct_q16(block))
+        .collect();
     if t_hat.len() != l_hat_curr as usize {
         return None;
     }

@@ -4,6 +4,7 @@
 # Tests of zero_sudo's knowledge_docs installer (ir_module_module.py) that need the real
 # `knowledge.article` model. They live here, not in zero_sudo/tests/, because zero_sudo does
 # not (and must not) depend on `knowledge`; a bare `-u zero_sudo` never installs it.
+from odoo.modules.module import get_manifest
 from odoo.tests.common import tagged
 from odoo.tools import file_open
 
@@ -41,6 +42,11 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
             "Module-authored docs must default to unpublished (internal-only) "
             "unless the manifest entry explicitly sets \"public\": True",
         )
+        self.assertEqual(
+            article.internal_permission,
+            "none",
+            "Internal documentation must be admin-only, not readable by every internal user.",
+        )
 
     def test_bootstrap_knowledge_docs_explicit_public_opt_in(self):
         Module = self.env["ir.module.module"]
@@ -59,6 +65,67 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
             article.is_published,
             "A knowledge_docs entry with \"public\": True should be published",
         )
+        self.assertEqual(article.internal_permission, "read")
+
+    def test_story_journey_and_runbook_docs_are_never_public(self):
+        # Tests [@ANCHOR: zero_sudo:install_single_doc]
+        # Stories, journeys and runbooks are internal engineering documents.
+        # Even a manifest entry that says "public": True must not publish one.
+        Module = self.env["ir.module.module"]
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+
+        doc_info = {
+            "name": "Test Story Marked Public",
+            "path": "docs/stories/search.md",
+            "public": True,
+        }
+        with self.assertLogs("odoo.addons.zero_sudo.models.ir_module_module", "ERROR"):
+            Module._install_single_doc(utils, Article, "knowledge", doc_info)
+        article = Article.search([("name", "=", "Test Story Marked Public")], limit=1)
+        self.assertTrue(article)
+        self.assertFalse(article.is_published)
+        self.assertEqual(article.internal_permission, "none")
+
+    def test_no_manifest_publishes_a_story_journey_or_runbook(self):
+        # Tests [@ANCHOR: zero_sudo:install_single_doc]
+        # Covers every installed module in this database, so a manifest that
+        # tries to publish an internal document fails the suite of the
+        # repository that ships it.
+        Module = self.env["ir.module.module"]
+        offenders = []
+        installed = Module.search([("state", "=", "installed")])
+        for module in installed:
+            manifest = get_manifest(module.name)
+            for doc_info in (manifest or {}).get("knowledge_docs", []):
+                if doc_info.get("public") and Module._is_internal_doc_path(doc_info.get("path", "")):
+                    offenders.append(f"{module.name}: {doc_info['path']}")
+        self.assertEqual(offenders, [])
+
+    def test_markdown_docs_are_stored_as_html(self):
+        # Tests [@ANCHOR: zero_sudo:install_single_doc]
+        # A markdown file used to be stored as raw markdown text, which the
+        # viewer then had to guess at. Literal tag text in the file, such as
+        # a heading written as `<h2>`, defeated the guess and the article
+        # was served as raw markdown.
+        Module = self.env["ir.module.module"]
+        html = Module._markdown_doc_to_html(
+            "# Title\n\nUse the `<h2>` tag.\n\n- one\n- two\n\n<script>window.bad=1</script>\n"
+        )
+        self.assertIn("<h1", html)
+        self.assertIn("<li>one</li>", html)
+        self.assertIn("&lt;h2&gt;", html)
+        self.assertNotIn("<script", html)
+
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+        Module._install_single_doc(
+            utils, Article, "knowledge", {"name": "Test Markdown Doc", "path": "docs/stories/search.md"}
+        )
+        article = Article.search([("name", "=", "Test Markdown Doc")], limit=1)
+        self.assertTrue(article)
+        self.assertRegex(article.body, r"<h[1-6][ >]")
+        self.assertNotRegex(article.body, r"(?m)^#{1,6}\s")
 
     def test_install_single_doc_does_not_collide_across_modules_sharing_a_name(self):
         # Tests [@ANCHOR: zero_sudo:install_single_doc]

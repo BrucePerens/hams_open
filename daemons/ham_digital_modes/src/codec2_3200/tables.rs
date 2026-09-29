@@ -4,6 +4,9 @@
 //! `tables_gen::tests::committed_tables_match_the_generator` fails if this drifts.
 //! Contains no floating point: every value is an integer constant.
 
+// rustfmt would reflow this file, and the test compares its layout with this generator's output.
+#![cfg_attr(rustfmt, rustfmt::skip)]
+
 /// 1e-6, Q23
 pub(crate) const ENVELOPE_EPS_A2_Q23: i64 = 8;
 /// LPCPF_BETA, Q23

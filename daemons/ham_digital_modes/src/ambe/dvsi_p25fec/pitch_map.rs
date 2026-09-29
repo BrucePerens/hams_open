@@ -13,7 +13,9 @@ pub const CHIP_B0_OFFSET: f64 = -390.9867;
 
 /// Encoder side of the chip's pitch map: `b0` for period `p_samples`.
 pub fn quantize_fundamental_frequency_chip(p_samples: f64) -> u32 {
-    (CHIP_B0_STEPS_PER_OCTAVE * p_samples.log2() + CHIP_B0_OFFSET).round().clamp(0.0, 255.0) as u32
+    (CHIP_B0_STEPS_PER_OCTAVE * p_samples.log2() + CHIP_B0_OFFSET)
+        .round()
+        .clamp(0.0, 255.0) as u32
 }
 
 /// Decoder side of the chip's pitch map: `omega0` for a received `b0` (see [`CHIP_B0_STEPS_PER_OCTAVE`]).

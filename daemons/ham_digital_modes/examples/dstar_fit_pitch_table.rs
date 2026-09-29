@@ -16,7 +16,9 @@
 //! (run once with `dstar_float_decoded.wav` as a control: the float PCM's pitch is exactly the guess, so a ratio
 //! near 1.000 there shows the estimator itself is unbiased.)
 
-use ham_digital_modes::ambe::float::dstar::decode::{extract_raw_parameters, f0_from_b0, parse_frame};
+use ham_digital_modes::ambe::float::dstar::decode::{
+    extract_raw_parameters, f0_from_b0, parse_frame,
+};
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use rustfft::{num_complex::Complex64, FftPlanner};
 
@@ -24,7 +26,10 @@ const FFT_LEN: usize = 8192;
 
 fn read_wav(path: &str) -> Vec<f64> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).collect()
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+        .collect()
 }
 
 fn spectrum(seg: &[f64]) -> Vec<f64> {
@@ -34,7 +39,12 @@ fn spectrum(seg: &[f64]) -> Vec<f64> {
     let mut buf: Vec<Complex64> = seg
         .iter()
         .enumerate()
-        .map(|(i, &s)| Complex64::new(s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos()), 0.0))
+        .map(|(i, &s)| {
+            Complex64::new(
+                s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (n as f64 - 1.0)).cos()),
+                0.0,
+            )
+        })
         .collect();
     buf.resize(FFT_LEN, Complex64::new(0.0, 0.0));
     fft.process(&mut buf);
@@ -47,7 +57,9 @@ fn comb_score(mag: &[f64], f0: f64) -> f64 {
     let mut k = 1;
     while (k as f64 * f0) < 2600.0 {
         let b = bin(k as f64 * f0);
-        let peak = (b.saturating_sub(1)..=(b + 1).min(mag.len() - 1)).map(|i| mag[i]).fold(0.0, f64::max);
+        let peak = (b.saturating_sub(1)..=(b + 1).min(mag.len() - 1))
+            .map(|i| mag[i])
+            .fold(0.0, f64::max);
         score += (1.0 + peak).ln();
         k += 1;
     }
@@ -55,14 +67,20 @@ fn comb_score(mag: &[f64], f0: f64) -> f64 {
 }
 
 fn main() {
-    let dir = std::env::args().nth(1).unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
+    let dir = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| std::env::temp_dir().to_string_lossy().into_owned());
     let hex = std::fs::read_to_string(format!("{dir}/dstar_channel_payloads.hex")).unwrap();
-    let wav_name = std::env::args().nth(2).unwrap_or_else(|| "dstar_chip_decoded.wav".to_string());
+    let wav_name = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "dstar_chip_decoded.wav".to_string());
     let chip = read_wav(&format!("{dir}/{wav_name}"));
     let b0s: Vec<u32> = hex
         .lines()
         .map(|l| {
-            let bytes: Vec<u8> = (0..l.len() / 2).map(|i| u8::from_str_radix(&l[2 * i..2 * i + 2], 16).unwrap()).collect();
+            let bytes: Vec<u8> = (0..l.len() / 2)
+                .map(|i| u8::from_str_radix(&l[2 * i..2 * i + 2], 16).unwrap())
+                .collect();
             let mut wire = [0u8; 9];
             wire.copy_from_slice(&bytes[bytes.len() - 9..]);
             extract_raw_parameters(parse_frame(wire_bytes_to_frame(&wire)).d).b0
@@ -110,9 +128,17 @@ fn main() {
     let mut ratios: Vec<f64> = points.iter().map(|p| p.1).collect();
     ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let q = |p: f64| ratios[((ratios.len() - 1) as f64 * p) as usize];
-    println!("chip/guess ratio: p10 {:.4} median {:.4} p90 {:.4}", q(0.1), q(0.5), q(0.9));
+    println!(
+        "chip/guess ratio: p10 {:.4} median {:.4} p90 {:.4}",
+        q(0.1),
+        q(0.5),
+        q(0.9)
+    );
     let n = points.len() as f64;
-    let (sx, sy) = (points.iter().map(|p| p.0 as f64).sum::<f64>(), points.iter().map(|p| p.1.log2()).sum::<f64>());
+    let (sx, sy) = (
+        points.iter().map(|p| p.0 as f64).sum::<f64>(),
+        points.iter().map(|p| p.1.log2()).sum::<f64>(),
+    );
     let sxx: f64 = points.iter().map(|p| (p.0 as f64).powi(2)).sum();
     let sxy: f64 = points.iter().map(|p| p.0 as f64 * p.1.log2()).sum();
     let slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);

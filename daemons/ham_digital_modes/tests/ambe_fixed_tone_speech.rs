@@ -14,9 +14,15 @@ fn no_speech_slot_of_the_four_fixtures_is_a_tone() {
         let pcm = common::read_wav_mono_i16(path);
         for (k, slot) in pcm.chunks_exact(160).enumerate() {
             slots += 1;
-            assert!(fx::detect_tone(slot).is_none(), "{path} slot {k} detected as a tone by the fixed detector");
+            assert!(
+                fx::detect_tone(slot).is_none(),
+                "{path} slot {k} detected as a tone by the fixed detector"
+            );
             let f: Vec<f64> = slot.iter().map(|&s| s as f64).collect();
-            assert!(fl::detect_tone(&f).is_none(), "{path} slot {k} detected as a tone by the float detector");
+            assert!(
+                fl::detect_tone(&f).is_none(),
+                "{path} slot {k} detected as a tone by the float detector"
+            );
         }
     }
     assert!(slots > 7000);

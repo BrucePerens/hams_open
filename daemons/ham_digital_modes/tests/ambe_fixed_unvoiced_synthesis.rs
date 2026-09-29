@@ -92,15 +92,26 @@ fn run_scenario(
 
     let mut float_pcm = Vec::new();
     let mut fixed_pcm = Vec::new();
-    for (i, (voiced, amplitudes)) in voiced_frames.iter().zip(amplitude_frames.iter()).enumerate() {
+    for (i, (voiced, amplitudes)) in voiced_frames
+        .iter()
+        .zip(amplitude_frames.iter())
+        .enumerate()
+    {
         if i > 0 {
             float_noise.advance_frame();
             fixed_noise.advance_frame();
         }
-        let float_frame = float_state.synthesize(&float_noise, omega0, voiced, amplitudes).unwrap();
+        let float_frame = float_state
+            .synthesize(&float_noise, omega0, voiced, amplitudes)
+            .unwrap();
         let amplitudes_q16: Vec<i32> = amplitudes.iter().map(|&a| to_q16(a)).collect();
         let fixed_frame = fixed_state
-            .synthesize(&fixed_noise, (omega0 * 4294967296.0).round() as i64, voiced, &amplitudes_q16)
+            .synthesize(
+                &fixed_noise,
+                (omega0 * 4294967296.0).round() as i64,
+                voiced,
+                &amplitudes_q16,
+            )
             .unwrap();
         float_pcm.extend(float_frame.iter().copied());
         fixed_pcm.extend(fixed_frame.iter().map(|&s| s as f64 / 65536.0));
@@ -121,7 +132,10 @@ fn synthesize_matches_float_for_a_fully_unvoiced_steady_tone() {
     let amplitude_frames = vec![amplitudes; 4];
     let (float_pcm, fixed_pcm) = run_scenario(omega0, &voiced_frames, &amplitude_frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "unvoiced steady tone SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "unvoiced steady tone SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -141,7 +155,10 @@ fn synthesize_matches_float_for_a_partially_voiced_mix_across_a_pitch_change() {
     let omega0 = ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency(100);
     let (float_pcm, fixed_pcm) = run_scenario(omega0, &voiced_frames, &amplitude_frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "partially voiced mix SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "partially voiced mix SNR too low: {snr} dB"
+    );
 }
 
 #[test]
@@ -154,7 +171,10 @@ fn synthesize_matches_float_for_a_low_pitch_many_harmonic_frame() {
     let amplitude_frames = vec![amplitudes; 3];
     let (float_pcm, fixed_pcm) = run_scenario(omega0, &voiced_frames, &amplitude_frames);
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "low-pitch many-harmonic SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "low-pitch many-harmonic SNR too low: {snr} dB"
+    );
 }
 
 #[test]

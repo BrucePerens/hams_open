@@ -30,7 +30,9 @@
 //!
 //! Run against the chip: `cargo run --release --features ambe_plus_2 --example ambe_chip_validate_ambe_plus_2 -- 192.168.10.189:2460`
 
-use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind, RawParameters};
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+    classify_b0, extract_raw_parameters, FrameKind, RawParameters,
+};
 use ham_digital_modes::ambe::float::ambe_plus_2::interleave::interleaved_to_frame;
 use ham_digital_modes::ambe::float::ambe_plus_2::{parse_frame, tables};
 use std::net::UdpSocket;
@@ -52,8 +54,9 @@ const CAPTURED_FRAMES: usize = 15;
 const RATET_HALF_RATE_FEC: u8 = 33;
 const RATET_HALF_RATE_NOFEC: u8 = 34;
 
-const TEST_FREQS_HZ: [f64; 10] =
-    [50.0, 80.0, 100.0, 160.0, 200.0, 250.0, 400.0, 500.0, 800.0, 1000.0];
+const TEST_FREQS_HZ: [f64; 10] = [
+    50.0, 80.0, 100.0, 160.0, 200.0, 250.0, 400.0, 500.0, 800.0, 1000.0,
+];
 
 fn build_control_ratet(index: u8) -> Vec<u8> {
     let payload = vec![FIELD_RATET, index];
@@ -88,7 +91,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 
@@ -219,7 +224,8 @@ fn pitch_from_b0(b0: u32) -> Option<f64> {
 
 fn run_nofec_test(sock: &UdpSocket) {
     println!("\n=== RATET({RATET_HALF_RATE_NOFEC}) -- AMBE+2 half-rate, No FEC (2450 bps, 49-bit frame) ===");
-    sock.send(&build_control_ratet(RATET_HALF_RATE_NOFEC)).expect("send RATET config");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_NOFEC))
+        .expect("send RATET config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATET config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid RATET ack");
@@ -228,7 +234,9 @@ fn run_nofec_test(sock: &UdpSocket) {
     let settled = capture_settled_frames(sock);
     for (freq, _frame, num_bits) in &settled {
         if *num_bits != 49 {
-            eprintln!("warning: {freq}Hz: chip returned {num_bits} bits, expected 49 for this rate");
+            eprintln!(
+                "warning: {freq}Hz: chip returned {num_bits} bits, expected 49 for this rate"
+            );
         }
     }
 
@@ -251,7 +259,12 @@ fn run_nofec_test(sock: &UdpSocket) {
         }
         let raw = extract_raw_parameters(d);
         let pitch = pitch_from_b0(raw.b0);
-        println!("  {freq:>6}Hz: b0={} kind={:?} w0={:?}", raw.b0, classify_b0(raw.b0), pitch);
+        println!(
+            "  {freq:>6}Hz: b0={} kind={:?} w0={:?}",
+            raw.b0,
+            classify_b0(raw.b0),
+            pitch
+        );
     }
 
     // Structured hypothesis (b): plain contiguous b0..b8 fields, MSB-first, in that bit-width
@@ -275,7 +288,12 @@ fn run_nofec_test(sock: &UdpSocket) {
             b8: window_value(&bit_rows[i], 46, WIDTHS[8]),
         };
         let pitch = pitch_from_b0(raw.b0);
-        println!("  {freq:>6}Hz: b0={} kind={:?} w0={:?}", raw.b0, classify_b0(raw.b0), pitch);
+        println!(
+            "  {freq:>6}Hz: b0={} kind={:?} w0={:?}",
+            raw.b0,
+            classify_b0(raw.b0),
+            pitch
+        );
     }
 
     // Hypothesis-agnostic sliding 7-bit-window correlation scan, plain and Gray-decoded, against
@@ -285,14 +303,20 @@ fn run_nofec_test(sock: &UdpSocket) {
     let min_len = bit_rows.iter().map(|b| b.len()).min().unwrap_or(0);
     let mut best: Option<(usize, bool, f64)> = None;
     for start in 0..min_len.saturating_sub(6) {
-        let plain: Vec<f64> = bit_rows.iter().map(|b| window_value(b, start, 7) as f64).collect();
+        let plain: Vec<f64> = bit_rows
+            .iter()
+            .map(|b| window_value(b, start, 7) as f64)
+            .collect();
         let gray: Vec<f64> = bit_rows
             .iter()
             .map(|b| gray_to_binary(window_value(b, start, 7)) as f64)
             .collect();
         let sp_plain = spearman(&true_freqs, &plain);
         let sp_gray = spearman(&true_freqs, &gray);
-        println!("  bits[{start}..{}): plain spearman={sp_plain:.3}  gray spearman={sp_gray:.3}", start + 7);
+        println!(
+            "  bits[{start}..{}): plain spearman={sp_plain:.3}  gray spearman={sp_gray:.3}",
+            start + 7
+        );
         for (is_gray, sp) in [(false, sp_plain), (true, sp_gray)] {
             if best.is_none_or(|(_, _, b)| sp.abs() > b.abs()) {
                 best = Some((start, is_gray, sp));
@@ -303,7 +327,11 @@ fn run_nofec_test(sock: &UdpSocket) {
         println!(
             "\n  Best candidate: bits[{start}..{}), {}, |spearman|={:.3}",
             start + 7,
-            if is_gray { "Gray-decoded" } else { "plain binary" },
+            if is_gray {
+                "Gray-decoded"
+            } else {
+                "plain binary"
+            },
             sp.abs()
         );
     }
@@ -311,7 +339,8 @@ fn run_nofec_test(sock: &UdpSocket) {
 
 fn run_fec_test(sock: &UdpSocket) {
     println!("\n=== RATET({RATET_HALF_RATE_FEC}) -- AMBE+2 half-rate, with FEC (3600 bps, 72-bit frame) ===");
-    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC)).expect("send RATET config");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC))
+        .expect("send RATET config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATET config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid RATET ack");
@@ -320,11 +349,16 @@ fn run_fec_test(sock: &UdpSocket) {
     let settled = capture_settled_frames(sock);
     for (freq, _, num_bits) in &settled {
         if *num_bits != 72 {
-            eprintln!("warning: {freq}Hz: chip returned {num_bits} bits, expected 72 for this rate");
+            eprintln!(
+                "warning: {freq}Hz: chip returned {num_bits} bits, expected 72 for this rate"
+            );
         }
     }
 
-    for (framing_name, deinterleave) in [("direct C0||C1||C2||C3", false), ("Annex H deinterleaved", true)] {
+    for (framing_name, deinterleave) in [
+        ("direct C0||C1||C2||C3", false),
+        ("Annex H deinterleaved", true),
+    ] {
         println!("\n-- Framing hypothesis: {framing_name} --");
         let mut zero_error_count = 0usize;
         let mut total = 0usize;
@@ -337,7 +371,11 @@ fn run_fec_test(sock: &UdpSocket) {
             for &byte in frame.iter().take(9) {
                 wire = (wire << 8) | byte as u128;
             }
-            let logical = if deinterleave { interleaved_to_frame(wire) } else { wire };
+            let logical = if deinterleave {
+                interleaved_to_frame(wire)
+            } else {
+                wire
+            };
             let parsed = parse_frame(logical);
             total += 1;
             if parsed.epsilon_c0 == 0 && parsed.epsilon_c1 == 0 {
@@ -348,7 +386,10 @@ fn run_fec_test(sock: &UdpSocket) {
         }
         println!("  zero-error frames: {zero_error_count}/{total}");
         for (freq, b0, pitch) in &freq_pitch {
-            println!("    {freq:>6}Hz: b0={b0} kind={:?} w0={pitch:?}", classify_b0(*b0));
+            println!(
+                "    {freq:>6}Hz: b0={b0} kind={:?} w0={pitch:?}",
+                classify_b0(*b0)
+            );
         }
     }
 }
@@ -356,8 +397,15 @@ fn run_fec_test(sock: &UdpSocket) {
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 /// Real-speech validation of the FEC rate (33), using the already-confirmed-correct "Annex H
@@ -366,7 +414,8 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
 /// corrected errors.
 fn run_fec_real_speech_test(sock: &UdpSocket) -> bool {
     println!("\n=== RATET({RATET_HALF_RATE_FEC}) real recorded speech ===");
-    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC)).expect("send RATET config");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC))
+        .expect("send RATET config");
     let mut buf = [0u8; 256];
     let n = sock.recv(&mut buf).expect("RATET config response");
     parse_packet(&buf[..n]).expect("valid RATET ack");
@@ -400,7 +449,9 @@ fn run_fec_real_speech_test(sock: &UdpSocket) -> bool {
                 zero_error_count += 1;
             }
         }
-        println!("  {path}: {zero_error_count}/{n_frames} frames zero-error (Annex H deinterleaved)");
+        println!(
+            "  {path}: {zero_error_count}/{n_frames} frames zero-error (Annex H deinterleaved)"
+        );
         if zero_error_count != n_frames {
             all_ok = false;
         }
@@ -409,17 +460,24 @@ fn run_fec_real_speech_test(sock: &UdpSocket) -> bool {
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
 
     run_nofec_test(&sock);
     run_fec_test(&sock);
     let speech_ok = run_fec_real_speech_test(&sock);
     if !speech_ok {
-        eprintln!("\nFAIL: at least one real-speech frame did not decode with zero errors on RATET(33).");
+        eprintln!(
+            "\nFAIL: at least one real-speech frame did not decode with zero errors on RATET(33)."
+        );
         std::process::exit(1);
     }
-    println!("\nPASS: every real-speech frame decoded with zero errors on RATET({RATET_HALF_RATE_FEC}).");
+    println!(
+        "\nPASS: every real-speech frame decoded with zero errors on RATET({RATET_HALF_RATE_FEC})."
+    );
 }

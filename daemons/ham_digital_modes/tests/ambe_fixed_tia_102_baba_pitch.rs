@@ -46,8 +46,10 @@ fn run_file(path: &str, stats: &mut Stats) {
     // (10 s of speech) keep this test to a few seconds. A full-file run (7748 frames over the four
     // files, `MAX_FRAMES_PER_FILE=100000`) measured: E max abs error 0.00002, max relative error
     // 0.00011 where |E|>0.1; initial pitch agreement 99.87% end-to-end and lockstep.
-    let max_frames: usize =
-        std::env::var("MAX_FRAMES_PER_FILE").ok().and_then(|v| v.parse().ok()).unwrap_or(500);
+    let max_frames: usize = std::env::var("MAX_FRAMES_PER_FILE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
     centers.truncate(max_frames + 2);
 
     let mut fl_hist = [(100.0f64, 0.0f64); 2];
@@ -56,7 +58,9 @@ fn run_file(path: &str, stats: &mut Stats) {
 
     let build = |c: usize| {
         let ff = fl::PitchAnalysisFrame::new(&raw_f, c);
-        let ftab: Vec<f64> = (0..fx::CANDIDATES).map(|i| ff.error_function(21.0 + 0.5 * i as f64)).collect();
+        let ftab: Vec<f64> = (0..fx::CANDIDATES)
+            .map(|i| ff.error_function(21.0 + 0.5 * i as f64))
+            .collect();
         let xf = fx::PitchAnalysisFrame::new(&raw_i, c);
         (ftab, xf.error_table())
     };
@@ -102,7 +106,8 @@ fn run_file(path: &str, stats: &mut Stats) {
         let (lf, lcf) = fx::look_ahead_pitch_tracking(xt0, xt1, xt2);
         let l_fx = fx::choose_initial_pitch_estimate(lb, lcb, lf, lcf);
         let (fpb, fceb) = fl::look_back_pitch_tracking(float_at(ft0), lock_hist[0], lock_hist[1]);
-        let (fpf, fcef) = fl::look_ahead_pitch_tracking(float_at(ft0), float_at(ft1), float_at(ft2));
+        let (fpf, fcef) =
+            fl::look_ahead_pitch_tracking(float_at(ft0), float_at(ft1), float_at(ft2));
         let l_fl = fl::choose_initial_pitch_estimate(fpb, fceb, fpf, fcef);
         lock_hist = [(l_fl, ft0[index_of(l_fl)]), lock_hist[0]];
         if l_fx == index_of(l_fl) {
@@ -138,9 +143,21 @@ fn fixed_pitch_tracking_matches_float_on_real_speech() {
         pct(stats.lockstep_f_agree),
     );
     assert!(stats.frames >= 300);
-    assert!(stats.e_max_abs < 0.001, "E(P) max abs error {}", stats.e_max_abs);
-    assert!(pct(stats.end_to_end_agree) >= 99.0, "end to end {}", pct(stats.end_to_end_agree));
-    assert!(pct(stats.lockstep_agree) >= 99.0, "lockstep {}", pct(stats.lockstep_agree));
+    assert!(
+        stats.e_max_abs < 0.001,
+        "E(P) max abs error {}",
+        stats.e_max_abs
+    );
+    assert!(
+        pct(stats.end_to_end_agree) >= 99.0,
+        "end to end {}",
+        pct(stats.end_to_end_agree)
+    );
+    assert!(
+        pct(stats.lockstep_agree) >= 99.0,
+        "lockstep {}",
+        pct(stats.lockstep_agree)
+    );
 }
 
 /// Silence scores the worst error everywhere, as in the float sibling; the default history is the

@@ -21,10 +21,13 @@ pub struct FrameErrorsQ16 {
 }
 
 /// The fixed-point equivalent of `estimate_errors` (Eq. 95-96).
-pub fn estimate_errors_q16(corrected_error_counts: &[u32; 7], previous_rate_q16: i32) -> FrameErrorsQ16 {
+pub fn estimate_errors_q16(
+    corrected_error_counts: &[u32; 7],
+    previous_rate_q16: i32,
+) -> FrameErrorsQ16 {
     let total: u32 = corrected_error_counts.iter().sum();
-    let rate_q16 =
-        mul_q16(POINT_95_Q16_16, previous_rate_q16) + mul_q16(POINT_000365_Q16_16, (total as i32) << 16);
+    let rate_q16 = mul_q16(POINT_95_Q16_16, previous_rate_q16)
+        + mul_q16(POINT_000365_Q16_16, (total as i32) << 16);
     FrameErrorsQ16 {
         total,
         rate_q16,

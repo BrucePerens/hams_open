@@ -105,6 +105,35 @@ class EdgeRoutingDomain(models.Model):
                     _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
 
             unique_domains = list(set(all_domains))
+
+            # bug-hunt (2026-09-27, review_tier 1): this POST never carried an
+            # `api_identity` at all, so EVERY sync since pager_duty's own
+            # shared-secret gate went in was refused. The receiving route
+            # (pager_duty/controllers/domain_api.py,
+            # the pager_duty:update_domains anchor) is `auth="public"` and
+            # gated solely on `hmac.compare_digest(api_identity,
+            # <pager_duty.domain_api_identity>)`; with the field absent it
+            # returns {"status": "error", "message": "Unauthorized"} -- and
+            # because that is a `type="jsonrpc"` route, the refusal arrives
+            # inside an HTTP *200* envelope, so `raise_for_status()` below saw
+            # nothing wrong and the broad `except` never fired. The domain
+            # list therefore never reached `pager.check.
+            # update_lets_encrypt_domains()`, silently, on every scheduled
+            # run and every domain create/write/unlink trigger.
+            api_identity = env_svc["zero_sudo.security.utils"]._get_system_param(
+                "pager_duty.domain_api_identity"
+            )
+            if not api_identity:
+                # Fail loudly rather than POSTing a request the endpoint is
+                # guaranteed to refuse: each refusal also increments that
+                # route's own per-source-IP failed-attempt counter, so a
+                # silent retry loop locks this origin out of it entirely.
+                _logger.warning(
+                    "Skipping PagerDuty domain sync: system parameter "
+                    "'pager_duty.domain_api_identity' is not configured, so "
+                    "/api/v1/pager_duty/update_domains would refuse the push."
+                )
+                return
             # Send to the API
             host = config.get('odoo_host') or 'odoo'
             response = requests.post(
@@ -112,11 +141,33 @@ class EdgeRoutingDomain(models.Model):
                 json={
                     "jsonrpc": "2.0",
                     "method": "call",
-                    "params": {"domains": unique_domains},
+                    "params": {
+                        "domains": unique_domains,
+                        "api_identity": api_identity,
+                    },
                 },
                 timeout=5,
             )
             response.raise_for_status()
+            # A JSON-RPC route answers an application-level refusal
+            # ("Unauthorized", "Too many attempts", "Empty payload") with HTTP
+            # 200 and the refusal in the body, so raise_for_status() above is
+            # not a success check on its own. Raise into this function's own
+            # "don't fail the cron" handler so the refusal is at least logged
+            # instead of being indistinguishable from a successful sync.
+            body = response.json()
+            if body.get("error"):
+                raise ValueError(
+                    "PagerDuty domain sync RPC error: %s" % (body["error"],)
+                )
+            result = body.get("result") or {}
+            if result.get("status") != "success":
+                # Only the endpoint's own status/message are echoed here --
+                # never `api_identity`.
+                raise ValueError(
+                    "PagerDuty domain sync refused (status=%s): %s"
+                    % (result.get("status"), result.get("message"))
+                )
         except Exception as e:  # audit-ignore-catch-all
             # bug-hunt (2026-09-09): requests.post()/raise_for_status() raise
             # requests.exceptions.* (ConnectionError, Timeout, HTTPError) on

@@ -17,6 +17,9 @@
         "edge_routing",
         "knowledge",
         "caching",
+        # Already an indirect dependency via edge_routing/caching; made direct because
+        # trusted_ip_ranges.py imports it explicitly (get_redis_connection()).
+        "distributed_redis_cache",
     ],
     "data": [
         "security/security_data.xml",

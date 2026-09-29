@@ -53,7 +53,10 @@ fn g0_values_from_speech_correlation_tsv(path: &str) -> Vec<u16> {
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
     let mut lines = text.lines();
     let header: Vec<&str> = lines.next().expect("header").split('\t').collect();
-    let g0_col = header.iter().position(|&h| h == "chip_g0").expect("chip_g0 column");
+    let g0_col = header
+        .iter()
+        .position(|&h| h == "chip_g0")
+        .expect("chip_g0 column");
     lines
         .filter_map(|line| {
             let parts: Vec<&str> = line.split('\t').collect();
@@ -63,7 +66,10 @@ fn g0_values_from_speech_correlation_tsv(path: &str) -> Vec<u16> {
 }
 
 fn main() {
-    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/references/ratet27_captures");
+    let dir = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/docs/references/ratet27_captures"
+    );
 
     // Datasets built from tone/sweep/DTMF/speech content -- expected to read as ACTIVE throughout,
     // so none of these should ever produce g0 >= DTX_SILENCE_G0.
@@ -89,7 +95,11 @@ fn main() {
         let path = format!("{dir}/{name}");
         let values = g0_values_from_label_hex_tsv(&path);
         let max = values.iter().copied().max().unwrap_or(0);
-        let violations: Vec<u16> = values.iter().copied().filter(|&v| v >= DTX_SILENCE_G0).collect();
+        let violations: Vec<u16> = values
+            .iter()
+            .copied()
+            .filter(|&v| v >= DTX_SILENCE_G0)
+            .collect();
         if !violations.is_empty() {
             any_counterexample = true;
         }
@@ -103,8 +113,11 @@ fn main() {
     let speech_path = format!("{dir}/u_vector_speech_correlation_600frames.tsv");
     let speech_values = g0_values_from_speech_correlation_tsv(&speech_path);
     let speech_max = speech_values.iter().copied().max().unwrap_or(0);
-    let speech_violations: Vec<u16> =
-        speech_values.iter().copied().filter(|&v| v >= DTX_SILENCE_G0).collect();
+    let speech_violations: Vec<u16> = speech_values
+        .iter()
+        .copied()
+        .filter(|&v| v >= DTX_SILENCE_G0)
+        .collect();
     if !speech_violations.is_empty() {
         any_counterexample = true;
     }
@@ -117,13 +130,18 @@ fn main() {
 
     // Datasets specifically about DTX/silence/noise-floor content -- expected to show g0 >=
     // DTX_SILENCE_G0 for their inactive portions; reported for context, not as counterexamples.
-    println!("\n-- DTX/silence/noise-floor datasets (context only, not checked as counterexamples) --");
+    println!(
+        "\n-- DTX/silence/noise-floor datasets (context only, not checked as counterexamples) --"
+    );
     for name in ["dtx_silence_sweep.tsv", "dtx_noise_levels_sweep.tsv"] {
         let path = format!("{dir}/{name}");
         let values = g0_values_from_label_hex_tsv(&path);
         let max = values.iter().copied().max().unwrap_or(0);
         let min = values.iter().copied().min().unwrap_or(0);
-        println!("{name:45}  n={:5}  min_g0={min:5}  max_g0={max:5}", values.len());
+        println!(
+            "{name:45}  n={:5}  min_g0={min:5}  max_g0={max:5}",
+            values.len()
+        );
     }
 
     println!(

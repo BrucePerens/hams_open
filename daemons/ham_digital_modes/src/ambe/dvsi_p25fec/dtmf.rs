@@ -108,26 +108,51 @@ mod tests {
     fn decode_dtmf_digit_round_trips_every_confirmed_chip_capture() {
         for (row_index, row) in CONFIRMED_DTMF_G0_U4.iter().enumerate() {
             for (column_index, &(g0, u4)) in row.iter().enumerate() {
-                assert_eq!(decode_dtmf_digit(g0, u4), Some((row_index as u8, column_index as u8)));
+                assert_eq!(
+                    decode_dtmf_digit(g0, u4),
+                    Some((row_index as u8, column_index as u8))
+                );
             }
         }
     }
 
     #[test]
     fn decode_dtmf_digit_rejects_values_outside_the_confirmed_range() {
-        assert_eq!(decode_dtmf_digit(0, 0), None, "g0=0 is nowhere near the DTMF row base");
-        assert_eq!(decode_dtmf_digit(4032, 81), None, "u4=81 is not a multiple-of-128 offset");
-        assert_eq!(decode_dtmf_digit(4036, 80), None, "row index 4 is out of the confirmed 0..4 range");
-        assert_eq!(decode_dtmf_digit(4032, 80 + 128 * 4), None, "column index 4 is out of range");
+        assert_eq!(
+            decode_dtmf_digit(0, 0),
+            None,
+            "g0=0 is nowhere near the DTMF row base"
+        );
+        assert_eq!(
+            decode_dtmf_digit(4032, 81),
+            None,
+            "u4=81 is not a multiple-of-128 offset"
+        );
+        assert_eq!(
+            decode_dtmf_digit(4036, 80),
+            None,
+            "row index 4 is out of the confirmed 0..4 range"
+        );
+        assert_eq!(
+            decode_dtmf_digit(4032, 80 + 128 * 4),
+            None,
+            "column index 4 is out of range"
+        );
     }
 
     #[test]
     fn row_and_column_index_round_trip_through_their_own_encode_decode_pair() {
         for row_index in 0u8..4 {
-            assert_eq!(row_index_from_g0(g0_from_row_index(row_index)), Some(row_index));
+            assert_eq!(
+                row_index_from_g0(g0_from_row_index(row_index)),
+                Some(row_index)
+            );
         }
         for column_index in 0u8..4 {
-            assert_eq!(column_index_from_u4(u4_from_column_index(column_index)), Some(column_index));
+            assert_eq!(
+                column_index_from_u4(u4_from_column_index(column_index)),
+                Some(column_index)
+            );
         }
     }
 }

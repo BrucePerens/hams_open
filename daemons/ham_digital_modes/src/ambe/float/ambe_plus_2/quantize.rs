@@ -30,7 +30,10 @@ fn nearest_row<const N: usize>(table: &[[f64; N]], target: &[f64; N]) -> u32 {
 /// clamped to `0..=119` (the 120 real pitch codes; 120-127 are the special erasure/silence/tone
 /// ranges `decode::classify_b0` handles, never a real encoder target).
 pub fn quantize_pitch(w0: f64) -> u32 {
-    assert!(w0.is_finite() && w0 > 0.0, "pitch must be a finite positive frequency, got {w0}");
+    assert!(
+        w0.is_finite() && w0 > 0.0,
+        "pitch must be a finite positive frequency, got {w0}"
+    );
     let f0 = w0 / (2.0 * std::f64::consts::PI);
     tables::W0_TABLE
         .iter()
@@ -181,7 +184,10 @@ mod tests {
             let f0 = tables::W0_TABLE[b0 as usize];
             let w0 = f0 * 2.0 * std::f64::consts::PI;
             let recovered = quantize_pitch(w0);
-            assert_eq!(recovered, b0, "w0={w0} (from b0={b0}), recovered={recovered}");
+            assert_eq!(
+                recovered, b0,
+                "w0={w0} (from b0={b0}), recovered={recovered}"
+            );
         }
     }
 }

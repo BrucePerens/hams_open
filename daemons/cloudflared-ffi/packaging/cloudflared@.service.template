@@ -1,0 +1,39 @@
+# Copyright © HAMS project. AGPL-3.0-or-later.
+#
+# Templated per Cloudflare Tunnel: %i is the tunnel's own Cloudflare tunnel id (an opaque,
+# non-secret identifier, safe to log and to name a unit instance after -- see
+# cloudflare/utils/cloudflare_systemd.py for the Odoo-side half of this design, and
+# night_shift_questions/answered/cloudflare-tunnel-supervisor-architecture-a4e8f1c3.md for the
+# full "why" writeup).
+#
+# The literal text "{cloudflared_bin}" below is filled in by cloudflare_systemd.py at write time
+# via a plain string .replace() (systemd does not expand environment variables in the ExecStart
+# executable position, only in its arguments -- confirmed empirically, not assumed, before this
+# design was finalized), so the rendered unit file itself is host-specific; this checked-in file
+# is the template, not what actually gets installed.
+#
+# Installed as a --user unit for the `odoo` account (systemctl --user), never a system unit: this
+# keeps it inside the odoo user's own `user@<uid>.slice` cgroup subtree, which `odoo.service`'s own
+# KillMode=mixed cgroup-wide kill sweep on restart/stop does not reach -- the entire point of
+# moving this out of Odoo's own process. Requires `loginctl enable-linger odoo` once (root, at
+# provisioning time) so the user manager stays up across boots without an interactive login.
+[Unit]
+Description=Cloudflare Tunnel (%i)
+
+[Service]
+Type=simple
+EnvironmentFile=/opt/hams/etc/keys/cloudflared-%i.env
+# The run token is deliberately NOT passed as `--token <value>`: an argument is world-readable through
+# /proc/<pid>/cmdline and `ps` for every local account (this host's /proc has no hidepid). cloudflared reads
+# the same value from its TUNNEL_TOKEN environment variable, which EnvironmentFile= above supplies and which
+# only the unit's own user (and root) can read from /proc/<pid>/environ.
+ExecStart={cloudflared_bin} tunnel --no-autoupdate run
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

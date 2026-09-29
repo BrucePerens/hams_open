@@ -32,7 +32,9 @@ use super::enhancement::{
     update_local_energy_q16,
 };
 use super::error_estimation::FrameErrorsQ16;
-use crate::ambe::fixed::general::unvoiced_synthesis::{advance_noise, NoiseState, UnvoicedState, N};
+use crate::ambe::fixed::general::unvoiced_synthesis::{
+    advance_noise, NoiseState, UnvoicedState, N,
+};
 use crate::ambe::fixed::general::voiced_synthesis::VoicedState;
 
 /// `round(-5.0 * 65536)`.
@@ -111,7 +113,8 @@ impl SynthesisState {
 
         // Section 8: spectral amplitude enhancement (Eq. 105-110).
         let r_m0 = energy_q16(reconstructed_amplitudes_q16);
-        let enhanced = enhance_spectral_amplitudes_q16(reconstructed_amplitudes_q16, omega0_tilde_q32);
+        let enhanced =
+            enhance_spectral_amplitudes_q16(reconstructed_amplitudes_q16, omega0_tilde_q32);
 
         // Section 9: V/UV smoothing (Eq. 111-113) -- forcing uses the *enhanced*, not-yet-gamma_M-
         // scaled amplitude, per enhancement::smooth_voicing_decision_q16's own established contract.
@@ -155,12 +158,15 @@ impl SynthesisState {
         }
         self.first_frame = false;
 
-        let s_uv = self
-            .unvoiced
-            .synthesize(&self.noise, omega0_tilde_q32, voiced, final_amplitudes_q16)?;
-        let s_v = self
-            .voiced
-            .synthesize(&self.noise, omega0_tilde_q32, voiced, final_amplitudes_q16)?;
+        let s_uv = self.unvoiced.synthesize(
+            &self.noise,
+            omega0_tilde_q32,
+            voiced,
+            final_amplitudes_q16,
+        )?;
+        let s_v =
+            self.voiced
+                .synthesize(&self.noise, omega0_tilde_q32, voiced, final_amplitudes_q16)?;
 
         let mut s = [0i64; N];
         for i in 0..N {
@@ -204,7 +210,10 @@ impl SynthesisState {
     /// A repeated frame with every amplitude multiplied by `scale_q16` (a fade); the stored last frame stays untouched.
     pub fn synthesize_repeated_frame_scaled(&mut self, scale_q16: i32) -> Option<[i64; N]> {
         let (omega0_tilde_q32, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
-        let scaled: Vec<i32> = final_amplitudes.iter().map(|&a| ((a as i64 * scale_q16 as i64) >> 16) as i32).collect();
+        let scaled: Vec<i32> = final_amplitudes
+            .iter()
+            .map(|&a| ((a as i64 * scale_q16 as i64) >> 16) as i32)
+            .collect();
         self.synthesize_core(omega0_tilde_q32, &voiced, &scaled)
     }
 }

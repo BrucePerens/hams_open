@@ -13,7 +13,9 @@
 //!
 //! Usage: `cargo run --release --example dstar_diagnose_low_band_deficit`
 
-use ham_digital_modes::ambe::float::dstar::decode::{dequantize, parse_frame, DStarDecoderState, DequantizedFrame};
+use ham_digital_modes::ambe::float::dstar::decode::{
+    dequantize, parse_frame, DStarDecoderState, DequantizedFrame,
+};
 use ham_digital_modes::ambe::float::dstar::interleave::wire_bytes_to_frame;
 use ham_digital_modes::ambe::float::mbe_synthesis::MbeSynthesizer;
 use rustfft::{num_complex::Complex64, FftPlanner};
@@ -33,21 +35,37 @@ fn psd_low(frames: &[[f64; 160]]) -> (f64, f64) {
 }
 
 fn main() {
-    let hex = std::fs::read_to_string(std::env::temp_dir().join("dstar_channel_payloads.hex")).expect("run the harness first");
+    let hex = std::fs::read_to_string(std::env::temp_dir().join("dstar_channel_payloads.hex"))
+        .expect("run the harness first");
     let payloads: Vec<Vec<u8>> = hex
         .lines()
-        .map(|l| (0..l.len() / 2).map(|i| u8::from_str_radix(&l[2 * i..2 * i + 2], 16).unwrap()).collect())
+        .map(|l| {
+            (0..l.len() / 2)
+                .map(|i| u8::from_str_radix(&l[2 * i..2 * i + 2], 16).unwrap())
+                .collect()
+        })
         .collect();
     let wav = std::fs::read(std::env::temp_dir().join("dstar_chip_decoded.wav")).expect("chip wav");
-    let chip: Vec<f64> = wav[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f64).collect();
-    let chip_frames: Vec<[f64; 160]> = chip.chunks_exact(160).map(|c| c.try_into().unwrap()).collect();
+    let chip: Vec<f64> = wav[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
+        .collect();
+    let chip_frames: Vec<[f64; 160]> = chip
+        .chunks_exact(160)
+        .map(|c| c.try_into().unwrap())
+        .collect();
 
     let mut voiced_by_l = [(0usize, 0usize); 12];
     let mut ml_by_l = [(0.0f64, 0usize); 12];
     let mut l_sum = 0u32;
     let mut speech = 0usize;
 
-    let variants = ["as-is", "all voiced", "harmonics 1-8 voiced", "all unvoiced"];
+    let variants = [
+        "as-is",
+        "all voiced",
+        "harmonics 1-8 voiced",
+        "all unvoiced",
+    ];
     for (vi, variant) in variants.iter().enumerate() {
         let mut state = DStarDecoderState::initial();
         let mut synth = MbeSynthesizer::new();
@@ -71,11 +89,21 @@ fn main() {
                 }
                 match vi {
                     1 => params.voiced.iter_mut().for_each(|v| *v = true),
-                    2 => params.voiced.iter_mut().enumerate().for_each(|(i, v)| *v = (1..=8).contains(&i)),
+                    2 => params
+                        .voiced
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(i, v)| *v = (1..=8).contains(&i)),
                     3 => params.voiced.iter_mut().for_each(|v| *v = false),
                     _ => {}
                 }
-                if let Some(f) = synth.synthesize_speech(params.w0, &params.voiced, &params.ml, parsed.epsilon_c0, parsed.epsilon_c1) {
+                if let Some(f) = synth.synthesize_speech(
+                    params.w0,
+                    &params.voiced,
+                    &params.ml,
+                    parsed.epsilon_c0,
+                    parsed.epsilon_c1,
+                ) {
                     frames.push(f);
                     continue;
                 }
@@ -95,29 +123,55 @@ fn main() {
             wb.copy_from_slice(&p[2..11]);
             let parsed = parse_frame(wire_bytes_to_frame(&wb));
             if let DequantizedFrame::Speech(params) = dequantize(parsed.d, &mut state) {
-                if let Some(f) = synth.synthesize_speech(params.w0, &params.voiced, &params.ml, parsed.epsilon_c0, parsed.epsilon_c1) {
-                    let rms = |x: &[f64]| (x.iter().map(|v| v * v).sum::<f64>() / x.len() as f64).sqrt();
+                if let Some(f) = synth.synthesize_speech(
+                    params.w0,
+                    &params.voiced,
+                    &params.ml,
+                    parsed.epsilon_c0,
+                    parsed.epsilon_c1,
+                ) {
+                    let rms =
+                        |x: &[f64]| (x.iter().map(|v| v * v).sum::<f64>() / x.len() as f64).sqrt();
                     let (cr, fr) = (rms(&chip_frames[i]), rms(&f));
                     if cr > 300.0 && fr > 1.0 {
-                        let vf = params.voiced[1..].iter().filter(|&&v| v).count() as f64 / params.l as f64;
-                        rows.push((cr / fr, params.w0 * 8000.0 / (2.0 * std::f64::consts::PI), vf, cr));
+                        let vf = params.voiced[1..].iter().filter(|&&v| v).count() as f64
+                            / params.l as f64;
+                        rows.push((
+                            cr / fr,
+                            params.w0 * 8000.0 / (2.0 * std::f64::consts::PI),
+                            vf,
+                            cr,
+                        ));
                     }
                 }
             }
         }
         rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         let n = rows.len();
-        println!("loud frames {n}: chip/float RMS ratio p10 {:.2} median {:.2} p90 {:.2}", rows[n / 10].0, rows[n / 2].0, rows[9 * n / 10].0);
+        println!(
+            "loud frames {n}: chip/float RMS ratio p10 {:.2} median {:.2} p90 {:.2}",
+            rows[n / 10].0,
+            rows[n / 2].0,
+            rows[9 * n / 10].0
+        );
         for (lo, hi) in [(0.0, 100.0), (100.0, 140.0), (140.0, 400.0)] {
             let sel: Vec<_> = rows.iter().filter(|r| r.1 >= lo && r.1 < hi).collect();
             if !sel.is_empty() {
-                println!("  f0 {lo:>3.0}-{hi:<3.0} Hz: {} frames, mean ratio {:.2}", sel.len(), sel.iter().map(|r| r.0).sum::<f64>() / sel.len() as f64);
+                println!(
+                    "  f0 {lo:>3.0}-{hi:<3.0} Hz: {} frames, mean ratio {:.2}",
+                    sel.len(),
+                    sel.iter().map(|r| r.0).sum::<f64>() / sel.len() as f64
+                );
             }
         }
         for (lo, hi) in [(0.0, 0.34), (0.34, 0.67), (0.67, 1.01)] {
             let sel: Vec<_> = rows.iter().filter(|r| r.2 >= lo && r.2 < hi).collect();
             if !sel.is_empty() {
-                println!("  voiced frac {lo:.2}-{hi:.2}: {} frames, mean ratio {:.2}", sel.len(), sel.iter().map(|r| r.0).sum::<f64>() / sel.len() as f64);
+                println!(
+                    "  voiced frac {lo:.2}-{hi:.2}: {} frames, mean ratio {:.2}",
+                    sel.len(),
+                    sel.iter().map(|r| r.0).sum::<f64>() / sel.len() as f64
+                );
             }
         }
     }
@@ -130,7 +184,12 @@ fn main() {
             let mut buf: Vec<Complex64> = x
                 .iter()
                 .enumerate()
-                .map(|(k, &s)| Complex64::new(s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * k as f64 / (n - 1.0)).cos()), 0.0))
+                .map(|(k, &s)| {
+                    Complex64::new(
+                        s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * k as f64 / (n - 1.0)).cos()),
+                        0.0,
+                    )
+                })
                 .collect();
             buf.resize(1024, Complex64::new(0.0, 0.0));
             fft.process(&mut buf);
@@ -147,7 +206,13 @@ fn main() {
             let parsed = parse_frame(wire_bytes_to_frame(&wb));
             if let DequantizedFrame::Speech(params) = dequantize(parsed.d, &mut state) {
                 let vf = params.voiced[1..].iter().filter(|&&v| v).count() as f64 / params.l as f64;
-                if let Some(f) = synth.synthesize_speech(params.w0, &params.voiced, &params.ml, parsed.epsilon_c0, parsed.epsilon_c1) {
+                if let Some(f) = synth.synthesize_speech(
+                    params.w0,
+                    &params.voiced,
+                    &params.ml,
+                    parsed.epsilon_c0,
+                    parsed.epsilon_c1,
+                ) {
                     if vf < 0.6 {
                         continue;
                     }
@@ -158,7 +223,11 @@ fn main() {
                             continue;
                         }
                         let b = (k as f64 * f0_bins).round() as usize;
-                        let peak = |m: &[f64]| (b.saturating_sub(2)..=(b + 2).min(511)).map(|j| m[j]).fold(0.0, f64::max);
+                        let peak = |m: &[f64]| {
+                            (b.saturating_sub(2)..=(b + 2).min(511))
+                                .map(|j| m[j])
+                                .fold(0.0, f64::max)
+                        };
                         if peak(&fm) > 1.0 {
                             ratios[k].push(peak(&cm) / peak(&fm));
                             chip_per_ml[k].push(peak(&cm) / params.ml[k]);
@@ -173,8 +242,18 @@ fn main() {
             if r.len() > 2 {
                 let mut v = r.clone();
                 v.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                let med = |x: &Vec<f64>| { let mut y = x.clone(); y.sort_by(|a, b| a.partial_cmp(b).unwrap()); y[y.len() / 2] };
-                println!("  k={k:>2}: n={:>3} chip/float {:.2}   chip/Ml {:.2}   float/Ml {:.2}", v.len(), v[v.len() / 2], med(&chip_per_ml[k]), med(&float_per_ml[k]));
+                let med = |x: &Vec<f64>| {
+                    let mut y = x.clone();
+                    y.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    y[y.len() / 2]
+                };
+                println!(
+                    "  k={k:>2}: n={:>3} chip/float {:.2}   chip/Ml {:.2}   float/Ml {:.2}",
+                    v.len(),
+                    v[v.len() / 2],
+                    med(&chip_per_ml[k]),
+                    med(&float_per_ml[k])
+                );
             }
         }
     }
@@ -199,7 +278,12 @@ fn main() {
                 let mut buf: Vec<Complex64> = x
                     .iter()
                     .enumerate()
-                    .map(|(k, &s)| Complex64::new(s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * k as f64 / 159.0).cos()), 0.0))
+                    .map(|(k, &s)| {
+                        Complex64::new(
+                            s * (0.5 - 0.5 * (2.0 * std::f64::consts::PI * k as f64 / 159.0).cos()),
+                            0.0,
+                        )
+                    })
                     .collect();
                 buf.resize(2048, Complex64::new(0.0, 0.0));
                 fft.process(&mut buf);
@@ -208,7 +292,9 @@ fn main() {
                 let (mut best_s, mut best_v) = (1.0, -1.0);
                 let mut s = 0.85;
                 while s <= 1.15 {
-                    let v: f64 = (1..=6).map(|k| mag[((k as f64 * f0_bins * s).round() as usize).min(1023)]).sum();
+                    let v: f64 = (1..=6)
+                        .map(|k| mag[((k as f64 * f0_bins * s).round() as usize).min(1023)])
+                        .sum();
                     if v > best_v {
                         best_v = v;
                         best_s = s;
@@ -223,8 +309,14 @@ fn main() {
         println!("pitch scale (chip f0 / our f0) over {n} voiced loud frames: p10 {:.3} median {:.3} p90 {:.3}", scales[n / 10], scales[n / 2], scales[9 * n / 10]);
     }
     let (clo, cmid) = psd_low(&chip_frames);
-    println!("{:>30}: 0-400 Hz {clo:.1} dB, 400-1000 Hz {cmid:.1} dB", "chip");
-    println!("speech frames {speech}, mean L {:.1}", l_sum as f64 / speech.max(1) as f64);
+    println!(
+        "{:>30}: 0-400 Hz {clo:.1} dB, 400-1000 Hz {cmid:.1} dB",
+        "chip"
+    );
+    println!(
+        "speech frames {speech}, mean L {:.1}",
+        l_sum as f64 / speech.max(1) as f64
+    );
     for l in 1..12 {
         println!(
             "harmonic {l:>2}: voiced {:>5.1}%, mean Ml {:>9.2}",

@@ -21,13 +21,19 @@
 //!
 //! Usage: `cargo run --release --example ratet27_probe_bit_layout -- <host:port> [base_frame_indexes...]`
 
-use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
-use ham_digital_modes::ambe::dvsi_p25fec::fec::{g3_decode, g3_encode, hamming_decode_chip, hamming_encode_chip};
+use ham_digital_modes::ambe::dvsi_p25fec::fec::{
+    g3_decode, g3_encode, hamming_decode_chip, hamming_encode_chip,
+};
 use ham_digital_modes::ambe::dvsi_p25fec::wire_format::{block_wire_members, Block};
-use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{deprioritize_bits, extract_fundamental_frequency_quantizer};
+use ham_digital_modes::ambe::float::tia_102_baba::bit_prioritization::{
+    deprioritize_bits, extract_fundamental_frequency_quantizer,
+};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
 use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding::dequantize_fundamental_frequency;
 use ham_digital_modes::ambe::float::tia_102_baba::quantize::higher_order_coefficient_positions;
-use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_bit_allocation, higher_order_bit_allocation};
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
+    gain_bit_allocation, higher_order_bit_allocation,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
 use ham_digital_modes::ambe::general::fec::{golay_decode, golay_encode};
 use rustfft::{num_complex::Complex64, FftPlanner};
@@ -103,8 +109,15 @@ fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 1024], pkt: &[u8]) -> usi
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     let mut wire_frame_bits = [false; 144];
@@ -134,7 +147,6 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
         raw(Block::Raw),
     ]
 }
-
 
 const REPS: usize = 8;
 const BANDS: usize = 8;
@@ -175,7 +187,10 @@ fn band_energies_db(frames: &[Vec<f64>]) -> [f64; BANDS] {
             .iter()
             .enumerate()
             .map(|(i, &s)| {
-                let w = 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / (FRAME_SAMPLES as f64 - 1.0)).cos();
+                let w = 0.5
+                    - 0.5
+                        * (2.0 * std::f64::consts::PI * i as f64 / (FRAME_SAMPLES as f64 - 1.0))
+                            .cos();
                 Complex64::new(s * w, 0.0)
             })
             .collect();
@@ -220,18 +235,30 @@ fn tia_label(u_base: &[u32; 8], v: usize, bit: usize, width: usize) -> String {
     let b0 = extract_fundamental_frequency_quantizer(u_base);
     let l_hat = harmonics_count(dequantize_fundamental_frequency(b0));
     let k_hat = frequency_bands_count(l_hat);
-    let gain_widths: [u8; 5] = std::array::from_fn(|i| gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
-    let higher_widths: Vec<u8> = higher_order_bit_allocation(l_hat).unwrap().iter().copied().filter(|&w| w > 0).collect();
+    let gain_widths: [u8; 5] =
+        std::array::from_fn(|i| gain_bit_allocation(l_hat, i as u32 + 2).unwrap().0);
+    let higher_widths: Vec<u8> = higher_order_bit_allocation(l_hat)
+        .unwrap()
+        .iter()
+        .copied()
+        .filter(|&w| w > 0)
+        .collect();
     let positions = higher_order_coefficient_positions(l_hat).unwrap();
     let alloc = higher_order_bit_allocation(l_hat).unwrap();
-    let nonzero_positions: Vec<(usize, usize)> =
-        positions.iter().zip(alloc.iter()).filter(|(_, &w)| w > 0).map(|(&p, _)| p).collect();
+    let nonzero_positions: Vec<(usize, usize)> = positions
+        .iter()
+        .zip(alloc.iter())
+        .filter(|(_, &w)| w > 0)
+        .map(|(&p, _)| p)
+        .collect();
     let _ = width;
     let a = deprioritize_bits(*u_base, k_hat, gain_widths, &higher_widths);
     let mut um = *u_base;
     um[v] ^= 1 << bit;
     let b = deprioritize_bits(um, k_hat, gain_widths, &higher_widths);
-    let (Some(a), Some(b)) = (a, b) else { return "?".into() };
+    let (Some(a), Some(b)) = (a, b) else {
+        return "?".into();
+    };
     if a.b0 != b.b0 {
         return format!("b0.{}", (a.b0 ^ b.b0).trailing_zeros());
     }
@@ -244,13 +271,22 @@ fn tia_label(u_base: &[u32; 8], v: usize, bit: usize, width: usize) -> String {
     }
     for i in 0..5 {
         if a.gain_vector[i].0 != b.gain_vector[i].0 {
-            return format!("gain[{}].{}", i + 2, (a.gain_vector[i].0 ^ b.gain_vector[i].0).trailing_zeros());
+            return format!(
+                "gain[{}].{}",
+                i + 2,
+                (a.gain_vector[i].0 ^ b.gain_vector[i].0).trailing_zeros()
+            );
         }
     }
     for (j, (x, y)) in a.higher_order.iter().zip(b.higher_order.iter()).enumerate() {
         if x.0 != y.0 {
             let (blk, k) = nonzero_positions[j];
-            return format!("hoc[blk{},k{}].{}", blk + 1, k, (x.0 ^ y.0).trailing_zeros());
+            return format!(
+                "hoc[blk{},k{}].{}",
+                blk + 1,
+                k,
+                (x.0 ^ y.0).trailing_zeros()
+            );
         }
     }
     if a.sync_bit != b.sync_bit {
@@ -296,7 +332,10 @@ impl Chip<'_> {
             let n = send_recv_retrying(self.sock, &mut self.buf, &build_channel(&payload));
             let (ptype, p) = parse_packet(&self.buf[..n]).expect("valid packet");
             if ptype != TYPE_SPEECH {
-                eprintln!("non-speech reply type {ptype}: {:02x?}", &self.buf[..n.min(24)]);
+                eprintln!(
+                    "non-speech reply type {ptype}: {:02x?}",
+                    &self.buf[..n.min(24)]
+                );
                 frames.push(vec![0.0; FRAME_SAMPLES]);
                 continue;
             }
@@ -311,7 +350,11 @@ fn ours_repeated(c_base: &[u32; 8], c_mod: &[u32; 8]) -> ([f64; BANDS], [f64; BA
     let mut run = |c: &[u32; 8]| -> Vec<Vec<f64>> {
         let mut frames = Vec::new();
         for _ in 0..REPS {
-            frames.push(d.decode_frame(*c).map(|f| f.to_vec()).unwrap_or_else(|| vec![0.0; FRAME_SAMPLES]));
+            frames.push(
+                d.decode_frame(*c)
+                    .map(|f| f.to_vec())
+                    .unwrap_or_else(|| vec![0.0; FRAME_SAMPLES]),
+            );
         }
         frames.split_off(REPS - 2)
     };
@@ -321,11 +364,21 @@ fn ours_repeated(c_base: &[u32; 8], c_mod: &[u32; 8]) -> ([f64; BANDS], [f64; BA
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
-    let bases: Vec<usize> = std::env::args().skip(2).filter_map(|a| a.parse().ok()).collect();
-    let bases = if bases.is_empty() { vec![45, 84] } else { bases };
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let bases: Vec<usize> = std::env::args()
+        .skip(2)
+        .filter_map(|a| a.parse().ok())
+        .collect();
+    let bases = if bases.is_empty() {
+        vec![45, 84]
+    } else {
+        bases
+    };
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 1024];
     sock.send(&build_control_ratep(RATEP_P25_FEC)).unwrap();
@@ -333,7 +386,11 @@ fn main() {
     parse_packet(&buf[..n]).unwrap();
 
     let pcm = read_wav_mono_i16("tests/fixtures/osr_speech/OSR_us_000_0010_8k.wav");
-    let mut chip = Chip { sock: &sock, buf: [0u8; 1024], header: Vec::new() };
+    let mut chip = Chip {
+        sock: &sock,
+        buf: [0u8; 1024],
+        header: Vec::new(),
+    };
     let widths: [usize; 8] = [12, 12, 12, 8, 11, 11, 11, 7]; // u3 is g3's 8-bit subspace
 
     for &base_idx in &bases {
@@ -346,7 +403,11 @@ fn main() {
             let mut wb = [0u8; FRAME_BYTES];
             wb.copy_from_slice(&payload[payload.len() - FRAME_BYTES..]);
             chip.header = payload[..payload.len() - FRAME_BYTES].to_vec();
-            assert_eq!(c_to_wire_bytes(&wire_bytes_to_c(&wb)), wb, "c<->wire round trip");
+            assert_eq!(
+                c_to_wire_bytes(&wire_bytes_to_c(&wb)),
+                wb,
+                "c<->wire round trip"
+            );
             eprintln!("payload len {} header {:02x?}", payload.len(), chip.header);
             c_base = wire_bytes_to_c(&wb);
         }
@@ -355,13 +416,20 @@ fn main() {
         println!("== base frame {base_idx}: u = {u_base:04x?}");
         let base_chip = band_energies_db(&chip.decode_repeated(&c_base_clean));
         println!("chip base band dB: {:.1?}", base_chip);
-        println!("ours base band dB: {:.1?}", ours_repeated(&c_base_clean, &c_base_clean).0);
+        println!(
+            "ours base band dB: {:.1?}",
+            ours_repeated(&c_base_clean, &c_base_clean).0
+        );
         let noise: Vec<f64> = {
             let a = band_energies_db(&chip.decode_repeated(&c_base_clean));
             let b = band_energies_db(&chip.decode_repeated(&c_base_clean));
             (0..BANDS).map(|i| b[i] - a[i]).collect()
         };
-        println!("chip base-vs-base noise floor dB: {:.1?} (|.| mean {:.1})", noise, noise.iter().map(|x| x.abs()).sum::<f64>() / BANDS as f64);
+        println!(
+            "chip base-vs-base noise floor dB: {:.1?} (|.| mean {:.1})",
+            noise,
+            noise.iter().map(|x| x.abs()).sum::<f64>() / BANDS as f64
+        );
         println!("vec.bit | chip delta dB per 500Hz band | corr(chip,ours) | |chip|/|ours|");
         for v in 0..8 {
             for bit in 0..widths[v] {
@@ -378,7 +446,11 @@ fn main() {
                 let chip_delta: Vec<f64> = (0..BANDS).map(|b| chip_mod[b] - base_now[b]).collect();
                 let (ob, om) = ours_repeated(&c_base_clean, &c_mod);
                 let ours_delta: Vec<f64> = (0..BANDS).map(|b| om[b] - ob[b]).collect();
-                let label = if v == 3 { "g3(unmapped)".to_string() } else { tia_label(&u_base, v, bit, widths[v]) };
+                let label = if v == 3 {
+                    "g3(unmapped)".to_string()
+                } else {
+                    tia_label(&u_base, v, bit, widths[v])
+                };
                 println!(
                     "u{v}.{bit:<2} {label:16} | {:>5.1?} | {:5.2} | {:5.2}",
                     chip_delta,

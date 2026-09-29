@@ -83,8 +83,9 @@ fn log2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
 #[cfg(test)]
 fn exp2_lut_table() -> &'static [f32; LOG2_LUT_SIZE] {
     static TABLE: OnceLock<[f32; LOG2_LUT_SIZE]> = OnceLock::new();
-    TABLE
-        .get_or_init(|| core::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2()))
+    TABLE.get_or_init(|| {
+        core::array::from_fn(|i| (i as f32 / (1u32 << LOG2_LUT_BITS) as f32).exp2())
+    })
 }
 
 /// Q23-quantized sibling of `log2_lut_table()` -- what `log2_lut()`'s
@@ -412,7 +413,14 @@ fn log2_q23_split32(x_q23: i64) -> i64 {
         (shift, m)
     } else {
         let shift = (31 - clz_nonzero(lo)) as i32 - 23;
-        (shift, if shift >= 0 { lo >> shift } else { lo << (-shift) })
+        (
+            shift,
+            if shift >= 0 {
+                lo >> shift
+            } else {
+                lo << (-shift)
+            },
+        )
     };
     let frac = mantissa & ((1 << 23) - 1); // [0, 2^23)
     let idx = (frac >> (23 - LOG2_LUT_BITS)) as usize;
@@ -434,7 +442,11 @@ fn log2_q23_native(x_q23: i64) -> i64 {
     let x_q23 = x_q23.max(1);
     let bits = 63 - x_q23.leading_zeros() as i32;
     let shift = bits - 23;
-    let mantissa_q23: i64 = if shift >= 0 { x_q23 >> shift } else { x_q23 << (-shift) };
+    let mantissa_q23: i64 = if shift >= 0 {
+        x_q23 >> shift
+    } else {
+        x_q23 << (-shift)
+    };
     let mantissa_frac_q23 = (mantissa_q23 - (1i64 << 23)) as u64;
     let levels = 1u32 << LOG2_LUT_BITS;
     let scaled_full = mantissa_frac_q23 * levels as u64;
@@ -551,10 +563,23 @@ mod tests {
     fn log2_and_exp2_q23_match_their_64_bit_reference_bit_for_bit() {
         let mut seed = 0x1234_5678_9abc_def0u64;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             seed
         };
-        let mut xs: Vec<i64> = vec![0, 1, 2, 3, i64::MAX, i64::MAX - 1, 1 << 23, (1 << 23) - 1, (1 << 24) - 1, 1 << 24];
+        let mut xs: Vec<i64> = vec![
+            0,
+            1,
+            2,
+            3,
+            i64::MAX,
+            i64::MAX - 1,
+            1 << 23,
+            (1 << 23) - 1,
+            (1 << 24) - 1,
+            1 << 24,
+        ];
         for k in 0..63 {
             for d in [-2i64, -1, 0, 1, 2] {
                 xs.push(((1i64 << k) + d).max(1));

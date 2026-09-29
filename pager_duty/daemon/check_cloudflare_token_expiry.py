@@ -40,10 +40,27 @@ import sys
 import urllib.error
 import urllib.request
 
+# generalized_monitor.py lives in this same daemon/ directory. Reached via a
+# sys.path hop, never the odoo.addons namespace: hams_shared/tools/
+# check_burn_list.py's "CRITICAL DAEMON DECOUPLING" rule bans `from odoo`
+# in any daemon/ directory, and the `odoo` package is not importable in
+# this script's real standalone process anyway (same precedent as
+# pager_synthetic_spooler.py's hop to zero_sudo/daemon).
+_DAEMON_DIR = os.path.dirname(os.path.abspath(__file__))
+if _DAEMON_DIR not in sys.path:
+    sys.path.insert(0, _DAEMON_DIR)
+from generalized_monitor import severity_for_days_left  # noqa: E402
+
 DEFAULT_CREDENTIALS_PATH = "/opt/hams/etc/relay_cert_renew/cloudflare.ini"
 # A token this close to expiring should page well before it's too late to
 # generate and roll a replacement by hand -- matches the "ssl" check type's
 # own default `critical` threshold (14 days) for the same kind of decision.
+# Superseded in practice by severity_for_days_left()'s own graduated ladder
+# (added 2026-09-22, shared with check_github_pat_expiry.py) -- kept as the
+# HAMS_CLOUDFLARE_TOKEN_WARN_DAYS-overridable single threshold this script's
+# own tests and any existing override already depend on; days_left <= this
+# is still when main() starts reporting a failure at all, graduated severity
+# just decides how urgently once it does.
 DEFAULT_WARN_DAYS = 30
 # Not a secret -- a Cloudflare account identifier, not a credential (doesn't
 # match any of MASTER_01_SECURITY_ZERO_SUDO.md's own restricted-substring
@@ -142,10 +159,16 @@ def main():
     days_left = (expiry_dt - datetime.datetime.now(datetime.timezone.utc)).days
 
     if days_left <= warn_days:
-        print(
-            f"Cloudflare API token expires in {days_left} days ({expires_on})",
-            file=sys.stderr,
-        )
+        # Same graduated-severity contract as check_github_pat_expiry.py: a bare
+        # "SEVERITY:<level>" line on stderr, read by generalized_monitor.py's
+        # execute_check(). Past the ladder's last rung (only reachable with a
+        # HAMS_CLOUDFLARE_TOKEN_WARN_DAYS override above 30) no line is printed
+        # and the monitor keeps its flat default, exactly as before.
+        severity = severity_for_days_left(days_left)
+        message = f"Cloudflare API token expires in {days_left} days ({expires_on})"
+        if severity:
+            message = f"SEVERITY:{severity}\n{message}"
+        print(message, file=sys.stderr)
         return 1
 
     print(f"token healthy, expires in {days_left} days ({expires_on})")

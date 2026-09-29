@@ -22,12 +22,18 @@
 //! below verifies directly that this mismatch, not amplitude-reconstruction compounding, is what drives
 //! this file's own multi-frame SNR decline.
 
-use ham_digital_modes::ambe::fixed::tia_102_baba::decode::{DecoderState as FixedDecoderState, FrameOutcome as FixedFrameOutcome};
-use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState as FloatDecoderState, FrameOutcome as FloatFrameOutcome};
+use ham_digital_modes::ambe::fixed::tia_102_baba::decode::{
+    DecoderState as FixedDecoderState, FrameOutcome as FixedFrameOutcome,
+};
+use ham_digital_modes::ambe::float::tia_102_baba::decode::{
+    DecoderState as FloatDecoderState, FrameOutcome as FloatFrameOutcome,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::parameter_encoding as float_parameter_encoding;
 use ham_digital_modes::ambe::float::tia_102_baba::synthesis::SynthesisState as FloatSynthesisState;
 use ham_digital_modes::ambe::float::tia_102_baba::vuv;
-use ham_digital_modes::ambe::float::tia_102_baba::{bit_prioritization, encode_code_vectors, tables};
+use ham_digital_modes::ambe::float::tia_102_baba::{
+    bit_prioritization, encode_code_vectors, tables,
+};
 
 const MIN_SNR_DB: f64 = 40.0;
 
@@ -77,7 +83,9 @@ fn build_synthetic_voiced_frame(b0: u32) -> [u32; 8] {
         .map(|&w| (1u32 & ((1 << w) - 1), w))
         .collect();
 
-    let u = bit_prioritization::prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, false).unwrap();
+    let u =
+        bit_prioritization::prioritize_bits(b0, b1, k_hat, b2, gain_vector, &higher_order, false)
+            .unwrap();
     encode_code_vectors(u)
 }
 
@@ -103,16 +111,26 @@ fn decode_parameters_matches_float_exactly_for_a_real_synthetic_voiced_frame() {
     assert_eq!(fixed_params.bits.b1, float_params.bits.b1);
     assert_eq!(fixed_params.bits.b2, float_params.bits.b2);
     assert_eq!(fixed_params.bits.gain_vector, float_params.bits.gain_vector);
-    assert_eq!(fixed_params.bits.higher_order, float_params.bits.higher_order);
+    assert_eq!(
+        fixed_params.bits.higher_order,
+        float_params.bits.higher_order
+    );
     assert_eq!(fixed_params.l_hat, float_params.l_hat);
     assert_eq!(fixed_params.k_hat, float_params.k_hat);
     assert_eq!(fixed_params.voiced, float_params.voiced);
 
-    let omega0_rel_err = (from_q16(fixed_params.omega0_tilde_q16) - float_params.omega0_tilde).abs()
+    let omega0_rel_err = (from_q16(fixed_params.omega0_tilde_q16) - float_params.omega0_tilde)
+        .abs()
         / float_params.omega0_tilde;
-    assert!(omega0_rel_err < 0.01, "omega0_tilde relative error too high: {omega0_rel_err}");
+    assert!(
+        omega0_rel_err < 0.01,
+        "omega0_tilde relative error too high: {omega0_rel_err}"
+    );
 
-    assert_eq!(fixed_params.reconstructed_amplitudes_q16.len(), float_params.reconstructed_amplitudes.len());
+    assert_eq!(
+        fixed_params.reconstructed_amplitudes_q16.len(),
+        float_params.reconstructed_amplitudes.len()
+    );
     for (i, (&fixed_amp_q16, &float_amp)) in fixed_params
         .reconstructed_amplitudes_q16
         .iter()
@@ -120,7 +138,10 @@ fn decode_parameters_matches_float_exactly_for_a_real_synthetic_voiced_frame() {
         .enumerate()
     {
         let rel_err = (from_q16(fixed_amp_q16) - float_amp).abs() / float_amp.max(1.0);
-        assert!(rel_err < 0.01, "harmonic {i}: reconstructed amplitude relative error too high: {rel_err}");
+        assert!(
+            rel_err < 0.01,
+            "harmonic {i}: reconstructed amplitude relative error too high: {rel_err}"
+        );
     }
 }
 
@@ -140,7 +161,10 @@ fn decode_frame_matches_float_across_several_real_frames_with_varying_pitch() {
         fixed_pcm.extend(fixed_frame.iter().map(|&s| from_q16_i64(s)));
     }
     let snr = snr_db(&float_pcm, &fixed_pcm);
-    assert!(snr >= MIN_SNR_DB, "end-to-end decode_frame SNR too low: {snr} dB");
+    assert!(
+        snr >= MIN_SNR_DB,
+        "end-to-end decode_frame SNR too low: {snr} dB"
+    );
 }
 
 /// Characterizes, rather than chases, a genuine but modest multi-frame SNR decline this full
@@ -200,7 +224,8 @@ fn decode_frame_characterizes_multi_frame_decline_from_compounding_already_accep
 /// quantization mismatch (not amplitude-prediction compounding) is the cause of this file's own
 /// `decode_frame_characterizes_multi_frame_decline_from_compounding_already_accepted_tolerances`.
 #[test]
-fn decode_frame_confirms_the_multi_frame_decline_is_from_omega0_quantization_not_amplitude_compounding() {
+fn decode_frame_confirms_the_multi_frame_decline_is_from_omega0_quantization_not_amplitude_compounding(
+) {
     const ISO_MIN_SNR_DB: f64 = 45.0;
     let b0_values = [50u32, 51, 50, 49, 50, 51, 50, 49];
 
@@ -259,7 +284,8 @@ fn decode_frame_does_not_panic_on_an_all_zero_first_frame() {
 /// on the fixed side too, even on the very first frame (no previous frame for a repeat to fall back
 /// on, but `synthesize_comfort_frame` has no such dependency).
 #[test]
-fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_even_on_the_first_frame() {
+fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_even_on_the_first_frame(
+) {
     // No public constructor takes a seeded error_rate directly, so this drives the same effect via
     // several genuinely bad (all-zero, maximal-error) frames in a row, matching how a real corrupted
     // channel would actually raise error_rate_prev over successive frames rather than starting there.
@@ -309,7 +335,10 @@ fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_eve
             saw_mute = true;
         }
     }
-    assert!(saw_mute, "bad_c never actually accumulated enough corrected-error rate to trigger a mute");
+    assert!(
+        saw_mute,
+        "bad_c never actually accumulated enough corrected-error rate to trigger a mute"
+    );
 
     let mut decoder = FixedDecoderState::new();
     let mut last_pcm = None;
@@ -318,7 +347,10 @@ fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_eve
     }
     if let Some(pcm) = last_pcm {
         for &sample in &pcm {
-            assert!(sample.abs() < (1i64 << 40), "unreasonably large sample under a bad-channel run: {sample}");
+            assert!(
+                sample.abs() < (1i64 << 40),
+                "unreasonably large sample under a bad-channel run: {sample}"
+            );
         }
     }
 }

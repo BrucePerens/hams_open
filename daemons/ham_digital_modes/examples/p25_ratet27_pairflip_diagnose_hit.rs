@@ -81,7 +81,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 fn digital_silence() -> Vec<i16> {
@@ -94,12 +96,18 @@ fn rms(samples: &[i16]) -> f64 {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     // Accepts 2 or more bit positions (all args after the host), flipped together as one group --
     // extended beyond a fixed pair to test whether a 3-or-more-way flip within a suspected
     // redundancy/majority-vote group matches the same result as any 2-of-N subset.
     let positions: Vec<usize> = if args.len() > 3 {
-        args[2..].iter().map(|s| s.parse().expect("bit position")).collect()
+        args[2..]
+            .iter()
+            .map(|s| s.parse().expect("bit position"))
+            .collect()
     } else {
         vec![
             args.get(2).and_then(|s| s.parse().ok()).unwrap_or(8),
@@ -108,11 +116,13 @@ fn main() {
     };
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
     println!("RATEP(P25 FEC) config ack: type={ptype:#04x} payload={payload:02x?}");
@@ -135,7 +145,8 @@ fn main() {
     let silence_samples = digital_silence();
     let mut silence_r: Vec<u8> = Vec::new();
     for i in 0..SETTLING_FRAMES {
-        sock.send(&build_speech(&silence_samples)).expect("send speech");
+        sock.send(&build_speech(&silence_samples))
+            .expect("send speech");
         let n = sock.recv(&mut buf).expect("recv channel");
         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
         assert_eq!(ptype, TYPE_CHANNEL);
@@ -146,13 +157,17 @@ fn main() {
     }
     println!("captured silence conditioning frame: {silence_r:02x?}");
 
-    let send_channel_get_pcm = |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
-        sock.send(raw_packet).expect("send channel");
-        let n = sock.recv(buf).expect("recv speech");
-        let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
-        payload[2..].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
-    };
+    let send_channel_get_pcm =
+        |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
+            sock.send(raw_packet).expect("send channel");
+            let n = sock.recv(buf).expect("recv speech");
+            let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
+            payload[2..]
+                .chunks_exact(2)
+                .map(|b| i16::from_be_bytes([b[0], b[1]]))
+                .collect()
+        };
     // Per Bruce: AMBE's encoder incorporates feedback from previous decoding, so a decode-only
     // reset (feeding pre-canned silence_r into the decoder) may not flush whatever state the chip
     // shares between its encode and decode paths -- this actually EXERCISES the encoder with live
@@ -169,9 +184,15 @@ fn main() {
     let fft = planner.plan_fft_forward(FRAME_SAMPLES);
     const DB_FLOOR: f64 = 1.0;
     let db_spectrum = |samples: &[i16]| -> Vec<f64> {
-        let mut buf: Vec<Complex64> = samples.iter().map(|&s| Complex64::new(s as f64, 0.0)).collect();
+        let mut buf: Vec<Complex64> = samples
+            .iter()
+            .map(|&s| Complex64::new(s as f64, 0.0))
+            .collect();
         fft.process(&mut buf);
-        buf[..FRAME_SAMPLES / 2 + 1].iter().map(|c| 20.0 * (c.norm().max(DB_FLOOR)).log10()).collect()
+        buf[..FRAME_SAMPLES / 2 + 1]
+            .iter()
+            .map(|c| 20.0 * (c.norm().max(DB_FLOOR)).log10())
+            .collect()
     };
     let spectral_distance = |a: &[f64], b: &[f64]| -> f64 {
         let sum_sq: f64 = a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum();
@@ -226,18 +247,29 @@ fn main() {
     condition(&sock, &mut buf);
     let baseline = send_channel_get_pcm(&sock, &mut buf, &r);
     let baseline_spectrum = db_spectrum(&baseline);
-    println!("\nbaseline PCM (unmodified R, after silence conditioning): rms={:.2}", rms(&baseline));
+    println!(
+        "\nbaseline PCM (unmodified R, after silence conditioning): rms={:.2}",
+        rms(&baseline)
+    );
     println!("baseline first 20 samples: {:?}", &baseline[..20]);
 
     condition(&sock, &mut buf);
     let flipped = flip_bits_in_packet(&r, &positions);
     let pcm = send_channel_get_pcm(&sock, &mut buf, &flipped);
     let distance = spectral_distance(&baseline_spectrum, &db_spectrum(&pcm));
-    println!("\nflipped {positions:?} PCM (after silence conditioning): rms={:.2}", rms(&pcm));
+    println!(
+        "\nflipped {positions:?} PCM (after silence conditioning): rms={:.2}",
+        rms(&pcm)
+    );
     println!("flipped first 20 samples: {:?}", &pcm[..20]);
-    println!("dB spectral distance from baseline: {distance:.2} dB (sweep's own threshold was 5.00 dB)");
+    println!(
+        "dB spectral distance from baseline: {distance:.2} dB (sweep's own threshold was 5.00 dB)"
+    );
 
-    println!("\nrms ratio (flipped/baseline): {:.4}", rms(&pcm) / rms(&baseline).max(1.0));
+    println!(
+        "\nrms ratio (flipped/baseline): {:.4}",
+        rms(&pcm) / rms(&baseline).max(1.0)
+    );
 
     // Re-test from the SAME connection, but conditioned again from silence each time -- if
     // conditioning is what was missing, this retest should now agree with the first result.
@@ -294,7 +326,8 @@ fn main() {
         send_channel_get_pcm(&sock, &mut buf, &r);
     }
     let pcm_after_busy_recovered = send_channel_get_pcm(&sock, &mut buf, &flipped);
-    let distance_after_busy_recovered = spectral_distance(&baseline_spectrum, &db_spectrum(&pcm_after_busy_recovered));
+    let distance_after_busy_recovered =
+        spectral_distance(&baseline_spectrum, &db_spectrum(&pcm_after_busy_recovered));
     println!(
         "after 100 busy random flip-decodes + condition() + targeted 3-frame recovery: rms={:.2}, distance={:.2} dB",
         rms(&pcm_after_busy_recovered),

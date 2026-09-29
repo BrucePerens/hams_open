@@ -111,13 +111,18 @@ fn sawtooth(freq: f64, amp: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
@@ -136,33 +141,41 @@ fn main() {
         unreachable!()
     };
 
-    let capture = |sock: &UdpSocket, buf: &mut [u8; 512], ecmode_in: u16, samples: &[i16]| -> (u16, u16) {
-        sock.send(&build_control_ecmode(ecmode_in)).expect("send ECMODE config");
-        let n = sock.recv(buf).expect("ECMODE config response");
-        parse_packet(&buf[..n]).expect("valid packet");
-        for _ in 0..SETTLING_FRAMES {
-            let n = send_recv_retrying(sock, buf, &build_speech(samples));
+    let capture =
+        |sock: &UdpSocket, buf: &mut [u8; 512], ecmode_in: u16, samples: &[i16]| -> (u16, u16) {
+            sock.send(&build_control_ecmode(ecmode_in))
+                .expect("send ECMODE config");
+            let n = sock.recv(buf).expect("ECMODE config response");
             parse_packet(&buf[..n]).expect("valid packet");
-        }
-        let mut last = (0u16, 0u16);
-        for _ in 0..CAPTURE_FRAMES {
-            let n = send_recv_retrying(sock, buf, &build_speech(samples));
-            let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
-            assert_eq!(ptype, TYPE_CHANNEL);
-            let pkt = &buf[..n];
-            let bits_bytes: &[u8; FRAME_BYTES] =
-                pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES].try_into().unwrap();
-            let frame = decode_frame(bits_bytes);
-            last = (frame.g0.value, frame.u4.value);
-        }
-        last
-    };
+            for _ in 0..SETTLING_FRAMES {
+                let n = send_recv_retrying(sock, buf, &build_speech(samples));
+                parse_packet(&buf[..n]).expect("valid packet");
+            }
+            let mut last = (0u16, 0u16);
+            for _ in 0..CAPTURE_FRAMES {
+                let n = send_recv_retrying(sock, buf, &build_speech(samples));
+                let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
+                assert_eq!(ptype, TYPE_CHANNEL);
+                let pkt = &buf[..n];
+                let bits_bytes: &[u8; FRAME_BYTES] = pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES]
+                    .try_into()
+                    .unwrap();
+                let frame = decode_frame(bits_bytes);
+                last = (frame.g0.value, frame.u4.value);
+            }
+            last
+        };
 
     // Same 16-point amplitude sweep as p25_ratet27_capture_g0_long_settling_amplitude.rs, so this
     // probe's results sit on the exact same amplitude scale as g0's own confirmed curve.
-    let amps: Vec<f64> = (0..16).map(|i| 100.0 * (2.0_f64).powf(i as f64 * 7.0 / 15.0)).collect();
+    let amps: Vec<f64> = (0..16)
+        .map(|i| 100.0 * (2.0_f64).powf(i as f64 * 7.0 / 15.0))
+        .collect();
 
-    println!("{:>10}  {:>8}  {:>8}  {:>8}  {:>8}  {:>10}  {:>10}", "amp", "g0_base", "g0_bit8", "u4_base", "u4_bit8", "g0_delta", "u4_delta");
+    println!(
+        "{:>10}  {:>8}  {:>8}  {:>8}  {:>8}  {:>10}  {:>10}",
+        "amp", "g0_base", "g0_bit8", "u4_base", "u4_bit8", "g0_delta", "u4_delta"
+    );
     for &amp in &amps {
         let samples = sawtooth(200.0, amp);
         let (g0_base, u4_base) = capture(&sock, &mut buf, 0x0000, &samples);

@@ -81,18 +81,24 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn test_tone(freq: f64) -> Vec<i16> {
     let period = SAMPLE_RATE / freq;
     (0..FRAME_SAMPLES)
-        .map(|n| (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16)
+        .map(|n| {
+            (8000.0 * (2.0 * std::f64::consts::PI * (n as f64 % period) / period).sin()) as i16
+        })
         .collect()
 }
 
 fn main() {
-    let host = std::env::args().nth(1).unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
     println!("RATEP(P25 FEC) config ack: type={ptype:#04x} payload={payload:02x?}");
@@ -110,23 +116,36 @@ fn main() {
             r = buf[..n].to_vec();
         }
     }
-    println!("captured reference frame R (raw packet, {} bytes): {r:02x?}", r.len());
+    println!(
+        "captured reference frame R (raw packet, {} bytes): {r:02x?}",
+        r.len()
+    );
 
-    let send_channel_get_pcm = |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
-        sock.send(raw_packet).expect("send channel");
-        let n = sock.recv(buf).expect("recv speech");
-        let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
-        payload[2..].chunks_exact(2).map(|b| i16::from_be_bytes([b[0], b[1]])).collect()
-    };
+    let send_channel_get_pcm =
+        |sock: &UdpSocket, buf: &mut [u8; 512], raw_packet: &[u8]| -> Vec<i16> {
+            sock.send(raw_packet).expect("send channel");
+            let n = sock.recv(buf).expect("recv speech");
+            let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
+            payload[2..]
+                .chunks_exact(2)
+                .map(|b| i16::from_be_bytes([b[0], b[1]]))
+                .collect()
+        };
 
     let mut planner = FftPlanner::<f64>::new();
     let fft = planner.plan_fft_forward(FRAME_SAMPLES);
     const DB_FLOOR: f64 = 1.0;
     let db_spectrum = |samples: &[i16]| -> Vec<f64> {
-        let mut buf: Vec<Complex64> = samples.iter().map(|&s| Complex64::new(s as f64, 0.0)).collect();
+        let mut buf: Vec<Complex64> = samples
+            .iter()
+            .map(|&s| Complex64::new(s as f64, 0.0))
+            .collect();
         fft.process(&mut buf);
-        buf[..FRAME_SAMPLES / 2 + 1].iter().map(|c| 20.0 * (c.norm().max(DB_FLOOR)).log10()).collect()
+        buf[..FRAME_SAMPLES / 2 + 1]
+            .iter()
+            .map(|c| 20.0 * (c.norm().max(DB_FLOOR)).log10())
+            .collect()
     };
     let spectral_distance = |a: &[f64], b: &[f64]| -> f64 {
         let sum_sq: f64 = a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum();
@@ -151,9 +170,15 @@ fn main() {
     let threshold = (noise_floor * 5.0).max(5.0);
     println!("noise floor (max of 8 repeats): {noise_floor:.2} dB; using changed-decode threshold = {threshold:.2} dB");
 
-    let candidates: Vec<usize> = (0..TOTAL_BITS).filter(|k| !KNOWN_UNPROTECTED.contains(k)).collect();
+    let candidates: Vec<usize> = (0..TOTAL_BITS)
+        .filter(|k| !KNOWN_UNPROTECTED.contains(k))
+        .collect();
 
-    println!("\n--- anchor sweep: {} anchors x {} candidates each ---", ANCHORS.len(), candidates.len() - 1);
+    println!(
+        "\n--- anchor sweep: {} anchors x {} candidates each ---",
+        ANCHORS.len(),
+        candidates.len() - 1
+    );
     for &anchor in &ANCHORS {
         println!("\nanchor bit {anchor}:");
         let mut partners = Vec::new();
@@ -174,7 +199,10 @@ fn main() {
         if partners.is_empty() {
             println!("  no partner found -- likely Golay-protected, or its true Hamming codeword wasn't in this sweep's candidate set (shouldn't happen; all 142 non-unprotected bits are candidates)");
         } else {
-            println!("  {} partner(s) found (pairing with anchor changes decode): {partners:?}", partners.len());
+            println!(
+                "  {} partner(s) found (pairing with anchor changes decode): {partners:?}",
+                partners.len()
+            );
         }
     }
     // Re-converge once more at the end, leaving the decoder in a clean state.

@@ -4,12 +4,14 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
+import http.client
 import logging
 import os
 import subprocess
 import sys
 import signal
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from odoo import models, api, fields, _
@@ -127,7 +129,31 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                     if response.status == 200:
                         _logger.info("Health check %s passed.", url)
                         return True
-            except urllib.error.URLError as e:
+            # bug-hunt (2026-09-27): `urllib.error.URLError` alone does NOT
+            # cover the two failure modes a daemon that is still starting up
+            # produces most often, so this retry-until-healthy loop used to
+            # abort on the first one and propagate a raw, unwrapped exception
+            # instead of polling on and then failing with this method's own
+            # `UserError`. Confirmed empirically against a real loopback
+            # socket, not reasoned from the docs: `urllib.request`'s
+            # `AbstractHTTPHandler.do_open` wraps only `h.request(...)` in its
+            # `except OSError: raise URLError(err)`; the following
+            # `r = h.getresponse()` is OUTSIDE that wrapper, so
+            #   * a daemon that accepts the connection but has not answered
+            #     within `interval` raises bare `TimeoutError`, and
+            #   * a daemon that accepts and then closes without replying
+            #     raises `http.client.RemoteDisconnected`
+            # neither of which is a `URLError`. Both are exactly "not up yet,"
+            # which is the condition this loop exists to wait out. Nothing is
+            # swallowed by widening this: every one of these still logs, and
+            # the loop still ends in the loud `UserError` below if the daemon
+            # never becomes healthy.
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                ConnectionError,
+                http.client.HTTPException,
+            ) as e:
                 _logger.info("Health check polling connection issue: %s", e)
             time.sleep(interval)  # audit-ignore-sleep: # Tested by [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
 

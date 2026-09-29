@@ -50,8 +50,16 @@ const KNOWN_C7_PITCH_WIRE_BITS: [usize; 2] = [131, 143];
 fn bits_index_to_raw_k(j: usize, reverse_bytes: bool, lsb_first: bool) -> usize {
     let byte_out = j / 8;
     let bitpos_out = j % 8;
-    let source_byte = if reverse_bytes { 17 - byte_out } else { byte_out };
-    let k_bit_from_msb = if lsb_first { 7 - bitpos_out } else { bitpos_out };
+    let source_byte = if reverse_bytes {
+        17 - byte_out
+    } else {
+        byte_out
+    };
+    let k_bit_from_msb = if lsb_first {
+        7 - bitpos_out
+    } else {
+        bitpos_out
+    };
     source_byte * 8 + k_bit_from_msb
 }
 
@@ -82,7 +90,9 @@ fn main() {
             // Table 5-1's row numbering IS the "bits[]" index under the (reverse_bytes=false,
             // lsb_first=false) hypothesis (this crate's plain MSB-first-per-byte convention) --
             // then re-map through each of the 4 byte/bit-order hypotheses to get raw-packet k.
-            for &(reverse_bytes, lsb_first) in &[(false, false), (false, true), (true, false), (true, true)] {
+            for &(reverse_bytes, lsb_first) in
+                &[(false, false), (false, true), (true, false), (true, true)]
+            {
                 let k1 = bits_index_to_raw_k(table_wire_pos_of_c7[1], reverse_bytes, lsb_first);
                 let k2 = bits_index_to_raw_k(table_wire_pos_of_c7[2], reverse_bytes, lsb_first);
                 let mut found = [k1, k2];
@@ -115,7 +125,9 @@ fn main() {
         };
         let natural_pos_1 = c7_start + index_to_offset(1);
         let natural_pos_2 = c7_start + index_to_offset(2);
-        for &(reverse_bytes, lsb_first) in &[(false, false), (false, true), (true, false), (true, true)] {
+        for &(reverse_bytes, lsb_first) in
+            &[(false, false), (false, true), (true, false), (true, true)]
+        {
             let k1 = bits_index_to_raw_k(natural_pos_1, reverse_bytes, lsb_first);
             let k2 = bits_index_to_raw_k(natural_pos_2, reverse_bytes, lsb_first);
             let mut found = [k1, k2];

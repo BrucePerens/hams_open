@@ -34,7 +34,9 @@ pub fn saturate_to_i16(sample: f64) -> i16 {
 
 /// The inverse of [`dstar_tone_amplitude`]: the `volume` field for a desired per-tone amplitude.
 pub fn dstar_tone_volume_for_amplitude(amplitude: f64) -> u32 {
-    (180.0 + (amplitude.max(1.0) / 3268.0).ln() / 0.04084).round().clamp(0.0, 255.0) as u32
+    (180.0 + (amplitude.max(1.0) / 3268.0).ln() / 0.04084)
+        .round()
+        .clamp(0.0, 255.0) as u32
 }
 
 /// AMBE+2 half-rate: the chip's total output level for any tone frame (single, DTMF, call progress), rms in PCM units.
@@ -81,7 +83,13 @@ impl ToneSynthesizer {
     }
 
     pub fn dtmf(&mut self, row: u8, col: u8, peak: f64) -> [f64; N] {
-        self.synthesize(&[DTMF_ROW_HZ[(row & 3) as usize], DTMF_COL_HZ[(col & 3) as usize]], peak)
+        self.synthesize(
+            &[
+                DTMF_ROW_HZ[(row & 3) as usize],
+                DTMF_COL_HZ[(col & 3) as usize],
+            ],
+            peak,
+        )
     }
 }
 
@@ -171,9 +179,17 @@ mod tests {
     #[test]
     fn dstar_tone_level_curve_matches_the_chip_measurements_and_inverts() {
         // Chip peaks measured at volumes 120/150/180/210: 283, 961, 3268, 11105.
-        for (v, peak) in [(120u32, 283.0f64), (150, 961.0), (180, 3268.0), (210, 11105.0)] {
+        for (v, peak) in [
+            (120u32, 283.0f64),
+            (150, 961.0),
+            (180, 3268.0),
+            (210, 11105.0),
+        ] {
             let a = dstar_tone_amplitude(v);
-            assert!((a / peak - 1.0).abs() < 0.04, "volume {v}: model {a} vs chip {peak}");
+            assert!(
+                (a / peak - 1.0).abs() < 0.04,
+                "volume {v}: model {a} vs chip {peak}"
+            );
         }
         for v in 60u32..=230 {
             assert_eq!(dstar_tone_volume_for_amplitude(dstar_tone_amplitude(v)), v);

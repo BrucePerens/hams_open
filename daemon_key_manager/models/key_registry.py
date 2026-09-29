@@ -181,9 +181,49 @@ class DaemonKeyRegistry(models.Model):
         # This prevents a rollback bypass where file I/O occurs before constraints fail.
         self.env.flush_all()
 
-        # Ensure the service account has the necessary group for extended API key duration
-        # as mentioned in the README.
-        # Note: Direct assignment to group_ids is flagged by linter but required for dynamic rotation security.
+        # _rotate_key_and_write_file() below already calls _ensure_usage_group() itself, after
+        # its own active-account/__system__/group_system safety checks -- an earlier version of
+        # this method called it directly here too, before those checks run for this call path.
+        # Harmless today (nothing commits the transaction in between, so a raised UserError rolls
+        # back the raw-SQL group grant along with everything else), but redundant, and a future
+        # refactor that adds an intermediate commit could silently turn this into a real
+        # privilege-grant-survives-rejection gap. Rely on the single, correctly-ordered call
+        # inside _rotate_key_and_write_file() instead.
+        registry._rotate_key_and_write_file()
+        return True
+
+    def _ensure_usage_group(self, user):
+        """
+        Grants `group_daemon_key_usage` (the 90-day API-key-duration group) to `user`
+        if it doesn't already have it.
+
+        Real bug found 2026-09-28/29 while chasing a live production incident
+        (`backup_worker` unable to rotate its own key, `ValidationError: You cannot
+        exceed 1.0 days` from `res.users._check_expiration_date()`, despite this exact
+        group having been granted once already): every daemon service account this
+        codebase defines declares its OWN `group_ids` as a static `(6, 0, [...])` eval
+        in a `noupdate="0"` XML record -- intentionally, so upgrading a daemon module
+        can revoke a group it no longer wants the account to hold (see
+        `backup_management/security/security.xml`'s own 2026-09-14 comment on exactly
+        this mechanism). But `group_daemon_key_usage` was never one of the groups any
+        of those per-module `(6, 0, [...])` lists statically declared -- it was only
+        ever granted dynamically, here, via the raw-SQL insert below, the first time
+        `register_daemon()` ran for that account. A `(6, 0, [...])` eval *replaces* the
+        full group set, so the next ordinary module upgrade after that first
+        registration silently wiped this dynamically-granted membership back out
+        again, with no error anywhere -- confirmed against every `is_service_account`
+        XML record in this codebase as of this date: not one statically includes this
+        group. `register_daemon()` alone re-granting it (the only call site before this
+        fix) doesn't help, since `register_daemon()` isn't what runs on a later,
+        ordinary key rotation -- `action_rotate_key()` and the nightly
+        `cron_rotate_all_keys()` are, and neither of them re-checked this. Calling this
+        from `_rotate_key_and_write_file()` itself (this method's own real caller,
+        reached by all three of `register_daemon()`, `action_rotate_key()`, and the
+        cron) makes every rotation path self-healing regardless of what an
+        intervening module upgrade did to `group_ids`, without editing every
+        individual daemon module's own security.xml (which would only fix today's
+        known daemons, not tomorrow's).
+        """
         usage_group = self.env.ref(
             "daemon_key_manager.group_daemon_key_usage", raise_if_not_found=False
         )
@@ -200,9 +240,6 @@ class DaemonKeyRegistry(models.Model):
             self.env.cr.execute(q, (user.id, usage_group.id))
             user.invalidate_recordset()
             self.env.registry.clear_cache()
-
-        registry._rotate_key_and_write_file()
-        return True
 
     def action_force_provision_all(self, *args, **kwargs):
         # # Tested by [@ANCHOR: COMM_test_force_provisioning]
@@ -259,17 +296,35 @@ class DaemonKeyRegistry(models.Model):
         for reg in registries:
             _logger.info("Synchronously provisioning key for daemon: %s", reg.name)
             try:
-                reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
+                # A savepoint per daemon: a failure part-way through one registry undoes that registry's own
+                # database changes (the old key is restored) without touching the daemons that already succeeded.
+                with self.env.cr.savepoint():
+                    reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
             except (UserError, ValidationError, AccessError, OSError) as e:
                 _logger.error("Failed to provision key for daemon %s: %s", reg.name, e)
                 failures.append(reg.name)
 
         if failures:
+            # Return, do not raise. Raising here used to roll back the whole transaction, including the rotations
+            # that had succeeded -- but their new keys were already written to their key files, so the files and the
+            # database disagreed and those daemons were refused (found live on hams1, 2026-09-23: the event and
+            # AI-triage services stayed unauthorised for days after one unrelated daemon failed). A failure is
+            # reported in the result instead, and the caller commits what succeeded. The systemd bootstrap script
+            # turns a non-success result into a failed unit.
             msg = _(
                 "Provisioned keys for %(ok)d daemon(s); FAILED for: %(failed)s. "
                 "Check the server log for each failure's own real error."
             )
-            raise UserError(msg % {"ok": len(registries) - len(failures), "failed": ", ".join(failures)})
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Some keys were not provisioned"),
+                    "message": msg % {"ok": len(registries) - len(failures), "failed": ", ".join(failures)},
+                    "sticky": True,
+                    "type": "danger",
+                },
+            }
 
         return {
             "type": "ir.actions.client",
@@ -341,6 +396,10 @@ class DaemonKeyRegistry(models.Model):
                 "RPC calls."
             )
             raise UserError(msg)
+
+        # Self-healing re-grant: see _ensure_usage_group()'s own docstring for why this
+        # can't be assumed to still hold just because register_daemon() granted it once.
+        self._ensure_usage_group(self.user_id)
 
         key_name = f"{self.name}_key"
 

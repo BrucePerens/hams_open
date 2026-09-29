@@ -15,8 +15,8 @@
 use super::pitch_refinement::{Pitch, RefinementFrame};
 use super::prediction::{prediction_residual_q16, INITIAL_L_HAT_PREV};
 use super::quantize::{
-    block_dct_q16, gain_vector_dct_q16, partition_into_blocks_q16, quantize_gain_index_q16, quantize_gain_vector_q16,
-    quantize_higher_order_coefficients_q16,
+    block_dct_q16, gain_vector_dct_q16, partition_into_blocks_q16, quantize_gain_index_q16,
+    quantize_gain_vector_q16, quantize_higher_order_coefficients_q16,
 };
 use super::reconstruct::reconstruct_spectral_amplitudes_q16;
 use super::spectral_amplitude::estimate_spectral_amplitudes_q16;
@@ -56,7 +56,13 @@ pub fn encode_frame(
     previous_state: &FrameState,
     sync_bit: bool,
 ) -> Option<([u32; 8], FrameState)> {
-    let (u, state) = encode_prioritized_bits(frame, pitch, initial_pitch_error_q16, previous_state, sync_bit)?;
+    let (u, state) = encode_prioritized_bits(
+        frame,
+        pitch,
+        initial_pitch_error_q16,
+        previous_state,
+        sync_bit,
+    )?;
     Some((encode_code_vectors(u), state))
 }
 
@@ -72,13 +78,19 @@ pub fn encode_prioritized_bits(
     block_lengths_for_l(l_hat)?; // reject an out-of-range L before any L-sized work
     let k_hat = frequency_bands_count(l_hat);
 
-    let (voiced, xi_max_q16) =
-        determine_voicing(frame, pitch, initial_pitch_error_q16, previous_state.xi_max_q16, &previous_state.voiced);
+    let (voiced, xi_max_q16) = determine_voicing(
+        frame,
+        pitch,
+        initial_pitch_error_q16,
+        previous_state.xi_max_q16,
+        &previous_state.voiced,
+    );
     // Floor at one PCM step (log2 = 0), as the float sibling does: the logarithm of zero is undefined.
-    let amplitudes: Vec<i64> = estimate_spectral_amplitudes_q16(frame, l_hat, k_hat, pitch, &voiced)
-        .into_iter()
-        .map(|m| m.max(1 << 16))
-        .collect();
+    let amplitudes: Vec<i64> =
+        estimate_spectral_amplitudes_q16(frame, l_hat, k_hat, pitch, &voiced)
+            .into_iter()
+            .map(|m| m.max(1 << 16))
+            .collect();
 
     let residuals: Vec<i32> = (1..=l_hat)
         .map(|l| {
@@ -103,7 +115,15 @@ pub fn encode_prioritized_bits(
     let gain_vector = quantize_gain_vector_q16(&g_hat, l_hat)?;
     let higher_order = quantize_higher_order_coefficients_q16(&dct_blocks, l_hat)?;
 
-    let u = prioritize_bits(b0, b1, k_hat, b2 as u32, gain_vector, &higher_order, sync_bit)?;
+    let u = prioritize_bits(
+        b0,
+        b1,
+        k_hat,
+        b2 as u32,
+        gain_vector,
+        &higher_order,
+        sync_bit,
+    )?;
 
     // The decoder's own history for the next frame's prediction: this frame's quantizer values run back through the
     // fixed dequantization.
@@ -118,5 +138,13 @@ pub fn encode_prioritized_bits(
         &previous_state.spectral_amplitudes_q16,
     )?;
 
-    Some((u, FrameState { xi_max_q16, l_hat, voiced, spectral_amplitudes_q16: reconstructed }))
+    Some((
+        u,
+        FrameState {
+            xi_max_q16,
+            l_hat,
+            voiced,
+            spectral_amplitudes_q16: reconstructed,
+        },
+    ))
 }

@@ -33,7 +33,11 @@ struct ErrorTable(Vec<f64>);
 impl ErrorTable {
     fn compute(raw: &[f64], center: usize) -> Self {
         let frame = PitchAnalysisFrame::new(raw, center);
-        Self(candidate_pitches().map(|p| frame.error_function(p)).collect())
+        Self(
+            candidate_pitches()
+                .map(|p| frame.error_function(p))
+                .collect(),
+        )
     }
 
     fn at(&self, p: f64) -> f64 {
@@ -94,7 +98,8 @@ impl FrameAnalyzer {
     }
 
     fn center(&self, k: usize) -> usize {
-        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64).max(MARGIN as i64) as usize
+        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64).max(MARGIN as i64)
+            as usize
     }
 
     pub fn push_samples(&mut self, samples: &[f64]) {
@@ -105,7 +110,8 @@ impl FrameAnalyzer {
     /// Pads with silence so every pushed sample's frame can be analysed; call once, then drain `next_analysis`.
     pub fn finish_input(&mut self) {
         if !self.finished {
-            self.raw.extend(std::iter::repeat_n(0.0, 3 * FRAME_SAMPLES + 2 * MARGIN));
+            self.raw
+                .extend(std::iter::repeat_n(0.0, 3 * FRAME_SAMPLES + 2 * MARGIN));
             self.finished = true;
         }
     }
@@ -139,7 +145,11 @@ impl FrameAnalyzer {
         let find = |tables: &VecDeque<(usize, ErrorTable)>, idx: usize| -> usize {
             tables.iter().position(|(i, _)| *i == idx).unwrap()
         };
-        let (i0, i1, i2) = (find(&self.tables, k), find(&self.tables, k + 1), find(&self.tables, k + 2));
+        let (i0, i1, i2) = (
+            find(&self.tables, k),
+            find(&self.tables, k + 1),
+            find(&self.tables, k + 2),
+        );
         let (t0, t1, t2) = (&self.tables[i0].1, &self.tables[i1].1, &self.tables[i2].1);
 
         let (p_b, ce_b) = look_back_pitch_tracking(|p| t0.at(p), self.prev1, self.prev2);
@@ -166,7 +176,13 @@ impl FrameAnalyzer {
             self.raw.drain(..drop);
             self.trimmed += drop;
         }
-        Some(FrameAnalysis { omega0_hat, initial_pitch: p_initial, initial_pitch_error: e_initial, refinement, slot_samples })
+        Some(FrameAnalysis {
+            omega0_hat,
+            initial_pitch: p_initial,
+            initial_pitch_error: e_initial,
+            refinement,
+            slot_samples,
+        })
     }
 }
 
@@ -233,7 +249,10 @@ impl Encoder {
     /// An encoder whose frames use the DVSI chip's framing (no modulation, chip Hamming labelling), for the
     /// chip-comparison tools. The analysis and quantization are identical to [`Self::new`]'s.
     pub fn new_chip_wire() -> Self {
-        Self { chip_wire: true, ..Self::new() }
+        Self {
+            chip_wire: true,
+            ..Self::new()
+        }
     }
 
     /// Shifts every frame's analysis centre by `samples` (may be negative) relative to `k*160`.
@@ -244,7 +263,10 @@ impl Encoder {
     /// Feeds PCM to the encoder, applying the standard's input high-pass filter (Eq. 3) first.
     pub fn push_samples(&mut self, samples: &[f64]) {
         // Rounded to whole sample values, as PCM hardware (and the fixed-point sibling) would output.
-        let filtered: Vec<f64> = samples.iter().map(|&x| (self.high_pass.step(x) + 0.5).floor()).collect();
+        let filtered: Vec<f64> = samples
+            .iter()
+            .map(|&x| (self.high_pass.step(x) + 0.5).floor())
+            .collect();
         self.analyzer.push_samples(&filtered);
     }
 
@@ -253,9 +275,21 @@ impl Encoder {
         let a = self.analyzer.next_analysis()?;
         self.last_analysis = Some((a.initial_pitch, a.omega0_hat, a.initial_pitch_error));
         let encoded = if self.chip_wire {
-            encode_frame_chip_wire(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false)
+            encode_frame_chip_wire(
+                &a.refinement,
+                a.omega0_hat,
+                a.initial_pitch_error,
+                &self.state,
+                false,
+            )
         } else {
-            encode_frame(&a.refinement, a.omega0_hat, a.initial_pitch_error, &self.state, false)
+            encode_frame(
+                &a.refinement,
+                a.omega0_hat,
+                a.initial_pitch_error,
+                &self.state,
+                false,
+            )
         };
         match encoded {
             Some((c, next_state)) => {
@@ -297,7 +331,10 @@ mod tests {
         (0..n)
             .map(|i| {
                 (1..=8)
-                    .map(|h| 1500.0 / h as f64 * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin())
+                    .map(|h| {
+                        1500.0 / h as f64
+                            * (2.0 * std::f64::consts::PI * h as f64 * i as f64 / period).sin()
+                    })
                     .sum()
             })
             .collect()
@@ -313,7 +350,11 @@ mod tests {
             frames.push(f);
         }
         frames.extend(enc.finish());
-        assert!(frames.len() >= 25, "expected roughly one frame per 160 input samples, got {}", frames.len());
+        assert!(
+            frames.len() >= 25,
+            "expected roughly one frame per 160 input samples, got {}",
+            frames.len()
+        );
 
         let mut dec = DecoderState::new();
         let mut checked = 0;
@@ -325,13 +366,18 @@ mod tests {
                 // A perfectly periodic signal fits an integer multiple of its period equally well (E(P) ~ 0 for
                 // both), and the sub-multiple tests are ill-conditioned against such a near-zero reference error,
                 // so accept the period or its double.
-                let ok = [1.0, 2.0].iter().any(|m| (period_est / (period * m) - 1.0).abs() < 0.03);
+                let ok = [1.0, 2.0]
+                    .iter()
+                    .any(|m| (period_est / (period * m) - 1.0).abs() < 0.03);
                 assert!(ok, "decoded period {period_est} vs true {period}");
                 checked += 1;
             }
             assert!(dec.decode_frame(*c).is_some());
         }
-        assert!(checked >= 10, "only {checked} steady-state frames decoded to parameters");
+        assert!(
+            checked >= 10,
+            "only {checked} steady-state frames decoded to parameters"
+        );
         assert_eq!(enc.failed_frames, 0);
     }
 }

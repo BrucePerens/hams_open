@@ -56,7 +56,8 @@ fn dual_tone(f1: f64, f2: f64, amp: f64) -> Vec<i16> {
     (0..FRAME_SAMPLES)
         .map(|n| {
             let t = n as f64 / SAMPLE_RATE;
-            let s = (2.0 * std::f64::consts::PI * f1 * t).sin() + (2.0 * std::f64::consts::PI * f2 * t).sin();
+            let s = (2.0 * std::f64::consts::PI * f1 * t).sin()
+                + (2.0 * std::f64::consts::PI * f2 * t).sin();
             (amp * 0.5 * s) as i16
         })
         .collect()
@@ -82,14 +83,19 @@ fn sine(freq: f64, amp: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     parse_packet(&buf[..n]).expect("valid DVSI packet");
 
@@ -107,21 +113,34 @@ fn main() {
         }
         unreachable!()
     };
-    let capture_frame = |sock: &UdpSocket, buf: &mut [u8; 512], label: &str, idx: usize, samples: &[i16]| {
-        let n = send_recv_retrying(sock, buf, &build_speech(samples));
-        let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
-        assert_eq!(ptype, TYPE_CHANNEL);
-        let pkt = &buf[..n];
-        let bits = &pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES];
-        let hex: String = bits.iter().map(|b| format!("{b:02x}")).collect();
-        println!("{label}\t{idx}\t{hex}");
-    };
+    let capture_frame =
+        |sock: &UdpSocket, buf: &mut [u8; 512], label: &str, idx: usize, samples: &[i16]| {
+            let n = send_recv_retrying(sock, buf, &build_speech(samples));
+            let (ptype, _payload) = parse_packet(&buf[..n]).expect("valid packet");
+            assert_eq!(ptype, TYPE_CHANNEL);
+            let pkt = &buf[..n];
+            let bits = &pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES];
+            let hex: String = bits.iter().map(|b| format!("{b:02x}")).collect();
+            println!("{label}\t{idx}\t{hex}");
+        };
 
     let mut stimuli: Vec<(String, Vec<i16>)> = vec![];
-    for &(f1, f2) in &[(60.0, 90.0), (100.0, 250.0), (150.0, 380.0), (57.0, 444.0), (200.0, 210.0)] {
+    for &(f1, f2) in &[
+        (60.0, 90.0),
+        (100.0, 250.0),
+        (150.0, 380.0),
+        (57.0, 444.0),
+        (200.0, 210.0),
+    ] {
         stimuli.push((format!("dualtone_{f1}_{f2}"), dual_tone(f1, f2, 5000.0)));
     }
-    for &(f0, f1) in &[(57.0, 444.0), (444.0, 57.0), (100.0, 400.0), (400.0, 100.0), (57.0, 200.0)] {
+    for &(f0, f1) in &[
+        (57.0, 444.0),
+        (444.0, 57.0),
+        (100.0, 400.0),
+        (400.0, 100.0),
+        (57.0, 200.0),
+    ] {
         stimuli.push((format!("chirp_{f0}_{f1}"), chirp(f0, f1, 7000.0)));
     }
     // Extreme pitch, outside/at the edges of AMBE's own designed 57-444Hz range.

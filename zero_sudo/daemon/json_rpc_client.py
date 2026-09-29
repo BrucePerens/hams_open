@@ -7,7 +7,6 @@
 import os
 import requests
 import logging
-import json
 
 _logger = logging.getLogger(__name__)
 

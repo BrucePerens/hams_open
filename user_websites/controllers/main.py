@@ -31,6 +31,29 @@ redis_pool = redis.ConnectionPool(
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 
+# [@ANCHOR: user_websites:report_violation_redirect_target]
+# Verified by [@ANCHOR: test_report_violation_redirects_back_to_reported_page]
+def _report_violation_redirect_target(reported_url, query_param):
+    """Where to send the visitor back after a report_violation() submission.
+
+    Deliberately uses only the PATH (and existing query string) of `reported_url`, never its
+    scheme/host -- `reported_url` comes from an untrusted POST field (or the Referer header),
+    so echoing it back verbatim as a redirect target would be an open redirect. A bare path is
+    always same-origin by construction, and Odoo's own request.redirect() resolves it against
+    the current site regardless of what host `reported_url` claimed.
+    """
+    path = "/"
+    if reported_url:
+        try:
+            parsed_path = urlparse(reported_url).path
+        except ValueError:
+            parsed_path = ""
+        if parsed_path:
+            path = parsed_path
+    separator = "&" if "?" in path else "?"
+    return f"{path}{separator}{query_param}"
+
+
 class UserWebsitesController(http.Controller):
 
     @http.route(
@@ -41,19 +64,39 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )
-    def report_violation(self, url="", reason="", description="", email="", **post):
+    def report_violation(self, url="", reason="", description="", email="", website_honeypot="", **post):
         # [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
 
         # Triggered by [@ANCHOR: violation_report_logic]
 
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
 
+        # Verified by [@ANCHOR: user_websites:test_report_violation_honeypot_rejected]
+        # report_violation_modal (user_websites_templates.xml) already ships a hidden
+        # "website_honeypot" field (d-none, aria-hidden, tabindex="-1" -- invisible and
+        # unreachable for a real visitor, but many form-filling bots populate every input
+        # regardless of CSS). Found live 2026-09-28/29: the field existed but this controller
+        # never actually read it, so it caught nothing -- five near-identical spam submissions
+        # ("Hi, I wanted to know your price," the same template in five different languages)
+        # landed as real content.violation.report rows and emailed Bruce, over five days, while
+        # the honeypot sat there doing nothing. Pretend success rather than surfacing an error:
+        # a bot that gets useful rejection feedback learns to stop filling the field, which
+        # defeats the whole mechanism; a real visitor never sees or fills this field at all, so
+        # this branch never fires for one.
+        if website_honeypot:
+            _logger.info("report_violation: honeypot triggered, discarding silently")
+            return request.redirect(
+                _report_violation_redirect_target(url, "report_submitted=1")
+            )
+
         # Extract referrer if it's missing in POST
         if not url and "Referer" in request.httprequest.headers:
             url = request.httprequest.headers.get("Referer")
 
         if not url or not description:
-            return request.redirect("/?error=missing_fields")
+            return request.redirect(
+                _report_violation_redirect_target(url, "error=missing_fields")
+            )
 
         # Enforce max length on description
         if len(description) > 5000:
@@ -90,9 +133,13 @@ class UserWebsitesController(http.Controller):
             env_svc["content.violation.report"].create(create_vals)
         except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_tour_violation_report]
             _logger.warning("Report creation failed: %s", e)
-            return request.redirect("/?error=creation_failed")
+            return request.redirect(
+                _report_violation_redirect_target(url, "error=creation_failed")
+            )
 
-        return request.redirect("/?report_submitted=1")
+        return request.redirect(
+            _report_violation_redirect_target(url, "report_submitted=1")
+        )
 
     @http.route(
         ["/<string:website_slug>/blog", "/<string:website_slug>/blog/page/<int:page>"],
@@ -393,6 +440,88 @@ class UserWebsitesController(http.Controller):
         env_svc["blog.blog"].create(create_vals)
         return request.redirect(f"/{website_slug}/blog")
 
+    @http.route(
+        "/<string:website_slug>/create_blog_post",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_create_blog_post]
+    def create_blog_post(self, website_slug, **kwargs):
+        # Real gap found live 2026-09-29: create_blog() (immediately above) lets an owner create
+        # their own blog CONTAINER, but nothing ever let them add a POST to it -- blog_index's own
+        # template (user_websites_templates.xml) renders "No posts available yet." with no button
+        # at all, even for the owner, once a blog exists. A user who had just created their first
+        # blog had no way to add its first post. This mirrors create_blog()'s own ownership checks
+        # exactly, then creates a blank blog.post in the caller's own blog and redirects straight
+        # into it via website_blog's own standard post-edit route -- the same route blog_index's
+        # own "Read Post" links already use (/blog/<blog_id>/post/<post_id>), so the normal website
+        # builder's editor toolbar (Edit/New) works on it exactly as it does on any other blog post,
+        # with no new rendering path of this module's own to build or maintain.
+        user = request.env.user
+        utils = request.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
+
+        user_id = env_svc["res.users"].get_record_by_slug(website_slug)
+        profile_user = (
+            env_svc["res.users"].browse(user_id) if user_id else env_svc["res.users"]
+        )
+        group_id = env_svc["user.websites.group"].get_record_by_slug(website_slug)
+        profile_group = (
+            env_svc["user.websites.group"].browse(group_id)
+            if group_id
+            else env_svc["user.websites.group"]
+        )
+
+        if not profile_user and not profile_group:
+            raise request.not_found()
+
+        if profile_user and profile_user.id != user.id:
+            raise request.not_found()
+        if profile_user and profile_user.is_suspended_from_websites:
+            raise request.not_found()
+        if profile_group:
+            if profile_group.is_suspended_from_websites:
+                raise request.not_found()
+            if user.id not in profile_group.member_ids.ids:
+                raise request.not_found()
+
+        blog_domain = (
+            [("owner_user_id", "=", profile_user.id)]
+            if profile_user
+            else [("user_websites_group_id", "=", profile_group.id)]
+        )
+        blog = env_svc["blog.blog"].search(blog_domain, limit=1)
+        if not blog:
+            # No blog container yet -- send them to the create_blog() flow instead of creating
+            # a post with nowhere to live.
+            return request.redirect(f"/{website_slug}/blog")
+
+        create_vals = {
+            "name": "New Post",
+            "blog_id": blog.id,
+            "website_id": blog.website_id.id,
+        }
+        # website_blog's own author_id defaults to self.env.user.partner_id at create time
+        # (website_blog.py) -- since this create() runs elevated as the service account (see
+        # blog_post.py's own create() override), that default silently attributed every post
+        # created this way to "System Provisioner" instead of its real author. Set it explicitly
+        # in both branches so the published byline always matches who the post actually belongs
+        # to -- the group branch used the real requester's own partner (`user`, already captured
+        # above), matching a group blog's own real authorship model: any member can post, and the
+        # byline should credit whichever member actually wrote it, not the group as a whole.
+        if profile_user:
+            create_vals["owner_user_id"] = profile_user.id
+            create_vals["author_id"] = profile_user.partner_id.id
+        elif profile_group:
+            create_vals["user_websites_group_id"] = profile_group.id
+            create_vals["author_id"] = user.partner_id.id
+
+        post = env_svc["blog.post"].create(create_vals)
+        return request.redirect(f"/blog/{blog.id}/post/{post.id}")
+
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     # [@ANCHOR: user_websites:COMM_documentation]
     def documentation(self, **kwargs):
@@ -661,7 +790,7 @@ class UserWebsitesController(http.Controller):
     )  # fmt: skip
     # [@ANCHOR: user_websites:COMM_unsubscribe]
     def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
-        # # Tested by [@ANCHOR: user_websites:test_unsubscribe_secret]
+        # # Tested by [@ANCHOR: test_unsubscribe_secret]
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 

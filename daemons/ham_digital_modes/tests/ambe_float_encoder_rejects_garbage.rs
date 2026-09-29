@@ -4,7 +4,9 @@
 use ham_digital_modes::ambe::float::dstar::encoder::Encoder as DStarEncoder;
 use ham_digital_modes::ambe::float::dstar::quantize::quantize_pitch as dstar_quantize_pitch;
 use ham_digital_modes::ambe::float::dstar::tables as dstar_tables;
-use ham_digital_modes::ambe::float::mbe_encode::{quantize_speech, ModeTables, PrevState, SpeechTarget};
+use ham_digital_modes::ambe::float::mbe_encode::{
+    quantize_speech, ModeTables, PrevState, SpeechTarget,
+};
 
 #[test]
 #[should_panic(expected = "non-finite sample")]
@@ -40,7 +42,12 @@ fn dstar_speech_quantizer_rejects_nan_amplitude() {
         prba24: &dstar_tables::PRBA24,
         prba58: &dstar_tables::PRBA58,
         lmprbl: &dstar_tables::LMPRBL,
-        hoc: [&dstar_tables::HOC_B5, &dstar_tables::HOC_B6, &dstar_tables::HOC_B7, &dstar_tables::HOC_B8],
+        hoc: [
+            &dstar_tables::HOC_B5,
+            &dstar_tables::HOC_B6,
+            &dstar_tables::HOC_B7,
+            &dstar_tables::HOC_B8,
+        ],
         hoc_b8_even_only: true,
         rho: ham_digital_modes::ambe::float::dstar::decode::PREDICTOR_RHO,
         gamma_scale: ham_digital_modes::ambe::float::dstar::decode::GAMMA_SCALE,
@@ -48,8 +55,18 @@ fn dstar_speech_quantizer_rejects_nan_amplitude() {
     };
     let prev_log2_ml = vec![0.0f64; (l + 1) as usize];
     quantize_speech(
-        &SpeechTarget { l, w0: 2.0 * std::f64::consts::PI / 60.0, vuv_f0: 1.0 / 60.0, voiced: &voiced, ml: &ml },
-        &PrevState { l, log2_ml: &prev_log2_ml, gamma: 0.0 },
+        &SpeechTarget {
+            l,
+            w0: 2.0 * std::f64::consts::PI / 60.0,
+            vuv_f0: 1.0 / 60.0,
+            voiced: &voiced,
+            ml: &ml,
+        },
+        &PrevState {
+            l,
+            log2_ml: &prev_log2_ml,
+            gamma: 0.0,
+        },
         &mode,
     );
 }

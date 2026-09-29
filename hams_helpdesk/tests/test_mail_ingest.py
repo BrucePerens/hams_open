@@ -1,6 +1,7 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import ast
 import base64
 
 from odoo.exceptions import AccessError
@@ -126,6 +127,82 @@ class TestMailIngest(HamsTransactionCase):
         self.assertFalse(
             ticket.partner_id,
             "An unrecognized sender must not be linked to an arbitrary partner_id.",
+        )
+
+    def test_06_partner_ids_check_runs_as_the_request_user(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
+        """Regression for the 2026-09-27 production incident: every inbound
+        mail to info@hams.com died with "Failed to write field
+        mail.message.partner_ids / not allowed to access res.partner",
+        reported against the ingest service account's own uid even though
+        the failing message_post() ran under user_helpdesk_service via
+        zero_sudo's with_user() elevation. security/mail_ingest_security.xml
+        carries the full mechanism; in short, Odoo 19's
+        Many2many.write_real() -> _check_sudo_commands() re-runs the
+        res.partner read check as env.transaction.default_env.uid -- the
+        account that made the RPC call -- and discards every with_user()
+        applied since.
+
+        Every other test in this class, and any `odoo shell`, silently
+        misses that because their transaction's default env is the
+        superuser. The real RPC dispatcher (odoo/service/model.py:
+        `env.transaction.default_env = env`) and HTTP layer (odoo/http.py)
+        set it to the CALLER's env, so this test does exactly the same for
+        the ingest account before calling in -- the production execution
+        path, not a mock of it.
+        """
+        manager = self.env["res.users"].create(
+            {
+                "name": "Assignee For Ingest Test",
+                "login": "ingest_assignee_test",
+                "group_ids": [
+                    (6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_manager").id])
+                ],
+            }
+        )
+        # Production tickets get their assignee from pager_duty's on-duty
+        # admin; hams_helpdesk on its own has no on-duty source (its
+        # calendar_event.get_current_on_duty_admin() returns False), so hand
+        # create() an assignee the same way it would otherwise receive one,
+        # through vals["user_id"] -- via the alias's real alias_defaults --
+        # so _automated_routing_and_notification() takes the
+        # message_post(partner_ids=...) branch that failed in production.
+        alias = self.env["mail.alias"].search([("alias_name", "=", "support")], limit=1)
+        self.assertTrue(alias, "hams_helpdesk's own support@ alias must exist.")
+        defaults = ast.literal_eval(alias.alias_defaults or "{}")
+        defaults["user_id"] = manager.id
+        alias.alias_defaults = repr(defaults)
+
+        ingest_env = self.env(user=self.ingest_user.id)
+        transaction = self.env.transaction
+        previous_default_env = transaction.default_env
+        transaction.default_env = ingest_env
+        self.addCleanup(setattr, transaction, "default_env", previous_default_env)
+
+        self.assertTrue(
+            ingest_env["res.partner"].has_access("read"),
+            "group_mail_ingest_service needs read on res.partner: Odoo core "
+            "checks mail.message.partner_ids as the request user, not as the "
+            "elevated helpdesk service account (see mail_ingest_security.xml).",
+        )
+
+        raw = self._raw_email("support@hams.com", subject="Assigned on arrival")
+        ingest_env["hams_helpdesk.ticket"].ingest_inbound_email(
+            base64.b64encode(raw).decode("ascii")
+        )
+
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "ilike", "Assigned on arrival")], limit=1
+        )
+        self.assertTrue(ticket, "Expected the inbound email to create a ticket.")
+        self.assertEqual(ticket.user_id, manager)
+        assignment_note = ticket.message_ids.filtered(
+            lambda message: manager.partner_id in message.partner_ids
+        )
+        self.assertTrue(
+            assignment_note,
+            "The assignment note (message_post with partner_ids) must have been "
+            "posted; in production this is exactly the write that raised.",
         )
 
     def test_03_non_service_account_is_denied(self):

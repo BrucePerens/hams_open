@@ -136,26 +136,38 @@ fn channel_bits(pkt: &[u8]) -> &[u8] {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC)).expect("send RATET config");
+    sock.send(&build_control_ratet(RATET_HALF_RATE_FEC))
+        .expect("send RATET config");
     let n = sock.recv(&mut buf).expect("RATET config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_ecmode(TD_ENABLE_BIT)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(TD_ENABLE_BIT))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_chanfmt(0b01)).expect("send CHANFMT config");
+    sock.send(&build_control_chanfmt(0b01))
+        .expect("send CHANFMT config");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 
     let rows = [697.0, 770.0, 852.0, 941.0];
     let cols = [1209.0, 1336.0, 1477.0, 1633.0];
-    let digit_names = [["1", "2", "3", "A"], ["4", "5", "6", "B"], ["7", "8", "9", "C"], ["*", "0", "#", "D"]];
+    let digit_names = [
+        ["1", "2", "3", "A"],
+        ["4", "5", "6", "B"],
+        ["7", "8", "9", "C"],
+        ["*", "0", "#", "D"],
+    ];
 
     let mut all_ok = true;
     for (ri, &row) in rows.iter().enumerate() {
@@ -233,10 +245,12 @@ fn main() {
     }
 
     // Reset to a known-clean state.
-    sock.send(&build_control_ecmode(TD_ENABLE_BIT)).expect("send ECMODE reset");
+    sock.send(&build_control_ecmode(TD_ENABLE_BIT))
+        .expect("send ECMODE reset");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     parse_packet(&buf[..n]).expect("valid packet");
-    sock.send(&build_control_chanfmt(0b00)).expect("send CHANFMT reset");
+    sock.send(&build_control_chanfmt(0b00))
+        .expect("send CHANFMT reset");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     parse_packet(&buf[..n]).expect("valid packet");
 

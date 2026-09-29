@@ -96,7 +96,21 @@ mod tests {
 
     #[test]
     fn isqrt_u128_matches_the_defining_inequality_and_isqrt_u64() {
-        for n in [0u128, 1, 2, 3, 4, 15, 16, 17, u64::MAX as u128, (u64::MAX as u128) + 1, u128::MAX, 1u128 << 100, (1u128 << 100) - 1] {
+        for n in [
+            0u128,
+            1,
+            2,
+            3,
+            4,
+            15,
+            16,
+            17,
+            u64::MAX as u128,
+            (u64::MAX as u128) + 1,
+            u128::MAX,
+            1u128 << 100,
+            (1u128 << 100) - 1,
+        ] {
             let r = isqrt_u128(n);
             assert!(r * r <= n, "n={n}");
             assert!((r + 1).checked_mul(r + 1).is_none_or(|sq| sq > n), "n={n}");
@@ -119,4 +133,3 @@ mod tests {
         }
     }
 }
-

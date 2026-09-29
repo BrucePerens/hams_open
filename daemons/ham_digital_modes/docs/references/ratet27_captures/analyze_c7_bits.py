@@ -33,9 +33,9 @@ for bit_idx in range(7):
 import re
 freq_frames = []
 for label, c7 in frames:
-    m = re.match(r'(sine|sawtooth|extreme_sine)_(\d+\.?\d*)$', label)
-    if m:
-        freq = float(m.group(2))
+    label_match = re.match(r'(sine|sawtooth|extreme_sine)_(\d+\.?\d*)$', label)
+    if label_match:
+        freq = float(label_match.group(2))
         freq_frames.append((freq, c7))
 
 def spearman(xs, ys):

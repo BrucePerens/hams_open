@@ -8,42 +8,42 @@
 /// position (MSB-first widths: c0=24, c1=23, c2=11, c3=14, matching the frame layer's own
 /// C0/C1/C2/C3 split).
 pub const ANNEX_H: [((u8, u8), (u8, u8)); 36] = [
-    ((0, 23), (0, 5)), // symbol 0
-    ((1, 10), (2, 3)), // symbol 1
-    ((0, 22), (0, 4)), // symbol 2
-    ((1, 9), (2, 2)), // symbol 3
-    ((0, 21), (0, 3)), // symbol 4
-    ((1, 8), (2, 1)), // symbol 5
-    ((0, 20), (0, 2)), // symbol 6
-    ((1, 7), (2, 0)), // symbol 7
-    ((0, 19), (0, 1)), // symbol 8
-    ((1, 6), (3, 13)), // symbol 9
-    ((0, 18), (0, 0)), // symbol 10
-    ((1, 5), (3, 12)), // symbol 11
+    ((0, 23), (0, 5)),  // symbol 0
+    ((1, 10), (2, 3)),  // symbol 1
+    ((0, 22), (0, 4)),  // symbol 2
+    ((1, 9), (2, 2)),   // symbol 3
+    ((0, 21), (0, 3)),  // symbol 4
+    ((1, 8), (2, 1)),   // symbol 5
+    ((0, 20), (0, 2)),  // symbol 6
+    ((1, 7), (2, 0)),   // symbol 7
+    ((0, 19), (0, 1)),  // symbol 8
+    ((1, 6), (3, 13)),  // symbol 9
+    ((0, 18), (0, 0)),  // symbol 10
+    ((1, 5), (3, 12)),  // symbol 11
     ((0, 17), (1, 22)), // symbol 12
-    ((1, 4), (3, 11)), // symbol 13
+    ((1, 4), (3, 11)),  // symbol 13
     ((0, 16), (1, 21)), // symbol 14
-    ((1, 3), (3, 10)), // symbol 15
+    ((1, 3), (3, 10)),  // symbol 15
     ((0, 15), (1, 20)), // symbol 16
-    ((1, 2), (3, 9)), // symbol 17
+    ((1, 2), (3, 9)),   // symbol 17
     ((0, 14), (1, 19)), // symbol 18
-    ((1, 1), (3, 8)), // symbol 19
+    ((1, 1), (3, 8)),   // symbol 19
     ((0, 13), (1, 18)), // symbol 20
-    ((1, 0), (3, 7)), // symbol 21
+    ((1, 0), (3, 7)),   // symbol 21
     ((0, 12), (1, 17)), // symbol 22
-    ((2, 10), (3, 6)), // symbol 23
+    ((2, 10), (3, 6)),  // symbol 23
     ((0, 11), (1, 16)), // symbol 24
-    ((2, 9), (3, 5)), // symbol 25
+    ((2, 9), (3, 5)),   // symbol 25
     ((0, 10), (1, 15)), // symbol 26
-    ((2, 8), (3, 4)), // symbol 27
-    ((0, 9), (1, 14)), // symbol 28
-    ((2, 7), (3, 3)), // symbol 29
-    ((0, 8), (1, 13)), // symbol 30
-    ((2, 6), (3, 2)), // symbol 31
-    ((0, 7), (1, 12)), // symbol 32
-    ((2, 5), (3, 1)), // symbol 33
-    ((0, 6), (1, 11)), // symbol 34
-    ((2, 4), (3, 0)), // symbol 35
+    ((2, 8), (3, 4)),   // symbol 27
+    ((0, 9), (1, 14)),  // symbol 28
+    ((2, 7), (3, 3)),   // symbol 29
+    ((0, 8), (1, 13)),  // symbol 30
+    ((2, 6), (3, 2)),   // symbol 31
+    ((0, 7), (1, 12)),  // symbol 32
+    ((2, 5), (3, 1)),   // symbol 33
+    ((0, 6), (1, 11)),  // symbol 34
+    ((2, 4), (3, 0)),   // symbol 35
 ];
 
 // # The TIA over-the-air interleave, and why the chip wire format may not use it
@@ -120,11 +120,17 @@ mod tests {
         for &((c1, p1), (c0, p0)) in ANNEX_H.iter() {
             for (c, p) in [(c1, p1), (c0, p0)] {
                 let bit = codeword_frame_bit(c, p) as usize;
-                assert!(!seen[bit], "logical frame bit {bit} (c{c}({p})) claimed twice");
+                assert!(
+                    !seen[bit],
+                    "logical frame bit {bit} (c{c}({p})) claimed twice"
+                );
                 seen[bit] = true;
             }
         }
-        assert!(seen.iter().all(|&s| s), "not every logical frame bit is covered by Annex H");
+        assert!(
+            seen.iter().all(|&s| s),
+            "not every logical frame bit is covered by Annex H"
+        );
     }
 
     /// The real round trip this module exists for: interleaving then deinterleaving must recover
@@ -150,6 +156,9 @@ mod tests {
     fn interleave_actually_reorders_bits_for_a_non_symmetric_frame() {
         let frame: u128 = 0x1234_5678_9ABC_DEF0_1234u128 & ((1u128 << 72) - 1);
         let wire = frame_to_interleaved(frame);
-        assert_ne!(wire, frame, "a real interleave should reorder this non-symmetric pattern");
+        assert_ne!(
+            wire, frame,
+            "a real interleave should reorder this non-symmetric pattern"
+        );
     }
 }

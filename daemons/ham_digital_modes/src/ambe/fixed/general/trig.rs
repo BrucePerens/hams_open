@@ -124,7 +124,11 @@ pub fn radians_q32_from_phase(phase: u32) -> i64 {
     let numerator = (phase as i32 as i128) * PI_Q48;
     let denominator = 1i128 << 47;
     let half = denominator / 2;
-    let rounded = if numerator >= 0 { numerator + half } else { numerator - half };
+    let rounded = if numerator >= 0 {
+        numerator + half
+    } else {
+        numerator - half
+    };
     (rounded / denominator) as i64
 }
 
@@ -132,7 +136,11 @@ pub fn radians_q32_from_phase(phase: u32) -> i64 {
 /// [`super::fixed_ops::mul_q16`]/`explog::exp2_q16` already use) before truncating to `u32`.
 fn round_div_to_u32(numerator: i128, denominator: i128) -> u32 {
     let half = denominator.abs() / 2;
-    let rounded = if numerator >= 0 { numerator + half } else { numerator - half };
+    let rounded = if numerator >= 0 {
+        numerator + half
+    } else {
+        numerator - half
+    };
     (rounded / denominator) as u32
 }
 
@@ -159,7 +167,11 @@ pub fn radians_from_phase_q16(phase: u32) -> i32 {
     let numerator = (phase as i32 as i128) * PI_Q48;
     let denominator = 1i128 << 63;
     let half = denominator / 2;
-    let rounded = if numerator >= 0 { numerator + half } else { numerator - half };
+    let rounded = if numerator >= 0 {
+        numerator + half
+    } else {
+        numerator - half
+    };
     (rounded / denominator) as i32
 }
 

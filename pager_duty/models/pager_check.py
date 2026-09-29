@@ -241,10 +241,27 @@ class PagerCheck(models.Model):
         # (effectively admin) test user. Gated to the same groups `ir.model.access.csv` already
         # grants real access to `pager.check` itself (group_pager_admin, group_pager_service),
         # matching this model's own established access scope rather than inventing a new one.
+        #
+        # Bug-hunt refresh, 2026-09-27: the gate above used to also accept a bare
+        # `user.is_service_account`, which does NOT match the scope the comment claims. That
+        # flag is set on EVERY service account in the whole database (caching, cloudflare,
+        # backup_management, compliance, daemon_key_manager, binary_downloader,
+        # user_websites, ...), so it admitted dozens of accounts that ir.model.access.csv
+        # grants no access to `pager.check` at all -- including this module's OWN
+        # `user_pager_incident_creator`, whose group membership was deliberately narrowed
+        # away from group_pager_service (see security.xml's own comment on
+        # group_pager_incident_creator) precisely so that the account handling
+        # externally-triggered, lower-trust input -- any daemon's report, any inbound email
+        # to info@/postmaster@, ham_relay_bridge's theft-case intake -- could no longer
+        # touch pager.check. The disjunct silently gave that narrowing back for this one
+        # elevated RPC. It is also redundant for the real caller: the only caller in the
+        # tree is generalized_monitor.py's verify_and_install_dependencies(), which
+        # authenticates as `pager_service_internal` (pager-os-monitor.service pins
+        # ODOO_USER, and generalized_monitor.get_odoo_client defaults to the same login),
+        # and that account already holds group_pager_service.
         user = self.env.user
         if not (
-            user.is_service_account
-            or user.has_group("base.group_system")
+            user.has_group("base.group_system")
             or user.has_group("pager_duty.group_pager_admin")
             or user.has_group("pager_duty.group_pager_service")
         ):
@@ -488,6 +505,9 @@ class PagerCheck(models.Model):
             if check.grace_period:
                 check_dict["grace"] = check.grace_period
             if check.parent_check_id:
+                # The daemon matches the parent by id (a name is only unique per website). The name stays for
+                # a daemon or a config file from before parent_id existed.
+                check_dict["parent_id"] = check.parent_check_id.id
                 check_dict["parent"] = check.parent_check_id.name
             if check.maintenance_start:
                 check_dict["maint_start"] = check.maintenance_start.strftime("%Y-%m-%d %H:%M:%S")
@@ -557,6 +577,17 @@ class PagerCheck(models.Model):
             # entirely: the file is never briefly (or permanently)
             # world-readable.
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # Bug-hunt refresh, 2026-09-27: the 0o600 mode argument above only applies when
+            # os.open() actually CREATES the file. Re-exporting over a pager_config.json
+            # that already exists -- the overwhelmingly common case, since every
+            # action_push_to_json() after the first one does exactly that, and any file
+            # left behind by a pre-fix export is 0o644 -- leaves the old, permissive mode
+            # untouched, so the "never permanently world-readable" guarantee the comment
+            # above claims did not actually hold for the file this method writes in
+            # practice. fchmod() on the already-open, already-truncated fd tightens it
+            # BEFORE any credential is written into it, so there is still no window where
+            # the current contents are readable by another local account.
+            os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 # fd is now owned by `f` -- its own `with` exit closes it,
                 # on every path including a write failure, so there is no

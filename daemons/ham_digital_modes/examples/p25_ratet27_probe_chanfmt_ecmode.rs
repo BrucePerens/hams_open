@@ -83,27 +83,34 @@ fn dtmf_tone(row_hz: f64, col_hz: f64, amp: f64) -> Vec<i16> {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
-    sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+    sock.send(&build_control_ratep(RATEP_P25_FEC))
+        .expect("send RATEP config");
     let n = sock.recv(&mut buf).expect("RATEP config response");
     println!("RATEP response ({n} bytes): {:02x?}", &buf[..n]);
 
     // Reset ECMODE_IN to a known, clean baseline (TD_ENABLE on, bit 12, matching the chip's own
     // documented reset default; every other bit off) -- the earlier probe run inherited leftover
     // state from a previous DTX_ENABLE test, contaminating that reading.
-    sock.send(&build_control_ecmode(1 << 12)).expect("send ECMODE config");
+    sock.send(&build_control_ecmode(1 << 12))
+        .expect("send ECMODE config");
     let n = sock.recv(&mut buf).expect("ECMODE config response");
     println!("ECMODE reset response ({n} bytes): {:02x?}", &buf[..n]);
 
     // ecmode bits 0-1 = 0b01 ("always contain ecmode field"); all other bits 0 per the manual's
     // own explicit warning that reserved bits must be 0.
-    sock.send(&build_control_chanfmt(0b01)).expect("send CHANFMT config");
+    sock.send(&build_control_chanfmt(0b01))
+        .expect("send CHANFMT config");
     let n = sock.recv(&mut buf).expect("CHANFMT config response");
     println!("CHANFMT response ({n} bytes): {:02x?}", &buf[..n]);
 
@@ -114,15 +121,20 @@ fn main() {
         let mut state = 42u64;
         (0..FRAME_SAMPLES)
             .map(|_| {
-                state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
                 (((state >> 33) as f64 / (1u64 << 31) as f64 - 1.0) * 8000.0) as i16
             })
             .collect()
     };
 
-    for (label, samples) in
-        [("loud_tone", &loud_tone), ("silence", &silence), ("dtmf_1", &dtmf), ("noise", &noise)]
-    {
+    for (label, samples) in [
+        ("loud_tone", &loud_tone),
+        ("silence", &silence),
+        ("dtmf_1", &dtmf),
+        ("noise", &noise),
+    ] {
         // Settle first so the classification reflects steady-state, not transition frames.
         for _ in 0..30 {
             sock.send(&build_speech(samples)).expect("send speech");

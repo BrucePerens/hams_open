@@ -14,14 +14,20 @@ mod common;
 
 use common::{compare_streams, FrameView, Parity};
 use ham_digital_modes::ambe::fixed::ambe_plus_2::encoder::Encoder as FixedEncoder;
-use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_b0, extract_raw_parameters, FrameKind};
-use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
+use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+    classify_b0, extract_raw_parameters, FrameKind,
+};
 use ham_digital_modes::ambe::float::ambe_plus_2::encoder::Encoder as FloatEncoder;
+use ham_digital_modes::ambe::float::ambe_plus_2::parse_frame;
 use ham_digital_modes::ambe::float::ambe_plus_2::synthesis::AmbePlus2SynthesisDecoder;
 
 fn view(frame: u128) -> FrameView {
     let raw = extract_raw_parameters(parse_frame(frame).d);
-    FrameView { tone: classify_b0(raw.b0) != FrameKind::Speech, b0: raw.b0, b1: raw.b1 }
+    FrameView {
+        tone: classify_b0(raw.b0) != FrameKind::Speech,
+        b0: raw.b0,
+        b1: raw.b1,
+    }
 }
 
 fn encode_fixed(pcm: &[i16], flush: bool) -> Vec<u128> {
@@ -82,9 +88,19 @@ fn speech_parity_with_the_float_encoder_first_150_frames() {
     let p = parity("AMBE+2 first 150 frames", 0, common::parity_frames());
     assert_eq!(p.count_mismatch, 0);
     assert!(p.frames >= 4 * (common::parity_frames().min(1000) - 2));
-    assert_eq!(p.tone_frames_fixed, 0, "no speech frame may be emitted as a tone frame");
-    assert_eq!(p.tone_frames_float, 0, "no speech frame may be emitted as a tone frame");
-    assert!(p.frac(p.identical) >= 0.99, "identical frames {}", p.frac(p.identical));
+    assert_eq!(
+        p.tone_frames_fixed, 0,
+        "no speech frame may be emitted as a tone frame"
+    );
+    assert_eq!(
+        p.tone_frames_float, 0,
+        "no speech frame may be emitted as a tone frame"
+    );
+    assert!(
+        p.frac(p.identical) >= 0.99,
+        "identical frames {}",
+        p.frac(p.identical)
+    );
     assert!(p.frac(p.b0_within_1) >= 0.999 && p.frac(p.b0_equal) >= 0.99);
     assert!(p.frac(p.b1_equal) >= 0.99);
     assert!(p.snr_db() >= 100.0, "decoded SNR {} dB", p.snr_db());
@@ -104,7 +120,11 @@ fn speech_parity_with_the_float_encoder_mid_file_window() {
     // decoded SNR 15.7 dB, envelope correlation above 0.9995. The float filter keeps its state in `f64` and the fixed one
     // in Q16, so a rare 1-LSB rounding difference in the filtered input flips one near-tie codebook decision and the
     // closed loop carries it forward; the pitch and voicing decisions and the envelope still agree.
-    assert!(p.frac(p.identical) >= 0.88, "identical frames {}", p.frac(p.identical));
+    assert!(
+        p.frac(p.identical) >= 0.88,
+        "identical frames {}",
+        p.frac(p.identical)
+    );
     // One frame in 600 lands on a different pitch index (a tie between two candidate periods).
     assert!(p.frac(p.b0_within_1) >= 0.995 && p.frac(p.b0_equal) >= 0.99);
     assert!(p.frac(p.b1_equal) >= 0.99);
@@ -114,17 +134,29 @@ fn speech_parity_with_the_float_encoder_mid_file_window() {
 
 fn sine(freqs: &[f64], amp: f64, frames: usize) -> Vec<i16> {
     (0..160 * frames)
-        .map(|i| freqs.iter().map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin()).sum::<f64>().round() as i16)
+        .map(|i| {
+            freqs
+                .iter()
+                .map(|&hz| amp * (2.0 * std::f64::consts::PI * hz * i as f64 / 8000.0).sin())
+                .sum::<f64>()
+                .round() as i16
+        })
         .collect()
 }
 
 #[test]
 fn tone_round_trip_dtmf_and_one_kilohertz() {
-    use ham_digital_modes::ambe::float::ambe_plus_2::decode::{classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx, ToneIdentity};
+    use ham_digital_modes::ambe::float::ambe_plus_2::decode::{
+        classify_tone_idx, decode_tone_idx, dtmf_digit_from_tone_idx, ToneIdentity,
+    };
     // Frames before the flush only: the padded tail frames are partly silence, not tone.
     let dtmf = encode_fixed(&sine(&[770.0, 1336.0], 4000.0, 12), false);
     assert!(dtmf.len() >= 8);
-    assert_eq!(dtmf, encode_float(&sine(&[770.0, 1336.0], 4000.0, 12), false), "tone frames should equal the float encoder's");
+    assert_eq!(
+        dtmf,
+        encode_float(&sine(&[770.0, 1336.0], 4000.0, 12), false),
+        "tone frames should equal the float encoder's"
+    );
     for &f in &dtmf {
         let idx = decode_tone_idx(parse_frame(f).d).expect("tone frame");
         assert_eq!(dtmf_digit_from_tone_idx(idx), Some((1, 1))); // digit 5
@@ -134,10 +166,16 @@ fn tone_round_trip_dtmf_and_one_kilohertz() {
     assert_eq!(single, encode_float(&sine(&[1000.0], 4000.0, 12), false));
     for &f in &single {
         let idx = decode_tone_idx(parse_frame(f).d).expect("tone frame");
-        assert!(matches!(classify_tone_idx(idx), ToneIdentity::SingleTone { hz } if (hz - 1000.0).abs() < 16.0));
+        assert!(
+            matches!(classify_tone_idx(idx), ToneIdentity::SingleTone { hz } if (hz - 1000.0).abs() < 16.0)
+        );
     }
     let mut dec = AmbePlus2SynthesisDecoder::new();
-    let last = single.iter().map(|&f| dec.decode_frame(f).unwrap()).last().unwrap();
+    let last = single
+        .iter()
+        .map(|&f| dec.decode_frame(f).unwrap())
+        .last()
+        .unwrap();
     assert!(last.iter().any(|&s| s.abs() > 100.0));
 }
 

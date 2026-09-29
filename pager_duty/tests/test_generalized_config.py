@@ -2,6 +2,7 @@
 # This software is distributed under the terms of the Affero General Public License (AGPL-3).
 
 # -*- coding: utf-8 -*-
+import json
 import os
 import tempfile
 
@@ -156,6 +157,53 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertEqual(params["type"], "danger")
         self.assertNotIn("Successful", params["title"])
         self.assertIn(bad_path, params["message"])
+
+    def test_06b_export_tightens_the_mode_of_an_already_existing_config_file(self):
+        """A re-export over a pre-existing, world-readable pager_config.json must end up
+        0o600. The os.open(..., 0o600) mode argument only applies on CREATION, so every
+        export after the first one (and any file left behind by a pre-fix export) kept the
+        old permissive mode while this method writes plaintext dbpass/SMTP credentials into
+        it -- Known Bug Class 11."""
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "pager_config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("{}")
+            os.chmod(path, 0o644)
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o644)
+            self.safe_patch_object(
+                type(check_model), "_get_config_path", return_value=path
+            )
+            result = check_model.action_push_to_json()
+            mode = os.stat(path).st_mode & 0o777
+        self.assertEqual(result["params"]["type"], "success")
+        self.assertEqual(
+            mode,
+            0o600,
+            "[!] DIAGNOSTIC FOR AI: pager_config.json embeds plaintext dbpass/SMTP "
+            "credentials for every monitored system; re-exporting over an existing file "
+            "must tighten its mode to 0o600, not leave whatever mode it already had.",
+        )
+
+    def test_06c_export_names_a_childs_parent_by_id_as_well_as_by_name(self):
+        """A check name is only unique per website, so the daemon matches a parent by id; the name stays for a config
+        file or daemon from before parent_id existed."""
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        parent = check_model.create({"name": "Parent Export Check", "check_type": "system", "target": "memory"})
+        child = check_model.create(
+            {"name": "Child Export Check", "check_type": "system", "target": "cpu", "parent_check_id": parent.id}
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "pager_config.json")
+            self.safe_patch_object(type(check_model), "_get_config_path", return_value=path)
+            check_model.action_push_to_json()
+            with open(path, encoding="utf-8") as f:
+                exported = {entry["id"]: entry for entry in json.load(f)["checks"]}
+        self.assertEqual(exported[child.id]["parent_id"], parent.id)
+        self.assertEqual(exported[child.id]["parent"], "Parent Export Check")
+        self.assertNotIn("parent_id", exported[parent.id])
 
     def test_07_export_still_reports_success_when_the_write_works(self):
         # Tests [@ANCHOR: generalized_pager_config]

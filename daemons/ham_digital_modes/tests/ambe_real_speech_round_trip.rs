@@ -27,7 +27,9 @@
 
 use ham_digital_modes::ambe::float::tia_102_baba::decode::DecoderState;
 use ham_digital_modes::ambe::float::tia_102_baba::pitch::PitchAnalysisFrame;
-use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::{refine_pitch, RefinementFrame};
+use ham_digital_modes::ambe::float::tia_102_baba::pitch_refinement::{
+    refine_pitch, RefinementFrame,
+};
 use ham_digital_modes::ambe::float::tia_102_baba::{encode_frame, FrameState};
 
 const FRAME_SAMPLES: usize = 160;
@@ -36,7 +38,11 @@ const MARGIN: usize = 200; // pitch analysis needs 150 samples of margin, refine
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
     data[44..]
         .chunks_exact(2)
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
@@ -100,7 +106,8 @@ fn run_one_file(path: &str) {
         let omega0_hat = estimate_omega0(&raw, center);
 
         let frame = RefinementFrame::new(&raw, center);
-        let Some((c, next_state)) = encode_frame(&frame, omega0_hat, 0.02, &encoder_state, false) else {
+        let Some((c, next_state)) = encode_frame(&frame, omega0_hat, 0.02, &encoder_state, false)
+        else {
             // A genuinely silent or degenerate frame (e.g. leading/trailing silence in the
             // recording) failing analysis is expected and fine -- not every 20ms window of a real
             // recording has to look like valid voiced/unvoiced speech.

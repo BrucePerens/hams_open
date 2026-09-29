@@ -30,10 +30,19 @@ impl Descriptor {
     /// `voiced` and `ml` are 1-indexed by harmonic (index 0 unused), as the decoders' parameter structs carry them.
     pub fn new(w0: f64, voiced: &[bool], ml: &[f64]) -> Self {
         let l = ml.len() - 1;
-        let level_db = 20.0 * (ml[1..].iter().map(|m| m * m).sum::<f64>() / l as f64).sqrt().max(1e-3).log10();
+        let level_db = 20.0
+            * (ml[1..].iter().map(|m| m * m).sum::<f64>() / l as f64)
+                .sqrt()
+                .max(1e-3)
+                .log10();
         let spectrum = std::array::from_fn(|k| 20.0 * ml[1 + (k * l) / 16].max(1e-3).log10());
         let voicing = std::array::from_fn(|b| voiced[1 + (b * l) / 8]);
-        Self { w0, level_db, spectrum, voicing }
+        Self {
+            w0,
+            level_db,
+            spectrum,
+            voicing,
+        }
     }
 
     fn any_voiced(&self) -> bool {
@@ -112,7 +121,12 @@ pub struct Concealer {
 
 impl Concealer {
     pub fn new(params: ConcealParams) -> Self {
-        Self { params, previous: None, ber: params.ber_floor, repeats: 0 }
+        Self {
+            params,
+            previous: None,
+            ber: params.ber_floor,
+            repeats: 0,
+        }
     }
 
     pub fn error_rate(&self) -> f64 {
@@ -124,9 +138,21 @@ impl Concealer {
         let widen = 1.0 + self.params.widen_per_repeat * self.repeats as f64;
         let q = &self.params;
         let mut cost = (c.level_db - p.level_db).abs() / (q.level_scale_db * widen);
-        let shape = (c.spectrum.iter().zip(&p.spectrum).map(|(a, b)| (a - b).powi(2)).sum::<f64>() / 16.0).sqrt();
+        let shape = (c
+            .spectrum
+            .iter()
+            .zip(&p.spectrum)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            / 16.0)
+            .sqrt();
         cost += shape / (q.shape_scale_db * widen);
-        cost += q.voicing_cost * c.voicing.iter().zip(&p.voicing).filter(|(a, b)| a != b).count() as f64;
+        cost += q.voicing_cost
+            * c.voicing
+                .iter()
+                .zip(&p.voicing)
+                .filter(|(a, b)| a != b)
+                .count() as f64;
         if c.any_voiced() && p.any_voiced() {
             cost += (c.w0 / p.w0).ln().abs() / (q.pitch_scale * widen);
         }
@@ -139,7 +165,8 @@ impl Concealer {
     pub fn decide(&mut self, candidates: &[(u32, Option<Descriptor>)], epsilon: u32) -> Decision {
         // Bit error rate estimate from the protected bits (47 per frame).
         let observed = epsilon as f64 / 47.0;
-        self.ber = ((1.0 - self.params.ber_alpha) * self.ber + self.params.ber_alpha * observed).clamp(self.params.ber_floor, 0.4);
+        self.ber = ((1.0 - self.params.ber_alpha) * self.ber + self.params.ber_alpha * observed)
+            .clamp(self.params.ber_floor, 0.4);
         // No evidence of channel errors (nothing corrected now, and the running estimate at its floor): decode as received.
         if epsilon == 0 && self.ber <= self.params.ber_floor * self.params.flip_gate {
             if let Some((_, Some(d))) = candidates.first() {
@@ -155,7 +182,9 @@ impl Concealer {
             if *flips > 0 && self.ber <= self.params.ber_floor * self.params.flip_gate {
                 continue;
             }
-            let cost = flip_cost * *flips as f64 + self.continuity_cost(d) + self.params.error_suspicion * epsilon as f64;
+            let cost = flip_cost * *flips as f64
+                + self.continuity_cost(d)
+                + self.params.error_suspicion * epsilon as f64;
             if best.is_none_or(|(_, b)| cost < b) {
                 best = Some((i, cost));
             }
@@ -172,7 +201,10 @@ impl Concealer {
             _ => {
                 self.repeats += 1;
                 let scale = self.params.fade_per_frame.powi(self.repeats as i32);
-                Decision::Repeat { scale: if scale < 0.03 { 0.0 } else { scale }, reset: self.repeats >= self.params.reset_after }
+                Decision::Repeat {
+                    scale: if scale < 0.03 { 0.0 } else { scale },
+                    reset: self.repeats >= self.params.reset_after,
+                }
             }
         }
     }

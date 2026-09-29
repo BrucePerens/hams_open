@@ -124,7 +124,7 @@ def publish_to_rabbitmq(env, msg, job_id=None, svc_uid=None):
     if job_id and svc_uid:
         registry = env.registry
 
-        def on_result(success):
+        def mark_failed_if_not_sent(success):
             if success:
                 return
             # Runs after the originating transaction committed, so the write
@@ -133,6 +133,8 @@ def publish_to_rabbitmq(env, msg, job_id=None, svc_uid=None):
                 api.Environment(cr, svc_uid, {})["backup.job"].browse(
                     job_id
                 )._mark_dispatch_failed()
+
+        on_result = mark_failed_if_not_sent
 
     try:
         env["hams_rabbitmq.pool"].publish(

@@ -32,9 +32,15 @@ const HZ_PER_INDEX_Q16: i32 = 2_048_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DetectedTone {
-    Dtmf { row: u8, col: u8 },
+    Dtmf {
+        row: u8,
+        col: u8,
+    },
     /// `index = round(f / 31.25)`, `hz_q16` the measured frequency (Q16.16 Hz).
-    Single { index: u32, hz_q16: i32 },
+    Single {
+        index: u32,
+        hz_q16: i32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,8 +104,14 @@ pub fn detect_tone(frame: &[i16]) -> Option<Detection> {
     }
 
     // DTMF: strongest row and column (ties resolve to the last, like the float's `max_by`).
-    let rows: Vec<(i64, i64)> = DTMF_ROW_HZ_Q16.iter().map(|&hz| fit_sinusoid(frame, hz)).collect();
-    let cols: Vec<(i64, i64)> = DTMF_COL_HZ_Q16.iter().map(|&hz| fit_sinusoid(frame, hz)).collect();
+    let rows: Vec<(i64, i64)> = DTMF_ROW_HZ_Q16
+        .iter()
+        .map(|&hz| fit_sinusoid(frame, hz))
+        .collect();
+    let cols: Vec<(i64, i64)> = DTMF_COL_HZ_Q16
+        .iter()
+        .map(|&hz| fit_sinusoid(frame, hz))
+        .collect();
     let arg_max = |v: &[(i64, i64)]| {
         let mut best = 0;
         for (i, e) in v.iter().enumerate() {
@@ -112,8 +124,18 @@ pub fn detect_tone(frame: &[i16]) -> Option<Detection> {
     let (r, c) = (arg_max(&rows), arg_max(&cols));
     let (ra, ca) = (rows[r].0, cols[c].0);
     let hundred = 100i64 << 16;
-    if ra > hundred && ca > hundred && ra.max(ca) < 3 * ra.min(ca) && explained_exceeds(total, rows[r].1 + cols[c].1, 17, 20) {
-        return Some(Detection { tone: DetectedTone::Dtmf { row: r as u8, col: c as u8 }, amplitude_q16: (ra + ca) >> 1 });
+    if ra > hundred
+        && ca > hundred
+        && ra.max(ca) < 3 * ra.min(ca)
+        && explained_exceeds(total, rows[r].1 + cols[c].1, 17, 20)
+    {
+        return Some(Detection {
+            tone: DetectedTone::Dtmf {
+                row: r as u8,
+                col: c as u8,
+            },
+            amplitude_q16: (ra + ca) >> 1,
+        });
     }
 
     // Single tone: coarse scan for the strongest sinusoid (150..=3900 Hz in 12.5 Hz steps), then refine by 1 Hz.
@@ -139,9 +161,14 @@ pub fn detect_tone(frame: &[i16]) -> Option<Detection> {
     if amp > hundred && explained_exceeds(total, p, 99, 100) {
         let index = ((hz as i64 + (HZ_PER_INDEX_Q16 as i64 >> 1)) / HZ_PER_INDEX_Q16 as i64) as u32;
         let in_range = (13..=122).contains(&index)
-            || (index == 6 && (hz - 200 * HZ_Q16).abs() < 3 * HZ_Q16 && explained_exceeds(total, p, 999, 1000));
+            || (index == 6
+                && (hz - 200 * HZ_Q16).abs() < 3 * HZ_Q16
+                && explained_exceeds(total, p, 999, 1000));
         if in_range {
-            return Some(Detection { tone: DetectedTone::Single { index, hz_q16: hz }, amplitude_q16: amp });
+            return Some(Detection {
+                tone: DetectedTone::Single { index, hz_q16: hz },
+                amplitude_q16: amp,
+            });
         }
     }
     None
@@ -172,10 +199,24 @@ mod tests {
     fn detects_every_dtmf_digit_with_the_chip_index_and_level() {
         for r in 0..4usize {
             for c in 0..4usize {
-                let x = sines(&[DTMF_ROW_HZ_Q16[r] >> 16, DTMF_COL_HZ_Q16[c] >> 16], 4000, 37);
+                let x = sines(
+                    &[DTMF_ROW_HZ_Q16[r] >> 16, DTMF_COL_HZ_Q16[c] >> 16],
+                    4000,
+                    37,
+                );
                 let d = detect_tone(&x).expect("digit detected");
-                assert_eq!(d.tone, DetectedTone::Dtmf { row: r as u8, col: c as u8 });
-                assert!((d.amplitude_q16 - (4000 << 16)).abs() < (200 << 16), "amplitude {}", d.amplitude_q16);
+                assert_eq!(
+                    d.tone,
+                    DetectedTone::Dtmf {
+                        row: r as u8,
+                        col: c as u8
+                    }
+                );
+                assert!(
+                    (d.amplitude_q16 - (4000 << 16)).abs() < (200 << 16),
+                    "amplitude {}",
+                    d.amplitude_q16
+                );
                 assert!((volume_for_amplitude_q16(d.amplitude_q16) as i32 - 186).abs() <= 1);
             }
         }
@@ -185,7 +226,11 @@ mod tests {
     fn single_tone_index_and_levels_match_the_chip() {
         for (hz, index) in [(500, 16u32), (1000, 32), (2000, 64), (3800, 122), (400, 13)] {
             let d = detect_tone(&sines(&[hz], 4000, 11)).expect("tone detected");
-            assert!(matches!(d.tone, DetectedTone::Single { index: i, .. } if i == index), "{hz} Hz -> {:?}", d.tone);
+            assert!(
+                matches!(d.tone, DetectedTone::Single { index: i, .. } if i == index),
+                "{hz} Hz -> {:?}",
+                d.tone
+            );
         }
         assert_eq!(volume_for_amplitude_q16(500 << 16), 135);
         assert_eq!(volume_for_amplitude_q16(1000 << 16), 152);

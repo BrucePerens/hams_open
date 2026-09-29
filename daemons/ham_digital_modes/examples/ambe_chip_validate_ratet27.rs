@@ -82,21 +82,33 @@ fn sawtooth(freq: f64) -> Vec<i16> {
 fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[8..12], b"WAVE", "{path}: not a RIFF/WAVE file");
-    assert_eq!(&data[36..40], b"data", "{path}: not a standard 44-byte-header PCM WAV");
-    data[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+    assert_eq!(
+        &data[36..40],
+        b"data",
+        "{path}: not a standard 44-byte-header PCM WAV"
+    );
+    data[44..]
+        .chunks_exact(2)
+        .map(|b| i16::from_le_bytes([b[0], b[1]]))
+        .collect()
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let host = args.get(1).cloned().unwrap_or_else(|| "192.168.10.189:2460".to_string());
+    let host = args
+        .get(1)
+        .cloned()
+        .unwrap_or_else(|| "192.168.10.189:2460".to_string());
 
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind local UDP socket");
-    sock.connect(&host).unwrap_or_else(|e| panic!("connect to {host}: {e}"));
+    sock.connect(&host)
+        .unwrap_or_else(|e| panic!("connect to {host}: {e}"));
     sock.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
     let mut buf = [0u8; 512];
 
     let n = {
-        sock.send(&build_control_ratep(RATEP_P25_FEC)).expect("send RATEP config");
+        sock.send(&build_control_ratep(RATEP_P25_FEC))
+            .expect("send RATEP config");
         sock.recv(&mut buf).expect("RATEP config response")
     };
     let (ptype, payload) = parse_packet(&buf[..n]).expect("valid DVSI packet");
@@ -137,8 +149,9 @@ fn main() {
             assert_eq!(payload[1] as usize, TOTAL_BITS, "unexpected bit count");
 
             let pkt = &buf[..n];
-            let bits_bytes: &[u8; FRAME_BYTES] =
-                pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES].try_into().unwrap();
+            let bits_bytes: &[u8; FRAME_BYTES] = pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES]
+                .try_into()
+                .unwrap();
             let frame = decode_frame(bits_bytes);
 
             total_frames += 1;
@@ -170,8 +183,9 @@ fn main() {
             assert_eq!(payload[1] as usize, TOTAL_BITS, "unexpected bit count");
 
             let pkt = &buf[..n];
-            let bits_bytes: &[u8; FRAME_BYTES] =
-                pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES].try_into().unwrap();
+            let bits_bytes: &[u8; FRAME_BYTES] = pkt[BITS_OFFSET..BITS_OFFSET + FRAME_BYTES]
+                .try_into()
+                .unwrap();
             let frame = decode_frame(bits_bytes);
 
             total_frames += 1;

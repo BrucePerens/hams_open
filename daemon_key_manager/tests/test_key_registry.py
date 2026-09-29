@@ -421,6 +421,42 @@ class TestKeyRegistry(RealTransactionCase):
         ).action_force_provision_all()
         self.assertTrue(os.path.exists(env_file_path))
 
+    def test_a_failing_daemon_does_not_undo_or_hide_the_daemons_that_succeeded(self):
+        # [@ANCHOR: COMM_test_force_provisioning_partial_failure]
+
+        # Tests [@ANCHOR: COMM_force_provision_error_handling]
+        # Found live on hams1, 2026-09-23: one daemon's failure raised UserError at the end, which rolled back the whole
+        # transaction, including the API keys of the daemons that HAD succeeded -- whose key files were already
+        # written. Files and database then disagreed and those daemons were refused for days.
+        good_path = "/opt/hams/etc/keys/partial_ok.env"
+        bad_path = "/opt/hams/etc/keys/partial_bad.env"
+        self.test_env_paths.extend([good_path, bad_path])
+        for path in (good_path, bad_path):
+            if os.path.exists(path):
+                os.remove(path)
+        registry_model = self.env["daemon.key.registry"].with_user(self.manager_user.id)
+        registry_model.create(
+            {"name": "Partial OK", "user_id": self.service_user.id, "env_file_path": good_path}
+        )
+        archived = self.env["res.users"].create(
+            {"name": "Archived Service", "login": "archived_partial_svc", "is_service_account": True, "active": False}
+        )
+        registry_model.create({"name": "Partial Bad", "user_id": archived.id, "env_file_path": bad_path})
+
+        result = registry_model.action_force_provision_all()  # must not raise
+
+        self.assertEqual(result["params"]["type"], "danger")
+        self.assertIn("Partial Bad", result["params"]["message"])
+        self.assertNotIn("Partial OK", result["params"]["message"].split("FAILED for:")[1])
+        self.assertTrue(os.path.exists(good_path), "the daemon that could be provisioned still is")
+        self.assertFalse(os.path.exists(bad_path))
+        self.assertTrue(
+            self.env["res.users.apikeys"].search_count(
+                [("user_id", "=", self.service_user.id), ("name", "=", "Partial OK_key")]
+            ),
+            "the successful daemon's key is in the database, in step with its file",
+        )
+
     def test_ui_rendering(self):
         """Test UI view rendering."""
         # [@ANCHOR: COMM_test_ui_rendering]
@@ -489,6 +525,66 @@ class TestKeyRegistry(RealTransactionCase):
 
         registry.with_user(self.manager_user.id).action_rotate_key()
         self.assertTrue(os.path.exists(env_file_path))
+
+    def test_action_rotate_key_self_heals_a_service_account_missing_the_usage_group(self):
+        """
+        Real bug found 2026-09-28/29 (a live production incident, `backup_worker` unable to
+        rotate its own key): `group_daemon_key_usage` (the group that grants a 90-day API-key
+        duration) was only ever granted dynamically, by `register_daemon()`, via a raw-SQL
+        insert -- never declared statically in any daemon service account's own `(6, 0, [...])`
+        `group_ids` eval. Since every one of those XML records lives in a `noupdate="0"` block
+        specifically so an ordinary module upgrade can *replace* the account's group set (see
+        `backup_management/security/security.xml`'s own 2026-09-14 comment), the very next
+        upgrade after a daemon's first registration silently wiped the dynamic grant back out,
+        with no error anywhere -- confirmed live: `action_rotate_key()` then fails with
+        `ValidationError: You cannot exceed 1.0 days` the next time anything tries to rotate
+        that daemon's key, since a service account holding none of this module's own groups
+        gets the ordinary 1-day default duration ceiling.
+
+        This test reproduces the account-missing-the-group half directly (the module-upgrade
+        wipe itself isn't reproduced here -- see this test's own docstring for why that part is
+        already covered by every `is_service_account` XML record's own review, not a unit test)
+        and asserts `action_rotate_key()` now self-heals: it grants the group itself
+        (`_ensure_usage_group()`, called from `_rotate_key_and_write_file()`) before generating
+        the key, rather than assuming some earlier caller already guaranteed it.
+        """
+        usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
+        self.assertNotIn(
+            usage_group,
+            self.service_user.group_ids,
+            "This test's own premise requires the service account to start without the usage "
+            "group -- if it already has it, this test is no longer exercising the real gap.",
+        )
+
+        daemon_name = "Self Heal Rotation Test"
+        env_file_path = "/opt/hams/etc/keys/self_heal_rotation.env"
+        self.test_env_paths.append(env_file_path)
+        if os.path.exists(env_file_path):
+            os.remove(env_file_path)
+
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": daemon_name,
+                    "user_id": self.service_user.id,
+                    "env_file_path": env_file_path,
+                }
+            )
+        )
+
+        # Before the fix, this raised ValidationError: You cannot exceed 1.0 days.
+        registry.with_user(self.manager_user.id).action_rotate_key()
+
+        self.assertTrue(os.path.exists(env_file_path))
+        self.service_user.invalidate_recordset()
+        self.assertIn(
+            usage_group,
+            self.service_user.group_ids,
+            "action_rotate_key() should grant the usage group itself when it's missing, not "
+            "just succeed by luck.",
+        )
 
     def test_rotated_key_bearer_json2_not_blocked_for_service_account(self):
         """A daemon calls /json/2/... with the Bearer key this module

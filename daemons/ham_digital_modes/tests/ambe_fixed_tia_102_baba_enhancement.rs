@@ -11,7 +11,9 @@ use ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::{
     estimate_errors_q16, should_mute_frame_q16, should_repeat_frame_q16,
 };
 use ham_digital_modes::ambe::float::tia_102_baba::enhancement as float_enh;
-use ham_digital_modes::ambe::float::tia_102_baba::error_estimation::{estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors};
+use ham_digital_modes::ambe::float::tia_102_baba::error_estimation::{
+    estimate_errors, should_mute_frame, should_repeat_frame, FrameErrors,
+};
 
 const RELATIVE_TOLERANCE: f64 = 0.01;
 
@@ -56,7 +58,9 @@ fn assert_close_i64(label: &str, float_val: f64, fixed_val_q16: i64) {
 /// or degenerate. `peak` sets the overall scale -- swept across several decades in the tests below
 /// to exercise `enhancement.rs`'s own wide `R_M0` range (real chip data: roughly 9 to 4x10^8).
 fn realistic_amplitudes(l: usize, peak: f64) -> Vec<f64> {
-    (1..=l).map(|i| peak * (0.4 + 0.6 * ((i as f64) * 0.7).sin().abs())).collect()
+    (1..=l)
+        .map(|i| peak * (0.4 + 0.6 * ((i as f64) * 0.7).sin().abs()))
+        .collect()
 }
 
 /// `(l, peak)` pairs whose `R_M0` spans the real chip-measured range (peak amplitudes from `0.5`
@@ -136,48 +140,77 @@ fn adaptive_voicing_threshold_matches_all_three_branches() {
         let s_e_i64 = to_q16_i64(s_e);
 
         // Branch 1: rate <= 0.005 && total <= 4 -> infinity. Compared by sentinel behavior, not value.
-        let errors_f = FrameErrors { total: 2, rate: 0.001, golay_init: 0, hamming_init: 0 };
-        let errors_q = ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+        let errors_f = FrameErrors {
             total: 2,
-            rate_q16: to_q16(0.001),
+            rate: 0.001,
             golay_init: 0,
             hamming_init: 0,
         };
+        let errors_q =
+            ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+                total: 2,
+                rate_q16: to_q16(0.001),
+                golay_init: 0,
+                hamming_init: 0,
+            };
         let float_v = float_enh::adaptive_voicing_threshold(&errors_f, s_e);
         let fixed_v = fixed_enh::adaptive_voicing_threshold_q16(&errors_q, s_e_i64);
-        assert!(float_v.is_infinite() && fixed_v == i32::MAX, "branch 1 s_e={s_e}: float={float_v}, fixed={fixed_v}");
+        assert!(
+            float_v.is_infinite() && fixed_v == i32::MAX,
+            "branch 1 s_e={s_e}: float={float_v}, fixed={fixed_v}"
+        );
 
         // Branch 2: rate <= 0.0125 && hamming_init == 0.
-        let errors_f = FrameErrors { total: 8, rate: 0.01, golay_init: 0, hamming_init: 0 };
-        let errors_q = ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+        let errors_f = FrameErrors {
             total: 8,
-            rate_q16: to_q16(0.01),
+            rate: 0.01,
             golay_init: 0,
             hamming_init: 0,
         };
+        let errors_q =
+            ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+                total: 8,
+                rate_q16: to_q16(0.01),
+                golay_init: 0,
+                hamming_init: 0,
+            };
         let float_v = float_enh::adaptive_voicing_threshold(&errors_f, s_e);
         let fixed_v = fixed_enh::adaptive_voicing_threshold_q16(&errors_q, s_e_i64);
         if float_v > 32767.0 {
             // Past a plain Q16.16 i32's own real-valued ceiling: V_M's saturation to i32::MAX is
             // the documented, correct behavior (see `powf_wide_input_q16`'s own doc comment), not a
             // precision bug -- real M_l never reaches this range either, so V_M > M_l stays false.
-            assert_eq!(fixed_v, i32::MAX, "branch 2 s_e={s_e} (saturation case): float={float_v}");
+            assert_eq!(
+                fixed_v,
+                i32::MAX,
+                "branch 2 s_e={s_e} (saturation case): float={float_v}"
+            );
         } else {
             assert_close(&format!("branch 2 s_e={s_e}"), float_v, fixed_v);
         }
 
         // Branch 3: neither of the above.
-        let errors_f = FrameErrors { total: 20, rate: 0.05, golay_init: 1, hamming_init: 2 };
-        let errors_q = ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+        let errors_f = FrameErrors {
             total: 20,
-            rate_q16: to_q16(0.05),
+            rate: 0.05,
             golay_init: 1,
             hamming_init: 2,
         };
+        let errors_q =
+            ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+                total: 20,
+                rate_q16: to_q16(0.05),
+                golay_init: 1,
+                hamming_init: 2,
+            };
         let float_v = float_enh::adaptive_voicing_threshold(&errors_f, s_e);
         let fixed_v = fixed_enh::adaptive_voicing_threshold_q16(&errors_q, s_e_i64);
         if float_v > 32767.0 {
-            assert_eq!(fixed_v, i32::MAX, "branch 3 s_e={s_e} (saturation case): float={float_v}");
+            assert_eq!(
+                fixed_v,
+                i32::MAX,
+                "branch 3 s_e={s_e} (saturation case): float={float_v}"
+            );
         } else {
             assert_close(&format!("branch 3 s_e={s_e}"), float_v, fixed_v);
         }
@@ -217,13 +250,19 @@ fn amplitude_sum_matches() {
 fn update_amplitude_threshold_matches_both_branches() {
     for &prev in &[15000.0f64, 200_000.0] {
         // Branch 1: rate <= 0.005 && total <= 6.
-        let errors_f = FrameErrors { total: 3, rate: 0.001, golay_init: 0, hamming_init: 0 };
-        let errors_q = ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+        let errors_f = FrameErrors {
             total: 3,
-            rate_q16: to_q16(0.001),
+            rate: 0.001,
             golay_init: 0,
             hamming_init: 0,
         };
+        let errors_q =
+            ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+                total: 3,
+                rate_q16: to_q16(0.001),
+                golay_init: 0,
+                hamming_init: 0,
+            };
         assert_close_i64(
             &format!("amplitude threshold branch 1 prev={prev}"),
             float_enh::update_amplitude_threshold(&errors_f, prev),
@@ -231,13 +270,19 @@ fn update_amplitude_threshold_matches_both_branches() {
         );
 
         // Branch 2.
-        let errors_f = FrameErrors { total: 15, rate: 0.05, golay_init: 1, hamming_init: 1 };
-        let errors_q = ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+        let errors_f = FrameErrors {
             total: 15,
-            rate_q16: to_q16(0.05),
+            rate: 0.05,
             golay_init: 1,
             hamming_init: 1,
         };
+        let errors_q =
+            ham_digital_modes::ambe::fixed::tia_102_baba::error_estimation::FrameErrorsQ16 {
+                total: 15,
+                rate_q16: to_q16(0.05),
+                golay_init: 1,
+                hamming_init: 1,
+            };
         assert_close_i64(
             &format!("amplitude threshold branch 2 prev={prev}"),
             float_enh::update_amplitude_threshold(&errors_f, prev),
@@ -248,7 +293,12 @@ fn update_amplitude_threshold_matches_both_branches() {
 
 #[test]
 fn amplitude_smoothing_scale_matches_both_branches() {
-    for &(tau, a) in &[(100.0f64, 50.0), (30.0, 50.0), (200_000.0, 150_000.0), (150_000.0, 200_000.0)] {
+    for &(tau, a) in &[
+        (100.0f64, 50.0),
+        (30.0, 50.0),
+        (200_000.0, 150_000.0),
+        (150_000.0, 200_000.0),
+    ] {
         assert_close(
             &format!("smoothing scale tau={tau} a={a}"),
             float_enh::amplitude_smoothing_scale(tau, a),
@@ -268,14 +318,26 @@ fn error_estimation_matches() {
     assert_close("error rate", float_errors.rate, fixed_errors.rate_q16);
     assert_eq!(float_errors.golay_init, fixed_errors.golay_init);
     assert_eq!(float_errors.hamming_init, fixed_errors.hamming_init);
-    assert_eq!(should_repeat_frame(&float_errors), should_repeat_frame_q16(&fixed_errors));
-    assert_eq!(should_mute_frame(&float_errors), should_mute_frame_q16(&fixed_errors));
+    assert_eq!(
+        should_repeat_frame(&float_errors),
+        should_repeat_frame_q16(&fixed_errors)
+    );
+    assert_eq!(
+        should_mute_frame(&float_errors),
+        should_mute_frame_q16(&fixed_errors)
+    );
 
     // A second, higher-error case exercising the other side of both thresholds.
     let counts2 = [3u32, 5, 4, 6, 5, 4, 3];
     let float_errors2 = estimate_errors(&counts2, float_errors.rate);
     let fixed_errors2 = estimate_errors_q16(&counts2, fixed_errors.rate_q16);
     assert_close("error rate 2", float_errors2.rate, fixed_errors2.rate_q16);
-    assert_eq!(should_repeat_frame(&float_errors2), should_repeat_frame_q16(&fixed_errors2));
-    assert_eq!(should_mute_frame(&float_errors2), should_mute_frame_q16(&fixed_errors2));
+    assert_eq!(
+        should_repeat_frame(&float_errors2),
+        should_repeat_frame_q16(&fixed_errors2)
+    );
+    assert_eq!(
+        should_mute_frame(&float_errors2),
+        should_mute_frame_q16(&fixed_errors2)
+    );
 }

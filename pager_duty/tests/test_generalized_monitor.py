@@ -7,6 +7,7 @@ import json
 from odoo import fields
 import os
 import socket
+import tempfile
 import time
 from unittest.mock import MagicMock
 
@@ -853,7 +854,62 @@ class TestMonitorExhaustive(HamsTransactionCase):
         # The startup jitter sleep is the very first call to time.sleep()
         # this function makes -- reaching it proves the real first-pass
         # execute_check()/status-report logic above it already ran.
-        self.assertIn("Polling Thread Test Check", generalized_monitor.THREAD_HEARTBEATS)
+        self.assertIn(99, generalized_monitor.THREAD_HEARTBEATS)
+        self.assertEqual(generalized_monitor.THREAD_NAMES[99], "Polling Thread Test Check")
+
+    # [@ANCHOR: test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state]
+    def test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state(self):
+        # Tests [@ANCHOR: pager_duty:check_key]
+        # A check name is unique only per website, so two websites can each have "Disk". Keyed by name they shared one
+        # heartbeat, one timeout and one failing flag.
+        website_a = {"id": 11, "name": "Disk", "website_id": 1, "type": "system", "target": "disk", "interval": 60}
+        website_b = {"id": 12, "name": "Disk", "website_id": 2, "type": "system", "target": "disk", "interval": 60}
+        self.assertNotEqual(generalized_monitor.check_key(website_a), generalized_monitor.check_key(website_b))
+
+        class _StopLoop(Exception):
+            pass
+
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.time.sleep", side_effect=_StopLoop
+        )
+        client = MagicMock()
+        client.execute.return_value = True
+        for check in (website_a, website_b):
+            with self.assertRaises(_StopLoop):
+                generalized_monitor.polling_thread(client, check)
+        self.assertIn(11, generalized_monitor.THREAD_HEARTBEATS)
+        self.assertIn(12, generalized_monitor.THREAD_HEARTBEATS)
+        self.assertNotIn("Disk", generalized_monitor.THREAD_HEARTBEATS)
+
+    # [@ANCHOR: test_20c_a_parent_failing_on_one_website_does_not_suppress_or_clear_the_other_websites_state]
+    def test_20c_a_parent_failing_on_one_website_does_not_suppress_or_clear_the_other_websites_state(self):
+        # Tests [@ANCHOR: pager_duty:parent_suppresses]
+        gm = generalized_monitor
+        self.addCleanup(gm.FAILING_CHECKS.clear)
+        self.addCleanup(gm.FAILING_NAMES.clear)
+        gm.FAILING_CHECKS.clear()
+        gm.FAILING_NAMES.clear()
+        child_of_a = {"id": 21, "name": "Child", "parent": "Disk", "parent_id": 11}
+        child_of_b = {"id": 22, "name": "Child", "parent": "Disk", "parent_id": 12}
+        gm.FAILING_CHECKS.add(11)  # the Disk check on website A fails
+        gm.FAILING_NAMES.add("Disk")
+        self.assertTrue(gm.parent_suppresses(child_of_a))
+        self.assertFalse(gm.parent_suppresses(child_of_b), "website B's Disk is healthy, so its child must still run")
+        gm.FAILING_CHECKS.discard(12)  # website B's Disk passing must not clear A's failure
+        self.assertTrue(gm.parent_suppresses(child_of_a))
+
+    # [@ANCHOR: test_20d_a_config_from_before_parent_id_still_matches_the_parent_by_name]
+    def test_20d_a_config_from_before_parent_id_still_matches_the_parent_by_name(self):
+        # Tests [@ANCHOR: pager_duty:parent_suppresses]
+        gm = generalized_monitor
+        self.addCleanup(gm.FAILING_NAMES.clear)
+        gm.FAILING_NAMES.clear()
+        legacy_child = {"name": "Child", "parent": "Disk"}
+        self.assertFalse(gm.parent_suppresses(legacy_child))
+        gm.FAILING_NAMES.add("Disk")
+        self.assertTrue(gm.parent_suppresses(legacy_child))
+        self.assertFalse(gm.parent_suppresses({"name": "No Parent"}))
+        self.assertEqual(gm.check_key({"name": "Old Format Check"}), "Old Format Check")
 
     def test_21_log_tail_thread_runs_one_real_cycle_then_exits(self):
         # Tests [@ANCHOR: pager_duty:log_tail_thread]
@@ -876,3 +932,64 @@ class TestMonitorExhaustive(HamsTransactionCase):
         with self.assertRaises(_StopLoop):
             generalized_monitor.log_tail_thread(mock_client, check)
         self.assertIn("Log Tail Test Check", generalized_monitor.THREAD_TIMEOUTS)
+
+    def test_22_extract_severity_prefix(self):
+        # Tests [@ANCHOR: pager_duty:extract_severity_prefix]
+        """The standalone parser both polling_thread() call sites use to pull a synthetic
+        script's own graduated severity back out of execute_check()'s message string."""
+        severity, msg = generalized_monitor.extract_severity_prefix(
+            "[SEVERITY:critical] Synthetic failure (Code 1): token expires in 1 days"
+        )
+        self.assertEqual(severity, "critical")
+        self.assertEqual(msg, "Synthetic failure (Code 1): token expires in 1 days")
+
+        # No prefix at all -- every check type except a graduated synthetic one, and every
+        # synthetic script that predates this feature -- must fall back to the same "high"
+        # every failing check has always paged at, with the message completely untouched.
+        severity, msg = generalized_monitor.extract_severity_prefix("plain failure message")
+        self.assertEqual(severity, "high")
+        self.assertEqual(msg, "plain failure message")
+
+    def test_23_synthetic_check_extracts_graduated_severity_from_stderr(self):
+        # Tests [@ANCHOR: daemon_verify_dependencies]
+        """A synthetic script's own SEVERITY: line on stderr (check_github_pat_expiry.py's own
+        convention) must survive execute_check() as a "[SEVERITY:xxx]" prefix on the returned
+        message, and a script that never prints one must be completely unaffected."""
+        mock_run = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
+        )
+
+        mock_run.return_value.returncode = 1
+        mock_run.return_value.stderr = "SEVERITY:critical\nGitHub PAT expires in 1 days (...)"
+        success, msg = generalized_monitor.execute_check(
+            {"type": "synthetic", "script": "/bin/false"}
+        )
+        self.assertFalse(success)
+        self.assertTrue(msg.startswith("[SEVERITY:critical] "))
+
+        # A plain failure with no SEVERITY marker (check_cloudflare_token_expiry.py's own
+        # existing shape, and every synthetic script written before this feature existed) must
+        # come back with no prefix at all, so extract_severity_prefix() falls back to "high".
+        mock_run.return_value.stderr = "Cloudflare API token expires in 5 days (...)"
+        success, msg = generalized_monitor.execute_check(
+            {"type": "synthetic", "script": "/bin/false"}
+        )
+        self.assertFalse(success)
+        self.assertFalse(msg.startswith("[SEVERITY:"))
+
+    def test_resolve_config_path_prefers_an_explicit_file_then_the_system_directory_then_the_daemon_directory(self):
+        # Tests [@ANCHOR: pager_duty:daemon_resolve_config_path]
+        # The Odoo side writes to the system configuration directory once the worker can write there; the daemon must read the
+        # same file, or every "Push to JSON" is reported as a success that nothing ever reads.
+        beside_daemon = os.path.join(os.path.dirname(generalized_monitor.__file__), "pager_config.json")
+        with tempfile.TemporaryDirectory() as system_dir:
+            environ = {"PAGER_CONFIG_DIR": system_dir}
+            self.assertEqual(generalized_monitor.resolve_config_path(environ), beside_daemon)
+            system_file = os.path.join(system_dir, "pager_config.json")
+            with open(system_file, "w", encoding="utf-8") as f:
+                f.write("{}")
+            self.assertEqual(generalized_monitor.resolve_config_path(environ), system_file)
+            explicit = os.path.join(system_dir, "other.json")
+            self.assertEqual(
+                generalized_monitor.resolve_config_path({**environ, "PAGER_CONFIG_PATH": explicit}), explicit
+            )

@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
 
+from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import SSRFValidationError
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 # Captured at import time, BEFORE any test's setUp() patches the module
 # attribute of the same name -- `from ... import X` binds a direct
@@ -238,12 +239,11 @@ class TestSesWebhook(HamsHttpCase):
             "SubscribeURL": "https://sns.us-east-1.amazonaws.com/confirm"
         }
         payload = self._sign(payload)
-        mock_urlopen = self.safe_patch('urllib.request.urlopen')
-        mock_urlopen.return_value = True
+        mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'))
         self.assertEqual(response.status_code, 200)
         mock_urlopen.assert_called_once_with(
-            "https://sns.us-east-1.amazonaws.com/confirm", timeout=10
+            "https://sns.us-east-1.amazonaws.com/confirm", "ses_webhook_sns_subscribe", https_only=True, timeout=10
         )
 
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sub-1')])
@@ -270,7 +270,7 @@ class TestSesWebhook(HamsHttpCase):
         # signature verification, so the signature itself must pass to
         # reach that check at all.
         payload = self._sign(payload)
-        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
         response = self.url_open(
             f'/mail/webhook/sns?token={self.domain_a.secret_token}',
             data=json.dumps(payload).encode('utf-8'),
@@ -697,7 +697,7 @@ class TestSesWebhook(HamsHttpCase):
         test's own mock of it, via the reference captured at module-import time): two calls with
         the same URL must issue exactly one real HTTP(S) fetch, the second served from cache."""
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
-        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
         # `urllib.request.urlopen(...)` is used as `with urlopen(...) as resp: resp.read()` --
         # MagicMock's built-in context-manager support means `.return_value.__enter__` is
         # already a real, callable magic method; only its own return needs configuring.
@@ -717,7 +717,18 @@ class TestSesWebhook(HamsHttpCase):
 
         self.assertEqual(first, self._sns_cert_pem)
         self.assertEqual(second, self._sns_cert_pem)
-        mock_urlopen.assert_called_once_with(url, timeout=10)
+        mock_urlopen.assert_called_once_with(
+            url, "ses_webhook_sns_signing_cert", https_only=True, timeout=10
+        )
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+
+    def test_33c_fetch_sns_signing_cert_refuses_a_link_local_address(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
+        """The URL regex fixes the host name; the fetch itself must also refuse an address the server can reach but a
+        caller should not (the cloud metadata address here) (real validator, no mock, and no connection is ever made)."""
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+        with self.assertRaises(SSRFValidationError):
+            _REAL_FETCH_SNS_SIGNING_CERT("https://169.254.169.254/SimpleNotificationService-linklocal000000000000.pem")
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
 
     def test_33b_fetch_sns_signing_cert_does_not_cache_a_malformed_response(self):
@@ -728,7 +739,7 @@ class TestSesWebhook(HamsHttpCase):
         function, a transient bad response is retried (and can succeed) on the very next call for
         the same URL, rather than permanently poisoning the cache for the process's lifetime."""
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
-        mock_urlopen = self.safe_patch('urllib.request.urlopen')
+        mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
         url = "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-badcachetest000000000000000000.pem"
 
         mock_urlopen.return_value.__enter__.return_value.read.return_value = b'<html>502 Bad Gateway</html>'

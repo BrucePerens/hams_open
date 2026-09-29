@@ -35,13 +35,15 @@ class CloudflareUtils(models.AbstractModel):
         docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md):
         this used to trust every CF-* header unconditionally, with no check
         that the request actually transited Cloudflare's edge -- forgeable
-        by any direct request to the origin. This deployment is
-        Tunnel-only (confirmed by Bruce 2026-09-11), so CF-* headers are
-        only genuine when the request's real transport peer is loopback
-        (cloudflared and Odoo run on the same host). When it isn't, every
-        CF-* field is dropped rather than trusted -- an attacker who
-        reaches origin directly gets no CF-derived geo/threat data at all,
-        not forged data.
+        by any direct request to the origin. On this deployment (Tunnel-only,
+        confirmed by Bruce 2026-09-11) that means the request's real transport
+        peer is loopback (cloudflared and Odoo run on the same host); a
+        self-hosted admin running Cloudflare WITHOUT Tunnel instead trusts
+        peers in `cloudflare.trusted_ip_utils`'s admin-configurable allow-list
+        (Settings -> Cloudflare), which defaults to Cloudflare's own published
+        ranges -- see that model's own docstring. Everywhere else, every CF-*
+        field is dropped rather than trusted -- an attacker who reaches origin
+        directly gets no CF-derived geo/threat data at all, not forged data.
         """
         if not request:
             return {}
@@ -49,9 +51,11 @@ class CloudflareUtils(models.AbstractModel):
         request_obj = request._get_current_object()
         headers = request_obj.httprequest.headers
         real_ip = self.env["zero_sudo.security.utils"]._get_trusted_client_ip(request_obj)
-        via_tunnel = request_obj.httprequest.remote_addr in ("127.0.0.1", "::1")  # burn-ignore-tunnel-peer-check
+        is_trusted_cf_peer = self.env["cloudflare.trusted_ip_utils"]._is_trusted_cf_peer(
+            request_obj.httprequest.remote_addr
+        )
 
-        if not via_tunnel:
+        if not is_trusted_cf_peer:
             return {
                 "ip": real_ip,
                 "country": None,

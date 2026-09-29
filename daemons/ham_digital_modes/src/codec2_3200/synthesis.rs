@@ -18,11 +18,11 @@
 
 #[cfg(feature = "std")]
 use super::envelope::Model;
-use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER_FRAME};
 #[cfg(feature = "std")]
 use super::TW;
 #[cfg(feature = "std")]
 use super::{BG_BETA, BG_MARGIN, BG_THRESH};
+use super::{FFT_ENC, MAX_AMP, N_SAMP, SAMPLES_PER_FRAME};
 #[cfg(feature = "std")]
 use rustfft::num_complex::Complex32;
 
@@ -563,7 +563,8 @@ impl SynthesisStateFixed {
         self.prepare_subframe_fixed(model, h);
 
         let k_q23 = model.k_q23;
-        let mut spectrum = SparseInverse::<FFT_ENC>::new(&mut self.scratch.re, &mut self.scratch.im);
+        let mut spectrum =
+            SparseInverse::<FFT_ENC>::new(&mut self.scratch.re, &mut self.scratch.im);
         for l in 1..=model.l {
             let raw = l as i64 * k_q23;
             let b = (((raw + (1i64 << 22)) >> 23) as usize).min(FFT_ENC / 2 - 1);

@@ -7,7 +7,9 @@
 use ham_digital_modes::ambe::fixed::dstar::decode as fixed_decode;
 use ham_digital_modes::ambe::fixed::general::mbe_speech::MbeDecoderState;
 use ham_digital_modes::ambe::float::dstar::decode as float_decode;
-use ham_digital_modes::ambe::float::dstar::decode::{DStarDecoderState, DequantizedFrame, RawParameters};
+use ham_digital_modes::ambe::float::dstar::decode::{
+    DStarDecoderState, DequantizedFrame, RawParameters,
+};
 use ham_digital_modes::ambe::float::dstar::encode::pack_raw_parameters;
 
 const ML_RELATIVE_TOLERANCE: f64 = 0.01;
@@ -15,7 +17,17 @@ const W0_RELATIVE_TOLERANCE: f64 = 3e-3; // see tests/ambe_fixed_ambe_plus_2.rs'
 
 #[allow(clippy::too_many_arguments)]
 fn raw_d(b0: u32, b1: u32, b2: u32, b3: u32, b4: u32, b5: u32, b6: u32, b7: u32, b8: u32) -> u64 {
-    pack_raw_parameters(&RawParameters { b0, b1, b2, b3, b4, b5, b6, b7, b8 })
+    pack_raw_parameters(&RawParameters {
+        b0,
+        b1,
+        b2,
+        b3,
+        b4,
+        b5,
+        b6,
+        b7,
+        b8,
+    })
 }
 
 /// A representative sweep, spanning low/mid/high `L` (via `b0`, kept away from D-STAR's own
@@ -35,7 +47,11 @@ fn representative_sequences() -> Vec<Vec<u64>> {
             raw_d(100, 15, 60, 410, 105, 13, 13, 13, 7),
         ],
         // L changes between frames -- exercises the previous-frame resampling.
-        vec![raw_d(5, 0, 0, 0, 0, 0, 0, 0, 0), raw_d(120, 15, 63, 511, 127, 15, 15, 15, 6), raw_d(60, 8, 32, 256, 64, 8, 8, 8, 4)],
+        vec![
+            raw_d(5, 0, 0, 0, 0, 0, 0, 0, 0),
+            raw_d(120, 15, 63, 511, 127, 15, 15, 15, 6),
+            raw_d(60, 8, 32, 256, 64, 8, 8, 8, 4),
+        ],
         vec![raw_d(0, 0, 0, 0, 0, 0, 0, 0, 0)],
         // Highest valid L_TABLE index that isn't a tone trigger (125 & 0x7E = 0x7C, not tone).
         vec![raw_d(125, 15, 63, 511, 127, 15, 15, 15, 6)],
@@ -74,8 +90,14 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
             let fixed_result = fixed_decode::dequantize(d, &mut fixed_state);
 
             match (float_result, fixed_result) {
-                (DequantizedFrame::Speech(float_params), fixed_decode::DequantizedFrame::Speech(fixed_params)) => {
-                    assert_eq!(float_params.l, fixed_params.l, "frame {frame_idx}, d={d:#x}: L mismatch");
+                (
+                    DequantizedFrame::Speech(float_params),
+                    fixed_decode::DequantizedFrame::Speech(fixed_params),
+                ) => {
+                    assert_eq!(
+                        float_params.l, fixed_params.l,
+                        "frame {frame_idx}, d={d:#x}: L mismatch"
+                    );
                     let float_w0 = float_params.w0;
                     let fixed_w0 = fixed_params.w0_q16 as f64 / 65536.0;
                     let w0_rel_err = ((fixed_w0 - float_w0) / float_w0).abs();
@@ -88,8 +110,12 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
                         "frame {frame_idx}, d={d:#x}: voiced decisions differ"
                     );
                     assert_eq!(float_params.ml.len(), fixed_params.ml_q16.len());
-                    for (h, (&float_ml, &fixed_ml_q16)) in
-                        float_params.ml.iter().zip(fixed_params.ml_q16.iter()).enumerate().skip(1)
+                    for (h, (&float_ml, &fixed_ml_q16)) in float_params
+                        .ml
+                        .iter()
+                        .zip(fixed_params.ml_q16.iter())
+                        .enumerate()
+                        .skip(1)
                     {
                         let fixed_ml = fixed_ml_q16 as f64 / 65536.0;
                         if float_ml >= I32_Q16_MAX {

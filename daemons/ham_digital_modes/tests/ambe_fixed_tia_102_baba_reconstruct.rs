@@ -16,7 +16,9 @@
 
 use ham_digital_modes::ambe::fixed::tia_102_baba::reconstruct::reconstruct_spectral_amplitudes_q16;
 use ham_digital_modes::ambe::float::tia_102_baba::reconstruct::reconstruct_spectral_amplitudes;
-use ham_digital_modes::ambe::float::tia_102_baba::tables::{gain_vector_bits, higher_order_bit_allocation};
+use ham_digital_modes::ambe::float::tia_102_baba::tables::{
+    gain_vector_bits, higher_order_bit_allocation,
+};
 
 const ML_RELATIVE_TOLERANCE: f64 = 0.01;
 
@@ -59,20 +61,52 @@ fn representative_sequences() -> Vec<Vec<FrameInput>> {
     vec![
         // Fixed L, a short sequence.
         vec![
-            FrameInput { b2: 17, l: 20, seed: 1 },
-            FrameInput { b2: 20, l: 20, seed: 5 },
-            FrameInput { b2: 15, l: 20, seed: 9 },
+            FrameInput {
+                b2: 17,
+                l: 20,
+                seed: 1,
+            },
+            FrameInput {
+                b2: 20,
+                l: 20,
+                seed: 5,
+            },
+            FrameInput {
+                b2: 15,
+                l: 20,
+                seed: 9,
+            },
         ],
         // L changes between frames -- exercises the prediction's own resampling. Every quantizer
         // value is now in-range for its own L (see this file's own doc comment on why that matters).
         vec![
-            FrameInput { b2: 30, l: 9, seed: 2 },
-            FrameInput { b2: 32, l: 56, seed: 11 },
-            FrameInput { b2: 25, l: 35, seed: 20 },
+            FrameInput {
+                b2: 30,
+                l: 9,
+                seed: 2,
+            },
+            FrameInput {
+                b2: 32,
+                l: 56,
+                seed: 11,
+            },
+            FrameInput {
+                b2: 25,
+                l: 35,
+                seed: 20,
+            },
         ],
         // Boundary L values, single frames each.
-        vec![FrameInput { b2: 20, l: 9, seed: 0 }],
-        vec![FrameInput { b2: 40, l: 56, seed: 3 }],
+        vec![FrameInput {
+            b2: 20,
+            l: 9,
+            seed: 0,
+        }],
+        vec![FrameInput {
+            b2: 40,
+            l: 56,
+            seed: 3,
+        }],
     ]
 }
 
@@ -112,8 +146,14 @@ fn fixed_reconstruct_spectral_amplitudes_matches_float_across_representative_seq
             )
             .unwrap_or_else(|| panic!("frame {frame_idx}: fixed reconstruction returned None"));
 
-            assert_eq!(float_result.len(), fixed_result.len(), "frame {frame_idx}: length mismatch");
-            for (h, (&float_ml, &fixed_ml_q16)) in float_result.iter().zip(fixed_result.iter()).enumerate() {
+            assert_eq!(
+                float_result.len(),
+                fixed_result.len(),
+                "frame {frame_idx}: length mismatch"
+            );
+            for (h, (&float_ml, &fixed_ml_q16)) in
+                float_result.iter().zip(fixed_result.iter()).enumerate()
+            {
                 let fixed_ml = fixed_ml_q16 as f64 / 65536.0;
                 let rel_err = if float_ml.abs() > 1e-9 {
                     ((fixed_ml - float_ml) / float_ml).abs()

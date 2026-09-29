@@ -36,6 +36,32 @@ class ResUsersZeroSudo(models.Model):
         groups="base.group_system",
     )
 
+    # [@ANCHOR: zero_sudo:service_accounts_among_self]
+    # Verified by [@ANCHOR: test_a_mixed_set_notifies_only_the_person]
+    def _service_accounts_among_self(self):
+        """The service accounts in `self`. Read with SQL for the reason write() gives below: is_service_account is
+        groups="base.group_system", so filtering through the ORM raises AccessError for a narrower caller."""
+        if not self.ids:
+            return self.env["res.users"].browse()
+        self.flush_recordset(["is_service_account"])
+        self.env.cr.execute("SELECT id FROM res_users WHERE id = ANY(%s) AND is_service_account", (list(self.ids),))
+        return self.env["res.users"].browse([row[0] for row in self.env.cr.fetchall()])
+
+    # [@ANCHOR: zero_sudo:service_account_security_notice_suppressed]
+    # Verified by [@ANCHOR: test_a_service_account_is_never_sent_a_security_update_email]
+    def _notify_security_setting_update(self, subject, content, mail_values=None, **kwargs):
+        """Odoo emails a user "Security Update: Login Changed" / "Password Changed" whenever those fields are written.
+        A module upgrade rewrites them on every service account it declares (the XML data), which queued a mail per
+        account to an @hams.local address that cannot receive anything; on production each became a failed delivery in
+        the mail queue (94 on 2026-09-27, two more on 2026-09-28). Nobody reads a service account's mailbox, so no
+        notice is sent for one. People are still notified exactly as before."""
+        people = self - self._service_accounts_among_self()
+        if not people:
+            return None
+        return super(ResUsersZeroSudo, people)._notify_security_setting_update(
+            subject, content, mail_values=mail_values, **kwargs
+        )
+
     @api.model_create_multi
     def create(self, vals_list):
         # [@ANCHOR: zero_sudo:COMM_service_account_password_generation]

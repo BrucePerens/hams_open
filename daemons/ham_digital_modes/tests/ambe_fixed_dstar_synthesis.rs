@@ -30,10 +30,16 @@ fn encode_speech(frames: usize) -> Vec<u128> {
 
 /// Decodes `frames` on both sides, returning per-frame `(float, fixed)` PCM.
 fn decode_both(frames: &[u128]) -> Vec<(Vec<f64>, Vec<f64>)> {
-    decode_both_with(frames, ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::default())
+    decode_both_with(
+        frames,
+        ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::default(),
+    )
 }
 
-fn decode_both_with(frames: &[u128], policy: ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy) -> Vec<(Vec<f64>, Vec<f64>)> {
+fn decode_both_with(
+    frames: &[u128],
+    policy: ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy,
+) -> Vec<(Vec<f64>, Vec<f64>)> {
     let mut float = FloatDecoder::new().with_error_policy(policy);
     let mut fixed = FixedDecoder::new().with_error_policy(policy);
     frames
@@ -71,10 +77,19 @@ fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
     let per_frame: Vec<f64> = pairs.iter().map(|p| snr_db(&p.0, &p.1)).collect();
     let total = concat_snr(&pairs);
     eprintln!("dstar speech: first-frame SNR {first:.1} dB, 40-frame SNR {total:.1} dB");
-    eprintln!("dstar per-frame SNR: {:?}", per_frame.iter().map(|s| (s * 10.0).round() / 10.0).collect::<Vec<_>>());
+    eprintln!(
+        "dstar per-frame SNR: {:?}",
+        per_frame
+            .iter()
+            .map(|s| (s * 10.0).round() / 10.0)
+            .collect::<Vec<_>>()
+    );
     let loud = pairs.iter().map(|p| rms(&p.0)).fold(0.0, f64::max);
     assert!(loud > 100.0, "float speech unexpectedly quiet ({loud})");
-    assert!(first >= SPEECH_FIRST_FRAME_MIN_SNR_DB, "first frame {first}");
+    assert!(
+        first >= SPEECH_FIRST_FRAME_MIN_SNR_DB,
+        "first frame {first}"
+    );
     assert!(total >= SPEECH_40_FRAME_MIN_SNR_DB, "40-frame {total}");
     // The fixed output is at the right level (within 1 dB of the float rms over the run).
     let fl: Vec<f64> = pairs.iter().flat_map(|p| p.0.iter().copied()).collect();
@@ -88,7 +103,9 @@ fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
 /// (amplitudes, enhancement, voiced/unvoiced arithmetic) this comparison would still be low.
 #[test]
 fn speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic() {
-    use ham_digital_modes::ambe::fixed::dstar::decode::{dequantize as fixed_dequantize, DequantizedFrame as FixedDq};
+    use ham_digital_modes::ambe::fixed::dstar::decode::{
+        dequantize as fixed_dequantize, DequantizedFrame as FixedDq,
+    };
     use ham_digital_modes::ambe::fixed::general::mbe_speech::MbeDecoderState;
     use ham_digital_modes::ambe::float::dstar::decode::{
         dequantize as float_dequantize, DStarDecoderState, DequantizedFrame as FloatDq,
@@ -104,13 +121,16 @@ fn speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic() {
     for &f in &frames {
         let parsed = parse_frame(f);
         let fixed_pcm = fixed.decode_frame(f).unwrap();
-        let (FixedDq::Speech(fp), FloatDq::Speech(p)) =
-            (fixed_dequantize(parsed.d, &mut fixed_state), float_dequantize(parsed.d, &mut float_state))
-        else {
+        let (FixedDq::Speech(fp), FloatDq::Speech(p)) = (
+            fixed_dequantize(parsed.d, &mut fixed_state),
+            float_dequantize(parsed.d, &mut float_state),
+        ) else {
             panic!("speech test frames expected");
         };
         let w0 = fp.w0_q32 as f64 / 4294967296.0;
-        let pcm = synth.synthesize_speech(w0, &p.voiced, &p.ml, parsed.epsilon_c0, parsed.epsilon_c1).unwrap();
+        let pcm = synth
+            .synthesize_speech(w0, &p.voiced, &p.ml, parsed.epsilon_c0, parsed.epsilon_c1)
+            .unwrap();
         reference.extend(pcm);
         test.extend(from_q16_i64(&fixed_pcm));
     }
@@ -135,8 +155,15 @@ fn check_tone_run(frame: u128, frames: usize, label: &str) -> f64 {
 fn single_tones_match_float_across_frequency_and_level() {
     for index in [5u32, 8, 32, 60, 100, 122] {
         for volume in [100u32, 150, 180, 210, 240] {
-            let snr = check_tone_run(build_tone_frame(index, volume), 5, &format!("index {index} volume {volume}"));
-            assert!(snr >= TONE_MIN_SNR_DB, "index {index} volume {volume}: {snr} dB");
+            let snr = check_tone_run(
+                build_tone_frame(index, volume),
+                5,
+                &format!("index {index} volume {volume}"),
+            );
+            assert!(
+                snr >= TONE_MIN_SNR_DB,
+                "index {index} volume {volume}: {snr} dB"
+            );
         }
     }
 }
@@ -145,7 +172,11 @@ fn single_tones_match_float_across_frequency_and_level() {
 fn dtmf_digits_match_float() {
     for row in 0..4u32 {
         for col in 0..4u32 {
-            let snr = check_tone_run(build_tone_frame(128 + row + 4 * col, 180), 5, &format!("dtmf {row},{col}"));
+            let snr = check_tone_run(
+                build_tone_frame(128 + row + 4 * col, 180),
+                5,
+                &format!("dtmf {row},{col}"),
+            );
             assert!(snr >= TONE_MIN_SNR_DB, "dtmf {row},{col}: {snr} dB");
         }
     }
@@ -158,7 +189,10 @@ fn tone_level_follows_the_measured_volume_curve() {
         let pcm = from_q16_i64(&fixed.decode_frame(build_tone_frame(32, volume)).unwrap());
         let peak = pcm.iter().fold(0.0_f64, |m, &s| m.max(s.abs()));
         let expected = dstar_tone_amplitude(volume);
-        assert!((peak / expected - 1.0).abs() < 0.03, "volume {volume}: peak {peak} vs {expected}");
+        assert!(
+            (peak / expected - 1.0).abs() < 0.03,
+            "volume {volume}: peak {peak} vs {expected}"
+        );
     }
 }
 
@@ -167,8 +201,14 @@ fn undecodable_tone_codes_are_silent_like_float() {
     // Index 3: invalid single tone; 150: a dual-tone code with no identified digit.
     for index in [3u32, 150] {
         let pairs = decode_both(&[build_tone_frame(index, 180)]);
-        assert!(pairs[0].0.iter().all(|&s| s == 0.0), "float index {index} must be silent");
-        assert!(pairs[0].1.iter().all(|&s| s == 0.0), "fixed index {index} must be silent");
+        assert!(
+            pairs[0].0.iter().all(|&s| s == 0.0),
+            "float index {index} must be silent"
+        );
+        assert!(
+            pairs[0].1.iter().all(|&s| s == 0.0),
+            "fixed index {index} must be silent"
+        );
     }
 }
 
@@ -190,7 +230,10 @@ fn tone_then_speech_then_tone_restarts_the_tone_phase_like_float() {
 fn corrupt(frame: u128) -> u128 {
     let bad = frame ^ (1u128 << 70) ^ (1u128 << 60) ^ (1u128 << 45) ^ (1u128 << 35);
     let parsed = parse_frame(bad);
-    assert!(parsed.epsilon_c0 + parsed.epsilon_c1 > 3, "corruption must exceed the error threshold");
+    assert!(
+        parsed.epsilon_c0 + parsed.epsilon_c1 > 3,
+        "corruption must exceed the error threshold"
+    );
     bad
 }
 
@@ -207,12 +250,18 @@ fn bad_frame_policy_matches_float_repeat_three_times_then_mute_then_recover() {
     seq.push(corrupt(speech[10]));
     seq.push(speech[11]);
 
-    let pairs = decode_both_with(&seq, ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::Clean);
+    let pairs = decode_both_with(
+        &seq,
+        ham_digital_modes::ambe::float::mbe_synthesis::ErrorPolicy::Clean,
+    );
     for (i, (fl, fx)) in pairs.iter().enumerate() {
         let float_silent = fl.iter().all(|&s| s == 0.0);
         let fixed_silent = fx.iter().all(|&s| s == 0.0);
         assert_eq!(float_silent, fixed_silent, "frame {i}: silence disagrees");
-        eprintln!("dstar bad-frame seq frame {i}: SNR {:.1} dB (silent={float_silent})", snr_db(fl, fx));
+        eprintln!(
+            "dstar bad-frame seq frame {i}: SNR {:.1} dB (silent={float_silent})",
+            snr_db(fl, fx)
+        );
     }
     // Frame 7 is the fourth consecutive bad frame: muted on both sides.
     assert!(pairs[7].0.iter().all(|&s| s == 0.0) && pairs[7].1.iter().all(|&s| s == 0.0));

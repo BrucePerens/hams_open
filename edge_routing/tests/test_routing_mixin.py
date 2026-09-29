@@ -119,31 +119,33 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
             "record is gone and its cache entry invalidated.",
         )
 
-    def test_get_record_by_slug_cache_removal(self):
-        # res.users' get_record_by_slug() must not be decorated with
-        # @distributed_cache(): its login-fallback branch resolves against
-        # res.users.login, and routing_mixin.write()'s own cache-invalidation
-        # hook only fires on website_slug/name changes, so a cached result
-        # keyed on a slug that later matches a changed/new login would go
-        # stale for the full 24h Redis TTL.
+    def test_get_record_by_slug_is_cached_now_the_login_fallback_is_gone(self):
+        # res.users used to carry its own get_record_by_slug() override
+        # specifically to add a login-fallback branch, and that override
+        # was deliberately left undecorated by @distributed_cache()
+        # because the login-fallback branch resolved against
+        # res.users.login while routing_mixin.write()'s cache-invalidation
+        # hook only fires on website_slug/name changes -- a cached result
+        # for a slug that later matched a changed/new login would have
+        # gone stale for the full 24h Redis TTL.
         #
-        # Bug found while touching this file for the override_svc_uid fix
-        # (2026-09-12): this test's original assertion (a bare
-        # `method.clear_cache` lookup) could never fail either way --
-        # distributed_cache()'s wrapper never sets a `clear_cache` attribute
-        # at all (confirmed directly against
-        # distributed_redis_cache/redis_cache.py), so the AttributeError
-        # fired unconditionally regardless of decoration, and the test
-        # passed the whole time res.users.get_record_by_slug WAS decorated.
-        # `functools.wraps` (which distributed_cache() does use) sets
-        # `__wrapped__` on the wrapper, which is what actually distinguishes
-        # a decorated method from a plain one.
+        # The login-fallback override was removed (2026-09-24): every real
+        # human account's login is now an email address, which made that
+        # fallback a live PII exposure (probing hams.com/<email>), and it
+        # never protected SWL accounts anyway since they have no
+        # website_slug to fall back from. res.users now resolves purely
+        # through the mixin's own get_record_by_slug(), inherited
+        # unmodified -- so it should be the mixin's cached implementation,
+        # not a plain method. `functools.wraps` (which distributed_cache()
+        # uses) sets `__wrapped__` on the wrapper, which is what
+        # distinguishes a decorated method from a plain one.
         method = self.User.__class__.get_record_by_slug
-        self.assertFalse(
+        self.assertTrue(
             hasattr(method, "__wrapped__"),  # burn-ignore-introspection
-            "get_record_by_slug on res.users should not be wrapped by "
-            "@distributed_cache() -- its login-fallback branch isn't "
-            "covered by the mixin's write()-based cache invalidation.",
+            "get_record_by_slug on res.users should now be the mixin's "
+            "own @distributed_cache()'d implementation, inherited "
+            "unmodified -- there is no login-fallback branch left to "
+            "make caching unsafe.",
         )
 
     def test_get_record_by_slug_no_longer_accepts_a_caller_supplied_service_uid(self):
@@ -160,7 +162,8 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         Prove the parameter is genuinely gone, not just unused -- a
         TypeError here is exactly what protects against the RPC path,
         since Odoo's own dispatch passes kwargs straight through to the
-        method signature.
+        method signature. (res.users no longer overrides get_record_by_slug
+        at all, so this now exercises the mixin's implementation directly.)
         """
         with self.assertRaises(TypeError):
             self.User.get_record_by_slug(
