@@ -506,6 +506,12 @@ class UserWebsitesController(http.Controller):
         }
         if profile_user:
             create_vals["owner_user_id"] = profile_user.id
+            # website_blog's own author_id defaults to self.env.user.partner_id at create time
+            # (website_blog.py) -- since this create() runs elevated as the service account (see
+            # blog_post.py's own create() override), that default silently attributed every post
+            # created this way to "System Provisioner" instead of its real owner. Set it
+            # explicitly so the published byline matches who the post actually belongs to.
+            create_vals["author_id"] = profile_user.partner_id.id
         elif profile_group:
             create_vals["user_websites_group_id"] = profile_group.id
 

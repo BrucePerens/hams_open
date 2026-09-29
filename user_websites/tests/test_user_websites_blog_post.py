@@ -170,6 +170,12 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
         self.assertTrue(new_posts, "create_blog_post() should have created a new post in the owner's own blog.")
         self.assertEqual(new_posts.owner_user_id.id, self.user_a.id)
         self.assertEqual(
+            new_posts.author_id.id,
+            self.user_a.partner_id.id,
+            "The byline should credit the real owner, not website_blog's own default "
+            "(self.env.user.partner_id -- the elevated service account this create() runs as).",
+        )
+        self.assertEqual(
             self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)]),
             before_count + 1,
         )
