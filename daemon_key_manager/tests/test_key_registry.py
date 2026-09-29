@@ -526,6 +526,66 @@ class TestKeyRegistry(RealTransactionCase):
         registry.with_user(self.manager_user.id).action_rotate_key()
         self.assertTrue(os.path.exists(env_file_path))
 
+    def test_action_rotate_key_self_heals_a_service_account_missing_the_usage_group(self):
+        """
+        Real bug found 2026-09-28/29 (a live production incident, `backup_worker` unable to
+        rotate its own key): `group_daemon_key_usage` (the group that grants a 90-day API-key
+        duration) was only ever granted dynamically, by `register_daemon()`, via a raw-SQL
+        insert -- never declared statically in any daemon service account's own `(6, 0, [...])`
+        `group_ids` eval. Since every one of those XML records lives in a `noupdate="0"` block
+        specifically so an ordinary module upgrade can *replace* the account's group set (see
+        `backup_management/security/security.xml`'s own 2026-09-14 comment), the very next
+        upgrade after a daemon's first registration silently wiped the dynamic grant back out,
+        with no error anywhere -- confirmed live: `action_rotate_key()` then fails with
+        `ValidationError: You cannot exceed 1.0 days` the next time anything tries to rotate
+        that daemon's key, since a service account holding none of this module's own groups
+        gets the ordinary 1-day default duration ceiling.
+
+        This test reproduces the account-missing-the-group half directly (the module-upgrade
+        wipe itself isn't reproduced here -- see this test's own docstring for why that part is
+        already covered by every `is_service_account` XML record's own review, not a unit test)
+        and asserts `action_rotate_key()` now self-heals: it grants the group itself
+        (`_ensure_usage_group()`, called from `_rotate_key_and_write_file()`) before generating
+        the key, rather than assuming some earlier caller already guaranteed it.
+        """
+        usage_group = self.env.ref("daemon_key_manager.group_daemon_key_usage")
+        self.assertNotIn(
+            usage_group,
+            self.service_user.group_ids,
+            "This test's own premise requires the service account to start without the usage "
+            "group -- if it already has it, this test is no longer exercising the real gap.",
+        )
+
+        daemon_name = "Self Heal Rotation Test"
+        env_file_path = "/opt/hams/etc/keys/self_heal_rotation.env"
+        self.test_env_paths.append(env_file_path)
+        if os.path.exists(env_file_path):
+            os.remove(env_file_path)
+
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": daemon_name,
+                    "user_id": self.service_user.id,
+                    "env_file_path": env_file_path,
+                }
+            )
+        )
+
+        # Before the fix, this raised ValidationError: You cannot exceed 1.0 days.
+        registry.with_user(self.manager_user.id).action_rotate_key()
+
+        self.assertTrue(os.path.exists(env_file_path))
+        self.service_user.invalidate_recordset()
+        self.assertIn(
+            usage_group,
+            self.service_user.group_ids,
+            "action_rotate_key() should grant the usage group itself when it's missing, not "
+            "just succeed by luck.",
+        )
+
     def test_rotated_key_bearer_json2_not_blocked_for_service_account(self):
         """A daemon calls /json/2/... with the Bearer key this module
         provisions, as a service account. zero_sudo's ir.http._authenticate

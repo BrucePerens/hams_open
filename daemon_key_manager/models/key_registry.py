@@ -181,9 +181,43 @@ class DaemonKeyRegistry(models.Model):
         # This prevents a rollback bypass where file I/O occurs before constraints fail.
         self.env.flush_all()
 
-        # Ensure the service account has the necessary group for extended API key duration
-        # as mentioned in the README.
-        # Note: Direct assignment to group_ids is flagged by linter but required for dynamic rotation security.
+        self._ensure_usage_group(user)
+
+        registry._rotate_key_and_write_file()
+        return True
+
+    def _ensure_usage_group(self, user):
+        """
+        Grants `group_daemon_key_usage` (the 90-day API-key-duration group) to `user`
+        if it doesn't already have it.
+
+        Real bug found 2026-09-28/29 while chasing a live production incident
+        (`backup_worker` unable to rotate its own key, `ValidationError: You cannot
+        exceed 1.0 days` from `res.users._check_expiration_date()`, despite this exact
+        group having been granted once already): every daemon service account this
+        codebase defines declares its OWN `group_ids` as a static `(6, 0, [...])` eval
+        in a `noupdate="0"` XML record -- intentionally, so upgrading a daemon module
+        can revoke a group it no longer wants the account to hold (see
+        `backup_management/security/security.xml`'s own 2026-09-14 comment on exactly
+        this mechanism). But `group_daemon_key_usage` was never one of the groups any
+        of those per-module `(6, 0, [...])` lists statically declared -- it was only
+        ever granted dynamically, here, via the raw-SQL insert below, the first time
+        `register_daemon()` ran for that account. A `(6, 0, [...])` eval *replaces* the
+        full group set, so the next ordinary module upgrade after that first
+        registration silently wiped this dynamically-granted membership back out
+        again, with no error anywhere -- confirmed against every `is_service_account`
+        XML record in this codebase as of this date: not one statically includes this
+        group. `register_daemon()` alone re-granting it (the only call site before this
+        fix) doesn't help, since `register_daemon()` isn't what runs on a later,
+        ordinary key rotation -- `action_rotate_key()` and the nightly
+        `cron_rotate_all_keys()` are, and neither of them re-checked this. Calling this
+        from `_rotate_key_and_write_file()` itself (this method's own real caller,
+        reached by all three of `register_daemon()`, `action_rotate_key()`, and the
+        cron) makes every rotation path self-healing regardless of what an
+        intervening module upgrade did to `group_ids`, without editing every
+        individual daemon module's own security.xml (which would only fix today's
+        known daemons, not tomorrow's).
+        """
         usage_group = self.env.ref(
             "daemon_key_manager.group_daemon_key_usage", raise_if_not_found=False
         )
@@ -200,9 +234,6 @@ class DaemonKeyRegistry(models.Model):
             self.env.cr.execute(q, (user.id, usage_group.id))
             user.invalidate_recordset()
             self.env.registry.clear_cache()
-
-        registry._rotate_key_and_write_file()
-        return True
 
     def action_force_provision_all(self, *args, **kwargs):
         # # Tested by [@ANCHOR: COMM_test_force_provisioning]
@@ -359,6 +390,10 @@ class DaemonKeyRegistry(models.Model):
                 "RPC calls."
             )
             raise UserError(msg)
+
+        # Self-healing re-grant: see _ensure_usage_group()'s own docstring for why this
+        # can't be assumed to still hold just because register_daemon() granted it once.
+        self._ensure_usage_group(self.user_id)
 
         key_name = f"{self.name}_key"
 
