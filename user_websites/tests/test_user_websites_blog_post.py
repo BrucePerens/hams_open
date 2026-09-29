@@ -179,7 +179,15 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
             self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)]),
             before_count + 1,
         )
-        self.assertIn(f"/blog/{self.blog.id}/post/{new_posts.id}", response.url)
+        # Odoo's own website routing canonicalizes /blog/<id>/post/<id> (what the controller's
+        # own request.redirect() target literally is) to the SEO-slugified form
+        # (/blog/<blog-name>-<blog_id>/<post-name>-<post_id>) before this test's url_open() ever
+        # sees the final response -- assert on the part that survives that canonicalization
+        # (the real post's own id as a URL segment suffix) rather than the exact literal path.
+        self.assertTrue(
+            response.url.rstrip("/").endswith(f"-{new_posts.id}"),
+            f"Expected the final URL to resolve to post {new_posts.id}, got: {response.url}",
+        )
 
     def test_06_non_owner_cannot_create_blog_post_on_someone_elses_slug(self):
         # Tests [@ANCHOR: user_websites:COMM_create_blog_post]
