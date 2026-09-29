@@ -64,12 +64,30 @@ class UserWebsitesController(http.Controller):
         website=True,
         csrf=True,
     )
-    def report_violation(self, url="", reason="", description="", email="", **post):
+    def report_violation(self, url="", reason="", description="", email="", website_honeypot="", **post):
         # [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
 
         # Triggered by [@ANCHOR: violation_report_logic]
 
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
+
+        # Verified by [@ANCHOR: user_websites:test_report_violation_honeypot_rejected]
+        # report_violation_modal (user_websites_templates.xml) already ships a hidden
+        # "website_honeypot" field (d-none, aria-hidden, tabindex="-1" -- invisible and
+        # unreachable for a real visitor, but many form-filling bots populate every input
+        # regardless of CSS). Found live 2026-09-28/29: the field existed but this controller
+        # never actually read it, so it caught nothing -- five near-identical spam submissions
+        # ("Hi, I wanted to know your price," the same template in five different languages)
+        # landed as real content.violation.report rows and emailed Bruce, over five days, while
+        # the honeypot sat there doing nothing. Pretend success rather than surfacing an error:
+        # a bot that gets useful rejection feedback learns to stop filling the field, which
+        # defeats the whole mechanism; a real visitor never sees or fills this field at all, so
+        # this branch never fires for one.
+        if website_honeypot:
+            _logger.info("report_violation: honeypot triggered, discarding silently")
+            return request.redirect(
+                _report_violation_redirect_target(url, "report_submitted=1")
+            )
 
         # Extract referrer if it's missing in POST
         if not url and "Referer" in request.httprequest.headers:
