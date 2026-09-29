@@ -440,6 +440,78 @@ class UserWebsitesController(http.Controller):
         env_svc["blog.blog"].create(create_vals)
         return request.redirect(f"/{website_slug}/blog")
 
+    @http.route(
+        "/<string:website_slug>/create_blog_post",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_create_blog_post]
+    def create_blog_post(self, website_slug, **kwargs):
+        # Real gap found live 2026-09-29: create_blog() (immediately above) lets an owner create
+        # their own blog CONTAINER, but nothing ever let them add a POST to it -- blog_index's own
+        # template (user_websites_templates.xml) renders "No posts available yet." with no button
+        # at all, even for the owner, once a blog exists. A user who had just created their first
+        # blog had no way to add its first post. This mirrors create_blog()'s own ownership checks
+        # exactly, then creates a blank blog.post in the caller's own blog and redirects straight
+        # into it via website_blog's own standard post-edit route -- the same route blog_index's
+        # own "Read Post" links already use (/blog/<blog_id>/post/<post_id>), so the normal website
+        # builder's editor toolbar (Edit/New) works on it exactly as it does on any other blog post,
+        # with no new rendering path of this module's own to build or maintain.
+        user = request.env.user
+        utils = request.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
+
+        user_id = env_svc["res.users"].get_record_by_slug(website_slug)
+        profile_user = (
+            env_svc["res.users"].browse(user_id) if user_id else env_svc["res.users"]
+        )
+        group_id = env_svc["user.websites.group"].get_record_by_slug(website_slug)
+        profile_group = (
+            env_svc["user.websites.group"].browse(group_id)
+            if group_id
+            else env_svc["user.websites.group"]
+        )
+
+        if not profile_user and not profile_group:
+            raise request.not_found()
+
+        if profile_user and profile_user.id != user.id:
+            raise request.not_found()
+        if profile_user and profile_user.is_suspended_from_websites:
+            raise request.not_found()
+        if profile_group:
+            if profile_group.is_suspended_from_websites:
+                raise request.not_found()
+            if user.id not in profile_group.member_ids.ids:
+                raise request.not_found()
+
+        blog_domain = (
+            [("owner_user_id", "=", profile_user.id)]
+            if profile_user
+            else [("user_websites_group_id", "=", profile_group.id)]
+        )
+        blog = env_svc["blog.blog"].search(blog_domain, limit=1)
+        if not blog:
+            # No blog container yet -- send them to the create_blog() flow instead of creating
+            # a post with nowhere to live.
+            return request.redirect(f"/{website_slug}/blog")
+
+        create_vals = {
+            "name": "New Post",
+            "blog_id": blog.id,
+            "website_id": blog.website_id.id,
+        }
+        if profile_user:
+            create_vals["owner_user_id"] = profile_user.id
+        elif profile_group:
+            create_vals["user_websites_group_id"] = profile_group.id
+
+        post = env_svc["blog.post"].create(create_vals)
+        return request.redirect(f"/blog/{blog.id}/post/{post.id}")
+
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     # [@ANCHOR: user_websites:COMM_documentation]
     def documentation(self, **kwargs):
