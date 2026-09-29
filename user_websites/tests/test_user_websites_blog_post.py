@@ -147,3 +147,50 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
             public_created_post,
             "Public user should not be able to trigger blog creation",
         )
+
+    def test_05_owner_can_create_blog_post(self):
+        # Tests [@ANCHOR: user_websites:COMM_create_blog_post]
+        # Real gap found live 2026-09-29: blog_index's own template offered no way at all to add a
+        # post to an existing, empty blog, even for the owner (see create_blog_post()'s own
+        # comment). self.blog/self.post_a already exist for user_a from setUp, so this proves the
+        # route works for an owner who already has content too, not just a first-post case.
+        self.authenticate(self.user_a.login, self.user_a.login)
+        before_count = self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)])
+
+        response = self.url_open(
+            f"/{self.user_a.website_slug}/create_blog_post",
+            data={"csrf_token": odoo.http.Request.csrf_token(self)},
+            method="POST",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        new_posts = self.env["blog.post"].search(
+            [("blog_id", "=", self.blog.id), ("name", "=", "New Post")]
+        )
+        self.assertTrue(new_posts, "create_blog_post() should have created a new post in the owner's own blog.")
+        self.assertEqual(new_posts.owner_user_id.id, self.user_a.id)
+        self.assertEqual(
+            self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)]),
+            before_count + 1,
+        )
+        self.assertIn(f"/blog/{self.blog.id}/post/{new_posts.id}", response.url)
+
+    def test_06_non_owner_cannot_create_blog_post_on_someone_elses_slug(self):
+        # Tests [@ANCHOR: user_websites:COMM_create_blog_post]
+        self.authenticate(self.user_b.login, self.user_b.login)
+        before_count = self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)])
+
+        try:
+            self.url_open(
+                f"/{self.user_a.website_slug}/create_blog_post",
+                data={"csrf_token": odoo.http.Request.csrf_token(self)},
+                method="POST",
+            )
+        except urllib.error.HTTPError as e:
+            _logger.info("Expected error on cross-account blog post creation: %s", e)
+
+        self.assertEqual(
+            self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)]),
+            before_count,
+            "User B must not be able to create a post in User A's blog via User A's own slug.",
+        )
