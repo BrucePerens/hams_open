@@ -83,6 +83,40 @@
             <field name="privilege_id" ref="privilege_helpdesk"/>
         </record>
 
+        <record id="group_github_webhook_service" model="res.groups">
+            <!-- GitHub webhook ticket creation, 2026-09-24 (controllers/github_webhook_api.py):
+            GitHub's own dependabot_alert/workflow_run webhook POSTs, for both hams_com
+            (private) and hams_open (public) repos, land on a public, unauthenticated HTTP
+            route (GitHub itself can authenticate no other way) and create an ordinary
+            hams_helpdesk.ticket through the model's own create(), so a new ticket gets the
+            same on-duty routing every other ticket already gets. Same reasoning as
+            group_ai_triage_external_service immediately above and pager_duty's own
+            group_pager_incident_creator (pager_duty/security/security.xml): a narrow,
+            single-purpose service account, least privilege, not a share of a broader group —
+            this one needs exactly create access on hams_helpdesk.ticket (plus the read needed
+            for its own dedup search, see ir.model.access.csv) and nothing else. Deliberately
+            NOT group_helpdesk_manager (read/write/create/unlink on every ticket) and NOT
+            implied by / implying group_helpdesk_user or group_helpdesk_manager, for the same
+            "same-group ir.rule records OR together, not AND" reason
+            group_ai_triage_external_service's own comment documents. -->
+            <field name="name">GitHub Webhook Service Account Group</field>
+            <field name="privilege_id" ref="privilege_helpdesk"/>
+        </record>
+
+        <record id="rule_helpdesk_ticket_github_webhook_service" model="ir.rule">
+            <!-- Unconditional (not company-scoped), matching pager_duty's own
+            pager_incident_website_rule_creator precedent for an equivalently narrow
+            externally-triggered creator account: this service account's whole job is
+            creating/searching (for its own dedup check) hams_helpdesk.ticket rows for
+            GitHub events that are not inherently tied to one tenant company. Explicit,
+            rather than relying on "no group-specific rule means unrestricted" — self-
+            documenting for a future reader of this file. -->
+            <field name="name">Helpdesk Ticket GitHub Webhook Service</field>
+            <field name="model_id" ref="model_hams_helpdesk_ticket"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_github_webhook_service'))]"/>
+        </record>
+
         <record id="rule_helpdesk_ticket_user" model="ir.rule">
             <field name="name">Helpdesk Ticket User</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
@@ -160,6 +194,23 @@
             <field name="is_service_account" eval="True"/>
             <field name="active" eval="True"/>
             <field name="group_ids" eval="[(6, 0, [ref('group_ai_triage_external_service'), ref('base.group_user')])]"/>
+        </record>
+
+        <!-- GitHub Webhook Service Account, 2026-09-24: a dedicated, single-purpose account for
+        controllers/github_webhook_api.py's own public /webhook/github route — see
+        group_github_webhook_service's own comment above for the full least-privilege
+        reasoning. base.group_user is listed directly here (not via implied_ids on the group
+        itself), matching pager_duty.user_pager_mcp_triage_service's and this file's own
+        user_ai_triage_service's exact definition shape. -->
+        <record id="user_github_webhook_service" model="res.users">
+            <field name="name">GitHub Webhook Service Account</field>
+            <field name="login">github_webhook_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('group_github_webhook_service'), ref('base.group_user')])]"/>
         </record>
     </data>
 </odoo>
