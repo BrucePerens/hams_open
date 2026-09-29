@@ -937,6 +937,17 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # so it can be updated later without a code change.
             "hams_helpdesk.ncmec_contact_email",
             "hams_helpdesk.ncmec_contact_phone",
+            # hams_helpdesk/controllers/github_webhook_api.py's own shared HMAC secret, used to
+            # authenticate GitHub's dependabot_alert/workflow_run webhook POSTs (X-Hub-
+            # Signature-256, verified via hmac.compare_digest -- see that file's own
+            # _verify_github_signature). Same category as pager_duty.domain_api_identity and
+            # hams_helpdesk.ncmec_api_username/_password above: genuinely sensitive once
+            # configured, but hams_open has no per-service-account-scoped secret mechanism of
+            # its own, so this whitelist is the whole gate. Unset by default -- GitHub's own
+            # webhook registration is a separate, later step (this route exists and is
+            # reachable before any real webhook is ever registered against it) -- matching the
+            # established "unset by default, warn and no-op" shape.
+            "hams_helpdesk.github_webhook_secret",
             # Not a secret either -- where action_ncmec_report emails the assembled packet while
             # no real NCMEC API credentials exist (Bruce's own 2026-09-24 instruction to keep
             # the report action working now rather than block on that). Defaults to his own

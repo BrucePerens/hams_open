@@ -269,6 +269,23 @@ class HelpdeskTicket(models.Model):
         "credentials are configured (see action_ncmec_report).",
     )
 
+    # ------------------------------------------------------------------
+    # GitHub webhook-created tickets (controllers/github_webhook_api.py): dependabot_alert
+    # security-alert notifications and workflow_run CI-failure notifications, for both
+    # hams_com (private) and hams_open (public) repos. Stays ticket_type == 'general' --
+    # already on rule_helpdesk_ticket_ai_triage_external_allowlist, no new allow-list entry
+    # or ticket_type value needed.
+    # ------------------------------------------------------------------
+    github_source_url = fields.Char(
+        string="GitHub Source URL",
+        index=True,
+        help="The originating GitHub dependabot alert's or workflow run's own html_url -- "
+        "this ticket's own dedup key (see _github_webhook_ticket_for below): GitHub retries "
+        "a webhook delivery on any non-2xx response and can occasionally redeliver even an "
+        "already-processed one, so a second delivery for the same alert/run must not open a "
+        "second ticket.",
+    )
+
     # [@ANCHOR: hams_helpdesk:COMM_onchange_partner_id]
     @api.onchange("partner_id")
     def _onchange_partner_id(self):
@@ -757,6 +774,54 @@ class HelpdeskTicket(models.Model):
 
         create_vals = dict(vals, ticket_type=_CSAM_TICKET_TYPE)
         create_vals["ncmec_recording_uuid"] = recording_uuid
+        return self.create([create_vals])
+
+    # [@ANCHOR: hams_helpdesk:COMM_github_webhook_ticket_for]
+    # Verified by [@ANCHOR: test_github_webhook_ticket_for_creates_a_new_ticket]
+    # Verified by [@ANCHOR: test_github_webhook_ticket_for_skips_an_existing_open_ticket]
+    # Verified by [@ANCHOR: test_github_webhook_ticket_for_reopens_after_prior_ticket_closed]
+    @api.model
+    def _github_webhook_ticket_for(self, source_url, vals):
+        """The single creation entrypoint controllers/github_webhook_api.py calls for both a
+        dependabot_alert and a workflow_run event it has already decided is worth a ticket.
+
+        Idempotent by ``source_url`` -- GitHub's own ``html_url`` for the alert or the run --
+        matching _ncmec_report_ticket_for_recording's own dedup shape immediately above: search
+        first, by the natural key, scoped to still-open tickets only. A *closed* prior ticket
+        for the same URL does NOT count as still covering it (see the domain below) -- if an
+        earlier ticket for this same alert/run was already resolved, a fresh delivery (e.g. an
+        alert that was fixed and later reopened) must still open a new ticket, not silently
+        vanish into a dead one nobody is looking at.
+
+        Unlike _ncmec_report_ticket_for_recording, a genuine redelivery of the exact same event
+        (GitHub retries on any non-2xx response, and can occasionally redeliver even a
+        successfully-processed one) is NOT logged with a note on the existing ticket here --
+        there is no new information in a plain retry (the alert/run itself has not changed),
+        whereas NCMEC's own sibling case is a second, independently meaningful flag on the same
+        recording.
+
+        ``vals`` is the same create()-shaped dict a caller would otherwise pass to create()
+        directly (name, description, ticket_type, priority, ...); this method fills in
+        ``github_source_url`` itself and must not be passed that key.
+        """
+        if "github_source_url" in vals:
+            raise UserError(
+                _(
+                    "_github_webhook_ticket_for sets github_source_url itself; do not pass it "
+                    "in vals."
+                )
+            )
+        existing = self.search(
+            [
+                ("github_source_url", "=", source_url),
+                ("stage", "not in", ["resolved", "closed"]),
+            ],
+            limit=1,
+        )
+        if existing:
+            return existing
+
+        create_vals = dict(vals, github_source_url=source_url)
         return self.create([create_vals])
 
     # [@ANCHOR: hams_helpdesk:COMM_ncmec_assemble_report_packet]
