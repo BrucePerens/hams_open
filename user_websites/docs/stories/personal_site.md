@@ -16,7 +16,8 @@ As a **Community Member**, I want to create and manage my own personal website a
 - **Given** I have an active site
 - **When** I navigate to my blog index ([@ANCHOR: controller_user_blog_index])
 
-- **Then** I can create a new blog post ([@ANCHOR: UX_CREATE_BLOG_POST]). Verified by `[@ANCHOR: test_tour_create_blog]`.
+- **Then** I can create a new blog post ([@ANCHOR: UX_CREATE_BLOG_POST], routed by
+  [@ANCHOR: COMM_create_blog_post]). Verified by `[@ANCHOR: test_tour_create_blog]`.
 
 - **And** my followers will receive a weekly digest of my new content ([@ANCHOR: send_weekly_digest]). Verified by `[@ANCHOR: test_weekly_digest_mail_template]`.
 

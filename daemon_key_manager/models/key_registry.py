@@ -181,8 +181,14 @@ class DaemonKeyRegistry(models.Model):
         # This prevents a rollback bypass where file I/O occurs before constraints fail.
         self.env.flush_all()
 
-        self._ensure_usage_group(user)
-
+        # _rotate_key_and_write_file() below already calls _ensure_usage_group() itself, after
+        # its own active-account/__system__/group_system safety checks -- an earlier version of
+        # this method called it directly here too, before those checks run for this call path.
+        # Harmless today (nothing commits the transaction in between, so a raised UserError rolls
+        # back the raw-SQL group grant along with everything else), but redundant, and a future
+        # refactor that adds an intermediate commit could silently turn this into a real
+        # privilege-grant-survives-rejection gap. Rely on the single, correctly-ordered call
+        # inside _rotate_key_and_write_file() instead.
         registry._rotate_key_and_write_file()
         return True
 

@@ -504,16 +504,20 @@ class UserWebsitesController(http.Controller):
             "blog_id": blog.id,
             "website_id": blog.website_id.id,
         }
+        # website_blog's own author_id defaults to self.env.user.partner_id at create time
+        # (website_blog.py) -- since this create() runs elevated as the service account (see
+        # blog_post.py's own create() override), that default silently attributed every post
+        # created this way to "System Provisioner" instead of its real author. Set it explicitly
+        # in both branches so the published byline always matches who the post actually belongs
+        # to -- the group branch used the real requester's own partner (`user`, already captured
+        # above), matching a group blog's own real authorship model: any member can post, and the
+        # byline should credit whichever member actually wrote it, not the group as a whole.
         if profile_user:
             create_vals["owner_user_id"] = profile_user.id
-            # website_blog's own author_id defaults to self.env.user.partner_id at create time
-            # (website_blog.py) -- since this create() runs elevated as the service account (see
-            # blog_post.py's own create() override), that default silently attributed every post
-            # created this way to "System Provisioner" instead of its real owner. Set it
-            # explicitly so the published byline matches who the post actually belongs to.
             create_vals["author_id"] = profile_user.partner_id.id
         elif profile_group:
             create_vals["user_websites_group_id"] = profile_group.id
+            create_vals["author_id"] = user.partner_id.id
 
         post = env_svc["blog.post"].create(create_vals)
         return request.redirect(f"/blog/{blog.id}/post/{post.id}")
