@@ -95,6 +95,38 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "The controller must truncate the string to exactly 5000 characters.",
         )
 
+    def test_03b_violation_report_honeypot_rejected_silently(self):
+        """A filled website_honeypot field (a form-filling bot, since the field is hidden and
+        unreachable for a real visitor) must be discarded with no content.violation.report row
+        created, and no error surfaced -- a rejection error is itself useful feedback a bot could
+        adapt to. Real bug found live 2026-09-28/29: the honeypot field existed in the template
+        but this controller never read it at all, so five real spam submissions became real rows
+        and emailed Bruce over five days before this was caught."""
+        self.authenticate(None, None)
+
+        response = self.url_open(
+            "/website/report_violation",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "url": f"/{self.user_test.website_slug}/home",
+                "description": "Hi, I wanted to know your price.",
+                "email": "honeypot-bot@example.com",
+                "website_honeypot": "anything at all",
+            },
+            method="POST",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "report_submitted=1",
+            response.url,
+            "A honeypot hit must still look like an ordinary success to whatever submitted it.",
+        )
+        report = self.env["content.violation.report"].search(
+            [("reported_by_email", "=", "honeypot-bot@example.com")], limit=1
+        )
+        self.assertFalse(report, "A honeypot-triggered submission must not create a real report.")
+
     def test_04_gdpr_export_empty_state_json_validity(self):
         """Verify that the custom JSON streaming generator produces valid JSON when the user has 0 records."""
         self.authenticate(self.user_test.login, self.user_test.login)
