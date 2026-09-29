@@ -24,7 +24,20 @@ ODOO_HOST = os.environ.get("ODOO_HOST", "odoo")
 ODOO_URL = os.environ.get("ODOO_URL", f"http://{ODOO_HOST}:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
-ODOO_PASS = os.environ.get("ODOO_SERVICE_PASSWORD", "")  # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+# Real bug found 2026-09-28/29 chasing a live production incident (this daemon's own JSON-2 API
+# calls back to Odoo always failed with "401: Invalid apikey", even right after a successful key
+# rotation): this used to read ODOO_SERVICE_PASSWORD, a name nothing ever wrote. Every other
+# daemon in this codebase (zero_sudo/daemon/json_rpc_client.py, distributed_redis_cache's own
+# cache_manager.py) reads ODOO_RPC_KEY, which is what daemon_key_manager's own
+# _write_secure_env_file() actually writes to every daemon's env file -- this was the one daemon
+# using a name of its own that nothing produced, so ODOO_PASS was always the empty-string
+# default, silently, regardless of how many times the real key got rotated. This exact gap was
+# invisible to this file's own test suite because every one of those tests manually read the
+# real ODOO_RPC_KEY= line out of the env file and translated it into ODOO_SERVICE_PASSWORD before
+# injecting it into the subprocess's environment -- a compensating step in the tests, not
+# something main.py itself ever did. Matches the RMQ_USER/RMQ_PASS fix immediately above this
+# constant, the same bug class found and fixed once already in this exact file.
+ODOO_PASS = os.environ.get("ODOO_RPC_KEY", "")  # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 # Matches the RMQ_USER/RMQ_PASS keys infrastructure.py's rabbitmq.env

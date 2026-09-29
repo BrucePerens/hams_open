@@ -63,10 +63,14 @@ class TestRealBackupWorker(RealTransactionCase):
         if os.path.exists(env_file):
             with open(env_file, "r") as f:
                 for line in f:
+                    # Real bug found 2026-09-28/29: this used to translate the real
+                    # ODOO_RPC_KEY= line into ODOO_SERVICE_PASSWORD, a name main.py used to
+                    # read but that nothing else ever wrote -- a compensating step here that
+                    # hid main.py's own bug (it read the wrong env var and always got "").
+                    # main.py now reads ODOO_RPC_KEY directly, matching every other daemon in
+                    # this codebase, so this test passes it straight through instead.
                     if line.startswith("ODOO_RPC_KEY="):
-                        env_vars["ODOO_SERVICE_PASSWORD"] = line.strip().split("=", 1)[
-                            1
-                        ]
+                        env_vars["ODOO_RPC_KEY"] = line.strip().split("=", 1)[1]
 
         self.daemon_proc = daemon_utils._start_daemon_process(
             daemon_script, env_vars=env_vars
