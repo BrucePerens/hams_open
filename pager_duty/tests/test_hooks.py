@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.pager_duty.hooks import post_init_hook, _claim_info_alias

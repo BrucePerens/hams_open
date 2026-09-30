@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<!-- Copyright © Bruce Perens K6BP. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <!-- docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8:
      hams.com's own designated NCMEC CyberTipline reporting-contact info, "for now" per Bruce's
      own answer, a real ir.config_parameter value the report-packet assembly

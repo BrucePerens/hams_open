@@ -1,5 +1,6 @@
 /** @odoo-module **/
-/* This software is distributed under the terms of the Affero General Public License (AGPL-3). */
+// Copyright © Bruce Perens K6BP.
+// SPDX-License-Identifier: AGPL-3.0-or-later
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 

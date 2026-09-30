@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
