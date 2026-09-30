@@ -9,6 +9,12 @@
         <field name="arch" type="xml">
             <form string="Helpdesk Ticket">
                 <header>
+                    <!-- action_close()'s own anchor comment (models/helpdesk_ticket.py)
+                         explains why this button exists alongside the already-clickable
+                         stage statusbar a few lines below: a real admin reached for unlink()
+                         instead because there was no button-shaped way to just close a
+                         ticket. -->
+                    <button name="action_close" string="Close Ticket" type="object" invisible="not id or stage == 'closed'"/>
                     <button name="action_shift_handoff" string="Shift Handoff" type="object" class="oe_highlight" invisible="not id or stage in ('resolved', 'closed')"/>
                     <!-- [@ANCHOR: hams_helpdesk:COMM_ncmec_report_buttons] -->
                     <!-- No dedicated UI tour for these three admin-only buttons (burn-ignore-tour

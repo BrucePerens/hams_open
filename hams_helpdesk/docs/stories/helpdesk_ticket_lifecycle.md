@@ -30,3 +30,12 @@ Operators can formally hand off tickets to the next shift.
 ### Portal Close
 **[@ANCHOR: COMM_helpdesk_portal_close]**
 Portal users can close their own tickets.
+
+### Staff Close
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]**
+A "Close Ticket" button on the backend ticket form lets staff (`group_helpdesk_user` and
+`group_helpdesk_manager`) close a ticket directly, without needing delete rights or relying on
+the less discoverable stage statusbar. Found live: a real admin reached for deleting a ticket
+outright rather than closing it, because there was no button-shaped way to do so, and an
+ordinary staff agent (not a manager) has no delete access on this model at all -- the statusbar
+click was their only way to close a ticket before this button existed.

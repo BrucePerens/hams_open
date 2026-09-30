@@ -565,3 +565,85 @@ class TestHelpdeskCore(HamsTransactionCase):
     def test_helpdesk_portal_close(self):
         x = 1 + 1
         self.assertEqual(x, 2)
+
+    # Real bug found live, 2026-09-30: a real admin reached for unlink() to get a ticket out
+    # of the way, with no button-shaped alternative -- and group_helpdesk_user (an ordinary
+    # staff agent) has no unlink access on this model at all, so for that whole class of
+    # caller the stage statusbar click was the ONLY way to close a ticket before action_close()
+    # existed. Uses a staff_user with ONLY group_helpdesk_user (not manager) specifically to
+    # prove the fix reaches the caller who actually lacked unlink rights, not just an admin who
+    # already had another way out.
+    # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]
+    def test_action_close_sets_stage_and_is_usable_by_non_manager_staff(self):
+        staff_partner = self.env["res.partner"].create(
+            {"name": "Helpdesk Staff Partner", "email": "staff@example.com"}
+        )
+        staff_user = self.env["res.users"].create(
+            {
+                "name": "Helpdesk Staff",
+                "login": "hd_staff_action_close_test",
+                "partner_id": staff_partner.id,
+                "group_ids": [
+                    (6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_user").id])
+                ],
+            }
+        )
+        self.assertFalse(
+            staff_user.has_group("hams_helpdesk.group_helpdesk_manager"),
+            "This test must exercise a caller who lacks unlink rights, not a manager who "
+            "already had another way to get rid of a ticket.",
+        )
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Action Close Test Ticket",
+                "partner_id": self.portal_user.partner_id.id,
+                "stage": "in_progress",
+            }
+        )
+
+        ticket.with_user(staff_user).action_close()
+
+        self.assertEqual(ticket.stage, "closed")
+        # The pre-existing write() hook (not new code this button adds) posts the
+        # customer-facing mailback the same way a direct statusbar click already would --
+        # proving this button changes nothing about who gets notified, only how the action
+        # is reached.
+        messages = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")], limit=100
+        )
+        self.assertTrue(
+            any("Your issue has been updated" in (m.body or "") for m in messages),
+            "Closing via action_close() must still trigger the ordinary stage-change "
+            "customer mailback.",
+        )
+
+        # Calling it again once already closed must be a harmless no-op, not a second
+        # redundant write/mailback.
+        message_count_before = len(messages)
+        ticket.with_user(staff_user).action_close()
+        self.assertEqual(ticket.stage, "closed")
+        messages_after = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket")], limit=100
+        )
+        self.assertEqual(
+            len(messages_after),
+            message_count_before,
+            "Calling action_close() on an already-closed ticket must not post a second "
+            "mailback.",
+        )
+
+    # This is exactly the class of bug the button itself fixes, verified the same way: a
+    # method that works perfectly when called directly is invisible to a real user if no
+    # button actually renders it. get_view() proves the button node is really in the
+    # rendered form arch, not just that action_close() itself behaves correctly in isolation.
+    # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]
+    def test_action_close_button_is_present_on_the_ticket_form(self):
+        view = self.env["hams_helpdesk.ticket"].get_view(
+            view_id=self.env.ref("hams_helpdesk.view_hams_helpdesk_ticket_form").id
+        )
+        self.assertIn(
+            'name="action_close"',
+            view["arch"],
+            "The Close Ticket button must actually be present on the backend ticket form, "
+            "not just exist as a callable method nothing renders.",
+        )
