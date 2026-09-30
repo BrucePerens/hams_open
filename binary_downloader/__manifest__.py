@@ -6,7 +6,7 @@
     "name": "Binary Downloader",
     "summary": "Secure, DB-backed binary dependency provisioner",
     "description": "Secure, DB-backed binary dependency provisioner.",
-    "version": "1.0",
+    "version": "1.1",
     "category": "Hidden",
     "author": "Bruce Perens K6BP",
     "depends": ["base", "zero_sudo", "website", "pager_duty", "knowledge"],

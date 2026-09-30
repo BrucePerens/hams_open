@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- 
+    <!--
     Copyright © Bruce Perens K6BP.
     SPDX-License-Identifier: AGPL-3.0-or-later
     -->
-    <data noupdate="1">
+    <!-- Deliberately NOT noupdate="1": found live 2026-09-30 while bumping etcd, root-caused
+         against Odoo 19's own source (hams_com's own night_shift_history.md, same date):
+         odoo/tools/convert.py's XmlImport._tag_record() checks the XML importer's own
+         per-data-block parse-time noupdate flag BEFORE _load_records() is ever called, so a
+         record inside noupdate="1" silently never picks up a source-file edit on any `-u`
+         upgrade to an already-installed database, regardless of ir_model_data's own noupdate
+         DB column. Every record here is pure, codebase-controlled dependency-pin data (no user
+         ever edits a binary.manifest row by hand through the UI) that is SUPPOSED to always
+         reflect whatever this file currently says, the opposite of what noupdate="1" is for.
+         binary_downloader is already installed on production, so this record was silently
+         stuck at v3.7.1 until this fix; a future bump only actually reaches an
+         already-installed database because this block is no longer noupdate. -->
+    <data>
         <record id="binary_manifest_kopia" model="binary.manifest">
             <field name="company_id" eval="False"/>
             <field name="name">kopia</field>
@@ -16,8 +28,8 @@
         <record id="binary_manifest_etcd" model="binary.manifest">
             <field name="company_id" eval="False"/>
             <field name="name">etcd</field>
-            <field name="url">https://github.com/etcd-io/etcd/releases/download/v3.7.1/etcd-v3.7.1-linux-amd64.tar.gz</field>
-            <field name="checksum">e8cd3fa8064c98137c5dbd78b76f969417ace84efb83c481041d7a52ffdd8fb9</field>
+            <field name="url">https://github.com/etcd-io/etcd/releases/download/v3.7.2/etcd-v3.7.2-linux-amd64.tar.gz</field>
+            <field name="checksum">3a3679bc51a4ee9d30bccea1da7cd4fe62c6fc1d2ca1255068d2c53bf3026135</field>
             <field name="archive_type">tar.gz</field>
             <field name="extract_member">etcd</field>
         </record>
