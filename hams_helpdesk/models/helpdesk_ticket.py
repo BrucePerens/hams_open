@@ -627,6 +627,43 @@ class HelpdeskTicket(models.Model):
             self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
             self.with_env(hd_env).message_post(body=_("Ticket closed by customer."))
 
+    # [@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]
+    # Real bug found live, 2026-09-30: the backend form's own `stage` field is a clickable
+    # statusbar (`view_hams_helpdesk_ticket_form`'s header), which technically can reach
+    # "Closed" -- but with no button-shaped affordance next to it, a real admin reached for
+    # unlink() instead to get a resolved ticket out of the way, which is a destructive action
+    # with no undo, rather than a reversible stage change. Worse: `group_helpdesk_user` (an
+    # ordinary staff agent, not a manager) has NO unlink access at all on this model
+    # (security/ir.model.access.csv: access_hams_helpdesk_ticket_user's own unlink column is
+    # 0) -- for that whole class of user, the statusbar click was the ONLY way to close a
+    # ticket before this button existed, and it's considerably less discoverable than an
+    # explicit "Close Ticket" button sitting next to Shift Handoff in the same header.
+    #
+    # No portal-ownership gate (unlike action_portal_close() above): this button only ever
+    # renders on the BACKEND form, which ir.model.access.csv already restricts to
+    # group_helpdesk_user/group_helpdesk_manager -- a bare portal user never reaches this
+    # view at all (their own /my/ticket/<id> template calls action_portal_close() directly).
+    # And even a hypothetical direct RPC call from a portal account would still be refused:
+    # write()'s own restricted_fields set already blocks a portal user from writing `stage`
+    # (see write() above), so this method offers no privilege beyond what that check already
+    # enforces -- it is a convenience wrapper around an ordinary write(), not a new grant.
+    #
+    # Reuses the caller's own ambient env (no service-account elevation, unlike
+    # action_portal_close()'s hd_env switch): a staff/manager caller who can already open
+    # this form already holds real write access to `stage` directly, so write()'s own
+    # existing "if 'stage' in vals: ... message_post('Your issue has been updated')"
+    # customer-facing mailback (see write() above) fires exactly the same way a direct
+    # statusbar click already would -- this button changes nothing about who gets notified
+    # or how, it only makes the action easier to find.
+    # Verified by [@ANCHOR: test_action_close_sets_stage_and_is_usable_by_non_manager_staff]
+    # Verified by [@ANCHOR: test_action_close_button_is_present_on_the_ticket_form]
+    def action_close(self):
+        """Explicit "Close Ticket" header button for staff -- see the anchor comment above
+        for why this exists alongside the already-clickable stage statusbar."""
+        self.ensure_one()
+        if self.stage != "closed":
+            self.write({"stage": "closed"})
+
     # [@ANCHOR: hams_helpdesk:COMM_mcp_post_internal_note]
     def mcp_post_internal_note(self, note):
         """Posts ``note`` to this ticket's own chatter as an internal
