@@ -1,4 +1,5 @@
-# This software is distributed under the terms of the Affero General Public License (AGPL-3).
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 # Tests of zero_sudo's knowledge_docs installer (ir_module_module.py) that need the real

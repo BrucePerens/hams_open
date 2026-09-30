@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- This software is distributed under the terms of the Affero General Public License (AGPL-3). -->
+<!-- Copyright © Bruce Perens K6BP. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
     <template id="portal_my_home_menu_helpdesk" name="Portal layout : helpdesk menu entries" inherit_id="portal.portal_breadcrumbs" priority="20">
         <!-- burn-ignore-tour -->

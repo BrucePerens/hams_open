@@ -1,4 +1,5 @@
-/* This software is distributed under the terms of the Affero General Public License (AGPL-3). */
+// Copyright © Bruce Perens K6BP.
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // [@ANCHOR: COMM_helpdesk_portal_tour]
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
