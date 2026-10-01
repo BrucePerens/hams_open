@@ -674,3 +674,34 @@ class BackupConfig(models.Model):
                 )
                 if delta_drill > (7 * 24 * 60 * 60):  # 7 Days
                     conf._execute_restore_drill()
+
+    @api.model
+    def cron_trigger_scheduled_backups(self):
+        """Creates a real backup for every `backup.config`, on this cron's own daily schedule
+        (matching the `keep_daily` retention field's own name/intent -- one full backup per day,
+        retained `keep_daily` days; see `cron.xml`'s own record for the schedule itself).
+
+        Closes a real, previously-undiscovered gap found 2026-10-01 while verifying the
+        heartbeat-starvation backup fix (`night_shift_todo/high/production-database-has-zero-
+        backup-config-ever-configured-a82c2eb8.md`): `action_trigger_backup()` -- the method that
+        actually runs `pgbackrest backup`/`kopia snapshot create` -- had no caller anywhere in
+        this codebase except the "Run Backup Now" UI button and this module's own tests. The 25
+        real `backup.snapshot` records that to-do's own closure cited as proof the pipeline
+        worked were all created by that to-do's own session repeatedly calling
+        `action_trigger_backup()` by hand while testing the fix, not by any real, ongoing
+        schedule -- `cron_sync_all_backups()` above only ever SYNCS/lists existing snapshots
+        (`pgbackrest info`/`kopia snapshot list`), it never creates a new one. The moment manual
+        triggering stopped (confirmed directly: `backup.snapshot`'s own last real row is
+        11:26:53 UTC, matching almost exactly when `backup.worker.service` was last restarted to
+        deploy that session's own fix), real backups silently stopped too -- production would
+        have gone right back to having no fresh backups at all, the same risk the original to-do
+        existed to close, just with a time-delayed trigger instead of an immediate one."""
+        # [@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]
+
+        # Verified by [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups]
+        # Use Service ID for security & audit trails, matching cron_sync_all_backups() above.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "backup_management.user_backup_service_internal"
+        )
+        configs = self.env["backup.config"].with_user(svc_uid).search([], limit=1000)
+        configs.action_trigger_backup()

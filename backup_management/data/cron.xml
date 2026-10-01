@@ -17,5 +17,22 @@
             <field name="interval_type">hours</field>
             <field name="active" eval="True"/>
         </record>
+        <record id="cron_trigger_scheduled_backups" model="ir.cron">
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups] -->
+            <!-- Closes a real gap found 2026-10-01: cron_sync_backups above only ever SYNCS
+                 existing snapshots, it never creates a new one. action_trigger_backup() (the
+                 method that actually runs a real backup) had no scheduled caller anywhere in this
+                 codebase before this record, only the "Run Backup Now" UI button. Daily, matching
+                 backup.config.keep_daily's own name/intent (one full backup per day, retained
+                 keep_daily days); see cron_trigger_scheduled_backups()'s own docstring. -->
+            <field name="name">Backup Management: Scheduled Backup Run</field>
+            <field name="model_id" ref="model_backup_config"/>
+            <field name="user_id" ref="user_backup_service_internal"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_trigger_scheduled_backups()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
     </data>
 </odoo>

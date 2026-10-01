@@ -136,6 +136,49 @@ class TestBackupManagement(RealTransactionCase):
         jobs = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)], limit=100)
         self.assertTrue(jobs)
 
+    def test_05_cron_trigger_scheduled_backups_creates_a_real_job_for_every_config(self):
+        # Tests [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups]
+
+        # Tests [@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]
+        # Closes a real gap found 2026-10-01: action_trigger_backup() (the method that actually
+        # runs a real backup) previously had no scheduled caller at all -- only the "Run Backup
+        # Now" UI button and this module's own tests ever called it. cron_sync_all_backups()
+        # (test_04 above) only ever SYNCS existing snapshots; it never creates a new one. This
+        # confirms the new daily cron's own code method actually creates a real, pending
+        # backup.job for every configured backup.config, not just that the method runs clean.
+        channel = _AcceptingChannel()
+        self.safe_patch_object(
+            type(self.env["hams_rabbitmq.pool"]), "_get_channel", return_value=channel
+        )
+        jobs_before = self.env["backup.job"].search_count(
+            [("config_id", "in", [self.config_kopia.id, self.config_pg.id])]
+        )
+        self.env["backup.config"].cron_trigger_scheduled_backups()
+
+        kopia_job = self.env["backup.job"].search(
+            [("config_id", "=", self.config_kopia.id)], order="id desc", limit=1
+        )
+        pg_job = self.env["backup.job"].search(
+            [("config_id", "=", self.config_pg.id)], order="id desc", limit=1
+        )
+        msg = (
+            "[!] DIAGNOSTIC FOR AI: cron_trigger_scheduled_backups() did not create a real "
+            "backup.job for every backup.config -- the scheduled-backup cron is a no-op."
+        )
+        self.assertTrue(kopia_job.exists(), msg)
+        self.assertTrue(pg_job.exists(), msg)
+        self.assertEqual(kopia_job.state, "pending")
+        self.assertEqual(pg_job.state, "pending")
+        jobs_after = self.env["backup.job"].search_count(
+            [("config_id", "in", [self.config_kopia.id, self.config_pg.id])]
+        )
+        self.assertEqual(
+            jobs_after,
+            jobs_before + 2,
+            "Expected exactly one new backup.job per config, not zero and not a thrash of "
+            "repeated jobs.",
+        )
+
     def test_07_orchestration_trigger(self):
         # Tests [@ANCHOR: backup_management:COMM_test_backup_orchestration]
 
