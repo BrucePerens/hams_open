@@ -87,40 +87,31 @@
             <field name="group_ids" eval="[(6, 0, [ref('zero_sudo.group_mail_service'), ref('base.group_user')])]"/>
         </record>
 
-        <!-- base.user_root (OdooBot, uid 1) is granted zero groups at all by stock Odoo
-             (base/data/res_users_data.xml only sets its partner_id/company_id/email —
-             no group_ids). mail.thread._message_route_process() (Odoo core,
-             addons/mail/models/mail_thread.py) explicitly does
-             `thread.with_user(self.env.ref('base.user_root'))` before posting/linking an
-             inbound message's recipients, with its own comment calling this "a high-privilege
-             archived user" — but with_user() unconditionally sets su=False (odoo/orm/
-             models.py BaseModel.with_user()), and ir.model.access.check() (addons/base/models/
-             ir_model.py) only bypasses ACL when env.su is True; it has no separate special
-             case for uid == SUPERUSER_ID. So OdooBot's "high privilege" is not real under this
-             Odoo version's actual ACL code — it has exactly the access its own group
-             memberships grant, which by default is none.
-
-             Confirmed live, 2026-09-27: ses_inbound_mail_ingest hit this for real — a backlog
-             message that was a reply to an internal note failed at
-             `new_msg.write({'partner_ids': original_partner_ids})` (mail_thread.py:1434) with
-             "You are not allowed to access 'Contact' (res.partner) records", entirely inside
-             Odoo core's own routing, unrelated to hams_helpdesk.ticket.ingest_inbound_email()'s
-             own .sudo() call (which only covers the OUTER message_process() call, not this
-             inner with_user(user_root) re-scoping). This is a platform-wide gap, not specific
-             to that one daemon: any inbound email whose parent message has an author reachable
-             via partner_share hits the identical code path. Not filed upstream (Bruce's
-             standing rule: no outside bug reports without his review) — fixed locally here
-             instead, the same way mail_service_internal's own missing base.group_user access
-             was fixed above (identical symptom class: a service/system account missing a group
-             an Odoo core code path assumes it has).
-
-             (4, ...) here, not (6, 0, [...]) — unlike the dedicated single-purpose service
-             accounts above, base.user_root is core-owned and may already carry other groups;
-             replacing its whole group_ids would be destructive to whatever else depends on it. -->
-        <record id="base.user_root" model="res.users">
-            <field name="group_ids" eval="[(4, ref('zero_sudo.group_mail_service')), (4, ref('base.group_user'))]"/>
-        </record>
-
+        <!-- base.user_root (OdooBot, uid 1) is NOT granted any group here, on purpose — this
+             used to carry a (4, zero_sudo.group_mail_service)/(4, base.group_user) grant, added
+             2026-09-27 for a real, live ses_inbound_mail_ingest AccessError
+             (`new_msg.write({'partner_ids': original_partner_ids})` inside Odoo core's own
+             mail.thread._message_route_process(), which does `thread.with_user(self.env.ref(
+             'base.user_root'))` before posting/linking an inbound message's recipients).
+             Removed 2026-10-01, closing night_shift_todo/medium/odoobot-mail-ingest-partner-fix-
+             breaks-settings-tour-c8e4a913.md: hams_helpdesk/security/mail_ingest_security.xml's
+             own comment on access_res_partner_mail_ingest documents the REAL root cause and the
+             REAL fix, found by a later, more careful investigation of the same 2026-09-27
+             incident — Odoo 19's own Many2many.write_real()/_check_sudo_commands() re-checks
+             res.partner read access as `env.transaction.default_env.uid` (the account that made
+             the ORIGINAL RPC call), not as base.user_root at all, and explicitly names "an
+             OdooBot grant (hams_open #473)" — this one — as a fix that "changed nothing in
+             production". It was dead, ineffective grant surface from the moment it landed,
+             coexisting harmlessly alongside the real fix (the access_res_partner_mail_ingest row
+             granting group_mail_ingest_service, the actual calling account, read access) rather
+             than ever doing anything itself. A worktree once proposed removing this for exactly
+             that privilege-reduction reason and was held back after a real, reproducible A/B
+             regression in zero_sudo's own Settings tour (test_02_zero_sudo_tour) — re-run twice
+             more on 2026-10-01 with this grant removed, and it no longer reproduces
+             (zero_sudo: 129/129 passing both times; hams_helpdesk: 110/110 passing, confirming
+             the real mail-ingest fix is unaffected). Why the regression stopped reproducing was
+             not re-investigated — not treated as settled, just no longer a reason to keep a
+             grant already independently proven to do nothing real. -->
         <record id="gdpr_service_internal" model="res.users">
             <field name="name">Central GDPR Erasure Service Account</field>
             <field name="login">gdpr_service_internal</field>
