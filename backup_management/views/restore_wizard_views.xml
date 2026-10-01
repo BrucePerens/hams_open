@@ -12,6 +12,15 @@
         <field name="model">backup.restore.wizard</field>
         <field name="arch" type="xml">
             <form string="Restore Snapshot">
+                <field name="engine" invisible="1"/>
+                <div class="alert alert-warning" role="alert" invisible="engine != 'pgbackrest'">
+                    <strong>Restoring a pgBackRest snapshot through this wizard is not yet
+                    safe</strong> -- the restore path is never routed through the privileged
+                    sidecar that can actually write PostgreSQL's real data directory, and has no
+                    forced-safe restore destination of its own. Clicking "Restore" will refuse
+                    rather than attempt it. Consult your own deployment's disaster-recovery
+                    runbook for the verified manual restore procedure.
+                </div>
                 <group>
                     <field name="snapshot_id" readonly="1"/>
                     <field name="restore_target_path"/>
