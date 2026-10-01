@@ -3,8 +3,12 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import json
 import os
 import sys
+import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -130,6 +134,134 @@ class TestPgbackrestS3RepoArgs(unittest.TestCase):
         config = {"bucket_name": "b"}
         args = backup_worker._pgbackrest_s3_repo_args(config, "stanza")
         self.assertTrue(all(not a.startswith("--repo1-s3-endpoint") for a in args))
+
+
+# [@ANCHOR: backup_management:COMM_test_pgbackrest_requires_sidecar]
+class TestPgbackrestRequiresSidecar(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_pgbackrest_requires_sidecar]
+
+    def test_backup_requires_sidecar(self):
+        self.assertTrue(
+            backup_worker._pgbackrest_requires_sidecar(
+                ["pgbackrest", "backup", "--stanza=hams_prod"]
+            )
+        )
+
+    def test_info_does_not_require_sidecar(self):
+        # "info" is read-only and already works fine as odoo -- only a real
+        # write (backup) needs PostgreSQL data-directory access.
+        self.assertFalse(
+            backup_worker._pgbackrest_requires_sidecar(
+                ["pgbackrest", "info", "--stanza=hams_prod", "--output=json"]
+            )
+        )
+
+    def test_restore_does_not_require_sidecar(self):
+        # Deliberately not delegated yet -- restore remains a manual admin
+        # operation (see main.py's own comment on _PGBACKREST_PRIVILEGED_OPS).
+        self.assertFalse(
+            backup_worker._pgbackrest_requires_sidecar(
+                ["pgbackrest", "restore", "--stanza=hams_prod", "--set=latest"]
+            )
+        )
+
+    def test_non_pgbackrest_cmd_does_not_require_sidecar(self):
+        self.assertFalse(backup_worker._pgbackrest_requires_sidecar(["kopia", "snapshot", "create"]))
+
+    def test_empty_cmd_does_not_require_sidecar(self):
+        self.assertFalse(backup_worker._pgbackrest_requires_sidecar([]))
+
+
+# [@ANCHOR: backup_management:COMM_test_run_pgbackrest_via_sidecar]
+class TestRunPgbackrestViaSidecar(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_pgbackrest_privileged_sidecar]
+    #
+    # Exercises the real filesystem protocol (request/result JSON files, not
+    # a mocked subprocess) -- this function's whole job is that protocol, not
+    # anything subprocess-shaped itself; the privileged side of it is covered
+    # by TestPgbackrestSidecarScript below.
+
+    def setUp(self):
+        self._tmpdir = tempfile.mkdtemp(prefix="pgbackrest_sidecar_test_")
+        self._patchers = [
+            patch.object(backup_worker, "PGBACKREST_SPOOL_DIR", self._tmpdir),
+            patch.object(backup_worker, "PGBACKREST_SIDECAR_POLL_INTERVAL", 0.01),
+            patch.object(backup_worker, "PGBACKREST_SIDECAR_TIMEOUT", 1),
+        ]
+        for p in self._patchers:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _write_result(self, job_id, return_code, output):
+        result_path = os.path.join(self._tmpdir, f"result-{job_id}.json")
+        with open(result_path, "w") as f:
+            json.dump({"return_code": return_code, "output": output}, f)
+
+    def _wait_for_file(self, path):
+        # Poll briefly for a file the way the real .path unit's own trigger
+        # does, then act -- simplest way to exercise the real polling loop in
+        # _run_pgbackrest_via_sidecar without a real systemd unit in this
+        # unit test.
+        for _ in range(200):
+            if os.path.exists(path):
+                return
+            time.sleep(0.005)
+
+    def test_writes_a_request_file_and_returns_the_sidecars_result(self):
+        def fake_sidecar():
+            self._wait_for_file(os.path.join(self._tmpdir, "request-99.json"))
+            self._write_result(99, 0, "backup complete: full backup size = 1.2GB")
+
+        threading.Thread(target=fake_sidecar, daemon=True).start()
+
+        cmd = ["pgbackrest", "backup", "--stanza=hams_prod", "--type=full"]
+        config = {"storage_type": "local"}
+        return_code, output = backup_worker._run_pgbackrest_via_sidecar(cmd, config, 99)
+
+        self.assertEqual(return_code, 0)
+        self.assertIn("backup complete", output)
+        # Both the request and result files are cleaned up once consumed --
+        # the request carried no secret here, but the convention holds either way.
+        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "request-99.json")))
+        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "result-99.json")))
+
+    def test_request_file_carries_s3_secrets_but_not_in_argv(self):
+        captured = {}
+
+        def fake_sidecar():
+            request_path = os.path.join(self._tmpdir, "request-100.json")
+            self._wait_for_file(request_path)
+            with open(request_path) as f:
+                captured.update(json.load(f))
+            self._write_result(100, 0, "ok")
+
+        threading.Thread(target=fake_sidecar, daemon=True).start()
+
+        cmd = ["pgbackrest", "backup", "--stanza=hams_prod", "--repo1-type=s3"]
+        config = {
+            "storage_type": "s3",
+            "access_key": "AKIAFAKE",
+            "secret_key": "sekrit",
+        }
+        backup_worker._run_pgbackrest_via_sidecar(cmd, config, 100)
+
+        self.assertEqual(captured["cmd"], cmd)
+        self.assertNotIn("AKIAFAKE", cmd)  # never in argv
+        self.assertEqual(captured["env"]["PGBACKREST_REPO1_S3_KEY"], "AKIAFAKE")
+        self.assertEqual(captured["env"]["PGBACKREST_REPO1_S3_KEY_SECRET"], "sekrit")
+
+    def test_invalid_stanza_raises_before_touching_the_filesystem(self):
+        cmd = ["pgbackrest", "backup", "--stanza=../../etc/passwd"]
+        with self.assertRaises(ValueError):
+            backup_worker._run_pgbackrest_via_sidecar(cmd, {}, 101)
+        self.assertEqual(os.listdir(self._tmpdir), [])
+
+    def test_timeout_cleans_up_the_request_and_reports_failure(self):
+        cmd = ["pgbackrest", "backup", "--stanza=hams_prod"]
+        return_code, output = backup_worker._run_pgbackrest_via_sidecar(cmd, {}, 102)
+        self.assertEqual(return_code, 1)
+        self.assertIn("Timed out", output)
+        self.assertEqual(os.listdir(self._tmpdir), [])
 
 
 # [@ANCHOR: backup_management:COMM_test_ensure_kopia_s3_repository]
@@ -310,13 +442,20 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         run_env = mock_run.call_args_list[0].kwargs["env"]
         self.assertEqual(run_env["AWS_ACCESS_KEY_ID"], "AKIAFAKEKEY")
 
+    # test_02 and test_03 used to assert directly on subprocess.Popen's own call
+    # args, matching every other test in this class -- but a real pgbackrest
+    # "backup" can no longer run as this daemon's own `odoo` account at all
+    # (NoNewPrivileges=true blocks it; see main.py's own
+    # _run_pgbackrest_via_sidecar() docstring), so execute_job now delegates the
+    # whole operation there instead of calling subprocess.Popen directly. These
+    # two now assert on *that* call's args; TestRunPgbackrestViaSidecar below
+    # covers the delegation function's own real filesystem protocol end to end.
     @patch("main._json2_call")
-    @patch("main.subprocess.Popen")
-    @patch("main.shutil.which", return_value="/usr/bin/pgbackrest")
-    def test_02_pgbackrest_s3_job_command_and_env(
-        self, mock_which, mock_popen, mock_json2
+    @patch("main._run_pgbackrest_via_sidecar")
+    def test_02_pgbackrest_s3_backup_job_delegates_to_the_privileged_sidecar(
+        self, mock_sidecar, mock_json2
     ):
-        mock_popen.return_value = self._popen_result()
+        mock_sidecar.return_value = (0, "backup complete")
         ch, method = self._make_ch_method()
         payload = {
             "job_id": 2,
@@ -333,30 +472,33 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         body = backup_worker.json.dumps(payload)
         backup_worker.execute_job(ch, method, MagicMock(), body)
 
-        cmd = mock_popen.call_args.args[0]
+        cmd, config, job_id = mock_sidecar.call_args.args
         self.assertEqual(cmd[0], "pgbackrest")
+        self.assertEqual(cmd[1], "backup")
         self.assertIn("--repo1-type=s3", cmd)
         self.assertIn("--repo1-s3-bucket=b2-bucket", cmd)
         self.assertIn(
             "--repo1-s3-endpoint=s3.us-west-002.backblazeb2.com", cmd
         )
         self.assertIn("--repo1-retention-full=5", cmd)
-        # Never the raw secret flags -- pgbackrest's real CLI refuses them.
+        # Never the raw secret values in argv -- pgbackrest's real CLI refuses
+        # them there outright; they travel via `config`, read by the sidecar
+        # delegation function itself, same as the direct-Popen path used to.
         joined = " ".join(cmd)
         self.assertNotIn("b2keyid", joined)
         self.assertNotIn("b2applicationkey", joined)
-
-        env = mock_popen.call_args.kwargs["env"]
-        self.assertEqual(env["PGBACKREST_REPO1_S3_KEY"], "b2keyid")
-        self.assertEqual(env["PGBACKREST_REPO1_S3_KEY_SECRET"], "b2applicationkey")
+        self.assertEqual(job_id, 2)
+        self.assertEqual(config["access_key"], "b2keyid")
+        self.assertEqual(config["secret_key"], "b2applicationkey")
 
     @patch("main._json2_call")
-    @patch("main.subprocess.Popen")
-    @patch("main.shutil.which", return_value="/usr/bin/pgbackrest")
-    def test_03_local_storage_type_unaffected(self, mock_which, mock_popen, mock_json2):
+    @patch("main._run_pgbackrest_via_sidecar")
+    def test_03_local_storage_type_unaffected(self, mock_sidecar, mock_json2):
         # Regression guard: a plain local-storage pgbackrest job must not
-        # gain any --repo1-s3-* flags or PGBACKREST_REPO1_S3_* env vars.
-        mock_popen.return_value = self._popen_result()
+        # gain any --repo1-s3-* flags, and still routes through the sidecar
+        # (local storage changes the repo target, not the privilege problem --
+        # this account still can't read PostgreSQL's own data directory).
+        mock_sidecar.return_value = (0, "")
         ch, method = self._make_ch_method()
         payload = {
             "job_id": 3,
@@ -368,10 +510,10 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         body = backup_worker.json.dumps(payload)
         backup_worker.execute_job(ch, method, MagicMock(), body)
 
-        cmd = mock_popen.call_args.args[0]
+        cmd, config, job_id = mock_sidecar.call_args.args
         self.assertTrue(all(not c.startswith("--repo1-s3") for c in cmd))
-        env = mock_popen.call_args.kwargs["env"]
-        self.assertNotIn("PGBACKREST_REPO1_S3_KEY", env)
+        self.assertNotIn("access_key", config)
+        self.assertEqual(job_id, 3)
 
 
 class TestUnexpectedExceptionIsolation(unittest.TestCase):

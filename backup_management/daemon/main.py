@@ -47,6 +47,22 @@ RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
 RMQ_USER = os.environ.get("RMQ_USER")
 RMQ_PASS = os.environ.get("RMQ_PASS")  # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
+# This daemon's own systemd unit (backup.worker.service) runs as `odoo` with
+# NoNewPrivileges=true and ProtectSystem=strict (MASTER_01 ADR, "OS-Level
+# Daemon Restriction") -- confirmed live on hams1, 2026-10-01. NoNewPrivileges
+# makes an in-process `sudo`/setuid escalation to `postgres` mechanically
+# impossible (that is exactly what the directive exists to block), and
+# PostgreSQL's own data directory is 0700 postgres:postgres, so a real
+# `pgbackrest backup` genuinely cannot run as `odoo` at all. See
+# _run_pgbackrest_via_sidecar()'s own docstring for the real fix: delegate to
+# a separate, unsandboxed, postgres-owned sidecar systemd unit via a spool
+# directory, the same "airgapped spooling" shape the ADR already mandates for
+# privileged hardware telemetry.
+PGBACKREST_SPOOL_DIR = os.environ.get("PGBACKREST_SPOOL_DIR", "/opt/hams/backup_requests")
+PGBACKREST_SIDECAR_TIMEOUT = int(os.environ.get("PGBACKREST_SIDECAR_TIMEOUT", "3600"))
+PGBACKREST_SIDECAR_POLL_INTERVAL = float(os.environ.get("PGBACKREST_SIDECAR_POLL_INTERVAL", "2"))
+_STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+
 
 # [@ANCHOR: backup_management:COMM_require_rabbitmq_credentials]
 def _require_rabbitmq_credentials():
@@ -223,6 +239,120 @@ def _pgbackrest_s3_repo_args(config, target_path):
     # bucket from colliding, without inventing a new payload field.
     args.append(f"--repo1-path=/{target_path}")
     return args
+
+
+# A pgbackrest operation this daemon cannot perform itself (needs real
+# filesystem access to PostgreSQL's own 0700 postgres-owned data directory)
+# and must delegate to the privileged sidecar instead. Only "backup" today --
+# "info" (read-only, used by sync_snapshots) already works fine as odoo, and
+# "restore" is deliberately left a manual admin operation (see this file's
+# own to-do history); adding it here later means teaching
+# hams-pgbackrest-backup.service's own argv validation about it too.
+_PGBACKREST_PRIVILEGED_OPS = ("backup",)
+
+
+def _pgbackrest_requires_sidecar(cmd):
+    # [@ANCHOR: backup_management:COMM_pgbackrest_requires_sidecar]
+    # Verified by [@ANCHOR: backup_management:COMM_test_pgbackrest_requires_sidecar]
+    return bool(cmd) and cmd[0] == "pgbackrest" and len(cmd) > 1 and cmd[1] in _PGBACKREST_PRIVILEGED_OPS
+
+
+# [@ANCHOR: backup_management:COMM_pgbackrest_privileged_sidecar]
+# Verified by [@ANCHOR: backup_management:COMM_test_run_pgbackrest_via_sidecar]
+def _run_pgbackrest_via_sidecar(cmd, config, job_id):
+    """
+    Runs a privileged pgbackrest operation (currently just "backup") without
+    this daemon ever holding postgres/root filesystem access itself.
+
+    backup.worker.service runs as `odoo` with NoNewPrivileges=true and
+    ProtectSystem=strict (MASTER_01 ADR section 6, "OS-Level Daemon
+    Restriction") -- confirmed live on hams1, 2026-10-01
+    (`systemctl cat backup.worker.service`). NoNewPrivileges blocks any
+    setuid-gaining escalation from inside this process, including `sudo`,
+    and PostgreSQL's own data directory is 0700 postgres:postgres, so a real
+    backup cannot run as `odoo` regardless. Rather than loosen this daemon's
+    own sandbox (the ADR's whole point) or grant it a broad, standing
+    `sudo` grant, the real privileged operation runs in a separate,
+    unsandboxed, postgres-owned sidecar (hams-pgbackrest-backup.service),
+    the same "airgapped spooling" shape MASTER_01 section 6 already mandates
+    for privileged hardware telemetry (a sidecar writes a spool file an
+    unprivileged daemon reads) -- mirrored here with the roles reversed:
+    this (unprivileged) daemon writes the request, the privileged sidecar
+    writes the result.
+
+    Protocol: write a request JSON (the exact argv plus any S3/B2 secret
+    env vars -- never written into this daemon's own log) into
+    PGBACKREST_SPOOL_DIR, which this daemon owns (0700 odoo:odoo) and the
+    sidecar (running as root before its own internal `runuser -u postgres`)
+    can read regardless of that mode. A `hams-pgbackrest-backup.path` unit
+    notices the new file and starts the sidecar service, which validates
+    the request again on its own side (never trust the other side of a
+    privilege boundary -- the same posture this file's own restore_cmd
+    branch already takes), runs it, writes a result JSON back into the same
+    directory, and deletes the request (shortening the secret's lifetime on
+    disk). This function polls for that result.
+
+    Tested by [@ANCHOR: backup_management:COMM_test_pgbackrest_sidecar]
+    """
+    stanza = None
+    for part in cmd:
+        if part.startswith("--stanza="):
+            stanza = part.split("=", 1)[1]
+    if not stanza or not _STANZA_RE.match(stanza):
+        raise ValueError(f"Refusing to delegate pgbackrest backup with invalid stanza: {stanza!r}")
+
+    os.makedirs(PGBACKREST_SPOOL_DIR, exist_ok=True)
+    request_path = os.path.join(PGBACKREST_SPOOL_DIR, f"request-{job_id}.json")
+    result_path = os.path.join(PGBACKREST_SPOOL_DIR, f"result-{job_id}.json")
+    tmp_path = request_path + f".tmp-{os.getpid()}"
+
+    secret_env = {}
+    if config.get("storage_type") in ("s3", "b2"):
+        if config.get("access_key"):
+            secret_env["PGBACKREST_REPO1_S3_KEY"] = config["access_key"]
+        if config.get("secret_key"):
+            secret_env["PGBACKREST_REPO1_S3_KEY_SECRET"] = config["secret_key"]
+    request = {"cmd": cmd, "env": secret_env}
+
+    # A stale result from an earlier, abandoned job sharing this job_id
+    # (should not happen -- job ids are not reused -- but a leftover file
+    # must never be mistaken for this run's own result).
+    if os.path.exists(result_path):
+        os.remove(result_path)
+
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(request, f)
+    except OSError:
+        # Disk full, permission problem, etc. mid-write -- clean up the
+        # partial tmp file before propagating; a leaked, never-renamed
+        # tmp-*.json is otherwise harmless (the .path unit only ever
+        # watches request-*.json), so this is tidiness, not a safety net.
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise
+    os.rename(tmp_path, request_path)  # Atomic: the .path unit only ever sees a complete file.
+
+    deadline = time.time() + PGBACKREST_SIDECAR_TIMEOUT
+    while time.time() < deadline:
+        if os.path.exists(result_path):
+            try:
+                with open(result_path) as f:
+                    result = json.load(f)
+            finally:
+                os.remove(result_path)
+            if os.path.exists(request_path):
+                os.remove(request_path)
+            return result.get("return_code", 1), result.get("output", "")
+        time.sleep(PGBACKREST_SIDECAR_POLL_INTERVAL)
+
+    # Timed out waiting for the sidecar. Remove our own request so a sidecar
+    # that finishes late doesn't silently resurrect a job this daemon has
+    # already given up on and reported failed.
+    if os.path.exists(request_path):
+        os.remove(request_path)
+    return 1, f"Timed out after {PGBACKREST_SIDECAR_TIMEOUT}s waiting for the privileged pgbackrest sidecar (hams-pgbackrest-backup.service) to produce a result."
 
 
 # Keys inside a job payload dict that carry live, decrypted credentials
@@ -490,35 +620,21 @@ def execute_job(ch, method, properties, body):
             if config.get("secret_key"):
                 env_vars["PGBACKREST_REPO1_S3_KEY_SECRET"] = config["secret_key"]
 
-        if not shutil.which(cmd[0]):
-            warn_msg = f"""Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here."""
-            logger.warning(warn_msg)
-            err_msg = f"""Binary {cmd[0]} not found in PATH."""
-            raise OSError(err_msg)
-
-        logger.info("Executing: %s", " ".join(shlex.quote(c) for c in cmd))
-
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=env_vars,
-            shell=False,
-        )
-
-        log_buffer = ""
-        unsent_buffer = ""
-        last_update = time.time()
-
-        while True:
-            chunk = proc.stdout.read(4096)
-            if not chunk:
-                break
-            log_buffer += chunk
-            unsent_buffer += chunk
-            # Throttle updates to Odoo to avoid overwhelming it
-            if time.time() - last_update > 2.0 and unsent_buffer:
+        if _pgbackrest_requires_sidecar(cmd):
+            # This daemon cannot run this operation itself -- see
+            # _run_pgbackrest_via_sidecar()'s own docstring. Nothing is
+            # streamed incrementally here (the sidecar captures all of its
+            # own output before this call returns), so the whole result
+            # lands in one append_log call below instead of the throttled
+            # per-chunk updates the direct-subprocess path uses.
+            logger.info(
+                "Delegating to privileged pgbackrest sidecar: %s",
+                " ".join(shlex.quote(c) for c in cmd),
+            )
+            return_code, sidecar_output = _run_pgbackrest_via_sidecar(cmd, config, job_id)
+            log_buffer = sidecar_output
+            unsent_buffer = sidecar_output
+            if unsent_buffer:
                 try:
                     _json2_call(
                         "backup.job",
@@ -527,13 +643,53 @@ def execute_job(ch, method, properties, body):
                         ids=[job_id],
                         text_chunk=unsent_buffer,
                     )
-                    unsent_buffer = ""
                 except urllib.error.URLError as e:
-                    logger.warning("Throttled log update failed: %s", e)
-                last_update = time.time()
+                    logger.warning("Sidecar log update failed: %s", e)
+        else:
+            if not shutil.which(cmd[0]):
+                warn_msg = f"""Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here."""
+                logger.warning(warn_msg)
+                err_msg = f"""Binary {cmd[0]} not found in PATH."""
+                raise OSError(err_msg)
 
-        proc.stdout.close()
-        return_code = proc.wait()
+            logger.info("Executing: %s", " ".join(shlex.quote(c) for c in cmd))
+
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env_vars,
+                shell=False,
+            )
+
+            log_buffer = ""
+            unsent_buffer = ""
+            last_update = time.time()
+
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                log_buffer += chunk
+                unsent_buffer += chunk
+                # Throttle updates to Odoo to avoid overwhelming it
+                if time.time() - last_update > 2.0 and unsent_buffer:
+                    try:
+                        _json2_call(
+                            "backup.job",
+                            "append_log",
+                            svc_uid=svc_uid,
+                            ids=[job_id],
+                            text_chunk=unsent_buffer,
+                        )
+                        unsent_buffer = ""
+                    except urllib.error.URLError as e:
+                        logger.warning("Throttled log update failed: %s", e)
+                    last_update = time.time()
+
+            proc.stdout.close()
+            return_code = proc.wait()
 
         final_state = "done" if return_code == 0 else "failed"
         log_buffer += f"\nProcess exited with code {return_code}"
