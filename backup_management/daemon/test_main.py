@@ -493,6 +493,41 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
 
     @patch("main._json2_call")
     @patch("main._run_pgbackrest_via_sidecar")
+    def test_02b_sidecar_output_is_logged_exactly_once(self, mock_sidecar, mock_json2):
+        # Advisor-caught bug, 2026-10-01: the sidecar branch used to send
+        # sidecar_output via an early append_log call, then the shared
+        # "write final state" block below unconditionally appended it to
+        # unsent_buffer and sent it again -- every sidecar backup's own
+        # output landed in the job log twice. A bare, call-count-blind mock
+        # (the shape every other test in this class already used) couldn't
+        # catch this; this test exists specifically to.
+        mock_sidecar.return_value = (0, "backup complete: full backup size = 1.2GB")
+        ch, method = self._make_ch_method()
+        payload = {
+            "job_id": 20,
+            "engine": "pgbackrest",
+            "target_path": "mystanza",
+            "config_id": 7,
+            "storage_type": "local",
+        }
+        body = backup_worker.json.dumps(payload)
+        backup_worker.execute_job(ch, method, MagicMock(), body)
+
+        append_log_calls = [
+            c for c in mock_json2.call_args_list if c.args[:2] == ("backup.job", "append_log")
+        ]
+        self.assertEqual(
+            len(append_log_calls),
+            1,
+            f"expected exactly one append_log call, got {len(append_log_calls)}: {append_log_calls}",
+        )
+        self.assertEqual(
+            append_log_calls[0].kwargs["text_chunk"].count("backup complete"),
+            1,
+        )
+
+    @patch("main._json2_call")
+    @patch("main._run_pgbackrest_via_sidecar")
     def test_03_local_storage_type_unaffected(self, mock_sidecar, mock_json2):
         # Regression guard: a plain local-storage pgbackrest job must not
         # gain any --repo1-s3-* flags, and still routes through the sidecar

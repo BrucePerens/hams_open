@@ -152,11 +152,30 @@ def _process_one(request_path):
         result = {"return_code": 1, "output": f"Sidecar error: {e}"}
 
     tmp_result_path = result_path + f".tmp-{os.getpid()}"
-    with open(tmp_result_path, "w") as f:
-        json.dump(result, f)
-    os.rename(tmp_result_path, result_path)
-    os.chmod(result_path, 0o644)  # readable back by backup_worker (odoo), which owns the spool dir
-    os.remove(request_path)  # shortens the S3/B2 secret's lifetime on disk
+    try:
+        with open(tmp_result_path, "w") as f:
+            json.dump(result, f)
+        os.rename(tmp_result_path, result_path)
+        os.chmod(result_path, 0o644)  # readable back by backup_worker (odoo), which owns the spool dir
+        os.remove(request_path)  # shortens the S3/B2 secret's lifetime on disk
+    except OSError:
+        # Advisor-caught gap, 2026-10-01: a bare, unwrapped os.remove() here
+        # meant that if writing/renaming the result itself failed (full
+        # disk, an odd permission problem), the request file would still
+        # be sitting there afterward -- still matching
+        # PathExistsGlob=request-*.json, so hams-pgbackrest-backup.path
+        # would re-trigger this service immediately, and again, and again,
+        # until systemd's StartLimitBurst trips and leaves the .path unit
+        # itself failed -- at which point no future backup request can
+        # trigger anything until a human runs `systemctl reset-failed`.
+        # Renaming the request out of the glob pattern (rather than
+        # deleting it, and rather than leaving it matching) stops that
+        # loop while keeping the evidence for whoever investigates. Never
+        # re-raises: main() must keep processing any other queued request
+        # files in this same run.
+        logger.exception("Job %s: failed to write its result or clear its request", job_id)
+        if os.path.exists(request_path):
+            os.rename(request_path, os.path.join(SPOOL_DIR, f"failed-{job_id}.json"))
 
 
 def main():

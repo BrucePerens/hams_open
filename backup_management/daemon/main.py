@@ -632,19 +632,16 @@ def execute_job(ch, method, properties, body):
                 " ".join(shlex.quote(c) for c in cmd),
             )
             return_code, sidecar_output = _run_pgbackrest_via_sidecar(cmd, config, job_id)
+            # Don't send sidecar_output here -- advisor-caught bug, 2026-10-01: the
+            # shared "Write final state and send any remaining buffer" block just
+            # below unconditionally appends it to unsent_buffer and sends it again,
+            # so an early send here would have put every sidecar backup's full
+            # output into the job log twice. The direct-Popen path's own loop
+            # clears unsent_buffer = "" after each throttled send specifically to
+            # avoid this; this branch has nothing to clear because it never sends
+            # early in the first place.
             log_buffer = sidecar_output
             unsent_buffer = sidecar_output
-            if unsent_buffer:
-                try:
-                    _json2_call(
-                        "backup.job",
-                        "append_log",
-                        svc_uid=svc_uid,
-                        ids=[job_id],
-                        text_chunk=unsent_buffer,
-                    )
-                except urllib.error.URLError as e:
-                    logger.warning("Sidecar log update failed: %s", e)
         else:
             if not shutil.which(cmd[0]):
                 warn_msg = f"""Required binary {cmd[0]} not found. JIT Binary Self-Healing should fetch it here."""
