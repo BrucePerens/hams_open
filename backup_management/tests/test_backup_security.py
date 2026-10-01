@@ -221,7 +221,13 @@ class TestBackupSecurity(RealTransactionCase):
             wizard.action_restore()
             self.env.flush_all()
 
-        # Test pgbackrest injection
+        # Test pgbackrest is refused outright. Updated 2026-10-01: this used to be a true
+        # stanza-injection test (the old per-stanza isalnum() check caught "main; rm -rf /"
+        # specifically) -- action_restore() now raises for EVERY pgbackrest restore before even
+        # reaching that check (see test_batch_2.py's own test_restore_wizard_validation, which
+        # proves a well-formed stanza name is refused too). Kept as-is rather than deleted: an
+        # injection-shaped restore_target_path must still be refused, which it still is, just
+        # for a more complete reason now.
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "zero_sudo.odoo_facility_service_internal"
         )

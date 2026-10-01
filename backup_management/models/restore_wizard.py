@@ -20,6 +20,10 @@ class BackupRestoreWizard(models.TransientModel):
         required=True,
         help="Path where the backup should be restored, or stanza to target.",
     )
+    # [@ANCHOR: backup_management:restore_wizard_engine]
+    # Exposed purely so the view can show a real, loud warning for the pgbackrest case below --
+    # see action_restore()'s own matching check for why pgbackrest restores are refused here.
+    engine = fields.Selection(related="snapshot_id.config_id.engine", string="Backup Engine", readonly=True)
 
     def action_restore(self):
         self.ensure_one()
@@ -31,15 +35,37 @@ class BackupRestoreWizard(models.TransientModel):
                 _("Only Backup Administrators can trigger restore operations.")
             )
 
+        # [@ANCHOR: backup_management:restore_wizard_refuses_pgbackrest]
+        # Fail-fast fix, found live 2026-10-01 while manually verifying a real pgBackRest
+        # restore: this wizard's own pgbackrest path was never actually wired through
+        # daemon/main.py's privileged sidecar (_PGBACKREST_PRIVILEGED_OPS only ever listed
+        # "backup", never "restore") -- clicking "Restore" here queues a job that the ordinary,
+        # sandboxed backup_worker.service then tries to run directly, with no permission to
+        # write PostgreSQL's real data directory and no forced-safe restore-target override.
+        # The real fix (routing restore through a hardened sidecar extension, the restore
+        # target always forced to a safe scratch location, never caller-supplied) is a real
+        # security-sensitive privilege-boundary decision, not something to default into here --
+        # see this codebase's own fail-fast philosophy: refuse loudly now, rather than let an
+        # operator discover mid-incident that the one button they reached for silently cannot
+        # do what it says. A real restore is still possible via a manually-run, carefully-scoped
+        # pgbackrest invocation against a dedicated scratch directory -- consult your own
+        # deployment's disaster-recovery runbook for the exact, already-verified procedure.
+        if self.snapshot_id.config_id.engine == "pgbackrest":
+            raise UserError(
+                _(
+                    "Restoring a pgBackRest snapshot through this wizard is not yet safe: the "
+                    "restore path is never routed through the privileged sidecar that can "
+                    "actually write PostgreSQL's real data directory, and has no forced-safe "
+                    "restore destination of its own. This has been disabled here rather than "
+                    "left to fail silently or, worse, attempt to write somewhere unintended. "
+                    "A real restore is still possible via a manually-run pgbackrest command "
+                    "against a dedicated scratch directory -- consult your own deployment's "
+                    "disaster-recovery runbook for the verified procedure."
+                )
+            )
+
         if self.snapshot_id.config_id.engine == "kopia":
             validate_backup_path(self.restore_target_path)
-
-        # Additional safety check for pgbackrest stanza
-        if self.snapshot_id.config_id.engine == "pgbackrest":
-            if not self.restore_target_path:
-                raise UserError(_("Restore target stanza is required."))
-            if not self.restore_target_path.replace("_", "").isalnum():
-                raise UserError(_("Invalid pgBackRest stanza name. Use only alphanumeric characters and underscores."))
 
         # Use Service ID for security & audit trails
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -132,6 +158,12 @@ class BackupRestoreWizard(models.TransientModel):
                 }
             )
         elif self.snapshot_id.config_id.engine == "pgbackrest":
+            # Currently unreachable: action_restore()'s own early check above now raises for
+            # every pgbackrest engine before this point. Left in place, not deleted, as the
+            # real starting point for whoever builds the hardened-sidecar fix this to-do's own
+            # "What to build" section describes -- the stanza-derivation logic below is still
+            # correct and still the right approach once restore is actually routed through a
+            # privileged sidecar that can use it safely.
             # Bug-hunt fix (2026-09-09, tier-1 pass): the stanza that gets
             # restored (and therefore which tenant's live PostgreSQL data
             # directory pgbackrest.conf points that stanza at) used to come

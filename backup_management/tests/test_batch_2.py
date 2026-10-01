@@ -90,6 +90,16 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertEqual(snap.name, "snap_false")
 
     def test_restore_wizard_validation(self):
+        # Tests [@ANCHOR: backup_management:restore_wizard_refuses_pgbackrest]
+        # Updated 2026-10-01: a pgbackrest restore through this wizard now ALWAYS raises
+        # UserError, regardless of how well-formed restore_target_path is -- see
+        # action_restore()'s own matching comment for why (the restore path is never actually
+        # routed through the privileged sidecar that can write PostgreSQL's real data
+        # directory). This test used to prove an invalid stanza name was refused but a valid
+        # one succeeded; now it proves EVERY pgbackrest restore attempt is refused, which is
+        # the whole point of this fix -- a well-formed stanza name is no longer enough to reach
+        # the (now-unreachable) cmd_args construction this file's own `elif` branch still
+        # documents as a blueprint for the real, future sidecar-routed fix.
         snap = self.env["backup.snapshot"].create({
             "config_id": self.config_pg.id,
             "snapshot_id": "snap_test",
@@ -100,12 +110,10 @@ class TestBatch2Fixes(HamsTransactionCase):
         })
         with self.assertRaises(UserError):
             wizard.action_restore()
-        
+
         wizard.restore_target_path = "valid_stanza_123"
-        # Since we use safe_patch we need to patch publish_to_rabbitmq so it doesn't try to connect
-        with self.safe_patch("odoo.addons.backup_management.models.restore_wizard.publish_to_rabbitmq"):
-            res = wizard.action_restore()
-            self.assertIsInstance(res, dict)
+        with self.assertRaises(UserError):
+            wizard.action_restore()
 
     def test_payload_publisher_variables(self):
         # [!] safe_patch() already calls patcher.start() and registers
