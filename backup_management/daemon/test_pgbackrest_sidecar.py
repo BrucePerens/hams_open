@@ -205,6 +205,26 @@ class TestProcessOne(unittest.TestCase):
         mode = os.stat(result_path).st_mode & 0o777
         self.assertEqual(mode, 0o644)
 
+    @patch("pgbackrest_sidecar.os.chmod")
+    @patch("pgbackrest_sidecar.subprocess.run")
+    def test_a_failure_writing_the_result_renames_the_request_instead_of_looping(
+        self, mock_run, mock_chmod
+    ):
+        # Advisor-caught gap, 2026-10-01: if writing/finishing the result
+        # file fails for any reason, the request file must stop matching
+        # PathExistsGlob=request-*.json -- otherwise hams-pgbackrest-backup.path
+        # re-triggers this same request immediately, forever, until
+        # systemd's StartLimitBurst trips and fails the .path unit itself.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok")
+        mock_chmod.side_effect = OSError("disk full")
+        request_path = self._write_request("6", ["pgbackrest", "backup", "--stanza=hams_prod"])
+
+        sidecar._process_one(request_path)  # must not raise
+
+        self.assertFalse(os.path.exists(request_path))
+        failed_path = os.path.join(self._tmpdir, "failed-6.json")
+        self.assertTrue(os.path.exists(failed_path))
+
 
 # [@ANCHOR: backup_management:COMM_test_pgbackrest_sidecar_main]
 class TestMainProcessesEveryPendingRequest(unittest.TestCase):
