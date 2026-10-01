@@ -259,10 +259,16 @@ def _pgbackrest_requires_sidecar(cmd):
 
 # [@ANCHOR: backup_management:COMM_pgbackrest_privileged_sidecar]
 # Verified by [@ANCHOR: backup_management:COMM_test_run_pgbackrest_via_sidecar]
-def _run_pgbackrest_via_sidecar(cmd, config, job_id):
+def _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=None):
     """
     Runs a privileged pgbackrest operation (currently just "backup") without
     this daemon ever holding postgres/root filesystem access itself.
+
+    `channel` (the real pika `BlockingChannel` `execute_job()` is consuming
+    on) is optional only for this function's own unit tests, which have no
+    real RabbitMQ connection to service -- `execute_job()`'s own real call
+    site always passes it. See the polling loop below for why a real
+    channel is load-bearing, not cosmetic.
 
     backup.worker.service runs as `odoo` with NoNewPrivileges=true and
     ProtectSystem=strict (MASTER_01 ADR section 6, "OS-Level Daemon
@@ -291,6 +297,28 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id):
     branch already takes), runs it, writes a result JSON back into the same
     directory, and deletes the request (shortening the secret's lifetime on
     disk). This function polls for that result.
+
+    **Real production bug found and fixed, 2026-10-01**: a real backup
+    (several minutes of wall-clock time) was completing successfully in the
+    sidecar every single time, but `execute_job()`'s own RabbitMQ connection
+    kept dying with `pika.exceptions.StreamLostError` moments after each
+    completion -- the worker never got to report success back to Odoo, so
+    the job was reprocessed from scratch on reconnect, over and over,
+    producing a real, successful, duplicate full backup upload roughly
+    every 14-15 minutes forever, with `backup.snapshot` staying empty the
+    whole time. Root cause, confirmed directly: the polling loop below used
+    to be a bare `time.sleep(PGBACKREST_SIDECAR_POLL_INTERVAL)`, which never
+    calls back into pika at all -- `BlockingConnection`'s own heartbeat
+    processing happens only between `on_message_callback` invocations, not
+    during one, so a callback that blocks for minutes (this one, waiting on
+    a multi-minute backup) starves the connection's heartbeat and the
+    broker eventually resets it. `channel.connection.process_data_events()`
+    is pika's own documented mechanism for exactly this ("if your
+    application maintains a long-lived connection, this method should be
+    called periodically in order to respond to heartbeats") -- used below
+    in place of a bare sleep, so the connection stays alive for the whole
+    wait, `execute_job()`'s own eventual `basic_ack()` succeeds normally,
+    and the job is never reprocessed after a success it already achieved.
 
     Tested by [@ANCHOR: backup_management:COMM_test_pgbackrest_sidecar]
     """
@@ -345,7 +373,13 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id):
             if os.path.exists(request_path):
                 os.remove(request_path)
             return result.get("return_code", 1), result.get("output", "")
-        time.sleep(PGBACKREST_SIDECAR_POLL_INTERVAL)
+        if channel is not None:
+            # Services the RabbitMQ connection's own heartbeat while we
+            # wait (see this function's own docstring) -- also acts as the
+            # wait itself, same shape as time.sleep() below.
+            channel.connection.process_data_events(time_limit=PGBACKREST_SIDECAR_POLL_INTERVAL)
+        else:
+            time.sleep(PGBACKREST_SIDECAR_POLL_INTERVAL)
 
     # Timed out waiting for the sidecar. Remove our own request so a sidecar
     # that finishes late doesn't silently resurrect a job this daemon has
@@ -631,7 +665,7 @@ def execute_job(ch, method, properties, body):
                 "Delegating to privileged pgbackrest sidecar: %s",
                 " ".join(shlex.quote(c) for c in cmd),
             )
-            return_code, sidecar_output = _run_pgbackrest_via_sidecar(cmd, config, job_id)
+            return_code, sidecar_output = _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=ch)
             # Don't send sidecar_output here -- advisor-caught bug, 2026-10-01: the
             # shared "Write final state and send any remaining buffer" block just
             # below unconditionally appends it to unsent_buffer and sends it again,

@@ -193,9 +193,21 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
             self.addCleanup(p.stop)
 
     def _write_result(self, job_id, return_code, output):
+        # Write-then-rename, matching the real sidecar's own atomic-write
+        # convention for request_path -- a plain in-place write left a real
+        # race in this test helper: _run_pgbackrest_via_sidecar's polling
+        # loop can observe result_path existing (os.path.exists) the
+        # instant this thread creates it, before the json.dump() below has
+        # written any bytes, and read back an empty/partial file. Harmless
+        # with a real time.sleep() between polls (slow enough the write
+        # always finishes first in practice) but reliably reproducible once
+        # a mocked channel.connection.process_data_events() makes the real
+        # polling loop spin far faster than any real wait ever would.
         result_path = os.path.join(self._tmpdir, f"result-{job_id}.json")
-        with open(result_path, "w") as f:
+        tmp_path = result_path + f".tmp-{os.getpid()}-{threading.get_ident()}"
+        with open(tmp_path, "w") as f:
             json.dump({"return_code": return_code, "output": output}, f)
+        os.rename(tmp_path, result_path)
 
     def _wait_for_file(self, path):
         # Poll briefly for a file the way the real .path unit's own trigger
@@ -262,6 +274,47 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
         self.assertEqual(return_code, 1)
         self.assertIn("Timed out", output)
         self.assertEqual(os.listdir(self._tmpdir), [])
+
+    def test_a_real_channel_is_serviced_during_the_wait_not_just_slept_through(self):
+        # Tests [@ANCHOR: backup_management:COMM_pgbackrest_privileged_sidecar]
+        # Real production bug, 2026-10-01: a bare time.sleep() here never let pika
+        # process heartbeats during a multi-minute wait, so RabbitMQ reset the
+        # connection and the worker reprocessed an already-succeeded job forever
+        # (see this function's own docstring). This proves the fix: when a real
+        # channel is passed, the wait goes through channel.connection.
+        # process_data_events() instead of a bare sleep.
+        def fake_sidecar():
+            self._wait_for_file(os.path.join(self._tmpdir, "request-103.json"))
+            time.sleep(0.03)  # force at least one real poll iteration
+            self._write_result(103, 0, "backup complete")
+
+        threading.Thread(target=fake_sidecar, daemon=True).start()
+
+        mock_channel = MagicMock()
+        cmd = ["pgbackrest", "backup", "--stanza=hams_prod"]
+        return_code, output = backup_worker._run_pgbackrest_via_sidecar(
+            cmd, {}, 103, channel=mock_channel
+        )
+
+        self.assertEqual(return_code, 0)
+        self.assertIn("backup complete", output)
+        self.assertTrue(mock_channel.connection.process_data_events.called)
+        # Never a bare sleep when a real channel is available -- the heartbeat
+        # would starve again if this regressed back to time.sleep().
+        for call in mock_channel.connection.process_data_events.call_args_list:
+            self.assertEqual(call.kwargs.get("time_limit"), backup_worker.PGBACKREST_SIDECAR_POLL_INTERVAL)
+
+    @patch("main.time.sleep")
+    def test_no_channel_falls_back_to_a_plain_sleep_not_a_crash(self, mock_sleep):
+        # The earlier tests above all call with no channel (the default) and
+        # already prove that path works end to end -- this test makes the
+        # fallback itself explicit and pins it against a future regression
+        # that silently makes channel required.
+        cmd = ["pgbackrest", "backup", "--stanza=hams_prod"]
+        return_code, output = backup_worker._run_pgbackrest_via_sidecar(cmd, {}, 104)
+        self.assertEqual(return_code, 1)  # no result file ever written -- times out
+        self.assertIn("Timed out", output)
+        mock_sleep.assert_called_with(backup_worker.PGBACKREST_SIDECAR_POLL_INTERVAL)
 
 
 # [@ANCHOR: backup_management:COMM_test_ensure_kopia_s3_repository]
@@ -490,6 +543,11 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         self.assertEqual(job_id, 2)
         self.assertEqual(config["access_key"], "b2keyid")
         self.assertEqual(config["secret_key"], "b2applicationkey")
+        # The real channel must reach the sidecar call -- see this function's
+        # own 2026-10-01 fix: without it, the polling wait falls back to a
+        # bare time.sleep() that starves the RabbitMQ heartbeat during a
+        # real, multi-minute backup.
+        self.assertIs(mock_sidecar.call_args.kwargs.get("channel"), ch)
 
     @patch("main._json2_call")
     @patch("main._run_pgbackrest_via_sidecar")
