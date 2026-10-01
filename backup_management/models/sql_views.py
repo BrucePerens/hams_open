@@ -47,13 +47,23 @@ class BackupLatestSnapshotView(models.Model):
             BEGIN
                 RETURN QUERY
                 INSERT INTO backup_snapshot (
-                    config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status,
-                    create_uid, create_date, write_uid, write_date
+                    config_id, website_id, company_id, name, snapshot_id, start_time, size_bytes,
+                    status, create_uid, create_date, write_uid, write_date
                 )
                 SELECT
                     p_config_id,
                     p_website_id,
                     p_company_id,
+                    -- Real bug found live, 2026-10-01: this bulk-insert procedure never set
+                    -- `name` at all, so every row this procedure ever wrote read back `name:
+                    -- False`/`display_name: False` in the UI and in any ORM read -- the
+                    -- model's own `name` field has a Python-level `default=` callable
+                    -- (backup_snapshot.py), but that's an ORM-create()-time mechanism this raw
+                    -- SQL INSERT never goes through. snapshot_id is already the real, unique,
+                    -- human-meaningful identifier (pgbackrest's own backup label, or kopia's
+                    -- own snapshot id) -- reusing it as name needs no new input and matches
+                    -- restore_command's own established convention of keying off snapshot_id.
+                    s->>'snapshot_id',
                     s->>'snapshot_id',
                     (s->>'start_time')::timestamp,
                     (s->>'size_bytes')::float,

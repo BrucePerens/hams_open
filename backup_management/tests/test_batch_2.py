@@ -67,6 +67,11 @@ class TestBatch2Fixes(HamsTransactionCase):
 
         snap = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_empty")])
         self.assertEqual(len(snap), 1)
+        # Real bug found live, 2026-10-01: upsert_backup_snapshots()'s own raw SQL INSERT
+        # never set `name` at all (it's a Python-level default= on the model, which a direct
+        # SQL insert never goes through) -- every snapshot this procedure ever wrote read
+        # back name/display_name as False. Fixed to reuse snapshot_id as name.
+        self.assertEqual(snap.name, "snap_empty")
 
     def test_upsert_crash_false(self):
         data_pg = [{
@@ -82,6 +87,7 @@ class TestBatch2Fixes(HamsTransactionCase):
 
         snap = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_false")])
         self.assertEqual(len(snap), 1)
+        self.assertEqual(snap.name, "snap_false")
 
     def test_restore_wizard_validation(self):
         snap = self.env["backup.snapshot"].create({
