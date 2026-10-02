@@ -40,6 +40,63 @@ from odoo import fields
 
 _test_callsign_counter = itertools.count(1)
 
+# night_shift_todo/low/flaky-httpcase-shared-callsign-counter-9e4c7a2b.md
+# investigated 2026-10-02 (hams_com night-shift session) whether this
+# single, monotonic, process-wide counter can hand out the SAME callsign
+# twice within one `test.py` run, via a hypothesized mechanism: an
+# HamsHttpCase test's real HTTP writes supposedly "commit for real" and
+# survive into a later test, which then collides with a separately-
+# memoized `get_callsign()` value landing on the same counter integer.
+# Investigated and ruled out, not fixed -- both halves of the hypothesis
+# are structurally impossible as this code is actually written and as
+# Odoo 19 (19.0.20260927, the version installed here) actually behaves:
+#   1. `itertools.count` is strictly monotonic and never resets within a
+#      process. `test.py`'s default "standard" mode runs every requested
+#      module's tests inside ONE Odoo process (confirmed via `ps aux`
+#      against a live run), so every FRESH call to
+#      next(_test_callsign_counter) -- from any test class, any key --
+#      returns a value no other fresh call can ever repeat. The only way
+#      to get the same string twice is a cache hit on the SAME (class,
+#      key) pair in get_callsign() below, which is the intended,
+#      deliberate behavior (give one test class's methods a stable,
+#      reusable callsign), not a collision.
+#   2. Even if an HamsHttpCase test's real_transaction were to "survive,"
+#      that surviving row still carries whichever single integer the
+#      counter already issued it -- per point 1, no other call can ever
+#      draw that same integer again. But the premise itself is false in
+#      this Odoo version anyway: HttpCase.setUpClass() calls
+#      registry_enter_test_mode_cls(), which monkeypatches
+#      `Registry.cursor` for the whole class so EVERY cursor obtained
+#      during the test (including one opened from inside a live HTTP
+#      request the test drives via url_open()/start_tour()) is a
+#      TestCursor wrapping the class's own savepoint-based transaction,
+#      not a second, independently-committing connection (confirmed by
+#      reading /usr/lib/python3/dist-packages/odoo/tests/common.py and
+#      odoo/sql_db.py's TestCursor directly). TestCursor.commit() only
+#      releases a savepoint; nothing here reaches a real COMMIT, and the
+#      whole thing rolls back together when the test (or class) tears
+#      down. This matches an unrelated, independently-recorded finding
+#      in this same codebase (night_shift_history.md, 2026-09-23: "a
+#      TransactionCase/HttpCase test's transaction begins as superuser
+#      too... HamsHttpCase's TestCursor silently never runs postcommit
+#      callbacks"). The one case that DOES use a real, separately-
+#      committing cursor is RealTransactionCase
+#      (zero_sudo/tests/real_transaction.py), and it comes with its own
+#      ORM-create tracking and leak-detection teardown specifically to
+#      stop exactly this kind of survival -- and even a real leak there
+#      still can't produce a repeated VALUE, by point 1.
+# A genuinely more plausible mechanism for the original 2026-08-31
+# UniqueViolation this to-do traces back to would be two actual, separate
+# OS processes (not two test CLASSES) racing against the shared
+# `hams_test` database, each with its OWN fresh counter starting at 1 --
+# e.g. if the systemwide test-runner lock (`/tmp/hams_odoo_test_runner.
+# lock`) were ever bypassed or raced. That is a lock/concurrency question,
+# not a scoping question about this counter or get_callsign()'s per-class
+# memoization, and was not independently confirmed either -- flagged here
+# only so a future session doesn't waste time re-deriving this analysis
+# from scratch, not as a new open item.
+
+
 # [@ANCHOR: zero_sudo:generate_test_callsign]
 def generate_test_callsign(prefix="T"):
     """
