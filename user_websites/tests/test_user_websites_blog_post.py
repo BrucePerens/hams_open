@@ -180,15 +180,18 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
             self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)]),
             before_count + 1,
         )
-        # Odoo's own website routing canonicalizes /blog/<id>/post/<id> (what the controller's
-        # own request.redirect() target literally is) to the SEO-slugified form
-        # (/blog/<blog-name>-<blog_id>/<post-name>-<post_id>) before this test's url_open() ever
-        # sees the final response -- assert on the part that survives that canonicalization
-        # (the real post's own id as a URL segment suffix) rather than the exact literal path.
+        # night_shift_todo/high/personal-blog-owner-cannot-actually-edit-or-publish-their-own-
+        # new-post-0c44e7eb.md: this redirect used to go straight into website_blog's own
+        # generic post-view route, relying on a generic website-builder editor toolbar that
+        # never actually renders for this module's real target user (see
+        # blog_post_edit()'s own comment, controllers/main.py). It now redirects into this
+        # module's own dedicated, ownership-scoped edit form instead, so the owner lands
+        # somewhere they can actually title, write and publish the post they just created.
         self.assertTrue(
-            response.url.rstrip("/").endswith(f"-{new_posts.id}"),
-            f"Expected the final URL to resolve to post {new_posts.id}, got: {response.url}",
+            response.url.rstrip("/").endswith(f"/blog_post/edit/{new_posts.id}"),
+            f"Expected the final URL to resolve to the new post's own edit form, got: {response.url}",
         )
+        self.assertIn(b"Edit Blog Post", response.content)
 
     def test_06_non_owner_cannot_create_blog_post_on_someone_elses_slug(self):
         # Tests [@ANCHOR: user_websites:COMM_create_blog_post]
@@ -209,3 +212,194 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
             before_count,
             "User B must not be able to create a post in User A's blog via User A's own slug.",
         )
+
+    def test_07_owner_can_edit_own_blog_post(self):
+        # [@ANCHOR: test_owner_can_edit_own_blog_post]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
+
+        # Tests [@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM]
+        """The actual fix for night_shift_todo/high/
+        personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md: a
+        real, dedicated edit form the owner can reach without the generic website-builder
+        editor toolbar (which never renders for this persona -- see the parent to-do)."""
+        self.authenticate(self.user_a.login, self.user_a.login)
+
+        get_response = self.url_open(f"/blog_post/edit/{self.post_a.id}")
+        self.assertEqual(get_response.status_code, 200)
+        self.assertIn(b"User A Post", get_response.content)
+
+        post_response = self.url_open(
+            f"/blog_post/edit/submit/{self.post_a.id}",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "name": "User A Post, Retitled",
+                "content": "<p>Real body content the owner just wrote.</p>",
+                "is_published": "on",
+            },
+            method="POST",
+        )
+        self.assertEqual(post_response.status_code, 200)
+
+        self.post_a.invalidate_recordset()
+        self.assertEqual(self.post_a.name, "User A Post, Retitled")
+        self.assertIn("Real body content", self.post_a.content or "")
+        self.assertTrue(self.post_a.is_published)
+        self.assertTrue(
+            post_response.url.rstrip("/").endswith(f"-{self.post_a.id}"),
+            f"Expected the final URL to land on the published post itself, got: {post_response.url}",
+        )
+
+    def test_08_non_owner_cannot_edit_someone_elses_blog_post(self):
+        # [@ANCHOR: test_blog_post_edit_denied_for_non_owner]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
+
+        # Tests [@ANCHOR: user_websites:COMM_get_own_blog_post_for_edit]
+        self.authenticate(self.user_b.login, self.user_b.login)
+        original_name = self.post_a.name
+
+        get_response = self.url_open(f"/blog_post/edit/{self.post_a.id}")
+        self.assertEqual(get_response.status_code, 200)
+        self.assertNotIn(b"blog_post_edit_form", get_response.content)
+
+        self.url_open(
+            f"/blog_post/edit/submit/{self.post_a.id}",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "name": "Hijacked Title",
+                "content": "hijacked",
+                "is_published": "on",
+            },
+            method="POST",
+        )
+
+        self.post_a.invalidate_recordset()
+        self.assertEqual(
+            self.post_a.name,
+            original_name,
+            "User B must not be able to edit User A's blog post.",
+        )
+
+    def test_09_group_member_can_edit_group_owned_blog_post(self):
+        # [@ANCHOR: test_blog_post_edit_denied_for_non_member]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
+
+        # Tests [@ANCHOR: user_websites:COMM_get_own_blog_post_for_edit]
+        """A group blog post's edit access follows group membership, not just owner_user_id --
+        the same two facts blog_post.py's own check_access() already enforces for write()."""
+        unique_id = str(uuid.uuid4())[:8]
+        website = self.env["website"].get_current_website() or self.env["website"].search(
+            [], limit=1
+        )
+        group = self.env["user.websites.group"].create(
+            {"name": f"Edit Test Group {unique_id}", "website_slug": f"edit-grp-{unique_id}"}
+        )
+        member = self.env["res.users"].create(
+            {
+                "name": f"Group Member {unique_id}",
+                "login": f"groupmember_{unique_id}",
+                "password": "groupmember",
+                "email": f"groupmember_{unique_id}@example.com",
+                "website_slug": f"groupmember_{unique_id}",
+                "group_ids": [
+                    (
+                        6,
+                        0,
+                        [
+                            self.env.ref("base.group_portal").id,
+                            self.env.ref("user_websites.group_user_websites_user").id,
+                        ],
+                    )
+                ],
+            }
+        )
+        group.write({"member_ids": [(4, member.id)]})
+        group_blog = self.env["blog.blog"].create(
+            {
+                "name": f"{group.name}'s Blog",
+                "website_id": website.id,
+                "user_websites_group_id": group.id,
+            }
+        )
+        group_post = self.env["blog.post"].create(
+            {
+                "name": "Group Post",
+                "blog_id": group_blog.id,
+                "website_id": website.id,
+                "user_websites_group_id": group.id,
+                "author_id": member.partner_id.id,
+            }
+        )
+
+        self.authenticate(member.login, "groupmember")
+        get_response = self.url_open(f"/blog_post/edit/{group_post.id}")
+        self.assertEqual(get_response.status_code, 200)
+        self.assertIn(b"Group Post", get_response.content)
+
+        self.url_open(
+            f"/blog_post/edit/submit/{group_post.id}",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "name": "Group Post, Edited By Member",
+                "content": "member-written body",
+                "is_published": "on",
+            },
+            method="POST",
+        )
+        group_post.invalidate_recordset()
+        self.assertEqual(group_post.name, "Group Post, Edited By Member")
+        self.assertTrue(group_post.is_published)
+
+        # A non-member must not be able to reach it.
+        self.authenticate(self.user_b.login, self.user_b.login)
+        self.url_open(
+            f"/blog_post/edit/submit/{group_post.id}",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "name": "Non-Member Hijack",
+                "content": "hijacked",
+                "is_published": "on",
+            },
+            method="POST",
+        )
+        group_post.invalidate_recordset()
+        self.assertEqual(
+            group_post.name,
+            "Group Post, Edited By Member",
+            "A non-member of the owning group must not be able to edit its post.",
+        )
+
+    def test_10_blog_post_edit_submit_sanitizes_content(self):
+        # [@ANCHOR: test_blog_post_edit_submit_sanitizes_content]
+
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
+        """blog.post's own "content" field is sanitize=False (stock website_blog, kept that
+        way so the generic website-builder snippet editor can write rich markup) -- a raw
+        <script> submitted through this route's plain <textarea> must still never reach a
+        published post's own content unsanitized, or it would be real, persistent stored XSS
+        against every visitor of this post, not just the owner who wrote it."""
+        self.authenticate(self.user_a.login, self.user_a.login)
+
+        self.url_open(
+            f"/blog_post/edit/submit/{self.post_a.id}",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "name": "User A Post",
+                "content": "<p>Safe text</p><script>alert('xss')</script>",
+                "is_published": "on",
+            },
+            method="POST",
+        )
+
+        self.post_a.invalidate_recordset()
+        self.assertIn("Safe text", self.post_a.content or "")
+        self.assertNotIn("<script", self.post_a.content or "")
+        self.assertNotIn("alert(", self.post_a.content or "")

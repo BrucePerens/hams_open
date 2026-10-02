@@ -21,6 +21,27 @@ As a **Community Member**, I want to create and manage my own personal website a
 
 - **And** my followers will receive a weekly digest of my new content ([@ANCHOR: send_weekly_digest]). Verified by `[@ANCHOR: test_weekly_digest_mail_template]`.
 
+### Editing and Publishing a Blog Post
+- **Given** I just created a new blog post, or want to revise an existing one of my own (or one
+  owned by a group website I belong to)
+- **When** I open its dedicated edit form ([@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM],
+  routed by [@ANCHOR: user_websites:COMM_blog_post_edit])
+- **Then** I see my post's current title and body, pre-filled, and a checkbox for whether it is
+  published
+- **When** I change the title and/or body and save ([@ANCHOR: user_websites:COMM_blog_post_edit_submit])
+- **Then** my post is updated and I am redirected to its live page. Verified by
+  `[@ANCHOR: test_owner_can_edit_own_blog_post]`.
+- **And** if I am not the post's owner (or a member of the group that owns it), I am redirected
+  away instead of seeing or changing its content
+  ([@ANCHOR: user_websites:COMM_get_own_blog_post_for_edit]). Verified by
+  `[@ANCHOR: test_blog_post_edit_denied_for_non_owner]` and
+  `[@ANCHOR: test_blog_post_edit_denied_for_non_member]`.
+- This exists because the generic website-builder "Edit" toolbar is gated on
+  `website.group_website_designer`, a global, sitewide website-editing permission a personal-site
+  owner does not and structurally cannot hold -- granting it would let any owner edit any website
+  content sitewide, not just their own post. This dedicated form gives the owner a real way to
+  title, write, and publish their own post without that sitewide permission change.
+
 ### Managing Content Quotas
 - **Given** the administrator has set a global page limit
 - **When** I attempt to create more pages than allowed

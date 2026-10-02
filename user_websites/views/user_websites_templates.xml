@@ -272,7 +272,18 @@
                             <div class="card-body">
                                 <h3 class="card-title fw-bold" t-out="post.name"/>
                                 <p class="text-muted" t-if="post.subtitle" t-out="post.subtitle"/>
+                                <span t-if="is_owner and not post.is_published" class="badge bg-warning text-dark ms-1">Draft</span>
                                 <a t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}" class="btn btn-outline-primary mt-2">Read Post</a>
+                                <!-- Real gap found live 2026-10-01 (night_shift_todo/high/
+                                     personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md):
+                                     the generic website-builder "Edit" toolbar never renders for this
+                                     module's real target user (it's gated on website.group_website_designer,
+                                     a global permission personal-site owners don't and structurally
+                                     can't hold), so blog_post_edit() is this module's own, ownership-scoped
+                                     replacement. -->
+                                <a t-if="is_owner" t-attf-href="/blog_post/edit/#{post.id}" class="btn btn-outline-secondary mt-2 ms-1">
+                                    <i class="fa fa-pencil me-1" aria-hidden="true"/>Edit
+                                </a>
                             </div>
                         </div>
                     </t>
@@ -282,6 +293,41 @@
                 </div>
             </div>
             <div id="user_websites_dropzone_blog_footer"></div>
+        </t>
+    </template>
+
+    <template id="blog_post_edit_form" name="Edit Blog Post">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_can_edit_own_blog_post] -->
+
+        <!-- [@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM] -->
+        <t t-call="website.layout">
+            <div class="container mt-4 mb-5">
+                <h2>Edit Blog Post</h2>
+                <div class="card shadow-sm mt-3">
+                    <div class="card-body">
+                        <t t-if="request.params.get('error') == 'missing_fields'">
+                            <div class="alert alert-danger">Please provide a title before saving.</div>
+                        </t>
+                        <form t-attf-action="/blog_post/edit/submit/#{post.id}" method="post" id="blog_post_edit_form">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <div class="mb-3">
+                                <label for="name" class="form-label fw-bold">Title</label>
+                                <input type="text" class="form-control" id="name" name="name" required="1" t-att-value="post.name"/>
+                            </div>
+                            <div class="mb-4">
+                                <label for="content" class="form-label fw-bold">Body</label>
+                                <textarea class="form-control" id="content" name="content" rows="10"><t t-out="post.content"/></textarea>
+                            </div>
+                            <div class="form-check mb-4">
+                                <input type="checkbox" class="form-check-input" id="is_published" name="is_published" t-att-checked="'checked' if post.is_published else None"/>
+                                <label for="is_published" class="form-check-label fw-bold">Published (visible to the public)</label>
+                            </div>
+                            <button type="submit" class="btn btn-success">Save</button>
+                            <a t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}" class="btn btn-outline-secondary ms-2">Cancel</a>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </t>
     </template>
 
