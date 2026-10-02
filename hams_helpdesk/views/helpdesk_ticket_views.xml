@@ -130,6 +130,20 @@
         <field name="view_mode">list,form</field>
     </record>
 
+    <!-- Dedicated review queue for the "spam" stage above: without this,
+         a human reviewing for false positives would have to know to filter
+         the main Tickets list manually. Still just the same model/views,
+         scoped by domain only; nothing about this action makes a
+         quarantined ticket harder to recover. -->
+    <record id="action_hams_helpdesk_ticket_spam_review" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <field name="name">Spam / Phishing Review Queue</field>
+        <field name="res_model">hams_helpdesk.ticket</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('stage', '=', 'spam')]</field>
+    </record>
+
     <menuitem id="menu_hams_helpdesk_root" name="Helpdesk" sequence="50"/>
     <menuitem id="menu_hams_helpdesk_tickets" name="Tickets" parent="menu_hams_helpdesk_root" action="action_hams_helpdesk_ticket" sequence="10"/>
+    <menuitem id="menu_hams_helpdesk_tickets_spam_review" name="Spam / Phishing Review" parent="menu_hams_helpdesk_root" action="action_hams_helpdesk_ticket_spam_review" sequence="20"/>
 </odoo>

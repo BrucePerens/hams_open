@@ -135,6 +135,22 @@ class HelpdeskTicket(models.Model):
             ("in_progress", "In Progress"),
             ("resolved", "Resolved"),
             ("closed", "Closed"),
+            # Added per night_shift_todo/high/inbound-mail-ticket-ingestion-
+            # has-no-spam-phishing-filter-e3a8f612.md and Bruce's own answer
+            # in night_shift_questions/answered/inbound-spam-filter-location-
+            # and-signal-e14a6f8b.md: a message pager_duty's mail-ingestion
+            # filter (pager_duty/models/inbound_spam_filter.py, applied in
+            # incident_ticket_adapter.py's action_generate_helpdesk_ticket())
+            # flags as likely spam/phishing is routed here instead of "new".
+            # Placed last, not between "new" and "in_progress", so the
+            # statusbar doesn't suggest it's a normal step in the ordinary
+            # New -> In Progress -> Resolved -> Closed workflow -- it is a
+            # side lane, not a stage a real ticket is expected to pass
+            # through. Never deleted, never hidden from this model's own
+            # list/kanban views, so a human can still review it and move it
+            # back to "new" (a plain, reversible stage change) to recover a
+            # false positive.
+            ("spam", "Spam / Phishing (Quarantined)"),
         ],
         string="Stage",
         default="new",

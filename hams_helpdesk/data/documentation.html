@@ -14,6 +14,7 @@
 
     <h2 id="ticket_lifecycle" data-trace="[@ANCHOR: hams_helpdesk:ticket_lifecycle]">Ticket Lifecycle</h2>
     <p>Tickets progress through stages: <strong>New</strong>, <strong>In Progress</strong>, <strong>Resolved</strong>, and <strong>Closed</strong>. Transitioning a ticket automatically notifies the reporting customer.</p>
+    <p>A fifth stage, <strong>Spam / Phishing (Quarantined)</strong>, is used only for tickets the PagerDuty mail-ingestion adapter's own automated filter flagged as likely unsolicited commercial email or phishing when the inbound message first arrived. A quarantined ticket is never deleted or hidden -- it still appears in the ordinary Tickets list and in a dedicated "Spam / Phishing Review" menu, with the filter's own reasons recorded in both the ticket description and the linked PagerDuty incident's chatter, so a human can confirm the flag or move the ticket back to "New" if it was a real customer inquiry. Unlike the other stages, entering this one at creation time does not send the customer-notification email, since a flagged sender is, by design, not assumed to be a legitimate customer yet.</p>
 
     <h2 id="formal_shift_handoff" data-trace="[@ANCHOR: hams_helpdesk:formal_shift_handoff]">Formal Shift Handoff</h2>
     <p>Continuity is maintained via a formal handoff wizard. Operators are required to provide detailed briefing notes when transferring ownership, ensuring the next shift has all the necessary context to proceed with resolution.</p>

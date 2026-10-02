@@ -5,8 +5,27 @@ import logging
 from odoo import _, fields, models, api
 
 from .incident import TREND_TRACKED_SEVERITIES
+from .inbound_spam_filter import detect_inbound_spam_signals
 
 _logger = logging.getLogger(__name__)
+
+# The stage value a flagged inbound email's mirrored hams_helpdesk.ticket
+# is routed to instead of the default "new" -- per Bruce's own decision
+# (night_shift_questions/answered/inbound-spam-filter-location-and-signal-
+# e14a6f8b.md): filter at mail-ingestion time, in this adapter, but never
+# silently drop a message -- a flagged ticket still exists, still shows up
+# in the ordinary Tickets list, and a human can move it straight back to
+# "new" (the stage field is a clickable statusbar) to recover a false
+# positive.
+_SPAM_QUARANTINE_STAGE = "spam"
+# Only incidents created from a real inbound email carry this prefix (see
+# incident.py's own message_new(), [@ANCHOR: pager_incident_message_new]:
+# data["source"] = f"{source_prefix}:{sender}", source_prefix defaults to
+# "email"). Monitoring/synthetic incidents use other sources entirely
+# (e.g. "test_source", a pager_check's own check name) -- gating on this
+# prefix keeps the spam heuristic scoped to genuine inbound mail only, so
+# it can never misclassify a monitoring signal.
+_EMAIL_SOURCE_PREFIX = "email:"
 
 
 class PagerDutyIncidentTicketAdapter(models.Model):
@@ -88,16 +107,76 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                 )
             return
         target_env = self.env[target_model]
+        # Dynamically resolved, same spirit as target_model itself just
+        # above: a future/alternate helpdesk model configured via
+        # pager_duty.helpdesk_model might not define a "stage" field at
+        # all, or might define one without a "spam" value -- fields_get()
+        # is the generic way to check both without assuming hams_helpdesk.
+        # ticket's own schema. When it's not available we still create the
+        # ticket (never a silent drop), just without the stage routing.
+        stage_field_info = target_env.fields_get(allfields=["stage"]).get("stage")
+        stage_supports_spam = bool(stage_field_info) and any(
+            key == _SPAM_QUARANTINE_STAGE
+            for key, _label in stage_field_info.get("selection", [])
+        )
 
         payloads = []
+        spam_reasons_by_incident = {}
         for incident in incidents_to_process:
+            spam_reasons = []
+            if incident.source and incident.source.startswith(_EMAIL_SOURCE_PREFIX):
+                spam_reasons = detect_inbound_spam_signals(
+                    subject=incident.name,
+                    body_html=incident.description,
+                )
+            if spam_reasons:
+                spam_reasons_by_incident[incident.id] = spam_reasons
+                _logger.info(
+                    "Inbound-mail incident %s (source=%s) flagged as likely spam/"
+                    "phishing by the mail-ingestion filter: %s",
+                    incident.name,
+                    incident.source,
+                    "; ".join(spam_reasons),
+                )
+                incident.message_post(
+                    body=_(
+                        "Flagged as likely spam/phishing by the automated "
+                        "mail-ingestion filter. The mirrored helpdesk ticket "
+                        "was routed to quarantine instead of the on-duty "
+                        "admin. Reasons: %s"
+                    )
+                    % "; ".join(spam_reasons),
+                    subtype_xmlid="mail.mt_note",
+                )
+
+            # A flagged message still gets the ordinary on-duty assignee
+            # here (hams_helpdesk.ticket's own create() independently
+            # re-resolves and fills in the on-duty admin whenever a
+            # payload omits "user_id" at all -- see its own
+            # [@ANCHOR: COMM_helpdesk_ticket_creation] -- so leaving this
+            # unset would not actually prevent the assignment, only hide
+            # it from this payload). What this adapter DOES fully control
+            # is the stage routing below and the calendar block skip a few
+            # lines down: a flagged message never gets an "Incident
+            # Response" calendar meeting scheduled over junk, even though
+            # it still shows an owner for audit/visibility purposes.
             assignee_id = _assignee_for(incident.website_id.id)
+            description = f"<p><strong>Severity:</strong> {incident.severity}</p><p>{incident.description or 'No description provided.'}</p>"
+            if spam_reasons:
+                reasons_html = "".join(f"<li>{reason}</li>" for reason in spam_reasons)
+                description = (
+                    "<p><strong>⚠ Possible spam/phishing</strong> "
+                    "(flagged by the automated mail-ingestion filter):</p>"
+                    f"<ul>{reasons_html}</ul>"
+                ) + description
             payload = {
                 "name": f"[PAGER] {incident.name}",
-                "description": f"<p><strong>Severity:</strong> {incident.severity}</p><p>{incident.description or 'No description provided.'}</p>",
+                "description": description,
             }
             if assignee_id:
                 payload["user_id"] = assignee_id
+            if spam_reasons and stage_supports_spam:
+                payload["stage"] = _SPAM_QUARANTINE_STAGE
             payloads.append(payload)
 
         # Isolate specific module service accounts for scoped relational object generation
@@ -115,6 +194,8 @@ class PagerDutyIncidentTicketAdapter(models.Model):
 
         calendar_payloads = []
         for incident, ticket in zip(incidents_to_process, tickets):
+            if incident.id in spam_reasons_by_incident:
+                continue
             assignee_id = _assignee_for(incident.website_id.id)
             if not assignee_id:
                 continue
