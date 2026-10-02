@@ -723,7 +723,24 @@ def _tear_down_partly_built_browser(browser):
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
-        self.__class__.remote_debugging_port = 9222
+        # night_shift_todo/low/zero-sudo-pause-on-fail-pins-cdp-port-9222-
+        # process-wide-624bd3a2.md -- this USED to write
+        # `self.__class__.remote_debugging_port`, Core's class attribute
+        # (default sentinel `0`, meaning "let Chrome pick an ephemeral
+        # port"). That pinned every `ChromeBrowser` built afterwards in the
+        # same process to port 9222, including ones constructed after
+        # `HAMS_PAUSE_ON_FAIL` was unset again, because nothing ever
+        # restored the class default. Writing the INSTANCE attribute
+        # instead keeps the feature's own point -- every browser built
+        # while the env var is "1" still gets the known, fixed port
+        # `_patched_browser_js`'s pause message hardcodes -- without
+        # leaking that pin onto `ChromeBrowser` itself, so a later
+        # instance built with the var unset (or never set) still gets
+        # Core's ephemeral-port default. Two browsers alive at once *both*
+        # built under `HAMS_PAUSE_ON_FAIL=1` would still collide on the
+        # same fixed port; that is a separate, pre-existing limitation the
+        # todo explicitly left as a product decision, not fixed here.
+        self.remote_debugging_port = 9222
 
     retries = 3
     for attempt in range(retries):
