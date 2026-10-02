@@ -119,6 +119,10 @@ name = "ambe_chip_noise_capture"
 required-features = ["ambe_plus_2"]
 
 [[example]]
+name = "ambe_chip_noise_table_capture"
+required-features = ["ambe_plus_2"]
+
+[[example]]
 name = "ambe_chip_validate_ambe_plus_2_dtmf"
 required-features = ["ambe_plus_2"]
 
