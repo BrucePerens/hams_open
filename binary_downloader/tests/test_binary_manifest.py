@@ -889,6 +889,41 @@ class TestBinaryManifest(HamsTransactionCase):
             "leave a stray temp file behind in bin_dir: %s" % leftover_tmp_files,
         )
 
+    def test_23_download_exceeding_size_cap_is_rejected(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
+        # night_shift_todo/low/binary-downloader-no-total-size-cap-9d2e4a7c.md: the download
+        # loop streamed in bounded 8KB chunks but never capped the TOTAL bytes written to disk
+        # before the checksum check ran. Patches MAX_DOWNLOAD_SIZE_BYTES down to a tiny value
+        # (no real multi-gigabyte payload needed) and confirms a chunked response exceeding it
+        # is rejected with a UserError, with no partial temp file left behind.
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        self.safe_patch(
+            "odoo.addons.binary_downloader.models.binary_utils.MAX_DOWNLOAD_SIZE_BYTES",
+            4,
+        )
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
+
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"1234", b"5678", b""]
+        mock_response_get.getheader.return_value = "fake-etag"
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+
+        with self.assertRaises(UserError):
+            self.env["binary.manifest"].ensure_executable("testbin")
+
+        data_dir = tools.config.get("data_dir", "/var/lib/odoo")
+        bin_dir = os.path.join(data_dir, "hams_bin")
+        leftover_tmp_files = [f for f in os.listdir(bin_dir) if f.startswith("tmp")]
+        self.assertFalse(
+            leftover_tmp_files,
+            "[!] DIAGNOSTIC FOR AI: rejecting an oversized download must not "
+            "leave a stray temp file behind in bin_dir: %s" % leftover_tmp_files,
+        )
+
 
 @tagged("post_install", "-at_install", "standard")
 class TestBinarySsrfProtection(HamsTransactionCase):
