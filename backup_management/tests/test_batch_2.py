@@ -140,6 +140,50 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertIn("kopia_password", payload)
         self.assertIn("exclude_patterns", payload)
 
+    def test_region_field_reaches_the_published_payload(self):
+        # night_shift_todo/low/backup-config-no-region-field-6e8c1a4f.md:
+        # backup.config used to have no `region` field at all, so the
+        # pgbackrest daemon's own real `config.get('region') or
+        # 'us-east-1'` override (daemon/main.py's
+        # _pgbackrest_s3_repo_args(), tested there by
+        # test_03_region_override_honored) was dead capability -- there was
+        # no way for an admin to actually populate it. This proves the
+        # model-side half of the fix: a non-default region set on the
+        # config is carried through to the exact payload key
+        # (config["region"]) the daemon's override reads.
+        config = self.env["backup.config"].create({
+            "name": f"Region Config {self.id()}",
+            "engine": "pgbackrest",
+            "target_path": "region_test_stanza",
+            "storage_type": "s3",
+            "region": "eu-central-1",
+        })
+        mock_pub = self.safe_patch(
+            "odoo.addons.backup_management.models.backup_config.publish_to_rabbitmq"
+        )
+        config.with_env(self.env).action_trigger_backup()
+        self.env.cr.postcommit.run()
+
+        mock_pub.assert_called_once()
+        payload = json.loads(mock_pub.call_args[0][1])
+        self.assertEqual(payload.get("region"), "eu-central-1")
+
+    def test_region_field_defaults_to_falsy_when_unset(self):
+        # A config with no region set must still publish a "region" key
+        # (so the daemon's `config.get('region') or 'us-east-1'` override
+        # sees an explicit falsy value and falls back to the documented
+        # default) rather than omitting the key entirely.
+        mock_pub = self.safe_patch(
+            "odoo.addons.backup_management.models.backup_config.publish_to_rabbitmq"
+        )
+        self.config1.with_env(self.env).action_trigger_backup()
+        self.env.cr.postcommit.run()
+
+        mock_pub.assert_called_once()
+        payload = json.loads(mock_pub.call_args[0][1])
+        self.assertIn("region", payload)
+        self.assertFalse(payload.get("region"))
+
     def test_kopia_restore_destination_ignores_free_text_target_path(self):
         # Bug-hunt fix (2026-09-13): action_restore's kopia branch used to
         # build the real filesystem restore destination straight from

@@ -67,6 +67,14 @@ class BackupConfig(models.Model):
     )
     bucket_name = fields.Char(string="Bucket Name")
     endpoint_url = fields.Char(string="Endpoint URL")
+    region = fields.Char(
+        string="Region",
+        help="S3 region for the pgBackRest repository (e.g. 'eu-central-1'). "
+        "Optional -- AWS S3 and Backblaze B2 both tolerate the daemon's own "
+        "'us-east-1' placeholder default, but a strict S3-compatible "
+        "provider that enforces SigV4 region/endpoint agreement needs the "
+        "real region set here.",
+    )
     access_key = fields.Char(string="Access Key", groups=_SECRET_FIELD_GROUPS)
     secret_key_crypt = fields.Char(
         string="Encrypted Secret Key", groups=_SECRET_FIELD_GROUPS
@@ -327,6 +335,7 @@ class BackupConfig(models.Model):
                 "storage_type": rec.storage_type,
                 "bucket_name": rec.bucket_name,
                 "endpoint_url": rec.endpoint_url,
+                "region": rec.region,
                 "access_key": rec.access_key,
                 "secret_key": rec.secret_key,
                 "kopia_password": rec.kopia_password,
