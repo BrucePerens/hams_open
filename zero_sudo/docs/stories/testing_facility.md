@@ -77,6 +77,8 @@ A cluster of module-level patches make headless-Chrome tour testing reliable in 
 
 - **Opener Init** `[@ANCHOR: zero_sudo:patched_opener_init]`, **Chrome Init** `[@ANCHOR: zero_sudo:patched_chrome_init]`, **Chrome Stop** `[@ANCHOR: zero_sudo:patched_chrome_stop]`, **Wait-Ready** `[@ANCHOR: zero_sudo:patched_wait_ready]`, **Chrome Start** `[@ANCHOR: zero_sudo:patched_chrome_start]`: The rest of the Chrome lifecycle -- constructing the CDP connection, waiting for it to actually be ready before the first navigation, and tearing it back down -- each patched for a real, previously-hit reliability issue specific to this sandboxed CI environment.
 
+- **Retry Teardown** `[@ANCHOR: zero_sudo:tear_down_partly_built_browser]`: Core's `ChromeBrowser.__init__` has no error handling of its own, so a failed attempt (retried by the patched Chrome Init above) used to leave its partially-registered resources (profile directory, process, websocket, receiver thread) orphaned when the retry overwrote the same object's `cleanup` stack -- worse, the orphaned receiver thread's own teardown then ran against the SUCCEEDING attempt's healthy socket, silently breaking every CDP call for the rest of that browser's life. This closes out whatever the failed attempt actually registered before the retry starts from a clean object.
+
 - **Draining Background Requests** `[@ANCHOR: zero_sudo:wait_for_werkzeug_threads]`: `RealTransactionCase`'s own teardown calls this before dropping its raw cursor, so a daemon's in-flight RPC request can't outlive the test block and cause a `SerializationFailure` on the way out.
 
 ## Safe Mocking

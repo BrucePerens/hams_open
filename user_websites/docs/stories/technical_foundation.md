@@ -58,6 +58,8 @@ The module provides several dropzones for UI extension:
 
 - **Sanitization:** User-provided HTML is sanitized to prevent XSS ([@ANCHOR: website_page_sanitize_arch]).
 
+- **Reentrancy Guard on Publish Toggle:** Writing `website_published` on a page recurses once through the ORM's own `write()` (Odoo's compute/inverse plumbing turns it into a second, inner write of `is_published`), so the publish/unpublish invalidation signal is guarded to fire exactly once per logical toggle rather than twice ([@ANCHOR: website_page_write_reentrancy_guard]).
+
 - **Toast Notifications:** Feedback is provided via native notifications ([@ANCHOR: toast_notifications_logic], [@ANCHOR: admin_toast_logic]).
 
 - **Violation Reporting:** Form submission is handled securely ([@ANCHOR: violation_report_logic]).

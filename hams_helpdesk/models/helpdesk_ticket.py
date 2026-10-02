@@ -967,7 +967,17 @@ class HelpdeskTicket(models.Model):
         AccessError branches of _ncmec_apply_recording_legal_hold_best_effort below without
         ham_communications_consent (hams_com) actually being installed. Returns True on success,
         False if no matching recording row was found; raises AccessError exactly as the real ORM
-        call would, uncaught -- the caller is responsible for catching it."""
+        call would, uncaught -- the caller is responsible for catching it.
+
+        Reviewed, ratchet-grandfathered gap, not an oversight: this method's own real body (the
+        cross-repo `self.env[model_name].search()` + `.action_apply_legal_hold()` call) cannot be
+        exercised from a hams_open-only test run at all -- `ham_communications_consent` lives in
+        hams_com, so `model_name` never resolves to a real model here, and AGENTS.md's own
+        standing rule forbids inventing a test-only stand-in model just to give this one method
+        a direct test. Its calling CONTRACT (both the success and AccessError paths) is already
+        pinned by the three `Verified by` tests on `_ncmec_apply_recording_legal_hold_best_effort`
+        just below, which patch this exact method as their documented seam -- a hams_com-side
+        test exercising the real cross-repo call is the only way to close this for real."""
         self.ensure_one()
         recording = self.env[model_name].search(
             [("recording_uuid", "=", self.ncmec_recording_uuid)], limit=1

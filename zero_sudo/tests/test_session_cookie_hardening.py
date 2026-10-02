@@ -30,15 +30,19 @@ class TestHardenCookieHeader(unittest.TestCase):
         self.assertNotIn("Secure", hardened)
         self.assertIn("SameSite=Lax", hardened)
 
+    # Tests [@ANCHOR: zero_sudo:hardened_cookie_names]
     def test_frontend_lang_is_also_hardened(self):
         raw = "frontend_lang=en_US; Expires=Thu, 01-Jan-2027; Path=/"
         hardened = _harden_cookie_header(raw, is_https=True)
         self.assertIn("Secure", hardened)
         self.assertIn("SameSite=Lax", hardened)
 
+    # Tests [@ANCHOR: zero_sudo:hardened_cookie_names]
     def test_an_unrelated_cookie_is_left_untouched(self):
         # A cookie set explicitly elsewhere (e.g. gdpr_export_token) with its
-        # own deliberate flags must not be touched by this general hardening.
+        # own deliberate flags must not be touched by this general hardening --
+        # proof that the hardening is scoped to exactly _HARDENED_COOKIE_NAMES,
+        # not every Set-Cookie header.
         raw = "gdpr_export_token=xyz; Max-Age=300; HttpOnly; Path=/api/v1/gdpr_export/; SameSite=Strict; Secure"
         hardened = _harden_cookie_header(raw, is_https=True)
         self.assertEqual(hardened, raw)
@@ -58,6 +62,7 @@ class TestPostDispatchCookieHardening(HamsHttpCase):
     # proxy_mode's own X-Forwarded-Proto contract), confirming the real
     # Set-Cookie header Odoo sends is actually hardened, not just the pure
     # helper function in isolation.
+    # Tests [@ANCHOR: zero_sudo:ir_http_post_dispatch_cookie_hardening]
     def test_login_page_sets_a_samesite_hardened_session_cookie(self):
         # Only asserts SameSite here, not Secure: whether this test harness's
         # own werkzeug stack actually trusts X-Forwarded-Proto the same way

@@ -39,6 +39,8 @@ class CloudflareTunnelSimulator:
         stop_tunnel_simulator()
 
     # [@ANCHOR: cloudflare:COMM_simulate_edge_request]
+    # Verified by [@ANCHOR: COMM_test_edge_traffic_parsing]
+    # Verified by [@ANCHOR: COMM_test_websocket_traffic]
     def simulate_edge_request(self, path, cf_connecting_ip='1.2.3.4', cf_visitor='{"scheme":"https"}', extra_headers=None):
         """
         Sends an HTTPS request directly to the Go CGO Simulator, which will proxy

@@ -17,6 +17,10 @@ class TestTrustedIpRanges(HamsTransactionCase):
         return self.env["cloudflare.trusted_ip_utils"]
 
     # [@ANCHOR: test_trusted_ip_ranges]
+    # The module docstring's own `Verified by [@ANCHOR: test_trusted_ip_ranges]`
+    # already names this test for the whole merged-ranges feature, not just
+    # the one helper it calls directly.
+    # Tests [@ANCHOR: cloudflare:trusted_ip_ranges]
     # Tests [@ANCHOR: cloudflare:get_effective_trusted_ip_ranges]
     def test_01_effective_ranges_default_to_the_baked_in_snapshot(self):
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
@@ -94,3 +98,44 @@ class TestTrustedIpRanges(HamsTransactionCase):
             "203.0.113.0/24",
             "A failed refresh must leave the last known-good list untouched.",
         )
+
+    # Tests [@ANCHOR: cloudflare:COMM_trusted_ip_ranges_settings_fields]
+    # Tests [@ANCHOR: cloudflare:publish_trusted_ip_ranges_to_redis]
+    def test_11_settings_custom_field_is_config_parameter_backed_and_republishes(self):
+        """The settings-screen `cloudflare_trusted_ip_ranges_custom` field is a plain
+        `config_parameter=` passthrough (res_config_settings.py), so saving the settings
+        form must both persist the value to ir.config_parameter and re-publish the merged
+        list to Redis immediately (set_values()), rather than waiting for the next cron
+        tick -- this is the real reason set_values() is overridden at all."""
+        redis_mock = MagicMock()
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.trusted_ip_ranges.get_redis_connection",
+            return_value=redis_mock,
+        )
+        settings = self.env["res.config.settings"].create(
+            {"cloudflare_trusted_ip_ranges_custom": "203.0.113.0/24"}
+        )
+        settings.set_values()
+        self.assertEqual(
+            self._icp().get_param("cloudflare.trusted_ip_ranges_custom"),
+            "203.0.113.0/24",
+            "The settings field must persist through Odoo's own config_parameter= plumbing.",
+        )
+        redis_mock.set.assert_called_once()
+        published = redis_mock.set.call_args.args[1]
+        self.assertIn("203.0.113.0/24", published)
+
+    # Tests [@ANCHOR: cloudflare:COMM_action_refresh_cloudflare_trusted_ip_ranges]
+    def test_12_refresh_action_invokes_the_cron_method_and_reloads(self):
+        """The admin-facing "Refresh now" button on the settings page must run the exact
+        same refresh logic as the daily cron (not a separate, divergent code path), then
+        reload the settings page so the admin immediately sees the new auto-fetched list
+        and last-refreshed timestamp."""
+        mock_cron = self.safe_patch(
+            "odoo.addons.cloudflare.models.trusted_ip_ranges."
+            "CloudflareTrustedIpUtils._cron_refresh_cloudflare_ip_ranges"
+        )
+        settings = self.env["res.config.settings"].create({})
+        result = settings.action_refresh_cloudflare_trusted_ip_ranges()
+        self.assertTrue(mock_cron.called, "The button must call the same cron refresh method.")
+        self.assertEqual(result, {"type": "ir.actions.client", "tag": "reload"})

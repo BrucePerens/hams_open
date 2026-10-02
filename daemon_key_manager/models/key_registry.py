@@ -269,6 +269,7 @@ class DaemonKeyRegistry(models.Model):
         self = self.with_user(svc_uid)
 
         # [@ANCHOR: COMM_force_provision_logic]
+        # Verified by [@ANCHOR: COMM_test_force_provisioning_partial_failure]
         registries = self.env["daemon.key.registry"].search([], limit=1000)
         user_ids = registries.mapped("user_id").ids
         key_names = [f"{reg.name}_key" for reg in registries]
