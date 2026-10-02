@@ -167,7 +167,14 @@ class ResConfigSettings(models.TransientModel):
         command = f"cloudflared service install {token_val}"
 
         # ADR-0001: Headless Mutation Context
-        wizard = self.env["cloudflare.tunnel.wizard"].create({"command": command})
+        # Bug-hunt fix (night_shift_todo/low/cloudflare-tunnel-token-
+        # persisted-plaintext-3f7c9a2b.md): `command` embeds a real,
+        # one-time Cloudflare tunnel install token. It is deliberately
+        # NOT passed to create() -- cloudflare.tunnel.wizard.command is
+        # a non-stored field computed from this action's own context,
+        # so the token is never written to a DB column at all. It
+        # lives only in this one response, for this one display.
+        wizard = self.env["cloudflare.tunnel.wizard"].create({})
 
         return {
             "name": _("Cloudflare Tunnel Command"),
@@ -176,4 +183,5 @@ class ResConfigSettings(models.TransientModel):
             "res_id": wizard.id,
             "view_mode": "form",
             "target": "new",
+            "context": {"install_command": command},
         }
