@@ -183,7 +183,7 @@
                                     <div>Download a copy of your data above <strong>before</strong> erasing anything below. Once this runs, there is no way to get your content back.</div>
                                 </div>
                                 <p class="text-muted">Permanently delete all of your personal content -- website pages, blog posts, and everything else tied to your account across this platform -- remove you from the public community directory, deactivate your account, and anonymize your remaining identifying information (name, login, and any license/callsign details on file). Amateur radio contacts and other on-air activity records are never deleted, since they were already public over the air; only your ownership of them is anonymized. <strong>This cannot be undone.</strong></p>
-                                <form action="/my/privacy/delete_content" method="post" onsubmit="return confirm('Are you absolutely sure? This permanently deletes your content, deactivates your account, and anonymizes your identity. This cannot be undone.');">
+                                <form action="/my/privacy/delete_content" method="post" data-hams-confirm="Are you absolutely sure? This permanently deletes your content, deactivates your account, and anonymizes your identity. This cannot be undone.">
                                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                     <button type="submit" class="btn btn-danger o_tour_erasure_initiate"><i class="fa fa-warning" aria-hidden="true"/> Erase My Account &amp; Content</button>
                                 </form>
