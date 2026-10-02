@@ -16,9 +16,31 @@ class TestTrustedIpRanges(HamsTransactionCase):
     def _utils(self):
         return self.env["cloudflare.trusted_ip_utils"]
 
+    def _enable_non_tunnel_mode(self):
+        self._icp().set_param("cloudflare.trust_non_tunnel_peers", "True")
+
     # [@ANCHOR: test_trusted_ip_ranges]
     # Tests [@ANCHOR: cloudflare:get_effective_trusted_ip_ranges]
-    def test_01_effective_ranges_default_to_the_baked_in_snapshot(self):
+    # Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-
+    # ranges-on-tunnel-only-deployments-7d2b8f14.md): "Done when" requires a test that the default
+    # list on a Tunnel deployment contains no Cloudflare range.
+    def test_00_effective_ranges_are_empty_by_default_tunnel_only_deployment(self):
+        self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
+        self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "")
+        ranges = self._utils()._get_effective_trusted_ip_ranges()
+        self.assertEqual(ranges, [], "A Tunnel-only deployment must trust no Cloudflare range by default.")
+        self.assertNotIn("173.245.48.0/20", ranges)
+        self.assertNotIn("2400:cb00::/32", ranges)
+
+    def test_00b_effective_ranges_stay_empty_even_with_a_custom_range_configured_if_mode_is_off(self):
+        """Adding a custom range alone must not enable trust -- the single, explicit
+        non-Tunnel-mode toggle gates the whole feature, auto AND custom."""
+        self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24")
+        ranges = self._utils()._get_effective_trusted_ip_ranges()
+        self.assertEqual(ranges, [])
+
+    def test_01_effective_ranges_default_to_the_baked_in_snapshot_once_mode_is_on(self):
+        self._enable_non_tunnel_mode()
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "")
         ranges = self._utils()._get_effective_trusted_ip_ranges()
@@ -26,6 +48,7 @@ class TestTrustedIpRanges(HamsTransactionCase):
         self.assertIn("2400:cb00::/32", ranges)
 
     def test_02_effective_ranges_include_admin_custom_additions(self):
+        self._enable_non_tunnel_mode()
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24")
         ranges = self._utils()._get_effective_trusted_ip_ranges()
@@ -33,6 +56,7 @@ class TestTrustedIpRanges(HamsTransactionCase):
         self.assertIn("173.245.48.0/20", ranges, "Custom additions must not replace the default.")
 
     def test_03_malformed_custom_range_is_skipped_not_fatal(self):
+        self._enable_non_tunnel_mode()
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self._icp().set_param(
             "cloudflare.trusted_ip_ranges_custom", "not-a-cidr\n203.0.113.0/24\n"
@@ -46,16 +70,26 @@ class TestTrustedIpRanges(HamsTransactionCase):
         self.assertTrue(self._utils()._is_trusted_cf_peer("127.0.0.1"))  # burn-ignore-ssrf-test-value
         self.assertTrue(self._utils()._is_trusted_cf_peer("::1"))
 
-    def test_05_is_trusted_cf_peer_true_for_a_default_cloudflare_range_ip(self):
+    def test_04b_is_trusted_cf_peer_false_for_a_cloudflare_range_ip_when_mode_is_off(self):
+        """The core of this bug-hunt fix: a real Cloudflare-published address is NOT a trusted
+        peer on a Tunnel-only deployment (the default) even though it is a genuine Cloudflare
+        edge IP -- this deployment's origin can never actually be reached from it."""
+        self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
+        self.assertFalse(self._utils()._is_trusted_cf_peer("173.245.48.1"))
+
+    def test_05_is_trusted_cf_peer_true_for_a_default_cloudflare_range_ip_once_mode_is_on(self):
+        self._enable_non_tunnel_mode()
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self.assertTrue(self._utils()._is_trusted_cf_peer("173.245.48.1"))
 
     def test_06_is_trusted_cf_peer_false_for_an_untrusted_ip(self):
+        self._enable_non_tunnel_mode()
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "")
         self.assertFalse(self._utils()._is_trusted_cf_peer("8.8.8.8"))
 
     def test_07_is_trusted_cf_peer_true_once_admin_adds_a_custom_range(self):
+        self._enable_non_tunnel_mode()
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24")
         self.assertTrue(self._utils()._is_trusted_cf_peer("203.0.113.55"))
