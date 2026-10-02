@@ -5,7 +5,9 @@
 Core's ChromeBrowser.__init__ registers its resources in `self.cleanup` and has no error handling; the retry wrapper used
 to run it again on the same object, replacing `cleanup` and leaving the first attempt's receiver thread to delete the
 second attempt's websocket. These tests drive the wrapper with a fake constructor (no Chrome needed)."""
+import os
 from contextlib import ExitStack
+from unittest.mock import patch
 
 from odoo.addons.zero_sudo.tests import common
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -52,3 +54,38 @@ class TestChromeInitRetryTeardown(HamsTransactionCase):
             common._patched_chrome_init(browser)
         self.assertEqual(self.events, ["closed attempt 1", "closed attempt 2", "closed attempt 3"])
         self.assertFalse(vars(browser).get("ws"))
+
+    # Tests [@ANCHOR: zero_sudo:patched_chrome_init]
+    def test_pause_on_fail_pins_only_the_instance_not_the_class(self):
+        """night_shift_todo/low/zero-sudo-pause-on-fail-pins-cdp-port-9222-process-wide-624bd3a2.md.
+
+        HAMS_PAUSE_ON_FAIL=1 must pin remote_debugging_port on the one browser built while it's
+        set, never on ChromeBrowser itself -- a class-attribute write used to leak the pin onto
+        every later browser built in the same process, including ones built after the var is
+        unset again."""
+        self.safe_patch_object(common, "original_chrome_init", self._fake_init(fail_times=0))
+        self.safe_patch_object(common, "_js_coverage_start", lambda browser: None)
+
+        with patch.dict(os.environ, {"HAMS_PAUSE_ON_FAIL": "1"}):
+            pinned_browser = _Browser()
+            common._patched_chrome_init(pinned_browser)
+
+        self.assertEqual(
+            pinned_browser.remote_debugging_port,
+            9222,
+            "the browser built while the env var is set must get the known, fixed port",
+        )
+        self.assertNotIn(
+            "remote_debugging_port",
+            vars(_Browser),
+            "the class itself must stay unpinned, or every later browser in the process "
+            "would inherit port 9222 regardless of the env var",
+        )
+
+        later_browser = _Browser()
+        common._patched_chrome_init(later_browser)
+        self.assertNotIn(
+            "remote_debugging_port",
+            vars(later_browser),
+            "a browser built after the env var is unset again must not inherit the earlier pin",
+        )
