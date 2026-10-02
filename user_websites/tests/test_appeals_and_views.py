@@ -80,7 +80,15 @@ class TestAppealsAndViews(RealTransactionCase):
         # Tests [@ANCHOR: test_privacy_friendly_view_counter]
 
         # Tests [@ANCHOR: procedure_flush_view_counters]
-        """Verify the view counter increments cleanly on page load."""
+
+        # Tests [@ANCHOR: COMM_user_home_fallback]
+        """Verify the view counter increments cleanly on page load.
+
+        Visiting an existing `/<slug>/home` page routes through
+        `UserWebsitesController.user_home_fallback()` (it is the sole handler for this URL
+        pattern, existing-page or not -- see its own docstring), so this also exercises its
+        existing-page branch (the Redis view-counter increment and `_serve_fallback()` call).
+        """
         self.assertEqual(self.page.view_count, 0)
 
         # Public user visits the page

@@ -105,6 +105,7 @@ class TestAdvancedEdgeCases(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
 
     def test_03_report_violation_missing_referrer(self):
+        # Tests [@ANCHOR: report_violation_redirect_target]
         """
         Ensure the report submission form safely redirects back to the reported page (not a
         hardcoded '/') when the `url` form field is a real page and the HTTP Referrer header

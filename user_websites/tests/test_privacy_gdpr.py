@@ -66,6 +66,8 @@ class TestPrivacyGDPR(HamsHttpCase):
         # [@ANCHOR: test_gdpr_export_api]
 
         # Tests [@ANCHOR: UX_GDPR_EXPORT]
+
+        # Tests [@ANCHOR: COMM_privacy_export]
         """Verify the user can successfully download a JSON payload of their data."""
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
 
@@ -116,6 +118,8 @@ class TestPrivacyGDPR(HamsHttpCase):
         token itself travels via a short-lived cookie (2026-09-10
         hardening), never in the redirect URL's own query string."""
         # Tests [@ANCHOR: gdpr_export_token]
+
+        # Tests [@ANCHOR: COMM_privacy_export_zip]
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
         response = self.url_open(
             "/my/privacy/export.zip", allow_redirects=False

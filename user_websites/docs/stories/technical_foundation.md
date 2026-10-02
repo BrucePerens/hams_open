@@ -11,13 +11,13 @@ As a **Developer**, I want to use reliable utility functions and a robust securi
 
 ### Documentation Access
 - **When** I need help using the module.
-- **Then** I can navigate to the documentation route ([@ANCHOR: controller_user_websites_documentation]). Verified by `[@ANCHOR: test_documentation_route]`.
+- **Then** I can navigate to the documentation route ([@ANCHOR: user_websites:COMM_documentation]). Verified by `[@ANCHOR: test_documentation_route]`.
 - **And** the system attempts to redirect me to the appropriate `knowledge.article` if available.
 
 ## Technical Notes
 - The module relies on a specialized service account for most background and initialization tasks ([@ANCHOR: mixin_proxy_ownership_create]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
 
-- Frontend notifications for administrators are powered by a lightweight RPC endpoint ([@ANCHOR: api_pending_reports]). Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
+- Frontend notifications for administrators are powered by a lightweight RPC endpoint ([@ANCHOR: user_websites:COMM_pending_reports]). Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
 
 ### Extensibility Dropzones
 The module provides several dropzones for UI extension:
