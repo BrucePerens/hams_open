@@ -51,6 +51,7 @@
                                 <field name="storage_type"/>
                                 <field name="endpoint_url" invisible="storage_type == 'local'"/>
                                 <field name="bucket_name" invisible="storage_type == 'local'"/>
+                                <field name="region" invisible="storage_type == 'local'"/>
                                 <field name="access_key" invisible="storage_type == 'local'"/>
                                 <field name="secret_key" password="True" invisible="storage_type == 'local'"/>
                             </group>

@@ -223,15 +223,14 @@ def _pgbackrest_s3_repo_args(config, target_path):
     ]
     if endpoint_host:
         args.append(f"--repo1-s3-endpoint={endpoint_host}")
-    # backup.config has no dedicated "region" field (only
-    # storage_type/bucket_name/endpoint_url/access_key/secret_key) even
-    # though pgbackrest's s3 repo type requires *some* region value.
-    # "us-east-1" is the common S3-compatible-provider placeholder and
-    # works for AWS S3 and for B2 (B2's S3-compatible API does not
-    # validate SigV4 region against the endpoint host). A provider that
-    # does enforce region/endpoint agreement would need a real `region`
-    # field added to the model -- not done here; see the daemon's own
-    # to-do note for this gap.
+    # backup.config now has a dedicated, optional "region" field
+    # (models/backup_config.py), wired into this payload's "region" key.
+    # "us-east-1" remains the fallback when it's left unset: the common
+    # S3-compatible-provider placeholder, which works for AWS S3 and for
+    # B2 (B2's S3-compatible API does not validate SigV4 region against
+    # the endpoint host). A provider that does enforce region/endpoint
+    # agreement can now set the real region on the config instead of
+    # needing a code change.
     args.append(f"--repo1-s3-region={config.get('region') or 'us-east-1'}")
     # No dedicated bucket-prefix/path field exists either; keying the
     # in-bucket path off target_path (the pgbackrest stanza name, already
