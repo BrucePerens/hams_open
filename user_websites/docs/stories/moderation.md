@@ -12,7 +12,7 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
 
 ### Reviewing Abuse Reports
 - **Given** I am a **User Websites Administrator**
-- **When** I log in, I see a toast notification if there are pending reports ([@ANCHOR: admin_toast_logic]). Verified by `[@ANCHOR: test_tour_toast_notifications]`.
+- **When** I log in, I see a toast notification if there are pending reports ([@ANCHOR: admin_toast_logic], backed by [@ANCHOR: user_websites:COMM_pending_reports]). Verified by `[@ANCHOR: test_tour_toast_notifications]`.
 - **When** I review a report, I can take action against the content owner.
 - **Then** I can issue a strike ([@ANCHOR: content_moderation:action_take_action_and_strike], moved to the generic `content_moderation` module 2026-09-23; this module's own `_apply_enforcement_action()` override, [@ANCHOR: user_websites:COMM_apply_enforcement_action], is what actually strikes and, past 3 strikes, suspends), which may lead to automatic account suspension. Verified by `[@ANCHOR: test_moderation_suspension]`.
 
@@ -30,6 +30,11 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
 ## Technical Notes
 - The "take action" consequence is an extension hook ([@ANCHOR: content_moderation:apply_enforcement_action]), owned by the generic `content_moderation` module: its own default is a documented no-op (no strike infrastructure exists to assume outside a consuming module), and this module's own override ([@ANCHOR: user_websites:COMM_apply_enforcement_action]) is what supplies the real strike-and-suspend behavior described above. Verified by `[@ANCHOR: test_moderation_suspension]`.
 
-- Pending reports are checked via a background RPC call ([@ANCHOR: api_pending_reports]). Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
+- Pending reports are checked via a background RPC call ([@ANCHOR: user_websites:COMM_pending_reports]). Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
 
 - Administrators receive periodic email notifications about outstanding reports ([@ANCHOR: cron_notify_pending_reports]). Verified by `[@ANCHOR: test_cron_pending_reports]`.
+
+- A report submission redirects the visitor back to the page they reported (never to a bare
+  `/`, and never to an attacker-controlled off-site host -- only the path portion of the
+  submitted URL is ever trusted) ([@ANCHOR: user_websites:report_violation_redirect_target]).
+  Verified by `[@ANCHOR: test_report_violation_redirects_back_to_reported_page]`.

@@ -139,6 +139,7 @@ class TestUserWebsitesControllers(RealTransactionCase):
     def test_03_community_directory_rendering(self):
         """
         Tests [@ANCHOR: UX_COMMUNITY_DIRECTORY]
+        Tests [@ANCHOR: COMM_community_directory]
         Action: Public user browses the community directory.
         Expected: HTTP 200 OK. The user who opted into `privacy_show_in_directory` MUST be visible.
         """
