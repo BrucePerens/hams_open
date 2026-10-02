@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
+from odoo.tools import html_sanitize
 import json
 import logging
 import os
@@ -520,7 +521,135 @@ class UserWebsitesController(http.Controller):
             create_vals["author_id"] = user.partner_id.id
 
         post = env_svc["blog.post"].create(create_vals)
-        return request.redirect(f"/blog/{blog.id}/post/{post.id}")
+        # Real gap found live 2026-10-01 (night_shift_todo/high/
+        # personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md):
+        # this used to redirect straight into website_blog's own generic post-view route
+        # (/blog/<blog_id>/post/<post_id>), on the comment-stated assumption that "the normal
+        # website builder's editor toolbar (Edit/New) works on it exactly as it does on any
+        # other blog post." That assumption is false for this module's real target user --
+        # Odoo core's own website/models/ir_http.py gates that whole toolbar on
+        # website.group_website_designer, a GLOBAL, sitewide website-editing permission a
+        # personal-site owner (base.group_portal + group_user_websites_user) does not and
+        # structurally cannot hold without being hand-granted it through the backend Users UI.
+        # Granting that group was rejected (see the to-do's own option (a) writeup) because it
+        # is not scoped to "only this user's own post" -- it would let any owner edit ANY
+        # website content sitewide. Redirecting here into this module's own dedicated,
+        # ownership-scoped edit form (blog_post_edit/blog_post_edit_submit below) instead
+        # gives the owner a real, working way to title, write, and publish the post they just
+        # created, with no sitewide permission change at all.
+        return request.redirect(f"/blog_post/edit/{post.id}")
+
+    def _get_own_blog_post_for_edit(self, post_id):
+        # [@ANCHOR: user_websites:COMM_get_own_blog_post_for_edit]
+
+        # Verified by [@ANCHOR: test_blog_post_edit_denied_for_non_owner]
+
+        # Verified by [@ANCHOR: test_blog_post_edit_denied_for_non_member]
+        """Resolves `post_id` to a blog.post the CURRENT caller may edit, or False.
+
+        Mirrors create_blog_post()'s own ownership resolution: reads through the
+        user_websites_service_account's own elevated env (so a brand-new, still-unpublished
+        post -- exactly what a fresh "New Post" is -- can be found at all, since an ordinary
+        caller's own env is scoped by blog_post_private_rule/blog_post_group_rule to posts
+        they already own), then checks the SAME ownership facts (owner_user_id, or membership
+        in the owning group) those two ir.rules independently enforce, before ever handing the
+        caller a live record. The caller's own env.user still does every subsequent read/write
+        through the record returned here, so blog_post.py's own check_access()/
+        _check_proxy_ownership_write() enforcement (and its allowed-fields whitelist) applies
+        in full -- this helper only decides whether to let the request proceed at all.
+        """
+        user = request.env.user
+        utils = request.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
+
+        post_svc = env_svc["blog.post"].browse(post_id)
+        if not post_svc.exists():
+            return False
+
+        is_owner = post_svc.owner_user_id.id == user.id
+        is_group_member = bool(
+            post_svc.user_websites_group_id
+            and user.id in post_svc.user_websites_group_id.member_ids.ids
+        )
+        if not is_owner and not is_group_member and not request.env.is_admin():
+            return False
+
+        # Browsed again through the caller's OWN env (not the elevated service account) --
+        # every write below goes through this record, so blog_post.py's own write()
+        # override (check_access, the proxy-ownership guard, and the non-admin allowed-
+        # fields whitelist) is the real, enforced boundary, not just this helper's own
+        # pre-check.
+        return request.env["blog.post"].browse(post_id)
+
+    @http.route("/blog_post/edit/<int:post_id>", type="http", auth="user", website=True)
+    # [@ANCHOR: user_websites:COMM_blog_post_edit]
+    def blog_post_edit(self, post_id, **kwargs):
+        # Verified by [@ANCHOR: test_owner_can_edit_own_blog_post]
+
+        # Verified by [@ANCHOR: test_blog_post_edit_denied_for_non_owner]
+        post = self._get_own_blog_post_for_edit(post_id)
+        if not post:
+            return request.redirect("/my/home")
+
+        return request.render(
+            "user_websites.blog_post_edit_form",
+            {"post": post, "default_title": "Edit Blog Post"},
+        )
+
+    @http.route(
+        "/blog_post/edit/submit/<int:post_id>",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
+    def blog_post_edit_submit(
+        self, post_id, name="", content="", is_published="", **kwargs
+    ):
+        # Verified by [@ANCHOR: test_owner_can_edit_own_blog_post]
+
+        # Verified by [@ANCHOR: test_blog_post_edit_denied_for_non_owner]
+
+        # Verified by [@ANCHOR: test_blog_post_edit_denied_for_non_member]
+
+        # Verified by [@ANCHOR: test_blog_post_edit_submit_sanitizes_content]
+        post = self._get_own_blog_post_for_edit(post_id)
+        if not post:
+            return request.redirect("/my/home")
+
+        if not name:
+            return request.redirect(
+                f"/blog_post/edit/{post_id}?error=missing_fields"
+            )
+
+        # [!] SECURITY: blog.post's own "content" field is declared sanitize=False
+        # (stock website_blog/models/website_blog.py) -- deliberately, so the generic
+        # website-builder snippet editor can write arbitrary rich markup. That also means
+        # Odoo's ORM does NOT auto-sanitize a write to this field the way a normal Html
+        # field would; a raw <textarea> POST (this route's only input) reaching write()
+        # unsanitized would be real, persistent stored XSS against every visitor of this
+        # post once published, not just the owner. html_sanitize() here, scoped to only
+        # this route's own write path, closes that without touching the field's own
+        # sanitize flag (which would also affect the separate website-builder write path,
+        # a broader change out of scope for this fix).
+        sanitized_content = html_sanitize(content) if content else content
+
+        # blog.post's own write() override (models/blog_post.py) is the real enforcement
+        # boundary -- it re-checks ownership via check_access()/
+        # _check_proxy_ownership_write(), restricts a non-admin caller to this exact
+        # field set regardless of what's passed here, and applies the service-account
+        # escalation, cache-invalidation and Cloudflare-purge side effects every other
+        # blog.post write in this module already relies on.
+        post.write(
+            {
+                "name": name,
+                "content": sanitized_content,
+                "is_published": bool(is_published),
+            }
+        )
+        return request.redirect(f"/blog/{post.blog_id.id}/post/{post.id}")
 
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     # [@ANCHOR: user_websites:COMM_documentation]
