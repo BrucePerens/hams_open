@@ -26,6 +26,15 @@ from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import (
 
 _logger = logging.getLogger(__name__)
 
+# night_shift_todo/low/binary-downloader-no-total-size-cap-9d2e4a7c.md: the download loop below
+# streamed in bounded 8KB chunks (no per-chunk memory exhaustion) but never capped the TOTAL
+# bytes written to disk before the checksum check ran -- a misbehaving or compromised upstream
+# source could stream an arbitrarily large response and fill disk before the checksum ever got a
+# chance to reject it. 1 GiB is generous for a CLI tool binary/archive (this module's own real
+# targets, per its surrounding code: `target_bin`, 0o750 executables, tar/zip archives of them)
+# while still bounding the real exposure.
+MAX_DOWNLOAD_SIZE_BYTES = 1024 * 1024 * 1024
+
 
 # Bug-hunt finding, 2026-09-09 (binary_utils_download_and_extract, bug class
 # 26-shaped): this module's own https-only/URL-scheme checks are real
@@ -228,7 +237,17 @@ class BinaryDownloaderMixin(models.AbstractModel):
 
                     with tempfile.NamedTemporaryFile(dir=bin_dir, delete=False) as tmp:
                         tmp_path = tmp.name
+                        total_bytes = 0
                         for chunk in iter(lambda: response.read(8192), b""):
+                            total_bytes += len(chunk)
+                            if total_bytes > MAX_DOWNLOAD_SIZE_BYTES:
+                                raise UserError(
+                                    _(
+                                        "Security Alert: download for %s "
+                                        "exceeded the %d byte size cap."
+                                    )
+                                    % (cmd_name, MAX_DOWNLOAD_SIZE_BYTES)
+                                )
                             tmp.write(chunk)
 
                 hasher = hashlib.sha256()
