@@ -127,6 +127,129 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             "The adapter MUST execute an emergency SMTP message post if the helpdesk system is unreachable.",
         )
 
+    def test_04_spam_flagged_email_incident_is_quarantined_not_dropped(self):
+        """Tests [@ANCHOR: pd_helpdesk_adapter]: a real phishing lure (ticket #15's
+        own ShareFile/NDA "Secure document" content, per the to-do) must
+        still produce a real, visible ticket -- just routed to the "spam"
+        stage, with no Incident Response calendar block -- never silently
+        dropped."""
+        self.env["ir.config_parameter"].set_param(
+            "pager_duty.helpdesk_model", "hams_helpdesk.ticket"
+        )
+        manager = self.on_duty_user
+        self.safe_patch_object(
+            type(self.env["calendar.event"]),
+            "get_current_on_duty_admin",
+            lambda self: manager,
+            create=True,
+        )
+
+        incident = self.env["pager.incident"].create(
+            {
+                "name": "Non Disclosure Agreement. Secure document for your review",
+                "source": "email:ShareFile <notifications@sharefile-secure-login.example.net>",
+                "severity": "low",
+                "description": (
+                    "<p>Please review and sign this Non Disclosure Agreement via "
+                    "our ShareFile secure document portal.</p>"
+                    '<p><a href="https://sharefile-secure-login.example.net/sign">'
+                    "Open in ShareFile</a></p>"
+                ),
+            }
+        )
+        # "low" severity is in TREND_TRACKED_SEVERITIES, so incident.py's
+        # own create() override does not auto-generate a ticket (see
+        # [@ANCHOR: pager_trend_severity_gate]) -- call the adapter
+        # directly, same as test_03_batch_helpdesk_creation above and as
+        # message_new() does for every real inbound email.
+        incident.action_generate_helpdesk_ticket()
+
+        self.assertTrue(
+            incident.helpdesk_ticket_id,
+            "A flagged message must still get a real, visible ticket -- never a "
+            "silent drop.",
+        )
+        ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
+        self.assertTrue(ticket.exists())
+        self.assertEqual(
+            ticket.stage,
+            "spam",
+            "A flagged message must be routed to the visible spam/quarantine stage.",
+        )
+        # hams_helpdesk.ticket's own create() independently re-resolves and
+        # assigns the on-duty admin whenever a payload omits "user_id" --
+        # see incident_ticket_adapter.py's own comment on this -- so a
+        # quarantined ticket still shows a real owner for audit purposes.
+        # What this adapter does fully control, and what's asserted below,
+        # is that no calendar meeting gets scheduled over the quarantine.
+        self.assertEqual(
+            ticket.user_id,
+            self.on_duty_user,
+            "A quarantined ticket still shows a real owner (hams_helpdesk.ticket's "
+            "own create() assigns this independently of the adapter's payload).",
+        )
+
+        events = self.env["calendar.event"].search(
+            [("name", "ilike", incident.name)], limit=10
+        )
+        self.assertFalse(
+            events,
+            "A quarantined ticket must not generate an Incident Response calendar block.",
+        )
+
+        self.env.flush_all()
+        messages = self.env["mail.message"].search(
+            [("res_id", "=", incident.id), ("model", "=", "pager.incident")], limit=50
+        )
+        self.assertTrue(
+            any("Flagged as likely spam/phishing" in (m.body or "") for m in messages),
+            "The incident's own chatter must record why it was flagged, for review.",
+        )
+
+    def test_05_legitimate_email_incident_is_not_quarantined(self):
+        """A genuine human inquiry (same shape as a real info@hams.com
+        question) must go through the ordinary "new" stage, get assigned
+        to the on-duty admin, and get its calendar block -- the spam
+        filter must never touch a real ticket."""
+        self.env["ir.config_parameter"].set_param(
+            "pager_duty.helpdesk_model", "hams_helpdesk.ticket"
+        )
+        manager = self.on_duty_user
+        self.safe_patch_object(
+            type(self.env["calendar.event"]),
+            "get_current_on_duty_admin",
+            lambda self: manager,
+            create=True,
+        )
+
+        incident = self.env["pager.incident"].create(
+            {
+                "name": "General question about membership",
+                "source": "email:member@example.com",
+                "severity": "low",
+                "description": "<p>Hi, I'm trying to renew my membership and the "
+                "portal gave me an error. Can someone help?</p>",
+            }
+        )
+        incident.action_generate_helpdesk_ticket()
+
+        self.assertTrue(incident.helpdesk_ticket_id)
+        ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
+        self.assertEqual(ticket.stage, "new")
+        self.assertEqual(ticket.user_id, self.on_duty_user)
+
+        events = self.env["calendar.event"].search(
+            [
+                ("partner_ids", "in", self.on_duty_user.partner_id.id),
+                ("name", "ilike", incident.name),
+            ],
+            limit=10,
+        )
+        self.assertTrue(
+            events,
+            "A genuine ticket must still get its normal Incident Response calendar block.",
+        )
+
     def test_03_batch_helpdesk_creation(self):
         """Verify that multiple incidents generate helpdesk tickets in a single batched create query."""
         self.env["ir.config_parameter"].set_param(

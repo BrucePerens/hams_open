@@ -8,6 +8,7 @@ from . import test_controllers
 from . import test_generalized_config
 from . import test_generalized_monitor
 from . import test_helpdesk_adapter
+from . import test_inbound_spam_filter
 from . import test_incident
 from . import test_incident_creator_privilege
 from . import test_incident_edge_cases
