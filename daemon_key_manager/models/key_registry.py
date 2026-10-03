@@ -8,8 +8,15 @@ import datetime
 import tempfile
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError, AccessError
+from odoo.addons.base.models.res_users import INDEX_SIZE, KEY_CRYPT_CONTEXT
 
 _logger = logging.getLogger(__name__)
+
+# A key is rotated once it is older than this. Shared by the Odoo-side
+# cron and the remote self-rotation path so both follow one schedule.
+ROTATION_AGE_DAYS = 59
+# Lifetime of every key this module mints.
+KEY_LIFETIME_DAYS = 90
 
 
 class DaemonKeyRegistry(models.Model):
@@ -47,6 +54,20 @@ class DaemonKeyRegistry(models.Model):
         help="The company that owns this daemon registry. Service accounts are company-specific.",
     )
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
+    remote_self_rotation = fields.Boolean(
+        string="Remote Self-Rotation",
+        default=False,
+        help="""
+        Set for a daemon that runs on a different machine than Odoo. Odoo
+        cannot write that machine's key file, so the Odoo-side rotation
+        paths (the daily cron, Force Provision All, Rotate Key) skip this
+        registry, and the daemon rotates its own key through
+        rotate_own_key() over JSON-2 instead.
+        """,
+    )
+    # Id of the res.users.apikeys row rotate_own_key() issued and the remote
+    # daemon has not yet proved it holds. 0 when no rotation is in flight.
+    pending_key_id = fields.Integer(readonly=True, copy=False)
 
     _err_uniq = "The daemon name must be unique per company!"
     _name_company_uniq = models.Constraint(
@@ -269,8 +290,14 @@ class DaemonKeyRegistry(models.Model):
         self = self.with_user(svc_uid)
 
         # [@ANCHOR: COMM_force_provision_logic]
+        # A remote self-rotating registry is left alone: re-provisioning it here
+        # would revoke the key the remote daemon holds (see
+        # COMM_remote_self_rotation_excluded_from_local_rotation). This runs on
+        # every hams.daemon.keys.service start, so it is not a rare path.
         # Verified by [@ANCHOR: COMM_test_force_provisioning_partial_failure]
-        registries = self.env["daemon.key.registry"].search([], limit=1000)
+        registries = self.env["daemon.key.registry"].search(
+            [("remote_self_rotation", "=", False)], limit=1000
+        )
         user_ids = registries.mapped("user_id").ids
         key_names = [f"{reg.name}_key" for reg in registries]
         pre_fetched_keys = self.env["res.users.apikeys"].search([
@@ -369,6 +396,153 @@ class DaemonKeyRegistry(models.Model):
             },
         }
 
+    @api.model
+    def rotate_own_key(self, daemon_name, current_key):
+        """
+        Remote self-rotation, called over JSON-2 by a daemon that runs on another
+        machine (Remote Self-Rotation set on its registry), authenticated with its
+        current key. Odoo cannot write that machine's key file, so the daemon
+        fetches its new key itself, in two calls, and no key is revoked until the
+        daemon has proved it holds the new one:
+
+        1. Called with the registry's active key. When the key is older than
+           ROTATION_AGE_DAYS, a new key is minted and returned and the active key
+           is left valid. Otherwise nothing changes.
+           Returns {"status": "issued", "login": ..., "key": ...} or
+           {"status": "not_due", "next_rotation": ...}.
+        2. The daemon writes the new key to its key file and calls again with it.
+           The old key is revoked, the new key becomes the active one, it is
+           written to env_file_path on this machine as well, and last_rotated is
+           set. Returns {"status": "confirmed"}.
+
+        A lost response at any point leaves the daemon holding a valid key: a lost
+        step-1 reply means the daemon still has the old key, and its next step 1
+        replaces the unused new key; a lost step-2 reply means the daemon has the
+        new key on disk, and its next call (with that key) completes step 2.
+
+        `current_key` must be a valid key of this registry (not merely any key of
+        the same service account), so another daemon sharing the account cannot
+        rotate this registry. Rotation is only ever issued once the key is due,
+        which bounds how often a stolen key could renew itself, and every issue and
+        confirmation is logged at WARNING.
+        """
+        # [@ANCHOR: COMM_rotate_own_key_api]
+
+        # # Verified by [@ANCHOR: COMM_test_rotate_own_key_two_phase]
+        caller = self.env.user
+        refused = _("Remote self-rotation is not available for daemon '%s'.")
+        if not isinstance(daemon_name, str) or not isinstance(current_key, str):
+            raise AccessError(refused % daemon_name)
+        if len(current_key) <= INDEX_SIZE:
+            raise AccessError(refused % daemon_name)
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
+        registry_model = (
+            self.with_user(svc_uid)
+            .with_company(caller.company_id.id)
+            .env["daemon.key.registry"]
+        )
+        registry = registry_model.search(
+            [
+                ("name", "=", daemon_name),
+                ("user_id", "=", caller.id),
+                ("remote_self_rotation", "=", True),
+            ],
+            limit=1,
+        )
+        # One message for "no such registry", "not yours" and "not remote", so
+        # the refusal does not reveal which registries exist.
+        if not registry:
+            raise AccessError(refused % daemon_name)
+        registry._assert_account_may_hold_key()
+
+        presented_key_id = registry._own_key_row_id(current_key)
+        if not presented_key_id:
+            raise AccessError(refused % daemon_name)
+
+        if presented_key_id == registry.pending_key_id:
+            return registry._confirm_remote_rotation(current_key)
+        return registry._issue_remote_rotation()
+
+    def _own_key_row_id(self, raw_key):
+        """
+        Id of the live res.users.apikeys row of this registry that `raw_key` is, or
+        None. The key's hash and index are not ORM fields, so they are read with SQL.
+        """
+        self.ensure_one()
+        self.env.cr.execute(
+            "SELECT id, key FROM res_users_apikeys"
+            " WHERE user_id = %s AND name = %s AND index = %s"
+            " AND (expiration_date IS NULL"
+            " OR expiration_date >= now() at time zone 'utc')",
+            (self.user_id.id, f"{self.name}_key", raw_key[:INDEX_SIZE]),
+        )
+        for row_id, hashed in self.env.cr.fetchall():
+            if KEY_CRYPT_CONTEXT.verify(raw_key, hashed):
+                return row_id
+        return None
+
+    def _issue_remote_rotation(self):
+        """Step 1 of rotate_own_key(): mint the new key, revoke nothing yet."""
+        self.ensure_one()
+        # [@ANCHOR: COMM_rotate_own_key_issue]
+        if self.last_rotated:
+            age = datetime.timedelta(days=ROTATION_AGE_DAYS)
+            due_at = self.last_rotated + age
+            if fields.Datetime.now() < due_at:
+                return {
+                    "status": "not_due",
+                    "next_rotation": fields.Datetime.to_string(due_at),
+                }
+
+        apikeys = self.env["res.users.apikeys"]
+        if self.pending_key_id:
+            # An earlier step 1 whose reply never reached the daemon (or whose
+            # key it never confirmed): that key is unused, so replace it.
+            stale = apikeys.search([("id", "=", self.pending_key_id)], limit=1)
+            stale.unlink()
+
+        self._ensure_usage_group(self.user_id)
+        raw_key = self._mint_key(f"{self.name}_key")
+        self.pending_key_id = self._own_key_row_id(raw_key)
+        _logger.warning(
+            "Remote self-rotation: issued a new key for daemon %s (account %s); "
+            "the old key stays valid until the daemon confirms the new one.",
+            self.name,
+            self.user_id.login,
+        )
+        return {"status": "issued", "login": self.user_id.login, "key": raw_key}
+
+    def _confirm_remote_rotation(self, new_key):
+        """Step 2 of rotate_own_key(): the daemon holds the new key; revoke the rest."""
+        self.ensure_one()
+        # [@ANCHOR: COMM_rotate_own_key_confirm]
+        superseded = self.env["res.users.apikeys"].search(
+            [
+                ("user_id", "=", self.user_id.id),
+                ("name", "=", f"{self.name}_key"),
+                ("id", "!=", self.pending_key_id),
+            ],
+            limit=100,
+        )
+        superseded.unlink()
+        # Keep this machine's copy current too, so env_file_path always holds the
+        # live key (it is where an operator re-copies the key from if the remote
+        # machine loses its file).
+        self._write_secure_env_file(self.env_file_path, self.user_id.login, new_key)
+        self.pending_key_id = 0
+        self.last_rotated = fields.Datetime.now()
+        _logger.warning(
+            "Remote self-rotation: daemon %s (account %s) confirmed its new key; "
+            "%d old key(s) revoked.",
+            self.name,
+            self.user_id.login,
+            len(superseded),
+        )
+        return {"status": "confirmed"}
+
     def _rotate_key_and_write_file(self, pre_fetched_keys=None):
         # # Tested by [@ANCHOR: COMM_test_force_provisioning]
 
@@ -382,22 +556,20 @@ class DaemonKeyRegistry(models.Model):
             msg = _("Only Daemon Key Managers can rotate keys.")
             raise AccessError(msg)
 
-        if not self.user_id.active:
-            # [@ANCHOR: COMM_rotation_safety_archived_user]
-
-            # # Verified by [@ANCHOR: COMM_test_rotation_safety_archived_user]
-            msg = _("Cannot rotate key for archived service account: %s")
-            raise UserError(msg % self.user_id.login)
-
-        if self.user_id.id == self.env.ref(
-            "base.user_root"
-        ).id or self.user_id.has_group("base.group_system"):
+        if self.remote_self_rotation:
+            # [@ANCHOR: COMM_remote_self_rotation_excluded_from_local_rotation]
+            # This path revokes the old key and writes the new one to a file on
+            # THIS machine. For a daemon on another machine that strands it on
+            # a revoked key: it cannot see the file. It rotates through
+            # rotate_own_key() instead.
             msg = _(
-                "Security Alert: The __system__ user ID cannot be used "
-                "to provision a key. This account is forbidden from "
-                "RPC calls."
+                "Daemon '%s' rotates its own key remotely (Remote Self-Rotation). "
+                "Rotating it here would revoke the key the remote daemon holds. "
+                "Clear Remote Self-Rotation first if you really mean to."
             )
-            raise UserError(msg)
+            raise UserError(msg % self.name)
+
+        self._assert_account_may_hold_key()
 
         # Self-healing re-grant: see _ensure_usage_group()'s own docstring for why this
         # can't be assumed to still hold just because register_daemon() granted it once.
@@ -430,16 +602,7 @@ class DaemonKeyRegistry(models.Model):
         # # Tested by [@ANCHOR: COMM_test_key_ownership]
 
         # # Verified by [@ANCHOR: COMM_test_key_ownership]
-        expiration_date = fields.Datetime.now() + datetime.timedelta(days=90)
-
-        # Odoo enforces a strict expiration limit on API keys based on the user's groups.
-        # We execute as the target service account. The required duration (90 days)
-        # is granted by the 'group_daemon_key_usage' group assigned in register_daemon.
-        raw_key = (
-            self.env["res.users.apikeys"]
-            .with_user(self.user_id.id)
-            ._generate("rpc", key_name, expiration_date)
-        )
+        raw_key = self._mint_key(key_name)
 
         # Write to secure file
         self._write_secure_env_file(self.env_file_path, self.user_id.login, raw_key)
@@ -447,6 +610,40 @@ class DaemonKeyRegistry(models.Model):
         _logger.info(
             "Successfully rotated and exported API key for daemon: %s", self.name
         )
+
+    def _mint_key(self, key_name):
+        """Generates a KEY_LIFETIME_DAYS key named `key_name` for this registry's account."""
+        self.ensure_one()
+        expiration_date = fields.Datetime.now() + datetime.timedelta(days=KEY_LIFETIME_DAYS)
+
+        # Odoo enforces a strict expiration limit on API keys based on the user's groups.
+        # We execute as the target service account. The required duration (90 days)
+        # is granted by the 'group_daemon_key_usage' group assigned in register_daemon.
+        return (
+            self.env["res.users.apikeys"]
+            .with_user(self.user_id.id)
+            ._generate("rpc", key_name, expiration_date)
+        )
+
+    def _assert_account_may_hold_key(self):
+        """Refuses archived accounts and __system__/group_system accounts."""
+        self.ensure_one()
+        if not self.user_id.active:
+            # [@ANCHOR: COMM_rotation_safety_archived_user]
+
+            # # Verified by [@ANCHOR: COMM_test_rotation_safety_archived_user]
+            msg = _("Cannot rotate key for archived service account: %s")
+            raise UserError(msg % self.user_id.login)
+
+        if self.user_id.id == self.env.ref(
+            "base.user_root"
+        ).id or self.user_id.has_group("base.group_system"):
+            msg = _(
+                "Security Alert: The __system__ user ID cannot be used "
+                "to provision a key. This account is forbidden from "
+                "RPC calls."
+            )
+            raise UserError(msg)
 
     def _write_secure_env_file(self, path, login, key):
         """
@@ -561,9 +758,14 @@ class DaemonKeyRegistry(models.Model):
         )
         self = self.with_user(svc_uid)
 
-        threshold = fields.Datetime.now() - datetime.timedelta(days=59)
+        threshold = fields.Datetime.now() - datetime.timedelta(days=ROTATION_AGE_DAYS)
         registries = self.env["daemon.key.registry"].search(
-            ["|", ("last_rotated", "=", False), ("last_rotated", "<", threshold)],
+            [
+                ("remote_self_rotation", "=", False),
+                "|",
+                ("last_rotated", "=", False),
+                ("last_rotated", "<", threshold),
+            ],
             limit=10,
             order="last_rotated asc",
         )
