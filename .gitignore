@@ -53,3 +53,9 @@ pager_duty/daemon/pager_config.json
 # LLVM coverage raw profiles (instrumented runs without LLVM_PROFILE_FILE write default_*.profraw into the
 # current directory). Safety net only: tools set LLVM_PROFILE_FILE to a temp dir and remove it.
 *.profraw
+
+# daemons/cloudflared/vendor/ is `go mod vendor` output committed on purpose (#472) and must be
+# tracked in full: generic patterns above (env/, *.log, ...) otherwise silently drop real vendored
+# Go packages -- env/ dropped go.opentelemetry.io/otel/sdk/trace/internal/env/env.go, which left
+# the committed tree unbuildable with -mod=vendor from a clean checkout. Keep this rule last.
+!daemons/cloudflared/vendor/**
