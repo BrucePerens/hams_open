@@ -20,7 +20,7 @@ class WebsitePage(models.Model):
         """
         cacheable = self._allow_to_use_cache(request)
         response = super()._get_response(request)
-        if response and cacheable and hasattr(response, "time"):
+        if response and cacheable and not response.cf_page_cache_hit:
             # [@ANCHOR: COMM_website_page_no_shared_cache_entry]
             # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
             # Odoo's page cache, when an entry is older than _CACHE_DURATION, re-renders the page,
@@ -29,8 +29,9 @@ class WebsitePage(models.Model):
             # (their session_id), content_security_policy writes this request's script nonce into
             # the body with set_data() (turning it into bytes, on which the next cache hit's
             # _post_process_response_from_cache() raises TypeError: a 500 for every later
-            # visitor). `time` is set only on a fresh render (_get_response_raw); a cache hit is a
-            # new http.Response without it. Hand the dispatcher a copy and leave the entry intact.
+            # visitor). A cache hit is a new http.Response built for this request, flagged by
+            # _post_process_response_from_cache() below; a fresh render (_get_response_raw) may be
+            # the cache entry itself. Hand the dispatcher a copy and leave the entry intact.
             fresh = http.Response(
                 headers=response.headers.copy(),
                 mimetype=response.mimetype,
@@ -38,9 +39,9 @@ class WebsitePage(models.Model):
                 status=response.status,
                 response=list(response.response),
             )
-            if hasattr(response, "qcontext"):
-                # website.ir_http._register_website_track() reads the main object from it.
-                fresh.qcontext = response.qcontext
+            # website.ir_http._register_website_track() reads the main object from it. Every
+            # http.Response has a qcontext (Response.set_default() runs in __init__).
+            fresh.qcontext = response.qcontext
             response = fresh
         if response:
             # [@ANCHOR: COMM_website_page_no_inherited_set_cookie]
@@ -52,3 +53,17 @@ class WebsitePage(models.Model):
         if response and cacheable:
             response.headers[EDGE_CACHEABLE_MARKER] = "1"
         return response
+
+    def _get_response_raw(self, request):
+        # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
+        """Flag a freshly rendered page as not a cache hit; see _get_response()."""
+        response = super()._get_response_raw(request)
+        if response:
+            response.cf_page_cache_hit = False
+        return response
+
+    def _post_process_response_from_cache(self, request, response):
+        # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
+        """Flag a response built from Odoo's page cache as a cache hit; see _get_response()."""
+        super()._post_process_response_from_cache(request, response)
+        response.cf_page_cache_hit = True

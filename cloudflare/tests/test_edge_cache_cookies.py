@@ -8,7 +8,6 @@ starts from a fresh cookie jar (_fresh_visitor), because HttpCase's opener other
 session cookie of an earlier request into the next one.
 """
 import re
-from unittest.mock import patch
 
 from odoo.tests.common import Opener, tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -165,7 +164,7 @@ class TestEdgeCacheCookies(HamsHttpCase):
         page_model = type(self.env["website.page"])
         self._fresh_visitor()
         self.url_open(PAGE_URL)  # fill Odoo's page cache
-        with patch.object(page_model, "_CACHE_DURATION", -1):
+        with self.safe_patch_object_cm(page_model, "_CACHE_DURATION", -1):
             self._fresh_visitor()
             visitor_a = self.url_open(PAGE_URL, cookies={"website_cookies_bar": '{"optional": true}'})
         self.assertEqual(visitor_a.status_code, 200)
