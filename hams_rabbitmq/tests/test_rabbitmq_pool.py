@@ -7,6 +7,7 @@ import pika
 
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.hams_rabbitmq.models.rabbitmq_pool import resolve_rabbitmq_credentials
 
 
 @tagged("post_install", "-at_install")
@@ -183,3 +184,16 @@ class TestRabbitMQPool(RealTransactionCase):
         self.safe_patch_object(type(pool), "_get_channel", return_value=None)
         pool.publish("", "hams_rabbitmq_unused", "x", on_result=boom)
         self.env.cr.commit()  # must not raise
+
+    def test_05_credentials_never_fall_back_to_guest(self):
+        # [@ANCHOR: COMM_test_05_credentials_never_fall_back_to_guest]
+        """Production (hams_prod) has no rabbitmq.* parameters, so the account comes from
+        RMQ_USER/RMQ_PASS in odoo.service's environment; with neither source there is no account,
+        never the factory guest/guest one."""
+        # Tests [@ANCHOR: rabbitmq_resolve_credentials]
+        env = {"RMQ_USER": "hams_rabbitmq", "RMQ_PASS": "from-env"}
+        self.assertEqual(resolve_rabbitmq_credentials("param_user", "param_pass", env), ("param_user", "param_pass"))
+        self.assertEqual(resolve_rabbitmq_credentials(None, None, env), ("hams_rabbitmq", "from-env"))
+        self.assertEqual(resolve_rabbitmq_credentials("param_user", None, env), ("hams_rabbitmq", "from-env"))
+        self.assertIsNone(resolve_rabbitmq_credentials(None, None, {}))
+        self.assertIsNone(resolve_rabbitmq_credentials(None, None, {"RMQ_USER": "hams_rabbitmq"}))

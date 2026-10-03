@@ -9,6 +9,7 @@ import odoo.addons.distributed_redis_cache.redis_cache as rc
 import odoo.addons.distributed_redis_cache.redis_pool as rp
 from odoo import fields
 import asyncio
+import os
 import odoo.addons.distributed_redis_cache.daemons.cache_manager as cm
 from odoo.addons.distributed_redis_cache.daemons.cache_manager import broadcast_to_redis, postgres_notify_handler
 
@@ -393,3 +394,40 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
             asyncio.run(cm.main())
         except ConnectionRefusedError:
             self.fail("_reconnect()'s own except block did not swallow the connection failure")
+
+    def test_redis_pools_authenticate_with_the_redis_env_credentials(self):
+        # [@ANCHOR: COMM_test_redis_pool_env_variables]
+        """Production Redis refuses unauthenticated clients (since 2026-10-03): the shared pool and
+        every custom pool must carry REDIS_USERNAME/REDIS_PASSWORD from redis.env, and an unset
+        value must mean "no AUTH" (a test box), never an empty-string username."""
+        # Tests [@ANCHOR: COMM_redis_connection_pool]
+        self.assertEqual(rp.REDIS_USERNAME_DEFAULT, os.getenv("REDIS_USERNAME") or None)
+        self.assertEqual(rp.redis_pool.connection_kwargs.get("username"), rp.REDIS_USERNAME_DEFAULT)
+        self.assertEqual(rp.redis_pool.connection_kwargs.get("password"), rp.REDIS_PASS_DEFAULT)
+        self.assertIsNotNone(get_redis_connection().ping())
+
+        class MockSecurityUtils:
+            def with_context(self, **kwargs):
+                return self
+
+            def _get_system_param(self, key, default=None):
+                if key == "distributed_redis_cache.redis_port":
+                    return str(rp.REDIS_PORT_DEFAULT)
+                if key == "distributed_redis_cache.redis_password":
+                    return "a-different-password"
+                return default
+
+        class MockCr:
+            dbname = "redis_credentials_probe_db"
+
+        class MockEnv(dict):
+            cr = MockCr()
+
+        rp.clear_db_config_cache("redis_credentials_probe_db")
+        try:
+            client = get_redis_connection(MockEnv({"zero_sudo.security.utils": MockSecurityUtils()}))
+            self.assertEqual(client.connection_pool.connection_kwargs.get("username"), rp.REDIS_USERNAME_DEFAULT)
+            self.assertEqual(client.connection_pool.connection_kwargs.get("password"), "a-different-password")
+        finally:
+            rp.clear_db_config_cache("redis_credentials_probe_db")
+            _custom_pools.pop((rp.REDIS_HOST_DEFAULT, rp.REDIS_PORT_DEFAULT, "a-different-password"), None)
