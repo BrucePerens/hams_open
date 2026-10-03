@@ -1,6 +1,6 @@
 <section id="ses-webhook">
     <h2>SES Webhook Functionality</h2>
-    <p>This module provides an interface to configure incoming email routing from Amazon SES via SNS webhooks.</p>
+    <p>This module provides an interface to configure incoming email routing from Amazon SES via Amazon SNS (Simple Notification Service) webhooks.</p>
 
     <h3>UI Functionality</h3>
     
@@ -10,7 +10,7 @@
         <li><strong>List View:</strong> Displays configured domains, their associated company, and the Webhook URL.</li>
         <li><strong>Form View:</strong> Allows administrators to register a new domain and map it to a tenant company.
             <ul>
-                <li><strong>Secret Token:</strong> Automatically generated and used to authenticate requests -- one of two independent checks; incoming requests are also required to carry a real, verified AWS SNS message signature.</li>
+                <li><strong>Secret Token:</strong> Automatically generated and used to authenticate requests -- one of two independent checks; incoming requests are also required to carry a real, verified AWS SNS message signature. The token is part of the Webhook URL (its <code>token</code> query parameter), so keep that URL private.</li>
                 <li><strong>Webhook URL:</strong> The URL to provide to Amazon SNS. It can be easily copied to the clipboard.</li>
                 <li><strong>AWS Configuration Instructions:</strong> A dedicated tab providing step-by-step guidance on setting up the Amazon SNS Topic and Amazon SES Receipt Rule.</li>
             </ul>
@@ -20,7 +20,13 @@
     <h4>2. SES Webhook Logs</h4>
     <p><strong>Path:</strong> SES Webhooks &gt; Logs</p>
     <ul>
-        <li><strong>List View:</strong> Shows a color-coded log of all received webhooks. Green for success, red for failed, and gray for ignored.</li>
+        <li><strong>List View:</strong> Shows a color-coded log of all received webhooks. Green for success, red for failed, and gray for ignored. The two rejection statuses (Rejected Subscribe URL, and Rejected: Invalid AWS SNS Signature) have no color.
+            <ul>
+                <li><strong>Ignored</strong> means the request was accepted but no incoming email was handed to Odoo's mail processing: an unsubscribe confirmation, a notification with no email content, or an email from a sender with no matching user account (see Pending Submissions below).</li>
+                <li><strong>Rejected Subscribe URL</strong> means a subscription confirmation named a confirmation address that is not an Amazon SNS address, so it was not visited.</li>
+                <li>A request with a missing or wrong token is refused and does not appear in this log.</li>
+            </ul>
+        </li>
         <li><strong>Form View:</strong> Displays detailed information about a specific webhook request, including:
             <ul>
                 <li>Message ID, Date, Payload Type, and Status.</li>
@@ -30,5 +36,12 @@
         </li>
     </ul>
     
+    <h4>3. Pending Submissions</h4>
+    <p><strong>Path:</strong> SES Webhooks &gt; Pending Submissions</p>
+    <p>When an incoming email's sender does not match any user account, the email is not handed to Odoo's mail processing. It is held here instead, and the sender is sent an email asking them to create an account with the same address and then resend their message. Held emails are deleted automatically 7 days after they arrive.</p>
+
+    <h4>4. Bounces and Complaints</h4>
+    <p>Amazon SES bounce and complaint notifications arriving at the same webhook add the affected recipient addresses to Odoo's email blacklist, so no further mail is sent to them. Every spam complaint is blacklisted; a bounce is blacklisted only when Amazon SES reports it as permanent.</p>
+
     <p>Logs older than 30 days are automatically deleted by a scheduled action to preserve database space.</p>
 </section>

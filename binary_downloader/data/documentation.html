@@ -6,10 +6,10 @@
 
     <h2>1. Purpose and Automation</h2>
     <p>
-        Modern Odoo deployments often rely on external high-performance tools written in languages like Go or Rust. Instead of requiring manual system administration to install these tools on the host server, the Binary Downloader automates the lifecycle of these dependencies. This module operates without administrative privileges (Zero-Sudo) and ensures that all binaries are verified for integrity before execution.
+        Modern Odoo deployments often rely on external high-performance tools written in languages like Go or Rust. Instead of requiring manual system administration to install these tools on the host server, the Binary Downloader automates the lifecycle of these dependencies. This module operates without administrative privileges (Zero-Sudo: this platform's rule that code never calls Odoo's <code>.sudo()</code>; privileged steps run as a dedicated service-account user instead) and ensures that all binaries are verified for integrity before execution.
     </p>
     <p>
-        When an Odoo module needs a specific program, it asks the Binary Downloader to "ensure" it is available. If the program is missing or invalid, it is downloaded, verified for integrity using cryptographic hashes, and installed into a protected internal directory.
+        When an Odoo module needs a specific program, it asks the Binary Downloader to "ensure" it is available. If the program is missing or invalid, it is downloaded, verified for integrity using cryptographic hashes, and installed into a protected internal directory. This request always uses the copy in that directory, never a same-named program found on the system PATH.
     </p>
 
     <!-- [@ANCHOR: binary_downloader:UX_BINARY_INSTALL] -->
@@ -19,9 +19,9 @@
     </p>
     <h3>2.1. Monitoring and Manual Installation</h3>
     <ol>
-        <li>Navigate to <strong>Settings -> Technical -> Binary Manifests</strong>.</li>
+        <li>Open the <strong>Binary Manifests</strong> menu. It is declared as a top-level menu (no parent), not under <strong>Settings -> Technical</strong>.</li>
         <li>Review the list of binaries. The <strong>Installed</strong> column indicates if the dependency is currently available on the system PATH or in Odoo's private binary directory (<code>hams_bin</code>).</li>
-        <li>To manually install or update a dependency, click the <strong>Install</strong> button on the list view, or open the record and click <strong>Install Now</strong>.</li>
+        <li>To manually install or update a dependency, click the <strong>Install</strong> button on the list view, or open the record and click <strong>Install Now</strong>. These buttons are shown only to members of the Binary Downloader Manager group and administrators, and only while the binary is not marked Installed. A program found on the system PATH counts as Installed, so its button is hidden.</li>
         <li>If an installation fails, a detailed notification will explain the cause (e.g., network error, checksum mismatch, or missing member in archive).</li>
     </ol>
 
@@ -30,11 +30,11 @@
         In advanced multi-tenant environments, you may need different websites to use different versions of the same tool.
     </p>
     <ol>
-        <li><strong>Version Management:</strong> Under <strong>Settings -> Technical -> Binary Versions</strong>, you can define multiple specific releases for a Software Manifest (e.g., Kopia 0.12.1, 0.13.0).</li>
-        <li><strong>Central Pool UI:</strong> From the Version record, click <strong>Download to Pool</strong> to retrieve the selected binary version and store it in the central pool.</li>
-        <li><strong>Station Notification:</strong> Use the <strong>Alert Stations via PagerDuty</strong> button to trigger automated alerts to stations when a new version becomes available.</li>
-        <li><strong>Tenant Links:</strong> Under <strong>Settings -> Technical -> Tenant Executables</strong>, you can link a specific <strong>Website</strong> to a <strong>Software</strong> and select an <strong>Active Version</strong>.</li>
-        <li><strong>Automatic Symlinks:</strong> The system automatically creates a secure "shortcut" (symlink) in a website-specific directory (<code>tenant_bins/site_ID/</code>). This allows your website-specific scripts to always find the correct version of the tool.</li>
+        <li><strong>Version Management:</strong> Under <strong>Settings -> Technical -> Version Pool</strong>, you can define multiple specific releases for a Software Manifest (e.g., Kopia 0.12.1, 0.13.0).</li>
+        <li><strong>Central Pool UI:</strong> From the Version record, click <strong>Download to Pool</strong> to retrieve the selected binary version and store it in the central pool. The central pool is the same protected <code>hams_bin</code> directory manifests install into; each version is stored there under a name derived from its binary name and checksum. Only members of the Binary Downloader Manager group and administrators may download.</li>
+        <li><strong>Station Notification:</strong> Use the <strong>Alert Stations via PagerDuty</strong> button to trigger automated alerts to stations when a new version becomes available. "PagerDuty" here is this platform's own Pager Duty module: the button creates one incident, of medium severity, for each website linked to this software that is not already on this version. Only members of the Binary Downloader Manager group and administrators may send alerts.</li>
+        <li><strong>Tenant Links:</strong> Under <strong>Settings -> Technical -> Station Executables</strong>, you can link a specific <strong>Tenant / Website</strong> to a <strong>Software</strong> and select an <strong>Active Version</strong>. A tenant, a station and a website mean the same thing here. Each website can have one link per software. The <strong>1-Click Upgrade to Latest</strong> button switches the link to the version with the latest Upstream Release Date.</li>
+        <li><strong>Automatic Symlinks:</strong> The system automatically creates a secure "shortcut" (symlink) in a website-specific directory (<code>tenant_bins/site_ID/</code>). This allows your website-specific scripts to always find the correct version of the tool. The symlink is created when the link is saved and re-pointed when the Active Version changes; a version not yet in the central pool is downloaded first.</li>
     </ol>
 
     <h3>2.3. Adding New Binaries</h3>
@@ -45,10 +45,10 @@
         <li>Click the <strong>New</strong> button in the Binary Manifests list.</li>
         <li><strong>Binary Name:</strong> Enter the command name (e.g., <code>my-utility</code>). Do not use slashes or backslashes.</li>
         <li><strong>Company:</strong> Select the company that owns this manifest. In multi-company environments, this ensures that each company can have its own specific version or download source for a binary.</li>
-        <li><strong>Download URL:</strong> Provide the HTTPS link to the raw binary or <code>.tar.gz</code> archive.</li>
+        <li><strong>Download URL:</strong> Provide the HTTPS link to the raw binary or the <code>.tar.gz</code> or <code>.zip</code> archive. Only <code>https://</code> URLs are accepted.</li>
         <li><strong>SHA-256 Checksum:</strong> Provide the expected SHA-256 hash of the file. This is mandatory for security.</li>
         <li><strong>Archive Type:</strong> Select "Raw Binary" if the URL points directly to the executable, "Tarball (.tar.gz)" for Gzipped Tar archives, or "Zip Archive (.zip)" for ZIP files.</li>
-        <li><strong>Extract Member:</strong> For tarballs and zip files, specify the filename within the archive that should be extracted as the executable. This is required for <code>.tar.gz</code> and <code>.zip</code> files.</li>
+        <li><strong>Extract Member:</strong> For tarballs and zip files, specify the filename within the archive that should be extracted as the executable. This is required for <code>.tar.gz</code> and <code>.zip</code> files. The first archive entry whose path equals this value, or ends in <code>/</code> followed by it, is used, so a file inside a subdirectory can be named by its file name alone.</li>
     </ol>
 
     <h2 id="binary_security">3. Security Architecture</h2>
@@ -59,17 +59,17 @@
         <li><strong>Cryptographic Verification:</strong> Every downloaded file is verified against a <strong>SHA-256 checksum</strong>. If the file's digital fingerprint doesn't match the expected value, the installation is aborted to protect against tampering.</li>
         <li><strong>Advisory Locking:</strong> The system uses database-level locks (PostgreSQL advisory locks) to ensure that multiple Odoo workers don't try to install or update the same binary simultaneously, preventing file corruption.</li>
         <li><strong>Micro-Privilege:</strong> Downloads and installations are performed using a restricted service account (<code>user_binary_downloader_service</code>) to minimize system risk, adhering to the Zero-Sudo mandate.</li>
-        <li><strong>Path Sanitization:</strong> Strict protections are in place to prevent "Tar Slip" and "Zip Slip" vulnerabilities. Symbolic links and hard links within archives are strictly forbidden.</li>
+        <li><strong>Path Sanitization:</strong> Strict protections are in place to prevent "Tar Slip" and "Zip Slip" vulnerabilities, in which a path such as <code>../../x</code> inside an archive makes extraction write outside the intended directory. Only the one selected archive member is extracted, and it is always written to a file name the system computes, never to the path stored in the archive. Symbolic links and hard links within archives are strictly forbidden: if the selected member is a link, installation is refused.</li>
         <li><strong>Isolation:</strong> Binaries are stored in a dedicated <code>hams_bin</code> folder within Odoo's data directory, kept separate from system-wide binaries and set with restricted <code>0o750</code> permissions.</li>
     </ul>
 
     <h2>4. Troubleshooting Common Issues</h2>
     <ul>
         <li><strong>Checksum Failures:</strong> If you see a "Security Alert: Checksum mismatch", it means the file downloaded from the internet does not match the fingerprint in Odoo's database. This could be due to a corrupted download or a change in the remote file. Contact your technical support.</li>
-        <li><strong>System Architecture:</strong> Automatic installation is currently optimized for <strong>64-bit Linux (x86_64)</strong> systems. Other architectures may require manual installation via the system package manager.</li>
-        <li><strong>Network Connectivity:</strong> The Odoo server must have HTTPS access to the download URLs (e.g., <code>github.com</code>) to fetch the dependencies. The system also supports local mirrors if configured.</li>
+        <li><strong>System Architecture:</strong> Automatic installation runs only on <strong>Linux</strong> on x86_64, aarch64 or armv7l processors; on anything else it stops with an error asking for manual installation. The manifests shipped with this module (kopia, etcd, cloudflared) point at 64-bit x86 (x86_64) Linux builds, so on other processors change their Download URL and checksum to a matching build. They are shipped from the module's data file, so a module upgrade resets those three manifests to the shipped values and undoes such an edit. A company-specific manifest of the same name is not reset and takes precedence over the shipped global one for that company.</li>
+        <li><strong>Network Connectivity:</strong> The Odoo server must have HTTPS access to the download URLs (e.g., <code>github.com</code>) to fetch the dependencies. A mirror can be used by pointing a manifest's Download URL at it, but only if its host name resolves to public internet addresses: loopback, private-network and other internal addresses are refused (also after a redirect) to stop the server being used to reach internal services. Downloads over 1 GiB are refused, and network operations use a 15-second timeout.</li>
         <li><strong>Missing Member:</strong> For archives, ensure the "Extract Member" field exactly matches the filename inside the archive.</li>
-        <li><strong>Permissions:</strong> If a binary is present but not working, the system will attempt to set its permissions to <code>0o750</code>. Ensure Odoo has write access to its own data directory.</li>
+        <li><strong>Permissions:</strong> If a binary is present but not executable, the system will attempt to set its permissions to <code>0o750</code>. Ensure Odoo has write access to its own data directory.</li>
     </ul>
 
     <h2>User Interface</h2>
