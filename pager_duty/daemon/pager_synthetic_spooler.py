@@ -117,9 +117,8 @@ def execute_check(check):
                         target_path = os.path.join(tmpdir, os.path.basename(fname))
                         req = urllib.request.Request(
                             url,
-                            # An honest User-Agent, like this module's other fetches (Pager-Daemon/1.0); never a
-                            # browser string (no browser impersonation, 2026-10-02).
-                            headers={"User-Agent": "Pager-Synthetic-Spooler/1.0"}
+                            # An honest User-Agent naming hams.com with a contact URL (ADR 0104); never a browser string.
+                            headers={"User-Agent": "Pager-Synthetic-Spooler/1.0 (+https://crawler.hams.com; bruce@perens.com)"}
                         )
                         try:
                             # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe()

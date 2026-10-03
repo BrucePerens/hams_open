@@ -201,7 +201,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
         pager_synthetic_spooler.execute_check(check)
         self.assertEqual(len(seen_requests), 1)
         user_agent = seen_requests[0].get_header("User-agent")
-        self.assertEqual(user_agent, "Pager-Synthetic-Spooler/1.0")
+        self.assertEqual(user_agent, "Pager-Synthetic-Spooler/1.0 (+https://crawler.hams.com; bruce@perens.com)")
         self.assertNotRegex(user_agent, r"Mozilla/|AppleWebKit|Chrome/|Safari/|Gecko")
 
     def test_03_main_runs_one_real_cycle_and_writes_the_spool_file(self):
