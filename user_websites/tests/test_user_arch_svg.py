@@ -251,10 +251,9 @@ class TestUserArchSvgMemberPaths(HamsHttpCase):
     # Tests [@ANCHOR: test_blog_post_orm_content_sanitized]
     # Tests [@ANCHOR: user_websites:blog_post_content_sanitize]
 
-    def setUp(self):
-        super().setUp()
+    def _new_member(self):
         unique = uuid.uuid4().hex[:8]
-        self.member = self.env["res.users"].create(
+        return self.env["res.users"].create(
             {
                 "name": f"Svg Member {unique}",
                 "login": f"svgmember_{unique}",
@@ -274,16 +273,21 @@ class TestUserArchSvgMemberPaths(HamsHttpCase):
             }
         )
 
-    def _create_page(self, slug, arch, as_member=True):
+    def setUp(self):
+        super().setUp()
+        self.member = self._new_member()
+
+    def _create_page(self, slug, arch, as_member=True, member=None):
+        member = member or self.member
         pages = self.env["website.page"]
         if as_member:
-            pages = pages.with_user(self.member)
+            pages = pages.with_user(member)
         return pages.create(
             {
-                "url": f"/{self.member.website_slug}/{slug}",
+                "url": f"/{member.website_slug}/{slug}",
                 "name": slug,
                 "type": "qweb",
-                "owner_user_id": self.member.id,
+                "owner_user_id": member.id,
                 "website_published": True,
                 "arch": arch,
             }
@@ -364,6 +368,7 @@ class TestUserArchSvgMemberPaths(HamsHttpCase):
         )
         assert_arch_is_safe(self, "member page", member_page.arch)
         extra = []
+        owner = self._new_member()
         for index, (name, payload) in enumerate(XSS_CORPUS + RAW_TEXT_VECTORS):
             if name in combined_names:
                 continue
@@ -374,7 +379,11 @@ class TestUserArchSvgMemberPaths(HamsHttpCase):
             cleaned, _ = self.env["website.page"]._sanitize_user_arch(
                 f"<div id='corpus-start'>{name}</div>{payload}"
             )
-            page = self._create_page(f"v{index}", f"<t name='{name}'>{cleaned}</t>", as_member=False)
+            if index % 50 == 49:
+                owner = self._new_member()  # each member is capped at 100 pages
+            page = self._create_page(
+                f"v{index}", f"<t name='{name}'>{cleaned}</t>", as_member=False, member=owner
+            )
             extra.append(page.url)
         self.assertTrue(extra)
         self.browser_js(
