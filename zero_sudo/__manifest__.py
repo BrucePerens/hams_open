@@ -95,6 +95,12 @@
             "category": "workspace",
         },
         {
+            "name": "Inline SVG Allowlist Sanitizer",
+            "path": "docs/stories/svg_allowlist_sanitizer.md",
+            "icon": "📐",
+            "category": "workspace",
+        },
+        {
             "name": "High-Performance Atomic KV Storage",
             "path": "docs/stories/set_kv_procedure.md",
             "icon": "⚡",

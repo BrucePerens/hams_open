@@ -25,6 +25,7 @@ from . import test_controllers
 from . import test_offline_store_hoot
 from . import test_hoot_empty_run_guard
 from . import test_confirm_submit_csp
+from . import test_svg_sanitizer
 from . import common
 from . import dummy_daemon
 
@@ -87,3 +88,4 @@ from . import test_chrome_init_retry_teardown  # noqa: E402
 from . import test_werkzeug_thread_wait  # noqa: E402
 from . import test_debug_assets_propagation  # noqa: E402
 from . import test_navigator_overrides  # noqa: E402
+from . import test_svg_review_findings  # noqa: E402

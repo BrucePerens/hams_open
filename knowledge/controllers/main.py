@@ -62,6 +62,11 @@ class ManualLibraryController(http.Controller):
                     "//div | //table | //section | //article | //img"
                     " | //h1 | //h2 | //h3 | //h4 | //h5 | //h6"
                     " | //ul | //ol | //pre | //blockquote | //hr | //dl"
+                    # An inline SVG diagram (kept by zero_sudo's SVG allowlist
+                    # sanitizer) is real HTML. Its text labels can look like
+                    # markdown ("- 10k"), and re-parsing it through
+                    # html2plaintext would destroy the drawing.
+                    " | //svg"
                 )
             )
         except (TypeError, ValueError, lxml.etree.ParserError, lxml.etree.XMLSyntaxError): # audit-ignore-catch-all
