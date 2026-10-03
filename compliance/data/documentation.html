@@ -4,14 +4,14 @@
 <hr class="mt-4 mb-4"/>
 
 <h2 class="mt-4">1. Introduction</h2>
-<p>Running a website today involves many legal responsibilities. The <code>compliance</code> module is designed to automate the technical side of these responsibilities so you can focus on your community. This guide explains what the module does and how you can manage your site's legal standing. We handle the technical "heavy lifting" so you can stay compliant with GDPR, CCPA, and the ePrivacy directive effortlessly.</p>
+<p>Running a website today involves many legal responsibilities. The <code>compliance</code> module is designed to automate the technical side of these responsibilities so you can focus on your community. This guide explains what the module does and how you can manage your site's legal standing. We handle the technical "heavy lifting" so you can stay compliant with GDPR, CCPA, and the ePrivacy directive (each explained below) effortlessly.</p>
 
 <h2 class="mt-4">2. Data Privacy &amp; Protection (GDPR &amp; CCPA)</h2>
 <p>Modern data protection laws like the General Data Protection Regulation (GDPR) in Europe and the California Consumer Privacy Act (CCPA) mandate strict handling of personal data. This platform is built with <strong>Privacy by Design</strong>.</p>
 <ul>
     <li><strong>Data Minimization:</strong> The platform avoids unnecessary data collection. System view counters operate without logging Personally Identifiable Information (PII) or IP addresses.</li>
     <li><strong>Data Portability (Right to Access):</strong> Users have the right to request a copy of their data. The platform provides an automated JSON export tool at <code>/my/privacy</code>.</li>
-    <li><strong>Right to Erasure (Right to be Forgotten):</strong> Users must be able to delete their accounts and data. An automated hard-delete facility is available at <code>/my/privacy</code>, which immediately unlinks all authored pages and blogs.</li>
+    <li><strong>Right to Erasure (Right to be Forgotten):</strong> Users must be able to delete their accounts and data. An automated hard-delete facility is available at <code>/my/privacy</code>, which immediately unlinks all of the user's pages, blog posts, and blogs, removes the user from the community directory, and then deactivates the account.</li>
 </ul>
 
 <hr class="mt-4 mb-4"/>
@@ -60,7 +60,7 @@
 <h3 class="mt-3">The "Non-Destructive Mandate"</h3>
 <!-- [@ANCHOR: COMM_test_compliance_non_destructive_mandate] -->
 <p>We respect your work. If you have already created a custom page at one of these URLs before installing this module, we will <strong>not</strong> overwrite it. Instead, the module will automatically "unpublish" its own boilerplate version to ensure your custom content remains the one your visitors see.</p>
-<p>If you want to go back to using our boilerplate after having unpublished it (or having it automatically unpublished), simply delete your custom page or unpublish it, and then re-publish the "Global Compliance" version of the page in the <b>Site -&gt; Pages</b> menu. When the module is updated, it will automatically re-publish its boilerplate if no custom version is detected for that specific website.</p>
+<p>If you want to go back to using our boilerplate after having unpublished it (or having it automatically unpublished), simply delete your custom page or unpublish it, and then re-publish the "Global Compliance" version of the page (it has the same page name, e.g. "Privacy Policy") in the <b>Site -&gt; Pages</b> menu. The module does not do this for you on a module update: its check for custom pages runs only when the module is installed (or reinstalled). At that point it re-publishes its boilerplate wherever no custom version is detected for that specific website.</p>
 <p>Additionally, because these pages are created as "noupdate" records, any edits you make using the website builder will be preserved even when you update the <code>compliance</code> module in the future.</p>
 
 <hr class="mt-4 mb-4"/>
@@ -81,7 +81,7 @@
 <ul>
     <li><strong>Notice and Action Mechanism:</strong> Integrated modules provide a "Report Violation" button on user-generated content, allowing guests and users to report abuse.</li>
     <li><strong>Reporter Shielding:</strong> To prevent retaliation, the identity of the complainant is strictly shielded from the content owner.</li>
-    <li><strong>Fair Appeals:</strong> The automated Three-Strike suspension system implemented across the platform ensures users can contest moderation decisions fairly.</li>
+    <li><strong>Fair Appeals:</strong> The automated Three-Strike suspension system implemented across the platform is paired with an appeal process: a suspended user can file an appeal, which a User Websites administrator approves or rejects.</li>
 </ul>
 
 <hr class="mt-4 mb-4"/>
@@ -91,7 +91,7 @@
 <ul>
     <li><strong>Review Templates Monthly:</strong> Regulations change. While our templates provide a solid starting point, navigate to <code>/privacy</code> and <code>/terms</code> once a month to ensure the text accurately reflects your community's current practices.</li>
     <li><strong>Test the Consent Bar:</strong> Every time you add a new third-party widget (like a chat tool or video embed), open your site in an Incognito window to confirm the Cookie Bar still appears and functions correctly.</li>
-    <li><strong>Monitor Violation Reports:</strong> Use the "Content Violations" menu in the backend to review any reports submitted by users. Fair and timely moderation is a key part of modern compliance (e.g., Digital Services Act).</li>
+    <li><strong>Monitor Violation Reports:</strong> Use the <b>User Websites -&gt; Moderation</b> menu (the "Violation Reports" list, visible to moderators) in the backend to review any reports submitted by users. Fair and timely moderation is a key part of modern compliance (e.g., Digital Services Act).</li>
 </ul>
 
 <hr class="mt-4 mb-4"/>

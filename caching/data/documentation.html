@@ -4,7 +4,7 @@
 
     <!-- [@ANCHOR: COMM_caching_overview] -->
     <h2 id="overview">1. Overview</h2>
-    <p>The Caching module dramatically speeds up your website by saving essential design files (like JavaScript, CSS, and UI icons) directly in your browser's local storage. This means that after the first time you visit, the website loads almost instantly because it doesn't have to wait for the same files to download over the internet again. This module acts like a high-speed personal library for your web browser, keeping the website's interface ready for use at a moment's notice.</p>
+    <p>The Caching module dramatically speeds up your website by saving essential design files (like JavaScript, CSS, and UI icons) directly in your browser's cache storage. This means that after the first time you visit, the website loads almost instantly because it doesn't have to wait for the same files to download over the internet again. This module acts like a high-speed personal library for your web browser, keeping the website's interface ready for use at a moment's notice.</p>
 
     <!-- [@ANCHOR: COMM_caching_how_it_works] -->
     <h2 id="how_it_works">2. How it Works</h2>
@@ -12,24 +12,24 @@
     <ul>
         <li><strong>Smart Asset Interception:</strong> It automatically identifies and saves Odoo's core assets and custom module files.</li>
         <li><strong>Local Fulfillment:</strong> On subsequent visits, these files are delivered from your computer's storage with near-zero latency, even on slow connections.</li>
-        <li><strong>Automatic Background Updates:</strong> If the website design is updated, your browser will automatically detect the change on the next visit, download the new versions in the background, and seamlessly update your local cache.</li>
+        <li><strong>Automatic Background Updates:</strong> If the website design is updated (the server's scan of module files finds a newer file, or an administrator clicks <strong>Invalidate Cache Now</strong>), your browser will automatically detect the change on the next visit, download the new versions in the background, and seamlessly update your local cache. The page then shows an "Update Available" notice with a <strong>Reload</strong> button. Odoo's own compiled bundles update even without this, because each new version has a new address.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_caching_safety_features] -->
     <h2 id="safety_features">3. Important Safety Features</h2>
     <ul>
-        <li><strong>Intelligent Quota Management:</strong> Browsers limit how much data a Service Worker can save. To prevent the browser from "panicking" and deleting the entire cache, our assistant calculates exactly how much space is safe. It prioritizes small, essential UI files and automatically skips very large media files, while always reserving at least 10MB for critical system bundles and overhead.</li>
+        <li><strong>Intelligent Quota Management:</strong> Browsers limit how much data a Service Worker can save. To prevent the browser from "panicking" and deleting the entire cache, our assistant calculates exactly how much space is safe. It prioritizes small, essential UI files and automatically skips files above a size limit it calculates from the quota, while always setting aside 10MB of the quota for critical system bundles and overhead. When the browser's storage still goes over the quota, it removes the least recently used files first.</li>
         <li><strong>Privacy-First Architecture:</strong> The module only saves public technical assets required to display the website. It never saves your personal information, login credentials, or private data.</li>
         <li><strong>Real-time Compatibility:</strong> Live communication features like chat and notifications are explicitly bypassed by the caching system to ensure they always provide real-time updates.</li>
-        <li><strong>High-Performance Delivery:</strong> The module uses advanced database procedures to ensure that checking for cache updates doesn't slow down the server, even with thousands of simultaneous visitors.</li>
+        <li><strong>High-Performance Delivery:</strong> The server does not rescan its files for every visitor: the scan result and the Service Worker script template are kept in the shared Redis cache (for up to 24 hours) and in each server's memory, so checking for cache updates doesn't slow down the server, even with thousands of simultaneous visitors.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_caching_admin_controls] -->
     <h2 id="administrator_controls">4. Administrator Controls</h2>
-    <p>Administrators can fine-tune the caching behavior from the <strong>Website Settings</strong> (Configuration &gt; Settings &gt; Website section):</p>
+    <p>Administrators can fine-tune the caching behavior from the <strong>Website Settings</strong> (Configuration &gt; Settings &gt; Website section, in the <strong>Caching Service Worker</strong> block):</p>
     <ul>
         <li><strong>Safe Quota (MB):</strong> Adjust the maximum total size of files the browser is allowed to save. The default is 35MB, which is safe for most modern browsers. If your website's assets exceed this limit, the module will automatically prioritize essential files and skip the heaviest ones to maintain stability.</li>
-        <li><strong>Force Cache Invalidation:</strong> If you have made major visual changes (like updating logos, brand colors, or custom scripts) and want to ensure all users see the update immediately on their next visit, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version and forces all browsers to purge their saved assets and download fresh ones.</li>
+        <li><strong>Force Cache Invalidation:</strong> If you have made major visual changes (like updating logos, brand colors, or custom scripts) and want to ensure all users see the update immediately on their next visit, click the <strong>Invalidate Cache Now</strong> button. This increments the cache version of the website you are configuring and forces all browsers to purge their saved assets for that website and download fresh ones.</li>
         <li><strong>PWA Theme Color &amp; Background Color:</strong> Configure the colors injected into the dynamically generated <code>/manifest.json</code>. These settings dictate the browser's UI colors (such as the address bar and splash screen) when users install the site as a Progressive Web App (PWA).</li>
     </ul>
 
@@ -39,15 +39,15 @@
 
     <!-- [@ANCHOR: COMM_caching_troubleshooting] -->
     <h2 id="troubleshooting">6. Troubleshooting</h2>
-    <p>If the website layout appears inconsistent or "broken" after a major update, it is possible that some browsers are still holding onto stale cached files. An administrator can resolve this globally by using the <strong>Invalidate Cache Now</strong> button in the Website Settings. For individual users, a simple page refresh is usually enough to trigger the Service Worker's background update mechanism.</p>
+    <p>If the website layout appears inconsistent or "broken" after a major update, it is possible that some browsers are still holding onto stale cached files. An administrator can resolve this globally by using the <strong>Invalidate Cache Now</strong> button in the Website Settings. For individual users, a simple page refresh is usually enough to trigger the Service Worker's background update mechanism, but only once the server is offering a new Service Worker version (after <strong>Invalidate Cache Now</strong> or a new file scan). Until then, a refresh loads the same saved files again, because saved files are used without checking the server for a newer copy.</p>
 
     <!-- [@ANCHOR: COMM_caching_developer_tips] -->
     <h2 id="developer_tips">7. Developer Tips</h2>
     <p>For developers creating new modules:</p>
     <ul>
         <li>Assets in <code>/your_module/static/src/js/</code> and <code>/your_module/static/src/css/</code> are automatically cached.</li>
-        <li>To force a cache refresh during development, you can either restart the Odoo server or use the <strong>Invalidate Cache Now</strong> button in settings.</li>
-        <li>Avoid putting very large files (over 5MB) in the <code>static/</code> folder, as they might be excluded from the cache to preserve the storage quota.</li>
+        <li>To force a cache refresh during development, you can either restart the Odoo server or use the <strong>Invalidate Cache Now</strong> button in settings. A restart is not always enough: when Redis is in use, the file-scan result cached there can last up to 24 hours. The button always works.</li>
+        <li>Avoid putting very large files in the <code>static/</code> folder, as they might be excluded from the cache to preserve the storage quota. There is no fixed size cutoff: the limit is calculated from the quota and from the sizes of all modules' static files.</li>
     </ul>
 </section>
 

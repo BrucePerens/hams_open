@@ -17,9 +17,9 @@
 <h2 id="UX_CORE_FEATURES" data-trace="[@ANCHOR: backup_management:UX_CORE_FEATURES]">Core Features</h2>
         <ul class="feature-list">
             <li><strong>Unified Dashboard:</strong> View the health and status of all your backup configurations in one place.</li>
-            <li><strong>Automated Scheduling:</strong> Configure periodic snapshots and retention policies.</li>
+            <li><strong>Automated Scheduling:</strong> Configure periodic snapshots and retention policies. Once a day the system queues a backup for every configuration, and once an hour it refreshes the list of snapshots and checks for stale backups.</li>
             <li><strong>Safe Execution:</strong> Operations run in the background to ensure the system remains responsive.</li>
-            <li><strong>Integrity Checks:</strong> Automated restore drills verify that your data can actually be recovered.</li>
+            <li><strong>Integrity Checks:</strong> Automated restore drills verify that your data can actually be recovered. A drill runs only for a configuration that names a restore drill script, and at most once every 7 days.</li>
         </ul>
 
         <!-- [@ANCHOR: backup_management:UX_GETTING_STARTED] -->
@@ -28,28 +28,29 @@
         <!-- [@ANCHOR: backup_management:UX_BACKUP_SYNC] -->
 <section id="UX_BACKUP_SYNC" data-trace="[@ANCHOR: backup_management:UX_BACKUP_SYNC]">
             <h4>1. Setup a Backup Configuration</h4>
-            <p>Go to <strong>Backup Management > Configuration > Backup Configurations</strong>. Create a new record, choosing the appropriate engine (Kopia for files, pgBackRest for databases) and providing the target destination. You can also specify how many daily, weekly, and monthly snapshots to keep.</p>
+            <p>Go to <strong>Backups > Management > Configurations</strong>. Create a new record, choosing the appropriate engine (Kopia for files, pgBackRest for databases) and filling in the <strong>Target / Stanza</strong> field: for Kopia, the path the worker passes to <code>kopia snapshot create</code>, which must lie inside one of the allowed backup directories when storage is a local directory; for pgBackRest, the stanza name (letters, digits and underscores only). You can also specify how many daily, weekly, and monthly snapshots to keep. For Kopia, click <strong>Apply Policies</strong> to push those numbers to the repository; for pgBackRest, only the daily number is used.</p>
+            <p>Saving a Kopia password or an S3/B2 secret key fails with an error if the server has no backup encryption key configured, because these secrets are stored encrypted.</p>
         </section>
 
         <!-- [@ANCHOR: backup_management:UX_MONITOR_DASHBOARD] -->
 <h4 id="UX_MONITOR_DASHBOARD" data-trace="[@ANCHOR: backup_management:UX_MONITOR_DASHBOARD]">2. Monitor via Dashboard</h4>
-        <p>The <strong>Backup Dashboard</strong> shows you at a glance if your backups are up to date. Records highlighted in red indicate that no backup has been successful in the last 26 hours. The dashboard also displays the status of the most recent backup or sync job, providing real-time visibility into background operations.</p>
+        <p>The <strong>Backup Dashboard</strong> (<strong>Backups > Management > Backup Dashboard</strong>) shows you at a glance if your backups are up to date. A configuration outlined in red and labeled STALE / FAILED has no recorded snapshot, or its newest recorded snapshot started more than 26 hours ago. The dashboard also displays the status of the most recent backup or sync job, providing real-time visibility into background operations.</p>
 
         <!-- [@ANCHOR: backup_management:UX_MANUAL_EXECUTION] -->
 <h4 id="UX_MANUAL_EXECUTION" data-trace="[@ANCHOR: backup_management:UX_MANUAL_EXECUTION]">3. Manual Execution</h4>
         <p>You can manually interact with backups in several ways:</p>
         <ul>
-            <li><strong>Trigger Backup:</strong> From the configuration form or the Backup Dashboard, click the "Trigger Backup" action to immediately queue a new backup snapshot.</li>
-            <li><strong>Sync Snapshots:</strong> If snapshots were created outside of Odoo, click "Sync Snapshots" to update the local database with remote metadata.</li>
-            <li><strong>Test Connection:</strong> Use the "Test Connection" action on a configuration to verify connectivity with Kopia or pgBackRest.</li>
+            <li><strong>Trigger Backup:</strong> Click "Run Backup Now" on the configuration form, or "Backup" on the Backup Dashboard, to immediately queue a new backup snapshot. The dashboard buttons are disabled while that configuration's latest job is still pending or processing.</li>
+            <li><strong>Sync Snapshots:</strong> If snapshots were created outside of Odoo, click "Sync Snapshots" (or "Sync" on the dashboard) to update the local database with remote metadata.</li>
+            <li><strong>Test Connection:</strong> Use the "Test Connection" action on a configuration to verify connectivity with Kopia or pgBackRest. It queues the same job as "Sync Snapshots"; check its result under <strong>Active Jobs</strong>.</li>
         </ul>
 
         <!-- [@ANCHOR: backup_management:UX_PERFORM_RESTORE] -->
 <h4 id="UX_PERFORM_RESTORE" data-trace="[@ANCHOR: backup_management:UX_PERFORM_RESTORE]">4. Performing a Restore</h4>
-        <p>In the event of data loss, navigate to <strong>Backups > Snapshots</strong>. Select a known good snapshot and click the <strong>Restore</strong> button. You will be prompted for a target directory where the files should be placed.</p>
+        <p>In the event of data loss, navigate to <strong>Backups > Management > Snapshots</strong>. Select a known good snapshot and click the <strong>Restore Snapshot</strong> button, then <strong>Restore</strong> in the dialog. The dialog asks for a target directory, but for Kopia that value is not used: the files are always restored into <code>/var/lib/odoo/backups/restore_&lt;job id&gt;</code>, and the exact path is written into the restore job's log. Restoring a pgBackRest snapshot from this dialog is refused with an error; a pgBackRest restore must be run manually.</p>
 
         <div class="alert alert-warning">
-            <strong>Security Note:</strong> Only users with "Backup Administrator" privileges can create configurations or trigger restore operations.
+            <strong>Security Note:</strong> Only users with "Backup Administrator" privileges can trigger restore operations, and the <strong>Backups</strong> menu is shown only to them. Creating configurations requires either that group or Odoo system administrator (Settings) rights, which also grant full access to configurations, snapshots and jobs.
         </div>
         
     <!-- [@ANCHOR: backup_management:UX_USER_INTERFACE] -->

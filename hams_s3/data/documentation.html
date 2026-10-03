@@ -7,17 +7,17 @@
     <section id="hams_s3_admin_ui">
         <h2>Cloud Storage Configuration</h2>
         <p>
-            The <code>hams_s3</code> module adds a dedicated <strong>Cloud Storage</strong> block to Odoo's General Settings (Settings &gt; General Settings).
+            The <code>hams_s3</code> module adds a dedicated <strong>Cloud Storage</strong> block to Odoo's General Settings (Settings &gt; General Settings) for configuring an Amazon S3 (Simple Storage Service) storage backend. The AWS (Amazon Web Services) fields below hold its connection settings.
         </p>
         
         <h3>Configuration Fields</h3>
         <ul>
-            <li><strong>Use Amazon S3 Storage</strong>: Enables the S3 backend. If the required OCA dependencies are missing, a warning alert will be displayed directing the administrator to run the setup script.</li>
+            <li><strong>Use Amazon S3 Storage</strong>: Enables the S3 backend. The fields below appear only while this box is checked and the OCA (Odoo Community Association) <code>storage_backend</code> addon is installed. While that addon is missing, a warning alert is displayed instead, directing the administrator to run the setup script <code>hams_s3/scripts/install_oca_storage.py</code>, which takes the destination addons directory as a required argument. Saving with this box checked writes the values below to the first <code>storage.backend</code> record of type <code>amazon_s3</code>, creating one named "Amazon S3 Storage" if none exists; saving with it unchecked does not touch that record.</li>
             <li><strong>AWS Host</strong>: The endpoint URL for the S3-compatible service (leave blank for default AWS).</li>
             <li><strong>AWS Access Key</strong>: The Access Key ID for authentication.</li>
-            <li><strong>AWS Secret Key</strong>: The Secret Access Key for authentication.</li>
+            <li><strong>AWS Secret Key</strong>: The Secret Access Key for authentication. The field is masked as a password.</li>
             <li><strong>AWS Bucket</strong>: The name of the S3 bucket to store attachments.</li>
-            <li><strong>AWS Region</strong>: The geographic region of the bucket (e.g., `us-east-1`).</li>
+            <li><strong>AWS Region</strong>: The geographic region of the bucket, chosen from a fixed list (e.g., <code>us-east-1</code>) or "Other". If left empty, <code>us-east-1</code> is saved.</li>
         </ul>
     </section>
 </body>

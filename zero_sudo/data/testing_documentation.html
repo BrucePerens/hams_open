@@ -8,25 +8,25 @@
 
 <p>Most tests in Odoo are "pretend" tests—they don't actually save any data to the database permanently. While this is fast, it can sometimes hide bugs that only appear when data is truly saved.</p>
 
-<p>Our <strong>Real Transaction Testing Facility</strong> allows developers to write tests that behave exactly like the real world. It saves data for real during the test, then carefully cleans it all up when the test is finished.</p>
+<p>Our <strong>Real Transaction Testing Facility</strong> (the <code>RealTransactionCase</code> test class in <code>zero_sudo/tests/real_transaction.py</code>) allows developers to write tests that behave exactly like the real world. It saves data for real during the test, then carefully cleans it all up when the test is finished.</p>
 
 <h3 id="COMM_UX_database_leak_protection" data-trace="[@ANCHOR: zero_sudo:COMM_UX_database_leak_protection]">Database Leak Protection</h3>
-<p>Because these tests save real data, we have to be very careful not to leave any "trash" behind in the database. The system automatically tracks every record created during a test and deletes it afterward. As an extra safety measure, it counts all the rows in every table before and after the test. If any extra rows are left over, the test fails, alerting the developer that something wasn't cleaned up properly.</p>
+<p>Because these tests save real data, we have to be very careful not to leave any "trash" behind in the database. The system automatically tracks every record created through Odoo's normal record-creation path during a test and deletes it afterward. As an extra safety measure, it counts all the rows in every table before and after the test. If any table's row count has changed (rows left over, or rows missing), the test fails with a "Database pollution detected!" error, alerting the developer that something wasn't cleaned up properly. This count check is what catches rows written with raw SQL, which the record tracking cannot see.</p>
 
 <h3 id="COMM_UX_noisy_tables" data-trace="[@ANCHOR: zero_sudo:COMM_UX_noisy_tables]">Noisy Tables</h3>
 <p>Some tables in Odoo are naturally "noisy"—they get new data all the time from background processes (like system logs or internal message tracking). If the leak protector caught these, tests would fail for no reason.</p>
 
-<p>Administrators can manage which tables are ignored by the leak protector using the <strong>Noisy Tables</strong> interface. You can find this under <strong>Settings &gt; Technical &gt; Database Structure &gt; Noisy Tables</strong>.</p>
+<p>Administrators can manage which tables are ignored by the leak protector using the <strong>Noisy Tables</strong> interface. You can find this under <strong>Settings &gt; Zero-Sudo Security &gt; Noisy Tables</strong>.</p>
 
 <ul>
     <li><strong>Table Name:</strong> The internal name of the database table to ignore (e.g., <code>ir_logging</code>).</li>
-    <li><strong>Active:</strong> If unchecked, the table will no longer be ignored, and the leak protector will start checking it again.</li>
+    <li><strong>Active:</strong> If unchecked, the table will no longer be ignored, and the leak protector will start checking it again. Exception: the leak protector also has its own built-in list of noisy tables (including <code>ir_logging</code>) that it always ignores, whatever this setting says.</li>
     <li>This management interface is crucial for ensuring tests pass without false positives.</li>
 </ul>
 
 <h2 id="COMM_UX_external_service_testing" data-trace="[@ANCHOR: zero_sudo:COMM_UX_external_service_testing]">External Service Testing</h2>
 
-<p>Many of our modules talk to external services or run background processes (daemons). This module provides the tools to automatically start these services before a test begins and shut them down afterward. It also makes sure the service is actually "awake" and responding before the test starts sending it commands.</p>
+<p>Many of our modules talk to external services or run background processes (daemons). This module provides the tools to automatically start these services before a test begins and shut them down afterward. It also makes sure the service is actually "awake" and responding before the test starts sending it commands. If the service exits before it is ready, or does not answer before the time limit, the test fails instead of continuing.</p>
 
 <h2 id="COMM_UX_user_interface_tours" data-trace="[@ANCHOR: zero_sudo:COMM_UX_user_interface_tours]">User Interface (UI) Tours</h2>
 
@@ -34,5 +34,5 @@
 
 <h2 id="COMM_UX_diagnostic_tools" data-trace="[@ANCHOR: zero_sudo:COMM_UX_diagnostic_tools]">Diagnostic Tools</h2>
 
-<p>If a UI tour fails, the system provides a specialized "Skeleton Dump" in the error logs. This dump strips away the visual clutter and provides a simplified view of the interactive elements on the page at the time of failure. This helps developers quickly identify if a button was missing or if the page redirected unexpectedly.</p>
+<p>If a fatal browser error happens during a UI tour (an uncaught JavaScript error, an unhandled promise rejection, a failed server request, or the browser going offline), the system provides a specialized "Skeleton Dump" (headed "INTERACTABLE DOM SKELETON") in the error logs. An ordinary tour step failure reported by Odoo's own tour engine does not produce one. This dump strips away the visual clutter and provides a simplified view of the interactive elements on the page at the time of failure. This helps developers quickly identify if a button was missing or if the page redirected unexpectedly.</p>
 </div>
