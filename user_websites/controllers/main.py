@@ -16,14 +16,19 @@ from xml.sax.saxutils import escape as xml_escape
 from werkzeug.wrappers import Response
 
 from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
+from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, REDIS_USERNAME_DEFAULT
 
 _logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
+# Same credentials as distributed_redis_cache's shared pool (REDIS_USERNAME/REDIS_PASSWORD from
+# redis.env); production Redis refuses unauthenticated clients since 2026-10-03.
 redis_pool = redis.ConnectionPool(
     host=REDIS_HOST,
     port=REDIS_PORT,
+    username=REDIS_USERNAME_DEFAULT,
+    password=REDIS_PASS_DEFAULT,
     db=0,
     decode_responses=True,
     socket_timeout=1.0,

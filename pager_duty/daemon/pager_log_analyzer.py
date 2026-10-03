@@ -211,10 +211,12 @@ def main():
     # the full reasoning (this daemon's log_search_req/log_search_res/
     # log_anomalies channels are the other end of that same trust boundary).
     redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
+    redis_username = os.getenv("REDIS_USERNAME") or None  # the production ACL user (redis.env)
 
     try:
         r_client = redis.Redis(
-            host=redis_host, port=redis_port, db=0, password=redis_password, decode_responses=True
+            host=redis_host, port=redis_port, db=0, username=redis_username, password=redis_password,
+            decode_responses=True,
         )
         r_client.ping()
         logger.info("Connected to Redis successfully.")

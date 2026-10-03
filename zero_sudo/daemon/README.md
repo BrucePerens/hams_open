@@ -9,3 +9,5 @@ This directory contains components related to the `zero_sudo` architecture, enab
 
 ### File Structure
 - `json_rpc_client.py`: The secure client implementation.
+- `ssrf_safe_fetch.py`: DNS-rebinding-safe, address-pinned HTTP(S) fetch (`urlopen_ssrf_safe()`) for crawling attacker-influenceable third-party URLs.
+- `robots_txt_policy.py`: The one shared robots.txt verdict policy (`robots_txt_verdict()`) used by every crawler that fetches robots.txt through `urlopen_ssrf_safe()`; no network access of its own.

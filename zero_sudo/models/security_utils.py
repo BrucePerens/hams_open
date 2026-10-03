@@ -854,6 +854,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "cloudflare.trusted_ip_ranges_auto",
             "cloudflare.trusted_ip_ranges_custom",
             "cloudflare.trusted_ip_ranges_last_refreshed",
+            # The admin's explicit opt-in to trusting Cloudflare's published ranges at all (off by default on a
+            # Tunnel-only deployment). Read by the same service account on every Settings save, every refresh
+            # cron tick, and every non-loopback CF-* trust check; written only by an administrator, so
+            # readable but deliberately not service-writable.
+            "cloudflare.trust_non_tunnel_peers",
             "pager_duty.helpdesk_model",
             "user_websites.company_abuse_email",
             "user_websites.max_sites_per_user",

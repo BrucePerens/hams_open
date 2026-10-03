@@ -30,33 +30,11 @@ configured on the same site.
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_xpath_rendering_advertising] -->
         <xpath expr="//head" position="inside">
             <t t-if="website.google_adsense_client_id and not editable">
-                <script id="adsense_consent_config">
-                    window.dataLayer = window.dataLayer || [];
-                    function gtag(){dataLayer.push(arguments);}
-                    gtag('consent', 'default', {
-                        'ad_storage': 'denied',
-                        'ad_user_data': 'denied',
-                        'ad_personalization': 'denied',
-                        'analytics_storage': 'denied',
-                    });
-                    function adsenseConsentsGranted() {
-                        gtag('consent', 'update', {
-                            'ad_storage': 'granted',
-                            'ad_user_data': 'granted',
-                            'ad_personalization': 'granted',
-                        });
-                    }
-                    <t t-if="website._allConsentsGranted()">
-                        adsenseConsentsGranted();
-                    </t>
-                    <t t-else="">
-                        document.addEventListener(
-                            "optionalCookiesAccepted",
-                            adsenseConsentsGranted,
-                            {once: true}
-                        );
-                    </t>
-                </script>
+                <!-- No inline script (strict CSP without 'unsafe-inline' or nonces): the
+                     Consent Mode code is static/src/js/adsense_consent.js; its one per-request
+                     value travels in a JSON data block, which browsers never execute. -->
+                <script type="application/json" id="advertising_adsense_consent" t-out="json.dumps({'all_consents_granted': bool(website._allConsentsGranted())})"/>
+                <script id="adsense_consent_config" type="text/javascript" src="/advertising/static/src/js/adsense_consent.js"/>
                 <script
                     id="adsense_loader"
                     async="async"
@@ -93,7 +71,7 @@ configured on the same site.
                          t-att-data-ad-slot="website.google_adsense_footer_slot_id"
                          data-ad-format="auto"
                          data-full-width-responsive="true"/>
-                    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+                    <script type="text/javascript" src="/advertising/static/src/js/adsense_slot_push.js"/>
                 </div>
             </t>
 
@@ -120,7 +98,7 @@ configured on the same site.
                          style="display:inline-block;width:160px;height:600px"
                          t-att-data-ad-client="website.google_adsense_client_id"
                          t-att-data-ad-slot="website.google_adsense_sidebar_slot_id"/>
-                    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+                    <script type="text/javascript" src="/advertising/static/src/js/adsense_slot_push.js"/>
                 </div>
             </t>
         </xpath>
