@@ -156,6 +156,54 @@ class TestSyntheticSpooler(HamsTransactionCase):
         self.assertIn("exceeded", res.get("error", ""))
         self.assertIn("byte cap", res.get("error", ""))
 
+    def test_02e_sandbox_downloads_identify_honestly_not_as_a_browser(self):
+        # Tests [@ANCHOR: synthetic_i18n]
+        # Until 2026-10-02 this fetch sent a Chrome User-Agent string. No fetch in this codebase
+        # impersonates a browser; it names itself, like the module's other fetches.
+        seen_requests = []
+
+        class _OversizedResponse:
+            def read(self, n=-1):
+                return b"x" * 100
+
+            def geturl(self):
+                return "https://example.invalid/payload"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+        def _record(req, *args, **kwargs):
+            seen_requests.append(req)
+            return _OversizedResponse()
+
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_synthetic_spooler._assert_host_is_ssrf_safe",
+            return_value=None,
+        )
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_synthetic_spooler._urlopen_ssrf_safe",
+            side_effect=_record,
+        )
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.MAX_SANDBOX_DOWNLOAD_BYTES",
+            10,
+        )
+        check = {
+            "type": "bash",
+            "name": "test_user_agent",
+            "code_payload": "echo should_never_run",
+            "sandbox_downloads": "https://example.invalid/payload|deadbeef|payload.bin",
+            "sandbox_network_access": "loopback",
+        }
+        pager_synthetic_spooler.execute_check(check)
+        self.assertEqual(len(seen_requests), 1)
+        user_agent = seen_requests[0].get_header("User-agent")
+        self.assertEqual(user_agent, "Pager-Synthetic-Spooler/1.0")
+        self.assertNotRegex(user_agent, r"Mozilla/|AppleWebKit|Chrome/|Safari/|Gecko")
+
     def test_03_main_runs_one_real_cycle_and_writes_the_spool_file(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_main]
         class _StopLoop(Exception):
