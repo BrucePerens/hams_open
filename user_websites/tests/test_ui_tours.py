@@ -227,3 +227,60 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.start_tour(
             f"/{self.user_test.website_slug}/home?debug=1", "test_tour_violation_report"
         )
+
+    def test_11_violation_report_from_edge_cacheable_page(self):
+        # Tests [@ANCHOR: COMM_edge_cache_csrf_refresh]
+        """File a report from a page the server marks edge-cacheable (cloudflare module).
+
+        Such a page reaches the browser without a session cookie, so the CSRF token in the report
+        form is bound to no one; the report only goes through if cloudflare's edge_cache_csrf.js
+        fetches a fresh token first. The tour's browser starts with no session cookie at all, the
+        way a first-time visitor (or anyone served from Cloudflare's cache) arrives.
+        """
+        url = "/edge-cache-report-test"
+        # No trailing ")": the tour types it with run "edit <text>", and web_tour parses that string
+        # with /^(?<action>\w*) *\(? *(?<arguments>.*?)\)?$/, which drops a final ")" -- the row
+        # would hold "...(test_11" and the exact-match search below would never find it.
+        description = "Edge-cached page report, test_11"
+        page = self.env["website.page"].create(
+            {
+                "url": url,
+                "name": "Edge cache report test",
+                "type": "qweb",
+                "arch": (
+                    '<t name="Edge cache report test" t-name="edge_cache_report_test">'
+                    '<t t-call="website.layout"><div>Edge cache content'
+                    '<t t-call="user_websites.report_violation_snippet"/></div></t></t>'
+                ),
+                "website_published": True,
+            }
+        )
+        self.env.cr.commit()
+        try:
+            first = self.url_open(url)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(
+                first.headers.get("Cloudflare-CDN-Cache-Control"),
+                "max-age=86400",
+                "the test page must be edge-cacheable, or this test proves nothing",
+            )
+            self.assertNotIn("Set-Cookie", first.headers)
+
+            def authenticate_without_browser_cookie(case, user, password, *args, browser=None, **kwargs):
+                # browser_js() signs the browser in (here: as nobody) by planting a session_id
+                # cookie; leave the browser cookieless instead.
+                return RealTransactionCase.authenticate(case, user, password, *args, **kwargs)
+
+            self.safe_patch_object(type(self), "authenticate", authenticate_without_browser_cookie)
+            self.start_tour(url, "test_tour_violation_report_edge_cached")
+
+            self.env.cr.commit()  # new snapshot: see the row the browser's request committed
+            self.env.invalidate_all()
+            Report = self.env["content.violation.report"]
+            self.assertTrue(
+                Report.search([("description", "=", description)], limit=1),
+                "the report posted from the edge-cacheable page must have been created",
+            )
+        finally:
+            page.unlink()
+            self.env.cr.commit()
