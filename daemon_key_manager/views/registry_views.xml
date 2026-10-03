@@ -13,6 +13,7 @@
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="env_file_path"/>
                 <field name="last_rotated"/>
+                <field name="remote_self_rotation" optional="show"/>
             </list>
         </field>
     </record>
@@ -26,7 +27,7 @@
         <field name="arch" type="xml">
             <form string="Daemon Key Registry">
                 <header>
-                    <button name="action_rotate_key" type="object" string="Rotate Key" class="oe_highlight" invisible="not id"/>
+                    <button name="action_rotate_key" type="object" string="Rotate Key" class="oe_highlight" invisible="not id or remote_self_rotation"/>
                     <button name="action_force_provision_all" type="object" string="Force Provision All" invisible="not id"/>
                 </header>
                 <sheet>
@@ -39,6 +40,7 @@
                         <group>
                             <field name="env_file_path"/>
                             <field name="last_rotated"/>
+                            <field name="remote_self_rotation"/>
                         </group>
                     </group>
                 </sheet>
