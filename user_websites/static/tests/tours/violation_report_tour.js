@@ -3,9 +3,8 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 
-// Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
-registry.category("web_tour.tours").add("test_tour_violation_report", {
-    steps: () => [
+// Shared by both tours below: open the report modal, fill it in, submit it.
+const reportViolationSteps = (beforeSubmit = [], description = "Unsolicited advertising links.") => [
         { trigger: 'body', content: 'Initialize Tour' },
         TourUtils.bypassDialogs(),
         {
@@ -109,9 +108,10 @@ registry.category("web_tour.tours").add("test_tour_violation_report", {
         {
             trigger: 'textarea[name="description"]',
             content: "Provide description notes",
-            run: "edit Unsolicited advertising links.",
+            run: `edit ${description}`,
         },
         { trigger: '.modal-body', content: 'Blur form to commit state', run: 'click' },
+        ...beforeSubmit,
         {
             trigger: 'button[type="submit"].btn-danger',
             content: "Submit violation ticket and trigger page reload",
@@ -123,5 +123,40 @@ registry.category("web_tour.tours").add("test_tour_violation_report", {
             content: 'Wait for page reload after successful controller redirect',
             run: () => {}
         }
-    ]
+];
+
+// Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
+registry.category("web_tour.tours").add("test_tour_violation_report", {
+    steps: () => reportViolationSteps(),
+});
+
+// Tests [@ANCHOR: COMM_edge_cache_csrf_refresh]
+// The same report, filed from a page the server marked edge-cacheable and sent without a session
+// cookie, so the CSRF token in the form belongs to no one. cloudflare's edge_cache_csrf.js must
+// fetch a fresh token (and the session it is bound to) before the form posts; without it the post
+// is rejected with a 400 and never redirects back with report_submitted=1.
+registry.category("web_tour.tours").add("test_tour_violation_report_edge_cached", {
+    steps: () => [
+        ...reportViolationSteps([
+            {
+                trigger: "#reportViolationModal",
+                content: "Fill in the guest email address when the form asks for one",
+                run: () => {
+                    const email = document.querySelector('#reportViolationModal input[name="email"]');
+                    if (email) {
+                        email.value = "edge-cache-tour@example.com";
+                    }
+                },
+            },
+        ], "Edge-cached page report (test_11)"),
+        {
+            trigger: "body",
+            content: "The report was accepted: the controller redirected back with report_submitted=1",
+            run: () => {
+                if (!window.location.search.includes("report_submitted=1")) {
+                    throw new Error(`report not accepted, landed on ${window.location.href}`);
+                }
+            },
+        },
+    ],
 });

@@ -7,6 +7,32 @@ from odoo.http import request
 _logger = logging.getLogger(__name__)
 
 
+# Internal opt-in marker. A response that may be shared by every anonymous visitor (website.page
+# sets it when Odoo's own page cache accepts the page; a controller may set it too) carries this
+# header out of the controller; _post_dispatch consumes it and never lets it reach the client.
+EDGE_CACHEABLE_MARKER = "X-Cloudflare-Edge-Cacheable"
+NO_EDGE_CACHE = "no-cache, no-store"
+PUBLIC_PAGE_EDGE_CACHE = "max-age=86400"
+# Cookies Odoo sets on a first anonymous visit that carry nothing per-visitor when the conditions
+# in _cloudflare_strip_redundant_cookies() hold. Any other cookie makes a response uncacheable.
+SESSION_COOKIE = "session_id"
+LANG_COOKIE = "frontend_lang"
+# Request cookies whose presence means the page may differ for this visitor (a session, a cookie
+# consent choice that changes which tracking code the page carries). The Cloudflare cache rule must
+# bypass the cache for the same cookies; the origin refuses to mark such a response cacheable too.
+STATEFUL_REQUEST_COOKIES = (SESSION_COOKIE, "website_cookies_bar")
+
+
+def _set_cookie_name(header_value):
+    """Pure: the cookie name of one raw Set-Cookie header value."""
+    return header_value.split(";", 1)[0].partition("=")[0].strip()
+
+
+def _set_cookie_value(header_value):
+    """Pure: the cookie value of one raw Set-Cookie header value."""
+    return header_value.split(";", 1)[0].partition("=")[2].strip()
+
+
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 
@@ -31,6 +57,9 @@ class IrHttp(models.AbstractModel):
 
         if not request:
             return res
+        # The marker is internal; it must never reach the client whatever happens below.
+        opted_in = bool(response.headers.get(EDGE_CACHEABLE_MARKER))
+        response.headers.setlist(EDGE_CACHEABLE_MARKER, [])
 
         # Fail loudly if request lacks httprequest
         path = request.httprequest.path
@@ -49,11 +78,14 @@ class IrHttp(models.AbstractModel):
             # A transient error (500/404/etc.) must never be pinned at the edge for a
             # year -- only a genuinely successful (or not-modified) asset response is
             # long-TTL cacheable.
-            if response.status_code in (200, 304):
+            # Same cookie rule as public pages: a response marked edge-cacheable never carries
+            # a Set-Cookie (Odoo hands an anonymous asset fetch a fresh session_id cookie).
+            cls._cloudflare_strip_redundant_cookies(response)
+            if response.status_code in (200, 304) and not response.headers.getlist("Set-Cookie"):
                 response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=31536000"
                 response.headers["Cache-Tag"] = "odoo-static-assets"
             else:
-                response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
+                response.headers["Cloudflare-CDN-Cache-Control"] = NO_EDGE_CACHE
             return res
 
         # 2. Hardcoded Dynamic or API Routes (Zero caching)
@@ -76,25 +108,14 @@ class IrHttp(models.AbstractModel):
             response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
             return res
 
-        # 3. Dynamic State Isolation (Protecting Authenticated User Data)
-        is_public = True
-        if request.env and request.env.user:
-            # Enforce schema contract: user must have _is_public method
-            is_public = request.env.user._is_public()
-
-        if not is_public:
-            response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
+        # 3. Public HTML: uncached unless the page opted in AND nothing about this exchange is
+        #    per-visitor. Design: night_shift_todo/medium/cloudflare-html-caching-prereqs
+        #    (hams_com) -- a response Cloudflare caches is replayed to every later visitor, Set-Cookie
+        #    included, so "cacheable" and "sets a cookie" must never both be true.
+        if not (opted_in and cls._cloudflare_edge_cacheable(response)):
+            response.headers["Cloudflare-CDN-Cache-Control"] = NO_EDGE_CACHE
             return res
-
-        # 4. Semi-Static Content (Public Website Pages, Blogs, Classifieds)
-        # Cache heavily at the edge. The purge_queue will invalidate individual URLs when edited.
-        # A non-200/304 response here (a transient 500, a genuine 404) must not be pinned
-        # at the edge for a day -- that would keep serving the error long after the origin
-        # recovered, or long after the page starts existing.
-        if response.status_code not in (200, 304):
-            response.headers["Cloudflare-CDN-Cache-Control"] = "no-cache, no-store"
-            return res
-        response.headers["Cloudflare-CDN-Cache-Control"] = "max-age=86400"
+        response.headers["Cloudflare-CDN-Cache-Control"] = PUBLIC_PAGE_EDGE_CACHE
 
         # Inject Website-specific Cache-Tag for granular site-wide purging if needed.
         # request.website only exists on requests Odoo's website framework
@@ -134,3 +155,68 @@ class IrHttp(models.AbstractModel):
             )
 
         return res
+
+    @classmethod
+    def _cloudflare_edge_cacheable(cls, response):
+        # [@ANCHOR: COMM_cloudflare_edge_cacheable]
+        # Tests [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
+        """Whether this opted-in, already-dispatched response may be cached at Cloudflare's edge.
+
+        Every one of these must hold: a GET/HEAD; status 200/304; the public user; the request
+        carried no stateful cookie (STATEFUL_REQUEST_COOKIES); and, once the redundant first-visit
+        cookies are dropped (_cloudflare_strip_redundant_cookies), no Set-Cookie remains. Called
+        after super()._post_dispatch(): Odoo's Dispatcher.post_dispatch() saves the session and
+        copies future_response's cookies onto the response there, so every cookie this response
+        will carry is already on it.
+        """
+        if request.httprequest.method not in ("GET", "HEAD"):
+            return False
+        if response.status_code not in (200, 304):
+            return False
+        if not (request.env and request.env.user and request.env.user._is_public()):
+            return False
+        if any(request.httprequest.cookies.get(name) for name in STATEFUL_REQUEST_COOKIES):
+            return False
+        cls._cloudflare_strip_redundant_cookies(response)
+        return not response.headers.getlist("Set-Cookie")
+
+    @classmethod
+    def _cloudflare_strip_redundant_cookies(cls, response):
+        # [@ANCHOR: COMM_cloudflare_strip_redundant_cookies]
+        # Tests [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
+        """Drop the two cookies Odoo sets on a first anonymous visit that carry nothing for it.
+
+        - `session_id`, when the request brought none and the session was never persisted: Odoo
+          hands every cookieless visitor a brand-new, empty, unsaved session id. Dropping it
+          changes nothing on the server; the visitor simply gets one later, from the first request
+          that needs it (a login, a cart, or /cloudflare/csrf_token before a form POST).
+        - `frontend_lang`, when the request brought none and its value is the website's default
+          language: an absent cookie already resolves to that language.
+        Anything else is left alone, so the caller treats the response as per-visitor.
+        """
+        cookies = response.headers.getlist("Set-Cookie")
+        if not cookies:
+            return
+        session = request.session
+        session_is_new = not (
+            request.httprequest.cookies.get(SESSION_COOKIE)
+            or session.uid
+            or session.is_dirty
+            or session.should_rotate
+        )
+        lang_cookie_is_new = not request.httprequest.cookies.get(LANG_COOKIE)
+        kept = []
+        for cookie in cookies:
+            name = _set_cookie_name(cookie)
+            if name == SESSION_COOKIE and session_is_new:
+                continue
+            if (
+                name == LANG_COOKIE
+                and lang_cookie_is_new
+                and _set_cookie_value(cookie) == request.env["ir.http"]._get_default_lang().code
+            ):
+                continue
+            kept.append(cookie)
+        if len(kept) != len(cookies):
+            # setlist, not `del headers[...]`: see content_security_policy's cookie hardening.
+            response.headers.setlist("Set-Cookie", kept)
