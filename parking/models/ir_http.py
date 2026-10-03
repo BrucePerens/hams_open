@@ -63,11 +63,15 @@ class IrHttp(models.AbstractModel):
             return super()._serve_fallback()
         return cls._parking_serve()
 
+    # [@ANCHOR: parking:COMM_parking_service_env]
+    # Verified by [@ANCHOR: parking:COMM_test_parking_service_env]
     @classmethod
     def _parking_service_env(cls):
         uid = request.env["ir.model.data"]._xmlid_to_res_id(SERVICE_USER_XMLID, raise_if_not_found=True)
         return request.env(user=uid)
 
+    # [@ANCHOR: parking:COMM_parking_serve]
+    # Verified by [@ANCHOR: parking:COMM_test_parking_serve]
     @classmethod
     def _parking_serve(cls):
         environ = request.httprequest.environ
@@ -93,6 +97,8 @@ class IrHttp(models.AbstractModel):
             return cls._parking_response("", 204, "text/plain", record)
         return cls._parking_page(host, record, env)
 
+    # [@ANCHOR: parking:COMM_parking_page]
+    # Verified by [@ANCHOR: parking:COMM_test_parking_page]
     @classmethod
     def _parking_page(cls, host, record, env):
         behavior = record.behavior if record else "parked"
@@ -122,6 +128,8 @@ class IrHttp(models.AbstractModel):
         )
         return cls._parking_response(body, 200, "text/html", record)
 
+    # [@ANCHOR: parking:COMM_parking_response]
+    # Verified by [@ANCHOR: parking:COMM_test_parking_response]
     @classmethod
     def _parking_response(cls, body, status, content_type, record):
         """Every parking response: no cookie, a content-security-policy that allows no script, and
@@ -144,6 +152,8 @@ class IrHttp(models.AbstractModel):
             headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
 
+    # [@ANCHOR: parking:COMM_post_dispatch]
+    # Verified by [@ANCHOR: parking:COMM_test_post_dispatch]
     @classmethod
     def _post_dispatch(cls, response):
         super()._post_dispatch(response)
@@ -155,6 +165,8 @@ class IrHttp(models.AbstractModel):
 
     # ------------------------------------------------------------------ settings
 
+    # [@ANCHOR: parking:COMM_parking_secret]
+    # Verified by [@ANCHOR: parking:COMM_test_parking_secret]
     @classmethod
     def _parking_secret(cls, env):
         secret = env["ir.config_parameter"]._get_param("parking.form_secret")

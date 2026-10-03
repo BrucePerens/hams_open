@@ -15,7 +15,11 @@ class TestParkingModels(HamsTransactionCase):
         self.Domain = self.env["parking.domain"]
 
     # [@ANCHOR: parking:COMM_test_domain_constraints]
+    # [@ANCHOR: parking:COMM_test_domain_normalize_name]
+    # [@ANCHOR: parking:COMM_test_domain_create]
     def test_names_are_normalized_and_unique(self):
+        # Tests [@ANCHOR: parking:COMM_domain_normalize_name]
+        # Tests [@ANCHOR: parking:COMM_domain_create]
         # Tests [@ANCHOR: parking:COMM_domain_constraints]
         record = self.Domain.create({"name": "Bücher.Example"})
         self.assertEqual(record.name, "xn--bcher-kva.example")
@@ -45,7 +49,9 @@ class TestParkingModels(HamsTransactionCase):
             self.Domain.create({"name": "ttl.example", "cache_ttl": -1})
             self.env.flush_all()
 
+    # [@ANCHOR: parking:COMM_test_domain_lookup]
     def test_lookup_exact_and_www(self):
+        # Tests [@ANCHOR: parking:COMM_domain_lookup]
         record = self.Domain.create({"name": "lookup.example"})
         other = self.Domain.create({"name": "nowww.example", "include_www": False})
         self.assertEqual(self.Domain._lookup("lookup.example"), record)
@@ -92,6 +98,37 @@ class TestParkingModels(HamsTransactionCase):
         domain = self.Domain.create({"name": "notes.example", "notes": "secret note"})
         with self.assertRaises(AccessError):
             domain.with_user(uid).read(["notes"])
+
+    # [@ANCHOR: parking:COMM_test_post_init_hook]
+    def test_post_init_hook_seeds_the_settings(self):
+        # Tests [@ANCHOR: parking:COMM_post_init_hook]
+        params = self.env["ir.config_parameter"]
+        self.assertTrue(params._get_param("parking.form_secret"))
+        self.assertEqual(params._get_param("parking.unknown_host_policy"), "not_found")
+        from odoo.addons.parking.hooks import post_init_hook
+
+        secret = params._get_param("parking.form_secret")
+        post_init_hook(self.env)
+        self.assertEqual(params._get_param("parking.form_secret"), secret)  # never overwritten
+
+    # [@ANCHOR: parking:COMM_test_domain_compute_inquiry_count]
+    def test_inquiry_count_follows_the_inquiries(self):
+        # Tests [@ANCHOR: parking:COMM_domain_compute_inquiry_count]
+        domain = self.Domain.create({"name": "count.example", "behavior": "for_sale"})
+        self.assertEqual(domain.inquiry_count, 0)
+        self.env["parking.inquiry"].create({"domain_id": domain.id, "email": "a@b.example", "message": "x"})
+        self.env["parking.inquiry"].create({"domain_id": domain.id, "email": "c@d.example", "message": "y"})
+        self.assertEqual(domain.inquiry_count, 2)
+
+    # [@ANCHOR: parking:COMM_test_domain_write]
+    def test_rename_is_normalized_too(self):
+        # Tests [@ANCHOR: parking:COMM_domain_write]
+        record = self.Domain.create({"name": "first.example"})
+        record.write({"name": "Zweite.Example"})
+        self.assertEqual(record.name, "zweite.example")
+        with self.assertRaises(ValidationError):
+            record.write({"name": "not a name"})
+            self.env.flush_all()
 
     # [@ANCHOR: parking:COMM_test_views_render]
     def test_backend_views_render(self):

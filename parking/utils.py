@@ -118,6 +118,8 @@ def form_token(secret, host, now=None):
     return f"{stamp}.{mac}"
 
 
+# [@ANCHOR: parking:COMM_verify_form_token]
+# Verified by [@ANCHOR: parking:COMM_test_verify_form_token]
 def verify_form_token(secret, host, token, now=None):
     """True when the token was made for this host, is at least TOKEN_MIN_AGE seconds old (a bot
     that posts instantly fails) and at most TOKEN_MAX_AGE seconds old."""
@@ -142,6 +144,8 @@ def original_peer(environ):
     return orig.get("REMOTE_ADDR") or environ.get("REMOTE_ADDR") or ""
 
 
+# [@ANCHOR: parking:COMM_is_loopback_address]
+# Verified by [@ANCHOR: parking:COMM_test_is_loopback_address]
 def is_loopback_address(address):
     try:
         return ipaddress.ip_address((address or "").strip()).is_loopback
@@ -149,6 +153,8 @@ def is_loopback_address(address):
         return False
 
 
+# [@ANCHOR: parking:COMM_client_ip]
+# Verified by [@ANCHOR: parking:COMM_test_client_ip]
 def client_ip(environ, headers):
     """The visitor's address. CF-Connecting-IP is trusted only when CF-Ray is also present: every
     request that came through Cloudflare carries both, and the tenant's only listener is reachable
@@ -158,6 +164,8 @@ def client_ip(environ, headers):
     return (environ.get("REMOTE_ADDR") or "")[:64]
 
 
+# [@ANCHOR: parking:COMM_hash_ip]
+# Verified by [@ANCHOR: parking:COMM_test_hash_ip]
 def hash_ip(secret, ip):
     return hmac.new(secret.encode(), ip.encode(), hashlib.sha256).hexdigest()[:32]
 
@@ -170,6 +178,8 @@ STYLE = (
 )
 
 
+# [@ANCHOR: parking:COMM_page]
+# Verified by [@ANCHOR: parking:COMM_test_page]
 def _page(title, body, noindex, lang="en"):
     robots = '<meta name="robots" content="noindex,nofollow">' if noindex else ""
     return (
@@ -189,6 +199,8 @@ def render_parked(host, title="", message="", noindex=True):
     return _page(title or host, f"<h1>{heading}</h1>{paragraphs}", noindex)
 
 
+# [@ANCHOR: parking:COMM_render_for_sale]
+# Verified by [@ANCHOR: parking:COMM_test_render_for_sale]
 def render_for_sale(host, token, title="", message="", price_text="", sent=False, noindex=True):
     heading = html.escape(title or f"{host} is for sale")
     text = html.escape(message or "Interested in this domain? Send an inquiry below.")
@@ -208,9 +220,13 @@ def render_for_sale(host, token, title="", message="", price_text="", sent=False
     return _page(title or host, f"<h1>{heading}</h1><p>{text}</p>{price}{form}", noindex)
 
 
+# [@ANCHOR: parking:COMM_render_gone]
+# Verified by [@ANCHOR: parking:COMM_test_render_gone]
 def render_gone(host):
     return _page(host, "<h1>410 Gone</h1><p>This address no longer exists.</p>", True)
 
 
+# [@ANCHOR: parking:COMM_robots_txt]
+# Verified by [@ANCHOR: parking:COMM_test_robots_txt]
 def robots_txt(noindex):
     return "User-agent: *\nDisallow: /\n" if noindex else "User-agent: *\nAllow: /\n"

@@ -28,7 +28,9 @@ class TestParkingUtils(HamsTransactionCase):
         self.assertEqual(utils.original_host({"HTTP_HOST": "x.example"}), "x.example")
 
     # [@ANCHOR: parking:COMM_test_original_peer]
+    # [@ANCHOR: parking:COMM_test_is_loopback_address]
     def test_original_peer_and_loopback_detection(self):
+        # Tests [@ANCHOR: parking:COMM_is_loopback_address]
         # Tests [@ANCHOR: parking:COMM_original_peer]
         forged = {"REMOTE_ADDR": "::1", "werkzeug.proxy_fix.orig": {"REMOTE_ADDR": "203.0.113.9"}}
         self.assertEqual(utils.original_peer(forged), "203.0.113.9")
@@ -63,7 +65,9 @@ class TestParkingUtils(HamsTransactionCase):
         self.assertNotIn("\n", loc)
 
     # [@ANCHOR: parking:COMM_test_form_token]
+    # [@ANCHOR: parking:COMM_test_verify_form_token]
     def test_form_token(self):
+        # Tests [@ANCHOR: parking:COMM_verify_form_token]
         # Tests [@ANCHOR: parking:COMM_form_token]
         token = utils.form_token("s3cret", "a.example", now=1000)
         self.assertTrue(utils.verify_form_token("s3cret", "a.example", token, now=1010))
@@ -75,7 +79,15 @@ class TestParkingUtils(HamsTransactionCase):
             self.assertFalse(utils.verify_form_token("s3cret", "a.example", junk, now=1010))
 
     # [@ANCHOR: parking:COMM_test_render_pages]
+    # [@ANCHOR: parking:COMM_test_page]
+    # [@ANCHOR: parking:COMM_test_render_for_sale]
+    # [@ANCHOR: parking:COMM_test_render_gone]
+    # [@ANCHOR: parking:COMM_test_robots_txt]
     def test_pages_escape_everything_they_show(self):
+        # Tests [@ANCHOR: parking:COMM_page]
+        # Tests [@ANCHOR: parking:COMM_render_for_sale]
+        # Tests [@ANCHOR: parking:COMM_render_gone]
+        # Tests [@ANCHOR: parking:COMM_robots_txt]
         # Tests [@ANCHOR: parking:COMM_render_pages]
         body = utils.render_parked("a.example", "<script>alert(1)</script>", '"><img src=x onerror=1>')
         self.assertNotIn("<script>alert", body)
@@ -86,9 +98,25 @@ class TestParkingUtils(HamsTransactionCase):
         self.assertNotIn("<b>$1</b>", sale)
         self.assertIn(utils.INQUIRY_PATH, sale)
         self.assertLess(len(utils.render_parked("a.example")), 3000)
+        gone = utils.render_gone("a.example")
+        self.assertIn("410", gone)
+        self.assertIn("noindex", gone)
+        self.assertEqual(utils.robots_txt(True), "User-agent: *\nDisallow: /\n")
+        self.assertEqual(utils.robots_txt(False), "User-agent: *\nAllow: /\n")
+        self.assertIn("Thank you", utils.render_for_sale("a.example", "t", sent=True))
+        self.assertNotIn("<form", utils.render_for_sale("a.example", "t", sent=True))
 
+    # [@ANCHOR: parking:COMM_test_client_ip]
+    # [@ANCHOR: parking:COMM_test_hash_ip]
     def test_client_ip_trusts_cloudflare_headers_only_with_proof(self):
+        # Tests [@ANCHOR: parking:COMM_client_ip]
+        # Tests [@ANCHOR: parking:COMM_hash_ip]
         environ = {"REMOTE_ADDR": "::1"}
         self.assertEqual(utils.client_ip(environ, {"CF-Connecting-IP": "9.9.9.9"}), "::1")
         both = {"CF-Connecting-IP": "9.9.9.9", "CF-Ray": "abc"}
         self.assertEqual(utils.client_ip(environ, both), "9.9.9.9")
+        first = utils.hash_ip("secret", "9.9.9.9")
+        self.assertEqual(first, utils.hash_ip("secret", "9.9.9.9"))
+        self.assertNotEqual(first, utils.hash_ip("other", "9.9.9.9"))
+        self.assertNotEqual(first, utils.hash_ip("secret", "9.9.9.8"))
+        self.assertNotIn("9.9.9.9", first)

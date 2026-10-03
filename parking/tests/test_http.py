@@ -49,7 +49,9 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
 
     # [@ANCHOR: parking:COMM_test_serve_fallback]
+    # [@ANCHOR: parking:COMM_test_post_dispatch]
     def test_parked_page(self):
+        # Tests [@ANCHOR: parking:COMM_post_dispatch]
         # Tests [@ANCHOR: parking:COMM_serve_fallback]
         response = self.get("/", "parked.example")
         self.assertEqual(response.status_code, 200)
@@ -62,11 +64,15 @@ class TestParkingHttp(HamsHttpCase):
         self.assertLess(len(response.content), 3000)
         self.assertEqual(self.get("/any/deep/path?x=1", "parked.example").status_code, 200)
 
+    # [@ANCHOR: parking:COMM_test_parking_service_env]
     def test_www_alias_and_port_in_host(self):
+        # Tests [@ANCHOR: parking:COMM_parking_service_env]
         self.assertEqual(self.get("/", "www.parked.example").status_code, 200)
         self.assertEqual(self.get("/", "PARKED.example:443").status_code, 200)
 
+    # [@ANCHOR: parking:COMM_test_parking_response]
     def test_unknown_host_is_a_non_cacheable_404(self):
+        # Tests [@ANCHOR: parking:COMM_parking_response]
         response = self.get("/", "nobody.example")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
@@ -79,7 +85,9 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("nobody.example", response.text)
 
+    # [@ANCHOR: parking:COMM_test_parking_serve]
     def test_robots_and_indexing(self):
+        # Tests [@ANCHOR: parking:COMM_parking_serve]
         self.assertEqual(self.get("/robots.txt", "parked.example").text, "User-agent: *\nDisallow: /\n")
         response = self.get("/robots.txt", "indexed.example")
         self.assertEqual(response.text, "User-agent: *\nAllow: /\n")
@@ -87,7 +95,9 @@ class TestParkingHttp(HamsHttpCase):
         self.assertNotIn("X-Robots-Tag", page.headers)
         self.assertIn("s-maxage=60", page.headers["Cache-Control"])
 
+    # [@ANCHOR: parking:COMM_test_parking_page]
     def test_redirects_keep_the_target_host(self):
+        # Tests [@ANCHOR: parking:COMM_parking_page]
         response = self.get("//evil.example/x?a=1", "redir.example")
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response.headers["Location"], "https://target.example/base/evil.example/x?a=1")
@@ -141,7 +151,9 @@ class TestParkingHttp(HamsHttpCase):
         return re.search(r'name="token" value="([^"]+)"', page.text).group(1)
 
     # [@ANCHOR: parking:COMM_test_inquiry_controller]
+    # [@ANCHOR: parking:COMM_test_inquiry_done]
     def test_sale_form_end_to_end(self):
+        # Tests [@ANCHOR: parking:COMM_inquiry_done]
         # Tests [@ANCHOR: parking:COMM_inquiry_controller]
         page = self.get("/", "sale.example")
         self.assertEqual(page.status_code, 200)
@@ -175,7 +187,11 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 303)
         self.assertEqual(self.env["parking.inquiry"].search_count([]), count)
 
+    # [@ANCHOR: parking:COMM_test_parking_secret]
+    # [@ANCHOR: parking:COMM_test_inquiry_rate_limited]
     def test_sale_form_rate_limit_per_address(self):
+        # Tests [@ANCHOR: parking:COMM_parking_secret]
+        # Tests [@ANCHOR: parking:COMM_inquiry_rate_limited]
         token = self.token_from("sale.example")
         data = {"token": token, "email": "a@b.example", "message": "hello"}
         self.safe_patch_object(utils, "TOKEN_MIN_AGE", 0)

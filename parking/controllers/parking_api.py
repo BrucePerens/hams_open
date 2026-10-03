@@ -53,6 +53,8 @@ class ParkingController(http.Controller):
         )
         return self._done(ir_http, record)
 
+    # [@ANCHOR: parking:COMM_inquiry_rate_limited]
+    # Verified by [@ANCHOR: parking:COMM_test_inquiry_rate_limited]
     def _rate_limited(self, env, ip_hash):
         since = fields.Datetime.to_string(datetime.datetime.utcnow() - datetime.timedelta(hours=1))
         inquiries = env["parking.inquiry"]
@@ -60,6 +62,8 @@ class ParkingController(http.Controller):
         everyone = inquiries.search_count([("create_date", ">=", since)])
         return per_ip >= INQUIRY_PER_IP_HOUR or everyone >= INQUIRY_GLOBAL_HOUR
 
+    # [@ANCHOR: parking:COMM_inquiry_done]
+    # Verified by [@ANCHOR: parking:COMM_test_inquiry_done]
     def _done(self, ir_http, record):
         response = ir_http._parking_response("", 303, "text/html", None)
         response.headers["Location"] = "/?sent=1"

@@ -59,21 +59,29 @@ class ParkingDomain(models.Model):
     inquiry_ids = fields.One2many("parking.inquiry", "domain_id")
     inquiry_count = fields.Integer(compute="_compute_inquiry_count")
 
+    # [@ANCHOR: parking:COMM_domain_compute_inquiry_count]
+    # Verified by [@ANCHOR: parking:COMM_test_domain_compute_inquiry_count]
     @api.depends("inquiry_ids")
     def _compute_inquiry_count(self):
         for record in self:
             record.inquiry_count = len(record.inquiry_ids)
 
+    # [@ANCHOR: parking:COMM_domain_create]
+    # Verified by [@ANCHOR: parking:COMM_test_domain_create]
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
             self._normalize_name(vals)
         return super().create(vals_list)
 
+    # [@ANCHOR: parking:COMM_domain_write]
+    # Verified by [@ANCHOR: parking:COMM_test_domain_write]
     def write(self, vals):
         self._normalize_name(vals)
         return super().write(vals)
 
+    # [@ANCHOR: parking:COMM_domain_normalize_name]
+    # Verified by [@ANCHOR: parking:COMM_test_domain_normalize_name]
     @api.model
     def _normalize_name(self, vals):
         if "name" not in vals:
@@ -97,6 +105,8 @@ class ParkingDomain(models.Model):
             if not 0 <= record.cache_ttl <= 31536000:
                 raise ValidationError(self.env._("Edge cache seconds must be between 0 and 31536000."))
 
+    # [@ANCHOR: parking:COMM_domain_lookup]
+    # Verified by [@ANCHOR: parking:COMM_test_domain_lookup]
     @api.model
     def _lookup(self, host):
         """The record that answers for `host` (exact name, else the bare domain for www.), or an

@@ -2,6 +2,8 @@
 import secrets
 
 
+# [@ANCHOR: parking:COMM_post_init_hook]
+# Verified by [@ANCHOR: parking:COMM_test_post_init_hook]
 def post_init_hook(env):
     """Seeds the settings the public handler needs. Existing values are never overwritten."""
     params = env["ir.config_parameter"]
