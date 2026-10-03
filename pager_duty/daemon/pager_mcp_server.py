@@ -32,14 +32,14 @@ import os
 import urllib.error
 import urllib.request
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
 )
 logger = logging.getLogger("pager_mcp_server")
 
-mcp = FastMCP("PagerDutyTriage")
+mcp = MCPServer("PagerDutyTriage")
 
 
 class OdooClient:

@@ -12,6 +12,27 @@ from odoo import models, fields, api
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: rabbitmq_resolve_credentials]
+def resolve_rabbitmq_credentials(param_user, param_pass, environ):
+    """
+    The RabbitMQ account Odoo publishes as: the rabbitmq.user/rabbitmq.pass system parameters if
+    both are set, otherwise RMQ_USER/RMQ_PASS from the environment (odoo.service loads
+    /opt/hams/etc/rabbitmq.env, the same file every RabbitMQ daemon reads). Returns None when
+    neither source gives both values.
+
+    There is deliberately no "guest" fallback. Until 2026-10-03 this fell back to guest/guest, and
+    production (hams_prod has no rabbitmq.* parameters) published as RabbitMQ's factory account
+    for its whole life, which kept that account alive on the production broker.
+    """
+    if param_user and param_pass:
+        return param_user, param_pass
+    env_user = environ.get("RMQ_USER")
+    env_pass = environ.get("RMQ_PASS")
+    if env_user and env_pass:
+        return env_user, env_pass
+    return None
+
+
 class RabbitMQPool(models.AbstractModel):
     name = fields.Char(string="Name", required=True)
     _name = "hams_rabbitmq.pool"
@@ -31,8 +52,18 @@ class RabbitMQPool(models.AbstractModel):
             if not self._connection or self._connection.is_closed:
                 try:
                     utils = self.env['zero_sudo.security.utils']
-                    mq_user = utils._get_system_param('rabbitmq.user') or 'guest'
-                    mq_pass = utils._get_system_param('rabbitmq.pass') or 'guest'
+                    credentials_pair = resolve_rabbitmq_credentials(
+                        utils._get_system_param('rabbitmq.user'),
+                        utils._get_system_param('rabbitmq.pass'),
+                        os.environ,  # burn-ignore-env: RMQ_USER/RMQ_PASS from rabbitmq.env # Tested by [@ANCHOR: COMM_test_05_credentials_never_fall_back_to_guest]
+                    )
+                    if credentials_pair is None:
+                        _logger.error(
+                            "No RabbitMQ credentials: set RMQ_USER/RMQ_PASS (rabbitmq.env) or the "
+                            "rabbitmq.user/rabbitmq.pass system parameters. Not publishing."
+                        )
+                        return None
+                    mq_user, mq_pass = credentials_pair
                     mq_host = os.environ.get('RABBITMQ_HOST', 'rabbitmq')
                     mq_port = int(utils._get_system_param('rabbitmq.port') or 5672)
                     mq_vhost = utils._get_system_param('rabbitmq.vhost') or '/'
