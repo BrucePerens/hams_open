@@ -10,7 +10,10 @@
             The <code>hams_rabbitmq</code> module provides a secure global connection pool for RabbitMQ. This feature operates entirely in the backend and serves as an integration backbone for other services.
         </p>
         <p>
-            <strong>Note for Administrators:</strong> Credentials and configurations are securely fetched via the `zero_sudo` vault. There is no direct configuration menu for RabbitMQ.
+            <strong>Note for Administrators:</strong> The RabbitMQ user, password, port and virtual host are read from the Odoo system parameters <code>rabbitmq.user</code>, <code>rabbitmq.pass</code>, <code>rabbitmq.port</code> and <code>rabbitmq.vhost</code> through <code>zero_sudo</code>'s whitelisted parameter reader; unset values fall back to <code>guest</code> / <code>guest</code>, port <code>5672</code> and virtual host <code>/</code>. The broker host comes from the <code>RABBITMQ_HOST</code> environment variable (default <code>rabbitmq</code>). There is no direct configuration menu for RabbitMQ.
+        </p>
+        <p>
+            The "pool" is one shared connection and channel that every module reuses. Messages are sent only after the database transaction that queued them commits; a message that cannot be sent (no connection, or the send fails) is logged and dropped, not retried.
         </p>
     </section>
 </body>

@@ -1,65 +1,66 @@
 <div class="knowledge_doc">
     <h1>☁️ Cloudflare Edge Orchestration (<code>cloudflare</code>)</h1>
-    <p>The Cloudflare Edge Orchestration module is your central command center for managing Cloudflare's CDN and Web Application Firewall (WAF). Fully optimized for Odoo 19, it automates caching, security, and connectivity between your Odoo server and the Cloudflare edge, significantly improving performance and security for one or many websites while maintaining strict Zero-Trust security standards.</p>
+    <p>The Cloudflare Edge Orchestration module is your central command center for managing Cloudflare's CDN (Content Delivery Network, Cloudflare's worldwide edge cache) and Web Application Firewall (WAF). Fully optimized for Odoo 19, it automates caching, security, and connectivity between your Odoo server and the Cloudflare edge, significantly improving performance and security for one or many websites while maintaining strict Zero-Trust security standards.</p>
 
     <h2>1. Getting Started</h2>
-    <p>To begin, you need to connect Odoo to your Cloudflare account. Navigate to <strong>Settings > Website</strong> and look for the <strong>Cloudflare Edge</strong> section. Configuration is website-specific, allowing you to manage multiple domains independently.</p>
+    <p>To begin, you need to connect Odoo to your Cloudflare account. Navigate to <strong>Settings > Cloudflare</strong> and look for the <strong>Cloudflare Edge Orchestration</strong> section. Configuration is website-specific, allowing you to manage multiple domains independently.</p>
     <ul>
         <li><strong>CF API Token:</strong> This is a secure token you create in your Cloudflare dashboard. It must have permissions for <em>Zone.Cache Purge</em>, <em>Zone.Firewall Services</em>, and optionally <em>Account.Cloudflare Tunnel</em>.</li>
         <li><strong>CF Zone ID:</strong> This unique ID identifies your domain in Cloudflare. You can find it on your domain's overview page in the Cloudflare dashboard.</li>
         <li><strong>CF Account ID:</strong> Your main Cloudflare account ID, required if you want to use Zero Trust Tunnels.</li>
+        <li><strong>Turnstile Secret:</strong> Optional. The secret key of your Cloudflare Turnstile widget, needed only if your forms use Turnstile.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:CACHE_MANAGEMENT] -->
     <h2 id="CACHE_MANAGEMENT">2. Making Your Site Fast: Cache Management</h2>
     <p>This module uses Cloudflare to store copies of your website content around the world, so it loads instantly for users everywhere.</p>
     <ul>
-        <li><strong>Smart Caching:</strong> Odoo automatically tells Cloudflare how long to keep different types of content. Static files (like images and scripts) are cached for a year, while website pages are cached for 24 hours for public visitors.</li>
-        <li><strong>Automatic Updates:</strong> When you edit a page, blog post, product, product review, or website menu, Odoo automatically tells Cloudflare to clear the old version from its cache. Page and post edits clear individual URLs, while menu changes trigger a full website cache refresh to ensure headers and footers are updated immediately. This all happens in the background, ensuring your visitors always see the latest content without slowing down your work.</li>
-        <li><strong>Static File Sync:</strong> Every time your Odoo server starts, it checks if any of your theme or module files have changed. If they have, it triggers a global cache clear for those files across all your websites.</li>
-        <li><strong>Manual Control:</strong> If you ever need to clear the cache manually, you can use the <strong>Purge Cache</strong> wizard under <strong>Website > Configuration > Cloudflare</strong>. You can clear everything, specific pages, or groups of content using tags.</li>
+        <li><strong>Smart Caching:</strong> Odoo automatically tells Cloudflare how long to keep different types of content. Odoo's bundled stylesheets and scripts (served under <code>/web/assets</code>) are cached for a year, while website pages are cached for 24 hours for public visitors. Images and file downloads served by <code>/web/image</code> and <code>/web/content</code> are never cached at the edge, because they can be private.</li>
+        <li><strong>Automatic Updates:</strong> When you edit or delete a page, blog post, or product, or edit a website menu, Odoo automatically tells Cloudflare to clear the old version from its cache. Page, post, and product changes clear individual URLs, while menu changes trigger a full website cache refresh to ensure headers and footers are updated immediately. This all happens in the background (a queue processed every minute), ensuring your visitors always see the latest content without slowing down your work. If a website has no API Token or Zone ID, its queued clears are marked failed and are not retried.</li>
+        <li><strong>Static File Sync:</strong> The module contains a check that compares your module files' modification times with the last recorded one and, if any are newer, clears the static-asset cache (the <code>odoo-static-assets</code> tag) on all your websites. Nothing currently runs this check when the server starts, so after updating theme or module files you can clear that tag yourself with the Manual Cache Purge wizard below.</li>
+        <li><strong>Manual Control:</strong> If you ever need to clear the cache manually, you can use the wizard under <strong>Cloudflare Edge > Manual Cache Purge</strong>. You can clear everything, specific pages, or groups of content using tags (labels Odoo attaches to cached responses, such as <code>odoo-static-assets</code> or <code>odoo-website-1</code>).</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:FIREWALL_IP_BANS] -->
     <h2 id="FIREWALL_IP_BANS">3. Keeping Your Site Secure: Firewall &amp; IP Bans</h2>
     <p>Protect your Odoo instance from bots and attackers using Cloudflare's security edge.</p>
     <ul>
-        <li><strong>Honeypot Protection:</strong> The module integrates with silent "honeypot" traps. If a malicious bot triggers one of these traps, its IP address is instantly banned at the Cloudflare network level. You can review and manage these bans under <strong>Website > Configuration > Cloudflare > IP Bans</strong>.</li>
-        <li><strong>Firewall Rules (WAF):</strong> You can manage advanced Cloudflare firewall rules directly from Odoo. Use the <strong>Pull</strong> action to import your existing rules or <strong>Push</strong> to deploy rules you've defined in Odoo. This is found under <strong>Website > Configuration > Cloudflare > WAF Rules</strong>.</li>
-        <li><strong>Security Level:</strong> Quickly adjust how aggressive Cloudflare's security should be (e.g., enabling "Under Attack" mode if you are experiencing a surge of malicious traffic) using the <strong>Zone Settings Wizard</strong>.</li>
+        <li><strong>Honeypot Protection:</strong> The module provides the ban service that silent "honeypot" traps in other modules call; it does not contain a trap itself. When a malicious bot triggers such a trap, its IP address is banned at the Cloudflare network level with an IP Access Rule on that website's zone. A ban has no expiry: it stays until you lift it. You can review these bans under <strong>Cloudflare Edge > Honeypot Triggers (Bans)</strong>, where <strong>Lift Ban</strong> removes the rule from Cloudflare. A ban that could not be sent to Cloudflare (for example, missing credentials) is shown as <em>API Sync Failed</em>.</li>
+        <li><strong>Firewall Rules (WAF):</strong> You can manage advanced Cloudflare firewall rules directly from Odoo. The rules are listed under <strong>Cloudflare Edge > WAF Rulesets</strong>. In <strong>Settings > Cloudflare</strong>, <strong>Pull from Edge</strong> replaces this website's rules in Odoo with the zone's current custom firewall rules, and <strong>Push to Edge</strong> replaces the zone's whole custom firewall ruleset with the rules in Odoo, so a rule that exists only in Cloudflare is removed.</li>
+        <li><strong>Security Level:</strong> Quickly adjust how aggressive Cloudflare's security should be (e.g., enabling "Under Attack" mode if you are experiencing a surge of malicious traffic) using the <strong>Zone Settings Wizard</strong> under <strong>Cloudflare Edge > Zone Settings</strong>, which also sets Development Mode and the browser cache TTL. Changes are applied to Cloudflare immediately.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:ZERO_TRUST_TUNNELS] -->
     <h2 id="ZERO_TRUST_TUNNELS">4. Secure Connections: Zero Trust Tunnels</h2>
     <p>Cloudflare Tunnels allow you to host your Odoo server securely without opening any ports on your firewall. This creates a private, encrypted "tunnel" between your server and Cloudflare.</p>
     <ul>
-        <li><strong>Easy Setup:</strong> Use the <strong>Generate Tunnel Command</strong> button in the settings. Odoo will create the tunnel in Cloudflare and give you a simple command to run on your server.</li>
-        <li><strong>Management:</strong> View the health and status of your tunnels under <strong>Website > Configuration > Cloudflare > Tunnels</strong>. You can sync the list from Cloudflare or delete tunnels directly from the Odoo interface.</li>
+        <li><strong>Easy Setup:</strong> Use the <strong>Generate Setup Command</strong> button in <strong>Settings > Cloudflare</strong> (it needs the API Token and Account ID). Odoo will create the tunnel in Cloudflare and give you a simple <code>cloudflared service install ...</code> command to run on your server.</li>
+        <li><strong>Management:</strong> View the health and status of your tunnels under <strong>Cloudflare Edge > Tunnels</strong>. You can sync the list from Cloudflare or delete tunnels directly from the Odoo interface.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:ADVANCED_INTEGRATION] -->
     <h2 id="ADVANCED_INTEGRATION">5. Advanced Integration &amp; Security</h2>
     <p>For developers and advanced users, the module provides several tools designed for high security and performance:</p>
     <ul>
-        <li><strong>Geographic Data:</strong> The module extracts location information (Country, City, etc.) provided by Cloudflare for every request. This data is handled safely even in background tasks where a standard web request might not be present.</li>
-        <li><strong>Turnstile CAPTCHA:</strong> Securely verify Cloudflare Turnstile tokens on your public forms to prevent spam.</li>
-        <li><strong>Safe Caching:</strong> Sensitive areas like your shopping cart, checkout, and portal pages are automatically excluded from edge caching to protect user privacy.</li>
+        <li><strong>Geographic Data:</strong> The module extracts location information (Country, City, etc.) provided by Cloudflare for every request. It is trusted only when the request comes through your local Cloudflare Tunnel or from a Cloudflare address in <strong>Trusted Cloudflare IP Ranges</strong> (Settings > Cloudflare); otherwise the location fields are left empty, so a request sent straight to your server cannot fake them. This data is handled safely even in background tasks where a standard web request might not be present.</li>
+        <li><strong>Turnstile CAPTCHA:</strong> Securely verify Cloudflare Turnstile tokens on your public forms to prevent spam. Without a Turnstile Secret in the settings, every token is rejected.</li>
+        <li><strong>Safe Caching:</strong> Sensitive areas like your shopping cart, checkout, and portal pages, and every page shown to a logged-in user, are automatically excluded from edge caching to protect user privacy.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:DNS_HOSTNAMES] -->
     <h2 id="DNS_HOSTNAMES">6. DNS &amp; Custom Hostnames</h2>
     <ul>
-        <li><strong>DNS Records Management:</strong> View and manage your Cloudflare DNS records directly from the Odoo interface under <strong>Website > Configuration > Cloudflare > DNS Records</strong>.</li>
-        <li><strong>Custom Hostname Provisioning:</strong> Allows multi-tenant setups where customers can bring their own domains. Odoo automatically provisions the Custom Hostname in Cloudflare and requests SSL certificates seamlessly.</li>
+        <li><strong>DNS Records Management:</strong> Keep a list of DNS records under <strong>Cloudflare Edge > DNS Records</strong>. These records are stored in Odoo only; they are not sent to Cloudflare, so changing them does not change your live DNS.</li>
+        <li><strong>Custom Hostname Provisioning:</strong> Allows multi-tenant setups where customers can bring their own domains. When a custom domain is added whose name matches one of your websites' domains, and that website has an API Token and Zone ID, Odoo automatically provisions the Custom Hostname in Cloudflare and requests its SSL certificate. Otherwise no hostname is created. If Cloudflare refuses to delete a hostname when its domain is removed, the domain is still removed in Odoo and the hostname is listed under <strong>Cloudflare Edge > Pending Hostname Deletes</strong> for automatic retries.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:ADVANCED_TRAFFIC] -->
     <h2 id="ADVANCED_TRAFFIC">7. Advanced Traffic &amp; Security Controls</h2>
     <ul>
-        <li><strong>Analytics Dashboard:</strong> Access a comprehensive dashboard visualizing Cloudflare traffic, security events, and performance metrics right within Odoo.</li>
-        <li><strong>Rate Limits &amp; Cache Rules:</strong> Configure fine-grained rate limiting policies and custom cache rules to protect your application from abuse and optimize asset delivery.</li>
-        <li><strong>Zero Trust Policies:</strong> Define and deploy Cloudflare Zero Trust policies to secure access to specific routes and internal applications.</li>
-        <li><strong>Configuration Backups:</strong> Before deploying major changes from Odoo to Cloudflare, the system automatically creates pre-Odoo configuration backup workflows, ensuring you can safely revert if necessary.</li>
+        <li><strong>Analytics Dashboard:</strong> A dashboard intended to show Cloudflare traffic, security events, and performance metrics within Odoo. It is currently a placeholder that displays fixed sample numbers, not your real Cloudflare data.</li>
+        <li><strong>Rate Limits &amp; Cache Rules:</strong> Record rate limiting policies and custom cache rules in Odoo. They are stored in Odoo only and are not sent to Cloudflare, so they take effect only once you configure them in Cloudflare itself.</li>
+        <li><strong>Zero Trust Policies:</strong> Record Cloudflare Zero Trust policies for specific routes and internal applications. Like rate limits, they are stored in Odoo only and are not deployed to Cloudflare.</li>
+        <li><strong>Configuration Backups:</strong> When the module is installed, it saves a read-only "Pre-Odoo Backup" of each website's existing Cloudflare custom firewall rules (the rules as they were before Odoo took them over) and then imports those rules into Odoo. Backups are listed under <strong>Cloudflare Edge > Configuration Backups</strong>. No backup is made before later pushes, and there is no restore button; a backup shows the raw rules for reference.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:USER_INTERFACE] -->

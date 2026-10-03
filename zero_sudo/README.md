@@ -2,15 +2,15 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).*
 
-This module is the foundational security layer for our Odoo ecosystem. It enforces a strict **Zero-Sudo Architecture** (ADR-0002) to prevent privilege escalation vulnerabilities and physically isolates background service accounts from interactive web sessions (ADR-0005).
+This module is the foundational security layer for our Odoo ecosystem. It enforces a strict **Zero-Sudo Architecture** (Architecture Decision Record ADR-0002) to prevent privilege escalation vulnerabilities and physically isolates background service accounts from interactive web sessions (ADR-0005).
 
 ## 🛡️ Core Security Missions
 
-1.  **Eliminate `.sudo()` Usage:** Developers are forbidden from using Odoo's native `.sudo()` command. This module provides a secure, audited alternative via the **Service Account Pattern**.
+1.  **Eliminate `.sudo()` Usage:** Developers are forbidden from using Odoo's native `.sudo()` command, which switches the environment into superuser mode (`env.su`) for the whole call, so access rules are no longer applied; "Zero-Sudo" means none of it. This module provides a secure, audited alternative via the **Service Account Pattern**.
 2.  **Web Isolation:** Automated background tasks (Service Accounts) are strictly prohibited from logging into the website interface, preventing session hijacking or accidental human interference.
-3.  **Mechanical Whitelisting:** Critical system parameters (like cryptographic keys) are blocked from being accessed or modified through the UI unless they are explicitly registered in a secure code-level whitelist.
-4.  **Security Audit Trail:** All blocked login attempts and security events are logged for administrator review.
-5.  **High-Performance Security Interop:** Critical security lookups and atomic KV operations are optimized via PostgreSQL procedures to minimize latency and ensure transaction-safe execution.
+3.  **Mechanical Whitelisting:** Critical system parameters (like cryptographic keys) are blocked from being accessed or modified through the Zero-Sudo parameter helpers (`_get_system_param` / `_set_system_param`) unless they are explicitly registered in a secure code-level whitelist.
+4.  **Security Audit Trail:** Blocked service-account logins, denied system-parameter reads and writes, and model cache invalidations are logged for administrator review.
+5.  **High-Performance Security Interop:** Critical security lookups and atomic key-value (KV) operations are optimized via PostgreSQL procedures to minimize latency and ensure transaction-safe execution.
 
 ---
 
@@ -20,16 +20,17 @@ This module is the foundational security layer for our Odoo ecosystem. It enforc
 A "Service Account" is a special user profile used only by background programs, bots, and automated tasks. Because these accounts often have powerful permissions, they are **forbidden** from being used to log into the website through a browser.
 
 ### Managing Service Accounts:
-1.  **Restricting an Account:** Go to **Settings > Users**, select a user, and check the **"Is Service Account"** box.
+1.  **Restricting an Account:** Go to **Settings > Users**, select a user, and check the **"Is Service Account"** box on the **Access Rights** tab. Only Settings administrators (`base.group_system`) can see or change this box.
 2.  **Access Denied:** Once flagged, any login attempt with that account via the browser will result in an "Access Denied" error. This is a deliberate security feature.
-3.  **Automatic Protection:** Every Service Account is automatically assigned an extremely long, randomized password that is impossible to guess, ensuring it can only be accessed by the automated system intended to use it.
+3.  **Automatic Protection:** Every Service Account is automatically assigned an extremely long, randomized password that is impossible to guess, ensuring it can only be accessed by the automated system intended to use it. Turning the box on or off replaces the password with a new random one, and later password changes to a Service Account are ignored.
 
 ### Security Audit Logs:
-Administrators can monitor security events in **Settings > Security Logs**. The following events are tracked:
-*   **Service Account Web Login Attempt:** Logs when a background account tries to access the UI.
-*   **Privilege Escalation Security Block Tripped:** Logs when an automated account attempts to escalate to global administrative privileges.
-*   **Unauthorized System Parameter Access:** Logs when a process attempts to read or write a restricted system setting.
-*   **Model Cache Invalidation:** Logs when a user or process manually triggers a system-wide cache refresh.
+Administrators can monitor security events in **Settings > Zero-Sudo Security > Security Audit Logs**. The following events are tracked:
+*   **Service Account Web Login Attempt:** Logs when a background account signs in to the web interface with its correct password (the session is then ended).
+*   **God-Mode Security Block Tripped:** A reserved event type for a background account trying to use global administrative privileges. Nothing in this repository currently records it; a blocked attempt is refused with an access error to the program that asked instead.
+*   **Unauthorized System Parameter Access:** Logs when a process attempts to read a restricted system setting.
+*   **Unauthorized System Parameter Write:** Logs when a process attempts to change a restricted system setting.
+*   **Model Cache Invalidation:** Logs when a user or process manually clears the cached data for one kind of record (one model), not the whole system.
 
 ---
 
@@ -44,15 +45,15 @@ Administrators can monitor security events in **Settings > Security Logs**. The 
 
 1.  **Service Account Pattern**: High-privilege operations are offloaded to dedicated `res.users` records flagged with `is_service_account=True`.
 2.  **Centralized Security Utilities**: The `zero_sudo.security.utils` model provides cached methods for secure UID retrieval, system parameter whitelisting, and deterministic hashing.
-3.  **Web Isolation Interceptor**: A controller override on `web_login` that uses raw SQL to check and block interactive logins for service accounts.
-4.  **Automated Documentation Bootstrap**: An inheritance of `ir.module.module` that centrally manages the installation of HTML documentation from module manifests.
+3.  **Web Isolation Interceptor**: A controller override on `web_login` that uses raw SQL to check and block interactive logins for service accounts. The JSON login route (`/web/session/authenticate`) is overridden the same way, and an `ir.http._authenticate` check refuses every later request from a service-account session except the RPC (remote procedure call) endpoints `/jsonrpc` and `/xmlrpc/...`.
+4.  **Automated Documentation Bootstrap**: An inheritance of `ir.module.module` that centrally manages the installation of HTML documentation from module manifests. On every registry load it installs or updates each installed module's `knowledge_docs` entries as `knowledge.article` records, skipping a document whose content hash is unchanged, and does nothing when the `knowledge.article` model is not installed. Documents are visible only to administrators unless their manifest entry sets `"public": True`.
 </architecture>
 
 <security_design>
 ## Security Design (ADR-0002, ADR-0005)
 
--   **Anti-IDOR & Privilege Escalation**: `_get_service_uid` performing direct SQL lookups strictly rejects any service account with global administrative groups (`base.group_system`, `base.group_erp_manager`).
--   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce a hardcoded `PARAM_WHITELIST` and block keys matching cryptographic patterns (e.g., "secret", "token") to prevent SSTI exfiltration.
+-   **Anti-IDOR (Insecure Direct Object Reference) & Privilege Escalation**: `_get_service_uid` performing direct SQL lookups (the PL/pgSQL functions in `data/postgres_procedures.xml`) strictly rejects any account that is disabled, is not flagged as a service account, or holds a global administrative group (`base.group_system`, `base.group_erp_manager`), directly or through implied groups. A rejection raises `AccessError`.
+-   **Mechanical Secret Block**: `_get_system_param` and `_set_system_param` enforce hardcoded whitelists (`_get_param_read_whitelist()` and `_get_param_write_whitelist()`) to prevent SSTI (Server-Side Template Injection) exfiltration. Any key not on the list is denied with `AccessError` and logged. For a denied read, a key matching a cryptographic pattern (e.g., "secret", "token") only changes the error message; the pattern check does not apply to whitelisted keys, some of which are credentials.
 </security_design>
 
 ---
@@ -73,7 +74,7 @@ You are strictly FORBIDDEN from using `.sudo()` inline. To escalate privileges:
 <shared_service_accounts>
 ## 2. Centralized Shared Service Accounts
 
-When a daemon strictly requires native ERP framework interactions that mandate `base.group_user`, they MUST temporarily assume one of the two centralized proxy accounts:
+When a daemon strictly requires native ERP framework interactions that mandate `base.group_user`, they MUST temporarily assume one of the two centralized proxy accounts. These are the only two accounts this module declares with `base.group_user`; its other service accounts (`config_service_internal`, `gdpr_service_internal`, `user_lockout_service_internal`, and the never-acting `orphaned_record_owner`) hold only narrow groups or none:
 
 ### A. Central Mail Service Account (`zero_sudo.mail_service_internal`)
 * **Use Case:** Execute `message_post()`, `send_mail()`, or interact with the `mail.thread` chatter.
@@ -88,7 +89,7 @@ When a daemon strictly requires native ERP framework interactions that mandate `
 ## 3. Python API Reference (`zero_sudo.security.utils`)
 
 #### `_get_service_uid(xml_id)` `[@ANCHOR: get_service_uid]`
-Safely retrieves the database ID of a Service Account. Result is RAM-cached.
+Safely retrieves the database ID of a Service Account. Only the XML ID to user ID lookup is RAM-cached (preloaded at registry load). The safety check (account active, flagged as a service account, no administrative groups) runs live on every call, and a failure raises `AccessError`.
 * **Arguments:** `xml_id` (str): The external ID (e.g., `'your_module.your_service_account'`).
 * **Returns:** `int` (The User ID).
 
@@ -97,19 +98,19 @@ Generates a deterministic 32-bit integer hash for `pg_advisory_xact_lock`.
 * **Returns:** `int`.
 
 #### `_get_system_param(key, default=None)` `[@ANCHOR: get_system_param]`
-Safely retrieves a whitelisted system configuration parameter.
+Safely retrieves a whitelisted system configuration parameter, reading it as `zero_sudo.config_service_internal`. A key not on the read whitelist is logged as `param_access_denied` and raises `AccessError`.
 
 #### `_notify_cache_invalidation(model_name, key_value)` `[@ANCHOR: coherent_cache_signal]`
-Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches.
+Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches. It delegates to `distributed_redis_cache`'s `notify_model_invalidation()`, which signals on the `distributed_cache_invalidation` channel that the `distributed_redis_cache` cache-manager daemon listens on. Invalidation is for the whole model; `key_value` must be non-empty but does not narrow it.
 
 #### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
-Retrieves the root cryptographic key from environment or local file, bypassing DB.
+Retrieves the root cryptographic key from environment or local file, bypassing DB. It checks the `HAMS_CRYPTO_KEY` environment variable, then `/var/lib/odoo/hams_crypto.secret`, then Odoo's `admin_passwd` setting. If none is set, or the value is `admin`, it logs an error and returns an empty string, so callers must refuse to encrypt or sign.
 
 #### `_invalidate_model_cache(model_name)` `[@ANCHOR: invalidate_model_cache]`
-Securely invalidates the entire cache for a specific model. Requires the user to have write access to the model. Events are audited.
+Securely invalidates the entire cache for a specific model. Requires the user to have write access to the model (members of `base.group_system` skip this check). It clears that model's entries in Redis and in this worker's local cache, notifies the other workers through `_notify_cache_invalidation`, and records a `cache_invalidation` security log entry.
 
 #### `_set_kv(key, value)` `[@ANCHOR: set_kv_procedure]`
-High-performance atomic key-value update using an optimized Postgres procedure.
+High-performance atomic key-value update using an optimized Postgres procedure (`zero_sudo_set_kv`, a single `INSERT ... ON CONFLICT (key) DO UPDATE` upsert).
 </python_api>
 
 ---
@@ -123,13 +124,13 @@ The `TourUtils` object (`@zero_sudo/js/tour_utils`) provides centralized macros 
 Generates a step array that clicks a save button and then waits (a native tour step, no polling loop) for `.o_form_saved`, the form renderer's own "persisted and not dirty" class, so the tour cannot end or navigate while the save RPC is still in flight. Pass `waitTrigger` to wait on something else instead. (Do not wait on `.o_form_button_create`: the control panel's always-present New button matches before the save resolves.)
 
 #### `bypassDialogs()`
-Generates a macro to intercept and bypass native blocking dialogs (`window.alert`, `window.confirm`) during testing.
+Generates a macro to intercept and bypass native blocking dialogs (`window.alert`, `window.confirm`) during testing. Intercepted dialogs are logged as warnings, and `confirm` always answers yes.
 
 #### `mockExternalRequests(urlPattern, mockResponse)`
-Generates a macro to intercept and mock `fetch` requests matching a specific URL pattern, preventing external network calls during tests.
+Generates a macro to intercept and mock `fetch` requests matching a specific URL pattern, preventing external network calls during tests. The pattern is a plain substring (not a regular expression); a matching request gets `mockResponse` as a JSON body with status 200.
 
 #### `waitForAbsence(selector, description)`
-Generates a macro that polls and explicitly waits for a specific DOM element to disappear from the page.
+Generates a macro that polls and explicitly waits for a specific DOM element to disappear from the page. It checks every 250 ms and fails the step after 10 seconds.
 
 #### `deterministicInput(helpers, text)`
 A direct execution function (used within a tour's `run` step) that safely injects text into the currently active input element and explicitly dispatches the `input`, `change`, and `keyup` events required to reliably awaken Odoo's frontend framework (e.g., Many2one debouncers).
@@ -150,21 +151,21 @@ residual risks and the vector list: `docs/stories/svg_allowlist_sanitizer.md`. T
 Provides centralized, private utilities for managing background daemon processes tightly coupled with Odoo.
 * `_start_daemon_process(script_path, args, env_vars)`: Safely forks a background process detached from the web request lifecycle.
 * `_stop_daemon_process(process)`: Safely terminates a running daemon.
-* `_poll_health_check(url, timeout, interval)`: Polls an HTTP endpoint to verify daemon health before proceeding with tests.
+* `_poll_health_check(url, timeout, interval)`: Polls an HTTP endpoint to verify daemon health before proceeding with tests. It sends `HEAD` requests until one returns 200, accepts only `http` and `https` URLs, and raises `UserError` after `timeout` seconds (default 30).
 
 ### `zero_sudo.kv`
-A high-performance Key-Value store table optimized for lock-free reads and atomic writes via PostgreSQL procedures. Used extensively by the core for tracking document hashes and caching configuration lookups.
+A high-performance Key-Value store table with cached reads (`_get_kv()` is `@distributed_cache`-decorated) and atomic writes via PostgreSQL procedures. In this repository it is used by the documentation bootstrap to record each installed document's content hash and article ID.
 * Developers interact with this model via `_get_kv()` and `_set_kv()` in `zero_sudo.security.utils`.
 
 ### `zero_sudo.noisy_table`
-A registry model (`zero_sudo_noisy_table`) used to declare tables that undergo high-frequency or technically necessary data mutations (e.g. `ir.module.category`). Tables registered here are exempt from the strict end-of-test Database Leak Prevention checks.
+A registry model (`zero_sudo_noisy_table`) used to declare PostgreSQL tables (by table name) that undergo high-frequency or technically necessary data mutations (e.g. `ir_logging`, `bus_bus`). Tables registered here are exempt from the strict end-of-test Database Leak Prevention checks of `RealTransactionCase` (`tests/real_transaction.py`), which also always skips its own built-in list of such tables.
 
 ### `zero_sudo.security.log`
-The centralized audit log model (`zero_sudo_security_log`). Records all access denial events, tripped security wires, parameter tampering attempts, and cache invalidation commands. 
-* Includes a built-in `autovacuum()` cron job to prune logs older than 90 days.
+The centralized audit log model (`zero_sudo_security_log`). Records blocked service-account logins, denied system-parameter reads and writes, and cache invalidation commands. 
+* Includes a built-in `autovacuum()` cron job to prune logs older than 90 days. It runs daily as `odoo_facility_service_internal` and deletes at most 10,000 rows per run with raw SQL.
 * Immutable design ensures even `base.group_system` users cannot delete or modify log records via the UI or ORM.
 
 ---
 
 ## 6. External Dependencies
-* `python`: `["psycopg2", "requests"]`
+* `python`: `["markdown", "psycopg2", "requests"]`

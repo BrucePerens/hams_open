@@ -10,38 +10,38 @@
 <h3 id="COMM_UX_service_accounts" data-trace="[@ANCHOR: zero_sudo:COMM_UX_service_accounts]">Service Accounts</h3>
     <p>A "Service Account" is a special user profile created for automated tasks (like sending emails or backing up data). These accounts are hardened to prevent misuse:</p>
     <ul>
-        <li><strong>Web Login Block:</strong> Service Accounts are strictly <strong>forbidden</strong> from logging in through a web browser. Any attempt to do so is instantly blocked and logged for auditing.</li>
-        <li><strong>Automated Hardening:</strong> Every Service Account is assigned a complex, randomized password that is impossible to guess, ensuring only the intended automated system can use it.</li>
-        <li><strong>How to Identify:</strong> You can manage these accounts in <strong>Settings > Users &amp; Companies > Users</strong> by toggling the <strong>"Is Service Account"</strong> checkbox.</li>
+        <li><strong>Web Login Block:</strong> Service Accounts are strictly <strong>forbidden</strong> from logging in through a web browser. Any attempt to do so is instantly blocked; a sign-in with the correct password is also logged for auditing before the session is ended.</li>
+        <li><strong>Automated Hardening:</strong> Every Service Account is assigned a complex, randomized password that is impossible to guess, ensuring only the intended automated system can use it. Turning the checkbox on or off replaces the password with a new random one, and later password changes to a Service Account are ignored.</li>
+        <li><strong>How to Identify:</strong> You can manage these accounts in <strong>Settings > Users &amp; Companies > Users</strong> by toggling the <strong>"Is Service Account"</strong> checkbox on the <strong>Access Rights</strong> tab. Only Settings administrators can see or change it.</li>
     </ul>
 
     <!-- [@ANCHOR: zero_sudo:COMM_UX_safe_configuration] -->
 <h3 id="COMM_UX_safe_configuration" data-trace="[@ANCHOR: zero_sudo:COMM_UX_safe_configuration]">Safe Configuration & Parameter Whitelisting</h3>
-    <p>To prevent sensitive data leaks, the system uses a strict whitelist for configuration parameters. Parameters like encryption keys or master passwords cannot be accessed or modified via standard tools unless they are explicitly registered in the security core. This protects against several classes of system-level attacks.</p>
+    <p>To prevent sensitive data leaks, the system uses a strict whitelist for configuration parameters. Parameters like encryption keys or master passwords cannot be accessed or modified through the security core's parameter helpers, which background programs use, unless they are explicitly registered in the security core. A refused read or write is logged. This protects against several classes of system-level attacks.</p>
 
     <!-- [@ANCHOR: zero_sudo:COMM_UX_centralized_security_logs] -->
 <h3 id="COMM_UX_centralized_security_logs" data-trace="[@ANCHOR: zero_sudo:COMM_UX_centralized_security_logs]">Centralized Security Logs</h3>
-    <p>The system maintains a centralized audit trail for critical security events. Administrators can monitor these in <strong>Settings > Security Logs</strong>. Tracked events include:</p>
+    <p>The system maintains a centralized audit trail for critical security events. Administrators can monitor these in <strong>Settings > Zero-Sudo Security > Security Audit Logs</strong>. Tracked events include:</p>
     <div style="text-align: center; margin: 20px 0;">
         <img src="/zero_sudo/static/description/images/zero_sudo_settings.png" alt="Zero Sudo Settings and Logs" style="max-width: 100%; border: 1px solid #ccc; border-radius: 5px;">
 </div>
     <ul>
-        <li><strong>Blocked Login Attempts:</strong> When a Service Account attempts to access the web UI.</li>
-        <li><strong>Privilege Escalation Violations:</strong> When an automated process attempts to gain full system administrator rights.</li>
-        <li><strong>Restricted Parameter Access:</strong> When an unauthorized attempt is made to read or write sensitive system configurations.</li>
-        <li><strong>Cache Invalidation:</strong> Records system-wide data refreshes.</li>
+        <li><strong>Blocked Login Attempts:</strong> When a Service Account signs in to the web UI with its correct password.</li>
+        <li><strong>Privilege Escalation Violations:</strong> A reserved event type for an automated process attempting to gain full system administrator rights. Nothing in this repository currently records it; the attempt is refused with an access error instead.</li>
+        <li><strong>Restricted Parameter Access:</strong> When an unauthorized attempt is made to read or write sensitive system configurations (reads and writes are recorded as separate event types).</li>
+        <li><strong>Cache Invalidation:</strong> Records a manual refresh of the cached data for one kind of record (one model), not the whole system.</li>
     </ul>
 
     <!-- [@ANCHOR: UX_CACHE_INVALIDATION] -->
     <!-- [@ANCHOR: zero_sudo:COMM_UX_CACHE_INVALIDATION] -->
 <h3 id="COMM_UX_CACHE_INVALIDATION" data-trace="[@ANCHOR: zero_sudo:COMM_UX_CACHE_INVALIDATION]">Safe Cache Invalidation</h3>
-    <p>To optimize performance without compromising security, the system provides a granular way to refresh data caches. Users with appropriate permissions can safely trigger a refresh for specific parts of the system, ensuring that data is always up-to-date without needing full administrative rights. This prevents "stale data" issues while maintaining strict isolation between different parts of the platform.</p>
+    <p>To optimize performance without compromising security, the system provides a granular way to refresh data caches. Users with appropriate permissions (write access to that kind of record) can safely trigger a refresh for specific parts of the system, ensuring that data is always up-to-date without needing full administrative rights. This prevents "stale data" issues while maintaining strict isolation between different parts of the platform.</p>
     <!-- [@ANCHOR: UX_CACHE_INVALIDATION] -->
     <!-- - -->
     <!-- [@ANCHOR: COMM_UX_NOISY_TABLE_MANAGEMENT] -->
     <!-- [@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT] -->
 <h3 id="COMM_UX_NOISY_TABLE_MANAGEMENT" data-trace="[@ANCHOR: zero_sudo:COMM_UX_NOISY_TABLE_MANAGEMENT]">Noisy Table Management</h3>
-    <p>System administrators can flag specific technical tables as "Noisy" to streamline security audits. This reduces false positives by indicating that certain tables are known to have high-frequency, non-sensitive data changes.</p>
+    <p>System administrators can flag specific technical tables as "Noisy" in <strong>Settings > Zero-Sudo Security > Noisy Tables</strong>. Noisy tables are ignored by the Real Transaction Testing Facility's end-of-test database leak check (see the Real Transaction Testing Facility Guide). This reduces false test failures for tables that are known to have high-frequency data changes from background processes.</p>
     <!-- [@ANCHOR: COMM_UX_NOISY_TABLE_MANAGEMENT] -->
 
     <p><strong>Frequently Asked Questions</strong></p>
@@ -50,7 +50,7 @@
     <p>If you see an error referring to <code>access_denied_service</code>, you are trying to log in with a Service Account. These accounts are for background tasks only. Please use your standard employee account.</p>
 
     <p><strong>"Where are the system manuals?"</strong></p>
-    <p>This module automatically installs and updates help guides like this one whenever new features are added to the platform. You can find them in the Knowledge app.</p>
+    <p>This module automatically installs and updates help guides like this one each time the server loads, whenever a guide's content has changed. You can find them in the Knowledge app, if it is installed. Guides are visible only to administrators unless a module marks them as public.</p>
 
     <!-- Semantic Anchors for Traceability -->
     <!-- [@ANCHOR: zero_sudo:zero_sudo_main] -->

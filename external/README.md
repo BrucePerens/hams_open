@@ -19,7 +19,8 @@ license text each library's own license requires, not just its SPDX identifier.
 ### Transformers.js
 - **Version:** 2.16.1 (published as `@xenova/transformers`)
 - **License:** Apache-2.0
-- **Purpose:** Machine Learning (NLP) at the edge for speech-to-text and entity extraction.
+- **Purpose:** Machine Learning (NLP, natural language processing) at the edge, meaning in the user's
+  browser rather than on the server, for speech-to-text and entity extraction.
 - **Local Path:** `/external/static/src/node_modules/transformers/transformers.js`
 
 ### D3.js, d3-geo-projection, and topojson-client
@@ -39,8 +40,9 @@ license text each library's own license requires, not just its SPDX identifier.
   `topojson-client.min.js` is byte-identical to a fresh unpkg download once the
   `/** @odoo-module **/` banner is stripped; `d3.v7.min.js` and `d3-geo-projection.v4.min.js` carry
   the same banner plus internal line-reflowing versus a fresh download (same tokens, different line
-  breaks); `d3-geo-projection.v4.min.js` additionally has its UMD wrapper's `require("d3-geo")`/
-  `require("d3-array")` calls replaced with nonexistent `importModule(...)` calls and its AMD branch
+  breaks); `d3-geo-projection.v4.min.js` additionally has its UMD (Universal Module Definition) wrapper's `require("d3-geo")`/
+  `require("d3-array")` calls replaced with nonexistent `importModule(...)` calls and its AMD
+  (Asynchronous Module Definition) branch
   disabled -- a targeted, deliberate-looking fix (only the one file with real external `require()`
   calls got this treatment) for what a fresh-download replacement reproduces as a real
   "d3-array module dependency" failure at test time.
@@ -70,6 +72,7 @@ license text each library's own license requires, not just its SPDX identifier.
 
 ### Noble crypto libraries (@noble/curves, @noble/hashes, @noble/ciphers)
 - **Version:** 2.3.0 (all three packages)
+- **License:** MIT (all three)
 - **Purpose:** The primitive layer (X25519, SHA-256, HKDF, ChaCha20-Poly1305) underneath
   `hams_com`'s browser-side Noise_XX handshake (`ham_shack/static/src/js/noise_xx.js`,
   `docs/proposals/TRANSMITTER_HIJACK_PREVENTION.md` section 1). These used to be imported live from
@@ -136,6 +139,9 @@ license text each library's own license requires, not just its SPDX identifier.
   integrity value, extract it and compare the same files.
 
 ### ft8js (WASM FT8 decode + encode)
+WASM is WebAssembly, the compiled binary format browsers run alongside JavaScript. FT8 is the
+weak-signal amateur-radio digital mode these modules decode and encode.
+
 - **Version:** 0.0.3 upstream, but not vendored as the unmodified upstream build -- see below.
 - **License:** MIT (both `ft8js`'s own wrapper code and the underlying `ft8_lib` it compiles, per
   each project's own `LICENSE`/`LICENSE-MIT` file, checked directly rather than assumed from the
@@ -163,7 +169,7 @@ license text each library's own license requires, not just its SPDX identifier.
 - **A real algorithmic-improvement hypothesis was tested here and honestly falsified -- recorded
   so a future session doesn't re-spend the time re-testing it.** `SOFTWARE_ANALYSIS_PROPOSALS.md`
   records Bruce's direct instruction to study why the same author's `ft8ts` (a pure-TypeScript,
-  GPL-3.0 port of WSJT-X's own reference LDPC decoder) claims a real, benchmarked accuracy
+  GPL-3.0 port of WSJT-X's own reference LDPC (low-density parity-check) decoder) claims a real, benchmarked accuracy
   advantage over `ft8_lib`/`ft8js` (17/N vs 8/N decoded messages on the author's own test set), and
   reimplement whatever real improvement is found as original, MIT-licensed code -- not port or
   copy `ft8ts`'s own GPL source. Reading both implementations side by side found one concrete,
@@ -174,7 +180,7 @@ license text each library's own license requires, not just its SPDX identifier.
   `atanh` in double precision throughout. Belief propagation is iterative and multiplicative across
   LDPC check-node edges (`kLDPC_iterations = 25`), so the reasoned hypothesis was that per-edge
   approximation/precision error compounds over those iterations and disproportionately hurts
-  marginal, low-SNR decodes -- exactly the regime `ft8ts`'s benchmark claims an advantage in.
+  marginal, low-SNR (signal-to-noise ratio) decodes -- exactly the regime `ft8ts`'s benchmark claims an advantage in.
   **Tested it directly rather than trusting the reasoning**: patched a local `ldpc.c` to use exact
   `tanhf`/`atanhf` (real C99 libm functions, not copied from `ft8ts` or anywhere else -- this
   satisfies the "reimplement, don't port" requirement independent of the outcome) in place of the
@@ -233,7 +239,8 @@ license text each library's own license requires, not just its SPDX identifier.
   correctly at -16/-18dB and cleanly failing (not crashing, not hallucinating a message) at -20dB
   and below, plus a real encode-then-decode round trip through both WASM modules together
   (`"CQ K6BP CM87"` in, byte-identical text out); (2)
-  `ham_shack/static/tests/ft8_browser_decode.test.js` -- a real hoot suite running that same
+  `ham_shack/static/tests/ft8_browser_decode.test.js` -- a real hoot (Odoo's JavaScript test
+  framework, `@odoo/hoot`) suite running that same
   encode-then-decode round trip inside the actual headless-Chrome test browser via a genuine
   `import()` of the vendored module (not a mock), proving the WASM-in-browser path specifically,
   not just WASM-in-Node.js.
@@ -241,6 +248,12 @@ license text each library's own license requires, not just its SPDX identifier.
 ## Maintenance
 
 To update or refresh the local assets, the script `fetch_assets.py` can be executed. This script downloads the libraries directly into the module structure.
+
+`main()` covers only Leaflet and Transformers.js. The noble and ft8js files are not fetched by
+this script; rebuild them with the commands in their own sections above. Every download is
+checked against a pinned SHA-256 hash: a file already on disk with the matching hash is skipped,
+and a download whose hash does not match raises `ValueError` without replacing the existing file
+(any temporary download file is removed).
 
 ```bash
 python3 external/fetch_assets.py
@@ -269,7 +282,11 @@ verified against a pinned, currently-vendored-file hash rather than assumed corr
 ## Usage in Other Modules
 
 ### Leaflet
-Odoo's asset system will automatically include Leaflet in the backend and frontend bundles if this module is installed.
+Leaflet is not added to any Odoo asset bundle. This module deliberately declares no `assets`
+keys (see the comment in `__manifest__.py`), so installing it does not put Leaflet on any page.
+A module that needs Leaflet loads it by URL from Odoo's ordinary static-file route:
+`/external/static/src/node_modules/leaflet/leaflet.js` and
+`/external/static/src/node_modules/leaflet/leaflet.css`.
 
 ### Transformers.js
 For modules using dynamic imports, use the local path:
@@ -280,4 +297,5 @@ const module = await import('/external/static/src/node_modules/transformers/tran
 
 ## External Dependencies
 
-- None
+- None. The manifest declares no `external_dependencies` (Python or system packages). Its Odoo
+  module dependencies are `zero_sudo`, `base` and `web`.
