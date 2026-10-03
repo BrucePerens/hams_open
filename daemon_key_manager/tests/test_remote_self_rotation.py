@@ -52,6 +52,10 @@ class TestRemoteSelfRotation(RealTransactionCase):
         )
 
     def tearDown(self):
+        # A test's HTTP calls commit on their own cursors after this cursor's
+        # snapshot may already be open; deleting a row they updated would then
+        # fail with a serialization error. Start a fresh transaction first.
+        self._reload()
         self._remove_env_files()
         self.registry_model.search(
             [("user_id", "=", self.service_user.id)]
@@ -60,6 +64,17 @@ class TestRemoteSelfRotation(RealTransactionCase):
         self.service_user.unlink()
         self.env.cr.commit()
         super().tearDown()
+
+    def _reload(self):
+        """
+        Ends this cursor's transaction and drops the ORM cache, so the next read
+        sees what the HTTP requests (committed on their own cursors) wrote. The
+        cursor is REPEATABLE READ: without this, a read after an HTTP call can
+        return the snapshot taken before it. Nothing is pending on this cursor at
+        the call sites (every write here is followed by a commit).
+        """
+        self.env.cr.commit()
+        self.env.invalidate_all()
 
     def _remove_env_files(self):
         for path in self.env_paths:
@@ -141,7 +156,7 @@ class TestRemoteSelfRotation(RealTransactionCase):
         self.assertFalse(self._key_accepted(old_key), "old key revoked at step 2")
         self.assertTrue(self._key_accepted(new_key))
 
-        registry.invalidate_recordset()
+        self._reload()
         self.assertEqual(registry.pending_key_id, 0)
         age = fields.Datetime.now() - registry.last_rotated
         self.assertLess(age, datetime.timedelta(minutes=5))
@@ -203,7 +218,7 @@ class TestRemoteSelfRotation(RealTransactionCase):
         response = self._rotate(name, other_key)
         self.assertNotEqual(response.status_code, 200)
         self.assertIn("AccessError", response.text)
-        registry.invalidate_recordset()
+        self._reload()
         self.assertEqual(registry.pending_key_id, 0)
         self.assertTrue(self._key_accepted(remote_key))
 
