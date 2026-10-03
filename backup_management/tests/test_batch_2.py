@@ -91,6 +91,7 @@ class TestBatch2Fixes(HamsTransactionCase):
 
     def test_restore_wizard_validation(self):
         # Tests [@ANCHOR: backup_management:restore_wizard_refuses_pgbackrest]
+        # Tests [@ANCHOR: backup_management:restore_wizard_engine]
         # Updated 2026-10-01: a pgbackrest restore through this wizard now ALWAYS raises
         # UserError, regardless of how well-formed restore_target_path is -- see
         # action_restore()'s own matching comment for why (the restore path is never actually
@@ -108,6 +109,10 @@ class TestBatch2Fixes(HamsTransactionCase):
             "snapshot_id": snap.id,
             "restore_target_path": "../invalid_stanza",
         })
+        # The related, readonly `engine` field exists purely so the view can show the
+        # loud pgbackrest warning above -- confirm it actually reflects the snapshot's
+        # real engine rather than silently staying blank/wrong.
+        self.assertEqual(wizard.engine, "pgbackrest")
         with self.assertRaises(UserError):
             wizard.action_restore()
 

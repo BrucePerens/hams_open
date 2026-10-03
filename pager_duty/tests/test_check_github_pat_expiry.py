@@ -30,6 +30,7 @@ class TestSeverityForDaysLeft(HamsTransactionCase):
     """The graduated-severity ladder itself, independent of the network/file-reading plumbing
     around it -- shared logic any future expiring-credential check could reuse."""
 
+    # Tests [@ANCHOR: pager_duty:severity_for_days_left]
     def test_healthy_past_every_threshold_returns_none(self):
         self.assertIsNone(check_mod.severity_for_days_left(45))
 

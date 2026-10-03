@@ -213,6 +213,42 @@ class TestCloudflareSystemd(HamsTransactionCase):
             with open(path) as f:
                 self.assertEqual(f.read(), "TOKEN=ok\n")
 
+    # Tests [@ANCHOR: cloudflare:ensure_unit_installed]
+    def test_15_ensure_unit_installed_renders_once_and_skips_reload_when_unchanged(self):
+        """start_tunnel_daemon's own test (test_04/test_05 above) mocks this function out
+        entirely, so its real rendering/idempotency logic had no direct test at all. Real
+        filesystem, matching test_09/test_10's own convention for this file -- only
+        subprocess.run (`daemon-reload`) and the resolved binary path are mocked."""
+        self.safe_patch(
+            "odoo.addons.cloudflare.utils.cloudflare_systemd._resolve_cloudflared_bin",
+            return_value="/usr/local/bin/cloudflared",
+        )
+        mock_run = self._mock_run(returncode=0, stdout="")
+        with tempfile.TemporaryDirectory() as tmp_unit_dir:
+            self.safe_patch(
+                "odoo.addons.cloudflare.utils.cloudflare_systemd._USER_UNIT_DIR",
+                new=tmp_unit_dir,
+            )
+            cf_systemd._ensure_unit_installed()
+            unit_path = os.path.join(tmp_unit_dir, cf_systemd._UNIT_NAME_TEMPLATE)
+            with open(unit_path) as f:
+                rendered = f.read()
+            self.assertIn("/usr/local/bin/cloudflared", rendered)
+            self.assertNotIn("{cloudflared_bin}", rendered)
+            mock_run.assert_called_once()
+            self.assertEqual(mock_run.call_args[0][0][-1], "daemon-reload")
+            no_leftovers = [
+                f for f in os.listdir(tmp_unit_dir) if f.startswith(".cloudflared_unit_")
+            ]
+            self.assertEqual(no_leftovers, [])
+
+            # Second call with identical rendered content: no daemon-reload, no rewrite.
+            mock_run.reset_mock()
+            before_mtime = os.stat(unit_path).st_mtime_ns
+            cf_systemd._ensure_unit_installed()
+            mock_run.assert_not_called()
+            self.assertEqual(os.stat(unit_path).st_mtime_ns, before_mtime)
+
     # Tests [@ANCHOR: cloudflare:start_tunnel_daemon]
     def test_14_the_unit_never_puts_the_run_token_on_the_command_line(self):
         """An argument is readable by every local account through /proc/<pid>/cmdline and ps. The token
