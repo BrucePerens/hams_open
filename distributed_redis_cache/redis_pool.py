@@ -15,12 +15,17 @@ POOL_LOCK = threading.Lock()
 REDIS_HOST_DEFAULT = os.getenv("REDIS_HOST") or "redis"
 REDIS_PORT_DEFAULT = int(os.getenv("REDIS_PORT") or "6379")
 REDIS_PASS_DEFAULT = os.getenv("REDIS_PASSWORD")  # burn-ignore-env: # Verified by [@ANCHOR: COMM_test_redis_pool_env_variables]
+# Production Redis has no unauthenticated access since 2026-10-03: every client authenticates as
+# the ACL user that hams_shared/tools/infrastructure.py provisions and writes, with its password,
+# to /opt/hams/etc/redis.env (REDIS_USERNAME/REDIS_PASSWORD). Unset (a test box) means no AUTH.
+REDIS_USERNAME_DEFAULT = os.getenv("REDIS_USERNAME") or None
 REDIS_DB_DEFAULT = int(os.getenv("REDIS_DB") or "0")
 
 # Centralized connection pool for the default Redis settings
 redis_pool = redis.ConnectionPool(
     host=REDIS_HOST_DEFAULT,
     port=REDIS_PORT_DEFAULT,
+    username=REDIS_USERNAME_DEFAULT,
     password=REDIS_PASS_DEFAULT,
     db=REDIS_DB_DEFAULT,
     decode_responses=True,
@@ -88,6 +93,7 @@ def get_redis_connection(env=None):
                     _custom_pools[pool_key] = redis.ConnectionPool(
                         host=host,
                         port=port,
+                        username=REDIS_USERNAME_DEFAULT,
                         password=password,
                         db=REDIS_DB_DEFAULT,
                         decode_responses=True,
