@@ -287,6 +287,13 @@ class TestNcmecReport(HamsTransactionCase):
 
     def test_action_ncmec_report_requires_group_system(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_action_report]
+        # Real server-side enforcement for the view's own group="base.group_system"
+        # buttons/page -- see helpdesk_ticket_views.xml's own comment next to
+        # [@ANCHOR: hams_helpdesk:COMM_ncmec_report_buttons] and
+        # [@ANCHOR: hams_helpdesk:COMM_ncmec_report_page] for why there is no
+        # separate UI tour for this admin-only surface.
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_report_buttons]
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_report_page]
         ticket = self._create_csam_ticket()
         with self.assertRaises(AccessError):
             ticket.with_user(self.manager_user).action_ncmec_report()

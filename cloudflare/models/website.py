@@ -33,6 +33,7 @@ class WebsiteCloudflare(models.Model):
     _inherit = "website"
 
     # [@ANCHOR: cloudflare:COMM_website_write_busts_credential_cache]
+    # Verified by [@ANCHOR: COMM_test_credential_write_busts_distributed_cache]
     def write(self, vals):
         result = super().write(vals)
         if _CLOUDFLARE_CREDENTIAL_FIELDS & vals.keys():

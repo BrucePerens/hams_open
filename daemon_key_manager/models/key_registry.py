@@ -294,6 +294,7 @@ class DaemonKeyRegistry(models.Model):
         # would revoke the key the remote daemon holds (see
         # COMM_remote_self_rotation_excluded_from_local_rotation). This runs on
         # every hams.daemon.keys.service start, so it is not a rare path.
+        # Verified by [@ANCHOR: COMM_test_force_provisioning_partial_failure]
         registries = self.env["daemon.key.registry"].search(
             [("remote_self_rotation", "=", False)], limit=1000
         )

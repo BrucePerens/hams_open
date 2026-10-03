@@ -160,6 +160,9 @@ class TestHelpdeskAiTriageExternalAllowlist(HamsTransactionCase):
 
     def test_05_mcp_post_internal_note_posts_as_internal_note_on_allowlisted_ticket(self):
         # Tests [@ANCHOR: hams_helpdesk:mcp_post_internal_note]
+        # Same method, also carrying the outer public-facing anchor at its
+        # own `def` line (helpdesk_ticket.py).
+        # Tests [@ANCHOR: hams_helpdesk:COMM_mcp_post_internal_note]
         self.general_ticket.with_user(self.ai_triage_uid).mcp_post_internal_note(
             "AI triage analysis: looks routine"
         )

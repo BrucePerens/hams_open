@@ -2,7 +2,7 @@
 
 The system maintains a synchronized view of offsite backup states through a polling mechanism.
 
-1. **Cron Trigger**: A global cron job `[@ANCHOR: backup_management:COMM_cron_sync_all_backups]` runs periodically.
+1. **Cron Trigger**: A global cron job `[@ANCHOR: backup_management:COMM_cron_sync_all_backups]` runs periodically, and a sibling daily cron `[@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]` actually CREATES the day's backup for every `backup.config` (running `pgbackrest backup`/`kopia snapshot create`) -- the sync cron above only ever lists/reconciles existing snapshots, it never creates one, so without this second cron a deployment would silently stop taking new backups while still showing healthy-looking sync activity.
 2. **Task Offloading**: For each configuration, a sync task is pushed to the RabbitMQ Bastion.
 3. **Engine Execution**:
    - For **Kopia**: It executes `kopia snapshot list --json` and parses the output `[@ANCHOR: backup_management:COMM_backup_sync_kopia]`.

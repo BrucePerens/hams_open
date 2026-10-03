@@ -39,3 +39,16 @@ the less discoverable stage statusbar. Found live: a real admin reached for dele
 outright rather than closing it, because there was no button-shaped way to do so, and an
 ordinary staff agent (not a manager) has no delete access on this model at all -- the statusbar
 click was their only way to close a ticket before this button existed.
+
+### Spam / Phishing Quarantine
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]**
+Mail sent straight to admin@ or support@ becomes a ticket through `message_new()`, not through
+pager_duty's Helpdesk Adapter, so the same mail-ingestion spam filter runs there too. A flagged
+message still becomes a ticket (never a silent drop), but it starts in the "Spam / Phishing" stage
+with an internal note listing the reasons, and a human can move it back to "New" to recover a false
+positive. Production tickets #2 and #43 arrived this way before the filter covered this path.
+
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]**
+Moving a ticket into "Spam / Phishing" sends no stage-change mail-back: the From address is either
+the spammer (a reply confirms a live inbox) or a real customer whose address was spoofed. Moving
+it back out of that stage mails the customer as usual.
