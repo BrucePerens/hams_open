@@ -138,6 +138,22 @@ console.error = function (...args) {
 window._pendingRPCCount = 0;
 const originalFetch = window.fetch;
 
+// A test that deliberately makes its own server unreachable (ham_shack's offline tour, run under
+// tools/test.py --offline-isolation) must see the real network failure: both rewrites below exist
+// to hide backend-teardown noise, and during such a test they would turn the very condition under
+// test into a fake HTTP 200 (found 2026-10-03: the offline tour's "the server is unreachable" check
+// got `{}` with status 200 from a server that was refusing connections). The test opts in by
+// setting sessionStorage "hams_real_network_failures" to "1"; sessionStorage survives the page
+// navigations inside one browser tab, and the flag is read on every call, so setting it takes
+// effect at once. Anything unreadable counts as "not requested", the default behaviour.
+function realNetworkFailuresRequested() {
+    try {
+        return window.sessionStorage.getItem("hams_real_network_failures") === "1";
+    } catch {
+        return false;
+    }
+}
+
 window.fetch = async function(...args) {
     window._pendingRPCCount++;
     try {
@@ -180,7 +196,7 @@ window.fetch = async function(...args) {
                 // cross-origin (the safer default: propagate the real
                 // error rather than risk masking one).
             }
-            if (isSameOrigin) {
+            if (isSameOrigin && !realNetworkFailuresRequested()) {
                 return new Response('{}', {status: 200});
             }
         }
@@ -196,6 +212,7 @@ window.XMLHttpRequest.prototype.open = function(method, url, ...rest) {
     this.addEventListener('loadend', () => window._pendingRPCCount--);
     this.addEventListener('error', () => {
         window._pendingRPCCount--;
+        if (realNetworkFailuresRequested()) return;
         triggerInstantAbort("XHR Network Error", "The backend server crashed or dropped the connection during RPC to: " + url);
     });
     this.addEventListener('abort', () => window._pendingRPCCount--);
