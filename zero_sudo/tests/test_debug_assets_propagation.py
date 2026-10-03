@@ -37,7 +37,9 @@ _MIN_WEB_BUNDLE_RE = re.compile(
 @tagged("post_install", "-at_install")
 class TestDebugAssetsReachesWebClientBundles(HamsHttpCase):
     def _webclient_html(self, url_path):
-        response = self.url_open(url_path)
+        # Debug links are bare URLs (AssetsBundle.get_link), so no bundle
+        # is built here; the margin is for the first webclient render.
+        response = self.url_open(url_path, timeout=60)
         self.assertEqual(
             response.status_code,
             200,
