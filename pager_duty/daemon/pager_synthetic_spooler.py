@@ -118,7 +118,7 @@ def execute_check(check):
                         req = urllib.request.Request(
                             url,
                             # An honest User-Agent naming hams.com with a contact URL (ADR 0104); never a browser string.
-                            headers={"User-Agent": "Pager-Synthetic-Spooler/1.0 (+https://crawler.hams.com; bruce@perens.com)"}
+                            headers={"User-Agent": "Pager-Synthetic-Spooler/1.0 (+https://crawler.hams.com)"}
                         )
                         try:
                             # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe()
