@@ -128,6 +128,66 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
         )
         self.assertFalse(report, "A honeypot-triggered submission must not create a real report.")
 
+    def test_03c_violation_report_records_logged_in_reporter(self):
+        # [@ANCHOR: test_report_violation_records_logged_in_reporter]
+        # Tests [@ANCHOR: report_violation_records_logged_in_reporter]
+        """A signed-in member's report names them in reported_by_user_id; a guest's leaves it
+        empty (a guest is identified only by reported_by_email). A posted reported_by_user_id is
+        ignored: the reporter comes from the session, not the form."""
+        Report = self.env["content.violation.report"]
+
+        self.authenticate(self.user_test.login, self.user_test.login)
+        response = self.url_open(
+            "/website/report_violation",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "url": "/report-reporter-member-test",
+                "description": "Reported by a signed-in member, test_03c",
+                "reported_by_user_id": str(self.env.ref("base.user_admin").id),
+            },
+            method="POST",
+            allow_redirects=False,
+        )
+        # The target URLs are made up, so check the redirect itself rather than following it
+        # to a 404.
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("report_submitted=1", response.headers.get("Location", ""))
+        member_report = Report.search(
+            [("description", "=", "Reported by a signed-in member, test_03c")], limit=1
+        )
+        self.assertTrue(member_report, "The signed-in member's report must be created.")
+        self.assertEqual(
+            member_report.reported_by_user_id,
+            self.user_test,
+            "A signed-in reporter must be recorded as reported_by_user_id, from the session.",
+        )
+
+        self.authenticate(None, None)
+        response = self.url_open(
+            "/website/report_violation",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "url": "/report-reporter-guest-test",
+                "description": "Reported by a guest, test_03c",
+                "email": "guest-reporter-03c@example.com",
+            },
+            method="POST",
+            allow_redirects=False,
+        )
+        # The target URLs are made up, so check the redirect itself rather than following it
+        # to a 404.
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("report_submitted=1", response.headers.get("Location", ""))
+        guest_report = Report.search(
+            [("description", "=", "Reported by a guest, test_03c")], limit=1
+        )
+        self.assertTrue(guest_report, "The guest's report must be created.")
+        self.assertFalse(
+            guest_report.reported_by_user_id,
+            "A guest's report must not name the public user (or anyone) as its reporter.",
+        )
+        self.assertEqual(guest_report.reported_by_email, "guest-reporter-03c@example.com")
+
     def test_04_gdpr_export_empty_state_json_validity(self):
         """Verify that the custom JSON streaming generator produces valid JSON when the user has 0 records."""
         self.authenticate(self.user_test.login, self.user_test.login)

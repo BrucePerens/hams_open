@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © HAMS project. AGPL-3.0-or-later. -->
+<!--
+    Plain (non-noupdate) data file, re-executed on every install and every upgrade of this module,
+    following ses_webhook/data/security_backfill.xml's own pattern (post_init_hook fires only on a
+    fresh install, never on an upgrade).
+
+    Republishes the trusted-peer allow-list to Redis from the current settings. Needed once for the
+    upgrade that made the allow-list opt-in (night_shift_todo/low/cloudflare-trusted-ip-allow-list-
+    defaults-to-cloudflare-ranges-on-tunnel-only-deployments-7d2b8f14.md): before it, Redis held
+    Cloudflare's full published ranges on every install, and wsgi_proxy_scheme.py now keeps the last
+    list it read across a missing key, so without this a worker could pick up that stale, wider list
+    and keep it until the next daily refresh cron. Harmless on every later upgrade: it publishes the
+    same list a Settings save would.
+-->
+<odoo>
+    <data>
+        <!-- [@ANCHOR: cloudflare:COMM_republish_trusted_ip_ranges_on_module_load] -->
+        <function model="cloudflare.trusted_ip_utils" name="_publish_trusted_ip_ranges_to_redis"/>
+    </data>
+</odoo>

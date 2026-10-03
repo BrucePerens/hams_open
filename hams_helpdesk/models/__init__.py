@@ -3,6 +3,7 @@
 
 
 from . import calendar_event
+from . import inbound_spam_filter
 from . import helpdesk_ticket
 from . import res_partner
 from . import shift_handoff

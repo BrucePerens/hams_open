@@ -33,7 +33,7 @@
     "external_dependencies": {
         # "mcp" is for daemon/pager_mcp_server.py -- PAGER_DUTY_MCP_AI_TRIAGE.md's
         # real build order slice 1, same library hams_shared/tools/mcp_watchdog.py
-        # already depends on for its own FastMCP server.
+        # already depends on for its own MCPServer (mcp>=2).
         "python": ["psutil", "redis", "mcp"],
     },
     "data": [

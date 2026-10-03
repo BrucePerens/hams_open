@@ -25,6 +25,7 @@
         "security/security_data.xml",
         "security/ir.model.access.csv",
         "data/cron.xml",
+        "data/republish_trusted_ip_ranges.xml",
         "views/tunnel_wizard_views.xml",
         "views/res_config_settings_views.xml",
         "views/cloudflare_menus.xml",
@@ -46,6 +47,9 @@
         }
     ],
     "assets": {
+        "web.assets_frontend": [
+            "cloudflare/static/src/js/edge_cache_csrf.js",
+        ],
         "web.assets_backend": [
             "cloudflare/static/src/components/analytics/analytics.js",
             "cloudflare/static/src/components/analytics/analytics.xml",

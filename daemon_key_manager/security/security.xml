@@ -49,6 +49,24 @@
             <field name="domain_force">[('is_service_account', '=', True)]</field>
             <field name="groups" eval="[(4, ref('daemon_key_manager.group_daemon_key_manager'))]"/>
         </record>
+
+        <!-- [@ANCHOR: COMM_manager_apikeys_of_service_accounts_rule]
+             The Manager group implies base.group_user, whose "Users can read and
+             delete their own keys" rule (base.api_key_user) limits
+             res.users.apikeys to user_id = user.id. Without this rule every key
+             search the Daemon Key Manager Service makes for a service account's
+             keys came back empty, so no rotation ever revoked an old key: the
+             Odoo-side rotation left the previous key valid until it expired, and
+             remote self-rotation (rotate_own_key) revoked "0 old key(s)" on
+             confirm and never replaced an unconfirmed key. Group rules OR
+             together, so this widens only this group, and only to the keys of
+             service accounts (the same scope as the res.users rule above). -->
+        <record id="daemon_key_manager_service_account_apikeys_rule" model="ir.rule">
+            <field name="name">Daemon Key Manager can revoke Service Account API keys</field>
+            <field name="model_id" ref="base.model_res_users_apikeys"/>
+            <field name="domain_force">[('user_id.is_service_account', '=', True)]</field>
+            <field name="groups" eval="[(4, ref('daemon_key_manager.group_daemon_key_manager'))]"/>
+        </record>
     </data>
     <data>
         <record id="user_daemon_key_manager_service" model="res.users">

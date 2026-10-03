@@ -23,6 +23,28 @@ class ResConfigSettings(models.TransientModel):
         related="website_id.cloudflare_turnstile_secret", readonly=False
     )
 
+    # Off by default: a Tunnel-only deployment's origin is never reachable from Cloudflare's
+    # published ranges at all (the only peer that can ever connect is loopback, trusted
+    # unconditionally elsewhere), so there is no reason to trust those ranges too. See
+    # trusted_ip_ranges.py's own docstring for why this single toggle gates the whole feature
+    # (auto-fetched snapshot AND the admin's own custom additions below) and what else turning it
+    # on actually requires to mean anything.
+    cloudflare_trust_non_tunnel_peers = fields.Boolean(
+        string="Trust Cloudflare's Published IP Ranges",
+        config_parameter="cloudflare.trust_non_tunnel_peers",
+        help=(
+            "Only turn this on if Cloudflare connects to this origin directly over "
+            "the network instead of through a Cloudflare Tunnel. Leave it off for a "
+            "Tunnel-only deployment: cloudflared's connection is loopback and is "
+            "already trusted unconditionally. Turning this on also needs "
+            "authenticated origin pulls (Cloudflare's mTLS feature) or a per-zone "
+            "firewall rule restricting the origin to Cloudflare's edge -- set up "
+            "separately -- or it only adds trust without adding real protection, "
+            "since Cloudflare's ranges front every one of its customers, not just "
+            "this zone."
+        ),
+    )
+
     # [@ANCHOR: cloudflare:COMM_trusted_ip_ranges_settings_fields]
     # Admin-supplied additions on top of the auto-fetched list below; never touched by the daily
     # refresh cron (see trusted_ip_ranges.py's own docstring for why they're kept separate).

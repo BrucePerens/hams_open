@@ -68,6 +68,18 @@ In containerized/orchestrated environments:
 * **Behavior**: Revokes existing key and generates a new one synchronously.
 * **Security**: Only accessible to members of `Daemon Key Management / Manager`.
 
+#### `rotate_own_key(daemon_name, current_key)` (remote self-rotation)
+* **Use Case**: A daemon that runs on another machine than Odoo, whose key file Odoo cannot write
+  (e.g. a sync daemon moved to a separate machine for a non-datacenter egress path). A manager sets **Remote Self-Rotation** on its registry; the
+  cron, `action_force_provision_all()` and `action_rotate_key()` then leave that registry alone.
+* **Behavior**: Called over JSON-2 by the daemon itself, authenticated with its current key, which it
+  also passes as `current_key`. Two phases: with the active key, once the key is more than 59 days old,
+  it returns `{"status": "issued", "login", "key"}` and revokes nothing; with that new key it returns
+  `{"status": "confirmed"}`, revokes the old key and writes the new one to `env_file_path`. Otherwise
+  `{"status": "not_due", "next_rotation"}`. The daemon calls it at the start of each run and writes the new key to its own key file
+  atomically between the two calls.
+* **Security**: Only the registry's own service account, presenting a live key of that registry.
+
 #### `action_force_provision_all()`
 * **Use Case**: Used during system bootstrapping (e.g., via systemd or Kubernetes init containers) or emergency rotations.
 * **Shell Invocation**:

@@ -30,3 +30,26 @@ The system strictly prevents key rotation for service accounts that have been ar
 ## Security Benefits
 - Even if a backup of the `.env` file is stolen, the key will expire and be revoked within 60 days.
 - The 90-day expiration on the Odoo side provides a 30-day buffer for the rotation to succeed.
+
+## Scenario: A Daemon on Another Machine (Remote Self-Rotation)
+
+Some daemons run on a different machine than Odoo (for example a sync daemon given a non-datacenter
+egress path). Odoo cannot write that machine's key file, and the ordinary rotation revokes the old key at
+once, so the daemon would be locked out at the first rotation after its key was installed. For these,
+a manager sets **Remote Self-Rotation** on the registry:
+
+1.  The cron, Force Provision All and Rotate Key all skip or refuse the registry
+    [@ANCHOR: COMM_remote_self_rotation_excluded_from_local_rotation].
+2.  At the start of each run the daemon calls `rotate_own_key(daemon_name, current_key)` over JSON-2
+    with its current key [@ANCHOR: COMM_rotate_own_key_api].
+3.  Once the key is more than 59 days old, Odoo mints a new key and returns it, leaving the old key valid
+    [@ANCHOR: COMM_rotate_own_key_issue].
+4.  The daemon writes the new key to its own key file and calls again, presenting the new key. Odoo then
+    revokes the old key, writes the new one to `env_file_path` on the Odoo host too, and records the
+    rotation [@ANCHOR: COMM_rotate_own_key_confirm].
+
+A lost reply at either step leaves the daemon with a key that still works; the next run finishes the job.
+Only a key belonging to that registry can rotate it, not another key of the same service account.
+
+Note: the "30-day buffer" below does not apply to keys a daemon cannot re-read after a rotation. The
+ordinary rotation revokes the old key in the same transaction as it mints the new one.

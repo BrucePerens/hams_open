@@ -40,8 +40,9 @@ class CloudflareUtils(models.AbstractModel):
         peer is loopback (cloudflared and Odoo run on the same host); a
         self-hosted admin running Cloudflare WITHOUT Tunnel instead trusts
         peers in `cloudflare.trusted_ip_utils`'s admin-configurable allow-list
-        (Settings -> Cloudflare), which defaults to Cloudflare's own published
-        ranges -- see that model's own docstring. Everywhere else, every CF-*
+        (Settings -> Cloudflare), which is empty -- trusting nothing beyond
+        loopback -- until the admin explicitly turns on non-Tunnel mode; see
+        that model's own docstring. Everywhere else, every CF-*
         field is dropped rather than trusted -- an attacker who reaches origin
         directly gets no CF-derived geo/threat data at all, not forged data.
         """

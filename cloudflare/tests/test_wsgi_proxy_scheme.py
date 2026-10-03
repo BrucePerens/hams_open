@@ -41,6 +41,11 @@ class TestWsgiProxyScheme(HamsTransactionCase):
 
     # [@ANCHOR: test_wsgi_proxy_scheme_fix_sets_https_for_trusted_cf_visitor]
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    # Also the real exercise of the whole-module fix the docstring's own
+    # `Verified by [@ANCHOR: test_wsgi_proxy_scheme_fix_sets_https_for_trusted_cf_visitor]`
+    # already names this test for -- this is the one case where the CF-Visitor
+    # scheme is actually trusted and applied, i.e. the module's own reason to exist.
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix]
     def test_01_trusted_loopback_cf_visitor_https_sets_wsgi_url_scheme(self):
         environ = {
             "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
@@ -123,10 +128,12 @@ class TestWsgiProxyScheme(HamsTransactionCase):
         self.assertEqual(result["wsgi.url_scheme"], "http")
         self.assertNotIn("HTTP_X_FORWARDED_PROTO", result)
 
-    def test_05d_redis_unavailable_falls_back_to_the_baked_in_default_ranges(self):
-        """A real Cloudflare-range peer (no Tunnel, Redis down/unreachable) must still be
-        trusted via the module's own baked-in snapshot -- Redis being down must never
-        silently disable the whole allow-list."""
+    # Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-
+    # ranges-on-tunnel-only-deployments-7d2b8f14.md): Redis being unreachable with no prior
+    # successful read (cold start, or a Tunnel-only deployment that never needed Redis for this
+    # at all) must NOT fall back to trusting Cloudflare's full published-range snapshot -- that
+    # was the bug. It must stay loopback-only, the correct default.
+    def test_05d_redis_unavailable_with_no_prior_cache_stays_loopback_only(self):
         self.safe_patch(
             "odoo.addons.cloudflare.wsgi_proxy_scheme.get_redis_connection",
             side_effect=ConnectionError("redis unreachable"),
@@ -137,7 +144,42 @@ class TestWsgiProxyScheme(HamsTransactionCase):
             "wsgi.url_scheme": "http",
         }
         result = self._call(environ)
-        self.assertEqual(result["wsgi.url_scheme"], "https")
+        self.assertEqual(
+            result["wsgi.url_scheme"], "http",
+            "A Tunnel-only deployment (or any deployment that has never published a real "
+            "non-Tunnel allow-list) must never trust a Cloudflare-range peer just because "
+            "Redis happens to be unreachable.",
+        )
+        self.assertNotIn("HTTP_X_FORWARDED_PROTO", result)
+
+    def test_05e_redis_outage_after_a_successful_read_keeps_serving_the_last_known_good_list(self):
+        """Once a self-hosted non-Tunnel admin's real allow-list has actually been read from
+        Redis, a later transient Redis outage must not drop that trust back to loopback-only --
+        it should keep serving the last-known-good list until Redis is reachable again."""
+        fake_redis = MagicMock()
+        fake_redis.get.return_value = json.dumps(["203.0.113.0/24"])
+        self.safe_patch(
+            "odoo.addons.cloudflare.wsgi_proxy_scheme.get_redis_connection",
+            return_value=fake_redis,
+        )
+        trusted_environ = {
+            "REMOTE_ADDR": "203.0.113.42",  # burn-ignore-ssrf-test-value
+            "HTTP_CF_VISITOR": '{"scheme":"https"}',
+            "wsgi.url_scheme": "http",
+        }
+        self.assertEqual(self._call(dict(trusted_environ))["wsgi.url_scheme"], "https")
+
+        # Force the in-process cache to expire, then make Redis start failing.
+        wsgi_proxy_scheme._ranges_cache["loaded_at"] = 0.0
+        self.safe_patch(
+            "odoo.addons.cloudflare.wsgi_proxy_scheme.get_redis_connection",
+            side_effect=ConnectionError("redis unreachable"),
+        )
+        result = self._call(dict(trusted_environ))
+        self.assertEqual(
+            result["wsgi.url_scheme"], "https",
+            "A transient Redis outage must not undo an already-published non-Tunnel allow-list.",
+        )
 
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
     def test_05_existing_x_forwarded_proto_wins_over_cf_visitor(self):

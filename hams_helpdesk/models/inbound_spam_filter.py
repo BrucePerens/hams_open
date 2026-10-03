@@ -1,13 +1,28 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-"""Real, explainable spam/phishing heuristic for inbound-mail-created
-pager.incident records, applied at mail-ingestion time in incident_ticket_
-adapter.py's action_generate_helpdesk_ticket() -- per Bruce's own decision
-recorded in night_shift_questions/answered/inbound-spam-filter-location-
-and-signal-e14a6f8b.md ("Filter at mail-ingestion time... in pager_duty's
-own Helpdesk Adapter"), not as a post-hoc hams_helpdesk.ticket stage/tag
-and not left to the ticket-triage AI pass.
+"""Real, explainable spam/phishing heuristic for inbound mail, applied at
+mail-ingestion time -- per Bruce's own decision recorded in
+night_shift_questions/answered/inbound-spam-filter-location-and-signal-
+e14a6f8b.md ("Filter at mail-ingestion time"), not as a post-hoc
+hams_helpdesk.ticket stage/tag and not left to the ticket-triage AI pass.
+
+Inbound mail reaches a helpdesk ticket by two separate routes, and both
+call this function:
+
+- info@/postmaster@ -> pager.incident -> pager_duty's Helpdesk Adapter
+  (pager_duty/models/incident_ticket_adapter.py,
+  action_generate_helpdesk_ticket()), which creates a "[PAGER] ..." ticket.
+- admin@/support@ -> hams_helpdesk.ticket directly, through the mail
+  aliases in hams_helpdesk/data/mail_alias_data.xml and
+  hams_helpdesk.ticket.message_new(). Production tickets #2 (same
+  QuickBooks "negative feedback" campaign as phishing ticket #13) and #43
+  ("Pending Violation Reports") arrived this way and so bypassed the
+  filter while it lived only in pager_duty.
+
+It lives in hams_helpdesk (a pure-Python module, no ORM use) because
+pager_duty depends on hams_helpdesk, not the other way round, so this is
+the one place both callers can import it from.
 
 Deliberately NOT a machine-learning classifier (per the to-do's own "start
 simple and defensible" instruction) -- every signal below is a plain,
@@ -21,7 +36,7 @@ False positives are the named risk, not false negatives: this module only
 ever classifies, it never deletes or drops anything -- the caller is
 responsible for routing a flagged message to a visible quarantine stage
 that a human can still review and recover from (see incident_ticket_
-adapter.py's own "spam" stage handling).
+adapter.py's and helpdesk_ticket.py's message_new() "spam" stage handling).
 """
 import re
 from urllib.parse import urlsplit

@@ -14,6 +14,10 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
+from markupsafe import Markup
+
+from .inbound_spam_filter import detect_inbound_spam_signals
+
 _logger = logging.getLogger(__name__)
 
 # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: the mandatory
@@ -138,10 +142,11 @@ class HelpdeskTicket(models.Model):
             # Added per night_shift_todo/high/inbound-mail-ticket-ingestion-
             # has-no-spam-phishing-filter-e3a8f612.md and Bruce's own answer
             # in night_shift_questions/answered/inbound-spam-filter-location-
-            # and-signal-e14a6f8b.md: a message pager_duty's mail-ingestion
-            # filter (pager_duty/models/inbound_spam_filter.py, applied in
-            # incident_ticket_adapter.py's action_generate_helpdesk_ticket())
-            # flags as likely spam/phishing is routed here instead of "new".
+            # and-signal-e14a6f8b.md: a message the mail-ingestion filter
+            # (hams_helpdesk/models/inbound_spam_filter.py, applied both in
+            # pager_duty's incident_ticket_adapter.py and in this model's
+            # own message_new() below) flags as likely spam/phishing is
+            # routed here instead of "new".
             # Placed last, not between "new" and "in_progress", so the
             # statusbar doesn't suggest it's a normal step in the ordinary
             # New -> In Progress -> Resolved -> Closed workflow -- it is a
@@ -598,7 +603,13 @@ class HelpdeskTicket(models.Model):
 
         res = super().write(vals)
         # Mail-back facility on state change
-        if "stage" in vals:
+        # [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
+        # Not when the ticket is being quarantined as spam: the "customer"
+        # there is the message's From address, which is either the spammer
+        # (a mail-back confirms a live, reading inbox) or a real customer
+        # whose address was spoofed (who would be told their ticket is
+        # phishing). Moving it back out of "spam" still mails as usual.
+        if "stage" in vals and vals["stage"] != "spam":
             for ticket in self:
                 if ticket.partner_id:
                     stage_str = dict(self._fields["stage"]._description_selection(self.env)).get(ticket.stage)
@@ -745,7 +756,42 @@ class HelpdeskTicket(models.Model):
         author_id = msg_dict.get("author_id")
         if author_id and not values.get("partner_id"):
             values["partner_id"] = author_id
-        return super().message_new(msg_dict, custom_values=values)
+
+        # [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
+        # Mail to admin@/support@ arrives here directly, never through
+        # pager_duty's Helpdesk Adapter, so the mail-ingestion spam filter
+        # has to run here too -- production tickets #2 and #43 came in this
+        # way and sat in "new" with no check at all. Same rule as the
+        # adapter: a flagged message still becomes a ticket (never a silent
+        # drop), it just starts in the "spam" quarantine stage, which a
+        # human can move back to "new" to recover a false positive.
+        spam_reasons = detect_inbound_spam_signals(
+            subject=msg_dict.get("subject") or "",
+            body_html=msg_dict.get("body") or "",
+        )
+        if spam_reasons:
+            values["stage"] = "spam"
+            _logger.info(
+                "Inbound email %r from %s flagged as likely spam/phishing by "
+                "the mail-ingestion filter: %s",
+                msg_dict.get("subject"),
+                msg_dict.get("email_from"),
+                "; ".join(spam_reasons),
+            )
+        ticket = super().message_new(msg_dict, custom_values=values)
+        if spam_reasons:
+            ticket.message_post(
+                body=Markup(
+                    "<p><strong>Possible spam/phishing</strong> (flagged by the "
+                    "automated mail-ingestion filter; the ticket was placed in "
+                    "the Spam / Phishing stage instead of New):</p><ul>%s</ul>"
+                )
+                % Markup().join(
+                    Markup("<li>%s</li>") % reason for reason in spam_reasons
+                ),
+                subtype_xmlid="mail.mt_note",
+            )
+        return ticket
 
     def ingest_inbound_email(self, raw_email_bytes):
         """RPC entrypoint for the SES-to-S3-to-Odoo inbound mail daemon
@@ -967,7 +1013,17 @@ class HelpdeskTicket(models.Model):
         AccessError branches of _ncmec_apply_recording_legal_hold_best_effort below without
         ham_communications_consent (hams_com) actually being installed. Returns True on success,
         False if no matching recording row was found; raises AccessError exactly as the real ORM
-        call would, uncaught -- the caller is responsible for catching it."""
+        call would, uncaught -- the caller is responsible for catching it.
+
+        Reviewed, ratchet-grandfathered gap, not an oversight: this method's own real body (the
+        cross-repo `self.env[model_name].search()` + `.action_apply_legal_hold()` call) cannot be
+        exercised from a hams_open-only test run at all -- `ham_communications_consent` lives in
+        hams_com, so `model_name` never resolves to a real model here, and AGENTS.md's own
+        standing rule forbids inventing a test-only stand-in model just to give this one method
+        a direct test. Its calling CONTRACT (both the success and AccessError paths) is already
+        pinned by the three `Verified by` tests on `_ncmec_apply_recording_legal_hold_best_effort`
+        just below, which patch this exact method as their documented seam -- a hams_com-side
+        test exercising the real cross-repo call is the only way to close this for real."""
         self.ensure_one()
         recording = self.env[model_name].search(
             [("recording_uuid", "=", self.ncmec_recording_uuid)], limit=1
