@@ -6,6 +6,8 @@ from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 
+from ..hooks import post_init_hook
+
 
 
 @tagged("post_install", "-at_install", "parking")
@@ -105,8 +107,6 @@ class TestParkingModels(HamsTransactionCase):
         params = self.env["ir.config_parameter"]
         self.assertTrue(params._get_param("parking.form_secret"))
         self.assertEqual(params._get_param("parking.unknown_host_policy"), "not_found")
-        from odoo.addons.parking.hooks import post_init_hook
-
         secret = params._get_param("parking.form_secret")
         post_init_hook(self.env)
         self.assertEqual(params._get_param("parking.form_secret"), secret)  # never overwritten
