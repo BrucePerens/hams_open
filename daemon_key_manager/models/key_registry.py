@@ -586,7 +586,14 @@ class DaemonKeyRegistry(models.Model):
         # Note: res.users.apikeys access is granted via ir.model.access.csv for our group.
         # We search and unlink keys belonging to the target service account.
         if pre_fetched_keys is not None:
-            old_keys = pre_fetched_keys.filtered(lambda k: k.user_id.id == self.user_id.id and k.name == key_name)
+            # exists() first: the batch callers fetch every registry's keys once, and an
+            # earlier registry in the same run has already unlinked its own. Reading a
+            # field on those deleted records raised MissingError, which failed every
+            # registry after the first one that actually revoked something (found on
+            # hams_prod 2026-10-03, once the key manager could see service-account keys).
+            old_keys = pre_fetched_keys.exists().filtered(
+                lambda k: k.user_id.id == self.user_id.id and k.name == key_name
+            )
         else:
             old_keys = self.env["res.users.apikeys"].search(
                 [("user_id", "=", self.user_id.id), ("name", "=", key_name)], limit=100

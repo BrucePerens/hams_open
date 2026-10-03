@@ -30,6 +30,8 @@ class TestKeyRegistry(RealTransactionCase):
             "/opt/hams/etc/keys/force_provision.env",
             "/opt/hams/etc/keys/unauthorized.env",
             "/opt/hams/etc/keys/exception_test.env",
+            "/opt/hams/etc/keys/batch_revoke_a.env",
+            "/opt/hams/etc/keys/batch_revoke_b.env",
         ]
 
         # Directories this suite creates inside the REAL production key
@@ -432,6 +434,47 @@ class TestKeyRegistry(RealTransactionCase):
         second_ids = [row[0] for row in self.env.cr.fetchall()]
         self.assertEqual(len(second_ids), 1, "the previous key was not revoked")
         self.assertNotEqual(second_ids, first_ids)
+
+    def test_batch_rotation_survives_keys_revoked_earlier_in_the_batch(self):
+        # Tests [@ANCHOR: COMM_revoke_old_keys_logic]
+        # The batch callers (force provision, the rotation cron) fetch every registry's keys
+        # once. Rotating the first registry unlinks its old key; reading that deleted record
+        # while filtering for the second registry raised MissingError and failed every
+        # registry after the first (hams_prod, 2026-10-03).
+        registries = []
+        for suffix, path in (("A", self.test_env_paths[7]), ("B", self.test_env_paths[8])):
+            svc = self.env["res.users"].create(
+                {
+                    "name": f"Batch Revoke Service {suffix}",
+                    "login": f"test_batch_revoke_svc_{suffix.lower()}",
+                    "is_service_account": True,
+                }
+            )
+            reg = (
+                self.env["daemon.key.registry"]
+                .with_user(self.manager_user.id)
+                .create({"name": f"Batch Revoke Daemon {suffix}", "user_id": svc.id, "env_file_path": path})
+            )
+            reg._rotate_key_and_write_file()
+            registries.append(reg)
+
+        prefetched = (
+            self.env["res.users.apikeys"]
+            .with_user(self.manager_user.id)
+            .search(
+                [
+                    ("user_id", "in", [r.user_id.id for r in registries]),
+                    ("name", "in", [f"{r.name}_key" for r in registries]),
+                ]
+            )
+        )
+        self.assertEqual(len(prefetched), 2)
+        for reg in registries:
+            reg._rotate_key_and_write_file(pre_fetched_keys=prefetched)
+
+        for reg in registries:
+            self.env.cr.execute("SELECT count(*) FROM res_users_apikeys WHERE name = %s", (f"{reg.name}_key",))
+            self.assertEqual(self.env.cr.fetchone()[0], 1, f"{reg.name}: old key not revoked or rotation failed")
 
     def test_force_provisioning(self):
         """Test force provisioning of all keys."""
