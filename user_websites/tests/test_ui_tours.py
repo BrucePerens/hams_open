@@ -4,7 +4,6 @@
 # -*- coding: utf-8 -*-
 import logging
 import time
-from unittest.mock import patch
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -269,8 +268,8 @@ class TestUserWebsitesUITours(RealTransactionCase):
                 # cookie; leave the browser cookieless instead.
                 return RealTransactionCase.authenticate(case, user, password, *args, **kwargs)
 
-            with patch.object(type(self), "authenticate", authenticate_without_browser_cookie):
-                self.start_tour(url, "test_tour_violation_report_edge_cached")
+            self.safe_patch_object(type(self), "authenticate", authenticate_without_browser_cookie)
+            self.start_tour(url, "test_tour_violation_report_edge_cached")
 
             self.env.cr.commit()  # new snapshot: see the row the browser's request committed
             self.env.invalidate_all()
