@@ -3,6 +3,7 @@
 
 from odoo import api, models, fields
 
+
 class CloudflareTunnelRoute(models.Model):
     _name = "cloudflare.tunnel.route"
     _description = "Cloudflare Tunnel Route"
@@ -13,12 +14,28 @@ class CloudflareTunnelRoute(models.Model):
         "cloudflare.tunnel", string="Tunnel", ondelete="cascade",
         help="If empty, this acts as a Global Route Template applied to all tunnels."
     )
-    sequence = fields.Integer(string="Sequence", default=10)
+    # Pushed rules are ordered by (sequence, id), and
+    # cloudflare.tunnel.action_push_configuration refuses to push when
+    # two rules of one tunnel's merged list (its own routes plus the
+    # global templates) share a sequence -- cloudflared applies the
+    # first matching rule, so the order must be explicit.
+    sequence = fields.Integer(
+        string="Sequence",
+        default=10,
+        help="Position in the pushed ingress list. Must be unique among "
+        "this tunnel's routes and the global templates.",
+    )
     hostname = fields.Char(
         string="Hostname", help="e.g. api.hams.com (leave empty to match all)"
     )
+    # Cloudflare treats an ingress path as an unanchored regular
+    # expression: "/ws" also matches "/ws/daemon_uplink".
     path = fields.Char(
-        string="Path", help="e.g. /adif (leave empty to match all)"
+        string="Path",
+        help="Regular expression matched against the request path, "
+        "e.g. ^/adif$ (anchor it with ^ and $ to match only that path; "
+        "an unanchored /ws also matches /ws/daemon_uplink). Leave empty "
+        "to match all.",
     )
     # cloudflared runs on the same host as the services it proxies to, so
     # localhost is the real, architecturally correct example below,

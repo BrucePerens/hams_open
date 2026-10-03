@@ -47,6 +47,7 @@
                             <field name="cf_tunnel_id" readonly="1"/>
                             <field name="status" readonly="1"/>
                             <field name="website_id" readonly="1"/>
+                            <field name="ssh_route_enabled"/>
                         </group>
                     </group>
                     <notebook>
@@ -55,12 +56,12 @@
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="hostname" placeholder="e.g. api.hams.com"/>
-                                    <field name="path" placeholder="e.g. /adif"/>
+                                    <field name="path" placeholder="e.g. ^/adif$"/>
                                     <field name="service_url" placeholder="e.g. http://localhost:8070"/>
                                 </list>
                             </field>
                             <div class="text-muted mt-2">
-                                Note: A catch-all rule pointing to Odoo (http://localhost:8069) is automatically appended when pushing to Cloudflare.
+                                Note: rules are pushed in sequence order, merged with the Global Ingress Routes; every sequence must be unique. Paths are regular expressions (anchor them with ^ and $). When "Publish SSH Route" is set and the website has a domain, ssh.&lt;domain&gt; -&gt; ssh://localhost:22 is added, and a catch-all rule pointing to Odoo (http://localhost:8069) is always appended last.
                             </div>
                         </page>
                     </notebook>
@@ -89,7 +90,7 @@
             <list string="Global Ingress Routes" editable="bottom">
                 <field name="sequence" widget="handle"/>
                 <field name="hostname" placeholder="e.g. api.hams.com"/>
-                <field name="path" placeholder="e.g. /adif"/>
+                <field name="path" placeholder="e.g. ^/adif$"/>
                 <field name="service_url" placeholder="e.g. http://localhost:8070"/>
             </list>
         </field>
