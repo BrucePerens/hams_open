@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
-    <data noupdate="1">
+    <!-- protects_hams_template sits in an ordinary <data> block, not the noupdate block below,
+         so edits to this repo-authored page reach already-installed databases on -u. Inside
+         noupdate="1" the importer skips the record on every upgrade: #457 (2026-09-23) added the
+         ransomware section here and hams_prod never received it. migrations/1.1/pre-migration.py
+         clears the stale ir_model_data.noupdate flag left from the original install. The
+         website.page and compliance.document records stay noupdate. -->
+    <data>
 
         <template id="protects_hams_template" name="How Hams.com Protects Hams">
             <!-- [@ANCHOR: compliance:protects_hams_page] -->
@@ -93,6 +99,9 @@
                 </div>
             </t>
         </template>
+
+    </data>
+    <data noupdate="1">
 
         <record id="protects_hams_page" model="website.page">
             <field name="url">/protects-hams</field>
