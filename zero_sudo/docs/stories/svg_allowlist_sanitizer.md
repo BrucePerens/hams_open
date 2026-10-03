@@ -87,11 +87,18 @@ whoever views it. Out of scope: an administrator who can already write unsanitiz
   (stock `blog.post.content`, edited through the website builder) are not sanitized by the ORM at
   all, so this patch neither helps nor hurts them; `user_websites`' blog edit route calls
   `html_sanitize` itself and therefore does keep a safe SVG now.
-- `fields.Html(sanitize_overridable=True)` compares `html_normalize(stored)` with
-  `html_sanitize(stored)`. A stored SVG makes the two differ (the plain parser lowercases `viewBox`;
-  the sanitized value restores it), so a user without the sanitize-override group who edits such a
-  field is told the content is restricted. This already happened for any SVG before this change,
-  because the stripped output never matched; it is not a new regression.
+- **New behaviour for `fields.Html(sanitize_overridable=True)`** (stock: `survey.question` and
+  `survey.survey` description, `gamification.karma.rank` motivational text). On write, a user
+  without the sanitize-override group has the stored value compared as
+  `html_normalize(stored)` against `html_sanitize(stored)`, and a difference raises "includes
+  content that is restricted for security reasons". Before this change an SVG was stripped at write
+  time, so the stored value contained none and the two always agreed. Now the stored value keeps
+  the SVG with its camel-case names, the plain `html_normalize` parser lowercases `viewBox` and
+  friends, the two differ, and such a user gets that error on their *next* edit of a field that
+  holds an SVG. Users in the override group are unaffected. Mail templates and the other
+  `sanitize_overridable` fields that never hold SVG behave as before. Accepting it is a decision
+  for the owner of those fields; the alternative is to make `html_normalize` canonicalise the SVG
+  too (not done: it would patch a second core function).
 - A bare `<svg>` that is the whole value is wrapped in a `<div>`, because the cleaner cannot drop a
   root element. A value that stock Odoo reduces to a top-level `<svg>` (an odd `<!DOCTYPE>` prefix)
   gains that wrapper on the next pass; after that it no longer changes.
@@ -131,10 +138,19 @@ external, `javascript:`, `data:` and protocol-relative targets; text that looks 
 stray closing tags; a forged placeholder token; unclosed and mis-nested SVG; `textPath href`;
 `data-*` payloads. Cap tests cover element count, depth and size on both sides of each limit.
 
+## Where Diagrams Can Live
+
+Inline SVG works in any sanitized `fields.Html` value and in `.html` documentation files
+(`data/documentation.html`, installed through an article write). A **`.md` documentation file
+cannot carry an inline diagram**: python-markdown splits inline SVG, hoisting the shapes out of the
+`<svg>` into separate paragraphs, before the sanitizer ever sees it (found while testing the
+installer's markdown path; the unit test was dropped for that reason). Static `.svg` files served as
+images remain a valid choice and need no sanitizer.
+
 ## Verification
 
 `zero_sudo/tests/test_svg_sanitizer.py` (unit and `fields.Html` coverage, including every module
-that binds `html_sanitize` by name, the data-file load path and the documentation installer),
+that binds `html_sanitize` by name and the data-file load path),
 `knowledge/tests/test_svg_article.py` (manual article), `user_websites/tests/
 test_user_websites_blog_post.py` (blog route). The real-browser tests (shapes have non-zero
 rendered boxes, `currentColor` follows the page and the theme, the diagram scales at 375 px, no
