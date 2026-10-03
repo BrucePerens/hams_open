@@ -5,7 +5,7 @@ import logging
 from odoo import _, fields, models, api
 
 from .incident import TREND_TRACKED_SEVERITIES
-from .inbound_spam_filter import detect_inbound_spam_signals
+from odoo.addons.hams_helpdesk.models.inbound_spam_filter import detect_inbound_spam_signals
 
 _logger = logging.getLogger(__name__)
 

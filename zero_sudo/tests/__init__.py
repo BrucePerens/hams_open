@@ -16,6 +16,7 @@ from . import test_cron_service_access
 from . import test_security_utils
 from . import test_service_account_security_notices
 from . import test_session_cookie_hardening
+from . import test_robots_txt_policy
 from . import test_ssrf_safe_fetch
 from . import test_tdd_fixes
 from . import test_views
@@ -23,6 +24,7 @@ from . import test_facility
 from . import test_controllers
 from . import test_offline_store_hoot
 from . import test_hoot_empty_run_guard
+from . import test_confirm_submit_csp
 from . import common
 from . import dummy_daemon
 

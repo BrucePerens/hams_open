@@ -27,7 +27,10 @@ this installation uses.
 4. A self-hosted admin running Cloudflare in front of Odoo WITHOUT a Tunnel has a real network peer
    (not loopback) on every request, so the loopback-only check above can never match it. This
    module merges an auto-fetched Cloudflare-published range list with an admin-supplied custom list
-   so that case can trust CF-* headers too `[@ANCHOR: trusted_ip_ranges]`.
+   so that case can trust CF-* headers too `[@ANCHOR: trusted_ip_ranges]`. The whole feature is
+   off by default behind one explicit "Trust Cloudflare's Published IP Ranges" setting: a
+   Tunnel-only deployment's only peer is loopback, so until the admin turns it on the effective
+   list is empty, auto-fetched snapshot and custom additions alike.
 5. The auto-fetched half refreshes daily from `https://www.cloudflare.com/ips-v4`/`ips-v6`, seeded
    from a baked-in snapshot so the feature works before the cron's first run, and never overwrites
    the last known-good list on a failed/empty/malformed fetch
@@ -42,6 +45,8 @@ this installation uses.
    `[@ANCHOR: get_effective_trusted_ip_ranges]`; since the WSGI hook runs before any database
    connection exists, the merged list is also published to Redis on every cron refresh and every
    settings save, so it's never more than one tick stale `[@ANCHOR: publish_trusted_ip_ranges_to_redis]`.
+   A module upgrade re-publishes it too, so an empty list replaces any wider one an older version
+   left in Redis `[@ANCHOR: COMM_republish_trusted_ip_ranges_on_module_load]`.
 
 ## Scenario: Rotating Cloudflare credentials invalidates the cross-worker cache
 
