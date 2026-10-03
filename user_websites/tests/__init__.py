@@ -37,4 +37,5 @@ from . import test_xpath_rendering
 from . import test_toast_notifications_hoot
 from . import test_violation_report_hoot
 from . import test_violation_batch_write
+from . import test_migration_orphan_content_violation
 from . import test_redis_credentials
