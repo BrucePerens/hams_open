@@ -58,15 +58,17 @@ class CloudflareTunnel(models.Model):
         "(and retry on every later start until it succeeds).",
     )
     # [@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]
-    # action_push_configuration has always appended
+    # action_push_configuration used to append
     # ssh.<website domain> -> the local sshd, before the catch-all.
-    # It is now an explicit, per-tunnel switch instead of a hidden
-    # rule; the default keeps the old behaviour. The rule is only
-    # added when the website has a domain set.
+    # Bruce, 2026-10-03: "Don't expose ssh." It is now an explicit,
+    # per-tunnel switch that is OFF by default; the migration to 1.5
+    # turned it off on every existing tunnel. The rule is only added
+    # when an administrator turns it on AND the website has a domain.
     ssh_route_enabled = fields.Boolean(
         string="Publish SSH Route",
-        default=True,
-        help="When set, a push adds ssh.<website domain> -> "
+        default=False,
+        help="SSH is NOT published unless this is set. When set, a push "
+        "adds ssh.<website domain> -> "
         "ssh://localhost:22 just before the catch-all rule. It needs "  # burn-ignore-cloudflared-ingress
         "the website's domain to be set, and a DNS record for that "
         "ssh. name to be reachable.",
