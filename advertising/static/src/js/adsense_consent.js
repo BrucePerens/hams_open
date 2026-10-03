@@ -1,8 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 
 /*
- * [@ANCHOR: advertising:adsense_consent_js]
- *
  * AdSense Consent Mode defaults, loaded with a synchronous <script id="adsense_consent_config" src>
  * from views/website_layout.xml, before the AdSense loader. Was an inline script until 2026-10-03;
  * moved so a strict Content-Security-Policy without 'unsafe-inline' (and without per-response
@@ -16,6 +14,7 @@ var advertisingAdsenseConsent = JSON.parse(
     document.getElementById("advertising_adsense_consent").textContent
 );
 window.dataLayer = window.dataLayer || [];
+// [@ANCHOR: advertising:adsense_consent_js]
 function gtag() {
     window.dataLayer.push(arguments);
 }
@@ -25,6 +24,7 @@ gtag("consent", "default", {
     ad_personalization: "denied",
     analytics_storage: "denied",
 });
+// [@ANCHOR: advertising:adsense_consents_granted]
 function adsenseConsentsGranted() {
     gtag("consent", "update", {
         ad_storage: "granted",

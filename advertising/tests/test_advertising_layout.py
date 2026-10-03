@@ -144,6 +144,7 @@ class TestAdvertisingLayout(HamsHttpCase):
         # inline scripts); the page carries only the per-request state.
         # Tests [@ANCHOR: advertising:adsense_consent_js]
         # Tests [@ANCHOR: advertising:adsense_slot_push_js]
+        # Tests [@ANCHOR: advertising:adsense_consents_granted]
         self.assertIn('id="advertising_adsense_consent"', response.text)
         self.assertIn('"all_consents_granted": false', response.text)
         self.assertIn("/advertising/static/src/js/adsense_consent.js", response.text)
