@@ -3,6 +3,7 @@
 
 # -*- coding: utf-8 -*-
 from cryptography.fernet import Fernet
+from odoo.exceptions import UserError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -236,3 +237,158 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         # services it proxies to).
         self.assertEqual(ingress[-2]["service"], "ssh://localhost:22")  # burn-ignore-cloudflared-ingress
         self.assertEqual(ingress[-1]["service"], "http://localhost:8069")  # burn-ignore-cloudflared-ingress
+
+    def _make_push_test_tunnel(self, label, domain):
+        """A website with Cloudflare credentials and one tunnel on it,
+        set up the same way the push test above does."""
+        fernet_key = Fernet.generate_key()
+        mock_fernet = self.safe_patch(
+            "odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_fernet"
+        )
+        mock_fernet.return_value = Fernet(fernet_key)
+        website = self.env["website"].create(
+            {"name": f"{label} Website", "domain": domain}
+        )
+        website.write(
+            {
+                "cloudflare_api_token": "tok",
+                "cloudflare_zone_id": "zone",
+                "cloudflare_account_id": "acct",
+            }
+        )
+        return self.env["cloudflare.tunnel"].create(
+            {
+                "cf_tunnel_id": f"cftun_{label.lower().replace(' ', '_')}",
+                "name": f"{label} Tunnel",
+                "website_id": website.id,
+            }
+        )
+
+    def test_push_configuration_orders_routes_and_refuses_shared_sequence(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_push_route_order]
+        """
+        cloudflared applies the first ingress rule that matches, so the
+        pushed order must be explicit. Rules go out sorted by sequence
+        (a tunnel route and a global route interleave by sequence, not
+        by which recordset they came from), hostname and anchored path
+        regexes pass through unchanged, and a sequence shared by two
+        rules of the merged list makes the push fail before anything
+        is sent to Cloudflare.
+        """
+        tunnel = self._make_push_test_tunnel(
+            "Route Order", "https://route-order-test.example.com"
+        )
+        Route = self.env["cloudflare.tunnel.route"]
+        Route.create(
+            {
+                "tunnel_id": tunnel.id,
+                "hostname": "relay.route-order-test.example.com",
+                "path": "^/ws/daemon_uplink$",
+                "service_url": "ws://relay-bridge:8766",
+                "sequence": 3,
+            }
+        )
+        Route.create(
+            {
+                "tunnel_id": False,
+                "path": "^/route-order-global$",
+                "service_url": "http://global-service:9090",
+                "sequence": 2,
+            }
+        )
+        Route.create(
+            {
+                "tunnel_id": tunnel.id,
+                "path": "^/route-order-first$",
+                "service_url": "http://first-service:9091",
+                "sequence": 1,
+            }
+        )
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+
+        tunnel.action_push_configuration()
+
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        own_paths = (
+            "^/route-order-first$",
+            "^/route-order-global$",
+            "^/ws/daemon_uplink$",
+        )
+        own_rules = [rule for rule in ingress if rule.get("path") in own_paths]
+        self.assertEqual(
+            own_rules,
+            [
+                {
+                    "path": "^/route-order-first$",
+                    "service": "http://first-service:9091",
+                },
+                {
+                    "path": "^/route-order-global$",
+                    "service": "http://global-service:9090",
+                },
+                {
+                    "hostname": "relay.route-order-test.example.com",
+                    "path": "^/ws/daemon_uplink$",
+                    "service": "ws://relay-bridge:8766",
+                },
+            ],
+        )
+
+        # A global route that takes sequence 1 as well: the order of
+        # the two is no longer defined, so nothing may be pushed.
+        Route.create(
+            {
+                "tunnel_id": False,
+                "path": "^/route-order-clash$",
+                "service_url": "http://clash-service:9092",
+                "sequence": 1,
+            }
+        )
+        mock_push.reset_mock()
+        with self.assertRaises(UserError) as caught:
+            tunnel.action_push_configuration()
+        self.assertIn("1", str(caught.exception))
+        mock_push.assert_not_called()
+
+    def test_push_configuration_ssh_route_follows_tunnel_switch(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]
+        """
+        The ssh.<domain> rule is an explicit per-tunnel switch,
+        defaulting to on (the behaviour before the switch existed).
+        Turned off, the push ends with the routes and the catch-all
+        only. A website with no domain gets no ssh rule either way.
+        """
+        tunnel = self._make_push_test_tunnel(
+            "Ssh Switch", "https://ssh-switch-test.example.com"
+        )
+        self.assertTrue(tunnel.ssh_route_enabled)
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertEqual(
+            ingress[-2]["hostname"], "ssh.ssh-switch-test.example.com"
+        )
+
+        tunnel.ssh_route_enabled = False
+        mock_push.reset_mock()
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        hostnames = [rule.get("hostname") for rule in ingress]
+        self.assertNotIn("ssh.ssh-switch-test.example.com", hostnames)
+        self.assertEqual(ingress[-1], {"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
+
+        no_domain_tunnel = self._make_push_test_tunnel("No Domain", False)
+        self.assertTrue(no_domain_tunnel.ssh_route_enabled)
+        mock_push.reset_mock()
+        no_domain_tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertFalse(
+            [rule for rule in ingress if "ssh://" in rule["service"]]
+        )

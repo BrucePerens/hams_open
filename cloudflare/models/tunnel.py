@@ -57,6 +57,20 @@ class CloudflareTunnel(models.Model):
         "Cloudflare. Cleared value means the next daemon start will push it "
         "(and retry on every later start until it succeeds).",
     )
+    # [@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]
+    # action_push_configuration has always appended
+    # ssh.<website domain> -> the local sshd, before the catch-all.
+    # It is now an explicit, per-tunnel switch instead of a hidden
+    # rule; the default keeps the old behaviour. The rule is only
+    # added when the website has a domain set.
+    ssh_route_enabled = fields.Boolean(
+        string="Publish SSH Route",
+        default=True,
+        help="When set, a push adds ssh.<website domain> -> "
+        "ssh://localhost:22 just before the catch-all rule. It needs "  # burn-ignore-cloudflared-ingress
+        "the website's domain to be set, and a DNS record for that "
+        "ssh. name to be reachable.",
+    )
 
     # [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
     def _check_tunnel_caller_authorized(self):
@@ -101,21 +115,45 @@ class CloudflareTunnel(models.Model):
                 )
 
             all_routes = tunnel.route_ids | global_routes
+            # [@ANCHOR: cloudflare:COMM_tunnel_push_route_order]
+            # cloudflared applies the first rule that matches, so the
+            # order must be explicit: sorted by (sequence, id), and a
+            # shared sequence is refused instead of being resolved by
+            # whatever order the recordset union happened to have.
+            ordered_routes = all_routes.sorted(
+                key=lambda route: (route.sequence, route.id)
+            )
+            sequences = ordered_routes.mapped("sequence")
+            duplicated = sorted(
+                {seq for seq in sequences if sequences.count(seq) > 1}
+            )
+            if duplicated:
+                raise UserError(
+                    _(
+                        "Tunnel %(tunnel)s: several routes share the "
+                        "sequence %(sequences)s, so their order in the "
+                        "ingress list is not defined. Give every route "
+                        "(including the global routes) its own sequence.",
+                        tunnel=tunnel.display_name,
+                        sequences=", ".join(str(seq) for seq in duplicated),
+                    )
+                )
 
             ingress = []
-            for route in all_routes.sorted('sequence'):
+            for route in ordered_routes:
                 rule = {"service": route.service_url}
                 if route.hostname:
                     rule["hostname"] = route.hostname
                 if route.path:
                     rule["path"] = route.path
                 ingress.append(rule)
-            
+
             # Add SSH route. cloudflared runs on the same host as the SSH
             # daemon and Odoo HTTP server it fronts, so localhost is the
             # real, correct proxy target here -- not a container-to-
             # container networking mistake.
-            if tunnel.website_id.domain:
+            # Gated by the tunnel's ssh_route_enabled switch.
+            if tunnel.ssh_route_enabled and tunnel.website_id.domain:
                 parsed = urlparse(tunnel.website_id.domain)
                 hostname = parsed.netloc or parsed.path
                 if hostname:
