@@ -154,14 +154,9 @@ registry.category("web_tour.tours").add("test_tour_violation_report_edge_cached"
         // parameter with history.replaceState as soon as the page starts, so document.location no
         // longer carries it by the time this step runs. The success toast is the lasting evidence; a
         // rejected post (400, or ?error=...) never shows it. test_11 also checks the created row.
-        {
-            trigger: '.o_notification_manager .o_notification:contains("We received your report")',
-            content: "The report was accepted: the success toast for report_submitted=1 is shown",
-            run: () => {
-                if (document.location.search.includes("error=")) {
-                    throw new Error(`report not accepted, landed on ${document.location.href}`);
-                }
-            },
-        },
+        TourUtils.waitForText(
+            "We received your report",
+            "The report was accepted: the success toast for report_submitted=1 is shown"
+        ),
     ],
 });
