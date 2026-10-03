@@ -146,9 +146,12 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
                 "reported_by_user_id": str(self.env.ref("base.user_admin").id),
             },
             method="POST",
+            allow_redirects=False,
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("report_submitted=1", response.url)
+        # The target URLs are made up, so check the redirect itself rather than following it
+        # to a 404.
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("report_submitted=1", response.headers.get("Location", ""))
         member_report = Report.search(
             [("description", "=", "Reported by a signed-in member, test_03c")], limit=1
         )
@@ -169,9 +172,12 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
                 "email": "guest-reporter-03c@example.com",
             },
             method="POST",
+            allow_redirects=False,
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("report_submitted=1", response.url)
+        # The target URLs are made up, so check the redirect itself rather than following it
+        # to a 404.
+        self.assertEqual(response.status_code, 303)
+        self.assertIn("report_submitted=1", response.headers.get("Location", ""))
         guest_report = Report.search(
             [("description", "=", "Reported by a guest, test_03c")], limit=1
         )
