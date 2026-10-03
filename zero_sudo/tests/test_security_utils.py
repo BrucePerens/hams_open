@@ -1466,8 +1466,11 @@ class TestSecurityUtils(HamsTransactionCase):
             "cloudflare.trusted_ip_ranges_auto",
             "cloudflare.trusted_ip_ranges_custom",
             "cloudflare.trusted_ip_ranges_last_refreshed",
+            "cloudflare.trust_non_tunnel_peers",
         ):
             self.assertIn(key, read, key)
         self.assertIn("cloudflare.trusted_ip_ranges_auto", write)
         self.assertIn("cloudflare.trusted_ip_ranges_last_refreshed", write)
         self.assertNotIn("cloudflare.trusted_ip_ranges_custom", write)
+        # The non-Tunnel opt-in is set by an administrator through Settings, never by a service account.
+        self.assertNotIn("cloudflare.trust_non_tunnel_peers", write)
