@@ -44,6 +44,11 @@ formatters:
 
 run:
   timeout: 5m
+  # hams_open commits vendor/ deliberately (#472), unlike upstream (which moved
+  # to modules-download-mode: readonly / dropped its own vendor/ directory
+  # somewhere between 2026.7.2 and 2026.9.3) -- keep vendor mode here so
+  # golangci-lint actually uses the committed vendor/ tree instead of trying
+  # to fetch modules.
   modules-download-mode: vendor
 
 # output configuration options
@@ -78,14 +83,11 @@ issues:
   # Default: false
   whole-files: true
   # Which dirs to exclude: issues from them won't be reported.
-  # Can use regexp here: `generated.*`, regexp is applied on full path,
-  # including the path prefix if one is set.
   # Default dirs are skipped independently of this option's value (see exclude-dirs-use-default).
-  # "/" will be replaced by current OS file path separator to properly work on Windows.
-  # Default: []
+  # Kept (upstream dropped this along with its own vendor/ directory) because
+  # hams_open still commits vendor/ -- see modules-download-mode above.
   exclude-dirs:
     - vendor
-
 linters-settings:
   # Check exhaustiveness of enum switch statements.
   exhaustive:
