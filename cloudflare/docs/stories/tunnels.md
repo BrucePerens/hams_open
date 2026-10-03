@@ -38,6 +38,24 @@ I run hams.com, perens.com and postopen.org from the same Odoo server, each with
 
 10. Whether a given tunnel's daemon is currently up is a question the daemon layer answers per tunnel `[@ANCHOR: is_tunnel_daemon_running]`, which is what lets the job skip a healthy tunnel without spending a Cloudflare API call on it every few minutes.
 
+## Scenario: Other sites, run as separate Odoo instances, behind the same tunnel
+
+perens.com, postopen.org and a parking instance run as their own small Odoo instances on this
+machine (ADR 0105), not as websites of this Odoo, and they go through the same tunnel as hams.com.
+
+7a. A rule with no hostname matches every hostname, so the path rules for this site's websocket, DX
+    firehose, band simulator, ADIF and GDPR export endpoints are scoped to `hams.com` and `*.hams.com`
+    before any other zone's name reaches the tunnel, tenant hostnames come first, and the final
+    catch-all goes to the parking instance. That whole-list replacement is made by
+    `hams_shared/tools/tenant_cloudflare.py` from the live list, reviewed by digest; it is not made by
+    the push below.
+
+7b. The push in step 6 always appends a catch-all to this Odoo (`http://localhost:8069`) and knows
+    nothing of the tenant rules, so once tenants are live it must not be used on this tunnel until the
+    catch-all service is configurable (to-do `cloudflare-tunnel-catch-all-service-configurable`).
+    A tenant route is an ordinary row (hostname, path, service URL), so the list can move into
+    Odoo's rows later; `tenant_cloudflare.py plan --odoo-rows` prints it in that shape.
+
 ## Scenario: How a tunnel's daemon actually runs on this host
 
 11. Each tunnel's `cloudflared` process is a real `systemd --user` service, not a process this

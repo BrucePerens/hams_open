@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_parking_domain_manager,parking.domain manager,model_parking_domain,parking.group_parking_manager,1,1,1,1
+access_parking_inquiry_manager,parking.inquiry manager,model_parking_inquiry,parking.group_parking_manager,1,1,0,1
+access_parking_domain_service,parking.domain service,model_parking_domain,parking.group_parking_service,1,0,0,0
+access_parking_inquiry_service,parking.inquiry service,model_parking_inquiry,parking.group_parking_service,1,0,1,0
