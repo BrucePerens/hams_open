@@ -5,8 +5,16 @@
 # License: AGPL-3.0
 
 import logging
-from . import models
-from . import controllers
+
+from . import svg_sanitizer
+
+# [@ANCHOR: zero_sudo:svg_allowlist_install]
+# Must run before any model class is built: it makes Odoo's HTML sanitizer accept a strict
+# allowlist of inline SVG. See svg_sanitizer.py for why it patches `_Cleaner.__call__`.
+svg_sanitizer.install()
+
+from . import models  # noqa: E402
+from . import controllers  # noqa: E402
 
 
 class TEscWarningFilter(logging.Filter):

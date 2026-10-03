@@ -403,3 +403,38 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
         self.assertIn("Safe text", self.post_a.content or "")
         self.assertNotIn("<script", self.post_a.content or "")
         self.assertNotIn("alert(", self.post_a.content or "")
+
+    def test_10b_blog_post_edit_submit_keeps_safe_svg_and_strips_unsafe_svg(self):
+        # Tests [@ANCHOR: test_svg_allowlist_sanitizer_fields]
+        # Tests [@ANCHOR: zero_sudo:svg_allowlist_sanitizer]
+        """blog.post.content is sanitize=False, so the only sanitizing is this route's own
+        html_sanitize(); with zero_sudo's SVG allowlist a schematic written in the textarea
+        keeps its shapes while a hostile one loses every active part."""
+        self.authenticate(self.user_a.login, self.user_a.login)
+        safe = (
+            "<svg viewBox='0 0 40 20'><rect id='box' width='30' height='10'"
+            " stroke='currentColor'/><text x='2' y='8'>10k</text></svg>"
+        )
+        hostile = (
+            "<svg viewBox='0 0 40 20' onload='window.__xss=1'><script>window.__xss=1</script>"
+            "<rect id='box2' width='3' height='3'/><a href='javascript:window.__xss=1'>"
+            "<text>x</text></a><use href='data:image/svg+xml,x'/></svg>"
+        )
+        for content, ident in ((safe, "box"), (hostile, "box2")):
+            self.url_open(
+                f"/blog_post/edit/submit/{self.post_a.id}",
+                data={
+                    "csrf_token": odoo.http.Request.csrf_token(self),
+                    "name": "User A Post",
+                    "content": content,
+                    "is_published": "on",
+                },
+                method="POST",
+            )
+            self.post_a.invalidate_recordset()
+            stored = self.post_a.content or ""
+            self.assertIn("<svg", stored)
+            self.assertIn(f'id="{ident}"', stored)
+            for gone in ("<script", "onload", "javascript:", "<use", "<a ", "data:"):
+                self.assertNotIn(gone, stored)
+        self.assertIn("viewBox=", stored)

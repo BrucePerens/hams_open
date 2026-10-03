@@ -137,6 +137,15 @@ A direct execution function (used within a tour's `run` step) that safely inject
 
 ## 5. Additional Models and Utilities
 
+### Inline SVG allowlist sanitizer (`svg_sanitizer.py`) `[@ANCHOR: zero_sudo:svg_allowlist_sanitizer]`
+Odoo's HTML sanitizer strips every SVG shape, so inline schematics render as empty boxes. At import
+time this module patches `odoo.tools.mail._Cleaner.__call__` (installed from `__init__.py`,
+`[@ANCHOR: zero_sudo:svg_allowlist_install]`) so every `fields.Html` write, and every module that
+imported `html_sanitize` by name, rebuilds each `<svg>` from a strict element/attribute/value
+allowlist and leaves the rest of the document to the stock sanitizer. Design, threat model,
+residual risks and the vector list: `docs/stories/svg_allowlist_sanitizer.md`. Tests:
+`tests/test_svg_sanitizer.py`, shared corpus `tests/svg_corpus.py`.
+
 ### `zero_sudo.daemon.utils`
 Provides centralized, private utilities for managing background daemon processes tightly coupled with Odoo.
 * `_start_daemon_process(script_path, args, env_vars)`: Safely forks a background process detached from the web request lifecycle.
