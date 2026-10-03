@@ -4,7 +4,6 @@
 
 import os
 import re
-import unittest
 
 from odoo.tests.common import tagged
 
@@ -27,7 +26,8 @@ class TestConfirmSubmitShipsInFrontendBundle(HamsTransactionCase):
         )
 
 
-class TestNoInlineEventHandlerAttributesInHamsOpen(unittest.TestCase):
+@tagged("post_install", "-at_install")
+class TestNoInlineEventHandlerAttributesInHamsOpen(HamsTransactionCase):
     """Static regression scan: no template this repo ships may carry an inline event-handler
     attribute (onclick=, onsubmit=, ...). Such an attribute runs only under a script-src that
     allows 'unsafe-inline'; a CSP nonce never authorizes it
@@ -37,7 +37,11 @@ class TestNoInlineEventHandlerAttributesInHamsOpen(unittest.TestCase):
 
     Covers server-rendered views (any case) and OWL markup under static/src (lowercase only: a
     literal lowercase `onclick="..."` in an OWL template is rendered as a real HTML attribute and
-    is just as dead, while camelCase `onClose=`/`onQsy=` are component props, not handlers)."""
+    is just as dead, while camelCase `onClose=`/`onQsy=` are component props, not handlers).
+
+    A tagged Odoo test class, not a plain unittest.TestCase: Odoo's TagsSelector.check()
+    (odoo/tests/tag_selector.py) silently skips any test without `test_tags`, so a plain
+    unittest class here would never run under the real test runner."""
 
     _VIEW_RE = re.compile(
         r"(?<![\w.:-])(?:t-att(?:f)?-)?on(?:click|load|error|mouseover|mouseout|mousedown|mouseup|"
