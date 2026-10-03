@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- burn-ignore-tour: backend admin views of a generic tenant module (no browser stack on a tenant); Verified by [@ANCHOR: parking:COMM_test_views_render] -->
+    <record id="view_parking_domain_list" model="ir.ui.view">
+        <field name="name">parking.domain.list</field>
+        <field name="model">parking.domain</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="behavior"/>
+                <field name="redirect_url" optional="show"/>
+                <field name="noindex" optional="hide"/>
+                <field name="inquiry_count"/>
+                <field name="active" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- burn-ignore-tour: backend admin views of a generic tenant module (no browser stack on a tenant); Verified by [@ANCHOR: parking:COMM_test_views_render] -->
+    <record id="view_parking_domain_form" model="ir.ui.view">
+        <field name="name">parking.domain.form</field>
+        <field name="model">parking.domain</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="behavior"/>
+                            <field name="include_www"/>
+                            <field name="noindex"/>
+                            <field name="cache_ttl"/>
+                        </group>
+                        <group invisible="behavior != 'redirect'">
+                            <field name="redirect_url" required="behavior == 'redirect'"/>
+                            <field name="redirect_code"/>
+                            <field name="preserve_path"/>
+                        </group>
+                    </group>
+                    <group invisible="behavior not in ('parked', 'for_sale')">
+                        <field name="title"/>
+                        <field name="message"/>
+                        <field name="price_text" invisible="behavior != 'for_sale'"/>
+                    </group>
+                    <group>
+                        <field name="notes"/>
+                    </group>
+                    <field name="inquiry_ids" invisible="behavior != 'for_sale'">
+                        <list>
+                            <field name="create_date"/>
+                            <field name="name"/>
+                            <field name="email"/>
+                            <field name="message"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- burn-ignore-tour: backend admin views of a generic tenant module (no browser stack on a tenant); Verified by [@ANCHOR: parking:COMM_test_views_render] -->
+    <record id="view_parking_domain_search" model="ir.ui.view">
+        <field name="name">parking.domain.search</field>
+        <field name="model">parking.domain</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <filter name="for_sale" string="For sale" domain="[('behavior', '=', 'for_sale')]"/>
+                <filter name="redirect" string="Redirects" domain="[('behavior', '=', 'redirect')]"/>
+                <filter name="archived" string="Archived" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- burn-ignore-tour: backend admin views of a generic tenant module (no browser stack on a tenant); Verified by [@ANCHOR: parking:COMM_test_views_render] -->
+    <record id="view_parking_inquiry_list" model="ir.ui.view">
+        <field name="name">parking.inquiry.list</field>
+        <field name="model">parking.inquiry</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="create_date"/>
+                <field name="domain_id"/>
+                <field name="name"/>
+                <field name="email"/>
+                <field name="message"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_parking_domain" model="ir.actions.act_window">
+        <field name="name">Parked domains</field>
+        <field name="res_model">parking.domain</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_parking_inquiry" model="ir.actions.act_window">
+        <field name="name">Inquiries</field>
+        <field name="res_model">parking.inquiry</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <menuitem id="menu_parking_root" name="Parking" action="action_parking_domain" sequence="40"
+              groups="parking.group_parking_manager"/>
+    <menuitem id="menu_parking_domains" name="Domains" parent="menu_parking_root"
+              action="action_parking_domain" sequence="10"/>
+    <menuitem id="menu_parking_inquiries" name="Inquiries" parent="menu_parking_root"
+              action="action_parking_inquiry" sequence="20"/>
+</odoo>
