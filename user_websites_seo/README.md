@@ -10,12 +10,12 @@ Search Engine Optimization (SEO) is critical for making your content discoverabl
 - **Social Media Previews:** Customize the images and titles that appear when your content is shared on platforms like Facebook or X (Twitter).
 - **SEO Keywords:** Add specific keywords to help search engines understand the topics of your site.
 - **Secure Editing:** Our "Zero-Sudo" architecture ensures you can only edit SEO data for content you own or groups you belong to.
-- **Backend Management:** SEO fields are conveniently located in a dedicated tab on user profiles, groups, website pages, and blog posts.
+- **Backend Management:** SEO fields are conveniently located in a dedicated tab on user profiles, groups, website pages, blogs, and blog posts.
 
 ## How to Use
 
 ### From the Website
-1. Log in and navigate to the page or blog post you want to optimize (e.g., `/your-slug/home` or `/your-slug/blog/post/1`).
+1. Log in and navigate to the page or blog post you want to optimize (e.g., `/your-slug/home`, `/your-slug/blog`, or a post at `/blog/<blog-id>/post/<post-id>`).
 2. Click the **Site** menu in the top bar.
 3. Select **Optimize SEO**.
 4. Update your **Title**, **Description**, and **Keywords** in the dialog.
@@ -36,18 +36,18 @@ Search Engine Optimization (SEO) is critical for making your content discoverabl
 </system_role>
 
 ## 1. Architecture
-This module extends `user_websites` by adding SEO metadata to users and groups through inheritance of `website.seo.metadata`.
+This module extends `user_websites` by adding the SEO metadata fields to groups through inheritance of `website.seo.metadata` (`models/user_websites_group.py`), and by putting the secure-write mixin described below on `res.users`, `user.websites.group`, `website.page`, `blog.blog`, and `blog.post`. The SEO fields it manages are `website_meta_title`, `website_meta_description`, `website_meta_keywords`, `website_meta_og_img` (the social media preview image), and `seo_name`.
 
 ## 2. Security & Zero-Sudo
-We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a dedicated service account: `user_websites.user_websites_service_account`.
+We strictly follow the Zero-Sudo mandate: code never calls Odoo's `.sudo()` (which bypasses all access rules); when a step needs more rights than the user has, it runs just that step as a narrowly scoped service account via `with_user(svc_uid)`. Privileged writes are handled via a dedicated service account: `user_websites.user_websites_service_account`.
 
-*   **Model Mixin:** `user.websites.seo.metadata.mixin` centralizes the secure write logic.
-    *   **Developer Usage:** To use this mixin on a model, inherit from `user.websites.seo.metadata.mixin` and you **must** implement the `_check_seo_write_permission(self)` method to define who is authorized to edit SEO fields.
+*   **Model Mixin:** `user.websites.seo.metadata.mixin` centralizes the secure write logic. When a `write()` includes SEO fields, the mixin first calls the model's `_check_seo_write_permission()` (which raises `AccessError` to refuse the whole write), then writes the non-SEO fields as the caller under normal Odoo access rules, then writes the SEO fields as the service account. The superuser and members of `user_websites.group_user_websites_administrator` skip these checks.
+    *   **Developer Usage:** To use this mixin on a model, inherit from `user.websites.seo.metadata.mixin` and you **must** implement the `_check_seo_write_permission(self)` method to define who is authorized to edit SEO fields (the mixin's default raises `NotImplementedError`). The built-in rules: a user may edit only their own `res.users` record, only members may edit a group's, and `website.page`, `blog.blog`, and `blog.post` require normal write access to the record (which `user_websites` limits to its owner or group members).
     *   **Bypassing Logic:** Developers can pass `{"skip_seo_metadata_mixin": True}` in the context to bypass the mixin's specialized write behavior.
 *   **Self-Writable Fields:** SEO fields are whitelisted in `res.users` to allow users to edit their own profiles without elevated backend rights. `[@ANCHOR: COMM_res_users_self_writeable_fields]`
 
 ## 3. Implementation Details
-*   **Controller Override:** `UserWebsitesSEOController` intercepts the blog index route to inject the `main_object`. This is required for the Odoo frontend SEO widget to function. `[@ANCHOR: COMM_controller_user_blog_index_seo_override]`
+*   **Controller Override:** `UserWebsitesSEOController` intercepts the blog index route to inject the `main_object`. This is required for the Odoo frontend SEO widget to function. The base `user_websites` controller already sets `main_object` to the profile user or group, but loads it as the service account; the override pre-reads the SEO fields, then re-binds the user or group record to the visiting user's own access rights before rendering, so that record is not exposed to the template (and to server-side template injection, SSTI) with service-account privileges. `[@ANCHOR: COMM_controller_user_blog_index_seo_override]`
 *   **Traceability:** All critical logic is mapped to semantic anchors and verified by the test suite.
 
 ## 4. 🔗 Semantic Anchors & Traceability
@@ -71,7 +71,7 @@ We strictly follow the Zero-Sudo mandate. Privileged writes are handled via a de
 | `[@ANCHOR: COMM_test_xpath_rendering_user_websites_group]` | Backend view rendering for groups. | `COMM_test_xpath_rendering_user_websites_group` |
 
 ## 5. Multi-Website & Multi-Tenant Support
-- **Multi-Tenancy:** Inherits from `res.users` and `user.websites.group`, ensuring natural isolation between organizations.
+- **Multi-Tenancy:** Inherits from `res.users` and `user.websites.group`, ensuring natural isolation between organizations: the SEO fields are stored on those existing records, so they are covered by the same record rules (including `user_websites`' multi-company rule on `user.websites.group`) as the records themselves.
 - **Multi-Website:** Fully compatible with Odoo's multi-website routing and context switching.
 
 ## External Dependencies

@@ -3,11 +3,11 @@
     
     <h2>User & Administrator Configuration</h2>
     <ul>
-        <li><strong>Custom Domain Mapping:</strong> Administrators can map user vanity slugs to custom external domains. This allows users to host their profiles or user websites under their own root domain instead of a subpath.</li>
-        <li><strong>Vanity URL Management:</strong> End-users can claim unique vanity slugs for their profiles, preventing collisions with system reserved routes.</li>
-        <li><strong>Virtual Slug Fallback:</strong> If a vanity slug is not set or removed, the routing engine automatically falls back to resolving profiles via the operator's Callsign (login ID).</li>
+        <li><strong>Custom Domain Mapping:</strong> Administrators can map user vanity slugs to custom external domains. This allows users to host their profiles or user websites under their own root domain instead of a subpath. The mapping is a record of which domain belongs to which slug; it does not route visitors by itself (the domain is served through the website's own domain setting). Only administrators can create or change mappings, a domain must contain a dot, and a reserved system word cannot be a target.</li>
+        <li><strong>Vanity URL Management:</strong> End-users can claim unique vanity slugs for their profiles, preventing collisions with system reserved routes. A reserved word is refused with an error; a slug already used by another profile or site is not refused but made unique by adding <code>-1</code>, <code>-2</code>, and so on.</li>
+        <li><strong>No Login Fallback:</strong> Profiles are found only by their vanity slug. If a vanity slug is not set or removed, the profile has no vanity URL; the routing engine does not fall back to the login, because logins are email addresses and such a fallback would let anyone test whether an account exists.</li>
     </ul>
     
     <h2>Integration Details</h2>
-    <p>All custom domains and routes mapped within the UI are asynchronously synchronized to the external PagerDuty routing layer to ensure high availability and global load balancing.</p>
+    <p>Whenever a custom domain is added, changed, or removed, and once a day regardless, the full list of custom domain names (plus DNS zone names when the ham_dns module is installed) is sent in the background to the Pager Duty monitoring module (the hams_open <code>pager_duty</code> module, not the commercial PagerDuty service). Pager Duty uses the list as the set of domains its Let's Encrypt certificate-readiness check watches. Slugs and routes are not sent, and this does not balance or route traffic. If the shared secret in the <code>pager_duty.domain_api_identity</code> system parameter is not configured, the sync is skipped and a warning is logged.</p>
 </div>

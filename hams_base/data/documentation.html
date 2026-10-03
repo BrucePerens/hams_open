@@ -3,15 +3,15 @@
 
     <h2>Email Policies & Security</h2>
     <ul>
-        <li><strong>DMARC Reports:</strong> Administrators can view parsed DMARC Aggregate (RUA) reports in the backend to monitor domain email reputation and DKIM/SPF alignment.</li>
-        <li><strong>Configuration Settings:</strong> Exposes the required SPF and DMARC DNS records that administrators need to configure for the instance to maintain high email deliverability.</li>
-        <li><strong>Bounce Handling:</strong> Automatically alerts system administrators and club officers when emails to members consistently bounce.</li>
-        <li><strong>Account Security Alerts:</strong> Automatically sends a security alert to users whenever their login credentials or recovery email address is modified.</li>
+        <li><strong>DMARC Reports:</strong> Administrators can view parsed DMARC (Domain-based Message Authentication, Reporting and Conformance) Aggregate (RUA) reports in the backend to monitor domain email reputation and DKIM/SPF alignment. Receiving mail servers send these reports to the <code>dmarc-reports@</code> address of the instance; each report lists, per sending server address, how many messages were seen and whether they passed DKIM (DomainKeys Identified Mail) and SPF (Sender Policy Framework) checks. A report that cannot be read is kept as "Unparsed Email" instead of being lost.</li>
+        <li><strong>Configuration Settings:</strong> Exposes the recommended SPF and DMARC DNS records that administrators need to configure for the instance to maintain high email deliverability. The SPF record is a template that names an example provider and must be edited for your own provider. The DMARC record is shown only after turning on "Enable Custom DMARC". The DKIM record must be copied from your email provider. The same settings page holds the organization name and mailing address printed at the bottom of the platform's notification emails.</li>
+        <li><strong>Bounce Handling:</strong> When an email to a member bounces, a "Bounce Alert" message is posted on each club the member belongs to, so club officers can contact the member another way.</li>
+        <li><strong>Account Security Alerts:</strong> Automatically sends a security alert to the previous email address whenever a user's login or email address is changed, so the owner can spot a change they did not make.</li>
     </ul>
 
     <h2>Public Portal Features</h2>
     <ul>
-        <li><strong>Email Policy Page:</strong> A public-facing documentation page (`/email-policy`) detailing the platform's anti-spam stance and email handling policies.</li>
-        <li><strong>Unsubscribe Management:</strong> Users can manage their email preferences or completely lock out communications via the `/unsubscribe` and `/unsubscribe/lockout` portals.</li>
+        <li><strong>Email Policy Page:</strong> A public-facing documentation page (<code>/email-policy</code>) detailing the platform's anti-spam stance and email handling policies, including every kind of email the platform sends.</li>
+        <li><strong>Unsubscribe Management:</strong> Users can manage their email preferences or completely lock out communications via the <code>/unsubscribe</code> and <code>/unsubscribe/lockout</code> portals. The lockout deactivates the user's whole account and logs them out: they can no longer log in or receive password-reset emails, and only an administrator can reverse it.</li>
     </ul>
 </div>

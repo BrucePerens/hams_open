@@ -15,20 +15,20 @@
 <body>
 <!-- [@ANCHOR: COMM_doc_inject_distributed_redis_cache] -->
 <h1>Distributed Redis Cache</h1>
-<p>The <b>Distributed Redis Cache</b> module is a performance tool designed for Odoo environments with multiple servers. It ensures that when data changes on one server, every other server in your cluster is updated instantly, preventing "stale data" errors.</p>
+<p>The <b>Distributed Redis Cache</b> module is a performance tool designed for Odoo environments with multiple servers. It ensures that when data changes on one server, every other server in your cluster discards its cached copy before it handles its next request, preventing "stale data" errors.</p>
 
 <h2>Overview</h2>
 <p>Normally, Odoo servers work independently. If you update a price or a user's permissions on Server A, Server B might not realize it for some time. This module links them all to a central "brain" (Redis) so they can share information about what has changed in real-time.</p>
 
 <h2>How it Works</h2>
 <ol>
-    <li><b>Detection:</b> Odoo automatically identifies when you save a record in a model (like a User, Product, or Customer).</li>
-    <li><b>Broadcast:</b> A background service (the <i>Cache Manager</i>) immediately relays this change to the shared memory server (Redis).</li>
-    <li><b>Refresh:</b> All other Odoo servers in your cluster are listening to Redis. As soon as they hear the signal, they instantly clear their local memory for that specific data type and fetch the latest version from the database.</li>
+    <li><b>Detection:</b> When a module changes data whose results it caches (or an administrator uses <b>Invalidate Model Cache</b>, described below), it sends an invalidation signal for that model through the database. This is not automatic for every record you save: each module decides which changes need a signal. When the change is saved, the cached entries for that model are deleted from Redis.</li>
+    <li><b>Broadcast:</b> A background service (the <i>Cache Manager</i>) immediately relays this change to the shared memory server (Redis) by increasing a shared counter.</li>
+    <li><b>Refresh:</b> Every Odoo server checks that counter at the start of each web request and before each scheduled job. When it sees the counter has changed, it clears its entire local memory cache (not just the data type that changed) and fetches fresh values as they are needed.</li>
 </ol>
 
 <div class="note">
-    <strong>Smart Cleanup:</strong> Instead of clearing everything and slowing down your system, this module only clears the specific data that actually changed.
+    <strong>Smart Cleanup:</strong> In the shared Redis store, this module deletes only the entries for the data type (model) that changed, in the one database where it changed. Each server's small local memory cache is cleared as a whole, as described in step 3.
 </div>
 
     <h2>User Interface</h2>
@@ -44,23 +44,25 @@
 <p>Click <b>Check Redis Status</b> to see if Odoo is talking to the shared memory server. <!-- [@ANCHOR: COMM_check_redis_status_logic] --></p>
 <ul>
     <li><b>Green Success:</b> Everything is working perfectly.</li>
-    <li><b>Red Error:</b> The shared memory is unreachable. Don't worry—Odoo will automatically switch to "Fail-Open" mode and use standard local memory so your website stays online.</li>
+    <li><b>Red Error:</b> The shared memory is unreachable. Don't worry—Odoo will automatically switch to "Fail-Open" mode and use standard local memory so your website stays online. ("Fail-open" means a cache failure lets requests through instead of blocking them: each server computes values itself and keeps them only in its own memory until Redis is reachable again.)</li>
 </ul>
+<p>This button tests only the Odoo server you are connected to. It does not check the Cache Manager background service.</p>
 
 <h3 id="distributed_cache_settings_view" data-trace="[@ANCHOR: COMM_distributed_redis_cache:distributed_cache_settings_view]">Configuration</h3>
 <p>Administrators can configure the Redis connection under the <b>Settings</b> menu in the <b>Distributed Redis Cache</b> section.</p>
 <ul>
-    <li><b>Redis Host:</b> The hostname or IP address of your Redis server.</li>
+    <li><b>Redis Host:</b> The hostname or IP address of your Redis server (default is <code>redis</code>).</li>
     <li><b>Redis Port:</b> The port Redis is listening on (default is 6379).</li>
     <li><b>Redis Password:</b> The password required to connect to your Redis instance.</li>
 </ul>
+<p>When you save these settings, every Odoo server switches to the new connection (the other servers at their next request or scheduled job). They are not passed to the Cache Manager background service, which takes its Redis host, port and password from its own environment variables (<code>REDIS_HOST</code>, <code>REDIS_PORT</code>, <code>REDIS_PASSWORD</code>; default <code>localhost</code>, 6379, no password).</p>
 
 <h4 id="manual_cache_invalidation" data-trace="[@ANCHOR: COMM_distributed_redis_cache:manual_cache_invalidation]">Manual Refresh</h4>
 <p>If you suspect a server is showing old information, you can manually trigger a refresh:</p>
 <ol>
-    <li>Select the <b>Data Type</b> (called a "Model", like <code>User</code> or <code>Partner</code>) from the list.</li>
+    <li>Select the data type in the <b>Model to Invalidate</b> field (Odoo calls a data type a "Model", like <code>User</code> or <code>Partner</code>).</li>
     <li>Click <b>Invalidate Model Cache</b>.</li>
-    <li>All servers in your cluster will instantly refresh their memory for that specific data type.</li>
+    <li>The shared Redis entries for that data type are deleted right away, and every other server clears its local memory at its next request or scheduled job (step 3 of How it Works).</li>
 </ol>
 
 <h2>Privacy and Isolation</h2>
@@ -68,9 +70,9 @@
 
 <h2>Technical Benefits</h2>
 <ul>
-    <li><b>Secure:</b> Uses "Zero-Sudo" architecture—background tasks have only the minimum access they need.</li>
+    <li><b>Secure:</b> Uses "Zero-Sudo" architecture—background tasks have only the minimum access they need. ("Zero-Sudo" is this project's rule against Odoo's all-powerful <code>sudo</code> mode; the Cache Manager service runs as an ordinary system user and its database account can only connect and listen for signals.)</li>
     <li><b>Reliable:</b> Designed to never crash your site even if the cache server goes down.</li>
-    <li><b>Efficient:</b> Uses optimized commands to handle millions of records without lagging.</li>
+    <li><b>Efficient:</b> When deleting a data type's entries, it walks the Redis keys in batches of 1,000 (Redis <code>SCAN</code>) instead of listing every key in one blocking command (<code>KEYS</code>), so a large cache does not stall Redis.</li>
 </ul>
 
 <div class="note">
@@ -81,8 +83,8 @@
 <p>If updates aren't appearing instantly:</p>
 <ul>
     <li><b>Check Status:</b> Use the "Check Redis Status" button.</li>
-    <li><b>Check the Service:</b> Ensure the "Cache Manager" background service is active on your host.</li>
-    <li><b>Be Patient:</b> While usually instant, network signals can sometimes take a fraction of a second to travel between servers.</li>
+    <li><b>Check the Service:</b> Ensure the "Cache Manager" background service is active on your host. While it is stopped, other servers never receive the signal and keep their old local copies until the service is running again and a later change is signalled, or until they are restarted.</li>
+    <li><b>Be Patient:</b> While usually instant, network signals can sometimes take a fraction of a second to travel between servers, and each server applies the signal only when it handles its next request or scheduled job.</li>
 </ul>
 
 </body>
