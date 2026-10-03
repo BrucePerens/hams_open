@@ -102,7 +102,8 @@ class RabbitMQPool(models.AbstractModel):
     def _discard_connection(self, dead_channel):
         # [@ANCHOR: rabbitmq_discard_stale_connection]
 
-        # # Verified by [@ANCHOR: COMM_test_07_publish_retries_once_on_a_fresh_connection_after_a_stale_one] [@ANCHOR: COMM_test_08_publish_reports_failure_when_the_retry_also_fails]
+        # # Verified by [@ANCHOR: COMM_test_07_publish_retries_once_on_a_fresh_connection_after_a_stale_one]
+        # # Verified by [@ANCHOR: COMM_test_08_publish_reports_failure_when_the_retry_also_fails]
         """
         Drop the pooled connection that ``dead_channel`` came from, so the next _get_channel()
         opens a fresh one. Only if it is still the pooled channel: another thread may already have
@@ -115,11 +116,11 @@ class RabbitMQPool(models.AbstractModel):
             dead_connection = self.__class__._connection
             self.__class__._connection = None
             self.__class__._channel = None
-        if dead_connection is not None:
-            try:
-                dead_connection.close()
-            except (pika.exceptions.AMQPError, OSError) as close_error:
-                _logger.debug("Closing a dead RabbitMQ connection raised %r", close_error)
+            if dead_connection is not None:
+                try:
+                    dead_connection.close()
+                except (pika.exceptions.AMQPError, OSError) as close_error:
+                    _logger.debug("Closing a dead RabbitMQ connection raised %r", close_error)
 
     @api.model
     def publish(self, exchange, routing_key, body, properties=None, on_result=None):
