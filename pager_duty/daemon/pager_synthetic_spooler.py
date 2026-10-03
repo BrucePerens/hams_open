@@ -117,7 +117,8 @@ def execute_check(check):
                         target_path = os.path.join(tmpdir, os.path.basename(fname))
                         req = urllib.request.Request(
                             url,
-                            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}
+                            # An honest User-Agent naming hams.com with a contact URL (ADR 0104); never a browser string.
+                            headers={"User-Agent": "Pager-Synthetic-Spooler/1.0 (+https://crawler.hams.com)"}
                         )
                         try:
                             # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe()

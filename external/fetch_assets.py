@@ -41,7 +41,7 @@ def download_file(url, dest_path, expected_hash):
     _logger.info("Downloading %s\n -> %s", url, dest_path)
 
     # [@ANCHOR: external:HTTP_NO_MASKING]
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"})
+    req = urllib.request.Request(url, headers={"User-Agent": "HamsComSyncDaemon/1.0 (+https://crawler.hams.com)"})
     
     # audit-ignore-outbound-fetch: developer-run script; every URL is a pinned entry of this file's own asset tables and the
     # download is refused unless its sha256 matches, so no caller or record field ever chooses the host
@@ -87,7 +87,7 @@ def download_and_transform_file(url, dest_path, transform_fn, expected_hash):
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     _logger.info("Downloading (transformed) %s\n -> %s", url, dest_path)
 
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"})
+    req = urllib.request.Request(url, headers={"User-Agent": "HamsComSyncDaemon/1.0 (+https://crawler.hams.com)"})
 
     # audit-ignore-outbound-fetch: same pinned, hash-checked asset tables as download_file() above
     with urllib.request.urlopen(req, timeout=10) as response:  # audit-ignore-outbound-fetch
