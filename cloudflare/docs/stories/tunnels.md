@@ -20,11 +20,11 @@ so that I can minimize the attack surface of my infrastructure.
 ## Scenario: Reviewing and Pushing Tunnel Routes
 5. I open the tunnel record's own form and route list views to review its ingress rules `[@ANCHOR: COMM_cf_tunnel_views_render]`.
 
-6. When the daemon starts the tunnel, Odoo pushes the merged ingress configuration to Cloudflare: this tunnel's own routes plus any global route templates, sorted by sequence, with the SSH route and a mandatory catch-all rule always appended last `[@ANCHOR: COMM_cloudflare_tunnel_push_config_catch_all]`. If that push fails (a Cloudflare API error), the daemon still starts -- basic connectivity stays up while route provisioning retries later, rather than the whole tunnel refusing to start over a routing hiccup.
+6. When the daemon starts the tunnel, Odoo pushes the merged ingress configuration to Cloudflare: this tunnel's own routes plus any global route templates, sorted by sequence, with the SSH route (only if an administrator turned it on; off by default) and a mandatory catch-all rule always appended last `[@ANCHOR: COMM_cloudflare_tunnel_push_config_catch_all]`. If that push fails (a Cloudflare API error), the daemon still starts -- basic connectivity stays up while route provisioning retries later, rather than the whole tunnel refusing to start over a routing hiccup.
 
 6a. The order of the pushed rules is explicit: routes are sorted by sequence, and if two rules of the merged list share a sequence the push is refused before anything is sent `[@ANCHOR: cloudflare:COMM_tunnel_push_route_order]`, because `cloudflared` applies the first rule that matches. A route can name its own hostname, its path is a regular expression (anchor it with `^` and `$`; an unanchored `/ws` also matches `/ws/daemon_uplink`), and its service may be `http://`, `ws://`, `ssh://` or `http_status:`.
 
-6b. The `ssh.<website domain>` rule is a per-tunnel switch ("Publish SSH Route", on by default) `[@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]`. It is only added when the website has a domain set; turn it off for a tunnel whose `ssh.` name has no DNS record or should not be published.
+6b. The `ssh.<website domain>` rule is a per-tunnel switch ("Publish SSH Route", **off by default**: SSH is not published unless an administrator enables it; the 1.5 migration switched it off on every existing tunnel) `[@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]`. It is only added when the website has a domain set; leave it off unless the `ssh.` name has a DNS record and exposing it through the tunnel is intended.
 
 ## Scenario: One server fronting several websites
 

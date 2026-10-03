@@ -2,10 +2,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import importlib.util
+import os
+
 from cryptography.fernet import Fernet
 from odoo.exceptions import UserError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+
+MIGRATION_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "migrations", "1.5", "post-ssh-route-off.py",
+)
 
 
 @tagged("post_install", "-at_install")
@@ -170,6 +178,9 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
                 "cf_tunnel_id": "cftun_push_test",
                 "name": "Push Config Test Tunnel",
                 "website_id": website.id,
+                # SSH is off by default; this test checks the ordering
+                # of the trailing ssh rule, so opt in explicitly.
+                "ssh_route_enabled": True,
             }
         )
         self.env["cloudflare.tunnel.route"].create(
@@ -365,20 +376,35 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
     def test_push_configuration_ssh_route_follows_tunnel_switch(self):
         # Tests [@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]
         """
-        The ssh.<domain> rule is an explicit per-tunnel switch,
-        defaulting to on (the behaviour before the switch existed).
-        Turned off, the push ends with the routes and the catch-all
-        only. A website with no domain gets no ssh rule either way.
+        The ssh.<domain> rule is an explicit per-tunnel switch that is
+        OFF by default ("Don't expose ssh", Bruce, 2026-10-03). A push
+        omits it until an administrator turns the switch on; turned
+        back off it disappears again. A website with no domain gets no
+        ssh rule either way.
         """
         tunnel = self._make_push_test_tunnel(
             "Ssh Switch", "https://ssh-switch-test.example.com"
         )
-        self.assertTrue(tunnel.ssh_route_enabled)
+        self.assertFalse(tunnel.ssh_route_enabled)
         mock_push = self.safe_patch(
             "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
             return_value=(True, "ok"),
         )
 
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertFalse(
+            [
+                rule for rule in ingress
+                if rule["service"].startswith("ssh://")
+                or rule.get("hostname", "").startswith("ssh.")
+            ],
+            "A default tunnel must not publish any ssh route.",
+        )
+        self.assertEqual(ingress[-1], {"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
+
+        tunnel.ssh_route_enabled = True
+        mock_push.reset_mock()
         tunnel.action_push_configuration()
         ingress = mock_push.call_args[0][3]["config"]["ingress"]
         self.assertEqual(
@@ -393,11 +419,45 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         self.assertNotIn("ssh.ssh-switch-test.example.com", hostnames)
         self.assertEqual(ingress[-1], {"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
 
+        # Enabled but no website domain: still no ssh rule.
         no_domain_tunnel = self._make_push_test_tunnel("No Domain", False)
-        self.assertTrue(no_domain_tunnel.ssh_route_enabled)
+        no_domain_tunnel.ssh_route_enabled = True
         mock_push.reset_mock()
         no_domain_tunnel.action_push_configuration()
         ingress = mock_push.call_args[0][3]["config"]["ingress"]
         self.assertFalse(
             [rule for rule in ingress if "ssh://" in rule["service"]]
         )
+
+    def test_ssh_route_default_false_and_migration_switches_existing_off(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_ssh_route_enabled]
+        """
+        New tunnels default to not publishing SSH, and the 1.5
+        post-migration (the real file Odoo runs) turns it off on rows
+        left True or NULL by 1.4, idempotently.
+        """
+        Tunnel = self.env["cloudflare.tunnel"]
+        self.assertFalse(
+            Tunnel.default_get(["ssh_route_enabled"]).get("ssh_route_enabled")
+        )
+        on = Tunnel.create({"cf_tunnel_id": "cftun_mig_on", "name": "Mig On"})
+        null = Tunnel.create({"cf_tunnel_id": "cftun_mig_null", "name": "Mig Null"})
+        off = Tunnel.create({"cf_tunnel_id": "cftun_mig_off", "name": "Mig Off"})
+        on.ssh_route_enabled = True
+        self.env.flush_all()
+        self.env.cr.execute(  # audit-ignore-sql: test fixture, bound params
+            "UPDATE cloudflare_tunnel SET ssh_route_enabled = NULL WHERE id = %s",
+            (null.id,),
+        )
+        self.env.invalidate_all()
+
+        spec = importlib.util.spec_from_file_location(
+            "cloudflare_post_migration_1_5", MIGRATION_PATH
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for _ in range(2):  # second run proves idempotence
+            module.migrate(self.env.cr, "1.4")
+            self.env.invalidate_all()
+            self.assertFalse((on | null | off).filtered("ssh_route_enabled"))
+        self.assertFalse(Tunnel.search([("ssh_route_enabled", "=", True)]))
