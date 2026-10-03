@@ -14,8 +14,9 @@ hams_com and ADR 0105): it takes over every public request of that instance.
   none, `robots.txt` and `X-Robots-Tag` asking search engines not to index (per domain switch).
 * A plain, non-cacheable 404 for a host that is not in the table (`parking.unknown_host_policy` =
   `not_found`, or `default_page`).
-* Nothing else: the Odoo login, backend, JSON-RPC, XML-RPC and websocket routes are not routes on a
-  public host.
+* No route, controller or backend page besides these: the Odoo login, backend, JSON-RPC, XML-RPC and
+  websocket routes are not routes on a public host. (Odoo's own `/<module>/static/*` files are still
+  served before routing, so a parked name does reveal that it is Odoo.)
 
 ## Administration
 
@@ -33,7 +34,8 @@ The backend answers only when the socket peer is a loopback address and the requ
 * The for-sale form carries a stateless token bound to the host and the render time; bots get the same
   answer as people and nothing is stored; one address may send five inquiries an hour.
 * The public handler runs as one service account that can read domains and write inquiries and nothing
-  else (no `zero_sudo`: a tenant instance has no Redis).
+  else (no `zero_sudo`: a tenant instance has no Redis). The module depends on `web` and `mail`; `mail`
+  brings cron jobs, which is why a tenant keeps `max_cron_threads = 1`.
 
 ## Tests
 
