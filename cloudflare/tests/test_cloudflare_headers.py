@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+from unittest.mock import patch
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.cloudflare.models.ir_http import (
@@ -288,27 +290,27 @@ class TestCloudflareHeaders(HamsHttpCase):
                 return {}
 
         mock_request = MockRequest()
-        self.safe_patch(
-            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
-        )
+        # Scoped to the test body, not safe_patch()'s addCleanup: HamsHttpCase.tearDown() probes the
+        # real server (/odoo/health) before cleanups run, and that real request must not be served
+        # with this mock as the module's `request` global.
+        with patch("odoo.addons.cloudflare.models.ir_http.request", new=mock_request):
+            # Semi-static branch (3): a 500 must not get max-age=86400, even opted in.
+            error_response = Response(status=500)
+            error_response.headers[EDGE_CACHEABLE_MARKER] = "1"
+            res = DummyIrHttp._post_dispatch(error_response)
+            self.assertEqual(
+                res.headers.get("Cloudflare-CDN-Cache-Control"),
+                "no-cache, no-store",
+                "A 500 response must not be cached at the edge as semi-static content.",
+            )
 
-        # Semi-static branch (3): a 500 must not get max-age=86400, even opted in.
-        error_response = Response(status=500)
-        error_response.headers[EDGE_CACHEABLE_MARKER] = "1"
-        res = DummyIrHttp._post_dispatch(error_response)
-        self.assertEqual(
-            res.headers.get("Cloudflare-CDN-Cache-Control"),
-            "no-cache, no-store",
-            "A 500 response must not be cached at the edge as semi-static content.",
-        )
-
-        # Static-asset branch (1): a 404 for a missing asset must not get
-        # max-age=31536000 either.
-        mock_request.httprequest.path = "/web/assets/1/missing.js"
-        missing_asset_response = Response(status=404)
-        res = DummyIrHttp._post_dispatch(missing_asset_response)
-        self.assertEqual(
-            res.headers.get("Cloudflare-CDN-Cache-Control"),
-            "no-cache, no-store",
-            "A 404 static-asset response must not be cached at the edge for a year.",
-        )
+            # Static-asset branch (1): a 404 for a missing asset must not get
+            # max-age=31536000 either.
+            mock_request.httprequest.path = "/web/assets/1/missing.js"
+            missing_asset_response = Response(status=404)
+            res = DummyIrHttp._post_dispatch(missing_asset_response)
+            self.assertEqual(
+                res.headers.get("Cloudflare-CDN-Cache-Control"),
+                "no-cache, no-store",
+                "A 404 static-asset response must not be cached at the edge for a year.",
+            )
