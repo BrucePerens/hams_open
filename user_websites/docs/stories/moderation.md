@@ -9,6 +9,7 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
 - **When** I encounter inappropriate content
 - **Then** I can click the "Report Violation" button ([@ANCHOR: user_websites:UX_REPORT_VIOLATION]) and provide details about the issue. Verified by `[@ANCHOR: test_tour_violation_report]`.
 - **And** the system records my report and notifies administrators.
+- **But** the button only ever appears when the page I'm viewing is genuinely personal-website content, not any other model that happens to reuse the same ownership mixin purely for claim-tracking (an event, a repeater, a classifieds listing, a training-progress record, and more all adopt it without being personal-site pages at all) ([@ANCHOR: report_violation_scoped_to_personal_website_content]).
 
 ### Reviewing Abuse Reports
 - **Given** I am a **User Websites Administrator**

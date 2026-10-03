@@ -11,6 +11,21 @@ from odoo import models, fields, api
 
 _logger = logging.getLogger(__name__)
 
+# Errors that mean the pooled connection or channel is dead rather than that the broker refused
+# this one message: StreamLostError (socket reset, e.g. "Connection reset by peer" after the
+# broker dropped the connection), ConnectionClosed/ConnectionClosedByBroker (broker restart,
+# heartbeat timeout, the connection's user deleted), ChannelClosed and the wrong-state errors, and
+# a raw socket ConnectionError (ConnectionResetError, BrokenPipeError) that pika did not wrap.
+# publish() retries exactly once, on a freshly opened connection, after any of these. Not the
+# other AMQPChannelError subclasses (UnroutableError, NackError): those are the broker answering
+# about this message on a live channel, and resending would not change the answer.
+STALE_CONNECTION_ERRORS = (
+    pika.exceptions.AMQPConnectionError,
+    pika.exceptions.ChannelClosed,
+    pika.exceptions.ChannelWrongStateError,
+    ConnectionError,
+)
+
 
 # [@ANCHOR: rabbitmq_resolve_credentials]
 def resolve_rabbitmq_credentials(param_user, param_pass, environ):
@@ -84,6 +99,30 @@ class RabbitMQPool(models.AbstractModel):
             return self._channel
 
     @api.model
+    def _discard_connection(self, dead_channel):
+        # [@ANCHOR: rabbitmq_discard_stale_connection]
+
+        # # Verified by [@ANCHOR: COMM_test_07_publish_retries_once_on_a_fresh_connection_after_a_stale_one]
+        # # Verified by [@ANCHOR: COMM_test_08_publish_reports_failure_when_the_retry_also_fails]
+        """
+        Drop the pooled connection that ``dead_channel`` came from, so the next _get_channel()
+        opens a fresh one. Only if it is still the pooled channel: another thread may already have
+        replaced it, and that newer connection must not be thrown away. Closing a connection the
+        broker already dropped normally raises; that is expected and only logged at debug level.
+        """
+        with self._lock:
+            if dead_channel is not self.__class__._channel:
+                return
+            dead_connection = self.__class__._connection
+            self.__class__._connection = None
+            self.__class__._channel = None
+            if dead_connection is not None:
+                try:
+                    dead_connection.close()
+                except (pika.exceptions.AMQPError, OSError) as close_error:
+                    _logger.debug("Closing a dead RabbitMQ connection raised %r", close_error)
+
+    @api.model
     def publish(self, exchange, routing_key, body, properties=None, on_result=None):
         # [@ANCHOR: rabbitmq_publish]
 
@@ -100,6 +139,12 @@ class RabbitMQPool(models.AbstractModel):
         must open its own cursor/transaction if it needs to write to the
         database. An exception raised by ``on_result`` is logged and never
         propagates into the commit path.
+
+        A pooled connection the broker has dropped since its last use (broker
+        restart, heartbeat timeout, its user deleted) fails on first use with
+        one of STALE_CONNECTION_ERRORS. The send then discards that
+        connection and retries exactly once on a freshly opened one; only if
+        that also fails is the publish reported as failed.
         """
         if isinstance(body, dict):
             body = json.dumps(body)
@@ -115,42 +160,74 @@ class RabbitMQPool(models.AbstractModel):
                     "(exchange=%r, routing_key=%r)", exchange, routing_key,
                 )
 
+        def _obtain_channel():
+            try:
+                return self._get_channel()
+            except Exception:  # audit-ignore-catch-all
+                _logger.exception(
+                    "Unexpected error obtaining RabbitMQ channel "
+                    "(exchange=%r, routing_key=%r)", exchange, routing_key,
+                )
+                return None
+
+        def _send(channel):
+            with self._lock:
+                channel.basic_publish(
+                    exchange=exchange,
+                    routing_key=routing_key,
+                    body=body,
+                    properties=properties or pika.BasicProperties(delivery_mode=2)
+                )
+
+        def _fail_no_channel():
+            _logger.error(
+                "Cannot publish message, no RabbitMQ channel available "
+                "(exchange=%r, routing_key=%r).", exchange, routing_key
+            )
+            _report(False)
+            return False
+
         def _do_publish():
             # publish() already returned True to its caller before this
             # postcommit callback runs, so the return value cannot carry the
             # outcome. Callers that need it pass on_result (see publish()'s
             # docstring); the failure branches also log exchange/routing_key
             # as the trail for reconciling a lost message.
-            try:
-                channel = self._get_channel()
-            except Exception:  # audit-ignore-catch-all
-                _logger.exception(
-                    "Unexpected error obtaining RabbitMQ channel "
-                    "(exchange=%r, routing_key=%r)", exchange, routing_key,
-                )
-                channel = None
+            channel = _obtain_channel()
             if not channel:
-                _logger.error(
-                    "Cannot publish message, no RabbitMQ channel available "
-                    "(exchange=%r, routing_key=%r).", exchange, routing_key
-                )
-                _report(False)
-                return False
+                return _fail_no_channel()
             try:
-                with self._lock:
-                    channel.basic_publish(
-                        exchange=exchange,
-                        routing_key=routing_key,
-                        body=body,
-                        properties=properties or pika.BasicProperties(delivery_mode=2)
+                _send(channel)
+            except STALE_CONNECTION_ERRORS as stale_error:
+                # The pooled connection was dead before we used it (production,
+                # 2026-10-03: StreamLostError after the broker dropped Odoo's
+                # connection, and backup job 145 was lost). Retry once, fresh.
+                _logger.warning(
+                    "RabbitMQ connection was dead (%r); discarding it and retrying once on a "
+                    "fresh connection (exchange=%r, routing_key=%r)",
+                    stale_error, exchange, routing_key,
+                )
+                self._discard_connection(channel)
+                channel = _obtain_channel()
+                if not channel:
+                    return _fail_no_channel()
+                try:
+                    _send(channel)
+                except (pika.exceptions.AMQPError, ConnectionError):
+                    _logger.exception(
+                        "Failed to publish message to RabbitMQ on a fresh connection after a "
+                        "stale one (exchange=%r, routing_key=%r)", exchange, routing_key,
                     )
+                    self._discard_connection(channel)
+                    _report(False)
+                    return False
             except pika.exceptions.AMQPError:
                 _logger.exception(
                     "Failed to publish message to RabbitMQ (exchange=%r, routing_key=%r)",
                     exchange, routing_key,
                 )
                 # Force reconnect on next attempt
-                self.__class__._connection = None
+                self._discard_connection(channel)
                 _report(False)
                 return False
             _report(True)

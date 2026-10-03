@@ -345,7 +345,9 @@ class TestCloudflareAPIs(HamsTransactionCase):
         )
         mock_sync.side_effect = _sync_side_effect
 
-        with mute_logger("odoo.addons.cloudflare.models.tunnel"):
+        # odoo.sql_db logs the deliberate "SELECT 1/0" above as "bad query ... division
+        # by zero"; it is the expected failure this test injects, not a real error.
+        with mute_logger("odoo.addons.cloudflare.models.tunnel", "odoo.sql_db"):
             self.env["cloudflare.tunnel"].action_sync_tunnels()
 
         self.assertIn(

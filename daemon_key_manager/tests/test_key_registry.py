@@ -393,6 +393,46 @@ class TestKeyRegistry(RealTransactionCase):
             "Key should not be owned by SUPERUSER",
         )
 
+    def test_rotating_again_revokes_the_previous_key(self):
+        # Tests [@ANCHOR: COMM_revoke_old_keys_logic]
+
+        # Tests [@ANCHOR: COMM_manager_apikeys_of_service_accounts_rule]
+        # The Manager group implies base.group_user, whose own-keys-only record rule
+        # used to hide every service account key from the rotation's revoke search:
+        # each rotation added a key and none was ever revoked.
+        service_user = self.env["res.users"].create(
+            {
+                "name": "Test Revocation Service Account",
+                "login": "test_revocation_svc",
+                "is_service_account": True,
+            }
+        )
+        registry = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Revocation Test Daemon",
+                    "user_id": service_user.id,
+                    "env_file_path": self.test_env_paths[2],
+                }
+            )
+        )
+        registry._rotate_key_and_write_file()
+        self.env.cr.execute(
+            "SELECT id FROM res_users_apikeys WHERE name = 'Revocation Test Daemon_key'"
+        )
+        first_ids = [row[0] for row in self.env.cr.fetchall()]
+        self.assertEqual(len(first_ids), 1)
+
+        registry._rotate_key_and_write_file()
+        self.env.cr.execute(
+            "SELECT id FROM res_users_apikeys WHERE name = 'Revocation Test Daemon_key'"
+        )
+        second_ids = [row[0] for row in self.env.cr.fetchall()]
+        self.assertEqual(len(second_ids), 1, "the previous key was not revoked")
+        self.assertNotEqual(second_ids, first_ids)
+
     def test_force_provisioning(self):
         """Test force provisioning of all keys."""
         # [@ANCHOR: COMM_test_force_provisioning]

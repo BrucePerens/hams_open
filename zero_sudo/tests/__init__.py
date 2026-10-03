@@ -85,4 +85,5 @@ from . import test_browser_js_timeout_message  # noqa: E402  (after the cursor m
 from . import test_wait_ready_polling  # noqa: E402
 from . import test_chrome_init_retry_teardown  # noqa: E402
 from . import test_werkzeug_thread_wait  # noqa: E402
+from . import test_debug_assets_propagation  # noqa: E402
 from . import test_navigator_overrides  # noqa: E402

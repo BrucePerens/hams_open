@@ -45,6 +45,7 @@ export class SWToast extends Component {
     // collision for another -- this defers the toast's own reveal instead, until no Bootstrap
     // modal is currently open, which is correct regardless of viewport size and generalizes to any
     // other modal this site might ever show at the same moment, not just this one consent bar.
+    // Verified by [@ANCHOR: test_toast_deferred_while_modal_open]
     _showOnceModalClear() {
         if (document.querySelector('.modal.show')) {
             document.addEventListener(
