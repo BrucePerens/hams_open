@@ -225,3 +225,82 @@ class TestMailIngest(HamsTransactionCase):
             self.env["hams_helpdesk.ticket"].with_user(other_user).ingest_inbound_email(
                 base64.b64encode(raw).decode("ascii")
             )
+
+    # ------------------------------------------------------------------
+    # Mail-ingestion spam filter on the direct admin@/support@ route
+    # ------------------------------------------------------------------
+
+    def _ingest(self, raw):
+        self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+            base64.b64encode(raw).decode("ascii")
+        )
+
+    def _spam_notes(self, ticket):
+        return ticket.message_ids.filtered(
+            lambda m: "Possible spam/phishing" in (m.body or "")
+        )
+
+    def test_07_spam_subject_to_support_is_quarantined_not_dropped(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
+        # Production ticket #43 ("Action Required: 5 Pending Violation
+        # Reports") reached support@/admin@ directly and sat in "new",
+        # because the filter used to run only in pager_duty's adapter.
+        raw = self._raw_email(
+            "support@hams.com",
+            subject="Action Required: 5 Pending Violation Reports",
+            from_addr="compliance-desk@example.net",
+        )
+        tickets_before = self.env["hams_helpdesk.ticket"].search_count([])
+        self._ingest(raw)
+        self.assertEqual(
+            self.env["hams_helpdesk.ticket"].search_count([]),
+            tickets_before + 1,
+            "A flagged message must still become a ticket, never be dropped.",
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "ilike", "Pending Violation Reports")], order="id desc", limit=1
+        )
+        self.assertTrue(ticket)
+        self.assertEqual(ticket.stage, "spam")
+        notes = self._spam_notes(ticket)
+        self.assertTrue(notes, "The ticket must record why it was quarantined.")
+        self.assertIn("compliance/violation scare spam", notes[0].body)
+
+    def test_08_brand_impersonation_link_in_body_is_quarantined(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
+        # The body-based signal (msg_dict["body"]), not just the subject:
+        # a neutral subject with a QuickBooks-branded body whose link goes
+        # to a non-Intuit domain, the shape of phishing ticket #13.
+        raw = (
+            "From: billing-alerts@example.org\r\n"
+            "To: admin@hams.com\r\n"
+            "Subject: Your account notice\r\n"
+            "Message-ID: <test-ingest-qbo-phish@example.org>\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n"
+            "\r\n"
+            "<p>QuickBooks: a customer left a review. "
+            '<a href="https://rwiwanksiit.vu/qbo/">View it here</a></p>\r\n'
+        ).encode("utf-8")
+        self._ingest(raw)
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "=", "Your account notice")], order="id desc", limit=1
+        )
+        self.assertTrue(ticket)
+        self.assertEqual(ticket.stage, "spam")
+        notes = self._spam_notes(ticket)
+        self.assertTrue(notes)
+        self.assertIn("quickbooks impersonation", notes[0].body)
+
+    def test_09_ordinary_support_request_stays_in_new(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
+        # The false-positive side: a plain support request is not touched.
+        raw = self._raw_email(
+            "support@hams.com", subject="Cannot log my QSOs from the shack page"
+        )
+        self._ingest(raw)
+        ticket = self.env["hams_helpdesk.ticket"].search(
+            [("name", "ilike", "Cannot log my QSOs")], order="id desc", limit=1
+        )
+        self.assertTrue(ticket)
+        self.assertEqual(ticket.stage, "new")
+        self.assertFalse(self._spam_notes(ticket))
