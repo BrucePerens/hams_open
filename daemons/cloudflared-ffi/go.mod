@@ -1,3 +1,3 @@
 module hams_open/cloudflared-ffi
 
-go 1.26
+go 1.24

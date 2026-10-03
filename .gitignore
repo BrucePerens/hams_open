@@ -7,6 +7,12 @@
 # Internationalization
 i18n/hams_master.pot
 
+# libcloudflared.so is compiled per CPU on the host that needs it (hams_shared/tools/
+# build_cloudflared_ffi.py, run by provisioning); a committed x86-64 copy broke arm64 hosts.
+daemons/cloudflared-ffi/libcloudflared.so
+daemons/cloudflared-ffi/libcloudflared.h
+daemons/cloudflared-ffi/.libcloudflared.*.new
+
 # Python / Bytecode
 __pycache__/
 *.py[cod]
