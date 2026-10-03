@@ -19,6 +19,8 @@
  * logged-in visitor's pages are never edge-cached, so their token is already good.
  */
 
+import { session } from "@web/session";
+
 const TOKEN_URL = "/cloudflare/csrf_token";
 const TOKEN_FORM = 'form:has(input[name="csrf_token"]), .s_website_form';
 const WEBSITE_FORM_SEND = ".s_website_form_send, .o_website_form_send";
@@ -94,8 +96,9 @@ function onWebsiteFormSend(ev) {
 }
 
 export function startEdgeCacheCsrfRefresh() {
-    const sessionInfo = globalThis.odoo && globalThis.odoo.__session_info__;
-    if (!sessionInfo || !sessionInfo.is_website_user) {
+    // @web/session, not odoo.__session_info__: that module consumes and deletes the global when it
+    // loads, which is before this one in the bundle, so the global is gone by the time this runs.
+    if (!session.is_website_user) {
         return false;
     }
     document.addEventListener("focusin", onEarlyInteraction, true);

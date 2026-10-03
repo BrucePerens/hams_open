@@ -82,9 +82,11 @@ class TestEdgeCacheCookies(HamsHttpCase):
         self.assertFalse(self.opener.cookies, "the browser must come away with no cookie at all")
 
         # The same page, for a visitor who already holds a session or a consent choice, is not.
-        for cookie in ("session_id", "website_cookies_bar"):
+        # The consent cookie holds JSON, as the website's cookie bar writes it; Odoo's own
+        # _is_allowed_cookie() parses it while rendering the page.
+        for cookie, value in (("session_id", "x"), ("website_cookies_bar", '{"required": true, "optional": true}')):
             self._fresh_visitor()
-            response = self.url_open(PAGE_URL, cookies={cookie: "x"})
+            response = self.url_open(PAGE_URL, cookies={cookie: value})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.headers.get(CDN), NO_STORE, f"request carrying {cookie}")
 
@@ -149,13 +151,16 @@ class TestEdgeCacheCookies(HamsHttpCase):
     def test_page_cache_never_replays_a_set_cookie(self):
         # [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         # Tests [@ANCHOR: COMM_website_page_no_inherited_set_cookie]
+        # Tests [@ANCHOR: COMM_website_page_no_shared_cache_entry]
         """Odoo's page cache must not hand one visitor's session cookie to the next.
 
         When a cached page is older than website.page._CACHE_DURATION, Odoo re-renders it and
         returns the very object it stores, and the dispatcher then appends the current visitor's
         Set-Cookie to it. Visitor A (no session, but a consent cookie, so nothing strips A's new
         session cookie) refreshes the entry; visitor B, who already holds a session, is then served
-        a cache hit and must not receive A's session_id.
+        a cache hit and must not receive A's session_id. With hams_com's content_security_policy
+        installed (production), A's response body is also rewritten with set_data(); if that were
+        the cached entry, B's cache hit would fail with a 500 (re.sub on bytes), hence B's 200.
         """
         page_model = type(self.env["website.page"])
         self._fresh_visitor()
