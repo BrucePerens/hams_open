@@ -347,7 +347,7 @@ class _Rejected(Exception):
 
 # Per html_sanitize() call, across every block: bounds the work and the output, which
 # the per-block caps alone do not (many small blocks). Blocks past a total are dropped.
-MAX_TOTAL_SVG_BLOCKS = 100
+MAX_TOTAL_SVG_BLOCKS = 1000
 MAX_TOTAL_SVG_BYTES = 1024 * 1024
 
 

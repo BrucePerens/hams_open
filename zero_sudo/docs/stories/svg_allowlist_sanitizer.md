@@ -76,7 +76,7 @@ contains `javascript:`, `vbscript:`, `data:`, `expression`, `@import`, a backsla
 characters.
 
 **Caps:** one block may hold at most 5000 elements, 256 KB of attribute and text data and 32 levels
-of nesting. Per `html_sanitize` call, across all blocks, at most 100 blocks and 1 MB of SVG data
+of nesting. Per `html_sanitize` call, across all blocks, at most 1000 blocks (Bruce's decision) and 1 MB of SVG data
 are kept (document order); anything past a cap is dropped whole, never truncated. The per-call
 totals bound both the time and the output size (an empty `<svg></svg>` grows about 4x when rebuilt
 with its namespace). Placeholders are comments swapped in O(1) and removed in one pass per parent,

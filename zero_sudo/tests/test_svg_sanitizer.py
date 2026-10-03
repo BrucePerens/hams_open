@@ -380,6 +380,28 @@ class TestSvgAllowlistSanitizerUnit(BaseCase):
             re.sub(r"<[^>]+>", "|", text).replace("||", "|"), "|a|1|b|2|c|"
         )
 
+    def test_25_block_count_boundary_is_exactly_1000(self):
+        self.assertEqual(svg_sanitizer.MAX_TOTAL_SVG_BLOCKS, 1000)
+        for count, expected in ((1000, 1000), (1001, 1000)):
+            started = time.monotonic()
+            text = str(html_sanitize("<p>" + "<svg><circle r='1'/></svg>" * count + "</p>"))
+            self.assertLess(time.monotonic() - started, 2.0)
+            self.assertEqual(text.count("<svg"), expected, count)
+        # the 1001st (and later) blocks are the ones dropped, not an earlier one
+        marked = "".join(f"<svg><text>b{i}</text></svg>" for i in range(1001))
+        text = str(html_sanitize(marked))
+        self.assertIn("b999<", text)
+        self.assertNotIn("b1000<", text)
+        self.assertNotIn("hamssvg", text)
+
+    def test_26_far_more_than_1000_blocks_stay_fast(self):
+        for value in ("<svg></svg>" * 20000, "<p>" + "<svg></svg><b>x</b>" * 20000 + "</p>"):
+            started = time.monotonic()
+            text = str(html_sanitize(value))
+            self.assertLess(time.monotonic() - started, 2.0)
+            self.assertEqual(text.count("<svg"), 1000)
+            self.assertLess(len(text), 8 * len(value) + 100)
+
 
 @tagged("post_install", "-at_install")
 class TestSvgAllowlistHtmlFields(TransactionCase):
