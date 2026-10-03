@@ -317,7 +317,16 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
             "^/route-order-global$",
             "^/ws/daemon_uplink$",
         )
-        own_rules = [rule for rule in ingress if rule.get("path") in own_paths]
+        # Select by hostname as well as path: another installed module
+        # (ham_base) ships a global relay.hams.com rule with the same
+        # ^/ws/daemon_uplink$ path, which a path-only filter would pick up.
+        own_hostnames = (None, "relay.route-order-test.example.com")
+        own_rules = [
+            rule
+            for rule in ingress
+            if rule.get("path") in own_paths
+            and rule.get("hostname") in own_hostnames
+        ]
         self.assertEqual(
             own_rules,
             [
