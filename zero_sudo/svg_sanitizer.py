@@ -115,8 +115,6 @@ _ENUMS = {
 
 _RE_LEN = re.compile(_LEN)
 _RE_LEN_AUTO = re.compile(rf"(?:auto|{_LEN})")
-_RE_MARGIN = re.compile(rf"(?:auto|{_LEN})(?:\s+(?:auto|{_LEN})){{0,3}}")
-_RE_DISPLAY = re.compile(r"(?:block|inline|inline-block|none)")
 _RE_NUMBER = re.compile(_NUM)
 _RE_OPACITY = re.compile(rf"{_NUM}%?")
 _RE_NUMLIST = re.compile(r"[0-9eE+\-.,\s%]*")
@@ -131,9 +129,7 @@ _RE_TRANSFORM = re.compile(
 _RE_PAINT = re.compile(_PAINT)
 _RE_URL_ONLY = re.compile(rf"\s*(?:none|{_URL_REF})\s*")
 _RE_ID = re.compile(_ID)
-_RE_CLASS = re.compile(r"[A-Za-z0-9_\- ]{0,200}")
-_RE_ROLE = re.compile(r"[a-z]{2,30}")
-_RE_ARIA_NAME = re.compile(r"aria-[a-z]{3,30}")
+_RE_ROLE = re.compile(r"img|graphics-document|presentation|none")
 _RE_ARIA_VALUE = re.compile(r"[^\x00-\x1f<>\"'&\\`]{0,200}")
 _RE_FONT_FAMILY = re.compile(r"[A-Za-z0-9 ,\-_']{1,200}")
 _RE_FONT_WEIGHT = re.compile(r"(?:normal|bold|bolder|lighter|[1-9]00)")
@@ -218,6 +214,33 @@ def _viewbox(value):
     return " ".join(parts)
 
 
+# ids that would shadow a window/document property through named access (DOM clobbering)
+# or name something a script reaches for. Compared case-insensitively; `__*` always refused.
+_CLOBBERING_IDS = frozenset(
+    "cookie location name top parent self window document forms body head domain referrer "
+    "title images links scripts embeds anchors all attributes children innerhtml implementation "
+    "documentelement defaultview getelementbyid queryselector createelement write writeln open "
+    "close history navigator frames opener length alert eval fetch constructor prototype "
+    "tostring hasownproperty valueof console localstorage sessionstorage event status origin "
+    "tagname nodename style action method submit elements lastmodified charset url".split()
+)
+
+
+def _safe_id(value):
+    stripped = value.strip()
+    if len(stripped) > SCALAR_LIMIT or not _RE_ID.fullmatch(stripped):
+        return None
+    if stripped.startswith("__") or stripped.lower() in _CLOBBERING_IDS:
+        return None
+    return stripped
+
+
+# aria-* attributes kept: a label and visibility only. The relationship attributes
+# (owns, controls, labelledby, describedby, flowto, activedescendant) point at ids
+# elsewhere in the page and are dropped.
+_ARIA_KEPT = {"aria-label", "aria-hidden", "aria-roledescription"}
+
+
 def _aria(value):
     return value if _RE_ARIA_VALUE.fullmatch(value) else None
 
@@ -247,8 +270,7 @@ _VALIDATORS = {
     "font-weight": _check_regex(_RE_FONT_WEIGHT),
     "offset": _check_regex(_RE_OFFSET),
     "orient": _check_regex(_RE_ORIENT),
-    "id": _check_regex(_RE_ID),
-    "class": _check_regex(_RE_CLASS, 200),
+    "id": _safe_id,
     "role": _check_regex(_RE_ROLE),
     "clip-path": _url_ref,
     "marker-start": _url_ref,
@@ -272,29 +294,50 @@ del _name
 
 ALLOWED_ATTRIBUTES = {name.lower(): name for name in _VALIDATORS}
 
-# `style` is accepted only as a list of declarations whose property is one of
-# these presentation properties and whose value passes that property's own
-# validator; it is re-serialised from the parsed declarations.
+# `style` is accepted only as a list of declarations whose property is one of these and
+# whose value passes that property's own validator; it is re-serialised from the parsed
+# declarations. Nothing here can size, position or stack the drawing: no width, height,
+# max-width, display, position, inset, transform, z-index, or margin on the left, right or
+# negative side (an svg paints above neighbouring text, so a large or negatively offset one
+# with a transparent shape would cover links in the site's origin).
 _STYLE_PROPS = {
     "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin",
     "stroke-dasharray", "stroke-dashoffset", "stroke-opacity",
     "stroke-miterlimit", "fill-opacity", "fill-rule", "opacity",
     "font-family", "font-size", "font-weight", "font-style", "text-anchor",
-    "dominant-baseline", "stop-color", "stop-opacity", "clip-path",
-    "marker-start", "marker-mid", "marker-end", "vector-effect",
-    # Layout niceties real schematics carry; none can position content outside its box.
-    "color", "background-color", "margin", "margin-top", "margin-bottom",
-    "margin-left", "margin-right", "max-width", "width", "height", "display",
+    "dominant-baseline", "stop-color", "stop-opacity", "color",
+    "background-color", "margin-top", "margin-bottom",
 }
+_RE_SMALL_MARGIN = re.compile(r"(\d{1,2}(?:\.\d{1,2})?)(px|em|rem)?")
+_RE_SVG_SIZE = re.compile(r"(\d{1,5}(?:\.\d{1,3})?)(px|em|rem|%)?")
+_RE_COLOUR_ONLY = re.compile(_COLOR)
+
+
+def _small_margin(value):
+    """A non-negative margin of at most 99px, or 9em/rem: spacing, never overlap."""
+    match = _RE_SMALL_MARGIN.fullmatch(value.strip())
+    if not match:
+        return None
+    limit = 99 if match.group(2) in (None, "px") else 9
+    return value.strip() if float(match.group(1)) <= limit else None
+
+
+def _svg_size(value):
+    """width/height on an <svg>: `auto`, at most 100%, 4000px or 250em."""
+    stripped = value.strip()
+    if stripped == "auto":
+        return stripped
+    match = _RE_SVG_SIZE.fullmatch(stripped)
+    if not match:
+        return None
+    limit = {None: 4000, "px": 4000, "%": 100}.get(match.group(2), 250)
+    return stripped if float(match.group(1)) <= limit else None
+
+
 _STYLE_ONLY_VALIDATORS = {
-    "background-color": _paint,
-    "margin": _check_regex(_RE_MARGIN),
-    "margin-top": _check_regex(_RE_LEN_AUTO),
-    "margin-bottom": _check_regex(_RE_LEN_AUTO),
-    "margin-left": _check_regex(_RE_LEN_AUTO),
-    "margin-right": _check_regex(_RE_LEN_AUTO),
-    "max-width": _check_regex(_RE_LEN_AUTO),
-    "display": _check_regex(_RE_DISPLAY),
+    "background-color": _check_regex(_RE_COLOUR_ONLY),
+    "margin-top": _small_margin,
+    "margin-bottom": _small_margin,
 }
 
 
@@ -302,10 +345,23 @@ class _Rejected(Exception):
     """Raised inside one block when it exceeds a cap; the block is dropped."""
 
 
-class _Budget:
+# Per html_sanitize() call, across every block: bounds the work and the output, which
+# the per-block caps alone do not (many small blocks). Blocks past a total are dropped.
+MAX_TOTAL_SVG_BLOCKS = 100
+MAX_TOTAL_SVG_BYTES = 1024 * 1024
+
+
+class _CallTotals:
     def __init__(self):
+        self.blocks = 0
+        self.size = 0
+
+
+class _Budget:
+    def __init__(self, totals=None):
         self.elements = 0
         self.size = 0
+        self.totals = totals
 
     def element(self):
         self.elements += 1
@@ -316,6 +372,10 @@ class _Budget:
         self.size += amount
         if self.size > MAX_SVG_BYTES:
             raise _Rejected("block too large")
+        if self.totals is not None:
+            self.totals.size += amount
+            if self.totals.size > MAX_TOTAL_SVG_BYTES:
+                raise _Rejected("too much SVG in one value")
 
 
 def _clean_style(value):
@@ -345,7 +405,7 @@ def _clean_attribute(name, value):
         return None
     lowered = name.lower()
     if lowered.startswith("aria-"):
-        if _RE_ARIA_NAME.fullmatch(lowered) and _aria(value) is not None:
+        if lowered in _ARIA_KEPT and _aria(value) is not None:
             return lowered, value
         return None
     if lowered == "style":
@@ -377,6 +437,16 @@ def _build(source, depth, budget, dropped_attributes=()):
         result = _clean_attribute(name, value)
         if result is None or result[0] in dropped_attributes:
             continue
+        if canonical == "svg":
+            # An <svg> is a replaced element that paints above neighbouring text:
+            # bound its size and never let it be moved by transform.
+            if result[0] == "transform":
+                continue
+            if result[0] in ("width", "height"):
+                bounded = _svg_size(result[1])
+                if bounded is None:
+                    continue
+                result = (result[0], bounded)
         budget.spend(len(result[0]) + len(result[1]))
         attr_name, attr_value = result
         if attr_name == "xml:space":
@@ -419,7 +489,7 @@ def _clean_text(text, keeps_text, budget):
     return "\n" if not text.strip() else None
 
 
-def sanitize_svg_element(source, dropped_attributes=()):
+def sanitize_svg_element(source, dropped_attributes=(), _totals=None):
     """Return a rebuilt, allowlisted copy of an `<svg>` element, or None.
 
     None means the block is dropped: not an svg element, over a size,
@@ -429,8 +499,14 @@ def sanitize_svg_element(source, dropped_attributes=()):
     """
     if not isinstance(source.tag, str) or source.tag.lower() != "svg":
         return None
+    if _totals is not None:
+        _totals.blocks += 1
+        if _totals.blocks > MAX_TOTAL_SVG_BLOCKS:
+            if _totals.blocks == MAX_TOTAL_SVG_BLOCKS + 1:
+                _logger.warning("SVG blocks past the per-value limit dropped")
+            return None
     try:
-        clean = _build(source, 1, _Budget(), dropped_attributes)
+        clean = _build(source, 1, _Budget(_totals), dropped_attributes)
     except _Rejected as rejection:
         _logger.warning("SVG block dropped: %s", rejection)
         return None
@@ -449,38 +525,38 @@ def _top_level_svgs(doc):
     return found
 
 
-def _replace_with_text(element, token):
-    """Swap `element` for `token` in the tree, keeping the tail text."""
-    parent = element.getparent()
-    tail = element.tail or ""
-    if parent is None:
-        return
-    previous = element.getprevious()
-    if previous is None:
-        parent.text = (parent.text or "") + token + tail
-    else:
-        previous.tail = (previous.tail or "") + token + tail
-    parent.remove(element)
-
-
 def _detach_svgs(doc, nonce, dropped_attributes):
-    """Validate every svg block, replace each with a token; return the stash."""
+    """Validate every svg block and swap each for a placeholder comment.
+
+    A comment is used, not text, so the swap is O(1) per block (rebuilding the
+    parent's text for every adjacent block was quadratic), the placeholder can
+    never land inside an attribute value, and Odoo's cleaner keeps comments.
+    Blocks past the per-call totals are validated as None, so they are dropped.
+    """
     stash = {}
-    svgs = _top_level_svgs(doc)
-    for index, element in enumerate(svgs):
-        token = f"hamssvg{nonce}x{index}x"
-        stash[index] = sanitize_svg_element(element, dropped_attributes)
+    totals = _CallTotals()
+    for index, element in enumerate(_top_level_svgs(doc)):
+        marker = f"hamssvg{nonce}x{index}x"
+        stash[index] = sanitize_svg_element(
+            element, dropped_attributes, _totals=totals
+        )
+        placeholder = etree.Comment(marker)
         if element is doc:
             # The whole value was a single <svg>: the root cannot be swapped
-            # out, so it becomes a plain <div> holding the token.
+            # out, so it becomes a plain <div> holding the placeholder.
             for child in list(doc):
                 doc.remove(child)
             doc.attrib.clear()
             doc.tag = "div"
-            doc.text = token
+            doc.text = None
             doc.tail = None
+            doc.append(placeholder)
             continue
-        _replace_with_text(element, token)
+        parent = element.getparent()
+        if parent is None:
+            continue
+        placeholder.tail = element.tail
+        parent.replace(element, placeholder)
     return stash
 
 
@@ -493,47 +569,50 @@ def _in_blocked_context(element):
     return False
 
 
-def _split_text(text, pattern, stash, blocked):
-    """Split text on tokens -> (leading text, [(svg or None, trailing text)])."""
-    parts = pattern.split(text)
-    lead = parts[0]
-    items = []
-    for position in range(1, len(parts), 2):
-        svg = None if blocked else stash.pop(int(parts[position]), None)
-        trailing = parts[position + 1]
-        if svg is None:
-            if items:
-                items[-1] = (items[-1][0], items[-1][1] + trailing)
-            else:
-                lead += trailing
-        else:
-            items.append((svg, trailing))
-    return lead, items
-
-
 def _reattach_svgs(doc, stash, nonce):
+    """Put each surviving block back; remove every placeholder either way."""
     pattern = re.compile(rf"hamssvg{nonce}x(\d+)x")
-    for owner in list(doc.iter()):
-        if not isinstance(owner.tag, str):
+    dropped = {}
+    for comment in list(doc.iter(etree.Comment)):
+        match = pattern.fullmatch(comment.text or "")
+        parent = comment.getparent()
+        if not match or parent is None:
             continue
-        blocked = _in_blocked_context(owner)
-        for child in list(owner):
-            tail = child.tail
-            if not tail or not pattern.search(tail):
-                continue
-            lead, items = _split_text(tail, pattern, stash, blocked)
-            child.tail = lead or None
-            position = owner.index(child) + 1
-            for svg, trailing in items:
-                svg.tail = trailing or None
-                owner.insert(position, svg)
-                position += 1
-        if owner.text and pattern.search(owner.text):
-            lead, items = _split_text(owner.text, pattern, stash, blocked)
-            owner.text = lead or None
-            for position, (svg, trailing) in enumerate(items):
-                svg.tail = trailing or None
-                owner.insert(position, svg)
+        svg = stash.pop(int(match.group(1)), None)
+        if svg is None or _in_blocked_context(parent):
+            dropped.setdefault(parent, set()).add(comment)
+            continue
+        svg.tail = comment.tail
+        parent.replace(comment, svg)
+    for parent, comments in dropped.items():
+        _remove_keeping_tails(parent, comments)
+
+
+def _remove_keeping_tails(parent, comments):
+    """Remove placeholder comments in one pass, merging their tails with join().
+
+    Merging one tail at a time with `+=` is quadratic for thousands of adjacent
+    dropped blocks.
+    """
+    pieces = [parent.text or ""]
+    holder = None
+    for child in list(parent):
+        if child in comments:
+            pieces.append(child.tail or "")
+            parent.remove(child)
+            continue
+        _store_text(parent, holder, pieces)
+        holder = child
+        pieces = [child.tail or ""]
+    _store_text(parent, holder, pieces)
+
+
+def _store_text(parent, holder, pieces):
+    text = "".join(pieces) or None
+    if holder is None:
+        parent.text = text
+    else:
+        holder.tail = text
 
 
 def clean_document(doc, run_cleaner, dropped_attributes=()):

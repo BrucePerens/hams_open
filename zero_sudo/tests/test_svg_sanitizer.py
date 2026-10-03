@@ -295,10 +295,10 @@ class TestSvgAllowlistSanitizerUnit(BaseCase):
         self.assertEqual(text.count("<svg"), 1)
         self.assertIn("viewBox", text)
 
-    def test_17_field_options_strip_style_and_classes(self):
+    def test_17_field_options_strip_style_and_class_is_never_kept(self):
         source = "<svg class='k' style='fill:red' fill='blue'><rect/></svg>"
         plain = str(html_sanitize(source))
-        self.assertIn('class="k"', plain)
+        self.assertNotIn("class=", plain)
         self.assertIn('style="fill:red"', plain)
         stripped = str(html_sanitize(source, strip_style=True, strip_classes=True))
         self.assertNotIn("class=", stripped)
@@ -325,6 +325,60 @@ class TestSvgAllowlistSanitizerUnit(BaseCase):
     def test_20_html_entities_in_labels_become_text(self):
         text = str(html_sanitize("<svg><text>5 &micro;F &amp; 10 &Omega; &lt;b&gt;</text></svg>"))
         self.assertIn("5 µF &amp; 10 Ω &lt;b&gt;", text)
+
+    def test_21_per_value_totals_bound_work_and_output(self):
+        value = "<svg></svg>x" * 20000
+        started = time.monotonic()
+        text = str(html_sanitize(value))
+        self.assertLess(time.monotonic() - started, 2.0)
+        self.assertEqual(text.count("<svg"), svg_sanitizer.MAX_TOTAL_SVG_BLOCKS)
+        self.assertLess(len(text), 2 * len(value))
+        self.assertNotIn("hamssvg", text)
+        text = str(html_sanitize("<svg><text>" + "a" * 200000 + "</text></svg>") * 1)
+        many = "<svg><text>" + "a" * 200000 + "</text></svg>"
+        text = str(html_sanitize(many * 8))
+        self.assertLessEqual(text.count("<svg"), 5)
+        self.assertLess(len(text), svg_sanitizer.MAX_TOTAL_SVG_BYTES + 1000)
+
+    def test_22_style_cannot_size_or_move_an_svg(self):
+        text = str(html_sanitize(
+            "<svg style='margin:-5px;margin-left:5px;margin-top:-1px;margin-bottom:12px;"
+            "width:10px;height:10px;position:fixed;display:block;max-width:5px;"
+            "background-color:#fff;fill:red' width='20000' height='50%' transform='translate(-9999)'>"
+            "<rect/></svg>"
+        ))
+        self.assertIn('style="margin-bottom:12px;background-color:#fff;fill:red"', text)
+        self.assertNotIn("width=", text)
+        self.assertNotIn("transform", text)
+        self.assertIn('height="50%"', text)
+        for given in ("200%", "4001", "-5", "1e9", "5cm"):
+            self.assertNotIn("width=", str(html_sanitize(f"<svg width='{given}'/>")))
+        for given in ("100%", "4000", "300px", "auto"):
+            self.assertIn("width=", str(html_sanitize(f"<svg width='{given}'/>")))
+        self.assertNotIn("margin-bottom:100px", str(html_sanitize("<svg style='margin-bottom:100px'/>")))
+
+    def test_23_role_aria_and_ids_cannot_reach_outside_the_diagram(self):
+        text = str(html_sanitize(
+            "<svg role='img' aria-label='ok' aria-hidden='false' aria-roledescription='d' "
+            "aria-owns='x' aria-controls='y' aria-labelledby='z' aria-describedby='q' "
+            "aria-flowto='r' aria-activedescendant='s'><rect id='ok1'/><rect id='cookie'/>"
+            "<rect id='Location'/><rect id='__proto__'/><rect id='x__y'/></svg>"
+        ))
+        for kept in ('role="img"', 'aria-label="ok"', 'aria-hidden="false"', "aria-roledescription", 'id="ok1"', 'id="x__y"'):
+            self.assertIn(kept, text)
+        for gone in ("aria-owns", "aria-controls", "aria-labelledby", "aria-describedby",
+                     "aria-flowto", "aria-activedescendant", 'id="cookie"', 'id="Location"', "__proto__"):
+            self.assertNotIn(gone, text)
+        for role in ("button", "link", "dialog", "alert"):
+            self.assertNotIn("role=", str(html_sanitize(f"<svg role='{role}'/>")))
+        for role in ("graphics-document", "presentation", "none"):
+            self.assertIn("role=", str(html_sanitize(f"<svg role='{role}'/>")))
+
+    def test_24_adjacent_blocks_and_surrounding_text_keep_order(self):
+        text = str(html_sanitize("<p>a<svg><text>1</text></svg>b<svg><text>2</text></svg>c</p>"))
+        self.assertEqual(
+            re.sub(r"<[^>]+>", "|", text).replace("||", "|"), "|a|1|b|2|c|"
+        )
 
 
 @tagged("post_install", "-at_install")
