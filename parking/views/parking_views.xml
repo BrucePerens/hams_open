@@ -92,12 +92,17 @@
         <field name="name">Parked domains</field>
         <field name="res_model">parking.domain</field>
         <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_parking_domain_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_parking_domain_form')})]"/>
     </record>
 
     <record id="action_parking_inquiry" model="ir.actions.act_window">
         <field name="name">Inquiries</field>
         <field name="res_model">parking.inquiry</field>
         <field name="view_mode">list</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_parking_inquiry_list')})]"/>
     </record>
 
     <menuitem id="menu_parking_root" name="Parking" action="action_parking_domain" sequence="40"

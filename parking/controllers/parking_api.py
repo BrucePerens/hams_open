@@ -20,7 +20,7 @@ class ParkingController(http.Controller):
     # form carries a stateless HMAC token bound to the host instead (utils.form_token).
     @http.route(utils.INQUIRY_PATH, type="http", auth="public", methods=["POST"], csrf=False,
                 readonly=False, save_session=False)
-    def inquiry(self, **post):
+    def inquiry(self, token="", name="", email="", message="", website="", **_ignored):
         ir_http = request.env["ir.http"]
         environ = request.httprequest.environ
         host = utils.normalize_host(utils.original_host(environ))
@@ -31,12 +31,12 @@ class ParkingController(http.Controller):
             return ir_http._parking_response("not found", 404, "text/plain", None)
         if (request.httprequest.content_length or 0) > MAX_BODY:
             return ir_http._parking_response("too large", 413, "text/plain", None)
-        token_ok = utils.verify_form_token(secret, host, post.get("token", ""))
-        if post.get("website") or not token_ok:
+        token_ok = utils.verify_form_token(secret, host, token)
+        if website or not token_ok:
             # A filled honeypot or a bad token: answer exactly like success so a bot learns nothing.
             return self._done(ir_http, record)
-        email = (post.get("email") or "").strip()[:200]
-        message = (post.get("message") or "").strip()[:4000]
+        email = (email or "").strip()[:200]
+        message = (message or "").strip()[:4000]
         if "@" not in email or not message:
             return ir_http._parking_response("email and message are required", 400, "text/plain", None)
         ip_hash = utils.hash_ip(secret, utils.client_ip(environ, request.httprequest.headers))
@@ -45,7 +45,7 @@ class ParkingController(http.Controller):
         env["parking.inquiry"].create(
             {
                 "domain_id": record.id,
-                "name": (post.get("name") or "").strip()[:120],
+                "name": (name or "").strip()[:120],
                 "email": email,
                 "message": message,
                 "ip_hash": ip_hash,
