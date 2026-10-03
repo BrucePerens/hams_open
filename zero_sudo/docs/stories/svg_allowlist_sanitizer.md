@@ -53,18 +53,34 @@ with its whole subtree.
 geometry and presentation attributes (`viewBox preserveAspectRatio width height x y x1 y1 x2 y2 cx
 cy r rx ry d points transform fill fill-opacity fill-rule stroke stroke-width stroke-linecap
 stroke-linejoin stroke-dasharray opacity font-family font-size font-weight text-anchor
-dominant-baseline offset stop-color stop-opacity gradientUnits gradientTransform ...`), `id` and
-`class` from a safe character set, `aria-*`, `role`, `xmlns` (forced to the SVG namespace),
-`markerWidth markerHeight refX refY orient`, `xml:space`. `fill`, `stroke`, `clip-path` and
-`marker-*` accept a colour or `url(#same-document-id)` only. `style` is accepted only as a list of
-presentation declarations that pass the same validators and is re-serialised from the parsed
-declarations; a field that sets `strip_style` or `strip_classes` loses `style` or `class` from the
-SVG too. Every other attribute is dropped: all `on*` handlers, `href`, `xlink:href`, `src`, any
-namespace-prefixed name, `data-*`, and any value that contains `javascript:`, `vbscript:`, `data:`,
-`expression`, `@import`, a backslash or markup characters.
+dominant-baseline offset stop-color stop-opacity gradientUnits gradientTransform ...`), `xmlns`
+(forced to the SVG namespace), `markerWidth markerHeight refX refY orient`, `xml:space`.
+`fill`, `stroke`, `clip-path` and `marker-*` accept a colour or `url(#same-document-id)` only.
+Because an `<svg>` is a replaced element that paints above neighbouring text, the outer and nested
+`svg` elements get tighter rules: `width`/`height` must be `auto`, at most 100%, 4000px or 250em,
+and `transform` is dropped. `class` is dropped on every SVG element (utility classes such as
+`position-fixed w-100 h-100` would pin a transparent shape over the page; the shipped schematics
+use none). `role` is limited to `img`, `graphics-document`, `presentation`, `none`. Of the `aria-*`
+attributes only `aria-label`, `aria-hidden` and `aria-roledescription` survive; the ones that point
+at other ids in the page (`owns controls labelledby describedby flowto activedescendant`) do not.
+`id` is kept (local `url(#id)` references need it) unless it begins `__` or names a window/document
+property (`cookie location name top parent self body forms ...`, case-insensitive), which would
+clobber it. `style` is accepted only as a list of presentation declarations (`fill stroke
+stroke-* opacity font-* text-anchor color stop-* background-color` and a non-negative
+`margin-top`/`margin-bottom` of at most 99px or 9em) re-serialised from the parsed declarations; it
+can never size, position, stack or offset the drawing (no width, height, display, position, inset,
+transform, z-index or left/right/negative margin). A field that sets `strip_style` or
+`strip_classes` loses `style` from the SVG too. Every other attribute is dropped: all `on*`
+handlers, `href`, `xlink:href`, `src`, any namespace-prefixed name, `data-*`, and any value that
+contains `javascript:`, `vbscript:`, `data:`, `expression`, `@import`, a backslash or markup
+characters.
 
 **Caps:** one block may hold at most 5000 elements, 256 KB of attribute and text data and 32 levels
-of nesting. A block over a cap is dropped whole, never truncated.
+of nesting. Per `html_sanitize` call, across all blocks, at most 1000 blocks (Bruce's decision) and 1 MB of SVG data
+are kept (document order); anything past a cap is dropped whole, never truncated. The per-call
+totals bound both the time and the output size (an empty `<svg></svg>` grows about 4x when rebuilt
+with its namespace). Placeholders are comments swapped in O(1) and removed in one pass per parent,
+so 20000 adjacent blocks cost about 0.1-0.3 s (a text-token design was quadratic: 11 s).
 
 ## Threat Model
 
@@ -79,7 +95,9 @@ whoever views it. Out of scope: an administrator who can already write unsanitiz
 | Parser differential / mutation XSS | The SVG is rebuilt, not filtered in place; only allowlisted names and attribute values are emitted, text is escaped, no `style`/`script`/`title`-as-RCDATA element can appear, and no HTML-breakout element (`p`, `br`, `img`...) can appear inside the foreign content |
 | Entity expansion, XXE | No XML parser is used; `<!DOCTYPE>`/`<!ENTITY>` are ignored by the HTML parser |
 | Placeholder forgery | Per-call random 96-bit nonce; a literal look-alike in the input is plain text |
-| Resource exhaustion | Element, byte and depth caps |
+| Resource exhaustion | Element, byte and depth caps per block; block and byte totals per call; linear-time placeholder swap; length-capped scalar values |
+| UI redress (a large or offset SVG with a transparent shape covering links) | No `class`, no size/position/stack/offset in `style`, bounded root `width`/`height`, no root `transform` |
+| DOM clobbering, ARIA relationships into the page | Clobbering ids refused; `aria-owns`/`controls`/`labelledby`/... and arbitrary `role` dropped |
 
 ## Residual Risks
 
@@ -102,9 +120,12 @@ whoever views it. Out of scope: an administrator who can already write unsanitiz
 - A bare `<svg>` that is the whole value is wrapped in a `<div>`, because the cleaner cannot drop a
   root element. A value that stock Odoo reduces to a top-level `<svg>` (an odd `<!DOCTYPE>` prefix)
   gains that wrapper on the next pass; after that it no longer changes.
-- `id` values are kept (needed for `url(#id)`), so two diagrams on one page can collide, and an `id`
-  can shadow a `window` property (DOM clobbering). Odoo allows `id` on ordinary HTML too, so this is
-  no new class of risk.
+- `id` values are kept (needed for `url(#id)`), so two diagrams on one page can still collide with
+  each other (a gradient or marker id reused by two diagrams resolves to the first). Names that
+  would shadow `window`/`document` properties are refused, but the list is a denylist; Odoo allows
+  `id` on ordinary HTML too.
+- A large `width`/`height` on shapes *inside* an SVG is not capped: the SVG viewport clips them,
+  and the root's own size is capped.
 - A `title` or `desc` element inside the SVG survives (stock Odoo kills `title`). Both hold plain
   escaped text only.
 - Mail clients ignore or strip inline SVG; nothing relies on it there.
