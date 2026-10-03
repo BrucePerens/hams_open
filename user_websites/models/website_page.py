@@ -348,6 +348,24 @@ class WebsitePage(models.Model):
                                 elem.attrib[f"data-blocked-ssti-{attr}"] = val
                                 was_modified = True
 
+            # [@ANCHOR: user_websites:page_arch_text_is_markup]
+            # Verified by [@ANCHOR: test_user_arch_svg_allowlist]
+            # QWeb writes a static text node into the page RAW, unescaped (ir_qweb.py,
+            # _compile_directive_inner_content: `_append_text(el.text)`). A text node whose
+            # value contains "<" is therefore live markup in the rendered page, however it was
+            # spelled in the arch: `&lt;script&gt;` and `<![CDATA[<script>]]>` both parse to the
+            # text "<script>" and came out as a real <script> element, with none of the
+            # element checks above ever seeing it. Re-spell every "<" in text as the entity
+            # "&lt;" (the node then holds the five characters, which the browser shows as "<").
+            # A second pass finds no "<" left, so saving again changes nothing.
+            for node in root.iter():
+                if not isinstance(node.tag, str):
+                    continue
+                if node.text and "<" in node.text:
+                    node.text = node.text.replace("<", "&lt;")
+                if node.tail and "<" in node.tail:
+                    node.tail = node.tail.replace("<", "&lt;")
+
             # Return inner HTML of root without the wrapper
             # Correctly handle text nodes and tail text to prevent data loss (Bug Fix)
             full_string = etree.tostring(root, encoding="unicode", method="xml")

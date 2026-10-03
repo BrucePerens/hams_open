@@ -43,6 +43,15 @@ _NOISE = re.compile(r"[\x00-\x20\x7f]+")
 _DANGEROUS_STYLE = re.compile(r"@import|expression\(|url\((?!#)", re.IGNORECASE)
 
 
+# Not SVG: the QWeb raw-text-node hole. The arch text "<script>" is written to the page as is.
+RAW_TEXT_VECTORS = [
+    ("text_entity_script", "<div>&lt;script&gt;window.__xss=1&lt;/script&gt;</div>"),
+    ("text_entity_img", "<p>&lt;img src=x onerror=window.__xss=1&gt;</p>"),
+    ("text_cdata_script", "<div><![CDATA[<script>window.__xss=1</script>]]></div>"),
+    ("text_entity_in_tail", "<b>x</b>&lt;iframe src=javascript:window.__xss=1&gt;"),
+]
+
+
 def _local(tag):
     return tag.rpartition("}")[2].lower()
 
@@ -57,6 +66,8 @@ def assert_arch_is_safe(test, name, arch):
         if not isinstance(element.tag, str):
             continue
         tag = _local(element.tag)
+        for text in (element.text, element.tail):
+            test.assertNotIn("<", text or "", f"{name}: markup-bearing text node: {text!r}")
         test.assertNotIn(":", element.tag.rpartition("}")[2], f"{name}: undeclared prefix survived: {element.tag}")
         test.assertNotIn(tag, _NEVER, f"{name}: <{tag}> survived: {arch[:300]}")
         in_svg = tag == "svg" or any(_local(a.tag) == "svg" for a in element.iterancestors())
@@ -98,7 +109,7 @@ class TestUserArchSvgSanitizer(HamsHttpCase):
         return self.env["website.page"]._sanitize_user_arch(arch)
 
     def test_01_every_corpus_vector_is_neutralised(self):
-        for name, payload in XSS_CORPUS:
+        for name, payload in XSS_CORPUS + RAW_TEXT_VECTORS:
             with self.subTest(vector=name):
                 cleaned, _modified = self.sanitize(f"<p>x</p>{payload}")
                 assert_arch_is_safe(self, name, cleaned)
@@ -353,7 +364,7 @@ class TestUserArchSvgMemberPaths(HamsHttpCase):
         )
         assert_arch_is_safe(self, "member page", member_page.arch)
         extra = []
-        for index, (name, payload) in enumerate(XSS_CORPUS):
+        for index, (name, payload) in enumerate(XSS_CORPUS + RAW_TEXT_VECTORS):
             if name in combined_names:
                 continue
             # The sanitizer's own output for this vector is exactly what a member's save would
