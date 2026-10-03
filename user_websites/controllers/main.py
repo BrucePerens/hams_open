@@ -125,6 +125,15 @@ class UserWebsitesController(http.Controller):
             }
             if email:
                 create_vals["reported_by_email"] = email
+            # [@ANCHOR: report_violation_records_logged_in_reporter]
+            # Verified by [@ANCHOR: test_report_violation_records_logged_in_reporter]
+            # Record who filed it when a signed-in member did. The service env creates the row,
+            # so nothing records the reporter unless it is set here; the id comes from the
+            # session's own user, never from the posted form, so a reporter cannot name someone
+            # else. The public user is not a reporter: a guest is identified only by the email
+            # field the modal asks them for.
+            if not request.env.user._is_public():
+                create_vals["reported_by_user_id"] = request.env.user.id
 
             if slug:
                 # Resolve the owner or group
