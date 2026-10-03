@@ -104,7 +104,11 @@ REDIS_KEY = "cloudflare:trusted_ip_ranges"
 # cache (wsgi_proxy_scheme.py's _get_cached_trusted_networks(), a much shorter TTL) is what
 # actually governs how quickly a settings change or cron refresh becomes visible there; this is
 # just how long the key itself survives a gap between publishes (e.g. the cron stops running).
-REDIS_KEY_TTL_SECONDS = 3600
+# Longer than the daily refresh cron's interval on purpose: the WSGI hook treats a missing key as
+# "keep whatever this worker last read", and a freshly restarted worker has read nothing, so a key
+# that expired between daily publishes would leave a non-Tunnel admin's workers trusting no
+# Cloudflare range at all until the next cron tick. Three days rides out a missed tick or two.
+REDIS_KEY_TTL_SECONDS = 3 * 86400
 
 
 def _parse_ranges(text):
@@ -177,8 +181,11 @@ class CloudflareTrustedIpUtils(models.AbstractModel):
     def _publish_trusted_ip_ranges_to_redis(self):
         """Pushes the current merged range list to Redis so the env-less WSGI hook
         (wsgi_proxy_scheme.py) can read it without a database connection. Called after every
-        cron refresh and every admin save of the custom-ranges settings field, so a change takes
-        effect immediately rather than waiting for the next cron tick."""
+        cron refresh, every admin save of the custom-ranges settings field, and every load of this
+        module (data/republish_trusted_ip_ranges.xml), so a change takes effect immediately rather
+        than waiting for the next cron tick. With non-Tunnel mode off this publishes an empty list
+        on purpose -- that is what replaces a wider list left in Redis by an older version of this
+        module, which the WSGI hook would otherwise keep serving as its last-known-good value."""
         ranges = self._get_effective_trusted_ip_ranges()
         try:
             r = get_redis_connection(self.env)

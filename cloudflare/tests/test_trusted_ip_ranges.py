@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import requests
 
 from odoo.tests.common import tagged
+from odoo.tools import convert_file
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 
@@ -128,3 +129,45 @@ class TestTrustedIpRanges(HamsTransactionCase):
             "203.0.113.0/24",
             "A failed refresh must leave the last known-good list untouched.",
         )
+
+    # Tests [@ANCHOR: cloudflare:publish_trusted_ip_ranges_to_redis]
+    def test_11_publish_with_non_tunnel_mode_off_writes_an_empty_list_that_outlives_the_daily_cron(self):
+        """A Tunnel-only deployment publishes an empty list, not Cloudflare's ranges -- that is what
+        replaces a wider list an older version of this module left in Redis. The key must also
+        outlive the daily refresh interval, since the WSGI hook keeps its last-read value across a
+        missing key and a freshly restarted worker has read nothing yet."""
+        fake_redis = MagicMock()
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.trusted_ip_ranges.get_redis_connection",
+            return_value=fake_redis,
+        )
+        self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24")
+        self._utils()._publish_trusted_ip_ranges_to_redis()
+        fake_redis.set.assert_called_once()
+        args, kwargs = fake_redis.set.call_args
+        self.assertEqual(args, ("cloudflare:trusted_ip_ranges", "[]"))
+        self.assertGreater(kwargs["ex"], 86400)
+
+    # Tests [@ANCHOR: cloudflare:COMM_republish_trusted_ip_ranges_on_module_load]
+    def test_12_module_upgrade_republishes_the_current_list_to_redis(self):
+        """Loads the real data file the way `odoo -u cloudflare` does (mode='update'), so an upgrade
+        of an existing install overwrites whatever Redis held before -- post_init_hook alone would
+        only cover a fresh install."""
+        fake_redis = MagicMock()
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.trusted_ip_ranges.get_redis_connection",
+            return_value=fake_redis,
+        )
+        convert_file(
+            self.env, "cloudflare", "data/republish_trusted_ip_ranges.xml", {}, mode="update"
+        )
+        fake_redis.set.assert_called_once()
+        self.assertEqual(fake_redis.set.call_args.args, ("cloudflare:trusted_ip_ranges", "[]"))
+
+        self._enable_non_tunnel_mode()
+        self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
+        fake_redis.reset_mock()
+        convert_file(
+            self.env, "cloudflare", "data/republish_trusted_ip_ranges.xml", {}, mode="update"
+        )
+        self.assertIn("173.245.48.0/20", fake_redis.set.call_args.args[1])
