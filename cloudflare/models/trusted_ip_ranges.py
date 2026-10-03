@@ -15,8 +15,25 @@ REMOTE_ADDR genuinely is one of Cloudflare's published ranges. Without this, a s
 in that topology had no way to let Odoo trust CF-* headers at all -- the existing loopback-only
 check can never match a real network peer.
 
-Cloudflare's published ranges change occasionally, so the effective list is a MERGE of two parts,
-both admin-visible on the Settings page:
+Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-ranges-
+on-tunnel-only-deployments-7d2b8f14.md): the effective list used to default to Cloudflare's own
+published ranges unconditionally, on every install, Tunnel-only or not. That is backwards for a
+Tunnel-only deployment: its origin is never reachable from Cloudflare's ranges at all (the only
+peer that can ever connect is loopback), so seeding the trust set with them added trust the
+deployment did not need -- "a peer in Cloudflare's ranges" does not mean "this site's Cloudflare
+zone", it means "any Cloudflare customer's zone", so if an origin port were ever exposed directly
+those ranges would let a Worker or another customer's proxied hostname send forged CF-* headers
+this code would believe. `CONFIG_KEY_TRUST_NON_TUNNEL` below gates the entire feature -- both the
+auto-fetched snapshot and the admin's own custom additions -- behind one explicit admin opt-in
+(Settings -> Cloudflare -> "Trust Cloudflare's Published IP Ranges"), off by default. Turning it on
+only lets Odoo read CF-* headers from a peer in those ranges; it does not by itself stop a forged
+request from reaching the origin, since those ranges front every Cloudflare customer, not just
+this zone -- it only means something once the origin is also restricted to Cloudflare's edge by
+authenticated origin pulls (Cloudflare's own mTLS feature) or a per-zone firewall rule, which this
+module does not configure and the admin must set up separately.
+
+Cloudflare's published ranges change occasionally, so the effective list, once that opt-in is on,
+is a MERGE of two parts, both admin-visible on the Settings page:
 - an auto-fetched list, periodically refreshed from https://www.cloudflare.com/ips-v4 and
   /ips-v6 by `_cron_refresh_cloudflare_ip_ranges` below, seeded from the `_DEFAULT_CLOUDFLARE_*`
   snapshot constants (fetched live 2026-09-26) so the feature works correctly before the cron's
@@ -75,12 +92,23 @@ DEFAULT_CLOUDFLARE_IPV6_RANGES = (
 CONFIG_KEY_AUTO = "cloudflare.trusted_ip_ranges_auto"
 CONFIG_KEY_CUSTOM = "cloudflare.trusted_ip_ranges_custom"
 CONFIG_KEY_LAST_REFRESHED = "cloudflare.trusted_ip_ranges_last_refreshed"
+# Off by default -- a Tunnel-only deployment (this project's own real one) never has a real
+# network peer to match against these ranges, so the admin must explicitly say this origin is
+# reachable from Cloudflare's edge directly (no Tunnel) before any of them are trusted. See this
+# module's own docstring for why that also needs authenticated origin pulls or a per-zone
+# firewall rule to mean anything.
+CONFIG_KEY_TRUST_NON_TUNNEL = "cloudflare.trust_non_tunnel_peers"
 
 REDIS_KEY = "cloudflare:trusted_ip_ranges"
-# How long a self-hosted admin's manual Redis outage is tolerated before the WSGI hook falls back
-# to the loopback-only check plus this module's own baked-in default -- see
-# wsgi_proxy_scheme.py's _is_trusted_cf_peer() for the consumer side of this constant's twin.
-REDIS_KEY_TTL_SECONDS = 3600
+# How long a published list is kept in Redis before it expires. The WSGI hook's own in-process
+# cache (wsgi_proxy_scheme.py's _get_cached_trusted_networks(), a much shorter TTL) is what
+# actually governs how quickly a settings change or cron refresh becomes visible there; this is
+# just how long the key itself survives a gap between publishes (e.g. the cron stops running).
+# Longer than the daily refresh cron's interval on purpose: the WSGI hook treats a missing key as
+# "keep whatever this worker last read", and a freshly restarted worker has read nothing, so a key
+# that expired between daily publishes would leave a non-Tunnel admin's workers trusting no
+# Cloudflare range at all until the next cron tick. Three days rides out a missed tick or two.
+REDIS_KEY_TTL_SECONDS = 3 * 86400
 
 
 def _parse_ranges(text):
@@ -109,13 +137,17 @@ class CloudflareTrustedIpUtils(models.AbstractModel):
     @api.model
     # [@ANCHOR: cloudflare:get_effective_trusted_ip_ranges]
     def _get_effective_trusted_ip_ranges(self):
-        """The merged auto + custom range list, as validated CIDR strings. The auto half falls
-        back to this module's own baked-in default snapshot when empty (first install, before
-        the cron's first successful run)."""
+        """The merged auto + custom range list, as validated CIDR strings. Empty unless the admin
+        has explicitly turned on `CONFIG_KEY_TRUST_NON_TUNNEL` (off by default, which is correct
+        for this project's own Tunnel-only deployment and for any other Tunnel-only self-hoster --
+        see this module's own docstring). The auto half falls back to this module's own baked-in
+        default snapshot when empty (first install, before the cron's first successful run)."""
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_trusted_ip"
         )
         icp = self.env["ir.config_parameter"].with_user(svc_uid)
+        if icp.get_param(CONFIG_KEY_TRUST_NON_TUNNEL) != "True":
+            return []
         auto_text = icp.get_param(CONFIG_KEY_AUTO, "")
         auto_ranges = _parse_ranges(auto_text) or list(
             DEFAULT_CLOUDFLARE_IPV4_RANGES + DEFAULT_CLOUDFLARE_IPV6_RANGES
@@ -149,15 +181,18 @@ class CloudflareTrustedIpUtils(models.AbstractModel):
     def _publish_trusted_ip_ranges_to_redis(self):
         """Pushes the current merged range list to Redis so the env-less WSGI hook
         (wsgi_proxy_scheme.py) can read it without a database connection. Called after every
-        cron refresh and every admin save of the custom-ranges settings field, so a change takes
-        effect immediately rather than waiting for the next cron tick."""
+        cron refresh, every admin save of the custom-ranges settings field, and every load of this
+        module (data/republish_trusted_ip_ranges.xml), so a change takes effect immediately rather
+        than waiting for the next cron tick. With non-Tunnel mode off this publishes an empty list
+        on purpose -- that is what replaces a wider list left in Redis by an older version of this
+        module, which the WSGI hook would otherwise keep serving as its last-known-good value."""
         ranges = self._get_effective_trusted_ip_ranges()
         try:
             r = get_redis_connection(self.env)
             r.set(REDIS_KEY, json.dumps(ranges), ex=REDIS_KEY_TTL_SECONDS)
         except Exception as e:  # audit-ignore-catch-all
             # Redis being unreachable must never break a settings save or a cron tick -- the
-            # WSGI hook's own fallback (loopback check + baked-in default) covers this case.
+            # WSGI hook keeps serving whatever it last read from Redis until this succeeds.
             _logger.warning("Could not publish Cloudflare trusted IP ranges to Redis: %s", e)
 
     @api.model

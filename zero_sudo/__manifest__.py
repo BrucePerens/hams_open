@@ -36,6 +36,10 @@
             # comment for why this lives here rather than in ham_shack (its original home) or
             # ics_forms. Consumed via `import { OfflineStore } from "@zero_sudo/js/offline_store"`.
             "zero_sudo/static/src/js/offline_store.js",
+            # Delegated, CSP-safe `data-hams-confirm` form confirmation -- replaces inline
+            # `onsubmit="return confirm(...)"`, which never runs under a script-src without
+            # 'unsafe-inline'. See the file's own header comment.
+            "zero_sudo/static/src/js/confirm_submit.js",
         ],
         "web.assets_tests": [
             "zero_sudo/static/src/js/tour_utils.js",

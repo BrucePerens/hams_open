@@ -720,6 +720,85 @@ def _tear_down_partly_built_browser(browser):
     vars(browser).pop("ws", None)
 
 
+# Two `navigator` overrides every headless test browser needs ("Jules suppressions" 0 and 0b):
+#
+# 0. `navigator.onLine` reads true. test.py runs the whole test process inside an isolated network
+#    namespace (loopback only, no default route -- see hams_shared/tools/test.py's "Isolating network
+#    namespace for test daemons" step), so headless Chrome's NetworkChangeNotifier reports no interface
+#    up and `navigator.onLine` reads false although the test server on 127.0.0.1 is reachable. ics_forms'
+#    save flow (ics_editor.js) gates its RPC on `if (!navigator.onLine)` and silently diverted to its
+#    offline queue in every browser test (root-caused via a temporary console.error dump showing
+#    `onLine: false`). A deployed browser reads this correctly; only the sandbox needs the override.
+#
+# 0b. `navigator.virtualKeyboard` returns a harmless stub. Headless Chromium exposes the VirtualKeyboard
+#    API's surface but calling it crashes, and web's dvu.js does at module load
+#    `if (isVirtualKeyboardSupported())  // "virtualKeyboard" in navigator` then
+#    `browser.navigator.virtualKeyboard.addEventListener(...)`, which crashed every hoot suite
+#    (hams_com HOOT_BROWSER_TEST_INFRA_BROKEN.md). `in` tests presence, not value, so an
+#    `undefined`-returning getter only changed the crash; a real addEventListener/removeEventListener
+#    pair is what works. No hoot test here exercises real VirtualKeyboard behavior.
+#
+# Both are defined on `Navigator.prototype`, never on the `navigator` instance. hoot's
+# `createMock(navigator, ...)` (web/static/lib/hoot/hoot_utils.js) walks up from `navigator` to the
+# first object that has own keys, builds the mock as `Object.create(<that object>)` and forwards only
+# those own keys to the real navigator. Instance-level overrides gave `navigator` two own keys, so the
+# mock inherited from the navigator instance and every other attribute read on it (`platform`,
+# `language`, ...) ran the WebIDL getter on the mock: "TypeError: Illegal invocation", aborting suites
+# at `@barcodes/barcode_service` (isIOS() reads navigator.platform). It only hit when the overrides
+# landed before hoot built its mock, which a slow VM (mac1) made routine. On the prototype the instance
+# keeps no own keys, the mock forwards every prototype key to the real navigator, and either order
+# works. (hams_shared/tools/patch_odoo_hoot_navigator_mock.py patched the `platform` read inside hoot
+# itself; the cause was this harness, not hoot.) The descriptors match WebIDL's shape: accessor,
+# enumerable, configurable.
+#
+# The script is installed twice: at document start of every page through CDP (see
+# `_install_navigator_overrides`), so the stub exists before dvu.js runs and again after each tour
+# navigation, and in browser_js's `ready` script as a fallback. `__hamsNavigatorOverridesVia` records
+# which one ran first; the guard makes the second a no-op.
+_NAVIGATOR_OVERRIDES_JS = """
+if (!window.__hamsNavigatorOverridesVia) {
+    window.__hamsNavigatorOverridesVia = "__HAMS_VIA__";
+    try {
+        Object.defineProperty(Navigator.prototype, "onLine", {
+            configurable: true,
+            enumerable: true,
+            get() { return true; },
+        });
+    } catch (e) {
+        console.error("[!] DIAGNOSTIC FOR AI: Failed to force navigator.onLine true:", e);
+    }
+    try {
+        const hamsVirtualKeyboardStub = {
+            addEventListener() {},
+            removeEventListener() {},
+        };
+        Object.defineProperty(Navigator.prototype, "virtualKeyboard", {
+            configurable: true,
+            enumerable: true,
+            get() { return hamsVirtualKeyboardStub; },
+        });
+    } catch (e) {
+        console.error("[!] DIAGNOSTIC FOR AI: Failed to stub navigator.virtualKeyboard:", e);
+    }
+}
+"""
+
+
+# [@ANCHOR: zero_sudo:install_navigator_overrides]
+def _install_navigator_overrides(browser):
+    """Run `_NAVIGATOR_OVERRIDES_JS` at the start of every document this browser loads.
+
+    Best effort, like `_js_coverage_start`: on failure the copy in browser_js's `ready` script still
+    installs the overrides, only later."""
+    try:
+        browser._websocket_request(
+            "Page.addScriptToEvaluateOnNewDocument",
+            params={"source": _NAVIGATOR_OVERRIDES_JS.replace("__HAMS_VIA__", "new-document")},
+        )
+    except (TimeoutError, OSError, AttributeError, ChromeBrowserException) as e:
+        _logger.warning("TRACING: could not install navigator overrides at document start (%s)", repr(e))
+
+
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
@@ -772,6 +851,7 @@ def _patched_chrome_init(self, *args, **kwargs):
         # `_websocket_request` silently returns `None` for the rest of that
         # browser's life. Opt-in coverage bookkeeping must never be able to
         # reach that path.
+        _install_navigator_overrides(self)
         _js_coverage_start(self)
         return
 
@@ -1862,78 +1942,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
         browser_logger.addHandler(empty_run_detector)
         try:
             # The Jules Headless Chrome Watchdog Suppressions
-            jules_protections = """
+            jules_protections = _NAVIGATOR_OVERRIDES_JS.replace("__HAMS_VIA__", "ready") + """
                 if (!window._jules_watchdog_suppressed) {
                     window._jules_watchdog_suppressed = true;
                     console.log("🛠️ Injecting Jules Watchdog Suppressions...");
 
-                    // 0. Force navigator.onLine true for the duration of every test.
-                    // This sandbox's own test.py runs the WHOLE test process inside an
-                    // isolated network namespace (loopback only, no default route --
-                    // see hams_shared/tools/test.py's own "Isolating network namespace
-                    // for test daemons" step) so headless Chrome's real
-                    // NetworkChangeNotifier correctly, but unhelpfully, reports no
-                    // network interface up -- navigator.onLine reads false even though
-                    // the test server on 127.0.0.1 is perfectly reachable via loopback.
-                    // Confirmed directly, not assumed: ics_forms' own save flow
-                    // (ics_editor.js) gates its real RPC on `if (!navigator.onLine)`
-                    // and silently diverted to its offline-queue fallback in every real
-                    // browser test run in this sandbox, never once reaching the server
-                    // -- root-caused via a temporary [ICS_SAVE_DEBUG] console.error
-                    // dump showing `onLine: false` with otherwise-correct form data.
-                    // A real deployed browser has a real network interface and reads
-                    // this correctly; only this sandbox's own namespace isolation needs
-                    // the override, so this belongs in the shared test harness, not in
-                    // any application code.
-                    try {
-                        Object.defineProperty(window.navigator, "onLine", {
-                            configurable: true,
-                            get: () => true,
-                        });
-                    } catch (e) {
-                        console.error("[!] DIAGNOSTIC FOR AI: Failed to force navigator.onLine true:", e);
-                    }
-
-                    // 0b. Stub navigator.virtualKeyboard for the duration
-                    // of every hoot unit test. Root-caused via
-                    // HOOT_BROWSER_TEST_INFRA_BROKEN.md (hams_com): this
-                    // sandbox's headless Chromium 151 exposes the
-                    // VirtualKeyboard API's surface but every hoot suite --
-                    // including ones untouched by this change, confirmed
-                    // via a control run -- crashed at MODULE LOAD time.
-                    // dvu.js's own top-level bootstrap does:
-                    //   if (isVirtualKeyboardSupported())  // "virtualKeyboard" in navigator
-                    //       browser.navigator.virtualKeyboard.addEventListener(...)
-                    // First attempt shadowed the property with an
-                    // `undefined`-returning getter, matching the onLine
-                    // override just above -- wrong idiom for this case:
-                    // `"x" in navigator` tests property PRESENCE, not
-                    // value, so the getter didn't change
-                    // isVirtualKeyboardSupported()'s answer at all; it just
-                    // changed the crash from "Illegal invocation" (calling
-                    // addEventListener on a real-but-broken headless stub)
-                    // to "Cannot read properties of undefined" (calling it
-                    // on undefined) -- confirmed directly by re-running the
-                    // suite and reading the new error. The fix that
-                    // actually works: give it a real, harmless
-                    // addEventListener/removeEventListener pair instead of
-                    // trying to make the feature-detection see "absent".
-                    // Doesn't touch Odoo core's own dvu.js/browser.js files
-                    // (system package files outside this repo, not a safe
-                    // or durable place to patch). No hoot test in this
-                    // codebase exercises real VirtualKeyboard behavior, so
-                    // nothing here loses real coverage.
-                    try {
-                        Object.defineProperty(window.navigator, "virtualKeyboard", {
-                            configurable: true,
-                            get: () => ({
-                                addEventListener() {},
-                                removeEventListener() {},
-                            }),
-                        });
-                    } catch (e) {
-                        console.error("[!] DIAGNOSTIC FOR AI: Failed to stub navigator.virtualKeyboard:", e);
-                    }
+                    // 0. / 0b. navigator.onLine and navigator.virtualKeyboard
+                    // overrides moved to _NAVIGATOR_OVERRIDES_JS (module level),
+                    // which is prepended to this script and also installed at
+                    // document start; see the comment there.
 
                     // 1. Suppress Fetch Abort Errors during teardown (REMOVED)
 

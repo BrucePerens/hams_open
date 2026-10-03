@@ -14,5 +14,7 @@ Developers can inherit or call the abstract model to publish messages:
 ### Credentials & Security
 The `_get_channel()` logic ([@ANCHOR: rabbitmq_get_channel]) dynamically relies on the `zero_sudo.security.utils` abstract model to fetch RabbitMQ credentials securely without hardcoding them in the source.
 
+Which account it uses ([@ANCHOR: rabbitmq_resolve_credentials]): the `rabbitmq.user`/`rabbitmq.pass` system parameters when both are set, otherwise `RMQ_USER`/`RMQ_PASS` from the Odoo process's environment (`odoo.service` loads `/opt/hams/etc/rabbitmq.env`, the same file the RabbitMQ daemons read). With neither, it logs an error and does not connect. There is no fallback to RabbitMQ's factory `guest` account: production published as `guest` this way until 2026-10-03, which kept that account alive on the production broker.
+
 ### Post-Commit Hook Strategy
 Message publishing should ideally be done within Odoo's `postcommit` hook to ensure messages are only sent if the database transaction successfully commits.

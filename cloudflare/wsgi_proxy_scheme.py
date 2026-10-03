@@ -43,9 +43,19 @@ database or cache access at all, exactly as before. For a self-hosted admin runn
 WITHOUT Tunnel (Cloudflare's edge connecting to the origin directly over the network), the peer is
 instead checked against `cloudflare.trusted_ip_ranges`'s admin-configurable allow-list (Settings ->
 Cloudflare), read from Redis with no `env` needed (see that module's own docstring for why) since
-no Odoo `env`/cursor exists yet at this point in the request. Redis being unreachable, or the admin
-never having configured anything, both fall back to that module's own baked-in Cloudflare-range
-snapshot -- this hook never simply trusts an unrecognized peer.
+no Odoo `env`/cursor exists yet at this point in the request.
+
+Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-ranges-
+on-tunnel-only-deployments-7d2b8f14.md): this used to fall back to Cloudflare's own baked-in
+published-range snapshot whenever Redis was unreachable, regardless of whether an admin had ever
+turned the non-Tunnel allow-list on. That is wrong for a Tunnel-only deployment -- its origin is
+never reachable from Cloudflare's ranges at all, so there was never a reason to trust them, Redis
+up or down. The cache below now starts empty (loopback-only, correct for a Tunnel-only deployment
+and for any Tunnel-only self-hoster who has never touched this setting) and, once a real admin-
+published list has been read from Redis at least once, keeps serving that last-known-good list
+across a later Redis outage instead of reverting to the Cloudflare-wide snapshot -- this hook never
+trusts more than an admin has actually configured, and a transient Redis blip degrades a
+non-Tunnel admin's setup to its last good state rather than to either extreme.
 """
 import ipaddress
 import json
@@ -55,11 +65,7 @@ import time
 
 import odoo.http
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
-from .models.trusted_ip_ranges import (
-    DEFAULT_CLOUDFLARE_IPV4_RANGES,
-    DEFAULT_CLOUDFLARE_IPV6_RANGES,
-    REDIS_KEY,
-)
+from .models.trusted_ip_ranges import REDIS_KEY
 
 _logger = logging.getLogger(__name__)
 
@@ -69,16 +75,14 @@ _TRUSTED_LOOPBACK_ADDRS = ("127.0.0.1", "::1")  # burn-ignore-tunnel-peer-check
 # every non-Tunnel visitor; a short TTL keeps a settings change or cron refresh visible within a
 # minute without that per-request cost. Module-level and per-worker-process on purpose -- each
 # pre-forked Odoo worker (real production runs with workers>0) keeps its own independent copy.
+#
+# Starts empty on purpose: loopback-only (this deployment's default, and correct for any
+# Tunnel-only self-hoster) until an admin turns on non-Tunnel mode and Redis has actually
+# published a real list at least once -- see this module's own docstring for why a Redis outage
+# must never seed this from Cloudflare's own published-range snapshot instead.
 _RANGES_CACHE_TTL_SECONDS = 60
 _ranges_cache_lock = threading.Lock()
 _ranges_cache = {"networks": (), "loaded_at": 0.0}
-
-
-def _default_trusted_networks():
-    return tuple(
-        ipaddress.ip_network(cidr)
-        for cidr in DEFAULT_CLOUDFLARE_IPV4_RANGES + DEFAULT_CLOUDFLARE_IPV6_RANGES
-    )
 
 
 def _get_cached_trusted_networks():
@@ -86,15 +90,20 @@ def _get_cached_trusted_networks():
     with _ranges_cache_lock:
         if now - _ranges_cache["loaded_at"] < _RANGES_CACHE_TTL_SECONDS:
             return _ranges_cache["networks"]
-    networks = _default_trusted_networks()
+        # Last-known-good value, kept unless Redis gives us something newer below -- never reset
+        # to a wider default just because this one read failed.
+        networks = _ranges_cache["networks"]
     try:
         raw = get_redis_connection().get(REDIS_KEY)
-        if raw:
+        if raw is not None:
             networks = tuple(ipaddress.ip_network(cidr) for cidr in json.loads(raw))
+        # raw is None: no admin has ever turned on non-Tunnel mode (or this is a Tunnel-only
+        # deployment, which never needs to). Keep whatever was last cached -- empty at cold start.
     except Exception as e:  # audit-ignore-catch-all
-        # Redis down, key missing/expired, or malformed content -- fall back to the baked-in
-        # default rather than let a cache-refresh failure block every non-Tunnel request.
-        _logger.info("Using default Cloudflare trusted IP ranges (Redis unavailable: %s)", e)
+        # Redis down, or malformed content -- keep the last-known-good list (empty at cold start,
+        # the correct loopback-only default) rather than let a cache-refresh failure either widen
+        # trust to Cloudflare's full published ranges or silently drop an admin's real setup.
+        _logger.info("Keeping last-known trusted IP ranges (Redis unavailable: %s)", e)
     with _ranges_cache_lock:
         _ranges_cache["networks"] = networks
         _ranges_cache["loaded_at"] = now
