@@ -95,6 +95,8 @@ if os.getenv("PGHOST"):
 REDIS_HOST = os.getenv("REDIS_HOST", os.getenv("redis_host", "localhost"))  # burn-ignore-env: cache-manager.service runs beside local redis-server.service (Requires=); containers set REDIS_HOST
 REDIS_PORT = int(os.getenv("REDIS_PORT", os.getenv("redis_port", "6379")))
 REDIS_PASS = os.getenv("REDIS_PASSWORD", os.getenv("redis_password"))
+# The production ACL user (redis.env); unset on a test box, where Redis needs no AUTH.
+REDIS_USERNAME = os.getenv("REDIS_USERNAME") or None
 
 PG_CHANNEL = "distributed_cache_invalidation"
 REDIS_CHANNEL = "odoo_cache_invalidation_bus"
@@ -169,6 +171,7 @@ async def main():
             host=REDIS_HOST,
             port=REDIS_PORT,
             db=0,
+            username=REDIS_USERNAME,
             password=REDIS_PASS,
             decode_responses=True,
             socket_timeout=10,

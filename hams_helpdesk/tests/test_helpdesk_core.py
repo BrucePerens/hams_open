@@ -216,6 +216,36 @@ class TestHelpdeskCore(HamsTransactionCase):
             "A stage transition MUST trigger a mail-back notification to the customer.",
         )
 
+    def test_04b_no_mailback_when_quarantined_as_spam(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
+        # Moving a ticket into "spam" must not mail its From address (the
+        # spammer, or a spoofed real customer); moving it back out still does.
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {
+                "name": "Quarantine Mailback Test",
+                "partner_id": self.portal_user.partner_id.id,
+                "stage": "new",
+            }
+        )
+
+        def mailbacks():
+            return self.env["mail.message"].search_count(
+                [
+                    ("res_id", "=", ticket.id),
+                    ("model", "=", "hams_helpdesk.ticket"),
+                    ("body", "ilike", "Your issue has been updated"),
+                ]
+            )
+
+        ticket.write({"stage": "spam"})
+        self.assertEqual(
+            mailbacks(), 0, "Quarantining a ticket as spam must not mail its sender."
+        )
+        ticket.write({"stage": "new"})
+        self.assertEqual(
+            mailbacks(), 1, "Recovering a false positive still mails the customer."
+        )
+
     def test_05_portal_write_restrictions(self):
         """Verify portal users cannot modify administrative fields."""
         # [@ANCHOR: test_05_portal_write_restrictions]

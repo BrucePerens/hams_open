@@ -82,10 +82,13 @@ class TestRequestContext(HamsHttpCase):
 
     def test_01c_get_request_context_from_an_allowlisted_non_tunnel_peer_trusts_cf_headers(self):
         # Tests [@ANCHOR: COMM_cf_get_request_context]
-        """A self-hosted admin running Cloudflare WITHOUT Tunnel: the peer is a real network
-        address in the admin-configured trusted-range allow-list (cloudflare.trusted_ip_utils),
-        not loopback -- its CF-* headers must be trusted the same way the Tunnel/loopback case
-        already is."""
+        """A self-hosted admin running Cloudflare WITHOUT Tunnel, who has explicitly turned on
+        non-Tunnel mode: the peer is a real network address in the admin-configured trusted-range
+        allow-list (cloudflare.trusted_ip_utils), not loopback -- its CF-* headers must be trusted
+        the same way the Tunnel/loopback case already is."""
+        self.env["ir.config_parameter"].set_param(
+            "cloudflare.trust_non_tunnel_peers", "True"
+        )
         self.env["ir.config_parameter"].set_param(
             "cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24"
         )
@@ -100,6 +103,26 @@ class TestRequestContext(HamsHttpCase):
 
         context = self.env["cloudflare.utils"].get_request_context()
         self.assertEqual(context["country"], "US")
+
+    # Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-
+    # ranges-on-tunnel-only-deployments-7d2b8f14.md): adding a custom range is not by itself an
+    # opt-in -- the explicit non-Tunnel-mode toggle is, and it defaults off.
+    def test_01d_custom_range_alone_without_non_tunnel_mode_still_ignores_cf_headers(self):
+        # Tests [@ANCHOR: COMM_cf_get_request_context]
+        self.env["ir.config_parameter"].set_param(
+            "cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24"
+        )
+        headers = {"CF-Connecting-IP": "1.2.3.4", "CF-IPCountry": "US"}
+        mock_obj = MagicMock()
+        mock_obj.httprequest.headers = headers
+        mock_obj.httprequest.remote_addr = "203.0.113.42"  # burn-ignore-ssrf-test-value
+        mock_obj._get_current_object.return_value = mock_obj
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.edge_context.request", new=mock_obj
+        )
+
+        context = self.env["cloudflare.utils"].get_request_context()
+        self.assertIsNone(context["country"])
 
     def test_02_get_request_context_no_headers(self):
         # [@ANCHOR: COMM_test_02_get_request_context_no_headers]

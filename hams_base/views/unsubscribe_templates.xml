@@ -33,7 +33,7 @@
                                             <em>Note: This action requires a live system administrator to reverse.</em>
                                         </p>
                                         <t t-if="not is_public_user">
-                                            <form action="/unsubscribe/lockout" method="post" onsubmit="return confirm('Are you sure you want to permanently lock your account? You will be logged out immediately.');">
+                                            <form action="/unsubscribe/lockout" method="post" data-hams-confirm="Are you sure you want to permanently lock your account? You will be logged out immediately.">
                                                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                                 <button type="submit" class="btn btn-danger">Lock My Account</button>
                                             </form>
