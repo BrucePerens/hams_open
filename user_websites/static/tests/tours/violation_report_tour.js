@@ -148,7 +148,7 @@ registry.category("web_tour.tours").add("test_tour_violation_report_edge_cached"
                     }
                 },
             },
-        ], "Edge-cached page report (test_11)"),
+        ], "Edge-cached page report, test_11"),
         // The controller answers an accepted report with a redirect to ...?report_submitted=1, but
         // toast_notifications.js (UrlToastNotification) shows its success toast and then strips that
         // parameter with history.replaceState as soon as the page starts, so document.location no

@@ -238,7 +238,10 @@ class TestUserWebsitesUITours(RealTransactionCase):
         way a first-time visitor (or anyone served from Cloudflare's cache) arrives.
         """
         url = "/edge-cache-report-test"
-        description = "Edge-cached page report (test_11)"
+        # No trailing ")": the tour types it with run "edit <text>", and web_tour parses that string
+        # with /^(?<action>\w*) *\(? *(?<arguments>.*?)\)?$/, which drops a final ")" -- the row
+        # would hold "...(test_11" and the exact-match search below would never find it.
+        description = "Edge-cached page report, test_11"
         page = self.env["website.page"].create(
             {
                 "url": url,
