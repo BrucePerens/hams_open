@@ -198,3 +198,22 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         args = mock_ban_ip.call_args
         self.assertEqual(args[0][3], "token_b")  # token
         self.assertEqual(args[0][4], "zone_b")  # zone_id
+
+    # Tests [@ANCHOR: cloudflare:COMM_website_write_busts_credential_cache]
+    def test_credential_write_busts_distributed_cache(self):
+        # [@ANCHOR: COMM_test_credential_write_busts_distributed_cache]
+        """write()'s own override must bust the cross-worker, 24h-TTL distributed cache
+        (see website.py's own module-level `_CLOUDFLARE_CREDENTIAL_FIELDS` comment) only
+        when a credential field is actually touched -- an unrelated write (e.g. renaming
+        the website) must not pay that cost or risk invalidating a still-good cache entry
+        for no reason."""
+        mock_notify = self.safe_patch(
+            "odoo.addons.cloudflare.models.website.notify_model_invalidation"
+        )
+        self.website_a.write({"cloudflare_zone_id": "zone_a_rotated"})
+        mock_notify.assert_called_once()
+        self.assertEqual(mock_notify.call_args.args[1], "website")
+
+        mock_notify.reset_mock()
+        self.website_a.write({"name": "Website A Renamed"})
+        mock_notify.assert_not_called()

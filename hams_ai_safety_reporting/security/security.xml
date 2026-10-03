@@ -37,7 +37,16 @@
             rule_helpdesk_ticket_ai_safety_reporting_creator below on the same model (Odoo
             ir.rule records for the SAME user are OR'ed, not AND'ed, across every group that user
             is in), which would silently defeat this account's category scoping the moment it
-            also picked up either of those. -->
+            also picked up either of those.
+
+            Verified by [@ANCHOR: test_ai_safety_reporting_service_account_group_membership_is_narrow]
+            (tests/test_ai_safety_reporting.py), which proves the account holds only this group
+            (plus base.group_user) and none of group_helpdesk_user/group_helpdesk_manager/
+            group_ai_triage_external_service/base.group_portal.
+            Verified by [@ANCHOR: test_ai_safety_reporting_service_account_cannot_read_write_unlink]:
+            the create-only half of this account's scoping lives in ir.model.access.csv
+            (perm_read=0/perm_write=0/perm_unlink=0), which cannot itself carry a comment anchor;
+            recorded here instead since this is the group that CSV row grants access through. -->
             <field name="name">AI Safety Reporting Service Account Group</field>
             <field name="privilege_id" ref="hams_helpdesk.privilege_helpdesk"/>
         </record>
@@ -54,7 +63,10 @@
             check validates domain_force against the record's post-insert state (see
             test_service_account_cannot_create_a_general_ticket in
             tests/test_ai_safety_reporting.py, which proves both the positive create() case for
-            ai_safety_concern and the negative case for 'general'/the default). Includes
+            ai_safety_concern and the negative case for 'general'/the default).
+            Verified by [@ANCHOR: test_ai_safety_reporting_service_account_can_create_ai_safety_concern_ticket]
+            Verified by [@ANCHOR: test_ai_safety_reporting_service_account_cannot_create_other_categories]
+            Includes
             csam_enticement_trafficking alongside ai_safety_concern: this account's real-world
             caller, the safety-classification daemon, can flag any of the four
             SafetyClassification categories, and a genuine CSAM/enticement/trafficking flag must
@@ -62,18 +74,18 @@
             workflow, see helpdesk_ticket.py there) rather than folded into the general
             ai_safety_concern category.
 
-            Known real gap, found 2026-09-24 by this module's own tests (see
-            test_service_account_creating_a_csam_ticket_currently_fails_on_the_core_write_
-            requirement in tests/test_ai_safety_reporting.py for the full account): this rule's
-            domain DOES allow a csam_enticement_trafficking create for this account, but
-            hams_helpdesk.ticket.create()'s own pre-existing NCMEC packet-assembly step still
-            fails it with an unrelated AccessError, because that step writes to the ticket under
-            the ambient (calling) identity rather than an elevated service account, and this is
-            the first genuinely create-only caller of create() for this ticket_type. That is a
-            hams_helpdesk-side gap, not a flaw in this rule's own domain: the domain is left as
-            written (not narrowed to just ai_safety_concern) so that fixing the write requirement
-            on the hams_helpdesk side is sufficient on its own, with no matching change needed
-            here. -->
+            Real gap found 2026-09-24 by this module's own tests, since fixed in helpdesk_ticket.py
+            itself (not here): this rule's domain DOES allow a csam_enticement_trafficking create
+            for this account, but hams_helpdesk.ticket.create()'s own NCMEC packet-assembly step
+            used to fail it with an unrelated AccessError, because that step wrote to the ticket
+            under the ambient (calling) identity rather than an elevated service account, and this
+            was the first genuinely create-only caller of create() for this ticket_type. Fixed by
+            elevating _ncmec_assemble_report_packet() to hams_helpdesk.user_helpdesk_service (see
+            COMM_ncmec_packet_and_legal_hold in helpdesk_ticket.py); this rule's own domain was
+            never the problem and needed no change.
+            Verified by [@ANCHOR: test_ai_safety_reporting_service_account_can_create_csam_ticket]
+            (tests/test_ai_safety_reporting.py), which proves the fixed positive-create path,
+            packet assembly included. -->
             <field name="name">Helpdesk Ticket AI Safety Reporting Creator</field>
             <field name="model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
             <field name="domain_force">[('ticket_type', 'in', ['ai_safety_concern', 'csam_enticement_trafficking'])]</field>
