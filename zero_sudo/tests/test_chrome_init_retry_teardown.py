@@ -23,6 +23,8 @@ class TestChromeInitRetryTeardown(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.safe_patch("odoo.addons.zero_sudo.tests.common.time.sleep")
+        # The fake browser has no DevTools session to install the navigator overrides into.
+        self.safe_patch_object(common, "_install_navigator_overrides", lambda browser: None)
         self.events = []
 
     def _fake_init(self, fail_times):
