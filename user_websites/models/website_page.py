@@ -180,10 +180,17 @@ class WebsitePage(models.Model):
             # origin with no <script> tag involved at all, exactly the
             # class of script-free bypass this strip list otherwise
             # defends against.
-            for tag in ["script", "iframe", "object", "embed", "base"]:
-                for elem in root.xpath(f'//*[local-name()="{tag}"]'):
-                    _remove_keeping_tail(elem)
-                    was_modified = True
+            # Case-insensitive: the arch is serialised back to markup that the browser's HTML
+            # parser reads, where <ScRiPt> is a script; an XML-case-sensitive match missed it.
+            strip_tags = {"script", "iframe", "object", "embed", "base"}
+            for elem in [
+                e
+                for e in root.iter()
+                if isinstance(e.tag, str)
+                and e.tag.rpartition("}")[2].lower() in strip_tags
+            ]:
+                _remove_keeping_tail(elem)
+                was_modified = True
 
             # Adversarial security review, 2026-09-03: a <meta
             # http-equiv="refresh" content="0;url=https://evil.example/">
@@ -195,7 +202,11 @@ class WebsitePage(models.Model):
             # specifically (not the whole <meta> tag, which has legitimate
             # uses like charset/viewport) whenever it's "refresh",
             # case-insensitively.
-            for elem in root.xpath('//*[local-name()="meta"]'):
+            for elem in [
+                e
+                for e in root.iter()
+                if isinstance(e.tag, str) and e.tag.rpartition("}")[2].lower() == "meta"
+            ]:
                 http_equiv = elem.attrib.get("http-equiv", "")
                 if http_equiv.strip().lower() == "refresh":
                     blocked_content = elem.attrib.get("content", "")
@@ -244,6 +255,13 @@ class WebsitePage(models.Model):
             }
 
             for elem in root.xpath("//*"):
+                # An svg block was rebuilt from the allowlist above (that rebuild sets a
+                # plain xmlns attribute, which this loop would count as a violation).
+                if elem.tag.rpartition("}")[2].lower() == "svg" or any(
+                    isinstance(a.tag, str) and a.tag.rpartition("}")[2].lower() == "svg"
+                    for a in elem.iterancestors()
+                ):
+                    continue
                 for attr in list(elem.attrib.keys()):
                     attr_lower = attr.lower()
                     # Prevent XML namespace bypasses

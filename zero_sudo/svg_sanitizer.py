@@ -683,9 +683,6 @@ def _looks_hostile(source):
     return False
 
 
-MAX_XML_SVG_BLOCKS = 200
-
-
 def _drop_keeping_tail(element):
     parent = element.getparent()
     if parent is None:
@@ -721,21 +718,17 @@ def sanitize_xml_svgs(root):
         if isinstance(element.tag, str)
         and element.tag.rpartition("}")[2].rpartition(":")[2].lower() == "svg"
     ]
-    kept = 0
+    totals = _CallTotals()
     for source in blocks:
         if any(ancestor in seen for ancestor in source.iterancestors()):
             continue
         seen.add(source)
-        kept += 1
-        if kept > MAX_XML_SVG_BLOCKS:
-            # Bounds the work an author can make one save cost: every block is rebuilt.
-            hostile = True
-            _drop_keeping_tail(source)
-            continue
         if _looks_hostile(source):
             hostile = True
-        clean = sanitize_svg_element(source)
+        clean = sanitize_svg_element(source, _totals=totals)
         if clean is None:
+            if totals.blocks > MAX_TOTAL_SVG_BLOCKS:
+                hostile = True  # an author sending thousands of blocks is not drawing
             # Not validated: drop the block. A foreign-namespace or prefix-games svg is never
             # an honest drawing, so that counts as hostile too.
             if svg_local_name(source.tag) != "svg" or ":" in source.tag:
