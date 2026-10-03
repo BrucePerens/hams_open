@@ -140,8 +140,20 @@ class TestAdvertisingLayout(HamsHttpCase):
         self.website.cookies_bar = True
         self.website.google_adsense_client_id = "ca-pub-1234567890123456"
         response = self.url_open("/")
-        self.assertIn("'ad_storage': 'denied'", response.text)
-        self.assertIn("optionalCookiesAccepted", response.text)
+        # Since 2026-10-03 the consent code is a static file (strict CSP, no
+        # inline scripts); the page carries only the per-request state.
+        # Tests [@ANCHOR: advertising:adsense_consent_js]
+        # Tests [@ANCHOR: advertising:adsense_slot_push_js]
+        self.assertIn('id="advertising_adsense_consent"', response.text)
+        self.assertIn('"all_consents_granted": false', response.text)
+        self.assertIn("/advertising/static/src/js/adsense_consent.js", response.text)
+        self.assertNotIn("adsenseConsentsGranted();", response.text)
+        consent_js = self.url_open("/advertising/static/src/js/adsense_consent.js")
+        self.assertEqual(consent_js.status_code, 200)
+        self.assertIn('ad_storage: "denied"', consent_js.text)
+        self.assertIn("optionalCookiesAccepted", consent_js.text)
+        slot_js = self.url_open("/advertising/static/src/js/adsense_slot_push.js")
+        self.assertEqual(slot_js.status_code, 200)
 
     def test_06_xpath_rendering_settings(self):
         # [@ANCHOR: test_xpath_rendering_advertising_settings]
