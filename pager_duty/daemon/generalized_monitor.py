@@ -46,6 +46,8 @@ import redis as redis_lib
 # boundary for an admin-gated feature resting on Redis network
 # reachability alone.
 REDIS_PASS = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
+# The production ACL user (redis.env); unset on a test box, where Redis needs no AUTH.
+REDIS_USERNAME = os.getenv("REDIS_USERNAME") or None
 
 
 class OdooClient:
@@ -1701,6 +1703,7 @@ if __name__ == "__main__":
             host=os.environ.get("REDIS_HOST") or "redis",
             port=int(os.environ.get("REDIS_PORT") or "6379"),
             db=0,
+            username=REDIS_USERNAME,
             password=REDIS_PASS,
             decode_responses=True,
         )
@@ -1748,6 +1751,7 @@ if __name__ == "__main__":
             host=os.environ.get("REDIS_HOST") or "redis",
             port=int(os.environ.get("REDIS_PORT") or "6379"),
             db=0,
+            username=REDIS_USERNAME,
             password=REDIS_PASS,
             decode_responses=True,
         )
