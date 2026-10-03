@@ -223,10 +223,24 @@ class TestUserWebsitesUITours(RealTransactionCase):
         # Tests [@ANCHOR: test_tour_violation_report]
 
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]
+
+        # [@ANCHOR: test_report_violation_guest_email_stored]
+        # Tests [@ANCHOR: report_violation_guest_email_field]
         self.url_open(f"/{self.user_test.website_slug}/home")
         self.start_tour(
             f"/{self.user_test.website_slug}/home?debug=1", "test_tour_violation_report"
         )
+
+        self.env.cr.commit()  # new snapshot: see the row the browser's request committed
+        self.env.invalidate_all()
+        report = self.env["content.violation.report"].search(
+            [("reported_by_email", "=", "normal-page-tour@example.com")], limit=1
+        )
+        self.assertTrue(
+            report,
+            "the guest's report must be stored with the email address the tour typed",
+        )
+        self.assertEqual(report.content_owner_id, self.user_test)
 
     def test_11_violation_report_from_edge_cacheable_page(self):
         # Tests [@ANCHOR: COMM_edge_cache_csrf_refresh]
@@ -277,9 +291,16 @@ class TestUserWebsitesUITours(RealTransactionCase):
             self.env.cr.commit()  # new snapshot: see the row the browser's request committed
             self.env.invalidate_all()
             Report = self.env["content.violation.report"]
+            report = Report.search([("description", "=", description)], limit=1)
             self.assertTrue(
-                Report.search([("description", "=", description)], limit=1),
+                report,
                 "the report posted from the edge-cacheable page must have been created",
+            )
+            # Tests [@ANCHOR: report_violation_guest_email_field]
+            self.assertEqual(
+                report.reported_by_email,
+                "edge-cache-tour@example.com",
+                "the guest's email must survive the edge-cached page and the CSRF refresh",
             )
         finally:
             page.unlink()
