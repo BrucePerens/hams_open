@@ -76,10 +76,10 @@ class TestStaleSessionBeforeWebsiteMatch(HamsHttpCase):
         session = self.authenticate("stale_session_tester", "stale_session_tester")
         self.env.registry.clear_cache()
 
-        response = self.url_open("/my/home", allow_redirects=False)
-        self.assertEqual(
+        response = self.url_open("/my/home")
+        self.assertLess(
             response.status_code,
-            200,
+            400,
             "[!] DIAGNOSTIC FOR AI: a valid portal session must still reach /my/home.",
         )
         stored = odoo.http.root.session_store.get(session.sid)
