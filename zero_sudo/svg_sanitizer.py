@@ -360,20 +360,43 @@ def _clean_attribute(name, value):
     return canonical, cleaned
 
 
+def svg_local_name(tag):
+    """Lower-cased local name of an SVG-vocabulary tag, or None for a foreign one.
+
+    Two spellings of the same element reach this module. An HTML-parsed tree (Odoo's
+    `html_sanitize`) has bare names: `svg`, `rect`. An XML-parsed tree (QWeb arch, where
+    `<svg xmlns="http://www.w3.org/2000/svg">` is namespaced) has Clark names:
+    `{http://www.w3.org/2000/svg}rect`. Both are accepted. Anything in another namespace
+    (`<x:script xmlns:x="...xhtml">`, a default-namespace switch to XHTML inside an svg) or a
+    tag still carrying an undeclared prefix (`svg:script`) is foreign and so dropped.
+    """
+    if not isinstance(tag, str):
+        return None
+    if tag.startswith("{"):
+        namespace, _, local = tag[1:].partition("}")
+        return local.lower() if namespace == SVG_NS else None
+    if ":" in tag:
+        return None
+    return tag.lower()
+
+
 def _build(source, depth, budget, dropped_attributes=()):
     """Rebuild one source element as a clean element, or None to drop it."""
     if depth > MAX_SVG_DEPTH:
         raise _Rejected("nested too deep")
-    tag = source.tag
-    if not isinstance(tag, str):
+    local = svg_local_name(source.tag)
+    if local is None:
         return None
-    canonical = ALLOWED_ELEMENTS.get(tag.lower())
+    canonical = ALLOWED_ELEMENTS.get(local)
     if canonical is None:
         return None
     budget.element()
     budget.spend(len(canonical))
     clean = etree.Element(canonical)
     for name, value in source.attrib.items():
+        if name == f"{{{XML_NS}}}space":
+            # An XML parse spells xml:space as a Clark name; the HTML parse keeps the prefix.
+            name = "xml:space"
         result = _clean_attribute(name, value)
         if result is None or result[0] in dropped_attributes:
             continue
@@ -427,7 +450,7 @@ def sanitize_svg_element(source, dropped_attributes=()):
     attributes the calling field refuses (`style` for strip_style fields,
     `class` for strip_classes fields).
     """
-    if not isinstance(source.tag, str) or source.tag.lower() != "svg":
+    if svg_local_name(source.tag) != "svg":
         return None
     try:
         clean = _build(source, 1, _Budget(), dropped_attributes)
@@ -545,6 +568,104 @@ def clean_document(doc, run_cleaner, dropped_attributes=()):
     result = run_cleaner(doc)
     _reattach_svgs(doc, stash, nonce)
     return result
+
+
+# What marks an SVG block as hostile rather than merely carrying something the allowlist
+# does not keep (an editor's `metadata`, `sodipodi:namedview`, a `data-*` attribute, an `href`
+# on a link). Used only to decide whether the author is struck; the block is rebuilt either way.
+_HOSTILE_ELEMENTS = frozenset(
+    "script foreignobject use animate animatetransform animatemotion set style iframe object "
+    "embed image feimage handler link meta base audio video body html".split()
+)
+_RE_HOSTILE_SCHEME = re.compile(r"(?:javascript|vbscript|data):", re.IGNORECASE)
+_URL_LIKE_ATTRS = frozenset(
+    "href src to from by values style action formaction data content".split()
+)
+_RE_SCHEME_NOISE = re.compile(r"[\x00-\x20\x7f]+")
+
+
+def _looks_hostile(source):
+    for node in source.iter():
+        if not isinstance(node.tag, str):
+            continue
+        local = node.tag.rpartition("}")[2].rpartition(":")[2].lower()
+        if local in _HOSTILE_ELEMENTS:
+            return True
+        for name, value in node.attrib.items():
+            attr = name.rpartition("}")[2].rpartition(":")[2].lower()
+            if attr.startswith("on"):
+                return True
+            # Only attributes that carry a URL or a script: "Data: voltage" in an aria-label
+            # is not an attack.
+            if attr in _URL_LIKE_ATTRS and _RE_HOSTILE_SCHEME.search(
+                _RE_SCHEME_NOISE.sub("", str(value))
+            ):
+                return True
+    return False
+
+
+MAX_XML_SVG_BLOCKS = 200
+
+
+def _drop_keeping_tail(element):
+    parent = element.getparent()
+    if parent is None:
+        return
+    tail = element.tail
+    if tail:
+        previous = element.getprevious()
+        if previous is None:
+            parent.text = (parent.text or "") + tail
+        else:
+            previous.tail = (previous.tail or "") + tail
+    parent.remove(element)
+
+
+def sanitize_xml_svgs(root):
+    """Replace every `<svg>` block under an XML-parsed `root` with its allowlisted rebuild.
+
+    For trees parsed as XML (QWeb arch), where the HTML-sanitizer hook in `install()` never
+    runs. Any element whose local name is `svg`, in any namespace or with an undeclared
+    prefix, counts as an svg block, because the browser that finally reads the serialised markup
+    treats a tag named `svg` as SVG whatever namespace the XML parser gave it. Each outermost
+    block becomes a new subtree built only from allowlisted elements, attributes and values
+    (every `t-*` QWeb attribute inside it included), or is removed when it cannot be validated
+    (foreign namespace, over a size cap). Returns True when something hostile was found, so the
+    caller can treat the author as having attempted injection; dropped-but-harmless parts
+    (editor metadata, unknown attributes) return False.
+    """
+    hostile = False
+    seen = set()
+    blocks = [
+        element
+        for element in root.iter()
+        if isinstance(element.tag, str)
+        and element.tag.rpartition("}")[2].rpartition(":")[2].lower() == "svg"
+    ]
+    kept = 0
+    for source in blocks:
+        if any(ancestor in seen for ancestor in source.iterancestors()):
+            continue
+        seen.add(source)
+        kept += 1
+        if kept > MAX_XML_SVG_BLOCKS:
+            # Bounds the work an author can make one save cost: every block is rebuilt.
+            hostile = True
+            _drop_keeping_tail(source)
+            continue
+        if _looks_hostile(source):
+            hostile = True
+        clean = sanitize_svg_element(source)
+        if clean is None:
+            # Not validated: drop the block. A foreign-namespace or prefix-games svg is never
+            # an honest drawing, so that counts as hostile too.
+            if svg_local_name(source.tag) != "svg" or ":" in source.tag:
+                hostile = True
+            _drop_keeping_tail(source)
+            continue
+        clean.tail = source.tail
+        source.getparent().replace(source, clean)
+    return hostile
 
 
 def install():

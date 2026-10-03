@@ -10,6 +10,7 @@ from lxml import etree
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+from odoo.addons.zero_sudo.svg_sanitizer import sanitize_xml_svgs
 from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, REDIS_USERNAME_DEFAULT
 
 _logger = logging.getLogger(__name__)
@@ -29,6 +30,21 @@ redis_pool = redis.ConnectionPool(
     socket_connect_timeout=1.0,
 )
 redis_client = redis.Redis(connection_pool=redis_pool)
+
+
+def _remove_keeping_tail(element):
+    """Remove `element` from its parent without losing the text that follows it."""
+    parent = element.getparent()
+    if parent is None:
+        return
+    tail = element.tail
+    if tail:
+        previous = element.getprevious()
+        if previous is None:
+            parent.text = (parent.text or "") + tail
+        else:
+            previous.tail = (previous.tail or "") + tail
+    parent.remove(element)
 
 
 class WebsitePage(models.Model):
@@ -135,6 +151,27 @@ class WebsitePage(models.Model):
 
             was_modified = False
 
+            # [@ANCHOR: user_websites:page_arch_svg_allowlist]
+            # Verified by [@ANCHOR: test_user_arch_svg_allowlist]
+            # Inline SVG is the one place a page can run script or fetch from elsewhere
+            # without a <script> tag: <set>/<animate> that rewrite an href to javascript:,
+            # <style> with @import, <foreignObject> carrying HTML, <use> of a data: URI,
+            # on* handlers. This sanitizer never called html_sanitize(), so none of that was
+            # touched. Every <svg> block (any namespace spelling, see sanitize_xml_svgs) is
+            # rebuilt from zero_sudo's strict allowlist, which also drops every t-* QWeb
+            # attribute and every <t> element inside it, or is removed if it cannot be
+            # validated. Runs first, so nothing below sees an svg subtree.
+            if sanitize_xml_svgs(root):
+                was_modified = True
+
+            # An element still carrying a namespace prefix nobody declared (<svg:script>,
+            # <x:use>) is not valid XML for the arch parser and is never a legitimate tag.
+            for elem in [
+                e for e in root.iter() if isinstance(e.tag, str) and ":" in e.tag
+            ]:
+                _remove_keeping_tail(elem)
+                was_modified = True
+
             # Strip script, iframe, object, embed entirely. Adversarial
             # security review, 2026-09-03: <base> added -- it rewrites how
             # every later relative URL/form-action on the whole rendered
@@ -145,7 +182,7 @@ class WebsitePage(models.Model):
             # defends against.
             for tag in ["script", "iframe", "object", "embed", "base"]:
                 for elem in root.xpath(f'//*[local-name()="{tag}"]'):
-                    elem.getparent().remove(elem)
+                    _remove_keeping_tail(elem)
                     was_modified = True
 
             # Adversarial security review, 2026-09-03: a <meta
@@ -216,14 +253,20 @@ class WebsitePage(models.Model):
                         continue
                     val = elem.attrib[attr]
                     # Block all dangerous URI schemes (data, vbscript, javascript)
+                    # Browsers drop tab, newline and other control characters inside a URL
+                    # scheme, so "java\tscript:" runs; strip them before matching.
                     if attr_lower in (
                         "href",
                         "src",
                         "content",
                         "formaction",
                         "action",
+                        "poster",
+                        "background",
                     ) and re.match(
-                        r"^\s*(javascript|data|vbscript):", val, re.IGNORECASE
+                        r"^(javascript|data|vbscript):",
+                        re.sub(r"[\x00-\x20\x7f]+", "", val),
+                        re.IGNORECASE,
                     ):
                         del elem.attrib[attr]
                         elem.attrib[f"data-blocked-{attr}"] = val

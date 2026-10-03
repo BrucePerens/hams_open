@@ -3,6 +3,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError, ValidationError
+from odoo.tools import html_sanitize
 import time
 import hashlib
 import hmac
@@ -188,6 +189,21 @@ class BlogPost(models.Model):
                         _("This group has reached its limit of %s blog posts.") % group_limit
                     )
 
+    # [@ANCHOR: user_websites:blog_post_content_sanitize]
+    # Verified by [@ANCHOR: test_blog_post_orm_content_sanitized]
+    @api.model
+    def _sanitize_member_content(self, vals):
+        """Sanitize a member's `content` on the ORM path.
+
+        blog.post.content is declared sanitize=False (the blog editor writes raw snippet
+        markup), so the ORM does nothing for it. The edit route sanitizes, but `create`/`write`
+        accept `content` from any member over JSON-RPC too, which skipped that and stored
+        script, handlers and hostile SVG for every reader. html_sanitize() is the same call
+        the route makes, and keeps a schematic as allowlisted SVG (zero_sudo.svg_sanitizer).
+        """
+        if vals.get("content"):
+            vals["content"] = html_sanitize(vals["content"])
+
     # [@ANCHOR: user_websites:COMM_blog_post_create]
     @api.model_create_multi
     def create(self, vals_list):
@@ -238,6 +254,7 @@ class BlogPost(models.Model):
                 for k in list(vals.keys()):
                     if k not in allowed:
                         del vals[k]
+                self._sanitize_member_content(vals)
                 if vals.get("blog_id"):
                     self.env["blog.blog"].browse(vals["blog_id"]).check_access("write")
         try:
@@ -334,6 +351,7 @@ class BlogPost(models.Model):
             for k in list(vals.keys()):
                 if k not in allowed:
                     del vals[k]
+            self._sanitize_member_content(vals)
             if vals.get("blog_id"):
                 self.env["blog.blog"].browse(vals["blog_id"]).check_access("write")
 
