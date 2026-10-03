@@ -27,6 +27,12 @@ class ResUsersZeroSudo(models.Model):
         # Tests [@ANCHOR: zero_sudo:COMM_story_login_blocking]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_journey_service_account_lifecycle]
+        # ---
+        # Verified by [@ANCHOR: test_every_cron_of_this_repository_is_allowed_to_run_as_its_own_user]
+        # (zero_sudo/tests/test_cron_service_access.py) -- this flag is exactly what lets that
+        # repo-wide audit tell a narrow service-account cron owner apart from an ordinary
+        # group_system admin when deciding whether Odoo 19's own
+        # _can_execute_action_on_records write-access gate would refuse the cron.
         string="Is Service Account",
         default=False,
         help=(

@@ -33,3 +33,17 @@ This prevents an attacker who might have compromised a service account's credent
 ## Verification
 - **Automated Test**: `test_01_web_login_interceptor` in `test_controllers.py` verifies the blocking logic via HTTP POST.
 - **UI Tour**: `zero_sudo_tour` `[@ANCHOR: zero_sudo:COMM_zero_sudo_tour]` verifies that a service account can be created and the flag is correctly handled in the UI.
+
+## A Module Upgrade Must Not Spam Administrators About Accounts Nobody Logs Into
+
+9. Filtering a recordset down to just the service accounts inside it is a plain SQL read, not an
+   ORM search: `is_service_account` is `groups="base.group_system"`, so a narrower caller filtering
+   through the ORM directly would raise `AccessError` on a field it has no business reading, even
+   though it only needs to know "which of these users are service accounts", not the flag's actual
+   value for any one of them `[@ANCHOR: zero_sudo:service_accounts_among_self]`.
+10. A module upgrade rewrites a service account's own login/password fields on every declared data
+    record, which would otherwise queue Odoo's own "Security Update: Login Changed"/"Password
+    Changed" notification email per account, per upgrade -- a real account nobody ever logs into has
+    no one to usefully receive that email, so it is suppressed specifically for service accounts,
+    while an ordinary human user's own password-change notification is unaffected
+    `[@ANCHOR: zero_sudo:service_account_security_notice_suppressed]`.

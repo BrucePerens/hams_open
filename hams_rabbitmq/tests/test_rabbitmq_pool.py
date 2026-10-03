@@ -185,6 +185,153 @@ class TestRabbitMQPool(RealTransactionCase):
         pool.publish("", "hams_rabbitmq_unused", "x", on_result=boom)
         self.env.cr.commit()  # must not raise
 
+    def test_07_publish_retries_once_on_a_fresh_connection_after_a_stale_one(self):
+        # [@ANCHOR: COMM_test_07_publish_retries_once_on_a_fresh_connection_after_a_stale_one]
+        """
+        Production, 2026-10-03 06:51: the broker had dropped Odoo's pooled
+        connection (its user was deleted), the pool still believed it open,
+        basic_publish raised StreamLostError, and backup job 145 was marked
+        failed. The next publish an hour later opened a fresh connection and
+        worked. Here the pooled connection/channel are replaced by ones that
+        look open but fail exactly that way; the real _get_channel() must then
+        open a real, fresh connection and the message must really arrive.
+        """
+        # Tests [@ANCHOR: rabbitmq_publish]
+        # Tests [@ANCHOR: rabbitmq_discard_stale_connection]
+        pool = self.env["hams_rabbitmq.pool"]
+        pool_class = type(pool)
+        queue_name = f"hams_rabbitmq_test_{uuid.uuid4().hex[:12]}"
+
+        setup_channel = pool._get_channel()
+        self.assertIsNotNone(setup_channel, "this test needs the real local RabbitMQ")
+        setup_channel.queue_declare(queue=queue_name, durable=False, auto_delete=True)
+        setup_connection = pool_class._connection
+
+        class _DeadConnection:
+            is_closed = False  # the pool cannot tell: it only learns on use
+            closed = 0
+
+            def channel(self):
+                raise pika.exceptions.StreamLostError("stale")
+
+            def close(self):
+                _DeadConnection.closed += 1
+                raise pika.exceptions.StreamLostError(
+                    "Stream connection lost: ConnectionResetError(104, 'Connection reset by peer')"
+                )
+
+        class _DeadChannel:
+            is_closed = False
+            attempts = 0
+
+            def basic_publish(self, **kwargs):
+                _DeadChannel.attempts += 1
+                raise pika.exceptions.StreamLostError(
+                    "Stream connection lost: ConnectionResetError(104, 'Connection reset by peer')"
+                )
+
+        dead_channel = _DeadChannel()
+        self.safe_patch_object(pool_class, "_connection", _DeadConnection())
+        self.safe_patch_object(pool_class, "_channel", dead_channel)
+
+        results = []
+        payload = {"marker": queue_name, "retried": True}
+        self.assertTrue(pool.publish("", queue_name, payload, on_result=results.append))
+        with self.assertLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING") as logs:
+            self.env.cr.commit()
+        self.assertTrue(
+            any("retrying once on a fresh connection" in line for line in logs.output),
+            "the dead connection must be logged, not silently replaced",
+        )
+
+        fresh_connection = pool_class._connection
+        self.assertEqual(_DeadChannel.attempts, 1, "the stale channel is tried exactly once")
+        self.assertEqual(_DeadConnection.closed, 1, "the dead connection is discarded (closed)")
+        self.assertIsNotNone(fresh_connection)
+        self.assertNotIsInstance(fresh_connection, _DeadConnection)
+        self.assertTrue(fresh_connection.is_open, "a fresh real connection replaced the dead one")
+        self.assertIsNot(pool_class._channel, dead_channel)
+        self.assertEqual(results, [True], "the retry on the fresh connection must succeed")
+
+        received = None
+        deadline = time.time() + 15.0
+        while time.time() < deadline:
+            method, _props, body = setup_channel.basic_get(queue_name, auto_ack=True)
+            if method:
+                received = json.loads(body)
+                break
+            time.sleep(0.25)  # audit-ignore-sleep
+        setup_channel.queue_delete(queue_name)
+        if fresh_connection is not setup_connection:
+            fresh_connection.close()
+        self.assertEqual(received, payload, "the retried message must really reach the broker")
+
+    def test_08_publish_reports_failure_when_the_retry_also_fails(self):
+        # [@ANCHOR: COMM_test_08_publish_reports_failure_when_the_retry_also_fails]
+        """
+        Stub channels, no live broker needed. A stale-connection error gets
+        exactly one retry: success on the retry is success, a second failure
+        is reported as failure (never swallowed, never a third attempt), and
+        an ordinary broker refusal that is not a dead connection is not
+        retried at all.
+        """
+        # Tests [@ANCHOR: rabbitmq_publish]
+        # Tests [@ANCHOR: rabbitmq_discard_stale_connection]
+        pool = self.env["hams_rabbitmq.pool"]
+
+        class _Channel:
+            def __init__(self, exc=None):
+                self.exc = exc
+                self.attempts = 0
+
+            def basic_publish(self, **kwargs):
+                self.attempts += 1
+                if self.exc:
+                    raise self.exc
+
+        # Stale, then a good fresh connection: delivered on the retry.
+        stale = _Channel(pika.exceptions.StreamLostError("reset"))
+        good = _Channel()
+        get_channel = self.safe_patch_object(type(pool), "_get_channel", side_effect=[stale, good])
+        results = []
+        pool.publish("", "q", "x", on_result=results.append)
+        self.env.cr.commit()
+        self.assertEqual(results, [True])
+        self.assertEqual((stale.attempts, good.attempts, get_channel.call_count), (1, 1, 2))
+
+        # Stale, and the fresh connection fails too: reported as a failure.
+        for first_error, second_error in (
+            (pika.exceptions.StreamLostError("reset"), pika.exceptions.ConnectionClosedByBroker(320, "gone")),
+            (ConnectionResetError(104, "Connection reset by peer"), pika.exceptions.ChannelClosed(406, "x")),
+        ):
+            first, second = _Channel(first_error), _Channel(second_error)
+            get_channel = self.safe_patch_object(
+                type(pool), "_get_channel", side_effect=[first, second, AssertionError("no third try")]
+            )
+            results = []
+            pool.publish("", "q", "x", on_result=results.append)
+            self.env.cr.commit()
+            self.assertEqual(results, [False], f"{first_error!r} then {second_error!r}")
+            self.assertEqual((first.attempts, second.attempts, get_channel.call_count), (1, 1, 2))
+
+        # Stale, and no fresh connection can be opened: a failure.
+        stale = _Channel(pika.exceptions.ConnectionClosed(320, "gone"))
+        self.safe_patch_object(type(pool), "_get_channel", side_effect=[stale, None])
+        results = []
+        pool.publish("", "q", "x", on_result=results.append)
+        self.env.cr.commit()
+        self.assertEqual(results, [False])
+
+        # Not a dead connection: no retry.
+        refused = _Channel(pika.exceptions.UnroutableError([]))
+        # (UnroutableError is an AMQPChannelError, yet the channel is alive.)
+        get_channel = self.safe_patch_object(type(pool), "_get_channel", side_effect=[refused, _Channel()])
+        results = []
+        pool.publish("", "q", "x", on_result=results.append)
+        self.env.cr.commit()
+        self.assertEqual(results, [False])
+        self.assertEqual((refused.attempts, get_channel.call_count), (1, 1))
+
     def test_05_credentials_never_fall_back_to_guest(self):
         # [@ANCHOR: COMM_test_05_credentials_never_fall_back_to_guest]
         """Production (hams_prod) has no rabbitmq.* parameters, so the account comes from

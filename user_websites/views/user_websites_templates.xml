@@ -404,7 +404,19 @@
                                 <input type="text" class="form-control" name="website_honeypot" id="website_honeypot" tabindex="-1" autocomplete="off"/>
                             </div>
 
-                            <t t-if="is_public_user">
+                            <!-- [@ANCHOR: report_violation_guest_email_field]
+                                 Verified by [@ANCHOR: test_report_violation_guest_email_stored]
+                                 Ask an anonymous visitor for an address, stored as
+                                 content.violation.report.reported_by_email. This used to test a
+                                 bare "is_public_user" qcontext variable that no controller or
+                                 website.layout ever sets, so it was always undefined, the field
+                                 never rendered on any page, and every guest report was stored
+                                 with no reporter address (found 2026-10-03 via the edge-cache
+                                 tour). website.is_public_user() is Odoo's own check (the visitor
+                                 is the website's public user), the same visitor
+                                 cloudflare/models/ir_http.py lets a page be edge-cached for, so
+                                 an edge-cached copy always carries the field. -->
+                            <t t-if="website.is_public_user()">
                                 <div class="mb-3">
                                     <label for="email" class="form-label">Your Email Address:</label>
                                     <input type="email" class="form-control" name="email" id="email" required="required" placeholder="name@example.com"/>

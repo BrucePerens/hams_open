@@ -18,10 +18,11 @@ _logger = logging.getLogger(__name__)
 # "new" (the stage field is a clickable statusbar) to recover a false
 # positive.
 _SPAM_QUARANTINE_STAGE = "spam"
-# Only incidents created from a real inbound email carry this prefix (see
-# incident.py's own message_new(), [@ANCHOR: pager_incident_message_new]:
-# data["source"] = f"{source_prefix}:{sender}", source_prefix defaults to
-# "email"). Monitoring/synthetic incidents use other sources entirely
+# Only incidents created from a real inbound email carry this prefix:
+# incident.py's own message_new() sets data["source"] = f"{source_prefix}:
+# {sender}", source_prefix defaulting to "email" -- that assignment is
+# tagged in incident.py, see [@ANCHOR: pager_incident_message_new].
+# Monitoring/synthetic incidents use other sources entirely
 # (e.g. "test_source", a pager_check's own check name) -- gating on this
 # prefix keeps the spam heuristic scoped to genuine inbound mail only, so
 # it can never misclassify a monitoring signal.
@@ -149,13 +150,13 @@ class PagerDutyIncidentTicketAdapter(models.Model):
                     subtype_xmlid="mail.mt_note",
                 )
 
-            # A flagged message still gets the ordinary on-duty assignee
-            # here (hams_helpdesk.ticket's own create() independently
-            # re-resolves and fills in the on-duty admin whenever a
-            # payload omits "user_id" at all -- see its own
-            # [@ANCHOR: COMM_helpdesk_ticket_creation] -- so leaving this
-            # unset would not actually prevent the assignment, only hide
-            # it from this payload). What this adapter DOES fully control
+            # A flagged message still gets the ordinary on-duty assignee here
+            # (hams_helpdesk.ticket's own create() independently re-resolves and
+            # fills in the on-duty admin whenever a payload omits "user_id" at
+            # all -- see [@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_creation])
+            # -- so leaving this unset would not actually prevent the
+            # assignment, only hide it from this payload. What this adapter
+            # DOES fully control
             # is the stage routing below and the calendar block skip a few
             # lines down: a flagged message never gets an "Incident
             # Response" calendar meeting scheduled over junk, even though

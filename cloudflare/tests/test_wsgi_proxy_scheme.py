@@ -41,6 +41,11 @@ class TestWsgiProxyScheme(HamsTransactionCase):
 
     # [@ANCHOR: test_wsgi_proxy_scheme_fix_sets_https_for_trusted_cf_visitor]
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    # Also the real exercise of the whole-module fix the docstring's own
+    # `Verified by [@ANCHOR: test_wsgi_proxy_scheme_fix_sets_https_for_trusted_cf_visitor]`
+    # already names this test for -- this is the one case where the CF-Visitor
+    # scheme is actually trusted and applied, i.e. the module's own reason to exist.
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix]
     def test_01_trusted_loopback_cf_visitor_https_sets_wsgi_url_scheme(self):
         environ = {
             "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
