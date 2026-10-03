@@ -4,6 +4,7 @@
 
 from . import test_gdpr_base
 from . import test_hooks
+from . import test_noupdate_migration
 from . import test_pages
 from . import test_security
 from . import test_ui_tours
