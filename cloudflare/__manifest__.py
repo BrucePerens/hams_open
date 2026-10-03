@@ -47,6 +47,9 @@
         }
     ],
     "assets": {
+        "web.assets_frontend": [
+            "cloudflare/static/src/js/edge_cache_csrf.js",
+        ],
         "web.assets_backend": [
             "cloudflare/static/src/components/analytics/analytics.js",
             "cloudflare/static/src/components/analytics/analytics.xml",

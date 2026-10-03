@@ -8,7 +8,11 @@ so that I can minimize the attack surface of my infrastructure.
 1. I open the Cloudflare Settings in Odoo `[@ANCHOR: COMM_xpath_rendering_cf_settings]`.
 
 2. I use the Tunnel Setup Wizard to create a new tunnel `[@ANCHOR: COMM_cf_tunnel_setup]`.
-3. The wizard provides a pre-configured command to run on my local server.
+3. The wizard provides a pre-configured command to run on my local server. That command embeds a
+   real, one-time install token, so it is never written to this wizard's own database row -- it is
+   computed on the fly from the action's own context, only for the single HTTP response that opens
+   the wizard right after generating it; re-opening the same wizard record later, or reading its
+   table directly, never finds the plaintext token `[@ANCHOR: COMM_tunnel_wizard_command_not_persisted]`.
 4. I can sync existing tunnels `[@ANCHOR: COMM_cf_sync_tunnels]` or delete them `[@ANCHOR: COMM_cf_delete_tunnel]` directly from the Odoo interface.
 
 **Status:** Verified by `[@ANCHOR: COMM_test_cf_tunnel_setup]`, `[@ANCHOR: COMM_test_cf_sync_tunnels]`, and `[@ANCHOR: COMM_test_cf_delete_tunnel]`.
@@ -32,4 +36,24 @@ I run hams.com, perens.com and postopen.org from the same Odoo server, each with
 
 9. "Have this tunnel's routes been pushed yet" is recorded on the tunnel record itself. A deployment that predates this and carries the old single system-wide flag has it folded onto the one tunnel that flag was actually about, exactly once `[@ANCHOR: COMM_migrate_global_provisioned_flag]`, so an already-provisioned server is neither re-provisioned nor left unable to provision its other websites.
 
-10. Whether a given tunnel's daemon is currently up is a question the daemon layer answers per tunnel `[@ANCHOR: COMM_is_tunnel_daemon_running]`, which is what lets the job skip a healthy tunnel without spending a Cloudflare API call on it every few minutes.
+10. Whether a given tunnel's daemon is currently up is a question the daemon layer answers per tunnel `[@ANCHOR: is_tunnel_daemon_running]`, which is what lets the job skip a healthy tunnel without spending a Cloudflare API call on it every few minutes.
+
+## Scenario: How a tunnel's daemon actually runs on this host
+
+11. Each tunnel's `cloudflared` process is a real `systemd --user` service, not a process this
+    codebase tracks in memory: before a tunnel is first started, its template unit is rendered with
+    this host's own resolved `cloudflared` binary path and written into the `odoo` user's systemd
+    `--user` unit directory, re-writing (and reloading) it only when the rendered content actually
+    changed `[@ANCHOR: ensure_unit_installed]`.
+12. Starting a tunnel writes its run token to its own `EnvironmentFile` (never onto the unit's
+    command line, where any local account could read it via `/proc/<pid>/cmdline`) and runs
+    `systemctl --user enable --now` on its unit -- idempotent, so the same daily job in the scenario
+    above can call it on every tick with no harm to an already-running tunnel
+    `[@ANCHOR: start_tunnel_daemon]`.
+13. Stopping a tunnel disables its unit and removes its run-token file; stopping with no tunnel key
+    at all discovers and disables every `cloudflared@*` unit currently known to systemd, rather than
+    relying on an in-process registry of "tunnels this worker itself started" that a restarted
+    worker would have lost `[@ANCHOR: stop_tunnel_daemon]`.
+14. All of this -- running `systemctl --user ...` with the right `XDG_RUNTIME_DIR`, and writing a
+    secret file atomically at `0600` inside the one directory it's allowed to live in -- is shared,
+    security-sensitive plumbing `[@ANCHOR: cloudflare_systemd]`.

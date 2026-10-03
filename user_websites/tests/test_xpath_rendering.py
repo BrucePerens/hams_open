@@ -120,6 +120,12 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
             response.content,
             "The global website layout must render the injected reporting modal.",
         )
+        # Tests [@ANCHOR: report_violation_guest_email_field]
+        self.assertIn(
+            b'<input type="email" class="form-control" name="email" id="email" required="required"',
+            response.content,
+            "An anonymous visitor's report form must ask for the reporter's email address.",
+        )
 
     def test_07_navbar_rendering(self):
         # [@ANCHOR: test_dropzone_navbar]

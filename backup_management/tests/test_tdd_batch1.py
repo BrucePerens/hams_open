@@ -243,7 +243,10 @@ class TestTddBatch1(RealTransactionCase):
         )
         with open(infra_path, "r") as f:
             infra_content = f.read()
-        service_start = infra_content.index("backup.worker.service")
+        # Anchor on the unit's own MANIFEST path, not the bare unit name: the name
+        # also appears earlier in infrastructure.py (lists of service names), and the
+        # first such hit is not the unit definition.
+        service_start = infra_content.index('"path": "/opt/hams/systemd/backup.worker.service"')
         service_end = infra_content.index('""",', service_start)
         service_content = infra_content[service_start:service_end]
         self.assertIn("EnvironmentFile=/opt/hams/etc/keys/backup_worker.env", service_content)
