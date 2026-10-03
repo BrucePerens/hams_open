@@ -16,6 +16,7 @@ namespaced names the XML parse here gives.
 """
 import json
 import re
+import time
 import uuid
 
 from lxml import etree
@@ -56,7 +57,7 @@ def assert_arch_is_safe(test, name, arch):
         if not isinstance(element.tag, str):
             continue
         tag = _local(element.tag)
-        test.assertNotIn(":", element.tag, f"{name}: undeclared prefix survived: {element.tag}")
+        test.assertNotIn(":", element.tag.rpartition("}")[2], f"{name}: undeclared prefix survived: {element.tag}")
         test.assertNotIn(tag, _NEVER, f"{name}: <{tag}> survived: {arch[:300]}")
         in_svg = tag == "svg" or any(_local(a.tag) == "svg" for a in element.iterancestors())
         if in_svg:
@@ -208,8 +209,6 @@ class TestUserArchSvgSanitizer(HamsHttpCase):
 
     def test_09_review_findings_in_the_member_page_path(self):
         """The adversarial review's vectors (huge repeated blocks, style overlay)."""
-        import time
-
         started = time.monotonic()
         cleaned, modified = self.sanitize("<div>" + "<svg><rect/></svg>" * 20000 + "</div>")
         self.assertLess(time.monotonic() - started, 5.0, "many svg blocks pinned the worker")
