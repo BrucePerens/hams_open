@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-"""Real, testable coverage for pager_duty/models/inbound_spam_filter.py --
+"""Real, testable coverage for hams_helpdesk/models/inbound_spam_filter.py --
 built directly from the live spam/phishing tickets found 2026-10-01 (see
 night_shift_todo/high/inbound-mail-ticket-ingestion-has-no-spam-phishing-
 filter-e3a8f612.md) so this proves the actual reported patterns are
@@ -10,7 +10,7 @@ proving the heuristic does not flag ordinary support requests."""
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
-from odoo.addons.pager_duty.models.inbound_spam_filter import (
+from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     detect_inbound_spam_signals,
 )
 
