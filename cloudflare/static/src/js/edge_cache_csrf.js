@@ -13,8 +13,9 @@
  *
  * Lazy on purpose: a visitor who only reads keeps no session cookie, so the next page they open
  * can still come from the edge cache. The fetch starts when the visitor first focuses or presses
- * on a field or button of such a form; a submit (or a website-form "send" click) that comes
- * before the fetch finishes is held and replayed once it settles. Anonymous visitors only: a
+ * on a field or button of such a form; a token-bearing form submit, or a website-form "send"
+ * click, that comes before the fetch finishes is held and replayed once it settles. (Odoo's
+ * website form checks CSRF only for logged-in sessions, so for it this is belt and braces.) Anonymous visitors only: a
  * logged-in visitor's pages are never edge-cached, so their token is already good.
  */
 

@@ -21,7 +21,10 @@ from odoo.addons.cloudflare.models.ir_http import (
 CDN = "Cloudflare-CDN-Cache-Control"
 NO_STORE = "no-cache, no-store"
 PAGE_URL = "/cf-edge-cache-test"
-META_TOKEN_RE = re.compile(r"""<meta name="csrf_token" value=["']([^"']+)["']""")
+# Any CSRF token Odoo baked into the page (request.csrf_token(): 40 hex digits, "o", expiry). Its
+# location differs by install (an inline `csrf_token: "..."` script in stock Odoo, a
+# <meta name="csrf_token"> under hams_com's content_security_policy, form inputs); all are dead.
+BAKED_TOKEN_RE = re.compile(r"\b([0-9a-f]{40}o\d+)\b")
 
 
 @tagged("post_install", "-at_install")
@@ -123,8 +126,8 @@ class TestEdgeCacheCookies(HamsHttpCase):
         self._fresh_visitor()
         page = self.url_open(PAGE_URL)
         self.assertEqual(page.headers.get(CDN), "max-age=86400")
-        baked = META_TOKEN_RE.search(page.text)
-        self.assertTrue(baked, "the layout must carry <meta name=csrf_token>")
+        baked = BAKED_TOKEN_RE.search(page.text)
+        self.assertTrue(baked, "the layout must carry a CSRF token")
 
         # The page's own token is bound to a session that was never handed out.
         response = self.url_open("/website/form", data={"csrf_token": baked.group(1)})
@@ -169,7 +172,10 @@ class TestEdgeCacheCookies(HamsHttpCase):
         self.assertTrue(a_sids, "visitor A must have been handed a session cookie")
 
         self._fresh_visitor()
-        visitor_b = self.url_open(PAGE_URL, cookies={"session_id": "b" * 84})
+        # Same consent cookie as A, so B shares A's page-cache key (it includes the consent state).
+        visitor_b = self.url_open(
+            PAGE_URL, cookies={"session_id": "b" * 84, "website_cookies_bar": '{"optional": true}'}
+        )
         self.assertEqual(visitor_b.status_code, 200)
         for value in visitor_b.raw.headers.getlist("Set-Cookie"):
             self.assertNotIn(a_sids[0], value, "visitor B was handed visitor A's session cookie")
