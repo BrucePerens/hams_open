@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import logging
+import re
 from urllib.parse import urlparse
 
 from odoo import models, fields, api, _
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from ..utils.cloudflare_api import (
     delete_cfd_tunnel,
     get_cfd_tunnel_token,
@@ -18,6 +19,10 @@ from ..utils.cloudflare_systemd import (
 )
 
 _logger = logging.getLogger(__name__)
+
+# The catch-all every tunnel had before it became a setting: this Odoo.
+DEFAULT_CATCH_ALL_SERVICE = "http://localhost:8069"  # burn-ignore-cloudflared-ingress
+CATCH_ALL_SERVICE_PATTERN = re.compile(r"https?://[^\s/]+(/\S*)?|http_status:\d{3}")
 
 # The pre-2026-09-19 single, system-wide "have we pushed routes yet" flag, kept
 # only so `_migrate_global_provisioned_flag` can fold it into the per-tunnel
@@ -73,6 +78,34 @@ class CloudflareTunnel(models.Model):
         "the website's domain to be set, and a DNS record for that "
         "ssh. name to be reachable.",
     )
+
+    # [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+    # The final, hostname-less rule Cloudflare requires. It used to be hard-coded to this Odoo.
+    # With separate tenant instances (hams_shared ADR 0105) the catch-all of the hams.com tunnel is
+    # the parking instance instead, so it is a per-tunnel setting. Odoo gives a new stored required
+    # field's default to every existing row when the module is upgraded, so an existing tunnel keeps
+    # pushing http://localhost:8069 exactly as before.
+    catch_all_service = fields.Char(
+        string="Catch-all Service",
+        required=True,
+        default=DEFAULT_CATCH_ALL_SERVICE,
+        help="Service that answers every hostname no other rule matches; always the last rule of "
+        "a push. The default is this Odoo. An http(s) URL or http_status:<code> "
+        "(for example http_status:404).",
+    )
+
+    @api.constrains("catch_all_service")
+    def _check_catch_all_service(self):
+        # [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+        for tunnel in self:
+            if not CATCH_ALL_SERVICE_PATTERN.fullmatch(tunnel.catch_all_service or ""):
+                raise ValidationError(
+                    _(
+                        "Catch-all service %(value)r must be an http:// or https:// URL "
+                        "without spaces, or http_status:<3-digit code>.",
+                        value=tunnel.catch_all_service,
+                    )
+                )
 
     # [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
     def _check_tunnel_caller_authorized(self):
@@ -161,8 +194,9 @@ class CloudflareTunnel(models.Model):
                 if hostname:
                     ingress.append({"hostname": f"ssh.{hostname}", "service": "ssh://localhost:22"})  # burn-ignore-cloudflared-ingress
 
-            # Catch-all required by Cloudflare
-            ingress.append({"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
+            # Catch-all required by Cloudflare; the service is the tunnel's own setting
+            # [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+            ingress.append({"service": tunnel.catch_all_service})
 
             payload = {"config": {"ingress": ingress}}
             success, msg = update_cfd_tunnel_configuration(

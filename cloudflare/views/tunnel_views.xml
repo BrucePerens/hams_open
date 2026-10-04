@@ -48,6 +48,7 @@
                             <field name="status" readonly="1"/>
                             <field name="website_id" readonly="1"/>
                             <field name="ssh_route_enabled" string="Publish SSH Route (off = SSH not published)"/>
+                            <field name="catch_all_service" placeholder="http://localhost:8069"/>
                         </group>
                     </group>
                     <notebook>
@@ -61,7 +62,7 @@
                                 </list>
                             </field>
                             <div class="text-muted mt-2">
-                                Note: rules are pushed in sequence order, merged with the Global Ingress Routes; every sequence must be unique. Paths are regular expressions (anchor them with ^ and $). SSH is not published unless "Publish SSH Route" is explicitly turned on; when it is on and the website has a domain, ssh.&lt;domain&gt; -&gt; ssh://localhost:22 is added. A catch-all rule pointing to Odoo (http://localhost:8069) is always appended last.
+                                Note: rules are pushed in sequence order, merged with the Global Ingress Routes; every sequence must be unique. Paths are regular expressions (anchor them with ^ and $). SSH is not published unless "Publish SSH Route" is explicitly turned on; when it is on and the website has a domain, ssh.&lt;domain&gt; -&gt; ssh://localhost:22 is added. A catch-all rule is always appended last; its service is the tunnel's "Catch-all Service" (default this Odoo, http://localhost:8069; a tunnel that fronts other instances points it at the parking instance).
                             </div>
                         </page>
                     </notebook>
