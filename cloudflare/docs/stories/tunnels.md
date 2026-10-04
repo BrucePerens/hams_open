@@ -38,6 +38,25 @@ I run hams.com, perens.com and postopen.org from the same Odoo server, each with
 
 10. Whether a given tunnel's daemon is currently up is a question the daemon layer answers per tunnel `[@ANCHOR: is_tunnel_daemon_running]`, which is what lets the job skip a healthy tunnel without spending a Cloudflare API call on it every few minutes.
 
+## Scenario: Other sites, run as tenants of this Odoo, behind the same tunnel
+
+perens.com, postopen.org and the parked domains are tenants of this Odoo (the `tenant_sites` and
+`parking` modules, ADR 0106), and they go through the same tunnel as hams.com.
+
+7a. A rule with no hostname matches every hostname, so the path rules for this site's websocket, DX
+    firehose, band simulator, ADIF and GDPR export endpoints are rows scoped to `hams.com` and
+    `*.hams.com`. `tenant_sites` refuses the push in step 6 (`_ingress_problems`)
+    `[@ANCHOR: cloudflare:COMM_tunnel_ingress_problems]` while any tenant or parked hostname exists and a rule has a
+    path but no hostname.
+
+7b. The tunnel's catch-all (its `catch_all_service` setting `[@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]`) stays this Odoo (`http://localhost:8069`): every tenant and parked hostname
+    reaches Odoo, whose request router (`tenant_sites`) serves the tenant's website, the parked page, or
+    an uncached 404. A row is only needed for something that is not Odoo (perens.com's `/static/` goes to
+    the read-only static file server) or to block paths at the edge as well.
+
+7c. `cloudflare.tunnel._build_ingress()` `[@ANCHOR: cloudflare:COMM_tunnel_build_ingress]` returns the list a push would send without any network call, so
+    a planned list can be compared with the live one before anything is pushed.
+
 ## Scenario: How a tunnel's daemon actually runs on this host
 
 11. Each tunnel's `cloudflared` process is a real `systemd --user` service, not a process this

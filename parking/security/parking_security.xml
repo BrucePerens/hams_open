@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+        <record id="group_parking_manager" model="res.groups">
+            <field name="name">Parking: manager</field>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="user_ids" eval="[(4, ref('base.user_admin'))]"/>
+        </record>
+        <record id="group_parking_service" model="res.groups">
+            <field name="name">Parking: public handler service</field>
+        </record>
+    </data>
+    <data>
+        <!-- [@ANCHOR: parking:COMM_service_account_acl] The public request handler reads domains and
+             writes inquiries as this account only; the anonymous public user has no access to any
+             parking model. Verified by [@ANCHOR: parking:COMM_test_service_account_acl] -->
+        <record id="user_parking_service" model="res.users">
+            <field name="name">Parking public handler</field>
+            <field name="login">parking_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('parking.group_parking_service')])]"/>
+        </record>
+    </data>
+</odoo>

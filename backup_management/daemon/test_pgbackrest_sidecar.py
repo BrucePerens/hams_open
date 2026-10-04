@@ -255,5 +255,39 @@ class TestMainProcessesEveryPendingRequest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(self._tmpdir, f"request-{job_id}.json")))
 
 
+class TestRepoSelectionAndInfo(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_pgbackrest_sidecar_validate_request]
+
+    def test_accepts_backup_into_a_configured_repo(self):
+        sidecar._validate_request_cmd(
+            ["pgbackrest", "backup", "--stanza=hams_prod", "--type=full", "--repo=2", "--repo2-retention-full=30"]
+        )
+
+    def test_accepts_info_json_for_a_repo(self):
+        sidecar._validate_request_cmd(
+            ["pgbackrest", "info", "--stanza=hams_prod", "--output=json", "--repo=2"]
+        )
+
+    def test_accepts_legacy_info_with_repo1_flags(self):
+        sidecar._validate_request_cmd(
+            ["pgbackrest", "info", "--stanza=hams_prod", "--output=json", "--repo1-type=s3",
+             "--repo1-s3-bucket=b", "--repo1-path=/hams_prod"]
+        )
+
+    def test_rejects_output_flag_on_backup(self):
+        with self.assertRaises(ValueError):
+            sidecar._validate_request_cmd(["pgbackrest", "backup", "--stanza=hams_prod", "--output=json"])
+
+    def test_rejects_a_non_numeric_repo(self):
+        for bad in ("--repo=x", "--repo=2;id", "--repo=", "--repo=1234", "--repo2-retention-full=a"):
+            with self.assertRaises(ValueError, msg=bad):
+                sidecar._validate_request_cmd(["pgbackrest", "backup", "--stanza=hams_prod", bad])
+
+    def test_still_rejects_restore_and_expire(self):
+        for op in ("restore", "expire", "stanza-delete"):
+            with self.assertRaises(ValueError, msg=op):
+                sidecar._validate_request_cmd(["pgbackrest", op, "--stanza=hams_prod", "--repo=2"])
+
+
 if __name__ == "__main__":
     unittest.main()

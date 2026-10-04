@@ -240,6 +240,28 @@ def _pgbackrest_s3_repo_args(config, target_path):
     return args
 
 
+def _pgbackrest_repo_number(config):
+    """
+    The pgBackRest repository number (repoN) this backup.config selects from
+    /etc/pgbackrest/pgbackrest.conf, or 0 for the legacy behaviour (the
+    daemon describes repo1 itself from the config's own bucket/path fields).
+
+    A non-zero number means the repository is defined only in pgbackrest.conf
+    on the host (this is how an encrypted repository is used: its cipher
+    passphrase must never travel on a command line or in this payload).
+    pgBackRest requires --repo for `backup` when more than one repository is
+    configured (https://pgbackrest.org/user-guide.html#multi-repo).
+    """
+    raw = config.get("pgbackrest_repo") or 0
+    try:
+        number = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError(f"Invalid pgbackrest_repo: {raw!r}") from None
+    if not 0 <= number <= 256:
+        raise ValueError(f"Invalid pgbackrest_repo: {raw!r}")
+    return number
+
+
 # A pgbackrest operation this daemon cannot perform itself (needs real
 # filesystem access to PostgreSQL's own 0700 postgres-owned data directory)
 # and must delegate to the privileged sidecar instead. Only "backup" today --
@@ -247,7 +269,7 @@ def _pgbackrest_s3_repo_args(config, target_path):
 # "restore" is deliberately left a manual admin operation (see this file's
 # own to-do history); adding it here later means teaching
 # hams-pgbackrest-backup.service's own argv validation about it too.
-_PGBACKREST_PRIVILEGED_OPS = ("backup",)
+_PGBACKREST_PRIVILEGED_OPS = ("backup", "info")
 
 
 def _pgbackrest_requires_sidecar(cmd):
@@ -501,11 +523,16 @@ def execute_job(ch, method, properties, body):
             cmd = ["kopia", "snapshot", "create", "--json", "--", target_path]
         elif engine == "pgbackrest":
             cmd = ["pgbackrest", "backup", f"--stanza={target_path}", "--type=full"]
-            if config.get("storage_type") in ("s3", "b2"):
+            repo_n = _pgbackrest_repo_number(config)
+            if repo_n:
+                # Repository defined in pgbackrest.conf on the host (its
+                # storage settings and any cipher passphrase live there).
+                cmd.append(f"--repo={repo_n}")
+            elif config.get("storage_type") in ("s3", "b2"):
                 cmd.extend(_pgbackrest_s3_repo_args(config, target_path))
             keep_daily = config.get("keep_daily", 0)
             if keep_daily > 0:
-                cmd.append(f"--repo1-retention-full={keep_daily}")
+                cmd.append(f"--repo{repo_n or 1}-retention-full={keep_daily}")
 
         elif engine == "kopia_policy":
             keep_daily = config.get("keep_daily", 7)
@@ -531,7 +558,10 @@ def execute_job(ch, method, properties, body):
                 cmd = ["kopia", "snapshot", "list", "--json"]
             else:
                 cmd = ["pgbackrest", "info", f"--stanza={target_path}", "--output=json"]
-                if config.get("storage_type") in ("s3", "b2"):
+                repo_n = _pgbackrest_repo_number(config)
+                if repo_n:
+                    cmd.append(f"--repo={repo_n}")
+                elif config.get("storage_type") in ("s3", "b2"):
                     cmd.extend(_pgbackrest_s3_repo_args(config, target_path))
         elif engine == "restore_drill":
             script_path = payload.get("script")

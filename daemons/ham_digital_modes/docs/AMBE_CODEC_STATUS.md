@@ -15,6 +15,15 @@ Common to all: streaming encoders (`push_samples`, `next_frame`, `finish`) that 
 report voiced speech as a tone; decoders with damaged-frame handling; float and fixed-point trees with the same behaviour
 (fixed-point uses no floating point at all: `tests/ambe_fixed_no_float_tokens.rs`).
 
+## What is gated, and why (2026-10-04)
+
+Only AMBE+2 half rate is gated (Cargo feature `ambe_plus_2`, off by default). D-STAR, TIA-102.BABA IMBE full rate and
+`dvsi_p25fec` are always compiled; `dvsi_p25fec` is limited by scope (chip time), not by patents. All 12 patents named in the
+TIA-102.BABA-1 addendum have expired (table with dates in `src/ambe/float/ambe_plus_2/AMBE_PLUS_2_NOTES.md`), but US 8,359,197 B2
+("Half-rate vocoder", priority 2003) is recorded as in force until 2028-05-20, so the gate stays pending Bruce's decision.
+Not legal advice. Not covered by any test or tool here: DMR, System Fusion and NXDN framing around the AMBE+2 codec (only the
+72-bit codec frame exists), and DVSI's official test vectors (none exist for us).
+
 ## Damaged frames: normal operation versus chip-conformance test mode
 
 * **The default is `ErrorPolicy::Concealing`**, a policy designed for audio quality (`src/ambe/float/concealment.rs` and its fixed-point

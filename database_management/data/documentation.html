@@ -5,7 +5,7 @@
 
 <section>
     <h2>Getting Started</h2>
-    <p>All database management features are located under the <strong>Database & SRE</strong> main menu. Access is strictly limited to users with System Administrator privileges to ensure the security and integrity of your data.</p>
+    <p>All database management features are located under the <strong>Database & SRE</strong> main menu. Access is strictly limited to users with System Administrator privileges to ensure the security and integrity of your data. System Administrators automatically hold the <strong>Database Manager</strong> group, which is the group the rest of this guide refers to.</p>
 </section>
 
 <section>
@@ -23,7 +23,7 @@
     <ol>
         <li>Select the tables you wish to clean in the list view.</li>
         <li>Click <strong>Vacuum Analyze Selected</strong>. This triggers the PostgreSQL <code>VACUUM ANALYZE</code> command, which removes dead tuples and updates optimizer statistics.
-            <br/><em>Performance Note:</em> The system automatically batches these requests to minimize overhead.</li>
+            <br/><em>Performance Note:</em> The system automatically batches these requests to minimize overhead: all selected tables are cleaned by a single <code>vacuumdb</code> run. If that run fails or takes longer than 10 minutes, an error message is shown.</li>
     </ol>
 
     <!-- [@ANCHOR: COMM_db_index_advisor] -->
@@ -31,10 +31,10 @@
     <p>Tables that are large and have many sequential scans are prime candidates for new indexes.</p>
     <ul>
         <li>Navigate to <strong>Database Health > Index Advisor</strong>.</li>
-        <li>The advisor lists tables with high sequential scan counts. Review these and consider if adding an index on columns used in <code>WHERE</code> clauses or <code>JOIN</code>s would improve performance.</li>
+        <li>The advisor lists tables with more than 100 sequential scans that are larger than 10 MB, most-scanned first. It does not propose a specific index. Review these and consider if adding an index on columns used in <code>WHERE</code> clauses or <code>JOIN</code>s would improve performance.</li>
     </ul>
     <p><em>Security Note:</em> Vacuuming is an intensive operation. Only users with <strong>Database Manager</strong> privileges can trigger it.</p>
-    <p><em>Proactive Alerting:</em> The system automatically monitors these levels and will trigger a <strong>PagerDuty</strong> incident if critical tables exceed safe bloat thresholds.</p>
+    <p><em>Proactive Alerting:</em> The system automatically monitors these levels and will trigger a <strong>PagerDuty</strong> incident if critical tables exceed safe bloat thresholds. Once a day, any table with more than 20% dead tuples and more than 10,000 dead tuples is listed in one incident. (PagerDuty here means this system's own Pager Duty module.)</p>
 </section>
 
 <section>
@@ -43,7 +43,7 @@
     <p>Indexes speed up read operations but slow down writes and consume disk space. Unused indexes should be removed.</p>
     <ul>
         <li>Navigate to <strong>Database Health > Index Health</strong>.</li>
-        <li>The <strong>Total Scans</strong> column shows how often an index is actually used. If a large index has zero or very few scans, it may be a candidate for removal.</li>
+        <li>The <strong>Total Scans</strong> column shows how often an index is actually used. If a large index has zero or very few scans, it may be a candidate for removal. Indexes with zero scans are highlighted. Unique indexes (including primary keys) are not listed.</li>
     </ul>
 </section>
 
@@ -54,9 +54,9 @@
     <ul>
         <li>Go to <strong>Database Health > Slow Queries (APM)</strong>.</li>
         <li>Queries are sorted by <strong>Total Time</strong>. This helps you identify which parts of the application are causing the most load, even if individual executions are fast.</li>
-        <li><strong>Installation Note:</strong> If queries do not appear, you may need to install the <code>pg_stat_statements</code> extension. Ensure it is included in your <code>postgresql.conf</code> <code>shared_preload_libraries</code>, and then use the provided installation button to enable it on the database.</li>
-        <li><strong>Reset Statistics:</strong> If you have resolved performance issues and want to start fresh, use the <strong>Reset Statistics</strong> button in the header.</li>
-        <li><strong>Explain Plan:</strong> Click the <strong>Explain</strong> (search icon) next to any query to generate a detailed <code>EXPLAIN (ANALYZE, BUFFERS)</code> plan. This reveals exactly how PostgreSQL is executing the query and where the bottlenecks are.</li>
+        <li><strong>Installation Note:</strong> If queries do not appear (the list shows a single row saying <code>pg_stat_statements</code> is not installed or not loaded), you may need to install the <code>pg_stat_statements</code> extension. Ensure it is included in your <code>postgresql.conf</code> <code>shared_preload_libraries</code>, restart PostgreSQL, and then use the <strong>Install / Fix Extension</strong> button to enable it on the database.</li>
+        <li><strong>Reset Statistics:</strong> There is currently no <strong>Reset Statistics</strong> button in this view. The server-side method that clears the statistics exists but is not connected to the interface.</li>
+        <li><strong>Explain Plan:</strong> Click the <strong>Explain</strong> (search icon) next to a query to generate a detailed <code>EXPLAIN (ANALYZE, BUFFERS)</code> plan. Only queries starting with <code>SELECT</code> or <code>WITH</code> are accepted; any other query is refused with an error. This reveals exactly how PostgreSQL is executing the query and where the bottlenecks are.</li>
     </ul>
 </section>
 
@@ -67,6 +67,7 @@
     <ul>
         <li>Go to <strong>Database Health > Active Sessions</strong>.</li>
         <li>Review the <strong>Duration</strong> and the <strong>Active Query</strong> text.</li>
+        <li>Sessions whose <strong>Duration</strong> (time since their current or most recent query started) is over 60 seconds are highlighted in red.</li>
         <li>If you identify a process that is causing issues, select it and click <strong>Kill Selected Queries</strong>. This safely terminates the database backend for that specific session.</li>
     </ul>
     <p><em>Security Note:</em> Terminating sessions can interrupt user operations. Only <strong>Database Managers</strong> are authorized to use this feature.</p>
@@ -87,31 +88,32 @@
     <h2 id="performance_optimization_wizard" data-trace="COMM_pg_optimize_wizard, COMM_db_settings_audit, COMM_test_pg_config_views">6. Performance Optimization Wizard</h2>
     <p>Configuring PostgreSQL for Odoo can be complex. Our wizard automates this using industry-standard DBA formulas.</p>
     <ol>
-        <li>Go to <strong>Configuration & Tuning > Optimization Wizard</strong>.</li>
+        <li>Go to <strong>Database Health > Configuration & Tuning > Optimization Wizard</strong>.</li>
         <li>Enter your server's <strong>Total RAM</strong> and <strong>CPU Cores</strong>.</li>
-        <li>Select your storage type (SSD is highly recommended).</li>
+        <li>Select your storage type (SSD is highly recommended) and the <strong>Max Connections</strong> you need (default 200).</li>
         <li>Click <strong>Calculate & Apply Optimizations</strong>.</li>
     </ol>
-    <p><strong>Note:</strong> Some settings (like <code>shared_buffers</code>) require a full PostgreSQL service restart to take effect. The wizard will notify you if a restart is needed.</p>
+    <p>The formulas, with RAM in MB: <code>shared_buffers</code> = 25% of RAM; <code>effective_cache_size</code> = 75% of RAM; <code>maintenance_work_mem</code> = 5% of RAM, at most 1024 MB; <code>work_mem</code> = 25% of RAM divided by Max Connections, at least 4 MB; <code>random_page_cost</code> = 1.1 for SSD or 4.0 for HDD; <code>max_worker_processes</code> and <code>max_parallel_workers</code> = CPU Cores; <code>max_parallel_workers_per_gather</code> = half the CPU Cores, at least 2; <code>max_connections</code> = the value entered. They are written with <code>ALTER SYSTEM</code> (into <code>postgresql.auto.conf</code>) and the configuration is reloaded.</p>
+    <p><strong>Note:</strong> Some settings (like <code>shared_buffers</code>) require a full PostgreSQL service restart to take effect. The wizard always shows a reminder about this after applying; it does not restart PostgreSQL. The <strong>Pending Restart</strong> column in <strong>Configuration & Tuning > View Active Settings</strong> shows which settings are still waiting for a restart.</p>
 </section>
 
 <section>
     <!-- [@ANCHOR: COMM_pg_ha_wizard] -->
     <h2 id="ha_orchestrator" data-trace="COMM_pg_ha_wizard">7. High Availability (HA) Orchestrator</h2>
-    <p>For production environments requiring high availability, this tool generates configuration templates for <strong>Patroni</strong>, <strong>etcd</strong>, and <strong>PgBouncer</strong>.</p>
+    <p>For production environments requiring high availability, this tool generates configuration templates for <strong>Patroni</strong> (including its <strong>etcd</strong> connection settings) and <strong>PgBouncer</strong>: one Patroni YAML file per node, which connects Patroni to your existing etcd hosts, and one PgBouncer INI file. It does not generate etcd's own configuration.</p>
     <ol>
-        <li>Go to <strong>Configuration & Tuning > High Availability Orchestrator</strong>.</li>
-        <li>Enter the IP addresses for your Primary and Secondary nodes.</li>
-        <li>Set a strong <strong>Replication Password</strong> (minimum 8 characters).</li>
-        <li>Click <strong>Generate Configuration</strong> to receive tailored YAML and INI files for your cluster nodes.</li>
+        <li>Go to <strong>Database Health > Configuration & Tuning > High Availability Orchestrator</strong>.</li>
+        <li>Enter the IP addresses for your Primary and Secondary nodes, the cluster name, and the etcd hosts as comma-separated <code>host:port</code> pairs.</li>
+        <li>Set a strong <strong>Replication Password</strong> (minimum 8 characters, with no characters that would break the YAML file). A random password is filled in by default. The generated Patroni files use this same password for both the replication user and the superuser.</li>
+        <li>Click <strong>Generate Configurations</strong> to receive tailored YAML and INI files for your cluster nodes. They are shown in three tabs for you to copy; nothing is installed or deployed. The <code>patroni</code>, <code>pgbouncer</code> and <code>etcd</code> programs must be available on the Odoo server; if one is missing, the system tries to install it through its binary downloader, and otherwise generation stops with an error.</li>
     </ol>
 </section>
 
 <section>
     <h2>Security & Architecture</h2>
-    <p>To maintain a "Zero-Sudo" environment, this module uses a dedicated service account (<code>user_database_management_service</code>) for all sensitive operations. This ensures that even administrative actions are performed with the minimum necessary privileges and are fully auditable.</p>
+    <p>To maintain a "Zero-Sudo" environment (this system's rule that Odoo's <code>sudo()</code> shortcut is never used), this module uses a dedicated service account (<code>user_database_management_service</code>) for sensitive operations: killing sessions, resetting query statistics and generating Explain plans. The Optimization Wizard's settings changes and Vacuum do not go through this account. This ensures that even administrative actions are performed with the minimum necessary privileges and are fully auditable.</p>
     <h3>Multi-Tenant Considerations</h3>
-    <p>Models in this module are classified as <strong>logically global</strong>. This is because they interface directly with PostgreSQL system views that track the health and activity of the entire database instance. In a multi-company setup, these metrics provide a unified view of the shared database resources, ensuring that administrators can optimize performance for all users simultaneously.</p>
+    <p>Models in this module are classified as <strong>logically global</strong>. This is because they interface directly with PostgreSQL system views that track the health and activity of the entire current database (and, for replication, the whole PostgreSQL server) rather than of one company. In a multi-company setup, these metrics provide a unified view of the shared database resources, ensuring that administrators can optimize performance for all users simultaneously.</p>
 </section>
 
 <img src="/database_management/static/description/images/form_screenshot.png" alt="Form View Screenshot" style="max-width: 100%; margin: 10px 0;" />

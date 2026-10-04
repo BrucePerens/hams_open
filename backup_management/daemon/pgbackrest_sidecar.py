@@ -42,11 +42,18 @@ PGBACKREST_BIN = os.environ.get("PGBACKREST_BIN", "pgbackrest")
 
 _STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 _GENERIC_VALUE_RE = re.compile(r"^[a-zA-Z0-9_.:/-]+$")
+_REPO_OPTION_RE = re.compile(r"^--repo=[0-9]{1,3}$")
+_REPO_RETENTION_RE = re.compile(r"^--repo[0-9]{1,3}-retention-full=[0-9]{1,5}$")
+# Operations delegated here. "info" is read-only but must read
+# /etc/pgbackrest/pgbackrest.conf, which holds the repository cipher
+# passphrase and storage keys and is therefore readable only by root and
+# postgres (mode 0640): the unprivileged daemon cannot read it.
+_ALLOWED_OPERATIONS = ("backup", "info")
 
 # Every argv prefix this sidecar will ever pass through to a real pgbackrest
 # invocation as postgres. Exhaustive, not a blocklist: anything not matched
 # here is refused. Mirrors exactly what main.py's own cmd-building code for
-# engine == "pgbackrest" (the "backup" branch) and _pgbackrest_s3_repo_args()
+# engine == "pgbackrest" (the "backup" and "info" branches) and _pgbackrest_s3_repo_args()
 # actually produce -- grow this list only in lockstep with those, never ahead
 # of them speculatively.
 _ALLOWED_FLAG_PREFIXES = (
@@ -70,7 +77,7 @@ def _validate_request_cmd(cmd):
         raise ValueError(f"Empty or non-list sidecar request cmd: {cmd!r}")
     if cmd[0] != "pgbackrest":
         raise ValueError(f"Refusing non-pgbackrest sidecar request: {cmd!r}")
-    if len(cmd) < 2 or cmd[1] != "backup":
+    if len(cmd) < 2 or cmd[1] not in _ALLOWED_OPERATIONS:
         raise ValueError(f"Refusing unsupported pgbackrest sidecar operation: {cmd!r}")
 
     stanza_seen = False
@@ -83,6 +90,10 @@ def _validate_request_cmd(cmd):
             if arg.split("=", 1)[1] not in ("full", "diff", "incr"):
                 raise ValueError(f"Invalid backup type in sidecar request: {arg!r}")
         elif arg == "--repo1-type=s3":
+            pass
+        elif arg == "--output=json" and cmd[1] == "info":
+            pass
+        elif _REPO_OPTION_RE.match(arg) or _REPO_RETENTION_RE.match(arg):
             pass
         elif any(arg.startswith(prefix) for prefix in _ALLOWED_FLAG_PREFIXES):
             value = arg.split("=", 1)[1]

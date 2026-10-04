@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import grp
 import os
 import logging
 import datetime
+import re
 import tempfile
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError, AccessError
@@ -17,6 +19,20 @@ _logger = logging.getLogger(__name__)
 ROTATION_AGE_DAYS = 59
 # Lifetime of every key this module mints.
 KEY_LIFETIME_DAYS = 90
+
+# The directory every key file lives under. Its own mode is KEY_ROOT_DIR_MODE: the owner (the Odoo
+# user) has full access, the group may traverse and not list. Daemon accounts that run under their
+# own OS account are in that group, so each can open the one key file it is named for (the file's
+# group, see os_group) and cannot enumerate or open anyone else's. A subdirectory stays 0700.
+KEY_ROOT_DIR = "/opt/hams/etc/keys"
+KEY_ROOT_DIR_MODE = 0o710
+KEY_SUBDIR_MODE = 0o700
+# Mode of a key file handed to an OS group: owner read/write, group read.
+KEY_FILE_GROUP_MODE = 0o640
+# The only group names a registry row may name. The prefix is what keeps a row from pointing a
+# key file at a privileged group (hams_com, adm, shadow): one OS account and group per daemon
+# family, named hamsd_<family> (docs/proposals/DAEMON_OS_ISOLATION_PLAN.md in hams_com).
+OS_GROUP_RE = re.compile(r"^hamsd_[a-z0-9_]{1,24}$")
 
 
 class DaemonKeyRegistry(models.Model):
@@ -54,6 +70,17 @@ class DaemonKeyRegistry(models.Model):
         help="The company that owns this daemon registry. Service accounts are company-specific.",
     )
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
+    os_group = fields.Char(
+        string="OS Group",
+        help="""
+        Operating-system group of the account the daemon runs as (hamsd_<family>). When set,
+        the key file is written 0640 with that group, so that account and no other daemon
+        can read it. When empty the file is 0600 and readable only by the Odoo user, as
+        before. The Odoo user must be a member of the group (provisioning adds it) and
+        the server must have been restarted since; otherwise the write fails and the old
+        key file is left untouched.
+        """,
+    )
     remote_self_rotation = fields.Boolean(
         string="Remote Self-Rotation",
         default=False,
@@ -105,6 +132,19 @@ class DaemonKeyRegistry(models.Model):
             if not record.user_id.is_service_account:
                 raise UserError(_("The selected user must be a service account."))
 
+    @api.constrains("os_group")
+    def _check_os_group(self):
+        # # Tested by [@ANCHOR: COMM_test_os_group_registry_constraint]
+
+        # [@ANCHOR: COMM_security_constraints_os_group]
+        for record in self:
+            if record.os_group and not OS_GROUP_RE.match(record.os_group):
+                msg = _(
+                    "The OS group must be a daemon-family group named "
+                    "hamsd_<family> (lower-case letters, digits, underscore). Got: %s"
+                )
+                raise UserError(msg % record.os_group)
+
     @api.constrains("env_file_path")
     def _check_env_file_path(self):
         # # Tested by [@ANCHOR: COMM_test_security_constraints]
@@ -129,10 +169,19 @@ class DaemonKeyRegistry(models.Model):
                 raise UserError(msg % (mandatory_prefix, real_path))
 
     @api.model
-    def register_daemon(self, daemon_name, user_xml_id, env_file_path):
+    def register_daemon(
+        self, daemon_name, user_xml_id, env_file_path, os_group=None
+    ):
         """
         API for other modules to request a bearer token/API key for their daemon.
         This registers the daemon for automated 60-day rotations and provisions synchronously.
+
+        `os_group` (optional): the hamsd_<family> OS group the daemon's account belongs to, so
+        its key file is written 0640 with that group instead of 0600 (see the os_group field).
+        None leaves an existing registry's group unchanged; an empty string clears it. Only a
+        Daemon Key Manager, an administrator or the superuser (a module's post_init_hook) may
+        set or clear it: a service account registering itself may not
+        widen who can read its own key file.
         """
         # # Tested by [@ANCHOR: COMM_test_register_daemon_api]
 
@@ -174,30 +223,35 @@ class DaemonKeyRegistry(models.Model):
                 msg = _("Service accounts can only provision keys for themselves.")
                 raise AccessError(msg)
 
+        may_set_group = (
+            caller.has_group("daemon_key_manager.group_daemon_key_manager")
+            or caller._is_admin()
+            or caller._is_superuser()
+        )
+        if os_group is not None and not may_set_group:
+            # [@ANCHOR: COMM_register_daemon_os_group_manager_only]
+            msg = _("Only Daemon Key Managers can set a key file's OS group.")
+            raise AccessError(msg)
+
         # [@ANCHOR: COMM_register_daemon_logic]
         # Multi-company awareness: search for existing daemon name.
         registry = self.env["daemon.key.registry"].with_company(user.company_id.id).search(
             [("name", "=", daemon_name), ("company_id", "=", user.company_id.id)],
             limit=1,
         )
+        values = {
+            "user_id": user.id,
+            "env_file_path": env_file_path,
+            "company_id": user.company_id.id,
+        }
+        if os_group is not None:
+            values["os_group"] = os_group
         if not registry:
-            registry = self.env["daemon.key.registry"].with_company(user.company_id.id).create(
-                {
-                    "name": daemon_name,
-                    "user_id": user.id,
-                    "env_file_path": env_file_path,
-                    "company_id": user.company_id.id,
-                }
-            )
+            values["name"] = daemon_name
+            registry = self.env["daemon.key.registry"].with_company(user.company_id.id).create(values)
         else:
             # [@ANCHOR: COMM_register_daemon_idempotency]
-            registry.with_company(user.company_id.id).write(
-                {
-                    "user_id": user.id,
-                    "env_file_path": env_file_path,
-                    "company_id": user.company_id.id,
-                }
-            )
+            registry.with_company(user.company_id.id).write(values)
             
         # Flush all pending database changes to trigger @api.constrains now.
         # This prevents a rollback bypass where file I/O occurs before constraints fail.
@@ -531,7 +585,12 @@ class DaemonKeyRegistry(models.Model):
         # Keep this machine's copy current too, so env_file_path always holds the
         # live key (it is where an operator re-copies the key from if the remote
         # machine loses its file).
-        self._write_secure_env_file(self.env_file_path, self.user_id.login, new_key)
+        self._write_secure_env_file(
+            self.env_file_path,
+            self.user_id.login,
+            new_key,
+            group=self.os_group or None,
+        )
         self.pending_key_id = 0
         self.last_rotated = fields.Datetime.now()
         _logger.warning(
@@ -612,7 +671,12 @@ class DaemonKeyRegistry(models.Model):
         raw_key = self._mint_key(key_name)
 
         # Write to secure file
-        self._write_secure_env_file(self.env_file_path, self.user_id.login, raw_key)
+        self._write_secure_env_file(
+            self.env_file_path,
+            self.user_id.login,
+            raw_key,
+            group=self.os_group or None,
+        )
         self.last_rotated = fields.Datetime.now()
         _logger.info(
             "Successfully rotated and exported API key for daemon: %s", self.name
@@ -652,10 +716,33 @@ class DaemonKeyRegistry(models.Model):
             )
             raise UserError(msg)
 
-    def _write_secure_env_file(self, path, login, key):
+    @api.model
+    def _resolve_os_group(self, group):
+        """Returns the gid of the hamsd_<family> OS group `group`, or raises UserError.
+
+        A name that does not match OS_GROUP_RE and a group the host does not have are both
+        refused: a key file is never silently written with another group, or with the Odoo
+        user's own, because provisioning has not run yet.
         """
-        Writes the credentials to the specified path and locks permissions to 0600.
-        Creates directories with 0700 if they do not exist.
+        # [@ANCHOR: COMM_resolve_os_group]
+        if not OS_GROUP_RE.match(group or ""):
+            msg = _("The OS group must be named hamsd_<family>. Got: %s")
+            raise UserError(msg % group)
+        try:
+            return grp.getgrnam(group).gr_gid
+        except KeyError:  # burn-ignore-os-account-probe
+            msg = _(
+                "The OS group %s does not exist on this host. Run the provisioning "
+                "(provision.py) that creates the daemon account, then retry."
+            )
+            raise UserError(msg % group)
+
+    def _write_secure_env_file(self, path, login, key, group=None):
+        """
+        Writes the credentials to the specified path and locks permissions to 0600, or, when
+        `group` names a hamsd_<family> OS group, to 0640 with that group so the one daemon
+        account in it can read the file. Creates directories with 0700 if they do not exist;
+        the key root directory itself is kept at 0710 (owner full, group traverse only).
         """
         # # Tested by [@ANCHOR: COMM_test_register_daemon_api]
 
@@ -671,13 +758,18 @@ class DaemonKeyRegistry(models.Model):
 
         try:
             directory = os.path.normpath(os.path.dirname(path))
+            # [@ANCHOR: COMM_key_root_directory_mode]
+            directory_mode = (
+                KEY_ROOT_DIR_MODE if directory == KEY_ROOT_DIR else KEY_SUBDIR_MODE
+            )
+            gid = self._resolve_os_group(group) if group else None
             if not os.path.exists(directory):
                 # Sandbox the creation: ensure we don't escape via symlinks
-                os.makedirs(directory, mode=0o700, exist_ok=True)
+                os.makedirs(directory, mode=directory_mode, exist_ok=True)
             else:
                 # Ensure the existing directory has correct permissions
                 try:
-                    os.chmod(directory, 0o700)
+                    os.chmod(directory, directory_mode)
                 except PermissionError:
                     msg = _(
                         "Security Alert: Could not enforce secure "
@@ -725,6 +817,23 @@ class DaemonKeyRegistry(models.Model):
             try:
                 try:
                     os.fchmod(fd, 0o600)
+                    if gid is not None:
+                        # [@ANCHOR: COMM_write_secure_env_file_group]
+                        # Group first, readable second: the file is 0600 until the group is
+                        # the intended one, so it is never group-readable under another
+                        # group. An unprivileged process may only chgrp to a group it is a
+                        # member of; if the Odoo server was started before provisioning
+                        # added it, this raises and the old key file stays untouched.
+                        try:
+                            os.fchown(fd, -1, gid)
+                        except PermissionError:
+                            msg = _(
+                                "The Odoo server user is not a member of the OS group "
+                                "%s, so it cannot hand it the key file. Provisioning "
+                                "adds it to the group; restart odoo.service and "
+                                "hams.daemon.keys.service afterwards."
+                            )
+                            raise UserError(msg % group)
                 except BaseException:  # audit-ignore-catch-all
                     # Cleanup-then-reraise: must catch every kind of interruption
                     # (including KeyboardInterrupt/SystemExit) to avoid leaking this
@@ -736,6 +845,9 @@ class DaemonKeyRegistry(models.Model):
                     env_file.write("# Auto-generated by daemon.key.registry\n")
                     env_file.write("ODOO_RPC_LOGIN=%s\n" % login)
                     env_file.write("ODOO_RPC_KEY=%s\n" % key)
+                    env_file.flush()
+                    if gid is not None:
+                        os.fchmod(env_file.fileno(), KEY_FILE_GROUP_MODE)
                 os.rename(tmp_path, path)
             except BaseException:  # audit-ignore-catch-all
                 # Same cleanup-then-reraise idiom as above, for the temp file itself.

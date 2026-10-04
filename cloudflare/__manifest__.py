@@ -6,7 +6,7 @@
     "description": "Generalized CDN Edge Orchestration, Proactive Purging, and WAF Management.",
     "author": "Open Source Community",
     "category": "Website",
-    "version": "1.5",
+    "version": "1.7",
     "license": "AGPL-3",
     "depends": [
         "base",
@@ -17,6 +17,9 @@
         "edge_routing",
         "knowledge",
         "caching",
+        # The Cloudflare-CDN-Cache-Control headers, the cookie rules for edge-cacheable pages and the
+        # CSRF refresh live there, so a tenant instance can use them without this module.
+        "edge_cache",
         # Already an indirect dependency via edge_routing/caching; made direct because
         # trusted_ip_ranges.py imports it explicitly (get_redis_connection()).
         "distributed_redis_cache",
@@ -47,9 +50,6 @@
         }
     ],
     "assets": {
-        "web.assets_frontend": [
-            "cloudflare/static/src/js/edge_cache_csrf.js",
-        ],
         "web.assets_backend": [
             "cloudflare/static/src/components/analytics/analytics.js",
             "cloudflare/static/src/components/analytics/analytics.xml",

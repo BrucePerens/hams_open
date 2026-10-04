@@ -10,6 +10,8 @@ from lxml import etree
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet
+from odoo.addons.zero_sudo.svg_sanitizer import sanitize_xml_svgs
 from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, REDIS_USERNAME_DEFAULT
 
 _logger = logging.getLogger(__name__)
@@ -29,6 +31,21 @@ redis_pool = redis.ConnectionPool(
     socket_connect_timeout=1.0,
 )
 redis_client = redis.Redis(connection_pool=redis_pool)
+
+
+def _remove_keeping_tail(element):
+    """Remove `element` from its parent without losing the text that follows it."""
+    parent = element.getparent()
+    if parent is None:
+        return
+    tail = element.tail
+    if tail:
+        previous = element.getprevious()
+        if previous is None:
+            parent.text = (parent.text or "") + tail
+        else:
+            previous.tail = (previous.tail or "") + tail
+    parent.remove(element)
 
 
 class WebsitePage(models.Model):
@@ -135,6 +152,27 @@ class WebsitePage(models.Model):
 
             was_modified = False
 
+            # [@ANCHOR: user_websites:page_arch_svg_allowlist]
+            # Verified by [@ANCHOR: test_user_arch_svg_allowlist]
+            # Inline SVG is the one place a page can run script or fetch from elsewhere
+            # without a <script> tag: <set>/<animate> that rewrite an href to javascript:,
+            # <style> with @import, <foreignObject> carrying HTML, <use> of a data: URI,
+            # on* handlers. This sanitizer never called html_sanitize(), so none of that was
+            # touched. Every <svg> block (any namespace spelling, see sanitize_xml_svgs) is
+            # rebuilt from zero_sudo's strict allowlist, which also drops every t-* QWeb
+            # attribute and every <t> element inside it, or is removed if it cannot be
+            # validated. Runs first, so nothing below sees an svg subtree.
+            if sanitize_xml_svgs(root):
+                was_modified = True
+
+            # An element still carrying a namespace prefix nobody declared (<svg:script>,
+            # <x:use>) is not valid XML for the arch parser and is never a legitimate tag.
+            for elem in [
+                e for e in root.iter() if isinstance(e.tag, str) and ":" in e.tag
+            ]:
+                _remove_keeping_tail(elem)
+                was_modified = True
+
             # Strip script, iframe, object, embed entirely. Adversarial
             # security review, 2026-09-03: <base> added -- it rewrites how
             # every later relative URL/form-action on the whole rendered
@@ -143,10 +181,57 @@ class WebsitePage(models.Model):
             # origin with no <script> tag involved at all, exactly the
             # class of script-free bypass this strip list otherwise
             # defends against.
-            for tag in ["script", "iframe", "object", "embed", "base"]:
-                for elem in root.xpath(f'//*[local-name()="{tag}"]'):
-                    elem.getparent().remove(elem)
-                    was_modified = True
+            # Case-insensitive: the arch is serialised back to markup that the browser's HTML
+            # parser reads, where <ScRiPt> is a script; an XML-case-sensitive match missed it.
+            strip_tags = {"script", "iframe", "object", "embed", "base"}
+            for elem in [
+                e
+                for e in root.iter()
+                if isinstance(e.tag, str)
+                and e.tag.rpartition("}")[2].lower() in strip_tags
+            ]:
+                _remove_keeping_tail(elem)
+                was_modified = True
+
+            # [@ANCHOR: user_websites:page_arch_style_link_filter]
+            # Verified by [@ANCHOR: test_user_arch_style_link_filter]
+            # <link> is removed on every page, whatever its rel: a stylesheet or prefetch
+            # link makes every visitor's browser fetch from a host the member chose, and a
+            # remote stylesheet is also the one place a member could swap the page's look
+            # after review. <style> is kept, but its text is rebuilt rule by rule from
+            # zero_sudo's stylesheet filter (no url() except #fragment, no @import, no
+            # position fixed/sticky; see css_sanitizer.py for the exfiltration and overlay
+            # reasons). Neither counts as an injection attempt (no strike): a page that
+            # linked a font or used a fixed header is not an attack, so the removal is
+            # logged and the page saved without it. Runs after the svg rebuild, so an svg's
+            # own (already dropped) style never reaches here.
+            for elem in [
+                e
+                for e in root.iter()
+                if isinstance(e.tag, str)
+                and e.tag.rpartition("}")[2].lower() in ("link", "style")
+            ]:
+                if elem.tag.rpartition("}")[2].lower() == "link":
+                    _logger.info("member page arch: <link> element removed")
+                    _remove_keeping_tail(elem)
+                    continue
+                source = "".join(elem.itertext())
+                cleaned_css, css_dropped = sanitize_stylesheet(source)
+                if css_dropped:
+                    _logger.info("member page arch: <style> rules removed by the stylesheet filter")
+                tail = elem.tail
+                for attr in list(elem.attrib):
+                    if attr.lower() != "media" or not re.fullmatch(
+                        r"[A-Za-z0-9\s:,().\-/]{1,200}", elem.attrib[attr]
+                    ):
+                        del elem.attrib[attr]
+                for child in list(elem):
+                    elem.remove(child)
+                elem.tail = tail
+                if cleaned_css:
+                    elem.text = cleaned_css
+                else:
+                    _remove_keeping_tail(elem)
 
             # Adversarial security review, 2026-09-03: a <meta
             # http-equiv="refresh" content="0;url=https://evil.example/">
@@ -158,7 +243,11 @@ class WebsitePage(models.Model):
             # specifically (not the whole <meta> tag, which has legitimate
             # uses like charset/viewport) whenever it's "refresh",
             # case-insensitively.
-            for elem in root.xpath('//*[local-name()="meta"]'):
+            for elem in [
+                e
+                for e in root.iter()
+                if isinstance(e.tag, str) and e.tag.rpartition("}")[2].lower() == "meta"
+            ]:
                 http_equiv = elem.attrib.get("http-equiv", "")
                 if http_equiv.strip().lower() == "refresh":
                     blocked_content = elem.attrib.get("content", "")
@@ -171,42 +260,34 @@ class WebsitePage(models.Model):
 
             # Strip all QWeb execution, inline JS directives, and javascript URIs
             dangerous_prefixes = ("t-", "on")
-            # ADR-0102: Explicitly allow safe QWeb directives while blocking SSTI vectors
-            # Finite whitelist of allowed t-att-* attributes to minimize attack surface.
-            ALLOWED_T_DIRECTIVES = {
-                "t-name",
-                "t-call",
-                "t-set",
-                "t-value",
-                "t-out",
-                "t-esc",
-                "t-if",
-                "t-elif",
-                "t-else",
-                "t-foreach",
-                "t-as",
-                "t-options",
-                "t-call-options",
-                "t-att-class",
-                "t-att-style",
-                "t-att-src",
-                "t-att-href",
-                "t-att-alt",
-                "t-att-title",
-                "t-att-name",
-                "t-att-value",
-                "t-att-data-target",
-                "t-att-data-bs-target",
-                "t-att-data-bs-toggle",
-                "t-att-role",
-                "t-att-aria-label",
-                "t-att-placeholder",
-                "t-att-id",
-                "t-att-checked",
-                "t-att-selected",
-            }
+            # [@ANCHOR: user_websites:page_arch_qweb_allowlist]
+            # Member arch may carry exactly two QWeb directives: t-name (the template's
+            # own name) and t-call with a literal naming one of MEMBER_CALLABLE_TEMPLATES.
+            # Everything else (t-out, t-esc, t-set, t-foreach, t-if, t-options,
+            # t-call-options, every t-att-*, t-attf-*) carries a Python expression the
+            # server evaluates under the VIEWER's account, and a regex blacklist on that
+            # expression text is not a safe boundary. A member page has no data of its
+            # own to compute over, so none of them is needed. t-call with an arbitrary
+            # name would render any installed template (backend views, mail templates)
+            # under the viewer's account, hence the fixed list.
+            MEMBER_CALLABLE_TEMPLATES = frozenset(
+                {
+                    "website.layout",
+                    "user_websites.template_default_home",
+                    "user_websites.report_violation_snippet",
+                    "user_websites.report_violation_modal",
+                }
+            )
+            T_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
 
             for elem in root.xpath("//*"):
+                # An svg block was rebuilt from the allowlist above (that rebuild sets a
+                # plain xmlns attribute, which this loop would count as a violation).
+                if elem.tag.rpartition("}")[2].lower() == "svg" or any(
+                    isinstance(a.tag, str) and a.tag.rpartition("}")[2].lower() == "svg"
+                    for a in elem.iterancestors()
+                ):
+                    continue
                 for attr in list(elem.attrib.keys()):
                     attr_lower = attr.lower()
                     # Prevent XML namespace bypasses
@@ -216,76 +297,56 @@ class WebsitePage(models.Model):
                         continue
                     val = elem.attrib[attr]
                     # Block all dangerous URI schemes (data, vbscript, javascript)
+                    # Browsers drop tab, newline and other control characters inside a URL
+                    # scheme, so "java\tscript:" runs; strip them before matching.
                     if attr_lower in (
                         "href",
                         "src",
                         "content",
                         "formaction",
                         "action",
+                        "poster",
+                        "background",
                     ) and re.match(
-                        r"^\s*(javascript|data|vbscript):", val, re.IGNORECASE
+                        r"^(javascript|data|vbscript):",
+                        re.sub(r"[\x00-\x20\x7f]+", "", val),
+                        re.IGNORECASE,
                     ):
                         del elem.attrib[attr]
                         elem.attrib[f"data-blocked-{attr}"] = val
                         was_modified = True
                     elif attr_lower.startswith(dangerous_prefixes):
-                        if attr_lower not in ALLOWED_T_DIRECTIVES:
-                            del elem.attrib[attr]
-                            elem.attrib[f"data-blocked-{attr}"] = val
-                            was_modified = True
-                        # Adversarial security review, 2026-09-03: t-att-href
-                        # and t-att-src are in ALLOWED_T_DIRECTIVES (real,
-                        # legitimate uses -- a page linking to an internal
-                        # anchor computed via a t-if, an image src built from
-                        # a t-foreach loop variable, etc.), but the literal-
-                        # attribute-name scheme check above only ever
-                        # matches the bare strings "href"/"src", never
-                        # "t-att-href"/"t-att-src" -- so a QWeb expression
-                        # like t-att-href="'javascript:alert(1)'" reached
-                        # only the SSTI-token regex below, which has nothing
-                        # to do with dangerous URI schemes, and sailed
-                        # through untouched into the real rendered href.
-                        # Unlike a plain href value, this attribute's own
-                        # text is Python expression SOURCE (quotes,
-                        # concatenation, etc. included), not the literal URL
-                        # itself, so an unanchored search for the dangerous
-                        # scheme name anywhere in the expression -- not just
-                        # at its very start -- is the correct check here,
-                        # the same conservative "search, don't match" shape
-                        # the SSTI check just below already uses.
-                        elif attr_lower in ("t-att-href", "t-att-src") and re.search(
-                            r"(javascript|data|vbscript)\s*:", val, re.IGNORECASE
+                        # Case-insensitive match, exact value check; the attribute is
+                        # kept only when it is one of the two permitted directives
+                        # with a value that passes its own validation.
+                        if (
+                            attr == "t-name" and T_NAME_RE.match(val)
+                        ) or (
+                            attr == "t-call"
+                            and val in MEMBER_CALLABLE_TEMPLATES
                         ):
-                            del elem.attrib[attr]
-                            elem.attrib[f"data-blocked-{attr}"] = val
-                            was_modified = True
-                        else:
-                            # # Verified by [@ANCHOR: test_website_page_sanitize_arch_bare_env_bypass]
-                            # Additional expression-level check for SSTI vectors.
-                            # [!] SECURITY: the original pattern only blocked
-                            # .sudo(/.with_user(/.with_env(/.env( when
-                            # immediately followed by a call paren, so bare
-                            # attribute/subscript access -- e.g.
-                            # t-esc="request.env['res.users'].search([])"
-                            # or "request.session.sid" -- bypassed it
-                            # entirely and reached full, un-sudoed ORM
-                            # access (and session-id theft) under whatever
-                            # account happens to VIEW the page, without
-                            # ever calling .sudo()/eval()/exec(). Block the
-                            # bare tokens that grant that access at all
-                            # (request/env/session), plus the ORM verbs
-                            # that mutate or execute raw SQL, not just the
-                            # privilege-escalation helper methods.
-                            if re.search(
-                                r"\.(sudo|with_user|with_context|with_env)\s*\(|"
-                                r"\b(request|env|session)\b|"
-                                r"__|"
-                                r"\b(eval|exec|getattr|setattr|write|unlink|create|execute|browse|search|read|import|open|cr)\b",
-                                val,
-                            ):
-                                del elem.attrib[attr]
-                                elem.attrib[f"data-blocked-ssti-{attr}"] = val
-                                was_modified = True
+                            continue
+                        del elem.attrib[attr]
+                        elem.attrib[f"data-blocked-{attr}"] = val
+                        was_modified = True
+
+            # [@ANCHOR: user_websites:page_arch_text_is_markup]
+            # Verified by [@ANCHOR: test_user_arch_svg_allowlist]
+            # QWeb writes a static text node into the page RAW, unescaped (ir_qweb.py,
+            # _compile_directive_inner_content: `_append_text(el.text)`). A text node whose
+            # value contains "<" is therefore live markup in the rendered page, however it was
+            # spelled in the arch: `&lt;script&gt;` and `<![CDATA[<script>]]>` both parse to the
+            # text "<script>" and came out as a real <script> element, with none of the
+            # element checks above ever seeing it. Re-spell every "<" in text as the entity
+            # "&lt;" (the node then holds the five characters, which the browser shows as "<").
+            # A second pass finds no "<" left, so saving again changes nothing.
+            for node in root.iter():
+                if not isinstance(node.tag, str):
+                    continue
+                if node.text and "<" in node.text:
+                    node.text = node.text.replace("<", "&lt;")
+                if node.tail and "<" in node.tail:
+                    node.tail = node.tail.replace("<", "&lt;")
 
             # Return inner HTML of root without the wrapper
             # Correctly handle text nodes and tail text to prevent data loss (Bug Fix)

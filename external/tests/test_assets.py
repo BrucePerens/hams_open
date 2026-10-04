@@ -100,6 +100,29 @@ class TestExternalAssets(HamsHttpCase):
                 f"{wasm_name} should start with the real WASM magic bytes.",
             )
 
+    # Tests [@ANCHOR: external:HTTP_REACHABLE_SIPJS]
+    def test_02c_sipjs_reachable_and_matches_the_recorded_checksums(self):
+        """SIP.js (ADR 0101's browser SIP stack) is served as plain ES modules and is byte-for-byte
+        the npm tarball content whose SHA-256 values are recorded in sipjs/SHA256SUMS."""
+        base = "/external/static/src/node_modules/sipjs/"
+        entry = self.url_open(base + "lib/index.js")
+        self.assertEqual(entry.status_code, 200, "SIP.js lib/index.js should be reachable.")
+        self.assertIn(b'from "./api/index.js"', entry.content)
+        # Every vendored file is reachable and matches its recorded digest.
+        sums = self.url_open(base + "SHA256SUMS")
+        self.assertEqual(sums.status_code, 200)
+        lines = [ln for ln in sums.content.decode().splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 195, "193 lib files, LICENSE.md and package.json")
+        for line in lines:
+            digest, name = line.split(None, 1)
+            response = self.url_open(base + name.strip())
+            self.assertEqual(response.status_code, 200, name)
+            self.assertEqual(hashlib.sha256(response.content).hexdigest(), digest, name)
+        package = self.url_open(base + "package.json")
+        self.assertIn(b'"version": "0.21.2"', package.content)
+        license_text = self.url_open(base + "LICENSE.md")
+        self.assertIn(b"Junction Networks", license_text.content)
+
     # Tests [@ANCHOR: external:HTTP_NO_HEAD]
     def test_03_no_head_request(self):
         """Verify fetch_assets does not use HEAD requests."""

@@ -71,6 +71,13 @@ _logger = logging.getLogger(__name__)
 
 _TRUSTED_LOOPBACK_ADDRS = ("127.0.0.1", "::1")  # burn-ignore-tunnel-peer-check
 
+# [@ANCHOR: cloudflare:strip_client_forwarded_host]
+# WSGI environ keys Cloudflare's edge always adds to a request it forwards. Their presence means the
+# request came through Cloudflare (Tunnel or direct), and on such a request nothing upstream of
+# Odoo sets `X-Forwarded-Host` except the visitor: cloudflared sets it only when an ingress rule
+# configures `httpHostHeader` (none of ours do), and Cloudflare does not remove a visitor's copy.
+_CLOUDFLARE_REQUEST_MARKERS = ("HTTP_CF_RAY", "HTTP_CF_CONNECTING_IP", "HTTP_CF_VISITOR")
+
 # Re-reading Redis on every single request would add a network round trip to the hot path for
 # every non-Tunnel visitor; a short TTL keeps a settings change or cron refresh visible within a
 # minute without that per-request cost. Module-level and per-worker-process on purpose -- each
@@ -126,6 +133,16 @@ _original_application_call = odoo.http.Application.__call__
 
 def _patched_application_call(self, environ, start_response, *args, **kwargs):
     # [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    # A visitor-supplied X-Forwarded-Host must never reach Odoo's proxy_mode handling: with it
+    # present, odoo/http.py runs werkzeug's ProxyFix(x_host=1), which replaces `Host` with the
+    # header, so one hostname's visitor can make Odoo answer as another host (website selection,
+    # absolute URLs, redirects) and Cloudflare would cache that answer under the requested name.
+    # Confirmed live on hams.com 2026-10-03 (`X-Forwarded-Host: crawler.hams.com` on `/` returned the
+    # crawler page). Dropping it also keeps ProxyFix, which Odoo only runs when this header exists,
+    # from running at all; the scheme is applied below. Requests that did not come through
+    # Cloudflare (a local nginx, which sets the header itself from `Host`) are left alone.
+    if any(marker in environ for marker in _CLOUDFLARE_REQUEST_MARKERS):
+        environ.pop("HTTP_X_FORWARDED_HOST", None)
     # Trust CF-Visitor only from a peer that is either loopback (this deployment's own Tunnel
     # case) or in the admin-configured Cloudflare IP allow-list (the non-Tunnel case) -- see
     # cloudflare/models/edge_context.py's own get_request_context(), which applies the identical

@@ -6,7 +6,7 @@ import importlib.util
 import os
 
 from cryptography.fernet import Fernet
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -461,3 +461,96 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
             self.env.invalidate_all()
             self.assertFalse((on | null | off).filtered("ssh_route_enabled"))
         self.assertFalse(Tunnel.search([("ssh_route_enabled", "=", True)]))
+
+    def test_build_ingress_is_exactly_what_a_push_sends_and_needs_no_network(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_build_ingress]
+        tunnel = self._make_push_test_tunnel("Build Ingress", "https://build-ingress-test.example.com")
+        self.env["cloudflare.tunnel.route"].create(
+            {
+                "tunnel_id": tunnel.id,
+                "hostname": "build-ingress-test.example.com",
+                "path": "^/adif$",
+                "service_url": "http://localhost:8070",  # burn-ignore-cloudflared-ingress
+                "sequence": 1,
+            }
+        )
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+        planned = tunnel._build_ingress()
+        mock_push.assert_not_called()
+        self.assertEqual(planned[-1], {"service": tunnel.catch_all_service})
+        self.assertIn(
+            {
+                "hostname": "build-ingress-test.example.com",
+                "path": "^/adif$",
+                "service": "http://localhost:8070",  # burn-ignore-cloudflared-ingress
+            },
+            planned,
+        )
+        tunnel.action_push_configuration()
+        self.assertEqual(mock_push.call_args[0][3]["config"]["ingress"], planned)
+
+    def test_a_push_is_refused_when_an_ingress_problem_is_reported(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_ingress_problems]
+        tunnel = self._make_push_test_tunnel("Problems", "https://problems-test.example.com")
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+        self.assertEqual(tunnel._ingress_problems(tunnel._build_ingress()), [])
+        mock_problems = self.safe_patch_object(
+            type(tunnel), "_ingress_problems", return_value=["a rule exposes a tenant"]
+        )
+        with self.assertRaises(UserError) as caught:
+            tunnel.action_push_configuration()
+        self.assertIn("a rule exposes a tenant", str(caught.exception))
+        mock_problems.assert_called()
+        mock_push.assert_not_called()
+
+    def test_push_configuration_catch_all_service_is_per_tunnel(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+        """
+        The last ingress rule is the tunnel's own catch_all_service. A default tunnel keeps pushing this
+        Odoo (the behaviour before the field existed); a tunnel whose unknown hostnames should be
+        answered elsewhere points it at another service; a malformed value is refused when saved,
+        never pushed.
+        """
+        tunnel = self._make_push_test_tunnel(
+            "Catch All", "https://catch-all-test.example.com"
+        )
+        self.assertEqual(tunnel.catch_all_service, "http://localhost:8069")  # burn-ignore-cloudflared-ingress
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertEqual(ingress[-1], {"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
+
+        tunnel.catch_all_service = "http://localhost:18110"  # burn-ignore-cloudflared-ingress
+        mock_push.reset_mock()
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertEqual(ingress[-1], {"service": "http://localhost:18110"})  # burn-ignore-cloudflared-ingress
+        self.assertEqual(
+            [rule for rule in ingress if "hostname" not in rule and "path" not in rule][-1],
+            ingress[-1],
+        )
+
+        tunnel.catch_all_service = "http_status:404"
+        mock_push.reset_mock()
+        tunnel.action_push_configuration()
+        self.assertEqual(
+            mock_push.call_args[0][3]["config"]["ingress"][-1], {"service": "http_status:404"}
+        )
+
+        for bad in (
+            "", "http_status:40", "http://a b", "no-scheme:8069",
+            "ssh://host:22", "http://host:8069\nx",
+        ):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                    tunnel.catch_all_service = bad
+                    tunnel.flush_recordset()

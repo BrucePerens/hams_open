@@ -1,0 +1,20 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_tenant_site_manager,tenant.site manager,model_tenant_site,tenant_sites.group_tenant_sites_manager,1,1,1,1
+access_tenant_site_host_manager,tenant.site.host manager,model_tenant_site_host,tenant_sites.group_tenant_sites_manager,1,1,1,1
+access_tenant_site_own_host_manager,tenant.site.own.host manager,model_tenant_site_own_host,tenant_sites.group_tenant_sites_manager,1,1,1,1
+access_tenant_site_service,tenant.site service,model_tenant_site,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_site_host_service,tenant.site.host service,model_tenant_site_host,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_site_own_host_service,tenant.site.own.host service,model_tenant_site_own_host,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_website,website svc,website.model_website,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_res_users,res.users svc,base.model_res_users,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_res_company,res.company svc,base.model_res_company,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_res_partner,res.partner svc,base.model_res_partner,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_edge_domain,edge.routing.domain svc,edge_routing.model_edge_routing_domain,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_website_page,website.page svc,website.model_website_page,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_module,ir.module.module svc,base.model_ir_module_module,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_model_data,ir.model.data svc,base.model_ir_model_data,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_view,ir.ui.view svc,base.model_ir_ui_view,tenant_sites.group_tenant_sites_service,1,1,1,0
+access_tenant_sites_svc_asset,ir.asset svc,base.model_ir_asset,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_groups,res.groups svc,base.model_res_groups,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_site_kept_module_manager,tenant.site.kept.module manager,model_tenant_site_kept_module,tenant_sites.group_tenant_sites_manager,1,1,1,1
+access_tenant_site_kept_module_service,tenant.site.kept.module service,model_tenant_site_kept_module,tenant_sites.group_tenant_sites_service,1,0,0,0

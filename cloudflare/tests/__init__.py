@@ -4,8 +4,7 @@
 # -*- coding: utf-8 -*-
 from . import test_multi_website
 from . import test_cloudflare_apis
-from . import test_cloudflare_headers
-from . import test_edge_cache_cookies
+from . import test_settings_view_block
 from . import test_purge_everything
 from . import test_purge_queue
 from . import test_enqueue_urls_batch
@@ -24,4 +23,5 @@ from . import test_hostname_pending_delete
 from . import test_tenant_key
 from . import test_wsgi_proxy_scheme
 from . import test_trusted_ip_ranges
+from . import test_dns_push
 from . import tunnel_simulator
