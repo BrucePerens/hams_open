@@ -31,7 +31,8 @@ The module follows a strict "minimum privilege" policy. It uses a dedicated serv
 
 ### OS-Level Sandboxing
 * **Strict Permissions:** `.env` files are created with `0600` (read/write only for the Odoo server process user).
-* **Directory Isolation:** Parent directories are created with `0700` to prevent other users on the system from traversing into the key storage area.
+* **Directory Isolation:** Parent directories are created with `0700` to prevent other users on the system from traversing into the key storage area. The key root directory (`/opt/hams/etc/keys`) itself is `0710`: the Odoo user has full access and its group may traverse and not list it, so a daemon account in that group can open the one file it is named for and cannot enumerate the others [@ANCHOR: COMM_key_root_directory_mode].
+* **Per-Daemon OS Group:** A registry may carry an `os_group` (`hamsd_<family>`, the OS group of the account the daemon runs as). Its key file is then written `0640` with that group, so that account, and no other daemon, can read it. The Odoo user cannot `chown` to another user (it is unprivileged), only `chgrp` to a group it belongs to, so provisioning puts it in each such group; the file stays owned by Odoo, the only account that writes it. The file is `0600` until the group is set, so it is never group-readable under another group, and a failure (the group missing, or the server started before provisioning added it) leaves the previous key file untouched [@ANCHOR: COMM_write_secure_env_file_group]. Only a Daemon Key Manager may set the group, and the name must match `hamsd_<family>` so a registry cannot point a key at `hams_com` or any other privileged group [@ANCHOR: COMM_security_constraints_os_group]. See `docs/proposals/DAEMON_OS_ISOLATION_PLAN.md` in hams_com.
 * **Path Validation:** All paths MUST start with `/opt/hams/etc/keys/`. The module strictly blocks directory traversal (`..`) and symlink attacks by resolving the `os.path.realpath` of the requested path before performing any file operations [@ANCHOR: COMM_security_constraints_path].
 
 To further protect the integrity of the host system, additional safety mechanisms are enforced across the platform.
@@ -92,8 +93,8 @@ In containerized/orchestrated environments:
 #### `_rotate_key_and_write_file(pre_fetched_keys=None)`
 * **Behavior**: The underlying mechanism that revokes old keys via `res.users.apikeys`, generates a new 90-day key, and calls `_write_secure_env_file`. Handles validation of `__system__` restrictions.
 
-#### `_write_secure_env_file(path, login, key)`
-* **Behavior**: Safely writes the `.env` file. Enforces `0600` on the file and `0700` on parent directories. Prevents path traversal.
+#### `_write_secure_env_file(path, login, key, group=None)`
+* **Behavior**: Safely writes the `.env` file. Enforces `0600` on the file (or `0640` with the given `hamsd_<family>` group) and `0700` on parent directories (`0710` on the key root). Prevents path traversal.
 
 #### `_cron_rotate_all_keys()`
 * **Behavior**: Triggered by cron. Uses a batch limit of 10 and triggers itself recursively to avoid transaction timeouts. Commits successful writes immediately and rolls back individual failures.
