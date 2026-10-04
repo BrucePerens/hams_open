@@ -11,7 +11,7 @@ import re
 
 from odoo.tests.common import Opener, tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
-from odoo.addons.cloudflare.models.ir_http import (
+from odoo.addons.edge_cache.models.ir_http import (
     EDGE_CACHEABLE_MARKER,
     _set_cookie_name,
     _set_cookie_value,
@@ -38,7 +38,7 @@ class TestEdgeCacheCookies(HamsHttpCase):
                 "type": "qweb",
                 "is_published": True,
                 "arch": (
-                    '<t name="Edge cache test page" t-name="cloudflare.edge_cache_test_page">'
+                    '<t name="Edge cache test page" t-name="edge_cache.edge_cache_test_page">'
                     '<t t-call="website.layout"><div id="wrap">Edge cache test content</div></t>'
                     "</t>"
                 ),

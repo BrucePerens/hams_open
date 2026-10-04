@@ -62,7 +62,7 @@ Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPT
 * **Multi-website tunnels:** one server fronting several websites is the ordinary case here. The "Ensure Tunnel Daemon Running" cron keeps **every** tunnel that has credentials up `[@ANCHOR: ensure_tunnel_running]`, one `cloudflared` daemon per tunnel, each tracked under its own Cloudflare tunnel id: a running tunnel is never started twice, a dead one is restarted, and one website's Cloudflare failure never stops another's tunnel `[@ANCHOR: ensure_one_tunnel_running]`. "Routes pushed yet?" lives on the tunnel record (`routes_provisioned`); installs carrying the old single `cloudflare.tunnel.provisioned` system parameter have it folded onto the one tunnel it was really about, once `[@ANCHOR: migrate_global_provisioned_flag]`.
 
 ## 3. Automated Subsystems
-* **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers via `ir.http._post_dispatch` `[@ANCHOR: ir_http_post_dispatch_headers]`. Dynamic and sensitive routes `[@ANCHOR: cf_nocache_routes]` are excluded.
+* **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers via `ir.http._post_dispatch` `[@ANCHOR: ir_http_post_dispatch_headers]`. This code, the first-visit cookie rules and the CSRF refresh script live in the `edge_cache` module (a dependency of this one, usable on its own by an instance with no Redis). Dynamic and sensitive routes `[@ANCHOR: cf_nocache_routes]` are excluded.
 
 * **Request Context Safety:** Safely extracts edge headers even in non-HTTP or unbound request contexts `[@ANCHOR: cf_get_request_context]`.
 * **Boot-time Sync:** Scans `static/` folders on boot and invalidates `odoo-static-assets` across all zones if changes are detected.

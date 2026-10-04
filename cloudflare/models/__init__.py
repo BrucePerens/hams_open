@@ -10,7 +10,6 @@ from . import domain
 from . import edge_context
 from . import hostname_pending_delete
 from . import ip_ban
-from . import ir_http
 from . import purge_queue
 from . import purge_wizard
 from . import res_config_settings
@@ -23,7 +22,6 @@ from . import turnstile
 from . import waf
 from . import waf_rule
 from . import website
-from . import website_page
 from . import zone_settings_wizard
 # # Verified by [@ANCHOR: COMM_test_multi_website_purge_queue]
 # spacing

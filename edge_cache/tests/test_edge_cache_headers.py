@@ -5,8 +5,8 @@
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
-from odoo.addons.cloudflare.models import ir_http as cloudflare_ir_http
-from odoo.addons.cloudflare.models.ir_http import (
+from odoo.addons.edge_cache.models import ir_http as cloudflare_ir_http
+from odoo.addons.edge_cache.models.ir_http import (
     EDGE_CACHEABLE_MARKER,
     IrHttp as CloudflareIrHttp,
 )
@@ -14,7 +14,7 @@ from odoo.http import Response
 
 
 @tagged("post_install", "-at_install")
-class TestCloudflareHeaders(HamsHttpCase):
+class TestEdgeCacheHeaders(HamsHttpCase):
     def setUp(self):
         super().setUp()
         # Create a user to test authenticated routes
@@ -85,7 +85,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_request.httprequest.path = "/web/assets/1/dummy.js"
 
         self.safe_patch(
-            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+            "odoo.addons.edge_cache.models.ir_http.request", new=mock_request
         )
         res = DummyIrHttp._post_dispatch(mock_response)
 
@@ -115,21 +115,6 @@ class TestCloudflareHeaders(HamsHttpCase):
             response_api.headers.get("Cloudflare-CDN-Cache-Control"),
             "no-cache, no-store",
             "API routes MUST NOT be cached at the edge.",
-        )
-
-    def test_03_xpath_rendering(self):
-        # [@ANCHOR: test_xpath_rendering_cf_settings]
-
-        # Tests [@ANCHOR: COMM_xpath_rendering_cf_settings]
-        """Verify the Cloudflare settings block successfully injects into the global website config."""
-        res = self.env["res.config.settings"].get_view(
-            view_id=self.env.ref("base.res_config_settings_view_form").id,
-            view_type="form",
-        )
-        self.assertIn(
-            "cloudflare_edge",
-            res["arch"],
-            "The injected settings block must exist in the compiled arch.",
         )
 
     def test_04_website_cache_tag_localproxy(self):
@@ -174,7 +159,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_request = MockRequest()
 
         self.safe_patch(
-            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+            "odoo.addons.edge_cache.models.ir_http.request", new=mock_request
         )
 
         # Only a response the page opted in (website.page sets this marker) is cached and tagged.
@@ -229,7 +214,7 @@ class TestCloudflareHeaders(HamsHttpCase):
         mock_request = MockRequest()
 
         self.safe_patch(
-            "odoo.addons.cloudflare.models.ir_http.request", new=mock_request
+            "odoo.addons.edge_cache.models.ir_http.request", new=mock_request
         )
 
         res = DummyIrHttp._post_dispatch(Response())

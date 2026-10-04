@@ -6,7 +6,7 @@
  * Tests [@ANCHOR: COMM_test_edge_cached_form_posts_after_token_fetch]
  *
  * A public page may come from Cloudflare's edge cache, rendered for an earlier visitor, and the
- * server sends such a page without a session cookie (cloudflare/models/ir_http.py), so the CSRF
+ * server sends such a page without a session cookie (edge_cache/models/ir_http.py), so the CSRF
  * token baked into it (odoo.csrf_token, <meta name="csrf_token">, <input name="csrf_token">) is
  * bound to a session nobody holds. Before a form that carries a token posts, fetch a fresh one
  * from /cloudflare/csrf_token, which also hands the visitor the session cookie it is bound to.
@@ -55,7 +55,7 @@ export function refreshCsrfToken() {
             .catch((error) => {
                 // Submit anyway with the token the page carries; if it is stale the server
                 // answers with its ordinary CSRF error, the same as before this script existed.
-                console.warn("cloudflare: could not refresh the CSRF token", error);
+                console.warn("edge_cache: could not refresh the CSRF token", error);
             })
             .finally(() => {
                 settled = true;
