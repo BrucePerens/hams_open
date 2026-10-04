@@ -60,7 +60,7 @@ class TestUserArchStyleAndLink(HamsHttpCase):
 
     def test_03_style_exfiltration_and_overlay_rules_are_removed_not_the_whole_style(self):
         cleaned, modified = self.sanitize(
-            f"<div><style>p{{color:red}} {EXFIL} .o{{position:fixed;top:0}} .k{{margin:0}}</style>x</div>"
+            f"<div><style>p{{color:red}} {EXFIL} .o{{position:fixed}} .k{{margin:0}}</style>x</div>"
         )
         styles = _tags(cleaned, "style")
         self.assertEqual(len(styles), 1)
