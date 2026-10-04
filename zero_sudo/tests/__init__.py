@@ -27,6 +27,7 @@ from . import test_hoot_empty_run_guard
 from . import test_confirm_submit_csp
 from . import svg_corpus  # noqa: F401
 from . import test_svg_sanitizer
+from . import test_css_sanitizer
 from . import common
 from . import dummy_daemon
 

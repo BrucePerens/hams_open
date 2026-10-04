@@ -6,6 +6,7 @@
 
 import logging
 
+from . import css_sanitizer
 from . import svg_sanitizer
 
 # [@ANCHOR: zero_sudo:svg_allowlist_install]
