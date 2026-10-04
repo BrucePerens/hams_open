@@ -473,13 +473,22 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
 
 # [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 def execute_job(ch, method, properties, body):
+    acked = False
+
+    def ack():
+        # Acknowledge the RabbitMQ message exactly once, however many paths below want to.
+        nonlocal acked
+        if not acked:
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            acked = True
+
     try:
         try:
             payload = json.loads(body)
         except json.JSONDecodeError as e:
             decode_err_msg = """Failed to decode RabbitMQ message body: %s"""
             logger.error(decode_err_msg, e)
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            ack()
             return
 
         job_id = payload.get("job_id")
@@ -493,7 +502,7 @@ def execute_job(ch, method, properties, body):
             logger.error(
                 "Missing job_id or engine in payload: %s", _redact_payload(payload)
             )
-            ch.basic_ack(delivery_tag=method.delivery_tag)
+            ack()
             return
 
         logger.info("Processing job %s (%s)", job_id, engine)
@@ -694,6 +703,15 @@ def execute_job(ch, method, properties, body):
                 "Delegating to privileged pgbackrest sidecar: %s",
                 " ".join(shlex.quote(c) for c in cmd),
             )
+            # Acknowledge BEFORE the long wait. RabbitMQ closes the channel of a consumer that holds
+            # a delivery unacknowledged for longer than consumer_timeout (30 minutes by default),
+            # and the broker then redelivers the message. A full backup of production takes 37 to
+            # 53 minutes, so without this every backup was redelivered and run again, forever
+            # (found 2026-10-04: a second and third full backup started the moment the first one
+            # finished, and the earlier hourly-looking full backups in repo1 were the same loop).
+            # The job row in Odoo, not the broker, tracks this job from here, and the request file
+            # in the spool directory is the durable hand-off to the sidecar.
+            ack()
             return_code, sidecar_output = _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=ch)
             # Don't send sidecar_output here -- advisor-caught bug, 2026-10-01: the
             # shared "Write final state and send any remaining buffer" block just
@@ -830,7 +848,7 @@ def execute_job(ch, method, properties, body):
                 message=error_msg,
             )
 
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        ack()
         logger.info("Job %s finished: %s", job_id, final_state)
 
     except MemoryError:
@@ -883,7 +901,7 @@ def execute_job(ch, method, properties, body):
             # is valid JSON but not an object raises AttributeError here).
             report_err_msg = """Failed to report failure back to Odoo: %s"""
             logger.exception(report_err_msg, inner_e)
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        ack()
 
 
 def main():
