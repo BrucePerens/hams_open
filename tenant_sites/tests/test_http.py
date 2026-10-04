@@ -131,7 +131,7 @@ class TestTenantSitesHttp(HamsHttpCase):
     def test_the_backend_and_login_do_not_exist_on_a_tenant_host(self):
         paths = ["/odoo", "/odoo/action-1", "/jsonrpc", "/xmlrpc/2/common", "/xmlrpc/2/object",
                  "/json/2/res.users", "/websocket", "/longpolling/poll", "/website/info", "/website/force/1",
-                 "/@/", "/my", "/my/home", "/shop", "/forum", "/event", "/mail/thread/messages",
+                 "/@", "/my", "/my/home", "/shop", "/forum", "/event", "/mail/thread/messages",
                  "/web/static/../../etc/passwd"]
         # Backend paths, each tagged: they are refused-path test data, not navigation targets.
         paths.append("/web")  # burn-ignore-route: refused-path test data

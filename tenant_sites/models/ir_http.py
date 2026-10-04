@@ -125,6 +125,8 @@ class IrHttp(models.AbstractModel):
         """The Python module of the controller a path would route to, or None when no route matches.
         Asked of the routing map directly: Odoo's own matching sets up the language and frontend state
         of the request as a side effect, and that must happen only for a path that is really served."""
+        website = request.env["website"].with_context(lang=None).get_current_website()
+        request.website_routing = website.id  # what the website module's own _match sets first
         adapter = request.env["ir.http"].routing_map().bind_to_environ(request.httprequest.environ)
         try:
             rule, _arguments = adapter.match(path_info=path_info, return_rule=True)
@@ -141,7 +143,7 @@ class IrHttp(models.AbstractModel):
         try:
             super()._match(UNROUTABLE_PATH)
         except NotFound:
-            pass
+            _logger.debug("tenant request %s refused", request.httprequest.path)
         raise NotFound()
 
     # [@ANCHOR: tenant_sites:COMM_serve_fallback]
