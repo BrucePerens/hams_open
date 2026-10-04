@@ -39,7 +39,12 @@ This module is fully optimized for Odoo 19 and adheres to a strict Zero-Sudo arc
 Control plane for the CDN edge. Manages Cache-Tags, WAF bans, and Turnstile CAPTCHA verification to offload processing to Cloudflare's edge.
 
 ## 2. API Interfaces
-* **DNS & Hostnames:** Management of `cloudflare.dns.record` and `CloudflareRoutingDomain` for automated SSL provisioning.
+* **DNS & Hostnames:** `cloudflare.dns.record` rows (A, AAAA, CNAME, TXT, NS) are pushed to Cloudflare by `dns_push_plan()` and `dns_push_apply(hash)` (list view, Action, "Push DNS records to Cloudflare"; administrators only). Odoo is the source of truth. `CloudflareRoutingDomain` provisions Custom Hostnames separately; never add one for a name that is already a zone of the account.
+  * **Plan first.** The plan is computed from reads only and shows, per row: `create`, `update`, `delete`, `adopt`, `conflict`, `problem`, `drift`, `unchanged`, with the reason. Apply takes the plan's hash and refuses if Cloudflare or the rows changed since. A row that cannot be planned (no token, no zone, Cloudflare unreachable) is reported and does not hold back the others; an unreachable Cloudflare plans nothing, never "create everything".
+  * **What it never does.** It never overwrites a record it did not create: a record that already exists with the same content (and proxied flag) is *adopted*, which stores its id in the row and writes nothing at Cloudflare; one with other content is a `conflict`. Pasting that record's id into the row is the deliberate way to take it over. It never touches a record Odoo has no row for. Deleting or archiving a row removes nothing at Cloudflare; the only delete is the **Retire** flag on a row linked to its record by id. An update keeps the record's TTL (a new record gets automatic TTL).
+  * **Rows.** `name` is the full lower-case name without a trailing dot; the zone is found from it (the longest suffix that is a zone the token sees). Credentials: the row's website, else the first website with an API token. `manage` off means observe only (rows that existed before 1.7 were switched to it by the migration). NS and TXT rows, and any name an NS row points at (glue), are never proxied.
+  * **DNSSEC.** `hams.com` is DNSSEC-signed; a delegated zone (`callbook.hams.com`, `u.hams.com`) that is not signed needs no DS record, and Odoo has no DS type: an NS delegation with no DS is an ordinary insecure delegation.
+  * **Extension.** `cloudflare.dns.record._dns_problems(entries)` returns strings that refuse the whole push, as `cloudflare.tunnel._ingress_problems` does for tunnels.
 
 * **Traffic Control:** Management of `cloudflare.rate.limit` and `cloudflare.cache.rule`.
 

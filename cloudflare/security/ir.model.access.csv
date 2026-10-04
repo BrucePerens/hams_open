@@ -28,6 +28,7 @@ access_cloudflare_tunnel_route_admin,cloudflare.tunnel.route admin,model_cloudfl
 access_cloudflare_ip_ban_public,cloudflare.ip.ban public,model_cloudflare_ip_ban,base.group_public,0,0,0,0
 access_cloudflare_ip_ban_portal,cloudflare.ip.ban portal,model_cloudflare_ip_ban,base.group_portal,0,0,0,0
 access_cloudflare_dns_record_admin,cloudflare.dns.record admin,model_cloudflare_dns_record,base.group_system,1,1,1,1
+access_cloudflare_dns_push_wizard_admin,cloudflare.dns.push.wizard admin,model_cloudflare_dns_push_wizard,base.group_system,1,1,1,1
 access_cloudflare_zone_settings_admin,cloudflare.zone.settings admin,model_cloudflare_zone_settings,base.group_system,1,1,1,1
 access_cloudflare_rate_limit_admin,cloudflare.rate.limit admin,model_cloudflare_rate_limit,base.group_system,1,1,1,1
 access_cloudflare_cache_rule_admin,cloudflare.cache.rule admin,model_cloudflare_cache_rule,base.group_system,1,1,1,1
