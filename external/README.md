@@ -106,6 +106,32 @@ license text each library's own license requires, not just its SPDX identifier.
   Playwright run driving the real X25519/SHA-256/HKDF/ChaCha20-Poly1305 code paths through a full
   Noise_XX handshake, with network interception confirming zero requests leave localhost.
 
+### SIP.js (browser SIP over WebSocket + WebRTC)
+- **Version:** 0.21.2 (npm `sip.js`, published 2022-10-27; the newest stable release on 2026-10-03, the
+  registry's `latest` dist-tag, with no pre-release newer than it).
+- **License:** MIT, Copyright (c) 2020 Junction Networks. The license text is in
+  `sip.js/LICENSE.md` and reproduced in `THIRD_PARTY_LICENSES.md`.
+- **Purpose:** The browser-direct AllStar client (`hams_com`'s `ham_shack`, ADR 0101): the browser registers
+  and calls an AllStar node itself over SIP-over-WSS and WebRTC, with no relay and no hams.com in the
+  signalling or audio path. Bruce chose SIP.js (2026-09-23) and authorised vendoring it (2026-10-03).
+- **Local Path:** `/external/static/src/node_modules/sip.js/lib/index.js` (loaded with a dynamic `import()`,
+  the same way `noise_xx.js` loads noble; the library is pure ES modules with relative `./x.js` imports and
+  no bare specifiers, so no bundling step is needed and none was done: the files are the npm tarball's own).
+- **Source:** fetched once, on 2026-10-03, from the npm registry:
+  `https://registry.npmjs.org/sip.js/-/sip.js-0.21.2.tgz` (255731 bytes), nothing else.
+- **Checksums**, from the registry's own metadata (`https://registry.npmjs.org/sip.js`, `versions["0.21.2"].dist`)
+  and recomputed on the downloaded tarball (all agree):
+  ```
+  integrity (sha512, base64): sha512-tSqTcIgrOd2IhP/rd70JablvAp+fSfLSxO4hGNY6LkWRY1SKygTO7OtJEV/BQb8oIxtMRx0LE7nUF2MaqGbFzA==
+  shasum (sha1):              621a2c996472042d5554db655ed1767bc7a865ea
+  sha256 (computed locally):  abbf374bccf50fdd0f659e24dd70a83a0bad09553bd16fa4b6c94021053f66cb
+  ```
+- **What was vendored:** the tarball's 193 `lib/**/*.js` files, `LICENSE.md` and `package.json`, unmodified.
+  Left out: the 193 TypeScript `.d.ts` declaration files, `README.md` and the source maps (there are none), none
+  of which a browser loads. `sip.js/SHA256SUMS` lists the SHA-256 of every vendored file (`sha256sum -c
+  SHA256SUMS` from inside `sip.js/`); to re-verify, download the tarball above, check it against the
+  integrity value, extract it and compare the same files.
+
 ### ft8js (WASM FT8 decode + encode)
 - **Version:** 0.0.3 upstream, but not vendored as the unmodified upstream build -- see below.
 - **License:** MIT (both `ft8js`'s own wrapper code and the underlying `ft8_lib` it compiles, per
