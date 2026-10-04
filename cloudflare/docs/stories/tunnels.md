@@ -38,26 +38,24 @@ I run hams.com, perens.com and postopen.org from the same Odoo server, each with
 
 10. Whether a given tunnel's daemon is currently up is a question the daemon layer answers per tunnel `[@ANCHOR: is_tunnel_daemon_running]`, which is what lets the job skip a healthy tunnel without spending a Cloudflare API call on it every few minutes.
 
-## Scenario: Other sites, run as separate Odoo instances, behind the same tunnel
+## Scenario: Other sites, run as tenants of this Odoo, behind the same tunnel
 
-perens.com, postopen.org and a parking instance run as their own small Odoo instances on this
-machine (ADR 0105), not as websites of this Odoo, and they go through the same tunnel as hams.com.
+perens.com, postopen.org and the parked domains are tenants of this Odoo (the `tenant_sites` and
+`parking` modules, ADR 0106), and they go through the same tunnel as hams.com.
 
 7a. A rule with no hostname matches every hostname, so the path rules for this site's websocket, DX
-    firehose, band simulator, ADIF and GDPR export endpoints are scoped to `hams.com` and `*.hams.com`
-    before any other zone's name reaches the tunnel, tenant hostnames come first, and the final
-    catch-all goes to the parking instance. That whole-list replacement is made by
-    `hams_shared/tools/tenant_cloudflare.py` from the live list, reviewed by digest; it is not made by
-    the push below.
+    firehose, band simulator, ADIF and GDPR export endpoints are rows scoped to `hams.com` and
+    `*.hams.com`. `tenant_sites` refuses the push in step 6 (`_ingress_problems`)
+    `[@ANCHOR: cloudflare:COMM_tunnel_ingress_problems]` while any tenant or parked hostname exists and a rule has a
+    path but no hostname.
 
-7b. The push in step 6 appends the tunnel's own "Catch-all Service" as the last rule (default this Odoo,
-    `http://localhost:8069`, so an existing tunnel behaves as before; an `http(s)` URL or `http_status:<code>`)
-    `[@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]`. The push still knows nothing of the tenant rules
-    unless they are rows of this tunnel, so once tenants are live do not use it on the `hams.com` tunnel until
-    the list lives in Odoo's rows or the push is retired for it (open question in the design doc, section 14,
-    item 7).
-    A tenant route is an ordinary row (hostname, path, service URL), so the list can move into
-    Odoo's rows later; `tenant_cloudflare.py plan --odoo-rows` prints it in that shape.
+7b. The tunnel's catch-all (its `catch_all_service` setting `[@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]`) stays this Odoo (`http://localhost:8069`): every tenant and parked hostname
+    reaches Odoo, whose request router (`tenant_sites`) serves the tenant's website, the parked page, or
+    an uncached 404. A row is only needed for something that is not Odoo (perens.com's `/static/` goes to
+    the read-only static file server) or to block paths at the edge as well.
+
+7c. `cloudflare.tunnel._build_ingress()` `[@ANCHOR: cloudflare:COMM_tunnel_build_ingress]` returns the list a push would send without any network call, so
+    a planned list can be compared with the live one before anything is pushed.
 
 ## Scenario: How a tunnel's daemon actually runs on this host
 

@@ -5,40 +5,8 @@ from odoo.tests import tagged
 from .. import utils
 
 
-
 @tagged("post_install", "-at_install", "parking")
 class TestParkingUtils(HamsTransactionCase):
-    # [@ANCHOR: parking:COMM_test_normalize_host]
-    def test_normalize_host(self):
-        # Tests [@ANCHOR: parking:COMM_normalize_host]
-        self.assertEqual(utils.normalize_host("Example.COM"), "example.com")
-        self.assertEqual(utils.normalize_host("example.com:8080"), "example.com")
-        self.assertEqual(utils.normalize_host("example.com."), "example.com")
-        self.assertEqual(utils.normalize_host("Bücher.example"), "xn--bcher-kva.example")
-        for bad in ("", None, "intranet", "10.0.0.1", "[::1]", "a b.example", "exa_mple.com",
-                    "-x.example", "example.com:abc", "x" * 64 + ".example", ("a." * 130) + "com",
-                    "http://example.com", "example.com/path", "user@example.com"):
-            self.assertEqual(utils.normalize_host(bad), "", bad)
-
-    # [@ANCHOR: parking:COMM_test_original_host]
-    def test_original_host_ignores_the_forwarded_rewrite(self):
-        # Tests [@ANCHOR: parking:COMM_original_host]
-        environ = {"HTTP_HOST": "victim.example", "werkzeug.proxy_fix.orig": {"HTTP_HOST": "parked-a.example"}}
-        self.assertEqual(utils.original_host(environ), "parked-a.example")
-        self.assertEqual(utils.original_host({"HTTP_HOST": "x.example"}), "x.example")
-
-    # [@ANCHOR: parking:COMM_test_original_peer]
-    # [@ANCHOR: parking:COMM_test_is_loopback_address]
-    def test_original_peer_and_loopback_detection(self):
-        # Tests [@ANCHOR: parking:COMM_is_loopback_address]
-        # Tests [@ANCHOR: parking:COMM_original_peer]
-        forged = {"REMOTE_ADDR": "::1", "werkzeug.proxy_fix.orig": {"REMOTE_ADDR": "203.0.113.9"}}
-        self.assertEqual(utils.original_peer(forged), "203.0.113.9")
-        self.assertFalse(utils.is_loopback_address(utils.original_peer(forged)))
-        self.assertTrue(utils.is_loopback_address("::1"))
-        for bad in ("", None, "203.0.113.9", "not an address", "10.99.0.2"):
-            self.assertFalse(utils.is_loopback_address(bad), bad)
-
     # [@ANCHOR: parking:COMM_test_validate_redirect_url]
     def test_validate_redirect_url(self):
         # Tests [@ANCHOR: parking:COMM_validate_redirect_url]

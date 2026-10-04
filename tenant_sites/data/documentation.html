@@ -1,0 +1,22 @@
+<h1>Tenant sites</h1>
+<p>A tenant site is another public website served by this Odoo under its own domain names, for
+example a personal or club site. It is a normal Odoo website: you edit its pages, menus and blogs in
+the Website app with the website switcher set to that site.</p>
+<h2>What a visitor can see</h2>
+<ul>
+  <li>Only the pages, menus, blogs, posts and redirects that belong to that website.
+  Content shared by all websites is not shown on a tenant site.</li>
+  <li>Read-only: a tenant site accepts no form posts, no login, no sign-up, and no JSON or XML-RPC calls.</li>
+  <li>None of the main site's members, forums, shop or other apps.</li>
+</ul>
+<h2>Setting up</h2>
+<ol>
+  <li>Create the website (Website, Configuration, Websites) and its content.</li>
+  <li>Tenant sites, Sites: create a site, pick the website and list its hostnames (include the www name).</li>
+  <li>Tenant sites, Main site hostnames: list the names the main site answers for (for example example.com and *.example.com).
+  Until at least one is listed, hostnames that are not tenants are served as before.</li>
+  <li>Add the matching tunnel routes in the Cloudflare app. A route that has a path but no hostname is refused at push time while tenant sites exist.</li>
+</ol>
+<h2>Safety</h2>
+<p>These rules apply only to requests that come through Cloudflare. Requests from this machine (daemons, operators) are unchanged.
+A hostname that is not the main site's, a tenant's or a parked domain's gets a 404 that is never cached.</p>

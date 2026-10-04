@@ -7,6 +7,8 @@ import logging
 from odoo import fields, http
 from odoo.http import request
 
+from odoo.addons.tenant_sites import utils as site_utils
+
 from .. import utils
 from ..models.ir_http import INQUIRY_GLOBAL_HOUR, INQUIRY_PER_IP_HOUR, MAX_BODY
 
@@ -23,7 +25,7 @@ class ParkingController(http.Controller):
     def inquiry(self, token="", name="", email="", message="", website="", **_ignored):
         ir_http = request.env["ir.http"]
         environ = request.httprequest.environ
-        host = utils.normalize_host(utils.original_host(environ))
+        host = site_utils.normalize_host(site_utils.original_host(environ))
         env = ir_http._parking_service_env()
         record = env["parking.domain"]._lookup(host) if host else env["parking.domain"]
         secret = env["ir.config_parameter"]._get_param("parking.form_secret")
