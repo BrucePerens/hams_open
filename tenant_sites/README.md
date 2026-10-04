@@ -9,8 +9,7 @@ Classification depends on the hostname the client sent (`werkzeug.proxy_fix.orig
 `X-Forwarded-Host`), and the request is refused (400) when it differs from the one Odoo would use. A
 request whose Host is not a domain name (`localhost`, an IP address, a one-word name such as the
 `odoo` host this machine's own daemons may use) is never classified and is served as before, which
-keeps the JSON-2 callers, the test harness and operators on loopback working; through the tunnel
-(it carries `CF-Ray`, which Cloudflare's edge sets itself) such a Host is refused. Nothing depends on
+keeps the JSON-2 callers, the test harness and operators on loopback working. Nothing depends on
 `CF-Ray` being present for a real domain name, so an operator can check a tenant over loopback with a
 `Host:` header.
 

@@ -27,28 +27,6 @@ class TestTenantSitesUtils(HamsTransactionCase):
         self.assertEqual(utils.original_host({"HTTP_HOST": "c.example"}), "c.example")
         self.assertEqual(utils.original_host({}), "")
 
-    # [@ANCHOR: tenant_sites:COMM_test_original_peer]
-    # [@ANCHOR: tenant_sites:COMM_test_is_loopback_address]
-    def test_original_peer_and_loopback_detection(self):
-        # Tests [@ANCHOR: tenant_sites:COMM_original_peer]
-        # Tests [@ANCHOR: tenant_sites:COMM_is_loopback_address]
-        loopback = "127.0.0.1"  # burn-ignore-ssrf-test-value: classification input, never connected to
-        environ = {"REMOTE_ADDR": "203.0.113.9", "werkzeug.proxy_fix.orig": {"REMOTE_ADDR": loopback}}
-        self.assertEqual(utils.original_peer(environ), loopback)
-        self.assertEqual(utils.original_peer({"REMOTE_ADDR": "10.0.0.1"}), "10.0.0.1")
-        self.assertTrue(utils.is_loopback_address(loopback))
-        self.assertTrue(utils.is_loopback_address("::1"))
-        self.assertFalse(utils.is_loopback_address("10.0.0.1"))
-        self.assertFalse(utils.is_loopback_address("not an address"))
-
-    # [@ANCHOR: tenant_sites:COMM_test_through_cloudflare]
-    def test_through_cloudflare(self):
-        # Tests [@ANCHOR: tenant_sites:COMM_through_cloudflare]
-        self.assertTrue(utils.through_cloudflare({"CF-Ray": "abc-SJC"}))
-        self.assertTrue(utils.through_cloudflare({"CF-Connecting-IP": "1.2.3.4"}))
-        self.assertFalse(utils.through_cloudflare({"X-Forwarded-For": "1.2.3.4"}))
-        self.assertFalse(utils.through_cloudflare({}))
-
     # [@ANCHOR: tenant_sites:COMM_test_host_matches]
     # [@ANCHOR: tenant_sites:COMM_test_valid_host_pattern]
     def test_host_patterns(self):

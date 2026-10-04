@@ -9,8 +9,7 @@ reject   the Host the client sent and the one Odoo would use disagree (X-Forward
 
 Only a request whose Host is a real domain name is classified. A request for `localhost`, an IP address
 or a one-word name (this machine's daemons calling the JSON-2 API, the test harness, an operator through
-an SSH tunnel) is always `main`, unless it carries Cloudflare's own headers, which a request through the
-tunnel always does: then a Host that is not a domain name is refused (400)."""
+an SSH tunnel, and cloudflared's own simulator in the tests) is always `main`."""
 
 import logging
 
@@ -52,7 +51,7 @@ class IrHttp(models.AbstractModel):
         environ = httprequest.environ
         host = utils.normalize_host(utils.original_host(environ))
         if not host:
-            return KIND_REJECT if utils.through_cloudflare(httprequest.headers) else KIND_MAIN
+            return KIND_MAIN
         if host != utils.normalize_host(environ.get("HTTP_HOST", "")):
             return KIND_REJECT
         hosts = request.env["tenant.site.host"]

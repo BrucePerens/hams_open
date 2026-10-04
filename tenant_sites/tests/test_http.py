@@ -214,7 +214,6 @@ class TestTenantSitesHttp(HamsHttpCase):
             self.assertEqual(response.headers["Cache-Control"], "no-store")
             self.assertNotIn("Set-Cookie", response.headers)
             self.assertNotIn("MAIN-ONLY-CONTENT", response.text)
-        self.assertEqual(self.get("/", "10.1.2.3").status_code, 400)
 
     def test_main_hostnames_and_member_custom_domains_are_served_as_before(self):
         self.assertEqual(self.get("/web/login", MAIN).status_code, 200)
@@ -228,8 +227,9 @@ class TestTenantSitesHttp(HamsHttpCase):
             response = self.url_open("/web/login", headers={"Host": host}, allow_redirects=False)
             self.assertEqual(response.status_code, 200, host)
             self.assertIn("password", response.text.lower(), host)
-        # Through the tunnel such a Host is refused, and a real domain name is classified without CF-Ray.
-        self.assertEqual(self.get("/", "10.99.0.1").status_code, 400)
+        # With Cloudflare's headers too (cloudflared's own simulator does this), and a real domain name is
+        # classified without them.
+        self.assertEqual(self.get("/", "10.99.0.1").status_code, 200)
         direct = self.url_open("/web/login", headers={"Host": TENANT}, allow_redirects=False)
         self.assertEqual(direct.status_code, 404)
 

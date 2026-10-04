@@ -4,12 +4,10 @@
 Nothing here touches Odoo, so the same code is unit-tested without a database.
 """
 
-import ipaddress
 import re
 
 LABEL_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
-CLOUDFLARE_HEADERS = ("CF-Ray", "CF-Connecting-IP")
 
 # Paths a public tenant website may answer through a route. Every other path is not a route on a
 # tenant host: it falls through to the website's own page and redirect lookup, then to a 404.
@@ -75,33 +73,6 @@ def original_host(environ):
     environ["werkzeug.proxy_fix.orig"]; this reads that, never the rewritten value."""
     orig = environ.get("werkzeug.proxy_fix.orig") or {}
     return orig.get("HTTP_HOST") or environ.get("HTTP_HOST") or ""
-
-
-# [@ANCHOR: tenant_sites:COMM_original_peer]
-# Verified by [@ANCHOR: tenant_sites:COMM_test_original_peer]
-def original_peer(environ):
-    """The address of the socket peer, before ProxyFix replaces it with X-Forwarded-For."""
-    orig = environ.get("werkzeug.proxy_fix.orig") or {}
-    return orig.get("REMOTE_ADDR") or environ.get("REMOTE_ADDR") or ""
-
-
-# [@ANCHOR: tenant_sites:COMM_is_loopback_address]
-# Verified by [@ANCHOR: tenant_sites:COMM_test_is_loopback_address]
-def is_loopback_address(address):
-    try:
-        return ipaddress.ip_address((address or "").strip()).is_loopback
-    except ValueError:
-        return False
-
-
-# [@ANCHOR: tenant_sites:COMM_through_cloudflare]
-# Verified by [@ANCHOR: tenant_sites:COMM_test_through_cloudflare]
-def through_cloudflare(headers):
-    """True when the request carries Cloudflare's own headers. The edge sets CF-Ray (and
-    CF-Connecting-IP) on every proxied request itself; a request from this machine's own daemons,
-    the test harness or an operator's SSH tunnel carries neither. Used only to refuse a request
-    through the tunnel whose Host is not a domain name; classification never depends on it."""
-    return any(headers.get(name) for name in CLOUDFLARE_HEADERS)
 
 
 # [@ANCHOR: tenant_sites:COMM_host_matches]
