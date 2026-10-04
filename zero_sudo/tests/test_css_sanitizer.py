@@ -11,7 +11,7 @@ import re
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
-from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet
+from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet, sanitize_style_attribute
 
 # Anything that can make a browser fetch or run something, in a sheet that came out.
 _FETCH = re.compile(
@@ -128,3 +128,112 @@ class TestCssStylesheetFilter(HamsTransactionCase):
         self.assertEqual(len(cleaned.splitlines()), 2000)
         self.assertEqual(sanitize_stylesheet(""), ("", False))
         self.assertEqual(sanitize_stylesheet("   /* only a comment */  "), ("", False))
+
+
+# Each is a `style="..."` value that must come out with no fetch, no overlay and no escape.
+STYLE_ATTR_HOSTILE = [
+    ("remote_url", "background:url(https://evil.example/a)"),
+    ("remote_url_uppercase_property", "BACKGROUND-IMAGE:URL(https://evil.example/a)"),
+    ("remote_url_mixed_case", "Background:uRl( 'https://evil.example/a' )"),
+    ("relative_url", "background:url(/web/image/1)"),
+    ("protocol_relative_url", "background:url(//evil.example/a)"),
+    ("comment_split_url", "background:ur/**/l(https://evil.example/a)"),
+    ("comment_in_property", "back/**/ground:url(https://evil.example/a)"),
+    ("escaped_url", r"background:\75rl(https://evil.example/a)"),
+    ("escaped_url_mixed", r"background:u\72l(https://evil.example/a)"),
+    ("image_set_url", 'background:image-set(url(https://evil.example/a) 1x)'),
+    ("webkit_image_set", 'background:-webkit-image-set("https://evil.example/a" 1x)'),
+    ("image_set_string", 'background:image-set("https://evil.example/a" 1x)'),
+    ("cursor_url", "cursor:url(https://evil.example/c.cur),auto"),
+    ("list_style_image", "list-style-image:url(https://evil.example/b)"),
+    ("content_url", "content:url(https://evil.example/b)"),
+    ("expression", "width:expression(alert(1))"),
+    ("expression_uppercase", "width:EXPRESSION(alert(1))"),
+    ("moz_binding", "-moz-binding:url(#x)"),
+    ("moz_binding_uppercase", "-MOZ-BINDING:url(https://evil.example/x.xml#y)"),
+    ("behavior", "behavior:url(https://evil.example/x.htc)"),
+    ("ms_behavior", "-ms-behavior:url(x.htc)"),
+    ("javascript_url", "background:url(javascript:alert(1))"),
+    ("javascript_value", "background:javascript:alert(1)"),
+    ("data_url", "background:url(data:image/png;base64,AAAA)"),
+    ("data_url_quoted", "background:url('data:text/html,x')"),
+    ("fixed", "position:fixed"),
+    ("fixed_uppercase", "POSITION:FIXED"),
+    ("fixed_spaced", "position : fixed"),
+    ("fixed_important", "position:fixed !important"),
+    ("fixed_important_uppercase", "position:fixed ! IMPORTANT"),
+    ("fixed_comment_split", "pos/**/ition:fi/**/xed"),
+    ("sticky", "position:sticky"),
+    ("webkit_sticky", "position:-webkit-sticky"),
+    ("webkit_sticky_important", "position:-webkit-sticky !important"),
+    ("attr_function", "content:attr(value)"),
+    ("import_in_value", "background:url(#a) @import 'x'"),
+]
+
+
+@tagged("post_install", "-at_install")
+class TestStyleAttributeFilter(HamsTransactionCase):
+    # Tests [@ANCHOR: zero_sudo:css_style_attribute_filter]
+    # [@ANCHOR: test_css_style_attribute_filter] lives here.
+
+    def test_01_harmless_declarations_pass_unchanged(self):
+        for value in (
+            "color:red",
+            "color:#222;margin:0 auto;padding:4px 8px",
+            "font-family:Georgia,serif;font-size:1.2em",
+            "position:absolute;top:0;left:-99999px",
+            "position:relative",
+            "top:99999999px;left:99999999px;inset:99999999px",
+            "fill:url(#gradient)",
+            "--gap:4px;width:calc(100% - 2rem)",
+            'content:"a;b"',
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(sanitize_style_attribute(value), (value, False))
+
+    def test_02_every_hostile_value_is_removed(self):
+        for name, value in STYLE_ATTR_HOSTILE:
+            with self.subTest(name=name):
+                cleaned, dropped = sanitize_style_attribute(value)
+                self.assertTrue(dropped)
+                self.assertEqual(cleaned, "", f"{value!r} kept as {cleaned!r}")
+                self.assertFalse(_FETCH.search(cleaned))  # audit-ignore-search: re.Pattern
+
+    def test_03_a_hostile_declaration_does_not_take_its_neighbours(self):
+        self.assertEqual(
+            sanitize_style_attribute("color:red; background:url(https://evil.example/a) ;margin:0"),
+            ("color:red;margin:0", True),
+        )
+        self.assertEqual(
+            sanitize_style_attribute("COLOR:Red ; Position:Fixed !important; margin : 0 !important"),
+            ("color:Red;margin:0 !important", True),
+        )
+
+    def test_04_comments_are_deleted(self):
+        self.assertEqual(sanitize_style_attribute("color:/* x */red"), ("color:red", False))
+        self.assertEqual(sanitize_style_attribute("/* only */"), ("", False))
+
+    def test_05_malformed_css_drops_the_whole_attribute(self):
+        for value in (
+            "color:red;/* never closed",
+            'color:red;font-family:"open',
+            "color:red;width:calc(1px",
+            "color:red;width:1px)",
+            "color:red;background",
+            "color:red;;just text;margin:0",
+            "color:red;col\\or:blue",
+            "color:red}p{color:blue",
+            "color:red;{margin:0}",
+            "color:red;\x00margin:0",
+            "color:red;1bad:value",
+            "color:red;" + "x" * 5000,
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(sanitize_style_attribute(value), ("", True))
+
+    def test_06_idempotent_and_blank(self):
+        once, _ = sanitize_style_attribute("COLOR:red;background:url(https://evil.example/a);margin:0 !IMPORTANT")
+        self.assertEqual(sanitize_style_attribute(once), (once, False))
+        self.assertEqual(sanitize_style_attribute(""), ("", False))
+        self.assertEqual(sanitize_style_attribute("  ;  ; "), ("", False))
+        self.assertEqual(sanitize_style_attribute(None), ("", False))
