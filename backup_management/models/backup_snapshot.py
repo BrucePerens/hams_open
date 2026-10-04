@@ -31,7 +31,7 @@ class BackupSnapshot(models.Model):
     _snapshot_uniq_msg = """Snapshot IDs must be unique per configuration!"""
     _snapshot_uniq = models.Constraint("UNIQUE(config_id, snapshot_id)", _snapshot_uniq_msg)
 
-    @api.depends("snapshot_id", "config_id.engine", "config_id.target_path")
+    @api.depends("snapshot_id", "config_id.engine", "config_id.target_path", "config_id.pgbackrest_repo")
     def _compute_restore_command(self):
         # [@ANCHOR: backup_management:COMM_backup_restore_command]
 
@@ -43,6 +43,11 @@ class BackupSnapshot(models.Model):
             if rec.config_id.engine == "kopia":
                 rec.restore_command = f"kopia restore {rec.snapshot_id} /var/lib/odoo/backups/restore_{rec.snapshot_id}"
             elif rec.config_id.engine == "pgbackrest":
-                rec.restore_command = f"pgbackrest restore --stanza={rec.config_id.target_path} --set={rec.snapshot_id}"
+                repo_option = (
+                    f" --repo={rec.config_id.pgbackrest_repo}" if rec.config_id.pgbackrest_repo else ""
+                )
+                rec.restore_command = (
+                    f"pgbackrest restore --stanza={rec.config_id.target_path} --set={rec.snapshot_id}{repo_option}"
+                )
             else:
                 rec.restore_command = ""

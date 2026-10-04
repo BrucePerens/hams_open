@@ -75,6 +75,16 @@ class BackupConfig(models.Model):
         "provider that enforces SigV4 region/endpoint agreement needs the "
         "real region set here.",
     )
+    pgbackrest_repo = fields.Integer(
+        string="pgBackRest Repository Number",
+        default=0,
+        help="0 (default): the daemon describes repository 1 from the storage fields "
+        "above. A number N from 1 up: use repositoryN as defined in "
+        "/etc/pgbackrest/pgbackrest.conf on the database host (backups and snapshot "
+        "listings run with --repo=N). Use this for an encrypted repository, whose "
+        "passphrase belongs only in that file and is never stored in Odoo. Required "
+        "by pgBackRest for backups when more than one repository is configured.",
+    )
     access_key = fields.Char(string="Access Key", groups=_SECRET_FIELD_GROUPS)
     secret_key_crypt = fields.Char(
         string="Encrypted Secret Key", groups=_SECRET_FIELD_GROUPS
@@ -112,6 +122,10 @@ class BackupConfig(models.Model):
     _target_path_not_empty = models.Constraint("CHECK(LENGTH(TRIM(target_path)) > 0)", _target_empty_msg)
     _retention_pos_msg = """Retention values cannot be negative."""
     _retention_positive = models.Constraint("CHECK(keep_daily >= 0 AND keep_weekly >= 0 AND keep_monthly >= 0)", _retention_pos_msg)
+    _pgbackrest_repo_range_msg = """The pgBackRest repository number must be between 0 and 256."""
+    _pgbackrest_repo_range = models.Constraint(
+        "CHECK(pgbackrest_repo >= 0 AND pgbackrest_repo <= 256)", _pgbackrest_repo_range_msg
+    )
     _min_size_pos_msg = """Minimum size threshold cannot be negative."""
     _min_size_positive = models.Constraint("CHECK(minimum_size_mb >= 0)", _min_size_pos_msg)
 
@@ -336,6 +350,7 @@ class BackupConfig(models.Model):
                 "bucket_name": rec.bucket_name,
                 "endpoint_url": rec.endpoint_url,
                 "region": rec.region,
+                "pgbackrest_repo": rec.pgbackrest_repo or 0,
                 "access_key": rec.access_key,
                 "secret_key": rec.secret_key,
                 "kopia_password": rec.kopia_password,
