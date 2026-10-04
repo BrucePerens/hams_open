@@ -50,9 +50,12 @@ machine (ADR 0105), not as websites of this Odoo, and they go through the same t
     `hams_shared/tools/tenant_cloudflare.py` from the live list, reviewed by digest; it is not made by
     the push below.
 
-7b. The push in step 6 always appends a catch-all to this Odoo (`http://localhost:8069`) and knows
-    nothing of the tenant rules, so once tenants are live it must not be used on this tunnel until the
-    catch-all service is configurable (to-do `cloudflare-tunnel-catch-all-service-configurable`).
+7b. The push in step 6 appends the tunnel's own "Catch-all Service" as the last rule (default this Odoo,
+    `http://localhost:8069`, so an existing tunnel behaves as before; an `http(s)` URL or `http_status:<code>`)
+    `[@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]`. The push still knows nothing of the tenant rules
+    unless they are rows of this tunnel, so once tenants are live do not use it on the `hams.com` tunnel until
+    the list lives in Odoo's rows or the push is retired for it (open question in the design doc, section 14,
+    item 7).
     A tenant route is an ordinary row (hostname, path, service URL), so the list can move into
     Odoo's rows later; `tenant_cloudflare.py plan --odoo-rows` prints it in that shape.
 

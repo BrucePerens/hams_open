@@ -89,7 +89,7 @@ def assert_arch_is_safe(test, name, arch):
                     lowered.startswith("t-") or lowered in {"href", "xlink:href", "src"},
                     f"{name}: {attr} kept inside svg",
                 )
-                test.assertIsNone(_DANGEROUS_STYLE.search(value), f"{name}: {attr}={value!r}")
+                test.assertEqual(_DANGEROUS_STYLE.findall(value), [], f"{name}: {attr}={value!r}")
             if lowered in {"href", "src", "action", "formaction", "content", "poster", "background"}:
                 test.assertIsNone(
                     _DANGEROUS_URL.match(_NOISE.sub("", value)),
@@ -236,6 +236,51 @@ class TestUserArchSvgSanitizer(HamsHttpCase):
         self.assertNotRegex(style, r":\s*-", f"negative length survived: {style!r}")
         self.assertNotRegex(style, r"(?:width|height):\s*\d{4,}", f"huge size survived: {style!r}")
 
+    def test_10_member_arch_keeps_only_t_name_and_allowlisted_t_call(self):
+        # Tests [@ANCHOR: user_websites:page_arch_qweb_allowlist]
+        """Every QWeb directive but t-name and a literal, allowlisted t-call is neutralised."""
+        cleaned, modified = self.sanitize(
+            '<t t-name="user_websites.home_x"><t t-call="website.layout">'
+            '<t t-call="user_websites.report_violation_snippet"/></t></t>'
+        )
+        self.assertFalse(modified)
+        self.assertEqual(cleaned.count("t-call="), 2)
+        self.assertIn('t-name="user_websites.home_x"', cleaned)
+        hostile = {
+            "t-call of an arbitrary installed template": '<t t-call="base.contact"/>',
+            "t-call that is only prefixed by an allowed name": '<t t-call="website.layout_x"/>',
+            "t-call with an expression": '<t t-call="website.layout or base.contact"/>',
+            "t-out": '<t t-out="1+1"/>',
+            "t-esc": '<p t-esc="\'x\'"/>',
+            "t-set": '<t t-set="a" t-value="1"/>',
+            "t-foreach": '<t t-foreach="range(3)" t-as="i"><b/></t>',
+            "t-if": '<p t-if="True">x</p>',
+            "t-options": '<t t-out="1" t-options="{}"/>',
+            "t-call-options": '<t t-call="website.layout" t-call-options="{}"/>',
+            "t-att-class": '<p t-att-class="\'a\'">x</p>',
+            "t-attf-id": '<p t-attf-id="a{{1}}">x</p>',
+            "t-name with markup": '<t t-name="a b&quot;"/>',
+        }
+        for name, payload in hostile.items():
+            with self.subTest(vector=name):
+                cleaned, modified = self.sanitize(payload)
+                self.assertTrue(modified)
+                root = etree.fromstring(f"<root>{cleaned}</root>")
+                for elem in root.iter():
+                    for attr in elem.attrib:
+                        if attr == "t-call":
+                            self.assertIn(
+                                elem.attrib[attr],
+                                (
+                                    "website.layout",
+                                    "user_websites.template_default_home",
+                                    "user_websites.report_violation_snippet",
+                                    "user_websites.report_violation_modal",
+                                ),
+                            )
+                        else:
+                            self.assertFalse(attr.startswith("t-"), (name, attr))
+
     def test_08_oversize_or_foreign_block_is_dropped_not_kept(self):
         huge = "<svg>" + "<g>" * 40 + "<rect/>" + "</g>" * 40 + "</svg>"
         cleaned, modified = self.sanitize(f"<p>ok</p>{huge}")
@@ -343,6 +388,64 @@ class TestUserArchSvgMemberPaths(HamsHttpCase):
             self.assertIn('id="box"', post.content)
             for word in ("<script", "onerror", "<set", "javascript"):
                 self.assertNotIn(word, post.content, f"{stage}: {word}")
+
+    def test_02b_blog_editor_markup_survives_the_post_content_sanitizer(self):
+        """What the website editor writes (snippet classes, data-*, style, images, tables, links)
+        is kept; script, handlers, javascript: links, forms and iframes are not."""
+        blog = self.env["blog.blog"].create(
+            {"name": f"Editor blog {uuid.uuid4().hex[:6]}", "owner_user_id": self.member.id}
+        )
+        editor_markup = (
+            '<section class="s_text_block pt40 pb40 o_colored_level" data-snippet="s_text_block" '
+            'data-name="Text" style="background-color: rgb(1, 2, 3);"><div class="container s_allow_columns">'
+            '<p class="lead">Hi <a href="/somewhere" class="btn btn-primary" data-bs-toggle="modal">link</a></p>'
+            '<img src="/web/image/123" class="img img-fluid o_we_custom_image" data-original-id="5" alt="a"/>'
+            '<i class="fa fa-star" role="img"/><table class="table"><tr><td>1</td></tr></table>'
+            "</div></section>"
+        )
+        hostile = (
+            '<form action="/x"><input name="a"/></form><iframe src="//evil.example/"/>'
+            '<p onclick="window.__xss=1">x</p><a href="javascript:window.__xss=1">j</a>'
+        )
+        post = self.env["blog.post"].with_user(self.member).create(
+            {
+                "name": "editor post",
+                "blog_id": blog.id,
+                "owner_user_id": self.member.id,
+                "content": editor_markup + hostile,
+            }
+        )
+        for kept in (
+            'class="s_text_block pt40 pb40 o_colored_level"',
+            'data-snippet="s_text_block"',
+            "background-color: rgb(1, 2, 3)",
+            'data-bs-toggle="modal"',
+            'src="/web/image/123"',
+            'data-original-id="5"',
+            'class="fa fa-star"',
+            "<table",
+            'href="/somewhere"',
+        ):
+            self.assertIn(kept, post.content)
+        for gone in ("<form", "<input", "<iframe", "onclick", "javascript:"):
+            self.assertNotIn(gone, post.content)
+
+    def test_02c_member_cannot_store_blog_blog_content(self):
+        """blog.blog.content is also sanitize=False; the member allowlist must drop it."""
+        blog = self.env["blog.blog"].with_user(self.member).create(
+            {
+                "name": f"Blog content {uuid.uuid4().hex[:6]}",
+                "owner_user_id": self.member.id,
+                "content": "<script>window.__xss=1</script>",
+            }
+        )
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_websites_service_account"
+        )
+        self.assertFalse(blog.with_user(svc_uid).content)
+        blog.with_user(self.member).write({"content": "<script>window.__xss=1</script>"})
+        blog.invalidate_recordset()
+        self.assertFalse(blog.with_user(svc_uid).content)
 
     def test_03_hostile_member_page_loaded_publicly_runs_nothing(self):
         """Save hostile pages as a member, load them as an anonymous visitor in headless Chrome."""

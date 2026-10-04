@@ -400,7 +400,7 @@ class TestORMSecurity(RealTransactionCase):
                 )
             )
             # Parse the actual attributes rather than substring-matching
-            # the raw XML text: "data-blocked-ssti-t-esc" itself CONTAINS
+            # the raw XML text: "data-blocked-t-esc" itself CONTAINS
             # the substring 't-esc="...' at its tail, so a naive
             # `'t-esc="..."' in page.arch` check would false-pass even
             # when the sanitizer correctly renamed the live attribute
@@ -415,14 +415,14 @@ class TestORMSecurity(RealTransactionCase):
                 f"eval()/exec() -- it must not survive as a live, "
                 f"executable t-esc attribute (it's fine, and expected, "
                 f"for the raw value to remain visible inside the inert "
-                f"data-blocked-ssti-t-esc diagnostic attribute the "
+                f"data-blocked-t-esc diagnostic attribute the "
                 f"sanitizer moves it to -- same pattern as test_07).",
             )
-            self.assertEqual(live_attrs.get("data-blocked-ssti-t-esc"), payload)
+            self.assertEqual(live_attrs.get("data-blocked-t-esc"), payload)
 
     def test_09_qweb_arch_sanitization_blocks_javascript_uri_via_t_att_href(self):
         # Adversarial security review, 2026-09-03: t-att-href/t-att-src are
-        # in ALLOWED_T_DIRECTIVES (real, legitimate uses), but the scheme
+        # were once allowed (see git history), and the scheme
         # check that blocks a plain href="javascript:..." only ever matched
         # the literal attribute names "href"/"src" -- never "t-att-href"/
         # "t-att-src" -- so a QWeb expression producing a javascript: URI
