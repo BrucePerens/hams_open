@@ -147,10 +147,11 @@ class TestPgbackrestRequiresSidecar(unittest.TestCase):
             )
         )
 
-    def test_info_does_not_require_sidecar(self):
-        # "info" is read-only and already works fine as odoo -- only a real
-        # write (backup) needs PostgreSQL data-directory access.
-        self.assertFalse(
+    def test_info_requires_sidecar(self):
+        # "info" is read-only, but it must read /etc/pgbackrest/pgbackrest.conf,
+        # which holds the encrypted repository's passphrase and is mode 0640
+        # root:postgres, so the unprivileged daemon cannot run it.
+        self.assertTrue(
             backup_worker._pgbackrest_requires_sidecar(
                 ["pgbackrest", "info", "--stanza=hams_prod", "--output=json"]
             )
@@ -686,6 +687,70 @@ class TestUnexpectedExceptionIsolation(unittest.TestCase):
         with self.assertRaises(MemoryError):
             backup_worker.execute_job(ch, method, MagicMock(), self._s3_body())
         ch.basic_ack.assert_not_called()
+
+
+class TestPgbackrestRepoNumber(unittest.TestCase):
+    # Tests the encrypted-repository selection (config "pgbackrest_repo"): the repository is
+    # defined only in pgbackrest.conf on the host, so the daemon passes --repo=N and no storage
+    # flags; pgBackRest requires --repo for backup once two repositories are configured.
+
+    def test_number_defaults_to_zero(self):
+        self.assertEqual(backup_worker._pgbackrest_repo_number({}), 0)
+        self.assertEqual(backup_worker._pgbackrest_repo_number({"pgbackrest_repo": 0}), 0)
+        self.assertEqual(backup_worker._pgbackrest_repo_number({"pgbackrest_repo": None}), 0)
+
+    def test_number_accepts_a_valid_repo(self):
+        self.assertEqual(backup_worker._pgbackrest_repo_number({"pgbackrest_repo": 2}), 2)
+
+    def test_number_rejects_garbage(self):
+        for bad in ("x; rm", -1, 257, [2]):
+            with self.assertRaises(ValueError):
+                backup_worker._pgbackrest_repo_number({"pgbackrest_repo": bad})
+
+    def _run(self, payload):
+        ch = MagicMock()
+        method = MagicMock()
+        method.delivery_tag = "t"
+        with patch("main._json2_call"), patch("main._run_pgbackrest_via_sidecar") as sidecar:
+            sidecar.return_value = (0, "ok")
+            backup_worker.execute_job(ch, method, MagicMock(), backup_worker.json.dumps(payload))
+        return sidecar.call_args.args[0]
+
+    def _payload(self, engine, **extra):
+        payload = {
+            "job_id": 5, "engine": engine, "config_engine": "pgbackrest", "target_path": "hams_prod",
+            "config_id": 2, "storage_type": "b2", "bucket_name": "b", "endpoint_url": "s3.example.com",
+            "access_key": "kid", "secret_key": "ksecret", "keep_daily": 30, "pgbackrest_repo": 2,
+        }
+        payload.update(extra)
+        return payload
+
+    def test_backup_selects_the_repo_and_sends_no_storage_flags(self):
+        cmd = self._run(self._payload("pgbackrest"))
+        self.assertEqual(cmd[:2], ["pgbackrest", "backup"])
+        self.assertIn("--repo=2", cmd)
+        self.assertIn("--repo2-retention-full=30", cmd)
+        self.assertFalse([a for a in cmd if a.startswith("--repo1-")], cmd)
+        self.assertNotIn("ksecret", " ".join(cmd))
+
+    def test_info_selects_the_repo(self):
+        cmd = self._run(self._payload("sync_snapshots"))
+        self.assertEqual(cmd[:2], ["pgbackrest", "info"])
+        self.assertIn("--repo=2", cmd)
+        self.assertIn("--output=json", cmd)
+        self.assertFalse([a for a in cmd if a.startswith("--repo1-")], cmd)
+
+    def test_default_keeps_the_legacy_repo1_flags(self):
+        cmd = self._run(self._payload("pgbackrest", pgbackrest_repo=0))
+        self.assertIn("--repo1-type=s3", cmd)
+        self.assertIn("--repo1-retention-full=30", cmd)
+        self.assertFalse([a for a in cmd if a.startswith("--repo=")], cmd)
+
+    def test_the_built_commands_pass_the_sidecars_own_validation(self):
+        import pgbackrest_sidecar
+        for engine in ("pgbackrest", "sync_snapshots"):
+            for repo in (0, 2):
+                pgbackrest_sidecar._validate_request_cmd(self._run(self._payload(engine, pgbackrest_repo=repo)))
 
 
 if __name__ == "__main__":
