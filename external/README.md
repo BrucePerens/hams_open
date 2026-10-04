@@ -110,13 +110,16 @@ license text each library's own license requires, not just its SPDX identifier.
 - **Version:** 0.21.2 (npm `sip.js`, published 2022-10-27; the newest stable release on 2026-10-03, the
   registry's `latest` dist-tag, with no pre-release newer than it).
 - **License:** MIT, Copyright (c) 2020 Junction Networks. The license text is in
-  `sip.js/LICENSE.md` and reproduced in `THIRD_PARTY_LICENSES.md`.
+  `sipjs/LICENSE.md` and reproduced in `THIRD_PARTY_LICENSES.md`.
 - **Purpose:** The browser-direct AllStar client (`hams_com`'s `ham_shack`, ADR 0101): the browser registers
   and calls an AllStar node itself over SIP-over-WSS and WebRTC, with no relay and no hams.com in the
   signalling or audio path. Bruce chose SIP.js (2026-09-23) and authorised vendoring it (2026-10-03).
-- **Local Path:** `/external/static/src/node_modules/sip.js/lib/index.js` (loaded with a dynamic `import()`,
+- **Local Path:** `/external/static/src/node_modules/sipjs/lib/index.js` (loaded with a dynamic `import()`,
   the same way `noise_xx.js` loads noble; the library is pure ES modules with relative `./x.js` imports and
   no bare specifiers, so no bundling step is needed and none was done: the files are the npm tarball's own).
+- **Why the directory is `sipjs`, not `sip.js`:** Odoo's `_get_lazy_bundles_from_js` opens every path under a module's
+  `static` tree whose name ends in `.js` as a file, so a directory called `sip.js` crashes Odoo's startup asset
+  pregeneration with `IsADirectoryError` (found by the first test run, 2026-10-04).
 - **Source:** fetched once, on 2026-10-03, from the npm registry:
   `https://registry.npmjs.org/sip.js/-/sip.js-0.21.2.tgz` (255731 bytes), nothing else.
 - **Checksums**, from the registry's own metadata (`https://registry.npmjs.org/sip.js`, `versions["0.21.2"].dist`)
@@ -128,8 +131,8 @@ license text each library's own license requires, not just its SPDX identifier.
   ```
 - **What was vendored:** the tarball's 193 `lib/**/*.js` files, `LICENSE.md` and `package.json`, unmodified.
   Left out: the 193 TypeScript `.d.ts` declaration files, `README.md` and the source maps (there are none), none
-  of which a browser loads. `sip.js/SHA256SUMS` lists the SHA-256 of every vendored file (`sha256sum -c
-  SHA256SUMS` from inside `sip.js/`); to re-verify, download the tarball above, check it against the
+  of which a browser loads. `sipjs/SHA256SUMS` lists the SHA-256 of every vendored file (`sha256sum -c
+  SHA256SUMS` from inside `sipjs/`); to re-verify, download the tarball above, check it against the
   integrity value, extract it and compare the same files.
 
 ### ft8js (WASM FT8 decode + encode)

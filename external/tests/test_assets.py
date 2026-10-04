@@ -103,8 +103,8 @@ class TestExternalAssets(HamsHttpCase):
     # Tests [@ANCHOR: external:HTTP_REACHABLE_SIPJS]
     def test_02c_sipjs_reachable_and_matches_the_recorded_checksums(self):
         """SIP.js (ADR 0101's browser SIP stack) is served as plain ES modules and is byte-for-byte
-        the npm tarball content whose SHA-256 values are recorded in sip.js/SHA256SUMS."""
-        base = "/external/static/src/node_modules/sip.js/"
+        the npm tarball content whose SHA-256 values are recorded in sipjs/SHA256SUMS."""
+        base = "/external/static/src/node_modules/sipjs/"
         entry = self.url_open(base + "lib/index.js")
         self.assertEqual(entry.status_code, 200, "SIP.js lib/index.js should be reachable.")
         self.assertIn(b'from "./api/index.js"', entry.content)
