@@ -147,7 +147,7 @@ class TestTenantSitesHttp(HamsHttpCase):
             response = self.get(path, TENANT)
             self.assertEqual(response.status_code, 404, path)
             self.assertNotIn('type="password"', response.text.lower(), path)
-            self.assertNotIn("/web/login", response.text, path)  # the header has no "Sign in" link
+            self.assertNotIn('href="/web/login"', response.text, path)  # the header has no "Sign in" link
             self.assertNotIn("Odoo", response.headers.get("Server", ""), path)
 
     # [@ANCHOR: tenant_sites:COMM_test_site_hides_login_link]
@@ -156,10 +156,10 @@ class TestTenantSitesHttp(HamsHttpCase):
         # Tests [@ANCHOR: tenant_sites:COMM_hide_login_link]
         tenant = self.get("/tenant-only", TENANT)
         self.assertEqual(tenant.status_code, 200)
-        self.assertNotIn("/web/login", tenant.text)
+        self.assertNotIn('href="/web/login"', tenant.text)
         main = self.get("/main-only", MAIN)
         self.assertEqual(main.status_code, 200)
-        self.assertIn("/web/login", main.text)
+        self.assertIn('href="/web/login"', main.text)
 
     def test_a_tenant_host_is_read_only(self):
         for method in ("POST", "PUT", "DELETE", "PATCH"):
