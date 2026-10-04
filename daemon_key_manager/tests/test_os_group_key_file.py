@@ -10,6 +10,12 @@ daemon family to run under its own account, docs/proposals/DAEMON_OS_ISOLATION_P
 hams_com); a host where provisioning has not run fails the setUp check below with that
 instruction rather than skipping, because a skipped test would hide a host that cannot hand a
 key to any daemon account.
+
+One-shot fix on a test host that predates this change (run as root from a checkout that has it):
+    python3 -c "import subprocess, sys; sys.path.insert(0, 'hams_shared/tools'); import infrastructure as i;
+    run = lambda c: subprocess.run(c, check=True);
+    i.provision_system_accounts(run, 'test'); i.apply_production_directories(run, 'test')"
+The Odoo server must then be started afresh (a running process keeps the groups it started with).
 """
 import grp
 import os
