@@ -38,9 +38,11 @@ class TestTenantSitesHttp(HamsHttpCase):
         cls.tenant_blog = env["blog.blog"].create({"name": "Tenant Blog", "website_id": cls.tenant_website.id})
         cls.main_blog = env["blog.blog"].create({"name": "Main Blog", "website_id": cls.main_website.id})
         cls.shared_blog = env["blog.blog"].create({"name": "Shared Blog", "website_id": False})
+        posts = {}
         for blog, title in ((cls.tenant_blog, "Tenant Post"), (cls.main_blog, "Main Post"),
                             (cls.shared_blog, "Shared Post")):
-            env["blog.post"].create({"name": title, "blog_id": blog.id, "is_published": True})
+            posts[title] = env["blog.post"].create({"name": title, "blog_id": blog.id, "is_published": True})
+        cls.tenant_post, cls.main_post, cls.shared_post = posts.values()
         env["website.rewrite"].create(
             {"name": "tenant redirect", "url_from": "/old", "url_to": "/tenant-only", "redirect_type": "301",
              "website_id": cls.tenant_website.id}
@@ -84,7 +86,11 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(self.get("/main-only", MAIN).status_code, 200)
         self.assertEqual(self.get("/shared-page", MAIN).status_code, 200)
 
+    # [@ANCHOR: tenant_sites:COMM_test_scoped_page_info]
+    # [@ANCHOR: tenant_sites:COMM_test_serve_redirect]
     def test_tenant_redirects_are_its_own(self):
+        # Tests [@ANCHOR: tenant_sites:COMM_scoped_page_info]
+        # Tests [@ANCHOR: tenant_sites:COMM_serve_redirect]
         own = self.get("/old", TENANT)
         self.assertEqual(own.status_code, 301)
         self.assertEqual(self.get("/shared-old", TENANT).status_code, 404)
@@ -101,10 +107,20 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertNotIn("Tenant Post", main_response.text)
 
     # [@ANCHOR: tenant_sites:COMM_test_scoped_search]
-    def test_scoped_search_only_applies_to_a_tenant_request(self):
+    # [@ANCHOR: tenant_sites:COMM_test_scoped_access]
+    def test_a_post_named_in_the_url_must_belong_to_the_tenant_website(self):
         # Tests [@ANCHOR: tenant_sites:COMM_scoped_search]
-        pages = self.env["website.page"].search([("url", "in", ["/shared-page", "/tenant-only"])])
-        self.assertEqual(len(pages), 2)
+        # Tests [@ANCHOR: tenant_sites:COMM_scoped_access]
+        own = self.get(self.tenant_post.website_url, TENANT)
+        self.assertEqual(own.status_code, 200)
+        self.assertIn("Tenant Post", own.text)
+        for post in (self.shared_post, self.main_post):
+            refused = self.get(post.website_url, TENANT)
+            self.assertEqual(refused.status_code, 404, post.website_url)
+            self.assertNotIn(post.name, refused.text)
+        # Outside a tenant request nothing is filtered: the same lookups see every blog.
+        self.assertEqual(len(self.env["blog.blog"].search([("id", "in", [self.tenant_blog.id, self.shared_blog.id])])), 2)
+        self.assertEqual(self.get(self.shared_post.website_url, MAIN).status_code, 200)
 
     def test_the_backend_and_login_do_not_exist_on_a_tenant_host(self):
         paths = ["/odoo", "/odoo/action-1", "/jsonrpc", "/xmlrpc/2/common", "/xmlrpc/2/object",

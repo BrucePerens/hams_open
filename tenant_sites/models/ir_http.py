@@ -130,6 +130,17 @@ class IrHttp(models.AbstractModel):
             return super()._serve_fallback()
         return cls._tenant_serve_other(kind)
 
+    # [@ANCHOR: tenant_sites:COMM_serve_redirect]
+    # Verified by [@ANCHOR: tenant_sites:COMM_test_serve_redirect]
+    @classmethod
+    def _serve_redirect(cls):
+        """On a tenant website only the tenant's own redirects apply, never one shared by all websites."""
+        redirect = super()._serve_redirect()
+        website_id = request.env["tenant.site.host"]._tenant_request_website_id()
+        if not redirect or not website_id:
+            return redirect
+        return redirect.filtered(lambda record: record.website_id.id == website_id)
+
     # [@ANCHOR: tenant_sites:COMM_serve_other]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_serve_other]
     @classmethod
