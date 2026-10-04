@@ -39,17 +39,20 @@ class TenantSite(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         sites = super().create(vals_list)
-        self.env.registry.clear_cache()  # the asset bundles of these websites are built differently now
+        self.env.registry.clear_cache('assets')  # the asset bundles of these websites are built differently now
+        self.env.registry.clear_cache()
         sites._apply_public_layout()
         return sites
 
     def write(self, vals):
         result = super().write(vals)
+        self.env.registry.clear_cache('assets')
         self.env.registry.clear_cache()
         return result
 
     def unlink(self):
         result = super().unlink()
+        self.env.registry.clear_cache('assets')
         self.env.registry.clear_cache()
         return result
 
