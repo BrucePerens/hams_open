@@ -20,7 +20,7 @@ import os
 import uuid
 
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.tests.common import new_test_user, tagged
+from odoo.tests.common import Form, new_test_user, tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.cloudflare.utils import cloudflare_api, dns_plan
 from cryptography.fernet import Fernet
@@ -430,6 +430,31 @@ class TestDnsPush(HamsTransactionCase):
         wizard.action_apply()
         self.assertEqual(wizard.state, "done")
         self.assertEqual(len(self.cf.writes()), 1)
+
+    def test_13b_the_wizard_offers_apply_for_a_plan_of_deletes(self):
+        row = self._row("gone.hams.com", "A", "192.0.2.44")
+        self._apply(row)
+        row.write({"retire": True})
+        wizard = self.env["cloudflare.dns.push.wizard"].create({"record_ids": [(6, 0, row.ids)]})
+        wizard.action_plan()
+        self.assertEqual(wizard.plan_writes, 1, "a delete is something Apply acts on, so the button must show")
+        self.assertIn("DELETE", wizard.plan_text)
+        wizard.action_apply()
+        self.assertEqual([c[0] for c in self.cf.writes()], ["create", "delete"])
+        self.assertFalse(row.active)
+
+    def test_13c_an_ns_row_can_be_saved_from_the_form_without_touching_proxied(self):
+        form = Form(self.Record)
+        form.name = "callbook.hams.com"
+        form.type = "NS"
+        form.content = "ns1.hams.com"
+        row = form.save()
+        self.assertEqual((row.type, row.proxied), ("NS", False))
+        txt = Form(self.Record)
+        txt.name = "hams.com"
+        txt.type = "TXT"
+        txt.content = "v=spf1 -all"
+        self.assertFalse(txt.save().proxied)
 
     def test_14_wizard_view_and_action_render(self):
         form = self.env["cloudflare.dns.push.wizard"].get_view(view_type="form")

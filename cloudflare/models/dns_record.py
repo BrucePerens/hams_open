@@ -77,6 +77,14 @@ class CloudflareDNSRecord(models.Model):
     active = fields.Boolean(default=True)
     cf_last_result = fields.Char(string="Last push result", readonly=True, copy=False)
 
+    @api.onchange("type")
+    def _onchange_type_clears_proxied(self):
+        """The form's Proxied box defaults on; an NS or TXT row can never be proxied, so choosing one of those
+        types clears it instead of leaving the administrator with a row the constraint refuses to save."""
+        for rec in self:
+            if rec.type not in dns_plan.PROXIABLE_TYPES:
+                rec.proxied = False
+
     # [@ANCHOR: cloudflare:COMM_dns_record_constraints]
     # Verified by [@ANCHOR: COMM_test_dns_record_constraints]
     @api.constrains("name", "type", "content", "proxied", "cf_record_id")

@@ -3,6 +3,8 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 
+from ..utils import dns_plan
+
 
 class CloudflareDnsPushWizard(models.TransientModel):
     """Two steps: show the plan (reads only), then apply exactly that plan."""
@@ -36,7 +38,13 @@ class CloudflareDnsPushWizard(models.TransientModel):
         self.ensure_one()
         records = self.record_ids or self.env["cloudflare.dns.record"].search([], limit=10000)
         plan = records.dns_push_plan()
-        writes = sum(1 for e in plan["entries"] if e["action"] in ("create", "update", "adopt"))
+        # Everything Apply would act on: writes at Cloudflare (create, update, delete), adoptions (an id stored in
+        # Odoo), and a retired row whose record is already gone (the row is archived). A plan of nothing else
+        # offers no Apply button.
+        writes = sum(
+            1 for e in plan["entries"]
+            if e["action"] in dns_plan.WRITING_ACTIONS or e["action"] == dns_plan.ADOPT or e.get("already_gone")
+        )
         text = plan["text"]
         if plan["problems"]:
             text = "REFUSED: " + "; ".join(plan["problems"]) + "\n\n" + text

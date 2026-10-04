@@ -25,7 +25,7 @@
                             <field name="name"/>
                             <field name="type"/>
                             <field name="content"/>
-                            <field name="proxied" invisible="type in ('NS', 'TXT')"/>
+                            <field name="proxied" readonly="type in ('NS', 'TXT')"/>
                             <field name="website_id" groups="website.group_multi_website"/>
                             <field name="manage"/>
                             <field name="retire" invisible="not cf_record_id"/>
