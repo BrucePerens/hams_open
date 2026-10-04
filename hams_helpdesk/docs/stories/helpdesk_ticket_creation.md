@@ -9,6 +9,7 @@ Ticket creation is an intelligent process that automatically routes incidents to
 3.  **Automatic Assignment**: The `user_id` is set to the on-duty admin if unassigned.
 4.  **Notifications**: Toast notifications and emails are sent to the assignee.
 5.  **Pre-Shift Awareness**: Upcoming shift operators are CC'd on tickets created shortly before their shift.
+6.  **AI Triage Wake-Up**: after the transaction commits, a ticket created in the `new` stage drops a tiny spool file (`ticket-<id>.json`, the integer id and nothing else) for the AI triage daemon **[@ANCHOR: hams_helpdesk:COMM_triage_wakeup_on_create]**, written by `write_triage_wakeups()` **[@ANCHOR: hams_helpdesk:triage_wakeup_write]**. It is fire-and-forget: a failure is logged and never reaches the create. A ticket in the spam quarantine stage writes nothing. The daemon's own debounce, daily caps and kill switch decide what happens next (`daemons/ticket_triage_agent/README.md` in hams_com).
 
 *Verified by [@ANCHOR: hams_helpdesk:COMM_test_01_ticket_creation_and_routing]*
 
