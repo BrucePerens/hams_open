@@ -17,6 +17,7 @@ import xml.etree.ElementTree as ET
 from markupsafe import Markup
 
 from .inbound_spam_filter import detect_inbound_spam_signals
+from .triage_wakeup import write_triage_wakeups
 
 _logger = logging.getLogger(__name__)
 
@@ -361,6 +362,22 @@ class HelpdeskTicket(models.Model):
 
         tickets = super().create(vals_list)
 
+        # [@ANCHOR: hams_helpdesk:COMM_triage_wakeup_on_create]
+        # Event-driven AI triage (NIGHT_PLAN decision 222): tell the triage daemon a ticket exists,
+        # after commit, fire-and-forget. Only "new"-stage tickets: a ticket created straight into the
+        # spam quarantine (inbound mail the filter flagged sets stage="spam" before create() runs) or
+        # into any other stage is never offered to the model, so it must not wake the daemon either.
+        # The stage comes from vals, not from reading the record, so a create-only service account
+        # (which cannot read) behaves the same and no sudo() or service env is needed. See
+        # models/triage_wakeup.py for why only the id travels and why nothing here can raise.
+        self._schedule_triage_wakeup(
+            [
+                ticket.id
+                for ticket, vals in zip(tickets, vals_list)
+                if (vals.get("stage") or "new") == "new"
+            ]
+        )
+
         # Execute automated routing and notifications using service accounts to ensure Zero-Sudo compliance
         tickets._automated_routing_and_notification()
 
@@ -393,6 +410,16 @@ class HelpdeskTicket(models.Model):
             ticket._ncmec_apply_recording_legal_hold_best_effort()
 
         return tickets
+
+    @api.model
+    def _schedule_triage_wakeup(self, ticket_ids):
+        """Queues the post-commit spool write for `ticket_ids`. Never raises into create()."""
+        if not ticket_ids:
+            return
+        try:
+            self.env.cr.postcommit.add(lambda ids=tuple(ticket_ids): write_triage_wakeups(ids))
+        except Exception:  # audit-ignore-catch-all: scheduling a notification must never break the ticket create
+            _logger.exception("Could not schedule the ticket-triage wake-up.")
 
     # [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
     def _automated_routing_and_notification(self):
