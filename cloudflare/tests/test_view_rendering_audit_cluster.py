@@ -65,6 +65,7 @@ class TestViewRenderingAuditCluster(HamsTransactionCase):
     def test_act_window_actions_resolve_to_the_right_model_and_views(self):
         expected = {
             "action_cf_dns_record": "cloudflare.dns.record",
+            "action_cf_dns_push_wizard": "cloudflare.dns.push.wizard",
             "action_cf_zone_settings": "cloudflare.zone.settings",
             "action_cf_rate_limit": "cloudflare.rate.limit",
             "action_cf_cache_rule": "cloudflare.cache.rule",

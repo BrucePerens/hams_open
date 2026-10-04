@@ -25,8 +25,12 @@
                             <field name="name"/>
                             <field name="type"/>
                             <field name="content"/>
-                            <field name="proxied"/>
+                            <field name="proxied" readonly="type in ('NS', 'TXT')" force_save="1"/>
                             <field name="website_id" groups="website.group_multi_website"/>
+                            <field name="manage"/>
+                            <field name="retire" invisible="not cf_record_id"/>
+                            <field name="cf_record_id"/>
+                            <field name="cf_last_result"/>
                         </group>
                     </sheet>
                 </form>
@@ -44,9 +48,50 @@
                     <field name="type"/>
                     <field name="content"/>
                     <field name="proxied"/>
+                    <field name="manage"/>
+                    <field name="cf_record_id" optional="hide"/>
+                    <field name="cf_last_result" optional="show"/>
                     <field name="website_id" groups="website.group_multi_website"/>
                 </list>
             </field>
+        </record>
+
+        <!-- Push wizard: plan first (reads only), then apply exactly that plan -->
+        <record id="view_cf_dns_push_wizard_form" model="ir.ui.view">
+        <!-- burn-ignore-tour: Justified exception -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
+            <field name="name">cloudflare.dns.push.wizard.form</field>
+            <field name="model">cloudflare.dns.push.wizard</field>
+            <field name="arch" type="xml">
+                <form>
+                    <field name="state" invisible="1"/>
+                    <field name="plan_writes" invisible="1"/>
+                    <group>
+                        <field name="record_ids" widget="many2many_tags" readonly="state != 'draft'"/>
+                    </group>
+                    <p invisible="state != 'draft'">Leave Records empty to plan every record. Showing the plan only reads from Cloudflare.</p>
+                    <field name="plan_text" invisible="state == 'draft'" widget="text"/>
+                    <field name="result_text" invisible="state != 'done'" widget="text"/>
+                    <footer>
+                        <button name="action_plan" type="object" string="Show plan" class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_apply" type="object" string="Apply this plan" class="btn-primary" invisible="state != 'planned' or plan_writes == 0"
+                                confirm="Apply exactly the plan shown? Records are created or updated at Cloudflare; nothing is ever deleted."/>
+                        <button string="Close" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_cf_dns_push_wizard" model="ir.actions.act_window">
+        <!-- burn-ignore-tour: Justified exception -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_cf_backend_views_rendering] -->
+            <field name="name">Push DNS records to Cloudflare</field>
+            <field name="res_model">cloudflare.dns.push.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="binding_model_id" ref="model_cloudflare_dns_record"/>
+            <field name="binding_view_types">list</field>
+            <field name="group_ids" eval="[(4, ref('base.group_system'))]"/>
         </record>
 
         <record id="action_cf_dns_record" model="ir.actions.act_window">
