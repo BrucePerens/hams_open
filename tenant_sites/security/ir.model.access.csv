@@ -11,3 +11,7 @@ access_tenant_sites_svc_res_company,res.company svc,base.model_res_company,tenan
 access_tenant_sites_svc_res_partner,res.partner svc,base.model_res_partner,tenant_sites.group_tenant_sites_service,1,0,0,0
 access_tenant_sites_svc_edge_domain,edge.routing.domain svc,edge_routing.model_edge_routing_domain,tenant_sites.group_tenant_sites_service,1,0,0,0
 access_tenant_sites_svc_website_page,website.page svc,website.model_website_page,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_module,ir.module.module svc,base.model_ir_module_module,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_model_data,ir.model.data svc,base.model_ir_model_data,tenant_sites.group_tenant_sites_service,1,0,0,0
+access_tenant_sites_svc_view,ir.ui.view svc,base.model_ir_ui_view,tenant_sites.group_tenant_sites_service,1,1,1,0
+access_tenant_sites_svc_asset,ir.asset svc,base.model_ir_asset,tenant_sites.group_tenant_sites_service,1,0,1,0

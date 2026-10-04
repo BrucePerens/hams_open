@@ -165,6 +165,48 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(main.status_code, 200)
         self.assertIn('href="/web/login"', main.text)
 
+    # [@ANCHOR: tenant_sites:COMM_test_site_hides_foreign_layout]
+    def test_a_tenant_site_gets_the_plain_layout_without_other_authors_additions(self):
+        # Tests [@ANCHOR: tenant_sites:COMM_apply_public_layout]
+        # Tests [@ANCHOR: tenant_sites:COMM_foreign_modules]
+        # Tests [@ANCHOR: tenant_sites:COMM_foreign_layout_views]
+        # Tests [@ANCHOR: tenant_sites:COMM_foreign_assets]
+        env = self.env
+        injector = env["ir.ui.view"].create(
+            {
+                "name": "test layout injector",
+                "type": "qweb",
+                "key": "tenant_sites.test_layout_injector",
+                "inherit_id": env.ref("website.layout").id,
+                "mode": "extension",
+                "arch_db": '<data><xpath expr="//footer" position="inside"><p>FOREIGN-LAYOUT-MARKER</p></xpath></data>',
+            }
+        )
+        env["ir.model.data"].create(
+            {"module": "tenant_sites", "name": "test_layout_injector", "model": "ir.ui.view", "res_id": injector.id,
+             "noupdate": True}
+        )
+        website = env["website"].create({"name": "Tenant Two", "domain": "https://two.tenant.example"})
+        env["tenant.site"].create(
+            {"name": "Two", "website_id": website.id, "host_ids": [(0, 0, {"name": "two.tenant.example"})]}
+        )
+        self._page("/two-only", "TWO-ONLY-CONTENT", website.id)
+        main = self.get("/main-only", MAIN)
+        self.assertIn("FOREIGN-LAYOUT-MARKER", main.text)
+        two = self.get("/two-only", "two.tenant.example")
+        self.assertEqual(two.status_code, 200)
+        self.assertNotIn("FOREIGN-LAYOUT-MARKER", two.text)
+        removed = env["ir.asset"].search(
+            [("website_id", "=", website.id), ("directive", "=", "remove"), ("path", "like", "edge_cache/%")], limit=10
+        )
+        self.assertTrue(removed)
+        self.assertFalse(env["ir.asset"].search_count([("website_id", "=", self.main_website.id), ("directive", "=", "remove"),
+                                                         ("path", "like", "edge_cache/%")], limit=1))
+        # repeating changes nothing
+        count = env["ir.asset"].search_count([("website_id", "=", website.id)], limit=1000)
+        env["tenant.site"].search([("website_id", "=", website.id)])._apply_public_layout()
+        self.assertEqual(env["ir.asset"].search_count([("website_id", "=", website.id)], limit=1000), count)
+
     def test_a_tenant_host_is_read_only(self):
         for method in ("POST", "PUT", "DELETE", "PATCH"):
             for path in ("/", "/tenant-only", "/web/login", "/jsonrpc", "/website/form/res.partner",
