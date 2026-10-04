@@ -7,60 +7,16 @@ Nothing here touches Odoo, so the same code is unit-tested without a database.
 import hashlib
 import hmac
 import html
-import ipaddress
-import re
 import time
 from urllib.parse import quote, urlsplit
 
-LABEL_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
+from odoo.addons.tenant_sites.utils import normalize_host
+
 INQUIRY_PATH = "/__parking/inquiry"
 TOKEN_MIN_AGE = 3
 TOKEN_MAX_AGE = 86400
 PATH_SAFE = "/:@!$&'()*+,;=-._~"
 QUERY_SAFE = "=&%+/:@!$'()*,;-._~?"
-
-
-# [@ANCHOR: parking:COMM_normalize_host]
-# Verified by [@ANCHOR: parking:COMM_test_normalize_host]
-def normalize_host(raw):
-    """Lowercase ASCII (punycode) hostname without port or trailing dot, or "" if it is not a
-    plausible DNS name. IP literals and anything with odd characters are refused."""
-    if not raw or not isinstance(raw, str):
-        return ""
-    text = raw.strip().lower()
-    if text.startswith("["):  # IPv6 literal: never a parked domain
-        return ""
-    if ":" in text:
-        text, _, port = text.partition(":")
-        if not port.isdigit():
-            return ""
-    text = text.rstrip(".")
-    if not text or len(text) > 253:
-        return ""
-    try:
-        text = text.encode("idna").decode("ascii")
-    except UnicodeError:
-        return ""
-    labels = text.split(".")
-    if len(labels) < 2 or all(label.isdigit() for label in labels):
-        return ""
-    if not all(LABEL_RE.match(label) for label in labels):
-        return ""
-    return text
-
-
-# [@ANCHOR: parking:COMM_original_host]
-# Verified by [@ANCHOR: parking:COMM_test_original_host]
-def original_host(environ):
-    """The Host header as the client sent it.
-
-    Odoo's proxy_mode runs werkzeug's ProxyFix with x_host=1, which REPLACES HTTP_HOST by the
-    client-supplied X-Forwarded-Host header. A visitor of parked-a.example could send
-    `X-Forwarded-Host: parked-b.example` and make Odoo answer as parked-b.example while Cloudflare
-    caches the answer under parked-a.example. ProxyFix keeps the original in
-    environ["werkzeug.proxy_fix.orig"]; this reads that, never the rewritten value."""
-    orig = environ.get("werkzeug.proxy_fix.orig") or {}
-    return orig.get("HTTP_HOST") or environ.get("HTTP_HOST") or ""
 
 
 # [@ANCHOR: parking:COMM_validate_redirect_url]
@@ -134,23 +90,6 @@ def verify_form_token(secret, host, token, now=None):
         return False
     expected = hmac.new(secret.encode(), f"{host}|{stamp}".encode(), hashlib.sha256).hexdigest()[:32]
     return hmac.compare_digest(expected, mac)
-
-
-# [@ANCHOR: parking:COMM_original_peer]
-# Verified by [@ANCHOR: parking:COMM_test_original_peer]
-def original_peer(environ):
-    """The address of the socket peer, before ProxyFix replaces it with X-Forwarded-For."""
-    orig = environ.get("werkzeug.proxy_fix.orig") or {}
-    return orig.get("REMOTE_ADDR") or environ.get("REMOTE_ADDR") or ""
-
-
-# [@ANCHOR: parking:COMM_is_loopback_address]
-# Verified by [@ANCHOR: parking:COMM_test_is_loopback_address]
-def is_loopback_address(address):
-    try:
-        return ipaddress.ip_address((address or "").strip()).is_loopback
-    except ValueError:
-        return False
 
 
 # [@ANCHOR: parking:COMM_client_ip]

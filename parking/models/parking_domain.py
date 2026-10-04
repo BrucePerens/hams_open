@@ -2,6 +2,8 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+from odoo.addons.tenant_sites.utils import host_matches
+
 from .. import utils
 
 
@@ -104,6 +106,19 @@ class ParkingDomain(models.Model):
                     )
             if not 0 <= record.cache_ttl <= 31536000:
                 raise ValidationError(self.env._("Edge cache seconds must be between 0 and 31536000."))
+
+    # [@ANCHOR: parking:COMM_domain_not_main]
+    # Verified by [@ANCHOR: parking:COMM_test_domain_not_main]
+    @api.constrains("name")
+    def _check_not_main_or_tenant(self):
+        """A parked domain must never shadow a hostname of the main site or of a tenant website."""
+        hosts = self.env["tenant.site.host"]
+        patterns = hosts._own_host_patterns()
+        for record in self:
+            if host_matches(record.name, patterns) or hosts._website_id_for_host(record.name):
+                raise ValidationError(
+                    self.env._("%s belongs to the main site or a tenant website.", record.name)
+                )
 
     # [@ANCHOR: parking:COMM_domain_lookup]
     # Verified by [@ANCHOR: parking:COMM_test_domain_lookup]

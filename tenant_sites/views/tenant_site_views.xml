@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <record id="tenant_site_view_list" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: back-office list/form of a small table, covered by the model and HTTP tests -->
+        <field name="name">tenant.site.list</field>
+        <field name="model">tenant.site</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="website_id"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+    <record id="tenant_site_view_form" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: back-office list/form of a small table, covered by the model and HTTP tests -->
+        <field name="name">tenant.site.form</field>
+        <field name="model">tenant.site</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="website_id"/>
+                        <field name="active"/>
+                    </group>
+                    <field name="host_ids">
+                        <list editable="bottom">
+                            <field name="name"/>
+                        </list>
+                    </field>
+                    <field name="notes" placeholder="Notes"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="tenant_site_own_host_view_list" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: back-office list/form of a small table, covered by the model and HTTP tests -->
+        <field name="name">tenant.site.own.host.list</field>
+        <field name="model">tenant.site.own.host</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+            </list>
+        </field>
+    </record>
+    <record id="tenant_site_kept_module_view_list" model="ir.ui.view">
+        <!-- burn-ignore-tour -->
+        <!-- audit-ignore-view: back-office list of a small table, covered by the model and HTTP tests -->
+        <field name="name">tenant.site.kept.module.list</field>
+        <field name="model">tenant.site.kept.module</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+            </list>
+        </field>
+    </record>
+    <record id="tenant_site_action" model="ir.actions.act_window">
+        <field name="name">Tenant sites</field>
+        <field name="res_model">tenant.site</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="tenant_site_view_list"/>
+    </record>
+    <record id="tenant_site_own_host_action" model="ir.actions.act_window">
+        <field name="name">Main site hostnames</field>
+        <field name="res_model">tenant.site.own.host</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="tenant_site_own_host_view_list"/>
+    </record>
+    <record id="tenant_site_kept_module_action" model="ir.actions.act_window">
+        <field name="name">Modules kept on every tenant site</field>
+        <field name="res_model">tenant.site.kept.module</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="tenant_site_kept_module_view_list"/>
+    </record>
+    <menuitem id="menu_tenant_sites_root" name="Tenant sites" groups="tenant_sites.group_tenant_sites_manager" sequence="60"/>
+    <menuitem id="menu_tenant_sites" name="Sites" parent="menu_tenant_sites_root" action="tenant_site_action" sequence="10"/>
+    <menuitem id="menu_tenant_sites_own_hosts" name="Main site hostnames" parent="menu_tenant_sites_root" action="tenant_site_own_host_action" sequence="20"/>
+    <menuitem id="menu_tenant_sites_kept_modules" name="Kept modules" parent="menu_tenant_sites_root" action="tenant_site_kept_module_action" sequence="30"/>
+</odoo>

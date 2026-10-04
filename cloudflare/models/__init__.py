@@ -6,6 +6,8 @@ from . import bridge
 from . import cloudflare_features
 from . import config_backup
 from . import config_manager
+from . import dns_push_wizard
+from . import dns_record
 from . import domain
 from . import edge_context
 from . import hostname_pending_delete

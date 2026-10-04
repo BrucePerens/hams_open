@@ -4,18 +4,14 @@
     "version": "1.0",
     "summary": "Serve parked, redirected, for-sale or gone pages for any number of domains from one database",
     "description": (
-        "For a dedicated, loopback-administered Odoo instance that sits behind a Cloudflare Tunnel "
-        "catch-all rule. Every request whose Host is not an administration host is answered from the "
-        "parking.domain table by the ir.http fallback: no website, no session cookie, no Odoo "
-        "frontend assets, no backend route reachable from the internet."
+        "Answers a request that arrives through Cloudflare for a hostname in the parking.domain table "
+        "(and only for such a hostname) with a parked page, a redirect, a for-sale page or 410 Gone: "
+        "no website, no session cookie, no Odoo frontend assets, no backend route. Built on tenant_sites, "
+        "which decides which hostnames belong to the main site, to a tenant website or to parking."
     ),
     "author": "HAMS",
     "category": "Website",
-    # Deliberately no zero_sudo: a tenant instance has no Redis, so zero_sudo and everything that
-    # depends on it cannot be installed there. The privilege separation zero_sudo provides is done
-    # here with one service account that holds exactly the ACLs the public handler needs. (The tests
-    # use the project's Hams test base classes, which only need zero_sudo importable.)
-    "depends": ["web", "mail"],
+    "depends": ["tenant_sites", "mail"],
     "data": [
         "security/parking_security.xml",
         "security/ir.model.access.csv",
@@ -32,6 +28,6 @@
     ],
     "post_init_hook": "post_init_hook",
     "installable": True,
-    "application": True,
+    "application": False,
     "license": "AGPL-3",
 }

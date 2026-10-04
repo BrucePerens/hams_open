@@ -22,6 +22,7 @@ class TestParkingHttp(HamsHttpCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.env["tenant.site.own.host"].create([{"name": "main.parking-test.example"}, {"name": "*.main.parking-test.example"}])
         Domain = cls.env["parking.domain"]
         cls.parked = Domain.create({"name": "parked.example", "title": "Hello <b>x</b>", "message": "Registered."})
         cls.redirect = Domain.create(
@@ -48,11 +49,9 @@ class TestParkingHttp(HamsHttpCase):
         self.assertNotIn("X-Parking-Response", response.headers)
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
 
-    # [@ANCHOR: parking:COMM_test_serve_fallback]
     # [@ANCHOR: parking:COMM_test_post_dispatch]
     def test_parked_page(self):
         # Tests [@ANCHOR: parking:COMM_post_dispatch]
-        # Tests [@ANCHOR: parking:COMM_serve_fallback]
         response = self.get("/", "parked.example")
         self.assertEqual(response.status_code, 200)
         self.assert_clean(response)
@@ -77,7 +76,6 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         self.assert_clean(response)
-        self.assertEqual(self.get("/", "10.1.2.3").status_code, 400)
 
     def test_unknown_host_default_page_policy(self):
         self.env["ir.config_parameter"].set_param("parking.unknown_host_policy", "default_page")
@@ -110,9 +108,7 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 410)
         self.assert_clean(response)
 
-    # [@ANCHOR: parking:COMM_test_match_guard]
     def test_backend_routes_do_not_exist_on_a_public_host(self):
-        # Tests [@ANCHOR: parking:COMM_match_guard]
         for path in ("/odoo", "/web/login", "/jsonrpc", "/xmlrpc/2/common", "/web/database/manager",
                      "/websocket", "/web/session/authenticate", "/json/2/res.users"):
             response = self.get(path, "parked.example")
@@ -123,16 +119,15 @@ class TestParkingHttp(HamsHttpCase):
             unknown = self.get(path, "nobody.example")
             self.assertEqual(unknown.status_code, 404, path)
 
-    # [@ANCHOR: parking:COMM_test_admin_request]
-    def test_the_operator_reaches_the_backend_only_from_loopback_without_cloudflare_headers(self):
-        # Tests [@ANCHOR: parking:COMM_admin_request]
-        direct = self.url_open("/web/login", headers=host("parked.example"), allow_redirects=False)
+    def test_the_operator_reaches_the_backend_only_through_a_host_that_is_not_a_domain_name(self):
+        loopback = "127.0.0.1"  # burn-ignore-ssrf-test-value: Host header value, never connected to
+        direct = self.url_open("/web/login", headers=host(loopback), allow_redirects=False)
         self.assertEqual(direct.status_code, 200)
         self.assertIn("password", direct.text.lower())
-        for proof in ({"CF-Ray": "abc123-SJC"}, {"CF-Connecting-IP": "1.2.3.4"}):
-            response = self.url_open("/web/login", headers=host("parked.example", **proof), allow_redirects=False)
-            self.assertNotIn("password", response.text.lower())
-            self.assertIn("Registered.", response.text)
+        for name in ("parked.example", "nobody.example"):
+            for proof in ({}, {"CF-Ray": "abc123-SJC"}, {"CF-Connecting-IP": "1.2.3.4"}):
+                response = self.url_open("/web/login", headers=host(name, **proof), allow_redirects=False)
+                self.assertNotIn("password", response.text.lower(), (name, proof))
 
     def test_a_forged_forwarded_for_does_not_make_a_visitor_the_operator(self):
         forged = {"X-Forwarded-Host": "parked.example", "X-Forwarded-For": "203.0.113.9"}
@@ -202,3 +197,29 @@ class TestParkingHttp(HamsHttpCase):
         response = self.get(utils.INQUIRY_PATH, "sale.example")
         self.assertEqual(response.status_code, 200)
         self.assertIn("<form", response.text)
+
+    # [@ANCHOR: parking:COMM_test_extra_kind]
+    # [@ANCHOR: parking:COMM_test_public_route]
+    def test_only_parked_hostnames_are_classified_as_parking(self):
+        # Tests [@ANCHOR: parking:COMM_extra_kind]
+        # Tests [@ANCHOR: parking:COMM_public_route]
+        ir_http = self.env.registry["ir.http"]
+        self.assertEqual(self.get("/", "www.parked.example").status_code, 200)
+        self.assertIn("Registered.", self.get("/", "www.parked.example").text)
+        self.assertEqual(self.get("/", "nobody.example").status_code, 404)
+        self.assertTrue(ir_http._tenant_public_route("parking", utils.INQUIRY_PATH, "POST"))
+        self.assertFalse(ir_http._tenant_public_route("parking", utils.INQUIRY_PATH, "GET"))
+        self.assertFalse(ir_http._tenant_public_route("unknown", utils.INQUIRY_PATH, "POST"))
+        self.assertFalse(ir_http._tenant_public_route("tenant", "/x", "POST"))
+
+    # [@ANCHOR: parking:COMM_test_serve_other]
+    def test_a_parked_host_never_shows_the_main_site(self):
+        # Tests [@ANCHOR: parking:COMM_serve_other]
+        main = self.get("/", "main.parking-test.example")
+        self.assertEqual(main.status_code, 200)
+        self.assertNotIn("Registered.", main.text)
+        for path in ("/", "/privacy", "/web/login", "/blog", "/contactus", "/shop"):
+            response = self.get(path, "parked.example")
+            self.assertIn("Registered.", response.text, path)
+            self.assertNotIn("password", response.text.lower(), path)
+        self.assertEqual(self.get("/", "other.main.parking-test.example").status_code, 200)

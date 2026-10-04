@@ -12,6 +12,54 @@ that testing found. Real deployment or default-on use would still need the paten
 question this file originally raised to be resolved separately; nothing about building this module
 for internal testing resolves that question on its own.
 
+## 2026-10-04: patent status of the 12 patents named in the addendum (research, not legal advice)
+
+The addendum's copyright statement (DVSI, dated 27 April 2009; text read from the local copy of
+`TIA-102.BABA-1_P25_Half_Rate_Vocoder_Addendum.pdf`) names U.S. Patents 6,199,037, 5,870,405, 5,754,974, 5,664,051,
+5,630,011, 5,517,511, 5,491,772, 5,247,579, 5,226,108, 5,226,084, 5,216,747 and 5,081,681, "and under other U.S. and
+foreign patents and patents pending". Dates below were read one patent at a time from the public Google Patents record
+on 2026-10-04 (its "anticipated expiration" and "Expired - Lifetime" status; the Patent Office's own pages were not
+used). The term rule applied as a cross-check: a U.S. patent filed before 1995-06-08 lasts the longer of 17 years from
+grant and 20 years from the earliest effective filing date; one filed later lasts 20 years from the earliest effective
+filing date (plus any adjustment, which does not apply to applications filed before 2000-05-29).
+
+| US patent | Subject | Earliest priority | Granted | Expiry | Status |
+|---|---|---|---|---|---|
+| 5,081,681 | phase synthesis | 1989-11-30 | 1992-01-14 | no later than 2012-08-15 | expired |
+| 5,216,747 | voiced/unvoiced estimation | 1990-09-20 | 1993-06-01 | 2010-09-20 | expired |
+| 5,226,084 | speech quantization and error correction | 1990-12-05 | 1993-07-06 | 2010-12-05 | expired |
+| 5,226,108 | pitch estimation | 1990-09-20 | 1993-07-06 | 2010-09-20 | expired |
+| 5,247,579 | speech transmission | 1990-12-05 | 1993-09-21 | 2010-12-05 | expired |
+| 5,491,772 | speech transmission | 1990-12-05 | 1996-02-13 | 2013-02-13 (17 years from grant) | expired |
+| 5,517,511 | transmission over a noisy channel | 1992-11-30 | 1996-05-14 | 2013-05-14 (17 years from grant) | expired |
+| 5,630,011 | quantization of harmonic amplitudes | 1990-12-05 | 1997-05-13 | 2014-05-13 | expired |
+| 5,664,051 | phase synthesis | 1990-09-24 | 1997-09-02 | 2014-09-02 | expired |
+| 5,754,974 | spectral magnitude representation | 1995-02-22 | 1998-05-19 | 2015-05-19 | expired |
+| 5,870,405 | transmission over a noisy channel | 1992-11-30 | 1999-02-09 | 2012-11-30 | expired |
+| 6,199,037 | joint quantization of voicing and pitch | 1997-12-04 | 2001-03-06 | 2017-12-04 | expired |
+
+All twelve expired by 2017-12-04. Confidence that these twelve are expired: high (every date is 20 years or more in the
+past, the term arithmetic agrees, and the status says expired); the only caveat is that Google Patents is a secondary
+source and maintenance-fee history was not checked at the Patent Office.
+
+**What this does not clear.** The list is not exhaustive. Found while checking, and not named in the addendum:
+
+* US 8,359,197 B2, "Half-rate vocoder", Digital Voice Systems; filed and priority 2003-04-01, granted 2013-01-22;
+  Google Patents lists it Active with anticipated expiration **2028-05-20** (a term adjustment beyond 2023-04-01). It
+  describes a 3600 bps MBE vocoder at half the 7200 bps P25 rate, the same rate and family as this module. It was
+  pending when the addendum was published, so it is plausibly the "patents pending" clause. Confidence that it is
+  unexpired today: moderate (single secondary source; its maintenance-fee payments and claims were not checked). Whether
+  its claims read on this implementation was not assessed.
+* US 8,595,002 B2 (continuation of the above, same priority) is listed "Expired - Fee Related" (lapsed, 2023).
+* US 6,131,084 "Dual subframe quantization of spectral magnitudes" (priority 1997-03-14) expired 2017-03-14. Named in
+  neither DVSI list, relevant to both half and full rate AMBE.
+* Foreign counterparts of any of these, and any other DVSI patents (for example the "interoperable vocoder" and
+  "voice transcoder" families from the early 2000s), were not searched.
+
+Consequence: the Cargo gate is kept. Whether to enable `ambe_plus_2` by default is filed for Bruce as
+`night_shift_questions/open/ambe-plus-2-enable-by-default-patent-8359197-*.md` in `hams_com` (options: wait for
+2028-05-20, a claim-by-claim read, a license).
+
 Per `docs/proposals/AMBE_CODEC_AND_DSTAR_IMPLEMENTATION_PLAN.md`: DMR and Yaesu System Fusion both use
 AMBE+2, the half-rate codec covered by the 2009 addendum to TIA-102.BABA-1, which names 12 specific
 patents. This file exists to record what's known about how AMBE+2 differs from the AMBE generation

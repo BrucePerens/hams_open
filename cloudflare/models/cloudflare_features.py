@@ -4,26 +4,6 @@
 from odoo import models, fields
 
 
-class CloudflareDNSRecord(models.Model):
-    _name = "cloudflare.dns.record"
-    _description = "Cloudflare DNS Record"
-
-    name = fields.Char(string="Name", required=True)
-
-    _check_name_not_empty = models.Constraint(
-        "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
-    )
-
-    type = fields.Selection(
-        [("A", "A"), ("AAAA", "AAAA"), ("CNAME", "CNAME"), ("TXT", "TXT")],
-        string="Type",
-        required=True,
-    )
-    content = fields.Char(string="Content", required=True)
-    proxied = fields.Boolean(string="Proxied", default=True)
-    website_id = fields.Many2one("website", string="Website")
-
-
 class CloudflareZoneSettings(models.Model):
     _name = "cloudflare.zone.settings"
     _description = "Cloudflare Zone Settings"

@@ -62,9 +62,13 @@ codec2_16k_bridge = []
 # extern `codec2_profile_mark(id)` the harness provides. Off by default; adds no code when off.
 codec2_profile = []
 # AMBE+2 (DMR / Yaesu System Fusion / P25 Phase 2 half-rate, TIA-102.BABA-1's 2009 addendum) is
-# covered by 12 specific named patents -- off by default, on only for internal chip-compatibility
-# testing. See src/ambe_plus_2/mod.rs's own doc comment and src/ambe/AMBE_PLUS_2_NOTES.md for the
-# authorization history. `cargo build`/`cargo test` (no flags) must never compile any of this --
+# gated off by default and on only for internal chip-compatibility testing. All 12 patents the
+# addendum names had expired by 2017-12-04 (table in src/ambe/float/ambe_plus_2/AMBE_PLUS_2_NOTES.md),
+# but the addendum also claims "other U.S. and foreign patents and patents pending", and US 8,359,197 B2
+# ("Half-rate vocoder", DVSI, priority 2003-04-01) is listed as in force until 2028-05-20, so the gate
+# stays until Bruce decides (night_shift_questions/open/ambe-plus-2-enable-by-default-patent-8359197-*).
+# See src/ambe/float/ambe_plus_2/mod.rs's doc comment and AMBE_PLUS_2_NOTES.md for the authorization history.
+# `cargo build`/`cargo test` (no flags) must never compile any of this --
 # verified directly, not just assumed from the #[cfg] attribute's placement.
 ambe_plus_2 = []
 

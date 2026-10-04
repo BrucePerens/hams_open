@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
+import re
 import requests
 import logging
 import base64
@@ -483,4 +484,97 @@ def delete_custom_hostname(hostname_id, token, zone_id):
     # than raising, which is what makes this distinguishable at all.
     if response is not None and response.status_code == 404:
         return True, "Custom hostname was already gone."
+    return False, "API Error"
+
+
+
+_CF_ID = re.compile(r"[0-9a-f]{32}")
+
+
+def is_cloudflare_id(value):
+    """Cloudflare's object ids are 32 lower-case hex characters. Ids are put into URL paths, so one that
+    is not that shape (a value an administrator pasted in) is refused instead of interpolated."""
+    return bool(value) and bool(_CF_ID.fullmatch(value))
+
+
+def find_zone_id(name, token):
+    """The id of the zone called exactly `name` that the token can see. (True, id), (True, None) when
+    the token sees no such zone, or (False, message) when Cloudflare could not be asked. GET only."""
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not name:
+        return False, "Missing credentials or zone name"
+    endpoint = "https://api.cloudflare.com/client/v4/zones"
+    response = _make_request(
+        "GET", endpoint, token, "Cloudflare Find Zone API failed", params={"name": name}, timeout=15
+    )
+    if response is None or response.status_code != 200:
+        return False, "API Error"
+    for zone in response.json().get("result") or []:
+        if (zone.get("name") or "").lower() == name.lower():
+            return True, zone.get("id")
+    return True, None
+
+
+def list_dns_records_named(zone_id, name, token):
+    """Every DNS record of the zone under exactly `name` (all types): (True, [record, ...]) or
+    (False, message). A failed read is never an empty list, so a caller can not mistake an outage for
+    "nothing exists yet". GET only."""
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not is_cloudflare_id(zone_id) or not name:
+        return False, "Missing credentials, zone or name"
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
+    found = []
+    page = 1
+    while True:
+        response = _make_request(
+            "GET", endpoint, token, "Cloudflare List DNS Records API failed",
+            params={"name": name, "per_page": 100, "page": page}, timeout=15,
+        )
+        if response is None or response.status_code != 200:
+            return False, "API Error"
+        body = response.json()
+        found.extend(body.get("result") or [])
+        if page >= int((body.get("result_info") or {}).get("total_pages") or 1):
+            return True, found
+        page += 1
+
+
+def create_dns_record(zone_id, payload, token):
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not is_cloudflare_id(zone_id):
+        return False, "Missing credentials or zone"
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
+    response = _make_request(
+        "POST", endpoint, token, "Cloudflare Create DNS Record API failed", json=payload, timeout=15
+    )
+    if response is not None and response.status_code == 200:
+        return True, (response.json().get("result") or {}).get("id")
+    return False, "API Error"
+
+
+def update_dns_record(zone_id, record_id, payload, token):
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not is_cloudflare_id(zone_id) or not is_cloudflare_id(record_id):
+        return False, "Missing credentials, zone or record id"
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
+    response = _make_request(
+        "PUT", endpoint, token, "Cloudflare Update DNS Record API failed", json=payload, timeout=15
+    )
+    if response is not None and response.status_code == 200:
+        return True, record_id
+    return False, "API Error"
+
+
+def delete_dns_record(zone_id, record_id, token):
+    """Delete one DNS record by id. Only the push's "retire" path calls this. 404 means it is already gone,
+    which is what the caller wanted."""
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not is_cloudflare_id(zone_id) or not is_cloudflare_id(record_id):
+        return False, "Missing credentials, zone or record id"
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
+    response = _make_request(
+        "DELETE", endpoint, token, "Cloudflare Delete DNS Record API failed", timeout=15
+    )
+    if response is not None and response.status_code in (200, 404):
+        return True, record_id
     return False, "API Error"

@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Serves every public request of a parking instance from the parking.domain table."""
+"""Answers requests for parked domains from the parking.domain table (kinds are decided by tenant_sites)."""
 
 import logging
 
-from werkzeug.exceptions import NotFound
 from werkzeug.wrappers import Response
 
 from odoo import models
 from odoo.http import request
+from odoo.addons.tenant_sites import utils as site_utils
+from odoo.addons.tenant_sites.models.ir_http import KIND_UNKNOWN
 
 from .. import utils
 
@@ -15,7 +16,7 @@ _logger = logging.getLogger(__name__)
 
 SERVICE_USER_XMLID = "parking.user_parking_service"
 INTERNAL_MARKER = "X-Parking-Response"
-CLOUDFLARE_PROOF_HEADER = "CF-Ray"
+KIND_PARKING = "parking"
 INQUIRY_PER_IP_HOUR = 5
 INQUIRY_GLOBAL_HOUR = 200
 MAX_BODY = 8192
@@ -24,44 +25,42 @@ MAX_BODY = 8192
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 
-    # ------------------------------------------------------------------ routing guard
+    # ------------------------------------------------------------------ classification hooks
 
-    # [@ANCHOR: parking:COMM_admin_request]
-    # Verified by [@ANCHOR: parking:COMM_test_admin_request]
+    # [@ANCHOR: parking:COMM_extra_kind]
+    # Verified by [@ANCHOR: parking:COMM_test_extra_kind]
     @classmethod
-    def _parking_is_admin_request(cls):
-        """True only for the operator: the socket peer is a loopback address (an SSH tunnel to the
-        instance's own port) AND the request shows no sign of Cloudflare. cloudflared connects from
-        loopback too, but every request through Cloudflare carries CF-Ray (the edge sets it itself),
-        so no visitor reaches the backend, whatever Host or X-Forwarded-For header they send."""
-        headers = request.httprequest.headers
-        if headers.get(CLOUDFLARE_PROOF_HEADER) or headers.get("CF-Connecting-IP"):
-            return False
-        return utils.is_loopback_address(utils.original_peer(request.httprequest.environ))
+    def _tenant_extra_kind(cls, host):
+        """A hostname in the parking table is a parked domain (tenant_sites asks every module)."""
+        if cls._parking_service_env()["parking.domain"]._lookup(host):
+            return KIND_PARKING
+        return super()._tenant_extra_kind(host)
 
-    # [@ANCHOR: parking:COMM_match_guard]
-    # Verified by [@ANCHOR: parking:COMM_test_match_guard]
+    # [@ANCHOR: parking:COMM_public_route]
+    # Verified by [@ANCHOR: parking:COMM_test_public_route]
     @classmethod
-    def _match(cls, path_info):
-        """On a public host nothing but the for-sale form post is a route; every other path, the
-        whole backend included, is a not-found that falls through to _serve_fallback."""
-        if cls._parking_is_admin_request():
-            return super()._match(path_info)
-        # Decided BEFORE the router runs: a wrong-method match (GET on a POST-only route) would
-        # otherwise surface as 405 and tell a visitor which backend routes exist.
-        if path_info == utils.INQUIRY_PATH and request.httprequest.method == "POST":
-            return super()._match(path_info)
-        raise NotFound()
+    def _tenant_public_route(cls, kind, path, method):
+        """On a parked domain the for-sale form post is the one real route."""
+        if kind == KIND_PARKING and path == utils.INQUIRY_PATH and method == "POST":
+            return True
+        return super()._tenant_public_route(kind, path, method)
 
     # ------------------------------------------------------------------ serving
 
-    # [@ANCHOR: parking:COMM_serve_fallback]
-    # Verified by [@ANCHOR: parking:COMM_test_serve_fallback]
+    # [@ANCHOR: parking:COMM_serve_other]
+    # Verified by [@ANCHOR: parking:COMM_test_serve_other]
     @classmethod
-    def _serve_fallback(cls):
-        if cls._parking_is_admin_request():
-            return super()._serve_fallback()
-        return cls._parking_serve()
+    def _tenant_serve_other(cls, kind):
+        """A parked domain is answered from the table; an unknown hostname gets the default page
+        only when `parking.unknown_host_policy` says so, else tenant_sites' plain 404."""
+        if kind == KIND_PARKING:
+            return cls._parking_serve()
+        if kind == KIND_UNKNOWN:
+            env = cls._parking_service_env()
+            policy = env["ir.config_parameter"]._get_param("parking.unknown_host_policy") or "not_found"
+            if policy == "default_page":
+                return cls._parking_serve()
+        return super()._tenant_serve_other(kind)
 
     # [@ANCHOR: parking:COMM_parking_service_env]
     # Verified by [@ANCHOR: parking:COMM_test_parking_service_env]
@@ -75,7 +74,7 @@ class IrHttp(models.AbstractModel):
     @classmethod
     def _parking_serve(cls):
         environ = request.httprequest.environ
-        host = utils.normalize_host(utils.original_host(environ))
+        host = site_utils.normalize_host(site_utils.original_host(environ))
         method = request.httprequest.method
         if method not in ("GET", "HEAD", "POST"):
             return cls._parking_response("method not allowed", 405, "text/plain", None)
