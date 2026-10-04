@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import re
 
-from odoo.addons.website.tools import MockRequest
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests import tagged
 
@@ -210,10 +209,9 @@ class TestParkingHttp(HamsHttpCase):
         # Tests [@ANCHOR: parking:COMM_extra_kind]
         # Tests [@ANCHOR: parking:COMM_public_route]
         ir_http = self.env.registry["ir.http"]
-        with MockRequest(self.env):
-            self.assertEqual(ir_http._tenant_extra_kind("parked.example"), "parking")
-            self.assertEqual(ir_http._tenant_extra_kind("www.parked.example"), "parking")
-            self.assertIsNone(ir_http._tenant_extra_kind("nobody.example"))
+        self.assertEqual(self.get("/", "www.parked.example").status_code, 200)
+        self.assertIn("Registered.", self.get("/", "www.parked.example").text)
+        self.assertEqual(self.get("/", "nobody.example").status_code, 404)
         self.assertTrue(ir_http._tenant_public_route("parking", utils.INQUIRY_PATH, "POST"))
         self.assertFalse(ir_http._tenant_public_route("parking", utils.INQUIRY_PATH, "GET"))
         self.assertFalse(ir_http._tenant_public_route("unknown", utils.INQUIRY_PATH, "POST"))

@@ -20,7 +20,7 @@ from werkzeug.wrappers import Response
 from odoo import models
 from odoo.http import request
 
-from .. import utils
+from .. import request_state, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -39,9 +39,10 @@ class IrHttp(models.AbstractModel):
     @classmethod
     def _tenant_classify(cls):
         """The kind of the current request, computed once per request."""
-        if not hasattr(request, "tenant_sites_kind"):
-            request.tenant_sites_kind = cls._tenant_compute_kind()
-        return request.tenant_sites_kind
+        memo = request_state.state()
+        if "kind" not in memo:
+            memo["kind"] = cls._tenant_compute_kind()
+        return memo["kind"]
 
     @classmethod
     def _tenant_compute_kind(cls):
@@ -58,7 +59,7 @@ class IrHttp(models.AbstractModel):
             return KIND_MAIN
         website_id = hosts._website_id_for_host(host)
         if website_id:
-            request.tenant_sites_website_id = website_id
+            request_state.state()["website_id"] = website_id
             return KIND_TENANT
         extra_kind = request.env["ir.http"]._tenant_extra_kind(host)
         if extra_kind:
@@ -115,11 +116,8 @@ class IrHttp(models.AbstractModel):
             raise NotFound()
         if not utils.tenant_path_allowed(path_info):
             raise NotFound()
-        endpoint = rule.endpoint
-        function = endpoint.func
-        if hasattr(function, "original_endpoint"):
-            function = function.original_endpoint
-        if not utils.tenant_module_allowed(path_info, function.__module__):
+        module_name = rule.endpoint.func.original_endpoint.__module__
+        if not utils.tenant_module_allowed(path_info, module_name):
             raise NotFound()
         return rule, args
 

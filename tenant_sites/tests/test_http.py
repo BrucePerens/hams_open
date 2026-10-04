@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from odoo.addons.website.tools import MockRequest
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests import tagged
 
@@ -193,11 +192,14 @@ class TestTenantSitesHttp(HamsHttpCase):
 
     # [@ANCHOR: tenant_sites:COMM_test_extra_kind]
     # [@ANCHOR: tenant_sites:COMM_test_public_route]
-    def test_default_hooks_add_no_kind_and_no_route(self):
+    def test_default_hooks_add_no_route_and_parking_adds_its_kind_only_for_parked_names(self):
         # Tests [@ANCHOR: tenant_sites:COMM_extra_kind]
         # Tests [@ANCHOR: tenant_sites:COMM_public_route]
         ir_http = self.env.registry["ir.http"]
         self.assertFalse(ir_http._tenant_public_route("unknown", "/x", "GET"))
         self.assertFalse(ir_http._tenant_public_route("unknown", "/__parking/inquiry", "GET"))
-        with MockRequest(self.env):
-            self.assertIsNone(ir_http._tenant_extra_kind("not-parked.example"))
+        self.env["parking.domain"].create({"name": "parked-by-test.example"})
+        parked = self.get("/", "parked-by-test.example")
+        self.assertEqual(parked.status_code, 200)
+        self.assertNotIn("MAIN-ONLY-CONTENT", parked.text)
+        self.assertEqual(self.get("/", "not-parked.example").status_code, 404)

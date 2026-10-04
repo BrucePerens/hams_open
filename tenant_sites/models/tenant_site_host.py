@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
-from odoo.http import request
 
-from .. import utils
+from .. import request_state, utils
 
 SERVICE_XMLID = "tenant_sites.user_tenant_sites_service"
 OWN_HOST_LIMIT = 1000
@@ -60,25 +59,12 @@ class TenantSiteHost(models.Model):
     def _service_env(self):
         return self.env["zero_sudo.security.utils"]._get_service_env(SERVICE_XMLID)
 
-    # [@ANCHOR: tenant_sites:COMM_request_memo]
-    # Verified by [@ANCHOR: tenant_sites:COMM_test_request_memo]
-    @api.model
-    def _request_memo(self):
-        """A dict that lives as long as the current HTTP request, or None outside one. The host
-        tables are small indexed queries, read fresh on purpose (a cache would need cross-worker
-        invalidation to be correct), but a request asks the same question many times."""
-        if not request:
-            return None
-        if not hasattr(request, "tenant_sites_memo"):
-            request.tenant_sites_memo = {}
-        return request.tenant_sites_memo
-
     # [@ANCHOR: tenant_sites:COMM_own_host_patterns]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_own_host_patterns]
     @api.model
     def _own_host_patterns(self):
         """The hostname patterns of the main site, as a tuple. Empty means nothing is configured."""
-        memo = self._request_memo()
+        memo = request_state.state()
         if memo is not None and "own" in memo:
             return memo["own"]
         own = self._service_env()["tenant.site.own.host"].search([], limit=OWN_HOST_LIMIT)
@@ -95,7 +81,7 @@ class TenantSiteHost(models.Model):
         host = utils.normalize_host(raw_host)
         if not host:
             return 0
-        memo = self._request_memo()
+        memo = request_state.state()
         key = ("site", host)
         if memo is not None and key in memo:
             return memo[key]
@@ -113,11 +99,10 @@ class TenantSiteHost(models.Model):
         """The tenant website of the request being served, or 0 when it is not a tenant request.
         Reads only an attribute the request router already set: it never queries, so the models
         it guards can call it from inside their own searches."""
-        if not request:
+        memo = request_state.state()
+        if memo is None:
             return 0
-        if not hasattr(request, "tenant_sites_website_id"):
-            return 0
-        return request.tenant_sites_website_id
+        return memo.get("website_id", 0)
 
     # [@ANCHOR: tenant_sites:COMM_tenant_hosts_exist]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_tenant_hosts_exist]

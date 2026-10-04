@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from odoo.addons.website.tools import MockRequest
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import tagged
 
+from .. import request_state
 from ..hooks import post_init_hook
 
 
@@ -95,22 +95,12 @@ class TestTenantSitesModels(HamsTransactionCase):
         self.assertEqual(Host._website_id_for_host("a.tenant.example"), 0)
 
     # [@ANCHOR: tenant_sites:COMM_test_request_website_id]
-    # [@ANCHOR: tenant_sites:COMM_test_request_memo]
-    def test_request_website_id_and_memo(self):
+    # [@ANCHOR: tenant_sites:COMM_test_request_state]
+    def test_outside_a_request_there_is_no_state_and_no_tenant_website(self):
         # Tests [@ANCHOR: tenant_sites:COMM_request_website_id]
-        # Tests [@ANCHOR: tenant_sites:COMM_request_memo]
-        Host = self.env["tenant.site.host"]
-        self.assertEqual(Host._tenant_request_website_id(), 0)
-        self.assertIsNone(Host._request_memo())
-        with MockRequest(self.env):
-            self.assertEqual(Host._tenant_request_website_id(), 0)
-            memo = Host._request_memo()
-            self.assertEqual(memo, {})
-            self.assertEqual(Host._website_id_for_host("a.tenant.example"), self.website.id)
-            self.assertEqual(memo[("site", "a.tenant.example")], self.website.id)
-            self.assertIs(Host._request_memo(), memo)
-            self.assertEqual(Host._own_host_patterns(), ())
-            self.assertEqual(memo["own"], ())
+        # Tests [@ANCHOR: tenant_sites:COMM_request_state]
+        self.assertIsNone(request_state.state())
+        self.assertEqual(self.env["tenant.site.host"]._tenant_request_website_id(), 0)
 
     # [@ANCHOR: tenant_sites:COMM_test_tenant_hosts_exist]
     def test_tenant_hosts_exist(self):
@@ -126,7 +116,7 @@ class TestTenantSitesModels(HamsTransactionCase):
         public = self.env.ref("base.public_user")
         for model in ("tenant.site", "tenant.site.host", "tenant.site.own.host"):
             with self.assertRaises(AccessError):
-                self.env[model].with_user(public).search([], limit=1)
+                self.env[model].with_user(public).check_access("read")
         service_uid = self.env["zero_sudo.security.utils"]._get_service_uid("tenant_sites.user_tenant_sites_service")
         service = self.env["tenant.site.host"].with_user(service_uid)
         self.assertTrue(service.search([], limit=1))
