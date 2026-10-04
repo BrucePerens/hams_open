@@ -753,5 +753,55 @@ class TestPgbackrestRepoNumber(unittest.TestCase):
                 pgbackrest_sidecar._validate_request_cmd(self._run(self._payload(engine, pgbackrest_repo=repo)))
 
 
+class TestAckBeforeLongSidecarWait(unittest.TestCase):
+    # RabbitMQ closes the channel of a consumer holding a delivery unacknowledged for longer than
+    # consumer_timeout (30 minutes by default) and redelivers it, so a 37 to 53 minute backup was run
+    # again and again. The message must be acknowledged before the wait, and only once.
+
+    def _payload(self):
+        return {"job_id": 9, "engine": "pgbackrest", "target_path": "hams_prod", "config_id": 2,
+                "storage_type": "b2", "keep_daily": 30, "pgbackrest_repo": 2}
+
+    def test_backup_is_acked_before_the_sidecar_wait_and_exactly_once(self):
+        events = []
+        ch = MagicMock()
+        ch.basic_ack.side_effect = lambda **kw: events.append("ack")
+        method = MagicMock()
+        method.delivery_tag = "t"
+
+        def fake_sidecar(cmd, config, job_id, channel=None):
+            events.append("sidecar")
+            return 0, "ok"
+
+        with patch("main._json2_call"), patch("main._run_pgbackrest_via_sidecar", side_effect=fake_sidecar):
+            backup_worker.execute_job(ch, method, MagicMock(), backup_worker.json.dumps(self._payload()))
+        self.assertEqual(events, ["ack", "sidecar"])
+        self.assertEqual(ch.basic_ack.call_count, 1)
+
+    def test_a_failure_after_the_early_ack_does_not_ack_twice(self):
+        ch = MagicMock()
+        method = MagicMock()
+        method.delivery_tag = "t"
+        with patch("main._json2_call"), patch(
+            "main._run_pgbackrest_via_sidecar", side_effect=OSError("disk full")
+        ):
+            backup_worker.execute_job(ch, method, MagicMock(), backup_worker.json.dumps(self._payload()))
+        self.assertEqual(ch.basic_ack.call_count, 1)
+
+    def test_a_job_that_does_not_use_the_sidecar_is_still_acked_once_at_the_end(self):
+        ch = MagicMock()
+        method = MagicMock()
+        method.delivery_tag = "t"
+        with patch("main._json2_call"), patch("main.shutil.which", return_value="/usr/bin/kopia"), patch(
+            "main.subprocess.Popen"
+        ) as popen:
+            popen.return_value.stdout.read.side_effect = ["", ""]
+            popen.return_value.wait.return_value = 0
+            payload = {"job_id": 3, "engine": "sync_snapshots", "config_engine": "kopia", "config_id": 1,
+                       "target_path": "x", "storage_type": "local"}
+            backup_worker.execute_job(ch, method, MagicMock(), backup_worker.json.dumps(payload))
+        self.assertEqual(ch.basic_ack.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
