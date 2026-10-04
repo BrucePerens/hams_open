@@ -14,6 +14,7 @@
                 <field name="env_file_path"/>
                 <field name="last_rotated"/>
                 <field name="remote_self_rotation" optional="show"/>
+                <field name="os_group" optional="show"/>
             </list>
         </field>
     </record>
@@ -41,6 +42,7 @@
                             <field name="env_file_path"/>
                             <field name="last_rotated"/>
                             <field name="remote_self_rotation"/>
+                            <field name="os_group" placeholder="hamsd_&lt;family&gt;"/>
                         </group>
                     </group>
                 </sheet>
