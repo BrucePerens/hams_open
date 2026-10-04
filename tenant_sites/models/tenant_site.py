@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo import api, fields, models
+from odoo.modules.module import get_manifest
 
 LOGIN_LINK_VIEW = "portal.user_sign_in"
 STOCK_AUTHOR = "Odoo S.A."
@@ -95,32 +96,48 @@ class TenantSite(models.Model):
 
     # [@ANCHOR: tenant_sites:COMM_foreign_assets]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_site_hides_foreign_layout]
-    def _remove_foreign_frontend_assets(self):
-        """Other authors' frontend scripts and styles are removed from the site's bundles with a
-        website-specific `remove` asset (one per file)."""
+    @api.model
+    def _foreign_frontend_assets(self):
+        """{(bundle, path)} of the frontend scripts and styles other authors' modules add to every website:
+        those their manifests declare, and those stored as generic `ir.asset` rows."""
         foreign = self._foreign_module_names()
+        found = set()
+        for name in sorted(foreign):
+            declared = get_manifest(name).get("assets") or {}
+            for bundle in FRONTEND_BUNDLES:
+                for entry in declared.get(bundle, ()):
+                    path = entry if isinstance(entry, str) else (entry[1] if entry[0] in ("append", "prepend") else None)
+                    if path:
+                        found.add((bundle, path.lstrip("/")))
         assets = self._service_env()["ir.asset"]
         generic = assets.search(
             [("website_id", "=", False), ("active", "=", True), ("bundle", "in", FRONTEND_BUNDLES), ("directive", "=", "append")],
             limit=100000,
         )
-        removals = assets.search(
-            [("website_id", "in", self.website_id.ids), ("directive", "=", "remove")], limit=100000
-        )
-        done = {(asset.website_id.id, asset.bundle, asset.path) for asset in removals}
-        foreign_generic = [a for a in generic if a.path.lstrip("/").split("/", 1)[0] in foreign]
+        for asset in generic:
+            if asset.path.lstrip("/").split("/", 1)[0] in foreign:
+                found.add((asset.bundle, asset.path.lstrip("/")))
+        return found
+
+    def _remove_foreign_frontend_assets(self):
+        """Other authors' frontend scripts and styles are removed from the site's bundles with a
+        website-specific `remove` asset (one per file or pattern)."""
+        assets = self._service_env()["ir.asset"]
+        wanted = self._foreign_frontend_assets()
+        removals = assets.search([("website_id", "in", self.website_id.ids), ("directive", "=", "remove")], limit=100000)
+        done = {(asset.website_id.id, asset.bundle, asset.path.lstrip("/")) for asset in removals}
         for site in self:
             wid = site.website_id.id
-            wanted = [a for a in foreign_generic if (wid, a.bundle, a.path) not in done]
             assets.create(
                 [
                     {
-                        "name": f"tenant_sites: remove {asset.path}",
-                        "bundle": asset.bundle,
+                        "name": f"tenant_sites: remove {path}",
+                        "bundle": bundle,
                         "directive": "remove",
-                        "path": asset.path,
+                        "path": path,
                         "website_id": wid,
                     }
-                    for asset in wanted
+                    for bundle, path in sorted(wanted)
+                    if (wid, bundle, path) not in done
                 ]
             )
