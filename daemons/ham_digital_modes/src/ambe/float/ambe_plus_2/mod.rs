@@ -8,14 +8,15 @@
 //!
 //! # Gated behind the `ambe_plus_2` Cargo feature, off by default
 //!
-//! AMBE+2 is covered by 12 specific patents named in the TIA-102.BABA-1 addendum itself. This
-//! module exists **only** for internal testing against real DVSI chip hardware -- confirming or
-//! refuting the hypothesis that the chip's own "P25" configurations are actually running an
-//! AMBE+2-family algorithm, not the published, patent-clear IMBE algorithm `super::tia_102_baba`
-//! implements. It is not enabled by default, not exported for any deployment use, and real
-//! deployment would need the patent-clearance question resolved separately (see
-//! `AMBE_PLUS_2_NOTES.md`'s own dated sections for the authorization history). Build/test it with
-//! `cargo build --features ambe_plus_2` / `cargo test --features ambe_plus_2`.
+//! The 12 patents the TIA-102.BABA-1 addendum names have all expired (the last on 2017-12-04; dates and sources in
+//! `AMBE_PLUS_2_NOTES.md`). The gate stays because the addendum also claims "other U.S. and foreign patents and
+//! patents pending", and US 8,359,197 B2 ("Half-rate vocoder", Digital Voice Systems, priority 2003-04-01) is
+//! recorded as in force until 2028-05-20. This module exists for internal testing against real DVSI chip hardware --
+//! confirming or refuting the hypothesis that the chip's own "P25" configurations are actually running an
+//! AMBE+2-family algorithm, not the published IMBE algorithm `super::tia_102_baba` implements. It is not enabled by
+//! default and not exported for any deployment use; enabling it by default is Bruce's decision (research, not legal
+//! advice; see `AMBE_PLUS_2_NOTES.md`'s dated sections). Build/test it with `cargo build --features ambe_plus_2` /
+//! `cargo test --features ambe_plus_2`.
 //!
 //! # Frame structure: identical to `super::dstar`'s own frame layer, different tables
 //!
