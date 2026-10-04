@@ -22,6 +22,13 @@ this installation uses.
    range list -- is shared, env-less logic the WSGI hook can call before any Odoo database cursor
    exists for the request `[@ANCHOR: is_trusted_cf_peer]`.
 
+3a. A visitor's own `X-Forwarded-Host` header is dropped from every request that carries a Cloudflare
+   marker header (`Cf-Ray`, `Cf-Connecting-Ip`, `Cf-Visitor`), before Odoo's `proxy_mode` handling can
+   replace `Host` with it. Cloudflare passes the visitor's copy through and `cloudflared` only sets the
+   header when an ingress rule configures `httpHostHeader` (none does), so on this deployment the header can
+   only be forged. Without this a visitor of one hostname could make Odoo answer as another and Cloudflare
+   would cache that answer under the requested name `[@ANCHOR: cloudflare:strip_client_forwarded_host]`.
+
 ## Scenario: Trusting Cloudflare's published IP ranges for "orange-cloud" (non-Tunnel) deployments
 
 4. A self-hosted admin running Cloudflare in front of Odoo WITHOUT a Tunnel has a real network peer
