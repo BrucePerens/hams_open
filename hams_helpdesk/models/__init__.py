@@ -7,3 +7,4 @@ from . import inbound_spam_filter
 from . import helpdesk_ticket
 from . import res_partner
 from . import shift_handoff
+from . import triage_wakeup
