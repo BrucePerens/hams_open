@@ -100,17 +100,20 @@ class TenantSite(models.Model):
         website-specific `remove` asset (one per file)."""
         foreign = self._foreign_module_names()
         assets = self._service_env()["ir.asset"]
+        generic = assets.search(
+            [("website_id", "=", False), ("active", "=", True), ("bundle", "in", FRONTEND_BUNDLES), ("directive", "=", "append")],
+            limit=100000,
+        )
+        removals = assets.search(
+            [("website_id", "in", self.website_id.ids), ("directive", "=", "remove")], limit=100000
+        )
+        done = {(asset.website_id.id, asset.bundle, asset.path) for asset in removals}
+        foreign_generic = [a for a in generic if a.path.lstrip("/").split("/", 1)[0] in foreign]
         for site in self:
             wid = site.website_id.id
-            generic = assets.search(
-                [("website_id", "=", False), ("active", "=", True), ("bundle", "in", FRONTEND_BUNDLES),
-                 ("directive", "=", "append")],
-                limit=100000,
-            )
-            have = set(assets.search([("website_id", "=", wid), ("directive", "=", "remove")], limit=100000).mapped("path"))
-            wanted = [a for a in generic if a.path.lstrip("/").split("/", 1)[0] in foreign and a.path not in have]
-            for asset in wanted:
-                assets.create(
+            wanted = [a for a in foreign_generic if (wid, a.bundle, a.path) not in done]
+            assets.create(
+                [
                     {
                         "name": f"tenant_sites: remove {asset.path}",
                         "bundle": asset.bundle,
@@ -118,4 +121,6 @@ class TenantSite(models.Model):
                         "path": asset.path,
                         "website_id": wid,
                     }
-                )
+                    for asset in wanted
+                ]
+            )

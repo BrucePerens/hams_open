@@ -15,3 +15,4 @@ access_tenant_sites_svc_module,ir.module.module svc,base.model_ir_module_module,
 access_tenant_sites_svc_model_data,ir.model.data svc,base.model_ir_model_data,tenant_sites.group_tenant_sites_service,1,0,0,0
 access_tenant_sites_svc_view,ir.ui.view svc,base.model_ir_ui_view,tenant_sites.group_tenant_sites_service,1,1,1,0
 access_tenant_sites_svc_asset,ir.asset svc,base.model_ir_asset,tenant_sites.group_tenant_sites_service,1,0,1,0
+access_tenant_sites_svc_groups,res.groups svc,base.model_res_groups,tenant_sites.group_tenant_sites_service,1,0,0,0
