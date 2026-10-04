@@ -232,3 +232,41 @@ class TestWsgiProxyScheme(HamsTransactionCase):
             "wsgi.url_scheme": "http",
         }
         self.assertEqual(self._call(environ)["wsgi.url_scheme"], "https")
+
+    # Tests [@ANCHOR: cloudflare:strip_client_forwarded_host]
+    def test_10_client_x_forwarded_host_is_dropped_on_a_cloudflare_request(self):
+        """A visitor's X-Forwarded-Host would make Odoo's ProxyFix replace Host; it is removed on
+        every request that carries a Cloudflare marker header, the scheme still applied."""
+        for marker in ("HTTP_CF_RAY", "HTTP_CF_CONNECTING_IP", "HTTP_CF_VISITOR"):
+            environ = {
+                "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
+                "HTTP_HOST": "hams.com",
+                "HTTP_X_FORWARDED_HOST": "crawler.hams.com",
+                "HTTP_X_FORWARDED_PROTO": "https",
+                marker: '{"scheme":"https"}' if marker == "HTTP_CF_VISITOR" else "x",
+                "wsgi.url_scheme": "http",
+            }
+            result = self._call(environ)
+            self.assertNotIn("HTTP_X_FORWARDED_HOST", result, marker)
+            self.assertEqual(result["HTTP_HOST"], "hams.com")
+            self.assertEqual(result["wsgi.url_scheme"], "https")
+
+    # Tests [@ANCHOR: cloudflare:strip_client_forwarded_host]
+    def test_11_x_forwarded_host_is_kept_without_a_cloudflare_marker(self):
+        """A local reverse proxy that is not Cloudflare (the dev nginx site) sets the header itself."""
+        environ = {
+            "REMOTE_ADDR": "127.0.0.1",  # burn-ignore-ssrf-test-value
+            "HTTP_X_FORWARDED_HOST": "hams.com",
+            "wsgi.url_scheme": "http",
+        }
+        self.assertEqual(self._call(environ)["HTTP_X_FORWARDED_HOST"], "hams.com")
+
+    # Tests [@ANCHOR: cloudflare:strip_client_forwarded_host]
+    def test_12_untrusted_peer_cloudflare_request_also_loses_x_forwarded_host(self):
+        environ = {
+            "REMOTE_ADDR": "203.0.113.7",  # burn-ignore-ssrf-test-value
+            "HTTP_CF_RAY": "abc",
+            "HTTP_X_FORWARDED_HOST": "evil.example",
+            "wsgi.url_scheme": "http",
+        }
+        self.assertNotIn("HTTP_X_FORWARDED_HOST", self._call(environ))
