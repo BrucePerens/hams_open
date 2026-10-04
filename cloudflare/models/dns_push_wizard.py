@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
-from odoo import api, fields, models, _
+from odoo import fields, models, _
 from odoo.exceptions import UserError
 
 from ..utils import dns_plan
