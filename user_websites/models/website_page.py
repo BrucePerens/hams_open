@@ -219,40 +219,25 @@ class WebsitePage(models.Model):
 
             # Strip all QWeb execution, inline JS directives, and javascript URIs
             dangerous_prefixes = ("t-", "on")
-            # ADR-0102: Explicitly allow safe QWeb directives while blocking SSTI vectors
-            # Finite whitelist of allowed t-att-* attributes to minimize attack surface.
-            ALLOWED_T_DIRECTIVES = {
-                "t-name",
-                "t-call",
-                "t-set",
-                "t-value",
-                "t-out",
-                "t-esc",
-                "t-if",
-                "t-elif",
-                "t-else",
-                "t-foreach",
-                "t-as",
-                "t-options",
-                "t-call-options",
-                "t-att-class",
-                "t-att-style",
-                "t-att-src",
-                "t-att-href",
-                "t-att-alt",
-                "t-att-title",
-                "t-att-name",
-                "t-att-value",
-                "t-att-data-target",
-                "t-att-data-bs-target",
-                "t-att-data-bs-toggle",
-                "t-att-role",
-                "t-att-aria-label",
-                "t-att-placeholder",
-                "t-att-id",
-                "t-att-checked",
-                "t-att-selected",
-            }
+            # [@ANCHOR: user_websites:page_arch_qweb_allowlist]
+            # Member arch may carry exactly two QWeb directives: t-name (the template's
+            # own name) and t-call with a literal naming one of MEMBER_CALLABLE_TEMPLATES.
+            # Everything else (t-out, t-esc, t-set, t-foreach, t-if, t-options,
+            # t-call-options, every t-att-*, t-attf-*) carries a Python expression the
+            # server evaluates under the VIEWER's account, and a regex blacklist on that
+            # expression text is not a safe boundary. A member page has no data of its
+            # own to compute over, so none of them is needed. t-call with an arbitrary
+            # name would render any installed template (backend views, mail templates)
+            # under the viewer's account, hence the fixed list.
+            MEMBER_CALLABLE_TEMPLATES = frozenset(
+                {
+                    "website.layout",
+                    "user_websites.template_default_home",
+                    "user_websites.report_violation_snippet",
+                    "user_websites.report_violation_modal",
+                }
+            )
+            T_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
 
             for elem in root.xpath("//*"):
                 # An svg block was rebuilt from the allowlist above (that rebuild sets a
@@ -290,63 +275,19 @@ class WebsitePage(models.Model):
                         elem.attrib[f"data-blocked-{attr}"] = val
                         was_modified = True
                     elif attr_lower.startswith(dangerous_prefixes):
-                        if attr_lower not in ALLOWED_T_DIRECTIVES:
-                            del elem.attrib[attr]
-                            elem.attrib[f"data-blocked-{attr}"] = val
-                            was_modified = True
-                        # Adversarial security review, 2026-09-03: t-att-href
-                        # and t-att-src are in ALLOWED_T_DIRECTIVES (real,
-                        # legitimate uses -- a page linking to an internal
-                        # anchor computed via a t-if, an image src built from
-                        # a t-foreach loop variable, etc.), but the literal-
-                        # attribute-name scheme check above only ever
-                        # matches the bare strings "href"/"src", never
-                        # "t-att-href"/"t-att-src" -- so a QWeb expression
-                        # like t-att-href="'javascript:alert(1)'" reached
-                        # only the SSTI-token regex below, which has nothing
-                        # to do with dangerous URI schemes, and sailed
-                        # through untouched into the real rendered href.
-                        # Unlike a plain href value, this attribute's own
-                        # text is Python expression SOURCE (quotes,
-                        # concatenation, etc. included), not the literal URL
-                        # itself, so an unanchored search for the dangerous
-                        # scheme name anywhere in the expression -- not just
-                        # at its very start -- is the correct check here,
-                        # the same conservative "search, don't match" shape
-                        # the SSTI check just below already uses.
-                        elif attr_lower in ("t-att-href", "t-att-src") and re.search(
-                            r"(javascript|data|vbscript)\s*:", val, re.IGNORECASE
+                        # Case-insensitive match, exact value check; the attribute is
+                        # kept only when it is one of the two permitted directives
+                        # with a value that passes its own validation.
+                        if (
+                            attr == "t-name" and T_NAME_RE.match(val)
+                        ) or (
+                            attr == "t-call"
+                            and val in MEMBER_CALLABLE_TEMPLATES
                         ):
-                            del elem.attrib[attr]
-                            elem.attrib[f"data-blocked-{attr}"] = val
-                            was_modified = True
-                        else:
-                            # # Verified by [@ANCHOR: test_website_page_sanitize_arch_bare_env_bypass]
-                            # Additional expression-level check for SSTI vectors.
-                            # [!] SECURITY: the original pattern only blocked
-                            # .sudo(/.with_user(/.with_env(/.env( when
-                            # immediately followed by a call paren, so bare
-                            # attribute/subscript access -- e.g.
-                            # t-esc="request.env['res.users'].search([])"
-                            # or "request.session.sid" -- bypassed it
-                            # entirely and reached full, un-sudoed ORM
-                            # access (and session-id theft) under whatever
-                            # account happens to VIEW the page, without
-                            # ever calling .sudo()/eval()/exec(). Block the
-                            # bare tokens that grant that access at all
-                            # (request/env/session), plus the ORM verbs
-                            # that mutate or execute raw SQL, not just the
-                            # privilege-escalation helper methods.
-                            if re.search(
-                                r"\.(sudo|with_user|with_context|with_env)\s*\(|"
-                                r"\b(request|env|session)\b|"
-                                r"__|"
-                                r"\b(eval|exec|getattr|setattr|write|unlink|create|execute|browse|search|read|import|open|cr)\b",
-                                val,
-                            ):
-                                del elem.attrib[attr]
-                                elem.attrib[f"data-blocked-ssti-{attr}"] = val
-                                was_modified = True
+                            continue
+                        del elem.attrib[attr]
+                        elem.attrib[f"data-blocked-{attr}"] = val
+                        was_modified = True
 
             # [@ANCHOR: user_websites:page_arch_text_is_markup]
             # Verified by [@ANCHOR: test_user_arch_svg_allowlist]
