@@ -77,6 +77,16 @@ class CloudflareDNSRecord(models.Model):
     active = fields.Boolean(default=True)
     cf_last_result = fields.Char(string="Last push result", readonly=True, copy=False)
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        """A row of a type that can never be proxied, created without saying so, is created DNS-only (the
+        field's default is on, which would make the new NS or TXT row fail its own constraint). Saying
+        proxied=True explicitly for such a type is still refused by the constraint."""
+        for vals in vals_list:
+            if "proxied" not in vals and vals.get("type") and vals["type"] not in dns_plan.PROXIABLE_TYPES:
+                vals["proxied"] = False
+        return super().create(vals_list)
+
     @api.onchange("type")
     def _onchange_type_clears_proxied(self):
         """The form's Proxied box defaults on; an NS or TXT row can never be proxied, so choosing one of those

@@ -229,6 +229,12 @@ class TestDnsRecordModel(HamsTransactionCase):
         self._make(cf_record_id=_id(), name="ok.hams.com")
         self._make(name="*.hams.com", type="CNAME", content=TUNNEL_CNAME, proxied=True)
 
+    def test_03b_a_row_created_without_proxied_is_dns_only_when_its_type_cannot_be_proxied(self):
+        ns = self.Record.create({"name": "callbook.hams.com", "type": "NS", "content": "ns1.hams.com"})
+        self.assertFalse(ns.proxied)
+        a_row = self.Record.create({"name": "www.hams.com", "type": "CNAME", "content": TUNNEL_CNAME})
+        self.assertTrue(a_row.proxied, "a CNAME keeps the default")
+
     def test_04_a_duplicate_row_is_refused(self):
         self._make()
         with self.assertRaises(ValidationError):
