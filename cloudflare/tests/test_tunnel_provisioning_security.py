@@ -6,7 +6,7 @@ import importlib.util
 import os
 
 from cryptography.fernet import Fernet
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -461,3 +461,48 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
             self.env.invalidate_all()
             self.assertFalse((on | null | off).filtered("ssh_route_enabled"))
         self.assertFalse(Tunnel.search([("ssh_route_enabled", "=", True)]))
+
+    def test_push_configuration_catch_all_service_is_per_tunnel(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+        """
+        The last ingress rule is the tunnel's own catch_all_service. A default tunnel keeps pushing this
+        Odoo (the behaviour before the field existed); a tunnel that fronts other instances points it
+        at the parking instance; a malformed value is refused when saved, never pushed.
+        """
+        tunnel = self._make_push_test_tunnel(
+            "Catch All", "https://catch-all-test.example.com"
+        )
+        self.assertEqual(tunnel.catch_all_service, "http://localhost:8069")  # burn-ignore-cloudflared-ingress
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertEqual(ingress[-1], {"service": "http://localhost:8069"})  # burn-ignore-cloudflared-ingress
+
+        tunnel.catch_all_service = "http://localhost:18110"  # burn-ignore-cloudflared-ingress
+        mock_push.reset_mock()
+        tunnel.action_push_configuration()
+        ingress = mock_push.call_args[0][3]["config"]["ingress"]
+        self.assertEqual(ingress[-1], {"service": "http://localhost:18110"})  # burn-ignore-cloudflared-ingress
+        self.assertEqual(
+            [rule for rule in ingress if "hostname" not in rule and "path" not in rule][-1],
+            ingress[-1],
+        )
+
+        tunnel.catch_all_service = "http_status:404"
+        mock_push.reset_mock()
+        tunnel.action_push_configuration()
+        self.assertEqual(
+            mock_push.call_args[0][3]["config"]["ingress"][-1], {"service": "http_status:404"}
+        )
+
+        for bad in (
+            "", "http_status:40", "http://a b", "no-scheme:8069",
+            "ssh://host:22", "http://host:8069\nx",
+        ):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                    tunnel.catch_all_service = bad
+                    tunnel.flush_recordset()
