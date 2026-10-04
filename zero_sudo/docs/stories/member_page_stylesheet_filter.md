@@ -35,7 +35,8 @@ not an attack; the removal is logged.
 `position: absolute` is kept: it only escapes its container when no ancestor is positioned, and
 members use it for ordinary layouts. A `style=""` attribute on an element is not filtered by this
 (it cannot select other elements, so it cannot read the page, but it can still carry `url()` and
-`position: fixed`); see `night_shift_questions/open/member-style-attribute-not-filtered-*.md`.
+`position: fixed`). Whether to filter it too changes what members' existing pages look like, so it is
+a question for the site owner, not decided here.
 
 Tests `[@ANCHOR: test_css_stylesheet_filter]` (the filter alone) and
 `[@ANCHOR: test_user_arch_style_link_filter]` (the member save path and the served page).
