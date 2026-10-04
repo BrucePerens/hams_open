@@ -200,8 +200,8 @@ class TestTenantSitesHttp(HamsHttpCase):
             [("website_id", "=", website.id), ("directive", "=", "remove"), ("path", "like", "edge_cache/%")], limit=10
         )
         self.assertTrue(removed)
-        self.assertFalse(env["ir.asset"].search_count([("website_id", "=", self.main_website.id), ("directive", "=", "remove"),
-                                                         ("path", "like", "edge_cache/%")], limit=1))
+        main_removals = [("website_id", "=", self.main_website.id), ("directive", "=", "remove"), ("path", "like", "edge_cache/%")]
+        self.assertFalse(env["ir.asset"].search_count(main_removals, limit=1))
         # repeating changes nothing
         count = env["ir.asset"].search_count([("website_id", "=", website.id)], limit=1000)
         env["tenant.site"].search([("website_id", "=", website.id)])._apply_public_layout()
