@@ -10,6 +10,7 @@ from lxml import etree
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
+from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet
 from odoo.addons.zero_sudo.svg_sanitizer import sanitize_xml_svgs
 from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, REDIS_USERNAME_DEFAULT
 
@@ -191,6 +192,46 @@ class WebsitePage(models.Model):
             ]:
                 _remove_keeping_tail(elem)
                 was_modified = True
+
+            # [@ANCHOR: user_websites:page_arch_style_link_filter]
+            # Verified by [@ANCHOR: test_user_arch_style_link_filter]
+            # <link> is removed on every page, whatever its rel: a stylesheet or prefetch
+            # link makes every visitor's browser fetch from a host the member chose, and a
+            # remote stylesheet is also the one place a member could swap the page's look
+            # after review. <style> is kept, but its text is rebuilt rule by rule from
+            # zero_sudo's stylesheet filter (no url() except #fragment, no @import, no
+            # position fixed/sticky; see css_sanitizer.py for the exfiltration and overlay
+            # reasons). Neither counts as an injection attempt (no strike): a page that
+            # linked a font or used a fixed header is not an attack, so the removal is
+            # logged and the page saved without it. Runs after the svg rebuild, so an svg's
+            # own (already dropped) style never reaches here.
+            for elem in [
+                e
+                for e in root.iter()
+                if isinstance(e.tag, str)
+                and e.tag.rpartition("}")[2].lower() in ("link", "style")
+            ]:
+                if elem.tag.rpartition("}")[2].lower() == "link":
+                    _logger.info("member page arch: <link> element removed")
+                    _remove_keeping_tail(elem)
+                    continue
+                source = "".join(elem.itertext())
+                cleaned_css, css_dropped = sanitize_stylesheet(source)
+                if css_dropped:
+                    _logger.info("member page arch: <style> rules removed by the stylesheet filter")
+                tail = elem.tail
+                for attr in list(elem.attrib):
+                    if attr.lower() != "media" or not re.fullmatch(
+                        r"[A-Za-z0-9\s:,().\-/]{1,200}", elem.attrib[attr]
+                    ):
+                        del elem.attrib[attr]
+                for child in list(elem):
+                    elem.remove(child)
+                elem.tail = tail
+                if cleaned_css:
+                    elem.text = cleaned_css
+                else:
+                    _remove_keeping_tail(elem)
 
             # Adversarial security review, 2026-09-03: a <meta
             # http-equiv="refresh" content="0;url=https://evil.example/">
