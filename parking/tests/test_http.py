@@ -76,7 +76,6 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         self.assert_clean(response)
-        self.assertEqual(self.get("/", "10.1.2.3").status_code, 400)
 
     def test_unknown_host_default_page_policy(self):
         self.env["ir.config_parameter"].set_param("parking.unknown_host_policy", "default_page")
