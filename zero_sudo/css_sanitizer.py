@@ -237,3 +237,65 @@ def sanitize_stylesheet(text):
         return "", True
     cleaned, dropped = _clean_rules(text, 0, _Counter())
     return cleaned, dropped or unterminated
+
+
+MAX_ATTRIBUTE_CHARS = 4000
+
+
+def sanitize_style_attribute(text):
+    """`(declarations, dropped)` for the value of a `style="..."` attribute.
+
+    [@ANCHOR: zero_sudo:css_style_attribute_filter]
+    Verified by [@ANCHOR: test_css_style_attribute_filter]
+
+    Same declaration rules as a `<style>` rule body (`_clean_value`: no `url()` except
+    `#fragment`, no `image-set()`, `data:`, `expression`, backslash, `position` other than
+    static/relative/absolute, ...), applied one declaration at a time. An attribute cannot
+    select other elements, but `background:url(https://other-site/x)` is still a third-party
+    request per visitor and `position:fixed` still covers the site's own chrome.
+
+    A declaration whose value is refused is removed and the rest kept. Malformed CSS drops the
+    whole attribute (returns `("", True)`): an unterminated comment, string or parenthesis, a
+    brace, a control character, a declaration with no colon or with a property name that is not
+    a plain lower-cased identifier once comments are deleted, or an attribute over the size cap.
+    Comments are deleted, not replaced, as in `sanitize_stylesheet`. Running the filter on its
+    own output changes nothing. `dropped` is True when anything but a comment was removed.
+    """
+    if not text or not text.strip():
+        return "", False
+    if len(text) > MAX_ATTRIBUTE_CHARS:
+        return "", True
+    if any(not match.group(0)[2:].endswith("*/") for match in _RE_COMMENT.finditer(text)):
+        return "", True
+    text = _RE_COMMENT.sub("", text)
+    if (
+        _RE_FORBIDDEN_CHAR.search(text)  # audit-ignore-search: re.Pattern, not an ORM search
+        or "{" in text
+        or "}" in text
+        or text.count('"') % 2
+        or text.count("'") % 2
+        or text.count("(") != text.count(")")
+    ):
+        return "", True
+    kept = []
+    dropped = False
+    i = 0
+    while i < len(text):
+        end = _scan(text, i, ";")
+        piece = text[i:end]
+        i = end + 1
+        if not piece.strip():
+            continue
+        prop, sep, raw = piece.partition(":")
+        prop = prop.strip().lower()
+        if not sep or not _RE_PROPERTY.fullmatch(prop):
+            return "", True
+        if len(kept) >= MAX_DECLARATIONS_PER_RULE or prop in _BAD_PROPERTIES:
+            dropped = True
+            continue
+        value = _clean_value(prop, raw)
+        if value is None:
+            dropped = True
+            continue
+        kept.append(f"{prop}:{value}")
+    return ";".join(kept), dropped

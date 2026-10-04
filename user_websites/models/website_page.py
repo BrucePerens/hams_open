@@ -10,7 +10,7 @@ from lxml import etree
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
-from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet
+from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet, sanitize_style_attribute
 from odoo.addons.zero_sudo.svg_sanitizer import sanitize_xml_svgs
 from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, REDIS_USERNAME_DEFAULT
 
@@ -232,6 +232,28 @@ class WebsitePage(models.Model):
                     elem.text = cleaned_css
                 else:
                     _remove_keeping_tail(elem)
+
+            # [@ANCHOR: user_websites:page_arch_style_attribute_filter]
+            # Verified by [@ANCHOR: test_user_arch_style_attribute_filter]
+            # A style="..." attribute on any element gets the same declaration filter as a
+            # <style> rule body (zero_sudo.css_sanitizer.sanitize_style_attribute): no url()
+            # except #fragment, no image-set(), data:, expression, escapes, and position only
+            # static/relative/absolute. Declarations are rewritten one by one; malformed CSS
+            # drops the whole attribute; an attribute left empty is removed. The attribute name
+            # is matched case-insensitively (the browser's HTML parser is). No strike, as for
+            # <style>. svg subtrees were rebuilt above and carry only their own filtered style.
+            for elem in root.iter():
+                if not isinstance(elem.tag, str):
+                    continue
+                for attr in list(elem.attrib):
+                    if attr.lower() != "style":
+                        continue
+                    cleaned_style, style_dropped = sanitize_style_attribute(elem.attrib[attr])
+                    if style_dropped:
+                        _logger.info("member page arch: style attribute declarations removed")
+                    del elem.attrib[attr]
+                    if cleaned_style:
+                        elem.attrib["style"] = cleaned_style
 
             # Adversarial security review, 2026-09-03: a <meta
             # http-equiv="refresh" content="0;url=https://evil.example/">
