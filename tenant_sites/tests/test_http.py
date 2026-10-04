@@ -170,7 +170,9 @@ class TestTenantSitesHttp(HamsHttpCase):
         # Tests [@ANCHOR: tenant_sites:COMM_apply_public_layout]
         # Tests [@ANCHOR: tenant_sites:COMM_foreign_modules]
         # Tests [@ANCHOR: tenant_sites:COMM_foreign_layout_views]
-        # Tests [@ANCHOR: tenant_sites:COMM_foreign_assets]
+        # Tests [@ANCHOR: tenant_sites:COMM_asset_addons]
+        # Tests [@ANCHOR: tenant_sites:COMM_asset_related]
+        # Tests [@ANCHOR: tenant_sites:COMM_is_tenant_website]
         env = self.env
         injector = env["ir.ui.view"].create(
             {
@@ -196,16 +198,22 @@ class TestTenantSitesHttp(HamsHttpCase):
         two = self.get("/two-only", "two.tenant.example")
         self.assertEqual(two.status_code, 200)
         self.assertNotIn("FOREIGN-LAYOUT-MARKER", two.text)
-        removed = env["ir.asset"].search(
-            [("website_id", "=", website.id), ("directive", "=", "remove"), ("path", "like", "edge_cache/%")], limit=10
-        )
-        self.assertTrue(removed)
-        main_removals = [("website_id", "=", self.main_website.id), ("directive", "=", "remove"), ("path", "like", "edge_cache/%")]
-        self.assertFalse(env["ir.asset"].search_count(main_removals, limit=1))
-        # repeating changes nothing
-        count = env["ir.asset"].search_count([("website_id", "=", website.id)], limit=1000)
+        # The same goes for the scripts of other authors' modules: out of the tenant's bundles, in the main site's.
+        csrf_script = "/edge_cache/static/src/js/edge_cache_csrf.js"
+        assets = env["ir.asset"]
+        main_files = {item[0] for item in assets._get_asset_paths("web.assets_frontend", {"website_id": self.main_website.id})}
+        two_files = {item[0] for item in assets._get_asset_paths("web.assets_frontend", {"website_id": website.id})}
+        self.assertIn(csrf_script, main_files)
+        self.assertNotIn(csrf_script, two_files)
+        self.assertTrue(any(path.startswith("/web/static/") for path in two_files))  # Odoo's own stay
+        # A module listed as kept stays on every tenant.
+        env["tenant.site.kept.module"].create({"name": "edge_cache"})
+        kept_files = {item[0] for item in assets._get_asset_paths("web.assets_frontend", {"website_id": website.id})}
+        self.assertIn(csrf_script, kept_files)
+        # Repeating changes nothing.
+        views_before = env["ir.ui.view"].search_count([("website_id", "=", website.id)], limit=100000)
         env["tenant.site"].search([("website_id", "=", website.id)])._apply_public_layout()
-        self.assertEqual(env["ir.asset"].search_count([("website_id", "=", website.id)], limit=1000), count)
+        self.assertEqual(env["ir.ui.view"].search_count([("website_id", "=", website.id)], limit=100000), views_before)
 
     def test_a_tenant_host_is_read_only(self):
         for method in ("POST", "PUT", "DELETE", "PATCH"):
