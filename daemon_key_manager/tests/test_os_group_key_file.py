@@ -28,9 +28,15 @@ from odoo.tests import tagged
 
 FAMILY_GROUP = "hamsd_ncvec_sync"
 KEY_ROOT = "/opt/hams/etc/keys"
+# A group file lives in its family's own key directory (owned by the writer, group = the family
+# group, 0750). These tests use the real ncvec_sync directory and remove only the files they
+# create; setUp records the directory's state and _cleanup puts it back.
+FAMILY_DIR = os.path.join(KEY_ROOT, "ncvec_sync")
+OTHER_FAMILY_DIR = os.path.join(KEY_ROOT, "club_crawl")
+# A key with no group may live in any plain subdirectory, which stays 0700.
 TEST_DIR = os.path.join(KEY_ROOT, "os_group_test")
 ROOT_PROBE = os.path.join(KEY_ROOT, "os_group_root_probe.env")
-REGISTERED = os.path.join(TEST_DIR, "registered.env")
+REGISTERED = os.path.join(FAMILY_DIR, "registered.env")
 MANAGER_XML_ID = "daemon_key_manager.user_daemon_key_manager_service"
 
 
@@ -53,6 +59,11 @@ class TestOsGroupKeyFile(RealTransactionCase):
         )
         self.registry_model = self.env["daemon.key.registry"]
         self.manager_user = self.env.ref(MANAGER_XML_ID)
+        info = os.stat(FAMILY_DIR) if os.path.isdir(FAMILY_DIR) else None
+        self._family_dir_before = (
+            None if info is None else (stat.S_IMODE(info.st_mode), info.st_gid, set(os.listdir(FAMILY_DIR)))
+        )
+        self._other_dir_existed = os.path.lexists(OTHER_FAMILY_DIR)
         self._cleanup()
         self.service_user = self.env["res.users"].create(
             {
@@ -74,6 +85,25 @@ class TestOsGroupKeyFile(RealTransactionCase):
         if os.path.lexists(TEST_DIR):
             os.chmod(TEST_DIR, 0o700)
             shutil.rmtree(TEST_DIR)
+        before = getattr(self, "_family_dir_before", None)
+        if os.path.isdir(FAMILY_DIR):
+            os.chmod(FAMILY_DIR, 0o750)
+            keep = before[2] if before else set()
+            for name in os.listdir(FAMILY_DIR):
+                if name not in keep:
+                    os.remove(os.path.join(FAMILY_DIR, name))
+            if before is None:
+                os.rmdir(FAMILY_DIR)
+            else:
+                # lchown, not chown: a test that mocks os.chown is still active in tearDown.
+                os.lchown(FAMILY_DIR, -1, before[1])
+                os.chmod(FAMILY_DIR, before[0])
+        if not getattr(self, "_other_dir_existed", True) and os.path.isdir(OTHER_FAMILY_DIR):
+            shutil.rmtree(OTHER_FAMILY_DIR)
+
+    def _family_files(self):
+        before = self._family_dir_before[2] if self._family_dir_before else set()
+        return sorted(set(os.listdir(FAMILY_DIR)) - before)
 
     def _write(self, path, key="key-value", group=None):
         self.registry_model._write_secure_env_file(path, "login", key, group=group)
@@ -83,7 +113,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
 
     def test_a_group_file_is_0640_in_that_group_and_owned_by_the_writer(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_group]
-        path = os.path.join(TEST_DIR, "group.env")
+        path = os.path.join(FAMILY_DIR, "group.env")
         self._write(path, key="the-key", group=FAMILY_GROUP)
         info = os.stat(path)
         self.assertEqual(stat.S_IMODE(info.st_mode), 0o640)
@@ -91,7 +121,62 @@ class TestOsGroupKeyFile(RealTransactionCase):
         self.assertEqual(info.st_uid, os.geteuid())
         with open(path, encoding="utf-8") as key_file:
             self.assertIn("ODOO_RPC_KEY=the-key\n", key_file.read())
-        self.assertEqual(self._mode(TEST_DIR), 0o700, "a subdirectory stays 0700")
+        # [@ANCHOR: COMM_test_family_key_directory]
+        # The family's key directory: owned by the writer, group = the family group, 0750.
+        directory = os.stat(FAMILY_DIR)
+        self.assertEqual(stat.S_IMODE(directory.st_mode), 0o750)
+        self.assertEqual(directory.st_gid, self.family_gid)
+        self.assertEqual(directory.st_uid, os.geteuid())
+
+    def test_an_existing_0700_family_directory_is_regrouped_and_opened_to_its_group(self):
+        # Tests [@ANCHOR: COMM_write_secure_env_file_group_directory]
+        os.makedirs(FAMILY_DIR, exist_ok=True)
+        os.chown(FAMILY_DIR, -1, os.getegid())
+        os.chmod(FAMILY_DIR, 0o700)
+        self._write(os.path.join(FAMILY_DIR, "regroup.env"), group=FAMILY_GROUP)
+        self.assertEqual(self._mode(FAMILY_DIR), 0o750)
+        self.assertEqual(os.stat(FAMILY_DIR).st_gid, self.family_gid)
+
+    def test_rewriting_keeps_the_family_directory_0750_and_never_widens_it(self):
+        path = os.path.join(FAMILY_DIR, "again.env")
+        self._write(path, group=FAMILY_GROUP)
+        self._write(path, key="second", group=FAMILY_GROUP)
+        self.assertEqual(self._mode(FAMILY_DIR), 0o750)
+        self.assertEqual(self._mode(FAMILY_DIR) & 0o027, 0, "no group write, no access for others")
+
+    def test_a_group_file_outside_its_family_directory_is_refused(self):
+        # Tests [@ANCHOR: COMM_write_secure_env_file_group_directory]
+        for name, path in (
+            ("the shared key root", os.path.join(KEY_ROOT, "os_group_root_probe.env")),
+            ("a plain subdirectory", os.path.join(TEST_DIR, "elsewhere.env")),
+            ("another family's directory", os.path.join(OTHER_FAMILY_DIR, "os_group_probe")),
+            ("a nested directory", os.path.join(FAMILY_DIR, "nested", "deeper.env")),
+        ):
+            with self.subTest(location=name):
+                with self.assertRaises(UserError) as caught:
+                    self._write(path, group=FAMILY_GROUP)
+                self.assertIn("its own key directory", str(caught.exception))
+                self.assertFalse(os.path.lexists(path))
+        self.assertFalse(os.path.lexists(TEST_DIR), "a refused write creates no directory")
+
+    def test_a_key_with_no_group_leaves_its_subdirectory_0700(self):
+        self._write(os.path.join(TEST_DIR, "plain_dir.env"))
+        self.assertEqual(self._mode(TEST_DIR), 0o700)
+        self.assertEqual(os.stat(TEST_DIR).st_gid, os.getegid())
+
+    def test_chown_of_the_directory_refused_by_the_kernel_leaves_the_old_file(self):
+        # The server started before provisioning added it to the group, so the kernel refuses
+        # the directory's chgrp. Simulated with the one failing call.
+        path = os.path.join(FAMILY_DIR, "dir_refused.env")
+        self._write(path, key="old", group=FAMILY_GROUP)
+        target = "odoo.addons.daemon_key_manager.models.key_registry.os.chown"
+        self.safe_patch(target, side_effect=PermissionError(1, "Operation not permitted"))
+        with self.assertRaises(UserError) as caught:
+            self._write(path, key="new", group=FAMILY_GROUP)
+        self.assertIn("cannot hand the key directory", str(caught.exception))
+        with open(path, encoding="utf-8") as key_file:
+            self.assertIn("ODOO_RPC_KEY=old\n", key_file.read())
+        self.assertEqual(self._family_files(), ["dir_refused.env"])
 
     def test_without_a_group_the_file_stays_0600(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
@@ -102,7 +187,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
         self.assertEqual(info.st_gid, os.getegid())
 
     def test_rewriting_a_group_file_keeps_the_group_and_replaces_the_key(self):
-        path = os.path.join(TEST_DIR, "rewrite.env")
+        path = os.path.join(FAMILY_DIR, "rewrite.env")
         self._write(path, key="first", group=FAMILY_GROUP)
         self._write(path, key="second", group=FAMILY_GROUP)
         self.assertEqual(os.stat(path).st_gid, self.family_gid)
@@ -114,18 +199,18 @@ class TestOsGroupKeyFile(RealTransactionCase):
 
     def test_a_missing_group_is_refused_and_the_old_file_is_untouched(self):
         # Tests [@ANCHOR: COMM_resolve_os_group]
-        path = os.path.join(TEST_DIR, "missing_group.env")
+        path = os.path.join(FAMILY_DIR, "missing_group.env")
         self._write(path, key="old", group=FAMILY_GROUP)
         with self.assertRaises(UserError) as caught:
             self._write(path, key="new", group="hamsd_no_such_family_x")
         self.assertIn("does not exist", str(caught.exception))
         with open(path, encoding="utf-8") as key_file:
             self.assertIn("ODOO_RPC_KEY=old\n", key_file.read())
-        self.assertEqual(os.listdir(TEST_DIR), ["missing_group.env"], "no temp file left behind")
+        self.assertEqual(self._family_files(), ["missing_group.env"], "no temp file left behind")
 
     def test_a_group_outside_the_daemon_family_namespace_is_refused(self):
         # Tests [@ANCHOR: COMM_resolve_os_group]
-        path = os.path.join(TEST_DIR, "wrong_name.env")
+        path = os.path.join(FAMILY_DIR, "wrong_name.env")
         for name in ("hams_com", "adm", "root", "hamsd_", "hamsd_UPPER", "hamsd_a-b"):
             with self.subTest(group=name):
                 with self.assertRaises(UserError):
@@ -135,7 +220,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
     def test_chgrp_refused_by_the_kernel_leaves_the_old_file_and_no_temp_file(self):
         # The server started before provisioning added it to the group: the kernel refuses the
         # chgrp. Simulated with the one failing call, standard mocking for a non-daemon test.
-        path = os.path.join(TEST_DIR, "refused.env")
+        path = os.path.join(FAMILY_DIR, "refused.env")
         self._write(path, key="old", group=FAMILY_GROUP)
         target = "odoo.addons.daemon_key_manager.models.key_registry.os.fchown"
         self.safe_patch(target, side_effect=PermissionError(1, "Operation not permitted"))
@@ -144,12 +229,12 @@ class TestOsGroupKeyFile(RealTransactionCase):
         self.assertIn("not a member of the OS group", str(caught.exception))
         with open(path, encoding="utf-8") as key_file:
             self.assertIn("ODOO_RPC_KEY=old\n", key_file.read())
-        self.assertEqual(os.listdir(TEST_DIR), ["refused.env"])
+        self.assertEqual(self._family_files(), ["refused.env"])
 
     def test_the_key_root_directory_is_kept_at_0710(self):
         # Tests [@ANCHOR: COMM_key_root_directory_mode]
         os.chmod(KEY_ROOT, 0o700)
-        self._write(ROOT_PROBE, group=FAMILY_GROUP)
+        self._write(ROOT_PROBE)
         self.assertEqual(self._mode(KEY_ROOT), 0o710)
 
     def test_the_registry_accepts_only_daemon_family_group_names(self):
@@ -164,7 +249,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
                         {
                             "name": f"Bad group {name}",
                             "user_id": self.service_user.id,
-                            "env_file_path": os.path.join(TEST_DIR, f"bad_{index}.env"),
+                            "env_file_path": os.path.join(FAMILY_DIR, f"bad_{index}.env"),
                             "os_group": name,
                         }
                     )
@@ -179,6 +264,19 @@ class TestOsGroupKeyFile(RealTransactionCase):
         )
         self.env.flush_all()
         self.assertEqual(good.os_group, FAMILY_GROUP)
+        # [@ANCHOR: COMM_test_os_group_registry_directory_constraint]
+        for where in (KEY_ROOT, TEST_DIR, OTHER_FAMILY_DIR):
+            with self.subTest(directory=where):
+                with self.assertRaises(UserError):
+                    registry.create(
+                        {
+                            "name": f"Wrong directory {where}",
+                            "user_id": self.service_user.id,
+                            "env_file_path": os.path.join(where, "x.env"),
+                            "os_group": FAMILY_GROUP,
+                        }
+                    )
+                    self.env.flush_all()
 
     def test_register_daemon_writes_the_group_file_and_keeps_it_across_reregistration(self):
         # Tests [@ANCHOR: COMM_register_daemon_idempotency]

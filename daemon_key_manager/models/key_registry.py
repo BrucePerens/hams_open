@@ -23,16 +23,30 @@ KEY_LIFETIME_DAYS = 90
 # The directory every key file lives under. Its own mode is KEY_ROOT_DIR_MODE: the owner (the Odoo
 # user) has full access, the group may traverse and not list. Daemon accounts that run under their
 # own OS account are in that group, so each can open the one key file it is named for (the file's
-# group, see os_group) and cannot enumerate or open anyone else's. A subdirectory stays 0700.
+# group, see os_group) and cannot enumerate or open anyone else's. A subdirectory stays 0700,
+# except a family's key directory (KEY_GROUP_DIR_MODE below).
 KEY_ROOT_DIR = "/opt/hams/etc/keys"
 KEY_ROOT_DIR_MODE = 0o710
 KEY_SUBDIR_MODE = 0o700
+# A key file handed to an OS group lives in that family's own key directory,
+# KEY_ROOT_DIR/<family> for the group hamsd_<family>, owned by the writer (the Odoo user) with the
+# family's group and mode 0750 (Bruce, NIGHT_PLAN 226): the writer writes, the one daemon account in
+# the group can traverse and read, nobody else can enter. The key root's own group (hams_com) only
+# traverses. One directory has one group, so two families never share a directory.
+KEY_GROUP_DIR_MODE = 0o750
+OS_GROUP_PREFIX = "hamsd_"
 # Mode of a key file handed to an OS group: owner read/write, group read.
 KEY_FILE_GROUP_MODE = 0o640
 # The only group names a registry row may name. The prefix is what keeps a row from pointing a
 # key file at a privileged group (hams_com, adm, shadow): one OS account and group per daemon
 # family, named hamsd_<family> (docs/proposals/DAEMON_OS_ISOLATION_PLAN.md in hams_com).
 OS_GROUP_RE = re.compile(r"^hamsd_[a-z0-9_]{1,24}$")
+
+
+def key_directory_for_group(group):
+    """The only directory a key file for the OS group `group` (hamsd_<family>) may live in."""
+    # [@ANCHOR: COMM_key_directory_for_group]
+    return os.path.join(KEY_ROOT_DIR, group[len(OS_GROUP_PREFIX):])
 
 
 class DaemonKeyRegistry(models.Model):
@@ -132,7 +146,7 @@ class DaemonKeyRegistry(models.Model):
             if not record.user_id.is_service_account:
                 raise UserError(_("The selected user must be a service account."))
 
-    @api.constrains("os_group")
+    @api.constrains("os_group", "env_file_path")
     def _check_os_group(self):
         # # Tested by [@ANCHOR: COMM_test_os_group_registry_constraint]
 
@@ -144,6 +158,18 @@ class DaemonKeyRegistry(models.Model):
                     "hamsd_<family> (lower-case letters, digits, underscore). Got: %s"
                 )
                 raise UserError(msg % record.os_group)
+            # [@ANCHOR: COMM_security_constraints_os_group_directory]
+            if record.os_group and record.env_file_path:
+                expected = key_directory_for_group(record.os_group)
+                actual = os.path.dirname(os.path.normpath(record.env_file_path))
+                if actual != expected:
+                    msg = _(
+                        "A key file for the OS group %(group)s must be in its own key "
+                        "directory %(expected)s, not in %(actual)s."
+                    )
+                    raise UserError(
+                        msg % {"group": record.os_group, "expected": expected, "actual": actual}
+                    )
 
     @api.constrains("env_file_path")
     def _check_env_file_path(self):
@@ -742,7 +768,10 @@ class DaemonKeyRegistry(models.Model):
         Writes the credentials to the specified path and locks permissions to 0600, or, when
         `group` names a hamsd_<family> OS group, to 0640 with that group so the one daemon
         account in it can read the file. Creates directories with 0700 if they do not exist;
-        the key root directory itself is kept at 0710 (owner full, group traverse only).
+        the key root directory itself is kept at 0710 (owner full, group traverse only). A
+        group file must be in that family's own key directory (key_directory_for_group()), which
+        is kept owned by the writer with that group at 0750: the group can traverse and read it,
+        nobody else can enter, the writer writes.
         """
         # # Tested by [@ANCHOR: COMM_test_register_daemon_api]
 
@@ -763,19 +792,46 @@ class DaemonKeyRegistry(models.Model):
                 KEY_ROOT_DIR_MODE if directory == KEY_ROOT_DIR else KEY_SUBDIR_MODE
             )
             gid = self._resolve_os_group(group) if group else None
+            if gid is not None:
+                # [@ANCHOR: COMM_write_secure_env_file_group_directory]
+                # A group file never goes in the shared key root or another family's directory.
+                expected = key_directory_for_group(group)
+                if directory != expected:
+                    msg = _(
+                        "A key file for the OS group %(group)s must be in its own key "
+                        "directory %(expected)s, not in %(actual)s."
+                    )
+                    raise UserError(
+                        msg % {"group": group, "expected": expected, "actual": directory}
+                    )
             if not os.path.exists(directory):
                 # Sandbox the creation: ensure we don't escape via symlinks
                 os.makedirs(directory, mode=directory_mode, exist_ok=True)
-            else:
-                # Ensure the existing directory has correct permissions
+            if gid is not None:
+                # Group first, readable second, as for the file below: the directory is 0700
+                # until its group is the family's, so it is never group-readable under another
+                # group. An unprivileged process may only chgrp a directory it owns to a group
+                # it is a member of (provisioning adds the Odoo user to the family group).
                 try:
-                    os.chmod(directory, directory_mode)
+                    os.chown(directory, -1, gid)
                 except PermissionError:
                     msg = _(
-                        "Security Alert: Could not enforce secure "
-                        "permissions on %s."
+                        "The Odoo server user cannot hand the key directory %(directory)s to the "
+                        "OS group %(group)s (it is not a member of the group, or does not own the "
+                        "directory). Provisioning adds it to the group and creates the directory; "
+                        "restart odoo.service and hams.daemon.keys.service afterwards."
                     )
-                    raise UserError(msg % directory)
+                    raise UserError(msg % {"directory": directory, "group": group})
+                directory_mode = KEY_GROUP_DIR_MODE
+            # Ensure the directory has the correct permissions
+            try:
+                os.chmod(directory, directory_mode)
+            except PermissionError:
+                msg = _(
+                    "Security Alert: Could not enforce secure "
+                    "permissions on %s."
+                )
+                raise UserError(msg % directory)
 
             # Real, CRITICAL fix, found by an adversarial security
             # review, live-reproduced on this exact dev box: the old code

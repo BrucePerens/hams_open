@@ -25,5 +25,5 @@ so that it receives a secure, auto-rotating API key without me having to manage 
 
 1.  The daemon's unit runs as a dedicated account (`hamsd_<family>`), not as the Odoo user.
 2.  A Daemon Key Manager registers it with that group (`register_daemon(..., os_group="hamsd_<family>")`) [@ANCHOR: COMM_register_daemon_os_group_manager_only].
-3.  The key file is written `0640` with that group, so only that account reads it [@ANCHOR: COMM_write_secure_env_file_group].
+3.  The key file is written `0640` with that group into the family's own key directory (`/opt/hams/etc/keys/<family>`, owned by Odoo, that group, `0750`), so only that account reads it [@ANCHOR: COMM_write_secure_env_file_group] [@ANCHOR: COMM_write_secure_env_file_group_directory].
 4.  Every other daemon, which is in no such group, gets "permission denied" opening it.
