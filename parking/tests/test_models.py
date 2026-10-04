@@ -9,7 +9,6 @@ from odoo.tools import mute_logger
 from ..hooks import post_init_hook
 
 
-
 @tagged("post_install", "-at_install", "parking")
 class TestParkingModels(HamsTransactionCase):
     def setUp(self):
@@ -135,3 +134,28 @@ class TestParkingModels(HamsTransactionCase):
         for view_type in ("list", "form", "search"):
             self.assertTrue(self.Domain.get_view(view_type=view_type)["arch"])
         self.assertTrue(self.env["parking.inquiry"].get_view(view_type="list")["arch"])
+
+    # [@ANCHOR: parking:COMM_test_domain_not_main]
+    def test_a_parked_domain_cannot_shadow_the_main_site_or_a_tenant(self):
+        # Tests [@ANCHOR: parking:COMM_domain_not_main]
+        self.env["tenant.site.own.host"].create([{"name": "mainsite.example"}, {"name": "*.mainsite.example"}])
+        website = self.env["website"].create({"name": "Tenant for parking test"})
+        site = self.env["tenant.site"].create(
+            {"name": "T", "website_id": website.id, "host_ids": [(0, 0, {"name": "tenant-host.example"})]}
+        )
+        self.assertTrue(site)
+        for name in ("mainsite.example", "relay.mainsite.example", "tenant-host.example"):
+            with self.assertRaises(ValidationError):
+                self.Domain.create({"name": name})
+                self.env.flush_all()
+        self.assertTrue(self.Domain.create({"name": "fine.example"}))
+
+    # [@ANCHOR: parking:COMM_test_tenant_hosts_exist]
+    def test_parked_domains_count_as_tenant_hostnames(self):
+        # Tests [@ANCHOR: parking:COMM_tenant_hosts_exist]
+        Host = self.env["tenant.site.host"]
+        self.Domain.search([]).unlink()
+        self.env["tenant.site"].search([]).unlink()
+        self.assertFalse(Host._tenant_hosts_exist())
+        self.Domain.create({"name": "counted.example"})
+        self.assertTrue(Host._tenant_hosts_exist())

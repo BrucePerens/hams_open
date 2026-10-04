@@ -1,16 +1,15 @@
 <h1>Parking domains</h1>
-<p>One Odoo instance answers for many domains. Open <b>Parking &gt; Domains</b> (reachable only from the
-server itself, through an SSH tunnel to the instance's loopback port) and add a domain with one of four
+<p>This Odoo answers for many parked domains. Open <b>Parking &gt; Domains</b> and add a domain with one of four
 behaviours: a parked page, a 301 or 302 redirect to a fixed URL, a for-sale page with a contact form
 (inquiries appear under <b>Inquiries</b>), or <b>410 Gone</b>.</p>
 <h2>What visitors see</h2>
 <ul>
 <li>A small self-contained page (a few kilobytes, no scripts, no cookies). <code>robots.txt</code> and
 <code>X-Robots-Tag</code> ask search engines not to index it unless you switch that off per domain.</li>
-<li>A host that is not in the list gets a plain 404 (setting <code>parking.unknown_host_policy</code>:
-<code>not_found</code> or <code>default_page</code>).</li>
-<li>Nothing else is served from the internet: the Odoo login, backend, JSON-RPC and websocket routes
-answer 404 on every public host.</li>
+<li>A host that is neither parked, a tenant site nor one of the main site's own names gets a plain 404
+(setting <code>parking.unknown_host_policy</code>: <code>not_found</code> or <code>default_page</code>).</li>
+<li>Nothing else is served for a parked domain: the Odoo login, backend, JSON-RPC and websocket routes
+answer with the parked page on every parked domain, and the main site's pages are never shown.</li>
 </ul>
 <h2>Bulk changes</h2>
 <p>Use <code>parking_ctl.py</code> (hams_shared/tools) with a text file of domains: it validates, shows a
