@@ -49,11 +49,9 @@ class TestParkingHttp(HamsHttpCase):
         self.assertNotIn("X-Parking-Response", response.headers)
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
 
-    # [@ANCHOR: parking:COMM_test_serve_fallback]
     # [@ANCHOR: parking:COMM_test_post_dispatch]
     def test_parked_page(self):
         # Tests [@ANCHOR: parking:COMM_post_dispatch]
-        # Tests [@ANCHOR: parking:COMM_serve_fallback]
         response = self.get("/", "parked.example")
         self.assertEqual(response.status_code, 200)
         self.assert_clean(response)
@@ -111,9 +109,7 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 410)
         self.assert_clean(response)
 
-    # [@ANCHOR: parking:COMM_test_match_guard]
     def test_backend_routes_do_not_exist_on_a_public_host(self):
-        # Tests [@ANCHOR: parking:COMM_match_guard]
         for path in ("/odoo", "/web/login", "/jsonrpc", "/xmlrpc/2/common", "/web/database/manager",
                      "/websocket", "/web/session/authenticate", "/json/2/res.users"):
             response = self.get(path, "parked.example")

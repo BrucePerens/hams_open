@@ -76,9 +76,13 @@ class TestTenantSitesHttp(HamsHttpCase):
 
     # [@ANCHOR: tenant_sites:COMM_test_match_guard]
     # [@ANCHOR: tenant_sites:COMM_test_tenant_match]
+    # [@ANCHOR: tenant_sites:COMM_test_route_module]
+    # [@ANCHOR: tenant_sites:COMM_test_refuse]
     def test_tenant_serves_its_own_page_and_nothing_of_the_main_site(self):
         # Tests [@ANCHOR: tenant_sites:COMM_match_guard]
         # Tests [@ANCHOR: tenant_sites:COMM_tenant_match]
+        # Tests [@ANCHOR: tenant_sites:COMM_route_module]
+        # Tests [@ANCHOR: tenant_sites:COMM_refuse]
         for host in (TENANT, f"www.{TENANT}", f"WWW.{TENANT}:443"):
             response = self.get("/tenant-only", host)
             self.assertEqual(response.status_code, 200, host)

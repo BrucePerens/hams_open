@@ -25,6 +25,7 @@ class TestTenantSitesModels(HamsTransactionCase):
     def test_host_names_are_normalized_and_validated(self):
         # Tests [@ANCHOR: tenant_sites:COMM_host_normalize]
         # Tests [@ANCHOR: tenant_sites:COMM_host_create]
+        # Tests [@ANCHOR: tenant_sites:COMM_host_write]
         self.assertEqual(sorted(self.site.host_ids.mapped("name")), ["a.tenant.example", "www.a.tenant.example"])
         with self.assertRaises(ValidationError):
             self.env["tenant.site.host"].create({"name": "10.0.0.1", "site_id": self.site.id})

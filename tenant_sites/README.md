@@ -38,6 +38,6 @@ and a rule has a path but no hostname (it would send tenant and parked hostnames
 
 ## Not done here
 
-DNS records and Cloudflare Custom Hostnames. The `cloudflare` module has no DNS-record model, and
+DNS records and Cloudflare Custom Hostnames. The `cloudflare` module has a `cloudflare.dns.record` model but it is data only (no push), and
 `edge.routing.domain` provisions a real Custom Hostname on create, so do not create one for a zone that
 is already in the account.
