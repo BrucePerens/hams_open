@@ -49,7 +49,7 @@ perens.com, postopen.org and the parked domains are tenants of this Odoo (the `t
     `[@ANCHOR: cloudflare:COMM_tunnel_ingress_problems]` while any tenant or parked hostname exists and a rule has a
     path but no hostname.
 
-7b. The tunnel's catch-all stays this Odoo (`http://localhost:8069`): every tenant and parked hostname
+7b. The tunnel's catch-all (its `catch_all_service` setting `[@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]`) stays this Odoo (`http://localhost:8069`): every tenant and parked hostname
     reaches Odoo, whose request router (`tenant_sites`) serves the tenant's website, the parked page, or
     an uncached 404. A row is only needed for something that is not Odoo (perens.com's `/static/` goes to
     the read-only static file server) or to block paths at the edge as well.
