@@ -157,7 +157,6 @@ class TestTenantSitesHttp(HamsHttpCase):
     # [@ANCHOR: tenant_sites:COMM_test_site_hides_login_link]
     def test_a_tenant_site_has_no_sign_in_link_and_the_main_site_keeps_its_own(self):
         # Tests [@ANCHOR: tenant_sites:COMM_site_create]
-        # Tests [@ANCHOR: tenant_sites:COMM_hide_login_link]
         tenant = self.get("/tenant-only", TENANT)
         self.assertEqual(tenant.status_code, 200)
         self.assertNotIn('href="/web/login"', tenant.text)
