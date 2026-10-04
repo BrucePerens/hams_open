@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from unittest.mock import patch
+from urllib.parse import urlsplit
+
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.tools import config
 from odoo.tests import tagged
 
 # Every request Cloudflare forwards carries CF-Ray; the tests send it too, so they walk the same
@@ -97,6 +101,8 @@ class TestTenantSitesHttp(HamsHttpCase):
 
     def test_tenant_blog_shows_only_its_own_posts(self):
         response = self.get("/blog", TENANT)
+        if response.status_code == 302:  # a website with one blog goes straight to it
+            response = self.get(urlsplit(response.headers["Location"]).path, TENANT)
         self.assertEqual(response.status_code, 200)
         self.assertIn("Tenant Post", response.text)
         self.assertNotIn("Main Post", response.text)
@@ -162,10 +168,20 @@ class TestTenantSitesHttp(HamsHttpCase):
     # [@ANCHOR: tenant_sites:COMM_test_classify]
     def test_forged_forwarded_host_is_rejected(self):
         # Tests [@ANCHOR: tenant_sites:COMM_classify]
-        for host, forged in ((TENANT, MAIN), (MAIN, TENANT), ("nobody.example", MAIN)):
-            response = self.get("/main-only", host, headers={"X-Forwarded-Host": forged})
-            self.assertIn(response.status_code, (400, 404), (host, forged))
-            self.assertNotIn("MAIN-ONLY-CONTENT", response.text)
+        # Odoo's proxy_mode replaces Host by X-Forwarded-Host; the router uses the Host the client sent
+        # and refuses a request where the two differ. (On the live site the cloudflare module also
+        # drops the header from every request that carries Cloudflare's own headers.)
+        with patch.dict(config.options, {"proxy_mode": True}):
+            for host, forged in ((TENANT, MAIN), (MAIN, TENANT), ("nobody.example", MAIN)):
+                response = self.url_open(
+                    "/main-only", headers={"Host": host, "X-Forwarded-Host": forged}, allow_redirects=False
+                )
+                self.assertEqual(response.status_code, 400, (host, forged))
+                self.assertNotIn("MAIN-ONLY-CONTENT", response.text)
+            same = self.url_open(
+                "/main-only", headers={"Host": MAIN, "X-Forwarded-Host": MAIN}, allow_redirects=False
+            )
+            self.assertEqual(same.status_code, 200)
 
     # [@ANCHOR: tenant_sites:COMM_test_serve_fallback]
     # [@ANCHOR: tenant_sites:COMM_test_serve_other]

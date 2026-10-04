@@ -29,6 +29,8 @@ KIND_TENANT = "tenant"
 KIND_UNKNOWN = "unknown"
 KIND_REJECT = "reject"
 PLAIN_MARKER = "X-Tenant-Sites-Plain"
+# No route has a path like this; routing it gives a refused request the state of an unknown page.
+UNROUTABLE_PATH = "/_tenant_sites_/no/route/here"
 
 
 class IrHttp(models.AbstractModel):
@@ -104,28 +106,51 @@ class IrHttp(models.AbstractModel):
     # Verified by [@ANCHOR: tenant_sites:COMM_test_tenant_match]
     @classmethod
     def _tenant_match(cls, path_info):
-        """The router runs first (the website needs the language and frontend state it sets up even
-        for a path that ends in the page lookup), then the result is held to the allow-lists. A
-        refusal is always a NotFound: a wrong-method match must not surface as a 405 that tells a
-        visitor which backend routes exist."""
-        try:
-            rule, args = super()._match(path_info)
-        except MethodNotAllowed:
-            raise NotFound() from None
+        """Routes a tenant request. A refusal is always a NotFound that Odoo's website answers as for
+        any unknown page (a wrong-method match must never surface as a 405 that tells a visitor which
+        backend routes exist)."""
         if request.httprequest.method not in utils.SAFE_METHODS:
-            raise NotFound()
+            return cls._tenant_refuse()
         if not utils.tenant_path_allowed(path_info):
-            raise NotFound()
-        module_name = rule.endpoint.func.original_endpoint.__module__
-        if not utils.tenant_module_allowed(path_info, module_name):
-            raise NotFound()
-        return rule, args
+            return cls._tenant_refuse()
+        module_name = cls._tenant_route_module(path_info)
+        if module_name is not None and not utils.tenant_module_allowed(path_info, module_name):
+            return cls._tenant_refuse()
+        return super()._match(path_info)
+
+    # [@ANCHOR: tenant_sites:COMM_route_module]
+    # Verified by [@ANCHOR: tenant_sites:COMM_test_route_module]
+    @classmethod
+    def _tenant_route_module(cls, path_info):
+        """The Python module of the controller a path would route to, or None when no route matches.
+        Asked of the routing map directly: Odoo's own matching sets up the language and frontend state
+        of the request as a side effect, and that must happen only for a path that is really served."""
+        adapter = request.env["ir.http"].routing_map().bind_to_environ(request.httprequest.environ)
+        try:
+            rule, _arguments = adapter.match(path_info=path_info, return_rule=True)
+        except (NotFound, MethodNotAllowed):
+            return None
+        return rule.endpoint.func.original_endpoint.__module__
+
+    # [@ANCHOR: tenant_sites:COMM_refuse]
+    # Verified by [@ANCHOR: tenant_sites:COMM_test_refuse]
+    @classmethod
+    def _tenant_refuse(cls):
+        """Let Odoo route a path that has no route (so the request gets the language and frontend state
+        the website's page and 404 handling need), then answer NotFound whatever it found."""
+        try:
+            super()._match(UNROUTABLE_PATH)
+        except NotFound:
+            pass
+        raise NotFound()
 
     # [@ANCHOR: tenant_sites:COMM_serve_fallback]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_serve_fallback]
     @classmethod
     def _serve_fallback(cls):
         kind = cls._tenant_classify()
+        if kind == KIND_TENANT and request.httprequest.method not in utils.SAFE_METHODS:
+            return cls._tenant_plain_response("not found", 404)
         if kind in (KIND_MAIN, KIND_TENANT):
             return super()._serve_fallback()
         return cls._tenant_serve_other(kind)
