@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from odoo.addons.hams_base.models import website_visitor as visitor_module
+from odoo.addons.website.models import website_visitor as core_visitor_module
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
 
@@ -27,7 +28,9 @@ class TestVisitorTrackDedup(HamsTransactionCase):
         self._request(URL)
 
     def _request(self, url):
-        self.safe_patch_object(visitor_module, "request", SimpleNamespace(httprequest=SimpleNamespace(url=url)))
+        fake = SimpleNamespace(httprequest=SimpleNamespace(url=url))
+        self.safe_patch_object(visitor_module, "request", fake)
+        self.safe_patch_object(core_visitor_module, "request", fake)
 
     def _track(self, url=URL, minutes_ago=0):
         track = self.env["website.track"].create({"visitor_id": self.visitor.id, "url": url})
