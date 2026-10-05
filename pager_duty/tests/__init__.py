@@ -3,7 +3,6 @@
 
 # -*- coding: utf-8 -*-
 from . import test_board_edge_cases
-from . import test_check_cloudflare_token_expiry
 from . import test_controllers
 from . import test_generalized_config
 from . import test_generalized_monitor

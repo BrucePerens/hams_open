@@ -17,5 +17,5 @@ The daemon reads its configuration file once, at startup, so restart it after pu
 - `pager_smart_spooler.py`: Run as root every 10 minutes by `pager-smart-spooler.timer`; writes `smartctl` health results to `/var/log/pager_smart_spool.json` for the `smart` check type.
 - `pager_synthetic_spooler.py`: Runs as root and executes the Playwright, Sandboxed Bash and Sandboxed Arbitrary Executable checks inside a Bubblewrap (`bwrap`) sandbox, writing results to `/var/log/pager_synthetic_spool.json`.
 - `pager_mcp_server.py`: A Model Context Protocol (MCP) server for AI triage, offering only `list_incidents`, `get_incident` and `add_incident_note`. It authenticates with an API key (`PAGER_MCP_API_KEY`) issued to the narrowly scoped `user_pager_mcp_triage_service` account and cannot acknowledge or resolve incidents.
-- `check_github_pat_expiry.py`, `check_cloudflare_token_expiry.py`: Stand-alone scripts for "Synthetic Journey (Script)" checks that warn before an API token expires, raising the severity as the expiry date approaches.
+- `check_github_pat_expiry.py`: A stand-alone script for a "Synthetic Journey (Script)" check that warns before an API token expires, raising the severity as the expiry date approaches.
 - `*.service`, `*.timer`: systemd units for the daemons above (see `../DEPLOYMENT.md`).

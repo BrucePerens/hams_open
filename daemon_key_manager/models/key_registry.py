@@ -17,8 +17,10 @@ _logger = logging.getLogger(__name__)
 # A key is rotated once it is older than this. Shared by the Odoo-side
 # cron and the remote self-rotation path so both follow one schedule.
 ROTATION_AGE_DAYS = 59
-# Lifetime of every key this module mints.
+# Lifetime of every key this module mints, unless the registry row sets its own (below).
 KEY_LIFETIME_DAYS = 90
+# The longest a registry row may ask for. `group_daemon_key_usage_long` (security.xml) allows exactly this.
+MAX_KEY_LIFETIME_DAYS = 400
 
 # The directory every key file lives under. Its own mode is KEY_ROOT_DIR_MODE: the owner (the Odoo
 # user) has full access, the group may traverse and not list. Daemon accounts that run under their
@@ -104,6 +106,19 @@ class DaemonKeyRegistry(models.Model):
         paths (the daily cron, Force Provision All, Rotate Key) skip this
         registry, and the daemon rotates its own key through
         rotate_own_key() over JSON-2 instead.
+        """,
+    )
+    key_lifetime_days = fields.Integer(
+        string="Key Lifetime (days)",
+        default=0,
+        help="""
+        0 uses the module's 90-day lifetime. A remote self-rotating daemon whose operator does not
+        want it to depend on a rotation window can ask for longer, from 90 up to 400 days (Bruce's
+        decision for the pi500-1 FCC ULS key: at least one year). It applies to keys this registry
+        mints from now on, and "Apply Key Lifetime" extends the key the daemon holds today. The
+        daemon is due to rotate 31 days before its key expires, the same margin as the 59-day
+        rotation of a 90-day key. Only a remote self-rotating row may set it: an Odoo-rotated
+        key keeps the module's schedule.
         """,
     )
     # Id of the res.users.apikeys row rotate_own_key() issued and the remote
@@ -294,6 +309,70 @@ class DaemonKeyRegistry(models.Model):
         registry._rotate_key_and_write_file()
         return True
 
+    @api.constrains("key_lifetime_days", "remote_self_rotation")
+    def _check_key_lifetime_days(self):
+        for registry in self:
+            days = registry.key_lifetime_days
+            if not days:
+                continue
+            if not registry.remote_self_rotation:
+                raise ValidationError(
+                    _("Key Lifetime can only be set on a Remote Self-Rotation registry.")
+                )
+            if not KEY_LIFETIME_DAYS <= days <= MAX_KEY_LIFETIME_DAYS:
+                raise ValidationError(
+                    _("Key Lifetime must be 0 (the default) or between %(low)d and %(high)d days.")
+                    % {"low": KEY_LIFETIME_DAYS, "high": MAX_KEY_LIFETIME_DAYS}
+                )
+
+    def _lifetime_days(self):
+        """Days a key minted for this registry lives."""
+        self.ensure_one()
+        return self.key_lifetime_days or KEY_LIFETIME_DAYS
+
+    def _rotation_age_days(self):
+        """Days after which a remote daemon's key is due for rotation: 31 days before it expires."""
+        self.ensure_one()
+        return self._lifetime_days() - (KEY_LIFETIME_DAYS - ROTATION_AGE_DAYS)
+
+    def action_apply_key_lifetime(self):
+        """
+        Extends the key a remote self-rotating daemon holds today to this row's Key Lifetime,
+        counted from now, and grants the account the long-lived group that allows it. Never
+        shortens a key, and touches nothing when the row uses the default lifetime. The
+        daemon needs nothing: its key string does not change, only its expiry.
+        """
+        # [@ANCHOR: COMM_action_apply_key_lifetime]
+        is_su = self.env.is_superuser()
+        if not is_su and not self.env.user.has_group("daemon_key_manager.group_daemon_key_manager"):
+            raise AccessError(_("Only Daemon Key Managers can change a key's lifetime."))
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
+        extended = 0
+        for registry in self.with_user(svc_uid):
+            if not registry.remote_self_rotation or not registry.key_lifetime_days:
+                continue
+            registry._assert_account_may_hold_key()
+            registry._ensure_usage_group(registry.user_id)
+            expires = fields.Datetime.now() + datetime.timedelta(days=registry._lifetime_days())
+            self.env.cr.execute(
+                "UPDATE res_users_apikeys SET expiration_date = %s"
+                " WHERE user_id = %s AND name = %s"
+                " AND expiration_date IS NOT NULL AND expiration_date < %s"
+                " AND expiration_date >= now() at time zone 'utc'",
+                (expires, registry.user_id.id, f"{registry.name}_key", expires),
+            )
+            extended += self.env.cr.rowcount
+            _logger.warning(
+                "Key lifetime applied for daemon %s (account %s): %d active key(s) now expire in %d days.",
+                registry.name,
+                registry.user_id.login,
+                self.env.cr.rowcount,
+                registry._lifetime_days(),
+            )
+        return extended
+
     def _ensure_usage_group(self, user):
         """
         Grants `group_daemon_key_usage` (the 90-day API-key-duration group) to `user`
@@ -326,9 +405,21 @@ class DaemonKeyRegistry(models.Model):
         individual daemon module's own security.xml (which would only fix today's
         known daemons, not tomorrow's).
         """
-        usage_group = self.env.ref(
-            "daemon_key_manager.group_daemon_key_usage", raise_if_not_found=False
-        )
+        groups = [
+            self.env.ref("daemon_key_manager.group_daemon_key_usage", raise_if_not_found=False)
+        ]
+        if self and self._lifetime_days() > KEY_LIFETIME_DAYS:
+            # A longer-lived key needs a group whose api_key_duration allows it (security.xml).
+            groups.append(
+                self.env.ref(
+                    "daemon_key_manager.group_daemon_key_usage_long", raise_if_not_found=False
+                )
+            )
+        for usage_group in groups:
+            self._grant_usage_group(user, usage_group)
+
+    def _grant_usage_group(self, user, usage_group):
+        """Puts `user` in `usage_group` by direct insert (see _ensure_usage_group)."""
         if usage_group and usage_group not in user.group_ids:
             # Mechanical bypass of ORM ACLs via raw SQL to adhere to the ZERO-SUDO mandate.
             # Directly assigning to group_ids via .write() requires base.group_erp_manager.
@@ -580,7 +671,7 @@ class DaemonKeyRegistry(models.Model):
         self.ensure_one()
         # [@ANCHOR: COMM_rotate_own_key_issue]
         if self.last_rotated:
-            age = datetime.timedelta(days=ROTATION_AGE_DAYS)
+            age = datetime.timedelta(days=self._rotation_age_days())
             due_at = self.last_rotated + age
             if fields.Datetime.now() < due_at:
                 return {
@@ -720,9 +811,9 @@ class DaemonKeyRegistry(models.Model):
         )
 
     def _mint_key(self, key_name):
-        """Generates a KEY_LIFETIME_DAYS key named `key_name` for this registry's account."""
+        """Generates a key named `key_name` for this registry's account, living `_lifetime_days()` days."""
         self.ensure_one()
-        expiration_date = fields.Datetime.now() + datetime.timedelta(days=KEY_LIFETIME_DAYS)
+        expiration_date = fields.Datetime.now() + datetime.timedelta(days=self._lifetime_days())
 
         # Odoo enforces a strict expiration limit on API keys based on the user's groups.
         # We execute as the target service account. The required duration (90 days)

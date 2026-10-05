@@ -19,7 +19,7 @@ import os
 from odoo import fields
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 _logger = logging.getLogger(__name__)
@@ -242,3 +242,76 @@ class TestRemoteSelfRotation(RealTransactionCase):
             self._key_accepted(remote_key),
             "cron, force-provision and Rotate Key must not revoke a remote key",
         )
+
+    def _active_key_expiries(self, registry):
+        """Expiry of every key the registry's account holds under its key name, soonest first."""
+        self._reload()
+        self.env.cr.execute(
+            "SELECT expiration_date FROM res_users_apikeys WHERE user_id = %s AND name = %s"
+            " ORDER BY expiration_date",
+            (registry.user_id.id, f"{registry.name}_key"),
+        )
+        return [row[0] for row in self.env.cr.fetchall()]
+
+    def _days_from_now(self, moment):
+        return (moment - datetime.datetime.utcnow()).total_seconds() / 86400
+
+    def test_key_lifetime_is_only_for_a_remote_row_and_within_range(self):
+        # Tests [@ANCHOR: COMM_action_apply_key_lifetime]
+        path = self.env_paths[0]
+        local = self.registry_model.create(
+            {"name": "Local Lifetime Test", "user_id": self.service_user.id, "env_file_path": path}
+        )
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
+            local.write({"key_lifetime_days": 365})
+        remote, _key = self._remote_registry("Remote Lifetime Test", self.env_paths[1])
+        for bad in (89, 401, -5):
+            with self.assertRaises(ValidationError), self.env.cr.savepoint():
+                remote.write({"key_lifetime_days": bad})
+        remote.write({"key_lifetime_days": 365})
+        self.env.cr.commit()
+        self.assertEqual(remote._lifetime_days(), 365)
+        self.assertEqual(remote._rotation_age_days(), 334)
+        remote.write({"key_lifetime_days": 0})
+        self.assertEqual(remote._lifetime_days(), 90)
+        self.assertEqual(remote._rotation_age_days(), 59)
+
+    def test_a_year_long_lifetime_extends_the_held_key_and_mints_year_long_keys(self):
+        # Tests [@ANCHOR: COMM_action_apply_key_lifetime]
+        name = "Remote Lifetime Year Test"
+        registry, old_key = self._remote_registry(name, self.env_paths[0])
+        (before,) = self._active_key_expiries(registry)
+        self.assertAlmostEqual(self._days_from_now(before), 90, delta=1)
+
+        # A default row: applying changes nothing.
+        self.assertEqual(registry.action_apply_key_lifetime(), 0)
+        self.env.cr.commit()
+        (unchanged,) = self._active_key_expiries(registry)
+        self.assertEqual(unchanged, before)
+
+        registry.write({"key_lifetime_days": 365})
+        self.env.cr.commit()
+        self.assertEqual(registry.action_apply_key_lifetime(), 1)
+        self.env.cr.commit()
+        (extended,) = self._active_key_expiries(registry)
+        self.assertAlmostEqual(self._days_from_now(extended), 365, delta=1)
+        self.assertTrue(self._key_accepted(old_key), "the daemon's key string is unchanged")
+        long_group = self.env.ref("daemon_key_manager.group_daemon_key_usage_long")
+        self.assertIn(long_group, self.service_user.group_ids)
+        # Applying again never shortens: still about a year.
+        registry.action_apply_key_lifetime()
+        self.env.cr.commit()
+        (again,) = self._active_key_expiries(registry)
+        self.assertGreaterEqual(again, extended)
+
+        # 60 days on, a 90-day key would be due; a year-long one is not.
+        self._make_due(registry)
+        self.assertEqual(self._rotate(name, old_key).json()["status"], "not_due")
+        # It is due 334 days after the last rotation, and the new key is a year long too.
+        registry.write({"last_rotated": fields.Datetime.now() - datetime.timedelta(days=335)})
+        self.env.cr.commit()
+        issued = self._rotate(name, old_key).json()
+        self.assertEqual(issued["status"], "issued")
+        self.assertEqual(self._rotate(name, issued["key"]).json()["status"], "confirmed")
+        (renewed,) = self._active_key_expiries(registry)
+        self.assertAlmostEqual(self._days_from_now(renewed), 365, delta=1)
