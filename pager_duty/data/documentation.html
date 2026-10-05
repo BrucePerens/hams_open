@@ -13,21 +13,25 @@
     <ul>
         <li>Create a standard Calendar event for the relevant engineer.</li>
         <li>Check the <strong>"Is Pager Duty Shift"</strong> box on the event.</li>
-        <li>The system will automatically identify the active shift and route incident notifications to that specific user.</li>
+        <li>The system will automatically identify the active shift and route incident notifications to that specific user. The user paged is the event's own user (its <code>user_id</code>), not its attendees.</li>
+        <li>If shifts overlap, the most recently created shift wins, so adding a new shift overrides an existing one.</li>
+        <li>If no shift covers the current time, no on-call notification is sent; the incident still gets its Helpdesk ticket (if its severity qualifies) and is still escalated.</li>
     </ul>
 
     <h3>2. NOC Dashboard</h3>
-    <p>Access the <strong>NOC Dashboard</strong> via <strong>Pager Duty &gt; NOC Dashboard</strong> for a real-time, high-visibility overview of your system health.</p>
+    <p>Access the <strong>NOC (Network Operations Center) Dashboard</strong> via <strong>Pager Duty &gt; NOC Dashboard</strong> for a real-time, high-visibility overview of your system health.</p>
     <ul>
-        <li><strong>Live Updates:</strong> The board refreshes instantly as incidents are created, acknowledged, or resolved.</li>
+        <li><strong>Live Updates:</strong> The board refreshes instantly as incidents are created, acknowledged, or resolved. The <strong>Pause Updates</strong> button stops this until you press <strong>Resume Updates</strong>.</li>
         <li><strong>Burn-In Protection:</strong> Designed for long-term display on office monitors, the dashboard subtly shifts its layout every 60 seconds to protect your hardware.</li>
     </ul>
 
     <h3>3. Acknowledgement &amp; Escalation</h3>
     <ul>
-        <li><strong>Acknowledge:</strong> When you start working on an issue, click "Acknowledge" on the dashboard or incident record. This signals to the team that the issue is being handled and stops the automatic escalation timer.</li>
-        <li><strong>Escalation:</strong> If a high-severity incident remains unacknowledged for more than 15 minutes, the system automatically escalates it by notifying all Pager Duty Administrators.</li>
-        <li><strong>Helpdesk Integration:</strong> Use the "Generate Helpdesk Ticket" button on an incident to instantly create a tracked ticket assigned to the on-call responder.</li>
+        <li><strong>Acknowledge:</strong> When you start working on an issue, click "Acknowledge" on the incident in the NOC Dashboard (the button appears on Open incidents). This signals to the team that the issue is being handled and stops the automatic escalation timer.</li>
+        <li><strong>Paging by severity:</strong> A new High or Critical incident notifies the on-call user at once (when the <code>pager_duty.helpdesk_model</code> system parameter is set, the Helpdesk ticket is the notification instead). Low and Medium incidents are recorded without paging; if the same source reports 5 times within 60 minutes, a separate High incident named "Trend: &lt;source&gt;" is raised, and that one pages.</li>
+        <li><strong>Escalation:</strong> If an incident of any severity remains unacknowledged (still Open) for more than 15 minutes, the system automatically escalates it by notifying the members of the Pager Duty Admin group for that incident's website (or global admins). The escalation job runs every 5 minutes, and each incident is escalated once.</li>
+        <li><strong>Helpdesk Integration:</strong> A tracked Helpdesk ticket, assigned to the on-call responder, is created automatically for every new High or Critical incident and for every incident created from inbound email. There is no button for creating one by hand.</li>
+        <li><strong>Auto-Resolution:</strong> When a failing check passes three times in a row, the monitor daemon resolves that check's Open and Acknowledged incidents.</li>
     </ul>
 
     <h2>Administrator Guide (For Admins)</h2>
@@ -38,29 +42,31 @@
         <li><strong>Web Resources:</strong> Monitor HTTP/HTTPS/HTTP3 endpoints.</li>
         <li><strong>Database Health:</strong> Deep health checks on PostgreSQL and MySQL/MariaDB.</li>
         <li><strong>System Metrics & Network Services:</strong> Monitor CPU, RAM, Disk space, and ports.</li>
-        <li><strong>Hardware Monitoring:</strong> SMART hard drive monitoring.</li>
+        <li><strong>Hardware Monitoring:</strong> SMART (Self-Monitoring, Analysis and Reporting Technology) hard drive monitoring.</li>
     </ul>
 
     <h3>2. Autodiscovery</h3>
-    <p>Admins can use the <strong>"Autodiscover"</strong> button in the Monitoring Checks list view. This action automatically scans your server to detect running web services, databases, and Let's Encrypt certificates, generating recommended checks for you.</p>
+    <p>Admins can use the <strong>"Auto-Discover Services"</strong> button in the Monitoring Checks list view. This action automatically scans your server and generates recommended checks for you: memory, CPU, load, failed systemd services, IPv4/IPv6 root DNS reachability, disk space for each mounted ext4, xfs, btrfs, zfs or vfat partition, the PostgreSQL, Redis, RabbitMQ, Nginx and Docker services it finds running, and an HTTP ping of Odoo itself. Checks whose name already exists are skipped, and the daemon configuration file is written afterwards.</p>
 
     <h3>3. Manual Triggering</h3>
-    <p>While configuring a check, an Admin can click the <strong>"Trigger Check"</strong> button to force an immediate execution. This is useful for validating new monitoring rules before committing them to the daemon schedule.</p>
+    <p>The check form has a <strong>"Run Check Now"</strong> button, but it does not run the check: the monitoring daemon runs outside Odoo on its own schedule, and the button only displays a notice saying so. A new or changed check runs once its configuration has been pushed to the daemon and the daemon has been restarted (see the next section).</p>
 
     <h3>4. Synchronizing with Daemons</h3>
     <p>After configuring checks in Odoo, you must sync them to the external Python daemons:</p>
     <ol>
         <li>Go to the <strong>Monitoring Checks</strong> list view.</li>
-        <li>Click <strong>JSON Configuration Tools</strong> and select <strong>Export to JSON</strong> (or Import to pull changes).</li>
+        <li>Click <strong>Push to Daemon (JSON)</strong> (or <strong>Pull from Daemon (JSON)</strong> to pull changes).</li>
         <li>This updates the daemon configuration file (<code>pager_config.json</code>).</li>
+        <li>Restart the daemon services. They read <code>pager_config.json</code> only when they start.</li>
     </ol>
+    <p>Push writes every active check. Pull deletes every check in the database and re-creates the checks from the file, so any check not in the file is lost. The file is written to the directory named by the <code>pager_duty.config_dir</code> system parameter (default <code>/opt/hams/etc</code>) when that directory is writable, and otherwise to the module's <code>daemon/</code> directory.</p>
 
     <h3>5. Multi-Website Awareness & Security</h3>
     <p id="rpc_ensure_executable_security" data-trace="rpc_ensure_executable_security">Pager Duty can isolate checks, incidents, and schedules by website. Data is secured via micro-privileges and a <code>pager_service_internal</code> zero-sudo account.</p>
 
     <h3>6. Log Analyzer (Splunk-style)</h3>
-    <p>The integrated Log Analyzer tails system logs in real-time. Define regex patterns to watch for critical errors. The <strong>Interactive Log Search</strong> tool allows Admins to perform live regex searches across server log files directly from the Odoo UI.</p>
+    <p>The integrated Log Analyzer tails system logs in real-time. Define regex patterns to watch for critical errors. The <strong>Interactive Log Search</strong> tool allows Admins to perform live regex searches across server log files directly from the Odoo UI. Only files under <code>/var/log</code> that are registered under <strong>Log Analyzer &gt; Target Files</strong> (and visible to you) can be searched.</p>
 
     <h3>7. Synthetic Journeys &amp; Sandboxing</h3>
-    <p>Admins can write Playwright (Python) or Bash scripts to simulate user behavior. These are executed in a strictly airgapped Bubblewrap (bwrap) sandbox.</p>
+    <p>Admins can write Playwright (Python) or Bash scripts to simulate user behavior. These are executed in a Bubblewrap (bwrap) sandbox. With the default <strong>Loop-back network only</strong> setting the sandbox has no access to the host's network; choosing <strong>Full network access</strong> lets the script reach the internet and LAN. The separate "Synthetic Journey (Script)" check type is not sandboxed: it runs its command directly in the monitoring daemon.</p>
 </div>
