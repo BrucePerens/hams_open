@@ -22,3 +22,22 @@ class ComplianceController(http.Controller):
         docs = env['compliance.document'].search(domain, limit=100)
 
         return http.request.render('compliance.compliance_index_template', {'docs': docs})
+
+    # [@ANCHOR: compliance:dmca_page_route]
+    @http.route('/compliance/dmca', type='http', auth='public', website=True)
+    def compliance_dmca(self):
+        """DMCA notice and designated-agent page.
+
+        The registration number and the legal entity name are per-deployment: this repository is open source and other sites
+        run it, so neither is written into the template. They come from the system parameters `compliance.dmca_registration_number`
+        and `compliance.dmca_agent_name` (read through Zero-Sudo's whitelisted reader); the postal address, phone and email come
+        from the company record, as the site footer does. A site with no registration number says so on the page.
+        """
+        # Bypass the distributed cache: a changed registration number must show at once, and this page is rarely requested.
+        utils = http.request.env['zero_sudo.security.utils'].with_context(redis_bypass_cache=True)
+        registration_number = (utils._get_system_param('compliance.dmca_registration_number', '') or '').strip()
+        agent_name = (utils._get_system_param('compliance.dmca_agent_name', '') or '').strip()
+        return http.request.render('compliance.dmca_template', {
+            'dmca_registration_number': registration_number,
+            'dmca_agent_name': agent_name,
+        })

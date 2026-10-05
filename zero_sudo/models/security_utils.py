@@ -961,6 +961,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # the report action working now rather than block on that). Defaults to his own
             # address in code; listed here so it can be reconfigured later without a code change.
             "hams_helpdesk.ncmec_fallback_report_email",
+            # Public by nature: the DMCA designated-agent registration number and legal entity name shown on /compliance/dmca
+            # (compliance/controllers/main.py). Per-deployment, so they are parameters and not template text.
+            "compliance.dmca_registration_number",
+            "compliance.dmca_agent_name",
         ]
 
     @api.model

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- The template is in an ordinary <data> block so that edits reach installed databases on -u. The page is served by a
+         controller route (compliance/controllers/main.py, /compliance/dmca) because the registration number and agent name are
+         system parameters that a template cannot read. -->
+    <data>
+
+        <template id="dmca_template" name="DMCA Notice and Designated Agent">
+            <!-- [@ANCHOR: compliance:dmca_page] -->
+            <t t-call="website.layout">
+                <t t-set="agent" t-value="dmca_agent_name or res_company.name"/>
+                <div id="wrap" class="oe_structure oe_empty">
+                    <section class="s_text_block pt40 pb40">
+                        <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
+                            <h1 class="mb-4 fw-bold">DMCA Notice and Designated Agent</h1>
+
+                            <p>If you believe something on this site infringes your copyright, this page tells you who to
+                            send a notice to and what it must say. It also explains what we do when we receive one, how a
+                            member can answer a notice, and what happens to people who repeatedly infringe. The law behind
+                            it is the Digital Millennium Copyright Act, 17 U.S.C. 512.</p>
+
+                            <h3 class="mt-4" id="designated-agent">Our designated agent</h3>
+                            <div class="alert alert-info" role="alert" id="dmca_agent">
+                                <p class="mb-2"><strong>Service provider:</strong> <span id="dmca_agent_name"><t t-out="agent"/></span></p>
+                                <p class="mb-2"><strong>Attn:</strong> Copyright Agent</p>
+                                <p t-if="dmca_registration_number" class="mb-2" id="dmca_registration"><strong>U.S. Copyright Office DMCA Designated Agent Directory registration number:</strong>
+                                    <span id="dmca_registration_number"><t t-out="dmca_registration_number"/></span></p>
+                                <p t-else="" class="mb-2" id="dmca_not_registered"><strong>No designated agent is registered yet.</strong>
+                                    This site has not yet registered a designated agent with the U.S. Copyright Office, so no registration number is shown.
+                                    You may still send a notice to the address below.</p>
+                                <p class="mb-2" id="dmca_postal" t-if="res_company.street"><strong>Postal address:</strong>
+                                    <t t-out="res_company.street"/>, <t t-out="res_company.city"/>, <t t-out="res_company.state_id.code"/> <t t-out="res_company.zip"/></p>
+                                <p class="mb-2" id="dmca_phone" t-if="res_company.phone"><strong>Phone:</strong>
+                                    <a t-attf-href="tel:{{res_company.phone}}"><t t-out="res_company.phone"/></a></p>
+                                <p class="mb-0" id="dmca_email" t-if="res_company.email"><strong>Email:</strong>
+                                    <a t-attf-href="mailto:{{res_company.email}}"><t t-out="res_company.email"/></a></p>
+                            </div>
+
+                            <h3 class="mt-4">How to send a notice</h3>
+                            <p>Send your notice in writing to the agent above, by post or by email. To count as a notice under
+                            17 U.S.C. 512(c)(3), it must include all of the following:</p>
+                            <ol>
+                                <li>The physical or electronic signature of the copyright owner or of a person authorized to act for the owner.</li>
+                                <li>A description of the copyrighted work you say has been infringed. If one notice covers several works, a list of them.</li>
+                                <li>A description of the material you say is infringing, and enough information (for example the address of the page) for us to find it.</li>
+                                <li>Your name, postal address, telephone number and email address, so we can reach you.</li>
+                                <li>A statement that you believe in good faith that the use is not authorized by the copyright owner, its agent or the law.</li>
+                                <li>A statement that the information in the notice is accurate and, under penalty of perjury, that you are the owner of the
+                                right that is allegedly infringed or are authorized to act for the owner.</li>
+                            </ol>
+                            <p>A notice that leaves these out may not be enough for us to act on it, and we may ask you to complete it.</p>
+
+                            <h3 class="mt-4">What we do when we receive a valid notice</h3>
+                            <p>We remove the material or disable access to it, and we tell the person who posted it, who may answer with a counter-notice.</p>
+
+                            <h3 class="mt-4">Counter-notice</h3>
+                            <p>If you posted material that was removed and you believe that was a mistake, you may send the agent above a
+                            counter-notice. Under 17 U.S.C. 512(g)(3) it must include:</p>
+                            <ol>
+                                <li>Your physical or electronic signature.</li>
+                                <li>A description of the material that was removed and where it appeared before it was removed.</li>
+                                <li>A statement, under penalty of perjury, that you have a good-faith belief the material was removed because of a mistake or
+                                a misidentification of the material.</li>
+                                <li>Your name, postal address and telephone number, and a statement that you consent to the jurisdiction of the federal
+                                district court for the district where you live (or, if you are outside the United States, any district where the service provider
+                                can be found), and that you will accept service of process from the person who sent the original notice or that person's agent.</li>
+                            </ol>
+                            <p>We pass a counter-notice to the person who sent the original notice. Unless that person tells us within 10 business days that they
+                            have filed a court action against you, we restore the material no sooner than 10 and no later than 14 business days after we
+                            receive the counter-notice. These are the periods the statute sets.</p>
+
+                            <h3 class="mt-4">False notices</h3>
+                            <p>Under 17 U.S.C. 512(f), a person who knowingly and materially misrepresents that material is infringing, or that it was
+                            removed by mistake, is liable for the damages that result, including costs and attorney's fees. Please do not send a notice or a
+                            counter-notice unless you mean it.</p>
+
+                            <h3 class="mt-4">People who repeatedly infringe</h3>
+                            <p>We close the accounts of people who repeatedly infringe.</p>
+
+                            <p class="small text-muted mt-4">This page is general information, not legal advice. See also our
+                            <a href="/terms">Terms of Service</a> and the <a href="/compliance">other notices we publish</a>.</p>
+                        </div>
+                    </section>
+                </div>
+            </t>
+        </template>
+
+    </data>
+
+    <data noupdate="1">
+
+        <record id="doc_dmca" model="compliance.document">
+            <field name="name">DMCA Notice and Designated Agent</field>
+            <field name="description">Who to send a copyright infringement notice to, what the notice must say, what we do on a valid notice, how a member can send a counter-notice, and our policy on repeat infringers.</field>
+            <field name="url">/compliance/dmca</field>
+            <field name="sequence">80</field>
+        </record>
+
+    </data>
+</odoo>
