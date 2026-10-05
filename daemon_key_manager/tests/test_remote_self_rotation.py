@@ -262,14 +262,12 @@ class TestRemoteSelfRotation(RealTransactionCase):
         local = self.registry_model.create(
             {"name": "Local Lifetime Test", "user_id": self.service_user.id, "env_file_path": path}
         )
-        with self.assertRaises(ValidationError):
+        with self.assertRaises(ValidationError), self.env.cr.savepoint():
             local.write({"key_lifetime_days": 365})
-        self.env.cr.rollback()
         remote, _key = self._remote_registry("Remote Lifetime Test", self.env_paths[1])
         for bad in (89, 401, -5):
-            with self.assertRaises(ValidationError):
+            with self.assertRaises(ValidationError), self.env.cr.savepoint():
                 remote.write({"key_lifetime_days": bad})
-            self.env.cr.rollback()
         remote.write({"key_lifetime_days": 365})
         self.env.cr.commit()
         self.assertEqual(remote._lifetime_days(), 365)
