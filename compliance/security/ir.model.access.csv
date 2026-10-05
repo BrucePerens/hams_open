@@ -6,4 +6,6 @@ access_compliance_ir_ui_view,compliance.ir.ui.view,base.model_ir_ui_view,group_c
 access_compliance_res_groups,compliance.res.groups,base.model_res_groups,group_compliance_service,1,0,0,0
 access_compliance_res_company,compliance.res.company,base.model_res_company,group_compliance_service,1,0,0,0
 access_compliance_document_public,compliance.document.public,model_compliance_document,base.group_public,1,0,0,0
+access_compliance_document_portal,compliance.document.portal,model_compliance_document,base.group_portal,1,0,0,0
+access_compliance_document_user,compliance.document.user,model_compliance_document,base.group_user,1,0,0,0
 access_compliance_document_service,compliance.document.service,model_compliance_document,group_compliance_service,1,1,1,1
