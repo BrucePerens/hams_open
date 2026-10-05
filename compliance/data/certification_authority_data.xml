@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+
+        <template id="certification_authority_template" name="Certification Authority">
+            <!-- [@ANCHOR: compliance:certification_authority_page] -->
+            <t t-call="website.layout">
+                <div id="wrap" class="oe_structure oe_empty">
+                    <section class="s_text_block pt40 pb40">
+                        <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
+                            <h1 class="mb-4 fw-bold">Our Certification Authority</h1>
+
+                            <div class="alert alert-success" role="alert">
+                                <p class="mb-2"><strong>The short version.</strong> The hams.com certification authority (CA) is hard-limited, inside
+                                the certificates themselves, to <strong>hams.com</strong> and to names that exist only on a local network
+                                (<code>.local</code>, <code>.lan</code>, <code>.home.arpa</code>, <code>.internal</code> and private IP addresses).
+                                It cannot vouch for any other site on the internet, so it is safe to accept our root certificate: accepting it gives us no
+                                power over your connection to your bank, your email or any other website.</p>
+                                <p class="mb-0">The keys that sign certificates every day are held in a hardware security module (HSM) run by Google. They
+                                cannot be read or copied by anyone, including us. Our software holds only a permission to ask the HSM for a signature, and
+                                Google logs every request. If someone stole that permission, the damage would be limited to what the next sections describe.</p>
+                            </div>
+
+                            <h3 class="mt-4">What the CA is for</h3>
+                            <p>Our relay software runs on your own computer and serves a web page on your local network. Your browser will only show a
+                            padlock for that page if some authority it trusts has signed a certificate for the relay's name. Rather than ask you to trust a
+                            general-purpose CA, we run a small one that can only ever sign names that belong to us or to a local network. It is
+                            <strong>optional</strong>: without it the relay uses a self-signed certificate and your browser asks you to click through once. We
+                            also use a second branch of the same hierarchy to issue the identity certificates that prove a member's callsign when signing in.</p>
+
+                            <h3 class="mt-4">Why it is safe to accept the root</h3>
+                            <p>Every CA certificate in the hierarchy, from the root down through the relay branch, carries a critical X.509 <em>name
+                            constraint</em> that permits only:</p>
+                            <ul>
+                                <li>DNS names under <code>hams.com</code>, <code>local</code>, <code>lan</code>, <code>home.arpa</code> and <code>internal</code>;</li>
+                                <li>IP addresses in the private and link-local ranges <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>,
+                                <code>169.254.0.0/16</code>, <code>fc00::/7</code> and <code>fe80::/10</code>.</li>
+                            </ul>
+                            <p>The constraint is part of the root certificate you install, so it cannot be removed or widened without making a different root
+                            that you would have to be asked to install again. A browser or TLS library that follows the standard (RFC 5280) refuses any
+                            certificate from this CA for a name outside those lists, whoever asks for it and whatever our software or our people do. The identity
+                            branch is stricter still: it may not issue a certificate for any server name or any IP address at all, only member identity
+                            certificates that carry a callsign and no server name. Software that does not enforce name constraints is the one
+                            exception to this protection, which is a reason to install the root only on current browsers and operating systems.</p>
+
+                            <h3 class="mt-4">How the signing keys are held</h3>
+                            <p>The two keys that sign certificates day to day (the relay issuing key and the identity issuing key), and the separate key that
+                            certifies who may issue transmit capabilities, live inside a Google Cloud HSM. They are not files. They are generated or imported into the
+                            hardware, they cannot be exported, and nobody at Google or at hams.com can read them. The server that runs hams.com holds,
+                            for each key, only a service-account credential whose permissions are exactly two: ask the HSM to sign a given
+                            digest with that one key, and read that key's public half. That credential cannot export or disable the key, cannot change any
+                            Google setting, and cannot use either of the other two keys. Google records every signature request in its audit log with who made it,
+                            when, and which key, so misuse is visible and attributable. Disabling a key at Google stops signing at once.</p>
+                            <p>The root and intermediate keys above the day-to-day keys (the master root, the second master, and the relay and identity roots)
+                            are never present on the hams.com servers. They are used only to certify the CAs below them, under our key custody procedure.</p>
+
+                            <h3 class="mt-4">What an attacker could and could not do</h3>
+                            <p>Every scenario below needs the attacker to obtain one of three Google service-account credentials held on the hams.com
+                            server, or to take over that server (which yields all three). We know of no other way to make our CA sign anything: the keys cannot
+                            be read, and the ordinary software path refuses requests outside its own policy. Each credential can sign with exactly one
+                            key, so what an attacker gets depends on which one:</p>
+                            <ul>
+                                <li><strong>Relay issuing key credential.</strong> The attacker could obtain a valid server certificate for any name in the
+                                permitted lists. That is wider than what our own software would issue: the signer daemon only issues relay names, but a stolen credential
+                                bypasses the daemon, so the permitted names include every name under <code>hams.com</code> and any local-network name or private
+                                address. The realistic harm is impersonation, and it needs control of the victim's network path and a victim who installed our
+                                root: a rogue device on your local network could present a padlock for your relay's name, and could watch or alter that browser
+                                session, and anyone who installed our root could be sent to a fake <code>hams.com</code> by someone controlling their network.
+                                Everyone else is unaffected, because browsers still verify <code>hams.com</code> against the ordinary public authorities.
+                                This credential cannot create transmit authority (see below).</li>
+                                <li><strong>Identity issuing key credential.</strong> The attacker could forge a member identity certificate naming any
+                                callsign. It cannot be used as a server certificate for any name. It could be used to sign in as that member to the hams.com services that accept
+                                certificate login, until the certificate is revoked, and whatever hams.com lets that member do (including asking for remote access to that
+                                member's own relays) would be exposed. The sign-in service checks our published revocation list, so a forged certificate we learn about can be
+                                cut off.</li>
+                                <li><strong>Capability root credential.</strong> This is the most serious one and is the exception to the next paragraph. This key certifies
+                                the hams.com issuer that signs relay capabilities. An attacker holding the credential could certify a key of their own as an issuer and then sign
+                                capabilities, including ones that allow transmitting, that every installed relay would accept as coming from hams.com, because relays carry the root
+                                public key. What a relay then does with such a capability still follows that relay's own settings. We bound this damage by keeping the issuer
+                                certificate short-lived (one year today), by Google's audit log recording every use of this key, and by being able to disable the key at Google
+                                at once. We cannot recall trust from relays already installed: removing a compromised root takes a new relay release.</li>
+                            </ul>
+                            <p><strong>A TLS certificate is not permission to transmit.</strong> A certificate from the relay or identity branch never authorizes
+                            transmitting through a relay. That authority comes from a capability signed under the capability root and tied to the person's own key, and the relay checks it
+                            itself. So a rogue device with a valid certificate cannot make a relay transmit for it unless the user's own key was exposed. We still advise
+                            treating a padlock as a statement about the name in the address bar, not as proof that a device is yours.</p>
+
+                            <h3 class="mt-4">Lifetimes and revocation</h3>
+                            <p>The two roots and the master certificates are valid for thirty years, the two issuing CAs for twenty, and each relay server certificate
+                            for 800 days (renewed by the relay after 400). Signed revocation lists are published at
+                            <code>https://hams.com/relay-ca/crl</code> and <code>https://hams.com/identity-ca/crl</code> for the issuing CAs, and at
+                            <code>https://hams.com/ca/&lt;role&gt;.crl</code> for the roots above them; every CA certificate and every member certificate
+                            names its list. The relay checks the lists and keeps working if hams.com is unreachable (it does not fail closed on a missing list, so
+                            a relay on an isolated network still runs).</p>
+
+                            <h3 class="mt-4">Verify what you are trusting</h3>
+                            <p>The public certificates are available from your own relay at <code>/trust/hams-roots.pem</code> and from the project source
+                            (<code>daemons/relay_ca/public_certs/</code>). Only install a root whose SHA-256 fingerprint matches this table (published 2026-10-05):</p>
+                            <table class="table table-sm">
+                                <thead><tr><th>Certificate</th><th>SHA-256 fingerprint</th></tr></thead>
+                                <tbody>
+                                    <tr><td>hams.com CA Master (Root A)</td><td><code>4A:32:D5:03:EB:E5:EE:BF:7F:C6:D0:D0:1D:6B:FC:6A:8F:3D:47:98:D9:56:CF:11:63:36:23:1C:27:18:05:14</code></td></tr>
+                                    <tr><td>hams.com CA Master B (Root B)</td><td><code>D1:C5:2C:4F:CF:E5:13:D1:7E:4E:2D:1C:6C:A3:29:0C:99:11:19:EB:6F:C5:90:ED:76:CE:C4:F0:CC:E6:EA:AB</code></td></tr>
+                                    <tr><td>hams.com Relay Root</td><td><code>08:D0:58:4E:A9:BA:E1:09:09:B3:E9:56:73:DB:3A:84:FE:41:EE:C0:CD:F6:04:E7:E2:D6:71:E1:1B:5F:4F:98</code></td></tr>
+                                    <tr><td>hams.com Relay Issuing CA</td><td><code>C7:EF:11:8B:64:43:DB:9B:14:4A:7D:8E:5C:B1:79:3B:6D:4B:C3:5F:EA:77:AF:BE:36:1F:BA:1F:72:18:30:63</code></td></tr>
+                                    <tr><td>hams.com Identity Root</td><td><code>A8:8E:8D:38:4E:5C:A0:68:C0:51:79:51:08:91:E6:C8:89:4B:CC:3C:E0:02:37:EA:BC:89:7A:22:2D:9F:3F:2E</code></td></tr>
+                                    <tr><td>hams.com Identity Issuing CA</td><td><code>F4:9E:3C:B9:07:0B:40:43:02:5F:93:07:24:3B:86:BA:77:3D:D5:0B:07:29:86:01:B9:BB:FC:CE:F2:67:34:41</code></td></tr>
+                                </tbody>
+                            </table>
+                            <p class="small text-muted">If you ever need to stop trusting us, remove the root from your browser or operating system's certificate store; the relay keeps working
+                            with its self-signed certificate.</p>
+                        </div>
+                    </section>
+                </div>
+            </t>
+        </template>
+
+        <record id="certification_authority_page" model="website.page">
+            <field name="url">/compliance/certification-authority</field>
+            <field name="is_published">True</field>
+            <field name="view_id" ref="certification_authority_template"/>
+            <field name="track">True</field>
+        </record>
+
+        <record id="doc_certification_authority" model="compliance.document">
+            <field name="name">Our Certification Authority</field>
+            <field name="description">Why it is safe to accept the hams.com certificate root: it can only sign hams.com and local-network names, its signing keys are held in a Google HSM that nobody can read, and what an attacker who stole the signing permission could and could not do.</field>
+            <field name="url">/compliance/certification-authority</field>
+            <field name="sequence">70</field>
+        </record>
+
+    </data>
+</odoo>

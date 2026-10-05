@@ -182,6 +182,27 @@ class TestCompliancePagesHttp(HamsHttpCase):
         )
         self.assertIn("/backup-policy", registered_urls)
 
+    def test_certification_authority_page_reachable_and_registered(self):
+        """The CA explanation resolves publicly, leads with the name-constraint limit, and is listed in /compliance."""
+        # Tests [@ANCHOR: compliance:certification_authority_page]
+        response = self.url_open("/compliance/certification-authority")
+        self.assertEqual(response.status_code, 200)
+        visible = " ".join(response.text.split())
+        self.assertIn("Our Certification Authority", visible)
+        self.assertIn("hard-limited", visible)
+        self.assertIn("safe to accept our root certificate", visible)
+        self.assertIn("Google", visible)
+        self.assertIn("A TLS certificate is not permission to transmit", visible)
+        self.assertIn("Capability root credential", visible)
+        self.assertIn("Identity issuing key credential", visible)
+        self.assertIn("Relay issuing key credential", visible)
+        # The permitted names the page states are the ones the CA actually carries.
+        for name in ("hams.com", ".local", ".lan", ".home.arpa", ".internal", "10.0.0.0/8", "192.168.0.0/16", "fe80::/10"):
+            self.assertIn(name, visible)
+        public_uid = self.env.ref("base.public_user").id
+        registered_urls = self.env["compliance.document"].with_user(public_uid).search([]).mapped("url")
+        self.assertIn("/compliance/certification-authority", registered_urls)
+
     def test_compliance_index_route_lists_only_active_documents(self):
         """Verify the actual /compliance HTTP route, not just its template."""
         # Tests [@ANCHOR: COMM_compliance_index_route]
