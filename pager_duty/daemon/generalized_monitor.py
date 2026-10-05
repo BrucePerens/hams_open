@@ -32,6 +32,13 @@ import psycopg2
 import pymysql
 import redis as redis_lib
 
+# The pagerduty maintenance flag (/etc/pagerduty/maintenance): run as a script from this directory the sibling module
+# imports directly; as part of the Odoo addon package it imports relatively.
+try:
+    from . import pagerduty_maintenance
+except ImportError:
+    import pagerduty_maintenance
+
 # Real fix, found by an adversarial security review: this module's own
 # internal Redis connections (log_anomaly_proxy/log_search_proxy below)
 # used to construct bare redis.Redis(host=..., port=..., db=0) with no
@@ -307,6 +314,17 @@ def is_in_maintenance(check):
 
 # [@ANCHOR: pager_duty:fallback_notify]
 def fallback_notify(source, msg, severity):
+    # During pagerduty maintenance (a planned restart; `pagerduty-maintenance start`) the Odoo outage is expected, so
+    # the e-mail is not sent. The incident goes to the log at warning. A malformed flag is not maintenance.
+    flag = pagerduty_maintenance.read_flag()
+    if flag["state"] == pagerduty_maintenance.MALFORMED:
+        logger.error("pagerduty maintenance flag ignored, so the page is sent: %s", flag["error"])
+    elif flag["state"] == pagerduty_maintenance.ACTIVE:
+        logger.warning(
+            "pagerduty maintenance active (%s): SMTP fallback e-mail NOT sent. %s - %s",
+            pagerduty_maintenance.describe(flag), source, msg,
+        )
+        return
     fallback_email = os.environ.get("PAGER_FALLBACK_EMAIL")
     smtp_host = os.environ.get("SMTP_HOST")
     smtp_port = int(os.environ.get("SMTP_PORT") or 587)

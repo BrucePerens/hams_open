@@ -46,6 +46,6 @@ This journey tracks the flow of data from Odoo configuration to the standalone m
 
 - **Log Tail Thread:** Log-pattern checks instead run inside a dedicated log-tailing thread [@ANCHOR: log_tail_thread], which follows a file's new appended content the same way `tail -f` would, rather than re-reading the whole file every cycle.
 
-- **SMTP/Webhook Fallback:** If the Odoo RPC itself is unreachable, `fallback_notify()` [@ANCHOR: fallback_notify] sends the alert directly via SMTP or a webhook instead, so a down Odoo instance doesn't also mean a silent monitoring fleet.
+- **SMTP/Webhook Fallback:** If the Odoo RPC itself is unreachable, `fallback_notify()` [@ANCHOR: fallback_notify] sends the alert directly via SMTP or a webhook instead, so a down Odoo instance doesn't also mean a silent monitoring fleet. While the pagerduty maintenance flag is active (set by an operator with `pagerduty-maintenance start`, read by [@ANCHOR: pager_duty:maintenance_read_flag]), `fallback_notify()` logs a warning and sends nothing; an expired, over-long or malformed flag is ignored, so paging stays on.
 
 - **Auto-Resolution:** Once a previously-failing check starts passing again, `auto_resolve()` [@ANCHOR: auto_resolve] calls back into Odoo to close out any open incident for that source, and is written to swallow (not raise) any RPC failure so a resolve call that can't reach Odoo doesn't crash the polling thread that made it.
