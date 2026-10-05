@@ -223,7 +223,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
         self.assertIn("DMCA Notice and Designated Agent", visible)
         self.assertIn("DMCA-TEST-4242", visible)
         self.assertIn("Example Radio LLC", visible)
-        self.assertIn("Attn: Copyright Agent", visible)
+        self.assertIn("Attn:</strong> Copyright Agent", visible)
         self.assertIn("Box 1234, Testville, CA 90001-1234", visible)
         self.assertIn("+1 555-010-0199", visible)
         self.assertIn("agent@example.test", visible)
