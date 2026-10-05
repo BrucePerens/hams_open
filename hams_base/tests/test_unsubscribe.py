@@ -139,6 +139,7 @@ class TestEmailPolicyPage(HamsHttpCase):
             msg = f"[!] DIAGNOSTIC FOR AI: {path} must show no limited-delivery notice when hams_base.email_delivery_notice is empty (the open-source default)."
             self.assertNotIn(b"Email delivery is limited", self.url_open(path).content, msg)
         params.set_param("hams_base.email_delivery_notice", "NOTICE-TEXT-7731")
+        self.assertEqual(self.env["website"].email_delivery_notice(), "NOTICE-TEXT-7731", "[!] DIAGNOSTIC FOR AI: the website method must return the parameter's value.")
         for path in ("/email-policy", "/unsubscribe"):
             msg = f"[!] DIAGNOSTIC FOR AI: {path} must show the limited-delivery notice when hams_base.email_delivery_notice is set."
             body = self.url_open(path).content
