@@ -35,6 +35,13 @@ any route of a `hams_com` module.
 and a rule has a path but no hostname (it would send tenant and parked hostnames to a daemon port).
 `cloudflare.tunnel._build_ingress()` returns the list a push would send, with no network call.
 
+It also refuses a push that drops a tenant's explicit `/static/` rule. A tenant site whose files are served
+by a separate static file server records it in `tenant.site.static_service` (for example
+`http://localhost:18201` for perens.com); every hostname of such a site must then have a rule with that
+hostname, the path `^/static/` and that service, or the push is refused with the missing hostnames named
+(the catch-all would otherwise send them to Odoo, which answers 404). The 1.1 migration adopts the sites that
+already have those rules, so the guard protects them from the first push.
+
 ## Not done here
 
 DNS records and Cloudflare Custom Hostnames. The `cloudflare` module has a `cloudflare.dns.record` model but it is data only (no push), and

@@ -25,6 +25,13 @@ class TenantSite(models.Model):
         "redirects of other websites, and records shared by every website, are never shown.",
     )
     host_ids = fields.One2many("tenant.site.host", "site_id", string="Hostnames")
+    static_service = fields.Char(
+        string="Static file service",
+        help="Where this site's /static/ is served from when it is not Odoo, for example "
+        "http://localhost:18201 (the read-only static file server). Every hostname of the site must then "
+        "have a tunnel route for ^/static/ to this service, and a tunnel push that lacks one is refused "
+        "(it would silently send the site's files to Odoo, which answers 404). Leave empty when Odoo serves it.",
+    )
     notes = fields.Text()
 
     # [@ANCHOR: tenant_sites:COMM_is_tenant_website]

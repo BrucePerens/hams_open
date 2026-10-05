@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 {
     "name": "Tenant sites: other websites on this Odoo",
-    "version": "1.0",
+    "version": "1.1",
     "summary": "Serve other sites (perens.com, postopen.org, ...) as websites of one Odoo, isolated from the main site",
     "description": (
         "A tenant is a website bound to its own hostnames. A request that arrives through Cloudflare "

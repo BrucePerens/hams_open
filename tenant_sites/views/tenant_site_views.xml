@@ -25,6 +25,7 @@
                     <group>
                         <field name="name"/>
                         <field name="website_id"/>
+                        <field name="static_service"/>
                         <field name="active"/>
                     </group>
                     <field name="host_ids">
