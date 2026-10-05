@@ -9,5 +9,6 @@ from . import test_helpdesk_personas
 from . import test_inbound_spam_filter
 from . import test_mail_ingest
 from . import test_triage_wakeup
+from . import test_triage_followups
 from . import test_ncmec_report
 from . import test_ui_tours

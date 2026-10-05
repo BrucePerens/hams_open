@@ -16,6 +16,8 @@ import xml.etree.ElementTree as ET
 
 from markupsafe import Markup
 
+from odoo.tools import html2plaintext
+
 from .inbound_spam_filter import detect_inbound_spam_signals
 from .triage_wakeup import write_triage_wakeups
 
@@ -756,6 +758,70 @@ class HelpdeskTicket(models.Model):
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
         self.with_env(hd_env).message_post(body=note, subtype_xmlid="mail.mt_note")
         return True
+
+    @api.model
+    def mcp_customer_followups(self, cutoffs):
+        """Read-only lookup for the external-AI ticket-triage MCP server
+        (daemons/hams_ticket_triage_mcp in hams_com): which of the tickets it already
+        wrote a note on has the CUSTOMER written again since it last looked?
+
+        ``cutoffs`` is ``{ticket_id: "YYYY-MM-DD HH:MM:SS" (UTC)}``, the time the agent last
+        listed each ticket. Returns ``{str(ticket_id): [{"date", "body"}, ...]}`` for tickets with at
+        least one customer-written message after that time: plain text, at most three messages of
+        2000 characters each, oldest first. Decided by the coordinator on Bruce's instruction,
+        2026-10-05 (one extra draft note per ticket on a customer follow-up).
+
+        What counts as the customer: a message of type email or comment with a non-internal subtype
+        whose author is not an internal (staff) user. The agent's own notes (mail.mt_note, posted by
+        a service user) and staff replies are therefore never reported. Tickets in the spam stage are
+        never reported. At most 200 tickets are looked at per call.
+
+        Which tickets the caller may ask about is decided by the ir.rule that already governs it:
+        the ticket search below runs under the CALLER's own identity, so a ticket outside
+        rule_helpdesk_ticket_ai_triage_external_allowlist is simply absent. Only then does the
+        message search elevate to hams_helpdesk.user_helpdesk_service (the caller's group has no
+        access to mail.message), and it writes nothing.
+        """
+        # [@ANCHOR: hams_helpdesk:mcp_customer_followups]
+        if not isinstance(cutoffs, dict):
+            return {}
+        wanted = {}
+        for key, value in list(cutoffs.items())[:200]:
+            try:
+                wanted[int(key)] = fields.Datetime.to_datetime(value)
+            except (TypeError, ValueError):
+                continue
+        wanted = {ticket_id: cutoff for ticket_id, cutoff in wanted.items() if cutoff}
+        if not wanted:
+            return {}
+        visible = self.search([("id", "in", list(wanted)), ("stage", "!=", "spam")])
+        utils = self.env["zero_sudo.security.utils"]
+        messages_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")["mail.message"]
+        found = {}
+        for ticket in visible:
+            messages = messages_env.search(
+                [
+                    ("model", "=", self._name),
+                    ("res_id", "=", ticket.id),
+                    ("message_type", "in", ("email", "comment")),
+                    ("subtype_id.internal", "=", False),
+                    ("date", ">", wanted[ticket.id]),
+                ],
+                order="date asc, id asc",
+                limit=20,
+            )
+            shown = []
+            for message in messages:
+                authors = message.author_id.user_ids
+                if any(not user.share for user in authors):
+                    continue  # a staff member's reply, not the customer's
+                body = html2plaintext(message.body or "").strip()
+                shown.append({"date": fields.Datetime.to_string(message.date), "body": body[:2000]})
+                if len(shown) >= 3:
+                    break
+            if shown:
+                found[str(ticket.id)] = shown
+        return found
 
     def message_new(self, msg_dict, custom_values=None):
         """Overrides mail.thread's own default so a ticket created from an
