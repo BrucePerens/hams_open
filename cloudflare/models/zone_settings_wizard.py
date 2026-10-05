@@ -32,6 +32,13 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
         string="Development Mode",
         help="Temporarily bypass Cloudflare cache...",
     )
+    always_use_https = fields.Selection(
+        [("on", "On"), ("off", "Off")],
+        string="Always Use HTTPS",
+        help="Redirect every plain-HTTP request for the zone to HTTPS at "
+        "Cloudflare's edge, before it reaches the origin. Leave unset to "
+        "keep the zone's current value.",
+    )
     browser_cache_ttl = fields.Integer(
         string="Browser Cache TTL (seconds)",
         help="Time in seconds. 0 means respect existing headers.",
@@ -64,6 +71,11 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
                     ):
                         res["development_mode"] = setting.get("value")
                     elif (
+                        setting.get("id") == "always_use_https"
+                        and "always_use_https" in fields_list
+                    ):
+                        res["always_use_https"] = setting.get("value")
+                    elif (
                         setting.get("id") == "browser_cache_ttl"
                         and "browser_cache_ttl" in fields_list
                     ):
@@ -94,6 +106,14 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
             )
             if not success:
                 errors.append(f"Development Mode: {msg}")
+
+        # [@ANCHOR: cloudflare:COMM_zone_settings_always_use_https]
+        if self.always_use_https:
+            success, msg = update_zone_setting(
+                "always_use_https", self.always_use_https, token, zone_id
+            )
+            if not success:
+                errors.append(f"Always Use HTTPS: {msg}")
 
         # Bug fix (bug-hunt, review_tier 1, 2026-09-09): `is not False` was a
         # vacuous/dead check (bug class 1) -- Odoo's Integer field never
