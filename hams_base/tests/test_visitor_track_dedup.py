@@ -1,62 +1,73 @@
 # -*- coding: utf-8 -*-
-from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-PAGE = "/hams-track-dedup-probe"
+from odoo.addons.hams_base.models import website_visitor as visitor_module
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.tests import tagged
+
+TOKEN = "0123456789abcdef0123456789abcdef"
+URL = "http://hams.test/event"
 
 
 @tagged("post_install", "-at_install")
-class TestVisitorTrackDedup(HamsHttpCase):
+class TestVisitorTrackDedup(HamsTransactionCase):
     """Tests [@ANCHOR: hams_base:visitor_track_dedup] (hams1 readiness audit row 13).
 
-    The probe is a tracked website page (core's own `_register_website_track` path, the same one /event and /blog use)."""
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.env["website.page"].create({
-            "name": "Track dedup probe",
-            "url": PAGE,
-            "type": "qweb",
-            "track": True,
-            "website_published": True,
-            "arch": '<t t-call="website.layout"><div id="wrap"><p>probe</p></div></t>',
-        })
+    The decision is tested directly against real visitor and track rows; only the HTTP request object and the
+    core method that would do the writes are replaced."""
 
     def setUp(self):
         super().setUp()
-        # Core does not track what it takes for a bot, and the requests library's default agent is one.
-        self.opener.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
+        self.visitors = self.env["website.visitor"]
+        self.visitor = self.visitors.create({"access_token": TOKEN})
+        self.core_write = MagicMock(name="core _get_visitor_from_request")
+        self.safe_patch_object(type(self.visitors), "_get_visitor_from_request", self.core_write)
+        self.safe_patch_object(type(self.visitors), "_get_access_token", lambda model: TOKEN)
+        self._request(URL)
 
-    def _count(self):
-        self.env.cr.execute("SELECT count(*) FROM website_track WHERE url LIKE %s", [f"%{PAGE}%"])
-        return self.env.cr.fetchone()[0]
+    def _request(self, url):
+        self.safe_patch_object(visitor_module, "request", SimpleNamespace(httprequest=SimpleNamespace(url=url)))
 
-    def test_the_probe_page_is_tracked_once_and_served(self):
-        self.assertEqual(self.url_open(PAGE).status_code, 200)
-        self.assertEqual(self._count(), 1)
+    def _track(self, url=URL, minutes_ago=0):
+        track = self.env["website.track"].create({"visitor_id": self.visitor.id, "url": url})
+        if minutes_ago:
+            self.env.cr.execute(
+                "UPDATE website_track SET visit_datetime = visit_datetime - make_interval(mins => %s) WHERE id = %s",
+                [minutes_ago, track.id],
+            )
+        return track
 
-    def test_repeated_requests_on_one_session_add_no_more_tracks(self):
-        for _ in range(6):
-            self.assertEqual(self.url_open(PAGE).status_code, 200)
-        self.assertEqual(self._count(), 1, "a tracked page viewed again in the same session must not write again")
+    def test_a_recent_track_for_the_same_url_skips_every_write(self):
+        self._track()
+        self.assertTrue(self.visitors._track_exists_for_this_request())
+        self.visitors._handle_webpage_dispatch(False)
+        self.core_write.assert_not_called()
 
-    def test_a_different_url_in_the_same_session_is_still_tracked(self):
-        self.url_open(PAGE)
-        self.url_open(PAGE + "?a=1")
-        self.assertEqual(self._count(), 2)
+    def test_no_track_means_core_runs_and_writes(self):
+        self.assertFalse(self.visitors._track_exists_for_this_request())
+        self.visitors._handle_webpage_dispatch(False)
+        self.core_write.assert_called_once()
 
-    def test_the_page_is_tracked_again_after_the_window(self):
-        self.url_open(PAGE)
-        self.env.cr.execute(
-            "UPDATE website_track SET visit_datetime = visit_datetime - interval '45 minutes' WHERE url LIKE %s",
-            [f"%{PAGE}%"],
-        )
-        self.url_open(PAGE)
-        self.assertEqual(self._count(), 2)
+    def test_a_different_url_is_still_tracked(self):
+        self._track(url="http://hams.test/blog")
+        self.assertFalse(self.visitors._track_exists_for_this_request())
+        self.visitors._handle_webpage_dispatch(False)
+        self.core_write.assert_called_once()
 
-    def test_a_new_session_is_a_new_visitor_and_is_tracked(self):
-        self.url_open(PAGE)
-        self.opener.cookies.clear()
-        self.url_open(PAGE)
-        self.assertEqual(self._count(), 2)
+    def test_an_old_track_no_longer_suppresses(self):
+        self._track(minutes_ago=self.visitors.TRACK_DEDUP_MINUTES + 15)
+        self.assertFalse(self.visitors._track_exists_for_this_request())
+
+    def test_a_track_just_inside_the_window_still_suppresses(self):
+        self._track(minutes_ago=self.visitors.TRACK_DEDUP_MINUTES - 5)
+        self.assertTrue(self.visitors._track_exists_for_this_request())
+
+    def test_another_sessions_track_does_not_suppress(self):
+        other = self.visitors.create({"access_token": "f" * 32})
+        self.env["website.track"].create({"visitor_id": other.id, "url": URL})
+        self.assertFalse(self.visitors._track_exists_for_this_request())
+
+    def test_no_request_context_means_no_suppression(self):
+        self.safe_patch_object(type(self.visitors), "_get_access_token", MagicMock(side_effect=ValueError("no request")))
+        self.assertFalse(self.visitors._track_exists_for_this_request())
