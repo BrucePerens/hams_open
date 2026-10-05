@@ -10,7 +10,7 @@ class UnsubscribeController(http.Controller):
         is_public_user = request.env.user.id == request.env.ref('base.public_user').id
         return request.render('hams_base.unsubscribe_page_template', {
             'is_public_user': is_public_user,
-            'email_delivery_notice': request.env['ir.config_parameter'].get_param('hams_base.email_delivery_notice', ''),
+            'email_delivery_notice': request.env['zero_sudo.security.utils']._get_system_param('hams_base.email_delivery_notice', ''),
         })
 
     # [@ANCHOR: hams_base:COMM_unsubscribe_lockout_route]

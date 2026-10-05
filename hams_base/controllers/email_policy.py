@@ -6,5 +6,5 @@ class EmailPolicyController(http.Controller):
     @http.route('/email-policy', type='http', auth='public', website=True)
     def email_policy(self, **kw):
         return http.request.render('hams_base.email_policy_template', {
-            'email_delivery_notice': http.request.env['ir.config_parameter'].get_param('hams_base.email_delivery_notice', ''),
+            'email_delivery_notice': http.request.env['zero_sudo.security.utils']._get_system_param('hams_base.email_delivery_notice', ''),
         })
