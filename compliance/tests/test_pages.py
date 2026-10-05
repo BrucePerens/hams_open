@@ -203,6 +203,57 @@ class TestCompliancePagesHttp(HamsHttpCase):
         registered_urls = self.env["compliance.document"].with_user(public_uid).search([]).mapped("url")
         self.assertIn("/compliance/certification-authority", registered_urls)
 
+    def _dmca_visible(self):
+        response = self.url_open("/compliance/dmca")
+        self.assertEqual(response.status_code, 200)
+        return response, " ".join(response.text.split())
+
+    def test_dmca_page_reads_registration_and_company_contact(self):
+        """The DMCA page shows the registration number and agent name from system parameters and the contact from the company record."""
+        # Tests [@ANCHOR: compliance:dmca_page]
+        # Tests [@ANCHOR: compliance:dmca_page_route]
+        company = self.env["res.company"].search([], limit=1)
+        state = self.env["res.country.state"].search([("country_id.code", "=", "US"), ("code", "=", "CA")], limit=1)
+        company.write({"street": "Box 1234", "city": "Testville", "zip": "90001-1234", "state_id": state.id,
+                       "phone": "+1 555-010-0199", "email": "agent@example.test"})
+        params = self.env["ir.config_parameter"]
+        params.set_param("compliance.dmca_registration_number", "DMCA-TEST-4242")
+        params.set_param("compliance.dmca_agent_name", "Example Radio LLC")
+        response, visible = self._dmca_visible()
+        self.assertIn("DMCA Notice and Designated Agent", visible)
+        self.assertIn("DMCA-TEST-4242", visible)
+        self.assertIn("Example Radio LLC", visible)
+        self.assertIn("Attn: Copyright Agent", visible)
+        self.assertIn("Box 1234, Testville, CA 90001-1234", visible)
+        self.assertIn("+1 555-010-0199", visible)
+        self.assertIn("agent@example.test", visible)
+        self.assertNotIn("No designated agent is registered yet", visible)
+        # The statute's elements, the counter-notice, the false-notice warning and the repeat-infringer policy are all present.
+        for text in ("512(c)(3)", "under penalty of perjury", "good faith", "512(g)(3)", "10 and no later than 14 business days",
+                     "512(f)", "We close the accounts of people who repeatedly infringe"):
+            self.assertIn(text, visible)
+
+    def test_dmca_page_without_registration_says_none_registered(self):
+        """With no registration number set (any other site running this code) the page says no designated agent is registered, and invents no number."""
+        # Tests [@ANCHOR: compliance:dmca_page]
+        params = self.env["ir.config_parameter"]
+        params.set_param("compliance.dmca_registration_number", "")
+        params.set_param("compliance.dmca_agent_name", "")
+        response, visible = self._dmca_visible()
+        self.assertIn("No designated agent is registered yet", visible)
+        self.assertNotIn("DMCA-", visible)
+        self.assertNotIn("registration number:", visible)
+
+    def test_dmca_page_listed_in_compliance_index(self):
+        """The DMCA page is registered in the compliance document registry and linked from /compliance."""
+        # Tests [@ANCHOR: compliance:dmca_page]
+        public_uid = self.env.ref("base.public_user").id
+        registered_urls = self.env["compliance.document"].with_user(public_uid).search([]).mapped("url")
+        self.assertIn("/compliance/dmca", registered_urls)
+        response = self.url_open("/compliance")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/compliance/dmca"', response.text)
+
     def test_compliance_index_route_lists_only_active_documents(self):
         """Verify the actual /compliance HTTP route, not just its template."""
         # Tests [@ANCHOR: COMM_compliance_index_route]

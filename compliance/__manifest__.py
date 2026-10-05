@@ -29,6 +29,7 @@ Upon installation, it:
               "data/protects_hams_data.xml",
               "data/intellectual_property_data.xml",
               "data/backup_policy_data.xml",
+              "data/dmca_data.xml",
               "data/certification_authority_data.xml",
              ],
     "knowledge_docs": [{"name": "Site Owner's Guide to Regulatory Compliance",
