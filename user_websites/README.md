@@ -28,7 +28,7 @@ Visit your blog page (e.g., `/yourname/blog`) and click "Create Your Blog" to st
 ## 🛡️ Community & Safety
 
 We want to keep our community safe and professional.
-*   **Report Violations:** If you see content that breaks our rules, every personal or group website page (home page, blog, or blog post) shows a "Report Violation" button to visitors other than its owner. Our admins will review reports promptly.
+*   **Report Violations:** If you see content that breaks our rules, every personal or group website page (home page, blog, or blog post) shows a "Report Violation" button to visitors other than its owner (on a group website, other than a group member). Our admins will review reports promptly.
 *   **Moderation:** We use a 3-strike system. If a user repeatedly violates our community guidelines, their account may be suspended from using website features.
 *   **Automated Security:** Our system automatically scans for and removes malicious code to protect all users.
 

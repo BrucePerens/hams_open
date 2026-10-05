@@ -68,7 +68,7 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, `
 
 <features>
 ## 3. Core Features & Logic
-*   **Article Feedback:** Atomic helpfulness increments: a single SQL `UPDATE ... SET helpful_count = helpful_count + 1` (or `unhelpful_count`) run under the Knowledge service account, so concurrent votes cannot overwrite each other. (`data/procedures.xml` also installs a `knowledge_increment_helpful()` Postgres function, but the controller does not call it.) `[@ANCHOR: controller_manual_feedback]`.
+*   **Article Feedback:** Atomic helpfulness increments: a single SQL `UPDATE ... SET helpful_count = COALESCE(helpful_count, 0) + 1` (or `unhelpful_count`) executed on the request's database cursor after a read-access check on the article, so concurrent votes cannot overwrite each other. The controller also resolves the Knowledge service account's environment, but the SQL statement itself is not subject to Odoo access rules. (`data/procedures.xml` also installs a `knowledge_increment_helpful()` Postgres function, but the controller does not call it.) `[@ANCHOR: controller_manual_feedback]`.
 
 *   **Search Engine:** Case-insensitive substring (`ilike`) search over title and body, with multi-tenant filtering `[@ANCHOR: controller_manual_search]`.
 
@@ -108,7 +108,7 @@ Every record rule below is also limited to the user's allowed companies.
 *   **Public:** `is_published=True` (record rule). The website match (`website_id` empty or equal to the current website) is applied by the sidebar, search and by-name queries in `controllers/main.py`, not by a record rule, so a direct `/manual/<id>-<slug>` URL is not website-filtered.
 *   **Portal/Internal:** read only: `internal_permission != 'none'`, or `is_published=True`, or member of `member_ids`, or `create_uid`. On the website, users outside `base.group_user` additionally need `is_published=True` or membership.
 *   **Admin:** Full CRUD. `knowledge.group_manual_manager` (Manual Administrator) is the only interactive group whose access rights allow create, write or delete.
-*   **Service Account:** `knowledge.user_knowledge_service_account` for background operations: feedback-vote increments and installing `knowledge_docs` articles.
+*   **Service Account:** `knowledge.user_knowledge_service_account` for background operations: installing `knowledge_docs` articles (the feedback controller also resolves this account before its SQL increment).
 </security>
 
 <dependencies>

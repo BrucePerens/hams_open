@@ -12,7 +12,7 @@ Zero-Sudo compliant, lightweight helpdesk management system designed for SRE (Si
 <architecture>
 The module implements a reactive ticketing system where assignment is driven by on-duty status. It uses a wizard-based handoff mechanism to ensure context is preserved during operator shifts.
 
-"On-duty" means the user that `calendar.event.get_current_on_duty_admin()` returns. This module's own version of that method returns nobody; the `pager_duty` module overrides it to return the user of the pager-duty calendar shift in force right now. This module does not depend on `pager_duty`, so without it, or when no shift is in force, new tickets are left unassigned. A failure in that lookup is logged and the ticket is still created, unassigned.
+"On-duty" means the user that `calendar.event.get_current_on_duty_admin()` returns. This module's own version of that method returns nobody; the `pager_duty` module overrides it to return the user of the pager-duty calendar shift in force right now for the current website (a shift with no website counts for every website; if several overlap, the most recently created wins). This module does not depend on `pager_duty`, so without it, or when no shift is in force, new tickets are left unassigned. A failure in that lookup is logged and the ticket is still created, unassigned.
 
 - **Models**:
     - `hams_helpdesk.ticket`: Main ticket entity, inherits `mail.thread` for communication.
@@ -83,7 +83,7 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
 2.  **Automated Routing**: The system identifies the currently on-duty administrator (`[@ANCHOR: helpdesk_ticket_creation]`) and assigns the ticket.
 
 3.  **Progression**: The operator manages tickets via the list ([@ANCHOR: helpdesk_ticket_list]) and form ([@ANCHOR: helpdesk_ticket_form]) views, moving through stages: New -> In Progress -> Resolved -> Closed. A fifth stage, Spam / Phishing (Quarantined), is a side lane for flagged inbound mail, not a normal step (see documentation.html).
-4.  **Customer Communication**: Every stage change triggers an automated update to the reporter (the ticket's Customer), if the ticket has one.
+4.  **Customer Communication**: Every stage change except a move into Spam / Phishing triggers an automated update to the reporter (the ticket's Customer), if the ticket has one.
 
 ### Incident Resolution Journey ([@ANCHOR: journey_incident_resolution])
 **Goal**: Complete the lifecycle of a critical incident from detection to resolution.
