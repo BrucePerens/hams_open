@@ -3,6 +3,7 @@
 
 # -*- coding: utf-8 -*-
 from . import test_multi_website
+from . import test_cache_rule_push
 from . import test_cloudflare_apis
 from . import test_settings_view_block
 from . import test_purge_everything

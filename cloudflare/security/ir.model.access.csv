@@ -4,6 +4,7 @@ access_website_purge_svc,website purge svc,website.model_website,cloudflare.grou
 access_res_company_purge_svc,res.company purge svc,base.model_res_company,cloudflare.group_cloudflare_purge,1,0,0,0
 access_ir_config_parameter_purge_svc,ir.config_parameter purge svc,base.model_ir_config_parameter,cloudflare.group_cloudflare_purge,1,0,0,0
 access_cloudflare_waf_rule_waf_svc,cloudflare.waf.rule waf svc,model_cloudflare_waf_rule,cloudflare.group_cloudflare_waf,1,1,1,1
+access_cloudflare_cache_rule_waf_svc,cloudflare.cache.rule waf svc,model_cloudflare_cache_rule,cloudflare.group_cloudflare_waf,1,0,0,0
 access_cloudflare_ip_ban_waf_svc,cloudflare.ip.ban waf svc,model_cloudflare_ip_ban,cloudflare.group_cloudflare_waf,1,1,1,1
 access_cloudflare_config_backup_waf_svc,cloudflare.config.backup waf svc,model_cloudflare_config_backup,cloudflare.group_cloudflare_waf,1,1,1,1
 access_cloudflare_config_manager_waf_svc,cloudflare.config.manager waf svc,model_cloudflare_config_manager,cloudflare.group_cloudflare_waf,1,0,0,0
