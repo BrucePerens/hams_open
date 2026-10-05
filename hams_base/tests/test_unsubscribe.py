@@ -129,3 +129,28 @@ class TestEmailPolicyPage(HamsHttpCase):
         msg = "[!] DIAGNOSTIC FOR AI: /email-policy should be reachable (200 OK) to anonymous visitors -- it's a public disclosure page."
         self.assertEqual(response.status_code, 200, msg)
         self.assertIn(b"How We Use Email", response.content, msg)
+
+
+    def test_email_delivery_notice_shows_only_when_configured(self):
+        # Tests [@ANCHOR: hams_base:email_policy_template], [@ANCHOR: hams_base:unsubscribe_page_template], [@ANCHOR: hams_base:website_email_delivery_notice]
+        # The default is no notice, on both pages.
+        self.assertEqual(self.env["website"].email_delivery_notice(), "", "[!] DIAGNOSTIC FOR AI: the notice is empty by default (the open-source default).")
+        for path in ("/email-policy", "/unsubscribe"):
+            msg = f"[!] DIAGNOSTIC FOR AI: {path} must show no limited-delivery notice when hams_base.email_delivery_notice is empty."
+            self.assertNotIn(b"Email delivery is limited", self.url_open(path).content, msg)
+        # The method reads hams_base.email_delivery_notice through zero_sudo's whitelisted reader (the parameter itself is cached
+        # per registry, which a test cannot invalidate for a request thread, so the reader is stood in for here).
+        seen = []
+
+        def reader(_utils, key, default=None):
+            seen.append(key)
+            return "NOTICE-TEXT-7731"
+
+        self.safe_patch_object(type(self.env["zero_sudo.security.utils"]), "_get_system_param", reader)
+        self.assertEqual(self.env["website"].email_delivery_notice(), "NOTICE-TEXT-7731", "[!] DIAGNOSTIC FOR AI: the method must return what the whitelisted reader returns.")
+        self.assertEqual(seen, ["hams_base.email_delivery_notice"], "[!] DIAGNOSTIC FOR AI: the method must read exactly hams_base.email_delivery_notice.")
+        for path in ("/email-policy", "/unsubscribe"):
+            msg = f"[!] DIAGNOSTIC FOR AI: {path} must show the limited-delivery notice when the parameter is set."
+            body = self.url_open(path).content
+            self.assertIn(b"Email delivery is limited", body, msg)
+            self.assertIn(b"NOTICE-TEXT-7731", body, msg)

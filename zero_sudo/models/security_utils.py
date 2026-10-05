@@ -924,6 +924,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # accompanies) instead of masking it with an unrelated KeyError.
             "hams_base.compliance_org_name",
             "hams_base.compliance_mailing_address",
+            # Launch audit J5-9: plain text shown on /email-policy and /unsubscribe while outgoing email is limited
+            # (hams_base/controllers). Empty by default; not a secret.
+            "hams_base.email_delivery_notice",
             # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: the
             # NCMEC CyberTipline mandatory-reporting workflow (hams_helpdesk/models/
             # helpdesk_ticket.py). Same category as pager_duty.domain_api_identity above --
