@@ -31,7 +31,7 @@ class TestScrubErrorBody(HamsTransactionCase):
     def test_traceback_is_dropped_and_unexpected_errors_become_generic(self):
         exc = self._raised(KeyError, "secret_table_name")
         raw = self._body(exc)
-        self.assertIn("Traceback", raw["debug"])
+        self.assertIn("secret_table_name", raw["debug"])
         with _dev_mode([]):
             scrubbed = lockdown.scrub_error_body(raw, exc)
         self.assertEqual(scrubbed["debug"], "")

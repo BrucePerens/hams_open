@@ -23,6 +23,11 @@ class TestVisitorTrackDedup(HamsHttpCase):
             "arch": '<t t-call="website.layout"><div id="wrap"><p>probe</p></div></t>',
         })
 
+    def setUp(self):
+        super().setUp()
+        # Core does not track what it takes for a bot, and the requests library's default agent is one.
+        self.opener.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
+
     def _count(self):
         self.env.cr.execute("SELECT count(*) FROM website_track WHERE url LIKE %s", [f"%{PAGE}%"])
         return self.env.cr.fetchone()[0]
