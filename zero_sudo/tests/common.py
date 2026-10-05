@@ -1929,6 +1929,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
     # [@ANCHOR: zero_sudo:hams_http_case_browser_js]
     def browser_js(self, *args, expect_empty=False, **kwargs):
         _logger.info("TRACING: Entering browser_js wrapper.")
+        # Odoo's hoot runner page answers 404 unless content_security_policy's explicit
+        # developer-pages parameter is on (default off for every deployment). A hoot run is the
+        # test asking for that page, so it sets the parameter itself, the ADR-0094 pattern;
+        # nothing is switched on implicitly, and the test transaction rolls it back.
+        url_path = str(args[0] if args else kwargs.get("url_path", ""))
+        if url_path.split("?")[0].rstrip("/") in ("/web/tests", "/web/tests/legacy"):
+            self.env["ir.config_parameter"].set_param(
+                "content_security_policy.allow_developer_pages", "True"
+            )
         # Watch the browser console for hoot's own "Passed 0 tests" line.
         # Odoo core's ChromeBrowser._handle_console logs every console
         # message to test_case._logger.getChild("browser")
