@@ -32,12 +32,10 @@ import psycopg2
 import pymysql
 import redis as redis_lib
 
-# The pagerduty maintenance flag (/etc/pagerduty/maintenance): run as a script from this directory the sibling module
-# imports directly; as part of the Odoo addon package it imports relatively.
-try:
-    from . import pagerduty_maintenance
-except ImportError:
-    import pagerduty_maintenance
+# The pagerduty maintenance flag (/etc/pagerduty/maintenance). The sibling file is imported by plain name from this
+# directory, which works both when the daemon runs as a script from here and when Odoo's tests import this module.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pagerduty_maintenance  # noqa: E402
 
 # Real fix, found by an adversarial security review: this module's own
 # internal Redis connections (log_anomaly_proxy/log_search_proxy below)

@@ -20,6 +20,10 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 import odoo.addons.pager_duty.daemon.generalized_monitor as generalized_monitor
 import odoo.addons.pager_duty.daemon.pagerduty_maintenance as pm
 
+# hams_shared sits beside this module in hams_open; site_monitor.py is stdlib-only and imports by plain name.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_shared", "tools"))
+import site_monitor  # noqa: E402
+
 NOW = 1_000_000
 
 
@@ -133,8 +137,6 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
 
     def test_06_an_unprivileged_user_cannot_set_or_clear_it(self):
         # Tests [@ANCHOR: pager_duty:maintenance_main]
-        if os.geteuid() == 0:
-            self.skipTest("root can write anywhere; the property is the file mode, checked in test_04")
         locked = os.path.join(self.dir, "locked")
         os.mkdir(locked, 0o555)
         self.addCleanup(os.chmod, locked, 0o755)
@@ -142,11 +144,15 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
         err = io.StringIO()
         stderr, sys.stderr = sys.stderr, err
         try:
-            self.assertEqual(pm.main(["--file", path, "start"], now=NOW, out=io.StringIO()), 2)
+            code = pm.main(["--file", path, "start"], now=NOW, out=io.StringIO())
         finally:
             sys.stderr = stderr
-        self.assertIn("only root can set it", err.getvalue())
-        self.assertFalse(os.path.exists(path))
+        if os.geteuid() == 0:  # root can write anywhere: the property is then the file mode, checked in test_04
+            self.assertEqual(code, 0)
+        else:
+            self.assertEqual(code, 2)
+            self.assertIn("only root can set it", err.getvalue())
+            self.assertFalse(os.path.exists(path))
 
     def _fallback(self, flag_path):
         mock_smtp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP")
@@ -183,14 +189,6 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
 
     def test_09_site_monitor_reader_agrees_with_this_one(self):
         """hams_shared's site monitor must not import this module, so it carries a copy: the two must not drift."""
-        tools = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_shared", "tools")
-        if not os.path.exists(os.path.join(tools, "site_monitor.py")):
-            self.skipTest("hams_shared is not checked out beside this module")
-        sys.path.insert(0, tools)
-        try:
-            import site_monitor
-        finally:
-            sys.path.remove(tools)
         self.assertEqual(site_monitor.MAINTENANCE_DEFAULT_PATH, pm.DEFAULT_PATH)
         self.assertEqual(site_monitor.maintenance_flag_path({}), pm.flag_path({}))
         self.assertEqual(site_monitor.maintenance_flag_path({"PAGERDUTY_MAINTENANCE_FILE": "/z"}),

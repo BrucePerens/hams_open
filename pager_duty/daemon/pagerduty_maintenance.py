@@ -110,12 +110,9 @@ def write_flag(minutes=DEFAULT_MINUTES, reason="", set_by="", path=None, now=Non
             handle.write("\n")
         os.chmod(tmp, 0o644)
         os.replace(tmp, path)
-    except BaseException:
-        try:
+    finally:
+        if os.path.exists(tmp):  # only when the write or the rename failed
             os.unlink(tmp)
-        except OSError:
-            pass
-        raise
     return data
 
 
