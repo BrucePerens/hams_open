@@ -378,6 +378,17 @@ class DaemonKeyRegistry(models.Model):
         registries = self.env["daemon.key.registry"].search(
             [("remote_self_rotation", "=", False)], limit=1000
         )
+        # [@ANCHOR: COMM_force_provision_skips_archived]
+        # A row whose service account is archived belongs to a daemon that was removed (the wildcard certificate
+        # renewal, for one). It is not a failure: skip it, say so once, and keep the unit green so a real failure
+        # is not hidden. Verified by [@ANCHOR: COMM_test_force_provision_skips_archived]
+        skipped = registries.filtered(lambda r: not r.user_id.active)
+        if skipped:
+            _logger.info(
+                "Skipping key provisioning for %d daemon(s) whose service account is archived: %s",
+                len(skipped), ", ".join(skipped.mapped("name")),
+            )
+            registries = registries - skipped
         user_ids = registries.mapped("user_id").ids
         key_names = [f"{reg.name}_key" for reg in registries]
         pre_fetched_keys = self.env["res.users.apikeys"].search([
@@ -937,6 +948,9 @@ class DaemonKeyRegistry(models.Model):
         registries = self.env["daemon.key.registry"].search(
             [
                 ("remote_self_rotation", "=", False),
+                # An archived service account marks a removed daemon: it can never rotate, and would sort first
+                # and fill the batch of 10 forever.
+                ("user_id.active", "=", True),
                 "|",
                 ("last_rotated", "=", False),
                 ("last_rotated", "<", threshold),

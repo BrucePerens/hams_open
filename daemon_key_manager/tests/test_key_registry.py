@@ -5,6 +5,7 @@
 import logging
 import os
 import shutil
+from unittest.mock import patch
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -522,12 +523,19 @@ class TestKeyRegistry(RealTransactionCase):
         registry_model.create(
             {"name": "Partial OK", "user_id": self.service_user.id, "env_file_path": good_path}
         )
-        archived = self.env["res.users"].create(
-            {"name": "Archived Service", "login": "archived_partial_svc", "is_service_account": True, "active": False}
+        other = self.env["res.users"].create(
+            {"name": "Partial Bad Service", "login": "partial_bad_svc", "is_service_account": True}
         )
-        registry_model.create({"name": "Partial Bad", "user_id": archived.id, "env_file_path": bad_path})
+        registry_model.create({"name": "Partial Bad", "user_id": other.id, "env_file_path": bad_path})
+        real_rotate = type(registry_model)._rotate_key_and_write_file
 
-        result = registry_model.action_force_provision_all()  # must not raise
+        def _rotate(reg, *args, **kwargs):
+            if reg.name == "Partial Bad":
+                raise OSError("simulated unwritable key file")
+            return real_rotate(reg, *args, **kwargs)
+
+        with patch.object(type(registry_model), "_rotate_key_and_write_file", _rotate):
+            result = registry_model.action_force_provision_all()  # must not raise
 
         self.assertEqual(result["params"]["type"], "danger")
         self.assertIn("Partial Bad", result["params"]["message"])
@@ -540,6 +548,34 @@ class TestKeyRegistry(RealTransactionCase):
             ),
             "the successful daemon's key is in the database, in step with its file",
         )
+
+    def test_force_provision_skips_a_removed_daemons_archived_account(self):
+        # [@ANCHOR: COMM_test_force_provision_skips_archived]
+        # Tests [@ANCHOR: COMM_force_provision_skips_archived]
+        # hams1, 2026-10-05: the registry row of the removed wildcard-certificate renewal (archived service account)
+        # made hams.daemon.keys.service exit 1 after every run. It is skipped, not a failure.
+        good_path = "/opt/hams/etc/keys/skip_ok.env"
+        old_path = "/opt/hams/etc/keys/skip_old.env"
+        self.test_env_paths.extend([good_path, old_path])
+        for path in (good_path, old_path):
+            if os.path.exists(path):
+                os.remove(path)
+        registry_model = self.env["daemon.key.registry"].with_user(self.manager_user.id)
+        registry_model.create({"name": "Skip OK", "user_id": self.service_user.id, "env_file_path": good_path})
+        archived = self.env["res.users"].create(
+            {"name": "Removed Daemon", "login": "removed_daemon_svc", "is_service_account": True, "active": False}
+        )
+        registry_model.create({"name": "Skip Old", "user_id": archived.id, "env_file_path": old_path})
+
+        with self.assertLogs("odoo.addons.daemon_key_manager.models.key_registry", level="INFO") as logs:
+            result = registry_model.action_force_provision_all()
+
+        # Other registry rows on the test database may or may not provision here; this removed daemon is not
+        # among the failures, and it was skipped with one INFO line.
+        self.assertNotIn("Skip Old", (result["params"]["message"].split("FAILED for:") + [""])[1])
+        self.assertTrue(any("Skipping key provisioning" in line and "Skip Old" in line for line in logs.output))
+        self.assertTrue(os.path.exists(good_path))
+        self.assertFalse(os.path.exists(old_path))
 
     def test_ui_rendering(self):
         """Test UI view rendering."""
