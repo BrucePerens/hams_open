@@ -45,3 +45,12 @@ class TestUtils(BaseCase):
     def test_06_leading_and_trailing_hyphens(self):
         self.assertEqual(slugify("---Test---"), "test")
         self.assertEqual(slugify("!@#Test!@#"), "test")
+
+
+@tagged("post_install", "-at_install")
+class TestDirectoryPathsAreReserved(BaseCase):
+    def test_top_level_directory_paths_are_not_claimable_as_vanity_slugs(self):
+        """/repeaters and /elmers are real site paths (the repeater directory and the Elmer finder)."""
+        from odoo.addons.edge_routing.utils import RESERVED_SLUGS
+
+        self.assertLessEqual({"repeaters", "elmers"}, RESERVED_SLUGS)

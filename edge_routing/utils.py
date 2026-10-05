@@ -28,6 +28,8 @@ RESERVED_SLUGS = {
     "dx",
     "ares",
     "arrl",
+    "repeaters",
+    "elmers",
 }
 
 
