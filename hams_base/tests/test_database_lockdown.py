@@ -19,17 +19,21 @@ def _dev_mode(value):
 class TestScrubErrorBody(HamsTransactionCase):
     """Tests [@ANCHOR: hams_base:scrub_error_body] and [@ANCHOR: hams_base:developer_mode_check]"""
 
+    def _raised(self, exc_type, *args):
+        """An exception instance that was really raised (so it carries a traceback)."""
+        with self.assertRaises(exc_type) as caught:
+            raise exc_type(*args)
+        return caught.exception
+
     def _body(self, exc):
         return http.serialize_exception(exc)
 
     def test_traceback_is_dropped_and_unexpected_errors_become_generic(self):
-        try:
-            raise KeyError("secret_table_name")
-        except KeyError as exc:
-            raw = self._body(exc)
-            self.assertIn("Traceback", raw["debug"])
-            with _dev_mode([]):
-                scrubbed = lockdown.scrub_error_body(raw, exc)
+        exc = self._raised(KeyError, "secret_table_name")
+        raw = self._body(exc)
+        self.assertIn("Traceback", raw["debug"])
+        with _dev_mode([]):
+            scrubbed = lockdown.scrub_error_body(raw, exc)
         self.assertEqual(scrubbed["debug"], "")
         self.assertEqual(scrubbed["message"], lockdown.GENERIC_MESSAGE)
         self.assertNotIn("secret_table_name", json.dumps(scrubbed))
@@ -38,10 +42,8 @@ class TestScrubErrorBody(HamsTransactionCase):
     def test_expected_errors_keep_their_message_but_lose_the_traceback(self):
         for exc in (UserError("You may not do that"), AccessDenied("no")):
             with self.subTest(exc=type(exc).__name__):
-                try:
-                    raise exc
-                except Exception:
-                    raw = self._body(exc)
+                exc = self._raised(type(exc), *exc.args)
+                raw = self._body(exc)
                 with _dev_mode([]):
                     scrubbed = lockdown.scrub_error_body(raw, exc)
                 self.assertEqual(scrubbed["debug"], "")
@@ -49,12 +51,10 @@ class TestScrubErrorBody(HamsTransactionCase):
                 self.assertEqual(scrubbed["name"], raw["name"])
 
     def test_developer_mode_leaves_the_body_untouched(self):
-        try:
-            raise ValueError("x")
-        except ValueError as exc:
-            raw = self._body(exc)
-            with _dev_mode(["all"]):
-                self.assertEqual(lockdown.scrub_error_body(raw, exc), raw)
+        exc = self._raised(ValueError, "x")
+        raw = self._body(exc)
+        with _dev_mode(["all"]):
+            self.assertEqual(lockdown.scrub_error_body(raw, exc), raw)
 
     def test_the_dispatchers_replace_the_core_ones(self):
         self.assertIs(http._dispatchers["jsonrpc"], lockdown.HamsJsonRPCDispatcher)
@@ -65,10 +65,8 @@ class TestScrubErrorBody(HamsTransactionCase):
         dispatcher = lockdown.HamsJsonRPCDispatcher(request)
         dispatcher.request_id = 7
         with _dev_mode([]):
-            try:
-                raise RuntimeError("psycopg2 says relation hidden_table does not exist")
-            except RuntimeError as exc:
-                response = dispatcher.handle_error(exc)
+            response = dispatcher.handle_error(
+                self._raised(RuntimeError, "psycopg2 says relation hidden_table does not exist"))
         self.assertEqual(response["error"]["data"]["debug"], "")
         self.assertNotIn("hidden_table", json.dumps(response))
         self.assertNotIn("Traceback", json.dumps(response))
@@ -83,18 +81,12 @@ class TestScrubErrorBody(HamsTransactionCase):
 
         dispatcher = lockdown.HamsJson2Dispatcher(SimpleNamespace(make_json_response=make))
         with _dev_mode([]):
-            try:
-                raise RuntimeError("boom with /srv/path/file.py")
-            except RuntimeError as exc:
-                dispatcher.handle_error(exc)
+            dispatcher.handle_error(self._raised(RuntimeError, "boom with /srv/path/file.py"))
         self.assertEqual(seen["status"], 500)
         self.assertEqual(seen["body"]["debug"], "")
         self.assertNotIn("/srv/path", json.dumps(seen["body"]))
         with _dev_mode([]):
-            try:
-                raise UserError("fine to show")
-            except UserError as exc:
-                dispatcher.handle_error(exc)
+            dispatcher.handle_error(self._raised(UserError, "fine to show"))
         self.assertEqual(seen["body"]["message"], "fine to show")
         self.assertEqual(seen["body"]["debug"], "")
 
