@@ -20,6 +20,17 @@
             <field name="comment">This group allows service accounts to have API keys with a 90-day duration.</field>
         </record>
 
+        <!-- A registry row that sets key_lifetime_days above 90 (Bruce, NIGHT_PLAN decision 80: the pi500-1 FCC ULS
+             key lives at least a year) needs a group whose API-key duration allows it: Odoo refuses a key whose
+             expiration is further out than the longest api_key_duration among the account's groups. 400 days is the
+             ceiling of key_lifetime_days. -->
+        <record id="group_daemon_key_usage_long" model="res.groups">
+            <field name="name">Daemon Key Usage (long-lived keys)</field>
+            <field name="privilege_id" ref="res_groups_privilege_daemon_key_manager"/>
+            <field name="api_key_duration">400</field>
+            <field name="comment">This group allows a service account to hold an API key of up to 400 days. Granted only to the account of a remote self-rotating registry row whose Key Lifetime is above 90 days.</field>
+        </record>
+
         <record id="daemon_key_registry_company_rule" model="ir.rule">
             <field name="name">Daemon Key Registry multi-company</field>
             <field name="model_id" ref="model_daemon_key_registry"/>

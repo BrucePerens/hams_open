@@ -30,6 +30,7 @@
                 <header>
                     <button name="action_rotate_key" type="object" string="Rotate Key" class="oe_highlight" invisible="not id or remote_self_rotation"/>
                     <button name="action_force_provision_all" type="object" string="Force Provision All" invisible="not id"/>
+                    <button name="action_apply_key_lifetime" type="object" string="Apply Key Lifetime" invisible="not id or not remote_self_rotation or not key_lifetime_days"/>
                 </header>
                 <sheet>
                     <group>
@@ -42,6 +43,7 @@
                             <field name="env_file_path"/>
                             <field name="last_rotated"/>
                             <field name="remote_self_rotation"/>
+                            <field name="key_lifetime_days" invisible="not remote_self_rotation"/>
                             <field name="os_group" placeholder="hamsd_&lt;family&gt;"/>
                         </group>
                     </group>
