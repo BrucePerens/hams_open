@@ -13,6 +13,10 @@
                                     Our commitment to transparent and respectful communication. Below is a comprehensive list of every type of email this platform sends.
                                 </p>
                                 
+                                <div t-if="email_delivery_notice" id="email_delivery_notice" class="alert alert-warning mt-4" role="alert">
+                                    <strong>Email delivery is limited:</strong> <t t-out="email_delivery_notice"/>
+                                </div>
+
                                 <h3 class="mt-5">1. Account Security &amp; Onboarding</h3>
                                 <p>
                                     These emails are critical to your account security and cannot be opted out of without locking your account.

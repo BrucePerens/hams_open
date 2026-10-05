@@ -13,6 +13,10 @@
                                     Manage how HAMS communicates with you.
                                 </p>
                                 
+                                <div t-if="email_delivery_notice" id="email_delivery_notice" class="alert alert-warning mt-4" role="alert">
+                                    <strong>Email delivery is limited:</strong> <t t-out="email_delivery_notice"/>
+                                </div>
+
                                 <div class="card mt-4 border-info">
                                     <div class="card-body">
                                         <h4 class="card-title text-info">Option 1: Mute Non-Critical Nudges</h4>

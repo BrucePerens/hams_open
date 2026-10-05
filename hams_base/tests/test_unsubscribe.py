@@ -129,3 +129,18 @@ class TestEmailPolicyPage(HamsHttpCase):
         msg = "[!] DIAGNOSTIC FOR AI: /email-policy should be reachable (200 OK) to anonymous visitors -- it's a public disclosure page."
         self.assertEqual(response.status_code, 200, msg)
         self.assertIn(b"How We Use Email", response.content, msg)
+
+
+    def test_email_delivery_notice_shows_only_when_configured(self):
+        # Tests [@ANCHOR: hams_base:email_policy_template], [@ANCHOR: hams_base:unsubscribe_page_template]
+        params = self.env["ir.config_parameter"].sudo()
+        params.set_param("hams_base.email_delivery_notice", "")
+        for path in ("/email-policy", "/unsubscribe"):
+            msg = f"[!] DIAGNOSTIC FOR AI: {path} must show no limited-delivery notice when hams_base.email_delivery_notice is empty (the open-source default)."
+            self.assertNotIn(b"Email delivery is limited", self.url_open(path).content, msg)
+        params.set_param("hams_base.email_delivery_notice", "NOTICE-TEXT-7731")
+        for path in ("/email-policy", "/unsubscribe"):
+            msg = f"[!] DIAGNOSTIC FOR AI: {path} must show the limited-delivery notice when hams_base.email_delivery_notice is set."
+            body = self.url_open(path).content
+            self.assertIn(b"Email delivery is limited", body, msg)
+            self.assertIn(b"NOTICE-TEXT-7731", body, msg)
