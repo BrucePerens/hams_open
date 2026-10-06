@@ -13,12 +13,6 @@ from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalid
 class ResUsersZeroSudo(models.Model):
     _inherit = "res.users"
 
-    security_log_ids = fields.One2many(
-        "zero_sudo.security.log",
-        "user_id",
-        string="Security Logs",
-    )
-
     is_service_account = fields.Boolean(
         # [@ANCHOR: zero_sudo:COMM_is_service_account_field]
         # ---
