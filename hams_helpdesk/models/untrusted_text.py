@@ -29,11 +29,14 @@ import binascii
 import codecs
 import html as _html
 import json
+import logging
 import re
 import secrets
 import unicodedata
 from html.parser import HTMLParser
 from urllib.parse import unquote, urlsplit
+
+_logger = logging.getLogger(__name__)
 
 SUSPICION_THRESHOLD = 5
 EXCERPT_CHARS = 60
@@ -849,6 +852,143 @@ def safe_header(value, limit=200, location="header"):
     result = scan_text(value if isinstance(value, str) else "", limit, location)
     result.text = result.text.replace("\n", " ")
     return result
+
+
+# ---------------------------------------------------------------------------------------------
+# Inbound mail: header allow-list, MIME alternatives, attachment names
+# ---------------------------------------------------------------------------------------------
+
+# header name (lower case) -> (character limit, kind). "display" headers carry text a person wrote
+# (a display name, a subject); "routing" headers drive threading and partner matching and are only
+# scanned and flagged, never rewritten. Every header not listed here is ignored by the filter and is
+# never given to an AI.
+MAIL_HEADER_ALLOW = {
+    "from": (300, "display"),
+    "sender": (300, "display"),
+    "reply-to": (300, "display"),
+    "to": (1000, "display"),
+    "cc": (1000, "display"),
+    "subject": (300, "display"),
+    "message-id": (300, "routing"),
+    "in-reply-to": (1000, "routing"),
+    "references": (2000, "routing"),
+}
+# Headers that exist only once; a second copy is how header smuggling picks "the other" value.
+MAIL_SINGLETON_HEADERS = ("from", "sender", "reply-to", "subject", "message-id", "in-reply-to")
+# Free-text headers outside the allow-list: never stored, never read by an AI, but their text is
+# scanned so a hostile one still raises the score.
+MAIL_FREE_TEXT_HEADERS = ("comments", "keywords", "organization", "thread-topic", "x-original-subject", "content-description")
+MAIL_CONTAINER_TYPES = (
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/gzip",
+    "application/x-gzip",
+    "application/x-tar",
+    "application/x-7z-compressed",
+    "application/x-rar-compressed",
+    "application/vnd.rar",
+    "application/x-bzip2",
+    "message/rfc822",
+)
+ATTACHMENT_NOTICE = (
+    "Attachments are never read by an AI. %d attachment(s) exist on this item and were not opened; "
+    "if an attachment matters, a person must open it."
+)
+
+
+ATTACHMENT_NOTICE_UNKNOWN = (
+    "Attachments are never read by an AI. Attachments may exist on this item; none were opened."
+)
+
+
+def attachment_notice(count):
+    """The fixed sentence every AI read states about attachments (they are not opened)."""
+    return ATTACHMENT_NOTICE % int(count or 0)
+
+
+def safe_filename(value, limit=200, location="attachment_name"):
+    """An attachment file name as plain visible text: hidden, bidi (right-to-left override tricks) and
+    control characters removed and counted, one line, length capped."""
+    return safe_header(value, limit, location)
+
+
+def _part_text(part):
+    payload = part.get_payload(decode=True)
+    if payload is None:
+        return ""
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        return payload.decode(charset, "replace")
+    except (LookupError, ValueError):
+        return payload.decode("utf-8", "replace")
+
+
+def inspect_mail(message, location="mail"):
+    """Check one parsed inbound mail (an `email.message.Message`) before anything reads it.
+
+    * Header allow-list: From, Sender, Reply-To, To, Cc, Subject and Message-ID (and the threading
+      headers) are scanned with the same text filter; display text is judged, routing values are
+      flagged and never rewritten. Free-text headers outside the allow-list are scanned only.
+    * A second copy of a singleton header (two Subject lines) is flagged: parsers disagree on which wins.
+    * Every multipart/alternative group: the visible text of the text/plain part and of the text/html part
+      are compared, and a mismatch is flagged (the "plain part says one thing, HTML part another" trick).
+    * Attachment file names go through the filename filter; attachments are counted (never opened) and
+      archives and nested messages are flagged.
+
+    Returns a Result: .text is empty (nothing here is meant to be read), .findings the findings (with
+    the vector, location, count, excerpt), .score the suspicion weight. A parser error is itself a
+    finding that makes the mail suspicious: it must never drop the mail, and never pass it as clean."""
+    findings = []
+    score_results = []
+    try:
+        counts = {}
+        for name, value in message.items():
+            lname = str(name).lower()
+            counts[lname] = counts.get(lname, 0) + 1
+            text = str(value)
+            if lname in MAIL_HEADER_ALLOW:
+                limit, kind = MAIL_HEADER_ALLOW[lname]
+                head = safe_header(text, limit, "header:%s" % lname)
+                if kind == "routing":
+                    # Flag only: rewriting a Message-ID would break threading and dedup.
+                    if head.findings:
+                        score_results.append(head)
+                    _add(findings, "mail_routing_header_hidden_text", "header:%s" % lname, 1 if head.findings else 0, text, 0)
+                else:
+                    score_results.append(head)
+            elif lname in MAIL_FREE_TEXT_HEADERS:
+                score_results.append(scan_text(text, 500, "header:%s" % lname))
+        for lname in MAIL_SINGLETON_HEADERS:
+            if counts.get(lname, 0) > 1:
+                _add(findings, "mail_duplicate_header", "header:%s" % lname, counts[lname], "", 2)
+        attachments = 0
+        for part in message.walk():
+            ctype = part.get_content_type()
+            if part.is_multipart():
+                if ctype == "multipart/alternative":
+                    plains = [p for p in part.iter_parts() if p.get_content_type() == "text/plain"]
+                    htmls = [p for p in part.iter_parts() if p.get_content_type() == "text/html"]
+                    for plain in plains:
+                        for html in htmls:
+                            findings.extend(compare_alternatives(_part_text(plain), _part_text(html), "%s:alternatives" % location))
+                continue
+            filename = part.get_filename()
+            disposition = (part.get_content_disposition() or "").lower()
+            if filename or disposition == "attachment":
+                attachments += 1
+                if filename:
+                    score_results.append(safe_filename(filename, 200, "attachment_name"))
+                if ctype in MAIL_CONTAINER_TYPES or ctype.startswith("application/zip"):
+                    _add(findings, "mail_attachment_container", "attachment", 1, ctype, 1)
+        if attachments:
+            _add(findings, "attachments_not_read", "attachment", attachments, "", 0)
+    except Exception as e:  # audit-ignore-catch-all: an inspection failure must mark the mail suspicious, never drop or clear it
+        _logger.warning("Inbound mail inspection failed (%s); the mail is marked suspicious.", type(e).__name__)
+        findings.append({"vector": "mail_inspection_error", "location": location, "count": 1, "excerpt": _excerpt(type(e).__name__), "weight": SUSPICION_THRESHOLD})
+        return Result("", "", findings, 0, SUSPICION_THRESHOLD)
+    merged, removed, score = merge(score_results)
+    all_findings = (merged + findings)[:MAX_FINDINGS]
+    return Result("", "", all_findings, removed, min(100, score + sum(f.get("weight", 0) for f in findings if not f["vector"].startswith("split_"))))
 
 
 def wrap_untrusted(text, label="ticket"):

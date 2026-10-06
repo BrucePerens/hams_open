@@ -16,6 +16,7 @@ from markupsafe import Markup
 from odoo import api, fields, models
 
 from . import untrusted_text as ut
+from .mail_thread_untrusted import stash_for
 
 _logger = logging.getLogger(__name__)
 
@@ -161,19 +162,53 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
                 raw["message_body"] = text[:RAW_EVIDENCE_LIMIT]
             kwargs["body"] = Markup(result.text) if ut.looks_like_html(text) else result.text
             results.append(("message_body", result))
-        for key, limit in (("subject", 300), ("email_from", 300)):
+        for key, limit in (("subject", 300), ("email_from", 300), ("reply_to", 300)):
             if isinstance(kwargs.get(key), str) and kwargs[key]:
                 head = ut.safe_header(kwargs[key], limit, key)
                 if head.text != kwargs[key]:
                     raw[key] = kwargs[key][:1000]
                 kwargs[key] = head.text
                 results.append((key, head))
+        # Attachment names are text from outside too (RTLO and hidden characters in a file name).
+        # Attachment content is never read by an AI; the name is cleaned so staff and tools do not
+        # render a disguised extension.
+        if isinstance(kwargs.get("attachments"), (list, tuple)):
+            cleaned = []
+            for att in kwargs["attachments"]:
+                if isinstance(att, (list, tuple)) and att and isinstance(att[0], str):
+                    head = ut.safe_filename(att[0])
+                    if head.text != att[0]:
+                        raw.setdefault("attachment_names", []).append(att[0][:300])
+                    results.append(("attachment_name", head))
+                    att = (head.text or "attachment",) + tuple(att[1:])
+                cleaned.append(att)
+            kwargs["attachments"] = cleaned
+        # What the inbound-mail inspection (mail_thread_untrusted.py) found about this very message:
+        # header allow-list, text/plain against text/html, attachment names, archives.
+        message_id = kwargs.get("message_id")
+        parked = stash_for(self.env).pop(message_id, None) if message_id else None
         message = super().message_post(**kwargs)
-        if results and self:
+        if (results or parked) and self:
             findings, removed, score = self._untrusted_summary(results)
+            if parked:
+                findings = (findings + parked["findings"])[: ut.MAX_FINDINGS]
+                score = max(score, parked["score"])
+                removed += parked["removed"]
             for ticket in self:
                 ticket._untrusted_record(findings, removed, score, raw, "message")
         return message
+
+    def _untrusted_attachment_count(self):
+        """How many attachments the ticket has, or None when the caller cannot count them. They are
+        counted, never opened: no AI reader gets attachment content."""
+        self.ensure_one()
+        try:
+            utils = self.env["zero_sudo.security.utils"]
+            hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+            return hd_env["ir.attachment"].search_count([("res_model", "=", self._name), ("res_id", "=", self.id)])
+        except Exception as e:  # audit-ignore-catch-all: counting is advisory; the notice is stated either way
+            _logger.info("Could not count attachments of ticket %s: %s", self.id, e)
+            return None
 
     # ---- the safe view every AI reader uses ----
 
@@ -197,6 +232,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             text = body.plain
             if max_chars and len(text) > max_chars:
                 text = "%s... [truncated, %d chars total; read the ticket for the rest]" % (text[:max_chars], len(body.plain))
+            attachment_count = ticket._untrusted_attachment_count()
             payload = "Subject: %s\nCallsign: %s\n\n%s" % (subject.text, call.text, text)
             views.append(
                 {
@@ -205,6 +241,8 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
                     "callsign": call.text,
                     "description": body.plain,
                     "untrusted_block": ut.wrap_untrusted(payload, "ticket"),
+                    "attachments": attachment_count,
+                    "attachments_notice": ut.attachment_notice(attachment_count) if attachment_count is not None else ut.ATTACHMENT_NOTICE_UNKNOWN,
                     "suspicious": suspicious,
                     "suspicion_score": max(score, ticket.suspicion_score or 0),
                     "removed_or_flagged": removed + len(findings),

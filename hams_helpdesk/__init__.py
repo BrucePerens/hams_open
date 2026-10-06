@@ -3,3 +3,4 @@
 
 from . import controllers
 from . import models
+from . import ai_reader_rule
