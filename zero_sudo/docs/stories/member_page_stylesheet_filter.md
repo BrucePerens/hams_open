@@ -32,6 +32,10 @@ not an attack; the removal is logged.
 
 ## Known limit
 
+Update: the `style=""` attribute limit described below has since been closed. The
+[user_websites README](../../../user_websites/README.md) ("Member CSS") records that every `style="..."` attribute is now filtered
+declaration by declaration with the same sanitizer; read the paragraph below as the original limit.
+
 `position: absolute` is kept: it only escapes its container when no ancestor is positioned, and
 members use it for ordinary layouts. A `style=""` attribute on an element is not filtered by this
 (it cannot select other elements, so it cannot read the page, but it can still carry `url()` and

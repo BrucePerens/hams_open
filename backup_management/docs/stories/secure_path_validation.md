@@ -8,6 +8,7 @@ Since the backup module interacts with the filesystem via shell commands, it mus
 ## The Process
 1. **Input Validation**: Whenever a path is entered (target path, restore script path), it must be checked for directory traversal attempts (e.g., `..`).
 2. **Mandatory Base Directory**: Paths must be validated against a mandatory base directory using `os.path.realpath` to prevent path traversal (CWE-22). Blacklists are strictly forbidden.
+   - The base directories are the allowed backup directories listed in `validate_backup_path()` in `models/utils.py`; for a Kopia configuration this check applies with Local Directory storage (see Configuring a Backup in the [module README](../../README.md)).
 3. **Enforcement**: The validation `[@ANCHOR: backup_management:COMM_backup_path_validation]` happens at the ORM level during `create` and `write` operations.
 
 ## Verification

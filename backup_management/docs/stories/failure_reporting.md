@@ -13,6 +13,7 @@ Reliable backups are critical. If a backup fails or hasn't run recently, the SRE
 2. **Alerting**:
    - The module uses a hard-dependency on `pager_duty` via the manifest.
    - It invokes `pager.incident.report_incident()` `[@ANCHOR: backup_management:COMM_backup_pager_synergy]`.
+   - "PagerDuty" and `pager_duty` here mean this project's own `pager_duty` Odoo module, not the commercial service. In the backup module the entry point is `report_backup_failure()`, which opens a critical `pager.incident` and posts the message on the configuration's chatter; the staleness and size rules are stated precisely under Health Monitoring in the [module README](../../README.md) (for example, a configuration with no recorded snapshot at all is not alerted on, and the size check applies only when **Minimum Size (MB)** is above 0).
 3. **Escalation**: The incident is reported using the `pager_service_internal` micro-account, triggering the configured escalation policy in PagerDuty.
 
 ## Verification

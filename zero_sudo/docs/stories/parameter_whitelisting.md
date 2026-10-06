@@ -15,11 +15,11 @@ System parameters (`ir.config_parameter`) often contain configuration that, if l
 
 2. **Whitelist Check**: The function checks if the requested key is in the list returned by `_get_param_read_whitelist` `[@ANCHOR: zero_sudo:get_param_read_whitelist]` (for reads) or `_get_param_write_whitelist` `[@ANCHOR: zero_sudo:get_param_write_whitelist]` (for writes) -- two separate lists, since a key safe to read isn't necessarily safe to let any caller overwrite.
 
-3. **Banned Substring Check**: Even for non-whitelisted keys (if the policy allows), it checks for substrings like `secret`, `key`, `password`, etc.
+3. **Banned Substring Check**: Even for non-whitelisted keys (if the policy allows), it checks for substrings like `secret`, `key`, `password`, etc. Per the [module README](../../README.md) ("Mechanical Secret Block"), for a denied read this match only selects the error message (the key is denied either way because it is not on the list), and it is not applied to whitelisted keys.
 4. **Restricted Retrieval**: If the key passes all checks, it is retrieved using a dedicated micro-privilege service account (`zero_sudo.config_service_internal`) and returned.
 
 ## Developer Requirement
-If a new, safe parameter needs to be accessible via this utility, the developer MUST add it to the whitelist by creating an `_inherit` extension of `zero_sudo.security.utils` and overriding the `_get_param_whitelist` method.
+If a new, safe parameter needs to be accessible via this utility, the developer MUST add it to the whitelist by creating an `_inherit` extension of `zero_sudo.security.utils` and overriding the `_get_param_whitelist` method. (Step 2 and the [module README](../../README.md) name two lists, `_get_param_read_whitelist()` and `_get_param_write_whitelist()`; the keys must be added to the list for the operation the module needs, read, write or both.)
 
 ## Cryptographic Secrets
 Cryptographic secrets are strictly forbidden from entering the parameter whitelist to prevent SSTI. To retrieve the system's root cryptographic key, developers must use the `_get_crypto_secret` utility `[@ANCHOR: zero_sudo:COMM_get_crypto_secret]`. This function reads from environment variables, local files, or Odoo's base configuration without evaluating the database's `ir.config_parameter` table.

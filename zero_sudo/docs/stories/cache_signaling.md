@@ -12,7 +12,7 @@ In a clustered Odoo environment, if one worker updates a record, other workers m
 
 ## The Process
 1. **Data Change**: A record is updated or a significant event occurs that requires cache invalidation.
-2. **Notification**: The `_notify_cache_invalidation` function `[@ANCHOR: zero_sudo:COMM_coherent_cache_signal]` is called with the model name and the key (or keys) to invalidate.
+2. **Notification**: The `_notify_cache_invalidation` function `[@ANCHOR: zero_sudo:COMM_coherent_cache_signal]` is called with the model name and a key. The key must be non-empty, but invalidation is for the whole model: the key does not narrow it (see step 3).
 
 
 3. **Postgres NOTIFY**: The function delegates to `distributed_redis_cache.redis_cache.notify_model_invalidation()`, which issues a `NOTIFY` command to the PostgreSQL database on the `distributed_cache_invalidation` channel, with a JSON payload (`{"model": ..., "dbname": ...}`). Bug-hunt fix, 2026-09-13: this function used to build its own payload (a plain colon-joined string, on a DIFFERENT channel, `"cache_invalidation"`) that the real listener below never actually consumed -- confirmed by reading `distributed_redis_cache/daemons/cache_manager.py`'s own `PG_CHANNEL` constant and its `json.loads(payload)` call. This is whole-model granularity only; the per-key/batch distinction this story previously described was never actually consumed downstream.

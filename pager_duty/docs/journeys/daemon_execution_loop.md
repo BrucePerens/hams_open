@@ -9,20 +9,20 @@ This journey tracks the flow of data from Odoo configuration to the standalone m
 ## 2. Sync to Daemon
 - **Wizard:** The admin uses the JSON configuration tools in Monitoring Checks [@ANCHOR: generalized_pager_config].
 - **Export:** `action_push_to_json()` transforms ORM records into a JSON structure.
-- **Persistence:** The file is written to the daemon's local filesystem (e.g., `pager_duty/daemon/pager_config.json`).
+- **Persistence:** The file is written to the daemon's local filesystem (e.g., `pager_duty/daemon/pager_config.json`, or the directory named by the `pager_duty.config_dir` system parameter when it exists and is writable; see "Config Isolation" in `../../README.md`).
 
 ## 3. Execution Cycle
 - **Boot:** `generalized_monitor.py` starts and parses the JSON.
 - **Dependency Check:** It verifies required system binaries [@ANCHOR: daemon_verify_dependencies].
 
-- **Watchdog:** The main thread starts an execution thread for each check and monitors their heartbeats [@ANCHOR: daemon_main_loop].
+- **Watchdog:** The main thread starts an execution thread for each check and monitors their heartbeats [@ANCHOR: daemon_main_loop]. (These are liveness signals each polling thread records for the watchdog; they are unrelated to the "Heartbeat (Push Monitor)" check type, where a remote job pings Odoo.)
 
 - **Isolation:** Each check type (HTTP, XML-RPC, Heartbeat) runs in its own isolated logic block [@ANCHOR: daemon_execute_check].
 
 - **Failover:** If Odoo is unreachable, the daemon falls back to direct `SMTP` or `Webhook` alerts [@ANCHOR: daemon_report_incident].
 
 ## 4. Feedback Loop
-- **Status Reporting:** Results are pushed back to Odoo via XML-RPC [@ANCHOR: daemon_report_incident].
+- **Status Reporting:** Results are pushed back to Odoo via its JSON-2 API (`/json/2/<model>/<method>`, see section 5 below and `../../daemon/README.md`) [@ANCHOR: daemon_report_incident].
 
 - **Dashboard:** The NOC Board [@ANCHOR: pager_board_data] reflects the latest check statuses in real-time.
 
@@ -40,7 +40,7 @@ This journey tracks the flow of data from Odoo configuration to the standalone m
 
 ## 6. Per-Check Execution Threads
 
-- **Maintenance Windows:** Before running a check's logic, the thread asks whether the check is inside a configured maintenance window [@ANCHOR: is_in_maintenance] -- if so, the thread skips alerting entirely for that cycle, so planned maintenance doesn't page anyone.
+- **Maintenance Windows:** Before running a check's logic, the thread asks whether the check is inside a configured maintenance window [@ANCHOR: is_in_maintenance] (distinct from the host-wide pagerduty maintenance flag described below) -- if so, the thread skips alerting entirely for that cycle, so planned maintenance doesn't page anyone.
 
 - **Polling Thread:** Each polled (non-heartbeat) check runs inside its own long-lived polling thread [@ANCHOR: polling_thread], which loops forever: run the check, record a heartbeat for the watchdog, sleep, repeat.
 

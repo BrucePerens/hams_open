@@ -8,6 +8,7 @@ This journey describes how an administrator can manually force all users to refr
 4. **Backend Update**:
    - The system retrieves the current `caching.invalidation_version` ([@ANCHOR: COMM_test_caching_sudo_params]).
    - It increments the version number and saves it back to system parameters.
+   - (The [module README](../../README.md) describes this version as the per-website field `website.caching_invalidation_version`, not a system parameter, so the button affects only the website being configured; where the two differ, the README is the more detailed statement.)
 5. **Reload**: The browser window reloads to confirm the change.
 6. **Service Worker Update**:
    - The next time any user's browser requests `/sw.js`, the server injects the new version number into the `CACHE_NAME` ([@ANCHOR: COMM_caching_sw_serve_route]).

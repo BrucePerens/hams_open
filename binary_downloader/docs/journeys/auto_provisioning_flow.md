@@ -18,7 +18,7 @@ bin_path = self.env["binary.manifest"].ensure_executable("kopia")
 - **Anchor:** `[@ANCHOR: COMM_binary_ensure_executable]`
 
 ### 2. Resolution
-Binary Downloader checks the system. If `kopia` is not in the PATH, it looks up the `binary.manifest` record.
+Binary Downloader checks the system. If `kopia` is not in the PATH, it looks up the `binary.manifest` record. (The [module README](../../README.md) states that `ensure_executable` itself never consults the `PATH`; the `PATH`-first step belongs to the wrapper `zero_sudo.security.utils._ensure_executable`, which the README says calls `ensure_executable` only when a service account is given.)
 - **Logic:** `ensure_executable` in `models/binary_manifest.py`.
 
 ### 3. Verification & Download

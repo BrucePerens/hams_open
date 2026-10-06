@@ -5,7 +5,7 @@ This platform handles massive, real-time data velocities. Standard ERP monitorin
 ## 🚀 Key Capabilities
 
 ### ⚡ Asynchronous & Airgapped
-The monitoring engine runs as a completely isolated Python daemon outside of Odoo. If Odoo crashes, the daemon doesn't crash with it. It catches the RPC failure and immediately utilizes its **Airgapped SMTP Fallback** to email you directly. If you configure a Webhook, it instantly pings your **Slack or Discord** via ChatOps.
+The monitoring engine runs as a completely isolated Python daemon outside of Odoo. If Odoo crashes, the daemon doesn't crash with it. It catches the RPC failure and immediately utilizes its **Airgapped SMTP Fallback** to email you directly. ("Airgapped" here means independent of Odoo, not disconnected from the network: the fallback needs `PAGER_FALLBACK_EMAIL` and `SMTP_HOST` set, see `daemon/README.md`.) If you configure a Webhook, it instantly pings your **Slack or Discord** via ChatOps.
 
 ### 📅 Intelligent Calendar Routing
 No more guessing who is on call when disaster strikes. The Pager Duty module natively integrates with Odoo's Calendar application to dynamically route alerts. By checking the "Is Pager Duty Shift" box on a calendar event, the system instantly knows who to notify. Because it relies on standard calendar mechanics, you have absolute versatility in scheduling—easily set up recurring shifts like "Every Monday at midnight," "The first Tuesday of the month," or manage complex holiday handoffs effortlessly.
@@ -29,7 +29,7 @@ Local DNS caching hides massive outages. Our DNS monitor executes `dig +trace`, 
 
 ### 🧠 Advanced SRE Capabilities
 * **Cascading Failure Suppression:** Link checks together. If the master database crashes, downstream HTTP checks automatically silence themselves to prevent an avalanche of redundant alerts.
-* **Maintenance Windows:** Define precise datetime ranges to mute alarms during planned infrastructure upgrades.
+* **Maintenance Windows:** Define precise datetime ranges to mute alarms during planned infrastructure upgrades. (A separate, host-wide flag for planned restarts is described under "Pagerduty maintenance" in `README.md`.)
 * **"Dead Man's Snitch" Heartbeats:** For jobs that *should* run (like nightly backups). Provide your external scripts with a unique `/api/v1/pager/heartbeat/<uuid>` URL. If the daemon doesn't hear from the script before the TTL expires, it raises the alarm.
 * **Multi-Tier Escalation:** An automated background job sweeps for `open` incidents older than 15 minutes. If your on-call operator sleeps through their page, the system automatically escalates the alert to the entire administrative group.
 * **SRE Analytics:** Native tracking of Mean Time To Acknowledge (MTTA) and Mean Time To Resolve (MTTR) metrics directly on the incident records.

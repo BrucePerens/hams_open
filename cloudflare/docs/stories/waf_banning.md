@@ -10,7 +10,7 @@ so that the origin server is protected from further attacks.
 
 3. The Cloudflare module executes the ban via `_execute_ban` `[@ANCHOR: COMM_cf_execute_ban]`.
 4. A firewall rule is created at the Cloudflare edge to block the IP.
-5. After the specified duration, the ban is automatically lifted by `_action_lift_ban` `[@ANCHOR: COMM_cf_action_lift_ban]`.
+5. After the specified duration, the ban is automatically lifted by `_action_lift_ban` `[@ANCHOR: COMM_cf_action_lift_ban]`. (The [module README](../../README.md) states instead that each ban becomes a Cloudflare IP Access Rule with no expiry that stays until an administrator lifts it, and that there is no timed lift; step 4's "firewall rule" is that IP Access Rule.)
 
 **Status:** Verified by `[@ANCHOR: COMM_test_cf_execute_ban]` and `[@ANCHOR: COMM_test_cf_action_lift_ban]`.
 

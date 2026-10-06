@@ -4,6 +4,8 @@ Receiving mail servers that support DMARC send periodic aggregate reports (RUA) 
 mail claiming to be from hams.com's domain passed SPF/DKIM alignment -- the standard way a domain
 owner detects spoofing or misconfigured legitimate senders.
 
+DMARC, RUA, SPF and DKIM are expanded in the Email & DMARC Handling section of [the module README](../../README.md).
+
 ## Epic: Reviewing DMARC Reports
 
 * **Story:** As an administrator, I want to browse received DMARC aggregate reports in a list, so I

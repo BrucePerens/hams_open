@@ -15,7 +15,7 @@ A new Odoo module with a `knowledge_docs` manifest entry is installed.
 2. The `_bootstrap_knowledge_docs` method `[@ANCHOR: zero_sudo:zero_sudo_doc_installer]` is triggered.
 3. The system identifies available knowledge-base providers (either `knowledge` or Odoo Enterprise `knowledge`).
 4. It iterates through installed modules and looks for `knowledge_docs` entries.
-5. If found, it reads the content and creates a new article record under a service account context.
+5. If found, it reads the content and creates a new article record under a service account context. Unless the manifest entry sets `"public": True`, the installed article is unpublished and readable only by Manual Administrators; stories, journeys and runbooks are never published (see "Interoperability" in [the module README](../../README.md)).
 6. This ensures documentation is always available regardless of module installation order (soft-dependency pattern).
 
 ## Technical Details

@@ -4,6 +4,8 @@
 
 This journey follows an invalidation signal as it travels through the system to ensure cluster-wide coherence.
 
+Terms used below: **L1** is each worker process's own in-memory cache (`_local_cache`, a least-recently-used cache capped at 8192 entries); **L2** is the shared Redis store. See the Architecture section of [the module README](../../README.md).
+
 1. **Trigger**: An administrator manually triggers an invalidation ([@ANCHOR: COMM_manual_cache_invalidation]) or a model mutation occurs.
 2. **PostgreSQL Signal**: Odoo executes a `SELECT pg_notify(...)` to alert the database cluster.
 3. **Daemon Reception**: The standalone `cache_manager.py` daemon, listening on the PostgreSQL channel, receives the notification.

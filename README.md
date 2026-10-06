@@ -4,6 +4,8 @@ Welcome to a comprehensive suite of open-source modules designed for **Odoo 19 C
 
 **License:** mostly AGPL-3.0-or-later, but not uniformly -- see [`LICENSING.md`](LICENSING.md) for the real breakdown (a few directories are GPL-3.0-or-later or LGPL-3.0-or-later, one is AGPL-3.0-or-later, and some files carry no header yet) before assuming a license for any specific file.
 
+**Project vocabulary.** `hams_open` is one of the project's repositories, alongside `hams_com` (the proprietary hams.com web site and infrastructure) and [`hams_shared`](hams_shared/README.md) (developer tooling, ADRs and AI-agent skills used by both; it is a git submodule here, and `AGENTS.md`, `tools/` and `docs/` in this repository are symlinks into it). An **ADR** is an Architecture Decision Record: a numbered document recording one standing design decision ([`docs/adrs/`](docs/adrs/)). The **Burn List**, the **Semantic Anchor System**, **Zero-Sudo** and **service accounts** are project-wide terms; each is explained once, in the section below that names it.
+
 ---
 
 ## 📡 Amateur Radio Digital Modes & Vocoders
@@ -70,7 +72,7 @@ To prevent AI "amnesia" and ensure code, tests, and documentation remain permane
 
 Security is mathematically enforced at the lowest levels of the architecture.
 
-* **[Zero-Sudo Security Core](zero_sudo/README.md) (`zero_sudo`):** Replaces Odoo's dangerous `.sudo()` method with a centralized Micro-Service Account pattern for least-privilege execution.
+* **[Zero-Sudo Security Core](zero_sudo/README.md) (`zero_sudo`):** Replaces Odoo's dangerous `.sudo()` method with a centralized Micro-Service Account pattern for least-privilege execution. `.sudo()` runs code with absolute database rights, bypassing access control lists and record rules; under Zero-Sudo it is banned, and an operation that needs elevated rights instead runs as a narrowly scoped **service account** (a user flagged `is_service_account`, which cannot log in through the web) via `with_user()`. The rule is in [MASTER 01](docs/adrs/MASTER_01_SECURITY_ZERO_SUDO.md) and the accounts are catalogued in [`docs/service_accounts.md`](docs/service_accounts.md).
 * **[Binary Downloader](binary_downloader/README.md) (`binary_downloader`):** A database-backed module that securely provisions static executables at runtime, validating strict SHA-256 checksums to protect against Arbitrary File Write vulnerabilities.
 * **[Cloudflare Edge Orchestration](cloudflare/README.md) (`cloudflare`):** Control your CDN directly from Odoo to deploy WAF bans, Zero Trust Tunnels, and Turnstile CAPTCHA.
 
@@ -81,7 +83,7 @@ Security is mathematically enforced at the lowest levels of the architecture.
 Built to handle high traffic and distributed workloads efficiently.
 
 * **[Caching PWA](caching/README.md) (`caching`):** A zero-config Service Worker that intercepts network requests to act as a client-side CDN for static assets.
-* **[Distributed Redis Cache](distributed_redis_cache/README.md) (`distributed_redis_cache`):** A Redis-backed pub/sub bus ensuring fine-grained phase coherence and instant cache invalidation across all Odoo WSGI nodes.
+* **[Distributed Redis Cache](distributed_redis_cache/README.md) (`distributed_redis_cache`):** A Redis-backed pub/sub bus ensuring fine-grained phase coherence and instant cache invalidation across all Odoo WSGI nodes. ("Phase coherence": once any worker signals that cached data changed, every other worker discards its copy before it serves its next request or runs its next cron job.)
 * **[Database Management & APM](docs/modules/database_management.md) (`database_management`):** An in-GUI DBA toolkit to track table bloat, terminate hanging sessions, and generate HA configurations for Patroni and PgBouncer.
 
 ---
@@ -97,7 +99,7 @@ Built to handle high traffic and distributed workloads efficiently.
 
 Empower users while maintaining legal compliance and moderation capabilities.
 
-* **[User Websites](user_websites/README.md) (`user_websites`):** Allows users to build personal or group websites safely using a Proxy Ownership pattern and shared blog container.
+* **[User Websites](user_websites/README.md) (`user_websites`):** Allows users to build personal or group websites safely using a Proxy Ownership pattern and shared blog container. (Proxy Ownership: a service account performs the database write on the user's behalf, while the user is recorded as the page's owner, so only that user can edit it later; see [`docs/modules/user_websites.md`](docs/modules/user_websites.md).)
 * **[Knowledge](knowledge/README.md) (`knowledge`):** A clean-room, open-source replacement for the Knowledge app, enabling hierarchical instruction manuals.
 * **[Global Compliance](compliance/README.md) (`compliance`):** Automatically provisions GDPR/CCPA privacy pages, terms of service, and enforces cookie consent across the ecosystem.
 

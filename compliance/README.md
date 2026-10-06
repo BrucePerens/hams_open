@@ -18,7 +18,7 @@ The boilerplate policies we generate are written specifically to cover the featu
 * How our privacy-friendly view counters work.
 * How users can download or permanently delete their data at the `/my/privacy` dashboard.
 * How our abuse reporting system hides the reporter's email to protect them.
-* How our 3-strike moderation and suspension system works.
+* How our 3-strike moderation and suspension system works. (A strike is an upheld content violation; see [Content Moderation](../content_moderation/README.md) and the `user_websites` [README](../user_websites/README.md).)
 
 ## 📖 User Guide: Operating Your Compliant Website
 
