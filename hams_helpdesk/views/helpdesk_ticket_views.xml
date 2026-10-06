@@ -45,6 +45,18 @@
                 </header>
                 <sheet>
                     <widget name="web_ribbon" title="Archived" bg_color="bg-danger" invisible="active"/>
+                    <!-- Untrusted-text filter banner. The text shown below is the filtered version; the
+                         original as received is on the Filter Findings page. -->
+                    <field name="suspicious" invisible="1"/>
+                    <div class="alert alert-danger" role="alert" invisible="not suspicious">
+                        <strong>Suspicious ticket:</strong> hidden or injected content was found
+                        (score <field name="suspicion_score" class="oe_inline"/>). It is not shown to any AI
+                        and is never auto-triaged or auto-answered. See the Filter Findings page.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="suspicious or not suspicion_removed">
+                        <field name="suspicion_removed" class="oe_inline"/> hidden characters were removed from
+                        this ticket. See the Filter Findings page.
+                    </div>
                     <group>
                         <group>
                             <field name="name"/>
@@ -64,6 +76,27 @@
                     <notebook>
                         <page string="Description">
                             <field name="description"/>
+                        </page>
+                        <page string="Filter Findings" groups="hams_helpdesk.group_helpdesk_user"
+                              invisible="not suspicion_removed and not suspicion_score and not suspicion_log_ids">
+                            <field name="suspicion_log_ids" readonly="1">
+                                <list>
+                                    <field name="create_date"/>
+                                    <field name="source"/>
+                                    <field name="score"/>
+                                    <field name="removed"/>
+                                    <field name="findings_summary"/>
+                                </list>
+                                <form>
+                                    <group>
+                                        <field name="source"/>
+                                        <field name="score"/>
+                                        <field name="removed"/>
+                                        <field name="findings_json" widget="text"/>
+                                        <field name="raw_original" widget="text"/>
+                                    </group>
+                                </form>
+                            </field>
                         </page>
                         <!-- [@ANCHOR: hams_helpdesk:COMM_ncmec_report_page]
                              Field-level visibility only, same reasoning as the header buttons
@@ -119,6 +152,7 @@
                 <field name="user_id"/>
                 <field name="stage"/>
                 <field name="priority" widget="priority"/>
+                <field name="suspicious" optional="show" decoration-danger="suspicious"/>
             </list>
         </field>
     </record>
