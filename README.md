@@ -88,7 +88,7 @@ Built to handle high traffic and distributed workloads efficiently.
 
 ## 🚨 Site Reliability Engineering (SRE)
 
-* **[Pager Duty](pager_duty/PROMO.md) (`pager_duty`):** An isolated, Datadog-level Python daemon running outside Odoo's web workers, featuring airgapped SMTP fallbacks, un-cached DNS lookups, and intelligent calendar-based routing.
+* **[Pager Duty](pager_duty/PROMO.md) (`pager_duty`):** An isolated, Datadog-level Python daemon running outside Odoo's web workers, featuring airgapped SMTP fallbacks, un-cached DNS lookups, and intelligent calendar-based routing. Planned restarts are announced with `sudo pagerduty-maintenance start` so they do not page ([setup and usage](pager_duty/README.md)).
 * **[Backup & Disaster Recovery](backup_management/README.md) (`backup_management`):** A centralized GUI orchestrating `Kopia` and `pgBackRest` with automated restore drills to prove snapshot integrity.
 
 ---

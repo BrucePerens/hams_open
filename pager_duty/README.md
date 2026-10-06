@@ -49,6 +49,40 @@ Integrates with the Odoo Calendar. Mark calendar events as "Pager Duty Shift" to
 
 ---
 
+### Pagerduty maintenance (planned restarts without a page)
+
+Restarting Odoo, upgrading a module or rebooting makes the monitors see a failure, and the daemon's SMTP fallback and any
+site monitor will page for it. Tell them first. A one-file command sets a flag that every pagerduty monitor on the host
+reads, with no Odoo, network or database involved (it works when Odoo is down, which is the point):
+
+```
+sudo pagerduty-maintenance start --minutes 20 --reason "module upgrade"   # default 20 minutes, at most 120
+sudo pagerduty-maintenance end                                            # when done; optional
+pagerduty-maintenance status                                              # exit 0 if active, 1 if not
+```
+
+- The flag is the file `/etc/pagerduty/maintenance` (change it with the environment variable
+  `PAGERDUTY_MAINTENANCE_FILE`). It holds `set_at`, `until`, `reason` and `set_by` as JSON.
+- It **expires by itself** at `until`, and `until` is never honoured beyond **2 hours** after `set_at`, so a forgotten flag
+  cannot silence paging for long. A malformed or unreadable flag counts as *not* in maintenance: paging stays on.
+- **Only root can set or clear it, on purpose**: the file is root-owned, mode 0644, in a root-owned 0755 directory, so an
+  unprivileged user or a compromised service account cannot silence paging. `status` needs no privilege.
+- While it is active the daemon's SMTP fallback logs at warning and sends no mail. hams_shared's `site_monitor.py`
+  (the optional host-level monitor) keeps running and logging every check but sends no page and no "recovered" notice,
+  and failures during maintenance do not count: after it ends, a check still failing needs the normal consecutive failures
+  before it pages. The monitors only read the file (their units run with a read-only `/etc`); `start` and `status` remove an
+  expired file.
+- Install the command on any host that runs the daemon: `sudo install -m 0755 pager_duty/daemon/pagerduty_maintenance.py
+  /usr/local/sbin/pagerduty-maintenance` (it is one stdlib-only Python 3 file) and `sudo install -d -m 0755 /etc/pagerduty`.
+  `hams_shared/tools/infrastructure.py` does both on hosts it provisions.
+- From a deploy script, around anything that restarts a service:
+
+```
+sudo pagerduty-maintenance start --minutes 30 --reason "apt upgrade"
+sudo apt-get -y upgrade        # or: docker compose up -d   /   odoo -u my_module ... && systemctl restart odoo
+sudo pagerduty-maintenance end
+```
+
 # Technical Documentation
 
 <system_role>
