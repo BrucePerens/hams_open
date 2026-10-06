@@ -10,5 +10,7 @@ The module reads its internal documentation file and creates a new article title
 
 Charlie can now find the "User Websites SEO Guide" in his Knowledge base, providing him and his users with immediate guidance on how to use the SEO features.
 
+The detection and the article creation are carried out centrally by the `zero_sudo` documentation bootstrap, which runs whenever the registry loads; see [Centralized Documentation Bootstrap](../../../zero_sudo/docs/stories/documentation_bootstrap.md).
+
 ## Technical Anchors
 - Dynamic Documentation Bootstrap: `[ANCHOR: soft_dependency_docs_installation]`

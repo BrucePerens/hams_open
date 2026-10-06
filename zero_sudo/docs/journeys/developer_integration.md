@@ -17,7 +17,7 @@ The developer creates a service account in their module's XML data, ensuring `is
 The developer replaces any direct `.sudo()` calls with `self.env['zero_sudo.security.utils']._get_service_uid('my_module.my_service_account')`.
 
 ## 4. Registering System Parameters
-If the module needs to read/write system parameters via `zero_sudo`, the developer adds them to the whitelist by creating an `_inherit` extension of `zero_sudo.security.utils`.
+If the module needs to read/write system parameters via `zero_sudo`, the developer adds them to the whitelist by creating an `_inherit` extension of `zero_sudo.security.utils`. Reads and writes have separate whitelists; see [parameter_whitelisting.md](../stories/parameter_whitelisting.md) and the [module README](../../README.md).
 
 ## 5. Adding Documentation
 The developer adds a `knowledge_docs` entry to their `__manifest__.py` to automatically install their module's documentation.

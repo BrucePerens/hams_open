@@ -15,6 +15,8 @@ The testing facility provides a safe environment.
 - **HamsHttpCase** `[@ANCHOR: zero_sudo:COMM_hams_http_case]`: Extended class for running UI tours and HTTP cases under true transactional isolation.
 
 ## The Leak Detection Mechanism
+The [module README](../../README.md) attributes the end-of-test Database Leak Prevention checks to `RealTransactionCase` (`tests/real_transaction.py`). A table is exempt from the final comparison below when it is registered in `zero_sudo.noisy_table` (tables with high-frequency or technically necessary writes, such as `ir_logging` and `bus_bus`), and `RealTransactionCase` also keeps its own built-in exemption list.
+
 - **Cursor Hijacking** `[@ANCHOR: zero_sudo:COMM_cursor_hijacking]`: The facility intercepts the test cursor to provision a real, committable PostgreSQL connection.
 The testing facility provides a safe environment.
 

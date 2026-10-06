@@ -48,7 +48,7 @@
 ## Journey 6: Proactive Incident Management
 **Context:** An unoptimized module is creating many dead tuples during a mass import.
 
-1. **Background Monitoring:** The DBA Autovacuum Monitor cron `[@ANCHOR: COMM_test_dba_cron]` runs every hour.
-2. **Threshold Breach:** The cron detects bloat exceeding 20% on several critical tables.
-3. **Alerting:** The system automatically triggers a PagerDuty incident `[@ANCHOR: COMM_bloat_alert_synergy]`.
+1. **Background Monitoring:** The DBA Autovacuum Monitor cron `[@ANCHOR: COMM_test_dba_cron]` runs every hour. (The [module README](../../README.md) says the alerting cron runs daily; where they differ, treat the README as the later statement.)
+2. **Threshold Breach:** The cron detects bloat exceeding 20% on several critical tables. (Per the README, the thresholds are more than 20% dead tuples and more than 10,000 dead tuples in the table.)
+3. **Alerting:** The system automatically triggers a PagerDuty incident `[@ANCHOR: COMM_bloat_alert_synergy]` (this project's own `pager_duty` module; per the README, one incident of severity medium listing every table over the thresholds).
 4. **Response:** The on-call SRE receives the alert and navigates to Odoo to perform a manual Vacuum or investigate the source of the bloat.

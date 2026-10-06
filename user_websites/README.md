@@ -77,7 +77,7 @@ The `user_websites` module enables decentralized content creation. It employs th
 ## 2. 🗄️ Data Model Reference
 
 ### Extended `res.users`
-* **`website_slug`**: URL-safe identifier.
+* **`website_slug`**: URL-safe identifier. A slug is the first path segment of a user's (or group's) site URLs, e.g. `yourname` in `/yourname/home` and `/yourname/blog`; it must not be one of `RESERVED_SLUGS` (section 3).
 * **`privacy_show_in_directory`**: Opt-in for the public `/community` directory.
 * **`violation_strike_count`**: Number of upheld content violations.
 * **`is_suspended_from_websites`**: If True, all personal content is forcefully unpublished (the unpublishing itself is done in the background by `action_suspend_user_websites()`; a direct write of this field only invalidates the slug/page resolver caches) and the user's slug routes return 404.

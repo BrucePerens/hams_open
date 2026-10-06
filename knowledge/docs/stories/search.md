@@ -9,7 +9,7 @@ A user wants to find information about a specific topic but doesn't know where i
 ## Process
 1. The user enters a search term in the search bar.
 2. The `manual_search` controller `[@ANCHOR: controller_manual_search]` receives the query.
-3. The controller performs a full-text search on the `name` and `body` fields of accessible articles.
+3. The controller performs a full-text search on the `name` and `body` fields of accessible articles. In practice this is a case-insensitive substring match (`ilike`), not a ranked full-text index (see "Search Engine" in [the module README](../../README.md)).
 4. Native record rules ensure that only articles the user has permission to see are returned.
 5. Multi-website isolation ensures that results are restricted to the current website context.
 6. The search results are displayed to the user, highlighting matches.

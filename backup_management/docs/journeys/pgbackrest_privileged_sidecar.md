@@ -10,7 +10,10 @@ decision; this journey walks through what actually happens end to end.
    retention, and -- for S3/B2 storage -- the non-secret `--repo1-s3-*` flags).
 2. **The privilege gate**: `[@ANCHOR: backup_management:COMM_pgbackrest_requires_sidecar]` recognizes this
    is a `pgbackrest backup` (not `info`, which stays on the direct-subprocess path since it already works
-   fine as `odoo`) and routes it to the sidecar instead of `subprocess.Popen`.
+   fine as `odoo`) and routes it to the sidecar instead of `subprocess.Popen`. (This describes the design
+   at the time of ADR 0103. The current [module README](../../README.md#daemon-architecture-daemonmainpy)
+   and the [daemon README](../../daemon/README.md) state that `pgbackrest info`, used to list snapshots,
+   is also handed to the sidecar; where they differ, they are the later statement.)
 3. **Handoff**: `_run_pgbackrest_via_sidecar()` validates the stanza name, then writes a request file
    (the argv plus, only for S3/B2, the two secret env var values) into `/opt/hams/backup_requests` --
    `backup_worker`'s own `0700 odoo:odoo` spool directory -- and polls for a result.

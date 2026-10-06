@@ -13,7 +13,8 @@ The daemon reads its configuration file once, at startup, so restart it after pu
 
 ### File Structure
 
-- `pagerduty_maintenance.py`: the `pagerduty-maintenance` command (`start`, `end`, `status`) and the flag reader the daemon imports. Standard library only; install it as `/usr/local/sbin/pagerduty-maintenance`.- `generalized_monitor.py`: The core monitoring script executing continuous checks.
+- `pagerduty_maintenance.py`: the `pagerduty-maintenance` command (`start`, `end`, `status`) and the flag reader the daemon imports. Standard library only; install it as `/usr/local/sbin/pagerduty-maintenance`.
+- `generalized_monitor.py`: The core monitoring script executing continuous checks.
 - `pager_log_analyzer.py`: Tails the configured log files for the configured regex patterns and answers interactive log searches. It starts as root, chroots to `/var/log`, drops its capabilities and switches to `nobody:adm`. It talks only to Redis; `generalized_monitor.py` forwards its findings to Odoo.
 - `pager_smart_spooler.py`: Run as root every 10 minutes by `pager-smart-spooler.timer`; writes `smartctl` health results to `/var/log/pager_smart_spool.json` for the `smart` check type.
 - `pager_synthetic_spooler.py`: Runs as root and executes the Playwright, Sandboxed Bash and Sandboxed Arbitrary Executable checks inside a Bubblewrap (`bwrap`) sandbox, writing results to `/var/log/pager_synthetic_spool.json`.

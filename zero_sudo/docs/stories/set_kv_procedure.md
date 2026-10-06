@@ -19,7 +19,7 @@ This eliminates the need for manual existence checks in Python and reduces the n
 KV procedures ensure atomic updates.
 
 ## Reading a Value
-The write side above (`_set_kv`) is paired with a plain read, `_get_kv` `[@ANCHOR: zero_sudo:get_kv]`, which looks the key up directly and returns `None` if it was never set.
+The write side above (`_set_kv`) is paired with a plain read, `_get_kv` `[@ANCHOR: zero_sudo:get_kv]`, which looks the key up directly and returns `None` if it was never set. Per the [module README](../../README.md) (`zero_sudo.kv`), reads through `_get_kv()` are cached (`@distributed_cache`), while writes go straight to the database through the procedure above.
 
 
 

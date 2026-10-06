@@ -18,6 +18,9 @@ the same way, so that the rules cannot drift between two hand-written copies.
    that never completes is handled by the caller as "allowed"
    `[@ANCHOR: zero_sudo:robots_txt_policy_robots_txt_verdict]`.
 
+`urlopen_ssrf_safe()` (the fetch helper, which refuses non-public addresses) and the shared verdict
+function (`robots_txt_verdict()`) are described in [daemon/README.md](../../daemon/README.md).
+
 ## Verification
 
 `zero_sudo/tests/test_robots_txt_policy.py` covers each body and status-code case.

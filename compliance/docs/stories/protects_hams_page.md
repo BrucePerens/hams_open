@@ -14,7 +14,7 @@ published source (`/relay/source`) -- rather than re-explaining each one.
 1. The visitor lands on `/protects-hams`, reachable without an account, registered in the shared
    `compliance.document` registry alongside Privacy/Terms/LoTW Trust/Transmitter Safety so it
    surfaces via `/compliance` like every other real trust page.
-2. The page links out to the two existing, real trust pages rather than duplicating their
+2. The page links out to the existing, real trust pages named above (`/lotw-trust`, `/transmitter-safety`, and the relay source at `/relay/source`) rather than duplicating their
    content, so each protection has exactly one canonical explanation.
    *(Reference: [@ANCHOR: compliance:protects_hams_page])*
 3. When this repository edits the page, the edit reaches an already-running site on the next

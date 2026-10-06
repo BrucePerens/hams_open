@@ -2,8 +2,8 @@
 
 The system maintains a synchronized view of offsite backup states through a polling mechanism.
 
-1. **Cron Trigger**: A global cron job `[@ANCHOR: backup_management:COMM_cron_sync_all_backups]` runs periodically, and a sibling daily cron `[@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]` actually CREATES the day's backup for every `backup.config` (running `pgbackrest backup`/`kopia snapshot create`) -- the sync cron above only ever lists/reconciles existing snapshots, it never creates one, so without this second cron a deployment would silently stop taking new backups while still showing healthy-looking sync activity.
-2. **Task Offloading**: For each configuration, a sync task is pushed to the RabbitMQ Bastion.
+1. **Cron Trigger**: A global cron job `[@ANCHOR: backup_management:COMM_cron_sync_all_backups]` runs hourly, and a sibling daily cron `[@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]` actually CREATES the day's backup for every `backup.config` (running `pgbackrest backup`/`kopia snapshot create`) -- the sync cron above only ever lists/reconciles existing snapshots, it never creates one, so without this second cron a deployment would silently stop taking new backups while still showing healthy-looking sync activity.
+2. **Task Offloading**: For each configuration, a sync task is pushed to RabbitMQ, where the backup worker daemon consumes it from the `backup_tasks` queue (see the [module README](../../README.md#daemon-architecture-daemonmainpy)); Odoo itself does not run the engine.
 3. **Engine Execution**:
    - For **Kopia**: It executes `kopia snapshot list --json` and parses the output `[@ANCHOR: backup_management:COMM_backup_sync_kopia]`.
 
@@ -11,7 +11,7 @@ The system maintains a synchronized view of offsite backup states through a poll
 
 4. **Data Ingestion**: The worker returns JSON results to Odoo, which updates the `backup.snapshot` records. This is optimized using a Postgres stored procedure `[@ANCHOR: backup_management:COMM_upsert_snapshots_procedure]` to ensure atomic, single-roundtrip bulk updates `[@ANCHOR: backup_management:COMM_upsert_snapshots_roundtrip_optimization]`.
 
-5. **Dashboard Update**: The aggregated data is made available for the NOC dashboard `[@ANCHOR: backup_management:COMM_backup_board_data]`.
+5. **Dashboard Update**: The aggregated data is made available for the Backup Dashboard (the NOC, network operations center, view of the latest snapshot per configuration) `[@ANCHOR: backup_management:COMM_backup_board_data]`.
 
 Documentation for this module is automatically bootstrapped into the system. `[@ANCHOR: backup_management:COMM_backup_doc_injection]`
 

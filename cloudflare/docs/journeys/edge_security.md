@@ -12,6 +12,6 @@ This journey covers the lifecycle of an IP ban, from detection to expiration.
 - The UI reflects the banned state `[@ANCHOR: COMM_test_tour_cf_ip_ban]`.
 
 ## Phase 3: Resolution
-- The ban duration expires.
+- The ban duration expires. (Per the [module README](../../README.md), a ban made through `ban_ip()` has no expiry and stays until an administrator lifts it; read this phase as the lifting step, whether by an administrator or by whatever calls `_action_lift_ban`.)
 - The automated cleanup logic triggers `_action_lift_ban` `[@ANCHOR: COMM_cf_action_lift_ban]`.
 - The IP is removed from Cloudflare's firewall.

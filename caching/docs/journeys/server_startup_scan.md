@@ -2,6 +2,8 @@
 
 This journey describes the background process that configures the Service Worker's dynamic parameters during Odoo startup.
 
+Reading note: per the [module README](../../README.md), nothing scans during server startup itself; the scan runs when `/sw.js` is requested and no cached scan result exists. The safe quota is the per-website field `website.caching_safe_quota_mb` (default 35MB, of which 10MB is always set aside), not the `caching.safe_quota_mb` system parameter that step 5 names, and the limit is set just below the size of the last file dropped, as the README describes.
+
 1. **Trigger**: When the first request for `/sw.js` arrives, or during initial worker boot ([@ANCHOR: COMM_caching_sw_serve_route]).
 2. **Module Discovery**: The system queries the database for all installed modules.
 3. **Filesystem Walk**: For each module, it recursively scans the `static/` directory ([@ANCHOR: COMM_caching_fs_scan_logic]).

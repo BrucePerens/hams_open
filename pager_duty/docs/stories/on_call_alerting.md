@@ -10,7 +10,7 @@ It's 2:00 AM on a Tuesday. Alice is fast asleep, but the `pager_duty` module is 
 A sudden database lock contention causes the Odoo XML-RPC interface to stop responding. The `generalized_monitor.py` daemon, running in its isolated execution loop, detects the failure during its "WSGI HTTP Ping" check.
 
 1.  **Detection:** The daemon attempts a ping and fails. It recognizes that the system is down.
-2.  **Notification:** The daemon calls the Odoo RPC to report the incident. Because the internal XML-RPC might be flaky, it also has direct SMTP fallbacks. In Odoo, the `report_incident` method is triggered [@ANCHOR: report_incident_rate_limit], utilizing an atomic Redis-based rate limit to prevent alert floods [@ANCHOR: pd_redis_rate_limit].
+2.  **Notification:** The daemon calls the Odoo RPC to report the incident. Because that RPC connection (Odoo's JSON-2 API) might be flaky, it also has direct SMTP fallbacks. In Odoo, the `report_incident` method is triggered [@ANCHOR: report_incident_rate_limit], utilizing an atomic Redis-based rate limit to prevent alert floods [@ANCHOR: pd_redis_rate_limit].
 
 3.  **On-Duty Lookup:** The system queries the `calendar.event` model to find out who is currently assigned to the "Pager Duty Shift" [@ANCHOR: test_pager_notification]. It finds Alice's record because her shift was marked with `is_pager_duty=True`.
 4.  **Alerting Alice:** An urgent message is posted to the incident chatter, and a notification is dispatched to Alice's mobile device via the mail service.
@@ -26,7 +26,7 @@ Alice wakes up to the alert. She logs into the NOC Dashboard [@ANCHOR: pager_boa
 4.  **Verification:** The `generalized_monitor.py` daemon completes its next check cycle. Finding the system healthy again, it triggers the auto-resolution sequence [@ANCHOR: auto_resolve_incidents], closing Alice's ticket and logging her MTTR (Mean Time To Resolve) for the morning's post-mortem.
 
 ## AI Triage Assist
-Before Alice even wakes up, an on-call AI triage assistant (running as an MCP client against this module's own MCP server) has already looked at the incident. It calls three genuinely non-destructive tools [@ANCHOR: pager_mcp_triage_tools] -- listing open incidents, reading one incident's full detail, and adding a triage note to it -- all backed by a narrowly-scoped, read-only-on-`pager.incident` service account rather than raw ORM access, so the assistant can gather context and leave Alice a head start without ever being able to acknowledge, resolve, or otherwise mutate an incident itself.
+Before Alice even wakes up, an on-call AI triage assistant (running as an MCP client against this module's own MCP server) has already looked at the incident. It calls three genuinely non-destructive tools [@ANCHOR: pager_mcp_triage_tools] -- listing open incidents, reading one incident's full detail, and adding a triage note to it -- all backed by a narrowly-scoped, read-only-on-`pager.incident` service account rather than raw ORM access (its one write is the triage note posted to the incident's chatter), so the assistant can gather context and leave Alice a head start without ever being able to acknowledge, resolve, or otherwise mutate an incident itself.
 
 ### How the MCP Server Bridges the Assistant to Odoo
 

@@ -16,6 +16,6 @@ This journey describes how cache invalidation is handled efficiently in the back
 - The Odoo Cron `[@ANCHOR: COMM_ir_cron_process_cf_purge_queue]` executes periodically.
 
 - `process_queue` `[@ANCHOR: COMM_cf_process_queue_logic]` batches records by website/credentials.
-- Purge commands are sent to Cloudflare in optimal batch sizes.
+- Purge commands are sent to Cloudflare in batches (per the [module README](../../README.md): the cron runs every minute, up to 10 batches of 30 entries per run; entries for a website with no API token or Zone ID, or whose API call fails, are marked `failed` and not retried).
 
 **Status:** Verified by `[@ANCHOR: COMM_test_queue_batching_and_rate_limiting]`.

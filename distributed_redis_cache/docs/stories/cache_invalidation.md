@@ -5,6 +5,8 @@
 Ensuring that all Odoo workers see the same data at the same time is critical for system integrity.
 
 ## The Pipeline
+In this story, **L1** is each worker process's own in-memory cache and **L2** is the shared Redis store (see the Architecture section of [the module README](../../README.md)).
+
 When a record is modified, the distributed cache uses a multi-stage invalidation pipeline:
 
 1. **PostgreSQL NOTIFY**: The worker performing the change emits a `pg_notify` signal via the `notify_model_invalidation` function ([@ANCHOR: COMM_notify_model_invalidation_logic]).

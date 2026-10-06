@@ -4,7 +4,7 @@
 This journey follows an administrator organizing documentation in the backend.
 
 ## Personas
-- **Documentation Admin**: A user with full access to manage articles.
+- **Documentation Admin**: A user with full access to manage articles, i.e. a member of the Manual Administrator group (see "Security and Access Rights" in [the module README](../../README.md)).
 
 ## Steps
 1. **Creation**: The admin creates a new `knowledge.article` in the backend.

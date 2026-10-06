@@ -2,7 +2,7 @@
 
 *Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).*
 
-This module is the foundational security layer for our Odoo ecosystem. It enforces a strict **Zero-Sudo Architecture** (Architecture Decision Record ADR-0002) to prevent privilege escalation vulnerabilities and physically isolates background service accounts from interactive web sessions (ADR-0005).
+This module is the foundational security layer for our Odoo ecosystem. It enforces a strict **Zero-Sudo Architecture** (Architecture Decision Record ADR-0002) to prevent privilege escalation vulnerabilities and physically isolates background service accounts from interactive web sessions (ADR-0005). ADR-0002 and ADR-0005 are consolidated in `hams_shared/docs/adrs/MASTER_01_SECURITY_ZERO_SUDO.md`.
 
 ## 🛡️ Core Security Missions
 
@@ -101,7 +101,7 @@ Generates a deterministic 32-bit integer hash for `pg_advisory_xact_lock`.
 Safely retrieves a whitelisted system configuration parameter, reading it as `zero_sudo.config_service_internal`. A key not on the read whitelist is logged as `param_access_denied` and raises `AccessError`.
 
 #### `_notify_cache_invalidation(model_name, key_value)` `[@ANCHOR: coherent_cache_signal]`
-Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches. It delegates to `distributed_redis_cache`'s `notify_model_invalidation()`, which signals on the `distributed_cache_invalidation` channel that the `distributed_redis_cache` cache-manager daemon listens on. Invalidation is for the whole model; `key_value` must be non-empty but does not narrow it.
+Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches. It delegates to `distributed_redis_cache`'s `notify_model_invalidation()`, which signals on the `distributed_cache_invalidation` channel that the `distributed_redis_cache` cache-manager daemon listens on. Invalidation is for the whole model; `key_value` must be non-empty but does not narrow it. What this signal does and does not reach on other workers is spelled out in [docs/stories/cache_signaling.md](docs/stories/cache_signaling.md).
 
 #### `_get_crypto_secret()` `[@ANCHOR: get_crypto_secret]`
 Retrieves the root cryptographic key from environment or local file, bypassing DB. It checks the `HAMS_CRYPTO_KEY` environment variable, then `/var/lib/odoo/hams_crypto.secret`, then Odoo's `admin_passwd` setting. If none is set, or the value is `admin`, it logs an error and returns an empty string, so callers must refuse to encrypt or sign.

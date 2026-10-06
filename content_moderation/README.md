@@ -28,6 +28,8 @@ rationale and `user_websites/models/content_violation_report_moderation.py`
   out. A consuming module overrides it via `_inherit =
   "content.violation.report"` to apply its own real consequence.
 
+A **strike**, as used in `action_take_action_and_strike()`, is one upheld content violation counted against the content's owner. This module defines no strike counter and no suspension (its default `_apply_enforcement_action()` is a no-op); the consuming `user_websites` module keeps `violation_strike_count`, adds a strike in its override, and suspends the user past 3 strikes (see its [README](../user_websites/README.md) and [moderation story](../user_websites/docs/stories/moderation.md)).
+
 ## What stayed out on purpose
 
 * **`content_group_id`** and any other target-type-specific field: added by

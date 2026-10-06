@@ -21,8 +21,9 @@ call, authenticates it, and hands the raw email off to Odoo's standard
    before handing it to `message_process`.
 2. **Failing safe toward AWS**: SNS retries a webhook delivery indefinitely
    until it receives a 2xx response, so a processing failure on Odoo's side
-   (a malformed payload, a `message_process` exception, an unmatched domain)
-   must still return HTTP 200 -- otherwise SNS would hammer the same failing
+   (a `message_process` exception, an unmatched sender)
+   must still return HTTP 200 (this applies once the token has been accepted and the body is a JSON object;
+   a missing or wrong token gets 403, and an empty or non-JSON body gets 400, see `../../README.md`) -- otherwise SNS would hammer the same failing
    delivery forever. The broad `except Exception` around processing records
    the real failure in `ses.webhook.log` rather than swallowing it, but
    always returns 200 either way ([@ANCHOR: COMM_ses_webhook_process_catch_all]).
