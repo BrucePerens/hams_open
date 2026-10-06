@@ -148,10 +148,11 @@
             access were ever accidentally widened some other way. Update THIS list, and only
             this list, when a category is deliberately approved for external-AI visibility;
             csam_enticement_trafficking is never added (see group_ai_triage_external_service's
-            own comment above). -->
+            own comment above). A ticket the untrusted-text filter marked suspicious (hidden or injected
+            content) is never visible to external AI either. -->
             <field name="name">Helpdesk Ticket AI Triage External Allowlist</field>
             <field name="model_id" ref="model_hams_helpdesk_ticket"/>
-            <field name="domain_force">[('company_id', 'in', company_ids), ('ticket_type', 'in', ['general', 'hams_local_relay'])]</field>
+            <field name="domain_force">[('company_id', 'in', company_ids), ('ticket_type', 'in', ['general', 'hams_local_relay']), ('suspicious', '=', False)]</field>
             <field name="groups" eval="[(4, ref('group_ai_triage_external_service'))]"/>
         </record>
     </data>
