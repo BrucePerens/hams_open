@@ -189,6 +189,11 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             findings, removed, score = ut.merge(results)
             findings.extend(ut.scan_concatenation([subject.plain, body.plain]))
             suspicious = bool(ticket.suspicious) or score >= ut.SUSPICION_THRESHOLD
+            if ticket.suspicion_score or ticket.suspicion_removed:
+                # What the filter found when the ticket arrived (the text is stored already clean).
+                findings.append(
+                    {"vector": "recorded_at_intake", "location": "ticket", "count": ticket.suspicion_removed, "excerpt": "", "weight": ticket.suspicion_score}
+                )
             text = body.plain
             if max_chars and len(text) > max_chars:
                 text = "%s... [truncated, %d chars total; read the ticket for the rest]" % (text[:max_chars], len(body.plain))
@@ -204,7 +209,8 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
                     "suspicion_score": max(score, ticket.suspicion_score or 0),
                     "removed_or_flagged": removed + len(findings),
                     "findings": [
-                        {k: f[k] for k in ("vector", "location", "count", "excerpt")} for f in findings
+                        # No excerpt: it holds the very text that was removed. Staff read it in the log.
+                        {k: f[k] for k in ("vector", "location", "count")} for f in findings
                     ],
                 }
             )

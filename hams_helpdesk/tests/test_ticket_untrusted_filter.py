@@ -84,6 +84,8 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
         self.assertTrue(view["suspicious"])
         self.assertIn("UNTRUSTED-", view["untrusted_block"])
         self.assertTrue(view["findings"])
+        for finding in view["findings"]:
+            self.assertNotIn("excerpt", finding)
 
     def test_09_safe_view_refilters_a_ticket_stored_before_the_filter(self):
         ticket = self._ticket()
