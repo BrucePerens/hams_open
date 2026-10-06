@@ -47,6 +47,7 @@
                     <widget name="web_ribbon" title="Archived" bg_color="bg-danger" invisible="active"/>
                     <!-- Untrusted-text filter banner. The text shown below is the filtered version; the
                          original as received is on the Filter Findings page. -->
+                    <field name="suspicious" invisible="1"/>
                     <div class="alert alert-danger" role="alert" invisible="not suspicious">
                         <strong>Suspicious ticket:</strong> hidden or injected content was found
                         (score <field name="suspicion_score" class="oe_inline"/>). It is not shown to any AI

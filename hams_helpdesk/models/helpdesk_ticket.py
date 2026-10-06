@@ -91,7 +91,9 @@ _NCMEC_PARAM_FALLBACK_EMAIL = "hams_helpdesk.ncmec_fallback_report_email"
 class HelpdeskTicket(models.Model):
     _name = "hams_helpdesk.ticket"
     _description = "Helpdesk Ticket"
-    _inherit = ["mail.thread", "mail.activity.mixin", "hams_helpdesk.untrusted.mixin"]
+    # The untrusted-text mixin comes FIRST: mail.thread.message_post does not call super(), so a mixin
+    # listed after it would never see message_post.
+    _inherit = ["hams_helpdesk.untrusted.mixin", "mail.thread", "mail.activity.mixin"]
 
     # [@ANCHOR: COMM_helpdesk_ticket_lifecycle]
 
@@ -773,8 +775,11 @@ class HelpdeskTicket(models.Model):
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
         # The AI's own output is filtered too: no markdown image, link or bare URL survives (a rendered
         # image URL that carries data is the classic zero-click leak), and no markup.
-        note = ut.filter_ai_output(note).text
-        self.with_env(hd_env).message_post(body=note, subtype_xmlid="mail.mt_note")
+        # The daemon sends escaped HTML; reduce it to visible text, filter that, and re-wrap it escaped.
+        visible = ut.sanitize_any(note or "", 20000, "ai_note").plain
+        text = ut.filter_ai_output(visible).text
+        body = Markup("<p>%s</p>") % Markup("<br/>").join(Markup.escape(line) for line in text.split("\n"))
+        self.with_env(hd_env).message_post(body=body, subtype_xmlid="mail.mt_note")
         return True
 
     def mcp_safe_read(self, max_chars=0):

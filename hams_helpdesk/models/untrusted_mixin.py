@@ -36,7 +36,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
     _name = "hams_helpdesk.untrusted.mixin"
     _description = "Untrusted text filter for tickets"
 
-    # Other modules extend this (see ham_simulated_band) to filter their own free-text fields too.
+    # Other modules extend this to filter their own free-text fields too: override and add to the dict.
     @api.model
     def _untrusted_field_specs(self):
         return dict(UNTRUSTED_FIELDS)

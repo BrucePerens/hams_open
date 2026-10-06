@@ -85,8 +85,26 @@ def _add(findings, vector, location, count, excerpt="", weight=0):
     )
 
 
+_PHRASE_VECTORS = None
+
+
+def _is_phrase(vector):
+    global _PHRASE_VECTORS
+    if _PHRASE_VECTORS is None:
+        _PHRASE_VECTORS = {n for n, _rx, _w in _PHRASES}
+    return vector in _PHRASE_VECTORS or vector.startswith("split_")
+
+
 def _score(findings):
-    return sum(f.get("weight", 0) for f in findings)
+    """Hidden-content findings add up. Phrase-only findings are weak evidence (ordinary support text
+    says "System: Ubuntu" and "send me my password"), so on their own they only reach the threshold
+    through one strongly injection-specific phrase (weight 5 or more) or two independent categories."""
+    hard = sum(f.get("weight", 0) for f in findings if not _is_phrase(f["vector"]))
+    phrases = [f for f in findings if _is_phrase(f["vector"])]
+    total = sum(f.get("weight", 0) for f in phrases)
+    if len({f["vector"] for f in phrases}) < 2 and not any(f.get("weight", 0) >= 5 for f in phrases):
+        total = min(total, SUSPICION_THRESHOLD - 1)
+    return hard + total
 
 
 # ---------------------------------------------------------------------------------------------
@@ -244,7 +262,7 @@ _PHRASES = [
     ("ignore_instructions", r"\b(ignore|disregard|forget|override|bypass|skip)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|all|any|your|the|these|those|system)\b[^.\n]{0,30}\b(instructions?|prompts?|rules?|directions?|guidelines?|context|polic(?:y|ies))\b", 5),
     ("new_instructions", r"\b(new|updated|real|actual|secret|hidden)\s+(instructions?|system prompt|directive|orders?)\b", 4),
     ("role_override", r"\byou\s+are\s+(now|no longer)\b|\bfrom\s+now\s+on\s+you\b|\bact\s+as\s+(an?|the)\s+(admin|administrator|system|root|developer|unrestricted)", 4),
-    ("fake_role_line", r"(^|\n)\s*(system|assistant|developer|ai|admin(istrator)?)\s*(message)?\s*[:>\]]", 4),
+    ("fake_role_line", r"(^|\n)\s*(system|assistant|developer|ai|admin(istrator)?)\s*(message)?\s*[:>\]]", 2),
     ("chat_template_token", r"<\|[a-z_ ]{2,30}\|>|\[/?inst\]|<<\s*/?sys\s*>>|<\s*/?\s*(s|im_start|im_end)\s*>|\bbegin_of_text\b|<\|endoftext\|>", 6),
     ("heading_system", r"(^|\n)\s*#{1,6}\s*(system|instructions?|assistant|developer)\b", 4),
     ("delimiter_closer", r"</\s*(ticket|untrusted|untrusted[_-]?data|data|user|input|context|document)\s*>|\bend\s+of\s+(the\s+)?(ticket|untrusted|data|input|message)\b|\bbegin\s+(system|new)\s+(prompt|instructions?)\b", 5),
@@ -252,8 +270,9 @@ _PHRASES = [
     ("addressed_to_ai", r"\b(dear|hey|hello|attention|note to|message for|instructions? for)\s+(claude|assistant|ai|gpt|chatgpt|gemini|llm|model|agent|triage|bot)\b|\bif\s+you\s+(are|'re)\s+(an?\s+)?(ai|llm|language model|assistant|bot|agent)\b|\bwhen\s+(the\s+)?(ai|assistant|admin(istrator)?|staff|triage|agent|model|llm)\s+(reads?|sees?|processes|opens|reviews)\b", 5),
     ("conceal", r"\b(do\s+not|don't|never|without)\s+(tell|tells|telling|mention|reveal|inform|informing|alert|notify|disclose|show)\b[^.\n]{0,40}\b(user|human|admin|administrator|staff|anyone|operator|owner|this)\b", 5),
     ("act_on_ticket", r"\b(mark|set|close|resolve|flag|label|classify)\s+(this\s+)?(ticket|issue|report|it)\s+(as\s+)?(resolved|closed|safe|legit(imate)?|not\s+spam|urgent|approved|done|verified)\b|\bapprove\s+(this|the)\s+(request|refund|ticket|access)\b", 4),
-    ("exfiltrate", r"\b(send|forward|email|post|upload|exfiltrate|leak|reveal|print|output|repeat|include)\b[^.\n]{0,60}\b(system\s+prompt|api[_ -]?key|secrets?|passwords?|credentials?|tokens?|other\s+tickets?|all\s+tickets?|previous\s+messages|conversation|your\s+instructions)\b", 6),
-    ("tool_request", r"\b(call|use|invoke|run|execute)\s+(the\s+)?[a-z_]{3,40}\s+(tool|function|command|api)\b|\b(run|execute)\s+(the\s+following|this)\s+(command|code|script|shell)\b", 4),
+    ("exfiltrate", r"\b(send|forward|email|post|upload|exfiltrate|leak|reveal|print|output|repeat|include|show)\b[^.\n]{0,60}\b(system\s+prompt|your\s+(system\s+)?(instructions|prompt|rules)|other\s+tickets?|all\s+(the\s+)?tickets?|previous\s+messages|the\s+conversation|hidden\s+instructions)\b", 6),
+    ("exfiltrate_secret", r"\b(send|forward|email|post|upload|exfiltrate|leak|reveal|print|output)\b[^.\n]{0,40}\b(api[_ -]?keys?|secrets?|credentials?|access\s+tokens?)\b", 2),
+    ("tool_request", r"\b(call|use|invoke|run|execute)\s+(the\s+)?[a-z_]{3,40}\s+(tool|function|api)\b|\b(run|execute)\s+(the\s+following|this)\s+(command|code|script|shell)\b", 2),
     ("markdown_exfil_image", r"!\[[^\]]{0,200}\]\(\s*https?://", 4),
     ("urgency_authority", r"\b(this is|i am|i'm)\s+(the\s+)?(system|administrator|admin|owner|bruce|ceo|security team|anthropic|openai)\b|\bpriority\s+override\b|\bemergency\s+override\b", 3),
     ("delayed_instruction", r"\b(after|once|when|next time|later)\b[^.\n]{0,40}\b(you|the assistant|the ai)\b[^.\n]{0,40}\b(read|summari[sz]e|triage|answer|reply|respond)\b[^.\n]{0,40}\b(ignore|always|must|should|then)\b", 3),
