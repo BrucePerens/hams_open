@@ -187,6 +187,7 @@ class ResUsers(models.Model):
     website_page_limit = fields.Integer(
         string="Website Page Limit",
         help="Maximum number of pages this user can create. If 0, the global limit is used.",
+        prefetch="user_websites",
     )
 
     privacy_show_in_directory = fields.Boolean(
@@ -196,34 +197,6 @@ class ResUsers(models.Model):
     )
 
     # --- Inverse Relationships (Bidirectional Integrity) ---
-    user_websites_page_ids = fields.One2many(
-        "website.page",
-        "owner_user_id",
-        string="Owned Website Pages",
-        help="Pages owned by this user.",
-    )
-
-    user_websites_blog_post_ids = fields.One2many(
-        "blog.post",
-        "owner_user_id",
-        string="Owned Blog Posts",
-        help="Blog posts authored by this user.",
-    )
-
-    submitted_violation_report_ids = fields.One2many(
-        "content.violation.report",
-        "reported_by_user_id",
-        string="Submitted Violation Reports",
-        help="Reports submitted by this user.",
-    )
-
-    received_violation_report_ids = fields.One2many(
-        "content.violation.report",
-        "content_owner_id",
-        string="Received Violation Reports",
-        help="Reports filed against content owned by this user.",
-    )
-
     appeal_ids = fields.One2many(
         "content.violation.appeal", "user_id", string="Moderation Appeals"
     )
