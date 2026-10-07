@@ -100,6 +100,7 @@
                             <p>Independent of the patent filings above, the project's implementation code is
                             published as open source on GitHub under the <code>BrucePerens</code> account:</p>
 
+                            <div class="table-responsive">
                             <table class="table table-striped table-sm">
                                 <thead>
                                     <tr><th>Repository</th><th>URL</th><th>Visibility</th></tr>
@@ -109,6 +110,7 @@
                                     <tr><td><code>hams_open</code></td><td><a href="https://github.com/BrucePerens/hams_open" target="_blank" rel="noopener">https://github.com/BrucePerens/hams_open</a></td><td>Public</td></tr>
                                 </tbody>
                             </table>
+                            </div>
 
                             <p>Both repositories are public as of this writing. Licensing is not uniform
                             across every file (see <code>hams_open/LICENSING.md</code> for the authoritative,
