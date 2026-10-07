@@ -336,3 +336,106 @@ class CloudflareConfigManager(models.AbstractModel):
             )
         else:
             return create_zone_ruleset(ruleset_payload, token, zone_id)
+
+    # ------------------------------------------------------------------
+    # Cache rules: cloudflare.cache.rule rows -> http_request_cache_settings
+    # ------------------------------------------------------------------
+    CACHE_PHASE = "http_request_cache_settings"
+
+    def _cache_rules_for_website(self, website):
+        return self.env["cloudflare.cache.rule"].search(
+            [
+                ("active", "=", True),
+                "|",
+                ("website_id", "=", website.id),
+                ("website_id", "=", False),
+            ],
+            order="sequence, id",
+            limit=1000,
+        )
+
+    @api.model
+    def _build_cache_ruleset_rules(self, odoo_rules):
+        """Turn ordered cache rule rows into Cloudflare ruleset rules.
+
+        Returns ``(rules, error)``; ``error`` is a message when the set is unsafe to push.
+
+        Safety invariants (the point of this method):
+        - Bypass rules are emitted first, in sequence order.
+        - Cloudflare evaluates every matching cache rule and a later one can override an earlier
+          one, so order alone is not enough: each "cache" rule's expression is ANDed with the
+          negation of every bypass rule's expression. A request a bypass rule matches can then
+          never match a cache rule, whatever the order.
+        - A cache rule is refused unless an active bypass rule on the session_id cookie exists:
+          Odoo sets that cookie for every visitor with state, and a cached response must never
+          be served to one.
+        """
+        bypass = odoo_rules.filtered(lambda r: r.rule_action == "bypass")
+        cache = odoo_rules.filtered(lambda r: r.rule_action == "cache")
+        if cache and not any("session_id" in (r.expression or "") for r in bypass):
+            return None, (
+                "Refusing to push cache rules: an active bypass rule on the session_id "
+                "cookie is required before any rule makes responses cacheable."
+            )
+        negated = " and ".join("not (%s)" % r.expression.strip() for r in bypass)
+        rules = []
+        for r in bypass:
+            rules.append(
+                {
+                    "action": "set_cache_settings",
+                    "expression": r.expression.strip(),
+                    "description": r.name,
+                    "enabled": True,
+                    "action_parameters": {"cache": False},
+                }
+            )
+        for r in cache:
+            expression = "(%s)" % r.expression.strip()
+            if negated:
+                expression = "%s and %s" % (expression, negated)
+            if r.edge_cache_ttl and r.edge_cache_ttl > 0:
+                edge_ttl = {"mode": "override_origin", "default": r.edge_cache_ttl}
+            else:
+                edge_ttl = {"mode": "respect_origin"}
+            rules.append(
+                {
+                    "action": "set_cache_settings",
+                    "expression": expression,
+                    "description": r.name,
+                    "enabled": True,
+                    "action_parameters": {"cache": True, "edge_ttl": edge_ttl},
+                }
+            )
+        return rules, None
+
+    @api.model
+    def action_push_cache_rules(self, website_id=None):
+        # [@ANCHOR: cf_action_push_cache_rules]
+        self._check_waf_caller_authorized()
+        website = (
+            self.env["website"].browse(website_id)
+            if website_id
+            else self.env["website"].get_current_website()
+        )
+        token, zone_id = website._get_cloudflare_credentials()
+        if not token or not zone_id:
+            return False, f"Missing API credentials for {website.name}."
+
+        rules, error = self._build_cache_ruleset_rules(
+            self._cache_rules_for_website(website)
+        )
+        if error:
+            return False, error
+
+        ruleset_payload = {
+            "name": f"Odoo Cache Rules - {website.name}",
+            "kind": "zone",
+            "phase": self.CACHE_PHASE,
+            "rules": rules,
+        }
+        existing_ruleset = get_zone_ruleset(self.CACHE_PHASE, token, zone_id)
+        if existing_ruleset and "id" in existing_ruleset:
+            return update_zone_ruleset(
+                existing_ruleset["id"], ruleset_payload, token, zone_id
+            )
+        return create_zone_ruleset(ruleset_payload, token, zone_id)

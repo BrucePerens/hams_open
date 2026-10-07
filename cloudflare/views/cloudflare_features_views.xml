@@ -204,7 +204,11 @@
                     <sheet>
                         <group>
                             <field name="name"/>
-                            <field name="edge_cache_ttl"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                            <field name="rule_action"/>
+                            <field name="expression"/>
+                            <field name="edge_cache_ttl" invisible="rule_action == 'bypass'"/>
                             <field name="bypass_rules"/>
                             <field name="website_id" groups="website.group_multi_website"/>
                         </group>
@@ -220,8 +224,14 @@
             <field name="model">cloudflare.cache.rule</field>
             <field name="arch" type="xml">
                 <list>
+                    <header>
+                        <button name="action_push_to_cloudflare" type="object" string="Push to Cloudflare" display="always" groups="base.group_system"/>
+                    </header>
+                    <field name="sequence" widget="handle"/>
                     <field name="name"/>
+                    <field name="rule_action"/>
                     <field name="edge_cache_ttl"/>
+                    <field name="active"/>
                     <field name="website_id" groups="website.group_multi_website"/>
                 </list>
             </field>
