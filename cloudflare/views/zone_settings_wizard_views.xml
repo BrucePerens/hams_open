@@ -9,14 +9,19 @@
             <form string="Zone Settings">
                 <sheet>
                     <group>
-                        <group>
+                        <group string="Profile &amp; Caching">
                             <field name="website_id" groups="website.group_multi_website"/>
                             <field name="security_level"/>
-                        </group>
-                        <group>
                             <field name="development_mode"/>
-                            <field name="always_use_https"/>
                             <field name="browser_cache_ttl"/>
+                        </group>
+                        <group string="HTTPS &amp; Transport Security">
+                            <field name="always_use_https"/>
+                            <field name="hsts_status"/>
+                            <field name="hsts_max_age" invisible="hsts_status != 'on'"/>
+                            <field name="hsts_include_subdomains" invisible="hsts_status != 'on'"/>
+                            <field name="hsts_nosniff" invisible="hsts_status != 'on'"/>
+                            <field name="hsts_preload" invisible="hsts_status != 'on'"/>
                         </group>
                     </group>
                 </sheet>

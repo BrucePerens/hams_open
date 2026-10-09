@@ -48,3 +48,79 @@ class TestZoneSettingsAlwaysUseHttps(HamsTransactionCase):
     def test_05_field_is_on_the_form(self):
         arch = self.env["cloudflare.zone.settings.wizard"].get_view(view_type="form")["arch"]
         self.assertIn("always_use_https", arch)
+
+    def test_06_apply_sends_hsts_security_header(self):
+        # Tests [@ANCHOR: cloudflare:COMM_zone_settings_security_header]
+        wiz = self.env["cloudflare.zone.settings.wizard"].create({
+            "hsts_status": "on",
+            "hsts_max_age": 86400,
+            "hsts_include_subdomains": True,
+            "hsts_nosniff": True,
+            "hsts_preload": True,
+        })
+        self.safe_patch(CREDS, return_value=("tok", "zone"))
+        upd = self.safe_patch(WIZ + ".update_zone_setting", return_value=(True, "ok"))
+        wiz.action_apply_settings()
+        expected_val = {
+            "strict_transport_security": {
+                "enabled": True,
+                "max_age": 86400,
+                "include_subdomains": True,
+                "nosniff": True,
+                "preload": True,
+            }
+        }
+        upd.assert_called_once_with("security_header", expected_val, "tok", "zone")
+
+    def test_07_apply_sends_hsts_disabled_when_off(self):
+        wiz = self.env["cloudflare.zone.settings.wizard"].create({"hsts_status": "off"})
+        self.safe_patch(CREDS, return_value=("tok", "zone"))
+        upd = self.safe_patch(WIZ + ".update_zone_setting", return_value=(True, "ok"))
+        wiz.action_apply_settings()
+        expected_val = {
+            "strict_transport_security": {
+                "enabled": False,
+                "max_age": 0,
+                "include_subdomains": False,
+                "nosniff": False,
+            }
+        }
+        upd.assert_called_once_with("security_header", expected_val, "tok", "zone")
+
+    def test_08_default_get_reads_hsts_security_header(self):
+        self.safe_patch(CREDS, return_value=("tok", "zone"))
+        self.safe_patch(
+            WIZ + ".get_zone_settings",
+            return_value=[{
+                "id": "security_header",
+                "value": {
+                    "strict_transport_security": {
+                        "enabled": True,
+                        "max_age": 31536000,
+                        "include_subdomains": True,
+                        "nosniff": True,
+                        "preload": False,
+                    }
+                },
+            }],
+        )
+        res = self.env["cloudflare.zone.settings.wizard"].default_get([
+            "hsts_status",
+            "hsts_max_age",
+            "hsts_include_subdomains",
+            "hsts_nosniff",
+            "hsts_preload",
+        ])
+        self.assertEqual(res["hsts_status"], "on")
+        self.assertEqual(res["hsts_max_age"], 31536000)
+        self.assertTrue(res["hsts_include_subdomains"])
+        self.assertTrue(res["hsts_nosniff"])
+        self.assertFalse(res["hsts_preload"])
+
+    def test_09_hsts_fields_are_on_the_form(self):
+        arch = self.env["cloudflare.zone.settings.wizard"].get_view(view_type="form")["arch"]
+        self.assertIn("hsts_status", arch)
+        self.assertIn("hsts_max_age", arch)
+        self.assertIn("hsts_include_subdomains", arch)
+        self.assertIn("hsts_nosniff", arch)
+        self.assertIn("hsts_preload", arch)
