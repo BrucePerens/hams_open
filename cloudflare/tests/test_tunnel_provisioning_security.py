@@ -546,6 +546,20 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
             mock_push.call_args[0][3]["config"]["ingress"][-1], {"service": "http_status:404"}
         )
 
+        # Test warning notification and log when catch_all_service points directly to port 8069 vs 8085
+        tunnel.catch_all_service = "http://localhost:8069"  # burn-ignore-cloudflared-ingress
+        mock_push.reset_mock()
+        with self.assertLogs("odoo.addons.cloudflare.models.tunnel", level="WARNING") as cm:
+            res_warn = tunnel.action_push_configuration()
+        self.assertEqual(res_warn["params"]["type"], "warning")
+        self.assertIn("8069", res_warn["params"]["message"])
+        self.assertTrue(any(":8069" in msg for msg in cm.output))
+
+        tunnel.catch_all_service = "http://localhost:8085"  # burn-ignore-cloudflared-ingress
+        mock_push.reset_mock()
+        res_ok = tunnel.action_push_configuration()
+        self.assertEqual(res_ok["params"]["type"], "success")
+
         for bad in (
             "", "http_status:40", "http://a b", "no-scheme:8069",
             "ssh://host:22", "http://host:8069\nx",
