@@ -201,9 +201,16 @@
             <field name="model">cloudflare.cache.rule</field>
             <field name="arch" type="xml">
                 <form>
+                    <header>
+                        <button name="action_push_to_cloudflare" type="object" string="Push cache rules to Cloudflare" class="btn-primary"/>
+                    </header>
                     <sheet>
                         <group>
                             <field name="name"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                            <field name="action"/>
+                            <field name="expression"/>
                             <field name="edge_cache_ttl"/>
                             <field name="bypass_rules"/>
                             <field name="website_id" groups="website.group_multi_website"/>
@@ -220,7 +227,9 @@
             <field name="model">cloudflare.cache.rule</field>
             <field name="arch" type="xml">
                 <list>
+                    <field name="sequence" widget="handle"/>
                     <field name="name"/>
+                    <field name="action"/>
                     <field name="edge_cache_ttl"/>
                     <field name="website_id" groups="website.group_multi_website"/>
                 </list>

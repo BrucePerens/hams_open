@@ -336,3 +336,67 @@ class CloudflareConfigManager(models.AbstractModel):
             )
         else:
             return create_zone_ruleset(ruleset_payload, token, zone_id)
+
+    @api.model
+    def _build_cache_ruleset_rules(self, website):
+        """Turn the website's active cache rules into Cloudflare cache-settings rules.
+
+        Bypass rules go first whatever their sequence, so no moment exists where a
+        cache rule is live without the bypass in front of it (decision 112).
+        """
+        rules = self.env["cloudflare.cache.rule"].search(
+            [
+                ("active", "=", True),
+                "|",
+                ("website_id", "=", website.id),
+                ("website_id", "=", False),
+            ],
+            limit=1000,
+        )
+        ordered = rules.sorted(lambda r: (r.action != "bypass", r.sequence, r.id))
+        payload = []
+        for r in ordered:
+            if r.action == "bypass":
+                params = {"cache": False}
+            elif r.edge_cache_ttl and r.edge_cache_ttl > 0:
+                params = {
+                    "cache": True,
+                    "edge_ttl": {"mode": "override_origin", "default": r.edge_cache_ttl},
+                }
+            else:
+                params = {"cache": True, "edge_ttl": {"mode": "respect_origin"}}
+            payload.append(
+                {
+                    "action": "set_cache_settings",
+                    "action_parameters": params,
+                    "expression": (r.expression or "true").strip(),
+                    "description": r.name,
+                    "enabled": True,
+                }
+            )
+        return payload
+
+    @api.model
+    def action_push_cache_rules(self, website_id=None):
+        """Push the Odoo cache rules to Cloudflare's http_request_cache_settings phase."""
+        self._check_waf_caller_authorized()
+        website = (
+            self.env["website"].browse(website_id)
+            if website_id
+            else self.env["website"].get_current_website()
+        )
+        token, zone_id = website._get_cloudflare_credentials()
+        if not token or not zone_id:
+            return False, f"Missing API credentials for {website.name}."
+
+        phase = "http_request_cache_settings"
+        ruleset_payload = {
+            "name": f"Odoo Cache Rules - {website.name}",
+            "kind": "zone",
+            "phase": phase,
+            "rules": self._build_cache_ruleset_rules(website),
+        }
+        existing = get_zone_ruleset(phase, token, zone_id)
+        if existing and "id" in existing:
+            return update_zone_ruleset(existing["id"], ruleset_payload, token, zone_id)
+        return create_zone_ruleset(ruleset_payload, token, zone_id)
