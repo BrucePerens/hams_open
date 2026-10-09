@@ -90,8 +90,9 @@ class CloudflareTunnel(models.Model):
         required=True,
         default=DEFAULT_CATCH_ALL_SERVICE,
         help="Service that answers every hostname no other rule matches; always the last rule of "
-        "a push. The default is this Odoo. An http(s) URL or http_status:<code> "
-        "(for example http_status:404).",
+        "a push. The default is this Odoo (port 8069). An http(s) URL or http_status:<code> "
+        "(for example http_status:404). Note: in production with an nginx buffering front end, "
+        "point this to the reverse proxy (e.g. port 8085) to prevent slow clients from truncating large downloads.",
     )
 
     @api.constrains("catch_all_service")
@@ -206,6 +207,7 @@ class CloudflareTunnel(models.Model):
         # them inside the loop would re-run the identical query once per
         # tunnel.
         global_routes = self.env["cloudflare.tunnel.route"].search([("tunnel_id", "=", False)], limit=10000)
+        warn_tunnels = []
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
             account_id = tunnel.website_id.cloudflare_account_id
@@ -214,6 +216,16 @@ class CloudflareTunnel(models.Model):
                 raise UserError(
                     _("Missing Cloudflare API Token or Account ID for the website.")
                 )
+
+            if ":8069" in (tunnel.catch_all_service or ""):
+                _logger.warning(
+                    "Tunnel %s: catch_all_service points directly to port 8069 (%s); "
+                    "in production with an nginx reverse proxy (e.g. port 8085), "
+                    "direct connections bypass buffering and slow clients may truncate downloads.",
+                    tunnel.display_name,
+                    tunnel.catch_all_service,
+                )
+                warn_tunnels.append(tunnel.display_name)
 
             ingress = tunnel._build_ingress(global_routes)
             problems = tunnel._ingress_problems(ingress)
@@ -245,6 +257,23 @@ class CloudflareTunnel(models.Model):
         # tunnel in `self` is actually processed before the one summary
         # notification is returned.
         # Simple notification since mail.thread isn't used
+        if warn_tunnels:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": _("Pushed with Warning"),
+                    "message": _(
+                        "Successfully pushed configuration to Cloudflare. "
+                        "Warning: tunnel %(tunnels)s catch-all points directly to port 8069; "
+                        "consider an nginx buffering front end (e.g. port 8085) to prevent truncated downloads.",
+                        tunnels=", ".join(warn_tunnels),
+                    ),
+                    "type": "warning",
+                    "sticky": True,
+                },
+            }
+
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
