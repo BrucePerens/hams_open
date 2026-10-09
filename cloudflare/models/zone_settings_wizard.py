@@ -39,6 +39,30 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
         "Cloudflare's edge, before it reaches the origin. Leave unset to "
         "keep the zone's current value.",
     )
+    hsts_status = fields.Selection(
+        [("on", "On"), ("off", "Off")],
+        string="HSTS (Strict-Transport-Security)",
+        help="Enable or disable HTTP Strict Transport Security (HSTS) at Cloudflare's edge. "
+        "Leave unset to keep the zone's current value.",
+    )
+    hsts_max_age = fields.Integer(
+        string="HSTS Max Age (seconds)",
+        default=86400,
+        help="Max age in seconds for Strict-Transport-Security header (e.g. 86400 for 1 day, 31536000 for 1 year).",
+    )
+    hsts_include_subdomains = fields.Boolean(
+        string="HSTS Include Subdomains",
+        help="Whether to include subdomains in the HSTS header.",
+    )
+    hsts_nosniff = fields.Boolean(
+        string="HSTS No-Sniff",
+        default=True,
+        help="Whether to include the X-Content-Type-Options: nosniff header.",
+    )
+    hsts_preload = fields.Boolean(
+        string="HSTS Preload",
+        help="Permit inclusion of this domain in the HSTS preload list.",
+    )
     browser_cache_ttl = fields.Integer(
         string="Browser Cache TTL (seconds)",
         help="Time in seconds. 0 means respect existing headers.",
@@ -75,6 +99,21 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
                         and "always_use_https" in fields_list
                     ):
                         res["always_use_https"] = setting.get("value")
+                    elif setting.get("id") == "security_header":
+                        val = setting.get("value")
+                        if isinstance(val, dict):
+                            hsts = val.get("strict_transport_security")
+                            if isinstance(hsts, dict):
+                                if "hsts_status" in fields_list:
+                                    res["hsts_status"] = "on" if hsts.get("enabled") else "off"
+                                if "hsts_max_age" in fields_list and hsts.get("max_age") is not None:
+                                    res["hsts_max_age"] = hsts.get("max_age")
+                                if "hsts_include_subdomains" in fields_list and "include_subdomains" in hsts:
+                                    res["hsts_include_subdomains"] = hsts.get("include_subdomains")
+                                if "hsts_nosniff" in fields_list and "nosniff" in hsts:
+                                    res["hsts_nosniff"] = hsts.get("nosniff")
+                                if "hsts_preload" in fields_list and "preload" in hsts:
+                                    res["hsts_preload"] = hsts.get("preload")
                     elif (
                         setting.get("id") == "browser_cache_ttl"
                         and "browser_cache_ttl" in fields_list
@@ -114,6 +153,24 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
             )
             if not success:
                 errors.append(f"Always Use HTTPS: {msg}")
+
+        # [@ANCHOR: cloudflare:COMM_zone_settings_security_header]
+        if self.hsts_status:
+            hsts_val = {
+                "strict_transport_security": {
+                    "enabled": self.hsts_status == "on",
+                    "max_age": int(self.hsts_max_age or 86400) if self.hsts_status == "on" else 0,
+                    "include_subdomains": bool(self.hsts_include_subdomains) if self.hsts_status == "on" else False,
+                    "nosniff": bool(self.hsts_nosniff) if self.hsts_status == "on" else False,
+                }
+            }
+            if self.hsts_status == "on" and self.hsts_preload:
+                hsts_val["strict_transport_security"]["preload"] = True
+            success, msg = update_zone_setting(
+                "security_header", hsts_val, token, zone_id
+            )
+            if not success:
+                errors.append(f"Security Header (HSTS): {msg}")
 
         # Bug fix (bug-hunt, review_tier 1, 2026-09-09): `is not False` was a
         # vacuous/dead check (bug class 1) -- Odoo's Integer field never
