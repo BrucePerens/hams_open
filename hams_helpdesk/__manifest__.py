@@ -25,6 +25,7 @@
         "views/shift_handoff_views.xml",
         "views/dashboard_views.xml",
         "views/portal_templates.xml",
+        "data/member_menu_data.xml",
     ],
     "assets": {
         "web.assets_tests": [

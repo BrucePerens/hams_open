@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © Bruce Perens K6BP. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- Support: /my/tickets (the member's help-desk tickets, "New Ticket" on it). [@ANCHOR: hams_helpdesk:member_menu_item]
+         Signed-in members only: website.menu's record rule hides an item with group_ids from everyone else, in the
+         top bar and the mobile menu. ham_init puts it under Learn, next to Help (HAMS_MENU_GROUPS), and its test
+         ham_init/tests/test_member_menu_items.py checks it. -->
+    <record id="menu_hams_support" model="website.menu">
+        <field name="name">Support</field>
+        <field name="url">/my/tickets</field>
+        <field name="parent_id" ref="website.main_menu"/>
+        <field name="sequence" type="int">93</field>
+        <field name="group_ids" eval="[(6, 0, [ref('base.group_portal'), ref('base.group_user')])]"/>
+    </record>
+</odoo>
