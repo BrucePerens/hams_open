@@ -18,6 +18,18 @@ _logger = logging.getLogger(__name__)
 
 _md_cache = lru.LRU(1024)
 
+# Headings of the Help index, in the order readers meet them. A member
+# manual names its heading with "help_topic" in its knowledge_docs entry;
+# unknown headings follow alphabetically, then "Other guides".
+HELP_TOPIC_ORDER = (
+    "Getting started and your account",
+    "Operating your station",
+    "Community",
+    "Training and testing",
+    "Your website",
+)
+DEFAULT_HELP_TOPIC = "Other guides"
+
 class ManualLibraryController(http.Controller):
 
     def _compile_markdown(self, html_body, article_id=None, write_date=None):
@@ -111,25 +123,88 @@ class ManualLibraryController(http.Controller):
             _md_cache[cache_key] = res
         return res
 
+    def _is_manual_manager(self):
+        # [@ANCHOR: knowledge:is_manual_manager]
+        return request.env.user.has_group("knowledge.group_manual_manager")
+
+    def _help_domain(self):
+        # [@ANCHOR: knowledge:help_audience_domain]
+        """Domain for what the Help pages may list, search and open.
+
+        Member user manuals that are published, plus articles shared with
+        this user by name. Internal documentation never matches, whoever
+        is asking: a Manual Administrator reaches it through the labelled
+        administrators-only view (`_internal_domain`), not through Help.
+        """
+        website_id = request.website.id if request.website else False
+        return [
+            ("website_id", "in", (False, website_id)),
+            "|",
+            "&",
+            ("is_published", "=", True),
+            ("audience", "=", "member"),
+            ("member_ids", "in", request.env.user.ids),
+        ]
+
+    def _internal_domain(self):
+        # [@ANCHOR: knowledge:help_internal_domain]
+        """Domain for the administrators-only view: everything Help hides."""
+        website_id = request.website.id if request.website else False
+        return [
+            ("website_id", "in", (False, website_id)),
+            "|",
+            ("audience", "!=", "member"),
+            ("is_published", "=", False),
+        ]
+
+    def _help_topics(self, articles):
+        # [@ANCHOR: knowledge:help_topics]
+        """Group member manuals by help topic, in a stable reader-friendly order."""
+        by_topic = {}
+        for article in articles:
+            topic = article.help_topic or DEFAULT_HELP_TOPIC
+            by_topic.setdefault(topic, []).append(article)
+
+        def topic_key(topic):
+            if topic in HELP_TOPIC_ORDER:
+                return (0, HELP_TOPIC_ORDER.index(topic), topic)
+            if topic == DEFAULT_HELP_TOPIC:
+                return (2, 0, topic)
+            return (1, 0, topic.lower())
+
+        return [
+            (topic, sorted(by_topic[topic], key=lambda a: a.name.lower()))
+            for topic in sorted(by_topic, key=topic_key)
+        ]
+
+    def _can_open_article(self, article):
+        # [@ANCHOR: knowledge:can_open_article]
+        """True when this reader may open the article by its URL."""
+        user = request.env.user
+        if self._is_manual_manager():
+            return True
+        if user.id in article.member_ids.ids:
+            return True
+        if article.audience != "member":
+            return False
+        if user.has_group("base.group_user"):
+            return True
+        return bool(article.is_published)
+
     def _get_sidebar_articles(self):
         """Helper to fetch and group root articles for the sidebar."""
         # [@ANCHOR: manual_sidebar_search_optimization]
         # Performance: Reducing 3 RPC/DB round-trips to 1 by using a combined domain.
         user_id = request.env.user.id
-        website_id = request.website.id if request.website else False
 
-        base_domain = [
-            ("parent_id", "=", False),
-            ("website_id", "in", (False, website_id)),
-        ]
-        is_internal = request.env.user.has_group("base.group_user")
-        if not is_internal:
-            base_domain += ["|", ("is_published", "=", True), ("member_ids", "in", user_id)]
+        base_domain = [("parent_id", "=", False)] + self._help_domain()
 
         # Manual Administrators may read every article, including internal
         # documentation whose permission is "none" (see the documentation
-        # installer in zero_sudo), so they get the unrestricted list.
-        is_manager = request.env.user.has_group("knowledge.group_manual_manager")
+        # installer in zero_sudo). Internal documentation is not in the
+        # help domain at all, so it never reaches this sidebar; the
+        # permission filter below only sorts out personal articles.
+        is_manager = self._is_manual_manager()
 
         # Combined domain to fetch all relevant root articles in one go
         combined_domain = list(base_domain)
@@ -157,8 +232,8 @@ class ManualLibraryController(http.Controller):
             and not a.member_ids
         )
         if is_manager:
-            # Internal documentation that is neither shared nor private to
-            # this administrator still belongs in the main list for them.
+            # Member manuals that are neither shared nor private to this
+            # administrator still belong in the main list for them.
             workspace_articles = all_roots - shared_articles - private_articles
         else:
             workspace_articles = all_roots.filtered(
@@ -166,6 +241,21 @@ class ManualLibraryController(http.Controller):
             )
 
         return workspace_articles, shared_articles, private_articles
+
+    def _sidebar_context(self):
+        # [@ANCHOR: knowledge:sidebar_context]
+        workspace_articles, shared_articles, private_articles = (
+            self._get_sidebar_articles()
+        )
+        user = request.env.user
+        return {
+            "workspace_articles": workspace_articles,
+            "shared_articles": shared_articles,
+            "private_articles": private_articles,
+            "is_internal_user": user.has_group("base.group_user")
+            or user.has_group("base.group_portal"),
+            "is_manual_manager": self._is_manual_manager(),
+        }
 
     @http.route(
         ["/manual", "/manual/<string:article_slug>"],
@@ -195,25 +285,16 @@ class ManualLibraryController(http.Controller):
             except (ValueError, IndexError, AccessError, UserError):
                 raise werkzeug.exceptions.NotFound()
 
-        # 2. Fetch root articles for the sidebar navigation
-        workspace_articles, shared_articles, private_articles = (
-            self._get_sidebar_articles()
-        )
-
-        # 3. If no specific article is requested, default to the first available root article
+        # 2. No article asked for: this is the Help index, a landing page
+        # listing the member user manuals by topic. It used to open whichever
+        # article happened to be installed first (for an administrator,
+        # "External Dependencies").
         if not article:
-            if workspace_articles:
-                article = workspace_articles[0]
-            elif shared_articles:
-                article = shared_articles[0]
-            elif private_articles:
-                article = private_articles[0]
+            return self._render_help_index()
 
-        # 4. Handle 404s gracefully
-        if not article or not article.exists():
+        # 3. Enforce Read Context (Public/Guest)
+        if not article.exists():
             raise werkzeug.exceptions.NotFound()
-
-        # 5. Enforce Read Context (Public/Guest)
         try:
             # Re-browse with the explicit user environment to trigger record rules
             user_article = (
@@ -226,10 +307,11 @@ class ManualLibraryController(http.Controller):
         except AccessError:
             raise werkzeug.exceptions.NotFound()
 
-        is_internal = request.env.user.has_group("base.group_user")
-        if not is_internal and not user_article.is_published:
-            if request.env.user.id not in user_article.member_ids.ids:
-                raise werkzeug.exceptions.NotFound()
+        # 4. [@ANCHOR: knowledge:internal_article_url_404] Internal
+        # documentation answers 404, not 403, to everyone but a Manual
+        # Administrator, so its existence is not revealed.
+        if not self._can_open_article(user_article):
+            raise werkzeug.exceptions.NotFound()
 
         # 6. Canonical Redirect for SEO: ensure the slug matches current name
         if article_slug and article.website_url != request.httprequest.path:
@@ -245,12 +327,43 @@ class ManualLibraryController(http.Controller):
                 "main_object": article,
                 "article": article,
                 "compiled_body": compiled_body,
-                "workspace_articles": workspace_articles,
-                "shared_articles": shared_articles,
-                "private_articles": private_articles,
                 "search_term": "",
-                "is_internal_user": is_internal
-                or request.env.user.has_group("base.group_portal"),
+                "is_internal_article": article.audience != "member",
+                **self._sidebar_context(),
+            },
+        )
+
+    # [@ANCHOR: knowledge:help_index]
+    def _render_help_index(self):
+        """The Help landing page: member user manuals by topic, with search."""
+        articles = request.env["knowledge.article"].search(
+            [("parent_id", "=", False)] + self._help_domain(), limit=1000
+        )
+        return request.render(
+            "knowledge.help_index_template",
+            {
+                "topics": self._help_topics(articles),
+                "search_term": "",
+                **self._sidebar_context(),
+            },
+        )
+
+    # [@ANCHOR: knowledge:internal_index]
+    @http.route(["/manual/internal"], type="http", auth="public", website=True)
+    def manual_internal_index(self, search="", **kwargs):
+        """Administrators-only list of the documentation Help hides."""
+        if not self._is_manual_manager():
+            raise werkzeug.exceptions.NotFound()
+        domain = self._internal_domain()
+        if search:
+            domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
+        articles = request.env["knowledge.article"].search(domain, limit=1000)
+        return request.render(
+            "knowledge.internal_index_template",
+            {
+                "articles": articles.sorted(lambda a: a.name.lower()),
+                "search_term": search,
+                **self._sidebar_context(),
             },
         )
 
@@ -263,34 +376,20 @@ class ManualLibraryController(http.Controller):
         """
         Provides full-text search across accessible articles.
         """
-        domain = []
+        # [@ANCHOR: knowledge:help_search_member_only] Only member user
+        # manuals are searched, for every reader including administrators.
+        domain = self._help_domain()
         if search:
             domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
 
-        # Explicitly filter by website_id in case record rules are not enough for frontend context
-        website_id = request.website.id if request.website else False
-        domain += [("website_id", "in", (False, website_id))]
-        is_internal = request.env.user.has_group("base.group_user")
-        if not is_internal:
-            domain += ["|", ("is_published", "=", True), ("member_ids", "in", request.env.user.ids)]
-
         articles = request.env["knowledge.article"].search(domain, limit=1000)
-
-        # Fetch and group root articles for the sidebar navigation
-        workspace_articles, shared_articles, private_articles = (
-            self._get_sidebar_articles()
-        )
 
         return request.render(
             "knowledge.search_results_template",
             {
                 "articles": articles,
                 "search_term": search,
-                "workspace_articles": workspace_articles,
-                "shared_articles": shared_articles,
-                "private_articles": private_articles,
-                "is_internal_user": request.env.user.has_group("base.group_user")
-                or request.env.user.has_group("base.group_portal"),
+                **self._sidebar_context(),
             },
         )
 
@@ -338,6 +437,8 @@ class ManualLibraryController(http.Controller):
                 _logger.debug(
                     "No exact article match for %r; falling through to search", search
                 )
+        if not search:
+            return self.manual_article_view(**kwargs)
         return self.manual_search(search=search, **kwargs)
 
     # [@ANCHOR: knowledge:COMM_manual_article_by_name]
@@ -367,16 +468,18 @@ class ManualLibraryController(http.Controller):
             .replace("%", "\\%")
             .replace("_", "\\_")
         )
-        website_id = request.website.id if request.website else False
-        domain = [
-            ("name", "=ilike", escaped_name),
-            ("website_id", "in", (False, website_id)),
-        ]
-        is_internal = request.env.user.has_group("base.group_user")
-        if not is_internal:
-            domain += ["|", ("is_published", "=", True), ("member_ids", "in", request.env.user.ids)]
-        
-        article = request.env["knowledge.article"].search(domain, limit=1)
+        # Help links resolve to member manuals only. A Manual
+        # Administrator's links may also reach internal documentation.
+        if self._is_manual_manager():
+            website_id = request.website.id if request.website else False
+            domain = [("website_id", "in", (False, website_id))]
+        else:
+            domain = self._help_domain()
+        domain = [("name", "=ilike", escaped_name)] + domain
+
+        article = request.env["knowledge.article"].search(
+            domain, limit=1, order="audience desc, id"
+        )
         if article:
             return request.redirect(article.website_url)
         raise werkzeug.exceptions.NotFound()

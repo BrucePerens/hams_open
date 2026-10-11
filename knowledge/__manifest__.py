@@ -9,7 +9,7 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com",
     "category": "Website",
-    "version": "1.2",
+    "version": "1.3",
     "license": "AGPL-3",
     "depends": [
         "base",
@@ -81,6 +81,12 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
             "path": "docs/stories/feedback.md",
             "name": "Story: Article Feedback",
             "icon": "💬",
+            "category": "workspace",
+        },
+        {
+            "path": "docs/stories/help_member_only.md",
+            "name": "Story: Help Shows Only User Manuals",
+            "icon": "📚",
             "category": "workspace",
         },
         {

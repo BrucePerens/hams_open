@@ -116,6 +116,32 @@ class KnowledgeArticle(models.Model):
         tracking=True,
     )
 
+    # [@ANCHOR: knowledge:article_audience]
+    # Who the article is written for. "member" articles are the user manuals
+    # the Help pages list, search and open for everyone. "internal" articles
+    # (stories, journeys, architecture, module reference, external
+    # dependencies, claims) are for administrators only: no Help page lists
+    # them, no search finds them, and a direct URL gives anyone but a Manual
+    # Administrator a 404. The documentation loader in zero_sudo always sets
+    # this explicitly and treats anything it cannot classify as internal.
+    # The field default is "member" only so that an article an administrator
+    # writes and publishes by hand in the backend keeps working as before.
+    audience = fields.Selection(
+        [
+            ("member", "Member user manual"),
+            ("internal", "Internal (administrators only)"),
+        ],
+        string="Audience",
+        default="member",
+        required=True,
+        index=True,
+        tracking=True,
+    )
+    help_topic = fields.Char(
+        string="Help Topic",
+        help="Heading the Help index files this member manual under.",
+    )
+
     member_ids = fields.Many2many(
         "res.users",
         "knowledge_article_member_rel",
@@ -334,19 +360,22 @@ class KnowledgeArticle(models.Model):
         # blog.post (see _search_get_detail there for the base shape).
         with_description = options["displayDescription"]
         # Matches the visibility rule controllers/main.py's own listing
-        # endpoints already use: internal staff (base.group_user) see
-        # everything regardless of publish state; everyone else only sees
-        # published articles, or ones they're specifically a member of.
-        # Found live 2026-08-29 reviewing this same-night fix: the first
-        # version of this domain checked is_published only, so a logged-in
-        # member searching for their own member-only article would get
-        # zero results here even though the same article is directly
-        # visible to them everywhere else on the site.
+        # endpoints use: published member manuals, or articles this user is
+        # specifically a member of. Found live 2026-08-29: the first version
+        # checked is_published only, so a logged-in member searching for their
+        # own member-only article got zero results here even though the same
+        # article is directly visible to them everywhere else on the site.
+        # Site search is for readers, never a back door to internal
+        # documentation: only member manuals (plus articles explicitly
+        # shared with this user) are searched, whoever is asking.
         user_id = self.env.user.id
-        if self.env.user.has_group("base.group_user"):
-            visibility_domain = []
-        else:
-            visibility_domain = ["|", ("is_published", "=", True), ("member_ids", "in", user_id)]
+        visibility_domain = [
+            "|",
+            "&",
+            ("is_published", "=", True),
+            ("audience", "=", "member"),
+            ("member_ids", "in", user_id),
+        ]
         domain = [
             visibility_domain,
             website.website_domain(),

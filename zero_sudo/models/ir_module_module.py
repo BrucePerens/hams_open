@@ -22,7 +22,58 @@ INTERNAL_DOC_DIRECTORIES = frozenset({"stories", "journeys", "runbooks"})
 # Folded into every installed document's hash. Bump it when the conversion or
 # the visibility policy below changes, so already-installed articles refresh
 # even though their files did not change.
-DOC_INSTALL_VERSION = b"\0doc-install-v2"
+DOC_INSTALL_VERSION = b"\0doc-install-v3"
+
+# The two audiences a documentation article can have. Only "member" articles
+# are listed, searchable or reachable by URL for ordinary readers.
+AUDIENCE_MEMBER = "member"
+AUDIENCE_INTERNAL = "internal"
+
+# Shown on the Help index for a member document whose manifest entry names
+# no "help_topic".
+DEFAULT_HELP_TOPIC = "Other guides"
+
+# A file with one of these names (case-insensitive) is developer
+# documentation wherever it sits.
+INTERNAL_DOC_FILENAMES = frozenset({"readme.md", "readme.html"})
+
+# A document title that starts like this is a story or a journey.
+INTERNAL_DOC_TITLE_PREFIXES = ("story:", "journey:")
+
+
+# [@ANCHOR: zero_sudo:classify_doc_audience]
+def classify_doc_audience(path, doc_info):
+    """Return "member" or "internal" for one `knowledge_docs` manifest entry.
+
+    Unknown means internal. A document is for members only when its manifest
+    entry says so ("public": True, or "audience": "member") AND nothing about
+    where it lives or what it is called marks it as developer documentation:
+    stories, journeys and runbooks directories, a README, or a title that
+    starts "Story:" or "Journey:". The markers win over the opt-in, so a
+    developer document cannot be exposed by a stray flag.
+    """
+    parts = [
+        part.lower()
+        for part in (path or "").replace("\\", "/").split("/")
+        if part
+    ]
+    if not parts:
+        return AUDIENCE_INTERNAL
+    if any(part in INTERNAL_DOC_DIRECTORIES for part in parts[:-1]):
+        return AUDIENCE_INTERNAL
+    if parts[-1] in INTERNAL_DOC_FILENAMES:
+        return AUDIENCE_INTERNAL
+    title = str((doc_info or {}).get("name") or "").strip().lower()
+    if title.startswith(INTERNAL_DOC_TITLE_PREFIXES):
+        return AUDIENCE_INTERNAL
+    explicit = (doc_info or {}).get("audience")
+    if explicit is not None:
+        if explicit == AUDIENCE_MEMBER:
+            return AUDIENCE_MEMBER
+        return AUDIENCE_INTERNAL
+    if (doc_info or {}).get("public") is True:
+        return AUDIENCE_MEMBER
+    return AUDIENCE_INTERNAL
 
 
 class Module(models.Model):
@@ -155,6 +206,12 @@ class Module(models.Model):
         return any(part in INTERNAL_DOC_DIRECTORIES for part in parts[:-1])
 
     @api.model
+    # [@ANCHOR: zero_sudo:doc_audience_for]
+    def _doc_audience_for(self, path, doc_info):
+        """Model-level door to classify_doc_audience, for callers and tests."""
+        return classify_doc_audience(path, doc_info)
+
+    @api.model
     # [@ANCHOR: zero_sudo:is_path_within_module_dir]
     def _is_path_within_module_dir(self, base_dir, resolved_path):
         # bug-hunt (2026-09-13): a bare .startswith(base_dir) matches by
@@ -204,18 +261,20 @@ class Module(models.Model):
         category = doc_info.get("category", "workspace")
         # Module-authored docs (architecture notes, security internals, runbooks,
         # developer/story/journey guides) are internal engineering documentation by
-        # default. A module must explicitly opt in with "public": True in its
-        # knowledge_docs manifest entry for a doc to appear in the public/anonymous
-        # website help sidebar -- see night_shift_todo.md, internal-doc-exposure fix.
-        is_public = bool(doc_info.get("public", False))
-        if is_public and self._is_internal_doc_path(path):
+        # default. A module must explicitly opt in with "public": True (or
+        # "audience": "member") in its knowledge_docs manifest entry for a doc to
+        # appear in the Help pages -- and a story, journey, runbook, README or
+        # "Story:"/"Journey:" title can never opt in. See classify_doc_audience.
+        audience = classify_doc_audience(path, doc_info)
+        is_public = audience == AUDIENCE_MEMBER
+        if doc_info.get("public") is True and not is_public:
             _logger.error(
-                "Knowledge document %s (%s) is a story, journey or runbook and "
-                'cannot be "public"; installing it as admin-only.',
+                "Knowledge document %s (%s) is developer documentation "
+                'and cannot be for members; installing it as internal.',
                 name,
                 module_name,
             )
-            is_public = False
+        help_topic = str(doc_info.get("help_topic") or "").strip()
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
         existing_hash = existing_hashes.get(hash_key) if existing_hashes is not None else utils._get_kv(hash_key)
@@ -235,6 +294,13 @@ class Module(models.Model):
         # internal user, leaving it to Manual Administrators only.
         vals["internal_permission"] = "read" if is_public else "none"
         vals["icon"] = icon
+        # Soft dependency: Odoo Enterprise's Knowledge has neither field.
+        if "audience" in Article._fields:
+            vals["audience"] = audience
+        if "help_topic" in Article._fields:
+            vals["help_topic"] = (
+                help_topic or DEFAULT_HELP_TOPIC if is_public else False
+            )
 
         # bug-hunt (2026-09-13): article identity is looked up by this
         # module's OWN previously-recorded article id, never by searching

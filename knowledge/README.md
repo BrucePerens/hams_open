@@ -63,7 +63,7 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, `
 
 ## 2. Interoperability
 *   **Fields Supported:** `name`, `body` (HTML), `parent_id`, `sequence`, `is_published`, `icon`, `active`, `internal_permission`, `member_ids`.
-*   Supports automated doc installation via the `knowledge_docs` manifest key and the `zero_sudo` bootstrap facility (`ir.module.module._bootstrap_knowledge_docs()`, which creates or updates one article per manifest entry when the file's content changes). An installed doc is unpublished and readable only by Manual Administrators (`internal_permission = 'none'`) unless its manifest entry sets `"public": True`; stories, journeys and runbooks are never published even then.
+*   Supports automated doc installation via the `knowledge_docs` manifest key and the `zero_sudo` bootstrap facility (`ir.module.module._bootstrap_knowledge_docs()`, which creates or updates one article per manifest entry when the file's content changes). An installed doc is unpublished and readable only by Manual Administrators (`internal_permission = 'none'`) unless its manifest entry sets `"public": True` (or `"audience": "member"`) and a `"help_topic"`, the Help index heading; stories, journeys and runbooks directories, README files and "Story:"/"Journey:" titles are never member manuals even then.
 </architecture>
 
 <features>

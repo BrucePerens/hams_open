@@ -105,8 +105,8 @@ class TestManualControllers(HamsHttpCase):
             "Private articles must return 404 to internal users lacking permissions.",
         )
 
-    def test_03_base_route_fallback(self):
-        """If no article is specified, the controller falls back to the first available root."""
+    def test_03_base_route_is_the_help_index(self):
+        """With no article named, /manual is the Help index, not a random article."""
         # Must explicitly clear the internal_user session from test_02 to run as a public guest
         self.authenticate(None, None)
 
@@ -115,14 +115,11 @@ class TestManualControllers(HamsHttpCase):
         all_roots = self.env["knowledge.article"].search([("parent_id", "=", False)])
         all_roots.write({"is_published": False})
 
-        # A guest hitting the base route with no public root articles available
-        # should gracefully receive a 404 rather than an IndexError or bypassing rules.
+        # With no manuals to show the index still renders (an empty-state
+        # message), where it used to 404 or open whichever article came first.
         response = self.url_open("/manual")
-        self.assertEqual(
-            response.status_code,
-            404,
-            "Graceful 404 if no articles are available to render.",
-        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"There are no manuals to show yet.", response.content)
 
     def test_04_feedback_anti_spam(self):
         """Verify that bots triggering the honeypot field are silently rejected without incrementing counts."""

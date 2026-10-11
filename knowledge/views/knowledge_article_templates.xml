@@ -13,7 +13,7 @@
             <t t-if="nav_article.child_ids">
                 <ul class="nav flex-column ms-3 mt-1 border-start border-2 ps-2">
                     <t t-foreach="nav_article.child_ids" t-as="child">
-                        <t t-if="is_internal_user or child.is_published">
+                        <t t-if="child.audience == 'member' and (is_internal_user or child.is_published)">
                             <t t-set="nav_article" t-value="child"/>
                             <t t-call="knowledge.sidebar_article_recursive"/>
                         </t>
@@ -68,6 +68,12 @@
                 </t>
             </ul>
         </t>
+
+        <p t-if="is_manual_manager" class="mt-4 small">
+            <a href="/manual/internal" class="text-muted">
+                <i class="fa fa-lock me-1" aria-hidden="true"/>Internal documentation (administrators only)
+            </a>
+        </p>
     </template>
 
     <template id="article_template" name="Manual Article">
@@ -107,6 +113,11 @@
                                     <li class="breadcrumb-item active" aria-current="page"><t t-out="article.name"/></li>
                                 </ol>
                             </nav>
+
+                            <div t-if="is_internal_article" class="alert alert-warning" role="note">
+                                <i class="fa fa-lock me-1" aria-hidden="true"/>
+                                Internal documentation. Only Manual Administrators can see this page; it is not part of the Help.
+                            </div>
 
                             <article>
                                 <header class="mb-4 pb-3 border-bottom">
@@ -210,8 +221,8 @@
                                         <div t-if="result_art.body_snippet" class="mb-2 text-muted small text-truncate" style="max-height: 3em;">
                                             <t t-out="result_art.body_snippet"/>
                                         </div>
-                                        <p class="mb-1 text-muted small">
-                                            Permission: <span class="text-uppercase" t-out="result_art.internal_permission"/>
+                                        <p t-if="result_art.help_topic" class="mb-1 text-muted small">
+                                            <t t-out="result_art.help_topic"/>
                                         </p>
                                     </a>
                                 </t>
@@ -223,6 +234,79 @@
                             </div>
                         </main>
                     </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="help_index_template" name="Help Index">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
+        <!-- burn-ignore-tour -->
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <div class="container pt-4 pb-5">
+                    <header class="mb-4 pb-3 border-bottom">
+                        <h1 class="display-5 fw-bold">Help</h1>
+                        <p class="lead text-muted mb-3">How-to guides and user manuals for the features of this site.</p>
+                        <form action="/manual/search" method="GET" role="search">
+                            <div class="input-group">
+                                <input type="text" name="search" class="form-control" placeholder="Search the manuals..." t-att-value="search_term" aria-label="Search the manuals"/>
+                                <button class="btn btn-primary" type="submit" aria-label="Submit search"><i class="fa fa-search" aria-hidden="true"/> Search</button>
+                            </div>
+                        </form>
+                    </header>
+
+                    <t t-foreach="topics" t-as="topic">
+                        <section class="mb-4 o_help_topic">
+                            <h2 class="h4 mb-3" t-out="topic[0]"/>
+                            <div class="list-group">
+                                <t t-foreach="topic[1]" t-as="manual">
+                                    <a t-att-href="manual.website_url" class="list-group-item list-group-item-action">
+                                        <span t-if="manual.icon" t-out="manual.icon" class="me-2" aria-hidden="true"/>
+                                        <strong t-out="manual.name"/>
+                                        <span t-if="manual.body_snippet" class="d-block small text-muted text-truncate" t-out="manual.body_snippet"/>
+                                    </a>
+                                </t>
+                            </div>
+                        </section>
+                    </t>
+                    <div t-if="not topics" class="alert alert-info">There are no manuals to show yet.</div>
+
+                    <p t-if="is_manual_manager" class="small">
+                        <a href="/manual/internal"><i class="fa fa-lock me-1" aria-hidden="true"/>Internal documentation (administrators only)</a>
+                    </p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="internal_index_template" name="Internal Documentation Index">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
+        <!-- burn-ignore-tour -->
+        <t t-call="website.layout">
+            <div id="wrap" class="oe_structure oe_empty">
+                <div class="container pt-4 pb-5">
+                    <div class="alert alert-warning" role="note">
+                        <i class="fa fa-lock me-1" aria-hidden="true"/>
+                        <strong>Internal documentation: administrators only.</strong>
+                        Developer and engineering documents that Help does not show to members. <a href="/manual">Back to Help</a>.
+                    </div>
+                    <form action="/manual/internal" method="GET" class="mb-4" role="search">
+                        <div class="input-group">
+                            <input type="text" name="search" class="form-control" placeholder="Search internal documentation..." t-att-value="search_term" aria-label="Search internal documentation"/>
+                            <button class="btn btn-outline-secondary" type="submit" aria-label="Submit search"><i class="fa fa-search" aria-hidden="true"/></button>
+                        </div>
+                    </form>
+                    <div class="list-group">
+                        <t t-foreach="articles" t-as="doc">
+                            <a t-att-href="doc.website_url" class="list-group-item list-group-item-action">
+                                <span t-if="doc.icon" t-out="doc.icon" class="me-2" aria-hidden="true"/>
+                                <strong t-out="doc.name"/>
+                                <span t-if="doc.audience == 'member'" class="badge text-bg-secondary ms-2">unpublished</span>
+                            </a>
+                        </t>
+                    </div>
+                    <div t-if="not articles" class="alert alert-info mt-3">No internal documentation matches.</div>
                 </div>
             </div>
         </t>
