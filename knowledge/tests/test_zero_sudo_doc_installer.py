@@ -272,3 +272,53 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
             "existing article (content hash unchanged should short-circuit "
             "before ever reaching the write/create branch).",
         )
+
+    def test_a_changed_documentation_file_replaces_the_stored_article_body(self):
+        # Tests [@ANCHOR: zero_sudo:install_single_doc]
+        # Documentation reaches hams_prod only through this installer: no
+        # migration and no `-u` is needed, because _register_hook runs it on
+        # every registry load and a different content hash rewrites the
+        # article (2026-10-11: removing the fake "Nexus ERP" screenshots from
+        # ~30 manuals relied on this). The article below stands for one
+        # created before the file changed: it carries an old body with a
+        # since-removed image and a stored hash that no longer matches.
+        Module = self.env["ir.module.module"]
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+
+        name = "Stale Image Refresh Test Doc"
+        key_suffix = name.replace(" ", "_")
+        hash_key = f"zero_sudo.doc_hash_zero_sudo_{key_suffix}"
+        article_id_key = f"zero_sudo.doc_article_id_zero_sudo_{key_suffix}"
+        stale = Article.create(
+            {
+                "name": name,
+                "body": (
+                    "<p>Old manual</p>"
+                    '<img src="/zero_sudo/static/description/images/'
+                    'zero_sudo_settings.png" alt="Old screenshot"/>'
+                ),
+            }
+        )
+        utils._set_kv(hash_key, "hash-of-the-previous-file-content")
+        utils._set_kv(article_id_key, str(stale.id))
+
+        doc_info = {"name": name, "path": "data/documentation.html"}
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+
+        fresh = Article.browse(int(utils._get_kv(article_id_key)))
+        self.assertEqual(fresh, stale, "The stored article is updated in place.")
+        self.assertNotIn("zero_sudo_settings.png", fresh.body)
+        self.assertNotIn("Old manual", fresh.body)
+        self.assertIn("Zero-Sudo Security: User Guide", fresh.body)
+        self.assertEqual(
+            len(Article.search([("name", "=", name)])), 1,
+            "Refreshing must not create a second article.",
+        )
+
+        write_date = fresh.write_date
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        self.assertEqual(
+            fresh.write_date, write_date,
+            "A second run with the same content is a no-op.",
+        )
