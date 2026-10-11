@@ -182,8 +182,12 @@
                                     <i class="fa fa-info-circle mt-1 me-2" aria-hidden="true"/>
                                     <div>Download a copy of your data above <strong>before</strong> erasing anything below. Once this runs, there is no way to get your content back.</div>
                                 </div>
-                                <p class="text-muted">Permanently delete all of your personal content -- website pages, blog posts, and everything else tied to your account across this platform -- remove you from the public community directory, deactivate your account, and anonymize your remaining identifying information (name, login, and any license/callsign details on file). Amateur radio contacts and other on-air activity records are never deleted, since they were already public over the air; only your ownership of them is anonymized. <strong>This cannot be undone.</strong></p>
-                                <form action="/my/privacy/delete_content" method="post" data-hams-confirm="Are you absolutely sure? This permanently deletes your content, deactivates your account, and anonymizes your identity. This cannot be undone.">
+                                <div class="alert alert-danger d-flex align-items-start" role="alert" id="user_websites_erasure_ban_warning">
+                                    <i class="fa fa-ban mt-1 me-2" aria-hidden="true"/>
+                                    <div><strong>Once you erase your data you will be permanently banned from hams.com. This is irreversible.</strong> Your callsign is recorded, and you will never be able to enroll again.</div>
+                                </div>
+                                <p class="text-muted">Permanently delete all of your personal content -- website pages, blog posts, and the other personal content tied to your account -- remove you from the public community directory, and deactivate your account. Your name, address, callsign and license image stay in hams.com's permanent callbook of radio amateurs, and amateur radio contacts and other on-air activity records are never deleted, since they were already public over the air. <strong>This cannot be undone.</strong></p>
+                                <form action="/my/privacy/delete_content" method="post" data-hams-confirm="Are you absolutely sure? This permanently deletes your content, deactivates your account, and permanently bans you from hams.com. This cannot be undone.">
                                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                     <button type="submit" class="btn btn-danger o_tour_erasure_initiate"><i class="fa fa-warning" aria-hidden="true"/> Erase My Account &amp; Content</button>
                                 </form>
@@ -204,9 +208,9 @@
                         <div class="col-12 col-lg-8 mx-auto">
                             <div id="user_websites_erasure_confirmed" class="alert alert-success" role="alert">
                                 <h2 class="fw-bold">Your data has been erased</h2>
-                                <p>We have permanently erased your personal website pages and blog posts from our servers, removed you from the public community directory, deactivated your account, and anonymized your remaining identifying information.</p>
+                                <p>We have permanently erased your personal website pages and blog posts from our servers, removed you from the public community directory, and deactivated your account. You are permanently banned from hams.com.</p>
                             </div>
-                            <p>This is permanent and cannot be undone. Amateur radio contacts and other on-air activity records are not deleted, because they were already public over the air; only your ownership of them was anonymized.</p>
+                            <p>This is permanent and cannot be undone. Your name, address, callsign and license image remain in hams.com's permanent callbook of radio amateurs, and amateur radio contacts and other on-air activity records are not deleted, because they were already public over the air.</p>
                             <p>If you have questions about this erasure, please <a href="/contactus">contact us</a> and mention that your request concerns privacy (GDPR).</p>
                             <a href="/" class="btn btn-primary">Return to the home page</a>
                         </div>
