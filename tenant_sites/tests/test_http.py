@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import re
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
@@ -213,6 +214,45 @@ class TestTenantSitesHttp(HamsHttpCase):
         views_before = env["ir.ui.view"].search_count([("website_id", "=", website.id)], limit=100000)
         env["tenant.site"].search([("website_id", "=", website.id)])._apply_public_layout()
         self.assertEqual(env["ir.ui.view"].search_count([("website_id", "=", website.id)], limit=100000), views_before)
+
+    # [@ANCHOR: tenant_sites:COMM_test_stock_modules_kept]
+    def test_a_tenant_stylesheet_compiles_and_keeps_every_stock_module(self):
+        # Tests [@ANCHOR: tenant_sites:COMM_foreign_modules]
+        # Tests [@ANCHOR: tenant_sites:COMM_asset_addons]
+        # Tests [@ANCHOR: tenant_sites:COMM_is_stock_module]
+        # perens.com (a tenant) answered a CSS-error stub, 'Undefined variable: "$o-base-color-palette"':
+        # html_editor, which defines that variable for website's primary_variables.scss, declares its
+        # author as "odoo" (html_builder: "Odoo"), not "Odoo S.A.", so it was counted a foreign module and
+        # left out of the tenant's bundles. A module that ships in Odoo's own addons directories is stock
+        # whatever its manifest author says.
+        env = self.env
+        website = env["website"].create({"name": "Tenant Css", "domain": "https://css.tenant.example"})
+        env["tenant.site"].create(
+            {"name": "Css", "website_id": website.id, "host_ids": [(0, 0, {"name": "css.tenant.example"})]}
+        )
+        self._page("/css-only", "CSS-ONLY-CONTENT", website.id)
+        # The production path: the page names its stylesheet, the browser fetches it from the tenant's host.
+        page = self.get("/css-only", "css.tenant.example")
+        self.assertEqual(page.status_code, 200)
+        hrefs = re.findall(r'href="(/web/assets/[^"]+\.css)"', page.text)
+        self.assertTrue(hrefs, "the tenant page links no /web/assets stylesheet")
+        for href in hrefs:
+            css = self.get(href, "css.tenant.example")
+            self.assertEqual(css.status_code, 200, href)
+            self.assertNotIn("Undefined variable", css.text, href)
+            self.assertNotIn("Error:", css.text[:400], href)
+            if "frontend" in href:
+                self.assertIn(".o_cc1", css.text, href)  # website's colour-combination classes were compiled
+        files = {item[0] for item in env["ir.asset"]._get_asset_paths("web.assets_frontend", {"website_id": website.id})}
+        self.assertTrue(any(path.startswith("/html_editor/static/src/scss/") for path in files))
+        foreign = env["tenant.site"]._foreign_module_names()
+        for name in ("html_editor", "html_builder", "website", "web", "website_blog"):
+            self.assertNotIn(name, foreign, name)
+        # A module outside Odoo's addons directories stays foreign, whatever author it claims.
+        self.assertIn("tenant_sites", foreign)
+        self.assertTrue(env["tenant.site"]._is_stock_module("html_editor"))
+        self.assertFalse(env["tenant.site"]._is_stock_module("tenant_sites"))
+        self.assertFalse(env["tenant.site"]._is_stock_module("no_such_module_anywhere"))
 
     def test_a_tenant_host_is_read_only(self):
         for method in ("POST", "PUT", "DELETE", "PATCH"):
