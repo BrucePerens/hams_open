@@ -77,7 +77,10 @@ class TestManualArticleInlineSvg(HamsHttpCase):
             "<svg viewBox='0 0 100 20'><text x='1' y='10'>- 10k</text>"
             "<text x='1' y='19'>- 4N25</text><rect id='keep' width='5' height='5'/></svg>"
         )
-        article = self._create(f"<p>**Heading** [link](https://example.com)</p>{svg}")
+        # The link-shaped text below is this test's input: it must reach _compile_markdown and leave the SVG alone.
+        article = self._create(
+            f"<p>**Heading** [link](https://example.com)</p>{svg}"  # burn-ignore: input of the SVG-untouched test
+        )
         self.authenticate(None, None)
         response = self.url_open(article.website_url)
         self.assertEqual(response.status_code, 200)
