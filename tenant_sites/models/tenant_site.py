@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import os
+
 from odoo import api, fields, models
+from odoo.modules.module import get_module_path
+from odoo.tools import config
 
 LOGIN_LINK_VIEW = "portal.user_sign_in"
-STOCK_AUTHOR = "Odoo S.A."
 LAYOUT_VIEW_KEYS = ("website.layout", "portal.frontend_layout", "web.frontend_layout", "web.layout", "website.homepage")
 
 
@@ -83,15 +86,36 @@ class TenantSite(models.Model):
 
     # [@ANCHOR: tenant_sites:COMM_foreign_modules]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_site_hides_foreign_layout]
+    # Verified by [@ANCHOR: tenant_sites:COMM_test_stock_modules_kept]
     @api.model
     def _foreign_module_names(self):
-        """Names of the installed modules whose author is not Odoo S.A., less the ones listed as kept
-        (tenant.site.kept.module: modules whose layout and assets every site needs, such as a site-wide
-        content security policy)."""
+        """Names of the installed modules that do not ship in Odoo's own addons directories, less the ones
+        listed as kept (tenant.site.kept.module: modules whose layout and assets every site needs, such as
+        a site-wide content security policy).
+
+        Stock is decided by where the module lives, not by its manifest `author`: Odoo S.A. writes its
+        own name three ways (html_editor says "odoo", html_builder "Odoo"), and a stock module counted as
+        foreign is left out of the tenant's bundles. html_editor defines `$o-base-color-palette`, which
+        website's primary_variables.scss uses, so the tenant's stylesheet stopped compiling and perens.com
+        was served unstyled."""
         service = self._service_env()
         installed = service["ir.module.module"].search([("state", "=", "installed")], limit=10000)
         kept = set(service["tenant.site.kept.module"].search([], limit=10000).mapped("name"))
-        return {module.name for module in installed if module.author != STOCK_AUTHOR and module.name not in kept}
+        return {module.name for module in installed if not self._is_stock_module(module.name) and module.name not in kept}
+
+    # [@ANCHOR: tenant_sites:COMM_is_stock_module]
+    # Verified by [@ANCHOR: tenant_sites:COMM_test_stock_modules_kept]
+    @api.model
+    def _is_stock_module(self, name):
+        """True when the module's directory is one of Odoo's own addons directories (the base `odoo/addons`
+        and the community `addons` next to the `odoo` package). Our own modules live in the hams_com and
+        hams_open checkouts (infrastructure.py writes them into addons_path after these two), never in
+        either directory."""
+        path = get_module_path(name, display_warning=False)
+        if not path:
+            return False
+        stock_dirs = {os.path.realpath(config.addons_base_dir), os.path.realpath(config.addons_community_dir)}
+        return os.path.dirname(os.path.realpath(path)) in stock_dirs
 
     @api.model
     def _service_env(self):
