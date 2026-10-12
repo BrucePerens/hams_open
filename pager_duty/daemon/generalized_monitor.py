@@ -111,7 +111,10 @@ def get_odoo_client(logger, config):
     if not db:
         db = "odoo"
 
-    user = os.environ.get("ODOO_USER") or "pager_service_internal"
+    # ODOO_USER / ODOO_PASSWORD are this daemon's own names. ODOO_RPC_LOGIN / ODOO_RPC_KEY are what daemon_key_manager writes
+    # into the key file it provisions for every daemon (keys/pager_duty.env on hams1), so a unit that loads that file works
+    # without a translation step. The own names win when both are set.
+    user = os.environ.get("ODOO_USER") or os.environ.get("ODOO_RPC_LOGIN") or "pager_service_internal"
     # Real bug, found by bug-hunt review (tier 1): this used to silently
     # fall back to an empty-string password when ODOO_PASSWORD wasn't set
     # (e.g. a typo'd var name or a missing line in /etc/pager_daemons.env),
@@ -126,10 +129,10 @@ def get_odoo_client(logger, config):
     # so a misconfigured password would have silently disabled all paging
     # instead of halting the daemon at boot the way a missing dependency or
     # a missing config file already does.
-    password = os.environ.get("ODOO_PASSWORD")
+    password = os.environ.get("ODOO_PASSWORD") or os.environ.get("ODOO_RPC_KEY")
     if not password:
         logger.critical(
-            "ODOO_PASSWORD is not set -- refusing to start with an "
+            "Neither ODOO_PASSWORD nor ODOO_RPC_KEY is set -- refusing to start with an "
             "unauthenticated Odoo client (would silently disable all "
             "incident reporting)."
         )
@@ -787,9 +790,20 @@ def execute_check(check, client=None):
     elif ctype == "redis":
         port = int(parse_env(check.get("port", 6379)))
         password = parse_env(check.get("password", ""))
+        username = parse_env(check.get("user", ""))
+        if not password:
+            # A check with no credentials of its own logs in as the service does: REDIS_USERNAME / REDIS_PASSWORD from the
+            # environment the unit loads (redis.env on hams1), the same login this daemon's own Redis connections use.
+            # Without this a Redis that requires AUTH answers NOAUTH and the check can never pass.
+            username = username or REDIS_USERNAME or ""
+            password = REDIS_PASS or ""
         try:
             r = redis_lib.Redis(
-                host=target, port=port, password=password or None, socket_timeout=2
+                host=target,
+                port=port,
+                username=username or None,
+                password=password or None,
+                socket_timeout=2,
             )
             if r.ping():
                 return True, "OK"
@@ -873,6 +887,13 @@ def execute_check(check, client=None):
         dbname = parse_env(check.get("dbname", "odoo"))
         user = parse_env(check.get("user", "odoo"))
         password = parse_env(check.get("password", ""))
+        if not password and os.environ.get("DB_USER") and os.environ.get("DB_PASS"):
+            # A check with no password of its own logs in with the login the unit's environment file supplies (DB_USER /
+            # DB_PASS / DB_NAME: on hams1 keys/pager_monitor_db.env, a CONNECT-only role). PostgreSQL requires a password
+            # (scram) on TCP, so "postgres" with none can never pass; the secret stays in a 0600 file, never in the database.
+            user = os.environ["DB_USER"]
+            password = os.environ["DB_PASS"]
+            dbname = os.environ.get("DB_NAME") or dbname
         query = (
             parse_env(check.get("query", "SELECT 1;"))
             if ctype == "anomaly"
@@ -1429,8 +1450,11 @@ def execute_check(check, client=None):
                         text=True,
                         timeout=10,
                     )
-                    if res.returncode != 0 or res.stdout.strip() != "active":
-                        failed_svcs.append(f"{svc} ({res.stdout.strip()})")
+                    state = res.stdout.strip()
+                    if res.returncode != 0 or state != "active":
+                        if state == "inactive" and _oneshot_last_run_succeeded(exe, svc):
+                            continue
+                        failed_svcs.append(f"{svc} ({state})")
 
                 if failed_svcs:
                     return (
@@ -1449,51 +1473,139 @@ def execute_check(check, client=None):
     return False, "Unknown check type"
 
 
+# [@ANCHOR: pager_duty:oneshot_last_run_succeeded]
+def _oneshot_last_run_succeeded(exe, unit):
+    """True for a Type=oneshot service that is inactive because its last run exited successfully. A timer-driven oneshot
+    (amsat.tle.sync.service, fcc.uls.sync.service) sits "inactive" between runs for its whole life, which is healthy; only
+    "failed" (Result other than success) is not. Anything that cannot be read counts as not healthy."""
+    try:
+        res = subprocess.run(
+            [exe, "show", unit, "-p", "Type", "-p", "Result", "-p", "LoadState"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    props = dict(line.split("=", 1) for line in res.stdout.splitlines() if "=" in line)
+    return (
+        res.returncode == 0
+        and props.get("LoadState") == "loaded"
+        and props.get("Type") == "oneshot"
+        and props.get("Result") == "success"
+    )
+
+
+# Seconds between the first run of every check and its second: a random offset up to this, so a daemon that starts with
+# dozens of checks does not run them all in the same second. It is capped (it used to be a random part of the check's
+# whole interval, so a daily check's second run came up to a day after the daemon started).
+STARTUP_JITTER_CAP_SECONDS = 60
+# While a check has failed fewer times in a row than its threshold it is run again after this many seconds (or its own
+# interval if that is shorter), so a transient failure is confirmed or cleared in seconds, not after a whole interval.
+RETRY_INTERVAL_SECONDS = 20
+
+
+# [@ANCHOR: pager_duty:record_check_status]
+def record_check_status(client, check, success):
+    """Writes the check's result into its Odoo row: status passing/failing and last_run. A check that has never produced a
+    result stays "never run" until this is called, so a monitor that is not running cannot look healthy."""
+    check_id = check.get("id")
+    if not (client and check_id):
+        return
+    try:
+        client.execute(
+            "pager.check",
+            "write",
+            ids=[check_id],
+            vals={
+                "status": "passing" if success else "failing",
+                "last_run": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+    # `client` is the JSON-2 OdooClient, whose execute() raises a bare Exception on an HTTPError (a real 401 from a bad
+    # key, say). Nothing narrower is safe: an exception here would end this check's whole polling thread, and only the
+    # watchdog (up to max(300, interval*3) seconds later) would notice and restart the whole daemon.
+    except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
+        logger.warning("[%s] Failed to update status in Odoo: %s", check.get("name", "Unknown"), e)
+
+
 # [@ANCHOR: pager_duty:polling_thread]
 def polling_thread(client, check):
     name = check.get("name", "Unknown")
-    check_id = check.get("id")
     key = check_key(check)
     THREAD_NAMES[key] = name
     website_id = check.get("website_id")
     interval = int(check.get("interval", 60))
     grace = int(check.get("grace", 0))
+    # Consecutive failed runs before the failure is reported. 1 (the default of a config file from before this existed)
+    # reports the first failure, as it always did.
+    threshold = max(1, int(check.get("threshold", 1)))
+    retry_interval = max(1, min(interval, RETRY_INTERVAL_SECONDS))
     thread_start_time = time.time()
 
     THREAD_TIMEOUTS[key] = max(300, interval * 3)
     logger.info(
-        f"Starting polling thread for [{name}] every {interval}s (Grace: {grace}s)"
+        f"Starting polling thread for [{name}] every {interval}s (Grace: {grace}s, report after {threshold} consecutive failures)"
     )
 
-    THREAD_HEARTBEATS[key] = time.time()
-    success, msg = execute_check(check, client)
-    clean_loops = 1 if success else 0
-    if not success:
+    # Passes in a row since the last failure, and failures in a row since the last pass. `clean_before_streak` is the number
+    # of passes that preceded the current failure streak: auto-remediation runs only for a check that was healthy and has just
+    # been confirmed failing, once per streak.
+    clean_loops = 0
+    failures_in_a_row = 0
+    clean_before_streak = 0
+
+    def one_pass():
+        """Runs the check once, records the result, reports or resolves. Returns seconds to wait before the next run."""
+        nonlocal clean_loops, failures_in_a_row, clean_before_streak
+        THREAD_HEARTBEATS[key] = time.time()
+        success, msg = execute_check(check, client)
+        record_check_status(client, check, success)
+
+        if success:
+            failures_in_a_row = 0
+            FAILING_CHECKS.discard(key)
+            FAILING_NAMES.discard(name)
+            clean_loops += 1
+            if clean_loops == 3:
+                auto_resolve(client, name, website_id=website_id)
+            return interval
+
+        if failures_in_a_row == 0:
+            clean_before_streak = clean_loops
+        failures_in_a_row += 1
+        clean_loops = 0
+        if failures_in_a_row < threshold:
+            logger.info(
+                f"[{name}] Failed {failures_in_a_row} of {threshold} runs; running it again in {retry_interval}s before reporting: {msg}"
+            )
+            return retry_interval
+
         FAILING_CHECKS.add(key)
         FAILING_NAMES.add(name)
         if time.time() - thread_start_time < grace:
             logger.info(
                 f"[{name}] Startup grace period active. Suppressing failure: {msg}"
             )
-        else:
-            severity, clean_msg = extract_severity_prefix(msg)
-            report(client, name, clean_msg, severity, website_id=website_id)
-            remedy = check.get("remediate")
-            if clean_loops > 0 and remedy and os.path.exists(remedy):
-                logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")
-                try:
-                    subprocess.Popen([remedy], shell=False)
-                except (
-                    ConnectionError,
-                    socket.timeout,
-                    Exception,
-                ) as e:  # audit-ignore-catch-all
-                    logger.error(f"Remediation failed: {e}")
-    else:
-        FAILING_CHECKS.discard(key)
-        FAILING_NAMES.discard(name)
+            return interval
+        severity, clean_msg = extract_severity_prefix(msg)
+        report(client, name, clean_msg, severity, website_id=website_id)
+        remedy = check.get("remediate")
+        if failures_in_a_row == threshold and clean_before_streak > 0 and remedy and os.path.exists(remedy):
+            logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")
+            try:
+                subprocess.Popen([remedy], shell=False)
+            except (
+                ConnectionError,
+                socket.timeout,
+                Exception,
+            ) as e:  # audit-ignore-catch-all
+                logger.error(f"Remediation failed: {e}")
+        return interval
 
-    jitter = secrets.SystemRandom().uniform(0, interval)
+    wait = one_pass()
+
+    jitter = secrets.SystemRandom().uniform(0, min(interval, STARTUP_JITTER_CAP_SECONDS, wait))
     logger.info(f"[{name}] Applying startup jitter: sleeping for {jitter:.1f}s")
     time.sleep(jitter)  # audit-ignore-sleep
 
@@ -1510,73 +1622,8 @@ def polling_thread(client, check):
             time.sleep(interval)  # audit-ignore-sleep
             continue
 
-        success, msg = execute_check(check, client)
-
-        # Update status in Odoo
-        if client and check_id:
-            try:
-                status = "passing" if success else "failing"
-                now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                client.execute(
-                    "pager.check",
-                    "write",
-                    ids=[check_id],
-                    vals={"status": status, "last_run": now},
-                )
-            # Real bug, found by bug-hunt review (tier 1): this used to
-            # only catch (OSError, xmlrpc.client.Fault,
-            # xmlrpc.client.ProtocolError) -- leftover exception types from
-            # an old XML-RPC-based client. `client` here is the JSON-2
-            # OdooClient defined at the top of this module, whose
-            # `execute()` raises a bare `Exception` on an HTTPError (e.g. a
-            # real 401 from a bad ODOO_PASSWORD) and never raises any
-            # xmlrpc.client type at all. A bare Exception wasn't caught by
-            # the old tuple, so it propagated out of this thread's own
-            # `while True:` loop and silently killed the whole
-            # polling_thread for this check -- recoverable only once the
-            # THREAD_HEARTBEATS watchdog noticed the stalled heartbeat
-            # (up to `max(300, interval*3)` seconds later) and force-
-            # restarted the entire daemon. Matching the broad
-            # "audit-ignore-catch-all" pattern already used for every other
-            # client.execute() call site in this same file.
-            except (
-                ConnectionError,
-                socket.timeout,
-                Exception,
-            ) as e:  # audit-ignore-catch-all
-                logger.warning(f"[{name}] Failed to update status in Odoo: {e}")
-
-        if not success:
-            FAILING_CHECKS.add(key)
-            FAILING_NAMES.add(name)
-            if time.time() - thread_start_time < grace:
-                logger.info(
-                    f"[{name}] Startup grace period active. Suppressing failure: {msg}"
-                )
-            else:
-                severity, clean_msg = extract_severity_prefix(msg)
-                report(client, name, clean_msg, severity, website_id=website_id)
-                remedy = check.get("remediate")
-                if clean_loops > 0 and remedy and os.path.exists(remedy):
-                    logger.info(
-                        f"[{name}] Triggering auto-remediation script: {remedy}"
-                    )
-                    try:
-                        subprocess.Popen([remedy], shell=False)
-                    except (
-                        ConnectionError,
-                        socket.timeout,
-                        Exception,
-                    ) as e:  # audit-ignore-catch-all
-                        logger.error(f"Remediation failed: {e}")
-            clean_loops = 0
-        else:
-            FAILING_CHECKS.discard(key)
-            FAILING_NAMES.discard(name)
-            clean_loops += 1
-            if clean_loops == 3:
-                auto_resolve(client, name, website_id=website_id)
-        time.sleep(interval)  # audit-ignore-sleep
+        wait = one_pass()
+        time.sleep(wait)  # audit-ignore-sleep
 
 
 # [@ANCHOR: pager_duty:log_tail_thread]
@@ -1644,6 +1691,24 @@ def log_tail_thread(client, check):
             continue
 
 
+# [@ANCHOR: pager_duty:check_once]
+def check_once(checks):
+    """Runs each check once and prints "PASS|FAIL name: message". Returns the process exit status: 0 when every check
+    passed, 1 when any failed. Log-tail checks are only listed (they are not polled). Nothing leaves this process."""
+    failed = 0
+    for check in checks:
+        name = check.get("name", "Unknown")
+        if check.get("type") == "log":
+            print(f"SKIP {name}: log-tail check, not polled")
+            continue
+        success, msg = execute_check(check, None)
+        severity, clean_msg = extract_severity_prefix(msg)
+        print(f"{'PASS' if success else 'FAIL'} {name}: {clean_msg}", flush=True)
+        failed += 0 if success else 1
+    print(f"{len(checks) - failed} of {len(checks)} checks passed")
+    return 1 if failed else 0
+
+
 # [@ANCHOR: pager_duty:daemon_resolve_config_path]
 def resolve_config_path(environ=None):
     """The configuration file this daemon reads, resolved by the same rule pager_check.PagerCheck._get_config_path writes by.
@@ -1682,6 +1747,13 @@ if __name__ == "__main__":
         logger.critical(msg)
         fallback_notify("Daemon Boot", msg, "critical")
         sys.exit(1)
+
+    if "--check-once" in sys.argv[1:]:
+        # A dry run: every check in the configuration runs once, in this process's own environment and sandbox, and the
+        # result is printed. Nothing is reported to Odoo, no incident is created, no e-mail is sent, no status is written.
+        # Use it (for example under `systemd-run` with the unit's User=, EnvironmentFile= and sandbox properties) to see
+        # what the daemon would do before it is enabled. Exit status 0 only when every check passed.
+        sys.exit(check_once(config.get("checks", [])))
 
     client = get_odoo_client(logger, config)
     if not client:

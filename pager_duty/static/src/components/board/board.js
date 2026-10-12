@@ -11,7 +11,7 @@ export class PagerBoard extends Component {
             active_incidents: [],
             resolved_incidents: [],
             on_duty: "Loading...",
-            stats: { passing: 0, failing: 0, maintenance: 0 },
+            stats: { passing: 0, failing: 0, maintenance: 0, never_run: 0 },
             transformStyle: "",
             isPaused: false
         });

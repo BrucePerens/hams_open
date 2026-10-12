@@ -34,7 +34,9 @@ Create diverse checks for your infrastructure:
 - **HTTP/HTTPS/HTTP3:** Verify website availability and content.
 - **PostgreSQL/MySQL:** Ensure database connectivity and performance.
 - **System Resources:** Monitor CPU, RAM, and Disk space.
-- **Service Status:** Check systemd services and Docker containers.
+- **Service Status:** Check systemd services and Docker containers. A timer-driven `Type=oneshot` service that is inactive because its last run succeeded counts as healthy; only a failed one does not.
+- **Status of a check:** a check that no monitor has ever produced a result for is **Never Run** (not "Passing"), so a monitor that was never installed cannot make the board look healthy. The monitor writes Passing or Failing and the Last Run time after every run, including its first.
+- **Failures Before Reporting:** a check is reported only after it has failed that many runs in a row (default 3), and after a failed run the monitor runs it again within about 20 seconds, so a transient failure is cleared quickly and a real one is reported after about a minute. Set 1 to report the first failure.
 - **Hard Drive Health:** Proactive SMART (Self-Monitoring, Analysis and Reporting Technology) monitoring.
 - **Custom Scripts:** Execute sandboxed Bash or Playwright scripts for synthetic journeys. Only the Playwright, Sandboxed Bash and Sandboxed Arbitrary Executable types run in the sandbox. The "Synthetic Journey (Script)" type runs its command directly inside the monitor daemon, unsandboxed, with a 60-second timeout.
 
@@ -42,7 +44,7 @@ Create diverse checks for your infrastructure:
 - **Dashboard:** The Network Operations Center (NOC) Dashboard provides a real-time overview of active and resolved incidents. It is powered by a high-performance PostgreSQL procedure to minimize latency and includes burn-in protection for long-term display (every 60 seconds the whole board drifts by up to 15 pixels in a random direction).
 - **Acknowledgement:** Engineers can acknowledge incidents to stop further escalation.
 - **Auto-Resolution:** The system automatically resolves incidents when the underlying check returns to a healthy state, which the monitor daemon takes to mean three consecutive passing runs of that check.
-- **Escalation:** Unacknowledged incidents are automatically escalated after 15 minutes to ensure attention. A job that runs every 5 minutes notifies the Pager Duty Admin group about every incident, of any severity, that is still Open 15 minutes after it was created. Each incident is escalated once.
+- **Escalation:** Unacknowledged incidents are automatically escalated after 15 minutes to ensure attention. A job that runs every 5 minutes notifies the Pager Duty Admin group about every high or critical incident that is still Open 15 minutes after it was created (low and medium incidents are tracked and become a paging "Trend:" incident if they recur; they are not escalated). Each incident is escalated once.
 
 ### On-Call Scheduling
 Integrates with the Odoo Calendar. Mark calendar events as "Pager Duty Shift" to define the current on-call engineer. The person paged is the event's own user (its `user_id`), not its attendees. When no shift is in force, no on-call notification is sent; the incident still gets its Helpdesk ticket (if its severity qualifies) and is still escalated.

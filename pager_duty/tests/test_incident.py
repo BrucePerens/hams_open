@@ -153,6 +153,26 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         incident.invalidate_recordset(["is_escalated"])
         self.assertTrue(incident.is_escalated)
 
+    def test_06b_escalation_skips_the_severities_that_do_not_page(self):
+        # Tests [@ANCHOR: test_pager_escalation]
+        # Low and medium incidents are tracked, not paged (TREND_TRACKED_SEVERITIES), so the 15 minute escalation must not
+        # page for them either.
+        self.env.user.group_ids = [(4, self.env.ref("pager_duty.group_pager_admin").id)]
+        low = self.incident_model.create({"source": "esc_low", "severity": "low", "description": "desc"})
+        medium = self.incident_model.create({"source": "esc_medium", "severity": "medium", "description": "desc"})
+        critical = self.incident_model.create({"source": "esc_critical", "severity": "critical", "description": "desc"})
+        self.env.cr.execute(
+            "UPDATE pager_incident SET create_date = %s WHERE id IN %s",
+            (fields.Datetime.now() - datetime.timedelta(minutes=20), (low.id, medium.id, critical.id)),
+        )
+        self.safe_patch_object(type(low), "message_post")
+        self.incident_model.action_escalate_unacknowledged()
+        for rec in (low, medium, critical):
+            rec.invalidate_recordset(["is_escalated"])
+        self.assertFalse(low.is_escalated)
+        self.assertFalse(medium.is_escalated)
+        self.assertTrue(critical.is_escalated)
+
     def test_04_views_render(self):
         # [@ANCHOR: test_pager_view]
         v1 = self.env["pager.incident"].get_view(view_type="form")

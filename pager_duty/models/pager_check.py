@@ -31,14 +31,17 @@ class PagerCheck(models.Model):
     name = fields.Char(string="Check Name / Source", required=True)
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
     company_id = fields.Many2one("res.company", string="Company", required=True, default=lambda self: self.env.company)
+    # "never_run" is a check no monitor has ever produced a result for. It used to start as "passing", so a daemon that
+    # was never installed left every check looking healthy (found on hams1, 2026-10-12: 24 checks "passing", none ever run).
     status = fields.Selection(
         [
+            ("never_run", "Never Run"),
             ("passing", "Passing"),
             ("failing", "Failing"),
             ("maintenance", "Maintenance"),
         ],
         string="Status",
-        default="passing",
+        default="never_run",
         readonly=True,
     )
     last_run = fields.Datetime(string="Last Run", readonly=True)
@@ -130,6 +133,13 @@ class PagerCheck(models.Model):
         default=0,
         help="Seconds to wait after daemon startup before reporting failures.",
     )
+    failure_threshold = fields.Integer(
+        string="Failures Before Reporting",
+        default=3,
+        help="The monitor reports a failure only after the check has failed this many runs in a row. After a failed run it "
+        "runs the check again within seconds instead of waiting a whole polling interval, so a transient failure is "
+        "cleared quickly and a real one is reported after about a minute. 1 reports the first failure.",
+    )
     active = fields.Boolean(default=True)
 
     parent_check_id = fields.Many2one(
@@ -180,6 +190,9 @@ class PagerCheck(models.Model):
     _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The check name cannot be empty or just spaces.")
     _interval_positive = models.Constraint("CHECK(interval > 0)", "The polling interval must be strictly greater than zero.")
     _grace_period_non_negative = models.Constraint("CHECK(grace_period >= 0)", "The grace period cannot be negative.")
+    _failure_threshold_positive = models.Constraint(
+        "CHECK(failure_threshold >= 1)", "A check must be allowed to fail at least once before it is reported."
+    )
 
     @api.model
     @distributed_cache()
@@ -416,6 +429,7 @@ class PagerCheck(models.Model):
                     "ignored_services": check.get("ignored_services", ""),
                     "interval": check.get("interval", 60),
                     "grace_period": check.get("grace", 0),
+                    "failure_threshold": check.get("threshold", 1),
                     "auto_remediate_script": check.get("remediate", ""),
                     "comment": check.get("comment", ""),
                     "code_payload": check.get("code_payload", ""),
@@ -503,6 +517,8 @@ class PagerCheck(models.Model):
                 check_dict["ignored_services"] = check.ignored_services
             if check.grace_period:
                 check_dict["grace"] = check.grace_period
+            if check.failure_threshold > 1:
+                check_dict["threshold"] = check.failure_threshold
             if check.parent_check_id:
                 # The daemon matches the parent by id (a name is only unique per website). The name stays for
                 # a daemon or a config file from before parent_id existed.

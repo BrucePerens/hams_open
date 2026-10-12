@@ -238,10 +238,15 @@ class PagerIncident(models.Model):
         )
         IncidentModel = self.env["pager.incident"].with_user(pd_svc)
 
+        # Only the severities that page. A low or medium incident is deliberately not paged when it is reported (see
+        # TREND_TRACKED_SEVERITIES and report_incident): it is tracked, and becomes a paging "Trend:" incident if it keeps
+        # recurring. Escalating it after 15 minutes would page for exactly what that design chose not to page for; on
+        # hams1 (2026-10-12) it would have mailed the administrators about 18 old inbound-mail incidents on the first run.
         incidents = IncidentModel.search(
             [
                 ("status", "=", "open"),
                 ("is_escalated", "=", False),
+                ("severity", "not in", list(TREND_TRACKED_SEVERITIES)),
                 ("create_date", "<", fifteen_mins_ago),
             ],
             limit=1000,
