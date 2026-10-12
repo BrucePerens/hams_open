@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
-    <data noupdate="1">
+    <!-- certification_authority_template sits in an ordinary <data> block, not the noupdate block below,
+         so edits to this repo-authored page reach already-installed databases on -u (inside
+         noupdate="1" the importer skips an existing record). migrations/1.2/pre-migration.py clears the
+         stale ir_model_data.noupdate flag left from the original install. The website.page and
+         compliance.document records stay noupdate. -->
+    <data>
 
         <template id="certification_authority_template" name="Certification Authority">
             <!-- [@ANCHOR: compliance:certification_authority_page] -->
@@ -121,6 +126,10 @@
                 </div>
             </t>
         </template>
+
+    </data>
+
+    <data noupdate="1">
 
         <record id="certification_authority_page" model="website.page">
             <field name="url">/compliance/certification-authority</field>
