@@ -10,17 +10,14 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests.common import tagged
 
 MODULE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MIGRATION_PATH = os.path.join(
-    MODULE_DIR, "migrations", "1.1", "pre-migration.py"
-)
 NOUPDATE_TRUE = ("1", "True", "true")
-CONTROL_XMLID = "protects_hams_page"
 
 
-def _load_migration():
+def _load_migration(version="1.1"):
     # Load the real migration file, the same one Odoo's upgrade runs.
+    path = os.path.join(MODULE_DIR, "migrations", version, "pre-migration.py")
     spec = importlib.util.spec_from_file_location(
-        "compliance_pre_migration_1_1", MIGRATION_PATH
+        "compliance_pre_migration_" + version.replace(".", "_"), path
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -56,9 +53,12 @@ def _declared_noupdate_by_xmlid():
     return declared
 
 
-@tagged("post_install", "-at_install")
-class TestNoupdateMigration(HamsTransactionCase):
-    # Tests [@ANCHOR: compliance:clear_stale_template_noupdate_flags]
+class _NoupdateMigrationChecks:
+    """The checks shared by every migration that clears stale noupdate flags.
+    A plain mixin so the runner collects only the concrete classes below."""
+    MIGRATION_VERSION = None
+    # A record that deliberately stays in a noupdate block and must keep its flag.
+    CONTROL_XMLID = None
 
     def _noupdate(self, name):
         self.env.cr.execute(  # audit-ignore-sql: static SQL; name is a constant, not user input
@@ -71,7 +71,7 @@ class TestNoupdateMigration(HamsTransactionCase):
         return row[0]
 
     def test_01_listed_templates_are_declared_outside_noupdate_blocks(self):
-        migration = _load_migration()
+        migration = _load_migration(self.MIGRATION_VERSION)
         declared = _declared_noupdate_by_xmlid()
         for name in migration.TEMPLATE_XMLIDS:
             self.assertIn(
@@ -89,7 +89,7 @@ class TestNoupdateMigration(HamsTransactionCase):
             )
 
     def test_02_migration_clears_stale_flags_and_nothing_else(self):
-        migration = _load_migration()
+        migration = _load_migration(self.MIGRATION_VERSION)
         names = migration.TEMPLATE_XMLIDS
         # The state an already-installed database is in: the row created
         # while the template sat in a noupdate block still carries the flag
@@ -101,12 +101,12 @@ class TestNoupdateMigration(HamsTransactionCase):
         )
         # The page record deliberately stays in the noupdate block and must
         # keep its flag.
-        self.assertTrue(_declared_noupdate_by_xmlid()[CONTROL_XMLID])
-        self.assertNotIn(CONTROL_XMLID, names)
+        self.assertTrue(_declared_noupdate_by_xmlid()[self.CONTROL_XMLID])
+        self.assertNotIn(self.CONTROL_XMLID, names)
         self.env.cr.execute(  # audit-ignore-sql: static SQL; the parameter is this file's own constant
             "UPDATE ir_model_data SET noupdate = true"
             " WHERE module = 'compliance' AND name = %s",
-            (CONTROL_XMLID,),
+            (self.CONTROL_XMLID,),
         )
 
         migration.migrate(self.env.cr, "19.0.1.0")
@@ -119,13 +119,13 @@ class TestNoupdateMigration(HamsTransactionCase):
                 "would keep skipping its template changes.",
             )
         self.assertTrue(
-            self._noupdate(CONTROL_XMLID),
+            self._noupdate(self.CONTROL_XMLID),
             "[!] DIAGNOSTIC FOR AI: the 1.1 pre-migration cleared noupdate on "
             "a record it does not list.",
         )
 
     def test_03_migration_does_nothing_on_fresh_install(self):
-        migration = _load_migration()
+        migration = _load_migration(self.MIGRATION_VERSION)
         name = migration.TEMPLATE_XMLIDS[0]
         self.env.cr.execute(  # audit-ignore-sql: static SQL; name is the migration's own constant
             "UPDATE ir_model_data SET noupdate = true"
@@ -134,3 +134,21 @@ class TestNoupdateMigration(HamsTransactionCase):
         )
         migration.migrate(self.env.cr, None)
         self.assertTrue(self._noupdate(name))
+
+
+
+@tagged("post_install", "-at_install")
+class TestNoupdateMigration(_NoupdateMigrationChecks, HamsTransactionCase):
+    # Tests [@ANCHOR: compliance:clear_stale_template_noupdate_flags]
+    # Odoo collects only methods defined on the class itself unless this is set.
+    allow_inherited_tests_method = True
+    MIGRATION_VERSION = "1.1"
+    CONTROL_XMLID = "protects_hams_page"
+
+
+@tagged("post_install", "-at_install")
+class TestNoupdateMigration12(_NoupdateMigrationChecks, HamsTransactionCase):
+    # Tests [@ANCHOR: compliance:clear_stale_ca_template_noupdate_flag]
+    allow_inherited_tests_method = True
+    MIGRATION_VERSION = "1.2"
+    CONTROL_XMLID = "certification_authority_page"
