@@ -149,3 +149,6 @@ The static rule (`ai_reader_rule.py`, run by `test_ai_reader_sites`) scans only 
 untracked directory (a leftover nested checkout) cannot fail it. Outside a git checkout it walks the directory instead.
 Outgoing mail that fails to send, and failures processing an incoming bounce, are reported the same way
 (source "Outgoing / incoming mail"; counts and fixed labels only, never an address or content).
+Failures of external daemons (RabbitMQ consumers, sync and ingest programs) reach the same tickets (source
+"External daemon") through a systemd `OnFailure=` template unit and the `reporting_failures` helper; see
+`daemon/README.md`.
