@@ -281,6 +281,7 @@ DAEMON_RESULTS = frozenset(
 DAEMON_TAIL_LINES = 20
 DAEMON_TAIL_LINE_LIMIT = 160
 DAEMON_TAIL_LIMIT = 4000
+_DAEMON_UNIT_SUFFIXES = (".service", ".timer", ".socket", ".target")
 _DAEMON_UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,79}$")
 _DAEMON_EXC_LINE_RE = re.compile(r"^((?:[A-Za-z_][\w.]*\.)?[A-Z]\w*(?:Error|Exception|Exit|Interrupt|Warning)):.*$")
 
@@ -295,7 +296,7 @@ def daemon_unit_name(unit):
     if at_sign:
         suffix = tail.rsplit(".", 1)[1] if "." in tail else ""
         text = f"{head}@.{suffix}" if suffix else f"{head}@"
-    if not _DAEMON_UNIT_RE.match(text):
+    if not _DAEMON_UNIT_RE.match(text) or not text.endswith(_DAEMON_UNIT_SUFFIXES):
         return None
     return text
 

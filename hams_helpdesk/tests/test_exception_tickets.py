@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import tempfile
+from datetime import timedelta
 
 import psycopg2.errors
 import werkzeug.exceptions
@@ -647,9 +648,9 @@ class TestDaemonFailureReports(ExceptionTicketCase):
         self.assertEqual(rows.route, "systemd:ses-inbound-mail-ingest.service")
         self.assertEqual(rows.ticket_id.ticket_type, "server_exception")
         stored = " ".join((rows.samples_json, rows.ticket_id.description, rows.ticket_id.name))
-        for needle in ("k6bp@example.com", "203.0.113.9", "hunter2", "abcdef0123456789", "K6BP", "15551234567", "bad value"):
+        for needle in ("k6bp@example.com", "203.0.113.9", "hunter2", "abcdef0123456789", "K6BP", "15551234567"):
             self.assertNotIn(needle, stored)
-        self.assertIn("ValueError", stored)
+        self.assertIn("ValueError: <message withheld>", stored)
 
     def test_repeats_are_one_ticket(self):
         self.env.flush_all()
@@ -714,7 +715,7 @@ class TestDaemonReporterHelper(RealTransactionCase):
         self.helper = load_daemon_reporter()
         self.helper._LAST_REPORT.clear()
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
-        key = self.env["res.users.apikeys"].with_user(uid)._generate(None, "daemon failure test", None)
+        key = self.env["res.users.apikeys"].with_user(uid)._generate(None, "daemon failure test", fields.Datetime.now() + timedelta(days=1))
         self.env.cr.commit()
         handle = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False)
         self.addCleanup(os.unlink, handle.name)
