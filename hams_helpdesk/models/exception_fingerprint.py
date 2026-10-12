@@ -7,8 +7,10 @@ addon frame, module, normalized route) and one ``server_exception`` ticket per r
 the row's counter and, at most once a minute per fingerprint, refreshes the ticket.
 
 Where it is called from: ir.http ``_handle_error`` (page controllers and every JSON-RPC / ORM call
-from the web client) and ir.cron ``_callback`` (scheduled jobs, which include the mail queue). See
-``ir_http_exception.py`` and ``ir_cron_exception.py``.
+from the web client) and ir.cron ``_callback`` (scheduled jobs, which include the mail queue), mail.mail
+``_postprocess_sent_message`` (a message that fails to send, which Odoo records on the mail and does
+not raise) and mail.thread ``_routing_handle_bounce``. See ``ir_http_exception.py``,
+``ir_cron_exception.py`` and ``mail_exception.py``.
 
 Safety properties, each tested:
 
@@ -48,7 +50,6 @@ SAMPLE_LIMIT = 5
 SAMPLE_TRACE_LIMIT = 6000
 GATE_MAX_ENTRIES = 5000
 CLOSED_STAGES = ("resolved", "closed")
-
 
 
 class _ReentryState(threading.local):
@@ -130,6 +131,46 @@ def _write_report(registry, data, folded):
         return env["hams_helpdesk.exception.fingerprint"]._record_occurrence(data, folded)
 
 
+# [@ANCHOR: hams_helpdesk:exc_report_event]
+def report_event(registry, source, type_name, module, frame, route, trace, name, uid=None):
+    """Turns an already-described failure into a ticket. Never raises, never recurses.
+
+    The shared tail of ``report_exception`` and of the reporters that have no Python exception to
+    describe (a mail that failed to send, an external daemon). The caller supplies text that is
+    already safe to store: a fixed vocabulary or counts, never a message, address or body. ``trace``
+    and ``name`` are cut to the storage limits here."""
+    if _STATE.active:
+        return False
+    _STATE.active = True
+    try:
+        key = scrub.fingerprint(type_name, module, frame, route)
+        folded = _admit(key)
+        if folded is None:
+            return False
+        data = {
+            "name": str(name)[:290],
+            "fingerprint": key,
+            "exc_type": type_name,
+            "module": module,
+            "frame": frame,
+            "route": route,
+            "source": source,
+            "uid": uid if isinstance(uid, int) else None,
+            "trace": str(trace)[:SAMPLE_TRACE_LIMIT],
+        }
+        written = _write_report(registry, data, folded)
+        if written:
+            _settle(key, folded)
+        return bool(written)
+    except Exception as error:  # audit-ignore-catch-all: Tested by [@ANCHOR: hams_helpdesk:exc_report_exception]
+        # A failure here must never reach the request, the cron job or the mail queue, and must not
+        # be reported again: log it on this module's own logger and stop.
+        _reporter_logger.error("Could not record a server exception ticket: %r", error)
+        return False
+    finally:
+        _STATE.active = False
+
+
 # [@ANCHOR: hams_helpdesk:exc_report_exception]
 def report_exception(registry, exc, source, uid=None, logged_in=False, path="", rule=None, user_agent=""):
     """Turns ``exc`` into a ticket if it deserves one. Never raises, never recurses.
@@ -138,38 +179,19 @@ def report_exception(registry, exc, source, uid=None, logged_in=False, path="", 
     path (any query string is dropped); ``rule`` is werkzeug's pattern for the matched route."""
     if _STATE.active:
         return False
-    _STATE.active = True
     try:
         if scrub.is_expected(exc, source, logged_in, path, user_agent):
             return False
         route = scrub.normalize_route(path, rule)
         type_name, module, frame = scrub.describe(exc)
-        key = scrub.fingerprint(type_name, module, frame, route)
-        folded = _admit(key)
-        if folded is None:
-            return False
-        data = {
-            "name": f"{type_name.rsplit('.', 1)[-1]} in {module} at {route}"[:290],
-            "fingerprint": key,
-            "exc_type": type_name,
-            "module": module,
-            "frame": frame,
-            "route": route,
-            "source": source,
-            "uid": uid if isinstance(uid, int) else None,
-            "trace": scrub.scrubbed_trace(exc)[:SAMPLE_TRACE_LIMIT],
-        }
-        written = _write_report(registry, data, folded)
-        if written:
-            _settle(key, folded)
-        return bool(written)
+        trace = scrub.scrubbed_trace(exc)
     except Exception as error:  # audit-ignore-catch-all: Tested by [@ANCHOR: hams_helpdesk:exc_report_exception]
-        # A failure here must never reach the request or the cron job, and must not be reported
-        # again: log it on this module's own logger and stop.
-        _reporter_logger.error("Could not record a server exception ticket: %r", error)
+        _reporter_logger.error("Could not describe a server exception: %r", error)
         return False
-    finally:
-        _STATE.active = False
+    return report_event(
+        registry, source, type_name, module, frame, route, trace,
+        f"{type_name.rsplit('.', 1)[-1]} in {module} at {route}", uid=uid,
+    )
 
 
 class ExceptionFingerprint(models.Model):
@@ -184,7 +206,12 @@ class ExceptionFingerprint(models.Model):
     frame = fields.Char(string="Innermost frame", readonly=True)
     route = fields.Char(string="Route", readonly=True, index=True)
     source = fields.Selection(
-        [("http", "Page"), ("rpc", "RPC / ORM call"), ("cron", "Scheduled job")],
+        [
+            ("http", "Page"),
+            ("rpc", "RPC / ORM call"),
+            ("cron", "Scheduled job"),
+            ("mail", "Outgoing / incoming mail"),
+        ],
         readonly=True,
     )
     occurrence_count = fields.Integer(string="Occurrences", readonly=True)
