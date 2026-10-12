@@ -2,8 +2,6 @@
 import logging
 import secrets
 
-from dateutil.relativedelta import relativedelta
-
 from odoo import _, api, fields, models
 
 _logger = logging.getLogger(__name__)
@@ -14,10 +12,7 @@ class SesWebhookPendingSubmission(models.Model):
     unregistered/unmatched sender's original inbound email content while
     they're nudged toward registering, rather than either silently
     creating a misattributed record (the old behavior) or silently
-    dropping the message. Deliberately narrower retention than
-    ses.webhook.log's 30-day window (see _cron_truncate_pending_submissions)
-    since this table holds actual unauthenticated email content, not just
-    success/failure metadata.
+    dropping the message. Rows are kept forever, like ses.webhook.log.
 
     Linking a since-registered user back to their pending submission via
     `token` is section 3's own explicitly-flagged open sub-question, not
@@ -47,24 +42,6 @@ class SesWebhookPendingSubmission(models.Model):
     def _compute_name(self):
         for record in self:
             record.name = _('Pending submission from %s', record.sender_email) if record.sender_email else _('New')
-
-    # [@ANCHOR: ses_webhook:COMM_cron_truncate_pending_submissions]
-    @api.model
-    def _cron_truncate_pending_submissions(self):
-        """Deletes pending submissions older than a 7-day retention window,
-        regardless of consumed state -- both "never registered" and
-        "already claimed and no longer needed" end the same way. See
-        SES_WEBHOOK_SENDER_REGISTRATION.md section 3 for why 7 days
-        (long enough to register and notice the confirmation email, short
-        enough this isn't a quiet second copy of someone's message living
-        indefinitely) rather than reusing ses.webhook.log's 30-day number.
-        """
-        cutoff_date = fields.Datetime.now() - relativedelta(days=7)
-        old = self.env["ses.webhook.pending_submission"].search(
-            [('create_date', '<', cutoff_date)], limit=10000
-        )
-        if old:
-            old.unlink()
 
     # [@ANCHOR: ses_webhook:COMM_create_and_notify]
     @api.model

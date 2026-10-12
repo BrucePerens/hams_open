@@ -176,8 +176,8 @@ class ZeroSudoSession(Session):
                 # very repository, so any anonymous caller could name one
                 # and drive an unlimited number of committed audit rows --
                 # unthrottled, because returning before super() also skips
-                # core's own login cooldown, and retained for 90 days by
-                # `zero_sudo.security.log.autovacuum`. It also destroyed the
+                # core's own login cooldown, and retained forever (nothing
+                # purges `zero_sudo.security.log`). It also destroyed the
                 # row's meaning: `service_account_blocked` stopped implying
                 # "someone actually held this account's credentials" and
                 # started meaning "someone typed this name," so a real

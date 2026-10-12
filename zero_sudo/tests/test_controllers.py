@@ -231,7 +231,7 @@ class TestZeroSudoControllers(RealTransactionCase):
         caller could name one and drive unlimited audit rows into the
         production database, unthrottled (returning before `super()` also
         skips `res.users._assert_can_auth`'s per-IP login cooldown) and
-        retained for 90 days by `zero_sudo.security.log.autovacuum`. It also
+        retained forever (nothing purges `zero_sudo.security.log`). It also
         destroyed the row's meaning: a real credential compromise became
         indistinguishable from a background scan.
 

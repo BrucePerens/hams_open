@@ -1334,67 +1334,6 @@ class TestSesWebhook(HamsHttpCase):
         )
         self.assertFalse(submission)
 
-    def test_20b_log_cron_truncates_old_rows_only(self):
-        # Tests [@ANCHOR: ses_webhook:COMM_cron_truncate_logs]
-        """_cron_truncate_logs() must delete rows past the 30-day window
-        and leave recent ones alone -- both directions, matching the same
-        proof _cron_truncate_pending_submissions() gets below."""
-        old = self.env['ses.webhook.log'].create({
-            'name': 'old-log-msg',
-            'payload_type': 'Notification',
-            'status': 'success',
-            'domain_id': self.domain_a.id,
-        })
-        recent = self.env['ses.webhook.log'].create({
-            'name': 'recent-log-msg',
-            'payload_type': 'Notification',
-            'status': 'success',
-            'domain_id': self.domain_a.id,
-        })
-        self.env.cr.execute(
-            "UPDATE ses_webhook_log SET create_date = create_date - interval '31 days' WHERE id = %s",
-            (old.id,),
-        )
-
-        self.env['ses.webhook.log'].with_user(
-            self.env.ref('base.user_root').id
-        )._cron_truncate_logs()
-
-        self.assertFalse(old.exists())
-        self.assertTrue(recent.exists())
-
-    def test_21_pending_submission_cron_truncates_old_rows_only(self):
-        # Tests [@ANCHOR: ses_webhook:COMM_cron_truncate_pending_submissions]
-        """_cron_truncate_pending_submissions() must delete rows past the
-        7-day window and leave recent ones alone -- both directions, not
-        just "it doesn't crash."""
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "ses_webhook.user_ses_webhook_service_internal"
-        )
-        old = self.env['ses.webhook.pending_submission'].with_user(svc_uid).create({
-            'sender_email': 'old@test-a.com',
-            'raw_content': 'old',
-            'domain_id': self.domain_a.id,
-        })
-        recent = self.env['ses.webhook.pending_submission'].with_user(svc_uid).create({
-            'sender_email': 'recent@test-a.com',
-            'raw_content': 'recent',
-            'domain_id': self.domain_a.id,
-        })
-        self.env.cr.execute(
-            "UPDATE ses_webhook_pending_submission SET create_date = create_date - interval '8 days' WHERE id = %s",
-            (old.id,),
-        )
-
-        # Matches ir_cron.xml's own user_id (base.user_root) -- the real
-        # cron runs as root, not the service account, so this test does too.
-        self.env['ses.webhook.pending_submission'].with_user(
-            self.env.ref('base.user_root').id
-        )._cron_truncate_pending_submissions()
-
-        self.assertFalse(old.exists())
-        self.assertTrue(recent.exists())
-
     def test_22_pending_submission_multi_company_isolation(self):
         """Same multi-company ir.rule treatment as domains/logs -- prove
         it holds for the new model too, not just assumed from the copied
