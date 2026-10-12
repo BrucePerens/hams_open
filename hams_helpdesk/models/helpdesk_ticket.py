@@ -800,7 +800,7 @@ class HelpdeskTicket(models.Model):
         # [@ANCHOR: hams_helpdesk:mcp_safe_read]
         rows = []
         for view in self.safe_view(max_chars=min(int(max_chars or 0), 20000)):
-            ticket = self.browse(view["id"])
+            ticket = self.env["hams_helpdesk.ticket"].browse(view["id"])
             row = {
                 "id": view["id"],
                 "ticket_type": ticket.ticket_type,
@@ -860,18 +860,23 @@ class HelpdeskTicket(models.Model):
         utils = self.env["zero_sudo.security.utils"]
         messages_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")["mail.message"]
         found = {}
-        for ticket in visible:
-            messages = messages_env.search(
+        # One query for every visible ticket, grouped here: a search per ticket would be N+1.
+        by_ticket = {}
+        if visible:
+            candidates = messages_env.search(
                 [
                     ("model", "=", self._name),
-                    ("res_id", "=", ticket.id),
+                    ("res_id", "in", visible.ids),
                     ("message_type", "in", ("email", "comment")),
                     ("subtype_id.internal", "=", False),
-                    ("date", ">", wanted[ticket.id]),
+                    ("date", ">", min(wanted[ticket_id] for ticket_id in visible.ids)),
                 ],
                 order="date asc, id asc",
-                limit=20,
             )
+            for message in candidates:
+                by_ticket.setdefault(message.res_id, []).append(message)
+        for ticket in visible:
+            messages = [m for m in by_ticket.get(ticket.id, []) if m.date > wanted[ticket.id]][:20]
             shown = []
             for message in messages:
                 authors = message.author_id.user_ids

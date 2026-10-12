@@ -260,6 +260,7 @@ class HamsHelpdeskTicketSuspicion(models.Model):
     _description = "What the untrusted-text filter removed or flagged on a ticket (staff evidence)"
     _order = "id desc"
 
+    name = fields.Char(compute="_compute_name", help="Display label: the source and the ticket.")
     ticket_id = fields.Many2one("hams_helpdesk.ticket", required=True, ondelete="cascade", index=True)
     source = fields.Char()
     score = fields.Integer()
@@ -267,6 +268,11 @@ class HamsHelpdeskTicketSuspicion(models.Model):
     findings_json = fields.Text(help="List of {vector, location, count, excerpt, weight}; excerpts are escaped.")
     raw_original = fields.Text(help="The text exactly as received, kept for evidence. Staff only. Never given to an AI.")
     findings_summary = fields.Char(compute="_compute_findings_summary")
+
+    @api.depends("source", "ticket_id")
+    def _compute_name(self):
+        for rec in self:
+            rec.name = "%s #%s" % (rec.source or "suspicion", rec.ticket_id.id or "")
 
     @api.depends("findings_json")
     def _compute_findings_summary(self):

