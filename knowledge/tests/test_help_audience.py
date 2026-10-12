@@ -19,6 +19,12 @@ NEEDLE = "Zorkmidquartz"
 class TestHelpAudience(HamsHttpCase):
     def setUp(self):
         super().setUp()
+        # hams.com's invite-only gate (ham_init) sends signed-out visitors to
+        # the sign-in page; these tests are about what Help shows, so open
+        # sign-up the way the public site is when anyone can join.
+        self.env["ir.config_parameter"].set_param(
+            "auth_signup.invitation_scope", "b2c"
+        )
         Article = self.env["knowledge.article"]
         self.manual = Article.create(
             {

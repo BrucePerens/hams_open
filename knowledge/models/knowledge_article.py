@@ -374,7 +374,7 @@ class KnowledgeArticle(models.Model):
             "&",
             ("is_published", "=", True),
             ("audience", "=", "member"),
-            ("member_ids", "in", user_id),
+            ("member_ids", "in", [user_id]),
         ]
         domain = [
             visibility_domain,
