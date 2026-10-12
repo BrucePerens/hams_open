@@ -13,9 +13,11 @@ import logging
 import psycopg2.errors
 import werkzeug.exceptions
 from odoo import fields
+from odoo.addons.base.models.ir_qweb import QWebError, QWebErrorInfo
 from odoo.exceptions import AccessDenied, AccessError, MissingError, UserError, ValidationError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
+from odoo.tools.safe_eval import safe_eval
 
 from odoo.addons.hams_helpdesk.controllers import portal as helpdesk_portal
 from odoo.addons.hams_helpdesk.models import exception_fingerprint as reporter
@@ -45,6 +47,14 @@ def raise_other_attribute_error():
 
 def raise_type_error(message):
     raise TypeError(message)
+
+
+def raise_qweb_error():
+    try:
+        raise_type_error("in a template")
+    except TypeError as inner:
+        info = QWebErrorInfo("Error while rendering", None, None, None, None, [], "")
+        raise QWebError(info) from inner
 
 
 def raise_chained(message):
@@ -181,6 +191,19 @@ class TestExceptionScrubbing(ExceptionTicketCase):
     def assert_clean(self, text):
         for needle in self.FORBIDDEN:
             self.assertNotIn(needle, text)
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_root_cause]
+    # Tests [@ANCHOR: hams_helpdesk:exc_raised_in_safe_eval]
+    def test_safe_eval_wrapper_is_looked_through(self):
+        wrapped = self.caught(safe_eval, "{}['missing']")
+        self.assertIsInstance(wrapped, ValueError)
+        self.assertIs(type(scrub.root_cause(wrapped)), KeyError)
+        type_name, _module, _frame = scrub.describe(wrapped)
+        self.assertEqual(type_name, "builtins.KeyError")
+        qweb = self.caught(raise_qweb_error)
+        self.assertIs(type(scrub.root_cause(qweb)), TypeError)
+        plain = self.caught(raise_type_error, "x")
+        self.assertIs(scrub.root_cause(plain), plain)
 
     def test_message_is_scrubbed(self):
         trace = scrub.scrubbed_trace(self.caught(raise_attribute_error, SECRET_MESSAGE))
@@ -407,6 +430,23 @@ class TestExceptionTicketAccess(ExceptionTicketCase):
         with self.assertRaises(AccessError):
             self.Fingerprint.with_user(self.portal_user).search([])
 
+    def test_staff_list_shows_rows_whose_ticket_is_assigned_to_someone_else(self):
+        self.assertTrue(self.report(self.caught(raise_attribute_error)))
+        record = self.fingerprints()
+        other = self.env["res.users"].create({"name": "Other Staff", "login": "exception_other_staff"})
+        record.ticket_id.write({"user_id": other.id})
+        self.env.flush_all()
+        self.env.invalidate_all()
+        specification = {
+            "name": {},
+            "occurrence_count": {},
+            "ticket_stage": {},
+            "ticket_id": {"fields": {"display_name": {}}},
+        }
+        result = self.Fingerprint.with_user(self.staff).web_search_read([], specification)
+        self.assertEqual(result["length"], 1)
+        self.assertEqual(result["records"][0]["occurrence_count"], 1)
+
     def test_portal_cannot_choose_the_category(self):
         self.assertIn("server_exception", helpdesk_portal._PORTAL_EXCLUDED_TICKET_TYPES)
 
@@ -502,7 +542,8 @@ class TestExceptionHooks(RealTransactionCase):
         rows = self.rows([("source", "=", "cron")])
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows.route, "cron: Exception ticket test job")
-        self.assertEqual(rows.exc_type, "builtins.ValueError")
+        # safe_eval wraps every server-action error in a ValueError; the ticket names the real one.
+        self.assertEqual(rows.exc_type, "builtins.KeyError")
 
     def test_report_survives_the_rollback_of_the_failed_transaction(self):
         exc = TypeError("bad")

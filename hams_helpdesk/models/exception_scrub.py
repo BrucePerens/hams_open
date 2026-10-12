@@ -20,6 +20,7 @@ import traceback
 import psycopg2
 import werkzeug.exceptions
 from odoo import exceptions
+from odoo.addons.base.models.ir_qweb import QWebError
 
 # Messages of these classes come from code, not from data, so they are kept (scrubbed). Every other
 # class has its message withheld: a KeyError, ValueError or database error routinely carries the
@@ -140,6 +141,32 @@ def is_expected(exc, source, logged_in, path="", user_agent=""):
     return False
 
 
+# [@ANCHOR: hams_helpdesk:exc_root_cause]
+def root_cause(exc):
+    """The exception that really failed. A server action or cron job's code is run through
+    ``safe_eval``, which re-raises every error as a ``ValueError`` (the real one is its
+    ``__context__``), and QWeb wraps a render error in ``QWebError``. Fingerprinting those
+    wrappers would file every different failure of one job under ValueError in ``ir_actions``."""
+    seen = set()
+    while id(exc) not in seen:
+        seen.add(id(exc))
+        inner = exc.__cause__ or exc.__context__
+        wrapped = isinstance(exc, QWebError) or _raised_in_safe_eval(exc)
+        if inner is None or not wrapped:
+            break
+        exc = inner
+    return exc
+
+
+# [@ANCHOR: hams_helpdesk:exc_raised_in_safe_eval]
+def _raised_in_safe_eval(exc):
+    """True when the innermost frame of ``exc`` is inside odoo.tools.safe_eval."""
+    innermost = None
+    for frame, _lineno in traceback.walk_tb(exc.__traceback__):
+        innermost = frame.f_globals.get("__name__")
+    return innermost == "odoo.tools.safe_eval"
+
+
 # [@ANCHOR: hams_helpdesk:exc_describe]
 def describe(exc):
     """(type name, module, innermost-frame "module:line in function") for the fingerprint.
@@ -148,6 +175,7 @@ def describe(exc):
     is not folded into every other bug that ends in odoo/orm/models.py. With no addon frame, the
     innermost frame overall is used and the module is "odoo". Taken from each frame's module name,
     not its file path, so the result is the same on the dev box and on the server."""
+    exc = root_cause(exc)
     exc_type = type(exc)
     type_name = f"{exc_type.__module__}.{exc_type.__qualname__}"
     chosen = None

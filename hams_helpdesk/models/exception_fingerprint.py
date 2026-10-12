@@ -121,6 +121,11 @@ def _write_report(registry, data, folded):
     """Writes one occurrence on its own cursor. No try/except here on purpose: the service-account
     lookup must fail fast, and ``report_exception`` is the single place that swallows."""
     with registry.cursor() as cr:
+        # The failed request's transaction may still be open, holding row locks, while this runs. A
+        # wait on one of them would hang this worker (one thread waiting on itself, which Postgres
+        # cannot see as a deadlock), so give up quickly: a timeout is swallowed like any failure.
+        cr.execute("SET LOCAL lock_timeout = '3s'")  # audit-ignore-sql: constant; Tested by [@ANCHOR: hams_helpdesk:exc_write_report]
+        cr.execute("SET LOCAL statement_timeout = '15s'")  # audit-ignore-sql: constant; Tested by [@ANCHOR: hams_helpdesk:exc_write_report]
         env = _service_env(cr)
         return env["hams_helpdesk.exception.fingerprint"]._record_occurrence(data, folded)
 
