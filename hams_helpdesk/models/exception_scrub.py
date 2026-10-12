@@ -272,3 +272,48 @@ def mail_failure_class(reason):
         if pattern.match(text):
             return label
     return "other"
+
+
+DAEMON_KINDS = ("unit_failed", "consumer_exception")
+DAEMON_RESULTS = frozenset(
+    ("exit-code", "signal", "core-dump", "timeout", "watchdog", "start-limit-hit", "resources", "oom-kill")
+)
+DAEMON_TAIL_LINES = 20
+DAEMON_TAIL_LINE_LIMIT = 160
+DAEMON_TAIL_LIMIT = 4000
+_DAEMON_UNIT_SUFFIXES = (".service", ".timer", ".socket", ".target")
+_DAEMON_UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,79}$")
+_DAEMON_EXC_LINE_RE = re.compile(r"^((?:[A-Za-z_][\w.]*\.)?[A-Z]\w*(?:Error|Exception|Exit|Interrupt|Warning)):.*$")
+
+
+# [@ANCHOR: hams_helpdesk:exc_daemon_unit_name]
+def daemon_unit_name(unit):
+    """The systemd unit name to report, or None when ``unit`` is not a plain unit name. The instance
+    part of a template unit ("worker@<instance>.service") is dropped: it can be a user or a path.
+    Names come from the operator's own unit files, so anything but a short plain name is refused."""
+    text = str(unit or "").strip()
+    head, at_sign, tail = text.partition("@")
+    if at_sign:
+        suffix = tail.rsplit(".", 1)[1] if "." in tail else ""
+        text = f"{head}@.{suffix}" if suffix else f"{head}@"
+    if not _DAEMON_UNIT_RE.match(text) or not text.endswith(_DAEMON_UNIT_SUFFIXES):
+        return None
+    return text
+
+
+# [@ANCHOR: hams_helpdesk:exc_daemon_tail]
+def scrub_daemon_tail(text):
+    """The last lines of a daemon's journal, safe to store. Free text from outside this codebase, so
+    the strict scrubber is applied to every line (emails, URLs, IP addresses, secret pairs, tokens,
+    callsigns, long digit runs), an exception line keeps only its class (the message is dropped, as for
+    a Python exception in ``scrubbed_trace``), and the result is cut to a fixed number and length of
+    lines."""
+    lines = [line.rstrip() for line in str(text or "").replace("\r", "").split("\n") if line.strip()]
+    out = []
+    for line in lines[-DAEMON_TAIL_LINES:]:
+        line = line.strip()
+        exc_line = _DAEMON_EXC_LINE_RE.match(line)
+        if exc_line:
+            line = exc_line.group(1) + ": <message withheld>"
+        out.append(scrub_text(line[:DAEMON_TAIL_LINE_LIMIT]))
+    return "\n".join(out)[:DAEMON_TAIL_LIMIT]

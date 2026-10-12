@@ -211,6 +211,7 @@ class ExceptionFingerprint(models.Model):
             ("rpc", "RPC / ORM call"),
             ("cron", "Scheduled job"),
             ("mail", "Outgoing / incoming mail"),
+            ("daemon", "External daemon"),
         ],
         readonly=True,
     )

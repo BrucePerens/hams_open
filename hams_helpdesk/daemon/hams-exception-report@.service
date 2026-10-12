@@ -1,0 +1,34 @@
+# Template unit: reports the failure of the unit named by the instance to the Odoo exception tickets.
+# Not started by hand and not enabled. A daemon opts in with a drop-in (hams-exception-report.conf):
+#   OnFailure=hams-exception-report@%n.service
+# See daemon/README.md. Install to /etc/systemd/system/.
+[Unit]
+Description=Report the failure of %I to the Odoo exception tickets
+# A report storm is bounded here as well as in Odoo.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+User=odoo
+# Reading another unit's journal needs this group.
+SupplementaryGroups=systemd-journal
+# The key file is written by the Daemon Key Manager (hams_helpdesk register_exception_reporter_key).
+Environment=ODOO_KEY_FILE=/opt/hams/etc/keys/exception_reporter.env
+Environment=ODOO_URL=http://odoo:8069
+ExecStart=/usr/bin/python3 /opt/odoo/addons/hams_helpdesk/daemon/exception_reporter.py report-unit %I
+TimeoutStartSec=60
+StandardOutput=journal
+StandardError=journal
+
+# --- Sandboxing ---
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
