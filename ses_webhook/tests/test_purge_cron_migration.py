@@ -35,11 +35,23 @@ class TestSesWebhookPurgeCronMigration(HamsTransactionCase):
             "interval_number": 1,
             "interval_type": "days",
             "user_id": self.env.ref("base.user_root").id,
+            "group_ids": [(6, 0, [self.env["res.groups"].create({"name": "Purge fixture group " + xmlid_name}).id])],
         })
-        self.env["ir.model.data"].create({
-            "module": "ses_webhook", "name": xmlid_name, "model": "ir.cron",
-            "res_id": cron.id, "noupdate": True,
-        })
+        for name, model, res_id in (
+            (xmlid_name, "ir.cron", cron.id),
+            (xmlid_name + "_ir_actions_server", "ir.actions.server", cron.ir_actions_server_id.id),
+        ):
+            self.env["ir.model.data"].create({
+                "module": "ses_webhook", "name": name, "model": model, "res_id": res_id, "noupdate": True,
+            })
+        # What a cron that has been running for months carries: a progress row and a queued trigger.
+        self.env.cr.execute(  # audit-ignore-sql: test fixture, bound params
+            "INSERT INTO ir_cron_progress (cron_id, remaining, done, timed_out_counter)"
+            " VALUES (%s, 0, 0, 0)", (cron.id,)
+        )
+        self.env.cr.execute(  # audit-ignore-sql: test fixture, bound params
+            "INSERT INTO ir_cron_trigger (cron_id, call_at) VALUES (%s, now())", (cron.id,)
+        )
         return cron
 
     def test_01_migration_unlinks_the_purge_crons_by_xmlid(self):
@@ -55,7 +67,7 @@ class TestSesWebhookPurgeCronMigration(HamsTransactionCase):
             self.env.invalidate_all()
             self.assertFalse(crons.exists())
             self.assertFalse(self.env["ir.actions.server"].browse(action_ids).exists())
-            for name in migration.CRON_XMLIDS:
+            for name in migration.CRON_XMLIDS + migration.SERVER_ACTION_XMLIDS:
                 self.assertFalse(
                     self.env.ref("ses_webhook." + name, raise_if_not_found=False)
                 )
@@ -69,19 +81,19 @@ class TestSesWebhookPurgeCronMigration(HamsTransactionCase):
 
     def test_03_no_purge_cron_xmlid_remains_on_an_upgraded_database(self):
         migration = _load_migration()
-        for name in migration.CRON_XMLIDS:
-            self.assertFalse(
-                self.env["ir.model.data"].search_count(
-                    [("module", "=", "ses_webhook"), ("name", "=", name)]
-                ),
-                name + " must not exist on a database that has run the 1.1 migration",
-            )
+        names = migration.CRON_XMLIDS + migration.SERVER_ACTION_XMLIDS
+        self.assertFalse(
+            self.env["ir.model.data"].search_count(
+                [("module", "=", migration.MODULE), ("name", "in", list(names))]
+            ),
+            "these must not exist on a database that has run the 1.1 migration: " + ", ".join(names),
+        )
 
     def test_04_no_truncate_methods_and_service_account_cannot_delete(self):
         log = self.env["ses.webhook.log"]
         pending = self.env["ses.webhook.pending_submission"]
-        self.assertFalse(hasattr(log, "_cron_truncate_logs"))
-        self.assertFalse(hasattr(pending, "_cron_truncate_pending_submissions"))
+        self.assertNotIn("_cron_truncate_logs", dir(log))
+        self.assertNotIn("_cron_truncate_pending_submissions", dir(pending))
         svc = self.env.ref("ses_webhook.user_ses_webhook_service_internal")
         for model in (log, pending):
             self.assertFalse(model.with_user(svc).has_access("unlink"))

@@ -21,6 +21,9 @@ CRON_XMLIDS = (
     "ir_cron_truncate_ses_webhook_pending_submissions",
 )
 
+# Odoo also records an xmlid "<cron xmlid>_ir_actions_server" for the cron's inherited server action.
+SERVER_ACTION_XMLIDS = tuple(name + "_ir_actions_server" for name in CRON_XMLIDS)
+
 
 def migrate(cr, version):
     if not version:
@@ -40,8 +43,10 @@ def migrate(cr, version):
         cr.execute("DELETE FROM ir_cron WHERE id = %s", (cron_id,))  # audit-ignore-sql: bound parameter
         if action_id:
             cr.execute("DELETE FROM ir_act_server WHERE id = %s", (action_id,))  # audit-ignore-sql: bound parameter
-            cr.execute("DELETE FROM ir_actions WHERE id = %s", (action_id,))  # audit-ignore-sql: bound parameter
+            cr.execute(  # audit-ignore-sql: bound parameter, constant type
+                "DELETE FROM ir_actions WHERE id = %s AND type = 'ir.actions.server'", (action_id,)
+            )
     cr.execute(  # audit-ignore-sql: static SQL; the only parameters are this file's own constants
         "DELETE FROM ir_model_data WHERE module = %s AND name IN %s",
-        (MODULE, CRON_XMLIDS),
+        (MODULE, CRON_XMLIDS + SERVER_ACTION_XMLIDS),
     )
