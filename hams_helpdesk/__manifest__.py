@@ -35,6 +35,17 @@
     },
     "knowledge_docs": [
         {
+            # The member-facing manual for the Support menu item (/my/tickets). It is
+            # the only member entry here: "Hams Helpdesk" below is developer
+            # documentation and stays internal.
+            "name": "Getting help: Support tickets",
+            "path": "data/member_manual.html",
+            "icon": "🎫",
+            "category": "workspace",
+            "public": True,
+            "help_topic": "Getting started and your account",
+        },
+        {
             "name": "Hams Helpdesk",
             "path": "data/documentation.html",
             "icon": "🎫",

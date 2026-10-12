@@ -17,3 +17,4 @@ from . import test_ticket_untrusted_filter
 from . import test_ncmec_report
 from . import test_ui_tours
 from . import test_member_menu_item
+from . import test_member_manual
