@@ -9,7 +9,7 @@ This directory contains the Distributed Cache Manager Daemon, a standalone Pytho
 
 ### File Structure
 - `cache_manager.py`: The main daemon script.
-- `cache-manager.service`: systemd unit that runs it as the `odoo` user.
+- `cache-manager.service`: systemd unit that runs it as the `odoo` user, with Redis credentials from `/opt/hams/etc/redis.env`. hams_com's provisioning MANIFEST carries the identical text (a test there fails if they drift).
 - `test_cache_manager.py`: unit tests for the daemon.
 
 ### Database privilege

@@ -58,5 +58,27 @@ class RequireDbCredentialsTests(unittest.IsolatedAsyncioTestCase):
         return mock_obj
 
 
+class UnitFileTests(unittest.TestCase):
+    """The shipped cache-manager.service must be one that works on a real host: found on hams1,
+    2026-10-12, the sample unit pointed at /opt/odoo/addons and loaded no Redis credentials, and no
+    deployment installed it, so the global_cache_invalidation_counter never existed."""
+
+    def setUp(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache-manager.service")
+        with open(path, encoding="utf-8") as f:
+            self.text = f.read()
+
+    def test_unit_loads_the_redis_login(self):
+        self.assertIn("EnvironmentFile=/opt/hams/etc/redis.env\n", self.text)
+
+    def test_unit_runs_the_deployed_file_that_exists(self):
+        self.assertNotIn("/opt/odoo/addons", self.text)
+        self.assertIn(
+            "ExecStart=/usr/bin/python3 /opt/hams/src/hams_open/distributed_redis_cache/daemons/cache_manager.py\n",
+            self.text,
+        )
+        self.assertTrue(os.path.isfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_manager.py")))
+
+
 if __name__ == "__main__":
     unittest.main()

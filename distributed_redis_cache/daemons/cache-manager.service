@@ -1,29 +1,33 @@
 # Copyright © Bruce Perens K6BP. AGPL-3.0-or-later.
+# Installed by hams_shared/tools/infrastructure.py's MANIFEST (hams_com), which carries the identical unit text;
+# a hams_com test fails if the two drift apart. Runs the deployed module file with Redis credentials from redis.env.
 [Unit]
-Description=Odoo Distributed Cache Manager (Redis Pub/Sub)
+Description=Odoo Distributed Cache Manager (PostgreSQL NOTIFY to the Redis invalidation counter)
 After=network.target postgresql.service redis-server.service
 Requires=postgresql.service redis-server.service
 
 [Service]
-Type=simple
-User=odoo
-# Removing group specification
-# Adjust WorkingDirectory to point to your specific addons path
-WorkingDirectory=/opt/odoo/addons/distributed_redis_cache/daemons
 ProtectSystem=strict
+ProtectHome=read-only
 PrivateTmp=true
 PrivateDevices=true
 NoNewPrivileges=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+Type=simple
+User=odoo
+WorkingDirectory=/opt/hams/src/hams_open/distributed_redis_cache/daemons
 
-# Database & Redis Configuration
+EnvironmentFile=/opt/hams/etc/redis.env
 EnvironmentFile=-/opt/hams/etc/keys/cache_manager.env
 
-ExecStart=/usr/bin/env python3 cache_manager.py
+ExecStart=/usr/bin/python3 /opt/hams/src/hams_open/distributed_redis_cache/daemons/cache_manager.py
 
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=cache-manager
 
 [Install]
 WantedBy=multi-user.target
