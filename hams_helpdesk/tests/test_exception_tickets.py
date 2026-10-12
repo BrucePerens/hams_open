@@ -529,7 +529,9 @@ class TestMailFailureReports(ExceptionTicketCase):
         rows = self.mail_rows()
         self.assertEqual(len(rows), 2)
         self.assertEqual(len(rows.mapped("ticket_id")), 2)
-        self.assertEqual(sorted(rows.mapped("occurrence_count")), [1, 2])
+        # The second connect failure was refused by the gate and is counted for the next write.
+        pending = [entry[1] for entry in reporter._GATE.values()]
+        self.assertEqual(sorted(pending), [0, 1])
 
     def test_bad_recipient_failures_are_not_tickets(self):
         mail = self.make_mail(email_to="not an address")
@@ -551,6 +553,8 @@ class TestMailFailureReports(ExceptionTicketCase):
         on the mail and swallows it, and the hook still reports."""
         mail = self.make_mail()
         self.env.flush_all()
+        # Odoo skips sending while a test runs unless this is patched, as its own mail tests do.
+        self.safe_patch_object(type(self.env["ir.mail_server"]), "_disable_send", return_value=False)
         self.safe_patch_object(
             type(self.env["ir.mail_server"]), "send_email", side_effect=OSError("Connection timed out")
         )
@@ -579,8 +583,15 @@ class TestMailFailureReports(ExceptionTicketCase):
     def test_bounce_processing_failure_is_reported_and_reraised(self):
         self.env.flush_all()
         # A bounce dict without the keys Odoo reads makes the real handler raise.
-        with self.assertRaises(KeyError):
+        # Not assertRaises: Odoo's wraps the block in a savepoint, and its rollback would also undo
+        # the report, which is written on a cursor that joins this test's transaction.
+        raised = False
+        try:
             self.env["mail.thread"]._routing_handle_bounce(None, {self.VICTIM: 1})
+        except KeyError as error:
+            raised = True
+            _logger.debug("the bounce handler failed as expected: %r", error)
+        self.assertTrue(raised, "the failure must still propagate")
         self.env.invalidate_all()
         rows = self.mail_rows()
         self.assertEqual(len(rows), 1)
