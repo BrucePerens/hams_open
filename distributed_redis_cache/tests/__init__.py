@@ -9,6 +9,7 @@ from . import test_b2_fixes
 from . import test_hooks
 from . import test_cron_cache_interceptor
 from . import test_poll_gate
+from . import test_upgrade_auth_check
 
 __all__ = [
     "test_distributed_cache",
@@ -19,4 +20,5 @@ __all__ = [
     "test_hooks",
     "test_cron_cache_interceptor",
     "test_poll_gate",
+    "test_upgrade_auth_check",
 ]
