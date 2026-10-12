@@ -356,7 +356,12 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=None):
     tmp_path = request_path + f".tmp-{os.getpid()}"
 
     secret_env = {}
-    if config.get("storage_type") in ("s3", "b2"):
+    # Only the legacy mode, where this daemon describes repo1 itself from the config row, needs the
+    # key in the environment. A host-defined repository (pgbackrest_repo != 0) keeps its own key in
+    # pgbackrest.conf; forwarding PGBACKREST_REPO1_S3_KEY there makes pgBackRest see a repo1 that
+    # the file does not define and refuse --repo=2 ("key '2' is not valid for 'repo' option"), found
+    # 2026-10-12 right after repo1 was removed from hams1's pgbackrest.conf.
+    if config.get("storage_type") in ("s3", "b2") and not _pgbackrest_repo_number(config):
         if config.get("access_key"):
             secret_env["PGBACKREST_REPO1_S3_KEY"] = config["access_key"]
         if config.get("secret_key"):
@@ -684,7 +689,11 @@ def execute_job(ch, method, properties, body):
                 config_file = _kopia_config_file(config_id)
                 env_vars["KOPIA_CONFIG_PATH"] = config_file
                 _ensure_kopia_s3_repository(config, env_vars, config_file)
-        elif cmd[0] == "pgbackrest" and storage_type in ("s3", "b2"):
+        elif (
+            cmd[0] == "pgbackrest"
+            and storage_type in ("s3", "b2")
+            and not _pgbackrest_repo_number(config)
+        ):
             # See _pgbackrest_s3_repo_args' own docstring: pgbackrest's CLI
             # refuses these two options as command-line flags outright.
             if config.get("access_key"):

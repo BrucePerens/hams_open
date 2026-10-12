@@ -263,6 +263,24 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
         self.assertEqual(captured["env"]["PGBACKREST_REPO1_S3_KEY"], "AKIAFAKE")
         self.assertEqual(captured["env"]["PGBACKREST_REPO1_S3_KEY_SECRET"], "sekrit")
 
+    def test_host_defined_repository_gets_no_repo1_key_in_the_request(self):
+        # pgbackrest_repo=2 means the repository lives in pgbackrest.conf with its own key; a
+        # forwarded PGBACKREST_REPO1_S3_KEY would make pgBackRest reject --repo=2.
+        captured = {}
+
+        def fake_sidecar():
+            request_path = os.path.join(self._tmpdir, "request-102.json")
+            self._wait_for_file(request_path)
+            with open(request_path) as f:
+                captured.update(json.load(f))
+            self._write_result(102, 0, "ok")
+
+        threading.Thread(target=fake_sidecar, daemon=True).start()
+        cmd = ["pgbackrest", "info", "--stanza=hams_prod", "--repo=2"]
+        config = {"storage_type": "b2", "access_key": "AKIAFAKE", "secret_key": "sekrit", "pgbackrest_repo": 2}
+        backup_worker._run_pgbackrest_via_sidecar(cmd, config, 102)
+        self.assertEqual(captured["env"], {})
+
     def test_invalid_stanza_raises_before_touching_the_filesystem(self):
         cmd = ["pgbackrest", "backup", "--stanza=../../etc/passwd"]
         with self.assertRaises(ValueError):
