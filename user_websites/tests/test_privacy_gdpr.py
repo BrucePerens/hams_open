@@ -305,6 +305,20 @@ class TestPrivacyGDPR(HamsHttpCase):
             self.url_open("/privacy/erased", allow_redirects=False).status_code, 200
         )
 
+    def test_02a_erasure_panel_warns_of_the_permanent_ban(self):
+        """The Right to Erasure panel says erasing means a permanent, irreversible ban, and no longer says ownership is anonymized."""
+        # [@ANCHOR: user_websites:test_erasure_panel_ban_warning]
+        self.authenticate(self.user_privacy.login, self.user_privacy.login)
+        page = self.url_open("/my/privacy")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('id="user_websites_erasure_ban_warning"', page.text)
+        self.assertIn("permanently banned from hams.com", page.text)
+        self.assertIn("This is irreversible", page.text)
+        self.assertNotIn("only your ownership of them is anonymized", page.text)
+        erased = self.url_open("/privacy/erased")
+        self.assertNotIn("only your ownership of them was anonymized", erased.text)
+        self.assertIn("permanently banned from hams.com", erased.text)
+
     def test_02_right_to_erasure(self):
         """Verify the user can permanently hard-delete their authored content and opt-out of directories."""
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
