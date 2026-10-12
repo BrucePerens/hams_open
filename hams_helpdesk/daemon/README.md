@@ -12,8 +12,13 @@ files below.
    unit that has the drop-in enters the failed state, systemd starts the template unit with the failed
    unit's name as the instance. It runs `exception_reporter.py report-unit <unit>`, which sends the unit
    name, systemd's `Result` word and the last 20 journal lines. A unit with `Restart=always` only enters
-   the failed state when its start limit is hit, so this reports a daemon that has given up, not every
-   crash.
+   the failed state when its start limit is hit, so `OnFailure=` alone reports a daemon that has given
+   up. A self-restarting unit also gets `hams-exception-report-crash.conf`, an `ExecStopPost=-+` line that
+   starts the same template when systemd stops the service with a `$SERVICE_RESULT` other than
+   `success` (a crash, a signal, a watchdog or timeout; a deploy restart is `success` and stays
+   quiet). It runs as root (`+`) so a `hamsd_*` account can start the unit, and `-` keeps a failed
+   report from failing the daemon. This is how a `hamsd_*` daemon, which cannot read the reporter key,
+   gets a ticket for each crash.
 2. **`reporting_failures`** (`exception_reporter.py`, Python, standard library only). A daemon wraps its
    consumer loop: an uncaught `Exception` is reported (the class and the frames, never the message), at
    most once a minute per name in that process, and then raised again, so the daemon still stops and
@@ -52,7 +57,7 @@ files below.
   runs), an exception line keeps only its class, and the tail is cut to 20 lines of 160 characters.
 * **Rate limits.** The shared ones: a fingerprint (unit, kind, result) is written at most once a minute
   per process, the whole process 30 times a minute, 50 new tickets an hour; repeats add to the count. The
-  template unit also has a start limit, and the helper sends at most one report a minute per name.
+  template unit also has a start limit (5 in 300 s, so a crash loop is bounded), and the helper sends at most one report a minute per name.
 
 ## Installing (operator)
 
