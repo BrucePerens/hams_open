@@ -369,13 +369,18 @@ class KnowledgeArticle(models.Model):
         # documentation: only member manuals (plus articles explicitly
         # shared with this user) are searched, whoever is asking.
         user_id = self.env.user.id
-        visibility_domain = [
-            "|",
-            "&",
-            ("is_published", "=", True),
-            ("audience", "=", "member"),
-            ("member_ids", "in", [user_id]),
-        ]
+        if self.env.user.has_group("base.group_user"):
+            # Staff may also find unpublished drafts of member manuals;
+            # internal documentation is never searchable here.
+            visibility_domain = [("audience", "=", "member")]
+        else:
+            visibility_domain = [
+                "|",
+                "&",
+                ("is_published", "=", True),
+                ("audience", "=", "member"),
+                ("member_ids", "in", [user_id]),
+            ]
         domain = [
             visibility_domain,
             website.website_domain(),

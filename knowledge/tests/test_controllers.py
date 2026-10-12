@@ -156,7 +156,8 @@ class TestManualControllers(HamsHttpCase):
         """Verify the controller groups articles properly based on member_ids and permissions."""
         self.authenticate(self.internal_user.login, self.internal_user.login)
 
-        response = self.url_open("/manual")
+        # The sidebar is on article pages; /manual itself is the Help index.
+        response = self.url_open(self.root_public.website_url)
         self.assertEqual(response.status_code, 200)
 
         # We expect the QWeb to render "WORKSPACE" for root_public
