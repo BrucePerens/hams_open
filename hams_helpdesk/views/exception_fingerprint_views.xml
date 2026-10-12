@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright © Bruce Perens K6BP. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- Back-office list of automatic server-exception tickets, one row per fingerprint, with counts.
+         Staff only (ir.model.access.csv gives the rows to group_helpdesk_user and up).
+         [@ANCHOR: hams_helpdesk:exc_fingerprint_list] -->
+    <record id="view_hams_helpdesk_exception_fingerprint_list" model="ir.ui.view">
+        <field name="name">hams_helpdesk.exception.fingerprint.list</field>
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_helpdesk:exc_fingerprint_list] -->
+        <field name="model">hams_helpdesk.exception.fingerprint</field>
+        <field name="arch" type="xml">
+            <list string="Server Exceptions" create="false" edit="false" default_order="last_seen desc">
+                <field name="last_seen"/>
+                <field name="exc_type"/>
+                <field name="module"/>
+                <field name="route"/>
+                <field name="source"/>
+                <field name="occurrence_count" sum="Total occurrences"/>
+                <field name="first_seen" optional="hide"/>
+                <field name="ticket_id"/>
+                <field name="ticket_stage"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hams_helpdesk_exception_fingerprint_form" model="ir.ui.view">
+        <field name="name">hams_helpdesk.exception.fingerprint.form</field>
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_helpdesk:exc_fingerprint_list] -->
+        <field name="model">hams_helpdesk.exception.fingerprint</field>
+        <field name="arch" type="xml">
+            <form string="Server Exception" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="exc_type"/>
+                            <field name="module"/>
+                            <field name="frame"/>
+                            <field name="route"/>
+                            <field name="source"/>
+                        </group>
+                        <group>
+                            <field name="occurrence_count"/>
+                            <field name="first_seen"/>
+                            <field name="last_seen"/>
+                            <field name="last_user_id"/>
+                            <field name="ticket_id"/>
+                            <field name="ticket_stage"/>
+                        </group>
+                    </group>
+                    <separator string="Last sample traces (scrubbed)"/>
+                    <field name="samples_json" nolabel="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_hams_helpdesk_exception_fingerprint_search" model="ir.ui.view">
+        <field name="name">hams_helpdesk.exception.fingerprint.search</field>
+        <!-- audit-ignore-view: Tested by [@ANCHOR: hams_helpdesk:exc_fingerprint_list] -->
+        <field name="model">hams_helpdesk.exception.fingerprint</field>
+        <field name="arch" type="xml">
+            <search string="Server Exceptions">
+                <field name="route"/>
+                <field name="exc_type"/>
+                <field name="module"/>
+                <filter name="open" string="Open tickets" domain="[('ticket_stage', 'not in', ['resolved', 'closed'])]"/>
+                <filter name="closed" string="Closed tickets" domain="[('ticket_stage', 'in', ['resolved', 'closed'])]"/>
+                <filter name="recurring" string="Recurring (10+)" domain="[('occurrence_count', '&gt;=', 10)]"/>
+                <group>
+                    <filter name="group_module" string="Module" context="{'group_by': 'module'}"/>
+                    <filter name="group_exc" string="Exception" context="{'group_by': 'exc_type'}"/>
+                    <filter name="group_source" string="Source" context="{'group_by': 'source'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_hams_helpdesk_exception_fingerprint" model="ir.actions.act_window">
+        <!-- burn-ignore-tour -->
+        <field name="name">Server Exceptions</field>
+        <field name="res_model">hams_helpdesk.exception.fingerprint</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+    </record>
+
+    <menuitem id="menu_hams_helpdesk_exceptions" name="Server Exceptions" parent="menu_hams_helpdesk_root" action="action_hams_helpdesk_exception_fingerprint" sequence="30" groups="hams_helpdesk.group_helpdesk_user"/>
+</odoo>

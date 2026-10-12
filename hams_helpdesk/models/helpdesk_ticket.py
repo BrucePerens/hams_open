@@ -136,12 +136,19 @@ class HelpdeskTicket(models.Model):
             # repeater_ownership value (a hams_com-only concern bolted on from outside), this
             # workflow IS a core hams_helpdesk feature, not an extension of one.
             (_CSAM_TICKET_TYPE, "Child Safety: Apparent CSAM / Enticement / Trafficking (NCMEC Mandatory Report)"),
+            # Opened only by models/exception_fingerprint.py, through its own service account. Staff-only:
+            # no partner is ever set, the portal cannot pick it (controllers/portal.py), it is not on
+            # the external-AI allow-list, and it never wakes the AI triage daemon.
+            ("server_exception", "Automatic: server exception"),
         ],
         string="Ticket Type",
         default="general",
         tracking=True,
     )
     active = fields.Boolean(default=True)
+    exception_fingerprint_ids = fields.One2many(
+        "hams_helpdesk.exception.fingerprint", "ticket_id", string="Exception fingerprints", readonly=True
+    )
 
     user_id = fields.Many2one(
         "res.users", string="Assigned To", tracking=True, index=True
@@ -391,6 +398,7 @@ class HelpdeskTicket(models.Model):
                 ticket.id
                 for ticket, vals in zip(tickets, vals_list)
                 if (vals.get("stage") or "new") == "new"
+                and vals.get("ticket_type") != "server_exception"
             ]
         )
 
