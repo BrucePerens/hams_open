@@ -45,6 +45,32 @@ Because this is a standalone Open Source module that relies on an external Pytho
    * The daemon does **not** read the Redis settings saved in Odoo. It takes `REDIS_HOST`, `REDIS_PORT` and `REDIS_PASSWORD` from its own environment, defaulting to `localhost`, 6379 and no password (note that the Odoo side defaults to host `redis`), and `DB_HOST`, `DB_PORT` and `DB_NAME` likewise, defaulting to `localhost`, 5432 and `odoo`. It listens on exactly one database, `DB_NAME`. Set these for the service when your deployment differs from the defaults.
 5. Navigate to **Settings > Technical > Distributed Cache** in Odoo to verify the connection status. The menu is shown to members of the Cache Manager group, which includes the administrator by default. The status check tests only this Odoo server's own Redis connection, not the daemon. [@ANCHOR: COMM_distributed_cache_view]
 
+## Upgrading modules on a server (Redis credentials)
+
+Production Redis refuses unauthenticated clients. The odoo systemd service gets its credentials from
+`EnvironmentFile=` entries (`/opt/hams/etc/redis.env` among them); a hand-run `sudo -u odoo odoo -u ...` does **not**,
+and every cache invalidation of such an upgrade fails ("Authentication required") while the upgrade itself succeeds,
+leaving the whole Redis L2 cache stale for up to 24 hours (found 2026-10-12, 2394 failed invalidations).
+
+Run upgrades with the service's environment:
+
+```
+sudo pagerduty-maintenance start --minutes 30 --reason "odoo upgrade"
+sudo systemctl stop odoo
+sudo python3 /opt/hams/src/hams_open/distributed_redis_cache/scripts/odoo_upgrade.py --db hams_prod --modules mod_a,mod_b --log /tmp/upgrade.log
+sudo systemctl start odoo
+sudo pagerduty-maintenance end
+```
+
+`odoo_upgrade.py` reads the service's own `EnvironmentFiles=`/`Environment=`/`User=` from `systemctl show` and runs
+`odoo -u` in a transient `systemd-run` unit with them (values are never read or printed), refuses to run if the service
+defines no `REDIS_PASSWORD` or is still running, and exits non-zero if the output shows any Redis authentication failure.
+Independently, `invalidate_model_cache` raises instead of warning when Redis rejects the credentials while the registry
+is still loading (module install/upgrade; [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]),
+so a hand-run upgrade fails at its first cache invalidation instead of logging thousands of warnings. A serving worker
+still only logs a warning and falls back to its local cache. If an upgrade did run unauthenticated: delete the `<db>:distributed_cache:*` keys with `SCAN`+`DEL` (never
+`FLUSHALL`) and restart odoo. A restart alone does not help: it clears only each worker's in-memory L1, not Redis.
+
 ## 🏗️ Architecture (CQRS)
 
 This module implements a strict CQRS (Command Query Responsibility Segregation) pattern to bypass Odoo's single-threaded limitations:

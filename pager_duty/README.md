@@ -80,6 +80,7 @@ pagerduty-maintenance status                                              # exit
 ```
 sudo pagerduty-maintenance start --minutes 30 --reason "apt upgrade"
 sudo apt-get -y upgrade        # or: docker compose up -d   /   odoo -u my_module ... && systemctl restart odoo
+                               # (hand-run odoo -u: use distributed_redis_cache/scripts/odoo_upgrade.py -- it gives the upgrade the service's Redis credentials)
 sudo pagerduty-maintenance end
 ```
 
