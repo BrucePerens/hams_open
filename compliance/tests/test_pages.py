@@ -193,7 +193,8 @@ class TestCompliancePagesHttp(HamsHttpCase):
         self.assertIn("safe to accept our root certificate", visible)
         self.assertIn("Google", visible)
         self.assertIn("A TLS certificate is not permission to transmit", visible)
-        self.assertIn("Capability root credential", visible)
+        self.assertIn("Relay issuer key credential", visible)
+        self.assertNotIn("Capability root credential", visible)
         self.assertIn("Identity issuing key credential", visible)
         self.assertIn("Relay issuing key credential", visible)
         # The permitted names the page states are the ones the CA actually carries.

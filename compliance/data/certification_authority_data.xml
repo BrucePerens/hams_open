@@ -45,8 +45,8 @@
                             exception to this protection, which is a reason to install the root only on current browsers and operating systems.</p>
 
                             <h3 class="mt-4">How the signing keys are held</h3>
-                            <p>The two keys that sign certificates day to day (the relay issuing key and the identity issuing key), and the separate key that
-                            certifies who may issue transmit capabilities, live inside a Google Cloud HSM. They are not files. They are generated or imported into the
+                            <p>The two keys that sign certificates day to day (the relay issuing key and the identity issuing key), and the separate key
+                            that signs relay operator lists and theft check-in answers (the relay issuer key), live inside a Google Cloud HSM. They are not files. They are generated or imported into the
                             hardware, they cannot be exported, and nobody at Google or at hams.com can read them. The server that runs hams.com holds,
                             for each key, only a service-account credential whose permissions are exactly two: ask the HSM to sign a given
                             digest with that one key, and read that key's public half. That credential cannot export or disable the key, cannot change any
@@ -74,16 +74,20 @@
                                 certificate login, until the certificate is revoked, and whatever hams.com lets that member do (including asking for remote access to that
                                 member's own relays) would be exposed. The sign-in service checks our published revocation list, so a forged certificate we learn about can be
                                 cut off.</li>
-                                <li><strong>Capability root credential.</strong> This is the most serious one and is the exception to the next paragraph. This key certifies
-                                the hams.com issuer that signs relay capabilities. An attacker holding the credential could certify a key of their own as an issuer and then sign
-                                capabilities, including ones that allow transmitting, that every installed relay would accept as coming from hams.com, because relays carry the root
-                                public key. What a relay then does with such a capability still follows that relay's own settings. We bound this damage by keeping the issuer
-                                certificate short-lived (one year today), by Google's audit log recording every use of this key, and by being able to disable the key at Google
-                                at once. We cannot recall trust from relays already installed: removing a compromised root takes a new relay release.</li>
+                                <li><strong>Relay issuer key credential.</strong> This key is not a certificate authority and has no certificate. It signs the
+                                operator list that hams.com keeps for each relay and the answer to a relay's theft check-in (including the instruction to wipe), and
+                                relays carry its public key and check those signatures directly. An attacker holding the credential could ask the HSM to sign lists and
+                                check-in answers of their own choosing, and every relay that carries this key would accept them as coming from hams.com. That could add
+                                keys to a relay's hams.com-signed list as operators or listeners, or send a wipe instruction. The relay's owners are kept at the relay and
+                                are not set by this list, and an owner's local block on a key still applies. We bound this damage by Google's audit log recording every use
+                                of the key and by being able to disable the key, or its credential, at Google at once. We cannot recall trust from relays already
+                                installed: replacing this key takes a new relay release. An earlier design had a separate capability root that certified this key. That
+                                root has been retired and its key at Google is scheduled for destruction, so no such root remains in use.</li>
                             </ul>
                             <p><strong>A TLS certificate is not permission to transmit.</strong> A certificate from the relay or identity branch never authorizes
-                            transmitting through a relay. That authority comes from a capability signed under the capability root and tied to the person's own key, and the relay checks it
-                            itself. So a rogue device with a valid certificate cannot make a relay transmit for it unless the user's own key was exposed. We still advise
+                            transmitting through a relay. The relay decides that itself, from the owners kept at the relay, from the operator list that hams.com
+                            signs for it and from any grants made locally, and it recognizes a person by that person's own key. So a rogue device with a valid certificate cannot make a
+                            relay transmit for it unless the user's own key was exposed. We still advise
                             treating a padlock as a statement about the name in the address bar, not as proof that a device is yours.</p>
 
                             <h3 class="mt-4">Lifetimes and revocation</h3>
