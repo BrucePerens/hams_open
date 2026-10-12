@@ -5,6 +5,8 @@
 real submodule, then a real `git worktree add` of it) under a tempdir, never the real trees.
 
 Run: python3 -m unittest test_fix_worktree_symlinks   (from the hams_open root)"""
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -47,6 +49,13 @@ class FixWorktreeTests(unittest.TestCase):
         run(["worktree", "add", "-q", "-b", "w1", self.worktree], self.main)
 
     def test_a_fresh_worktree_has_an_empty_submodule_and_the_fix_makes_it_work(self):
+        # Tests [@ANCHOR: fix_worktree_symlinks:fix_worktree]
+        # Tests [@ANCHOR: fix_worktree_symlinks:main_checkout_root]
+        # Tests [@ANCHOR: fix_worktree_symlinks:is_empty_dir]
+        # Tests [@ANCHOR: fix_worktree_symlinks:is_populated_checkout]
+        # Tests [@ANCHOR: fix_worktree_symlinks:link]
+        # Tests [@ANCHOR: fix_worktree_symlinks:recorded_sha]
+        # Tests [@ANCHOR: fix_worktree_symlinks:git]
         self.assertEqual(os.listdir(os.path.join(self.worktree, "hams_shared")), [])
         self.assertFalse(os.path.exists(os.path.join(self.worktree, "tools", "test.py")))
         fixed, messages = fws.fix_worktree(self.worktree)
@@ -66,6 +75,7 @@ class FixWorktreeTests(unittest.TestCase):
         self.assertEqual(run(["ls-tree", "HEAD", "hams_shared"], self.worktree).split()[0], "160000")
 
     def test_running_it_twice_changes_nothing(self):
+        # Tests [@ANCHOR: fix_worktree_symlinks:fix_worktree]
         fws.fix_worktree(self.worktree)
         fixed, _ = fws.fix_worktree(self.worktree)
         self.assertEqual(fixed, 0)
@@ -90,6 +100,17 @@ class FixWorktreeTests(unittest.TestCase):
         fixed, _ = fws.fix_worktree(self.worktree)
         self.assertEqual(fixed, 0)
         self.assertFalse(os.path.islink(os.path.join(self.worktree, "hams_shared")))
+
+    def test_main_fixes_the_worktree_it_is_run_in_and_reports_it(self):
+        # Tests [@ANCHOR: fix_worktree_symlinks:main]
+        old = os.getcwd()
+        self.addCleanup(os.chdir, old)
+        os.chdir(self.worktree)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(fws.main(), 0)
+        self.assertIn("Fixed hams_shared", out.getvalue())
+        self.assertTrue(os.path.islink(os.path.join(self.worktree, "hams_shared")))
 
 
 if __name__ == "__main__":

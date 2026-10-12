@@ -38,12 +38,14 @@ GITLINK_MODE = "160000"
 SYMLINK_MODE = "120000"
 
 
+# [@ANCHOR: fix_worktree_symlinks:git]
 def _git(args, cwd):
     return subprocess.run(
         ["git"] + args, cwd=cwd, capture_output=True, text=True, check=True
     ).stdout.strip()
 
 
+# [@ANCHOR: fix_worktree_symlinks:main_checkout_root]
 def main_checkout_root(this_root):
     """The root of the main (non-worktree) checkout that `this_root` belongs to."""
     main_git_dir = _git(["rev-parse", "--git-common-dir"], this_root)
@@ -52,15 +54,18 @@ def main_checkout_root(this_root):
     return os.path.dirname(os.path.normpath(main_git_dir))
 
 
+# [@ANCHOR: fix_worktree_symlinks:is_empty_dir]
 def _is_empty_dir(path):
     return os.path.isdir(path) and not os.path.islink(path) and not os.listdir(path)
 
 
+# [@ANCHOR: fix_worktree_symlinks:is_populated_checkout]
 def _is_populated_checkout(path):
     """A submodule working tree: a directory holding a `.git` file or directory."""
     return os.path.isdir(path) and os.path.exists(os.path.join(path, ".git"))
 
 
+# [@ANCHOR: fix_worktree_symlinks:link]
 def _link(this_root, rel_path, target):
     here_path = os.path.join(this_root, rel_path)
     if os.path.islink(here_path):
@@ -73,10 +78,12 @@ def _link(this_root, rel_path, target):
     _git(["update-index", "--skip-worktree", rel_path], this_root)
 
 
+# [@ANCHOR: fix_worktree_symlinks:recorded_sha]
 def _recorded_sha(entry_meta):
     return entry_meta.split()[1]
 
 
+# [@ANCHOR: fix_worktree_symlinks:fix_worktree]
 def fix_worktree(this_root):
     """Fix `this_root`. Returns (fixed, messages)."""
     main_root = main_checkout_root(this_root)
@@ -128,6 +135,7 @@ def fix_worktree(this_root):
     return fixed, messages
 
 
+# [@ANCHOR: fix_worktree_symlinks:main]
 def main():
     this_root = _git(["rev-parse", "--show-toplevel"], os.getcwd())
     _, messages = fix_worktree(this_root)

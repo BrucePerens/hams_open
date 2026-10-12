@@ -54,6 +54,7 @@ AI_FILE_MARKERS = (
 IGNORE_TAG = "ticket-ai-ignore:"
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_tracked_files]
 def _tracked_files(root):
     """Relative paths of the files git tracks under ``root``, or None when ``root`` is not in a git
     checkout (a deployed copy without a .git) or git cannot say.
@@ -73,6 +74,7 @@ def _tracked_files(root):
     return [rel for rel in res.stdout.split("\0") if rel]
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_candidate_files]
 def _candidate_files(root):
     tracked = _tracked_files(root)
     if tracked:  # not None (a checkout) and not empty (git saw nothing: scan the directory itself)
