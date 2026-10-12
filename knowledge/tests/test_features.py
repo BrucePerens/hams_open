@@ -12,6 +12,7 @@ class TestManualFeatures(HamsHttpCase):
 
     def setUp(self):
         super(TestManualFeatures, self).setUp()
+        self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")  # open sign-up: no invite-only redirect
 
         self.searchable_article = self.env["knowledge.article"].create(
             {

@@ -12,6 +12,7 @@ class TestManualControllers(HamsHttpCase):
 
     def setUp(self):
         super(TestManualControllers, self).setUp()
+        self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")  # open sign-up: no invite-only redirect
 
         self.internal_user = self.env["res.users"].create(
             {

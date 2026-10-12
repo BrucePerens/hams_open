@@ -202,7 +202,7 @@ class TestHelpAudience(HamsHttpCase):
             detail = Article._search_get_detail(
                 website, "name asc", {"displayDescription": True}
             )
-            found = Article.search(detail["base_domain"])
+            found = Article.search(detail["base_domain"][0] + detail["base_domain"][1])
             self.assertIn(self.manual, found, user.login)
             self.assertNotIn(self.story, found, user.login)
             self.assertNotIn(self.published_internal, found, user.login)
