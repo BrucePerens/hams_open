@@ -23,6 +23,7 @@
         "data/ncmec_report_data.xml",
         "views/helpdesk_ticket_views.xml",
         "views/shift_handoff_views.xml",
+        "views/exception_fingerprint_views.xml",
         "views/dashboard_views.xml",
         "views/portal_templates.xml",
         "data/member_menu_data.xml",
@@ -73,6 +74,12 @@
             "name": "Journey: Shift Handoff Protocol",
             "path": "docs/journeys/shift_handoff_protocol.md",
             "icon": "🤝",
+            "category": "workspace",
+        },
+        {
+            "name": "Story: Automatic Server-Exception Tickets",
+            "path": "docs/stories/server_exception_tickets.md",
+            "icon": "🐞",
             "category": "workspace",
         },
         {

@@ -130,6 +130,12 @@ Hams Helpdesk implements strict isolation:
 - Website-level filtering ensures portal users only see tickets created on that specific website, plus tickets not tied to any website (for example, ones created from email).
 - Controllers strictly validate ownership and website context before rendering ticket details.
 
+## Automatic server-exception tickets
+Unhandled exceptions from pages, RPC/ORM calls and scheduled jobs become tickets of the staff-only
+category "Automatic: server exception", one per fingerprint (exception type, innermost addon frame,
+module, normalized route), counted on `hams_helpdesk.exception.fingerprint` and listed under
+Helpdesk > Server Exceptions. See `docs/stories/server_exception_tickets.md`.
+
 ## Recent Improvements
 - Verified and linked all semantic anchors for traceability.
 - Added shift handoff verification to operator tours.

@@ -17,7 +17,7 @@ from odoo.addons.portal.controllers.portal import CustomerPortal, pager as porta
 # bypassing the dropdown entirely) and trigger the forced-Critical-priority, notify-every-
 # helpdesk-manager path meant for a trusted internal flag (bot self-reporting, the Official
 # Observer, or _ncmec_report_ticket_for_recording), not for an ordinary member's own report.
-_PORTAL_EXCLUDED_TICKET_TYPES = {"csam_enticement_trafficking"}
+_PORTAL_EXCLUDED_TICKET_TYPES = {"csam_enticement_trafficking", "server_exception"}
 
 
 class HelpdeskPortal(CustomerPortal):
