@@ -22,6 +22,7 @@ path from skipping it by accident.
 """
 import ast
 import os
+import subprocess
 
 SKIP_DIRS = {"__pycache__", "node_modules", ".git", "hams_shared", "tests", "worktrees", ".claude", "site-packages", "venv", ".venv", "target"}
 
@@ -53,16 +54,49 @@ AI_FILE_MARKERS = (
 IGNORE_TAG = "ticket-ai-ignore:"
 
 
-def _py_files(root, daemon_only=False):
+def _tracked_files(root):
+    """Relative paths of the files git tracks under ``root``, or None when ``root`` is not in a git
+    checkout (a deployed copy without a .git) or git cannot say.
+
+    The scan covers the code that is part of the repository, not whatever else sits in the directory:
+    an untracked stray (a leftover nested checkout, a scratch copy) is not this repository's code and
+    must not fail the rule. ``-z`` keeps odd file names intact."""
+    try:
+        res = subprocess.run(
+            ["git", "-c", "safe.directory=*", "-C", root, "ls-files", "-z", "--", "*.py"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if res.returncode != 0:
+        return None
+    return [rel for rel in res.stdout.split("\0") if rel]
+
+
+def _candidate_files(root):
+    tracked = _tracked_files(root)
+    if tracked:  # not None (a checkout) and not empty (git saw nothing: scan the directory itself)
+        for rel in sorted(tracked):
+            path = os.path.join(root, rel)
+            parts = rel.split("/")[:-1]
+            if any(d in SKIP_DIRS or d.startswith(".") for d in parts) or not os.path.isfile(path):
+                continue
+            yield path
+        return
     for dirpath, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
         for fname in files:
-            if not fname.endswith(".py") or fname.startswith("test_"):
-                continue
-            path = os.path.join(dirpath, fname)
-            if daemon_only and not any(part in ("daemon", "daemons") for part in os.path.relpath(path, root).split(os.sep)):
-                continue
-            yield path
+            yield os.path.join(dirpath, fname)
+
+
+def _py_files(root, daemon_only=False):
+    for path in _candidate_files(root):
+        fname = os.path.basename(path)
+        if not fname.endswith(".py") or fname.startswith("test_"):
+            continue
+        if daemon_only and not any(part in ("daemon", "daemons") for part in os.path.relpath(path, root).split(os.sep)):
+            continue
+        yield path
 
 
 def _constants(tree):

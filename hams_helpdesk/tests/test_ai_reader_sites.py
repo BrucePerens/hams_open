@@ -5,6 +5,8 @@
 or incident body to an AI reader (docs/security/TICKET_PROMPT_INJECTION.md). The rule itself, and what it
 looks at, is documented there; the cases below prove it fires and that the filtered shapes pass."""
 import os
+import subprocess
+import tempfile
 
 from odoo.tests.common import BaseCase, tagged
 
@@ -79,3 +81,34 @@ class TestAiReaderSites(BaseCase):
             "    return client.execute('hams_helpdesk.ticket', 'read', [1], ['name'])  # ticket-ai-ignore: staff export, no AI\n"
         )
         self.assertEqual(check_source(source), [])
+
+    def _write(self, root, rel, text):
+        path = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+    def test_10_only_tracked_files_are_scanned_so_an_untracked_stray_directory_cannot_fail_it(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_sites_rule]
+        # A stray untracked directory (a leftover nested checkout, a scratch copy) once failed the
+        # repository scan with violations that are not this repository's code.
+        bad = AI + "def run(client):\n    return client.execute('pager.incident', 'read', [1])\n"
+        with tempfile.TemporaryDirectory() as root:
+            git = ["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run(git + ["init", "-q"], check=True)
+            self._write(root, "tracked_ok/ok.py", "X = 1\n")
+            self._write(root, "tracked_bad/bad.py", bad)
+            subprocess.run(git + ["add", "."], check=True)
+            subprocess.run(git + ["commit", "-q", "-m", "x"], check=True)
+            self._write(root, "stray/hams_open/untracked_bad/bad.py", bad)
+            found = scan_tree(root)
+            self.assertEqual(len(found), 1, found)
+            self.assertTrue(found[0].startswith("tracked_bad/bad.py:"), found)
+
+    def test_11_a_directory_that_is_not_a_git_checkout_is_still_walked(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_sites_rule]
+        bad = AI + "def run(client):\n    return client.execute('pager.incident', 'read', [1])\n"
+        with tempfile.TemporaryDirectory() as root:
+            self._write(root, "mod/bad.py", bad)
+            found = scan_tree(root)
+            self.assertEqual(len(found), 1, found)
