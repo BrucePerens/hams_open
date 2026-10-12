@@ -45,4 +45,4 @@ against that same model. Odoo core's own `ir.actions.server._can_execute_action_
 additional gate beyond `ir.model.access.csv`, checked regardless of what the action's own code actually
 does. Setting `group_ids` on the `ir.cron` record (delegated from its underlying `ir.actions.server`)
 authorizes the specific group for that specific action, satisfying this gate without broadening the
-model's real ACL. `[@ANCHOR: zero_sudo:COMM_security_log_autovacuum_cron_runs]`
+model's real ACL.

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 {
     'name': 'SES Webhook Receiver',
-    'version': '1.0',
+    'version': '1.1',
     'summary': 'Receives HTTP webhooks from smtp2http for Amazon SES inbound emails',
     'description': 'A module to securely receive Amazon SNS webhooks containing SES incoming emails.',
     'author': 'HAMS',
@@ -19,7 +19,6 @@
         'security/ir.model.access.csv',
         'data/security_backfill.xml',
         'views/ses_webhook_views.xml',
-        'data/ir_cron.xml',
     ],
     'installable': True,
     'application': False,

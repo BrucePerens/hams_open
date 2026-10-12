@@ -4,8 +4,7 @@
 # This file is part of hams_open, an open source module.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from odoo import models, fields, api
-import datetime
+from odoo import models, fields
 
 
 class SecurityLog(models.Model):
@@ -40,19 +39,3 @@ class SecurityLog(models.Model):
     )
 
     create_date = fields.Datetime(index=True)
-
-    @api.model
-    # [@ANCHOR: zero_sudo:security_log_autovacuum]
-    def autovacuum(self):
-        ninety_days_ago = fields.Datetime.now() - datetime.timedelta(days=90)
-        self.env.cr.execute(
-            """
-            DELETE FROM zero_sudo_security_log
-            WHERE id IN (
-                SELECT id FROM zero_sudo_security_log
-                WHERE create_date < %s
-                LIMIT 10000
-            )
-            """,
-            (ninety_days_ago,)
-        )

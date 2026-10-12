@@ -162,7 +162,7 @@ A registry model (`zero_sudo_noisy_table`) used to declare PostgreSQL tables (by
 
 ### `zero_sudo.security.log`
 The centralized audit log model (`zero_sudo_security_log`). Records blocked service-account logins, denied system-parameter reads and writes, and cache invalidation commands. 
-* Includes a built-in `autovacuum()` cron job to prune logs older than 90 days. It runs daily as `odoo_facility_service_internal` and deletes at most 10,000 rows per run with raw SQL.
+* Rows are retained forever: no scheduled job purges, expires or truncates this log.
 * Immutable design ensures even `base.group_system` users cannot delete or modify log records via the UI or ORM.
 
 ---

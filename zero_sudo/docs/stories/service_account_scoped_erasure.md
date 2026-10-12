@@ -26,3 +26,9 @@ This story describes how GDPR erasure/anonymization utilities avoid a real, prev
 
 ## Is a Commit Safe Right Now?
 `_is_test_mode` `[@ANCHOR: zero_sudo:is_test_mode]` reports whether `env.cr.commit()` would be unsafe or meaningless in the current context -- true inside both `HamsTransactionCase` (whose cursor patches `.commit` to raise) and `HamsHttpCase`-style tests (Odoo's own `TestCursor`), so callers that conditionally commit only in real, non-test execution have one real, direct signal to check instead of re-deriving it themselves.
+
+## Removed 2026-10-11: security-log autovacuum and ownership anonymization
+Bruce Perens, 2026-10-11: "We retain data forever" and "Completely remove any code for logbook anonymization." The two mechanisms described above no longer exist, and the sections above are kept only as history.
+* `SecurityLog.autovacuum` and its cron (`zero_sudo.ir_cron_security_log_autovacuum`) are gone. `zero_sudo.security.log` rows are kept forever. zero_sudo 1.1's migration unlinks the cron from installed databases.
+* `_anonymize_via_service_account` is gone. Erasure no longer reassigns anything to a placeholder owner. The `zero_sudo.orphaned_record_owner` account is retained only because rows reassigned to it before this decision still point at it.
+* `_erase_via_service_account` and `_ground_truth_ids` are unchanged.

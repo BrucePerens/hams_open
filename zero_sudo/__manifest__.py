@@ -12,7 +12,7 @@
 """,
     "author": "Bruce Perens K6BP",
     "category": "Security",
-    "version": "1.0",
+    "version": "1.1",
     "license": "AGPL-3",
     "depends": ["base", "web", "mail"],
     # distributed_redis_cache depends on zero_sudo (its own security-account/param-read
@@ -60,7 +60,6 @@
     },
     "data": [
         "data/security_data.xml",
-        "data/ir_cron.xml",
         "data/postgres_procedures.xml",
         "security/ir.model.access.csv",
         "security/ir_rule.xml",

@@ -271,9 +271,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         Returns the literal set of ids matching `domain` on `model_name`,
         bypassing both ir.model.access and ir.rule entirely -- used ONLY as
-        a comparison baseline by `_erase_via_service_account` and
-        `_anonymize_via_service_account` below, never to perform the actual
-        mutation.
+        a comparison baseline by `_erase_via_service_account` below, never to
+        perform the actual mutation.
 
         Deliberately NOT `.sudo()` (forbidden platform-wide, see MASTER_01):
         `.sudo()` changes `self.env.su` for the whole call, which is far
@@ -366,76 +365,6 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             )
         if scoped:
             scoped.unlink()
-        return sorted(real_ids)
-
-    @api.model
-    # [@ANCHOR: zero_sudo:anonymize_via_service_account]
-    def _anonymize_via_service_account(self, model_name, domain, owner_field, service_xml_id):
-        """
-        Reassigns `owner_field` to the shared "orphaned record owner" account
-        (zero_sudo.orphaned_record_owner) for every record matching `domain` on
-        `model_name`, acting as the named service account -- the write-based sibling
-        of `_erase_via_service_account` above, for public records (MASTER_02: QSOs,
-        contest scores, net-control history) that must survive GDPR erasure with
-        their ownership anonymized rather than the record deleted. Same
-        visibility-vs-ground-truth safety check as `_erase_via_service_account` (see
-        its docstring for the mechanism and why) -- a silent under-anonymization
-        (leaving some records still attributed to the erased user because the
-        service account couldn't see them) is exactly as bad as a silent
-        under-deletion.
-
-        Reassigning to a real, stable service-account record instead of clearing
-        `owner_field` to False/null avoids two problems at once: it works even when
-        `owner_field` is `required=True` (nulling it would fail validation, forcing
-        every such field to be weakened to optional just to support erasure), and it
-        means every view/report displaying these public records never needs
-        null-ownership handling -- there's always a real, presentable name to show.
-        """
-        svc_uid = self._get_service_uid(service_xml_id)
-        orphan_uid = self._get_service_uid("zero_sudo.orphaned_record_owner")
-        # Deliberately unbounded -- see _erase_via_service_account's matching
-        # comment: a partial/limited comparison here would silently
-        # under-anonymize, exactly the failure mode this function exists to
-        # catch loudly instead.
-        scoped = self.env[model_name].with_user(svc_uid).search(domain)  # audit-ignore-search
-        real_ids = self._ground_truth_ids(model_name, domain)
-        scoped_ids = set(scoped.ids)
-        if scoped_ids != real_ids:
-            missing_ids = sorted(real_ids - scoped_ids)
-            # See the matching comment in _erase_via_service_account: a
-            # display string, not a privilege-shaped read.
-            self.env.cr.execute("SELECT login FROM res_users WHERE id = %s", (svc_uid,))  # audit-ignore-sql: display string only, not a privilege check -- see docstring above  # fmt: skip
-            row = self.env.cr.fetchone()
-            svc_login = row[0] if row else str(svc_uid)
-            raise AccessError(
-                _(
-                    "Service account '%(login)s' can only see %(scoped)d of "
-                    "%(real)d matching %(model)s record(s) for this anonymization "
-                    "(missing ids: %(missing)s). This usually means the "
-                    "account's own groups incidentally match an unrelated "
-                    "restrictive ir.rule on this model -- check every ir.rule "
-                    "scoped to any of its groups, not just ones written "
-                    "specifically for it."
-                )
-                % {
-                    "login": svc_login,
-                    "scoped": len(scoped_ids),
-                    "real": len(real_ids),
-                    "model": model_name,
-                    "missing": missing_ids,
-                }
-            )
-        if scoped:
-            # mail_auto_subscribe_no_notify: reassigning ownership to the shared
-            # orphan account is not a real "you've been assigned" event, and
-            # letting it through triggers mail.thread's auto-subscribe notify
-            # path (message_notify -> _mail_get_alias_domains -> mail.alias.domain),
-            # which most service accounts have no reason to be granted read access
-            # to. mail_notrack matches the same "this isn't a real change to show
-            # a human" reasoning for the chatter tracking message.
-            scoped.with_context(
-                mail_auto_subscribe_no_notify=True, mail_notrack=True
-            ).write({owner_field: orphan_uid})
         return sorted(real_ids)
 
     @api.model

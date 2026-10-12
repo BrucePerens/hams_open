@@ -26,7 +26,10 @@ class TestCronServiceAccess(common.HamsTransactionCase):
         repo_dir = os.path.dirname(get_module_path("zero_sudo"))
         cron_data = self.env["ir.model.data"].search([("model", "=", "ir.cron")], limit=2000)
         crons = self.env["ir.cron"].browse([row.res_id for row in cron_data if self._own_module(row.module, repo_dir)])
-        self.assertTrue(crons, "expected at least one cron from this repository's modules")
+        if not crons:
+            # zero_sudo and ses_webhook no longer ship a cron (their purge jobs were removed); a
+            # database with none of this repository's cron-carrying modules installed has nothing to check.
+            self.skipTest("no cron from this repository's modules is installed in this database")
         refused = []
         for cron in crons.with_context(active_test=False):
             server_action = cron.ir_actions_server_id
