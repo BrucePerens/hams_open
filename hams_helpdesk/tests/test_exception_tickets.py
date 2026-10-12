@@ -8,17 +8,24 @@ classification, scrubbing, de-duplication and storm tests, ``/web/dataset/call_k
 ir.http hook, and ``ir.cron._callback`` for the cron hook.
 """
 import json
+import logging
 
 import psycopg2.errors
 import werkzeug.exceptions
 from odoo import fields
 from odoo.exceptions import AccessDenied, AccessError, MissingError, UserError, ValidationError
 from odoo.tests.common import tagged
+from odoo.tools import mute_logger
 
 from odoo.addons.hams_helpdesk.controllers import portal as helpdesk_portal
 from odoo.addons.hams_helpdesk.models import exception_fingerprint as reporter
 from odoo.addons.hams_helpdesk.models import exception_scrub as scrub
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+
+_logger = logging.getLogger(__name__)
+
+LETTERS = "abcdefgh"
 
 SECRET_MESSAGE = (
     "bad value for k6bp@example.com from 203.0.113.9 and 2001:db8::1 password=hunter2 "
@@ -36,11 +43,15 @@ def raise_other_attribute_error():
     raise AttributeError("boom")
 
 
+def raise_type_error(message):
+    raise TypeError(message)
+
+
 def raise_chained(message):
     try:
-        raise_attribute_error(message)
-    except (AttributeError,) as inner:
-        raise TypeError("outer") from inner
+        raise_type_error(message)
+    except TypeError as inner:
+        raise ValueError("outer") from inner
 
 
 class FakeClock:
@@ -63,6 +74,10 @@ class ExceptionTicketCase(HamsTransactionCase):
 
     def setUp(self):
         super().setUp()
+        # New cursors (the reporter's own) join this test's transaction and roll back with it.
+        registry_test_mode = self.enter_registry_test_mode()
+        registry_test_mode.__enter__()
+        self.addCleanup(registry_test_mode.__exit__, None, None, None)
         # The gate is per-process state; start every test with it empty.
         reporter._GATE.clear()
         reporter._RECENT_WRITES.clear()
@@ -70,9 +85,13 @@ class ExceptionTicketCase(HamsTransactionCase):
         self.addCleanup(reporter._RECENT_WRITES.clear)
 
     def caught(self, raiser, *args):
-        with self.assertRaises(Exception) as context:
+        """The exception ``raiser`` raises, with its traceback (assertRaises strips it)."""
+        try:
             raiser(*args)
-        return context.exception
+        except Exception as exc:  # audit-ignore-catch-all: Tested by [@ANCHOR: hams_helpdesk:exc_describe]
+            _logger.info("provoked %r", exc)
+            return exc
+        self.fail("nothing was raised")
 
     def clock(self, now):
         return self.safe_patch_object(reporter, "time", new=FakeClock(now))
@@ -81,7 +100,12 @@ class ExceptionTicketCase(HamsTransactionCase):
         kwargs.setdefault("logged_in", True)
         kwargs.setdefault("uid", self.env.uid)
         kwargs.setdefault("path", "/web/dataset/call_kw/res.partner.write")
-        return reporter.report_exception(self.env.registry, exc, source, **kwargs)
+        # The reporter writes through its own environment: push this test's pending writes to the
+        # database first, and drop this test's cache afterwards so it reads what the reporter wrote.
+        self.env.flush_all()
+        written = reporter.report_exception(self.env.registry, exc, source, **kwargs)
+        self.env.invalidate_all()
+        return written
 
     def fingerprints(self):
         return self.Fingerprint.search([])
@@ -133,7 +157,7 @@ class TestExceptionClassification(ExceptionTicketCase):
             with self.subTest(exc=repr(exc)):
                 reporter._GATE.clear()
                 self.assertTrue(
-                    self.report(exc, source, logged_in=logged_in, path=f"/r{index}/p"),
+                    self.report(exc, source, logged_in=logged_in, path=f"/r{LETTERS[index]}/p"),
                     repr(exc),
                 )
 
@@ -174,15 +198,16 @@ class TestExceptionScrubbing(ExceptionTicketCase):
     def test_chained_cause_is_included_and_scrubbed(self):
         trace = scrub.scrubbed_trace(self.caught(raise_chained, SECRET_MESSAGE))
         self.assert_clean(trace)
-        self.assertIn("TypeError", trace)
-        self.assertIn("AttributeError", trace)
+        self.assertIn("ValueError", trace)
+        self.assertIn("TypeError: bad value for <email>", trace)
+        self.assertIn("raise_type_error", trace)
 
     def test_route_drops_query_string_and_variable_parts(self):
         self.assertEqual(
             scrub.normalize_route("/community/k6bp?email=a@b.com&token=zzz", "/community/<string:slug>"),
             "/community/<string:slug>",
         )
-        self.assertEqual(scrub.normalize_route("/some/page-12345/k6bp?x=1"), "/some/<x>/k6bp")
+        self.assertEqual(scrub.normalize_route("/some/page-12345/slug?x=1"), "/some/<x>/slug")
         self.assertEqual(
             scrub.normalize_route("/web/dataset/call_kw/res.partner.write?x=1", "/web/dataset/call_kw/<path:path>"),
             "/web/dataset/call_kw/res.partner.write",
@@ -268,7 +293,7 @@ class TestExceptionDedupAndStorm(ExceptionTicketCase):
     def test_process_wide_cap(self):
         self.clock(1000.0)
         self.safe_patch_object(reporter, "GLOBAL_WRITES_PER_MINUTE", new=3)
-        results = [self.report(KeyError("k"), path=f"/r{index}/p") for index in range(6)]
+        results = [self.report(KeyError("k"), path=f"/r{LETTERS[index]}/p") for index in range(6)]
         self.assertEqual(results.count(True), 3)
 
     def test_new_ticket_cap_keeps_counting_without_a_ticket(self):
@@ -406,11 +431,15 @@ class TestExceptionTicketAccess(ExceptionTicketCase):
 
 
 @tagged("post_install", "-at_install", "standard")
-class TestExceptionHooks(HamsHttpCase):
+class TestExceptionHooks(RealTransactionCase):
+    """Real connections and real commits: the hooks run the way they do in production, in the
+    request's own transaction, and the report has to survive that transaction's rollback."""
+
     # Tests [@ANCHOR: hams_helpdesk:exc_report_request_exception]
     # Tests [@ANCHOR: hams_helpdesk:exc_ir_http_handle_error]
     # Tests [@ANCHOR: hams_helpdesk:exc_ir_http_pre_dispatch]
     # Tests [@ANCHOR: hams_helpdesk:exc_ir_cron_callback]
+    # Tests [@ANCHOR: hams_helpdesk:exc_write_report]
 
     def setUp(self):
         super().setUp()
@@ -418,7 +447,12 @@ class TestExceptionHooks(HamsHttpCase):
         reporter._RECENT_WRITES.clear()
         self.addCleanup(reporter._GATE.clear)
         self.addCleanup(reporter._RECENT_WRITES.clear)
-        self.env.flush_all()
+        self.Fingerprint = self.env["hams_helpdesk.exception.fingerprint"]
+
+    def rows(self, domain=()):
+        self.env.cr.rollback()  # a fresh snapshot: the reporter committed on its own connection
+        self.env.invalidate_all()
+        return self.Fingerprint.search(list(domain))
 
     def test_rpc_error_from_the_web_client_makes_exactly_one_ticket(self):
         self.authenticate("admin", "admin")
@@ -430,17 +464,18 @@ class TestExceptionHooks(HamsHttpCase):
                 json={"id": 0, "jsonrpc": "2.0", "method": "call", "params": params},
             )
             self.assertIn("error", response.json())
-        rows = self.env["hams_helpdesk.exception.fingerprint"].search([])
+        rows = self.rows()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows.exc_type, "builtins.AttributeError")
         self.assertEqual(rows.source, "rpc")
         self.assertEqual(rows.route, route)
         self.assertEqual(rows.occurrence_count, 1)
         self.assertEqual(rows.ticket_id.ticket_type, "server_exception")
+        self.assertEqual(rows.last_user_id, self.env.ref("base.user_admin").id)
 
     def test_not_found_page_makes_no_ticket(self):
         self.url_open("/this/page/does/not/exist-12345")
-        self.assertFalse(self.env["hams_helpdesk.exception.fingerprint"].search([]))
+        self.assertFalse(self.rows())
 
     def test_failing_cron_job_is_reported_and_still_raises(self):
         cron = self.env["ir.cron"].create(
@@ -454,9 +489,29 @@ class TestExceptionHooks(HamsHttpCase):
                 "active": False,
             }
         )
-        with self.assertRaises(KeyError):
+        self.env.cr.commit()
+        # Not assertRaises: Odoo's wraps the block in a savepoint, which the job's own rollback
+        # (real here, as in production) destroys.
+        raised = False
+        try:
             cron._callback(cron.cron_name, cron.ir_actions_server_id.id)
-        rows = self.env["hams_helpdesk.exception.fingerprint"].search([("source", "=", "cron")])
+        except ValueError as error:
+            raised = True
+            _logger.debug("the job failed as expected: %r", error)
+        self.assertTrue(raised, "the cron failure must still propagate")
+        rows = self.rows([("source", "=", "cron")])
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows.route, "cron: Exception ticket test job")
-        self.assertEqual(rows.exc_type, "builtins.KeyError")
+        self.assertEqual(rows.exc_type, "builtins.ValueError")
+
+    def test_report_survives_the_rollback_of_the_failed_transaction(self):
+        exc = TypeError("bad")
+        with self.assertRaises(psycopg2.errors.DivisionByZero):
+            with mute_logger("odoo.sql_db"):
+                self.env.cr.execute("SELECT 1/0")  # audit-ignore-sql: aborts the transaction on purpose
+        # The transaction is now aborted, as a failed request's would be.
+        written = reporter.report_exception(
+            self.env.registry, exc, "rpc", uid=2, logged_in=True, path="/web/dataset/call_kw/a.b"
+        )
+        self.assertTrue(written)
+        self.assertEqual(len(self.rows()), 1)
