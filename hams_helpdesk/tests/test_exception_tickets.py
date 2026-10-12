@@ -7,8 +7,12 @@ The reporter is exercised through its real entry points: ``report_exception`` fo
 classification, scrubbing, de-duplication and storm tests, ``/web/dataset/call_kw`` over HTTP for the
 ir.http hook, and ``ir.cron._callback`` for the cron hook.
 """
+import importlib.util
 import json
 import logging
+import os
+import tempfile
+from datetime import timedelta
 
 import psycopg2.errors
 import werkzeug.exceptions
@@ -597,6 +601,204 @@ class TestMailFailureReports(ExceptionTicketCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows.exc_type, "builtins.KeyError")
         self.assertNotIn(self.VICTIM, rows.samples_json + rows.ticket_id.description)
+
+
+def load_daemon_reporter():
+    """The daemon-side helper, loaded from its file the way a daemon imports it."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "daemon", "exception_reporter.py")
+    spec = importlib.util.spec_from_file_location("hams_exception_reporter_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestDaemonFailureReports(ExceptionTicketCase):
+    """``report_daemon_failure``: the Odoo end of the daemon / OnFailure reporter."""
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_report_daemon_failure]
+    # Tests [@ANCHOR: hams_helpdesk:exc_daemon_unit_name]
+    # Tests [@ANCHOR: hams_helpdesk:exc_daemon_tail]
+
+    def as_reporter(self):
+        uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
+        return self.Fingerprint.with_user(uid)
+
+    def daemon_rows(self):
+        return self.Fingerprint.search([("source", "=", "daemon")])
+
+    def test_unit_failure_makes_one_scrubbed_ticket(self):
+        self.env.flush_all()
+        tail = "\n".join(
+            (
+                "starting consumer",
+                "Traceback (most recent call last):",
+                SECRET_MESSAGE,
+                "ValueError: bad value for k6bp@example.com",
+            )
+        )
+        answer = self.as_reporter().report_daemon_failure(
+            "ses-inbound-mail-ingest.service", "unit_failed", "exit-code", tail
+        )
+        self.env.invalidate_all()
+        self.assertEqual(answer, {"recorded": True})
+        rows = self.daemon_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows.module, "ses-inbound-mail-ingest.service")
+        self.assertEqual(rows.route, "systemd:ses-inbound-mail-ingest.service")
+        self.assertEqual(rows.ticket_id.ticket_type, "server_exception")
+        stored = " ".join((rows.samples_json, rows.ticket_id.description, rows.ticket_id.name))
+        for needle in ("k6bp@example.com", "203.0.113.9", "hunter2", "abcdef0123456789", "K6BP", "15551234567"):
+            self.assertNotIn(needle, stored)
+        self.assertIn("ValueError: <message withheld>", stored)
+
+    def test_repeats_are_one_ticket(self):
+        self.env.flush_all()
+        service = self.as_reporter()
+        service.report_daemon_failure("adif-processor.service", "unit_failed", "exit-code", "x")
+        again = service.report_daemon_failure("adif-processor.service", "unit_failed", "exit-code", "x")
+        self.env.invalidate_all()
+        self.assertEqual(again, {"recorded": False})
+        self.assertEqual(len(self.daemon_rows()), 1)
+
+    def test_another_account_is_refused(self):
+        with self.assertRaises(AccessError):
+            self.Fingerprint.report_daemon_failure("adif-processor.service", "unit_failed", "exit-code", "x")
+        self.assertFalse(self.daemon_rows())
+
+    def test_bad_input_is_refused(self):
+        service = self.as_reporter()
+        for unit in ("", "../etc/passwd", "a b.service", "x" * 200, "k6bp@example.com"):
+            with self.assertRaises(UserError, msg=unit):
+                service.report_daemon_failure(unit, "unit_failed", "exit-code", "x")
+        with self.assertRaises(UserError):
+            service.report_daemon_failure("a.service", "something_else", "exit-code", "x")
+
+    def test_instance_is_dropped_from_a_template_unit(self):
+        self.assertEqual(scrub.daemon_unit_name("worker@k6bp.service"), "worker@.service")
+        self.assertEqual(scrub.daemon_unit_name("plain.service"), "plain.service")
+        self.assertIsNone(scrub.daemon_unit_name("-bad.service"))
+
+    def test_tail_is_bounded_and_unknown_result_is_not_stored(self):
+        huge = "\n".join(f"line {number} " + "y" * 500 for number in range(500))
+        cut = scrub.scrub_daemon_tail(huge)
+        self.assertLessEqual(len(cut.split("\n")), scrub.DAEMON_TAIL_LINES)
+        self.assertLessEqual(len(cut), scrub.DAEMON_TAIL_LIMIT)
+        self.env.flush_all()
+        self.as_reporter().report_daemon_failure("a.service", "consumer_exception", "k6bp@example.com", huge)
+        self.env.invalidate_all()
+        rows = self.daemon_rows()
+        self.assertIn("result:unknown", rows.frame)
+        self.assertNotIn("example.com", rows.samples_json)
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestDaemonReporterHelper(RealTransactionCase):
+    """The daemon-side helper against the real JSON-2 endpoint with a real API key of the reporter
+    service account: the path the OnFailure unit and a daemon's ``reporting_failures`` take."""
+
+    # Tests [@ANCHOR: hams_helpdesk:daemon_post_report]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_load_key]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_report_unit]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_report_exception]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_frames_only]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_journal_tail]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_unit_result]
+
+    def setUp(self):
+        super().setUp()
+        reporter._GATE.clear()
+        reporter._RECENT_WRITES.clear()
+        self.addCleanup(reporter._GATE.clear)
+        self.addCleanup(reporter._RECENT_WRITES.clear)
+        self.helper = load_daemon_reporter()
+        self.helper._LAST_REPORT.clear()
+        uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
+        key = self.env["res.users.apikeys"].with_user(uid)._generate(None, "daemon failure test", fields.Datetime.now() + timedelta(days=1))
+        self.env.cr.commit()
+        handle = tempfile.NamedTemporaryFile("w", suffix=".env", delete=False)
+        self.addCleanup(os.unlink, handle.name)
+        with handle:
+            handle.write(f"ODOO_RPC_LOGIN=exception_reporter_service_internal\nODOO_RPC_KEY={key}\n")
+        os.chmod(handle.name, 0o600)
+        self.key_file = handle.name
+        self.options = {"url": self.base_url(), "key_file": self.key_file, "database": self.env.cr.dbname}
+
+    def rows(self):
+        self.env.cr.rollback()
+        self.env.invalidate_all()
+        return self.env["hams_helpdesk.exception.fingerprint"].search([("source", "=", "daemon")])
+
+    def test_report_unit_reaches_a_ticket(self):
+        answer = self.helper.post_report(
+            {"unit": "dx-firehose.service", "kind": "unit_failed", "result": "signal", "journal_tail": "boom"},
+            **self.options,
+        )
+        self.assertEqual(answer, {"recorded": True})
+        rows = self.rows()
+        self.assertEqual(rows.module, "dx-firehose.service")
+        self.assertEqual(rows.ticket_id.ticket_type, "server_exception")
+
+    def test_reporting_failures_reports_then_raises_the_same_exception(self):
+        secret = "bad value for k6bp@example.com"
+        with self.assertRaises(KeyError) as caught:
+            with self.helper.reporting_failures("club-crawl.service", **self.options):
+                raise KeyError(secret)
+        self.assertEqual(caught.exception.args, (secret,))
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows.exc_type, "daemon.consumer_exception")
+        self.assertNotIn("example.com", rows.samples_json)
+        self.assertIn("KeyError", rows.samples_json)
+
+    def test_reporting_failures_does_not_report_a_stop_signal(self):
+        with self.assertRaises(SystemExit):
+            with self.helper.reporting_failures("club-crawl.service", **self.options):
+                raise SystemExit(0)
+        self.assertFalse(self.rows())
+
+    def test_a_failed_report_never_hides_the_original_exception(self):
+        broken = dict(self.options, key_file="/nonexistent/key.env")
+        with self.assertRaises(ZeroDivisionError):
+            with self.helper.reporting_failures("club-crawl.service", **broken):
+                1 / 0  # audit-ignore-division: raises on purpose
+        self.assertFalse(self.rows())
+
+    def test_a_wrong_key_is_refused_without_leaking_it(self):
+        with open(self.key_file, "w", encoding="utf-8") as handle:
+            handle.write("ODOO_RPC_KEY=not-a-real-key\n")
+        with self.assertRaises(self.helper.ReportError) as caught:
+            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, **self.options)
+        self.assertNotIn("not-a-real-key", str(caught.exception))
+        self.assertNotIn(self.options["url"], str(caught.exception))
+
+    def test_missing_key_file_fails_fast(self):
+        with self.assertRaises(self.helper.ReportError):
+            self.helper.load_key("/nonexistent/key.env")
+
+    def test_reports_are_limited_to_one_a_minute_per_name(self):
+        exc = TypeError("x")
+        self.assertIsNotNone(self.helper.report_exception("limit.service", exc, **self.options))
+        self.assertIsNone(self.helper.report_exception("limit.service", exc, **self.options))
+
+    def test_main_rejects_other_arguments(self):
+        self.assertEqual(self.helper.main(["nonsense"]), 2)
+
+    def test_frames_only_carries_no_message(self):
+        try:
+            raise_type_error("secret k6bp@example.com")
+        except TypeError as exc:
+            text = self.helper.frames_only(exc)
+        self.assertNotIn("example.com", text)
+        self.assertIn("TypeError", text)
+        self.assertIn("raise_type_error", text)
+
+    def test_journal_and_result_readers_return_text_for_a_real_unit(self):
+        # Read-only calls against this machine's own systemd: a real unit name is not needed, the
+        # readers must give a string either way and never raise.
+        self.assertIsInstance(self.helper.journal_tail("no-such-unit-for-test.service"), str)
+        self.assertIsInstance(self.helper.unit_result("no-such-unit-for-test.service"), str)
 
 
 @tagged("post_install", "-at_install", "standard")

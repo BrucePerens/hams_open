@@ -12,7 +12,7 @@ Upon installation, it:
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "category": "Website",
-    "version": "1.1",
+    "version": "1.2",
     "license": "AGPL-3",
     "depends": ["base",
                 "website",

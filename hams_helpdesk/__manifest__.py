@@ -1,6 +1,6 @@
 {
     "name": "Hams Helpdesk",
-    "version": "1.0",
+    "version": "1.1",
     "category": "Operations/Helpdesk",
     "summary": "Zero-Sudo compliant, lightweight helpdesk management.",
     "description": "Zero-Sudo compliant, lightweight helpdesk management.",
@@ -14,6 +14,7 @@
         "zero_sudo",
         "website",
         "ham_callbook",
+        "daemon_key_manager",
     ],
     "data": [
         "security/helpdesk_security.xml",
@@ -89,6 +90,7 @@
             "category": "workspace",
         },
     ],
+    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": True,
     "license": "AGPL-3",
