@@ -804,10 +804,10 @@ class TestDaemonReporterHelper(RealTransactionCase):
         os.environ["ODOO_KEY_FILE"] = "/opt/hams/etc/keys/some_daemon.env"
         os.environ.pop("EXCEPTION_REPORTER_KEY_FILE", None)
         with self.assertRaises(self.helper.ReportError):
-            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://127.0.0.1:1")
+            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://odoo.invalid:1")
         os.environ["EXCEPTION_REPORTER_KEY_FILE"] = "/run/other/key.env"
         with self.assertRaises(self.helper.ReportError):
-            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://127.0.0.1:1")
+            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://odoo.invalid:1")
         self.assertEqual(seen, ["/opt/hams/etc/keys/exception_reporter.env", "/run/other/key.env"])
 
     def test_main_rejects_other_arguments(self):
