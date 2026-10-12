@@ -58,7 +58,7 @@
                             <p>Depending on your jurisdiction, you have robust rights regarding your personal data. We have built facilities directly into your user dashboard to exercise these rights immediately:</p>
                             <ul>
                                 <li><strong>Data Portability:</strong> You may download a machine-readable JSON copy of all your authored content via the <code>/my/privacy</code> dashboard.</li>
-                                <li><strong>Right to Erasure:</strong> You may permanently and instantly delete all your personal content and remove yourself from our directories via the <code>/my/privacy</code> dashboard.</li>
+                                <li><strong>Right to Erasure:</strong> You may delete your personal content and remove yourself from our directories via the <code>/my/privacy</code> dashboard. Erasing your data permanently bans you from this site, and this cannot be undone. Your name, address, callsign and license image stay in the permanent callbook of radio amateurs.</li>
                             </ul>
 
                             <h3 class="mt-4">5. Community Safety &amp; Reporting</h3>
