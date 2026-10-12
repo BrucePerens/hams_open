@@ -782,6 +782,34 @@ class TestDaemonReporterHelper(RealTransactionCase):
         self.assertIsNotNone(self.helper.report_exception("limit.service", exc, **self.options))
         self.assertIsNone(self.helper.report_exception("limit.service", exc, **self.options))
 
+    def test_the_key_file_is_the_reporters_own_never_the_daemons_odoo_key_file(self):
+        # A daemon's unit sets ODOO_KEY_FILE to the daemon's own key, which the endpoint refuses.
+        seen = []
+
+        def fake_load_key(path):
+            seen.append(path)
+            raise self.helper.ReportError("stop here")
+
+        saved = {name: os.environ.get(name) for name in ("ODOO_KEY_FILE", "EXCEPTION_REPORTER_KEY_FILE")}
+
+        def restore():
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+        self.addCleanup(restore)
+        self.safe_patch_object(self.helper, "load_key", new=fake_load_key)
+        os.environ["ODOO_KEY_FILE"] = "/opt/hams/etc/keys/some_daemon.env"
+        os.environ.pop("EXCEPTION_REPORTER_KEY_FILE", None)
+        with self.assertRaises(self.helper.ReportError):
+            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://odoo.invalid:1")
+        os.environ["EXCEPTION_REPORTER_KEY_FILE"] = "/run/other/key.env"
+        with self.assertRaises(self.helper.ReportError):
+            self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://odoo.invalid:1")
+        self.assertEqual(seen, ["/opt/hams/etc/keys/exception_reporter.env", "/run/other/key.env"])
+
     def test_main_rejects_other_arguments(self):
         self.assertEqual(self.helper.main(["nonsense"]), 2)
 

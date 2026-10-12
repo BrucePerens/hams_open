@@ -821,5 +821,54 @@ class TestAckBeforeLongSidecarWait(unittest.TestCase):
         self.assertEqual(ch.basic_ack.call_count, 1)
 
 
+class TestRunReportsFailures(unittest.TestCase):
+    """run() reports an uncaught exception from main() and raises it again (never swallows it)."""
+
+    @staticmethod
+    def _real_helper():
+        import importlib.util
+
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_helpdesk", "daemon", "exception_reporter.py"
+        )
+        spec = importlib.util.spec_from_file_location("exception_reporter_under_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_an_uncaught_exception_is_reported_with_the_unit_name_and_raised_again(self):
+        helper = self._real_helper()
+        helper._LAST_REPORT.clear()
+        sent = []
+        with patch.object(backup_worker, "reporting_failures", helper.reporting_failures), patch.object(
+            helper, "post_report", side_effect=lambda payload, **kw: sent.append(payload)
+        ), patch.object(backup_worker, "main", side_effect=KeyError("secret k6bp@example.com")):
+            with self.assertRaises(KeyError):
+                backup_worker.run()
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0]["unit"], "backup.worker.service")
+        self.assertEqual(sent[0]["kind"], "consumer_exception")
+        self.assertNotIn("example.com", sent[0]["journal_tail"])
+
+    def test_a_stop_signal_is_not_reported(self):
+        helper = self._real_helper()
+        helper._LAST_REPORT.clear()
+        with patch.object(backup_worker, "reporting_failures", helper.reporting_failures), patch.object(
+            helper, "post_report"
+        ) as post, patch.object(backup_worker, "main", side_effect=SystemExit(0)):
+            with self.assertRaises(SystemExit):
+                backup_worker.run()
+        post.assert_not_called()
+
+    def test_without_the_helper_the_daemon_still_runs_and_still_raises(self):
+        # The ImportError fallback: a host that has not received exception_reporter.py yet.
+        with patch.object(backup_worker, "main", side_effect=ValueError("x")):
+            with self.assertRaises(ValueError):
+                backup_worker.run()
+        with patch.object(backup_worker, "main") as main:
+            backup_worker.run()
+        main.assert_called_once_with()
+
+
 if __name__ == "__main__":
     unittest.main()

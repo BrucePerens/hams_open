@@ -4,8 +4,10 @@
 
 Two uses, both ending in ``hams_helpdesk.exception.fingerprint.report_daemon_failure`` over Odoo's
 JSON-2 API, authenticated with the daemon key the Daemon Key Manager issues to the exception
-reporter service account (read from the key file named by ``ODOO_KEY_FILE``, the same convention
-``hams_config.load_credentials`` uses; no secret lives in code or on a command line):
+reporter service account. The key file is ``EXCEPTION_REPORTER_KEY_FILE`` or, by default,
+``/opt/hams/etc/keys/exception_reporter.env`` (odoo-owned, 0600). ``ODOO_KEY_FILE`` is deliberately NOT
+used: a daemon's own unit sets it to the daemon's own key, and the endpoint refuses every account but
+the reporter's. No secret lives in code or on a command line:
 
 * ``python3 exception_reporter.py report-unit <unit>``: what the systemd template unit
   ``hams-exception-report@.service`` runs when a unit named ``OnFailure=`` fails. It sends the unit
@@ -29,6 +31,7 @@ import urllib.error
 import urllib.request
 
 DEFAULT_URL = "http://odoo:8069"
+DEFAULT_KEY_FILE = "/opt/hams/etc/keys/exception_reporter.env"
 USER_AGENT = "hams.com-daemon-client/1.0"
 REPORT_INTERVAL_SECONDS = 60
 JOURNAL_LINES = 20
@@ -43,7 +46,7 @@ class ReportError(Exception):
 def load_key(key_file):
     """The API key from a daemon-key-manager ``.env`` file (``ODOO_RPC_KEY=...``)."""
     if not key_file or not os.path.isfile(key_file):
-        raise ReportError("ODOO_KEY_FILE is not set or the file does not exist")
+        raise ReportError("the exception reporter key file does not exist or cannot be read")
     values = {}
     with open(key_file, "r", encoding="utf-8") as handle:
         for line in handle:
@@ -61,13 +64,13 @@ def load_key(key_file):
 def post_report(payload, url=None, database=None, key_file=None, timeout=15):
     """Sends one report. Returns Odoo's answer (a dict). Raises ReportError on any failure."""
     base = (url or os.environ.get("ODOO_URL") or DEFAULT_URL).rstrip("/")
-    key = load_key(key_file or os.environ.get("ODOO_KEY_FILE"))
+    key = load_key(key_file or os.environ.get("EXCEPTION_REPORTER_KEY_FILE") or DEFAULT_KEY_FILE)
     headers = {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
     }
-    database = database or os.environ.get("ODOO_DB")
+    database = database or os.environ.get("ODOO_DB") or os.environ.get("DB_NAME")
     if database:
         headers["X-Odoo-Database"] = database
     request = urllib.request.Request(
