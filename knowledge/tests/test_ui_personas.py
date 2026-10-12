@@ -11,6 +11,9 @@ class TestManualPersonasUITours(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
+        # The public-user tour needs open sign-up: with ham_init installed the manual is hidden from a
+        # visitor who is not signed in while the site is invite only.
+        self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")
         self.portal_user = self.env["res.users"].create(
             {
                 "name": "Portal User",

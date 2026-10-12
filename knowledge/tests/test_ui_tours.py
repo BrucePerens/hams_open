@@ -8,6 +8,13 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 @tagged("post_install", "-at_install")
 class TestManualLibraryUITours(HamsHttpCase):
+    def setUp(self):
+        super().setUp()
+        # These tours run as a visitor who is not signed in. With ham_init installed the manual is
+        # hidden from such a visitor while the site is invite only (sign-in redirect), so the tours
+        # open sign-up first, as the other knowledge tests do.
+        self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")
+
     def test_01_manual_toc_tour(self):
         # [@ANCHOR: test_tour_manual_toc]
 
