@@ -702,8 +702,8 @@ class UserWebsitesController(http.Controller):
 
         # Load directory entries (Users who opted in)
         utils = request.env["zero_sudo.security.utils"]
-        _ = utils._get_service_env("user_websites.user_websites_service_account")
-        entries = request.env["user_websites.public_directory_view"].search([], limit=1000)
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
+        entries = env_svc["user_websites.public_directory_view"].search([], limit=1000)
 
         return request.render(
             "user_websites.community_directory", {"pager": pager, "entries": entries}

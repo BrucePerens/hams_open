@@ -157,6 +157,19 @@ class TestUserWebsitesControllers(RealTransactionCase):
             "User A opted into the directory but is missing from the rendered HTML.",
         )
 
+    def test_03b_community_directory_internal_user(self):
+        """
+        Tests [@ANCHOR: COMM_community_directory]
+        Action: A logged-in internal (back-office) user, who is in neither the
+        portal nor the public group, browses the community directory.
+        Expected: HTTP 200 and no access error: the view is read through the
+        service environment, not as the requesting user.
+        """
+        self.authenticate("admin", self.password)
+        response = self.url_open("/community")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("You are not allowed to access", response.content.decode("utf-8"))
+
     def test_04_community_directory_privacy_respect(self):
         """
         Tests [@ANCHOR: UX_COMMUNITY_DIRECTORY]
