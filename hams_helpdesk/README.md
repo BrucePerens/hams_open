@@ -134,3 +134,10 @@ Hams Helpdesk implements strict isolation:
 - Verified and linked all semantic anchors for traceability.
 - Added shift handoff verification to operator tours.
 - Enhanced portal UI visibility for tickets.
+
+
+## Scanning for raw ticket text in AI readers
+
+The static rule (`ai_reader_rule.py`, run by `test_ai_reader_sites`) scans only the files git tracks
+(`[@ANCHOR: hams_helpdesk:ai_reader_tracked_files]`, `[@ANCHOR: hams_helpdesk:ai_reader_candidate_files]`), so a stray
+untracked directory (a leftover nested checkout) cannot fail it. Outside a git checkout it walks the directory instead.

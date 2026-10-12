@@ -103,3 +103,12 @@ Empower users while maintaining legal compliance and moderation capabilities.
 * **[Knowledge](knowledge/README.md) (`knowledge`):** A clean-room, open-source replacement for the Knowledge app, enabling hierarchical instruction manuals.
 * **[Global Compliance](compliance/README.md) (`compliance`):** Automatically provisions GDPR/CCPA privacy pages, terms of service, and enforces cookie consent across the ecosystem.
 
+
+
+## Working in a git worktree
+
+`hams_shared` is a git submodule, and `git worktree add` leaves it as an EMPTY directory, so inside a worktree
+`agents/`, `tools/`, `docs/` and `AGENTS.md` dangle and a test run fails on `import site_monitor` and the like.
+Run `python3 fix_worktree_symlinks.py` at the worktree root: it links `hams_shared` to the main checkout's, locally
+and marked `skip-worktree` so it cannot be committed (tests: `python3 -m unittest test_fix_worktree_symlinks`).
+Anchors for its steps: `[@ANCHOR: fix_worktree_symlinks:git]`, `[@ANCHOR: fix_worktree_symlinks:main_checkout_root]`, `[@ANCHOR: fix_worktree_symlinks:is_empty_dir]`, `[@ANCHOR: fix_worktree_symlinks:is_populated_checkout]`, `[@ANCHOR: fix_worktree_symlinks:link]`, `[@ANCHOR: fix_worktree_symlinks:recorded_sha]`, `[@ANCHOR: fix_worktree_symlinks:fix_worktree]`, `[@ANCHOR: fix_worktree_symlinks:main]`.
