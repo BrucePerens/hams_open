@@ -471,6 +471,135 @@ class TestExceptionTicketAccess(ExceptionTicketCase):
 
 
 @tagged("post_install", "-at_install", "standard")
+class TestMailFailureReports(ExceptionTicketCase):
+    """A message that fails to send is recorded by Odoo on the mail and not raised; it is reported
+    from ``_postprocess_sent_message`` with counts and fixed labels only."""
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_report_event]
+    # Tests [@ANCHOR: hams_helpdesk:exc_mail_postprocess]
+    # Tests [@ANCHOR: hams_helpdesk:exc_report_mail_failure]
+    # Tests [@ANCHOR: hams_helpdesk:exc_mail_failure_class]
+
+    VICTIM = "victim.person@example.org"
+    SUBJECT = "Confidential subject line 8675309"
+    BODY = "Dear Alice Example, your secret is hunter2"
+
+    def make_mail(self, **extra):
+        values = {
+            "subject": self.SUBJECT,
+            "body_html": f"<p>{self.BODY}</p>",
+            "email_to": self.VICTIM,
+            "email_from": "noreply@example.org",
+        }
+        values.update(extra)
+        return self.env["mail.mail"].create(values)
+
+    def mail_rows(self):
+        return self.Fingerprint.search([("source", "=", "mail")])
+
+    def test_failed_send_makes_one_ticket_with_no_addresses_or_content(self):
+        mail = self.make_mail()
+        self.env.flush_all()
+        reason = f"Connection refused talking to smtp.example.org for {self.VICTIM}: {self.BODY}"
+        mail._postprocess_sent_message([], [], failure_reason=reason, failure_type="mail_smtp")
+        self.env.invalidate_all()
+        rows = self.mail_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows.exc_type, "mail.mail.send_failure")
+        self.assertIn("mail_smtp/connect", rows.frame)
+        self.assertEqual(rows.ticket_id.ticket_type, "server_exception")
+        stored = " ".join(
+            str(value)
+            for value in (
+                rows.name, rows.frame, rows.route, rows.samples_json, rows.ticket_id.name,
+                rows.ticket_id.description,
+            )
+        )
+        for needle in (self.VICTIM, "example.org", "Alice", "hunter2", "Confidential", "8675309", "smtp.example"):
+            self.assertNotIn(needle, stored)
+        self.assertIn("messages in this batch: 1", stored)
+
+    def test_same_failure_class_is_de_duplicated_and_other_class_is_not(self):
+        mail = self.make_mail()
+        self.env.flush_all()
+        mail._postprocess_sent_message([], [], failure_reason="Connection refused", failure_type="mail_smtp")
+        mail._postprocess_sent_message([], [], failure_reason="connection reset", failure_type="mail_smtp")
+        mail._postprocess_sent_message([], [], failure_reason="535 Authentication failed", failure_type="mail_smtp")
+        self.env.invalidate_all()
+        rows = self.mail_rows()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows.mapped("ticket_id")), 2)
+        # The second connect failure was refused by the gate and is counted for the next write.
+        pending = [entry[1] for entry in reporter._GATE.values()]
+        self.assertEqual(sorted(pending), [0, 1])
+
+    def test_bad_recipient_failures_are_not_tickets(self):
+        mail = self.make_mail(email_to="not an address")
+        self.env.flush_all()
+        for failure_type in sorted(scrub.MAIL_FAILURES_NOT_REPORTED):
+            mail._postprocess_sent_message([], [], failure_reason="x", failure_type=failure_type)
+        self.env.invalidate_all()
+        self.assertFalse(self.mail_rows())
+
+    def test_successful_postprocess_reports_nothing(self):
+        mail = self.make_mail()
+        self.env.flush_all()
+        mail._postprocess_sent_message([], [])
+        self.env.invalidate_all()
+        self.assertFalse(self.mail_rows())
+
+    def test_real_send_failure_is_reported_through_mail_mail_send(self):
+        """The production path: IrMailServer.send_email raises, mail.mail._send records the failure
+        on the mail and swallows it, and the hook still reports."""
+        mail = self.make_mail()
+        self.env.flush_all()
+        # Odoo skips sending while a test runs unless this is patched, as its own mail tests do.
+        self.safe_patch_object(type(self.env["ir.mail_server"]), "_disable_send", return_value=False)
+        self.safe_patch_object(
+            type(self.env["ir.mail_server"]), "send_email", side_effect=OSError("Connection timed out")
+        )
+        mail._send(raise_exception=False)
+        self.env.invalidate_all()
+        self.assertEqual(mail.state, "exception")
+        rows = self.mail_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertIn("timeout", rows.frame)
+
+    def test_failure_class_vocabulary(self):
+        cases = {
+            "535 5.7.8 Authentication failed": "auth",
+            "SSL: CERTIFICATE_VERIFY_FAILED": "tls",
+            "timed out": "timeout",
+            "Connection refused": "connect",
+            "421 try later": "temporary_4xx",
+            "550 mailbox unavailable": "permanent_5xx",
+            "something odd": "other",
+            False: "other",
+        }
+        for text, label in cases.items():
+            self.assertEqual(scrub.mail_failure_class(text), label, text)
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_mail_bounce]
+    def test_bounce_processing_failure_is_reported_and_reraised(self):
+        self.env.flush_all()
+        # A bounce dict without the keys Odoo reads makes the real handler raise.
+        # Not assertRaises: Odoo's wraps the block in a savepoint, and its rollback would also undo
+        # the report, which is written on a cursor that joins this test's transaction.
+        raised = False
+        try:
+            self.env["mail.thread"]._routing_handle_bounce(None, {self.VICTIM: 1})
+        except KeyError as error:
+            raised = True
+            _logger.debug("the bounce handler failed as expected: %r", error)
+        self.assertTrue(raised, "the failure must still propagate")
+        self.env.invalidate_all()
+        rows = self.mail_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows.exc_type, "builtins.KeyError")
+        self.assertNotIn(self.VICTIM, rows.samples_json + rows.ticket_id.description)
+
+
+@tagged("post_install", "-at_install", "standard")
 class TestExceptionHooks(RealTransactionCase):
     """Real connections and real commits: the hooks run the way they do in production, in the
     request's own transaction, and the report has to survive that transaction's rollback."""

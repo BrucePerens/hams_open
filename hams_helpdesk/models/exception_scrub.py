@@ -235,3 +235,40 @@ def scrubbed_trace(exc):
         parts.append("\n".join([head] + _frame_lines(current)))
         current = current.__cause__ or (None if current.__suppress_context__ else current.__context__)
     return "\n--- caused by / during handling of ---\n".join(reversed(parts))
+
+
+# Failure types Odoo records for a recipient's or a sender's data rather than for a broken mail
+# system: a mistyped address, a blacklisted or opted-out recipient, a duplicate. They are shown on
+# the mail itself and are not tickets.
+MAIL_FAILURES_NOT_REPORTED = frozenset(
+    ("mail_email_invalid", "mail_email_missing", "mail_bl", "mail_optout", "mail_dup")
+)
+# (class, pattern) pairs tried in order against the transport's failure text. Only the class label
+# ever leaves ``mail_failure_class``; the text itself is never stored.
+_MAIL_FAILURE_PATTERNS = (
+    ("auth", r"authenticat|smtpauth|\b535\b|credentials|username and password"),
+    ("tls", r"\bssl\b|\btls\b|certificate|starttls"),
+    ("timeout", r"timed out|timeout"),
+    ("connect", (
+        r"connection (?:refused|reset|aborted|closed)|name or service|getaddrinfo|unreachable|"
+        r"unable to connect|disconnected|network is|no route"
+    )),
+    ("temporary_4xx", r"\b4\d\d\b"),
+    ("permanent_5xx", r"\b5\d\d\b"),
+)
+# Anchored with a leading ".*?" so ``match`` finds the pattern anywhere in the text.
+_MAIL_FAILURE_CLASSES = tuple(
+    (label, re.compile(r".*?(?:" + pattern + ")", re.IGNORECASE | re.DOTALL))
+    for label, pattern in _MAIL_FAILURE_PATTERNS
+)
+
+
+# [@ANCHOR: hams_helpdesk:exc_mail_failure_class]
+def mail_failure_class(reason):
+    """A label from a fixed vocabulary for the transport's failure text; "other" when nothing matches.
+    The text can hold an address, a subject or a server banner, so none of it is returned."""
+    text = str(reason or "")
+    for label, pattern in _MAIL_FAILURE_CLASSES:
+        if pattern.match(text):
+            return label
+    return "other"
