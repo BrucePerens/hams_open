@@ -75,6 +75,18 @@ U=$(id -u odoo)
 sudo -u odoo env XDG_RUNTIME_DIR=/run/user/$U systemctl --user restart cloudflared@515643a0-6c67-4c8c-9173-519a3a516fa2.service
 ```
 
+Use a timestamped backup name instead of a fixed `.prev` (`cloudflared.prev-$(date -u +%Y%m%dT%H%M%SZ)`) so repeated
+swaps never overwrite the previous rollback target, and start `sudo pagerduty-maintenance start` first (`end` afterwards).
+
+Two traps found on 2026-10-12 (the dependency bump #592 landed after the 2026-10-04 build, so the running binary still
+carried gopsutil 4.26.8 and grpc 1.83.2 although `--version` printed the same `2026.9.3` as the fresh build):
+
+- `--version` cannot tell two builds of the same release apart. Compare `go version -m <binary>` (module versions) and
+  `sha256sum /proc/<pid>/exe` against the file you built.
+- `deploy_to_production.py --sync-daemons cloudflared` compares and copies `/opt/hams/daemons/cloudflared/`, a separate
+  copy that no unit runs. The unit runs `/opt/hams/src/hams_open/daemons/cloudflared/cloudflared`, which the ordinary
+  (non-`--sync-daemons`) deploy keeps current. So a clean `--sync-daemons` report says nothing about the running binary.
+
 ### 3. Verify at once
 
 ```bash
