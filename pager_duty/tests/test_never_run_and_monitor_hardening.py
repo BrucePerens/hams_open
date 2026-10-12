@@ -116,6 +116,23 @@ class TestNeverRunStatus(HamsTransactionCase):
 
 
 @tagged("post_install", "-at_install")
+class TestSyntheticScriptsRunDirectly(HamsTransactionCase):
+    def test_20_the_shipped_check_scripts_are_executable_with_a_shebang(self):
+        # Tests [@ANCHOR: pager_duty:daemon_execute_check]
+        # A "Synthetic Journey (Script)" check runs its script path directly (shlex.split, no interpreter), so the file must be
+        # executable and name its interpreter. On hams1 (2026-10-12) both shipped scripts failed with "Permission denied".
+        daemon_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "daemon")
+        scripts = sorted(name for name in os.listdir(daemon_dir) if name.startswith("check_") and name.endswith(".py"))
+        self.assertGreaterEqual(len(scripts), 2)
+        for name in scripts:
+            path = os.path.join(daemon_dir, name)
+            with self.subTest(script=name):
+                self.assertTrue(os.access(path, os.X_OK), f"{name} must be executable")
+                with open(path, encoding="utf-8") as f:
+                    self.assertEqual(f.readline().rstrip("\n"), "#!/usr/bin/env python3")
+
+
+@tagged("post_install", "-at_install")
 class TestMonitorHardening(HamsTransactionCase):
     @mute_logger("generalized_monitor")
     def test_10_odoo_client_accepts_the_key_registry_names(self):
