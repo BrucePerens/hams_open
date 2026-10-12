@@ -13,6 +13,7 @@ class TestManualRobustness(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
+        self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")  # open sign-up: no invite-only redirect
         self.article_active = self.env["knowledge.article"].create(
             {
                 "name": "Active Article",

@@ -7,7 +7,7 @@ registry.category("web_tour.tours").add('manual_basic_browsing_tour', {
     steps: () => [
         {
             content: "Check that the manual page loaded and wait for articles",
-            trigger: '#manual_toc_container, .o_manual_article_link',
+            trigger: '#manual_toc_container, .o_manual_article_link, .o_help_topic',
             run: function () {} // Just wait for it
         },
 
@@ -30,7 +30,8 @@ registry.category("web_tour.tours").add('manual_basic_browsing_tour', {
                 document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
                 document.body.classList.remove('modal-open');
                 
-                const link = document.querySelector('aside.d-none.d-lg-block a.o_manual_article_link');
+                // /manual is the Help index: open the first manual it lists.
+                const link = document.querySelector('.o_help_topic a.list-group-item') || document.querySelector('aside.d-none.d-lg-block a.o_manual_article_link');
                 if (link) {
                     link.click();
                 }

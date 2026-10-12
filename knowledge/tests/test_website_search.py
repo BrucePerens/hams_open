@@ -10,6 +10,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 class TestKnowledgeArticleWebsiteSearch(HamsHttpCase):
     def setUp(self):
         super().setUp()
+        self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")  # open sign-up: no invite-only redirect
         self.published_article = self.env["knowledge.article"].create(
             {
                 "name": "Xyzzyplugh Interfacing Guide",

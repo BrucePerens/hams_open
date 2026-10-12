@@ -81,6 +81,7 @@ This module enables:
             # rendered) actually was -- not a symptom of the unrelated
             # cross-session Chrome-kill bug this was first attributed to.
             "public": True,
+            "help_topic": "Your website",
         }
     ],
     "assets": {
