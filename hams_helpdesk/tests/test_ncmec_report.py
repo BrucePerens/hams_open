@@ -189,14 +189,25 @@ class TestNcmecReport(HamsTransactionCase):
 
     def test_legal_hold_best_effort_noops_when_recording_model_not_installed(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_apply_recording_legal_hold_best_effort]
-        # ham_communications_consent (hams_com) is genuinely not installed in this hams_open-
-        # only test run -- no patching needed to prove this branch, it's the real behavior.
-        self.assertNotIn(_QSO_RECORDING_MODEL, self.env)
+        # The recording model belongs to a module this one cannot require (ham_simulated_band,
+        # or ham_communications_consent in hams_com), and this test cannot decide whether the
+        # database it runs in has it. So it asserts the real outcome for the state the registry
+        # is actually in, with no patching: the helper's own answer must agree with the registry,
+        # and the ticket must end up with the matching outcome.
+        installed = _QSO_RECORDING_MODEL in self.env
         ticket = self._create_csam_ticket(
             ncmec_recording_uuid="66666666-6666-6666-6666-666666666666"
         )
-        self.assertFalse(ticket.ncmec_legal_hold_applied)
-        self.assertIn("not installed", ticket.ncmec_legal_hold_note)
+        self.assertEqual(ticket._ncmec_recording_model_installed(), installed)
+        self.assertFalse(
+            ticket.ncmec_legal_hold_applied,
+            "No recording has this uuid, so no legal hold can have been applied.",
+        )
+        self.assertTrue(ticket.ncmec_legal_hold_note, "The outcome must be recorded, never silent.")
+        if installed:
+            self.assertNotIn("not installed", ticket.ncmec_legal_hold_note)
+        else:
+            self.assertIn("not installed", ticket.ncmec_legal_hold_note)
 
     def test_legal_hold_best_effort_noops_with_no_recording_uuid(self):
         ticket = self._create_csam_ticket()
