@@ -12,8 +12,8 @@ files below.
    unit that has the drop-in enters the failed state, systemd starts the template unit with the failed
    unit's name as the instance. It runs `exception_reporter.py report-unit <unit>`, which sends the unit
    name, systemd's `Result` word and the last 20 journal lines. A unit with `Restart=always` only enters
-   the failed state when its start limit is hit, so `OnFailure=` alone reports a daemon that has given
-   up. A self-restarting unit also gets `hams-exception-report-crash.conf`, an `ExecStopPost=-+` line that
+   the failed state when its start limit is hit on older systemd, so `OnFailure=` alone reports a daemon that
+   has given up (measured on hams1, systemd 257, 2026-10-12: `OnFailure=` already fires on every failed exit there). A self-restarting unit also gets `hams-exception-report-crash.conf`, an `ExecStopPost=-+` line that
    starts the same template when systemd stops the service with a `$SERVICE_RESULT` other than
    `success` (a crash, a signal, a watchdog or timeout; a deploy restart is `success` and stays
    quiet). It runs as root (`+`) so a `hamsd_*` account can start the unit, and `-` keeps a failed
