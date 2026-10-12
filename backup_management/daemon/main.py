@@ -15,6 +15,18 @@ import logging
 import shlex
 import re
 
+# Reports an uncaught exception to the Odoo exception tickets (Helpdesk > Server Exceptions) and raises it again.
+# hams_helpdesk/daemon/exception_reporter.py is copied to /opt/hams/daemons by deploy_to_production.py --sync-daemons
+# (PYTHONPATH=/opt/hams/daemons). A host without it runs the daemon unwrapped: reporting must never stop the worker.
+try:
+    from exception_reporter import reporting_failures
+except ImportError:
+    import contextlib
+
+    def reporting_failures(daemon_name, **options):
+        return contextlib.nullcontext()
+
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [BACKUP_WORKER] - %(message)s"
 )
@@ -952,6 +964,13 @@ def main():
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]
 
 
+def run():
+    """main(), with an uncaught exception reported to the exception tickets and then raised again, so the
+    process still dies and systemd (Restart=always, then OnFailure=) still sees it."""
+    with reporting_failures("backup.worker.service"):
+        main()
+
+
 if __name__ == "__main__":
     if "--start-test" in sys.argv:
         try:
@@ -968,4 +987,4 @@ if __name__ == "__main__":
             logger.error("Smoketest failed: %s", e)
             sys.exit(1)
 
-    main()
+    run()

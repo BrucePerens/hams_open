@@ -1,9 +1,11 @@
 # Template unit: reports the failure of the unit named by the instance to the Odoo exception tickets.
 # Not started by hand and not enabled. A daemon opts in with a drop-in (hams-exception-report.conf):
 #   OnFailure=hams-exception-report@%n.service
-# See daemon/README.md. Install to /etc/systemd/system/.
+# See daemon/README.md. On hams1 the MANIFEST in hams_shared (tools/infrastructure.py) installs this unit
+# and the drop-in of every production service; this copy must stay identical to it
+# (hams_shared tools/test_infrastructure.py, ExceptionReportUnitTests).
 [Unit]
-Description=Report the failure of %I to the Odoo exception tickets
+Description=Report the failure of %i to the Odoo exception tickets
 # A report storm is bounded here as well as in Odoo.
 StartLimitIntervalSec=300
 StartLimitBurst=5
@@ -13,13 +15,17 @@ Type=oneshot
 User=odoo
 # Reading another unit's journal needs this group.
 SupplementaryGroups=systemd-journal
-# The key file is written by the Daemon Key Manager (hams_helpdesk register_exception_reporter_key).
-Environment=ODOO_KEY_FILE=/opt/hams/etc/keys/exception_reporter.env
-Environment=ODOO_URL=http://odoo:8069
-ExecStart=/usr/bin/python3 /opt/odoo/addons/hams_helpdesk/daemon/exception_reporter.py report-unit %I
+# ODOO_URL and DB_NAME (read by the helper as the database) come from common.env, which systemd reads as root.
+# The key file is /opt/hams/etc/keys/exception_reporter.env, the helper's default, written by the Daemon Key
+# Manager (hams_helpdesk register_exception_reporter_key), odoo-owned 0600.
+EnvironmentFile=-/opt/hams/etc/common.env
+# %i, not %I: the OnFailure= drop-in passes the failed unit's name as written (%n), and %I would turn the dashes
+# of "hams-auth-gateway.service" into slashes.
+ExecStart=/usr/bin/python3 /opt/hams/src/hams_open/hams_helpdesk/daemon/exception_reporter.py report-unit %i
 TimeoutStartSec=60
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=hams-exception-report
 
 # --- Sandboxing ---
 ProtectSystem=strict

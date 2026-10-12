@@ -56,12 +56,25 @@ files below.
 
 ## Installing (operator)
 
-```
-install -m 0644 hams-exception-report@.service /etc/systemd/system/
-install -d /etc/systemd/system/<daemon>.service.d
-install -m 0644 hams-exception-report.conf /etc/systemd/system/<daemon>.service.d/
-systemctl daemon-reload
-```
+On hams1 nothing is installed by hand: `hams_shared/tools/infrastructure.py` (MANIFEST) writes
+`/opt/hams/systemd/hams-exception-report@.service` (linked into `/etc/systemd/system/`) and one
+`/etc/systemd/system/<unit>.service.d/hams-exception-report.conf` drop-in for every production service
+except the audited exclusions in `EXCEPTION_REPORT_EXCLUDED_UNITS`. The unit runs the deployed file
+`/opt/hams/src/hams_open/hams_helpdesk/daemon/exception_reporter.py` (kept current by
+`deploy_to_production.py`), and takes `ODOO_URL` and `DB_NAME` from `common.env`. To install a single
+entry by hand, render it from the MANIFEST (`hams_shared/tools/render_static_file.py <path>`), then
+`systemctl daemon-reload`.
 
-Set `ODOO_URL` (and `ODOO_DB` for a multi-database server) in a drop-in on the template unit if Odoo is
-not at `http://odoo:8069`. Test with `systemctl start hams-exception-report@<some-unit>.service`.
+Elsewhere: copy `hams-exception-report@.service` to `/etc/systemd/system/` (and fix its `ExecStart` path),
+`hams-exception-report.conf` to `/etc/systemd/system/<daemon>.service.d/`, then `systemctl daemon-reload`.
+Test with `systemctl start hams-exception-report@<some-unit>.service`.
+
+## In-process reporting needs the reporter key
+
+`reporting_failures` reads the same key file, `/opt/hams/etc/keys/exception_reporter.env` (override with
+`EXCEPTION_REPORTER_KEY_FILE`). It is readable by the `odoo` account only, so only a daemon that runs as
+`odoo` (adif.ingress, adif.processor, backup.worker, cache-manager) can deliver an in-process report. A
+daemon in its own `hamsd_*` account cannot read it and is covered by the OnFailure unit alone. The helper
+never uses `ODOO_KEY_FILE`: a daemon's unit sets that to the daemon's own key, which the endpoint refuses.
+A daemon imports the helper from `/opt/hams/daemons/exception_reporter.py`
+(`deploy_to_production.py --sync-daemons` copies it there; see `DAEMON_SHARED_FILES`).
