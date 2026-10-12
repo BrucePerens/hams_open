@@ -6,7 +6,7 @@
         <field name="name">pager.check.list</field>
         <field name="model">pager.check</field>
         <field name="arch" type="xml">
-            <list string="Monitoring Checks" decoration-danger="status == 'failing'" decoration-warning="status == 'maintenance'" decoration-success="status == 'passing'">
+            <list string="Monitoring Checks" decoration-danger="status == 'failing'" decoration-warning="status == 'maintenance'" decoration-success="status == 'passing'" decoration-muted="status == 'never_run'">
                 <header>
                     <button name="action_autodiscover" type="object" string="Auto-Discover Services" class="btn-info" confirm="This will scan your system and create new baseline checks for discovered daemons and hardware. Continue?"/>
                     <button name="action_pull_from_json" type="object" string="Pull from Daemon (JSON)" class="btn-secondary" confirm="This will overwrite your database checks with the current daemon JSON file. Continue?"/>
@@ -33,7 +33,7 @@
             <form string="Monitoring Check">
                 <header>
                     <button name="action_trigger_check" type="object" string="Run Check Now" class="btn-primary"/>
-                    <field name="status" widget="statusbar" statusbar_visible="passing,failing,maintenance"/>
+                    <field name="status" widget="statusbar" statusbar_visible="never_run,passing,failing,maintenance"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -50,6 +50,7 @@
                         <group>
                             <field name="interval"/>
                             <field name="grace_period"/>
+                            <field name="failure_threshold"/>
                             <field name="last_run" readonly="1"/>
                         </group>
                     </group>

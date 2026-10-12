@@ -144,6 +144,10 @@ BEGIN
             'maintenance',
             COALESCE(
                 (v_stats->>'maintenance')::int, 0
+            ),
+            'never_run',
+            COALESCE(
+                (v_stats->>'never_run')::int, 0
             )
         )
     );

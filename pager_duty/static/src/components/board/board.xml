@@ -9,7 +9,8 @@
                         <div class="mt-2">
                             <span class="badge bg-success me-2"><t t-out="state.stats.passing"/> Passing</span>
                             <span class="badge bg-danger me-2"><t t-out="state.stats.failing"/> Failing</span>
-                            <span class="badge bg-warning"><t t-out="state.stats.maintenance"/> Maintenance</span>
+                            <span class="badge bg-warning me-2"><t t-out="state.stats.maintenance"/> Maintenance</span>
+                            <span class="badge bg-secondary" t-if="state.stats.never_run"><t t-out="state.stats.never_run"/> Never run</span>
                         </div>
                     </div>
                     <div>
