@@ -38,3 +38,22 @@ class TestBackupJob(HamsTransactionCase):
         # It must not itself mutate the job's own state -- that's
         # _auto_refresh_status()'s job (already covered separately).
         self.assertEqual(self.job.state, "pending")
+
+    def test_stale_pending_job_is_failed_with_a_reason_and_fresh_ones_are_not(self):
+        # Tests [@ANCHOR: backup_management:COMM_fail_stale_pending_jobs]
+        # Tests [@ANCHOR: backup_management:COMM_auto_refresh_status]
+        Job = self.env["backup.job"]
+        old = Job.create({"config_id": self.config.id, "job_type": "kopia", "state": "pending"})
+        processing = Job.create({"config_id": self.config.id, "job_type": "kopia", "state": "processing"})
+        # create_date is set by the ORM; age the rows through SQL (test transaction only).
+        self.env.cr.execute(
+            "UPDATE backup_job SET create_date = now() at time zone 'utc' - interval '7 hours' WHERE id IN %s",
+            (tuple((old | processing).ids),),
+        )
+        self.env.invalidate_all()
+        Job._auto_refresh_status()
+        self.assertEqual(old.state, "failed")
+        self.assertIn("NOT run", old.output_log)
+        self.assertEqual(self.job.state, "pending", "a job created just now must stay pending")
+        # A job a worker already picked up is the processing timeout's business, not this one's.
+        self.assertEqual(processing.state, "processing")

@@ -72,12 +72,19 @@ class BackupJob(models.Model):
                 }
             )
 
+    # How long a job may sit in "pending" before it is written off as never picked up. Jobs are
+    # hourly and one runs at a time (prefetch 1); the longest real job, a full pgBackRest backup,
+    # takes about 40 minutes, so a healthy job leaves "pending" within the hour.
+    PENDING_TIMEOUT_HOURS = 6
+
     def _auto_refresh_status(self):
         """
-        Cleanup abandoned jobs that have been stuck in 'processing' for too long.
-        This ensures the UI doesn't show them as active forever if a worker dies.
+        Cleanup abandoned jobs: those stuck in 'processing' for too long, and those that never
+        left 'pending'. This ensures the UI doesn't show them as active forever if a worker dies
+        or a queue message is lost.
         """
         # [@ANCHOR: backup_management:COMM_auto_refresh_status]
+        self._fail_stale_pending_jobs()
         timeout_limit = fields.Datetime.now() - datetime.timedelta(hours=2)
         abandoned_jobs = self.env["backup.job"].search(
             [
@@ -94,6 +101,38 @@ class BackupJob(models.Model):
                     "output_log": (job.output_log or "") + timeout_msg,
                 }
             )
+
+    # [@ANCHOR: backup_management:COMM_fail_stale_pending_jobs]
+    def _fail_stale_pending_jobs(self):
+        """
+        Mark jobs still 'pending' after PENDING_TIMEOUT_HOURS as failed, with the reason in the log.
+
+        Found on hams1 2026-10-12: eight jobs (ids 5, 6, 143, 218-222) read "Queued in RabbitMQ..."
+        for a week. 218-222 were consumed while the worker's Odoo API key was rejected (HTTP 401),
+        so the worker could neither mark them "processing" nor report the failure, and acked them;
+        the others' messages were gone from the queue. Nothing ever moved them out of 'pending',
+        and the worker only ever updates a job it receives. This is the Odoo-side backstop.
+        A job a worker did pick up is 'processing' and is not touched here.
+        """
+        limit = fields.Datetime.now() - datetime.timedelta(hours=self.PENDING_TIMEOUT_HOURS)
+        stale = self.env["backup.job"].search(
+            [("state", "=", "pending"), ("create_date", "<", limit)], limit=1000
+        )
+        for job in stale:
+            _logger.warning(
+                "Backup job %s (config %s) was still pending after %s hours; marking it failed.",
+                job.id, job.config_id.id, self.PENDING_TIMEOUT_HOURS,
+            )
+            job.write(
+                {
+                    "state": "failed",
+                    "output_log": (job.output_log or "")
+                    + "\n[SYSTEM] No backup worker picked this job up within "
+                    f"{self.PENDING_TIMEOUT_HOURS} hours (the queue message was lost, or the worker "
+                    "could not reach Odoo). It was NOT run. Trigger it again.",
+                }
+            )
+        return len(stale)
 
     # [@ANCHOR: backup_management:COMM_action_refresh_status]
     def action_refresh_status(self):
