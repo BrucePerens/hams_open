@@ -4,37 +4,63 @@
 
     <template id="user_navbar" name="User Websites Navbar">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
-        <nav t-if="resolved_slug" class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar">
-            <div class="container">
-                <a class="navbar-brand" t-attf-href="/#{resolved_slug}">
-                    <t t-if="profile_user">
-                        <img t-attf-src="/web/image/res.users/#{profile_user.id}/avatar_128?unique=#{profile_user.write_date and int(profile_user.write_date.timestamp()) or 0}" width="30" height="30" class="d-inline-block align-top rounded-circle me-2" alt="User Avatar"/>
-                        <t t-out="profile_user.name"/>
-                    </t>
-                    <t t-elif="profile_group">
-                        <i class="fa fa-users me-2" aria-hidden="true"/> <t t-out="profile_group.name"/>
-                    </t>
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#userNavbarNav" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="userNavbarNav">
-                    <ul class="navbar-nav me-auto" id="user_navbar_nav_links">
-                        <li class="nav-item">
-                            <a class="nav-link" t-attf-href="/#{resolved_slug}">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" t-attf-href="/#{resolved_slug}/blog">Blog</a>
-                        </li>
-                    </ul>
-                    <div id="user_websites_dropzone_navbar_actions">
-                        <!-- [@ANCHOR: dropzone_navbar_actions] -->
+        <t t-if="resolved_slug">
+            <a class="visually-hidden-focusable uw-skip-link" href="#wrap">Skip to content</a>
+            <t t-if="is_owner and not request.params.get('visitor')">
+                <t t-call="user_websites.owner_toolbar"/>
+            </t>
+            <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar" aria-label="Site menu">
+                <div class="container">
+                    <a class="navbar-brand fw-bold" t-attf-href="/#{resolved_slug}">
+                        <t t-if="profile_user">
+                            <img t-attf-src="/web/image/res.users/#{profile_user.id}/avatar_128?unique=#{profile_user.write_date and int(profile_user.write_date.timestamp()) or 0}" width="30" height="30" class="d-inline-block align-top rounded-circle me-2" alt=""/>
+                            <span class="uw-callsign" t-out="resolved_slug.upper()"/>
+                            <span t-if="profile_user.name and profile_user.name.lower() != resolved_slug" class="fw-normal text-muted ms-2" t-out="profile_user.name"/>
+                        </t>
+                        <t t-elif="profile_group">
+                            <i class="fa fa-users me-2" aria-hidden="true"/> <t t-out="profile_group.name"/>
+                        </t>
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#userNavbarNav" aria-controls="userNavbarNav" aria-expanded="false" aria-label="Toggle site menu">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="userNavbarNav">
+                        <ul class="navbar-nav me-auto" id="user_navbar_nav_links">
+                            <li class="nav-item">
+                                <a class="nav-link" t-attf-href="/#{resolved_slug}">Home</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" t-attf-href="/#{resolved_slug}/blog">Blog</a>
+                            </li>
+                            <t t-foreach="(profile_user or profile_group)._user_websites_menu_pages()" t-as="menu_page">
+                                <li class="nav-item">
+                                    <a class="nav-link" t-att-href="menu_page['url']"><t t-out="menu_page['name']"/></a>
+                                </li>
+                            </t>
+                        </ul>
+                        <div id="user_websites_dropzone_navbar_actions">
+                            <!-- [@ANCHOR: dropzone_navbar_actions] -->
 
-                        <!-- Tested by [@ANCHOR: test_dropzone_navbar_actions] -->
+                            <!-- Tested by [@ANCHOR: test_dropzone_navbar_actions] -->
+                        </div>
                     </div>
                 </div>
+            </nav>
+        </t>
+    </template>
+
+    <template id="member_site_footer" name="Member Site Footer">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_member_site_has_no_hams_chrome] -->
+        <footer t-if="member_site and resolved_slug" class="uw-member-footer border-top bg-light py-3 mt-5" aria-label="Site footer">
+            <div class="container d-flex flex-wrap gap-3 justify-content-between align-items-center small">
+                <span><t t-out="resolved_slug.upper()"/> &#183; a <a href="https://hams.com/">Hams.com</a> member site</span>
+                <span class="d-flex flex-wrap gap-3 align-items-center">
+                    <t t-if="not is_owner"><t t-call="user_websites.report_violation_snippet"/></t>
+                    <a href="/privacy">Privacy</a>
+                    <a href="/terms">Terms</a>
+                </span>
             </div>
-        </nav>
+        </footer>
     </template>
 
     <template id="layout_inherit_user_navbar" inherit_id="website.layout" name="User Navbar Global">
@@ -52,6 +78,19 @@
             <t t-set="page_type" t-value="page_type or ('blog' if 'blog' in request.httprequest.path else 'home')"/>
             <t t-set="is_owner" t-value="is_owner or (profile_user and profile_user.id == uid) or (profile_group and uid in profile_group.member_ids.ids)"/>
 
+            <!-- [@ANCHOR: user_websites:member_site_standalone_layout]
+                 Verified by [@ANCHOR: test_member_site_has_no_hams_chrome]
+                 A member or group site wears its own header (user_navbar) and footer
+                 (member_site_footer), not hams.com's menu, banners and footer. member_site is
+                 true for the site's own pages (website.page, blog.blog, blog.post, the site home
+                 and blog index, whose main_object is the profile record) and for the owner tool
+                 pages, which pass member_site=True themselves. website.layout's header and
+                 footer honour no_header / no_footer. -->
+            <t t-set="member_site" t-value="member_site or bool(resolved_slug and main_object and (main_object._name in ('website.page', 'blog.blog', 'blog.post') or main_object == profile_user or main_object == profile_group))"/>
+            <t t-if="member_site">
+                <t t-set="no_header" t-value="True"/>
+                <t t-set="no_footer" t-value="True"/>
+            </t>
             <t t-if="resolved_slug">
                 <meta name="user_websites_slug" t-att-content="resolved_slug"/>
             </t>
@@ -66,7 +105,7 @@
 
                 <!-- Tested by [@ANCHOR: test_dropzone_navbar] -->
             </div>
-            <t t-if="resolved_slug">
+            <t t-if="resolved_slug and member_site">
                 <t t-call="user_websites.user_navbar"/>
             </t>
         </xpath>
@@ -305,34 +344,91 @@
 
         <!-- [@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM] -->
         <t t-call="website.layout">
-            <div class="container mt-4 mb-5">
-                <h2>Edit Blog Post</h2>
+            <div id="wrap" class="container mt-4 mb-5">
+                <h1 class="h2">Edit Blog Post</h1>
                 <div class="card shadow-sm mt-3">
                     <div class="card-body">
-                        <t t-if="request.params.get('error') == 'missing_fields'">
-                            <div class="alert alert-danger">Please provide a title before saving.</div>
-                        </t>
-                        <form t-attf-action="/blog_post/edit/submit/#{post.id}" method="post" id="blog_post_edit_form">
+                        <div t-if="request.params.get('error') == 'missing_fields'" class="alert alert-danger" role="alert">Please provide a title before saving.</div>
+                        <div t-if="request.params.get('error') == 'too_long'" class="alert alert-danger" role="alert">That post is too long. Shorten it and save again.</div>
+                        <form t-attf-action="/blog_post/edit/submit/#{post.id}" method="post" id="blog_post_edit_form" class="uw-editor-form">
                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                             <div class="mb-3">
                                 <label for="name" class="form-label fw-bold">Title</label>
-                                <input type="text" class="form-control" id="name" name="name" required="1" t-att-value="post.name"/>
+                                <input type="text" class="form-control" id="name" name="name" required="1" maxlength="120" t-att-value="post.name"/>
                             </div>
-                            <div class="mb-4">
-                                <label for="content" class="form-label fw-bold">Body</label>
-                                <textarea class="form-control" id="content" name="content" rows="10"><t t-out="post.content"/></textarea>
-                            </div>
-                            <div class="form-check mb-4">
+                            <t t-call="user_websites.rich_editor">
+                                <t t-set="editor_name" t-value="'content'"/>
+                                <t t-set="editor_label" t-value="'Post body'"/>
+                                <t t-set="editor_html" t-value="editor_initial"/>
+                                <t t-set="upload_url" t-value="'/my/site/%s/image' % site_slug"/>
+                            </t>
+                            <div class="form-check mt-3 mb-4">
                                 <input type="checkbox" class="form-check-input" id="is_published" name="is_published" t-att-checked="'checked' if post.is_published else None"/>
                                 <label for="is_published" class="form-check-label fw-bold">Published (visible to the public)</label>
                             </div>
                             <button type="submit" class="btn btn-success">Save</button>
-                            <a t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}" class="btn btn-outline-secondary ms-2">Cancel</a>
+                            <a t-attf-href="/my/site/#{site_slug}" class="btn btn-outline-secondary ms-2">Back to my site</a>
                         </form>
                     </div>
                 </div>
             </div>
         </t>
+    </template>
+
+    <template id="rich_editor" name="Member Site Rich Text Editor">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_page_editor_renders_wysiwyg] -->
+        <!-- [@ANCHOR: user_websites:UX_RICH_EDITOR]
+             A WYSIWYG: members see and format the page, never markup. static/src/js/rich_editor.js
+             fills the hidden field with the editor's HTML on submit; the server sanitizes it
+             (models/member_html.py). editor_name, editor_label, editor_html and upload_url come
+             from the calling template. -->
+        <div class="uw-rich-editor mb-3" t-att-data-upload-url="upload_url" t-att-data-csrf="request.csrf_token()">
+            <label t-attf-for="uw_editor_#{editor_name}" class="form-label fw-bold" t-out="editor_label"/>
+            <div class="uw-toolbar btn-toolbar gap-1 mb-1 p-1 border rounded bg-light" role="toolbar" aria-label="Formatting" data-uw-toolbar="1">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Text style">
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><i class="fa fa-bold" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i class="fa fa-italic" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><i class="fa fa-underline" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="code" title="Inline code" aria-label="Inline code"><i class="fa fa-code" aria-hidden="true"/></button>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Paragraph style">
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="formatBlock" data-uw-arg="h2" title="Heading" aria-label="Heading">H2</button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="formatBlock" data-uw-arg="h3" title="Subheading" aria-label="Subheading">H3</button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="formatBlock" data-uw-arg="p" title="Normal paragraph" aria-label="Normal paragraph">P</button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="formatBlock" data-uw-arg="blockquote" title="Quote" aria-label="Block quote"><i class="fa fa-quote-right" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="formatBlock" data-uw-arg="pre" title="Code block" aria-label="Code block">{ }</button>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Lists">
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list"><i class="fa fa-list-ul" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list"><i class="fa fa-list-ol" aria-hidden="true"/></button>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Alignment">
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="justifyLeft" title="Align left" aria-label="Align left"><i class="fa fa-align-left" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="justifyCenter" title="Center" aria-label="Center"><i class="fa fa-align-center" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="justifyRight" title="Align right" aria-label="Align right"><i class="fa fa-align-right" aria-hidden="true"/></button>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Insert">
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="link" title="Link" aria-label="Insert link"><i class="fa fa-link" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="unlink" title="Remove link" aria-label="Remove link"><i class="fa fa-chain-broken" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="image" t-att-disabled="None if upload_url else 'disabled'" title="Insert image" aria-label="Insert image"><i class="fa fa-picture-o" aria-hidden="true"/></button>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="History">
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><i class="fa fa-undo" aria-hidden="true"/></button>
+                    <button type="button" class="btn btn-outline-secondary" data-uw-cmd="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><i class="fa fa-repeat" aria-hidden="true"/></button>
+                </div>
+            </div>
+            <div class="uw-link-bar input-group input-group-sm mb-1 d-none" role="group" aria-label="Link address">
+                <label t-attf-for="uw_link_#{editor_name}" class="input-group-text">Link address</label>
+                <input type="url" class="form-control" t-attf-id="uw_link_#{editor_name}" placeholder="https://example.com/" data-uw-link-input="1"/>
+                <button type="button" class="btn btn-primary" data-uw-link-apply="1">Apply</button>
+                <button type="button" class="btn btn-outline-secondary" data-uw-link-cancel="1">Cancel</button>
+            </div>
+            <input type="file" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp" data-uw-file="1" aria-label="Choose an image to insert"/>
+            <div class="uw-editor-area form-control" t-attf-id="uw_editor_#{editor_name}" contenteditable="true" role="textbox" aria-multiline="true" t-attf-aria-label="#{editor_label}" data-uw-area="1"><t t-out="editor_html"/></div>
+            <div class="uw-editor-status small text-muted mt-1" role="status" aria-live="polite" data-uw-status="1"/>
+            <input type="hidden" t-att-name="editor_name" data-uw-field="1"/>
+            <noscript><p class="text-danger small">The editor needs JavaScript. Please enable it to write or change your content.</p></noscript>
+        </div>
     </template>
 
     <template id="community_directory" name="Community Directory">

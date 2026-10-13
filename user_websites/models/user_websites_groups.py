@@ -9,6 +9,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
+from odoo.addons.user_websites.models.member_html import menu_pages
 from psycopg2 import IntegrityError
 import psycopg2
 import logging
@@ -206,6 +207,12 @@ class UserWebsitesGroup(models.Model):
         ondelete="cascade",
         help="The Odoo security group associated with this website.",
     )
+
+    def _user_websites_menu_pages(self):
+        # [@ANCHOR: user_websites:fn_group_user_websites_menu_pages]
+        """The site's own published pages for its navbar (see member_html.menu_pages)."""
+        self.ensure_one()
+        return menu_pages(self.env, "user_websites_group_id", self.id, self.website_slug) if self.website_slug else []
 
     @api.constrains("website_slug")
     # [@ANCHOR: user_websites:COMM_group_check_reserved_slugs]
