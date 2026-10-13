@@ -69,7 +69,7 @@ pagerduty-maintenance status                                              # exit
   cannot silence paging for long. A malformed or unreadable flag counts as *not* in maintenance: paging stays on.
 - **Only root can set or clear it, on purpose**: the file is root-owned, mode 0644, in a root-owned 0755 directory, so an
   unprivileged user or a compromised service account cannot silence paging. `status` needs no privilege.
-- While it is active the daemon's SMTP fallback logs at warning and sends no mail. hams_shared's `site_monitor.py`
+- While it is active the daemon's SMTP fallback logs at warning and sends no mail, and the monitor neither counts nor reports a failing check (the row still shows `Failing`); after it ends a check that is still failing needs its normal consecutive failures again. hams_shared's `site_monitor.py`
   (the optional host-level monitor) keeps running and logging every check but sends no page and no "recovered" notice,
   and failures during maintenance do not count: after it ends, a check still failing needs the normal consecutive failures
   before it pages. The monitors only read the file (their units run with a read-only `/etc`); `start` and `status` remove an
