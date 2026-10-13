@@ -252,6 +252,39 @@ class TestMonitorHardening(HamsTransactionCase):
         self.assertEqual(writes[:3], ["failing", "failing", "passing"])
         self.assertTrue(all("last_run" in c.kwargs["vals"] for c in client.execute.call_args_list if c.args[1] == "write"))
 
+    def test_14b_failures_during_pagerduty_maintenance_are_not_counted_or_reported(self):
+        # Tests [@ANCHOR: pager_duty:polling_thread]
+        gm = generalized_monitor
+        self.addCleanup(gm.FAILING_CHECKS.clear)
+        self.addCleanup(gm.FAILING_NAMES.clear)
+        results = iter([(False, "boom")] * 5 + [(False, "boom")] * 3)
+        self.safe_patch_object(gm, "execute_check", side_effect=lambda *_a, **_k: next(results))
+        reported = self.safe_patch_object(gm, "report")
+        self.safe_patch_object(gm, "is_in_maintenance", return_value=False)
+        state = {"flag": gm.pagerduty_maintenance.ACTIVE}
+        self.safe_patch_object(
+            gm.pagerduty_maintenance, "read_flag", side_effect=lambda: {"state": state["flag"], "error": ""}
+        )
+        self.safe_patch_object(gm.pagerduty_maintenance, "describe", return_value="test maintenance")
+        sleeps = []
+
+        def fake_sleep(seconds):
+            sleeps.append(seconds)
+            if len(sleeps) == 5:  # the maintenance window ends
+                state["flag"] = gm.pagerduty_maintenance.ABSENT
+            if len(sleeps) >= 8:
+                raise _Stop
+
+        self.safe_patch_object(gm.time, "sleep", side_effect=fake_sleep)
+        check = {"id": 7003, "name": "Maintenance Check", "type": "system", "interval": 60, "threshold": 3}
+        try:
+            gm.polling_thread(MagicMock(), check)
+        except _Stop:
+            pass
+        # Five failing runs inside maintenance: none counted, none reported. After it ends the normal three consecutive
+        # failures are needed again, and the third one reports.
+        self.assertEqual(reported.call_count, 1)
+
     def test_15_the_first_run_is_recorded_so_a_daily_check_is_not_never_run_for_a_day(self):
         # Tests [@ANCHOR: pager_duty:record_check_status]
         gm = generalized_monitor

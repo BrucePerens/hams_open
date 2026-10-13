@@ -1576,6 +1576,20 @@ def polling_thread(client, check):
                 auto_resolve(client, name, website_id=website_id)
             return interval
 
+        # A planned restart (`sudo pagerduty-maintenance start`): the failure is expected, so it is not counted and not
+        # reported (the row still shows the truth), and after maintenance a check that is still failing needs its normal
+        # consecutive failures again. A malformed flag is not maintenance.
+        flag = pagerduty_maintenance.read_flag()
+        if flag["state"] == pagerduty_maintenance.ACTIVE:
+            logger.info(
+                f"[{name}] pagerduty maintenance active ({pagerduty_maintenance.describe(flag)}): failure not counted or reported: {msg}"
+            )
+            failures_in_a_row = 0
+            clean_loops = 0
+            FAILING_CHECKS.discard(key)
+            FAILING_NAMES.discard(name)
+            return interval
+
         if failures_in_a_row == 0:
             clean_before_streak = clean_loops
         failures_in_a_row += 1
