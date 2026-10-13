@@ -55,5 +55,4 @@ class TestMissingRequiredParams(HamsHttpCase):
         # A 400 is an HTTPException, which the reporter already skips (exception_scrub); this keeps it so.
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         self.url_open("/scoped_app", allow_redirects=False)
-        self.env.cr.rollback()
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
