@@ -26,8 +26,23 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-# (owner column, owner table)
-OWNERS = (("owner_user_id", "res_users"), ("user_websites_group_id", "user_websites_group"))
+# One static query per owner kind (no SQL built from strings).
+_STALE_USER_PAGES = """
+    SELECT p.id, p.url, p.website_id, p.is_published, o.id, o.website_slug
+      FROM website_page p
+      JOIN res_users o ON o.id = p.owner_user_id
+     WHERE o.website_slug IS NOT NULL AND o.website_slug <> ''
+       AND p.url ~ '^/[a-z0-9-]+(/.*)?$'
+       AND split_part(p.url, '/', 2) <> o.website_slug
+"""
+_STALE_GROUP_PAGES = """
+    SELECT p.id, p.url, p.website_id, p.is_published, o.id, o.website_slug
+      FROM website_page p
+      JOIN user_websites_group o ON o.id = p.user_websites_group_id
+     WHERE o.website_slug IS NOT NULL AND o.website_slug <> ''
+       AND p.url ~ '^/[a-z0-9-]+(/.*)?$'
+       AND split_part(p.url, '/', 2) <> o.website_slug
+"""
 
 
 def _free_url(cr, base, website_id):
@@ -43,17 +58,8 @@ def _free_url(cr, base, website_id):
 
 def migrate(cr, version):
     moved = []
-    for column, table in OWNERS:
-        cr.execute(  # audit-ignore-sql: column and table are fixed names from OWNERS above
-            f"""
-            SELECT p.id, p.url, p.website_id, p.is_published, o.id, o.website_slug
-              FROM website_page p
-              JOIN {table} o ON o.id = p.{column}
-             WHERE o.website_slug IS NOT NULL AND o.website_slug <> ''
-               AND p.url ~ '^/[a-z0-9-]+(/.*)?$'
-               AND split_part(p.url, '/', 2) <> o.website_slug
-            """
-        )
+    for query in (_STALE_USER_PAGES, _STALE_GROUP_PAGES):
+        cr.execute(query)  # audit-ignore-sql: static SQL, no parameters
         for page_id, url, website_id, published, owner_id, slug in cr.fetchall():
             seg = url.split("/")[1]
             cr.execute(

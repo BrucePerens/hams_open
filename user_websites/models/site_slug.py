@@ -45,6 +45,16 @@ def slug_policy(env):
     return POLICY_CALLSIGN if value == POLICY_CALLSIGN else POLICY_NAME_CALLSIGN
 
 
+def _next_hop(svc, current):
+    """The slug `/current` redirects to (a 301 row to a single-segment path), or None."""
+    row = svc["website.rewrite"].search(
+        [("url_from", "=", f"/{current}"), ("redirect_type", "=", "301"), ("active", "=", True)], limit=1
+    )
+    if not row or not _SLUG_PATH_RE.match(row.url_to or ""):
+        return None
+    return row.url_to[1:]
+
+
 def legacy_slug_target(env, slug):
     """The current slug a retired slug redirects to, or None.
 
@@ -55,20 +65,14 @@ def legacy_slug_target(env, slug):
     """
     # [@ANCHOR: user_websites:fn_legacy_slug_target]
     svc = env["zero_sudo.security.utils"]._get_service_env(SVC)
-    current = (slug or "").lower()
-    seen = {current}
-    for _hop in range(3):
-        row = svc["website.rewrite"].search(
-            [("url_from", "=", f"/{current}"), ("redirect_type", "=", "301"), ("active", "=", True)], limit=1
-        )
-        if not row or not _SLUG_PATH_RE.match(row.url_to or ""):
-            return None
-        current = row.url_to[1:]
-        if current in seen:
-            return None
-        seen.add(current)
-        if svc["res.users"].get_record_by_slug(current) or svc["user.websites.group"].get_record_by_slug(current):
-            return current
+    first = (slug or "").lower()
+    second = _next_hop(svc, first)
+    third = _next_hop(svc, second) if second and second != first else None
+    fourth = _next_hop(svc, third) if third and third not in (first, second) else None
+    for candidate in (second, third, fourth):
+        if candidate and candidate != first:
+            if svc["res.users"].get_record_by_slug(candidate) or svc["user.websites.group"].get_record_by_slug(candidate):
+                return candidate
     return None
 
 
@@ -100,36 +104,47 @@ def rehome_site(env, owner_field, owner_id, old, new):
 
     # A redirect whose source is the slug being claimed would shadow the new site; one that points at
     # the slug being left would chain through it.
-    shadow = rewrite.search(["|", ("url_from", "=", f"/{new}"), ("url_from", "=like", _like_escape(f"/{new}/") + "%")])
+    shadow = rewrite.search(
+        ["|", ("url_from", "=", f"/{new}"), ("url_from", "=like", _like_escape(f"/{new}/") + "%")], limit=1000
+    )
     if shadow:
         log.append(("drop_redirect", shadow.mapped("url_from")))
         shadow.unlink()
-    for row in rewrite.search(["|", ("url_to", "=", f"/{old}"), ("url_to", "=like", _like_escape(f"/{old}/") + "%")]):
+    chained = rewrite.search(
+        ["|", ("url_to", "=", f"/{old}"), ("url_to", "=like", _like_escape(f"/{old}/") + "%")], limit=1000
+    )
+    for row in chained:
         target = f"/{new}" + row.url_to[len(old) + 1:]
         log.append(("repoint_redirect", row.url_from, row.url_to, target))
         row.write({"url_to": target})
 
     Page = svc["website.page"].with_context(active_test=False)
     pages = Page.search(
-        [(owner_field, "=", owner_id), "|", ("url", "=", f"/{old}"), ("url", "=like", _like_escape(f"/{old}/") + "%")]
+        [(owner_field, "=", owner_id), "|", ("url", "=", f"/{old}"), ("url", "=like", _like_escape(f"/{old}/") + "%")],
+        limit=1000,
     )
+    # Everything already under the new slug, read once: (url, website_id) pairs that are taken.
+    taken = {(p.url, p.website_id.id) for p in Page.search([("url", "=like", _like_escape(f"/{new}") + "%")], limit=5000)}
+    new_rewrites = []
     for page in pages:
         rest = page.url[len(old) + 1:]
         target = f"/{new}{rest}"
-        clash = Page.search([("url", "=", target), ("website_id", "=", page.website_id.id), ("id", "!=", page.id)], limit=1)
+        website = page.website_id.id
+        clash = (target, website) in taken
         vals = {"url": target}
         if clash:
             # The page already at the new address wins; this one is kept, unpublished, under a name
             # the owner can find in the dashboard (the editor's page-slug rule: [a-z0-9-], not reserved).
             base = f"/{new}/" + ("former-home" if not rest else rest.strip("/").replace("/", "-") + "-former")
             target, n = base, 2
-            while Page.search_count([("url", "=", target), ("website_id", "=", page.website_id.id)]):
+            while (target, website) in taken:
                 target, n = f"{base}-{n}", n + 1
             vals = {"url": target, "website_published": False}
-        log.append(("move_page", page.id, page.url, target, bool(clash)))
+        taken.add((target, website))
+        log.append(("move_page", page.id, page.url, target, clash))
         page.write(vals)
         if rest and not clash:
-            rewrite.create(
+            new_rewrites.append(
                 {
                     "name": f"Redirect {old}{rest} to {new}{rest}",
                     "url_from": f"/{old}{rest}",
@@ -138,8 +153,12 @@ def rehome_site(env, owner_field, owner_id, old, new):
                     "website_id": False,
                 }
             )
-    Menu = svc["website.menu"]
-    for menu in Menu.search(["|", ("url", "=", f"/{old}"), ("url", "=like", _like_escape(f"/{old}/") + "%")]):
+    if new_rewrites:
+        rewrite.create(new_rewrites)
+    menus = svc["website.menu"].search(
+        ["|", ("url", "=", f"/{old}"), ("url", "=like", _like_escape(f"/{old}/") + "%")], limit=1000
+    )
+    for menu in menus:
         menu.write({"url": f"/{new}" + menu.url[len(old) + 1:]})
     if log:
         _logger.info("user_websites: re-homed %s %s: /%s -> /%s: %s", owner_field, owner_id, old, new, log)
