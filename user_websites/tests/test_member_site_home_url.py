@@ -20,6 +20,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 @tagged("post_install", "-at_install")
 class TestMemberSiteHomeUrl(HamsHttpCase):
+    # [@ANCHOR: test_member_site_home_url]
 
     def setUp(self):
         super().setUp()
@@ -117,6 +118,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
             self.assertIn(word, RESERVED_SLUGS)
             with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
                 self.owner.write({"website_slug": word})
+                self.env.flush_all()
 
     def test_09_reserved_slugs_cover_static_single_segment_routes(self):
         # Tests [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
@@ -138,7 +140,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
 
     def test_10_migration_moves_home_pages_to_slug(self):
         # Tests [@ANCHOR: user_websites:migrate_home_url_to_slug]
-        # Verified by [@ANCHOR: test_migration_home_url_to_slug]
+        # [@ANCHOR: test_migration_home_url_to_slug]
         self.home_page.write({"url": "/homeurlowner/home"})
         self.env.flush_all()
         path = os.path.join(
