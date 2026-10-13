@@ -445,6 +445,15 @@ class HelpdeskTicket(models.Model):
         except Exception:  # audit-ignore-catch-all: scheduling a notification must never break the ticket create
             _logger.exception("Could not schedule the ticket-triage wake-up.")
 
+    def _silent_exception_note(self):
+        """Tail of the assignment message of an exception ticket that pages after a quiet stretch."""
+        silent = self.env.context.get("hams_exception_silent_count") or 0
+        if not silent:
+            return ""
+        return " " + _(
+            "%s other server exception tickets were opened without paging since the last page.", silent
+        )
+
     # [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
     def _automated_routing_and_notification(self):
         """
@@ -478,7 +487,12 @@ class HelpdeskTicket(models.Model):
             
             # Since assignment is now handled in create(), we only check if it was assigned
             facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
-            if ticket_service.user_id:
+            # An automatic server-exception ticket opened inside the notification window of an earlier
+            # one is assigned but does not page anybody (see exception_fingerprint.NOTIFY_WINDOW).
+            quiet = ticket_service.ticket_type == "server_exception" and self.env.context.get(
+                "hams_exception_quiet"
+            )
+            if ticket_service.user_id and not quiet:
                 # Email Notification
                 # Bug-hunt fix (2026-09-09): this internal-only assignment
                 # notice had no subtype_xmlid, so it defaulted to the
@@ -490,7 +504,8 @@ class HelpdeskTicket(models.Model):
                 # a few lines below already got this right
                 # (subtype_xmlid="mail.mt_note"); this one didn't.
                 ticket_service.message_post(
-                    body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id,
+                    body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id
+                    + self._silent_exception_note(),
                     partner_ids=[ticket_service.user_id.partner_id.id],
                     subject=_("Ticket Assigned: %s") % ticket_service.name,
                     subtype_xmlid="mail.mt_note",

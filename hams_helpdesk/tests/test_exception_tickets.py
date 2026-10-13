@@ -16,7 +16,7 @@ from datetime import timedelta
 
 import psycopg2.errors
 import werkzeug.exceptions
-from odoo import fields
+from odoo import fields, http
 from odoo.addons.base.models.ir_qweb import QWebError, QWebErrorInfo
 from odoo.exceptions import AccessDenied, AccessError, MissingError, UserError, ValidationError
 from odoo.tests.common import tagged
@@ -143,11 +143,21 @@ class TestExceptionClassification(ExceptionTicketCase):
             (AccessError("permission dialog"), "rpc", True),
             (MissingError("deleted record"), "http", True),
             (BrokenPipeError(), "http", True),
+            # Spam to an address nobody owns: the gateway retries and gives up.
+            (ValueError('No possible route found for incoming message from "X" <x@example.com> to y@hams.com'), "rpc", True),
+            (ValueError('No possible route found for incoming message from "X" <x@example.com> to y@hams.com'), "cron", True),
+            # A visitor with no valid session opening a login-only page is redirected to the login page.
+            (http.SessionExpiredException("Session expired"), "http", False),
+            (http.SessionExpiredException("Session expired"), "http", True),
+            (http.SessionExpiredException("Session expired"), "rpc", True),
         ]
         for exc, source, logged_in in expected:
             with self.subTest(exc=repr(exc), source=source):
                 self.assertFalse(self.report(exc, source, logged_in=logged_in))
         self.assertFalse(self.fingerprints())
+
+    def test_other_value_errors_are_still_reported(self):
+        self.assertTrue(self.report(ValueError("No possible route in this other message"), "rpc"))
 
     def test_bot_probes_are_not_reported_for_anonymous_callers(self):
         exc = self.caught(raise_attribute_error)
@@ -364,6 +374,118 @@ class TestExceptionNeverRaises(ExceptionTicketCase):
         self.safe_patch_object(reporter, "SERVICE_XMLID", new="hams_helpdesk.no_such_service_account")
         with self.assertLogs("hams_helpdesk.exception_reporter", level="ERROR"):
             self.assertFalse(self.report(exc))
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestExceptionWriterIsolation(ExceptionTicketCase):
+    # Tests [@ANCHOR: hams_helpdesk:exc_without_request]
+    # Tests [@ANCHOR: hams_helpdesk:exc_write_report]
+
+    def test_the_writer_does_not_see_the_request_being_reported(self):
+        seen = []
+        original = reporter._service_env
+
+        def spy(cr):
+            seen.append(bool(http.request))
+            return original(cr)
+
+        self.safe_patch_object(reporter, "_service_env", new=spy)
+        fake_request = object()
+        http._request_stack.push(fake_request)
+        self.addCleanup(http._request_stack.pop)
+        self.assertTrue(self.report(self.caught(raise_attribute_error)))
+        self.assertEqual(seen, [False], "the writer must run as a cron job would, with no request")
+        self.assertIs(http.request._get_current_object(), fake_request, "the request is put back")
+
+    def test_a_failure_to_write_is_logged_with_its_traceback(self):
+        def broken(cr):
+            raise ValueError("Expected singleton: res.users()")
+
+        self.safe_patch_object(reporter, "_service_env", new=broken)
+        with self.assertLogs("hams_helpdesk.exception_reporter", level="ERROR") as logs:
+            self.assertFalse(self.report(self.caught(raise_attribute_error)))
+        self.assertIsNotNone(logs.records[0].exc_info, "the traceback shows which line failed")
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestExceptionPaging(ExceptionTicketCase):
+    """A burst of new exception tickets pages the on-duty admin once, not once per ticket."""
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_notification_state]
+    # Tests [@ANCHOR: hams_helpdesk:exc_sync_ticket]
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.on_duty = cls.env["res.users"].create(
+            {
+                "name": "Exception On Duty",
+                "login": "exception_on_duty",
+                "email": "on_duty@example.com",
+                "group_ids": [(6, 0, [cls.env.ref("hams_helpdesk.group_helpdesk_user").id])],
+            }
+        )
+
+    def setUp(self):
+        super().setUp()
+        on_duty = self.on_duty
+        self.safe_patch_object(
+            type(self.env["calendar.event"]), "get_current_on_duty_admin", lambda self: on_duty, create=True
+        )
+        self.toasts = []
+
+        def sendone(bus, target, notification_type, message):
+            self.toasts.append(notification_type)
+
+        self.safe_patch_object(type(self.env["bus.bus"]), "_sendone", sendone, create=True)
+
+    def open_ticket(self, index):
+        """A new fingerprint (a different route) and its ticket."""
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc, "http", path=f"/page{LETTERS[index]}"))
+        return self.fingerprints().filtered(lambda row: row.route.endswith(f"page{LETTERS[index]}")).ticket_id
+
+    def assignment_messages(self, tickets):
+        return tickets.message_ids.filtered(lambda m: (m.subject or "").startswith("Ticket Assigned"))
+
+    def native_assignment_mails(self, tickets):
+        return tickets.message_ids.filtered(lambda m: (m.subject or "").startswith("You have been assigned"))
+
+    def test_the_first_ticket_pages_once_with_one_email_and_one_toast(self):
+        ticket = self.open_ticket(0)
+        self.assertEqual(ticket.user_id, self.on_duty)
+        self.assertEqual(len(self.assignment_messages(ticket)), 1)
+        self.assertFalse(self.native_assignment_mails(ticket), "Odoo's own assignment email repeats it")
+        self.assertEqual(self.toasts, ["simple_notification"])
+        self.assertTrue(self.Fingerprint.search([("ticket_id", "=", ticket.id)]).notified_at)
+
+    def test_tickets_in_the_window_are_assigned_but_silent(self):
+        first = self.open_ticket(0)
+        later = self.open_ticket(1) | self.open_ticket(2)
+        self.assertEqual(later.user_id, self.on_duty)
+        self.assertFalse(self.assignment_messages(later))
+        self.assertFalse(self.native_assignment_mails(later))
+        self.assertEqual(len(self.assignment_messages(first)), 1)
+        self.assertEqual(len(self.toasts), 1)
+        self.assertFalse(self.Fingerprint.search([("ticket_id", "in", later.ids)]).mapped("notified_at")[0])
+
+    def test_after_the_window_the_next_ticket_pages_and_counts_the_silent_ones(self):
+        self.open_ticket(0)
+        self.open_ticket(1)
+        self.open_ticket(2)
+        paged = self.Fingerprint.search([("notified_at", "!=", False)])
+        paged.notified_at = fields.Datetime.now() - reporter.NOTIFY_WINDOW - timedelta(minutes=1)
+        fourth = self.open_ticket(3)
+        messages = self.assignment_messages(fourth)
+        self.assertEqual(len(messages), 1)
+        self.assertIn("2 other server exception tickets", messages.body)
+        self.assertEqual(len(self.toasts), 2)
+
+    def test_a_ticket_that_stays_quiet_does_not_move_the_window(self):
+        self.open_ticket(0)
+        first_page = self.Fingerprint.search([("notified_at", "!=", False)]).notified_at
+        self.open_ticket(1)
+        self.assertEqual(self.Fingerprint.search([("notified_at", "!=", False)]).notified_at, first_page)
 
 
 @tagged("post_install", "-at_install", "standard")
@@ -871,6 +993,45 @@ class TestExceptionHooks(RealTransactionCase):
         self.assertEqual(rows.occurrence_count, 1)
         self.assertEqual(rows.ticket_id.ticket_type, "server_exception")
         self.assertEqual(rows.last_user_id, self.env.ref("base.user_admin").id)
+
+    def test_visit_to_a_login_only_page_without_a_valid_session_makes_no_ticket(self):
+        # Odoo answers this with a redirect to the login page; hams.com saw it from every scanner
+        # and expired tab. A browser-like agent, so the bot-agent rule is not what filters it.
+        self.opener.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"
+        for cookie in (None, "deadbeef" * 5):
+            reporter._GATE.clear()
+            self.opener.cookies.clear()
+            if cookie:
+                self.opener.cookies.set("session_id", cookie)
+            response = self.url_open("/my/privacy", allow_redirects=False)
+            self.assertEqual(response.status_code, 303)
+        self.assertFalse(self.rows())
+
+    def test_a_report_from_a_request_with_no_valid_user_still_reaches_the_on_duty_admin(self):
+        # The 2026-10-12 production failure: the assignment email is rendered while the failed request
+        # is still the ambient one, and QWeb helpers that read request.env.user got an empty user and
+        # raised "Expected singleton: res.users()", so the ticket was lost. Every exception class is
+        # forced through (SessionExpiredException is filtered now) with a session that has no user.
+        staff = self.env["res.users"].create(
+            {
+                "name": "Exception Duty",
+                "login": "exception_duty",
+                "email": "duty@example.com",
+                "group_ids": [(6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_user").id])],
+            }
+        )
+        self.env.cr.commit()
+        self.safe_patch_object(
+            type(self.env["calendar.event"]), "get_current_on_duty_admin", lambda self: staff, create=True
+        )
+        self.safe_patch_object(scrub, "is_expected", new=lambda *args, **kwargs: False)
+        self.opener.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"
+        self.opener.cookies.set("session_id", "deadbeef" * 5)
+        with self.assertNoLogs("hams_helpdesk.exception_reporter", level="ERROR"):
+            self.url_open("/my/privacy", allow_redirects=False)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows.ticket_id.user_id, staff)
 
     def test_not_found_page_makes_no_ticket(self):
         self.url_open("/this/page/does/not/exist-12345")

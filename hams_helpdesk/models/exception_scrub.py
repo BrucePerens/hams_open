@@ -19,7 +19,7 @@ import traceback
 
 import psycopg2
 import werkzeug.exceptions
-from odoo import exceptions
+from odoo import exceptions, http
 from odoo.addons.base.models.ir_qweb import QWebError
 
 # Messages of these classes come from code, not from data, so they are kept (scrubbed). Every other
@@ -38,6 +38,8 @@ MESSAGE_LIMIT = 200
 CODE_LINE_LIMIT = 160
 MAX_FRAMES = 25
 MAX_CHAIN = 4
+# Start of the ValueError Odoo's mail.thread.message_route raises for a message with no alias to go to.
+UNROUTABLE_MAIL_PREFIX = "No possible route found for incoming message"
 # Request paths that only scanners ask for. An exception on one of these, from an anonymous caller,
 # is noise.
 PROBE_PATH_RE = re.compile(
@@ -117,6 +119,16 @@ def is_expected(exc, source, logged_in, path="", user_agent=""):
     is a UserError, so it is decided before UserError."""
     if isinstance(exc, (BrokenPipeError, ConnectionResetError, werkzeug.exceptions.ClientDisconnected)):
         return True  # the browser went away
+    if isinstance(exc, http.SessionExpiredException):
+        # Odoo raises this for every visitor without a valid session who opens a login-only page
+        # (/my/..., /user-websites/...), answers it with a redirect to the login page and logs it at
+        # INFO. Nothing is broken, and it comes from every bot and every expired browser tab.
+        return True
+    if isinstance(exc, ValueError) and str(exc).startswith(UNROUTABLE_MAIL_PREFIX):
+        # mail.thread.message_route: an inbound message to an address nobody owns (spam to a made-up
+        # local part). The mail gateway retries it and gives up; nothing is broken. Only the start of
+        # the message is compared here and the rest, which holds addresses, is never stored.
+        return True
     if isinstance(exc, werkzeug.exceptions.HTTPException):
         # NotFound, redirects, CSRF (400), 403/405/413... all answered correctly already.
         return (exc.code or 0) < 500
