@@ -29,3 +29,4 @@ from . import test_hooks
 from . import test_never_run_and_monitor_hardening
 from . import test_check_github_pat_expiry
 from . import test_check_auth_cert_expiry
+from . import test_check_recordings_disk_usage
