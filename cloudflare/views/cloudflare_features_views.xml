@@ -202,6 +202,7 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
+                        <button name="action_plan_cache_push" type="object" string="Show plan (changes nothing)"/>
                         <button name="action_push_to_cloudflare" type="object" string="Push cache rules to Cloudflare" class="btn-primary"/>
                     </header>
                     <sheet>

@@ -4,13 +4,17 @@ import json
 import logging
 from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
+from ..utils import cache_plan
 from ..utils.cloudflare_api import (
     get_zone_ruleset,
+    get_zone_ruleset_checked,
     update_zone_ruleset,
     create_zone_ruleset,
 )
 
 _logger = logging.getLogger(__name__)
+
+CACHE_PHASE = "http_request_cache_settings"
 
 DEFAULT_WAF_RULES = [
     {
@@ -354,22 +358,31 @@ class CloudflareConfigManager(models.AbstractModel):
             limit=1000,
         )
         ordered = rules.sorted(lambda r: (r.action != "bypass", r.sequence, r.id))
+        # Cloudflare applies EVERY matching cache-settings rule, a later one overriding an earlier one's
+        # settings, so a bypass rule in front does not stop a cache rule behind it from caching the same
+        # request. Each cache rule therefore carries the negation of every bypass condition itself.
+        bypass_exprs = [(r.expression or "true").strip() for r in ordered if r.action == "bypass"]
         payload = []
         for r in ordered:
+            expression = (r.expression or "true").strip()
+            if r.action != "bypass":
+                for b in bypass_exprs:
+                    expression = f"({expression}) and not ({b})" if expression != "true" else f"not ({b})"
             if r.action == "bypass":
                 params = {"cache": False}
             elif r.edge_cache_ttl and r.edge_cache_ttl > 0:
                 params = {
                     "cache": True,
                     "edge_ttl": {"mode": "override_origin", "default": r.edge_cache_ttl},
+                    "browser_ttl": {"mode": "respect_origin"},
                 }
             else:
-                params = {"cache": True, "edge_ttl": {"mode": "respect_origin"}}
+                params = {"cache": True, "edge_ttl": {"mode": "respect_origin"}, "browser_ttl": {"mode": "respect_origin"}}
             payload.append(
                 {
                     "action": "set_cache_settings",
                     "action_parameters": params,
-                    "expression": (r.expression or "true").strip(),
+                    "expression": expression,
                     "description": r.name,
                     "enabled": True,
                 }
@@ -377,8 +390,13 @@ class CloudflareConfigManager(models.AbstractModel):
         return payload
 
     @api.model
-    def action_push_cache_rules(self, website_id=None):
-        """Push the Odoo cache rules to Cloudflare's http_request_cache_settings phase."""
+    def plan_cache_rules(self, website_id=None):
+        """What pushing the Odoo cache rules would do. Reads Cloudflare (GET only), writes nothing.
+
+        Returns {"ok", "message", "text", "hash", "writes", "rules", "ruleset_id", "ruleset_name"}. `ok` is
+        False when the plan is refused (no credentials, Cloudflare unreadable, an unmanaged rule would
+        change); nothing is then to be applied.
+        """
         self._check_waf_caller_authorized()
         website = (
             self.env["website"].browse(website_id)
@@ -387,16 +405,59 @@ class CloudflareConfigManager(models.AbstractModel):
         )
         token, zone_id = website._get_cloudflare_credentials()
         if not token or not zone_id:
-            return False, f"Missing API credentials for {website.name}."
+            return {"ok": False, "message": f"Missing API credentials for {website.name}.", "text": "", "writes": 0}
+        state, ruleset = get_zone_ruleset_checked(CACHE_PHASE, token, zone_id)
+        if state == "error":
+            return {"ok": False, "message": f"REFUSED: Cloudflare's cache-settings ruleset could not be read ({ruleset}); "
+                                            "nothing is planned.", "text": "", "writes": 0}
+        remote = (ruleset or {}).get("rules") or []
+        names = self.env["cloudflare.cache.rule"].with_context(active_test=False).search([], limit=10000).mapped("name")
+        plan = cache_plan.merge(remote, self._build_cache_ruleset_rules(website), names)
+        text = cache_plan.render(plan, "does not exist yet" if state == "absent" else f"{len(remote)} rule(s) now")
+        writes = sum(1 for e in plan["entries"] if e["action"] in (cache_plan.CREATE, cache_plan.UPDATE, cache_plan.DELETE))
+        ok = not plan["problems"]
+        if not ok:
+            text = "REFUSED: " + "; ".join(plan["problems"]) + "\n\n" + text
+        return {"ok": ok, "message": text if not ok else "Planned.", "text": text, "hash": plan["hash"], "writes": writes,
+                "rules": plan["rules"], "ruleset_id": (ruleset or {}).get("id"), "ruleset_name": (ruleset or {}).get("name"),
+            }
 
-        phase = "http_request_cache_settings"
-        ruleset_payload = {
-            "name": f"Odoo Cache Rules - {website.name}",
+    @api.model
+    def action_push_cache_rules(self, website_id=None, plan_hash=None):
+        """Push the Odoo cache rules to Cloudflare's http_request_cache_settings phase.
+
+        Plans first and refuses if the plan is refused. Rules Odoo does not manage are carried through
+        untouched. With `plan_hash`, applies only if the plan is still exactly the reviewed one.
+        """
+        plan = self.plan_cache_rules(website_id=website_id)
+        if not plan["ok"]:
+            return False, plan["message"]
+        if plan_hash and plan_hash != plan["hash"]:
+            return False, "REFUSED: Cloudflare or the Odoo rows changed since the plan was shown; plan again."
+        if not plan["writes"]:
+            return True, "Nothing to do: Cloudflare already holds these cache rules."
+        website = (
+            self.env["website"].browse(website_id)
+            if website_id
+            else self.env["website"].get_current_website()
+        )
+        token, zone_id = website._get_cloudflare_credentials()
+        payload = {
+            "name": plan["ruleset_name"] or f"Odoo Cache Rules - {website.name}",
             "kind": "zone",
-            "phase": phase,
-            "rules": self._build_cache_ruleset_rules(website),
+            "phase": CACHE_PHASE,
+            "rules": plan["rules"],
         }
-        existing = get_zone_ruleset(phase, token, zone_id)
-        if existing and "id" in existing:
-            return update_zone_ruleset(existing["id"], ruleset_payload, token, zone_id)
-        return create_zone_ruleset(ruleset_payload, token, zone_id)
+        if plan["ruleset_id"]:
+            ok, msg = update_zone_ruleset(plan["ruleset_id"], payload, token, zone_id)
+        else:
+            ok, msg = create_zone_ruleset(payload, token, zone_id)
+        if ok:
+            # Read it back: the unmanaged rules must be exactly what they were.
+            state, after = get_zone_ruleset_checked(CACHE_PHASE, token, zone_id)
+            names = self.env["cloudflare.cache.rule"].with_context(active_test=False).search([], limit=10000).mapped("name")
+            kept = [cache_plan.clean(r) for r in ((after or {}).get("rules") or []) if r.get("description") not in names]
+            before = [r for r in plan["rules"] if r.get("description") not in names]
+            if state != "ok" or [r.get("id") for r in kept] != [r.get("id") for r in before]:
+                return False, "Pushed, but the read-back does not match the plan; check the zone's cache rules."
+        return ok, msg

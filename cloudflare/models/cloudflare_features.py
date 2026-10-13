@@ -83,6 +83,23 @@ class CloudflareCacheRule(models.Model):
     )
     website_id = fields.Many2one("website", string="Website")
 
+    def action_plan_cache_push(self):
+        """Show what a push would do (reads Cloudflare, writes nothing)."""
+        self.ensure_one()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_waf")
+        website_id = self.website_id.id or self.env["website"].get_current_website().id
+        plan = self.env["cloudflare.config.manager"].with_user(svc_uid).plan_cache_rules(website_id=website_id)
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Cache rule plan") if plan["ok"] else _("Cache rule plan refused"),
+                "message": plan["text"] or plan["message"],
+                "type": "info" if plan["ok"] else "danger",
+                "sticky": True,
+            },
+        }
+
     def action_push_to_cloudflare(self):
         """Push every active cache rule of this rule's website to Cloudflare."""
         self.ensure_one()

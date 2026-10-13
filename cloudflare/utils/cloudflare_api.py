@@ -243,6 +243,25 @@ def get_zone_ruleset(phase, token, zone_id):
     return None
 
 
+def get_zone_ruleset_checked(phase, token, zone_id):
+    """Like get_zone_ruleset, but tells "there is no ruleset" from "Cloudflare could not be read".
+
+    Returns ("ok", ruleset), ("absent", None) or ("error", message). A planner must not mistake an outage or
+    a missing permission for an empty ruleset, because a push of that would replace what is there."""
+    if not token or not zone_id:
+        return "error", "Missing credentials."
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/rulesets/phases/{phase}/entrypoint"
+    response = _make_request("GET", endpoint, token, "Cloudflare Ruleset Fetch API failed", timeout=15)
+    if response is None:
+        return "error", "API Error"
+    if response.status_code == 404:
+        return "absent", None
+    if response.status_code != 200:
+        return "error", f"HTTP {response.status_code}"
+    result = response.json().get("result")
+    return ("ok", result) if isinstance(result, dict) else ("error", "unexpected response")
+
+
 def update_zone_ruleset(ruleset_id, payload, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
