@@ -27,6 +27,7 @@ Safety properties, each tested:
 """
 
 import collections
+import contextlib
 import json
 import logging
 import threading
@@ -34,7 +35,7 @@ import time
 from datetime import timedelta
 
 from markupsafe import Markup
-from odoo import api, fields, models
+from odoo import api, fields, http, models
 
 from . import exception_scrub as scrub
 
@@ -46,6 +47,10 @@ TICKET_TYPE = "server_exception"
 PER_FINGERPRINT_SECONDS = 60
 GLOBAL_WRITES_PER_MINUTE = 30
 NEW_TICKETS_PER_HOUR = 50
+# A new ticket pages the on-duty admin (an email and a toast) only when none did in this long; the
+# others in a burst are still created and assigned, just silent, and the next one that does page says
+# how many were silent. A release that breaks twenty pages is one page, not twenty.
+NOTIFY_WINDOW = timedelta(minutes=30)
 SAMPLE_LIMIT = 5
 SAMPLE_TRACE_LIMIT = 6000
 GATE_MAX_ENTRIES = 5000
@@ -117,11 +122,28 @@ def _service_env(cr):
     return env["zero_sudo.security.utils"]._get_service_env(SERVICE_XMLID)
 
 
+# [@ANCHOR: hams_helpdesk:exc_without_request]
+@contextlib.contextmanager
+def _without_request():
+    """Hides the HTTP request this thread is serving, if any, while the report is written.
+
+    The writer runs on its own cursor as the service account. Code under ticket creation (website
+    rules, mail, bus) looks at the ambient ``request`` when there is one, and for a failed request
+    that request can be half-built (a session with no valid user): the writer would then depend on
+    the very request whose failure it is reporting. A cron job has no request, so this is the path the
+    writer is written for."""
+    if not http.request:
+        yield
+        return
+    with http.borrow_request():
+        yield
+
+
 # [@ANCHOR: hams_helpdesk:exc_write_report]
 def _write_report(registry, data, folded):
     """Writes one occurrence on its own cursor. No try/except here on purpose: the service-account
     lookup must fail fast, and ``report_exception`` is the single place that swallows."""
-    with registry.cursor() as cr:
+    with _without_request(), registry.cursor() as cr:
         # The failed request's transaction may still be open, holding row locks, while this runs. A
         # wait on one of them would hang this worker (one thread waiting on itself, which Postgres
         # cannot see as a deadlock), so give up quickly: a timeout is swallowed like any failure.
@@ -165,7 +187,7 @@ def report_event(registry, source, type_name, module, frame, route, trace, name,
     except Exception as error:  # audit-ignore-catch-all: Tested by [@ANCHOR: hams_helpdesk:exc_report_exception]
         # A failure here must never reach the request, the cron job or the mail queue, and must not
         # be reported again: log it on this module's own logger and stop.
-        _reporter_logger.error("Could not record a server exception ticket: %r", error)
+        _reporter_logger.error("Could not record a server exception ticket: %r", error, exc_info=True)
         return False
     finally:
         _STATE.active = False
@@ -219,6 +241,10 @@ class ExceptionFingerprint(models.Model):
     first_seen = fields.Datetime(readonly=True)
     last_seen = fields.Datetime(readonly=True, index=True)
     last_written_at = fields.Datetime(readonly=True)
+    notified_at = fields.Datetime(
+        readonly=True,
+        help="When opening this row's ticket paged the on-duty admin. Empty when it was opened silently.",
+    )
     last_user_id = fields.Integer(
         string="Last user id", readonly=True,
         help="Internal user id of the last logged-in user affected. Never a name or an email.",
@@ -360,7 +386,14 @@ class ExceptionFingerprint(models.Model):
             )
             return
         name = "Server exception: " + record.name
-        ticket = Ticket.create(
+        quiet, silent_since_page = self._notification_state(now)
+        # mail_auto_subscribe_no_notify: Odoo's own "You have been assigned" email would repeat the
+        # helpdesk's "Ticket Assigned" one and ignore the window.
+        ticket = Ticket.with_context(
+            mail_auto_subscribe_no_notify=True,
+            hams_exception_quiet=quiet,
+            hams_exception_silent_count=silent_since_page,
+        ).create(
             {
                 "name": name[:290],
                 "description": body,
@@ -370,3 +403,19 @@ class ExceptionFingerprint(models.Model):
             }
         )
         record.ticket_id = ticket.id
+        if not quiet:
+            record.notified_at = now
+
+    # [@ANCHOR: hams_helpdesk:exc_notification_state]
+    @api.model
+    def _notification_state(self, now):
+        """(quiet, silent): whether a ticket opened now stays silent because another one paged the
+        on-duty admin within NOTIFY_WINDOW, and, when it is not quiet, how many tickets were opened
+        silently since the last page."""
+        last_page = self.search([("notified_at", "!=", False)], order="notified_at desc", limit=1)
+        if last_page and now - last_page.notified_at < NOTIFY_WINDOW:
+            return True, 0
+        domain = [("ticket_type", "=", TICKET_TYPE)]
+        if last_page:
+            domain.append(("id", ">", last_page.ticket_id.id or 0))
+        return False, self.env["hams_helpdesk.ticket"].search_count(domain)
