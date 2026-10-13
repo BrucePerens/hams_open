@@ -54,6 +54,9 @@ class TestOwnerDelete(HamsHttpCase):
                 "type": "qweb",
                 "owner_user_id": self.owner.id,
                 "website_published": True,
+                # A site-specific page, as the owner tools make them: on a generic page (no website)
+                # Odoo's copy-on-write would archive a COPY of the view and leave the original active.
+                "website_id": self.env["website"].search([], limit=1).id,
                 "arch": ARCH.format(key=url.strip("/").replace("/", "_"), body=body),
             }
         )
