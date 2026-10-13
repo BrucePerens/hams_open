@@ -160,12 +160,21 @@ function cleanupStaleCaches() {
     });
 }
 
+// True when an older version of THIS worker left its cache behind, i.e. this activation is an update.
+// QA pass 2026-10-13: the activate handler told every open page "NEW_VERSION_INSTALLED" on the very first
+// install too, so every first-time visitor saw "Update Available: a new version of this app is available".
+function previousVersionCacheExists() {
+    return caches.keys().then((names) => names.some((n) => n.startsWith(CACHE_NAME_PREFIX) && n !== CACHE_NAME));
+}
+
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        cleanupStaleCaches().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((clients) => {
-            clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
+        previousVersionCacheExists().then((wasUpdate) => cleanupStaleCaches().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((clients) => {
+            if (wasUpdate) {
+                clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
+            }
             return;
-        })
+        }))
     );
 });
 
