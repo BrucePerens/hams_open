@@ -294,7 +294,12 @@ class ResUsers(models.Model):
 
     # [@ANCHOR: user_websites:COMM_res_users_write]
     def write(self, vals):
-        if site_slug.slug_policy(self.env) == site_slug.POLICY_CALLSIGN and not self.env.context.get("slug_policy_done"):
+        # Cheap test first: res.users.write runs on every login, and only these keys can matter.
+        if (
+            ({"website_slug", "name"} | set(self._slug_identity_fields())) & set(vals)
+            and not self.env.context.get("slug_policy_done")
+            and site_slug.slug_policy(self.env) == site_slug.POLICY_CALLSIGN
+        ):
             if len(self) > 1 and ("website_slug" in vals or any(f in vals for f in self._slug_identity_fields())):
                 for record in self:
                     record.with_context(slug_policy_done=True).write(dict(vals))
