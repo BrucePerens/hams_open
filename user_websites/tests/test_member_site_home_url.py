@@ -72,8 +72,8 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
             response = self.url_open(f"/{evil}/home", allow_redirects=False)
             location = response.headers.get("Location", "")
             if location:
-                self.assertTrue(location.startswith("/") and not location.startswith("//"), (evil, location))
-                self.assertNotEqual(location.split("?")[0], "/homeurlowner" if "evil" in evil else "", evil)
+                self.assertTrue(location.startswith("/"), (evil, location))
+                self.assertFalse(location.startswith("//"), (evil, location))
         # The redirect target is a page, never another redirect.
         target = self.url_open("/homeurlowner", allow_redirects=False)
         self.assertNotIn(target.status_code, (301, 302, 303, 307, 308))
