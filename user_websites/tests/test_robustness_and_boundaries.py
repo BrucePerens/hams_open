@@ -77,7 +77,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
-                "url": f"/{self.user_test.website_slug}/home",
+                "url": f"/{self.user_test.website_slug}",
                 "description": long_desc,
                 "email": "truncatetest@example.com",
             },
@@ -109,7 +109,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
-                "url": f"/{self.user_test.website_slug}/home",
+                "url": f"/{self.user_test.website_slug}",
                 "description": "Hi, I wanted to know your price.",
                 "email": "honeypot-bot@example.com",
                 "website_honeypot": "anything at all",

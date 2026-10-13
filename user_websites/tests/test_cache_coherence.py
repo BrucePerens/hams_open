@@ -49,7 +49,7 @@ class TestCacheCoherence(RealTransactionCase):
             .with_user(svc_uid)
             .create(
                 {
-                    "url": "/race-test/home",
+                    "url": "/race-test",
                     "name": "User A Home",
                     "type": "qweb",
                     "website_published": True,
@@ -61,13 +61,13 @@ class TestCacheCoherence(RealTransactionCase):
         self.env.cr.commit()
 
         # Verify routing goes to User A
-        res_a = self.url_open("/race-test/home")
+        res_a = self.url_open("/race-test")
         self.assertEqual(res_a.status_code, 200)
         self.assertIn("USER_A_CONTENT", res_a.content.decode("utf-8"))
 
         # 2. User A changes their slug to free it up
         self.user_a.write({"website_slug": "race-old"})
-        page_a.write({"url": "/race-old/home"})
+        page_a.write({"url": "/race-old"})
         self.env.cr.commit()
 
         # 3. User B immediately claims the released slug
@@ -83,7 +83,7 @@ class TestCacheCoherence(RealTransactionCase):
 
         self.env["website.page"].with_user(svc_uid).create(
             {
-                "url": "/race-test/home",
+                "url": "/race-test",
                 "name": "User B Home",
                 "type": "qweb",
                 "website_published": True,
@@ -94,7 +94,7 @@ class TestCacheCoherence(RealTransactionCase):
         self.env.cr.commit()
 
         # 4. Verify routing goes to User B immediately (Cache was properly invalidated)
-        res_b = self.url_open("/race-test/home")
+        res_b = self.url_open("/race-test")
         self.assertEqual(
             res_b.status_code,
             200,

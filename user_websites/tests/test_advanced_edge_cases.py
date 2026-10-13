@@ -51,7 +51,7 @@ class TestAdvancedEdgeCases(HamsHttpCase):
         # Create a page and post tied to the group
         page = self.env["website.page"].create(
             {
-                "url": f"/{self.doomed_group.website_slug}/home",
+                "url": f"/{self.doomed_group.website_slug}",
                 "name": "Group Home",
                 "type": "qweb",
                 "user_websites_group_id": self.doomed_group.id,
@@ -182,7 +182,7 @@ class TestAdvancedEdgeCases(HamsHttpCase):
         )
 
         created_page = self.env["website.page"].search(
-            [("url", "=", f"/{self.user_empty.website_slug}/home")], limit=1
+            [("url", "=", f"/{self.user_empty.website_slug}")], limit=1
         )
 
         self.assertEqual(

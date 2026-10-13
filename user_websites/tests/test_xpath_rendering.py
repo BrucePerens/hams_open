@@ -176,7 +176,7 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
 
         self.env["website.page"].create(
             {
-                "url": f"/{user.website_slug}/home",
+                "url": f"/{user.website_slug}",
                 "name": "Home",
                 "type": "qweb",
                 "website_published": True,
@@ -186,7 +186,7 @@ class TestXPathRendering(odoo.tests.common.HttpCase):
             }
         )
 
-        response = self.url_open(f"/{user.website_slug}/home")
+        response = self.url_open(f"/{user.website_slug}")
         self.assertEqual(response.status_code, 200)
         self.assertIn(
             b'id="user_websites_dropzone_home_header"',

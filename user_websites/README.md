@@ -8,7 +8,7 @@ Welcome to User Websites! This Odoo 19 module allows you to build and manage you
 
 ## 🌟 What Can I Do?
 
-*   **Create Your Personal Site:** Get a unique URL (like `/yourname/home`) and use our easy drag-and-drop editor to build your pages.
+*   **Create Your Personal Site:** Get a unique URL (like `/yourname`) and use our easy drag-and-drop editor to build your pages.
 *   **Start a Blog:** Share your thoughts and stories with the community. Everyone gets their own blog section.
 *   **Collaborate with Groups:** Create shared websites for your team, club, or project.
 *   **Join the Community:** Choose to show off your site in our public directory and discover what others are building.
@@ -77,7 +77,7 @@ The `user_websites` module enables decentralized content creation. It employs th
 ## 2. 🗄️ Data Model Reference
 
 ### Extended `res.users`
-* **`website_slug`**: URL-safe identifier. A slug is the first path segment of a user's (or group's) site URLs, e.g. `yourname` in `/yourname/home` and `/yourname/blog`; it must not be one of `RESERVED_SLUGS` (section 3).
+* **`website_slug`**: URL-safe identifier. A slug is the first path segment of a user's (or group's) site URLs, e.g. `yourname` in `/yourname` and `/yourname/blog`; it must not be one of `RESERVED_SLUGS` (section 3).
 * **`privacy_show_in_directory`**: Opt-in for the public `/community` directory.
 * **`violation_strike_count`**: Number of upheld content violations.
 * **`is_suspended_from_websites`**: If True, all personal content is forcefully unpublished (the unpublishing itself is done in the background by `action_suspend_user_websites()`; a direct write of this field only invalidates the slug/page resolver caches) and the user's slug routes return 404.
@@ -133,7 +133,7 @@ DO NOT USE user_websites_settings_dropzone. All settings views must now inherit 
 
 * **Violation Reporting:** Form endpoint `/website/report_violation` `[@ANCHOR: user_websites:UX_REPORT_VIOLATION]`, `[@ANCHOR: violation_report_logic]`, verified by `[@ANCHOR: test_tour_violation_report]`.
 
-* **Home Routing:** Target view `/<slug>/home` `[@ANCHOR: controller_user_websites_home]`.
+* **Home Routing:** Target view `/<slug>` (the old `/<slug>/home` answers a permanent 301 to it, `[@ANCHOR: user_websites:COMM_user_home_legacy_redirect]`) `[@ANCHOR: controller_user_websites_home]`.
 
 * **Site Creation:** `/<slug>/create_site` `[@ANCHOR: UX_CREATE_SITE]`, concurrency scaling proven by `[@ANCHOR: test_site_creation_performance_scaling]`.
 
@@ -271,7 +271,7 @@ This section ensures all module functions and their developer usage are thorough
 ### Controllers (`controllers/main.py`, `controllers/user_websites_api.py`)
 *   **`UserWebsitesController`**:
     *   `report_violation()`: POST handler for violation flags.
-    *   `user_blog_index()`, `user_home_fallback()`: Resolvers for `/<slug>/blog` and `/<slug>/home`.
+    *   `user_blog_index()`, `user_home_fallback()`: Resolvers for `/<slug>/blog` and `/<slug>` (plus the `/<slug>/home` 301).
     *   `create_site()`, `create_blog()`: JIT provisioners for missing infrastructure.
     *   `create_blog_post()`, `blog_post_edit()`, `blog_post_edit_submit()`: New-post creation and the owner-only post edit form (`/blog_post/edit/<post_id>`).
     *   `documentation()`: Redirects to the module's published knowledge article.

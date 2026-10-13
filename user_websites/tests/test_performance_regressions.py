@@ -66,7 +66,7 @@ class TestPerformanceORM(HamsHttpCase):
 
             self.env["website.page"].with_user(svc_uid).create(
                 {
-                    "url": f"/{user.website_slug}/home",
+                    "url": f"/{user.website_slug}",
                     "name": display_name,
                     "is_published": True,
                     "website_published": True,
@@ -142,7 +142,7 @@ class TestPerformanceRouting(HamsHttpCase):
 
             self.env["website.page"].with_user(svc_uid).create(
                 {
-                    "url": f"/{user.website_slug}/home",
+                    "url": f"/{user.website_slug}",
                     "name": display_name,
                     "is_published": True,
                     "website_published": True,
@@ -210,7 +210,7 @@ class TestPerformanceRouting(HamsHttpCase):
 
             self.env["website.page"].with_user(svc_uid).create(
                 {
-                    "url": f"/{user.website_slug}/home",
+                    "url": f"/{user.website_slug}",
                     "name": display_name,
                     "is_published": True,
                     "website_published": True,
@@ -245,7 +245,7 @@ class TestPerformanceRouting(HamsHttpCase):
 
         # Assert User A's content rendered on A's page
         self.env.flush_all()
-        response_a = self.url_open(f"/{user_a.website_slug}/home")
+        response_a = self.url_open(f"/{user_a.website_slug}")
         self.assertEqual(response_a.status_code, 200)
         self.assertIn(
             custom_content.encode("utf-8"),
@@ -255,7 +255,7 @@ class TestPerformanceRouting(HamsHttpCase):
 
         # Assert User A's content did NOT bleed into User B's page
         self.env.flush_all()
-        response_b = self.url_open(f"/{user_b.website_slug}/home")
+        response_b = self.url_open(f"/{user_b.website_slug}")
         self.assertEqual(response_b.status_code, 200)
         self.assertNotIn(
             custom_content.encode("utf-8"),

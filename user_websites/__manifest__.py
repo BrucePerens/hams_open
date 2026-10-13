@@ -5,8 +5,8 @@
     "description": """
 This module enables:
 
-- Users to have a personal website (e.g. /username/home)
-- Users to create shared group websites (e.g. /groupname/home)
+- Users to have a personal website (e.g. /username)
+- Users to create shared group websites (e.g. /groupname)
 - Users to manage a blog within their site.
 - Privacy controls and content violation reporting.
 - Advanced Moderation, 3-Strike suspension, and Appeals.
@@ -15,7 +15,7 @@ This module enables:
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "category": "Website",
-    "version": "0.4",
+    "version": "0.5",
     "license": "AGPL-3",
     "depends": [
         "base",

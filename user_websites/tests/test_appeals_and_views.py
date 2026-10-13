@@ -40,7 +40,7 @@ class TestAppealsAndViews(RealTransactionCase):
 
         self.page = self.env["website.page"].create(
             {
-                "url": f"/{self.user_public.website_slug}/home",
+                "url": f"/{self.user_public.website_slug}",
                 "name": "Home",
                 "type": "qweb",
                 "arch": '<t name="Home" t-name="home"><t t-call="website.layout"><div>Test</div></t></t>',
@@ -84,7 +84,7 @@ class TestAppealsAndViews(RealTransactionCase):
         # Tests [@ANCHOR: COMM_user_home_fallback]
         """Verify the view counter increments cleanly on page load.
 
-        Visiting an existing `/<slug>/home` page routes through
+        Visiting an existing `/<slug>` page routes through
         `UserWebsitesController.user_home_fallback()` (it is the sole handler for this URL
         pattern, existing-page or not -- see its own docstring), so this also exercises its
         existing-page branch (the Redis view-counter increment and `_serve_fallback()` call).
@@ -92,7 +92,7 @@ class TestAppealsAndViews(RealTransactionCase):
         self.assertEqual(self.page.view_count, 0)
 
         # Public user visits the page
-        self.url_open(f"/{self.user_public.website_slug}/home")
+        self.url_open(f"/{self.user_public.website_slug}")
 
         # Sync snapshot to see the Werkzeug thread's executed updates
         self.env.cr.commit()

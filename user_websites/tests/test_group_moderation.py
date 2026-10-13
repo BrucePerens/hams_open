@@ -21,7 +21,7 @@ class TestGroupModeration(RealTransactionCase):
 
         self.group_page = self.env["website.page"].create(
             {
-                "url": f"/{self.group.website_slug}/home",
+                "url": f"/{self.group.website_slug}",
                 "name": "Group Home",
                 "type": "qweb",
                 "arch": '<t name="Group Home" t-name="user_websites.group_home"><div>Spam</div></t>',

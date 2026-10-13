@@ -144,7 +144,7 @@ class TestLongRunningSimulation(odoo.tests.common.HttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
-                "url": f"/{other_user.website_slug}/home",
+                "url": f"/{other_user.website_slug}",
                 "description": f"Simulated violation report in iteration {i}.",
                 "email": user.email,
             },

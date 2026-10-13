@@ -61,7 +61,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         # 1. Create User Content
         page = self.env["website.page"].create(
             {
-                "url": f"/{self.test_user.website_slug}/home",
+                "url": f"/{self.test_user.website_slug}",
                 "name": "Home",
                 "type": "qweb",
                 "owner_user_id": self.test_user.id,

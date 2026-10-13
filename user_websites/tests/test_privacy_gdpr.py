@@ -40,7 +40,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         # Create some test data for the user
         self.page = self.env["website.page"].create(
             {
-                "url": f"/{self.user_privacy.website_slug}/home",
+                "url": f"/{self.user_privacy.website_slug}",
                 "name": "My Private Home",
                 "type": "qweb",
                 "arch": "<div>Sensitive Text</div>",

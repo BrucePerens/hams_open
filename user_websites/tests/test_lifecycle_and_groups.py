@@ -97,7 +97,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
 
         group_home = self.env["website.page"].search(
             [
-                ("url", "=", f"/{self.test_group.website_slug}/home"),
+                ("url", "=", f"/{self.test_group.website_slug}"),
                 ("user_websites_group_id", "=", self.test_group.id),
             ],
             limit=1
@@ -145,7 +145,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
         self.env.cr.commit()
 
         page = self.env["website.page"].search(
-            [("url", "=", f"/{evil_user.website_slug}/home")], limit=1
+            [("url", "=", f"/{evil_user.website_slug}")], limit=1
         )
         self.assertTrue(page, "Page should still be created for a malicious name")
 
@@ -172,7 +172,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
-            [("url", "=", f"/{self.test_group.website_slug}/home")], limit=1
+            [("url", "=", f"/{self.test_group.website_slug}")], limit=1
         )
         self.assertFalse(
             group_home, "Non-member should not be able to create group homepage"
@@ -266,7 +266,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
 
         self.env["website.page"].create(
             {
-                "url": f"/{self.test_group.website_slug}/home",
+                "url": f"/{self.test_group.website_slug}",
                 "name": "Home",
                 "is_published": True,
                 "website_published": True,
@@ -277,7 +277,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
         )
 
         report_button_text = b"Report Violation"
-        url_group = f"/{self.test_group.website_slug}/home"
+        url_group = f"/{self.test_group.website_slug}"
 
         self.authenticate(self.user_a.login, self.user_a.login)
         self.env.cr.commit()
@@ -312,7 +312,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
             _logger.warning("An error occurred: %s", e)
 
         group_home = self.env["website.page"].search(
-            [("url", "=", f"/{self.test_group.website_slug}/home")], limit=1
+            [("url", "=", f"/{self.test_group.website_slug}")], limit=1
         )
         self.assertFalse(
             group_home, "Public Guest should not be able to create group homepage"
