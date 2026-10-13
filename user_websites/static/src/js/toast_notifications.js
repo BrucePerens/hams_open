@@ -117,7 +117,7 @@ export class AdminViolationToast extends Interaction {
                     buttons.push({
                         name: "Review reports",
                         primary: true,
-                        onClick: () => { window.location.assign(url); },
+                        onClick: () => { document.location.assign(url); },
                     });
                 }
                 buttons.push({ name: "Dismiss", onClick: () => {} });

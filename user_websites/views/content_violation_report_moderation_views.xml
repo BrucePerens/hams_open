@@ -80,6 +80,7 @@
         <field name="res_model">content.violation.report</field>
         <field name="view_mode">list,kanban,form</field>
         <field name="domain">[('state', '=', 'new')]</field>
+        <field name="view_id" ref="content_moderation.view_content_violation_report_list"/>
     </record>
 
     <menuitem id="menu_content_violation_report"
