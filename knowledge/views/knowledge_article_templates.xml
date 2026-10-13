@@ -218,7 +218,7 @@
                                             <span t-if="result_art.icon" t-out="result_art.icon" class="me-2" aria-hidden="true"/>
                                             <span t-out="result_art.name"/>
                                         </h5>
-                                        <div t-if="result_art.body_snippet" class="mb-2 text-muted small text-truncate" style="max-height: 3em;">
+                                        <div t-if="result_art.body_snippet" class="mb-2 text-muted small">
                                             <t t-out="result_art.body_snippet"/>
                                         </div>
                                         <p t-if="result_art.help_topic" class="mb-1 text-muted small">
@@ -263,8 +263,8 @@
                                 <t t-foreach="topic[1]" t-as="manual">
                                     <a t-att-href="manual.website_url" class="list-group-item list-group-item-action">
                                         <span t-if="manual.icon" t-out="manual.icon" class="me-2" aria-hidden="true"/>
-                                        <strong t-out="manual.name"/>
-                                        <span t-if="manual.body_snippet" class="d-block small text-muted text-truncate" t-out="manual.body_snippet"/>
+                                        <strong t-out="manual.name.replace('/', '/\u200b')"/>
+                                        <span t-if="manual.body_snippet" class="d-block small text-muted"><t t-out="manual.body_snippet[:160].replace('/', '/\u200b')"/><t t-if="len(manual.body_snippet) > 160">&#8230;</t></span>
                                     </a>
                                 </t>
                             </div>
