@@ -95,7 +95,9 @@ This section supersedes the `/my-username/home` addresses in the scenarios above
   `/<slug>/home` to `/<slug>`.
 - Reserved words (`home`, `admin`, `blog`, `my`, `privacy`, `manual`, `api`, and every other first
   segment of a platform route) cannot be claimed as a slug (`edge_routing.utils.RESERVED_SLUGS`).
-  A guard test fails when a new static platform route is missing from that list.
+  A guard test fails when a new static platform route is missing from that list, and the constraint also refuses any
+  first segment of a route registered in the running database (`edge_routing.utils.reserved_slug_words`), so a route added later
+  cannot be shadowed even before the list is updated.
 
 ## Owner Toolbar, Dashboard and Editor (2026-10-12)
 

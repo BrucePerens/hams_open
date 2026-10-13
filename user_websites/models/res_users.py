@@ -19,7 +19,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
-from odoo.addons.edge_routing.utils import RESERVED_SLUGS, language_slugs
+from odoo.addons.edge_routing.utils import reserved_slug_words
 from odoo.addons.user_websites.models.member_html import menu_pages
 import psycopg2
 from odoo.modules.registry import Registry
@@ -186,10 +186,7 @@ class ResUsers(models.Model):
     # [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
     def _check_reserved_slugs(self):
         for record in self:
-            if record.website_slug and (
-                record.website_slug.lower() in RESERVED_SLUGS
-                or record.website_slug.lower() in language_slugs(self.env)
-            ):
+            if record.website_slug and record.website_slug.lower() in reserved_slug_words(self.env):
                 raise ValidationError(
                     _("The slug '%s' is reserved and cannot be used.") % record.website_slug
                 )

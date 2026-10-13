@@ -125,6 +125,27 @@ RESERVED_SLUGS = {
     "terms",
     "websocket",
     "xmlrpc",
+    # Added 2026-10-13: first segments of platform routes that this list lacked (found by the guard test in
+    # a run with the hams_com modules loaded, and by listing hams_prod's live routing map). A member who
+    # had claimed one would own a site nobody could reach. reserved_slug_words() now also reads the live
+    # routing map, so a route added later is covered even before it is written here.
+    "calendar",
+    "ca",
+    "communications-history",
+    "ics",
+    "lead",
+    "legal",
+    "mailing",
+    "nic",
+    "pager",
+    "profile",
+    "r",
+    "request-invite",
+    "responsible-messages",
+    "silent-key-policy",
+    "simulated-band",
+    "view",
+    "webhook",
 }
 
 
@@ -179,3 +200,40 @@ def language_slugs(env):
         if url_code:
             words.add(url_code.lower())
     return words
+
+
+def routed_first_segments(env):
+    """Every fixed first path segment of a route registered in this database's routing map, lower-cased.
+
+    A static route wins over the /<slug> converter route, so a member or group that claimed one of
+    these words would own a site nobody could reach, and a platform route added next year would
+    silently shadow a slug already claimed. Reading the live routing map (the one the server routes
+    with) keeps RESERVED_SLUGS from having to be updated by hand for each new route.
+    """
+    # [@ANCHOR: edge_routing:routed_first_segments]
+    # Verified by [@ANCHOR: test_routed_first_segments_are_reserved]
+    if not env.registry.loaded:
+        # While modules are still installing the routing map would be built from the modules loaded so
+        # far and cached half-made; the data a module ships is covered by the fixed list and the tests.
+        return frozenset()
+    routing_map = env["ir.http"].routing_map()
+    # The map object is rebuilt whenever Odoo invalidates its routing cache, so a result kept on it
+    # is never stale.
+    words = getattr(routing_map, "_hams_first_segments", None)
+    if words is None:
+        words = set()
+        for rule in routing_map.iter_rules():
+            parts = [part for part in rule.rule.split("/") if part]
+            if parts and "<" not in parts[0] and parts[0] != "static":
+                words.add(parts[0].lower())
+        words = frozenset(words)
+        routing_map._hams_first_segments = words
+    return words
+
+
+def reserved_slug_words(env):
+    """Every word a member or group site slug may not be: the fixed list, the first segment of any
+    registered route, and Odoo's language prefixes."""
+    # [@ANCHOR: edge_routing:reserved_slug_words]
+    # Verified by [@ANCHOR: test_routed_first_segments_are_reserved]
+    return RESERVED_SLUGS | routed_first_segments(env) | language_slugs(env)
