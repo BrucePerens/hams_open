@@ -68,7 +68,9 @@ class TestCacheRulePush(HamsTransactionCase):
         self.mock_get.return_value = ("ok", {"id": "rs_1", "name": "Existing", "rules": []})
         ok, _msg = self._push()
         self.assertTrue(ok)
-        self.mock_get.assert_called_once_with(PHASE, "fake_token", "fake_zone")
+        # Once to plan, once to read the zone back after the write.
+        self.assertEqual(self.mock_get.call_count, 2)
+        self.mock_get.assert_called_with(PHASE, "fake_token", "fake_zone")
         ruleset_id, payload = self.mock_update.call_args[0][:2]
         self.assertEqual(ruleset_id, "rs_1")
         self.assertEqual(payload["phase"], PHASE)
@@ -89,7 +91,8 @@ class TestCacheRulePush(HamsTransactionCase):
         self.env["cloudflare.cache.rule"].create(
             {"name": "Static", "action": "cache", "edge_cache_ttl": 600}
         )
-        self.mock_get.return_value = ("absent", None)
+        # Absent when planned; the read-back after the create finds the ruleset (no unmanaged rules).
+        self.mock_get.side_effect = [("absent", None), ("ok", {"id": "rs_new", "name": "New", "rules": []})]
         ok, _msg = self._push()
         self.assertTrue(ok)
         self.mock_create.assert_called_once()
