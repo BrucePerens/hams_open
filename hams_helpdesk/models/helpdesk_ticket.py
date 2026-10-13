@@ -977,6 +977,9 @@ class HelpdeskTicket(models.Model):
         text, and a raw MIME message is not guaranteed to be valid UTF-8
         (attachments, non-ASCII bodies without a text-safe
         Content-Transfer-Encoding).
+
+        Returns ``{"status": "ingested"}``, or ``{"status": "unroutable", "detail": ...}`` for a
+        message addressed to no alias (not retryable; the daemon moves it to failed/).
         """
         # [@ANCHOR: COMM_helpdesk_mail_ingest]
         if self.env.user.login != "mail_ingest_service_internal":
@@ -984,7 +987,21 @@ class HelpdeskTicket(models.Model):
                 _("Only the mail-ingest service account may call this method.")
             )
         message_bytes = base64.b64decode(raw_email_bytes)
-        self.env["mail.thread"].sudo().with_company(self.env.company).message_process(None, message_bytes)  # burn-ignore-sudo: message_process() unconditionally sudo()s internally on any alias match (see mail_thread.py); identical, already user-verified reasoning as ses_webhook/controllers/webhook_api.py's matched-sender call.
+        try:
+            with self.env.cr.savepoint():
+                self.env["mail.thread"].sudo().with_company(self.env.company).message_process(None, message_bytes)  # burn-ignore-sudo: message_process() unconditionally sudo()s internally on any alias match (see mail_thread.py); identical, already user-verified reasoning as ses_webhook/controllers/webhook_api.py's matched-sender call.
+        except ValueError as e:
+            # Mail for a local part that has no alias (a typo, backscatter, spam to a random name) is deterministic:
+            # Odoo core's message_route() raises this bare ValueError before any message row exists, and retrying can
+            # never succeed. Raising it turned each such message into an HTTP 500 and an ERROR traceback in the Odoo
+            # log, three times per message (the daemon retries a failed call), ~180 messages in a week. Answer with a
+            # result the daemon can act on (it moves the object to failed/ without retrying). Anything else a
+            # ValueError means is a real fault and still raises.
+            if "No possible route found" not in str(e):
+                raise
+            _logger.info("Inbound email is not routable, not ingested: %s", e)
+            return {"status": "unroutable", "detail": str(e)[:500]}
+        return {"status": "ingested"}
 
     # ------------------------------------------------------------------
     # NCMEC mandatory-reporting workflow (docs/proposals/

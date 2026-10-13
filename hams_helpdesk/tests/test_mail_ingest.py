@@ -226,6 +226,37 @@ class TestMailIngest(HamsTransactionCase):
                 base64.b64encode(raw).decode("ascii")
             )
 
+    def test_03b_a_routable_message_reports_ingested(self):
+        # Tests [@ANCHOR: COMM_helpdesk_mail_ingest]
+        result = self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+            base64.b64encode(self._raw_email("support@hams.com", subject="Routable one")).decode("ascii")
+        )
+        self.assertEqual(result, {"status": "ingested"})
+
+    def test_03c_mail_to_a_local_part_with_no_alias_is_reported_unroutable_not_raised(self):
+        # Tests [@ANCHOR: COMM_helpdesk_mail_ingest]
+        # Production, 2026-10-05..12: spam and backscatter to random local parts made message_route() raise
+        # "No possible route found", which became an HTTP 500 and an ERROR traceback, three times per message.
+        # It is deterministic, so the entrypoint now answers with a status the daemon moves to failed/ on.
+        tickets_before = self.env["hams_helpdesk.ticket"].search_count([])
+        result = self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+            base64.b64encode(self._raw_email("no-such-alias-xyzzy@hams.com", subject="Nobody home")).decode("ascii")
+        )
+        self.assertEqual(result["status"], "unroutable")
+        self.assertIn("No possible route found", result["detail"])
+        self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), tickets_before)
+
+    def test_03d_a_valueerror_that_is_not_a_missing_route_still_raises(self):
+        # Tests [@ANCHOR: COMM_helpdesk_mail_ingest]
+        raw = self._raw_email("support@hams.com")
+        self.safe_patch_object(
+            type(self.env["mail.thread"]), "message_process", side_effect=ValueError("something else broke")
+        )
+        with self.assertRaises(ValueError):
+            self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+                base64.b64encode(raw).decode("ascii")
+            )
+
     # ------------------------------------------------------------------
     # Mail-ingestion spam filter on the direct admin@/support@ route
     # ------------------------------------------------------------------
