@@ -22,6 +22,11 @@ What it does:
     invalidation Redis rejects, so a run that bypasses this tool still fails fast (but only after that point);
   * after the run, exits non-zero if the output contains any Redis authentication failure.
 
+The run is the transient systemd unit `odoo-upgrade` (`systemctl is-active odoo-upgrade`). While it runs it holds odoo's HTTP port, so a
+`systemctl restart odoo` (or the tool's own `Restart=on-failure`) fails with "Address already in use" until it ends -- 8 failed starts on
+2026-10-12 23:07 when a restart was issued under a running upgrade. That collision is also the only thing that stops a full odoo from
+starting on top of tables being rewritten, so do not restart odoo until the unit is inactive.
+
 It does not stop or start odoo and does not set the pagerduty maintenance flag: wrap it in the usual
 `pagerduty-maintenance start` / `systemctl stop odoo` ... `systemctl start odoo` / `pagerduty-maintenance end`.
 """
@@ -34,6 +39,9 @@ import subprocess
 import sys
 
 SERVICE = "odoo"
+# A FIXED unit name (not systemd-run's random run-uNNN): a second upgrade cannot start while one runs (systemd refuses a duplicate
+# unit), and the deploy tooling can ask `systemctl is-active odoo-upgrade` before copying files or restarting odoo.
+UPGRADE_UNIT = "odoo-upgrade"
 ODOO_BIN = "/usr/bin/odoo"
 ODOO_CONF = "/etc/odoo/odoo.conf"
 AUTH_FAILURE = re.compile(r".*(Authentication required|invalid username-password|NOAUTH)", re.I)
@@ -92,7 +100,7 @@ def build_command(service, db, modules):
     """The systemd-run command line. Environment files are passed by PATH, so systemd (root) reads them."""
     if not service["user"]:
         raise UpgradeError(f"cannot determine the {SERVICE} service's User=")
-    cmd = ["systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec",
+    cmd = ["systemd-run", "--quiet", "--wait", "--pipe", "--collect", "--service-type=exec", f"--unit={UPGRADE_UNIT}",
            "-p", f"User={service['user']}"]
     if service["group"]:
         cmd += ["-p", f"Group={service['group']}"]
