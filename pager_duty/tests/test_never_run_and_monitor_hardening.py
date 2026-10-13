@@ -189,6 +189,10 @@ class TestMonitorHardening(HamsTransactionCase):
             self.assertTrue(ok)
             kwargs = pg.connect.call_args.kwargs
             self.assertEqual((kwargs["user"], kwargs["password"], kwargs["dbname"]), ("pager_monitor_ro", "p", "hams_prod"))
+            # An anomaly check runs its own SQL, which that CONNECT-only login could not read: it never gets the fallback.
+            generalized_monitor.execute_check({"type": "anomaly", "target": "postgres", "user": "mine", "dbname": "other", "critical": 0})
+            kwargs = pg.connect.call_args.kwargs
+            self.assertEqual((kwargs["user"], kwargs["password"], kwargs["dbname"]), ("mine", "", "other"))
             # A check that carries its own password keeps its own login.
             generalized_monitor.execute_check(
                 {"type": "postgres", "target": "postgres", "user": "mine", "password": "x", "dbname": "other"}
