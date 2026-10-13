@@ -156,3 +156,23 @@ def slugify(s, max_length=None):
         # dynamically could pass 0 and get the full untruncated slug back.
         s = s[:max_length].rstrip("-")
     return s
+
+
+def language_slugs(env):
+    """Every first path segment Odoo's own language handling owns: for each installed language its
+    code (en_US), its URL code (en, fr) and the bare language prefix (fr for fr_FR), lower-cased.
+
+    A site slug equal to one of these would shadow Odoo's /<lang>/... routing ("/en_US/" is the
+    home page in English), and a route that matched it would 404 the language prefix.
+    """
+    # [@ANCHOR: edge_routing:language_slugs]
+    # Verified by [@ANCHOR: test_language_codes_are_not_slugs]
+    words = set()
+    langs = env["res.lang"]
+    for code, _name in langs.get_installed():
+        words.add(code.lower())
+        words.add(code.split("_")[0].lower())
+        url_code = langs._get_data(code=code).url_code
+        if url_code:
+            words.add(url_code.lower())
+    return words

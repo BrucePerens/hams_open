@@ -8,7 +8,7 @@ from odoo.addons.user_websites.controllers.main import UserWebsitesController
 class UserWebsitesSEOController(UserWebsitesController):
 
     @http.route(
-        ["/<string:website_slug>/blog", "/<string:website_slug>/blog/"],
+        ["/<uwslug:website_slug>/blog", "/<uwslug:website_slug>/blog/"],
         type="http",
         auth="public",
         website=True,

@@ -172,7 +172,7 @@ class UserWebsitesController(http.Controller):
         )
 
     @http.route(
-        ["/<string:website_slug>/blog", "/<string:website_slug>/blog/page/<int:page>"],
+        ["/<uwslug:website_slug>/blog", "/<uwslug:website_slug>/blog/page/<int:page>"],
         type="http",
         auth="public",
         website=True,
@@ -276,7 +276,7 @@ class UserWebsitesController(http.Controller):
         return request.render("user_websites.blog_index", values)
 
     @http.route(
-        "/<string:website_slug>/home",
+        "/<uwslug:website_slug>/home",
         type="http",
         auth="public",
         website=True,
@@ -315,7 +315,7 @@ class UserWebsitesController(http.Controller):
         )
 
     @http.route(
-        "/<string:website_slug>",
+        "/<uwslug:website_slug>",
         type="http",
         auth="public",
         website=True,
@@ -403,7 +403,7 @@ class UserWebsitesController(http.Controller):
         return request.render("user_websites.placeholder_page", values)
 
     @http.route(
-        "/<string:website_slug>/create_site",
+        "/<uwslug:website_slug>/create_site",
         type="http",
         auth="user",
         methods=["POST"],
@@ -480,7 +480,7 @@ class UserWebsitesController(http.Controller):
         return request.redirect(page.url)
 
     @http.route(
-        "/<string:website_slug>/create_blog",
+        "/<uwslug:website_slug>/create_blog",
         type="http",
         auth="user",
         methods=["POST"],
@@ -534,7 +534,7 @@ class UserWebsitesController(http.Controller):
         return request.redirect(f"/{website_slug}/blog")
 
     @http.route(
-        "/<string:website_slug>/create_blog_post",
+        "/<uwslug:website_slug>/create_blog_post",
         type="http",
         auth="user",
         methods=["POST"],
@@ -1001,7 +1001,7 @@ class UserWebsitesController(http.Controller):
         )
 
     @http.route(
-        "/<string:website_slug>/subscribe",
+        "/<uwslug:website_slug>/subscribe",
         type="http",
         auth="user",
         methods=["POST"],
