@@ -7,8 +7,6 @@
 Bruce, 2026-10-13: "hams1 publishes two web sites for the user. One is bruce-perens-k6bp, and one
 is k6bp" and "The 'edit' and 'unpublish' button on bruce-perens-k6bp get a 404".
 """
-from unittest.mock import patch
-
 import odoo.http
 from odoo.exceptions import ValidationError
 from odoo.modules.module import load_script
@@ -160,10 +158,12 @@ class TestSiteSlugOneSite(HamsHttpCase):
         self.env["ir.config_parameter"].set_param("user_websites.slug_policy", value)
 
     def _callsign_identity(self):
-        """Stand-in for hams_com's callsign: the user's job-title field."""
-        return (
-            patch.object(ResUsers, "_slug_identity_fields", lambda s: ("function",)),
-            patch.object(ResUsers, "_slug_identity", lambda s, vals=None: (vals or {}).get("function") or (s.function if s else False)),
+        """Stand-in for hams_com's callsign: the user's job-title field (patched for this test)."""
+        self.safe_patch_object(ResUsers, "_slug_identity_fields", lambda s: ("function",))
+        self.safe_patch_object(
+            ResUsers,
+            "_slug_identity",
+            lambda s, vals=None: (vals or {}).get("function") or (s.function if s else False),
         )
 
     def test_07_open_source_default_slug_follows_the_name(self):
@@ -172,41 +172,40 @@ class TestSiteSlugOneSite(HamsHttpCase):
 
     def test_08_callsign_policy_one_slug_from_the_callsign(self):
         self._policy("callsign")
-        p1, p2 = self._callsign_identity()
-        with p1, p2:
-            user = self.env["res.users"].create(
-                {"name": "Pol User (K6PP)", "login": "poluser", "email": "p@example.com", "function": "K6PP"}
-            )
-            self.assertEqual(user.website_slug, "k6pp")
-            # A name change never makes a second slug.
-            user.write({"name": "Pol User Renamed"})
-            self.assertEqual(user.website_slug, "k6pp")
-            # An explicit name-style slug is overridden by the callsign.
-            user.write({"website_slug": "pol-user-k6pp"})
-            self.assertEqual(user.website_slug, "k6pp")
-            # Portable suffix: K6PP/P is k6pp-p.
-            other = self.env["res.users"].create(
-                {"name": "Portable", "login": "portable", "email": "po@example.com", "function": "K6PP/P"}
-            )
-            self.assertEqual(other.website_slug, "k6pp-p")
-            # Vanity change: new slug, the old one redirects, the pages follow.
-            _page(self.env, user, "/k6pp", "pol home")
-            user.write({"function": "W6PP"})
-            self.assertEqual(user.website_slug, "w6pp")
-            self.assertEqual(self.env["website.page"].search([("owner_user_id", "=", user.id)]).url, "/w6pp")
-            self.assertTrue(self.env["website.rewrite"].search([("url_from", "=", "/k6pp"), ("url_to", "=", "/w6pp")]))
+        self._callsign_identity()
+        user = self.env["res.users"].create(
+            {"name": "Pol User (K6PP)", "login": "poluser", "email": "p@example.com", "function": "K6PP"}
+        )
+        self.assertEqual(user.website_slug, "k6pp")
+        # A name change never makes a second slug.
+        user.write({"name": "Pol User Renamed"})
+        self.assertEqual(user.website_slug, "k6pp")
+        # An explicit name-style slug is overridden by the callsign.
+        user.write({"website_slug": "pol-user-k6pp"})
+        self.assertEqual(user.website_slug, "k6pp")
+        # Portable suffix: K6PP/P is k6pp-p.
+        other = self.env["res.users"].create(
+            {"name": "Portable", "login": "portable", "email": "po@example.com", "function": "K6PP/P"}
+        )
+        self.assertEqual(other.website_slug, "k6pp-p")
+        # Vanity change: new slug, the old one redirects, the pages follow.
+        _page(self.env, user, "/k6pp", "pol home")
+        user.write({"function": "W6PP"})
+        self.assertEqual(user.website_slug, "w6pp")
+        self.assertEqual(self.env["website.page"].search([("owner_user_id", "=", user.id)]).url, "/w6pp")
+        self.assertTrue(self.env["website.rewrite"].search([("url_from", "=", "/k6pp"), ("url_to", "=", "/w6pp")]))
 
     def test_09_callsign_policy_no_callsign_no_site_and_collisions_fail(self):
         self._policy("callsign")
-        p1, p2 = self._callsign_identity()
-        with p1, p2:
-            user = self.env["res.users"].create({"name": "No Callsign Yet", "login": "nocall", "email": "n@example.com"})
-            self.assertFalse(user.website_slug)
-            user.write({"name": "No Callsign Renamed"})
-            self.assertFalse(user.website_slug, "no name-derived slug under the callsign policy")
-            user.write({"function": "K6NN"})
-            self.assertEqual(user.website_slug, "k6nn")
-            with self.assertRaises(ValidationError):
-                self.env["res.users"].create(
-                    {"name": "Dup", "login": "dupcall", "email": "du@example.com", "function": "K6NN"}
-                )
+        self._callsign_identity()
+        user = self.env["res.users"].create({"name": "No Callsign Yet", "login": "nocall", "email": "n@example.com"})
+        self.assertFalse(user.website_slug)
+        user.write({"name": "No Callsign Renamed"})
+        self.assertFalse(user.website_slug, "no name-derived slug under the callsign policy")
+        user.write({"function": "K6NN"})
+        self.assertEqual(user.website_slug, "k6nn")
+        with self.assertRaises(ValidationError):
+            self.env["res.users"].create(
+                {"name": "Dup", "login": "dupcall", "email": "du@example.com", "function": "K6NN"}
+            )
+            self.env.flush_all()
