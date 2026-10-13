@@ -97,7 +97,7 @@ class CloudflareTunnel(models.Model):
 
     @api.constrains("catch_all_service")
     def _check_catch_all_service(self):
-        # [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+        # See [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
         for tunnel in self:
             if not CATCH_ALL_SERVICE_PATTERN.fullmatch(tunnel.catch_all_service or ""):
                 raise ValidationError(
@@ -186,7 +186,7 @@ class CloudflareTunnel(models.Model):
                 ingress.append({"hostname": f"ssh.{hostname}", "service": "ssh://localhost:22"})  # burn-ignore-cloudflared-ingress
 
         # Catch-all required by Cloudflare; the service is the tunnel's own setting
-        # [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
+        # See [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
         ingress.append({"service": self.catch_all_service})
         return ingress
 

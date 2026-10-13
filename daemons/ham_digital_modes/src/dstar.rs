@@ -232,7 +232,8 @@ mod tests {
         assert_eq!(dstar_checksum(b""), 0x0000);
     }
 
-    // Tests [@ANCHOR: dstar_checksum_append], [@ANCHOR: dstar_checksum_verify]
+    // Tests [@ANCHOR: dstar_checksum_append]
+    // Tests [@ANCHOR: dstar_checksum_verify]
     #[test]
     fn append_then_verify_round_trips_for_arbitrary_data() {
         for data in [&b""[..], b"K6BP", b"D-STAR routing header goes here!!!"] {
@@ -277,7 +278,8 @@ mod tests {
         }
     }
 
-    // Tests [@ANCHOR: DStarHeader::pack], [@ANCHOR: DStarHeader::unpack]
+    // Tests [@ANCHOR: DStarHeader::pack]
+    // Tests [@ANCHOR: DStarHeader::unpack]
     #[test]
     fn pack_then_unpack_round_trips_exactly() {
         let header = sample_header();

@@ -45,7 +45,8 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
         )
 
     def test_01_mcp_list_incidents_filters_by_status_and_severity(self):
-        # Tests [@ANCHOR: pager_duty:mcp_list_incidents] [@ANCHOR: pager_mcp_triage_tools]
+        # Tests [@ANCHOR: pager_duty:mcp_list_incidents]
+        # Tests [@ANCHOR: pager_mcp_triage_tools]
         other = (
             self.env["pager.incident"]
             .with_user(self.admin)
@@ -59,7 +60,8 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
         self.assertNotIn(other.id, ids)
 
     def test_02_mcp_get_incident_detail_includes_chatter(self):
-        # Tests [@ANCHOR: pager_duty:mcp_get_incident_detail] [@ANCHOR: pager_mcp_triage_tools]
+        # Tests [@ANCHOR: pager_duty:mcp_get_incident_detail]
+        # Tests [@ANCHOR: pager_mcp_triage_tools]
         self.incident.with_user(self.mcp_svc_uid).mcp_add_note("first note")
         detail = self.incident.with_user(self.mcp_svc_uid).mcp_get_incident_detail()
         self.assertEqual(detail["id"], self.incident.id)
@@ -99,7 +101,8 @@ class TestPagerMcpTriageModelMethods(HamsTransactionCase):
         self.assertNotIn("evil.example", last.body)
 
     def test_03_mcp_add_note_tags_the_message_as_ai_authored(self):
-        # Tests [@ANCHOR: pager_duty:mcp_add_note] [@ANCHOR: pager_mcp_triage_tools]
+        # Tests [@ANCHOR: pager_duty:mcp_add_note]
+        # Tests [@ANCHOR: pager_mcp_triage_tools]
         # Sorted by id, not date: mail.message.date is second-resolution
         # (same class of gotcha as pager.incident.last_occurred elsewhere
         # in this module -- see test_incident.py's own test_10), so the

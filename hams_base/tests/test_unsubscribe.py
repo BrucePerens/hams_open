@@ -132,7 +132,9 @@ class TestEmailPolicyPage(HamsHttpCase):
 
 
     def test_email_delivery_notice_shows_only_when_configured(self):
-        # Tests [@ANCHOR: hams_base:email_policy_template], [@ANCHOR: hams_base:unsubscribe_page_template], [@ANCHOR: hams_base:website_email_delivery_notice]
+        # Tests [@ANCHOR: hams_base:email_policy_template]
+        # Tests [@ANCHOR: hams_base:unsubscribe_page_template]
+        # Tests [@ANCHOR: hams_base:website_email_delivery_notice]
         # The default is no notice, on both pages.
         self.assertEqual(self.env["website"].email_delivery_notice(), "", "[!] DIAGNOSTIC FOR AI: the notice is empty by default (the open-source default).")
         for path in ("/email-policy", "/unsubscribe"):
