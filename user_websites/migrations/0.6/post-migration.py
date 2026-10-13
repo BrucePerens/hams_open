@@ -21,12 +21,12 @@ _logger = logging.getLogger(__name__)
 
 
 def migrate(cr, version):
-    collisions = []
-    for kind, table in (("member", "res_users"), ("group", "user_websites_group")):
-        cr.execute(  # audit-ignore-sql: table name is one of two literals above
-            "SELECT id, website_slug FROM " + table + " WHERE website_slug IS NOT NULL AND website_slug <> ''"
-        )
-        collisions += [(kind, row_id, slug) for row_id, slug in cr.fetchall() if slug.lower() in RESERVED_SLUGS]
+    cr.execute(  # audit-ignore-sql: static SQL, no parameters
+        "SELECT 'member', id, website_slug FROM res_users WHERE website_slug IS NOT NULL AND website_slug <> '' "
+        "UNION ALL "
+        "SELECT 'group', id, website_slug FROM user_websites_group WHERE website_slug IS NOT NULL AND website_slug <> ''"
+    )
+    collisions = [(kind, row_id, slug) for kind, row_id, slug in cr.fetchall() if slug.lower() in RESERVED_SLUGS]
     for kind, row_id, slug in collisions:
         _logger.error("user_websites: %s id %s has the reserved slug %r; its site is unreachable until renamed", kind, row_id, slug)
     _logger.info("user_websites: %d reserved-slug collisions found", len(collisions))

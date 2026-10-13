@@ -8,7 +8,6 @@ Bruce, 2026-10-12: "make all of the user websites be hams.com/<callsign> without
 """
 import importlib.util
 import os
-from unittest.mock import patch
 
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
@@ -148,17 +147,17 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         # A route added after the fixed list was written still cannot be shadowed: with the fixed list
         # emptied, the live routing map alone must refuse the words of core and platform routes.
         self.assertIn("web", routed_first_segments(self.env))
-        with patch.object(edge_utils, "RESERVED_SLUGS", frozenset()):
-            for word in ("web", "odoo"):
-                self.assertIn(word, reserved_slug_words(self.env))
-                with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
-                    self.owner.write({"website_slug": word})
-                    self.env.flush_all()
-                with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
-                    self.env["user.websites.group"].create({"name": "Shadow " + word, "website_slug": word})
-                    self.env.flush_all()
-            # A name that slugifies to a routed word gets another slug, not a refusal.
-            self.assertNotIn(self.env["res.users"]._generate_unique_slug("Web"), ("web", ""))
+        self.safe_patch_object(edge_utils, "RESERVED_SLUGS", frozenset())
+        for word in ("web", "odoo"):
+            self.assertIn(word, reserved_slug_words(self.env))
+            with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
+                self.owner.write({"website_slug": word})
+                self.env.flush_all()
+            with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
+                self.env["user.websites.group"].create({"name": "Shadow " + word, "website_slug": word})
+                self.env.flush_all()
+        # A name that slugifies to a routed word gets another slug, not a refusal.
+        self.assertNotIn(self.env["res.users"]._generate_unique_slug("Web"), ("web", ""))
         self.assertNotIn("homeurlowner", reserved_slug_words(self.env))
 
     def test_09c_migration_reports_reserved_slug_collisions(self):
