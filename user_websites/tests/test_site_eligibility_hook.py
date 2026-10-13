@@ -7,8 +7,6 @@
 Bruce, 2026-10-13: hams.com offers a website and blog only to a verified licensed amateur who has
 accepted the agreement and done the $1 verification. This module only provides the hook.
 """
-from unittest.mock import patch
-
 import odoo.http
 from odoo.tests import tagged
 
@@ -62,7 +60,7 @@ class TestSiteEligibilityHook(HamsHttpCase):
         )
 
     def _gaps(self, gaps):
-        return patch.object(ResUsers, "_website_eligibility_gaps", lambda s: list(gaps))
+        return self.safe_patch_object_cm(ResUsers, "_website_eligibility_gaps", lambda s: list(gaps))
 
     def test_01_open_source_default_everyone_is_eligible(self):
         self.assertEqual(self.owner._website_eligibility_gaps(), [])

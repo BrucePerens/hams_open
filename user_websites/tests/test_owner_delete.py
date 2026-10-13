@@ -25,17 +25,19 @@ class TestOwnerDelete(HamsHttpCase):
     def setUp(self):
         super().setUp()
         groups = [self.env.ref("base.group_portal").id, self.env.ref("user_websites.group_user_websites_user").id]
-        mk = lambda login: self.env["res.users"].create(  # noqa: E731
-            {
-                "name": login.title(),
-                "login": login,
-                "password": login,
-                "email": f"{login}@example.com",
-                "website_slug": login,
-                "group_ids": [(6, 0, groups)],
-            }
+        self.owner, self.other = self.env["res.users"].create(
+            [
+                {
+                    "name": login.title(),
+                    "login": login,
+                    "password": login,
+                    "email": f"{login}@example.com",
+                    "website_slug": login,
+                    "group_ids": [(6, 0, groups)],
+                }
+                for login in ("delowner", "delother")
+            ]
         )
-        self.owner, self.other = mk("delowner"), mk("delother")
         self.home = self._page("/delowner", "home body")
         self.about = self._page("/delowner/about", "about body")
         blog = self.env["blog.blog"].create({"name": "B", "owner_user_id": self.owner.id})
