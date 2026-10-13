@@ -88,7 +88,9 @@ class TestSiteEligibilityHook(HamsHttpCase):
         self.assertEqual(self.env["res.users"].reconcile_website_eligibility([self.owner.id]), {self.owner.id: "shown"})
         for rec in (self.home, self.about, self.mine_off, self.post, self.owner):
             rec.invalidate_recordset()
-        self.assertTrue(self.home.website_published and self.about.website_published and self.post.is_published)
+        self.assertTrue(self.home.website_published)
+        self.assertTrue(self.about.website_published)
+        self.assertTrue(self.post.is_published)
         self.assertFalse(self.mine_off.website_published, "never republished: the owner unpublished it")
         self.assertFalse(self.owner.website_ineligible)
         self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 200)
