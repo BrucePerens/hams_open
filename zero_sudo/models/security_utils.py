@@ -204,7 +204,19 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # multi-database deployment).
         uid = _SERVICE_UID_CACHE.get((self.env.cr.dbname, xml_id))
         try:
-            with self.env.cr.savepoint():
+            # [@ANCHOR: zero_sudo:COMM_get_service_uid_no_transaction_flush]
+            # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_no_transaction_flush]
+            # Flush through THIS env and open the savepoint without its own flush. The default
+            # `savepoint()` calls `cr.flush()` -> `Transaction.flush()`, which flushes the
+            # transaction's `default_env`; a public request has none yet while tenant_sites'
+            # `ir.http._match` resolves its service account, before authentication gives the
+            # request a user, so Odoo logged "Missing default_env, flushing as public user" and
+            # looked up base.public_user, on every public request (millions a day on hams1). The
+            # procedure below only SELECTs, so the one thing the flush buys is that a pending ORM
+            # write to the service user (active, groups) is visible to it, and `flush_all()` on
+            # this env does exactly that.
+            self.env.flush_all()
+            with self.env.cr.savepoint(flush=False):
                 if uid is not None:
                     self.env.cr.execute("SELECT zero_sudo_verify_service_uid(%s, %s)", (uid, xml_id))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_get_service_uid_sql_verify]  # fmt: skip
                 else:
