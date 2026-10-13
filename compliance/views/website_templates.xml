@@ -9,13 +9,15 @@
 
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
         <xpath expr="//div[hasclass('o_footer_copyright')]" position="inside">
-            <div class="col-sm text-center text-sm-start small">
+            <!-- QA pass 2026-10-13: the row sat directly in the full-width footer strip, so the links touched the
+                 left edge of the window (x=0) while everything above them is inset by the page container. -->
+            <div class="container"><div class="row"><div class="col-sm text-center text-sm-start small">
                 <a href="/privacy" class="me-3 o_tour_footer_privacy">Privacy Policy</a>
                 <a href="/cookie-policy" class="me-3 o_tour_footer_cookie_policy">Cookie Policy</a>
                 <a href="/terms" class="me-3 o_tour_footer_terms">Terms of Service</a>
                 <a href="/accessibility" class="me-3 o_tour_footer_accessibility">Accessibility Statement</a>
                 <a href="/my/privacy" class="me-3 o_tour_footer_my_privacy">My Privacy</a>
-            </div>
+            </div></div></div>
         </xpath>
     </template>
 </odoo>
