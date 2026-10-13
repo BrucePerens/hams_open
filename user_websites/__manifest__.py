@@ -51,6 +51,7 @@ This module enables:
         "views/content_violation_appeal_views.xml",
         # Templates
         "views/user_websites_templates.xml",
+        "views/owner_site_templates.xml",
         "views/website_layout.xml",
         "views/snippets.xml",
     ],
@@ -88,6 +89,8 @@ This module enables:
         "web.assets_frontend": [
             "user_websites/static/src/js/violation_report.js",
             "user_websites/static/src/js/toast_notifications.js",
+            "user_websites/static/src/js/rich_editor.js",
+            "user_websites/static/src/css/member_site.css",
         ],
         "web.assets_tests": [
             "user_websites/static/tests/tours/backend_views_tour.js",
@@ -97,6 +100,7 @@ This module enables:
             "user_websites/static/tests/tours/frontend_misc_tour.js",
             "user_websites/static/tests/tours/gdpr_privacy_tour.js",
             "user_websites/static/tests/tours/moderation_appeal_tour.js",
+            "user_websites/static/tests/tours/owner_site_tour.js",
             "user_websites/static/tests/tours/toast_notifications_tour.js",
             "user_websites/static/tests/tours/violation_report_tour.js",
         ],

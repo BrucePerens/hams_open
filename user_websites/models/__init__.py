@@ -13,4 +13,5 @@ from . import res_users
 from . import res_users_moderation
 from . import user_websites_groups
 from . import website_page
+from . import member_html
 from . import sql_views

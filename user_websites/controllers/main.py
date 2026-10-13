@@ -3,7 +3,8 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-from odoo.tools import html_sanitize
+from markupsafe import Markup
+from odoo.addons.user_websites.models.member_html import MAX_BODY_CHARS, sanitize_member_html
 import json
 import logging
 import os
@@ -61,6 +62,7 @@ def _report_violation_redirect_target(reported_url, query_param):
 
 
 def _serve_core_fallback():
+    # [@ANCHOR: user_websites:fn_main_serve_core_fallback]
     """Odoo's own page / redirect / attachment lookup for the request's path.
 
     The /<website_slug> route puts website_slug into request.params, and
@@ -320,6 +322,7 @@ class UserWebsitesController(http.Controller):
         sitemap=False,
     )
     # [@ANCHOR: user_websites:COMM_user_home_fallback]
+    # Verified by [@ANCHOR: test_member_site_home_url]
     def user_home_fallback(self, website_slug, **kwargs):
         """A member or group site's home, at /<slug>.
 
@@ -585,9 +588,18 @@ class UserWebsitesController(http.Controller):
         )
         blog = env_svc["blog.blog"].search(blog_domain, limit=1)
         if not blog:
-            # No blog container yet -- send them to the create_blog() flow instead of creating
-            # a post with nowhere to live.
-            return request.redirect(f"/{website_slug}/blog")
+            # No blog container yet. The owner toolbar's "New blog post" must work from any page
+            # of the site, so make the container here with create_blog()'s own values.
+            entity_name = profile_user.name if profile_user else profile_group.name
+            blog_vals = {
+                "name": f"{entity_name}'s Blog",
+                "website_id": request.website.id,
+            }
+            if profile_user:
+                blog_vals["owner_user_id"] = profile_user.id
+            elif profile_group:
+                blog_vals["user_websites_group_id"] = profile_group.id
+            blog = env_svc["blog.blog"].create(blog_vals)
 
         create_vals = {
             "name": "New Post",
@@ -680,9 +692,28 @@ class UserWebsitesController(http.Controller):
         if not post:
             return request.redirect("/my/home")
 
+        owner = post.owner_user_id or post.user_websites_group_id
+        if not owner:
+            return request.redirect("/my/home")
+        env_svc = request.env["zero_sudo.security.utils"]._get_service_env(
+            "user_websites.user_websites_service_account"
+        )
+        owner_svc = env_svc[owner._name].browse(owner.id)
+        clean_html, _hostile = sanitize_member_html(post.content)
         return request.render(
             "user_websites.blog_post_edit_form",
-            {"post": post, "default_title": "Edit Blog Post"},
+            {
+                "post": post,
+                "default_title": "Edit Blog Post",
+                "editor_initial": Markup(clean_html),
+                "site_slug": owner_svc.website_slug,
+                "profile_user": owner_svc if owner._name == "res.users" else env_svc["res.users"],
+                "profile_group": owner_svc if owner._name != "res.users" else env_svc["user.websites.group"],
+                "main_object": owner_svc,
+                "resolved_slug": owner_svc.website_slug,
+                "member_site": True,
+                "is_owner": True,
+            },
         )
 
     @http.route(
@@ -713,17 +744,23 @@ class UserWebsitesController(http.Controller):
                 f"/blog_post/edit/{post_id}?error=missing_fields"
             )
 
-        # [!] SECURITY: blog.post's own "content" field is declared sanitize=False
-        # (stock website_blog/models/website_blog.py) -- deliberately, so the generic
-        # website-builder snippet editor can write arbitrary rich markup. That also means
-        # Odoo's ORM does NOT auto-sanitize a write to this field the way a normal Html
-        # field would; a raw <textarea> POST (this route's only input) reaching write()
-        # unsanitized would be real, persistent stored XSS against every visitor of this
-        # post once published, not just the owner. html_sanitize() here, scoped to only
-        # this route's own write path, closes that without touching the field's own
-        # sanitize flag (which would also affect the separate website-builder write path,
-        # a broader change out of scope for this fix).
-        sanitized_content = html_sanitize(content) if content else content
+        # [!] SECURITY: blog.post's own "content" field is declared sanitize=False (stock
+        # website_blog), so the ORM does not sanitize a write to it. The post body is written
+        # through the strict allow-list sanitizer (models/member_html.py) in this request path
+        # whoever the caller is: the model-level sanitizer skips administrators and the service
+        # account, and an internal administrator who owns a site is exactly such a caller.
+        # Hostile markup (script, frames, event handlers, QWeb directives) is stripped and also
+        # filed as an automated content violation, as a hostile page body is.
+        if len(content or "") > MAX_BODY_CHARS:
+            return request.redirect(f"/blog_post/edit/{post_id}?error=too_long")
+        sanitized_content, hostile = sanitize_member_html(content)
+        if hostile:
+            hostile_vals = {"url": f"/blog_post/edit/{post_id}"}
+            if post.owner_user_id:
+                hostile_vals["owner_user_id"] = post.owner_user_id.id
+            elif post.user_websites_group_id:
+                hostile_vals["user_websites_group_id"] = post.user_websites_group_id.id
+            request.env["website.page"]._trigger_malicious_arch_violation(hostile_vals)
 
         # blog.post's own write() override (models/blog_post.py) is the real enforcement
         # boundary -- it re-checks ownership via check_access()/

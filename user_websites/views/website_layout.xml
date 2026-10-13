@@ -59,11 +59,12 @@
                 </t>
             </t>
 
-            <t t-if="is_user_content and not is_owner">
+            <t t-if="is_user_content and not is_owner and not member_site">
                 <div class="container mt-4 mb-4 border-top pt-3">
                     <t t-call="user_websites.report_violation_snippet"/>
                 </div>
             </t>
+            <t t-call="user_websites.member_site_footer"/>
         </xpath>
     </template>
 </odoo>

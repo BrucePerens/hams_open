@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+
+    <!-- The owner's toolbar: shown above the site's own navbar only to the person who owns the site
+         (or a member of the owning group), on every page of that site. [@ANCHOR: user_websites:UX_OWNER_TOOLBAR]
+         Verified by [@ANCHOR: test_owner_toolbar_visible_to_owner_only] -->
+    <template id="owner_toolbar" name="Site Owner Toolbar">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_toolbar_visible_to_owner_only] -->
+        <t t-set="uw_manage" t-value="'/my/site/%s' % resolved_slug"/>
+        <t t-set="uw_page" t-value="main_object if (main_object is not None and main_object._name == 'website.page') else None"/>
+        <t t-set="uw_post" t-value="main_object if (main_object is not None and main_object._name == 'blog.post') else None"/>
+        <div class="uw-owner-toolbar bg-dark text-white py-2" role="region" aria-label="Site owner tools">
+            <div class="container d-flex flex-wrap gap-2 align-items-center small">
+                <strong class="me-2"><i class="fa fa-wrench me-1" aria-hidden="true"/>Your site</strong>
+                <a class="btn btn-sm btn-light" t-att-href="uw_manage">Manage site</a>
+                <a class="btn btn-sm btn-light" t-attf-href="#{uw_manage}/page/new"><i class="fa fa-file-o me-1" aria-hidden="true"/>New page</a>
+                <form t-attf-action="/#{resolved_slug}/create_blog_post" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button type="submit" class="btn btn-sm btn-light"><i class="fa fa-pencil me-1" aria-hidden="true"/>New blog post</button>
+                </form>
+                <a t-if="uw_page" class="btn btn-sm btn-warning" t-attf-href="#{uw_manage}/page/#{uw_page.id}"><i class="fa fa-edit me-1" aria-hidden="true"/>Edit this page</a>
+                <a t-if="uw_post" class="btn btn-sm btn-warning" t-attf-href="/blog_post/edit/#{uw_post.id}"><i class="fa fa-edit me-1" aria-hidden="true"/>Edit this post</a>
+                <a t-if="not uw_page and not uw_post and page_type == 'home' and request.httprequest.path == '/' + resolved_slug" class="btn btn-sm btn-warning" t-attf-href="#{uw_manage}#pages">Create your home page</a>
+                <a class="btn btn-sm btn-outline-light" t-attf-href="#{uw_manage}#images"><i class="fa fa-picture-o me-1" aria-hidden="true"/>Images</a>
+                <a class="btn btn-sm btn-outline-light" href="/my/privacy"><i class="fa fa-shield me-1" aria-hidden="true"/>Privacy</a>
+                <form t-if="uw_page" t-attf-action="#{uw_manage}/page/#{uw_page.id}/publish" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="hidden" name="publish" t-att-value="'0' if uw_page.website_published else '1'"/>
+                    <input type="hidden" name="next" t-att-value="'%s/page/%s' % (uw_manage, uw_page.id)"/>
+                    <button type="submit" class="btn btn-sm btn-outline-light"><t t-out="'Unpublish this page' if uw_page.website_published else 'Publish this page'"/></button>
+                </form>
+                <a class="btn btn-sm btn-outline-light ms-lg-auto" t-attf-href="#{request.httprequest.path}?visitor=1"><i class="fa fa-eye me-1" aria-hidden="true"/>View as visitor</a>
+            </div>
+        </div>
+    </template>
+
+    <template id="owner_site_dashboard" name="Site Owner Dashboard">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_site_dashboard_lists_content] -->
+        <!-- [@ANCHOR: user_websites:UX_OWNER_DASHBOARD] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-4">
+                <h1 class="h2">Manage <t t-out="site_slug.upper()"/></h1>
+                <p class="text-muted">Everything you publish is kept. "Unpublish" hides it from visitors; it is never deleted.
+                    <a href="/user-websites/documentation#UX_OWNER_DASHBOARD" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/><span class="visually-hidden">Help</span></a></p>
+                <div t-if="saved" class="alert alert-success" role="status">Saved.</div>
+                <div t-if="error == 'image'" class="alert alert-danger" role="alert">That image could not be added. Use a JPEG, PNG, GIF or WebP file under <t t-out="max_image_mb"/> MB.</div>
+
+                <section id="pages" class="mb-5" aria-labelledby="uw_pages_h">
+                    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+                        <h2 id="uw_pages_h" class="h4 mb-0">Pages</h2>
+                        <a class="btn btn-primary" t-attf-href="/my/site/#{site_slug}/page/new"><i class="fa fa-plus me-1" aria-hidden="true"/>New page</a>
+                    </div>
+                    <form t-if="not has_home" t-attf-action="/#{site_slug}/create_site" method="post" class="alert alert-info d-flex flex-wrap gap-2 align-items-center">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <span class="me-auto">Your home page (<code t-out="home_url"/>) has not been created yet.</span>
+                        <button type="submit" class="btn btn-primary btn-sm">Create your home page</button>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <caption class="visually-hidden">Your pages</caption>
+                            <thead><tr><th scope="col">Page</th><th scope="col">Address</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+                            <tbody>
+                                <tr t-foreach="pages" t-as="p">
+                                    <td t-out="p.name"/>
+                                    <td><a t-att-href="p.url"><code t-out="p.url"/></a></td>
+                                    <td><span t-attf-class="badge #{'bg-success' if p.website_published else 'bg-warning text-dark'}" t-out="'Published' if p.website_published else 'Unpublished'"/></td>
+                                    <td class="text-nowrap">
+                                        <a class="btn btn-sm btn-outline-secondary" t-attf-href="/my/site/#{site_slug}/page/#{p.id}">Edit<span class="visually-hidden"> <t t-out="p.name"/></span></a>
+                                        <form t-attf-action="/my/site/#{site_slug}/page/#{p.id}/publish" method="post" class="d-inline">
+                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                            <input type="hidden" name="publish" t-att-value="'0' if p.website_published else '1'"/>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-out="'Unpublish' if p.website_published else 'Publish'"/><span class="visually-hidden"> <t t-out="p.name"/></span></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                <tr t-if="not pages"><td colspan="4" class="text-muted">No pages yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="posts" class="mb-5" aria-labelledby="uw_posts_h">
+                    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+                        <h2 id="uw_posts_h" class="h4 mb-0">Blog posts</h2>
+                        <form t-attf-action="/#{site_slug}/create_blog_post" method="post">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <button type="submit" class="btn btn-primary"><i class="fa fa-plus me-1" aria-hidden="true"/>New blog post</button>
+                        </form>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <caption class="visually-hidden">Your blog posts</caption>
+                            <thead><tr><th scope="col">Title</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+                            <tbody>
+                                <tr t-foreach="posts" t-as="post">
+                                    <td t-out="post.name"/>
+                                    <td><span t-attf-class="badge #{'bg-success' if post.is_published else 'bg-warning text-dark'}" t-out="'Published' if post.is_published else 'Draft'"/></td>
+                                    <td class="text-nowrap">
+                                        <a class="btn btn-sm btn-outline-secondary" t-attf-href="/blog_post/edit/#{post.id}">Edit<span class="visually-hidden"> <t t-out="post.name"/></span></a>
+                                        <a class="btn btn-sm btn-outline-secondary" t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}">View<span class="visually-hidden"> <t t-out="post.name"/></span></a>
+                                        <form t-attf-action="/my/site/#{site_slug}/post/#{post.id}/publish" method="post" class="d-inline">
+                                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                            <input type="hidden" name="publish" t-att-value="'0' if post.is_published else '1'"/>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-out="'Unpublish' if post.is_published else 'Publish'"/><span class="visually-hidden"> <t t-out="post.name"/></span></button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                <tr t-if="not posts"><td colspan="3" class="text-muted">No blog posts yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section id="images" class="mb-5" aria-labelledby="uw_images_h">
+                    <h2 id="uw_images_h" class="h4">Images</h2>
+                    <p class="text-muted">JPEG, PNG, GIF or WebP, up to <t t-out="max_image_mb"/> MB each, <t t-out="max_images"/> per site. In the editor, use the picture button to add one to a page or post.</p>
+                    <form t-attf-action="/my/site/#{site_slug}/image" method="post" enctype="multipart/form-data" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <div class="col-12 col-md">
+                            <label for="uw_image_file" class="form-label">Add an image</label>
+                            <input id="uw_image_file" class="form-control" type="file" name="ufile" accept="image/jpeg,image/png,image/gif,image/webp" required="required"/>
+                        </div>
+                        <div class="col-auto"><button type="submit" class="btn btn-outline-primary">Upload</button></div>
+                    </form>
+                    <div class="d-flex flex-wrap gap-3">
+                        <figure t-foreach="images" t-as="img" class="m-0 text-center">
+                            <img t-attf-src="/web/image/#{img.id}" alt="" style="max-width:120px;max-height:90px" class="border rounded"/>
+                            <figcaption class="small"><code t-attf-title="Address of this image">/web/image/<t t-out="img.id"/></code></figcaption>
+                        </figure>
+                        <p t-if="not images" class="text-muted">No images yet.</p>
+                    </div>
+                </section>
+
+                <section id="settings" aria-labelledby="uw_settings_h">
+                    <h2 id="uw_settings_h" class="h4">Settings and privacy</h2>
+                    <ul>
+                        <li><a href="/my/privacy">Privacy and data: export your content or erase your account</a></li>
+                        <li><a t-attf-href="/#{site_slug}?visitor=1">View your site as a visitor</a></li>
+                        <li><a href="/user-websites/documentation">Help for member sites</a></li>
+                    </ul>
+                </section>
+            </div>
+        </t>
+    </template>
+
+    <template id="owner_page_edit" name="Site Owner Page Editor">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_page_editor_renders_wysiwyg] -->
+        <!-- [@ANCHOR: user_websites:UX_OWNER_PAGE_EDITOR] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-4">
+                <h1 class="h2" t-out="'Edit page' if page else 'New page'"/>
+                <div t-if="saved" class="alert alert-success" role="status">Saved.</div>
+                <div t-if="error" class="alert alert-danger" role="alert">
+                    <t t-if="error == 'title'">Please give the page a title of at most 120 characters.</t>
+                    <t t-elif="error == 'address'">That page address is not allowed. Use lower-case letters, digits and hyphens, and avoid words the site already uses (home, blog, and so on).</t>
+                    <t t-elif="error == 'exists'">You already have a page at that address. Choose another.</t>
+                    <t t-elif="error == 'too_long'">That page is too long. Shorten it and save again.</t>
+                    <t t-elif="error == 'not_editable'">This page was built with the website builder and cannot be changed here.</t>
+                    <t t-else="">The page could not be saved.</t>
+                </div>
+                <div t-if="not can_edit_body" class="alert alert-warning" role="status">This page was built with the website builder's advanced blocks, so it cannot be edited here. You can still publish or unpublish it from the dashboard.</div>
+                <form t-if="can_edit_body" t-attf-action="/my/site/#{site_slug}/page/save" method="post" class="uw-editor-form card card-body shadow-sm">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="hidden" name="page_id" t-att-value="page.id if page else ''"/>
+                    <div class="mb-3">
+                        <label for="uw_title" class="form-label fw-bold">Title</label>
+                        <input id="uw_title" type="text" class="form-control" name="title" required="required" maxlength="120" t-att-value="title"/>
+                    </div>
+                    <div class="mb-3" t-if="not is_home">
+                        <label for="uw_page_slug" class="form-label fw-bold">Page address</label>
+                        <div class="input-group">
+                            <span class="input-group-text">/<t t-out="site_slug"/>/</span>
+                            <input id="uw_page_slug" type="text" class="form-control" name="page_slug" maxlength="60" pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?" t-att-value="page_slug" t-att-readonly="'readonly' if page else None" aria-describedby="uw_slug_help" placeholder="made from the title if left empty"/>
+                        </div>
+                        <div id="uw_slug_help" class="form-text">Lower-case letters, digits and hyphens. It cannot be changed after the page is created.</div>
+                    </div>
+                    <t t-call="user_websites.rich_editor">
+                        <t t-set="editor_name" t-value="'content'"/>
+                        <t t-set="editor_label" t-value="'Page body'"/>
+                        <t t-set="editor_html" t-value="body"/>
+                        <t t-set="upload_url" t-value="'/my/site/%s/image' % site_slug"/>
+                    </t>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="uw_published" name="is_published" t-att-checked="'checked' if published else None"/>
+                        <label for="uw_published" class="form-check-label fw-bold">Published (visible to the public)</label>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="submit" class="btn btn-success">Save</button>
+                        <a t-attf-href="/my/site/#{site_slug}" class="btn btn-outline-secondary">Back to my site</a>
+                        <a t-if="page" t-att-href="page.url" class="btn btn-outline-secondary">View page</a>
+                    </div>
+                </form>
+            </div>
+        </t>
+    </template>
+</odoo>

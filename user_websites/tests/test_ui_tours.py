@@ -305,3 +305,15 @@ class TestUserWebsitesUITours(RealTransactionCase):
         finally:
             page.unlink()
             self.env.cr.commit()
+
+    def test_12_owner_writes_and_publishes_a_post(self):
+        # Tests [@ANCHOR: test_tour_owner_site]
+        # The owner opens their own site, starts a post from the owner toolbar, writes it in the
+        # WYSIWYG editor (no markup typed), publishes it and sees it on the site.
+        self.env.cr.commit()
+        self.start_tour("/touruser?debug=1", "owner_site_tour", login=self.user_test.login)
+        post = self.env["blog.post"].search([("owner_user_id", "=", self.user_test.id)])
+        self.assertEqual(len(post), 1)
+        self.assertTrue(post.is_published)
+        self.assertEqual(post.name, "Tour Post Title")
+        self.assertIn("<b>Written without markup", post.content)

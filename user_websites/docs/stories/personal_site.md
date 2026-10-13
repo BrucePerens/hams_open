@@ -96,3 +96,37 @@ This section supersedes the `/my-username/home` addresses in the scenarios above
 - Reserved words (`home`, `admin`, `blog`, `my`, `privacy`, `manual`, `api`, and every other first
   segment of a platform route) cannot be claimed as a slug (`edge_routing.utils.RESERVED_SLUGS`).
   A guard test fails when a new static platform route is missing from that list.
+
+## Owner Toolbar, Dashboard and Editor (2026-10-12)
+
+Bruce, owner and administrator, on his own K6BP site: "I don't see any interface for creating anything."
+The models and routes existed, but nothing on the site led to them, and the site wore hams.com's own menu and
+footer. This section adds the owner's interface and the member site's own layout.
+
+- **Given** I am signed in and I open any page of my own site (a member of the owning group, for a group site),
+  **then** an owner toolbar sits above the site menu ([@ANCHOR: user_websites:UX_OWNER_TOOLBAR]): Manage site,
+  New page, New blog post, Edit this page / post, Images, Privacy, Publish / Unpublish this page, and View as
+  visitor. This holds for internal users, an administrator included, on their own slug only. Visitors and other
+  members never see it. Verified by `[@ANCHOR: test_owner_toolbar_visible_to_owner_only]`.
+- **When** I open Manage site, **then** the dashboard (`/my/site/<slug>`,
+  [@ANCHOR: user_websites:UX_OWNER_DASHBOARD]) lists my pages, blog posts and images with Edit, Publish and
+  Unpublish. Unpublish hides and keeps; nothing is deleted. Verified by
+  `[@ANCHOR: test_owner_site_dashboard_lists_content]`.
+- **When** I create or edit a page ([@ANCHOR: user_websites:UX_OWNER_PAGE_EDITOR]) or a post
+  ([@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM]), **then** I write in a WYSIWYG editor
+  ([@ANCHOR: user_websites:UX_RICH_EDITOR]) with headings, bold, italic, underline, code, lists, quotes,
+  alignment, links, images, undo and redo, and paste cleanup. I never type markup. Verified by
+  `[@ANCHOR: test_tour_owner_site]` and `[@ANCHOR: test_owner_page_editor_renders_wysiwyg]`.
+- **And** the server keeps only allow-listed markup whoever I am, including an internal administrator
+  ([@ANCHOR: user_websites:member_html_sanitize]); hostile markup is stripped and reported through the
+  content-violation pipeline. Verified by `[@ANCHOR: test_member_html_sanitize_strips_hostile_markup]`.
+- **And** images are JPEG, PNG, GIF or WebP, at most 2 MB, 100 per site, stored as public attachments of my
+  account ([@ANCHOR: user_websites:COMM_owner_image_upload]); writes are rate limited per user
+  ([@ANCHOR: user_websites:owner_rate_limit]). Verified by `[@ANCHOR: test_owner_image_upload_rules]` and
+  `[@ANCHOR: test_owner_write_rate_limited]`.
+- **And** page addresses are `/<slug>/<address>` and cannot be a word the site itself uses
+  ([@ANCHOR: user_websites:member_page_reserved_subpaths]). Verified by `[@ANCHOR: test_member_page_slug_reserved]`.
+- **Then** a member site shows its own header (callsign, name, menu of its published pages and blog) and a small
+  footer (callsign, a link to hams.com, Report, Privacy, Terms), and none of hams.com's menu, banners or footer
+  ([@ANCHOR: user_websites:member_site_standalone_layout]). Verified by
+  `[@ANCHOR: test_member_site_has_no_hams_chrome]`.

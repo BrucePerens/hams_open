@@ -20,6 +20,7 @@ from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
+from odoo.addons.user_websites.models.member_html import menu_pages
 import psycopg2
 from odoo.modules.registry import Registry
 
@@ -174,6 +175,12 @@ class ResUsers(models.Model):
         index="trigram",
         help="The URL-friendly identifier for the user's site. Alphanumeric and hyphens only.",
     )
+
+    def _user_websites_menu_pages(self):
+        # [@ANCHOR: user_websites:fn_users_user_websites_menu_pages]
+        """The site's own published pages for its navbar (see member_html.menu_pages)."""
+        self.ensure_one()
+        return menu_pages(self.env, "owner_user_id", self.id, self.website_slug) if self.website_slug else []
 
     @api.constrains("website_slug")
     # [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
@@ -867,6 +874,18 @@ class ResUsers(models.Model):
                 break
             if not os.environ.get("ODOO_DISABLE_SLEEPS"):
                 time.sleep(0.1)  # audit-ignore-sleep
+
+        # Images the member uploaded with the site editor (controllers/owner_site.py): at most
+        # MAX_IMAGES_PER_SITE per account, so one batch.
+        images = env_svc["ir.attachment"].search(
+            [
+                ("res_model", "=", "res.users"),
+                ("res_id", "=", self.id),
+                ("description", "=", "user_websites site image"),
+            ],
+            limit=500,
+        )
+        images.unlink()  # audit-ignore-gdpr-hand-rolled-unlink: bounded at 100 rows per account by the upload limit
 
         # ADR-0001: All service account mutations must include appropriate context
         self.with_env(env_svc).write({"privacy_show_in_directory": False})

@@ -37,3 +37,16 @@ Steps 2 to 8 of "Onboarding and Creation" now use `/alice` rather than `/alice/h
 the "Create Your Home" button and the finished home page are all at `/alice`. `/alice/home` is a
 permanent redirect to `/alice` ([@ANCHOR: user_websites:COMM_user_home_legacy_redirect]). Verified by
 `[@ANCHOR: test_member_site_home_url]`.
+
+## Path: Writing Your First Page and Post (2026-10-12)
+
+1. **Sign in and open your site**: `/alice`. The owner toolbar appears above the site menu
+   ([@ANCHOR: user_websites:UX_OWNER_TOOLBAR]).
+2. **Home page**: if it does not exist, "Create Your Home" makes it; "Edit this page" then opens the editor.
+3. **New page**: toolbar, New page. Give a title, optionally an address, write in the editor, tick Published, Save
+   ([@ANCHOR: user_websites:COMM_owner_page_save]).
+4. **New blog post**: toolbar, New blog post creates the blog container if needed and opens the post editor
+   ([@ANCHOR: user_websites:COMM_create_blog_post]). Verified by `[@ANCHOR: test_tour_owner_site]`.
+5. **Manage**: toolbar, Manage site lists everything; Unpublish hides a page or post and keeps it
+   ([@ANCHOR: user_websites:UX_OWNER_DASHBOARD]).
+6. **See what visitors see**: toolbar, View as visitor.

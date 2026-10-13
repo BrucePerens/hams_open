@@ -12,10 +12,10 @@
             <h2 id="UX_CREATE_SITE" data-trace="[@ANCHOR: user_websites:UX_CREATE_SITE]" class="fw-bold"><i class="fa fa-magic text-primary me-2" aria-hidden="true"></i> Creating Your Site</h2>
             <p>Every user is entitled to a personal website. To get started:</p>
             <ol>
-                <li>Click on your profile name or avatar in the main navigation menu.</li>
-                <li>If your site isn't set up yet, you'll see a <strong>"Create Your Site"</strong> button.</li>
-                <li>Clicking this button will initialize your home page with a default layout.</li>
-                <li>Use the <strong>"Edit"</strong> button in the top right to start adding content!</li>
+                <li>Open your site at <code>hams.com/your-callsign</code> (your website name), or choose <strong>My Website</strong> in the menu.</li>
+                <li>If your home page isn't set up yet, you'll see a <strong>"Create Your Home"</strong> button.</li>
+                <li>Clicking this button creates your home page with a default layout.</li>
+                <li>Use the <strong>owner toolbar</strong> across the top of your site (see below) to write your home page and add more pages and posts.</li>
             </ol>
             <!-- [@ANCHOR: UX_CREATE_SITE] -->
 
@@ -61,6 +61,38 @@
             <!-- Tests [@ANCHOR: user_websites:test_subscription_creation] -->
 
             <!-- Tests [@ANCHOR: user_websites:test_unsubscribe_secret] -->
+        </section>
+
+        <section id="owner-tools" class="mb-5">
+            <h2 id="UX_OWNER_DASHBOARD" data-trace="[@ANCHOR: user_websites:UX_OWNER_DASHBOARD]" class="fw-bold"><i class="fa fa-wrench text-primary me-2" aria-hidden="true"></i> Your Site Tools: Toolbar, Dashboard and Editor</h2>
+            <p>Your site is its own small website at <code>hams.com/your-callsign</code>, with your name and menu on top and a plain footer. Only you see the tools described here.</p>
+            <h3 id="UX_OWNER_TOOLBAR" data-trace="[@ANCHOR: user_websites:UX_OWNER_TOOLBAR]" class="fw-bold">The owner toolbar</h3>
+            <p>When you are signed in and look at any page of your own site, a dark bar appears above the site menu:</p>
+            <ul>
+                <li><strong>Manage site</strong>: your dashboard.</li>
+                <li><strong>New page</strong> and <strong>New blog post</strong>: open the editor on something new.</li>
+                <li><strong>Edit this page</strong> / <strong>Edit this post</strong>: edit what you are looking at.</li>
+                <li><strong>Images</strong>, <strong>Privacy</strong>: your pictures, and your data export and erasure page.</li>
+                <li><strong>Publish this page / Unpublish this page</strong>.</li>
+                <li><strong>View as visitor</strong>: hides the bar so you can see the site as everyone else does. Reload without <code>?visitor=1</code> to bring it back.</li>
+            </ul>
+            <h3 id="UX_OWNER_PAGE_EDITOR" data-trace="[@ANCHOR: user_websites:UX_OWNER_PAGE_EDITOR]" class="fw-bold">The dashboard and the page editor</h3>
+            <p>Choose <strong>Manage site</strong> (or <strong>My Website</strong> in the main menu) to list your pages, blog posts and images, with Edit, Publish and Unpublish for each. Nothing is deleted: <em>Unpublish</em> hides a page or post from visitors and keeps it, and you can publish it again at any time.</p>
+            <h3 id="UX_RICH_EDITOR" data-trace="[@ANCHOR: user_websites:UX_RICH_EDITOR]" class="fw-bold">The editor</h3>
+            <p>You write in the page itself, as you would in a word processor, and never see any code. The toolbar above the writing area has headings, bold, italic, underline, inline code, bulleted and numbered lists, quotes, code blocks, left/center/right alignment, links, pictures, undo and redo. Text you paste is cleaned of other programs' fonts and colours. Every button has a text label for screen readers, and the writing area can be reached with the Tab key.</p>
+            <ul>
+                <li><strong>Links</strong> start with <code>http://</code>, <code>https://</code>, <code>mailto:</code> or <code>/</code>.</li>
+                <li><strong>Pictures</strong> are JPEG, PNG, GIF or WebP files of at most 2 MB, up to 100 per site. Pictures hosted elsewhere cannot be used.</li>
+                <li>A page has a <strong>title</strong>, an <strong>address</strong> (<code>/your-callsign/address</code>; letters, digits and hyphens, fixed once the page exists) and a <strong>Published</strong> box. Addresses such as <code>home</code> and <code>blog</code> are used by the site itself and cannot be chosen.</li>
+                <li>Your pages appear in your site's menu once published.</li>
+            </ul>
+            <p>Everything you save is checked by the server. Scripts, frames and similar are removed, and an attempt to include them is reported to the moderators like any other violation.</p>
+            <h3>Your address</h3>
+            <p>Your home page is <code>hams.com/your-callsign</code>. Older links of the form <code>hams.com/your-callsign/home</code> still work: they are redirected.</p>
+            <!-- [@ANCHOR: UX_OWNER_DASHBOARD] -->
+            <!-- Tests [@ANCHOR: user_websites:test_owner_site_dashboard_lists_content] -->
+            <!-- Tests [@ANCHOR: user_websites:test_owner_toolbar_visible_to_owner_only] -->
+            <!-- Tests [@ANCHOR: user_websites:test_tour_owner_site] -->
         </section>
 
         <section id="directory" class="mb-5">
