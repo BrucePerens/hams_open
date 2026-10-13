@@ -18,7 +18,7 @@ _logger = logging.getLogger(__name__)
 # "new" (the stage field is a clickable statusbar) to recover a false
 # positive.
 _SPAM_QUARANTINE_STAGE = "spam"
-# Only incidents created from a real inbound email carry this prefix:
+# Only incidents created from a real inbound email carry an `email` or `<alias>-email` prefix (see _is_inbound_email_source):
 # incident.py's own message_new() sets data["source"] = f"{source_prefix}:
 # {sender}", source_prefix defaulting to "email" -- that assignment is
 # tagged in incident.py, see [@ANCHOR: pager_incident_message_new].
@@ -26,7 +26,22 @@ _SPAM_QUARANTINE_STAGE = "spam"
 # (e.g. "test_source", a pager_check's own check name) -- gating on this
 # prefix keeps the spam heuristic scoped to genuine inbound mail only, so
 # it can never misclassify a monitoring signal.
-_EMAIL_SOURCE_PREFIX = "email:"
+
+
+# [@ANCHOR: pager_duty:is_inbound_email_source]
+def _is_inbound_email_source(source):
+    """True for an incident that came from inbound mail.
+
+    The mail aliases set `incident_source_prefix` in their `alias_defaults` (`info-email` for info@,
+    `postmaster-email` for postmaster@; `pager_duty/hooks.py` and `data/mail_alias_data.xml`), so the
+    real sources read `info-email:<sender>`, not `email:<sender>`. Matching only `email:` left the filter
+    inert in production (tickets 6, 9, 10, 16, 48 and 49 of hams_prod, spam subjects included, stayed in
+    `new`). The prefix before the first colon must be `email` or end in `-email`.
+    """
+    prefix, separator, _sender = (source or "").partition(":")
+    if not separator:
+        return False
+    return prefix == "email" or prefix.endswith("-email")
 
 
 class PagerDutyIncidentTicketAdapter(models.Model):
@@ -125,7 +140,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         spam_reasons_by_incident = {}
         for incident in incidents_to_process:
             spam_reasons = []
-            if incident.source and incident.source.startswith(_EMAIL_SOURCE_PREFIX):
+            if _is_inbound_email_source(incident.source):
                 spam_reasons = detect_inbound_spam_signals(
                     subject=incident.name,
                     body_html=incident.description,

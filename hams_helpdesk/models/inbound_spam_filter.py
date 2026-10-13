@@ -136,7 +136,13 @@ def _domain_matches_brand(hostname, real_domains):
 def _extract_link_domains(body_html):
     domains = set()
     for href in _HREF_RE.findall(body_html or ""):
-        hostname = urlsplit(href).hostname
+        # urlsplit() raises ValueError for a malformed host such as "http://[x/" ("Invalid IPv6 URL").
+        # A hostile message is exactly the input this module must tolerate, and it runs inside the
+        # mail ingestion path, so one bad href must not stop the ticket from being created.
+        try:
+            hostname = urlsplit(href).hostname
+        except ValueError:
+            continue
         if hostname:
             domains.add(hostname.lower())
     return domains

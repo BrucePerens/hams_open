@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
+from odoo.addons.pager_duty.models.incident_ticket_adapter import _is_inbound_email_source
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 
@@ -205,6 +206,34 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             any("Flagged as likely spam/phishing" in (m.body or "") for m in messages),
             "The incident's own chatter must record why it was flagged, for review.",
         )
+
+    def test_04b_alias_prefixed_sources_are_inbound_email(self):
+        """Tests [@ANCHOR: pager_duty:is_inbound_email_source]: The production aliases name their sources `info-email:` and `postmaster-email:` (alias_defaults
+        `incident_source_prefix`), not `email:`; the filter must see those as inbound mail too. Monitoring
+        sources and look-alikes must not be."""
+        for source in ("email:a@b.c", "info-email:a <a@b.c>", "postmaster-email:a@b.c"):
+            self.assertTrue(_is_inbound_email_source(source), source)
+        for source in (False, "", "Systemd Failed Services Tracker", "test_source", "notemail:x", "email", "xinfo-emailer:x"):
+            self.assertFalse(_is_inbound_email_source(source), source)
+
+    def test_04c_info_alias_spam_incident_is_quarantined(self):
+        """Production shape: source `info-email:` (ticket 49 of hams_prod, 'high-intent buyer leads')."""
+        self.env["ir.config_parameter"].set_param("pager_duty.helpdesk_model", "hams_helpdesk.ticket")
+        manager = self.on_duty_user
+        self.safe_patch_object(
+            type(self.env["calendar.event"]), "get_current_on_duty_admin", lambda self: manager, create=True
+        )
+        incident = self.env["pager.incident"].create(
+            {
+                "name": "Are you missing out on high-intent buyer leads?",
+                "source": 'info-email:"Lead Gen" <sales@example.net>',
+                "severity": "low",
+                "description": "<p>We found buyers for you.</p>",
+            }
+        )
+        incident.action_generate_helpdesk_ticket()
+        ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
+        self.assertEqual(ticket.stage, "spam")
 
     def test_05_legitimate_email_incident_is_not_quarantined(self):
         """A genuine human inquiry (same shape as a real info@hams.com
