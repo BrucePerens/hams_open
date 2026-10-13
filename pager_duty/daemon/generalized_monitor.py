@@ -892,10 +892,11 @@ def execute_check(check, client=None):
         dbname = parse_env(check.get("dbname", "odoo"))
         user = parse_env(check.get("user", "odoo"))
         password = parse_env(check.get("password", ""))
-        if not password and os.environ.get("DB_USER") and os.environ.get("DB_PASS"):
+        if ctype == "postgres" and not password and os.environ.get("DB_USER") and os.environ.get("DB_PASS"):
             # A check with no password of its own logs in with the login the unit's environment file supplies (DB_USER /
             # DB_PASS / DB_NAME: on hams1 keys/pager_monitor_db.env, a CONNECT-only role). PostgreSQL requires a password
             # (scram) on TCP, so "postgres" with none can never pass; the secret stays in a 0600 file, never in the database.
+            # Only the ping: that login can connect and nothing more, so an `anomaly` check (its own SQL) must bring its own.
             user = os.environ["DB_USER"]
             password = os.environ["DB_PASS"]
             dbname = os.environ.get("DB_NAME") or dbname
