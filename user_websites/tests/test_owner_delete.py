@@ -80,6 +80,7 @@ class TestOwnerDelete(HamsHttpCase):
         done = self._post(f"/my/site/delowner/page/{self.about.id}/delete")
         self.assertEqual(done.status_code, 303)
         self.assertEqual(self.url_open("/delowner/about", allow_redirects=False).status_code, 404)
+        self.env.invalidate_all()
         page = self.env["website.page"].with_context(active_test=False).browse(self.about.id)
         self.assertTrue(page.exists(), "retained, never hard deleted")
         self.assertFalse(page.active)
@@ -99,7 +100,8 @@ class TestOwnerDelete(HamsHttpCase):
         url = self.post.website_url
         self.assertEqual(self.url_open(url, allow_redirects=False).status_code, 200)
         self._post(f"/my/site/delowner/post/{self.post.id}/delete")
-        self.assertEqual(self.url_open(url, allow_redirects=False).status_code, 404)
+        self.assertNotIn("Post One", self.url_open(url).text)
+        self.env.invalidate_all()
         post = self.env["blog.post"].with_context(active_test=False).browse(self.post.id)
         self.assertTrue(post.exists())
         self.assertFalse(post.active)

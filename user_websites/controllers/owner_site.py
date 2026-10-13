@@ -32,6 +32,7 @@ Security model, all of it enforced here and again by the models:
   (archived, restorable); there is no hard delete and no promise of erasure.
 """
 import base64
+import functools
 import json
 import logging
 from urllib.parse import quote
@@ -39,8 +40,7 @@ from urllib.parse import quote
 import redis
 from lxml import etree, html as lxml_html
 from markupsafe import Markup
-from werkzeug.exceptions import Forbidden, ServiceUnavailable, TooManyRequests
-from werkzeug.routing import RequestRedirect
+from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
 
 from odoo import fields, http
 from odoo.http import request
@@ -137,17 +137,30 @@ def _arch_body(arch_base):
     return inner, True
 
 
-class LegacySiteRedirect(RequestRedirect):
-    """Raised for an owner URL under a retired slug: the same URL under the live slug.
+class SiteResponse(Exception):
+    """Raised by _resolve_site() to end a request with a response of its own (a redirect from a
+    retired slug, the "what is missing" page for an ineligible member).
 
-    GET and HEAD get a 301; any other method gets a 308, which keeps the method and the body, so a
-    form posted to a stale page (a tab left open across a rename) still lands on the live site
-    with its CSRF token (the session is the same).
-    """
+    Not an HTTPException on purpose: Odoo's frontend error handler turns any raised HTTPException into
+    its own error page (a 301 becomes a 418), throwing the response away. answers_site_response() turns
+    this into the route's return value instead."""
 
-    def __init__(self, new_url, safe_method):
-        super().__init__(new_url)
-        self.code = 301 if safe_method else 308
+    def __init__(self, response):
+        super().__init__("owner site response")
+        self.response = response
+
+
+def answers_site_response(route):
+    """Route decorator: a SiteResponse raised anywhere below becomes the route's response."""
+    # [@ANCHOR: user_websites:fn_answers_site_response]
+    @functools.wraps(route)
+    def wrapper(*args, **kwargs):
+        try:
+            return route(*args, **kwargs)
+        except SiteResponse as ended:
+            return ended.response
+
+    return wrapper
 
 
 class UserWebsitesOwnerController(http.Controller):
@@ -179,8 +192,8 @@ class UserWebsitesOwnerController(http.Controller):
                 # Verified by [@ANCHOR: test_site_eligibility_hook]
                 # Say what is missing instead of a 404, and hide anything still public.
                 request.env["res.users"].reconcile_website_eligibility([profile_user.id])
-                raise Forbidden(
-                    response=request.render(
+                raise SiteResponse(
+                    request.render(
                         "user_websites.owner_site_ineligible",
                         {"gaps": gaps, "site_slug": profile_user.website_slug, "main_object": profile_user},
                         status=403,
@@ -209,7 +222,10 @@ class UserWebsitesOwnerController(http.Controller):
         query = request.httprequest.query_string.decode("utf-8", "replace")
         if query:
             new_url += "?" + query
-        raise LegacySiteRedirect(new_url, request.httprequest.method in ("GET", "HEAD"))
+        # 301 for a GET; 308 for anything else keeps the method and body (a form left open across a
+        # rename still lands on the live site, session and CSRF token unchanged).
+        code = 301 if request.httprequest.method in ("GET", "HEAD") else 308
+        raise SiteResponse(request.redirect(new_url, code=code, local=True))
 
     def _owner_domain(self, profile_user, profile_group):
         # [@ANCHOR: user_websites:fn_owner_owner_domain]
@@ -278,6 +294,7 @@ class UserWebsitesOwnerController(http.Controller):
     @http.route("/my/site/<string:site_slug>", type="http", auth="user", website=True, sitemap=False)
     # [@ANCHOR: user_websites:COMM_owner_site_dashboard]
     # Verified by [@ANCHOR: test_owner_site_dashboard_lists_content]
+    @answers_site_response
     def owner_site_dashboard(self, site_slug, **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         svc = self._svc()
@@ -339,6 +356,7 @@ class UserWebsitesOwnerController(http.Controller):
         "/my/site/<string:site_slug>/page/new", type="http", auth="user", website=True, sitemap=False
     )
     # [@ANCHOR: user_websites:COMM_owner_page_new]
+    @answers_site_response
     def owner_page_new(self, site_slug, **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         return request.render(
@@ -364,6 +382,7 @@ class UserWebsitesOwnerController(http.Controller):
         sitemap=False,
     )
     # [@ANCHOR: user_websites:COMM_owner_page_edit]
+    @answers_site_response
     def owner_page_edit(self, site_slug, page_id, **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         page = self._own_page(profile_user, profile_group, page_id)
@@ -395,6 +414,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_page_save]
     # Verified by [@ANCHOR: test_owner_page_create_edit_publish]
+    @answers_site_response
     def owner_page_save(
         self, site_slug, page_id="", title="", page_slug="", content="", is_published="", **kwargs
     ):
@@ -466,6 +486,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_page_publish]
     # Verified by [@ANCHOR: test_owner_page_create_edit_publish]
+    @answers_site_response
     def owner_page_publish(self, site_slug, page_id, publish="", **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         self._rate_limit("write", WRITES_PER_MINUTE)
@@ -487,6 +508,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_post_publish]
     # Verified by [@ANCHOR: test_owner_post_publish_toggle]
+    @answers_site_response
     def owner_post_publish(self, site_slug, post_id, publish="", **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         self._rate_limit("write", WRITES_PER_MINUTE)
@@ -538,6 +560,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_delete_confirm]
     # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    @answers_site_response
     def owner_delete_confirm(self, site_slug, kind, item_id, **kwargs):
         """The no-JavaScript confirmation step (the dashboard shows the same question in a dialog)."""
         profile_user, profile_group = self._resolve_site(site_slug)
@@ -564,6 +587,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_delete]
     # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    @answers_site_response
     def owner_delete(self, site_slug, kind, item_id, **kwargs):
         """Delete = removed from the site and from every public surface at once, kept archived.
 
@@ -602,6 +626,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_restore]
     # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    @answers_site_response
     def owner_restore(self, site_slug, kind, item_id, **kwargs):
         """Bring back something the owner deleted. It returns UNPUBLISHED: publishing is a separate,
         deliberate act. Only items the owner deleted can be restored here (a page archived by
@@ -644,6 +669,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_image_upload]
     # Verified by [@ANCHOR: test_owner_image_upload_rules]
+    @answers_site_response
     def owner_image_upload(self, site_slug, ufile=None, json_reply="", **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         self._rate_limit("upload", UPLOADS_PER_MINUTE)

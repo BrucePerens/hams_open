@@ -39,10 +39,16 @@ def _like_escape(text):
 
 
 def slug_policy(env):
-    """The deployment's slug policy; anything but "callsign" is the open-source default."""
+    """The deployment's slug policy; anything but "callsign" is the open-source default.
+
+    Read straight from ir_config_parameter, not through zero_sudo's cached, whitelisted
+    _get_system_param(): the policy must take effect the moment the parameter changes (a cached
+    "name_callsign" would keep creating name-style slugs), and this is one indexed lookup."""
     # [@ANCHOR: user_websites:fn_slug_policy]
-    value = env["zero_sudo.security.utils"]._get_system_param(SLUG_POLICY_PARAM, POLICY_NAME_CALLSIGN)
-    return POLICY_CALLSIGN if value == POLICY_CALLSIGN else POLICY_NAME_CALLSIGN
+    env["ir.config_parameter"].flush_model(["key", "value"])
+    env.cr.execute("SELECT value FROM ir_config_parameter WHERE key = %s", (SLUG_POLICY_PARAM,))  # audit-ignore-sql: parameterised, read-only
+    row = env.cr.fetchone()
+    return POLICY_CALLSIGN if row and row[0] == POLICY_CALLSIGN else POLICY_NAME_CALLSIGN
 
 
 def _next_hop(svc, current):

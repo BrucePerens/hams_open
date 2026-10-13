@@ -803,9 +803,6 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "pager_duty.helpdesk_model",
             "user_websites.company_abuse_email",
             "user_websites.max_sites_per_user",
-            # Which identity a member site slug is built from: name_callsign (open source default)
-            # or callsign (hams.com, set by its own module data). See user_websites/models/site_slug.py.
-            "user_websites.slug_policy",
             "user_websites.max_pages_per_site",
             "user_websites.allow_custom_domains",
             "user_websites.allow_html_embed",
