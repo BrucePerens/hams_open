@@ -10,3 +10,4 @@ from . import test_view_rendering_audit_cluster
 from . import test_stale_session_match
 from . import test_database_lockdown
 from . import test_visitor_track_dedup
+from . import test_canonical_url_dot_segments

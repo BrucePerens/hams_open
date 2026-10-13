@@ -15,6 +15,7 @@ from . import test_json_rpc_client
 from . import test_cron_service_access
 from . import test_purge_cron_migration
 from . import test_security_utils
+from . import test_service_uid_no_default_env
 from . import test_service_account_security_notices
 from . import test_session_cookie_hardening
 from . import test_robots_txt_policy
