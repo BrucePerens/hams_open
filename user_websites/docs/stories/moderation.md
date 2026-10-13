@@ -13,7 +13,7 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
 
 ### Reviewing Abuse Reports
 - **Given** I am a **User Websites Administrator**
-- **When** I log in, I see a toast notification if there are pending reports ([@ANCHOR: admin_toast_logic], backed by [@ANCHOR: user_websites:COMM_pending_reports]). Verified by `[@ANCHOR: test_tour_toast_notifications]`.
+- **When** I log in, I see a sticky "Pending Moderation" toast with a "Review reports" button linking to the pending queue and a "Dismiss" button, shown at most once per 12 hours unless the queue grows ([@ANCHOR: admin_toast_logic], backed by [@ANCHOR: user_websites:COMM_pending_reports]). Verified by `[@ANCHOR: test_tour_toast_notifications]`.
 - **When** I review a report, I can take action against the content owner.
 - **Then** I can issue a strike ([@ANCHOR: content_moderation:action_take_action_and_strike], moved to the generic `content_moderation` module 2026-09-23; this module's own `_apply_enforcement_action()` override, [@ANCHOR: user_websites:COMM_apply_enforcement_action], is what actually strikes and, past 3 strikes, suspends), which may lead to automatic account suspension. Verified by `[@ANCHOR: test_moderation_suspension]`.
 

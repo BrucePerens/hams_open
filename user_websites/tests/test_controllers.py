@@ -103,6 +103,15 @@ class TestUserWebsitesControllers(RealTransactionCase):
             1,
             "API failed to return the correct count of pending reports.",
         )
+        self.assertEqual(
+            data.get("url"),
+            "/odoo/action-user_websites.action_content_violation_report_pending",
+            "Moderators must get the back-office pending-queue link.",
+        )
+        self.assertGreater(data.get("latest_id", 0), 0)
+        self.assertTrue(
+            self.env.ref("user_websites.action_content_violation_report_pending")
+        )
 
     def test_02_api_pending_reports_unauthorized_access(self):
         """
@@ -121,6 +130,10 @@ class TestUserWebsitesControllers(RealTransactionCase):
             "Forbidden",
             "API should return Forbidden in JSON payload",
         )
+
+        for key in ("url", "latest_id"):
+            self.assertNotIn(key, res_user.json(), "Forbidden payload leaks %s" % key)
+        self.assertEqual(res_user.json().get("count"), 0)
 
         # 2. Test as Unauthenticated Public Guest
         self.authenticate(None, None)
