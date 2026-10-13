@@ -42,6 +42,8 @@ RESERVED_SLUGS = {
     "api",
     "aboutus",
     "auxcomm",
+    # 2026-10-13: the training area moved from /auxcomm/... to /training/... (the old words stay reserved: they redirect).
+    "training",
     "backup",
     "bus",
     "chat",
