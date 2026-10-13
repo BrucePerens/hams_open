@@ -63,7 +63,7 @@ sudo pagerduty-maintenance end
 ```
 
 `odoo_upgrade.py` reads the service's own `EnvironmentFiles=`/`Environment=`/`User=` from `systemctl show` and runs
-`odoo -u` in a transient `systemd-run` unit with them (values are never read or printed), refuses to run if the service
+`odoo -u` in the transient `systemd-run` unit `odoo-upgrade` (check `systemctl is-active odoo-upgrade`; do not `systemctl restart odoo` or copy a deploy while it is active: it holds the HTTP port, so a restart fails "Address already in use" until it ends, as on 2026-10-12) with them (values are never read or printed), refuses to run if the service
 defines no `REDIS_PASSWORD` or is still running, and exits non-zero if the output shows any Redis authentication failure.
 Independently, `invalidate_model_cache` raises instead of warning when Redis rejects the credentials while the registry
 is still loading (module install/upgrade; [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]),

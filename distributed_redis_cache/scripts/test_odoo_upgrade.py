@@ -36,6 +36,7 @@ class TestOdooUpgrade(unittest.TestCase):
         self.assertIn("-p User=odoo", out)
         self.assertIn("-E ODOO_RC=/etc/odoo/odoo.conf", out)
         self.assertIn("-u a_b,c --stop-after-init", out)
+        self.assertIn("--unit=odoo-upgrade", out)  # fixed name: no second concurrent upgrade, and `systemctl is-active` can see it
         self.assertNotIn(SECRET, out)
 
     def test_refuses_when_no_environment_file_defines_the_redis_password(self):
