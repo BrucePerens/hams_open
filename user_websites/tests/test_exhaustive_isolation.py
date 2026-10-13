@@ -201,7 +201,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
 
         self.env["website.page"].with_user(svc_uid).create(
             {
-                "url": f"/{self.malice.website_slug}/home",
+                "url": f"/{self.malice.website_slug}",
                 "name": "Malice Home",
                 "type": "qweb",
                 "website_published": True,
@@ -221,7 +221,7 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         admin_email = self.env["res.users"].browse(1).email or "admin@example.com"
 
         try:
-            response = self.url_open(f"/{self.malice.website_slug}/home")
+            response = self.url_open(f"/{self.malice.website_slug}")
             content = response.content.decode("utf-8")
             self.assertNotIn(
                 admin_email,

@@ -30,3 +30,10 @@ This journey describes the path a new user takes to establish their presence on 
 2. **OTP Dispatch**: The system sends an email with an official OTP pass-code using the OTP mail template ([ANCHOR: ham_onboarding:otp_mail_template]).
 
 3. **Official OTP Verification**: The system verifies the identity using an official OTP pass-code ([ANCHOR: ham_onboarding:action_verify_official_otp]).
+
+## Addendum (2026-10-12): the site address is /<slug>
+
+Steps 2 to 8 of "Onboarding and Creation" now use `/alice` rather than `/alice/home`: the placeholder,
+the "Create Your Home" button and the finished home page are all at `/alice`. `/alice/home` is a
+permanent redirect to `/alice` ([@ANCHOR: user_websites:COMM_user_home_legacy_redirect]). Verified by
+`[@ANCHOR: test_member_site_home_url]`.

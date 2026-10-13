@@ -8,7 +8,7 @@ import { registry } from "@web/core/registry";
 
 // Tests [@ANCHOR: UX_CREATE_SITE]
 registry.category("web_tour.tours").add("create_site_tour", {
-    url: "/sitetour/home",
+    url: "/sitetour",
     steps: () => [
         { trigger: 'button.o_tour_create_site_btn', content: 'Wait for: Wait for Create Site Button', run: function() {} },
         {

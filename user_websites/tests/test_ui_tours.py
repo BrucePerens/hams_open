@@ -39,7 +39,7 @@ class TestUserWebsitesUITours(RealTransactionCase):
         )
         self.page = self.env["website.page"].create(
             {
-                "url": f"/{self.user_test.website_slug}/home",
+                "url": f"/{self.user_test.website_slug}",
                 "name": "Tour Page",
                 "type": "qweb",
                 "arch": '<t name="Tour Page" t-name="tour"><t t-call="website.layout"><div>Tour Content<t t-call="user_websites.report_violation_snippet"/></div></t></t>',
@@ -56,7 +56,7 @@ class TestUserWebsitesUITours(RealTransactionCase):
             [("login", "in", ["sitetour", "blogtour"])]
         )
         dynamic_pages = self.env["website.page"].search(
-            [("url", "in", ["/sitetour/home", "/blogtour/blog"])]
+            [("url", "in", ["/sitetour", "/blogtour/blog"])]
         )
         dynamic_blogs = self.env["blog.blog"].search([("name", "ilike", "Tour User")])
         visitors = self.env["website.visitor"].search([])
@@ -159,10 +159,10 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.env.cr.commit()
 
         self.authenticate(user_no_site.login, "sitetour")
-        self.url_open("/sitetour/home")
+        self.url_open("/sitetour")
 
         self.start_tour(
-            "/sitetour/home?debug=1",
+            "/sitetour?debug=1",
             "create_site_tour",
             login=user_no_site.login,
             step_delay=100,
@@ -226,9 +226,9 @@ class TestUserWebsitesUITours(RealTransactionCase):
 
         # [@ANCHOR: test_report_violation_guest_email_stored]
         # Tests [@ANCHOR: report_violation_guest_email_field]
-        self.url_open(f"/{self.user_test.website_slug}/home")
+        self.url_open(f"/{self.user_test.website_slug}")
         self.start_tour(
-            f"/{self.user_test.website_slug}/home?debug=1", "test_tour_violation_report"
+            f"/{self.user_test.website_slug}?debug=1", "test_tour_violation_report"
         )
 
         self.env.cr.commit()  # new snapshot: see the row the browser's request committed

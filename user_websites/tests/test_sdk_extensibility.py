@@ -151,7 +151,7 @@ class TestSDKExtensibility(RealTransactionCase):
 
         rendered_str = str(rendered)
         self.assertIn(
-            f"{self.user.website_slug}/home",
+            f"{self.user.website_slug}",
             rendered_str,
             "Navbar must inject the resolved_slug into links.",
         )

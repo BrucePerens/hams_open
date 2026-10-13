@@ -83,7 +83,7 @@ class TestQWebContext(HamsHttpCase):
         # Create Pages
         self.env["website.page"].create(
             {
-                "url": f"/{self.user_render.website_slug}/home",
+                "url": f"/{self.user_render.website_slug}",
                 "name": "User Home",
                 "type": "qweb",
                 "owner_user_id": self.user_render.id,
@@ -94,7 +94,7 @@ class TestQWebContext(HamsHttpCase):
 
         self.env["website.page"].create(
             {
-                "url": f"/{self.group_render.website_slug}/home",
+                "url": f"/{self.group_render.website_slug}",
                 "name": "Group Home",
                 "type": "qweb",
                 "user_websites_group_id": self.group_render.id,
@@ -132,7 +132,7 @@ class TestQWebContext(HamsHttpCase):
         """
         self.authenticate(self.user_render.login, self.user_render.login)
         self.env.flush_all()
-        response = self.url_open(f"/{self.user_render.website_slug}/home")
+        response = self.url_open(f"/{self.user_render.website_slug}")
 
         self.assertEqual(
             response.status_code, 200, "The user homepage must render successfully."
@@ -152,7 +152,7 @@ class TestQWebContext(HamsHttpCase):
         """
         self.authenticate(self.user_render.login, self.user_render.login)
         self.env.flush_all()
-        response = self.url_open(f"/{self.group_render.website_slug}/home")
+        response = self.url_open(f"/{self.group_render.website_slug}")
 
         self.assertEqual(
             response.status_code, 200, "The group homepage must render successfully."
@@ -165,7 +165,7 @@ class TestQWebContext(HamsHttpCase):
         """
         self.authenticate(None, None)
         self.env.flush_all()
-        response = self.url_open(f"/{self.user_render.website_slug}/home")
+        response = self.url_open(f"/{self.user_render.website_slug}")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(
@@ -180,7 +180,7 @@ class TestQWebContext(HamsHttpCase):
         for downstream JS widgets to consume safely.
         """
         self.env.flush_all()
-        response = self.url_open(f"/{self.user_render.website_slug}/home")
+        response = self.url_open(f"/{self.user_render.website_slug}")
         self.assertEqual(response.status_code, 200)
 
         self.assertIn(

@@ -74,3 +74,25 @@ the user or group is not exceeded, and, for ordinary users, drops every field ou
 created through the module's service account, and the cache-invalidation notice and Cloudflare purge are
 sent for the new post's URLs.
 `[@ANCHOR: user_websites:COMM_blog_post_create]`
+
+## Home Address Is /<slug> (2026-10-12)
+
+Bruce asked that every member and group site live at `hams.com/<callsign>`, with no `home`.
+This section supersedes the `/my-username/home` addresses in the scenarios above.
+
+- **Given** a member whose website name is `k6bp`, **when** anyone opens `/k6bp`, **then** the member's
+  home page is served there ([@ANCHOR: user_websites:COMM_user_home_fallback]), or, for the owner of a
+  site that has no home page yet, the placeholder with the "Create Your Home" button. Verified by
+  `[@ANCHOR: test_member_site_home_url]`.
+- **When** anyone opens the old `/k6bp/home`, **then** they get a permanent (301) redirect to `/k6bp`
+  ([@ANCHOR: user_websites:COMM_user_home_legacy_redirect]), so bookmarks and search-engine entries
+  keep working. The target is built from the stored slug, never from the request path.
+- **When** a request for `/K6BP` arrives, **then** it is redirected (301) to the lower-case `/k6bp`.
+- A single path segment that is not a member or group slug is handed back to Odoo's own page,
+  redirect and attachment lookup, so `/contactus` and `website.rewrite` redirects are unaffected.
+- Existing databases are migrated by `migrations/0.5/post-migration.py`
+  ([@ANCHOR: user_websites:migrate_home_url_to_slug]), which renames each member or group page
+  `/<slug>/home` to `/<slug>`.
+- Reserved words (`home`, `admin`, `blog`, `my`, `privacy`, `manual`, `api`, and every other first
+  segment of a platform route) cannot be claimed as a slug (`edge_routing.utils.RESERVED_SLUGS`).
+  A guard test fails when a new static platform route is missing from that list.

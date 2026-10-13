@@ -10,7 +10,7 @@ import os
 import redis
 import hashlib
 import hmac
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
 from werkzeug.wrappers import Response
@@ -58,6 +58,19 @@ def _report_violation_redirect_target(reported_url, query_param):
             path = parsed_path
     separator = "&" if "?" in path else "?"
     return f"{path}{separator}{query_param}"
+
+
+def _serve_core_fallback():
+    """Odoo's own page / redirect / attachment lookup for the request's path.
+
+    The /<website_slug> route puts website_slug into request.params, and
+    website.page._allow_to_use_cache() refuses to cache any response whose request carries
+    parameters ("the parameters are not part of the cache key"), so every stock page reached
+    through this route would lose its edge caching. The path argument is not a query parameter:
+    drop it before handing the request to the page lookup.
+    """
+    request.params.pop("website_slug", None)
+    return request.env["ir.http"]._serve_fallback()
 
 
 class UserWebsitesController(http.Controller):
@@ -261,11 +274,60 @@ class UserWebsitesController(http.Controller):
         return request.render("user_websites.blog_index", values)
 
     @http.route(
-        ["/<string:website_slug>/home"], type="http", auth="public", website=True
+        "/<string:website_slug>/home",
+        type="http",
+        auth="public",
+        website=True,
+        sitemap=False,
+    )
+    # [@ANCHOR: user_websites:COMM_user_home_legacy_redirect]
+    def user_home_legacy_redirect(self, website_slug, **kwargs):
+        """Permanent redirect from the old /<slug>/home address to /<slug>.
+
+        Every member and group site's home is /<slug> (Bruce, 2026-10-12). Existing links,
+        bookmarks and search-engine entries for /<slug>/home keep working through this 301.
+        The target is built from the slug as stored in the database (lower-case, limited to
+        [a-z0-9-] by a database constraint) and quoted, never from the raw request path, so it is
+        always a same-origin path and cannot be steered to another host. A single path segment
+        can never redirect to itself, so there is no loop.
+        """
+        utils = request.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
+        user_id = env_svc["res.users"].get_record_by_slug(website_slug)
+        group_id = env_svc["user.websites.group"].get_record_by_slug(website_slug)
+        record = (
+            env_svc["res.users"].browse(user_id)
+            if user_id
+            else env_svc["user.websites.group"].browse(group_id)
+            if group_id
+            else None
+        )
+        if not record:
+            # Not a member site: some other page may own this path (e.g. a stock CMS page).
+            response = _serve_core_fallback()
+            if response:
+                return response
+            raise request.not_found()
+        return request.redirect(
+            "/" + quote(record.website_slug, safe=""), code=301, local=True
+        )
+
+    @http.route(
+        "/<string:website_slug>",
+        type="http",
+        auth="public",
+        website=True,
+        sitemap=False,
     )
     # [@ANCHOR: user_websites:COMM_user_home_fallback]
     def user_home_fallback(self, website_slug, **kwargs):
-        """Fallback router for missing /home pages to serve the placeholder layout."""
+        """A member or group site's home, at /<slug>.
+
+        Serves the site's home page, or the placeholder that lets the owner create it. A single
+        path segment that is not a member or group slug is not ours: it is handed to Odoo's own
+        page / redirect / attachment lookup (the same fallback a request reaches when no route
+        matches), so stock pages such as /aboutus and website.rewrite redirects keep working.
+        """
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
@@ -281,6 +343,9 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
+            response = _serve_core_fallback()
+            if response:
+                return response
             raise request.not_found()
 
         if profile_user and profile_user.is_suspended_from_websites:
@@ -289,9 +354,16 @@ class UserWebsitesController(http.Controller):
         if profile_group and profile_group.is_suspended_from_websites:
             raise request.not_found()
 
+        canonical = (profile_user or profile_group).website_slug
+        if website_slug != canonical:
+            # /K6BP -> /k6bp: one address per site for caches, the sitemap and canonical URLs.
+            return request.redirect(
+                "/" + quote(canonical, safe=""), code=301, local=True
+            )
+
         # Check if the page actually exists; if it does, let core ir.http route handle it
         domain = [
-            ("url", "=", f"/{website_slug}/home"),
+            ("url", "=", f"/{website_slug}"),
             ("website_published", "=", True),
         ]
         page = env_svc["website.page"].search(domain, limit=1)
@@ -305,6 +377,9 @@ class UserWebsitesController(http.Controller):
                 _logger.warning(
                     "Redis view counter increment failed in controller: %s", e
                 )
+            # Deliberately NOT _serve_core_fallback(): with website_slug left in request.params
+            # Odoo's page cache never serves this response, so a page unpublished by a
+            # suspension is gone at once (test_03_suspension_public_access_leak).
             return request.env["ir.http"]._serve_fallback()
 
         is_owner = False
@@ -386,7 +461,7 @@ class UserWebsitesController(http.Controller):
         req_website_id = request.website.id
 
         create_vals = {
-            "url": f"/{website_slug}/home",
+            "url": f"/{website_slug}",
             "name": f"{entity_name} Home",
             "type": "qweb",
             "arch_base": arch_base,

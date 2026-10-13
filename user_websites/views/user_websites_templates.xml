@@ -6,7 +6,7 @@
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <nav t-if="resolved_slug" class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar">
             <div class="container">
-                <a class="navbar-brand" t-attf-href="/#{resolved_slug}/home">
+                <a class="navbar-brand" t-attf-href="/#{resolved_slug}">
                     <t t-if="profile_user">
                         <img t-attf-src="/web/image/res.users/#{profile_user.id}/avatar_128?unique=#{profile_user.write_date and int(profile_user.write_date.timestamp()) or 0}" width="30" height="30" class="d-inline-block align-top rounded-circle me-2" alt="User Avatar"/>
                         <t t-out="profile_user.name"/>
@@ -21,7 +21,7 @@
                 <div class="collapse navbar-collapse" id="userNavbarNav">
                     <ul class="navbar-nav me-auto" id="user_navbar_nav_links">
                         <li class="nav-item">
-                            <a class="nav-link" t-attf-href="/#{resolved_slug}/home">Home</a>
+                            <a class="nav-link" t-attf-href="/#{resolved_slug}">Home</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" t-attf-href="/#{resolved_slug}/blog">Blog</a>
@@ -361,7 +361,7 @@
                                         </span>
                                     </p>
                                     <div class="d-grid gap-2">
-                                        <a t-attf-href="/#{entry.website_slug}/home" class="btn btn-primary py-2 fw-bold">
+                                        <a t-attf-href="/#{entry.website_slug}" class="btn btn-primary py-2 fw-bold">
                                             <i class="fa fa-home me-2" aria-hidden="true"/> Visit Home
                                         </a>
                                         <a t-attf-href="/#{entry.website_slug}/blog" class="btn btn-outline-secondary py-2 fw-bold">

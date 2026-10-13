@@ -36,7 +36,7 @@ class TestModeration(RealTransactionCase):
         # 2. Give them some published content
         self.spam_page = self.env["website.page"].create(
             {
-                "url": f"/{self.bad_user.website_slug}/home",
+                "url": f"/{self.bad_user.website_slug}",
                 "name": "Spam Home",
                 "type": "qweb",
                 "arch": '<t name="Spam Home" t-name="user_websites.spam_home"><div>Spam</div></t>',
@@ -167,7 +167,7 @@ class TestModeration(RealTransactionCase):
         # Ensure page is public
         self.authenticate(None, None)
         self.env.cr.commit()
-        res = self.url_open(f"/{self.bad_user.website_slug}/home")
+        res = self.url_open(f"/{self.bad_user.website_slug}")
         self.assertEqual(res.status_code, 200)
 
         # Suspend user
@@ -185,7 +185,7 @@ class TestModeration(RealTransactionCase):
 
         # Attempt public access again
         self.env.cr.commit()
-        res_after = self.url_open(f"/{self.bad_user.website_slug}/home")
+        res_after = self.url_open(f"/{self.bad_user.website_slug}")
         self.assertEqual(
             res_after.status_code,
             404,
@@ -230,7 +230,7 @@ class TestModeration(RealTransactionCase):
 
         report = self.env["content.violation.report"].create(
             {
-                "target_url": "/bad-group/home",
+                "target_url": "/bad-group",
                 "description": "Group is spamming",
                 "content_group_id": bad_group.id,
             }
