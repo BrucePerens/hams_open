@@ -150,6 +150,11 @@ logging.basicConfig(
 logger = logging.getLogger("generalized_monitor")
 
 
+def _utcnow():
+    """The current UTC time as a naive datetime, what Odoo stores and what `utcnow()` (deprecated since Python 3.12) returned."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
 # [@ANCHOR: pager_duty:parse_env]
 def parse_env(val):
     if isinstance(val, str) and val.startswith("ENV:"):
@@ -301,7 +306,7 @@ def is_in_maintenance(check):
         try:
             start = datetime.datetime.strptime(maint_start_str, "%Y-%m-%d %H:%M:%S")
             end = datetime.datetime.strptime(maint_end_str, "%Y-%m-%d %H:%M:%S")
-            now = datetime.datetime.utcnow()
+            now = _utcnow()
             if start <= now <= end:
                 return True
         except (
@@ -943,7 +948,7 @@ def execute_check(check, client=None):
                     expire_date = datetime.datetime.strptime(
                         cert["notAfter"], "%b %d %H:%M:%S %Y %Z"
                     )
-                    days_left = (expire_date - datetime.datetime.utcnow()).days
+                    days_left = (expire_date - _utcnow()).days
                     critical_days = int(check.get("critical", 14))
                     if days_left <= critical_days:
                         return False, f"SSL Cert expires in {days_left} days"
@@ -1519,7 +1524,7 @@ def record_check_status(client, check, success):
             ids=[check_id],
             vals={
                 "status": "passing" if success else "failing",
-                "last_run": datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "last_run": _utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             },
         )
     # `client` is the JSON-2 OdooClient, whose execute() raises a bare Exception on an HTTPError (a real 401 from a bad
