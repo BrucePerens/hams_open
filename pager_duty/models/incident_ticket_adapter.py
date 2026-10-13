@@ -26,6 +26,8 @@ _SPAM_QUARANTINE_STAGE = "spam"
 # (e.g. "test_source", a pager_check's own check name) -- gating on this
 # prefix keeps the spam heuristic scoped to genuine inbound mail only, so
 # it can never misclassify a monitoring signal.
+
+
 def _is_inbound_email_source(source):
     """True for an incident that came from inbound mail.
 
