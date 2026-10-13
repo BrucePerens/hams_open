@@ -13,6 +13,7 @@ from . import ir_http
 from . import site_slug
 from . import res_users
 from . import res_users_moderation
+from . import site_eligibility
 from . import user_websites_groups
 from . import website_page
 from . import member_html

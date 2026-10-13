@@ -35,6 +35,22 @@
         </div>
     </template>
 
+    <template id="owner_site_ineligible" name="Site Owner: Not Yet Eligible">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_site_eligibility_hook] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-5">
+                <h1 class="h2">Get a website</h1>
+                <p>A website and blog are available once these are done. Whatever you already wrote is kept and comes back as soon as they are.</p>
+                <ul class="list-group mb-3">
+                    <li t-foreach="gaps" t-as="gap" class="list-group-item">
+                        <strong t-out="gap.get('message')"/>
+                        <a t-if="gap.get('url')" class="btn btn-primary btn-sm ms-2" t-att-href="gap.get('url')">Do this now</a>
+                    </li>
+                </ul>
+            </div>
+        </t>
+    </template>
+
     <template id="owner_site_dashboard" name="Site Owner Dashboard">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_site_dashboard_lists_content] -->
         <!-- [@ANCHOR: user_websites:UX_OWNER_DASHBOARD] -->

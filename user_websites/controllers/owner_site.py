@@ -39,7 +39,7 @@ from urllib.parse import quote
 import redis
 from lxml import etree, html as lxml_html
 from markupsafe import Markup
-from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
+from werkzeug.exceptions import Forbidden, ServiceUnavailable, TooManyRequests
 from werkzeug.routing import RequestRedirect
 
 from odoo import http
@@ -173,6 +173,19 @@ class UserWebsitesOwnerController(http.Controller):
         if profile_user:
             if profile_user.id != user.id or profile_user.is_suspended_from_websites:
                 raise request.not_found()
+            gaps = profile_user._website_eligibility_gaps()
+            if gaps:
+                # [@ANCHOR: user_websites:owner_site_ineligible]
+                # Verified by [@ANCHOR: test_site_eligibility_hook]
+                # Say what is missing instead of a 404, and hide anything still public.
+                request.env["res.users"].reconcile_website_eligibility([profile_user.id])
+                raise Forbidden(
+                    response=request.render(
+                        "user_websites.owner_site_ineligible",
+                        {"gaps": gaps, "site_slug": profile_user.website_slug, "main_object": profile_user},
+                        status=403,
+                    )
+                )
         elif profile_group:
             if user.id not in profile_group.member_ids.ids or profile_group.is_suspended_from_websites:
                 raise request.not_found()

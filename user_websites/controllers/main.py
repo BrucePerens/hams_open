@@ -223,7 +223,7 @@ class UserWebsitesController(http.Controller):
                 return legacy
             raise request.not_found()
 
-        if profile_user and profile_user.is_suspended_from_websites:
+        if profile_user and not profile_user._website_publicly_visible():
             raise request.not_found()
 
         if profile_group and profile_group.is_suspended_from_websites:
@@ -377,7 +377,7 @@ class UserWebsitesController(http.Controller):
                 return response
             raise request.not_found()
 
-        if profile_user and profile_user.is_suspended_from_websites:
+        if profile_user and not profile_user._website_publicly_visible():
             raise request.not_found()
 
         if profile_group and profile_group.is_suspended_from_websites:
@@ -461,6 +461,9 @@ class UserWebsitesController(http.Controller):
             raise request.not_found()
         if profile_user and profile_user.is_suspended_from_websites:
             raise request.not_found()
+        if profile_user and not profile_user._hams_website_eligible():
+            # Not a 404: the owner's tools say what is missing (owner_site.py).
+            return request.redirect(f"/my/site/{quote(website_slug, safe='')}", code=303)
         if profile_group:
             if profile_group.is_suspended_from_websites:
                 raise request.not_found()
@@ -537,6 +540,9 @@ class UserWebsitesController(http.Controller):
             raise request.not_found()
         if profile_user and profile_user.is_suspended_from_websites:
             raise request.not_found()
+        if profile_user and not profile_user._hams_website_eligible():
+            # Not a 404: the owner's tools say what is missing (owner_site.py).
+            return request.redirect(f"/my/site/{quote(website_slug, safe='')}", code=303)
         if profile_group:
             if profile_group.is_suspended_from_websites:
                 raise request.not_found()
@@ -601,6 +607,9 @@ class UserWebsitesController(http.Controller):
             raise request.not_found()
         if profile_user and profile_user.is_suspended_from_websites:
             raise request.not_found()
+        if profile_user and not profile_user._hams_website_eligible():
+            # Not a 404: the owner's tools say what is missing (owner_site.py).
+            return request.redirect(f"/my/site/{quote(website_slug, safe='')}", code=303)
         if profile_group:
             if profile_group.is_suspended_from_websites:
                 raise request.not_found()

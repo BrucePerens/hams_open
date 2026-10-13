@@ -34,6 +34,17 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         index=True,
     )
 
+    # [@ANCHOR: user_websites:field_hidden_by_eligibility]
+    hidden_by_eligibility = fields.Boolean(
+        string="Hidden While Ineligible",
+        default=False,
+        copy=False,
+        index=True,
+        help="Unpublished by res.users.reconcile_website_eligibility() because the owner may not have a "
+        "site right now; republished when they may again. Never set on a piece the owner unpublished "
+        "themselves.",
+    )
+
     def _user_websites_navbar_profile_user(self):
         # [@ANCHOR: mixin_navbar_profile_user]
 
