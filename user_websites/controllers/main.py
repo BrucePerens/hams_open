@@ -748,6 +748,8 @@ class UserWebsitesController(http.Controller):
         headers = [
             ("Content-Type", "application/json"),
             ("Content-Disposition", 'attachment; filename="gdpr_export.json"'),
+            # A person's whole data export: never stored by a browser cache, a proxy or Cloudflare.
+            ("Cache-Control", "private, no-store"),
         ]
         return Response(generate(), headers=headers)
 
