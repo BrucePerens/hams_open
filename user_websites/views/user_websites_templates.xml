@@ -497,7 +497,7 @@
                         <input type="hidden" name="url" t-att-value="request.httprequest.url"/>
 
                         <div class="modal-header">
-                            <h5 class="modal-title fw-bold" id="reportViolationModalLabel">Report Content Violation <a href="/user-websites/documentation#UX_REPORT_VIOLATION" class="text-info fs-5 ms-2" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h5>
+                            <h2 class="modal-title h5 fw-bold" id="reportViolationModalLabel">Report Content Violation <a href="/user-websites/documentation#UX_REPORT_VIOLATION" class="text-info fs-5 ms-2" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h2>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
