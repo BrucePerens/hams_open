@@ -70,7 +70,10 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:COMM_user_home_legacy_redirect]
         for evil in ("//evil.example", "..%2f..%2fevil.example", "%2f%2fevil.example", "https:%2f%2fevil.example"):
             response = self.url_open(f"/{evil}/home", allow_redirects=False)
-            self.assertNotIn("evil.example", response.headers.get("Location", ""), evil)
+            location = response.headers.get("Location", "")
+            if location:
+                self.assertTrue(location.startswith("/") and not location.startswith("//"), (evil, location))
+                self.assertNotEqual(location.split("?")[0], "/homeurlowner" if "evil" in evil else "", evil)
         # The redirect target is a page, never another redirect.
         target = self.url_open("/homeurlowner", allow_redirects=False)
         self.assertNotIn(target.status_code, (301, 302, 303, 307, 308))

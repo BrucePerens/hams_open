@@ -377,7 +377,10 @@ class UserWebsitesController(http.Controller):
                 _logger.warning(
                     "Redis view counter increment failed in controller: %s", e
                 )
-            return _serve_core_fallback()
+            # Deliberately NOT _serve_core_fallback(): with website_slug left in request.params
+            # Odoo's page cache never serves this response, so a page unpublished by a
+            # suspension is gone at once (test_03_suspension_public_access_leak).
+            return request.env["ir.http"]._serve_fallback()
 
         is_owner = False
         if profile_user and profile_user.id == request.env.user.id:
