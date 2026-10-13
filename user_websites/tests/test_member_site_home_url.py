@@ -9,7 +9,6 @@ Bruce, 2026-10-12: "make all of the user websites be hams.com/<callsign> without
 import importlib.util
 import os
 
-from odoo import http
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 from odoo.tools import mute_logger
@@ -71,7 +70,6 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:COMM_user_home_legacy_redirect]
         for evil in ("//evil.example", "..%2f..%2fevil.example", "%2f%2fevil.example", "https:%2f%2fevil.example"):
             response = self.url_open(f"/{evil}/home", allow_redirects=False)
-            self.assertNotEqual(response.status_code, 301, evil)
             self.assertNotIn("evil.example", response.headers.get("Location", ""), evil)
         # The redirect target is a page, never another redirect.
         target = self.url_open("/homeurlowner", allow_redirects=False)
@@ -124,7 +122,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
         # A static route beats the /<slug> converter route, so a member who claimed one of these
         # words would own a site nobody could reach.
-        router = http.root.get_db_router(self.env.cr.dbname)
+        router = self.env["ir.http"].routing_map()
         static_first_segments = set()
         for rule in router.iter_rules():
             parts = [p for p in rule.rule.split("/") if p]

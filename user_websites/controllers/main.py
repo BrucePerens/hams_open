@@ -60,6 +60,19 @@ def _report_violation_redirect_target(reported_url, query_param):
     return f"{path}{separator}{query_param}"
 
 
+def _serve_core_fallback():
+    """Odoo's own page / redirect / attachment lookup for the request's path.
+
+    The /<website_slug> route puts website_slug into request.params, and
+    website.page._allow_to_use_cache() refuses to cache any response whose request carries
+    parameters ("the parameters are not part of the cache key"), so every stock page reached
+    through this route would lose its edge caching. The path argument is not a query parameter:
+    drop it before handing the request to the page lookup.
+    """
+    request.params.pop("website_slug", None)
+    return request.env["ir.http"]._serve_fallback()
+
+
 class UserWebsitesController(http.Controller):
 
     @http.route(
@@ -291,7 +304,7 @@ class UserWebsitesController(http.Controller):
         )
         if not record:
             # Not a member site: some other page may own this path (e.g. a stock CMS page).
-            response = request.env["ir.http"]._serve_fallback()
+            response = _serve_core_fallback()
             if response:
                 return response
             raise request.not_found()
@@ -330,7 +343,7 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
-            response = request.env["ir.http"]._serve_fallback()
+            response = _serve_core_fallback()
             if response:
                 return response
             raise request.not_found()
@@ -364,7 +377,7 @@ class UserWebsitesController(http.Controller):
                 _logger.warning(
                     "Redis view counter increment failed in controller: %s", e
                 )
-            return request.env["ir.http"]._serve_fallback()
+            return _serve_core_fallback()
 
         is_owner = False
         if profile_user and profile_user.id == request.env.user.id:
