@@ -28,6 +28,7 @@ _SPAM_QUARANTINE_STAGE = "spam"
 # it can never misclassify a monitoring signal.
 
 
+# [@ANCHOR: pager_duty:is_inbound_email_source]
 def _is_inbound_email_source(source):
     """True for an incident that came from inbound mail.
 

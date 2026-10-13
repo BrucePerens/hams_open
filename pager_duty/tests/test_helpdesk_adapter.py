@@ -207,7 +207,7 @@ class TestHelpdeskAdapter(HamsTransactionCase):
         )
 
     def test_04b_alias_prefixed_sources_are_inbound_email(self):
-        """The production aliases name their sources `info-email:` and `postmaster-email:` (alias_defaults
+        """Tests [@ANCHOR: pager_duty:is_inbound_email_source]: The production aliases name their sources `info-email:` and `postmaster-email:` (alias_defaults
         `incident_source_prefix`), not `email:`; the filter must see those as inbound mail too. Monitoring
         sources and look-alikes must not be."""
         from odoo.addons.pager_duty.models.incident_ticket_adapter import _is_inbound_email_source
