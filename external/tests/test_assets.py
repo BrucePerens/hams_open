@@ -124,6 +124,16 @@ class TestExternalAssets(HamsHttpCase):
         self.assertIn(b"Junction Networks", license_text.content)
 
     # Tests [@ANCHOR: external:HTTP_NO_HEAD]
+    def test_02d_jspdf_and_fabric_reachable(self):
+        """jsPDF and fabric.js (QA-015) are served from this site; hams_com's ham_logbook pages load them."""
+        for url, marker in (
+            ("/external/static/src/node_modules/jspdf/jspdf.umd.min.js", b"jsPDF"),
+            ("/external/static/src/node_modules/fabric/fabric.min.js", b"fabric"),
+        ):
+            response = self.url_open(url)
+            self.assertEqual(response.status_code, 200, url)
+            self.assertIn(marker, response.content, url)
+
     def test_03_no_head_request(self):
         """Verify fetch_assets does not use HEAD requests."""
         mock_urlopen = self.safe_patch("urllib.request.urlopen")
