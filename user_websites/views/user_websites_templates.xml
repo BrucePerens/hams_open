@@ -20,6 +20,9 @@
                         <t t-elif="profile_group">
                             <i class="fa fa-users me-2" aria-hidden="true"/> <t t-out="profile_group.name"/>
                         </t>
+                        <t t-else="">
+                            <span class="uw-callsign" t-out="resolved_slug.upper()"/>
+                        </t>
                     </a>
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#userNavbarNav" aria-controls="userNavbarNav" aria-expanded="false" aria-label="Toggle site menu">
                         <span class="navbar-toggler-icon"></span>
@@ -32,7 +35,7 @@
                             <li class="nav-item">
                                 <a class="nav-link" t-attf-href="/#{resolved_slug}/blog">Blog</a>
                             </li>
-                            <t t-foreach="(profile_user or profile_group)._user_websites_menu_pages()" t-as="menu_page">
+                            <t t-foreach="((profile_user or profile_group) and (profile_user or profile_group)._user_websites_menu_pages()) or []" t-as="menu_page">
                                 <li class="nav-item">
                                     <a class="nav-link" t-att-href="menu_page['url']"><t t-out="menu_page['name']"/></a>
                                 </li>
@@ -86,7 +89,7 @@
                  and blog index, whose main_object is the profile record) and for the owner tool
                  pages, which pass member_site=True themselves. website.layout's header and
                  footer honour no_header / no_footer. -->
-            <t t-set="member_site" t-value="member_site or bool(resolved_slug and main_object and (main_object._name in ('website.page', 'blog.blog', 'blog.post') or main_object == profile_user or main_object == profile_group))"/>
+            <t t-set="member_site" t-value="member_site or bool(resolved_slug and ((main_object and (main_object._name in ('website.page', 'blog.blog', 'blog.post') or main_object == profile_user or main_object == profile_group)) or request.httprequest.path.lower() == '/' + resolved_slug.lower() or request.httprequest.path.lower().startswith('/' + resolved_slug.lower() + '/')))"/>
             <t t-if="member_site">
                 <t t-set="no_header" t-value="True"/>
                 <t t-set="no_footer" t-value="True"/>

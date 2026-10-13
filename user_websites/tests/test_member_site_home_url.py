@@ -154,3 +154,38 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         module.migrate(self.env.cr, "0.4")  # idempotent
         self.home_page.invalidate_recordset(["url"])
         self.assertEqual(self.home_page.url, "/homeurlowner")
+
+    def test_11_language_prefixed_paths_still_work(self):
+        # [@ANCHOR: test_language_prefixed_paths_still_work]
+        # Tests [@ANCHOR: user_websites:site_slug_converter]
+        # The /<slug> routes must not shadow Odoo's /<lang>/... handling (found 2026-10-13: /en_US/
+        # redirected to /en_US, which answered 404).
+        response = self.url_open("/en_US/", allow_redirects=False)
+        self.assertNotEqual(response.status_code, 404)
+        followed = self.url_open("/en_US/")
+        self.assertEqual(followed.status_code, 200)
+        self.assertIn(b"</html>", followed.content)
+        self.assertNotEqual(self.url_open("/en_US", allow_redirects=False).status_code, 404)
+        self.assertEqual(self.url_open("/en_US/blog").status_code, 200)
+        # A member site is untouched.
+        self.assertEqual(self.url_open("/homeurlowner").status_code, 200)
+
+    def test_12_second_language_prefix_is_not_a_site(self):
+        # Tests [@ANCHOR: user_websites:site_slug_converter]
+        french = self.env["res.lang"].with_context(active_test=False).search([("code", "=", "fr_FR")])
+        french.active = True
+        website = self.env["website"].search([], limit=1)
+        website.language_ids = [(4, french.id)]
+        self.env.flush_all()
+        self.env.registry.clear_cache()
+        for path in ("/fr", "/fr/", "/fr/blog", "/fr/contactus"):
+            response = self.url_open(path, allow_redirects=False)
+            self.assertNotEqual(response.status_code, 404, path)
+
+    def test_13_language_codes_cannot_be_slugs(self):
+        # [@ANCHOR: test_language_codes_are_not_slugs]
+        # Tests [@ANCHOR: edge_routing:language_slugs]
+        for word in ("en",):
+            with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
+                self.owner.write({"website_slug": word})
+                self.env.flush_all()
