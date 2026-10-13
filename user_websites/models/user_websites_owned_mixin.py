@@ -45,6 +45,16 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         "themselves.",
     )
 
+    # [@ANCHOR: user_websites:field_deleted_by_owner]
+    deleted_by_owner = fields.Datetime(
+        string="Deleted By Owner",
+        copy=False,
+        index=True,
+        help="When the owner pressed Delete. The record is kept, archived, and hidden from every public "
+        "surface and from the owner's lists; the owner can restore it. The platform retains data, so "
+        "this is a removal from view, never an erasure.",
+    )
+
     def _user_websites_navbar_profile_user(self):
         # [@ANCHOR: mixin_navbar_profile_user]
 

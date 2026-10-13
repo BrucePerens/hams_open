@@ -57,6 +57,13 @@ class WebsitePage(models.Model):
         string="View Count", default=0, help="Privacy-friendly tracking of page views."
     )
 
+    deleted_original_url = fields.Char(
+        string="Address Before Deletion",
+        copy=False,
+        help="Set when the owner deletes the page: the page is moved to a private address under the "
+        "site so its old address can be used again, and restored to this one when possible.",
+    )
+
     _url_website_uniq = models.Constraint("UNIQUE(url, website_id)", "The page URL must be unique per website!")
 
     # [@ANCHOR: website_page_serve_page_view_counter]

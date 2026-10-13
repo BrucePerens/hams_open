@@ -30,6 +30,7 @@
                     <input type="hidden" name="next" t-att-value="'%s/page/%s' % (uw_manage, uw_page.id)"/>
                     <button type="submit" class="btn btn-sm btn-outline-light"><t t-out="'Unpublish this page' if uw_page.website_published else 'Publish this page'"/></button>
                 </form>
+                <a t-if="uw_page and uw_page.url != '/' + resolved_slug" class="btn btn-sm btn-outline-danger" t-attf-href="#{uw_manage}/page/#{uw_page.id}/delete"><i class="fa fa-trash me-1" aria-hidden="true"/>Delete</a>
                 <a class="btn btn-sm btn-outline-light ms-lg-auto" t-attf-href="#{request.httprequest.path}?visitor=1"><i class="fa fa-eye me-1" aria-hidden="true"/>View as visitor</a>
             </div>
         </div>
@@ -57,9 +58,12 @@
         <t t-call="website.layout">
             <div id="wrap" class="container my-4">
                 <h1 class="h2">Manage <t t-out="site_slug.upper()"/></h1>
-                <p class="text-muted">Everything you publish is kept. "Unpublish" hides it from visitors; it is never deleted.
+                <p class="text-muted">"Unpublish" hides a page or post from visitors and keeps it as a draft. "Delete" removes it from your site, and you can bring it back from the Deleted list below.
                     <a href="/user-websites/documentation#UX_OWNER_DASHBOARD" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/><span class="visually-hidden">Help</span></a></p>
-                <div t-if="saved" class="alert alert-success" role="status">Saved.</div>
+                <div t-if="saved and saved not in ('deleted', 'restored')" class="alert alert-success" role="status">Saved.</div>
+                <div t-if="saved == 'restored'" class="alert alert-success" role="status">Restored as an unpublished draft.</div>
+                <div t-if="error == 'home_delete'" class="alert alert-warning" role="alert">The home page cannot be deleted. You can edit it or unpublish it.</div>
+                <div t-if="saved == 'deleted'" class="alert alert-success" role="status">Deleted. You can restore it from the Deleted list at the bottom of this page.</div>
                 <div t-if="error == 'image'" class="alert alert-danger" role="alert">That image could not be added. Use a JPEG, PNG, GIF or WebP file under <t t-out="max_image_mb"/> MB.</div>
 
                 <section id="pages" class="mb-5" aria-labelledby="uw_pages_h">
@@ -88,6 +92,7 @@
                                             <input type="hidden" name="publish" t-att-value="'0' if p.website_published else '1'"/>
                                             <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-out="'Unpublish' if p.website_published else 'Publish'"/><span class="visually-hidden"> <t t-out="p.name"/></span></button>
                                         </form>
+                                        <a t-if="p.url != home_url" class="btn btn-sm btn-outline-danger uw-delete-link" t-attf-href="/my/site/#{site_slug}/page/#{p.id}/delete" t-att-data-uw-title="p.name" t-attf-data-uw-action="/my/site/#{site_slug}/page/#{p.id}/delete" data-uw-what="page">Delete<span class="visually-hidden"> <t t-out="p.name"/></span></a>
                                     </td>
                                 </tr>
                                 <tr t-if="not pages"><td colspan="4" class="text-muted">No pages yet.</td></tr>
@@ -120,6 +125,7 @@
                                             <input type="hidden" name="publish" t-att-value="'0' if post.is_published else '1'"/>
                                             <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-out="'Unpublish' if post.is_published else 'Publish'"/><span class="visually-hidden"> <t t-out="post.name"/></span></button>
                                         </form>
+                                        <a class="btn btn-sm btn-outline-danger uw-delete-link" t-attf-href="/my/site/#{site_slug}/post/#{post.id}/delete" t-att-data-uw-title="post.name" t-attf-data-uw-action="/my/site/#{site_slug}/post/#{post.id}/delete" data-uw-what="post">Delete<span class="visually-hidden"> <t t-out="post.name"/></span></a>
                                     </td>
                                 </tr>
                                 <tr t-if="not posts"><td colspan="3" class="text-muted">No blog posts yet.</td></tr>
@@ -148,6 +154,59 @@
                     </div>
                 </section>
 
+                <section id="deleted" class="mb-5" aria-labelledby="uw_deleted_h" t-if="deleted_pages or deleted_posts">
+                    <details>
+                        <summary id="uw_deleted_h" class="h5">Deleted (<t t-out="len(deleted_pages) + len(deleted_posts)"/>)</summary>
+                        <p class="text-muted mt-2">These are not on your site and visitors cannot see them. Restore one to bring it back as an unpublished draft.</p>
+                        <ul class="list-group">
+                            <li t-foreach="deleted_pages" t-as="dp" class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Page: <t t-out="dp.name"/></span>
+                                <form t-attf-action="/my/site/#{site_slug}/page/#{dp.id}/restore" method="post">
+                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Restore<span class="visually-hidden"> <t t-out="dp.name"/></span></button>
+                                </form>
+                            </li>
+                            <li t-foreach="deleted_posts" t-as="dpost" class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Blog post: <t t-out="dpost.name"/></span>
+                                <form t-attf-action="/my/site/#{site_slug}/post/#{dpost.id}/restore" method="post">
+                                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Restore<span class="visually-hidden"> <t t-out="dpost.name"/></span></button>
+                                </form>
+                            </li>
+                        </ul>
+                    </details>
+                </section>
+
+                <dialog id="uw_delete_dialog" aria-labelledby="uw_delete_title" class="rounded border p-4">
+                    <form method="post" id="uw_delete_form">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <h2 id="uw_delete_title" class="h5">Delete this <span id="uw_delete_what">page</span>?</h2>
+                        <p class="mb-1"><strong id="uw_delete_name"/></p>
+                        <p>It will be removed from your site and can't be seen by visitors.</p>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button type="button" class="btn btn-outline-secondary" id="uw_delete_cancel">Cancel</button>
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </div>
+                    </form>
+                </dialog>
+                <script>
+                    (function () {
+                        var dialog = document.getElementById("uw_delete_dialog");
+                        if (!dialog || typeof dialog.showModal !== "function") { return; }
+                        document.querySelectorAll(".uw-delete-link").forEach(function (link) {
+                            link.addEventListener("click", function (ev) {
+                                ev.preventDefault();
+                                document.getElementById("uw_delete_form").setAttribute("action", link.dataset.uwAction);
+                                document.getElementById("uw_delete_what").textContent = link.dataset.uwWhat;
+                                document.getElementById("uw_delete_name").textContent = link.dataset.uwTitle;
+                                dialog.showModal();
+                                document.getElementById("uw_delete_cancel").focus();
+                            });
+                        });
+                        document.getElementById("uw_delete_cancel").addEventListener("click", function () { dialog.close(); });
+                    })();
+                </script>
+
                 <section id="settings" aria-labelledby="uw_settings_h">
                     <h2 id="uw_settings_h" class="h4">Settings and privacy</h2>
                     <ul>
@@ -156,6 +215,28 @@
                         <li><a href="/user-websites/documentation">Help for member sites</a></li>
                     </ul>
                 </section>
+            </div>
+        </t>
+    </template>
+
+    <template id="owner_delete_confirm" name="Site Owner: Confirm Delete">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_delete_page_and_post] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-5">
+                <h1 class="h3">Delete this <t t-out="kind"/>?</h1>
+                <p><strong t-out="item_title"/></p>
+                <t t-if="is_home">
+                    <p class="alert alert-warning" role="alert">The home page cannot be deleted. You can edit it or unpublish it.</p>
+                    <a class="btn btn-outline-secondary" t-attf-href="/my/site/#{site_slug}">Back to my site</a>
+                </t>
+                <t t-else="">
+                    <p>It will be removed from your site and can't be seen by visitors.</p>
+                    <form t-attf-action="/my/site/#{site_slug}/#{kind}/#{item.id}/delete" method="post" class="d-flex gap-2">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <a class="btn btn-outline-secondary" t-attf-href="/my/site/#{site_slug}">Cancel</a>
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </t>
             </div>
         </t>
     </template>
@@ -204,6 +285,7 @@
                     <div class="d-flex flex-wrap gap-2">
                         <button type="submit" class="btn btn-success">Save</button>
                         <a t-attf-href="/my/site/#{site_slug}" class="btn btn-outline-secondary">Back to my site</a>
+                        <a t-if="page and not is_home" t-attf-href="/my/site/#{site_slug}/page/#{page.id}/delete" class="btn btn-outline-danger ms-auto">Delete</a>
                         <a t-if="page" t-att-href="page.url" class="btn btn-outline-secondary">View page</a>
                     </div>
                 </form>

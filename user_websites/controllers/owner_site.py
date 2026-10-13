@@ -28,8 +28,8 @@ Security model, all of it enforced here and again by the models:
   also filed as an automated content violation through the existing
   website.page._trigger_malicious_arch_violation().
 * POST routes carry Odoo's CSRF check. Writes are rate limited per user in Redis; bodies,
-  titles and images have size limits. Nothing here deletes: "remove" means unpublish and the
-  record is retained.
+  titles and images have size limits. Delete removes a page or post from view and the record is retained
+  (archived, restorable); there is no hard delete and no promise of erasure.
 """
 import base64
 import json
@@ -42,7 +42,7 @@ from markupsafe import Markup
 from werkzeug.exceptions import Forbidden, ServiceUnavailable, TooManyRequests
 from werkzeug.routing import RequestRedirect
 
-from odoo import http
+from odoo import fields, http
 from odoo.http import request
 from odoo.addons.edge_routing.utils import slugify
 from odoo.addons.user_websites.controllers.main import redis_client, UserWebsitesController
@@ -295,6 +295,12 @@ class UserWebsitesOwnerController(http.Controller):
             limit=MAX_IMAGES_PER_SITE,
         )
         home_url = f"/{(profile_user or profile_group).website_slug}"
+        deleted_pages = svc["website.page"].with_context(active_test=False).search(
+            domain + [("deleted_by_owner", "!=", False)], order="deleted_by_owner desc", limit=100
+        )
+        deleted_posts = svc["blog.post"].with_context(active_test=False).search(
+            domain + [("deleted_by_owner", "!=", False)], order="deleted_by_owner desc", limit=100
+        )
         return request.render(
             "user_websites.owner_site_dashboard",
             self._qcontext(
@@ -302,6 +308,8 @@ class UserWebsitesOwnerController(http.Controller):
                 profile_group,
                 pages=pages,
                 posts=posts,
+                deleted_pages=deleted_pages,
+                deleted_posts=deleted_posts,
                 images=images,
                 home_url=home_url,
                 max_images=MAX_IMAGES_PER_SITE,
@@ -491,6 +499,132 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         post.write({"is_published": publish == "1"})
         return request.redirect(f"/my/site/{quote(site_slug, safe='')}?saved=1", code=303)
+
+
+    # ------------------------------------------------------------ delete / restore
+
+    def _own_post(self, profile_user, profile_group, post_id):
+        # [@ANCHOR: user_websites:fn_owner_own_post]
+        post = self._svc()["blog.post"].with_context(active_test=False).browse(post_id)
+        if not post.exists():
+            raise request.not_found()
+        if (profile_user and post.owner_user_id != profile_user) or (
+            profile_group and post.user_websites_group_id != profile_group
+        ):
+            raise request.not_found()
+        return post
+
+    def _own_page_any(self, profile_user, profile_group, page_id):
+        """Like _own_page, but also finds a page the owner deleted (its address is parked)."""
+        page = self._svc()["website.page"].with_context(active_test=False).browse(page_id)
+        if not page.exists():
+            raise request.not_found()
+        if (profile_user and page.owner_user_id != profile_user) or (
+            profile_group and page.user_websites_group_id != profile_group
+        ):
+            raise request.not_found()
+        return page
+
+    def _back(self, site_slug, flag):
+        return request.redirect(f"/my/site/{quote(site_slug, safe='')}?{flag}", code=303)
+
+    @http.route(
+        "/my/site/<string:site_slug>/<any(page,post):kind>/<int:item_id>/delete",
+        type="http",
+        auth="user",
+        methods=["GET"],
+        website=True,
+        sitemap=False,
+    )
+    # [@ANCHOR: user_websites:COMM_owner_delete_confirm]
+    # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    def owner_delete_confirm(self, site_slug, kind, item_id, **kwargs):
+        """The no-JavaScript confirmation step (the dashboard shows the same question in a dialog)."""
+        profile_user, profile_group = self._resolve_site(site_slug)
+        if kind == "page":
+            item = self._own_page(profile_user, profile_group, item_id)
+            title = item.name
+            is_home = item.url == f"/{(profile_user or profile_group).website_slug}"
+        else:
+            item = self._own_post(profile_user, profile_group, item_id)
+            title = item.name
+            is_home = False
+        return request.render(
+            "user_websites.owner_delete_confirm",
+            self._qcontext(profile_user, profile_group, kind=kind, item=item, item_title=title, is_home=is_home),
+        )
+
+    @http.route(
+        "/my/site/<string:site_slug>/<any(page,post):kind>/<int:item_id>/delete",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_owner_delete]
+    # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    def owner_delete(self, site_slug, kind, item_id, **kwargs):
+        """Delete = removed from the site and from every public surface at once, kept archived.
+
+        The record stays (active False, deleted_by_owner stamped): the platform retains data and this
+        interface never promises erasure. A page is moved to a private address so its own can be reused.
+        The home page cannot be deleted. Runs as the service account after the ownership checks."""
+        profile_user, profile_group = self._resolve_site(site_slug)
+        self._rate_limit("write", WRITES_PER_MINUTE)
+        slug = (profile_user or profile_group).website_slug
+        now = fields.Datetime.now()
+        if kind == "page":
+            page = self._own_page(profile_user, profile_group, item_id)
+            if page.url == f"/{slug}":
+                return self._back(site_slug, "error=home_delete")
+            page.write(
+                {
+                    "deleted_original_url": page.url,
+                    "url": f"/{slug}/deleted-{page.id}",
+                    "website_published": False,
+                    "active": False,
+                    "deleted_by_owner": now,
+                }
+            )
+        else:
+            post = self._own_post(profile_user, profile_group, item_id)
+            post.write({"is_published": False, "active": False, "deleted_by_owner": now})
+        return self._back(site_slug, "saved=deleted")
+
+    @http.route(
+        "/my/site/<string:site_slug>/<any(page,post):kind>/<int:item_id>/restore",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_owner_restore]
+    # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    def owner_restore(self, site_slug, kind, item_id, **kwargs):
+        """Bring back something the owner deleted. It returns UNPUBLISHED: publishing is a separate,
+        deliberate act. Only items the owner deleted can be restored here (a page archived by
+        moderation, for instance, cannot)."""
+        profile_user, profile_group = self._resolve_site(site_slug)
+        self._rate_limit("write", WRITES_PER_MINUTE)
+        slug = (profile_user or profile_group).website_slug
+        if kind == "page":
+            page = self._own_page_any(profile_user, profile_group, item_id)
+            if not page.deleted_by_owner:
+                raise request.not_found()
+            url = page.deleted_original_url or f"/{slug}/restored-{page.id}"
+            if not (url == f"/{slug}" or url.startswith(f"/{slug}/")) or self._svc()["website.page"].search_count(
+                [("url", "=", url), ("website_id", "=", page.website_id.id)]
+            ):
+                url = f"/{slug}/restored-{page.id}"
+            page.write({"url": url, "active": True, "deleted_by_owner": False, "deleted_original_url": False})
+        else:
+            post = self._own_post(profile_user, profile_group, item_id)
+            if not post.deleted_by_owner:
+                raise request.not_found()
+            post.write({"active": True, "deleted_by_owner": False})
+        return self._back(site_slug, "saved=restored")
 
     # ------------------------------------------------------------------- images
 
