@@ -222,6 +222,8 @@ class TestOwnerSite(HamsHttpCase):
         self.assertIn('href="/privacy"', html)
         self.assertIn('href="/terms"', html)
         self.assertIn("reportViolationModal", html)
+        # QA-009: the dialog's title is an <h2> styled as h5; a bare <h5> made every page jump h2 -> h5.
+        self.assertIn('<h2 class="modal-title h5 fw-bold" id="reportViolationModalLabel">', html)
 
     # ------------------------------------------------------------------ toolbar
 
