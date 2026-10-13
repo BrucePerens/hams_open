@@ -6,7 +6,7 @@
 
 from odoo import models, fields, api, _
 from odoo.exceptions import ValidationError, UserError
-from odoo.addons.edge_routing.utils import slugify, RESERVED_SLUGS
+from odoo.addons.edge_routing.utils import slugify, reserved_slug_words
 from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
 )
@@ -37,7 +37,7 @@ class EdgeRoutingMixin(models.AbstractModel):
     @api.constrains("website_slug")
     def _check_reserved_slugs(self):
         for record in self:
-            if record.website_slug and record.website_slug in RESERVED_SLUGS:
+            if record.website_slug and record.website_slug in reserved_slug_words(self.env):
                 raise ValidationError(
                     _("The slug '%s' is reserved and cannot be used.")
                     % record.website_slug
@@ -72,7 +72,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         base_slug = slugify(base_string)
         
         routing_model_names = self._get_routing_models()
-        existing_slugs = set(RESERVED_SLUGS)
+        existing_slugs = set(reserved_slug_words(self.env))
         if forbidden_slugs:
             existing_slugs.update(forbidden_slugs)
 
@@ -221,7 +221,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         for vals in vals_list:
             if vals.get("website_slug"):
                 slug_to_check = slugify(vals["website_slug"])
-                if slug_to_check in RESERVED_SLUGS:
+                if slug_to_check in reserved_slug_words(self.env):
                     raise ValidationError(_("The slug '%s' is reserved and cannot be used.") % vals["website_slug"])
                 vals["website_slug"] = self._generate_unique_slug(vals["website_slug"], forbidden_slugs=assigned_slugs)
                 assigned_slugs.add(vals["website_slug"])
@@ -238,7 +238,7 @@ class EdgeRoutingMixin(models.AbstractModel):
     def write(self, vals):
         if vals.get("website_slug"):
             slug_to_check = slugify(vals["website_slug"])
-            if slug_to_check in RESERVED_SLUGS:
+            if slug_to_check in reserved_slug_words(self.env):
                 raise ValidationError(_("The slug '%s' is reserved and cannot be used.") % vals["website_slug"])
             
             if len(self) > 1:

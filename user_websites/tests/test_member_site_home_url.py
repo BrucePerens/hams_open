@@ -8,12 +8,14 @@ Bruce, 2026-10-12: "make all of the user websites be hams.com/<callsign> without
 """
 import importlib.util
 import os
+from unittest.mock import patch
 
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 
-from odoo.addons.edge_routing.utils import RESERVED_SLUGS
+from odoo.addons.edge_routing import utils as edge_utils
+from odoo.addons.edge_routing.utils import RESERVED_SLUGS, reserved_slug_words, routed_first_segments
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
@@ -138,6 +140,40 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
             and "_" not in w
         )
         self.assertEqual(missing, [], "Add these first path segments to edge_routing.utils.RESERVED_SLUGS")
+
+    def test_09b_routed_first_segments_are_reserved_without_the_fixed_list(self):
+        # [@ANCHOR: test_routed_first_segments_are_reserved]
+        # Tests [@ANCHOR: edge_routing:routed_first_segments]
+        # Tests [@ANCHOR: edge_routing:reserved_slug_words]
+        # A route added after the fixed list was written still cannot be shadowed: with the fixed list
+        # emptied, the live routing map alone must refuse the words of core and platform routes.
+        self.assertIn("web", routed_first_segments(self.env))
+        with patch.object(edge_utils, "RESERVED_SLUGS", frozenset()):
+            for word in ("web", "odoo"):
+                self.assertIn(word, reserved_slug_words(self.env))
+                with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
+                    self.owner.write({"website_slug": word})
+                    self.env.flush_all()
+                with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):
+                    self.env["user.websites.group"].create({"name": "Shadow " + word, "website_slug": word})
+                    self.env.flush_all()
+            # A name that slugifies to a routed word gets another slug, not a refusal.
+            self.assertNotIn(self.env["res.users"]._generate_unique_slug("Web"), ("web", ""))
+        self.assertNotIn("homeurlowner", reserved_slug_words(self.env))
+
+    def test_09c_migration_reports_reserved_slug_collisions(self):
+        # [@ANCHOR: test_migration_report_reserved_slug_collisions]
+        # Tests [@ANCHOR: user_websites:migrate_report_reserved_slug_collisions]
+        self.env.cr.execute("UPDATE res_users SET website_slug = 'calendar' WHERE id = %s", (self.owner.id,))
+        path = os.path.join(os.path.dirname(__file__), "..", "migrations", "0.6", "post-migration.py")
+        spec = importlib.util.spec_from_file_location("uw_migrate_06", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with self.assertLogs("uw_migrate_06", level="ERROR"):
+            found = module.migrate(self.env.cr, "0.5")
+        self.assertIn(("member", self.owner.id, "calendar"), found)
+        self.env.cr.execute("SELECT website_slug FROM res_users WHERE id = %s", (self.owner.id,))
+        self.assertEqual(self.env.cr.fetchone()[0], "calendar")  # reports only; the data is not changed
 
     def test_10_migration_moves_home_pages_to_slug(self):
         # Tests [@ANCHOR: user_websites:migrate_home_url_to_slug]
