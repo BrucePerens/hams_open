@@ -23,7 +23,8 @@ host before recording starts.
 
 Growth estimate: the bytes of the regular files directly in the directory and in its `sessions/` folder, with the bytes
 modified in the last 7 days giving a per-day rate and, with the filesystem's free space, the days left until the
-failure line. The listing stops after a time budget and says so rather than make the monitor's 60 second timeout fail
+failure line. A directory younger than 7 days is averaged over its own age (at least one hour), not over the full window,
+so the first day does not read as no growth. The listing stops after a time budget and says so rather than make the monitor's 60 second timeout fail
 the check. File names are listed, never opened: recordings are not read here.
 
 On a failure the first stderr lines are `SEVERITY:<level>` and a message that carries the essentials in its first
@@ -83,19 +84,21 @@ def filesystem_usage(path):
 
 # [@ANCHOR: pager_duty:recordings_volume]
 def directory_volume(path, now=None, window_days=RATE_WINDOW_DAYS, budget=SCAN_BUDGET_SECONDS):
-    """(file_count, total_bytes, recent_bytes, complete) for the regular files directly in `path` and in
+    """(file_count, total_bytes, recent_bytes, complete, oldest_mtime) for the regular files directly in `path` and in
     `path/sessions`. `recent_bytes` is the part modified within `window_days`. `complete` is False when the time
-    budget ran out. A directory that does not exist or cannot be listed has no files."""
+    budget ran out. `oldest_mtime` is the oldest modification time seen (None with no files). A directory that does not
+    exist or cannot be listed has no files."""
     now = time.time() if now is None else now
     cutoff = now - window_days * SECONDS_PER_DAY
     deadline = time.monotonic() + budget
     count = total = recent = 0
+    oldest = None
     for folder in (path, os.path.join(path, "sessions")):
         try:
             with os.scandir(folder) as entries:
                 for entry in entries:
                     if time.monotonic() > deadline:
-                        return count, total, recent, False
+                        return count, total, recent, False, oldest
                     try:
                         if not entry.is_file(follow_symlinks=False):
                             continue
@@ -106,9 +109,11 @@ def directory_volume(path, now=None, window_days=RATE_WINDOW_DAYS, budget=SCAN_B
                     total += info.st_size
                     if info.st_mtime >= cutoff:
                         recent += info.st_size
+                    if oldest is None or info.st_mtime < oldest:
+                        oldest = info.st_mtime
         except OSError:
             continue
-    return count, total, recent, True
+    return count, total, recent, True, oldest
 
 
 def human(nbytes):
@@ -121,12 +126,16 @@ def human(nbytes):
 
 
 # [@ANCHOR: pager_duty:recordings_estimate]
-def estimate(used_bytes, available_bytes, volume, window_days=RATE_WINDOW_DAYS, fail=DEFAULT_FAIL_PERCENT):
-    """(rate_bytes_per_day, days_to_fail). The rate is the bytes modified in the window over the window's length, which
-    under-estimates a directory younger than the window and never over-estimates it. `days_to_fail` is 0.0 when the
+def estimate(used_bytes, available_bytes, volume, window_days=RATE_WINDOW_DAYS, fail=DEFAULT_FAIL_PERCENT, now=None):
+    """(rate_bytes_per_day, days_to_fail). The rate is the bytes modified in the window over the window's length, or
+    over the directory's own age (at least one hour) when it is younger than the window. `days_to_fail` is 0.0 when the
     failure line is already crossed and None when the rate is zero."""
-    _count, _total, recent, _complete = volume
-    rate = recent / float(window_days)
+    _count, _total, recent, _complete, oldest = volume
+    now = time.time() if now is None else now
+    span_days = float(window_days)
+    if oldest is not None:
+        span_days = min(span_days, max((now - oldest) / SECONDS_PER_DAY, 1.0 / 24.0))
+    rate = recent / span_days
     # Bytes of growth until used / (used + available) reaches `fail` percent, the denominator `filesystem_usage` uses.
     room = fail / 100.0 * (used_bytes + available_bytes) - used_bytes
     if room <= 0:
@@ -137,17 +146,19 @@ def estimate(used_bytes, available_bytes, volume, window_days=RATE_WINDOW_DAYS, 
 
 
 def summary_line(path, percent, volume, rate, days_to_fail, fail=DEFAULT_FAIL_PERCENT):
-    count, total, _recent, complete = volume
+    count, total, _recent, complete, _oldest = volume
     if days_to_fail is None:
         tail = "no growth seen"
     elif days_to_fail <= 0:
         tail = f"already past {fail:.0f}%"
+    elif days_to_fail > 3650:
+        tail = f"more than 10 years to {fail:.0f}%"
     else:
         tail = f"about {days_to_fail:.0f} days to {fail:.0f}%"
     partial = "" if complete else " (listing stopped early, partial)"
     return (
-        f"recordings in {path}: {count} files, {human(total)}, {human(rate)}/day over the last "
-        f"{RATE_WINDOW_DAYS} days{partial}; filesystem {percent:.0f}% used, {tail}"
+        f"recordings in {path}: {count} files, {human(total)}, {human(rate)}/day (up to the last "
+        f"{RATE_WINDOW_DAYS} days){partial}; filesystem {percent:.0f}% used, {tail}"
     )
 
 

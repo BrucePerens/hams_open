@@ -76,32 +76,46 @@ class TestRecordingsVolumeEstimate(HamsTransactionCase):
             self._touch(os.path.join(tmp, "old.opus"), 5000, 30)
             self._touch(os.path.join(tmp, "sessions", "s.json"), 10, 2)
             self._touch(os.path.join(tmp, "elsewhere", "ignored.bin"), 99999, 0)
-            count, total, recent, complete = check_mod.directory_volume(tmp)
+            count, total, recent, complete, oldest = check_mod.directory_volume(tmp)
         self.assertEqual((count, total, recent, complete), (4, 6110, 1110, True))
+        self.assertAlmostEqual(oldest, time.time() - 30 * DAY, delta=60)
 
     def test_a_directory_that_does_not_exist_has_no_files(self):
-        self.assertEqual(check_mod.directory_volume("/nonexistent/qso_recordings"), (0, 0, 0, True))
+        self.assertEqual(check_mod.directory_volume("/nonexistent/qso_recordings"), (0, 0, 0, True, None))
 
     def test_the_listing_stops_at_its_time_budget_and_says_so(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._touch(os.path.join(tmp, "a.opus"), 10, 0)
-            *_, complete = check_mod.directory_volume(tmp, budget=-1)
+            _c, _t, _r, complete, _o = check_mod.directory_volume(tmp, budget=-1)
         self.assertFalse(complete)
 
     def test_days_to_fail_from_the_growth_rate(self):
         # 70 GB written in the last 7 days is 10 GB/day. Used 600 GB, available 400 GB: 85 percent is 850 GB,
         # 250 GB of room, 25 days.
-        volume = (100, 80 * GB, 70 * GB, True)
+        volume = (100, 80 * GB, 70 * GB, True, time.time() - 30 * DAY)
         rate, days = check_mod.estimate(600 * GB, 400 * GB, volume)
         self.assertAlmostEqual(rate, 10 * GB)
         self.assertAlmostEqual(days, 25.0)
 
     def test_no_growth_has_no_estimate_and_a_crossed_line_is_zero_days(self):
-        self.assertEqual(check_mod.estimate(100 * GB, 900 * GB, (1, 1, 0, True))[1], None)
-        self.assertEqual(check_mod.estimate(900 * GB, 100 * GB, (1, 1, GB, True))[1], 0.0)
+        self.assertEqual(check_mod.estimate(100 * GB, 900 * GB, (1, 1, 0, True, None))[1], None)
+        self.assertEqual(check_mod.estimate(900 * GB, 100 * GB, (1, 1, GB, True, time.time() - DAY))[1], 0.0)
+
+    def test_a_directory_younger_than_the_window_is_averaged_over_its_own_age(self):
+        # 6 GB written over 12 hours is 12 GB/day, not 6 GB / 7 days.
+        now = 1_000_000_000.0
+        rate, _days = check_mod.estimate(100 * GB, 900 * GB, (10, 6 * GB, 6 * GB, True, now - 0.5 * DAY), now=now)
+        self.assertAlmostEqual(rate, 12 * GB)
+        # A directory seconds old is not divided by seconds: the span has a one hour floor.
+        rate, _days = check_mod.estimate(100 * GB, 900 * GB, (1, GB, GB, True, now - 5), now=now)
+        self.assertAlmostEqual(rate, 24 * GB)
+
+    def test_a_huge_horizon_reads_as_more_than_ten_years(self):
+        line = check_mod.summary_line("/r", 24.0, (10, 2 * GB, 1000, True, None), 1000, 400000.0)
+        self.assertIn("more than 10 years to 85%", line)
 
     def test_summary_line_carries_files_size_rate_and_days(self):
-        line = check_mod.summary_line("/r", 24.0, (10, 2 * GB, 7 * GB, True), 1 * GB, 55.0)
+        line = check_mod.summary_line("/r", 24.0, (10, 2 * GB, 7 * GB, True, None), 1 * GB, 55.0)
         for part in ("/r", "10 files", "2.0 GB", "1.0 GB/day", "24% used", "55 days to 85%"):
             self.assertIn(part, line)
 
