@@ -92,6 +92,8 @@ class TestPrivacyGDPR(HamsHttpCase):
             response.headers.get("Content-Disposition", ""),
             "Response must prompt a file download.",
         )
+        # A person's whole data export is never stored by a browser cache, a proxy or Cloudflare.
+        self.assertEqual(response.headers.get("Cache-Control"), "private, no-store")
 
         # Parse the JSON response and assert data accuracy
         exported_data = json.loads(response.content)
