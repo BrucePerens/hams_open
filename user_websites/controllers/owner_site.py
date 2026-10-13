@@ -40,11 +40,13 @@ import redis
 from lxml import etree, html as lxml_html
 from markupsafe import Markup
 from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
+from werkzeug.routing import RequestRedirect
 
 from odoo import http
 from odoo.http import request
 from odoo.addons.edge_routing.utils import slugify
 from odoo.addons.user_websites.controllers.main import redis_client, UserWebsitesController
+from odoo.addons.user_websites.models.site_slug import legacy_slug_target
 from odoo.addons.user_websites.models.member_html import (
     MAX_BODY_CHARS,
     PAGE_SLUG_RE,
@@ -135,6 +137,19 @@ def _arch_body(arch_base):
     return inner, True
 
 
+class LegacySiteRedirect(RequestRedirect):
+    """Raised for an owner URL under a retired slug: the same URL under the live slug.
+
+    GET and HEAD get a 301; any other method gets a 308, which keeps the method and the body, so a
+    form posted to a stale page (a tab left open across a rename) still lands on the live site
+    with its CSRF token (the session is the same).
+    """
+
+    def __init__(self, new_url, safe_method):
+        super().__init__(new_url)
+        self.code = 301 if safe_method else 308
+
+
 class UserWebsitesOwnerController(http.Controller):
 
     # ------------------------------------------------------------------ helpers
@@ -162,8 +177,26 @@ class UserWebsitesOwnerController(http.Controller):
             if user.id not in profile_group.member_ids.ids or profile_group.is_suspended_from_websites:
                 raise request.not_found()
         else:
+            self._redirect_legacy_slug(site_slug)
             raise request.not_found()
         return profile_user, profile_group
+
+    def _redirect_legacy_slug(self, site_slug):
+        """Raise a redirect to the same owner URL under the live slug when `site_slug` is retired."""
+        # [@ANCHOR: user_websites:owner_redirect_legacy_slug]
+        # Verified by [@ANCHOR: test_site_slug_one_site]
+        target = legacy_slug_target(request.env, site_slug)
+        if not target:
+            return
+        path = request.httprequest.path
+        prefix = f"/my/site/{site_slug}"
+        if not path.startswith(prefix):
+            return
+        new_url = f"/my/site/{quote(target, safe='')}" + path[len(prefix):]
+        query = request.httprequest.query_string.decode("utf-8", "replace")
+        if query:
+            new_url += "?" + query
+        raise LegacySiteRedirect(new_url, request.httprequest.method in ("GET", "HEAD"))
 
     def _owner_domain(self, profile_user, profile_group):
         # [@ANCHOR: user_websites:fn_owner_owner_domain]

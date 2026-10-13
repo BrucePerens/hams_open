@@ -5,6 +5,7 @@ from odoo import http
 from odoo.http import request
 from markupsafe import Markup
 from odoo.addons.user_websites.models.member_html import MAX_BODY_CHARS, sanitize_member_html
+from odoo.addons.user_websites.models.site_slug import legacy_slug_target
 import json
 import logging
 import os
@@ -59,6 +60,20 @@ def _report_violation_redirect_target(reported_url, query_param):
             path = parsed_path
     separator = "&" if "?" in path else "?"
     return f"{path}{separator}{query_param}"
+
+
+def _legacy_slug_redirect(website_slug, rest=""):
+    """A 301 from a retired site slug to the same page of the site that holds it now, or None.
+
+    [@ANCHOR: user_websites:fn_main_legacy_slug_redirect]
+    Verified by [@ANCHOR: test_site_slug_one_site]
+    `rest` is the part after the slug ("", "/blog"). The target is built from the slug as stored
+    (limited to [a-z0-9-]) and quoted, so it is always a same-origin path.
+    """
+    target = legacy_slug_target(request.env, website_slug)
+    if not target:
+        return None
+    return request.redirect("/" + quote(target, safe="") + rest, code=301, local=True)
 
 
 def _serve_core_fallback():
@@ -203,6 +218,9 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
+            legacy = _legacy_slug_redirect(website_slug, "/blog")
+            if legacy:
+                return legacy
             raise request.not_found()
 
         if profile_user and profile_user.is_suspended_from_websites:
@@ -305,6 +323,9 @@ class UserWebsitesController(http.Controller):
             else None
         )
         if not record:
+            legacy = _legacy_slug_redirect(website_slug)
+            if legacy:
+                return legacy
             # Not a member site: some other page may own this path (e.g. a stock CMS page).
             response = _serve_core_fallback()
             if response:
@@ -346,6 +367,11 @@ class UserWebsitesController(http.Controller):
         )
 
         if not profile_user and not profile_group:
+            # A retired slug leads to the live site before any stock page is looked for: a page
+            # left at the old address would otherwise shadow the redirect and be a second site.
+            legacy = _legacy_slug_redirect(website_slug)
+            if legacy:
+                return legacy
             response = _serve_core_fallback()
             if response:
                 return response

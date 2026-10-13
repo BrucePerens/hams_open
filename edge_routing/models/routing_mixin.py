@@ -225,7 +225,7 @@ class EdgeRoutingMixin(models.AbstractModel):
                     raise ValidationError(_("The slug '%s' is reserved and cannot be used.") % vals["website_slug"])
                 vals["website_slug"] = self._generate_unique_slug(vals["website_slug"], forbidden_slugs=assigned_slugs)
                 assigned_slugs.add(vals["website_slug"])
-            elif vals.get("name"):
+            elif vals.get("name") and not self.env.context.get("edge_routing_no_name_slug"):
                 vals["website_slug"] = self._generate_unique_slug(vals["name"], forbidden_slugs=assigned_slugs)
                 assigned_slugs.add(vals["website_slug"])
         return super().create(vals_list)
@@ -247,7 +247,13 @@ class EdgeRoutingMixin(models.AbstractModel):
                 vals["website_slug"], record_id=self.id
             )
         
-        if len(self) == 1 and not vals.get("website_slug") and not self.website_slug and "name" in vals:
+        if (
+            len(self) == 1
+            and not vals.get("website_slug")
+            and not self.website_slug
+            and "name" in vals
+            and not self.env.context.get("edge_routing_no_name_slug")
+        ):
             vals["website_slug"] = self._generate_unique_slug(vals["name"], record_id=self.id)
 
         old_slugs = [s for s in self.mapped("website_slug") if s]
