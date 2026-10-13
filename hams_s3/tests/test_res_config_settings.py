@@ -74,7 +74,8 @@ class TestHamsS3ConfigSettings(HamsTransactionCase):
         self.assertEqual(env_svc.uid, service_account.id)
         self.assertTrue(env_svc.context.get("mail_notrack"))
 
-    # Tests [@ANCHOR: hams_s3_get_values] [@ANCHOR: hams_s3_set_values]
+    # Tests [@ANCHOR: hams_s3_get_values]
+    # Tests [@ANCHOR: hams_s3_set_values]
     def test_get_values_and_set_values_are_safe_no_ops_when_storage_backend_is_absent(self):
         # get_values()/set_values() both guard their real S3-persisting
         # logic behind `'storage.backend' in self.env` -- this is the one

@@ -255,8 +255,10 @@ class TestDnsRecordModel(HamsTransactionCase):
 
 @tagged("post_install", "-at_install")
 class TestDnsPush(HamsTransactionCase):
-    """The push against an in-memory Cloudflare. Tests [@ANCHOR: cloudflare:COMM_dns_push_plan]
-    [@ANCHOR: cloudflare:COMM_dns_push_apply] [@ANCHOR: cloudflare:COMM_dns_problems_hook]"""
+    """The push against an in-memory Cloudflare.
+    Tests [@ANCHOR: cloudflare:COMM_dns_push_plan]
+    Tests [@ANCHOR: cloudflare:COMM_dns_push_apply]
+    Tests [@ANCHOR: cloudflare:COMM_dns_problems_hook]"""
 
     def setUp(self):
         super().setUp()

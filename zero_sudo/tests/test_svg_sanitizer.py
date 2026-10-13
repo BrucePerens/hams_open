@@ -6,8 +6,8 @@
 """Tests for zero_sudo's SVG allowlist sanitizer.
 
 Tests [@ANCHOR: zero_sudo:svg_allowlist_sanitizer]
-[@ANCHOR: test_svg_allowlist_sanitizer_unit] and
-[@ANCHOR: test_svg_allowlist_sanitizer_fields] live here. The real-browser half
+The test anchors test_svg_allowlist_sanitizer_unit and
+test_svg_allowlist_sanitizer_fields live here. The real-browser half
 (do the shapes render, does anything run) is in hams_com's theme_hams tests,
 which need the site's own theme and CSP.
 """

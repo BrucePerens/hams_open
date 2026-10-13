@@ -60,7 +60,8 @@ class TestRecordingsDiskUsage(HamsTransactionCase):
 
 @tagged("post_install", "-at_install")
 class TestRecordingsVolumeEstimate(HamsTransactionCase):
-    # Tests [@ANCHOR: pager_duty:recordings_volume] [@ANCHOR: pager_duty:recordings_estimate]
+    # Tests [@ANCHOR: pager_duty:recordings_volume]
+    # Tests [@ANCHOR: pager_duty:recordings_estimate]
     def _touch(self, path, size, age_days):
         with open(path, "wb") as f:  # audit-ignore-path
             f.write(b"\0" * size)
