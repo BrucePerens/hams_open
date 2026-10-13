@@ -144,3 +144,48 @@ class TestInboundSpamFilter(HamsTransactionCase):
             '<a href="https://www.docusign.net/Signing/envelope123">Sign now</a></p>',
         )
         self.assertEqual(reasons, [])
+
+    # ------------------------------------------------------------------
+    # Hostile and edge-case input (the function's docstring promises it
+    # never raises on malformed input, and it runs inside mail ingestion).
+    # ------------------------------------------------------------------
+
+    def test_11_malformed_href_does_not_raise_and_other_links_still_count(self):
+        # urlsplit("http://[x/") raises ValueError("Invalid IPv6 URL"); one such href used to break the whole
+        # function. The well-formed link in the same message must still be judged.
+        body = (
+            '<p>Your QuickBooks account: <a href="http://[x/">one</a> '
+            '<a href="https://click.sleadtrack.com/go?id=1">two</a></p>'
+        )
+        reasons = detect_inbound_spam_signals(subject="Account notice", body_html=body)
+        self.assertTrue(any("quickbooks" in reason.lower() for reason in reasons), reasons)
+
+    def test_12_only_malformed_hrefs_flag_nothing(self):
+        body = '<p>See <a href="http://[x/">this</a> and <a href="https://[::1/">that</a></p>'
+        self.assertEqual(detect_inbound_spam_signals(subject="Hello", body_html=body), [])
+
+    def test_13_none_subject_and_body_are_accepted(self):
+        self.assertEqual(detect_inbound_spam_signals(subject=None, body_html=None), [])
+
+    def test_14_unsuccessful_payment_lure_is_flagged(self):
+        reasons = detect_inbound_spam_signals(
+            subject="Unsuccessful payment for your subscription", body_html="<p>Update your card.</p>"
+        )
+        self.assertTrue(any("billing" in reason for reason in reasons), reasons)
+
+    def test_15_lookalike_domains_are_not_the_brands_own_domain(self):
+        # "evilintuit.com" ends with "intuit.com" as a string but is not a subdomain of it, and
+        # "intuit.com.evil.example" merely starts with it. Both must be flagged as impersonation.
+        for link in ("https://evilintuit.com/login", "https://intuit.com.evil.example/login"):
+            reasons = detect_inbound_spam_signals(
+                subject="Your QuickBooks invoice",
+                body_html='<p>Pay in QuickBooks: <a href="%s">open</a></p>' % link,
+            )
+            self.assertTrue(any("quickbooks" in reason.lower() for reason in reasons), (link, reasons))
+
+    def test_16_brand_subdomain_and_uppercase_host_match_the_real_domain(self):
+        reasons = detect_inbound_spam_signals(
+            subject="Your QuickBooks invoice",
+            body_html='<p>Pay in QuickBooks: <a href="https://Accounts.INTUIT.com/pay">open</a></p>',
+        )
+        self.assertEqual(reasons, [])
