@@ -51,6 +51,27 @@ def slug_policy(env):
     return POLICY_CALLSIGN if row and row[0] == POLICY_CALLSIGN else POLICY_NAME_CALLSIGN
 
 
+def is_service_account(env, user):
+    """Whether `user` (a single res.users record or None) is a service account, read with SQL: the
+    callers include provisioning and invitation flows whose account may not read the field."""
+    # [@ANCHOR: user_websites:fn_site_slug_is_service_account]
+    if user is None or not user.id:
+        return False
+    env["res.users"].flush_model(["is_service_account"])
+    env.cr.execute("SELECT COALESCE(is_service_account, FALSE) FROM res_users WHERE id = %s", (user.id,))  # audit-ignore-sql: parameterised, read-only
+    row = env.cr.fetchone()
+    return bool(row and row[0])
+
+
+def current_slug(env, user):
+    """The stored website_slug of one res.users record, read with SQL (see is_service_account)."""
+    # [@ANCHOR: user_websites:fn_site_slug_current_slug]
+    env["res.users"].flush_model(["website_slug"])
+    env.cr.execute("SELECT website_slug FROM res_users WHERE id = %s", (user.id,))  # audit-ignore-sql: parameterised, read-only
+    row = env.cr.fetchone()
+    return row[0] if row else False
+
+
 def _next_hop(svc, current):
     """The slug `/current` redirects to (a 301 row to a single-segment path), or None."""
     row = svc["website.rewrite"].search(

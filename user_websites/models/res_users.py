@@ -277,7 +277,7 @@ class ResUsers(models.Model):
         explicit slug for a member with no callsign is the caller's deliberate choice and is kept."""
         if site_slug.slug_policy(self.env) != site_slug.POLICY_CALLSIGN:
             return False
-        if vals.get("is_service_account") or (record is not None and record.is_service_account):
+        if vals.get("is_service_account") or site_slug.is_service_account(self.env, record):
             return False
         touches = "website_slug" in vals or any(f in vals for f in self._slug_identity_fields())
         identity = (record or self)._slug_identity(vals)
@@ -290,7 +290,7 @@ class ResUsers(models.Model):
             return False
         if "website_slug" in vals:
             return False
-        return record is None or not record.website_slug
+        return record is None or not site_slug.current_slug(self.env, record)
 
     # [@ANCHOR: user_websites:COMM_res_users_write]
     def write(self, vals):
