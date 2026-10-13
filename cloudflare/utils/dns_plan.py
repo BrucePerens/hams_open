@@ -166,3 +166,47 @@ def render(entries):
     lines.append("Records at Cloudflare that Odoo has no row for are never changed or deleted; a delete happens only "
                  "for a row marked retire that is linked to the record by id.")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------------------------
+# Capacity (Bruce's design, docs/design/CALLSIGN_DNS_HAMS_COM.md in hams_com): a zone holds a limited number of
+# records, and every verified member adds one delegation record. A push that would take the zone past 90% of its
+# limit is refused, so there is always room to retire records and for infrastructure changes.
+# ---------------------------------------------------------------------------------------------
+# [@ANCHOR: cloudflare:COMM_dns_capacity]
+CAPACITY_HARD_STOP_PERCENT = 90
+# Free zones created before this date have the older, larger limit (Cloudflare's DNS record limits page).
+FREE_OLD_ZONE_CUTOFF = "2024-09-01"
+
+
+def record_limit(plan_legacy_id, created_on):
+    """The zone's record limit from its plan, or None when Cloudflare gives no per-zone limit (Enterprise, an
+    account quota) or the plan is not recognised. `created_on` is Cloudflare's ISO date string."""
+    plan = (plan_legacy_id or "").strip().lower()
+    if plan == "free":
+        return 1000 if (created_on or "9999")[:10] < FREE_OLD_ZONE_CUTOFF else 200
+    if plan in ("pro", "business"):
+        return 3500
+    return None
+
+
+def capacity_problem(zone_name, limit, current, creates, deletes):
+    """A reason string when the push would pass the hard stop, else None."""
+    if limit is None:
+        return None
+    projected = current + creates - deletes
+    ceiling = limit * CAPACITY_HARD_STOP_PERCENT // 100
+    if creates > deletes and projected > ceiling:
+        return (f"{zone_name} holds {current} of {limit} records; this push would make it {projected}, past the "
+                f"{CAPACITY_HARD_STOP_PERCENT}% hard stop of {ceiling}. Retire records first or change the plan")
+    return None
+
+
+def is_member_delegation(entry, zone_name):
+    """An NS row for a single label directly under the zone, such as k6bp.hams.com: a member's name."""
+    name = normalize_name(entry.get("name"))
+    suffix = "." + (zone_name or "")
+    if entry.get("type") != "NS" or not zone_name or not name.endswith(suffix):
+        return False
+    label = name[: -len(suffix)]
+    return bool(label) and "." not in label and label != "*"

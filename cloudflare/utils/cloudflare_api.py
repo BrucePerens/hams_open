@@ -597,3 +597,35 @@ def delete_dns_record(zone_id, record_id, token):
     if response is not None and response.status_code in (200, 404):
         return True, record_id
     return False, "API Error"
+
+
+def get_zone_details(zone_id, token):
+    """The zone object (plan, creation date, name): (True, dict) or (False, message). GET only."""
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not is_cloudflare_id(zone_id):
+        return False, "Missing credentials or zone"
+    response = _make_request(
+        "GET", f"https://api.cloudflare.com/client/v4/zones/{zone_id}", token,
+        "Cloudflare Zone Details API failed", timeout=15,
+    )
+    if response is None or response.status_code != 200:
+        return False, "API Error"
+    return True, response.json().get("result") or {}
+
+
+def count_dns_records(zone_id, token):
+    """How many DNS records the zone holds (Cloudflare's own total_count): (True, int) or (False, message).
+    GET only, one record per page asked for."""
+    # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
+    if not token or not is_cloudflare_id(zone_id):
+        return False, "Missing credentials or zone"
+    response = _make_request(
+        "GET", f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records", token,
+        "Cloudflare Count DNS Records API failed", params={"per_page": 1}, timeout=15,
+    )
+    if response is None or response.status_code != 200:
+        return False, "API Error"
+    total = (response.json().get("result_info") or {}).get("total_count")
+    if not isinstance(total, int):
+        return False, "Cloudflare did not report a record count"
+    return True, total
