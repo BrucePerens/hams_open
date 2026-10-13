@@ -109,6 +109,16 @@ license text each library's own license requires, not just its SPDX identifier.
   Playwright run driving the real X25519/SHA-256/HKDF/ChaCha20-Poly1305 code paths through a full
   Noise_XX handshake, with network interception confirming zero requests leave localhost.
 
+### jsPDF and fabric.js (PDF export, the Award Designer canvas)
+- **Version:** jsPDF 4.2.1, fabric.js 7.4.0 (replacing the 2.5.1 and 5.3.0 that pages used to load from `cdn.jsdelivr.net`; both
+  old lines have published advisories with no fix, see `VENDORED.md`).
+- **License:** MIT (both). Texts in `static/src/node_modules/{jspdf,fabric}/LICENSE`, reproduced in `THIRD_PARTY_LICENSES.md`.
+- **Purpose:** hams_com's `ham_logbook`: "Download PDF" on the QSL Collection and Awards Dashboard (jsPDF), and the Award Designer (fabric.js).
+- **Local Path:** `/external/static/src/node_modules/jspdf/jspdf.umd.min.js`, `/external/static/src/node_modules/fabric/fabric.min.js`
+- **Source, integrity and hashes:** `VENDORED.md` (npm tarball, `dist.integrity` checked, compared with unpkg, sha256 of each file; unmodified,
+  `tests/test_vendored_files.py` enforces the hashes). Not fetched by `fetch_assets.py`; update by the steps in `VENDORED.md`.
+- Loaded with plain `<script src>` tags, not an asset bundle (see the note in `__manifest__.py`).
+
 ### SIP.js (browser SIP over WebSocket + WebRTC)
 - **Version:** 0.21.2 (npm `sip.js`, published 2022-10-27; the newest stable release on 2026-10-03, the
   registry's `latest` dist-tag, with no pre-release newer than it).
