@@ -28,10 +28,11 @@ Security model, all of it enforced here and again by the models:
   also filed as an automated content violation through the existing
   website.page._trigger_malicious_arch_violation().
 * POST routes carry Odoo's CSRF check. Writes are rate limited per user in Redis; bodies,
-  titles and images have size limits. Nothing here deletes: "remove" means unpublish and the
-  record is retained.
+  titles and images have size limits. Delete removes a page or post from view and the record is retained
+  (archived, restorable); there is no hard delete and no promise of erasure.
 """
 import base64
+import functools
 import json
 import logging
 from urllib.parse import quote
@@ -41,10 +42,11 @@ from lxml import etree, html as lxml_html
 from markupsafe import Markup
 from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
 
-from odoo import http
+from odoo import fields, http
 from odoo.http import request
 from odoo.addons.edge_routing.utils import slugify
 from odoo.addons.user_websites.controllers.main import redis_client, UserWebsitesController
+from odoo.addons.user_websites.models.site_slug import legacy_slug_target
 from odoo.addons.user_websites.models.member_html import (
     MAX_BODY_CHARS,
     PAGE_SLUG_RE,
@@ -135,6 +137,32 @@ def _arch_body(arch_base):
     return inner, True
 
 
+class SiteResponse(Exception):
+    """Raised by _resolve_site() to end a request with a response of its own (a redirect from a
+    retired slug, the "what is missing" page for an ineligible member).
+
+    Not an HTTPException on purpose: Odoo's frontend error handler turns any raised HTTPException into
+    its own error page (a 301 becomes a 418), throwing the response away. answers_site_response() turns
+    this into the route's return value instead."""
+
+    def __init__(self, response):
+        super().__init__("owner site response")
+        self.response = response
+
+
+def answers_site_response(route):
+    """Route decorator: a SiteResponse raised anywhere below becomes the route's response."""
+    # [@ANCHOR: user_websites:fn_answers_site_response]
+    @functools.wraps(route)
+    def wrapper(*args, **kwargs):
+        try:
+            return route(*args, **kwargs)
+        except SiteResponse as ended:
+            return ended.response
+
+    return wrapper
+
+
 class UserWebsitesOwnerController(http.Controller):
 
     # ------------------------------------------------------------------ helpers
@@ -158,12 +186,46 @@ class UserWebsitesOwnerController(http.Controller):
         if profile_user:
             if profile_user.id != user.id or profile_user.is_suspended_from_websites:
                 raise request.not_found()
+            gaps = profile_user._website_eligibility_gaps()
+            if gaps:
+                # [@ANCHOR: user_websites:owner_site_ineligible]
+                # Verified by [@ANCHOR: test_site_eligibility_hook]
+                # Say what is missing instead of a 404, and hide anything still public.
+                request.env["res.users"].reconcile_website_eligibility([profile_user.id])
+                raise SiteResponse(
+                    request.render(
+                        "user_websites.owner_site_ineligible",
+                        {"gaps": gaps, "site_slug": profile_user.website_slug, "main_object": profile_user},
+                        status=403,
+                    )
+                )
         elif profile_group:
             if user.id not in profile_group.member_ids.ids or profile_group.is_suspended_from_websites:
                 raise request.not_found()
         else:
+            self._redirect_legacy_slug(site_slug)
             raise request.not_found()
         return profile_user, profile_group
+
+    def _redirect_legacy_slug(self, site_slug):
+        """Raise a redirect to the same owner URL under the live slug when `site_slug` is retired."""
+        # [@ANCHOR: user_websites:owner_redirect_legacy_slug]
+        # Verified by [@ANCHOR: test_site_slug_one_site]
+        target = legacy_slug_target(request.env, site_slug)
+        if not target:
+            return
+        path = request.httprequest.path
+        prefix = f"/my/site/{site_slug}"
+        if not path.startswith(prefix):
+            return
+        new_url = f"/my/site/{quote(target, safe='')}" + path[len(prefix):]
+        query = request.httprequest.query_string.decode("utf-8", "replace")
+        if query:
+            new_url += "?" + query
+        # 301 for a GET; 308 for anything else keeps the method and body (a form left open across a
+        # rename still lands on the live site, session and CSRF token unchanged).
+        code = 301 if request.httprequest.method in ("GET", "HEAD") else 308
+        raise SiteResponse(request.redirect(new_url, code=code, local=True))
 
     def _owner_domain(self, profile_user, profile_group):
         # [@ANCHOR: user_websites:fn_owner_owner_domain]
@@ -232,6 +294,7 @@ class UserWebsitesOwnerController(http.Controller):
     @http.route("/my/site/<string:site_slug>", type="http", auth="user", website=True, sitemap=False)
     # [@ANCHOR: user_websites:COMM_owner_site_dashboard]
     # Verified by [@ANCHOR: test_owner_site_dashboard_lists_content]
+    @answers_site_response
     def owner_site_dashboard(self, site_slug, **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         svc = self._svc()
@@ -249,6 +312,12 @@ class UserWebsitesOwnerController(http.Controller):
             limit=MAX_IMAGES_PER_SITE,
         )
         home_url = f"/{(profile_user or profile_group).website_slug}"
+        deleted_pages = svc["website.page"].with_context(active_test=False).search(
+            domain + [("deleted_by_owner", "!=", False)], order="deleted_by_owner desc", limit=100
+        )
+        deleted_posts = svc["blog.post"].with_context(active_test=False).search(
+            domain + [("deleted_by_owner", "!=", False)], order="deleted_by_owner desc", limit=100
+        )
         return request.render(
             "user_websites.owner_site_dashboard",
             self._qcontext(
@@ -256,6 +325,8 @@ class UserWebsitesOwnerController(http.Controller):
                 profile_group,
                 pages=pages,
                 posts=posts,
+                deleted_pages=deleted_pages,
+                deleted_posts=deleted_posts,
                 images=images,
                 home_url=home_url,
                 max_images=MAX_IMAGES_PER_SITE,
@@ -285,6 +356,7 @@ class UserWebsitesOwnerController(http.Controller):
         "/my/site/<string:site_slug>/page/new", type="http", auth="user", website=True, sitemap=False
     )
     # [@ANCHOR: user_websites:COMM_owner_page_new]
+    @answers_site_response
     def owner_page_new(self, site_slug, **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         return request.render(
@@ -310,6 +382,7 @@ class UserWebsitesOwnerController(http.Controller):
         sitemap=False,
     )
     # [@ANCHOR: user_websites:COMM_owner_page_edit]
+    @answers_site_response
     def owner_page_edit(self, site_slug, page_id, **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         page = self._own_page(profile_user, profile_group, page_id)
@@ -341,6 +414,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_page_save]
     # Verified by [@ANCHOR: test_owner_page_create_edit_publish]
+    @answers_site_response
     def owner_page_save(
         self, site_slug, page_id="", title="", page_slug="", content="", is_published="", **kwargs
     ):
@@ -412,6 +486,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_page_publish]
     # Verified by [@ANCHOR: test_owner_page_create_edit_publish]
+    @answers_site_response
     def owner_page_publish(self, site_slug, page_id, publish="", **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         self._rate_limit("write", WRITES_PER_MINUTE)
@@ -433,6 +508,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_post_publish]
     # Verified by [@ANCHOR: test_owner_post_publish_toggle]
+    @answers_site_response
     def owner_post_publish(self, site_slug, post_id, publish="", **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         self._rate_limit("write", WRITES_PER_MINUTE)
@@ -445,6 +521,138 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         post.write({"is_published": publish == "1"})
         return request.redirect(f"/my/site/{quote(site_slug, safe='')}?saved=1", code=303)
+
+
+    # ------------------------------------------------------------ delete / restore
+
+    def _own_post(self, profile_user, profile_group, post_id):
+        # [@ANCHOR: user_websites:fn_owner_own_post]
+        post = self._svc()["blog.post"].with_context(active_test=False).browse(post_id)
+        if not post.exists():
+            raise request.not_found()
+        if (profile_user and post.owner_user_id != profile_user) or (
+            profile_group and post.user_websites_group_id != profile_group
+        ):
+            raise request.not_found()
+        return post
+
+    def _own_page_any(self, profile_user, profile_group, page_id):
+        """Like _own_page, but also finds a page the owner deleted (its address is parked)."""
+        page = self._svc()["website.page"].with_context(active_test=False).browse(page_id)
+        if not page.exists():
+            raise request.not_found()
+        if (profile_user and page.owner_user_id != profile_user) or (
+            profile_group and page.user_websites_group_id != profile_group
+        ):
+            raise request.not_found()
+        return page
+
+    def _back(self, site_slug, flag):
+        return request.redirect(f"/my/site/{quote(site_slug, safe='')}?{flag}", code=303)
+
+    @http.route(
+        "/my/site/<string:site_slug>/<any(page,post):kind>/<int:item_id>/delete",
+        type="http",
+        auth="user",
+        methods=["GET"],
+        website=True,
+        sitemap=False,
+    )
+    # [@ANCHOR: user_websites:COMM_owner_delete_confirm]
+    # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    @answers_site_response
+    def owner_delete_confirm(self, site_slug, kind, item_id, **kwargs):
+        """The no-JavaScript confirmation step (the dashboard shows the same question in a dialog)."""
+        profile_user, profile_group = self._resolve_site(site_slug)
+        if kind == "page":
+            item = self._own_page(profile_user, profile_group, item_id)
+            title = item.name
+            is_home = item.url == f"/{(profile_user or profile_group).website_slug}"
+        else:
+            item = self._own_post(profile_user, profile_group, item_id)
+            title = item.name
+            is_home = False
+        return request.render(
+            "user_websites.owner_delete_confirm",
+            self._qcontext(profile_user, profile_group, kind=kind, item=item, item_title=title, is_home=is_home),
+        )
+
+    @http.route(
+        "/my/site/<string:site_slug>/<any(page,post):kind>/<int:item_id>/delete",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_owner_delete]
+    # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    @answers_site_response
+    def owner_delete(self, site_slug, kind, item_id, **kwargs):
+        """Delete = removed from the site and from every public surface at once, kept archived.
+
+        The record stays (active False, deleted_by_owner stamped): the platform retains data and this
+        interface never promises erasure. A page is moved to a private address so its own can be reused.
+        The home page cannot be deleted. Runs as the service account after the ownership checks."""
+        profile_user, profile_group = self._resolve_site(site_slug)
+        self._rate_limit("write", WRITES_PER_MINUTE)
+        slug = (profile_user or profile_group).website_slug
+        now = fields.Datetime.now()
+        if kind == "page":
+            page = self._own_page(profile_user, profile_group, item_id)
+            if page.url == f"/{slug}":
+                return self._back(site_slug, "error=home_delete")
+            # no_cow: archive THIS page's view, not a site-specific copy of a generic one.
+            page.with_context(no_cow=True).write(
+                {
+                    "deleted_original_url": page.url,
+                    "url": f"/{slug}/deleted-{page.id}",
+                    "website_published": False,
+                    "active": False,
+                    "deleted_by_owner": now,
+                }
+            )
+        else:
+            post = self._own_post(profile_user, profile_group, item_id)
+            post.write({"is_published": False, "active": False, "deleted_by_owner": now})
+        return self._back(site_slug, "saved=deleted")
+
+    @http.route(
+        "/my/site/<string:site_slug>/<any(page,post):kind>/<int:item_id>/restore",
+        type="http",
+        auth="user",
+        methods=["POST"],
+        website=True,
+        csrf=True,
+    )
+    # [@ANCHOR: user_websites:COMM_owner_restore]
+    # Verified by [@ANCHOR: test_owner_delete_page_and_post]
+    @answers_site_response
+    def owner_restore(self, site_slug, kind, item_id, **kwargs):
+        """Bring back something the owner deleted. It returns UNPUBLISHED: publishing is a separate,
+        deliberate act. Only items the owner deleted can be restored here (a page archived by
+        moderation, for instance, cannot)."""
+        profile_user, profile_group = self._resolve_site(site_slug)
+        self._rate_limit("write", WRITES_PER_MINUTE)
+        slug = (profile_user or profile_group).website_slug
+        if kind == "page":
+            page = self._own_page_any(profile_user, profile_group, item_id)
+            if not page.deleted_by_owner:
+                raise request.not_found()
+            url = page.deleted_original_url or f"/{slug}/restored-{page.id}"
+            if not (url == f"/{slug}" or url.startswith(f"/{slug}/")) or self._svc()["website.page"].search_count(
+                [("url", "=", url), ("website_id", "=", page.website_id.id)]
+            ):
+                url = f"/{slug}/restored-{page.id}"
+            page.with_context(no_cow=True).write(
+                {"url": url, "active": True, "deleted_by_owner": False, "deleted_original_url": False}
+            )
+        else:
+            post = self._own_post(profile_user, profile_group, item_id)
+            if not post.deleted_by_owner:
+                raise request.not_found()
+            post.write({"active": True, "deleted_by_owner": False})
+        return self._back(site_slug, "saved=restored")
 
     # ------------------------------------------------------------------- images
 
@@ -464,6 +672,7 @@ class UserWebsitesOwnerController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_owner_image_upload]
     # Verified by [@ANCHOR: test_owner_image_upload_rules]
+    @answers_site_response
     def owner_image_upload(self, site_slug, ufile=None, json_reply="", **kwargs):
         profile_user, profile_group = self._resolve_site(site_slug)
         self._rate_limit("upload", UPLOADS_PER_MINUTE)

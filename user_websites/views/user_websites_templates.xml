@@ -371,6 +371,7 @@
                             </div>
                             <button type="submit" class="btn btn-success">Save</button>
                             <a t-attf-href="/my/site/#{site_slug}" class="btn btn-outline-secondary ms-2">Back to my site</a>
+                            <a t-if="post and post.id" t-attf-href="/my/site/#{site_slug}/post/#{post.id}/delete" class="btn btn-outline-danger ms-2">Delete</a>
                         </form>
                     </div>
                 </div>

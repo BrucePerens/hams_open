@@ -37,3 +37,20 @@ class IrHttp(models.AbstractModel):
     def _get_converters(cls):
         # [@ANCHOR: user_websites:fn_ir_http_get_converters]
         return {**super()._get_converters(), "uwslug": SiteSlugConverter}
+
+    @classmethod
+    def _serve_page(cls):
+        # [@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]
+        # Verified by [@ANCHOR: test_site_eligibility_hook]
+        """A page under a member's slug is not served while that member's site is hidden (suspended or
+        not eligible): Odoo's page lookup knows nothing about owners. Unpublishing already hides the
+        content; this closes the gap before the next reconcile."""
+        segment = request.httprequest.path.strip("/").split("/", 1)[0].lower()
+        if segment and segment not in language_slugs(request.env):
+            env_svc = request.env["zero_sudo.security.utils"]._get_service_env(
+                "user_websites.user_websites_service_account"
+            )
+            user_id = env_svc["res.users"].get_record_by_slug(segment)
+            if user_id and not env_svc["res.users"].browse(user_id)._website_publicly_visible():
+                return False
+        return super()._serve_page()

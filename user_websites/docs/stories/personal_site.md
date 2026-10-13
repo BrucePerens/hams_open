@@ -132,3 +132,38 @@ footer. This section adds the owner's interface and the member site's own layout
   footer (callsign, a link to hams.com, Report, Privacy, Terms), and none of hams.com's menu, banners or footer
   ([@ANCHOR: user_websites:member_site_standalone_layout]). Verified by
   `[@ANCHOR: test_member_site_has_no_hams_chrome]`.
+
+## One site per member, eligibility and Delete (2026-10-13, append-only)
+
+Bruce: "hams1 publishes two web sites for the user. One is bruce-perens-k6bp, and one is k6bp." and "There is no
+'delete' button on web pages or blog posts."
+
+- **Given** a member's site address changes (the slug is renamed), **when** the change is saved, **then** their pages
+  and menu items move to the new address, a permanent 301 stays at the old one, redirect chains are flattened and a
+  redirect that would shadow the new site is dropped. A page that would collide with one already at the new address is
+  kept, unpublished, at `/<slug>/former-home`. Nothing is deleted. Before this, the pages stayed at the old address,
+  which Odoo serves before it reads any redirect: a second site, and an owner toolbar whose Edit and Unpublish
+  answered 404 because the page was not under the current slug. ([@ANCHOR: user_websites:fn_rehome_site]; migration
+  0.7 repairs existing sites [@ANCHOR: user_websites:migrate_rehome_stale_site_pages]. Verified by
+  `[@ANCHOR: test_site_slug_one_site]`.)
+- **When** anyone opens a retired address, public or the owner's tools (`/my/site/<old>/...`), **then** they are
+  redirected to the same URL under the live slug: 301 for a GET, 308 for a POST so a form left open across a rename
+  still lands. ([@ANCHOR: user_websites:owner_redirect_legacy_slug], [@ANCHOR: user_websites:fn_main_legacy_slug_redirect].)
+- **Slug policy.** `user_websites.slug_policy` is `name_callsign` (open source: the slug is made from the name) unless a
+  deployment sets `callsign` and supplies the member's callsign through `_slug_identity()`. Under `callsign` a member
+  has one address, never a name-derived one; with no callsign there is no site address yet; two members can never share
+  one (an error, not a `-1` suffix). Existing slugs are never cleared. ([@ANCHOR: user_websites:COMM_res_users_slug_policy].)
+- **Eligibility.** `_website_eligibility_gaps()` is the extension point for "who may have a website and blog"; open source
+  returns none. A member with a gap has no public site (404 everywhere), their content is unpublished and marked, the
+  owner's tools explain what is missing, new pages and posts are refused, and everything returns when the gap closes.
+  Administrators are not exempt on the public site. ([@ANCHOR: user_websites:site_eligibility]. Verified by
+  `[@ANCHOR: test_site_eligibility_hook]`.)
+- **When** I press Delete on a page or blog post (dashboard, editor, owner toolbar), **then** I am asked "Delete this
+  page? It will be removed from your site and can't be seen by visitors." (a dialog; a plain confirmation page without
+  JavaScript); on confirming it disappears from my site, my lists and every public surface, and its address answers 404.
+  The record is kept archived with a `deleted_by_owner` time: the platform retains data and the interface does not
+  promise erasure. The home page cannot be deleted. ([@ANCHOR: user_websites:COMM_owner_delete].)
+- **And** I can Restore from the collapsed Deleted list on the dashboard; the item comes back unpublished, at its old
+  address if free. Restore is allowed because it recovers an accident and the data was never erased; a page archived by
+  moderation is not in my list and cannot be restored by me. ([@ANCHOR: user_websites:COMM_owner_restore]. Verified by
+  `[@ANCHOR: test_owner_delete_page_and_post]`.)

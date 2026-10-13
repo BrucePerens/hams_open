@@ -52,6 +52,7 @@ class UserWebsitesPublicDirectoryView(models.Model):
                 AND u.privacy_show_in_directory IS TRUE
                 AND u.is_service_account IS NOT TRUE
                 AND u.is_suspended_from_websites IS NOT TRUE
+                AND u.website_ineligible IS NOT TRUE
             )
         """
         )
@@ -111,6 +112,7 @@ class UserWebsitesContentRoutingView(models.Model):
                 AND u.website_slug != ''
                 AND u.is_service_account IS NOT TRUE
                 AND u.is_suspended_from_websites IS NOT TRUE
+                AND u.website_ineligible IS NOT TRUE
 
                 UNION ALL
 
