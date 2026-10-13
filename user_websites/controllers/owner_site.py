@@ -602,7 +602,8 @@ class UserWebsitesOwnerController(http.Controller):
             page = self._own_page(profile_user, profile_group, item_id)
             if page.url == f"/{slug}":
                 return self._back(site_slug, "error=home_delete")
-            page.write(
+            # no_cow: archive THIS page's view, not a site-specific copy of a generic one.
+            page.with_context(no_cow=True).write(
                 {
                     "deleted_original_url": page.url,
                     "url": f"/{slug}/deleted-{page.id}",
@@ -643,7 +644,9 @@ class UserWebsitesOwnerController(http.Controller):
                 [("url", "=", url), ("website_id", "=", page.website_id.id)]
             ):
                 url = f"/{slug}/restored-{page.id}"
-            page.write({"url": url, "active": True, "deleted_by_owner": False, "deleted_original_url": False})
+            page.with_context(no_cow=True).write(
+                {"url": url, "active": True, "deleted_by_owner": False, "deleted_original_url": False}
+            )
         else:
             post = self._own_post(profile_user, profile_group, item_id)
             if not post.deleted_by_owner:
