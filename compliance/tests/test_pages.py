@@ -387,3 +387,17 @@ class TestCompliancePagesHttp(HamsHttpCase):
         normalized_arch = re.sub(r"\s+", " ", arch_str)
         msg = "[!] DIAGNOSTIC FOR AI: compliance_index_template missing title."
         self.assertIn("Regulatory Compliance &amp; Policies", normalized_arch, msg)
+
+
+@tagged("post_install", "-at_install")
+class TestCookiesBarName(HamsHttpCase):
+    def test_cookies_bar_dialog_has_an_accessible_name(self):
+        # [@ANCHOR: COMM_test_cookies_bar_has_a_name]
+        # Tests [@ANCHOR: COMM_compliance_cookies_bar_name]
+        response = self.url_open("/")
+        self.assertEqual(response.status_code, 200)
+        tree = etree.HTML(response.content)
+        bars = tree.xpath("//div[contains(concat(' ', normalize-space(@class), ' '), ' o_cookies_discrete ')]")
+        self.assertEqual(len(bars), 1, "setup sanity check: the cookie bar must be on the page.")
+        self.assertEqual(bars[0].get("role"), "dialog")
+        self.assertEqual(bars[0].get("aria-label"), "Cookie preferences")
