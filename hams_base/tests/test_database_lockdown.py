@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
 from types import SimpleNamespace
+
+from werkzeug.exceptions import BadRequest
 from unittest.mock import patch
 
 from odoo import http, tools
@@ -73,8 +75,6 @@ class TestScrubErrorBody(HamsTransactionCase):
         self.assertEqual(response["id"], 7)
 
     def test_jsonrpc_handle_error_names_a_bad_request_as_a_400(self):
-        from werkzeug.exceptions import BadRequest
-
         request = SimpleNamespace(make_json_response=lambda body, **kw: body)
         dispatcher = lockdown.HamsJsonRPCDispatcher(request)
         dispatcher.request_id = 3
