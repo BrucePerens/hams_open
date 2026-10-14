@@ -6,6 +6,7 @@ from . import test_advanced_edge_cases
 from . import test_appeals_and_views
 from . import test_audit_edge_cases
 from . import test_blog_limits
+from . import test_blog_post_no_website_request
 from . import test_cache_coherence
 from . import test_config_settings
 from . import test_controllers
