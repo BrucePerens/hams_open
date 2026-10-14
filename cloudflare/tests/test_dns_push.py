@@ -256,6 +256,14 @@ class TestDnsRecordModel(HamsTransactionCase):
         with self.assertRaises(ValidationError):
             self._make()
 
+    def test_04b_an_archived_row_never_clashes_even_when_the_caller_searches_archived_rows(self):
+        old = self._make()
+        old.active = False
+        again = self.Record.with_context(active_test=False).create(
+            {"name": old.name, "type": old.type, "content": old.content}
+        )
+        self.assertTrue(again.active)
+
     def test_05_existing_rows_become_observe_only_in_the_migration(self):
         spec = importlib.util.spec_from_file_location("cf_dns_migration_17", MIGRATION_PATH)
         module = importlib.util.module_from_spec(spec)
