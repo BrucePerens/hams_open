@@ -54,3 +54,10 @@ class TestDirectoryPathsAreReserved(BaseCase):
         from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 
         self.assertLessEqual({"repeaters", "elmers"}, RESERVED_SLUGS)
+
+    def test_training_area_words_are_reserved(self):
+        """/training is the Training area (courses, glossary, Morse Academy); /auxcomm is its old address and still redirects."""
+        from odoo.addons.edge_routing.utils import RESERVED_SLUGS, slugify
+
+        self.assertLessEqual({"training", "auxcomm"}, RESERVED_SLUGS)
+        self.assertIn(slugify("Training"), RESERVED_SLUGS)
