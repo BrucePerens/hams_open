@@ -56,3 +56,66 @@ class TestMissingRequiredParams(HamsHttpCase):
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         self.url_open("/scoped_app", allow_redirects=False)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+
+    # -- QA pass 2 (2026-10-14): the same 400 for a JSON-RPC route, and for a NUL byte --
+
+    def _rpc(self, route, params):
+        return self.opener.post(
+            self.base_url() + route,
+            json={"id": 0, "jsonrpc": "2.0", "method": "call", "params": params},
+        )
+
+    def test_a_json_call_that_leaves_out_a_required_argument_is_a_400_and_no_ticket(self):
+        # Tests [@ANCHOR: hams_helpdesk:missing_required_params_is_400]
+        # /web/session/authenticate declares db, login and password as required positionals; a call with none
+        # raised TypeError inside the handler, an exception ticket per call.
+        before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
+        body = self._rpc("/web/session/authenticate", {}).json()
+        self.assertIn("error", body)
+        self.assertEqual(body["error"]["code"], 400, body)
+        self.assertIn("Missing required parameter", str(body))
+        self.assertNotIn("Traceback", str(body))
+        self.assertNotIn("TypeError", str(body))
+        self.env.cr.rollback()
+        self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+
+    def test_a_json_call_that_carries_its_arguments_still_works(self):
+        # Tests [@ANCHOR: hams_helpdesk:missing_required_params_is_400]
+        self.authenticate("admin", "admin")
+        params = {"model": "res.partner", "method": "search_count", "args": [[]], "kwargs": {}}
+        body = self._rpc("/web/dataset/call_kw/res.partner.search_count", params).json()
+        self.assertIn("result", body, body)
+
+    def test_a_nul_byte_in_a_query_parameter_is_a_400_not_a_500(self):
+        # Tests [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        for route in ("/web/login?redirect=a%00b", "/scoped_app?app_id=a%00b"):
+            response = self.url_open(route, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, route)
+            self.assertNotIn("Traceback", response.text)
+
+    def test_a_nul_byte_in_the_path_is_a_400_not_a_500(self):
+        # Tests [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        for route in ("/no%00such-page", "/member/a%00b", "/w1aw%00/blog"):
+            response = self.url_open(route, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, route)
+
+    def test_a_nul_byte_in_a_json_body_is_refused(self):
+        # Tests [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        self.authenticate("admin", "admin")
+        params = {"model": "res.partner", "method": "search_count", "args": [[["name", "=", "a\u0000b"]]], "kwargs": {}}
+        body = self._rpc("/web/dataset/call_kw/res.partner.search_count", params).json()
+        self.assertEqual(body["error"]["code"], 400, body)
+
+    def test_text_where_a_handler_wants_a_number_is_a_400_not_a_500(self):
+        # Tests [@ANCHOR: hams_helpdesk:missing_required_params_is_400]
+        # Stock /web/image runs int(width): `?width=abc` raised ValueError, a 500 and a ticket for anyone.
+        before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
+        for route in (
+            "/web/image/res.partner/1/avatar_128?width=abc",
+            "/web/image?model=res.partner&id=1&field=avatar_128&height=1e9x",
+        ):
+            response = self.url_open(route, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, route)
+            self.assertNotIn("Traceback", response.text)
+            self.assertNotIn("ValueError", response.text)
+        self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)

@@ -72,6 +72,18 @@ class TestScrubErrorBody(HamsTransactionCase):
         self.assertNotIn("Traceback", json.dumps(response))
         self.assertEqual(response["id"], 7)
 
+    def test_jsonrpc_handle_error_names_a_bad_request_as_a_400(self):
+        from werkzeug.exceptions import BadRequest
+
+        request = SimpleNamespace(make_json_response=lambda body, **kw: body)
+        dispatcher = lockdown.HamsJsonRPCDispatcher(request)
+        dispatcher.request_id = 3
+        with _dev_mode([]):
+            response = dispatcher.handle_error(self._raised(BadRequest, "Missing required parameter: model"))
+        self.assertEqual(response["error"]["code"], 400)
+        self.assertIn("Missing required parameter: model", response["error"]["data"]["message"])
+        self.assertEqual(response["error"]["data"]["debug"], "")
+
     def test_json2_handle_error_has_no_traceback_and_keeps_the_status(self):
         seen = {}
 

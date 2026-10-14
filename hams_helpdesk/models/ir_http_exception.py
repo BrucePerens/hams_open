@@ -47,10 +47,38 @@ def report_request_exception(exception):
         _logger.error("Could not gather request details for an exception ticket: %r", error)
 
 
+# What int() and float() say when handed text that is not a number.
+_NOT_A_NUMBER_MESSAGES = ("invalid literal for int()", "could not convert string to float", "cannot convert float")
+
+# A route's own type name: "http" for a page, "jsonrpc" (older spelling "json") for a JSON-RPC call.
+_CALLED_WITH_REQUEST_PARAMS = ("http", "json", "jsonrpc")
+
+
+def _contains_nul(value):
+    """True when a string anywhere inside `value` (a parameter dict, a list, a nested JSON body) holds a NUL
+    byte. PostgreSQL cannot store or compare one, so a handler that reached the database with it raised
+    ValueError and answered 500 (QA pass 2: /member/<callsign>, /repeaters?search=, /<slug>, ...)."""
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return True
+        elif isinstance(item, bytes):
+            if b"\x00" in item:
+                return True
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, (list, tuple, set, frozenset)):
+            stack.extend(item)
+    return False
+
+
 def _missing_required_params(endpoint):
-    """Names of the parameters the page handler requires that the request does not carry; [] for a
-    JSON-RPC route, a handler Odoo gives no function to read, or when nothing is missing."""
-    if endpoint.routing.get("type") != "http":
+    """Names of the parameters the handler requires that the request does not carry; [] for a handler
+    Odoo gives no function to read, a route of another type, or when nothing is missing."""
+    if endpoint.routing.get("type") not in _CALLED_WITH_REQUEST_PARAMS:
         return []
     handler = getattr(endpoint, "original_endpoint", None)
     if handler is None:
@@ -78,10 +106,28 @@ class IrHttpExceptionReport(models.AbstractModel):
         request.httprequest.environ[ROUTE_RULE_KEY] = rule.rule
         return super()._pre_dispatch(rule, args)
 
+    # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+    @classmethod
+    def _match(cls, path_info):
+        """A NUL byte in the path is a 400 before any converter looks anything up (the member-site converters
+        search the database while the URL is matched, and the fall-back page lookup that follows a 404 does too,
+        so a NUL raised ValueError there, a 500). It is a 400, not a 404, so that fall-back is not tried."""
+        if "\x00" in (path_info or ""):
+            raise werkzeug.exceptions.BadRequest("The address holds an invalid character.")
+        return super()._match(path_info)
+
     # [@ANCHOR: hams_helpdesk:missing_required_params_is_400]
     @classmethod
     def _dispatch(cls, endpoint):
-        """A page route called without a parameter its handler cannot do without is a 400, not a 500.
+        """A NUL byte in a parameter, or a route called without a parameter its handler cannot do without, is
+        a 400, not a 500.
+
+        A NUL anywhere in the parameters (query, form or JSON body) is refused first (see _contains_nul).
+        The same 400 now covers JSON-RPC routes: a call that left out a required argument raised TypeError
+        inside the handler, a server-exception ticket per call (QA pass 2: 18 member routes under
+        /repeaters, /event, /api/v1/ham_shack, /api/v1/training and /api/v1/auxcomm).
+
+        A page route called without a parameter its handler cannot do without is a 400, not a 500.
 
         Stock handlers declare such parameters as required positionals (``def scoped_app(self, app_id, ...)``,
         ``def payment_confirm(self, tx_id, access_token, ...)``). Odoo calls the handler with whatever the
@@ -89,10 +135,26 @@ class IrHttpExceptionReport(models.AbstractModel):
         server-exception ticket (QA-014, 2026-10-13: /payment/confirmation, /profile/validate_email,
         /scoped_app, /scoped_app_icon_png, /shop/pricelist; /forum/get_tags earlier, ticket #67). This is the
         client's mistake: the reply is a 400 naming the missing parameter names (never a value)."""
+        if _contains_nul(request.params) or "\x00" in request.httprequest.path:
+            raise werkzeug.exceptions.BadRequest("A request parameter holds an invalid character.")
         missing = _missing_required_params(endpoint)
         if missing:
             raise werkzeug.exceptions.BadRequest("Missing required parameter: " + ", ".join(missing))
-        return super()._dispatch(endpoint)
+        try:
+            return super()._dispatch(endpoint)
+        except ValueError as error:
+            # A handler that turns a request parameter into a number with int() or float() and gets text raises
+            # ValueError("invalid literal for int() ..."): the sender's mistake, not a server fault (QA pass 2:
+            # /club/apply/submit?club_id=abc, /my/identity/street-quiz/submit?quiz_id=abc and the like, a 500 and
+            # a ticket each). Answered 400; logged at warning so a handler that really has this bug stays visible.
+            if str(error).startswith(_NOT_A_NUMBER_MESSAGES):
+                _logger.warning(
+                    "Answered 400 for a non-numeric parameter on %s: %s",
+                    request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path,
+                    error,
+                )
+                raise werkzeug.exceptions.BadRequest("A request parameter is not a number.") from error
+            raise
 
     # [@ANCHOR: hams_helpdesk:exc_ir_http_handle_error]
     @classmethod

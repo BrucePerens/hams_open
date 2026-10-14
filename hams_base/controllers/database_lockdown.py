@@ -18,7 +18,7 @@ import collections.abc
 import http as http_status_module
 import logging
 
-from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.exceptions import BadRequest, HTTPException, NotFound
 
 from odoo import http, tools
 from odoo.addons.web.controllers.database import Database
@@ -113,6 +113,11 @@ class HamsJsonRPCDispatcher(JsonRPCDispatcher):
         if isinstance(exc, NotFound):
             error["code"] = 404
             error["message"] = "404: Not Found"
+        elif isinstance(exc, BadRequest):
+            # A call that left out a required argument or carried a NUL byte (hams_helpdesk's ir.http): the
+            # caller's mistake, so a 400 whose data.message names it, not code 0 "Odoo Server Error".
+            error["code"] = 400
+            error["message"] = "400: Bad Request"
         elif isinstance(exc, SessionExpiredException):
             error["code"] = 100
             error["message"] = "Odoo Session Expired"
