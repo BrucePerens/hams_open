@@ -11,6 +11,7 @@ import os
 
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
+from odoo.modules.module import get_module_path
 from odoo.tools import mute_logger
 
 from odoo.addons.edge_routing import utils as edge_utils
@@ -122,13 +123,28 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
                 self.owner.write({"website_slug": word})
                 self.env.flush_all()
 
+    @staticmethod
+    def _is_open_source_route(rule, open_source_root):
+        """False only for a route that belongs to an addon outside this repository's addons directory."""
+        endpoint = getattr(rule.endpoint, "method", rule.endpoint)
+        parts = getattr(endpoint, "__module__", "").split(".")
+        if parts[:2] != ["odoo", "addons"] or len(parts) < 3:
+            return True
+        addon_path = get_module_path(parts[2])
+        return not addon_path or os.path.dirname(addon_path) == open_source_root
+
     def test_09_reserved_slugs_cover_static_single_segment_routes(self):
         # Tests [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
         # A static route beats the /<slug> converter route, so a member who claimed one of these
         # words would own a site nobody could reach.
+        # Only routes of the open-source modules: a hams.com module installed in the same database adds
+        # routes of its own, which the live routing map (reserved_slug_words) reserves without the list.
+        open_source_root = os.path.dirname(os.path.dirname(get_module_path("user_websites")))
         router = self.env["ir.http"].routing_map()
         static_first_segments = set()
         for rule in router.iter_rules():
+            if not self._is_open_source_route(rule, open_source_root):
+                continue
             parts = [p for p in rule.rule.split("/") if p]
             if parts and "<" not in parts[0] and parts[0] != "static":
                 static_first_segments.add(parts[0].lower())

@@ -12,7 +12,6 @@ from odoo.exceptions import ValidationError
 from odoo.modules.module import load_script
 from odoo.tests import tagged
 
-from odoo.addons.user_websites.models.res_users import ResUsers
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 ARCH = (
@@ -159,9 +158,12 @@ class TestSiteSlugOneSite(HamsHttpCase):
 
     def _callsign_identity(self):
         """Stand-in for hams_com's callsign: the user's job-title field (patched for this test)."""
-        self.safe_patch_object(ResUsers, "_slug_identity_fields", lambda s: ("function",))
+        # Patched on the registry's own class (the end of the inheritance chain), not on ResUsers: a
+        # module that overrides these methods (hams.com's ham_onboarding does) would otherwise win.
+        users = self.registry["res.users"]
+        self.safe_patch_object(users, "_slug_identity_fields", lambda s: ("function",))
         self.safe_patch_object(
-            ResUsers,
+            users,
             "_slug_identity",
             lambda s, vals=None: (vals or {}).get("function") or (s.function if s else False),
         )

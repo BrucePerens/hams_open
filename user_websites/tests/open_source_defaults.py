@@ -29,6 +29,8 @@ from unittest import mock
 from odoo.tests.common import HttpCase, TransactionCase, get_db_name
 import odoo.sql_db
 
+from odoo.addons.user_websites.models.site_eligibility import ResUsersSiteEligibility
+
 _SLUG_POLICY_KEY = "user_websites.slug_policy"
 _OPEN_SOURCE_POLICY = "name_callsign"
 
@@ -49,8 +51,6 @@ def _set_committed_param(key, value):
 
 
 def _open_source_eligibility_gaps(self):
-    from odoo.addons.user_websites.models.site_eligibility import ResUsersSiteEligibility
-
     return ResUsersSiteEligibility._website_eligibility_gaps(self)
 
 
