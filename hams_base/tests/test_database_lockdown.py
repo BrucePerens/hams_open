@@ -157,3 +157,49 @@ class TestJsonRpcErrorBody(HamsHttpCase):
         self.assertNotIn("Traceback", response.text)
         body = response.json()
         self.assertEqual(body["error"]["data"]["debug"], "")
+
+
+@tagged("post_install", "-at_install")
+class TestXmlrpcFaultsCarryNoTraceback(HamsHttpCase):
+    """QA pass 2: `/xmlrpc/2/<service>` put the whole Python traceback in the fault string. Tests
+    [@ANCHOR: hams_base:xmlrpc_fault_scrub]"""
+
+    def _post(self, route, body):
+        return self.url_open(route, data=body, headers={"Content-Type": "text/xml"})
+
+    def test_a_malformed_body_has_no_traceback_or_path_in_the_reply(self):
+        with _dev_mode([]):
+            for route in ("/xmlrpc/2/common", "/xmlrpc/common"):
+                response = self._post(route, "this is not xml")
+                self.assertIn("Odoo Server Error", response.text, route)
+                self.assertNotIn("Traceback", response.text, route)
+                self.assertNotIn("/usr/lib", response.text, route)
+                self.assertNotIn("File ", response.text, route)
+
+    def test_an_unknown_method_has_no_traceback_in_the_reply(self):
+        body = '<?xml version="1.0"?><methodCall><methodName>nosuchmethod</methodName><params/></methodCall>'
+        with _dev_mode([]):
+            response = self._post("/xmlrpc/2/common", body)
+        self.assertNotIn("Traceback", response.text)
+        self.assertNotIn("nosuchmethod", response.text)
+
+    def test_a_wrong_password_keeps_its_message(self):
+        body = (
+            '<?xml version="1.0"?><methodCall><methodName>authenticate</methodName><params>'
+            "<param><value><string>nodb</string></value></param>"
+            "<param><value><string>nobody</string></value></param>"
+            "<param><value><string>wrong</string></value></param>"
+            "<param><value><struct/></value></param></params></methodCall>"
+        )
+        with _dev_mode([]):
+            response = self._post("/xmlrpc/2/common", body)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("faultString", response.text)
+        self.assertNotIn("Traceback", response.text)
+
+    def test_a_good_call_still_works(self):
+        body = '<?xml version="1.0"?><methodCall><methodName>version</methodName><params/></methodCall>'
+        with _dev_mode([]):
+            response = self._post("/xmlrpc/2/common", body)
+        self.assertIn("server_version", response.text)
+        self.assertNotIn("faultCode", response.text)
