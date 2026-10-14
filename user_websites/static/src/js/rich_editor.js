@@ -36,6 +36,11 @@ export class RichEditor extends Interaction {
         this.fileInput = this.el.querySelector("[data-uw-file]");
         this.savedRange = null;
         this.form = this.el.closest("form");
+        // The editor keeps its own undo history of the page body: the browser's is shared with every other
+        // field on the page (Undo could empty the Title) and does not see changes the editor makes itself.
+        this.history = [this.area.innerHTML];
+        this.historyIndex = 0;
+        this.lastEdit = 0;
         this.syncField();
         this.addListener(this.el.querySelector("[data-uw-toolbar]"), "click", this.onToolbarClick.bind(this));
         this.addListener(this.el.querySelector("[data-uw-toolbar]"), "mousedown", (ev) => {
@@ -45,7 +50,9 @@ export class RichEditor extends Interaction {
             }
         });
         this.addListener(this.area, "paste", this.onPaste.bind(this));
-        this.addListener(this.area, "input", this.syncField.bind(this));
+        this.addListener(this.area, "input", this.onInput.bind(this));
+        this.addListener(this.area, "keydown", this.onHistoryKey.bind(this));
+        this.addListener(this.area, "beforeinput", this.onBeforeInput.bind(this));
         this.addListener(this.area, "keyup", this.refreshToolbarState.bind(this));
         this.addListener(this.area, "mouseup", this.refreshToolbarState.bind(this));
         this.addListener(this.linkBar, "click", this.onLinkBarClick.bind(this));
@@ -68,6 +75,81 @@ export class RichEditor extends Interaction {
         this.status.textContent = message || "";
     }
 
+    // [@ANCHOR: user_websites:rich_editor_record_history]
+    // Verified by [@ANCHOR: test_tour_owner_site]
+    recordHistory(separate) {
+        // One undo step per burst of typing (a pause of 700 ms starts a new one) and one per toolbar action.
+        const html = this.area.innerHTML;
+        if (html === this.history[this.historyIndex]) {
+            return;
+        }
+        const now = Date.now();
+        this.history.length = this.historyIndex + 1;
+        if (!separate && this.historyIndex > 0 && now - this.lastEdit < 700) {
+            this.history[this.historyIndex] = html;
+        } else {
+            this.history.push(html);
+            this.historyIndex = this.history.length - 1;
+            if (this.history.length > 200) {
+                this.history.shift();
+                this.historyIndex -= 1;
+            }
+        }
+        this.lastEdit = now;
+    }
+
+    // [@ANCHOR: user_websites:rich_editor_on_input]
+    // Verified by [@ANCHOR: test_tour_owner_site]
+    onInput() {
+        this.recordHistory(false);
+        this.syncField();
+    }
+
+    // [@ANCHOR: user_websites:rich_editor_step_history]
+    // Verified by [@ANCHOR: test_tour_owner_site]
+    stepHistory(direction) {
+        const target = this.historyIndex + direction;
+        if (target < 0 || target >= this.history.length) {
+            return;
+        }
+        this.historyIndex = target;
+        this.area.innerHTML = this.history[target];
+        this.lastEdit = 0;
+        const range = document.createRange();
+        range.selectNodeContents(this.area);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        this.syncField();
+    }
+
+    // [@ANCHOR: user_websites:rich_editor_history_key]
+    // Verified by [@ANCHOR: test_tour_owner_site]
+    onHistoryKey(ev) {
+        if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) {
+            return;
+        }
+        const key = ev.key.toLowerCase();
+        if (key === "z") {
+            ev.preventDefault();
+            this.stepHistory(ev.shiftKey ? 1 : -1);
+        } else if (key === "y") {
+            ev.preventDefault();
+            this.stepHistory(1);
+        }
+    }
+
+    // [@ANCHOR: user_websites:rich_editor_before_input]
+    // Verified by [@ANCHOR: test_tour_owner_site]
+    onBeforeInput(ev) {
+        // Undo and Redo from the browser's own menu take the same path as the buttons.
+        if (ev.inputType === "historyUndo" || ev.inputType === "historyRedo") {
+            ev.preventDefault();
+            this.stepHistory(ev.inputType === "historyUndo" ? -1 : 1);
+        }
+    }
+
     // [@ANCHOR: user_websites:rich_editor_toolbar_click]
     // Verified by [@ANCHOR: test_tour_owner_site]
     onToolbarClick(ev) {
@@ -84,10 +166,17 @@ export class RichEditor extends Interaction {
             this.fileInput.click();
         } else if (cmd === "code") {
             this.wrapSelectionInCode();
+        } else if (cmd === "undo") {
+            this.stepHistory(-1);
+        } else if (cmd === "redo") {
+            this.stepHistory(1);
         } else if (cmd === "formatBlock") {
             document.execCommand("formatBlock", false, button.dataset.uwArg);
         } else {
             document.execCommand(cmd, false, null);
+        }
+        if (cmd !== "link" && cmd !== "image" && cmd !== "undo" && cmd !== "redo") {
+            this.recordHistory(true);
         }
         this.syncField();
         this.refreshToolbarState();
@@ -193,7 +282,9 @@ export class RichEditor extends Interaction {
             this.say("Links must start with http://, https://, mailto: or /.");
             return;
         }
+        this.say("");
         document.execCommand("createLink", false, url);
+        this.recordHistory(true);
         this.syncField();
     }
 
@@ -229,6 +320,7 @@ export class RichEditor extends Interaction {
         this.restoreRange();
         const alt = (file.name || "image").replace(/\.[^.]+$/, "").replace(/["<>&]/g, "");
         document.execCommand("insertHTML", false, `<img src="${reply.url}" alt="${alt}"/>`);
+        this.recordHistory(true);
         this.syncField();
         this.say("Image added. Describe it in the page text for readers who cannot see it.");
     }
@@ -248,6 +340,7 @@ export class RichEditor extends Interaction {
         } else {
             document.execCommand("insertText", false, clipboard.getData("text/plain"));
         }
+        this.recordHistory(true);
         this.syncField();
     }
 

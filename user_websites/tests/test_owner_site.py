@@ -576,3 +576,49 @@ class TestOwnerSite(HamsHttpCase):
         )
         self.assertFalse(self.env["website.page"].search([("name", "=", "Sneaky")]))
         self.assertIsNone(re.match(PAGE_SLUG_RE, "x/y"))
+
+    def test_22_save_error_keeps_what_was_typed(self):
+        # [@ANCHOR: test_owner_save_error_keeps_what_was_typed]
+        # Tests [@ANCHOR: user_websites:fn_owner_editor_with_error]
+        self.authenticate("ownerone", "ownerone")
+        before = self.env["website.page"].search_count([("owner_user_id", "=", self.owner.id)])
+        taken = self._post(
+            "/my/site/ownerone/page/save",
+            title="My Dup",
+            page_slug="about",
+            content="<p>The essay I spent an hour on</p>",
+            is_published="on",
+        )
+        self.assertEqual(taken.status_code, 400)
+        self.assertIn("You already have a page at that address", taken.text)
+        self.assertIn("The essay I spent an hour on", taken.text)
+        self.assertIn('value="My Dup"', taken.text)
+        self.assertIn('value="about"', taken.text)
+        no_title = self._post(
+            "/my/site/ownerone/page/save", title="  ", page_slug="fresh", content="<p>Keep this body</p>"
+        )
+        self.assertEqual(no_title.status_code, 400)
+        self.assertIn("Please give the page a title", no_title.text)
+        self.assertIn("Keep this body", no_title.text)
+        edit = self._post(
+            "/my/site/ownerone/page/save", page_id=str(self.sub.id), title="", content="<p>Edited but untitled</p>"
+        )
+        self.assertEqual(edit.status_code, 400)
+        self.assertIn("Edited but untitled", edit.text)
+        self.assertIn(f'value="{self.sub.id}"', edit.text)
+        self.assertEqual(
+            self.env["website.page"].search_count([("owner_user_id", "=", self.owner.id)]), before
+        )
+
+    def test_23_suspended_owner_is_told_why(self):
+        # [@ANCHOR: test_owner_site_suspended_explains_and_points_to_appeal]
+        # Tests [@ANCHOR: user_websites:owner_site_suspended]
+        self.owner.is_suspended_from_websites = True
+        self.env.flush_all()
+        self.authenticate("ownerone", "ownerone")
+        response = self.url_open("/my/site/ownerone")
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Your website is suspended", response.text)
+        self.assertIn('href="/my"', response.text)
+        self.authenticate("ownertwo", "ownertwo")
+        self.assertEqual(self.url_open("/my/site/ownerone").status_code, 404)

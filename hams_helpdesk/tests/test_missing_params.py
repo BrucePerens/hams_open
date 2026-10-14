@@ -86,20 +86,20 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.assertIn("result", body, body)
 
     def test_a_nul_byte_in_a_query_parameter_is_a_400_not_a_500(self):
-        # Tests [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
         for route in ("/web/login?redirect=a%00b", "/scoped_app?app_id=a%00b"):
             response = self.url_open(route, allow_redirects=False)
             self.assertEqual(response.status_code, 400, route)
             self.assertNotIn("Traceback", response.text)
 
     def test_a_nul_byte_in_the_path_is_a_400_not_a_500(self):
-        # Tests [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:nul_byte_in_path]
         for route in ("/no%00such-page", "/member/a%00b", "/w1aw%00/blog"):
             response = self.url_open(route, allow_redirects=False)
             self.assertEqual(response.status_code, 400, route)
 
     def test_a_nul_byte_in_a_json_body_is_refused(self):
-        # Tests [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
         self.authenticate("admin", "admin")
         params = {"model": "res.partner", "method": "search_count", "args": [[["name", "=", "a\u0000b"]]], "kwargs": {}}
         body = self._rpc("/web/dataset/call_kw/res.partner.search_count", params).json()
@@ -118,3 +118,15 @@ class TestMissingRequiredParams(HamsHttpCase):
             self.assertNotIn("Traceback", response.text)
             self.assertNotIn("ValueError", response.text)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+
+    def test_a_nul_byte_in_the_path_or_a_parameter_is_a_400_not_a_500(self):
+        # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
+        before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
+        for path in ("/scoped_app?app_id=%00", "/web/login?login=%00"):
+            response = self.url_open(path, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, path)
+            self.assertNotIn("Traceback", response.text)
+        self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+        # Without it the same routes are served.
+        self.assertEqual(self.url_open("/scoped_app?app_id=web", allow_redirects=False).status_code, 200)

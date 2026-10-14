@@ -15,6 +15,7 @@ import hmac
 from urllib.parse import quote, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
+from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
 from werkzeug.wrappers import Response
 
 from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
@@ -39,6 +40,33 @@ redis_pool = redis.ConnectionPool(
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 
+BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
+REPORTS_PER_HOUR_VISITOR = 10
+REPORTS_PER_HOUR_MEMBER = 30
+
+
+def _report_rate_limit():
+    # [@ANCHOR: user_websites:fn_main_report_rate_limit]
+    # Verified by [@ANCHOR: test_report_violation_is_rate_limited]
+    """Counts this reporter's submission this hour (per signed-in member, per address for a visitor) and
+    refuses the one past the limit, so the public report form cannot be used to flood the moderation queue."""
+    user = request.env.user
+    if user._is_public():
+        who, limit = f"ip:{request.httprequest.remote_addr}", REPORTS_PER_HOUR_VISITOR
+    else:
+        who, limit = f"user:{user.id}", REPORTS_PER_HOUR_MEMBER
+    key = f"uw:rl:{request.env.cr.dbname}:report:{who}"
+    try:
+        count = redis_client.incr(key)
+        if count == 1:
+            redis_client.expire(key, 3600)
+    except redis.exceptions.RedisError as e:
+        _logger.error("Report rate limiter unavailable: %s", e)
+        raise ServiceUnavailable("Reports are temporarily unavailable. Please try again later.")
+    if count > limit:
+        raise TooManyRequests("Too many reports from you in the last hour. Please try again later.")
+
+
 # [@ANCHOR: user_websites:report_violation_redirect_target]
 # Verified by [@ANCHOR: test_report_violation_redirects_back_to_reported_page]
 def _report_violation_redirect_target(reported_url, query_param):
@@ -60,6 +88,22 @@ def _report_violation_redirect_target(reported_url, query_param):
             path = parsed_path
     separator = "&" if "?" in path else "?"
     return f"{path}{separator}{query_param}"
+
+
+# [@ANCHOR: user_websites:fn_main_reportable_url]
+# Verified by [@ANCHOR: test_report_violation_refuses_another_sites_url]
+def _reportable_url(url):
+    """`url` when it is a page of this site (a path, or a full address on this request's own host), else None. A report
+    of "https://evil.example/..." or "javascript:..." would put a foreign address in front of a moderator."""
+    try:
+        parts = urlparse(url)
+    except ValueError:
+        return None
+    if not parts.scheme and not parts.netloc:
+        return url if url.startswith("/") else None
+    if parts.scheme in ("http", "https") and parts.netloc == request.httprequest.host:
+        return url
+    return None
 
 
 def _legacy_slug_redirect(website_slug, rest=""):
@@ -133,6 +177,9 @@ class UserWebsitesController(http.Controller):
             return request.redirect(
                 _report_violation_redirect_target(url, "error=missing_fields")
             )
+        if _reportable_url(url) is None:
+            return request.redirect(_report_violation_redirect_target("", "error=invalid_url"))
+        _report_rate_limit()
 
         # Enforce max length on description
         if len(description) > 5000:
@@ -726,7 +773,13 @@ class UserWebsitesController(http.Controller):
         post = self._get_own_blog_post_for_edit(post_id)
         if not post:
             return request.redirect("/my/home")
+        return self._render_blog_post_editor(post)
 
+    def _render_blog_post_editor(self, post, error=None, name=None, content=None, is_published=None):
+        # [@ANCHOR: user_websites:fn_main_render_blog_post_editor]
+        # Verified by [@ANCHOR: test_blog_post_save_error_keeps_what_was_typed]
+        """The blog post form. After a refused save, `name`, `content` and `is_published` are what the member typed, so
+        the form comes back with their words in it (and the reason), not with the stored post."""
         owner = post.owner_user_id or post.user_websites_group_id
         if not owner:
             return request.redirect("/my/home")
@@ -734,13 +787,17 @@ class UserWebsitesController(http.Controller):
             "user_websites.user_websites_service_account"
         )
         owner_svc = env_svc[owner._name].browse(owner.id)
-        clean_html, _hostile = sanitize_member_html(post.content)
+        source = post.content if content is None else (content or "")[:MAX_BODY_CHARS]
+        clean_html, _hostile = sanitize_member_html(source)
         return request.render(
             "user_websites.blog_post_edit_form",
             {
                 "post": post,
                 "default_title": "Edit Blog Post",
                 "editor_initial": Markup(clean_html),
+                "form_name": name,
+                "form_published": is_published,
+                "error": error,
                 "site_slug": owner_svc.website_slug,
                 "profile_user": owner_svc if owner._name == "res.users" else env_svc["res.users"],
                 "profile_group": owner_svc if owner._name != "res.users" else env_svc["user.websites.group"],
@@ -749,6 +806,7 @@ class UserWebsitesController(http.Controller):
                 "member_site": True,
                 "is_owner": True,
             },
+            status=400 if error else 200,
         )
 
     @http.route(
@@ -774,10 +832,9 @@ class UserWebsitesController(http.Controller):
         if not post:
             return request.redirect("/my/home")
 
-        if not name:
-            return request.redirect(
-                f"/blog_post/edit/{post_id}?error=missing_fields"
-            )
+        name = (name or "").strip()
+        if not name or len(name) > BLOG_TITLE_MAX_CHARS:
+            return self._render_blog_post_editor(post, "missing_fields", name, content, is_published)
 
         # [!] SECURITY: blog.post's own "content" field is declared sanitize=False (stock
         # website_blog), so the ORM does not sanitize a write to it. The post body is written
@@ -787,7 +844,7 @@ class UserWebsitesController(http.Controller):
         # Hostile markup (script, frames, event handlers, QWeb directives) is stripped and also
         # filed as an automated content violation, as a hostile page body is.
         if len(content or "") > MAX_BODY_CHARS:
-            return request.redirect(f"/blog_post/edit/{post_id}?error=too_long")
+            return self._render_blog_post_editor(post, "too_long", name, content, is_published)
         sanitized_content, hostile = sanitize_member_html(content)
         if hostile:
             hostile_vals = {"url": f"/blog_post/edit/{post_id}"}

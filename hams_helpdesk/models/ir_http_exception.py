@@ -97,6 +97,16 @@ def _missing_required_params(endpoint):
     ]
 
 
+# [@ANCHOR: hams_helpdesk:request_has_nul_byte]
+# Verified by [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+def _request_has_nul_byte():
+    """True when the path or any text parameter of this request holds a NUL byte (%00), at any depth of a JSON body.
+    PostgreSQL refuses such a string, so every route that searched with it answered 500 and filed a
+    server-exception ticket (QA pass 2, 2026-10-14: /%00, /member/%00, /repeaters?search=%00, /event?search=%00,
+    /forum/help-1?search=%00 ...)."""
+    return "\x00" in request.httprequest.path or _contains_nul(request.params)
+
+
 class IrHttpExceptionReport(models.AbstractModel):
     _inherit = "ir.http"
 
@@ -106,7 +116,7 @@ class IrHttpExceptionReport(models.AbstractModel):
         request.httprequest.environ[ROUTE_RULE_KEY] = rule.rule
         return super()._pre_dispatch(rule, args)
 
-    # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+    # [@ANCHOR: hams_helpdesk:nul_byte_in_path]
     @classmethod
     def _match(cls, path_info):
         """A NUL byte in the path is a 400 before any converter looks anything up (the member-site converters
@@ -122,7 +132,7 @@ class IrHttpExceptionReport(models.AbstractModel):
         """A NUL byte in a parameter, or a route called without a parameter its handler cannot do without, is
         a 400, not a 500.
 
-        A NUL anywhere in the parameters (query, form or JSON body) is refused first (see _contains_nul).
+        A NUL anywhere in the parameters (query, form or JSON body) is refused first (see _request_has_nul_byte).
         The same 400 now covers JSON-RPC routes: a call that left out a required argument raised TypeError
         inside the handler, a server-exception ticket per call (QA pass 2: 18 member routes under
         /repeaters, /event, /api/v1/ham_shack, /api/v1/training and /api/v1/auxcomm).
@@ -135,8 +145,8 @@ class IrHttpExceptionReport(models.AbstractModel):
         server-exception ticket (QA-014, 2026-10-13: /payment/confirmation, /profile/validate_email,
         /scoped_app, /scoped_app_icon_png, /shop/pricelist; /forum/get_tags earlier, ticket #67). This is the
         client's mistake: the reply is a 400 naming the missing parameter names (never a value)."""
-        if _contains_nul(request.params) or "\x00" in request.httprequest.path:
-            raise werkzeug.exceptions.BadRequest("A request parameter holds an invalid character.")
+        if _request_has_nul_byte():
+            raise werkzeug.exceptions.BadRequest("The request contains a NUL byte.")
         missing = _missing_required_params(endpoint)
         if missing:
             raise werkzeug.exceptions.BadRequest("Missing required parameter: " + ", ".join(missing))

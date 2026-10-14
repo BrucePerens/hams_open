@@ -52,6 +52,18 @@
         </t>
     </template>
 
+    <template id="owner_site_suspended" name="Site Owner: Suspended">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_site_suspended_explains_and_points_to_appeal] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-5">
+                <h1 class="h2">Your website is suspended</h1>
+                <p>We suspended your website and blog features because of community guideline violations, and your pages are hidden. Nothing was deleted.</p>
+                <p>You can ask for the suspension to be reviewed once, from the appeal form at the top of your account page.</p>
+                <a class="btn btn-primary" href="/my">Go to my account and appeal</a>
+            </div>
+        </t>
+    </template>
+
     <template id="owner_site_dashboard" name="Site Owner Dashboard">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_owner_site_dashboard_lists_content] -->
         <!-- [@ANCHOR: user_websites:UX_OWNER_DASHBOARD] -->
@@ -155,7 +167,7 @@
                 </section>
 
                 <section id="deleted" class="mb-5" aria-labelledby="uw_deleted_h" t-if="deleted_pages or deleted_posts">
-                    <details>
+                    <details t-att-open="'open' if saved == 'deleted' else None">
                         <summary id="uw_deleted_h" class="h5">Deleted (<t t-out="len(deleted_pages) + len(deleted_posts)"/>)</summary>
                         <p class="text-muted mt-2">These are not on your site and visitors cannot see them. Restore one to bring it back as an unpublished draft.</p>
                         <ul class="list-group">

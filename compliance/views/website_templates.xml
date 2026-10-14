@@ -20,4 +20,14 @@
             </div></div></div>
         </xpath>
     </template>
+
+    <template id="compliance_cookies_bar_name" inherit_id="website.cookies_bar" name="Cookie bar accessible name">
+        <!-- [@ANCHOR: COMM_compliance_cookies_bar_name] -->
+        <!-- QA pass 2 (axe-core, aria-dialog-name, serious, every page): the stock cookie bar is role="dialog" with no
+             name, so a screen reader announced "dialog" with nothing to say what it was. -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_cookies_bar_has_a_name] -->
+        <xpath expr="//div[hasclass('o_cookies_discrete')]" position="attributes">
+            <attribute name="aria-label">Cookie preferences</attribute>
+        </xpath>
+    </template>
 </odoo>

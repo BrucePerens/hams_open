@@ -173,7 +173,9 @@ class ManualLibraryController(http.Controller):
             return (1, 0, topic.lower())
 
         return [
-            (topic, sorted(by_topic[topic], key=lambda a: a.name.lower()))
+            # A manual may ask to lead its heading with "sequence" in its knowledge_docs entry (lower first); the rest share the
+            # default and stay alphabetical.
+            (topic, sorted(by_topic[topic], key=lambda a: (a.sequence, a.name.lower())))
             for topic in sorted(by_topic, key=topic_key)
         ]
 

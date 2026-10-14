@@ -8,12 +8,18 @@ from odoo.exceptions import ValidationError
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import json
 
+from odoo.addons.user_websites.controllers import main as uw_main
+from odoo.addons.user_websites.controllers.main import redis_client
+
 
 @tagged("post_install", "-at_install")
 class TestRobustnessAndBoundaries(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
+        # The report form counts submissions per address for an hour; start each test from zero.
+        for key in redis_client.scan_iter(f"uw:rl:{self.env.cr.dbname}:report:*"):
+            redis_client.delete(key)
         self.user_test = self.env["res.users"].create(
             {
                 "name": "Robust User",
@@ -95,6 +101,50 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             5000,
             "The controller must truncate the string to exactly 5000 characters.",
         )
+
+    def test_03c_report_violation_is_rate_limited(self):
+        # [@ANCHOR: test_report_violation_is_rate_limited]
+        # Tests [@ANCHOR: user_websites:fn_main_report_rate_limit]
+        self.authenticate(None, None)
+        data = {
+            "csrf_token": odoo.http.Request.csrf_token(self),
+            "url": f"/{self.user_test.website_slug}",
+            "description": "Flood",
+            "email": "flood@example.com",
+        }
+        # One report an hour is allowed, the second is refused and files nothing.
+        self.safe_patch_object(uw_main, "REPORTS_PER_HOUR_VISITOR", 1)
+        first = self.url_open("/website/report_violation", data=dict(data, description="First"), method="POST")
+        second = self.url_open("/website/report_violation", data=data, method="POST")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
+        reports = self.env["content.violation.report"].search([("reported_by_email", "=", "flood@example.com")])
+        self.assertEqual(reports.mapped("description"), ["First"])
+
+    def test_03d_report_violation_refuses_another_sites_url(self):
+        # [@ANCHOR: test_report_violation_refuses_another_sites_url]
+        # Tests [@ANCHOR: user_websites:fn_main_reportable_url]
+        self.authenticate(None, None)
+        own_page = f"{self.base_url()}/{self.user_test.website_slug}"
+        for url, email in (
+            ("https://evil.example/phish", "foreign@example.com"),
+            ("javascript:alert(1)", "script@example.com"),
+            ("relative-without-slash", "relative@example.com"),
+            (own_page, "own@example.com"),
+            (f"/{self.user_test.website_slug}", "path@example.com"),
+        ):
+            self.url_open(
+                "/website/report_violation",
+                data={
+                    "csrf_token": odoo.http.Request.csrf_token(self),
+                    "url": url,
+                    "description": "Check the address rule",
+                    "email": email,
+                },
+                method="POST",
+            )
+        filed = self.env["content.violation.report"].search([("description", "=", "Check the address rule")])
+        self.assertEqual(sorted(filed.mapped("reported_by_email")), ["own@example.com", "path@example.com"])
 
     def test_03b_violation_report_honeypot_rejected_silently(self):
         """A filled website_honeypot field (a form-filling bot, since the field is hidden and

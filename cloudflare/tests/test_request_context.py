@@ -138,3 +138,27 @@ class TestRequestContext(HamsHttpCase):
         context = self.env["cloudflare.utils"].get_request_context()
         self.assertEqual(context["ip"], "1.1.1.1")
         self.assertIsNone(context["country"])
+
+
+@tagged("post_install", "-at_install")
+class TestCurrentWebsiteWithoutWebsiteAttr(HamsHttpCase):
+    def test_get_current_website_id_request_without_website_attribute(self):
+        """Backend JSON-RPC requests have no `.website` attribute at all
+        (helpdesk ticket 70). Must fall back, not raise AttributeError."""
+        import types
+
+        fake = types.SimpleNamespace()
+        fake._get_current_object = lambda: fake
+        self.safe_patch("odoo.addons.cloudflare.models.edge_context.request", new=fake)
+        expected = self.env["website"].get_current_website().id
+        self.assertEqual(self.env["cloudflare.utils"].get_current_website_id(), expected)
+
+    def test_enqueue_tags_request_without_website_attribute(self):
+        import types
+
+        fake = types.SimpleNamespace()
+        fake._get_current_object = lambda: fake
+        self.safe_patch("odoo.addons.cloudflare.models.edge_context.request", new=fake)
+        before = self.env["cloudflare.purge.queue"].search_count([])
+        self.env["cloudflare.purge.queue"].enqueue_tags(["no-website-tag"])
+        self.assertEqual(self.env["cloudflare.purge.queue"].search_count([]), before + 1)
