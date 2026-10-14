@@ -121,6 +121,31 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
         reports = self.env["content.violation.report"].search([("reported_by_email", "=", "flood@example.com")])
         self.assertEqual(reports.mapped("description"), ["First"])
 
+    def test_03d_report_violation_refuses_another_sites_url(self):
+        # [@ANCHOR: test_report_violation_refuses_another_sites_url]
+        # Tests [@ANCHOR: user_websites:fn_main_reportable_url]
+        self.authenticate(None, None)
+        own_page = f"{self.base_url()}/{self.user_test.website_slug}"
+        for url, email in (
+            ("https://evil.example/phish", "foreign@example.com"),
+            ("javascript:alert(1)", "script@example.com"),
+            ("relative-without-slash", "relative@example.com"),
+            (own_page, "own@example.com"),
+            (f"/{self.user_test.website_slug}", "path@example.com"),
+        ):
+            self.url_open(
+                "/website/report_violation",
+                data={
+                    "csrf_token": odoo.http.Request.csrf_token(self),
+                    "url": url,
+                    "description": "Check the address rule",
+                    "email": email,
+                },
+                method="POST",
+            )
+        filed = self.env["content.violation.report"].search([("description", "=", "Check the address rule")])
+        self.assertEqual(sorted(filed.mapped("reported_by_email")), ["own@example.com", "path@example.com"])
+
     def test_03b_violation_report_honeypot_rejected_silently(self):
         """A filled website_honeypot field (a form-filling bot, since the field is hidden and
         unreachable for a real visitor) must be discarded with no content.violation.report row
