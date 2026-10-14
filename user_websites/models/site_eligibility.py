@@ -42,6 +42,9 @@ class ResUsersSiteEligibility(models.Model):
         copy=False,
         readonly=True,
         index=True,
+        # Not read on a res.users first read: the SQL views and searches use the column, the ORM only reads it in the reconciler
+        # (ham_relay_bridge TestResUsersFirstReadWidth: a new column is hot or has a prefetch group).
+        prefetch="user_websites",
         help="The last reconciled answer of _website_eligibility_gaps(): True while the member's site is "
         "hidden because a requirement is missing. Maintained by reconcile_website_eligibility(); never "
         "set by the member.",
