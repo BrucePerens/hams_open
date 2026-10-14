@@ -89,6 +89,22 @@ def _report_violation_redirect_target(reported_url, query_param):
     return f"{path}{separator}{query_param}"
 
 
+# [@ANCHOR: user_websites:fn_main_reportable_url]
+# Verified by [@ANCHOR: test_report_violation_refuses_another_sites_url]
+def _reportable_url(url):
+    """`url` when it is a page of this site (a path, or a full address on this request's own host), else None. A report
+    of "https://evil.example/..." or "javascript:..." would put a foreign address in front of a moderator."""
+    try:
+        parts = urlparse(url)
+    except ValueError:
+        return None
+    if not parts.scheme and not parts.netloc:
+        return url if url.startswith("/") else None
+    if parts.scheme in ("http", "https") and parts.netloc == request.httprequest.host:
+        return url
+    return None
+
+
 def _legacy_slug_redirect(website_slug, rest=""):
     """A 301 from a retired site slug to the same page of the site that holds it now, or None.
 
@@ -160,6 +176,8 @@ class UserWebsitesController(http.Controller):
             return request.redirect(
                 _report_violation_redirect_target(url, "error=missing_fields")
             )
+        if _reportable_url(url) is None:
+            return request.redirect(_report_violation_redirect_target("", "error=invalid_url"))
         _report_rate_limit()
 
         # Enforce max length on description
