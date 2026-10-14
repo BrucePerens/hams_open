@@ -15,6 +15,7 @@ import hmac
 from urllib.parse import quote, urlparse
 from xml.sax.saxutils import escape as xml_escape
 
+from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
 from werkzeug.wrappers import Response
 
 from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
@@ -37,6 +38,32 @@ redis_pool = redis.ConnectionPool(
     socket_connect_timeout=1.0,
 )
 redis_client = redis.Redis(connection_pool=redis_pool)
+
+
+REPORTS_PER_HOUR_VISITOR = 10
+REPORTS_PER_HOUR_MEMBER = 30
+
+
+def _report_rate_limit():
+    # [@ANCHOR: user_websites:fn_main_report_rate_limit]
+    # Verified by [@ANCHOR: test_report_violation_is_rate_limited]
+    """Counts this reporter's submission this hour (per signed-in member, per address for a visitor) and
+    refuses the one past the limit, so the public report form cannot be used to flood the moderation queue."""
+    user = request.env.user
+    if user._is_public():
+        who, limit = f"ip:{request.httprequest.remote_addr}", REPORTS_PER_HOUR_VISITOR
+    else:
+        who, limit = f"user:{user.id}", REPORTS_PER_HOUR_MEMBER
+    key = f"uw:rl:{request.env.cr.dbname}:report:{who}"
+    try:
+        count = redis_client.incr(key)
+        if count == 1:
+            redis_client.expire(key, 3600)
+    except redis.exceptions.RedisError as e:
+        _logger.error("Report rate limiter unavailable: %s", e)
+        raise ServiceUnavailable("Reports are temporarily unavailable. Please try again later.")
+    if count > limit:
+        raise TooManyRequests("Too many reports from you in the last hour. Please try again later.")
 
 
 # [@ANCHOR: user_websites:report_violation_redirect_target]
@@ -133,6 +160,7 @@ class UserWebsitesController(http.Controller):
             return request.redirect(
                 _report_violation_redirect_target(url, "error=missing_fields")
             )
+        _report_rate_limit()
 
         # Enforce max length on description
         if len(description) > 5000:

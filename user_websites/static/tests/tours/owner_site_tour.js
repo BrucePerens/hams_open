@@ -1,5 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_owner_site]
 // Tests [@ANCHOR: user_websites:UX_OWNER_TOOLBAR]
@@ -15,6 +16,11 @@ import { registry } from "@web/core/registry";
 // Tests [@ANCHOR: user_websites:rich_editor_remember_range]
 // Tests [@ANCHOR: user_websites:rich_editor_restore_range]
 // Tests [@ANCHOR: user_websites:rich_editor_say]
+// Tests [@ANCHOR: user_websites:rich_editor_record_history]
+// Tests [@ANCHOR: user_websites:rich_editor_on_input]
+// Tests [@ANCHOR: user_websites:rich_editor_step_history]
+// Tests [@ANCHOR: user_websites:rich_editor_history_key]
+// Tests [@ANCHOR: user_websites:rich_editor_before_input]
 // Tests [@ANCHOR: user_websites:rich_editor_start]
 // Tests [@ANCHOR: user_websites:rich_editor_sync_field]
 // Tests [@ANCHOR: user_websites:rich_editor_toolbar_click]
@@ -39,6 +45,7 @@ registry.category("web_tour.tours").add("owner_site_tour", {
             content: "The editor is a rich-text area with a toolbar",
             trigger: ".uw-rich-editor [data-uw-area][contenteditable='true']",
         },
+        TourUtils.dismissCookiesBar(),
         {
             content: "Give the post a title",
             trigger: "#name",
@@ -62,6 +69,43 @@ registry.category("web_tour.tours").add("owner_site_tour", {
             content: "Make it bold with the toolbar",
             trigger: ".uw-rich-editor button[data-uw-cmd='bold']",
             run: "click",
+        },
+        {
+            content: "Undo takes the bold off again",
+            trigger: ".uw-rich-editor button[data-uw-cmd='undo']",
+            run: "click",
+        },
+        {
+            content: "The body is plain again",
+            trigger: ".uw-rich-editor [data-uw-area]:not(:has(b))",
+        },
+        {
+            content: "Undo again does not reach into the title",
+            trigger: ".uw-rich-editor button[data-uw-cmd='undo']",
+            run: "click",
+        },
+        {
+            content: "The title is still there",
+            trigger: "#name",
+            run() {
+                if (!this.anchor.value) {
+                    throw new Error("Undo emptied the title");
+                }
+            },
+        },
+        {
+            content: "Redo brings the text back",
+            trigger: ".uw-rich-editor button[data-uw-cmd='redo']",
+            run: "click",
+        },
+        {
+            content: "Redo again brings the bold back",
+            trigger: ".uw-rich-editor button[data-uw-cmd='redo']",
+            run: "click",
+        },
+        {
+            content: "The body is bold again",
+            trigger: ".uw-rich-editor [data-uw-area] b",
         },
         {
             content: "Publish it",

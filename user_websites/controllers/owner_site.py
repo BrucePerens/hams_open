@@ -184,8 +184,19 @@ class UserWebsitesOwnerController(http.Controller):
             svc["user.websites.group"].browse(group_id) if group_id else svc["user.websites.group"]
         )
         if profile_user:
-            if profile_user.id != user.id or profile_user.is_suspended_from_websites:
+            if profile_user.id != user.id:
                 raise request.not_found()
+            if profile_user.is_suspended_from_websites:
+                # [@ANCHOR: user_websites:owner_site_suspended]
+                # Verified by [@ANCHOR: test_owner_site_suspended_explains_and_points_to_appeal]
+                # The owner is told why and where to appeal; nobody else learns the site exists.
+                raise SiteResponse(
+                    request.render(
+                        "user_websites.owner_site_suspended",
+                        {"site_slug": profile_user.website_slug, "main_object": profile_user},
+                        status=403,
+                    )
+                )
             gaps = profile_user._website_eligibility_gaps()
             if gaps:
                 # [@ANCHOR: user_websites:owner_site_ineligible]
@@ -423,11 +434,18 @@ class UserWebsitesOwnerController(http.Controller):
         owner = profile_user or profile_group
         slug = owner.website_slug
         title = (title or "").strip()
-        if not title or len(title) > MAX_TITLE_CHARS:
-            return self._back_to_editor(slug, page_id, "title")
         body, hostile = self._clean_body(content)
+
+        def refused(code):
+            # The member's own words go back into the editor with the reason, never to an empty form.
+            return self._editor_with_error(
+                profile_user, profile_group, page_id, code, title, page_slug, content, is_published
+            )
+
+        if not title or len(title) > MAX_TITLE_CHARS:
+            return refused("title")
         if body is None:
-            return self._back_to_editor(slug, page_id, "too_long")
+            return refused("too_long")
 
         if page_id:
             if not str(page_id).isdigit():
@@ -442,11 +460,11 @@ class UserWebsitesOwnerController(http.Controller):
             page = None
             page_slug = (page_slug or slugify(title)).strip().lower()
             if not PAGE_SLUG_RE.match(page_slug) or page_slug in RESERVED_PAGE_SLUGS:
-                return self._back_to_editor(slug, page_id, "address")
+                return refused("address")
             url = f"/{slug}/{page_slug}"
             key = f"{slug}_{page_slug}"
             if self._svc()["website.page"].search_count([("url", "=", url)]):
-                return self._back_to_editor(slug, page_id, "exists")
+                return refused("exists")
 
         arch = _page_arch(slug, key.replace("-", "_"), title, body)
         published = bool(is_published)
@@ -470,6 +488,40 @@ class UserWebsitesOwnerController(http.Controller):
                 vals["user_websites_group_id"] = profile_group.id
             page = self._svc()["website.page"].create(vals)
         return request.redirect(f"/my/site/{quote(slug, safe='')}/page/{page.id}?saved=1")
+
+    def _editor_with_error(
+        self, profile_user, profile_group, page_id, error, title, page_slug, content, is_published
+    ):
+        # [@ANCHOR: user_websites:fn_owner_editor_with_error]
+        # Verified by [@ANCHOR: test_owner_save_error_keeps_what_was_typed]
+        """The page editor again, with the reason and everything the member typed (title, address, body, tick)."""
+        page = None
+        if page_id:
+            if not str(page_id).isdigit():
+                raise request.not_found()
+            page = self._own_page(profile_user, profile_group, int(page_id))
+        owner = profile_user or profile_group
+        slug = owner.website_slug
+        is_home = bool(page) and page.url == f"/{slug}"
+        if page:
+            page_slug = page.url.rsplit("/", 1)[-1] if not is_home else ""
+        clean_body, _hostile = sanitize_member_html((content or "")[:MAX_BODY_CHARS])
+        return request.render(
+            "user_websites.owner_page_edit",
+            self._qcontext(
+                profile_user,
+                profile_group,
+                page=page,
+                title=title,
+                page_slug=page_slug or "",
+                body=Markup(clean_body),
+                published=bool(is_published),
+                can_edit_body=True,
+                is_home=is_home,
+                error=error,
+            ),
+            status=400,
+        )
 
     def _back_to_editor(self, slug, page_id, error):
         # [@ANCHOR: user_websites:fn_owner_back_to_editor]
