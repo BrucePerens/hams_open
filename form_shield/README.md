@@ -50,7 +50,7 @@ enforced (see below).
 
 ## Privacy
 
-Nothing is stored that names a visitor. Redis keys are keyed hashes of a network prefix and expire
+Nothing is stored that names a visitor. (The periods below are the shipped defaults an operator can change; the public Privacy Policy deliberately states no retention period.) Redis keys are keyed hashes of a network prefix and expire
 within the rate-limit window (at most a day). The only database table, `form.shield.rejection`, holds
 one counter per (day, form, reason) and is purged after `form_shield.retention_days` (90). Back
 office: Settings, Form shield counters.

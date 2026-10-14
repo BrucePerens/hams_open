@@ -580,6 +580,8 @@
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reportViolationModal" t-att-data-url="request.httprequest.url">
                 <i class="fa fa-flag" aria-hidden="true"/> Report Violation
             </button>
+            <!-- Without scripts the modal cannot open: this link is the way to the question form. -->
+            <noscript><a class="btn btn-outline-danger btn-sm" href="/website/report_violation"><i class="fa fa-flag" aria-hidden="true"/> Report Violation</a></noscript>
         </div>
     </template>
 

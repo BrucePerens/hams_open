@@ -1,10 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import re
 import time
+
+import odoo
 
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests import tagged
 
 from .. import tokens
+from ..models.ir_http import ENFORCED_ACTIONS
 from .test_support import LOOPBACK, reset_shield_state, shield_response
 
 
@@ -93,3 +97,16 @@ class TestFormShieldHttp(HamsHttpCase):
         self.assertNotIn("verify this submission", on_time.text)
         again = self.url_open("/website/form/mail.mail", data=data, method="POST")
         self.assertIn("could not verify", again.text)
+
+    def test_enforced_actions_match_the_browser_patch(self):
+        """The server enforces exactly the actions the browser patch answers. An action enforced
+        here that the patch does not answer would refuse every visitor; one answered there but
+        not enforced here would only slow its form down."""
+        # Tests [@ANCHOR: form_shield:captcha_hook]
+        # Tests [@ANCHOR: form_shield:recaptcha_patch]
+        path = odoo.tools.file_path("form_shield/static/src/js/recaptcha_patch.js")
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        block = re.search(r"new Set\(\[(.*?)\]\)", source, re.S).group(1)
+        client_actions = tuple(re.findall(r'"([a-z_]+)"', block))
+        self.assertEqual(sorted(client_actions), sorted(ENFORCED_ACTIONS))
