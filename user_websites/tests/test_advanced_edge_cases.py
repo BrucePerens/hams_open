@@ -4,6 +4,7 @@
 import odoo.tests
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.user_websites.controllers.main import redis_client
 import logging
 import urllib.error
 import uuid
@@ -15,6 +16,8 @@ _logger = logging.getLogger(__name__)
 class TestAdvancedEdgeCases(HamsHttpCase):
     def setUp(self):
         super(TestAdvancedEdgeCases, self).setUp()
+        for key in redis_client.scan_iter(f"uw:rl:{self.env.cr.dbname}:report:*"):
+            redis_client.delete(key)
 
         unique_id = str(uuid.uuid4())[:8]
         self.user_empty = self.env["res.users"].create(
