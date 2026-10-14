@@ -156,7 +156,9 @@ class TestJsonRpcErrorBody(HamsHttpCase):
             response = self._post(json=payload)
         self.assertNotIn("Traceback", response.text)
         body = response.json()
-        self.assertEqual(body["error"]["data"]["debug"], "")
+        # The contract is that no traceback leaves the server: a "debug" entry, when the reply has one, is empty (this
+        # reply, for a call with no session, may carry none at all).
+        self.assertEqual(body["error"]["data"].get("debug", ""), "", body)
 
 
 @tagged("post_install", "-at_install")
