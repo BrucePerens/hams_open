@@ -302,6 +302,11 @@ class Module(models.Model):
                 help_topic or DEFAULT_HELP_TOPIC if is_public else False
             )
 
+        # Optional "sequence" (an int) puts a manual ahead of the others under its Help heading (lower first; the default is 10).
+        sequence = doc_info.get("sequence")
+        if isinstance(sequence, int) and not isinstance(sequence, bool):
+            vals["sequence"] = sequence
+
         # bug-hunt (2026-09-13): article identity is looked up by this
         # module's OWN previously-recorded article id, never by searching
         # `knowledge.article` on the shared, collision-prone `name` field --

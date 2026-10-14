@@ -212,3 +212,14 @@ class TestHelpAudience(HamsHttpCase):
         # documentation loader always sets the audience explicitly.
         article = self.env["knowledge.article"].create({"name": "Hand Written"})
         self.assertEqual(article.audience, "member")
+
+    def test_12_a_lower_sequence_leads_its_help_heading(self):
+        # Tests [@ANCHOR: knowledge:help_topics]
+        from odoo.addons.knowledge.controllers.main import ManualLibraryController
+
+        Article = self.env["knowledge.article"]
+        common = {"body": "<p>x</p>", "is_published": True, "internal_permission": "read", "audience": "member", "help_topic": "Getting started and your account"}
+        late = Article.create(dict(common, name="Aardvark Zorkmid Guide"))
+        lead = Article.create(dict(common, name="Zulu Zorkmid Lead", sequence=1))
+        topics = dict(ManualLibraryController()._help_topics(late | lead))
+        self.assertEqual([a.name for a in topics["Getting started and your account"]], ["Zulu Zorkmid Lead", "Aardvark Zorkmid Guide"])
