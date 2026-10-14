@@ -76,7 +76,6 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.assertIn("Missing required parameter", str(body))
         self.assertNotIn("Traceback", str(body))
         self.assertNotIn("TypeError", str(body))
-        self.env.cr.rollback()
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
 
     def test_a_json_call_that_carries_its_arguments_still_works(self):
