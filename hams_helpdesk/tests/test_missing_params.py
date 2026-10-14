@@ -56,3 +56,15 @@ class TestMissingRequiredParams(HamsHttpCase):
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         self.url_open("/scoped_app", allow_redirects=False)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+
+    def test_a_nul_byte_in_the_path_or_a_parameter_is_a_400_not_a_500(self):
+        # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
+        before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
+        for path in ("/scoped_app?app_id=%00", "/web/login?login=%00"):
+            response = self.url_open(path, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, path)
+            self.assertNotIn("Traceback", response.text)
+        self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+        # Without it the same routes are served.
+        self.assertEqual(self.url_open("/scoped_app?app_id=web", allow_redirects=False).status_code, 200)
