@@ -48,3 +48,7 @@ from . import test_site_eligibility_hook
 from . import test_owner_delete
 from . import test_owner_site
 from . import test_report_shield
+
+from .open_source_defaults import pin_package
+
+pin_package(__name__)
