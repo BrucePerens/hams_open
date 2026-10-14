@@ -48,26 +48,40 @@ class BlogPost(models.Model):
         self.mapped("owner_user_id.website_slug")
         self.mapped("user_websites_group_id.website_slug")
 
-        tags = set()
+        # Group tags per website so a purge from a context with no
+        # `request.website` (back-office JSON-RPC, cron) still targets the
+        # post's own website's zone rather than guessing.
+        tags_by_website = {}
         for rec in self:
-            if rec.owner_user_id and rec.owner_user_id.website_slug:
-                tags.add(f"site-{rec.owner_user_id.website_slug}")
-            elif rec.user_websites_group_id and rec.user_websites_group_id.website_slug:
-                tags.add(f"site-{rec.user_websites_group_id.website_slug}")
-        if tags:
-            try:
-                svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                    "cloudflare.user_cloudflare_purge"
-                )
-                self.env["cloudflare.purge.queue"].with_user(svc_uid).enqueue_tags(
-                    list(tags)
-                )
-            except AccessError:
-                logging.getLogger(__name__).debug("Cloudflare purge access denied")
-            except (KeyError, ValueError):  # audit-ignore-catch-all: # Tested by [@ANCHOR: user_websites:test_cloudflare_purge_failsafe]
-                logging.getLogger(__name__).exception(
-                    "Fatal error during Cloudflare purge"
-                )
+            slug = (
+                rec.owner_user_id.website_slug
+                or rec.user_websites_group_id.website_slug
+            )
+            if slug:
+                wid = rec.website_id.id or None
+                tags_by_website.setdefault(wid, set()).add(f"site-{slug}")
+        if not tags_by_website:
+            return
+        # A failure to enqueue an edge purge must never fail the user's own
+        # create/write/unlink (helpdesk ticket 70). The savepoint keeps a DB
+        # error here from poisoning the caller's transaction.
+        try:
+            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                "cloudflare.user_cloudflare_purge"
+            )
+            queue = self.env["cloudflare.purge.queue"].with_user(svc_uid)
+            with self.env.cr.savepoint():
+                for wid, tags in tags_by_website.items():
+                    queue.enqueue_tags(sorted(tags), website_id=wid)
+        except AccessError:
+            _logger.debug("Cloudflare purge access denied")
+        except Exception:  # audit-ignore-catch-all: # Tested by [@ANCHOR: user_websites:test_cloudflare_purge_failsafe]
+            _logger.warning(
+                "Cloudflare purge enqueue failed for blog.post %s; the edge "
+                "copy stays until its TTL expires.",
+                self.ids,
+                exc_info=True,
+            )
 
     # [@ANCHOR: user_websites:COMM_get_blog_urls]
     def _get_blog_urls(self):

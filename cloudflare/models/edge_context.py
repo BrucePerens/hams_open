@@ -2,6 +2,9 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, api, fields
 from odoo.http import request
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 
@@ -18,8 +21,19 @@ class CloudflareUtils(models.AbstractModel):
         """
         if request:
             request_obj = request._get_current_object()
-            if request_obj.website:
-                return request_obj.website.id
+            # `request.website` only exists on requests the website framework
+            # routed (website=True routes). Backend JSON-RPC (e.g. web_save in
+            # the back office), cron and shell requests have no such attribute,
+            # so reading it raised AttributeError (helpdesk ticket 70).
+            try:
+                req_website = request_obj.website
+            except AttributeError as e:  # audit-ignore-catch-all
+                _logger.info(
+                    "Request has no website (not a website-routed request): %s", e
+                )
+                req_website = False
+            if req_website:
+                return req_website.id
         return self.env["website"].get_current_website().id
 
     @api.model
