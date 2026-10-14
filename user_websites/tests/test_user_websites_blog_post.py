@@ -404,6 +404,31 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
         self.assertNotIn("<script", self.post_a.content or "")
         self.assertNotIn("alert(", self.post_a.content or "")
 
+    def test_10a_blog_post_save_error_keeps_what_was_typed(self):
+        # [@ANCHOR: test_blog_post_save_error_keeps_what_was_typed]
+        # Tests [@ANCHOR: user_websites:fn_main_render_blog_post_editor]
+        # QA pass 2: a refused save went back to the stored post and the member's edits were lost; a title of
+        # 100,000 characters or only spaces was accepted.
+        self.authenticate(self.user_a.login, self.user_a.login)
+        before = self.post_a.name
+        for name, content, needle in (
+            ("", "<p>Words I typed once</p>", "Please give the post a title"),
+            ("   ", "<p>Words I typed twice</p>", "Please give the post a title"),
+            ("T" * 121, "<p>Words I typed thrice</p>", "Please give the post a title"),
+            ("Fine title", "<p>" + "a" * 210000 + "</p>", "too long"),
+        ):
+            response = self.url_open(
+                f"/blog_post/edit/submit/{self.post_a.id}",
+                data={"csrf_token": odoo.http.Request.csrf_token(self), "name": name, "content": content},
+                method="POST",
+            )
+            self.assertEqual(response.status_code, 400, name[:10])
+            self.assertIn(needle, response.text)
+            if len(content) < 1000:
+                self.assertIn(content[3:-4], response.text)
+        self.post_a.invalidate_recordset()
+        self.assertEqual(self.post_a.name, before)
+
     def test_10b_blog_post_edit_submit_keeps_safe_svg_and_strips_unsafe_svg(self):
         # Tests [@ANCHOR: test_svg_allowlist_sanitizer_fields]
         # Tests [@ANCHOR: zero_sudo:svg_allowlist_sanitizer]

@@ -351,13 +351,13 @@
                 <h1 class="h2">Edit Blog Post</h1>
                 <div class="card shadow-sm mt-3">
                     <div class="card-body">
-                        <div t-if="request.params.get('error') == 'missing_fields'" class="alert alert-danger" role="alert">Please provide a title before saving.</div>
-                        <div t-if="request.params.get('error') == 'too_long'" class="alert alert-danger" role="alert">That post is too long. Shorten it and save again.</div>
+                        <div t-if="(error or request.params.get('error')) == 'missing_fields'" class="alert alert-danger" role="alert">Please give the post a title of at most 120 characters before saving.</div>
+                        <div t-if="(error or request.params.get('error')) == 'too_long'" class="alert alert-danger" role="alert">That post is too long. Shorten it and save again.</div>
                         <form t-attf-action="/blog_post/edit/submit/#{post.id}" method="post" id="blog_post_edit_form" class="uw-editor-form">
                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                             <div class="mb-3">
                                 <label for="name" class="form-label fw-bold">Title</label>
-                                <input type="text" class="form-control" id="name" name="name" required="1" maxlength="120" t-att-value="post.name"/>
+                                <input type="text" class="form-control" id="name" name="name" required="1" maxlength="120" t-att-value="post.name if form_name is None else form_name"/>
                             </div>
                             <t t-call="user_websites.rich_editor">
                                 <t t-set="editor_name" t-value="'content'"/>
@@ -366,7 +366,7 @@
                                 <t t-set="upload_url" t-value="'/my/site/%s/image' % site_slug"/>
                             </t>
                             <div class="form-check mt-3 mb-4">
-                                <input type="checkbox" class="form-check-input" id="is_published" name="is_published" t-att-checked="'checked' if post.is_published else None"/>
+                                <input type="checkbox" class="form-check-input" id="is_published" name="is_published" t-att-checked="'checked' if (post.is_published if form_published is None else form_published) else None"/>
                                 <label for="is_published" class="form-check-label fw-bold">Published (visible to the public)</label>
                             </div>
                             <button type="submit" class="btn btn-success">Save</button>

@@ -40,6 +40,7 @@ redis_pool = redis.ConnectionPool(
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 
+BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
 REPORTS_PER_HOUR_VISITOR = 10
 REPORTS_PER_HOUR_MEMBER = 30
 
@@ -754,7 +755,13 @@ class UserWebsitesController(http.Controller):
         post = self._get_own_blog_post_for_edit(post_id)
         if not post:
             return request.redirect("/my/home")
+        return self._render_blog_post_editor(post)
 
+    def _render_blog_post_editor(self, post, error=None, name=None, content=None, is_published=None):
+        # [@ANCHOR: user_websites:fn_main_render_blog_post_editor]
+        # Verified by [@ANCHOR: test_blog_post_save_error_keeps_what_was_typed]
+        """The blog post form. After a refused save, `name`, `content` and `is_published` are what the member typed, so
+        the form comes back with their words in it (and the reason), not with the stored post."""
         owner = post.owner_user_id or post.user_websites_group_id
         if not owner:
             return request.redirect("/my/home")
@@ -762,13 +769,17 @@ class UserWebsitesController(http.Controller):
             "user_websites.user_websites_service_account"
         )
         owner_svc = env_svc[owner._name].browse(owner.id)
-        clean_html, _hostile = sanitize_member_html(post.content)
+        source = post.content if content is None else (content or "")[:MAX_BODY_CHARS]
+        clean_html, _hostile = sanitize_member_html(source)
         return request.render(
             "user_websites.blog_post_edit_form",
             {
                 "post": post,
                 "default_title": "Edit Blog Post",
                 "editor_initial": Markup(clean_html),
+                "form_name": name,
+                "form_published": is_published,
+                "error": error,
                 "site_slug": owner_svc.website_slug,
                 "profile_user": owner_svc if owner._name == "res.users" else env_svc["res.users"],
                 "profile_group": owner_svc if owner._name != "res.users" else env_svc["user.websites.group"],
@@ -777,6 +788,7 @@ class UserWebsitesController(http.Controller):
                 "member_site": True,
                 "is_owner": True,
             },
+            status=400 if error else 200,
         )
 
     @http.route(
@@ -802,10 +814,9 @@ class UserWebsitesController(http.Controller):
         if not post:
             return request.redirect("/my/home")
 
-        if not name:
-            return request.redirect(
-                f"/blog_post/edit/{post_id}?error=missing_fields"
-            )
+        name = (name or "").strip()
+        if not name or len(name) > BLOG_TITLE_MAX_CHARS:
+            return self._render_blog_post_editor(post, "missing_fields", name, content, is_published)
 
         # [!] SECURITY: blog.post's own "content" field is declared sanitize=False (stock
         # website_blog), so the ORM does not sanitize a write to it. The post body is written
@@ -815,7 +826,7 @@ class UserWebsitesController(http.Controller):
         # Hostile markup (script, frames, event handlers, QWeb directives) is stripped and also
         # filed as an automated content violation, as a hostile page body is.
         if len(content or "") > MAX_BODY_CHARS:
-            return request.redirect(f"/blog_post/edit/{post_id}?error=too_long")
+            return self._render_blog_post_editor(post, "too_long", name, content, is_published)
         sanitized_content, hostile = sanitize_member_html(content)
         if hostile:
             hostile_vals = {"url": f"/blog_post/edit/{post_id}"}
