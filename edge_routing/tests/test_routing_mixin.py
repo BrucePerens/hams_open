@@ -20,6 +20,12 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         super().setUpClass()
         cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
         cls.User = cls.env['res.users']
+        # These tests exercise the mixin's own behaviour: a record created with a name and no slug gets a
+        # slug made from the name. A deployment that sets user_websites.slug_policy = "callsign" (hams.com
+        # does, from ham_onboarding's data) deliberately gives res.users a callsign slug instead and tells
+        # the mixin not to derive one from the name, so pin the open-source default for this test class.
+        # Rolled back with the class's transaction; the key means nothing when user_websites is absent.
+        cls.env['ir.config_parameter'].set_param('user_websites.slug_policy', 'name_callsign')
 
     def test_auto_generate_slug_on_create(self):
         # Tests [@ANCHOR: edge_routing:COMM_mixin_create]
