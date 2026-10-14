@@ -69,6 +69,17 @@ def _missing_required_params(endpoint):
     ]
 
 
+# [@ANCHOR: hams_helpdesk:request_has_nul_byte]
+# Verified by [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+def _request_has_nul_byte():
+    """True when the path or any text parameter of this request holds a NUL byte (%00). PostgreSQL refuses such a
+    string, so every route that searched with it answered 500 and filed a server-exception ticket (QA pass 2,
+    2026-10-14: /%00, /member/%00, /repeaters?search=%00, /event?search=%00, /forum/help-1?search=%00 ...)."""
+    if "\x00" in request.httprequest.path:
+        return True
+    return any(isinstance(value, str) and "\x00" in value for value in request.params.values())
+
+
 class IrHttpExceptionReport(models.AbstractModel):
     _inherit = "ir.http"
 
@@ -89,6 +100,8 @@ class IrHttpExceptionReport(models.AbstractModel):
         server-exception ticket (QA-014, 2026-10-13: /payment/confirmation, /profile/validate_email,
         /scoped_app, /scoped_app_icon_png, /shop/pricelist; /forum/get_tags earlier, ticket #67). This is the
         client's mistake: the reply is a 400 naming the missing parameter names (never a value)."""
+        if _request_has_nul_byte():
+            raise werkzeug.exceptions.BadRequest("The request contains a NUL byte.")
         missing = _missing_required_params(endpoint)
         if missing:
             raise werkzeug.exceptions.BadRequest("Missing required parameter: " + ", ".join(missing))
