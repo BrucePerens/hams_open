@@ -6,7 +6,7 @@
     "description": "Generalized CDN Edge Orchestration, Proactive Purging, and WAF Management.",
     "author": "Open Source Community",
     "category": "Website",
-    "version": "1.7",
+    "version": "1.8",
     "license": "AGPL-3",
     "depends": [
         "base",

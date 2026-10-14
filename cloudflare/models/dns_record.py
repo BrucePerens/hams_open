@@ -8,9 +8,11 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 
 from ..utils import dns_plan
 from ..utils.cloudflare_api import (
+    count_dns_records,
     create_dns_record,
     delete_dns_record,
     find_zone_id,
+    get_zone_details,
     is_cloudflare_id,
     list_dns_records_named,
     update_dns_record,
@@ -99,7 +101,8 @@ class CloudflareDNSRecord(models.Model):
     # Verified by [@ANCHOR: COMM_test_dns_record_constraints]
     @api.constrains("name", "type", "content", "proxied", "cf_record_id")
     def _check_record(self):
-        same_keys = self.env["cloudflare.dns.record"].search([("name", "in", self.mapped("name"))], limit=10000)
+        # Archived rows are not pushed, so they never clash, whatever active_test the caller carries.
+        same_keys = self.env["cloudflare.dns.record"].with_context(active_test=True).search([("name", "in", self.mapped("name"))], limit=10000)
         for rec in self:
             if not NAME_PATTERN.fullmatch(rec.name or ""):
                 raise ValidationError(_(
@@ -171,6 +174,23 @@ class CloudflareDNSRecord(models.Model):
                 return website, token, None
         return None, None, "no website has a Cloudflare API token"
 
+    # [@ANCHOR: cloudflare:COMM_dns_push_pending]
+    # Verified by [@ANCHOR: COMM_test_dns_push_pending]
+    @api.model
+    def action_push_pending(self):
+        """The one-click path: opens the push wizard with the plan already made for the rows that have something
+        to push (managed rows not yet at Cloudflare, and rows marked Retire). The administrator reads the plan and
+        presses Apply this plan; nothing is written until then."""
+        self._check_dns_caller_authorized()
+        pending = self.search(
+            [("manage", "=", True), "|", ("retire", "=", True), ("cf_record_id", "=", False)], limit=10000
+        )
+        wizard = self.env["cloudflare.dns.push.wizard"].create({"record_ids": [(6, 0, pending.ids)]})
+        if not pending:
+            wizard.write({"state": "done", "result_text": _("No DNS row is waiting to be pushed.")})
+            return wizard._reopen()
+        return wizard.action_plan()
+
     # [@ANCHOR: cloudflare:COMM_dns_push_plan]
     def dns_push_plan(self):
         """What a push of these rows would do, computed from Cloudflare's current state with reads only.
@@ -204,6 +224,7 @@ class CloudflareDNSRecord(models.Model):
                 continue
             entry = dns_plan.plan_row(plain, remote)
             entry["zone_id"] = zone_id
+            entry["zone_name"] = zone_cache.get(("zone_name", zone_id), "")
             entry["website_id"] = website.id
             entries.append(entry)
         problems = self._dns_problems(entries)
@@ -230,6 +251,7 @@ class CloudflareDNSRecord(models.Model):
             if not ok:
                 return None, "Cloudflare could not be asked for the zone (API error); nothing is planned for this row"
             if zone_id:
+                cache[("zone_name", zone_id)] = candidate
                 return zone_id, None
         return None, f"no Cloudflare zone for {name} is visible to the token of website {website.display_name}"
 
@@ -237,7 +259,53 @@ class CloudflareDNSRecord(models.Model):
     def _dns_problems(self, entries):
         """Reasons the whole push must be refused (strings; empty = fine). A hook: other modules extend it
         the way `_ingress_problems` is extended for tunnel pushes."""
-        return []
+        return self._dns_capacity_problems(entries)
+
+    # [@ANCHOR: cloudflare:COMM_dns_capacity_guard]
+    # Verified by [@ANCHOR: COMM_test_dns_capacity_guard]
+    def _dns_capacity_problems(self, entries):
+        """Refuse a push that grows a zone past 90% of its plan's record limit, or that adds a member
+        delegation (NS for one label directly under the zone) while a wildcard exists in that zone, which would
+        answer for every name that has no delegation. Only zones the plan writes to are looked at, and only
+        when the plan grows them; a push that only updates or retires needs no reading. If Cloudflare cannot
+        be asked, a growing push is refused: it must not guess about room."""
+        problems = []
+        by_zone = {}
+        for entry in entries:
+            if entry.get("zone_id") and entry["action"] in dns_plan.WRITING_ACTIONS:
+                by_zone.setdefault(entry["zone_id"], []).append(entry)
+        for zone_id, zone_entries in by_zone.items():
+            creates = [e for e in zone_entries if e["action"] == dns_plan.CREATE]
+            deletes = [e for e in zone_entries if e["action"] == dns_plan.DELETE]
+            zone_name = zone_entries[0].get("zone_name") or zone_id
+            website = self.env["website"].browse(zone_entries[0].get("website_id"))
+            token = website._get_cloudflare_credentials()[0] if website else None
+            delegations = [e for e in creates if dns_plan.is_member_delegation(e, zone_name)]
+            wildcard_creates = [e for e in creates if (e.get("name") or "").startswith("*.")]
+            if delegations and wildcard_creates:
+                problems.append(f"{zone_name}: this push creates a wildcard record and member name delegations "
+                                "together; a wildcard would answer for names that are not verified members")
+            if creates and len(creates) > len(deletes):
+                ok_zone, details = get_zone_details(zone_id, token)
+                ok_count, total = count_dns_records(zone_id, token)
+                if not (ok_zone and ok_count):
+                    problems.append(f"{zone_name}: Cloudflare could not report the plan or the record count, so "
+                                    "the push is refused (it may not guess about room)")
+                else:
+                    plan = details.get("plan") or {}
+                    limit = dns_plan.record_limit(plan.get("legacy_id"), details.get("created_on"))
+                    why = dns_plan.capacity_problem(zone_name, limit, total, len(creates), len(deletes))
+                    if why:
+                        problems.append(why)
+            if delegations:
+                ok, found = list_dns_records_named(zone_id, "*." + zone_name, token)
+                if not ok:
+                    problems.append(f"{zone_name}: Cloudflare could not be asked about a wildcard record, so member "
+                                    "name delegations are refused")
+                elif found:
+                    problems.append(f"{zone_name} has a wildcard record (*.{zone_name}): member names would "
+                                    "resolve for everyone, not only verified members. Remove it first")
+        return problems
 
     # [@ANCHOR: cloudflare:COMM_dns_push_apply]
     def dns_push_apply(self, expected_hash):

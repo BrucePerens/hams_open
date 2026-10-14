@@ -75,7 +75,7 @@
                     <footer>
                         <button name="action_plan" type="object" string="Show plan" class="btn-primary" invisible="state != 'draft'"/>
                         <button name="action_apply" type="object" string="Apply this plan" class="btn-primary" invisible="state != 'planned' or plan_writes == 0"
-                                confirm="Apply exactly the plan shown? Records are created or updated at Cloudflare; nothing is ever deleted."/>
+                                confirm="Apply exactly the plan shown? Records are created or updated at Cloudflare; a record is deleted only for a row marked Retire."/>
                         <button string="Close" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>
@@ -103,6 +103,18 @@
         </record>
 
         <menuitem id="menu_cf_dns_record" name="DNS Records" parent="menu_cloudflare_root" action="action_cf_dns_record" sequence="70"/>
+
+        <!-- One click: the plan for every row that is waiting to be pushed (new member names, retired ones) -->
+        <record id="action_cf_dns_push_pending" model="ir.actions.server">
+        <!-- burn-ignore-tour: Justified exception -->
+        <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_dns_push_pending] -->
+            <field name="name">Push pending DNS changes</field>
+            <field name="model_id" ref="model_cloudflare_dns_record"/>
+            <field name="state">code</field>
+            <field name="code">action = model.action_push_pending()</field>
+            <field name="group_ids" eval="[(4, ref('base.group_system'))]"/>
+        </record>
+        <menuitem id="menu_cf_dns_push_pending" name="Push pending DNS changes" parent="menu_cloudflare_root" action="action_cf_dns_push_pending" sequence="71" groups="base.group_system"/>
 
         <!-- Zone Settings -->
         <record id="view_cf_zone_settings_form" model="ir.ui.view">

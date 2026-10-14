@@ -45,6 +45,22 @@ class FakeCloudflare:
         self.records = []
         self.calls = []  # (verb, ...) in order
         self.fail_reads = False
+        self.plan = ("pro", "2014-01-25T03:59:00.776074Z")
+        self.count_override = None  # pretend the zone already holds this many records
+
+    def get_zone_details(self, zone_id, token):
+        self.calls.append(("zone_details", zone_id))
+        if self.fail_reads:
+            return False, "API Error"
+        return True, {"plan": {"legacy_id": self.plan[0]}, "created_on": self.plan[1]}
+
+    def count_dns_records(self, zone_id, token):
+        self.calls.append(("count", zone_id))
+        if self.fail_reads:
+            return False, "API Error"
+        if self.count_override is not None:
+            return True, self.count_override
+        return True, len([r for r in self.records if r["zone"] == zone_id])
 
     def add(self, zone, name, rtype, content, proxied=False, ttl=300):
         record = {"id": _id(), "zone": self.zones[zone], "name": name, "type": rtype, "content": content,
@@ -240,6 +256,14 @@ class TestDnsRecordModel(HamsTransactionCase):
         with self.assertRaises(ValidationError):
             self._make()
 
+    def test_04b_an_archived_row_never_clashes_even_when_the_caller_searches_archived_rows(self):
+        old = self._make()
+        old.active = False
+        again = self.Record.with_context(active_test=False).create(
+            {"name": old.name, "type": old.type, "content": old.content}
+        )
+        self.assertTrue(again.active)
+
     def test_05_existing_rows_become_observe_only_in_the_migration(self):
         spec = importlib.util.spec_from_file_location("cf_dns_migration_17", MIGRATION_PATH)
         module = importlib.util.module_from_spec(spec)
@@ -270,7 +294,7 @@ class TestDnsPush(HamsTransactionCase):
         self.website.write({"cloudflare_api_token": "tok-dns", "cloudflare_zone_id": "z", "cloudflare_account_id": "a"})
         self.cf = FakeCloudflare(["hams.com", "perens.com"])
         for name in ("find_zone_id", "list_dns_records_named", "create_dns_record", "update_dns_record",
-                     "delete_dns_record"):
+                     "delete_dns_record", "get_zone_details", "count_dns_records"):
             self.safe_patch(MODEL + name).side_effect = getattr(self.cf, name)
 
     def _row(self, name, rtype, content, proxied=False, **kw):
@@ -534,3 +558,147 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.assertEqual(self.mock.call_count, calls)
         self.mock.return_value = None
         self.assertEqual(cloudflare_api.delete_dns_record(zone, rid, "t"), (False, "API Error"))
+
+
+    def test_04_zone_details_and_record_count_are_reads_and_a_missing_total_is_a_failure(self):
+        zone = _id()
+        self.mock.return_value = self._Response({"result": {"plan": {"legacy_id": "pro"}, "created_on": "2014-01-25"}})
+        self.assertEqual(cloudflare_api.get_zone_details(zone, "t")[1]["plan"]["legacy_id"], "pro")
+        self.assertEqual(self.mock.call_args.args[0], "GET")
+        self.mock.return_value = self._Response({"result": [], "result_info": {"total_count": 26}})
+        self.assertEqual(cloudflare_api.count_dns_records(zone, "t"), (True, 26))
+        self.assertEqual(self.mock.call_args.kwargs["params"], {"per_page": 1})
+        self.mock.return_value = self._Response({"result": [], "result_info": {}})
+        self.assertFalse(cloudflare_api.count_dns_records(zone, "t")[0])
+        self.mock.return_value = None
+        self.assertFalse(cloudflare_api.get_zone_details(zone, "t")[0])
+        self.assertFalse(cloudflare_api.count_dns_records("../x", "t")[0])
+
+
+@tagged("post_install", "-at_install")
+class TestDnsCapacityPlan(HamsTransactionCase):
+    """The record-limit arithmetic, as pure data. Tests [@ANCHOR: cloudflare:COMM_dns_capacity]"""
+
+    def test_01_limits_by_plan(self):
+        self.assertEqual(dns_plan.record_limit("free", "2024-08-31T00:00:00Z"), 1000)
+        self.assertEqual(dns_plan.record_limit("free", "2024-09-01T00:00:00Z"), 200)
+        self.assertEqual(dns_plan.record_limit("pro", "2014-01-25T03:59:00Z"), 3500)
+        self.assertEqual(dns_plan.record_limit("business", None), 3500)
+        self.assertIsNone(dns_plan.record_limit("enterprise", None))
+        self.assertIsNone(dns_plan.record_limit("", None))
+
+    def test_02_hard_stop_at_ninety_percent(self):
+        self.assertIsNone(dns_plan.capacity_problem("hams.com", 3500, 3000, 100, 0))
+        self.assertIsNone(dns_plan.capacity_problem("hams.com", 3500, 3149, 1, 0), "3,150 is exactly 90%: allowed")
+        self.assertIn("hard stop", dns_plan.capacity_problem("hams.com", 3500, 3150, 1, 0))
+        # A push that only shrinks the zone is never refused, even over the line.
+        self.assertIsNone(dns_plan.capacity_problem("hams.com", 3500, 3400, 1, 5))
+        self.assertIsNone(dns_plan.capacity_problem("hams.com", None, 99999, 10, 0), "no per-zone limit known")
+
+    def test_03_a_member_delegation_is_one_label_directly_under_the_zone(self):
+        ns = {"type": "NS", "name": "k6bp.hams.com"}
+        self.assertTrue(dns_plan.is_member_delegation(ns, "hams.com"))
+        self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="x.k6bp.hams.com"), "hams.com"))
+        self.assertFalse(dns_plan.is_member_delegation(dict(ns, type="A"), "hams.com"))
+        self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="*.hams.com"), "hams.com"))
+        self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="hams.com"), "hams.com"))
+
+
+@tagged("post_install", "-at_install")
+class TestDnsCapacityGuard(HamsTransactionCase):
+    """The guard inside the push. Tests [@ANCHOR: COMM_test_dns_capacity_guard]"""
+
+    def setUp(self):
+        super().setUp()
+        self.Record = self.env["cloudflare.dns.record"]
+        self.Record.search([]).unlink()
+        fernet = self.safe_patch("odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_fernet")
+        fernet.return_value = Fernet(Fernet.generate_key())
+        self.website = self.env["website"].create({"name": "DNS cap site", "domain": "https://dnscap.example.com"})
+        self.website.write({"cloudflare_api_token": "tok-dns", "cloudflare_zone_id": "z", "cloudflare_account_id": "a"})
+        self.cf = FakeCloudflare(["hams.com"])
+        for name in ("find_zone_id", "list_dns_records_named", "create_dns_record", "update_dns_record",
+                     "delete_dns_record", "get_zone_details", "count_dns_records"):
+            self.safe_patch(MODEL + name).side_effect = getattr(self.cf, name)
+
+    def _row(self, name, rtype, content, proxied=False, **kw):
+        return self.Record.create(dict({"name": name, "type": rtype, "content": content, "proxied": proxied,
+                                        "website_id": self.website.id}, **kw))
+
+    def _member(self, label):
+        return self._row(f"{label}.hams.com", "NS", "ns1.hams.com")
+
+    def test_20_a_member_delegation_is_planned_when_there_is_room(self):
+        row = self._member("k6bp")
+        plan = row.dns_push_plan()
+        self.assertEqual(plan["problems"], [])
+        self.assertEqual(plan["entries"][0]["action"], "create")
+        self.assertEqual(plan["entries"][0]["zone_name"], "hams.com")
+
+    def test_21_the_push_is_refused_past_ninety_percent_of_the_plan_limit(self):
+        self.cf.count_override = 3150
+        row = self._member("k6bp")
+        plan = row.dns_push_plan()
+        self.assertTrue(any("hard stop" in p for p in plan["problems"]), plan["problems"])
+        with self.assertRaises(UserError):
+            row.dns_push_apply(plan["hash"])
+        self.assertEqual(self.cf.writes(), [])
+
+    def test_22_a_new_free_zone_has_room_for_only_one_hundred_eighty(self):
+        self.cf.plan = ("free", "2025-01-01T00:00:00Z")
+        self.cf.count_override = 181
+        self.assertTrue(self._member("k6bp").dns_push_plan()["problems"])
+        self.cf.count_override = 179
+        self.assertEqual(self._member("n0pz").dns_push_plan()["problems"], [])
+
+    def test_23_a_push_that_cannot_read_the_count_is_refused_not_guessed(self):
+        row = self._member("k6bp")
+        self.safe_patch(MODEL + "count_dns_records").return_value = (False, "API Error")
+        self.assertTrue(any("may not guess" in p for p in row.dns_push_plan()["problems"]))
+
+    def test_24_an_existing_wildcard_refuses_member_delegations(self):
+        self.cf.add("hams.com", "*.hams.com", "CNAME", "hams.com", proxied=False)
+        plan = self._member("k6bp").dns_push_plan()
+        self.assertTrue(any("wildcard record" in p for p in plan["problems"]), plan["problems"])
+
+    def test_25_a_wildcard_created_with_delegations_in_one_push_is_refused(self):
+        rows = self._member("k6bp") | self._row("*.hams.com", "CNAME", "hams.com")
+        plan = rows.dns_push_plan()
+        self.assertTrue(any("together" in p for p in plan["problems"]), plan["problems"])
+
+    def test_26_a_plain_record_needs_no_wildcard_look_and_a_retire_needs_no_count(self):
+        self._row("plain.hams.com", "A", "192.0.2.50").dns_push_plan()
+        self.assertNotIn(("list", "*.hams.com"), self.cf.calls)
+        self.cf.calls.clear()
+        gone = self.cf.add("hams.com", "old.hams.com", "A", "192.0.2.51")
+        row = self._row("old.hams.com", "A", "192.0.2.51", cf_record_id=gone["id"], retire=True)
+        row.dns_push_plan()
+        self.assertNotIn(("count", self.cf.zones["hams.com"]), self.cf.calls)
+
+
+    def test_30_the_pending_action_plans_only_rows_that_wait_to_be_pushed(self):
+        # Tests [@ANCHOR: COMM_test_dns_push_pending]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_push_pending]
+        pushed = self._row("pushed.hams.com", "A", "192.0.2.60", cf_record_id="b" * 32)
+        waiting = self._member("n0pz")
+        gone = self._row("gone.hams.com", "A", "192.0.2.61", cf_record_id="c" * 32, retire=True)
+        unmanaged = self._row("watch.hams.com", "A", "192.0.2.62", manage=False)
+        action = self.Record.action_push_pending()
+        wizard = self.env["cloudflare.dns.push.wizard"].browse(action["res_id"])
+        self.assertEqual(wizard.state, "planned")
+        self.assertEqual(set(wizard.record_ids.ids), {waiting.id, gone.id})
+        self.assertNotIn(pushed, wizard.record_ids)
+        self.assertNotIn(unmanaged, wizard.record_ids)
+        self.assertIn("n0pz.hams.com", wizard.plan_text)
+        self.assertEqual(self.cf.writes(), [], "showing the plan writes nothing")
+        # With nothing waiting it says so instead of planning every record.
+        self.Record.search([]).unlink()
+        wizard = self.env["cloudflare.dns.push.wizard"].browse(self.Record.action_push_pending()["res_id"])
+        self.assertEqual(wizard.state, "done")
+        self.assertIn("No DNS row", wizard.result_text)
+
+    def test_31_only_an_administrator_may_open_the_pending_action(self):
+        # Tests [@ANCHOR: COMM_test_dns_push_pending]
+        portal_user = new_test_user(self.env, login="dns_pending_portal", groups="base.group_portal")
+        with self.assertRaises(AccessError):
+            self.Record.with_user(portal_user).action_push_pending()
