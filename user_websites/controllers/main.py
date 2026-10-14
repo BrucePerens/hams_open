@@ -9,14 +9,24 @@ from odoo.addons.user_websites.models.site_slug import legacy_slug_target
 import json
 import logging
 import os
+import re
 import redis
 import hashlib
 import hmac
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urlparse, urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
-from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
 from werkzeug.wrappers import Response
+
+from odoo import _
+from odoo.tools import email_normalize
+
+from odoo.addons.form_shield.models.form_shield import (
+    LIMITED,
+    QUESTION,
+    UNAVAILABLE,
+)
+from odoo.addons.form_shield.refusal import refusal_response
 
 from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
 from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, REDIS_USERNAME_DEFAULT
@@ -41,30 +51,138 @@ redis_client = redis.Redis(connection_pool=redis_pool)
 
 
 BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
-REPORTS_PER_HOUR_VISITOR = 10
-REPORTS_PER_HOUR_MEMBER = 30
+
+# [@ANCHOR: user_websites:report_limits]
+# Verified by [@ANCHOR: test_report_violation_is_rate_limited]
+# Per network: 5 reports an hour (a member 30, counted per user); per reported page: 10 a day,
+# because a page that really is a problem is reported by several people, not by hundreds; for
+# the whole site: 100 an hour. (The limit that stood here before counted request.remote_addr,
+# which behind the Cloudflare tunnel is always the loopback address, so every visitor shared
+# one counter.)
+REPORT_LIMITS = (
+    ("subject", 5, 3600),
+    ("target", 10, 86400),
+    ("global", 100, 3600),
+)
+REPORT_MEMBER_LIMITS = (
+    ("subject", 30, 3600),
+    ("target", 10, 86400),
+    ("global", 100, 3600),
+)
+MIN_DESCRIPTION_CHARS = 10
+MAX_URLS_FROM_GUEST = 2
+URL_IN_TEXT = re.compile(r"(?:https?://|www\.)", re.IGNORECASE)
+RANDOM_TOKEN = re.compile(r"[A-Za-z0-9_+=/.\-]{16,}")
+LOWER_UPPER_DIGIT = (re.compile("[a-z]"), re.compile("[A-Z]"), re.compile("[0-9]"))
 
 
-def _report_rate_limit():
-    # [@ANCHOR: user_websites:fn_main_report_rate_limit]
-    # Verified by [@ANCHOR: test_report_violation_is_rate_limited]
-    """Counts this reporter's submission this hour (per signed-in member, per address for a visitor) and
-    refuses the one past the limit, so the public report form cannot be used to flood the moderation queue."""
-    user = request.env.user
-    if user._is_public():
-        who, limit = f"ip:{request.httprequest.remote_addr}", REPORTS_PER_HOUR_VISITOR
-    else:
-        who, limit = f"user:{user.id}", REPORTS_PER_HOUR_MEMBER
-    key = f"uw:rl:{request.env.cr.dbname}:report:{who}"
+# [@ANCHOR: user_websites:bare_host]
+# Verified by [@ANCHOR: user_websites:test_normalize_report_target]
+def _bare_host(host):
+    host = (host or "").lower().rstrip(".")
+    return host[4:] if host.startswith("www.") else host
+
+
+# [@ANCHOR: user_websites:report_own_site_hosts]
+# Verified by [@ANCHOR: user_websites:test_normalize_report_target]
+def _own_site_hosts():
+    """The hostnames a report may be about: this request's own host, the base URL and the
+    domain of every website of the database, www. dropped, port dropped."""
+    hosts = {_bare_host(request.httprequest.host.split(":")[0])}
+    base_url = request.env["ir.config_parameter"]._get_param("web.base.url")
+    hosts.add(_bare_host(urlsplit(base_url or "").hostname))
+    domains = request.env["website"].search([], limit=500).mapped("domain")
+    for domain in domains:
+        text = (domain or "").strip()
+        if text and "//" not in text:
+            text = "//" + text
+        hosts.add(_bare_host(urlsplit(text).hostname))
+    hosts.discard("")
+    return hosts
+
+
+# [@ANCHOR: user_websites:normalize_report_target]
+# Verified by [@ANCHOR: user_websites:test_normalize_report_target]
+def normalize_report_target(raw, hosts):
+    """The reported URL in one canonical form, or None when it is not a page of this site.
+
+    http and https are the same page (the tunnel in front of production makes the request see
+    http), a leading "www." does not matter, a bare path means this host, and the fragment,
+    credentials and control characters are dropped or refused. `hosts` is _own_site_hosts().
+    """
+    text = (raw or "").strip()
+    if not text or len(text) > 2048 or any(ord(char) < 32 for char in text):
+        return None
     try:
-        count = redis_client.incr(key)
-        if count == 1:
-            redis_client.expire(key, 3600)
-    except redis.exceptions.RedisError as e:
-        _logger.error("Report rate limiter unavailable: %s", e)
-        raise ServiceUnavailable("Reports are temporarily unavailable. Please try again later.")
-    if count > limit:
-        raise TooManyRequests("Too many reports from you in the last hour. Please try again later.")
+        parts = urlsplit(text)
+        host = parts.hostname
+    except ValueError:
+        return None
+    if parts.username or parts.password:
+        return None
+    if parts.scheme or parts.netloc:
+        if parts.scheme not in ("http", "https") or not host:
+            return None
+        if _bare_host(host) not in hosts:
+            return None
+        origin = "%s://%s" % (parts.scheme, parts.netloc.lower())
+    else:
+        if not text.startswith("/") or text.startswith("//"):
+            return None
+        origin = request.httprequest.host_url.rstrip("/")
+    path = parts.path or "/"
+    query = "?" + parts.query if parts.query else ""
+    return origin + path + query
+
+
+# [@ANCHOR: user_websites:local_part_ok]
+# Verified by [@ANCHOR: user_websites:test_report_problem_reasons]
+def _local_part_ok(address):
+    local = address.partition("@")[0]
+    return not (local.startswith(".") or local.endswith(".") or ".." in local)
+
+
+# [@ANCHOR: user_websites:report_problem]
+# Verified by [@ANCHOR: user_websites:test_report_problem_reasons]
+def report_problem(target, description, email, member):
+    """The reason a report is refused on its content alone, else None. Deliberately only
+    structural: a report that is short, unreadable or all links is refused; a rude, wrong or
+    odd one is the moderators' to read."""
+    if not target:
+        return "foreign_target"
+    text = (description or "").strip()
+    if len(text) < MIN_DESCRIPTION_CHARS:
+        return "short_description"
+    if RANDOM_TOKEN.fullmatch(text) and all(
+        pattern.search(text) for pattern in LOWER_UPPER_DIGIT
+    ):
+        return "gibberish"
+    if member:
+        return None
+    if len(URL_IN_TEXT.findall(text)) > MAX_URLS_FROM_GUEST:
+        return "too_many_urls"
+    address = email_normalize((email or "").strip(), strict=True)
+    if not address or not _local_part_ok(address):
+        return "bad_email"
+    return None
+
+
+# [@ANCHOR: user_websites:reported_path]
+# Verified by [@ANCHOR: user_websites:test_normalize_report_target]
+def _reported_path(reported_url):
+    """The PATH (and existing query string) of `reported_url`, or "/" -- never its scheme/host.
+    See _report_violation_redirect_target() for why."""
+    path = "/"
+    if reported_url:
+        try:
+            parsed_path = urlparse(reported_url).path
+        except ValueError:
+            parsed_path = ""
+        if parsed_path:
+            path = parsed_path
+    # "//host" and "/\\host" are protocol-relative to a browser: a path that arrives that way
+    # (http://this-site//evil.example) must not leave the site, so exactly one leading slash.
+    return "/" + path.lstrip("/\\")
 
 
 # [@ANCHOR: user_websites:report_violation_redirect_target]
@@ -78,14 +196,7 @@ def _report_violation_redirect_target(reported_url, query_param):
     always same-origin by construction, and Odoo's own request.redirect() resolves it against
     the current site regardless of what host `reported_url` claimed.
     """
-    path = "/"
-    if reported_url:
-        try:
-            parsed_path = urlparse(reported_url).path
-        except ValueError:
-            parsed_path = ""
-        if parsed_path:
-            path = parsed_path
+    path = _reported_path(reported_url)
     separator = "&" if "?" in path else "?"
     return f"{path}{separator}{query_param}"
 
@@ -136,6 +247,43 @@ def _serve_core_fallback():
 
 class UserWebsitesController(http.Controller):
 
+    # [@ANCHOR: user_websites:report_violation_page]
+    # Verified by [@ANCHOR: form_shield:test_question_form_page_renders_accessible_question]
+    # The report form as a page of its own, with the plain-text question in place of the
+    # proof of work. It serves a visitor whose browser runs no scripts (the Bootstrap modal
+    # cannot even open without them) or cannot run the proof of work (the modal links here),
+    # and it is what a post that carried no answer at all is shown. A question is issued per
+    # request, so this page must never be cached: it opts into no edge caching.
+    @http.route(
+        "/website/report_violation",
+        type="http",
+        auth="public",
+        methods=["GET"],
+        website=True,
+        sitemap=False,
+    )
+    def report_violation_form(self, url="", **_ignored):
+        reported = url or request.httprequest.headers.get("Referer", "")
+        return self._render_report_page(reported)
+
+    # [@ANCHOR: user_websites:render_report_page]
+    # Verified by [@ANCHOR: user_websites:test_report_violation_shield_outcomes]
+    def _render_report_page(self, url, description="", email="", notice="", status=200):
+        issued = request.env["form.shield"].issue("q")
+        response = request.render(
+            "user_websites.report_violation_page",
+            {
+                "url": url,
+                "description": description,
+                "email": email,
+                "notice": notice,
+                "issued": issued,
+            },
+        )
+        response.status_code = status
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @http.route(
         "/website/report_violation",
         type="http",
@@ -163,8 +311,14 @@ class UserWebsitesController(http.Controller):
         # a bot that gets useful rejection feedback learns to stop filling the field, which
         # defeats the whole mechanism; a real visitor never sees or fills this field at all, so
         # this branch never fires for one.
+        #
+        # The honeypot alone was not enough: reports 7 and 8 (2026-10-12 and 10-14) arrived
+        # after it was fixed, from programs that left it empty. The form_shield module's
+        # checks now run first (proof of work or question, a second honeypot, time-to-submit,
+        # rate limits); see [@ANCHOR: user_websites:report_violation_shield].
         if website_honeypot:
             _logger.info("report_violation: honeypot triggered, discarding silently")
+            request.env["form.shield"].refuse("report_violation", "honeypot")
             return request.redirect(
                 _report_violation_redirect_target(url, "report_submitted=1")
             )
@@ -175,12 +329,34 @@ class UserWebsitesController(http.Controller):
 
         if not url or not description:
             return request.redirect(
-                _report_violation_redirect_target(url, "error=missing_fields")
+                _report_violation_redirect_target(url, "report_error=missing_fields")
             )
-        if _reportable_url(url) is None:
-            return request.redirect(_report_violation_redirect_target("", "error=invalid_url"))
-        _report_rate_limit()
+BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
 
+
+        # [@ANCHOR: user_websites:report_violation_shield]
+        # Verified by [@ANCHOR: user_websites:test_report_violation_shield_outcomes]
+        target = normalize_report_target(url, _own_site_hosts())
+        shield = request.env["form.shield"]
+        member = not request.env.user._is_public()
+        verdict = shield.check_form(
+            "report_violation",
+            post,
+            target=target,
+            limits=REPORT_MEMBER_LIMITS if member else REPORT_LIMITS,
+        )
+        if not verdict.ok:
+            return self._report_refusal(verdict, url, description, email)
+
+        # Structural checks, after the shield so that a program that cannot solve the proof of
+        # work never reaches them. Each refusal is counted by reason (no text is kept).
+        problem = report_problem(target, description, email, member)
+        if problem:
+            shield.refuse("report_violation", problem)
+            return request.redirect(
+                _report_violation_redirect_target(url, "report_error=" + problem)
+            )
+        url = target
         # Enforce max length on description
         if len(description) > 5000:
             description = description[:5000]
@@ -226,11 +402,31 @@ class UserWebsitesController(http.Controller):
         except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: test_tour_violation_report]
             _logger.warning("Report creation failed: %s", e)
             return request.redirect(
-                _report_violation_redirect_target(url, "error=creation_failed")
+                _report_violation_redirect_target(url, "report_error=creation_failed")
             )
 
         return request.redirect(
             _report_violation_redirect_target(url, "report_submitted=1")
+        )
+
+    # [@ANCHOR: user_websites:report_refusal]
+    # Verified by [@ANCHOR: user_websites:test_report_violation_shield_outcomes]
+    def _report_refusal(self, verdict, url, description, email):
+        """The response for a submission the shield refused. A program is told it succeeded; a
+        person is told what to do next, and keeps what they typed where the page can hold it."""
+        if verdict.outcome == QUESTION:
+            notice = _("Please answer this short question to send your report.")
+            return self._render_report_page(url, description, email, notice)
+        if verdict.outcome == LIMITED:
+            notice = _("Too many reports from your network. Please wait a while and try again.")
+            return self._render_report_page(url, description, email, notice, status=429)
+        if verdict.outcome == UNAVAILABLE:
+            notice = _("Reporting is temporarily unavailable. Please try again later.")
+            return self._render_report_page(url, description, email, notice, status=503)
+        return refusal_response(
+            verdict,
+            _reported_path(url),
+            _report_violation_redirect_target(url, "report_submitted=1"),
         )
 
     @http.route(

@@ -9,7 +9,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import json
 
 from odoo.addons.user_websites.controllers import main as uw_main
-from odoo.addons.user_websites.controllers.main import redis_client
+from odoo.addons.form_shield.tests.test_support import reset_shield_state, shield_fields
 
 
 @tagged("post_install", "-at_install")
@@ -17,9 +17,8 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
 
     def setUp(self):
         super().setUp()
-        # The report form counts submissions per address for an hour; start each test from zero.
-        for key in redis_client.scan_iter(f"uw:rl:{self.env.cr.dbname}:report:*"):
-            redis_client.delete(key)
+        # The report form counts submissions per network for an hour; start each test from zero.
+        reset_shield_state(self.env)
         self.user_test = self.env["res.users"].create(
             {
                 "name": "Robust User",
@@ -83,6 +82,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
+                **shield_fields(self.env, "report_violation"),
                 "url": f"/{self.user_test.website_slug}",
                 "description": long_desc,
                 "email": "truncatetest@example.com",
@@ -104,22 +104,37 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
 
     def test_03c_report_violation_is_rate_limited(self):
         # [@ANCHOR: test_report_violation_is_rate_limited]
-        # Tests [@ANCHOR: user_websites:fn_main_report_rate_limit]
+        # Tests [@ANCHOR: user_websites:report_limits]
         self.authenticate(None, None)
-        data = {
-            "csrf_token": odoo.http.Request.csrf_token(self),
-            "url": f"/{self.user_test.website_slug}",
-            "description": "Flood",
-            "email": "flood@example.com",
-        }
-        # One report an hour is allowed, the second is refused and files nothing.
-        self.safe_patch_object(uw_main, "REPORTS_PER_HOUR_VISITOR", 1)
-        first = self.url_open("/website/report_violation", data=dict(data, description="First"), method="POST")
-        second = self.url_open("/website/report_violation", data=data, method="POST")
+        # The limit is per visitor network (the keyed hash of the /24), counted from the real
+        # client address, not from the tunnel's loopback peer.
+        self.safe_patch_object(
+            uw_main, "REPORT_LIMITS", (("subject", 1, 3600), ("global", 100, 3600))
+        )
+
+        def post(description):
+            return self.url_open(
+                "/website/report_violation",
+                data={
+                    "csrf_token": odoo.http.Request.csrf_token(self),
+                    **shield_fields(self.env, "report_violation"),
+                    "url": f"/{self.user_test.website_slug}",
+                    "description": description,
+                    "email": "flood@example.com",
+                },
+                method="POST",
+            )
+
+        first = post("First flood report from one network")
+        second = post("Second flood report from one network")
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
-        reports = self.env["content.violation.report"].search([("reported_by_email", "=", "flood@example.com")])
-        self.assertEqual(reports.mapped("description"), ["First"])
+        reports = self.env["content.violation.report"].search(
+            [("reported_by_email", "=", "flood@example.com")]
+        )
+        self.assertEqual(
+            reports.mapped("description"), ["First flood report from one network"]
+        )
 
     def test_03d_report_violation_refuses_another_sites_url(self):
         # [@ANCHOR: test_report_violation_refuses_another_sites_url]
@@ -159,6 +174,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
+                **shield_fields(self.env, "report_violation"),
                 "url": f"/{self.user_test.website_slug}",
                 "description": "Hi, I wanted to know your price.",
                 "email": "honeypot-bot@example.com",
@@ -191,6 +207,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
+                **shield_fields(self.env, "report_violation"),
                 "url": "/report-reporter-member-test",
                 "description": "Reported by a signed-in member, test_03c",
                 "reported_by_user_id": str(self.env.ref("base.user_admin").id),
@@ -217,6 +234,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
+                **shield_fields(self.env, "report_violation"),
                 "url": "/report-reporter-guest-test",
                 "description": "Reported by a guest, test_03c",
                 "email": "guest-reporter-03c@example.com",

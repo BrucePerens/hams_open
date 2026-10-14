@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- burn-ignore-tour: three read-only list/pivot/search views of a counters table, exercised by test_counters_keep_no_personal_data (the model) and rendered by the view-resolution check; no workflow to drive. -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: form_shield:test_counters_keep_no_personal_data] -->
+    <record id="view_form_shield_rejection_list" model="ir.ui.view">
+        <field name="name">form.shield.rejection.list</field>
+        <field name="model">form.shield.rejection</field>
+        <field name="arch" type="xml">
+            <list string="Form shield counters" create="false" edit="false">
+                <field name="day"/>
+                <field name="form_id"/>
+                <field name="reason"/>
+                <field name="count" sum="Total"/>
+            </list>
+        </field>
+    </record>
+    <!-- burn-ignore-tour -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: form_shield:test_counters_keep_no_personal_data] -->
+    <record id="view_form_shield_rejection_pivot" model="ir.ui.view">
+        <field name="name">form.shield.rejection.pivot</field>
+        <field name="model">form.shield.rejection</field>
+        <field name="arch" type="xml">
+            <pivot string="Form shield counters">
+                <field name="form_id" type="row"/>
+                <field name="reason" type="col"/>
+                <field name="count" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+    <!-- burn-ignore-tour -->
+    <!-- audit-ignore-view: Tested by [@ANCHOR: form_shield:test_counters_keep_no_personal_data] -->
+    <record id="view_form_shield_rejection_search" model="ir.ui.view">
+        <field name="name">form.shield.rejection.search</field>
+        <field name="model">form.shield.rejection</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="form_id"/>
+                <field name="reason"/>
+                <filter name="rejected" string="Refused only" domain="[('reason', '!=', 'accepted')]"/>
+                <group>
+                    <filter name="by_form" string="Form" context="{'group_by': 'form_id'}"/>
+                    <filter name="by_reason" string="Reason" context="{'group_by': 'reason'}"/>
+                    <filter name="by_day" string="Day" context="{'group_by': 'day:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+    <record id="action_form_shield_rejection" model="ir.actions.act_window">
+        <field name="name">Form shield counters</field>
+        <field name="res_model">form.shield.rejection</field>
+        <field name="view_mode">list,pivot</field>
+        <field name="context">{'search_default_rejected': 1}</field>
+    </record>
+    <menuitem id="menu_form_shield_rejection"
+              name="Form shield counters"
+              parent="base.menu_administration"
+              action="action_form_shield_rejection"
+              groups="base.group_system"
+              sequence="95"/>
+</odoo>
