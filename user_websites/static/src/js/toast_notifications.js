@@ -57,13 +57,43 @@ export class UrlToastNotification extends Interaction {
 }
 registry.category("public.interactions").add("user_websites.UrlToastNotification", UrlToastNotification);
 
+// Moderation duty toast: sticky but shown at most once per period per
+// (count, newest report id) so it does not nag on every tab/session.
+export const MODERATION_TOAST_KEY = 'admin_violation_toast_seen';
+export const MODERATION_TOAST_TTL_MS = 12 * 60 * 60 * 1000;
+
+export function readSeen(storage) {
+    try {
+        const raw = (storage || window.localStorage).getItem(MODERATION_TOAST_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+}
+
+export function writeSeen(data, now, storage) {
+    try {
+        (storage || window.localStorage).setItem(MODERATION_TOAST_KEY, JSON.stringify({
+            count: data.count, latest_id: data.latest_id || 0, ts: now,
+        }));
+    } catch {
+        // Storage may be blocked (private window); the toast then simply repeats.
+    }
+}
+
+/** Show when never seen, expired, or the queue grew (count or newest id up). */
+export function shouldShowToast(seen, data, now) {
+    if (!data || !(data.count > 0)) return false;
+    if (!seen || typeof seen.ts !== 'number') return true;
+    if (now - seen.ts >= MODERATION_TOAST_TTL_MS || now < seen.ts) return true;
+    return data.count > (seen.count || 0) || (data.latest_id || 0) > (seen.latest_id || 0);
+}
+
 export class AdminViolationToast extends Interaction {
     static selector = '#wrapwrap';
 
     start() {
-        if (sessionStorage.getItem('admin_violation_toast_shown') !== 'true') {
-            this._checkPendingReports();
-        }
+        this._checkPendingReports();
     }
 
     // [@ANCHOR: admin_toast_logic]
@@ -72,21 +102,32 @@ export class AdminViolationToast extends Interaction {
 
     // Verified by [@ANCHOR: test_admin_violation_toast_rpc]
     _checkPendingReports() {
-        fetch('/api/v1/user_websites/pending_reports')
+        return fetch('/api/v1/user_websites/pending_reports')
             .then(response => {
                 if (!response.ok) throw new Error("Network response was not ok");
                 return response.json();
             })
             .then(data => {
-                if (data && data.count > 0) {
-                    this.env.services.notification.add("There are " + data.count + " pending violation reports requiring review.", {
-                        title: "Pending Moderation",
-                        type: "warning",
-                        sticky: true,
+                const now = Date.now();
+                if (!shouldShowToast(readSeen(), data, now)) return;
+                const url = data.url;
+                const notify = this.env.services.notification;
+                const buttons = [];
+                if (typeof url === 'string' && url.startsWith('/')) {
+                    buttons.push({
+                        name: "Review reports",
+                        primary: true,
+                        onClick: () => { document.location.assign(url); },
                     });
-                    sessionStorage.setItem('admin_violation_toast_shown', 'true');
                 }
-                return;
+                buttons.push({ name: "Dismiss", onClick: () => {} });
+                notify.add("There are " + data.count + " pending violation reports requiring review.", {
+                    title: "Pending Moderation",
+                    type: "warning",
+                    sticky: true,
+                    buttons: buttons,
+                });
+                writeSeen(data, now);
             }).catch(() => {
                 // Silently ignore network errors to prevent UI disruption
             });

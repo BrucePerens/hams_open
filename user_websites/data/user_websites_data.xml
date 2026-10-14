@@ -79,6 +79,19 @@
             <field name="active" eval="True"/>
         </record>
 
+        <record id="ir_cron_reconcile_website_eligibility" model="ir.cron">
+            <!-- [@ANCHOR: ir_cron_reconcile_website_eligibility] -->
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: test_site_eligibility_hook] -->
+            <field name="name">User Websites: Hide and Show Sites by Eligibility</field>
+            <field name="model_id" ref="base.model_res_users"/>
+            <field name="user_id" ref="user_websites.user_websites_service_account"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_reconcile_website_eligibility()</field>
+            <field name="interval_number">10</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="email_template_weekly_digest" model="mail.template">
             <field name="name">User Websites: Weekly Digest</field>
             <field name="model_id" ref="website_blog.model_blog_post"/>

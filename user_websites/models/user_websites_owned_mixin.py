@@ -34,6 +34,27 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         index=True,
     )
 
+    # [@ANCHOR: user_websites:field_hidden_by_eligibility]
+    hidden_by_eligibility = fields.Boolean(
+        string="Hidden While Ineligible",
+        default=False,
+        copy=False,
+        index=True,
+        help="Unpublished by res.users.reconcile_website_eligibility() because the owner may not have a "
+        "site right now; republished when they may again. Never set on a piece the owner unpublished "
+        "themselves.",
+    )
+
+    # [@ANCHOR: user_websites:field_deleted_by_owner]
+    deleted_by_owner = fields.Datetime(
+        string="Deleted By Owner",
+        copy=False,
+        index=True,
+        help="When the owner pressed Delete. The record is kept, archived, and hidden from every public "
+        "surface and from the owner's lists; the owner can restore it. The platform retains data, so "
+        "this is a removal from view, never an erasure.",
+    )
+
     def _user_websites_navbar_profile_user(self):
         # [@ANCHOR: mixin_navbar_profile_user]
 

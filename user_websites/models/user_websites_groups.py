@@ -14,6 +14,7 @@ from psycopg2 import IntegrityError
 import psycopg2
 import logging
 from .res_users import BACKGROUND_EXECUTOR
+from odoo.addons.user_websites.models import site_slug
 import time
 import os
 import odoo
@@ -403,6 +404,7 @@ class UserWebsitesGroup(models.Model):
                 old_slug = old_slugs.get(group.id)
                 new_slug = group.website_slug
                 if old_slug and new_slug and old_slug != new_slug:
+                    site_slug.rehome_site(self.env, "user_websites_group_id", group.id, old_slug, new_slug)
                     redirects = [
                         {
                             "name": f"Redirect {old_slug} to {new_slug}",

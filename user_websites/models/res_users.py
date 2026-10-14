@@ -21,6 +21,8 @@ from odoo.exceptions import ValidationError, AccessError
 from psycopg2 import IntegrityError
 from odoo.addons.edge_routing.utils import reserved_slug_words
 from odoo.addons.user_websites.models.member_html import menu_pages
+from odoo.addons.user_websites.models import site_slug
+from odoo.addons.edge_routing.utils import slugify
 import psycopg2
 from odoo.modules.registry import Registry
 
@@ -243,14 +245,69 @@ class ResUsers(models.Model):
     # [@ANCHOR: user_websites:COMM_res_users_create]
     @api.model_create_multi
     def create(self, vals_list):
+        no_name_slug = False
         for vals in vals_list:
             if "website_slug" in vals and not vals["website_slug"]:
                 vals["website_slug"] = False
+            no_name_slug |= self._apply_slug_policy(None, vals)
 
+        if no_name_slug:
+            self = self.with_context(edge_routing_no_name_slug=True)
         return super(ResUsers, self).create(vals_list)
+
+    # --- Slug policy (one site per member) ---
+    # [@ANCHOR: user_websites:COMM_res_users_slug_policy]
+    # Verified by [@ANCHOR: test_site_slug_one_site]
+
+    def _slug_identity_fields(self):
+        """Field names the "callsign" slug policy builds the slug from. A deployment that sets the
+        policy extends this (hams.com: callsign); open source has none, so the policy is inert there."""
+        return ()
+
+    def _slug_identity(self, vals=None):
+        """The text the "callsign" policy slugifies (a callsign), from `vals` if they carry it, else
+        from this record. False when the member has none."""
+        return False
+
+    def _apply_slug_policy(self, record, vals):
+        """Under the "callsign" policy a member has exactly one site address: the slug of their
+        callsign (K6BP -> k6bp, K6BP/P -> k6bp-p). Rewrites vals in place. Returns True when the
+        caller must stop the mixin deriving a slug from the NAME (no callsign yet: no site until
+        one is on file). Never touches service accounts, never clears an existing slug, and an
+        explicit slug for a member with no callsign is the caller's deliberate choice and is kept."""
+        if site_slug.slug_policy(self.env) != site_slug.POLICY_CALLSIGN:
+            return False
+        if vals.get("is_service_account") or site_slug.is_service_account(self.env, record):
+            return False
+        touches = "website_slug" in vals or any(f in vals for f in self._slug_identity_fields())
+        identity = (record or self)._slug_identity(vals)
+        if identity:
+            if touches:
+                slug = slugify(identity)
+                if slug:
+                    site_slug.assert_slug_free(self.env, slug, record)
+                    vals["website_slug"] = slug
+            return False
+        if "website_slug" in vals:
+            return False
+        return record is None or not site_slug.current_slug(self.env, record)
 
     # [@ANCHOR: user_websites:COMM_res_users_write]
     def write(self, vals):
+        # Cheap test first: res.users.write runs on every login, and only these keys can matter.
+        if (
+            ({"website_slug", "name"} | set(self._slug_identity_fields())) & set(vals)
+            and not self.env.context.get("slug_policy_done")
+            and site_slug.slug_policy(self.env) == site_slug.POLICY_CALLSIGN
+        ):
+            if len(self) > 1 and ("website_slug" in vals or any(f in vals for f in self._slug_identity_fields())):
+                for record in self:
+                    record.with_context(slug_policy_done=True).write(dict(vals))
+                return True
+            if len(self) == 1:
+                vals = dict(vals)
+                if self._apply_slug_policy(self, vals):
+                    self = self.with_context(edge_routing_no_name_slug=True)
         old_slugs = {}
         if "website_slug" in vals:
             old_slugs = {
@@ -435,6 +492,7 @@ class ResUsers(models.Model):
                 old_slug = old_slugs.get(user.id)
                 new_slug = user.website_slug
                 if old_slug and new_slug and old_slug != new_slug:
+                    site_slug.rehome_site(self.env, "owner_user_id", user.id, old_slug, new_slug)
                     redirects = [
                         {
                             "name": f"Redirect {old_slug} to {new_slug}",
