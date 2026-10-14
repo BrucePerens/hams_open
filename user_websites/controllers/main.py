@@ -1029,8 +1029,19 @@ class UserWebsitesController(http.Controller):
             [("state", "=", "new")], limit=1000
         )
 
+        latest = env_svc["content.violation.report"].search(
+            [("state", "=", "new")], order="id desc", limit=1
+        )
         return request.make_response(
-            json.dumps({"count": count}),
+            json.dumps(
+                {
+                    "count": count,
+                    "latest_id": latest.id or 0,
+                    # Back-office moderation queue (pending reports only);
+                    # only ever returned to moderators, see the gate above.
+                    "url": "/odoo/action-user_websites.action_content_violation_report_pending",
+                }
+            ),
             status=200,
             headers=[("Content-Type", "application/json")],
         )

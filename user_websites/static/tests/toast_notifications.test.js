@@ -45,7 +45,7 @@
 // own precedent of skipping branches a hoot unit test can't safely reach
 // and relying on the tour instead.
 import { describe, expect, mockFetch, test } from "@odoo/hoot";
-import { AdminViolationToast } from "@user_websites/js/toast_notifications";
+import { AdminViolationToast, MODERATION_TOAST_KEY, MODERATION_TOAST_TTL_MS, shouldShowToast } from "@user_websites/js/toast_notifications";
 
 // _checkPendingReports() never returns its own fetch(...).then().then()
 // chain (no `return` in the source), so awaiting its call directly
@@ -63,24 +63,26 @@ describe("toast_notifications", () => {
     describe.current.tags("user_websites_toast_notifications");
 
     test("AdminViolationToast surfaces a warning toast when the API reports pending reports", async () => {
-        sessionStorage.removeItem("admin_violation_toast_shown");
+        localStorage.removeItem(MODERATION_TOAST_KEY);
         const calls = [];
         const instance = Object.create(AdminViolationToast.prototype);
         instance.env = { services: { notification: { add: (message, opts) => calls.push({ message, opts }) } } };
 
-        mockFetch(() => ({ count: 3 }));
+        mockFetch(() => ({ count: 3, latest_id: 7, url: "/odoo/action-x" }));
         instance._checkPendingReports();
         await flushMicrotasks();
 
         expect(calls.length).toBe(1);
         expect(calls[0].message).toBe("There are 3 pending violation reports requiring review.");
         expect(calls[0].opts.type).toBe("warning");
-        expect(sessionStorage.getItem("admin_violation_toast_shown")).toBe("true");
-        sessionStorage.removeItem("admin_violation_toast_shown");
+        expect(calls[0].opts.sticky).toBe(true);
+        expect(calls[0].opts.buttons.map((b) => b.name)).toEqual(["Review reports", "Dismiss"]);
+        expect(JSON.parse(localStorage.getItem(MODERATION_TOAST_KEY)).count).toBe(3);
+        localStorage.removeItem(MODERATION_TOAST_KEY);
     });
 
     test("AdminViolationToast stays silent when the count is zero", async () => {
-        sessionStorage.removeItem("admin_violation_toast_shown");
+        localStorage.removeItem(MODERATION_TOAST_KEY);
         const calls = [];
         const instance = Object.create(AdminViolationToast.prototype);
         instance.env = { services: { notification: { add: (message, opts) => calls.push({ message, opts }) } } };
@@ -90,7 +92,7 @@ describe("toast_notifications", () => {
         await flushMicrotasks();
 
         expect(calls.length).toBe(0);
-        expect(sessionStorage.getItem("admin_violation_toast_shown")).toBe(null);
+        expect(localStorage.getItem(MODERATION_TOAST_KEY)).toBe(null);
     });
 
     test("AdminViolationToast swallows a network failure instead of throwing", async () => {
@@ -104,5 +106,34 @@ describe("toast_notifications", () => {
         await flushMicrotasks();
 
         expect(calls.length).toBe(0);
+    });
+
+    test("AdminViolationToast is not shown twice for the same queue, but is when it grows", async () => {
+        localStorage.removeItem(MODERATION_TOAST_KEY);
+        const calls = [];
+        const instance = Object.create(AdminViolationToast.prototype);
+        instance.env = { services: { notification: { add: (message, opts) => calls.push({ message, opts }) } } };
+
+        mockFetch(() => ({ count: 3, latest_id: 7, url: "/odoo/action-x" }));
+        await instance._checkPendingReports();
+        await instance._checkPendingReports();
+        expect(calls.length).toBe(1);
+
+        mockFetch(() => ({ count: 4, latest_id: 8, url: "/odoo/action-x" }));
+        await instance._checkPendingReports();
+        expect(calls.length).toBe(2);
+        localStorage.removeItem(MODERATION_TOAST_KEY);
+    });
+
+    test("shouldShowToast: skip, increase and 12h expiry", () => {
+        const seen = { count: 3, latest_id: 7, ts: 1000 };
+        const same = { count: 3, latest_id: 7 };
+        expect(shouldShowToast(null, same, 2000)).toBe(true);
+        expect(shouldShowToast(seen, same, 2000)).toBe(false);
+        expect(shouldShowToast(seen, { count: 2, latest_id: 7 }, 2000)).toBe(false);
+        expect(shouldShowToast(seen, { count: 4, latest_id: 7 }, 2000)).toBe(true);
+        expect(shouldShowToast(seen, { count: 3, latest_id: 9 }, 2000)).toBe(true);
+        expect(shouldShowToast(seen, same, 1000 + MODERATION_TOAST_TTL_MS)).toBe(true);
+        expect(shouldShowToast(seen, { count: 0 }, 2000)).toBe(false);
     });
 });
