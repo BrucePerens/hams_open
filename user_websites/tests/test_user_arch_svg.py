@@ -511,11 +511,13 @@ _XSS_JS = r"""
         await new Promise((resolve) => window.addEventListener("load", resolve, { once: true }));
     }
     const fail = (message) => { throw new Error(message); };
-    // Positive control: the detector sees a raw payload run in this harness.
+    // Positive control: the detector sees a raw payload run in this harness. The image source is a
+    // data: URI that is not an image, so the error event comes from the browser at once; a relative
+    // "x" made it wait for the server's 404 page, which took longer than this loop on a loaded host.
     const control = document.createElement("div");
-    control.innerHTML = '<img src="x" onerror="window.__xss_control=1">';
+    control.innerHTML = '<img src="data:," onerror="window.__xss_control=1">';
     document.body.appendChild(control);
-    for (let i = 0; i < 50 && window.__xss_control === undefined; i++) {
+    for (let i = 0; i < 100 && window.__xss_control === undefined; i++) {
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
     if (window.__xss_control !== 1) { fail("control payload did not run: the XSS detector is blind"); }

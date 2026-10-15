@@ -14,6 +14,7 @@ import { TourUtils } from "@zero_sudo/js/tour_utils";
 // Tests [@ANCHOR: user_websites:COMM_privacy_erased]
 registry.category("web_tour.tours").add("gdpr_privacy_tour", {
     steps: () => [
+        TourUtils.dismissCookiesBar(),
         { trigger: 'h2', content: 'Wait for: Wait for Privacy Header', run: function() {} },
         {
             content: "Verify Privacy Dashboard Header",
@@ -33,6 +34,7 @@ registry.category("web_tour.tours").add("gdpr_privacy_tour", {
             run: 'click',
             expectUnloadPage: true,
         },
+        TourUtils.dismissCookiesBar(),
         {
             content: "Wait for the public erasure confirmation page (lazy JS loaded) and the document load event",
             trigger: 'body:not(.o_lazy_js_waiting) #user_websites_erasure_confirmed',

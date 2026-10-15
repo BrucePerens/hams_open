@@ -1,5 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 
 // Tests [@ANCHOR: test_tour_frontend_misc]
@@ -7,6 +8,7 @@ registry.category("web_tour.tours").add("frontend_misc_tour", {
     url: "/user-websites/documentation",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
+        TourUtils.dismissCookiesBar(),
         {
             // /user-websites/documentation (controllers/main.py's
             // `documentation()`) redirects here once the manifest-declared

@@ -15,6 +15,9 @@ pin_package() wraps `setUpClass` of every database test case defined in this pac
 life of the class:
   * the slug policy is the open-source default (a committed value, restored afterwards, so tests that
     run real committed transactions and the HTTP worker threads see it too), and
+  * the form shield's tuning parameters (minimum time to submit, difficulty, lifetime) are removed so the
+    shield's own defaults apply, whatever a hams.com deployment or an earlier test left in the database
+    (the report-violation tests rely on the 3 second minimum time-to-submit), and
   * `_website_eligibility_gaps()` is the open-source implementation, bypassing every hams.com
     override. A test that patches ResUsersSiteEligibility._website_eligibility_gaps itself (the
     extension-point test) still takes effect, because the open-source implementation is looked up at
@@ -33,6 +36,13 @@ from odoo.addons.user_websites.models.site_eligibility import ResUsersSiteEligib
 
 _SLUG_POLICY_KEY = "user_websites.slug_policy"
 _OPEN_SOURCE_POLICY = "name_callsign"
+# form_shield reads these with a built-in default when absent (form_shield/models/form_shield.py).
+_FORM_SHIELD_TUNING_KEYS = (
+    "form_shield.min_age_seconds",
+    "form_shield.question_min_age_seconds",
+    "form_shield.difficulty",
+    "form_shield.ttl_seconds",
+)
 
 
 def _set_committed_param(key, value):
@@ -63,6 +73,8 @@ def _wrap(cls):
         # Registered before the inner setUpClass so it runs after Odoo's own rollback/close cleanups
         # (LIFO): restoring on another connection must not wait on a row lock the class still holds.
         c.addClassCleanup(_set_committed_param, _SLUG_POLICY_KEY, previous)
+        for key in _FORM_SHIELD_TUNING_KEYS:
+            c.addClassCleanup(_set_committed_param, key, _set_committed_param(key, None))
         inner(c)
         patcher = mock.patch.object(c.registry["res.users"], "_website_eligibility_gaps", _open_source_eligibility_gaps)
         patcher.start()
