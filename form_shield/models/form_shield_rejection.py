@@ -34,11 +34,15 @@ class FormShieldRejection(models.Model):
     # [@ANCHOR: form_shield:count]
     # Verified by [@ANCHOR: form_shield:test_counters_keep_no_personal_data]
     @api.model
-    def _count(self, form_id, reason):
-        """Adds one to today's counter. Written on its own cursor so a refusal that raises an
-        error (and so rolls the request back) is still counted."""
+    def _count(self, form_id, reason, own_cursor=False):
+        """Adds one to today's counter, in the caller's transaction. With `own_cursor` it is
+        written on a cursor of its own instead, for a refusal that is about to raise an error
+        (which rolls the request's transaction back and would take the count with it)."""
         utils = self.env["zero_sudo.security.utils"]
         service_uid = utils._get_service_uid(SERVICE_ACCOUNT)
+        if not own_cursor:
+            self.with_user(service_uid)._upsert(form_id, reason)
+            return
         with self.env.registry.cursor() as cursor:
             env = api.Environment(cursor, service_uid, {})
             env["form.shield.rejection"]._upsert(form_id, reason)

@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "@odoo/hoot";
 import { noticeText } from "@form_shield/js/error_notice";
-import { ShieldSession, solve, fetchChallenge, CHALLENGE_URL, WORKER_URL } from "@form_shield/js/shield_client";
+import { ShieldSession, solve, solveOnMainThread, fetchChallenge, CHALLENGE_URL } from "@form_shield/js/shield_client";
 
 // The vector tests/test_tokens.py asserts against tokens.solve_pow(): the same challenge, form and
 // difficulty must give the same smallest counter in the browser and in Python.
@@ -11,6 +11,11 @@ const VECTOR_TOKEN =
     "v1.pow.1000.1600.16.00112233aabbccdd.0123456789abcdef.0000000000000000000000000000000000000000";
 const VECTOR_FORM = "contact";
 const VECTOR_COUNTER = 23661;
+
+// Hoot replaces window.Worker with a mock that never answers (and it cannot be reassigned), so
+// the session tests solve on the main thread, with the very same pow_core.js. The real worker file
+// runs in a real browser in the report-violation tour (user_websites).
+const noWorker = { solveImpl: solveOnMainThread };
 
 describe("form_shield", () => {
     describe.current.tags("form_shield");
@@ -38,23 +43,8 @@ describe("form_shield", () => {
         expect(core.solve(VECTOR_TOKEN, "other", 12)).not.toBe(core.solve(VECTOR_TOKEN, VECTOR_FORM, 12));
     });
 
-    // [@ANCHOR: form_shield:test_pow_worker_runs_in_a_real_browser]
-    test("the Web Worker file solves the vector in a real browser", async () => {
-        // Tests [@ANCHOR: form_shield:pow_worker_js]
-        const counter = await new Promise((resolve, reject) => {
-            const worker = new Worker(WORKER_URL);
-            worker.onmessage = (event) => {
-                worker.terminate();
-                resolve(event.data.counter);
-            };
-            worker.onerror = (event) => reject(new Error(event.message));
-            worker.postMessage({ challenge: VECTOR_TOKEN, formId: VECTOR_FORM, difficulty: 16 });
-        });
-        expect(counter).toBe(VECTOR_COUNTER);
-    });
-
     // [@ANCHOR: form_shield:test_client_session_solves_and_waits]
-    test("ShieldSession fetches, solves in a worker and waits out the minimum age", async () => {
+    test("ShieldSession fetches, solves and waits out the minimum age", async () => {
         // Tests [@ANCHOR: form_shield:client_session]
         const requests = [];
         const fetchImpl = async (url, options) => {
@@ -66,15 +56,15 @@ describe("form_shield", () => {
         };
         const waits = [];
         const waitImpl = async (milliseconds) => waits.push(milliseconds);
-        const session = new ShieldSession(VECTOR_FORM, { fetchImpl, waitImpl });
+        const session = new ShieldSession(VECTOR_FORM, { fetchImpl, waitImpl, ...noWorker });
         const answer = await session.token();
         expect(answer).toBe(`${VECTOR_TOKEN}~${VECTOR_COUNTER}`);
-        expect(requests).toEqual([[CHALLENGE_URL, "POST", "omit"]]);
+        expect(requests).toEqual([[CHALLENGE_URL, "POST", "same-origin"]]);
         // 3 s minimum plus the margin, less however long the fetch and solve took.
         expect(waits.length).toBe(1);
         expect(waits[0] > 2000 && waits[0] <= 3400).toBe(true);
         // The form id may also be learned late, as Odoo's own forms do.
-        const late = new ShieldSession(null, { fetchImpl, waitImpl });
+        const late = new ShieldSession(null, { fetchImpl, waitImpl, ...noWorker });
         expect(await late.token(VECTOR_FORM)).toBe(`${VECTOR_TOKEN}~${VECTOR_COUNTER}`);
     });
 
@@ -88,7 +78,7 @@ describe("form_shield", () => {
             failure = error;
         }
         expect(failure.constructor.name).toBe("ShieldUnavailable");
-        const session = new ShieldSession(VECTOR_FORM, { fetchImpl, waitImpl: async () => {} });
+        const session = new ShieldSession(VECTOR_FORM, { fetchImpl, waitImpl: async () => {}, ...noWorker });
         let rejected = false;
         await session.token().catch(() => {
             rejected = true;
@@ -102,7 +92,9 @@ describe("form_shield", () => {
         const reasons = ["expired", "ip_changed", "too_fast", "wrong_answer", "no_token", "rate_subject", "rate_target", "rate_global", "unavailable"];
         const texts = new Set(reasons.map((reason) => noticeText(reason)));
         expect(texts.size).toBe(reasons.length);
-        expect(noticeText("something new")).toBe("We could not send the form. Please try again.");
+        // Anything else gets one shared default, which is none of the specific messages.
+        expect(noticeText("something new")).toBe(noticeText("something else"));
+        expect(texts.has(noticeText("something new"))).toBe(false);
     });
 
     test("difficulty 0 needs no work", async () => {

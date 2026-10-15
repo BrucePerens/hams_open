@@ -25,7 +25,7 @@ export async function fetchChallenge(kind = "pow", fetchImpl = globalThis.fetch.
     const response = await fetchImpl(CHALLENGE_URL, {
         method: "POST",
         body,
-        credentials: "omit",
+        credentials: "same-origin",
         cache: "no-store",
     });
     if (!response.ok) {
@@ -34,7 +34,7 @@ export async function fetchChallenge(kind = "pow", fetchImpl = globalThis.fetch.
     return response.json();
 }
 
-function solveOnMainThread(challenge, formId, difficulty) {
+export function solveOnMainThread(challenge, formId, difficulty) {
     const core = globalThis.FormShieldPow;
     if (!core) {
         return Promise.reject(new ShieldUnavailable("pow_core.js is not loaded"));
@@ -96,10 +96,11 @@ export class ShieldSession {
     /**
      * @param {string|null} formId the form the answer is for, when known up front (then the
      *   solving starts at once); null to learn it at token() time.
-     * @param {Object} [options] fetchImpl and waitImpl replace fetch() and the time-to-submit
-     *   delay; for tests of this class only, production passes nothing.
+     * @param {Object} [options] fetchImpl, waitImpl and solveImpl replace fetch(), the time-to-submit
+     *   delay and the Web Worker solve; for tests of this class only, production passes nothing.
      */
-    constructor(formId = null, { fetchImpl, waitImpl } = {}) {
+    constructor(formId = null, { fetchImpl, waitImpl, solveImpl } = {}) {
+        this.solveImpl = solveImpl || solve;
         this.formId = formId;
         this.fetchImpl = fetchImpl;
         this.wait = waitImpl || defaultWait;
@@ -123,7 +124,7 @@ export class ShieldSession {
 
     async _solveFor(formId) {
         const issued = await this.challenge;
-        return solve(issued.challenge, formId, issued.difficulty);
+        return this.solveImpl(issued.challenge, formId, issued.difficulty);
     }
 
     /** The `<challenge>~<counter>` answer for `formId`; throws ShieldUnavailable on failure. */

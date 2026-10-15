@@ -3,6 +3,7 @@
 
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
+import { session } from "@web/session";
 import { ReCaptcha } from "@google_recaptcha/js/recaptcha";
 import { ShieldSession } from "@form_shield/js/shield_client";
 
@@ -27,12 +28,14 @@ export const ENFORCED_ACTIONS = new Set([
 
 patch(ReCaptcha.prototype, {
     loadLibs() {
-        this._shield = new ShieldSession(null);
+        if (session.is_website_user) {
+            this._shield = new ShieldSession(null);
+        }
         return Promise.resolve(true);
     },
 
     async getToken(action) {
-        if (!ENFORCED_ACTIONS.has(action)) {
+        if (!ENFORCED_ACTIONS.has(action) || !session.is_website_user) {
             return { message: _t("No automatic check is asked for on this form.") };
         }
         if (!this._shield) {

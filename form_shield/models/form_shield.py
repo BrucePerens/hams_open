@@ -156,7 +156,8 @@ class FormShield(models.AbstractModel):
             reason,
             outcome,
         )
-        self.env["form.shield.rejection"]._count(form_id, reason)
+        own_cursor = bool(self.env.context.get("form_shield_own_cursor"))
+        self.env["form.shield.rejection"]._count(form_id, reason, own_cursor)
         return Verdict(False, outcome, reason)
 
     # [@ANCHOR: form_shield:refuse]
@@ -178,6 +179,7 @@ class FormShield(models.AbstractModel):
         honeypots=(),
         target=None,
         limits=None,
+        own_cursor=False,
     ):
         """Decides whether this submission may proceed. Returns a Verdict.
 
@@ -187,6 +189,8 @@ class FormShield(models.AbstractModel):
         of fields a person never sees; any text in one marks a program. `target` is whatever the
         form is about, so one page cannot be flooded from many addresses.
         """
+        if own_cursor:
+            self = self.with_context(form_shield_own_cursor=True)
         if any((value or "").strip() for value in honeypots):
             return self._reject(form_id, "honeypot", SILENT)
         member = not self.env.user._is_public()

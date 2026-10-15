@@ -12,8 +12,8 @@ import { _t } from "@web/core/l10n/translation";
 // This says what happened in Odoo's notification (announced to screen readers) and removes the
 // parameter so a reload does not repeat it. Reasons that identify a program are never redirected
 // with: those get the form's ordinary success answer.
-export function noticeText(reason) {
-    const messages = {
+// Lazy translations, built once: _t() at module level is translated when first shown.
+const MESSAGES = {
         expired: _t("The check on the form timed out. Please open it again and resend."),
         ip_changed: _t("Your network changed while you filled in the form. Please open it again and resend."),
         too_fast: _t("That was sent very quickly. Please wait a moment and send it again."),
@@ -23,8 +23,11 @@ export function noticeText(reason) {
         rate_target: _t("This has been reported many times today. Please try again tomorrow."),
         rate_global: _t("This form is very busy. Please try again later."),
         unavailable: _t("This form is temporarily unavailable. Please try again later."),
-    };
-    return messages[reason] || _t("We could not send the form. Please try again.");
+};
+const DEFAULT_MESSAGE = _t("We could not send the form. Please try again.");
+
+export function noticeText(reason) {
+    return MESSAGES[reason] || DEFAULT_MESSAGE;
 }
 
 export class FormShieldErrorNotice extends Interaction {

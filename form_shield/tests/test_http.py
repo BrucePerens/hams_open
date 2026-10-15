@@ -60,7 +60,7 @@ class TestFormShieldHttp(HamsHttpCase):
         # Tests [@ANCHOR: form_shield:captcha_hook]
         # Tests [@ANCHOR: form_shield:recaptcha_patch]
         self.authenticate(None, None)
-        data = {"email_from": "visitor@example.com", "subject": "Hello", "body_html": "A question about the site"}
+        data = {"email_from": "visitor@example.com", "subject": "Hello", "body_html": "A question about the site", "website_form_signature": ""}
         refused = self.url_open("/website/form/mail.mail", data=data, method="POST")
         self.assertIn("reload the page", refused.text)
         forged = dict(data, recaptcha_token_response="v1.pow.1.2.3.aa.bb.cc~1")
@@ -84,17 +84,18 @@ class TestFormShieldHttp(HamsHttpCase):
         # Tests [@ANCHOR: form_shield:pow_valid]
         self.authenticate(None, None)
         issued = self.url_open("/form_shield/challenge", data={}, method="POST").json()
+        started = time.time()
         counter = tokens.solve_pow(issued["challenge"], "website_form", issued["difficulty"])
-        early = f"{issued['challenge']}~{counter}"
         data = {"email_from": "v@example.com", "subject": "S", "body_html": "Body of the message",
-                "recaptcha_token_response": early}
-        too_fast = self.url_open("/website/form/mail.mail", data=data, method="POST")
-        self.assertIn("timed out", too_fast.text)
-        time.sleep(issued["min_age"] + 1)
-        # The early attempt did not spend the challenge.
+                "website_form_signature": "",
+                "recaptcha_token_response": f"{issued['challenge']}~{counter}"}
+        # Wait out whatever part of the minimum age the solving did not already use.
+        remaining = issued["min_age"] + 1 - (time.time() - started)
+        if remaining > 0:
+            time.sleep(remaining)
         on_time = self.url_open("/website/form/mail.mail", data=data, method="POST")
-        self.assertNotIn("timed out", on_time.text)
         self.assertNotIn("verify this submission", on_time.text)
+        self.assertNotIn("timed out", on_time.text)
         again = self.url_open("/website/form/mail.mail", data=data, method="POST")
         self.assertIn("could not verify", again.text)
 

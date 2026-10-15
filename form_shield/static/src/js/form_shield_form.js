@@ -4,6 +4,7 @@
 import { Interaction } from "@web/public/interaction";
 import { registry } from "@web/core/registry";
 import { _t } from "@web/core/l10n/translation";
+import { session } from "@web/session";
 import { ShieldSession, fetchChallenge } from "@form_shield/js/shield_client";
 
 // [@ANCHOR: form_shield:form_interaction]
@@ -48,6 +49,12 @@ export class FormShieldForm extends Interaction {
     }
 
     begin() {
+        if (!session.is_website_user) {
+            // A signed-in member is not asked for the calculation (the server checks them by the
+            // honeypots and the rate limits), so their form is never held.
+            this.released = true;
+            return;
+        }
         this.released = false;
         const field = this.el.querySelector('input[name="shield_response"]');
         if (field) {

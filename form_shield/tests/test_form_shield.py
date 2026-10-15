@@ -186,10 +186,11 @@ class TestFormShield(HamsTransactionCase):
         # Tests [@ANCHOR: form_shield:count_upsert]
         # Tests [@ANCHOR: form_shield:count]
         # Tests [@ANCHOR: form_shield:service_account_acl]
+        self.shield.check("contact", shield_response(self.env, "contact", GUEST))
         self.shield.check("contact", "x~y")
         self.shield.check("contact", "x~y")
         rows = self.env["form.shield.rejection"].search([("form_id", "=", "contact")])
-        self.assertEqual(rows.mapped("count"), [2])
+        self.assertEqual(sorted(rows.mapped("count")), [1, 2])
         stored = {
             name for name, field in rows._fields.items()
             if field.store and name not in models_magic()

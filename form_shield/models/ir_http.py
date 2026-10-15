@@ -50,7 +50,8 @@ class IrHttp(models.AbstractModel):
             return super()._verify_request_recaptcha_token(action)
         response = request.params.pop("recaptcha_token_response", "")
         shield = self.env["form.shield"]
-        verdict = shield.check(action, response)
+        # The count is written on its own cursor: raising below rolls this request back.
+        verdict = shield.check(action, response, own_cursor=True)
         if verdict.ok:
             return None
         raise UserError(str(MESSAGES[verdict.outcome]))

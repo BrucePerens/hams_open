@@ -26,6 +26,7 @@ for Odoo's own website forms. Counts refusals per day, with no address or text k
     "data": [
         "security/form_shield_security.xml",
         "security/ir.model.access.csv",
+        "data/noisy_table.xml",
         "views/form_shield_views.xml",
         "views/form_shield_templates.xml",
     ],
