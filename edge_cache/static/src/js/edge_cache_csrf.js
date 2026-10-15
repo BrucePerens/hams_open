@@ -17,6 +17,14 @@
  * click, that comes before the fetch finishes is held and replayed once it settles. (Odoo's
  * website form checks CSRF only for logged-in sessions, so for it this is belt and braces.) Anonymous visitors only: a
  * logged-in visitor's pages are never edge-cached, so their token is already good.
+ *
+ * The token is fetched again at every submit of a token-bearing form, not only the first time. A
+ * token is bound to the session cookie the browser holds, and a cookieless page load fires several
+ * requests at once (/sw.js, /website/translations, ...), each answered with a session_id cookie of
+ * its own: the last response to arrive wins. One that is slow (a loaded server answered /sw.js after
+ * 3.4 s) can land after the early fetch and replace the cookie the earlier token was bound to, and
+ * the post is then refused with "CSRF validation failed". A token fetched with the cookie as it is
+ * at the moment of the submit cannot go stale that way.
  */
 
 import { session } from "@web/session";
@@ -27,6 +35,8 @@ const WEBSITE_FORM_SEND = ".s_website_form_send, .o_website_form_send";
 
 let pending = null;
 let settled = false;
+// Forms whose submit event is the replay of one this script held, after a token was fetched for it.
+const replaying = new WeakSet();
 
 function applyToken(token) {
     globalThis.odoo.csrf_token = token;
@@ -38,7 +48,7 @@ function applyToken(token) {
     }
 }
 
-export function refreshCsrfToken() {
+function fetchToken() {
     if (!pending) {
         pending = fetch(TOKEN_URL, {
             credentials: "same-origin",
@@ -59,9 +69,15 @@ export function refreshCsrfToken() {
             })
             .finally(() => {
                 settled = true;
+                pending = null;
             });
     }
     return pending;
+}
+
+/** The early fetch: once per page, so a visitor who only focuses a field is not asked again. */
+export function refreshCsrfToken() {
+    return settled && !pending ? Promise.resolve() : fetchToken();
 }
 
 function tokenForm(target) {
@@ -76,13 +92,25 @@ function onEarlyInteraction(ev) {
 
 function onSubmit(ev) {
     const form = ev.target;
-    if (settled || !(form instanceof HTMLFormElement) || !form.matches(TOKEN_FORM)) {
+    if (!(form instanceof HTMLFormElement) || !form.matches(TOKEN_FORM)) {
+        return;
+    }
+    if (replaying.has(form)) {
         return;
     }
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const submitter = ev.submitter && ev.submitter.form === form ? ev.submitter : null;
-    refreshCsrfToken().then(() => form.requestSubmit(submitter));
+    fetchToken().then(() => {
+        // requestSubmit() fires the submit event before it returns, so the mark is seen by this
+        // handler and then removed, even when the form's own validation stops the submit.
+        replaying.add(form);
+        try {
+            form.requestSubmit(submitter);
+        } finally {
+            replaying.delete(form);
+        }
+    });
 }
 
 function onWebsiteFormSend(ev) {
@@ -95,17 +123,23 @@ function onWebsiteFormSend(ev) {
     refreshCsrfToken().then(() => button.click());
 }
 
+/** Installs the listeners on an anonymous visitor's page; returns a function that removes them, or null. */
 export function startEdgeCacheCsrfRefresh() {
     // @web/session, not odoo.__session_info__: that module consumes and deletes the global when it
     // loads, which is before this one in the bundle, so the global is gone by the time this runs.
     if (!session.is_website_user) {
-        return false;
+        return null;
     }
     document.addEventListener("focusin", onEarlyInteraction, true);
     document.addEventListener("pointerdown", onEarlyInteraction, true);
     document.addEventListener("submit", onSubmit, true);
     document.addEventListener("click", onWebsiteFormSend, true);
-    return true;
+    return () => {
+        document.removeEventListener("focusin", onEarlyInteraction, true);
+        document.removeEventListener("pointerdown", onEarlyInteraction, true);
+        document.removeEventListener("submit", onSubmit, true);
+        document.removeEventListener("click", onWebsiteFormSend, true);
+    };
 }
 
 startEdgeCacheCsrfRefresh();

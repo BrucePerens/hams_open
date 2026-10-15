@@ -147,6 +147,46 @@ class TestEdgeCacheCookies(HamsHttpCase):
         # Now holding a session, the visitor no longer gets edge-cacheable pages.
         self.assertEqual(self.url_open(PAGE_URL).headers.get(CDN), NO_STORE)
 
+    def test_late_session_cookie_of_another_cookieless_request_voids_an_earlier_token(self):
+        # Tests [@ANCHOR: COMM_cloudflare_csrf_token_route]
+        # Tests [@ANCHOR: COMM_edge_cache_csrf_refresh]
+        """Why edge_cache_csrf.js fetches the token again at every submit.
+
+        A cookieless page load fires several requests at once (/sw.js, /website/translations, ...) and
+        each is answered with a session_id cookie of its own; the browser keeps the last to arrive. When
+        a slow one arrives after the token fetch it replaces the cookie the token was bound to, and the
+        post is refused. A token fetched with the cookie the browser holds then is accepted.
+        """
+        self._fresh_visitor()
+        self.assertEqual(self.url_open(PAGE_URL).headers.get(CDN), "max-age=86400")
+        # Another cookieless request, answered with a session cookie that has not reached the browser yet.
+        slow = self.url_open("/web/login")
+        slow_cookies = list(self.opener.cookies)
+        self.assertIn("session_id", [cookie.name for cookie in slow_cookies])
+        self.opener.cookies.clear()
+        early = self.url_open("/cloudflare/csrf_token")
+        self.assertEqual(slow.status_code, 200)
+        self.assertEqual(
+            self.url_open("/website/form", data={"csrf_token": early.json()["csrf_token"]}).status_code,
+            200,
+            "the token is good for the cookie it was fetched with",
+        )
+        # Now the slow response lands and replaces the session cookie.
+        for cookie in slow_cookies:
+            self.opener.cookies.set_cookie(cookie)
+        self.assertEqual(
+            self.url_open("/website/form", data={"csrf_token": early.json()["csrf_token"]}).status_code,
+            400,
+            "the earlier token is bound to a session the browser no longer holds",
+        )
+        # The token the script fetches at the submit is bound to the cookie as it is then.
+        late = self.url_open("/cloudflare/csrf_token")
+        self.assertNotEqual(late.json()["csrf_token"], early.json()["csrf_token"])
+        self.assertEqual(
+            self.url_open("/website/form", data={"csrf_token": late.json()["csrf_token"]}).status_code,
+            200,
+        )
+
     def test_page_cache_never_replays_a_set_cookie(self):
         # [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         # Tests [@ANCHOR: COMM_website_page_no_inherited_set_cookie]
