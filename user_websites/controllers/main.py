@@ -331,8 +331,6 @@ class UserWebsitesController(http.Controller):
             return request.redirect(
                 _report_violation_redirect_target(url, "report_error=missing_fields")
             )
-BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
-
 
         # [@ANCHOR: user_websites:report_violation_shield]
         # Verified by [@ANCHOR: user_websites:test_report_violation_shield_outcomes]
