@@ -534,6 +534,9 @@
                             <!-- [@ANCHOR: user_websites:report_violation_shield_fields]
                                  Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour] -->
                             <t t-call="form_shield.fields">
+                                <!-- form_shield.fields shows the question at once when `issued` is set; the page around this modal may use that name for something
+                                     else (ham_onboarding's invite_issued_page has a list called `issued`, which made the page a 500). -->
+                                <t t-set="issued" t-value="False"/>
                                 <t t-set="fallback_url" t-value="'/website/report_violation'"/>
                             </t>
                         </div>
