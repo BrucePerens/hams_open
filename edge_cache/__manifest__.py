@@ -22,6 +22,10 @@
         "web.assets_frontend": [
             "edge_cache/static/src/js/edge_cache_csrf.js",
         ],
+        "web.assets_unit_tests": [
+            "edge_cache/static/src/js/edge_cache_csrf.js",
+            "edge_cache/static/tests/edge_cache_csrf.test.js",
+        ],
     },
     "installable": True,
     "application": False,
