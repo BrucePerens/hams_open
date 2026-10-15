@@ -138,7 +138,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
 
     def test_03d_report_violation_refuses_another_sites_url(self):
         # [@ANCHOR: test_report_violation_refuses_another_sites_url]
-        # Tests [@ANCHOR: user_websites:fn_main_reportable_url]
+        # Tests [@ANCHOR: user_websites:normalize_report_target]
         self.authenticate(None, None)
         own_page = f"{self.base_url()}/{self.user_test.website_slug}"
         for url, email in (
@@ -152,6 +152,7 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
                 "/website/report_violation",
                 data={
                     "csrf_token": odoo.http.Request.csrf_token(self),
+                    **shield_fields(self.env, "report_violation"),
                     "url": url,
                     "description": "Check the address rule",
                     "email": email,

@@ -103,6 +103,7 @@ def _own_site_hosts():
 
 # [@ANCHOR: user_websites:normalize_report_target]
 # Verified by [@ANCHOR: user_websites:test_normalize_report_target]
+# Verified by [@ANCHOR: test_report_violation_refuses_another_sites_url]
 def normalize_report_target(raw, hosts):
     """The reported URL in one canonical form, or None when it is not a page of this site.
 
@@ -199,22 +200,6 @@ def _report_violation_redirect_target(reported_url, query_param):
     path = _reported_path(reported_url)
     separator = "&" if "?" in path else "?"
     return f"{path}{separator}{query_param}"
-
-
-# [@ANCHOR: user_websites:fn_main_reportable_url]
-# Verified by [@ANCHOR: test_report_violation_refuses_another_sites_url]
-def _reportable_url(url):
-    """`url` when it is a page of this site (a path, or a full address on this request's own host), else None. A report
-    of "https://evil.example/..." or "javascript:..." would put a foreign address in front of a moderator."""
-    try:
-        parts = urlparse(url)
-    except ValueError:
-        return None
-    if not parts.scheme and not parts.netloc:
-        return url if url.startswith("/") else None
-    if parts.scheme in ("http", "https") and parts.netloc == request.httprequest.host:
-        return url
-    return None
 
 
 def _legacy_slug_redirect(website_slug, rest=""):
