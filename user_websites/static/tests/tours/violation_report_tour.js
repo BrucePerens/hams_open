@@ -122,6 +122,34 @@ const reportViolationSteps = (beforeSubmit = [], description = "Unsolicited adve
             run: `edit ${description}`,
         },
         { trigger: '.modal-body', content: 'Blur form to commit state', run: 'click' },
+        {
+            // Tests [@ANCHOR: form_shield:form_interaction]
+            // Tests [@ANCHOR: form_shield:fields_template]
+            // Tests [@ANCHOR: user_websites:report_violation_shield_fields]
+            // The shield tells a screen reader what it is doing: a polite live region that says
+            // either that it is verifying or that it has verified. The tour then presses Send
+            // right away, so the form must hold the post until the browser's Web Worker has
+            // solved the challenge and the minimum time-to-submit has passed.
+            trigger: '#reportViolationModal [role="status"][aria-live="polite"][data-form-shield-status]',
+            content: "The shield announces its progress in a polite live region",
+            run: function () {
+                return new Promise((resolve, reject) => {
+                    const status = document.querySelector(
+                        '#reportViolationModal [data-form-shield-status]'
+                    );
+                    const deadline = Date.now() + 5000;
+                    const poll = setInterval(() => {
+                        if (status.textContent.includes("Verif")) {
+                            clearInterval(poll);
+                            resolve();
+                        } else if (Date.now() > deadline) {
+                            clearInterval(poll);
+                            reject(new Error("the shield never said it was verifying"));
+                        }
+                    }, 100);
+                });
+            },
+        },
         ...beforeSubmit,
         {
             trigger: 'button[type="submit"].btn-danger',

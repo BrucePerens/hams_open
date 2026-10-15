@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+        <record id="group_form_shield_service" model="res.groups">
+            <field name="name">Form shield: counter writer service</field>
+        </record>
+    </data>
+    <data>
+        <!-- [@ANCHOR: form_shield:service_account_acl] The shield writes its daily counters as this
+             account only; the anonymous public user has no access to the counters model.
+             Verified by [@ANCHOR: form_shield:test_counters_keep_no_personal_data] -->
+        <record id="user_form_shield_service" model="res.users">
+            <field name="name">Form shield counters</field>
+            <field name="login">form_shield_service_internal</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
+            <field name="notification_type">email</field>
+            <field name="is_service_account" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="group_ids" eval="[(6, 0, [ref('form_shield.group_form_shield_service')])]"/>
+        </record>
+        <record id="ir_cron_form_shield_purge" model="ir.cron">
+            <!-- [@ANCHOR: form_shield:cron_purge] -->
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: form_shield:test_purge_drops_old_counters] -->
+            <field name="name">Form shield: purge old counters</field>
+            <field name="model_id" ref="model_form_shield_rejection"/>
+            <field name="user_id" ref="form_shield.user_form_shield_service"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_purge()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

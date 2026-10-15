@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+        <!-- The daily refusal counters change on every public form post, whatever test is running
+             (a tour that really posts a form counts it): leak detection must not count them. -->
+        <record id="noisy_table_form_shield_rejection" model="zero_sudo.noisy_table">
+            <field name="name">form_shield_rejection</field>
+        </record>
+    </data>
+</odoo>

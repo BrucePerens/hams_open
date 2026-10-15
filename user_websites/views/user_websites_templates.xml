@@ -493,7 +493,7 @@
         <div class="modal fade" id="reportViolationModal" tabindex="-1" role="dialog" aria-labelledby="reportViolationModalLabel" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
-                    <form action="/website/report_violation" method="post">
+                    <form action="/website/report_violation" method="post" data-form-shield="report_violation">
                         <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                         <input type="hidden" name="url" t-att-value="request.httprequest.url"/>
 
@@ -529,8 +529,13 @@
 
                             <div class="mb-3">
                                 <label for="description" class="form-label">Reason for reporting:</label>
-                                <textarea class="form-control" name="description" id="description" rows="3" required="required"></textarea>
+                                <textarea class="form-control" name="description" id="description" rows="3" required="required" minlength="10" maxlength="5000"></textarea>
                             </div>
+                            <!-- [@ANCHOR: user_websites:report_violation_shield_fields]
+                                 Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour] -->
+                            <t t-call="form_shield.fields">
+                                <t t-set="fallback_url" t-value="'/website/report_violation'"/>
+                            </t>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -542,12 +547,41 @@
         </div>
     </template>
 
+    <template id="report_violation_page" name="Report Violation Page">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: form_shield:test_question_form_page_renders_accessible_question] -->
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-5" style="max-width: 640px;">
+                <h1 class="h3">Report a content violation</h1>
+                <div t-if="notice" class="alert alert-warning" role="alert" t-out="notice"/>
+                <form action="/website/report_violation" method="post">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <input type="hidden" name="url" t-att-value="url"/>
+                    <p class="text-muted">Reporting: <span t-out="url"/></p>
+                    <t t-if="website.is_public_user()">
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Your email address</label>
+                            <input type="email" class="form-control" name="email" id="email" required="required" t-att-value="email" placeholder="name@example.com"/>
+                        </div>
+                    </t>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Reason for reporting</label>
+                        <textarea class="form-control" name="description" id="description" rows="5" required="required" minlength="10" maxlength="5000" t-out="description"/>
+                    </div>
+                    <t t-call="form_shield.question_fields"/>
+                    <button type="submit" class="btn btn-danger">Submit Report</button>
+                </form>
+            </div>
+        </t>
+    </template>
+
     <template id="report_violation_snippet" name="Report Violation Button">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <div class="text-center user-websites-report-container d-inline">
             <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reportViolationModal" t-att-data-url="request.httprequest.url">
                 <i class="fa fa-flag" aria-hidden="true"/> Report Violation
             </button>
+            <!-- Without scripts the modal cannot open: this link is the way to the question form. -->
+            <noscript><a class="btn btn-outline-danger btn-sm" href="/website/report_violation"><i class="fa fa-flag" aria-hidden="true"/> Report Violation</a></noscript>
         </div>
     </template>
 

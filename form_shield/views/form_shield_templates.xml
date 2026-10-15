@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <!-- [@ANCHOR: form_shield:fields_template]
+         Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
+         Drop this inside a <form data-form-shield="FORM_ID"> (t-call, with fallback_url set to the
+         page that serves the question form). It holds the answer field, the honeypot that is moved
+         off-screen rather than display:none (some programs skip hidden fields), the status line
+         that screen readers announce, and the link shown when the automatic check cannot run. -->
+    <template id="fields" name="Form shield fields">
+        <!-- With `issued` (form.shield.issue('q')) the question is shown at once, for a page the
+             visitor reached from the "simple question form" link. -->
+        <t t-if="issued"><t t-call="form_shield.question_fields"/></t>
+        <t t-else="">
+        <input type="hidden" name="shield_response" value=""/>
+        <div class="form-shield-trap" aria-hidden="true">
+            <label>Leave this field empty if you are a person
+                <input type="text" name="fs_homepage" tabindex="-1" autocomplete="off" value=""/>
+            </label>
+        </div>
+        <div class="form-shield-status small text-muted" role="status" aria-live="polite" data-form-shield-status=""></div>
+        <a class="small" data-form-shield-fallback="" hidden="hidden" t-if="fallback_url" t-att-href="fallback_url">Use the simple question form instead</a>
+        <!-- Shown by form_shield_form.js when the browser cannot run the calculation and the form
+             has no page of its own for the question: the question appears here, inside the form. -->
+        <div class="mb-3" data-form-shield-question="" hidden="hidden">
+            <input type="hidden" name="shield_challenge" value=""/>
+            <label class="form-label d-block"><span data-form-shield-question-text=""></span>
+                <input type="text" class="form-control" name="shield_answer" inputmode="numeric" autocomplete="off"/>
+            </label>
+        </div>
+        <noscript t-if="fallback_url">
+            <p class="small">
+                This form checks that you are a person with a short calculation that needs scripts.
+                <a t-att-href="fallback_url">Use the simple question form instead</a>.
+            </p>
+        </noscript>
+        </t>
+    </template>
+
+    <!-- [@ANCHOR: form_shield:refused_page]
+         Verified by [@ANCHOR: form_shield:test_refusal_response_by_outcome] -->
+    <template id="refused_page" name="Form shield refusal">
+        <t t-call="website.layout">
+            <div id="wrap" class="container my-5" style="max-width: 640px;">
+                <h1 class="h3">
+                    <t t-if="verdict.outcome == 'limited'">Too many submissions</t>
+                    <t t-else="">Temporarily unavailable</t>
+                </h1>
+                <p t-if="verdict.outcome == 'limited'">Too many submissions have come from your network or about this page. Please wait a while and try again.</p>
+                <p t-else="">This form is temporarily unavailable. Please try again later.</p>
+                <a t-att-href="back_path" class="btn btn-secondary">Go back</a>
+            </div>
+        </t>
+    </template>
+
+    <!-- [@ANCHOR: form_shield:question_fields_template]
+         Verified by [@ANCHOR: form_shield:test_question_form_page_renders_accessible_question]
+         The question form for visitors without scripts or without Web Worker support.
+         `issued` is form.shield.issue('q'). -->
+    <template id="question_fields" name="Form shield question">
+        <input type="hidden" name="shield_challenge" t-att-value="issued['challenge']"/>
+        <div class="form-shield-trap" aria-hidden="true">
+            <label>Leave this field empty if you are a person
+                <input type="text" name="fs_homepage" tabindex="-1" autocomplete="off" value=""/>
+            </label>
+        </div>
+        <div class="mb-3">
+            <label for="shield_answer" class="form-label" t-out="issued['question']"/>
+            <input type="text" class="form-control" name="shield_answer" id="shield_answer"
+                   inputmode="numeric" autocomplete="off" required="required" aria-describedby="shield_answer_help"/>
+            <div id="shield_answer_help" class="form-text">This question stops automated programs. It is plain text so that a screen reader can read it. Please wait a few seconds before sending.</div>
+        </div>
+    </template>
+</odoo>

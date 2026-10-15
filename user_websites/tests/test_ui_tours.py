@@ -6,6 +6,7 @@ import logging
 import time
 from odoo.tests import tagged
 from odoo.tools import mute_logger
+from odoo.addons.form_shield.tests.test_support import reset_shield_state
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 _logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ _logger = logging.getLogger(__name__)
 class TestUserWebsitesUITours(RealTransactionCase):
     def setUp(self):
         super().setUp()
+        reset_shield_state(self.env)
         self.user_test = None
         self.page = None
 
@@ -220,6 +222,12 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.start_tour("/odoo?debug=1", "backend_views_tour", login="admin")
 
     def test_10_violation_report_tour(self):
+        # [@ANCHOR: form_shield:test_report_form_happy_path_tour]
+        # [@ANCHOR: form_shield:test_pow_worker_runs_in_a_real_browser]
+        # Tests [@ANCHOR: form_shield:pow_worker_js]
+        # The reporter's browser solves the real proof of work in its Web Worker at production
+        # difficulty and the post is accepted; test_report_shield.py solves the same challenge
+        # with tokens.solve_pow, the Python twin of that worker.
         # Tests [@ANCHOR: test_tour_violation_report]
 
         # Tests [@ANCHOR: user_websites:UX_REPORT_VIOLATION]

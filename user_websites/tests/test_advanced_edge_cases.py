@@ -4,10 +4,10 @@
 import odoo.tests
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
-from odoo.addons.user_websites.controllers.main import redis_client
 import logging
 import urllib.error
 import uuid
+from odoo.addons.form_shield.tests.test_support import reset_shield_state, shield_fields
 
 _logger = logging.getLogger(__name__)
 
@@ -16,8 +16,7 @@ _logger = logging.getLogger(__name__)
 class TestAdvancedEdgeCases(HamsHttpCase):
     def setUp(self):
         super(TestAdvancedEdgeCases, self).setUp()
-        for key in redis_client.scan_iter(f"uw:rl:{self.env.cr.dbname}:report:*"):
-            redis_client.delete(key)
+        reset_shield_state(self.env)
 
         unique_id = str(uuid.uuid4())[:8]
         self.user_empty = self.env["res.users"].create(
@@ -128,6 +127,7 @@ class TestAdvancedEdgeCases(HamsHttpCase):
             "/website/report_violation",
             data={
                 "csrf_token": odoo.http.Request.csrf_token(self),
+                **shield_fields(self.env, "report_violation"),
                 "url": reported_path,
                 "reason": "Harassment or bullying",
                 "description": "Testing stripped referrer",

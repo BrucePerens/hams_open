@@ -9,6 +9,24 @@ import { registry } from "@web/core/registry";
  * Listens for success parameters in the URL, fires a toast notification,
  * and cleans the URL via history.replaceState to prevent duplicate triggers on refresh.
  */
+// What the report form's refusals tell the visitor (the server's report_error=<reason>). The
+// reasons that identify a program (a bad signature, a wrong solution) are never sent: those get
+// the success message, so a program learns nothing.
+const REPORT_ERRORS = {
+    missing_fields: "Please describe the problem and try again.",
+    short_description: "Please describe the problem in at least ten characters.",
+    gibberish: "Please describe the problem in your own words.",
+    too_many_urls: "Please describe the problem in words, with at most two links.",
+    bad_email: "Please enter a valid email address.",
+    foreign_target: "That address is not a page of this site.",
+    expired: "The check on the form timed out. Please open it again and resend.",
+    ip_changed: "Your network changed while you filled in the form. Please open it again and resend.",
+    too_fast: "That was sent very quickly. Please wait a moment and send it again.",
+    wrong_answer: "That answer was not right. Please try again.",
+    creation_failed: "We could not save your report. Please try again later.",
+    default: "We could not send your report. Please try again.",
+};
+
 export class UrlToastNotification extends Interaction {
     static selector = '#wrapwrap';
 
@@ -26,7 +44,11 @@ export class UrlToastNotification extends Interaction {
         let type = 'success';
 
         // Map URL query parameters to specific notification messages
-        if (urlParams.has('report_submitted')) {
+        if (urlParams.has('report_error')) {
+            title = "Report not sent";
+            message = REPORT_ERRORS[urlParams.get('report_error')] || REPORT_ERRORS.default;
+            type = 'danger';
+        } else if (urlParams.has('report_submitted')) {
             title = "Success";
             message = "We received your report and will review it.";
         } else if (urlParams.has('appeal_submitted')) {

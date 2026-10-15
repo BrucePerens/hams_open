@@ -1,0 +1,19 @@
+<div>
+<h1>Form Shield: spam protection that does not track you</h1>
+<p>Forms that anyone can send (reporting a page, asking for an invitation, contacting us, signing up for a newsletter) attract programs that fill them in. The form shield stops most of them without a CAPTCHA picture and without any company's tracking script.</p>
+
+<h2 id="visitor">For visitors</h2>
+<p>While a form is open, your browser does a small calculation in the background. It takes a moment, it needs no clicks, and the form tells you ("Verifying you are human…") so a screen reader announces it. You can keep typing. If you press Send early, the form waits for the calculation and then sends.</p>
+<p>If your browser cannot do the calculation, a link on the form leads to a page with one question in words, such as "What is seven plus four?". Type the answer as digits.</p>
+<p>If you see a message that you sent too many forms, wait an hour. If a message says the check timed out, open the form again and resend.</p>
+
+<h2 id="privacy">What is kept</h2>
+<ul>
+<li>Briefly, a one-way code made from the first part of your network address (never the address itself), used only to limit how many forms one network can send.</li>
+<li>A counter per day, per form and per reason, of submissions that were turned away. It holds no address, email or text.</li>
+</ul>
+
+<h2 id="admin">For administrators</h2>
+<p>Settings, then <strong>Form shield counters</strong>, shows how many submissions each form accepted and turned away, and why (honeypot, replay, rate limit and so on). A sudden rise in one reason tells you what the spammers are trying. The limits and the difficulty are system parameters beginning with <code>form_shield.</code>; see the module README.</p>
+<p>Developers: a controller asks the form shield model to check the posted form (<code>check_form</code>, with the form's id and the posted values); a template includes <code>form_shield.fields</code> inside a form marked with <code>data-form-shield</code>.</p>
+</div>

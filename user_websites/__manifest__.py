@@ -29,6 +29,7 @@ This module enables:
         "compliance",
         "cloudflare",
         "content_moderation",
+        "form_shield",
     ],
     "external_dependencies": {
         "python": ["markupsafe"],
