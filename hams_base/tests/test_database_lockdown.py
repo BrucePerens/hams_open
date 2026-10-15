@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
 from types import SimpleNamespace
+
+from werkzeug.exceptions import BadRequest
 from unittest.mock import patch
 
 from odoo import http, tools
@@ -71,6 +73,16 @@ class TestScrubErrorBody(HamsTransactionCase):
         self.assertNotIn("hidden_table", json.dumps(response))
         self.assertNotIn("Traceback", json.dumps(response))
         self.assertEqual(response["id"], 7)
+
+    def test_jsonrpc_handle_error_names_a_bad_request_as_a_400(self):
+        request = SimpleNamespace(make_json_response=lambda body, **kw: body)
+        dispatcher = lockdown.HamsJsonRPCDispatcher(request)
+        dispatcher.request_id = 3
+        with _dev_mode([]):
+            response = dispatcher.handle_error(self._raised(BadRequest, "Missing required parameter: model"))
+        self.assertEqual(response["error"]["code"], 400)
+        self.assertIn("Missing required parameter: model", response["error"]["data"]["message"])
+        self.assertEqual(response["error"]["data"]["debug"], "")
 
     def test_json2_handle_error_has_no_traceback_and_keeps_the_status(self):
         seen = {}
@@ -144,4 +156,52 @@ class TestJsonRpcErrorBody(HamsHttpCase):
             response = self._post(json=payload)
         self.assertNotIn("Traceback", response.text)
         body = response.json()
-        self.assertEqual(body["error"]["data"]["debug"], "")
+        # The contract is that no traceback leaves the server: a "debug" entry, when the reply has one, is empty (this
+        # reply, for a call with no session, may carry none at all).
+        self.assertEqual(body["error"]["data"].get("debug", ""), "", body)
+
+
+@tagged("post_install", "-at_install")
+class TestXmlrpcFaultsCarryNoTraceback(HamsHttpCase):
+    """QA pass 2: `/xmlrpc/2/<service>` put the whole Python traceback in the fault string. Tests
+    [@ANCHOR: hams_base:xmlrpc_fault_scrub]"""
+
+    def _post(self, route, body):
+        return self.url_open(route, data=body, headers={"Content-Type": "text/xml"})
+
+    def test_a_malformed_body_has_no_traceback_or_path_in_the_reply(self):
+        with _dev_mode([]):
+            for route in ("/xmlrpc/2/common", "/xmlrpc/common"):
+                response = self._post(route, "this is not xml")
+                self.assertIn("Odoo Server Error", response.text, route)
+                self.assertNotIn("Traceback", response.text, route)
+                self.assertNotIn("/usr/lib", response.text, route)
+                self.assertNotIn("File ", response.text, route)
+
+    def test_an_unknown_method_has_no_traceback_in_the_reply(self):
+        body = '<?xml version="1.0"?><methodCall><methodName>nosuchmethod</methodName><params/></methodCall>'
+        with _dev_mode([]):
+            response = self._post("/xmlrpc/2/common", body)
+        self.assertNotIn("Traceback", response.text)
+        self.assertNotIn("nosuchmethod", response.text)
+
+    def test_a_wrong_password_keeps_its_message(self):
+        body = (
+            '<?xml version="1.0"?><methodCall><methodName>authenticate</methodName><params>'
+            "<param><value><string>nodb</string></value></param>"
+            "<param><value><string>nobody</string></value></param>"
+            "<param><value><string>wrong</string></value></param>"
+            "<param><value><struct/></value></param></params></methodCall>"
+        )
+        with _dev_mode([]):
+            response = self._post("/xmlrpc/2/common", body)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("faultString", response.text)
+        self.assertNotIn("Traceback", response.text)
+
+    def test_a_good_call_still_works(self):
+        body = '<?xml version="1.0"?><methodCall><methodName>version</methodName><params/></methodCall>'
+        with _dev_mode([]):
+            response = self._post("/xmlrpc/2/common", body)
+        self.assertIn("server_version", response.text)
+        self.assertNotIn("faultCode", response.text)
