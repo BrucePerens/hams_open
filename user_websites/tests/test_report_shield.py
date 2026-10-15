@@ -89,13 +89,18 @@ class TestReportShield(HamsHttpCase):
         for reason in ("bad_solution", "honeypot"):
             self.assertGreaterEqual(self.counted(reason), 1, reason)
         # A person who can retry is told why, and sent back to the page.
+        # The challenge is minted with its issue time `age` seconds ago and then solved here, in Python,
+        # before it is posted. At the default difficulty that solve alone can take longer than the
+        # server's minimum time-to-submit on a slow or busy machine (a 4.7 s solve made the "too fast"
+        # answer "old enough" in the combined hams.com run), so the cases whose age matters mint an easy
+        # challenge: the refusal being tested does not depend on the difficulty.
         for label, age, address, reason in (
             ("expired", 8000, None, "expired"),
             ("too fast", 0, None, "too_fast"),
             ("moved networks", 30, "198.51.100.7", "ip_changed"),
         ):
             fields_ = {"shield_response": shield_response(
-                self.env, FORM, **({"address": address} if address else {}), age=age)}
+                self.env, FORM, **({"address": address} if address else {}), age=age, difficulty=1)}
             response = self.post(email=email, **fields_)
             self.assertEqual(response.status_code, 303, label)
             self.assertIn("form_shield_error=" + reason, response.headers["Location"], label)

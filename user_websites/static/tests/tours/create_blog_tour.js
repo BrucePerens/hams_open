@@ -1,5 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
+import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 
 // [@ANCHOR: test_tour_create_blog]
@@ -10,6 +11,7 @@ import { registry } from "@web/core/registry";
 registry.category("web_tour.tours").add("create_blog_tour", {
     url: "/blogtour/blog",
     steps: () => [
+        TourUtils.dismissCookiesBar(),
         { trigger: 'button.o_tour_create_site_btn', content: 'Wait for: Wait for Create Blog Button', run: function() {} },
         {
             content: "Click Create using namespaced fallback class",
@@ -18,6 +20,7 @@ registry.category("web_tour.tours").add("create_blog_tour", {
             expectUnloadPage: true,
         },
         { trigger: 'body', content: 'Wait for page reload to hydrate DOM', run: function() {} },
+        TourUtils.dismissCookiesBar(),
         {
             content: "Verify blog created by targeting the community namespaced dropzone",
             trigger: '#user_websites_dropzone_blog_header:not(:visible)',

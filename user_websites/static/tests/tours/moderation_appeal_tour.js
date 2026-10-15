@@ -10,6 +10,7 @@ registry.category("web_tour.tours").add("moderation_appeal_tour", {
     url: "/my/home",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
+        TourUtils.dismissCookiesBar(),
         {
             trigger: 'form[action="/website/submit_appeal"] textarea[name="reason"]',
             content: "Wait for the suspension alert's appeal form to render",
@@ -26,6 +27,7 @@ registry.category("web_tour.tours").add("moderation_appeal_tour", {
             run: "click",
             expectUnloadPage: true,
         },
+        TourUtils.dismissCookiesBar(),
         TourUtils.waitForElement(
             '.o_notification_manager .o_notification',
             "success toast pushed to the DOM after a real appeal submission"

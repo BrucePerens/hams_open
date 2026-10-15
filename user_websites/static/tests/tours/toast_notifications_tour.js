@@ -10,6 +10,7 @@ registry.category("web_tour.tours").add("toast_notifications_tour", {
     url: "/?report_submitted=1",
     steps: () => [
         { trigger: 'body', content: 'Initialize Tour' },
+        TourUtils.dismissCookiesBar(),
         TourUtils.waitForElement('.o_notification_manager .o_notification', 'success toast notification pushed to the DOM'),
     ],
 });
