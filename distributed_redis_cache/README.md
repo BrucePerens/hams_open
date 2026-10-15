@@ -57,7 +57,7 @@ Run upgrades with the service's environment:
 ```
 sudo pagerduty-maintenance start --minutes 30 --reason "odoo upgrade"
 sudo systemctl stop odoo
-sudo python3 /opt/hams/src/hams_open/distributed_redis_cache/scripts/odoo_upgrade.py --db hams_prod --modules mod_a,mod_b --log /tmp/upgrade.log
+sudo python3 /opt/hams/src/hams_open/distributed_redis_cache/scripts/odoo_upgrade.py --db hams_prod --modules mod_a,mod_b --log /tmp/upgrade.log   # exit 4: do NOT start odoo
 sudo systemctl start odoo
 sudo pagerduty-maintenance end
 ```
@@ -67,7 +67,10 @@ sudo pagerduty-maintenance end
 defines no `REDIS_PASSWORD` or is still running, and exits non-zero if the output shows any Redis authentication failure.
 Independently, `invalidate_model_cache` raises instead of warning when Redis rejects the credentials while the registry
 is still loading (module install/upgrade; [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]),
-so a hand-run upgrade fails at its first cache invalidation instead of logging thousands of warnings. A serving worker
+so a hand-run upgrade fails at its first cache invalidation instead of logging thousands of warnings. After a successful upgrade, and before odoo is started, it
+compiles every stylesheet bundle (`scripts/check_asset_bundles_shell.py` piped into `odoo shell --no-http` in the unit `odoo-upgrade-css-check`, same environment, nothing written) and
+exits 4, printing the compiler's message and the rollback steps, if one fails: Odoo otherwise serves HTTP 200 with a "css error" stub stylesheet and the whole site is unstyled (hams.com, 2026-10-14). A run without a verdict line counts as a failure;
+`--no-css-check` skips it. A serving worker
 still only logs a warning and falls back to its local cache. If an upgrade did run unauthenticated: delete the `<db>:distributed_cache:*` keys with `SCAN`+`DEL` (never
 `FLUSHALL`) and restart odoo. A restart alone does not help: it clears only each worker's in-memory L1, not Redis.
 
