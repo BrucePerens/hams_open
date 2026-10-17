@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import re
+from unittest import mock
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -216,6 +217,40 @@ class TestHelpdeskTours(HamsHttpCase):
         )
         # Should redirect to ticket detail
         self.assertEqual(res.status_code, 200)
+
+    def test_portal_member_can_submit_ticket_assigned_to_an_agent(self):
+        # Tests [@ANCHOR: hams_helpdesk:portal_submit_service_default_env]
+        """Regression, found live 2026-10-17 (KU0HN, user 311): a plain member submitting a ticket got
+        "Failed to write field mail.message.partner_ids ... doesn't have 'read' access to: Contact
+        (res.partner)". Odoo 19 checks that Many2many link as the request's own user, and only the
+        branch where the ticket is routed to an on-duty agent (message_post with partner_ids) trips
+        it -- so the test must give the ticket an assignee, which a bare test database never does."""
+        manager = self.env["res.users"].create(
+            {
+                "name": "On Duty Agent",
+                "login": "portal_submit_agent",
+                "group_ids": [(6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_manager").id])],
+            }
+        )
+        self.authenticate("portal_cust_tour", "password")
+        res_page = self.url_open("/my/tickets/new")
+        csrf_token = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text).group(1)
+        # The registry class (top of the MRO), so a pager_duty override cannot shadow the patch.
+        with mock.patch.object(
+            type(self.env["calendar.event"]), "get_current_on_duty_admin", return_value=manager
+        ):
+            res = self.url_open(
+                "/my/tickets/submit",
+                data={"name": "Member ticket", "description": "Desc", "callsign": "K1AAA", "csrf_token": csrf_token},
+            )
+        self.assertEqual(res.status_code, 200)
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", "Member ticket")])
+        self.assertEqual(len(ticket), 1, "the member's ticket must have been created")
+        self.assertEqual(ticket.partner_id, self.portal_user.partner_id)
+        self.assertTrue(
+            ticket.message_ids.filtered(lambda m: manager.partner_id in m.partner_ids),
+            "the agent assignment note (message_post with partner_ids) must have been posted",
+        )
 
     def test_portal_ticket_new_deep_link_preselects_a_real_category(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]

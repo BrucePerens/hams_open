@@ -239,5 +239,22 @@ class HelpdeskPortal(CustomerPortal):
         }
         clean_ctx = dict(request.env.context)
         clean_ctx.pop("prefetch_fields", None)
-        ticket = request.env["hams_helpdesk.ticket"].with_context(**clean_ctx).with_user(svc_uid).with_company(company_id).create(vals)
+        svc_env = (
+            request.env["hams_helpdesk.ticket"].with_context(**clean_ctx).with_user(svc_uid).with_company(company_id).env
+        )
+        # [@ANCHOR: hams_helpdesk:portal_submit_service_default_env]
+        # Odoo 19's Many2many.write_real() re-runs the res.partner "read" check on mail.message.partner_ids
+        # as transaction.default_env.uid -- here the submitting member, who cannot read the assigned
+        # agent's partner -- and ignores the with_user() above. Found live 2026-10-17 (KU0HN, user 311:
+        # "Failed to write field mail.message.partner_ids"); see security/mail_ingest_security.xml for the
+        # mechanism. The ticket's notification recipients are chosen by the helpdesk service routing, never
+        # by the submitter, so for the duration of this one create the transaction's default env is the
+        # helpdesk service account (what the RPC dispatcher does for service callers). Restored in finally.
+        transaction = request.env.transaction
+        previous_default_env = transaction.default_env
+        transaction.default_env = svc_env
+        try:
+            ticket = svc_env["hams_helpdesk.ticket"].create(vals)
+        finally:
+            transaction.default_env = previous_default_env
         return request.redirect("/my/ticket/%s" % ticket.id)
