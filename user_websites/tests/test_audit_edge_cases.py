@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.tools import mute_logger
+import odoo.addons.user_websites.models.website_page as website_page_module
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.user_websites.models.user_websites_groups import (
@@ -299,8 +300,6 @@ class TestAuditEdgeCases(RealTransactionCase):
         Then every counter is added to its page exactly once and removed from Redis (atomically,
         GETDEL), a counter left at zero is removed rather than flushed, and a second run changes nothing.
         """
-        import odoo.addons.user_websites.models.website_page as website_page_module
-
         redis_client = website_page_module.redis_client
         first, second, idle = (self._view_page(n) for n in ("flush-a", "flush-b", "flush-idle"))
         for page in (first, second, idle):
@@ -336,8 +335,6 @@ class TestAuditEdgeCases(RealTransactionCase):
         Then each run takes one batch and schedules the next, and the run that empties the keyspace
         does not (the 2026-10-19 production loop: a cron that re-triggered itself forever).
         """
-        import odoo.addons.user_websites.models.website_page as website_page_module
-
         redis_client = website_page_module.redis_client
         pages = [self._view_page(f"flush-many-{i}") for i in range(5)]
         for page in pages:
@@ -363,8 +360,6 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_07b_cron_redis_flush_puts_the_counts_back_when_the_database_write_fails(self):
         # Tests [@ANCHOR: website_page_flush_redis_view_counters]
-        import odoo.addons.user_websites.models.website_page as website_page_module
-
         redis_client = website_page_module.redis_client
         page = self._view_page("flush-fail")
         key = self._view_key(page)
