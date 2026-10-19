@@ -3,6 +3,7 @@
 
 import pika
 import threading
+import time
 import logging
 import json
 import os
@@ -25,6 +26,15 @@ STALE_CONNECTION_ERRORS = (
     pika.exceptions.ChannelWrongStateError,
     ConnectionError,
 )
+
+
+# A pooled connection that has not carried a message for this long is closed cleanly and replaced before
+# it is used. pika's BlockingConnection answers the broker's heartbeats only while the process is inside a
+# pika call, so a connection idle between publishes goes silent, and the broker (heartbeat timeout 60 s)
+# resets it ("missed heartbeats from client", about three minutes after its last use). Production,
+# 2026-10-15..19: 154 publishes found the connection reset, each logging four pika ERROR lines and a
+# warning before the retry succeeded. Kept well under the 60 s heartbeat timeout.
+IDLE_RECYCLE_SECONDS = 20
 
 
 # [@ANCHOR: rabbitmq_resolve_credentials]
@@ -56,6 +66,9 @@ class RabbitMQPool(models.AbstractModel):
     # We use class variables for the singleton pattern across Odoo workers/threads
     _connection = None
     _channel = None
+    # Which process opened the pooled connection, and when it last carried a message (time.monotonic()).
+    _connection_pid = None
+    _last_used = None
     _lock = threading.Lock()
 
     @api.model
@@ -64,6 +77,7 @@ class RabbitMQPool(models.AbstractModel):
 
         # # Verified by [@ANCHOR: COMM_test_01_get_channel_connects_with_real_config] [@ANCHOR: COMM_test_04_get_channel_recreates_a_closed_channel_on_an_open_connection]
         with self._lock:
+            self._retire_unusable_connection()
             if not self._connection or self._connection.is_closed:
                 try:
                     utils = self.env['zero_sudo.security.utils']
@@ -86,6 +100,8 @@ class RabbitMQPool(models.AbstractModel):
                     parameters = pika.ConnectionParameters(mq_host, mq_port, mq_vhost, credentials)
                     self.__class__._connection = pika.BlockingConnection(parameters)
                     self.__class__._channel = self.__class__._connection.channel()
+                    self.__class__._connection_pid = os.getpid()
+                    self.__class__._last_used = time.monotonic()
                 except pika.exceptions.AMQPError:
                     _logger.exception("Failed to connect to RabbitMQ")
                     return None
@@ -97,6 +113,36 @@ class RabbitMQPool(models.AbstractModel):
                     return None
             
             return self._channel
+
+    def _retire_unusable_connection(self):
+        # [@ANCHOR: rabbitmq_retire_idle_or_inherited_connection]
+
+        # # Verified by [@ANCHOR: COMM_test_09_an_idle_connection_is_replaced_before_use_without_pika_errors]
+        # # Verified by [@ANCHOR: COMM_test_10_a_connection_inherited_across_fork_is_never_used_or_closed]
+        """
+        Called with the lock held. Forget the pooled connection when it should not be used:
+
+        * it was opened by another process (an Odoo worker forked after the master or its parent opened
+          one): two processes must never write to one socket, and closing it would send the AMQP close to
+          the broker for the other process too. The inherited objects are only dropped here; the child's
+          copy of the socket closes when they are collected, and the other process keeps its own.
+        * it has been idle longer than IDLE_RECYCLE_SECONDS: the broker is about to drop it, or already
+          has, for want of heartbeats. It is closed cleanly now, while it is still healthy, so the next
+          send opens a fresh one without a reset, a pika ERROR line or a retry.
+        """
+        cls = self.__class__
+        connection = cls._connection
+        if connection is None:
+            return
+        if cls._connection_pid is not None and cls._connection_pid != os.getpid():
+            cls._connection = cls._channel = cls._connection_pid = cls._last_used = None
+            return
+        if cls._last_used is not None and time.monotonic() - cls._last_used > IDLE_RECYCLE_SECONDS:
+            cls._connection = cls._channel = cls._connection_pid = cls._last_used = None
+            try:
+                connection.close()
+            except (pika.exceptions.AMQPError, OSError) as close_error:
+                _logger.debug("Closing an idle RabbitMQ connection raised %r", close_error)
 
     @api.model
     def _discard_connection(self, dead_channel):
@@ -116,6 +162,8 @@ class RabbitMQPool(models.AbstractModel):
             dead_connection = self.__class__._connection
             self.__class__._connection = None
             self.__class__._channel = None
+            self.__class__._connection_pid = None
+            self.__class__._last_used = None
             if dead_connection is not None:
                 try:
                     dead_connection.close()
@@ -178,6 +226,7 @@ class RabbitMQPool(models.AbstractModel):
                     body=body,
                     properties=properties or pika.BasicProperties(delivery_mode=2)
                 )
+                self.__class__._last_used = time.monotonic()
 
         def _fail_no_channel():
             _logger.error(

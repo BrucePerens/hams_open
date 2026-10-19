@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
+import os
 import time
 import uuid
 
@@ -7,7 +8,7 @@ import pika
 
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
-from odoo.addons.hams_rabbitmq.models.rabbitmq_pool import resolve_rabbitmq_credentials
+from odoo.addons.hams_rabbitmq.models.rabbitmq_pool import IDLE_RECYCLE_SECONDS, resolve_rabbitmq_credentials
 
 
 @tagged("post_install", "-at_install")
@@ -265,6 +266,78 @@ class TestRabbitMQPool(RealTransactionCase):
         if fresh_connection is not setup_connection:
             fresh_connection.close()
         self.assertEqual(received, payload, "the retried message must really reach the broker")
+
+    def test_09_an_idle_connection_is_replaced_before_use_without_pika_errors(self):
+        # [@ANCHOR: COMM_test_09_an_idle_connection_is_replaced_before_use_without_pika_errors]
+        """
+        Production, 2026-10-15..19: a pooled connection idle between publishes stops answering heartbeats, the
+        broker resets it, and the next publish logged four pika ERROR lines and a warning before its retry.
+        A connection idle longer than IDLE_RECYCLE_SECONDS is now closed cleanly and replaced before the send:
+        the message arrives and nothing is logged at WARNING or above.
+        """
+        # Tests [@ANCHOR: rabbitmq_retire_idle_or_inherited_connection]
+        pool = self.env["hams_rabbitmq.pool"]
+        pool_class = type(pool)
+        queue_name = f"hams_rabbitmq_test_{uuid.uuid4().hex[:12]}"
+        setup_channel = pool._get_channel()
+        self.assertIsNotNone(setup_channel, "this test needs the real local RabbitMQ")
+        setup_channel.queue_declare(queue=queue_name, durable=False, auto_delete=True)
+        idle_connection = pool_class._connection
+        self.assertEqual(pool_class._connection_pid, os.getpid())
+        self.safe_patch_object(pool_class, "_last_used", time.monotonic() - IDLE_RECYCLE_SECONDS - 5)
+
+        results = []
+        payload = {"marker": queue_name, "idle": True}
+        self.assertTrue(pool.publish("", queue_name, payload, on_result=results.append))
+        # The symptoms seen in production: the pool's "was dead" warning and pika's "Unexpected connection close"
+        # and "connection_lost" errors. (Not every pika logger: on a host where "localhost" resolves to ::1 first,
+        # pika logs its own refused IPv6 attempt at ERROR before it falls back to 127.0.0.1.)
+        with self.assertNoLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING"), \
+                self.assertNoLogs("pika.adapters.blocking_connection", "ERROR"), \
+                self.assertNoLogs("pika.adapters.base_connection", "ERROR"):
+            self.env.cr.commit()
+
+        fresh_connection = pool_class._connection
+        self.assertIsNot(fresh_connection, idle_connection, "the idle connection is replaced")
+        self.assertTrue(idle_connection.is_closed, "the idle connection was closed cleanly")
+        self.assertTrue(fresh_connection.is_open)
+        self.assertEqual(results, [True])
+        received = self._receive(fresh_connection.channel(), queue_name)
+        fresh_connection.close()
+        self.assertEqual(received, payload)
+
+    def test_10_a_connection_inherited_across_fork_is_never_used_or_closed(self):
+        # [@ANCHOR: COMM_test_10_a_connection_inherited_across_fork_is_never_used_or_closed]
+        """
+        A connection opened by another process (the pool's class attributes inherited through fork) must not
+        be written to, nor closed (that would send the AMQP close to the broker for the other process too).
+        Another process is simulated by a recorded owner pid that is not ours.
+        """
+        # Tests [@ANCHOR: rabbitmq_retire_idle_or_inherited_connection]
+        pool = self.env["hams_rabbitmq.pool"]
+        pool_class = type(pool)
+        self.assertIsNotNone(pool._get_channel(), "this test needs the real local RabbitMQ")
+        inherited = pool_class._connection
+        self.safe_patch_object(pool_class, "_connection_pid", os.getpid() + 1)
+
+        channel = pool._get_channel()
+        self.assertIsNotNone(channel)
+        own = pool_class._connection
+        self.assertIsNot(own, inherited, "a connection another process opened is not used")
+        self.assertEqual(pool_class._connection_pid, os.getpid())
+        self.assertTrue(inherited.is_open, "and it is not closed: its owner is still using it")
+        own.close()
+        inherited.close()
+
+    def _receive(self, channel, queue_name):
+        deadline = time.time() + 15.0
+        while time.time() < deadline:
+            method, _props, body = channel.basic_get(queue_name, auto_ack=True)
+            if method:
+                channel.queue_delete(queue_name)
+                return json.loads(body)
+            time.sleep(0.25)  # audit-ignore-sleep
+        return None
 
     def test_08_publish_reports_failure_when_the_retry_also_fails(self):
         # [@ANCHOR: COMM_test_08_publish_reports_failure_when_the_retry_also_fails]
