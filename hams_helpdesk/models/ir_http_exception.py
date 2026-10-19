@@ -10,6 +10,7 @@ broken report cannot change the response.
 
 import inspect
 import logging
+import traceback
 
 import werkzeug.exceptions
 
@@ -49,6 +50,23 @@ def report_request_exception(exception):
 
 # What int() and float() say when handed text that is not a number.
 _NOT_A_NUMBER_MESSAGES = ("invalid literal for int()", "could not convert string to float", "cannot convert float")
+
+# Odoo's own date-string parsers (odoo/tools/date_utils.py). The ORM's domain optimizer calls them on any date
+# value in a search domain, so a ValueError raised inside one means the request carried a date it could not read.
+_DATE_PARSER_FUNCTIONS = frozenset({"parse_date", "parse_iso_date"})
+
+
+# [@ANCHOR: hams_helpdesk:error_is_unreadable_date]
+def _error_is_unreadable_date(error):
+    """True when ``error`` was raised inside Odoo's date parser (``parse_date`` or ``parse_iso_date``).
+
+    Decided by where the error was raised, not by its message: the parser's messages vary ("Invalid term 'x' in
+    expression date", "Invalid isoformat string", "month must be in 1..12", "day is out of range for month")."""
+    return any(
+        frame.f_code.co_name in _DATE_PARSER_FUNCTIONS and frame.f_code.co_filename.endswith("date_utils.py")
+        for frame, _line in traceback.walk_tb(error.__traceback__)
+    )
+
 
 # A route's own type name: "http" for a page, "jsonrpc" (older spelling "json") for a JSON-RPC call.
 _CALLED_WITH_REQUEST_PARAMS = ("http", "json", "jsonrpc")
@@ -164,6 +182,18 @@ class IrHttpExceptionReport(models.AbstractModel):
                     error,
                 )
                 raise werkzeug.exceptions.BadRequest("A request parameter is not a number.") from error
+            # [@ANCHOR: hams_helpdesk:bad_date_is_400]
+            # Text where a date belongs: stock /blog passes ?date_begin= and ?date_end= straight into a search
+            # domain, and the ORM raises ValueError while optimizing it. A scanner's /blog and /blog/<blog> requests
+            # with date_begin=ijyM were 45 x 500 and server-exception tickets 72 and 73 (2026-10-16 00:34-00:35 UTC).
+            # The sender's mistake: 400, logged at warning so a handler that builds a bad date itself stays visible.
+            if _error_is_unreadable_date(error):
+                _logger.warning(
+                    "Answered 400 for an unreadable date parameter on %s: %s",
+                    request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path,
+                    error,
+                )
+                raise werkzeug.exceptions.BadRequest("A request parameter is not a date.") from error
             raise
 
     # [@ANCHOR: hams_helpdesk:exc_ir_http_handle_error]

@@ -119,6 +119,26 @@ class TestMissingRequiredParams(HamsHttpCase):
             self.assertNotIn("ValueError", response.text)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
 
+    def test_text_where_a_blog_wants_a_date_is_a_400_not_a_500(self):
+        # Tests [@ANCHOR: hams_helpdesk:bad_date_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:error_is_unreadable_date]
+        # 2026-10-16: /blog?...&date_begin=ijyM&date_end=pNOE was a 500 and a ticket (72, 73) for a scanner.
+        self.assertTrue(self._installed("/blog"), "stock /blog (website_blog) must be installed")
+        before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
+        for route in (
+            "/blog?date_begin=ijyM&date_end=pNOE",
+            "/blog?search=x&order=name%20asc&date_begin=ijyM",
+            "/blog?date_begin=2026-13-45",
+            "/blog?date_end=2026-02-30",
+        ):
+            response = self.url_open(route, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, route)
+            self.assertNotIn("Traceback", response.text)
+            self.assertNotIn("ValueError", response.text)
+        self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+        # A real date is still served.
+        self.assertEqual(self.url_open("/blog?date_begin=2026-01-01", allow_redirects=False).status_code, 200)
+
     def test_a_nul_byte_in_the_path_or_a_parameter_is_a_400_not_a_500(self):
         # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
         # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
