@@ -119,6 +119,30 @@ class TestMissingRequiredParams(HamsHttpCase):
             self.assertNotIn("ValueError", response.text)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
 
+    def test_text_where_a_blog_wants_a_date_is_a_400_not_a_500(self):
+        # Tests [@ANCHOR: hams_helpdesk:bad_date_is_400]
+        # Tests [@ANCHOR: hams_helpdesk:error_is_unreadable_date]
+        # 2026-10-16: /blog?...&date_begin=ijyM&date_end=pNOE and /blog/<blog>?... were 500s and tickets (72, 73)
+        # for a scanner. /blog redirects to the blog itself when only one exists, as the date is read only when
+        # there are several (production has two), so the test makes two.
+        self.assertTrue(self._installed("/blog"), "stock /blog (website_blog) must be installed")
+        blogs = self.env["blog.blog"].create([{"name": "Date test one"}, {"name": "Date test two"}])
+        self.assertGreater(self.env["blog.blog"].search_count([]), 1)
+        slug = self.env["ir.http"]._slug(blogs[0])
+        before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
+        for route in (
+            "/blog?date_begin=ijyM&date_end=pNOE",
+            "/blog?date_begin=2026-13-45",
+            f"/blog/{slug}?date_begin=ijyM&date_end=pNOE",
+        ):
+            response = self.url_open(route, allow_redirects=False)
+            self.assertEqual(response.status_code, 400, route)
+            self.assertNotIn("Traceback", response.text)
+            self.assertNotIn("ValueError", response.text)
+        self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
+        # A real date is still served.
+        self.assertEqual(self.url_open("/blog?date_begin=2026-01-01", allow_redirects=False).status_code, 200)
+
     def test_a_nul_byte_in_the_path_or_a_parameter_is_a_400_not_a_500(self):
         # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
         # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
