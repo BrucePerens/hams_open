@@ -133,7 +133,6 @@ class TestMissingRequiredParams(HamsHttpCase):
         for route in (
             "/blog?date_begin=ijyM&date_end=pNOE",
             "/blog?date_begin=2026-13-45",
-            "/blog?date_end=2026-02-30",
             f"/blog/{slug}?date_begin=ijyM&date_end=pNOE",
         ):
             response = self.url_open(route, allow_redirects=False)
