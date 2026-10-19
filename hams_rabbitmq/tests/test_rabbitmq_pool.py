@@ -289,8 +289,12 @@ class TestRabbitMQPool(RealTransactionCase):
         results = []
         payload = {"marker": queue_name, "idle": True}
         self.assertTrue(pool.publish("", queue_name, payload, on_result=results.append))
+        # The symptoms seen in production: the pool's "was dead" warning and pika's "Unexpected connection close"
+        # and "connection_lost" errors. (Not every pika logger: on a host where "localhost" resolves to ::1 first,
+        # pika logs its own refused IPv6 attempt at ERROR before it falls back to 127.0.0.1.)
         with self.assertNoLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING"), \
-                self.assertNoLogs("pika", "ERROR"):
+                self.assertNoLogs("pika.adapters.blocking_connection", "ERROR"), \
+                self.assertNoLogs("pika.adapters.base_connection", "ERROR"):
             self.env.cr.commit()
 
         fresh_connection = pool_class._connection
