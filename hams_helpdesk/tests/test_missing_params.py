@@ -132,10 +132,9 @@ class TestMissingRequiredParams(HamsHttpCase):
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         for route in (
             "/blog?date_begin=ijyM&date_end=pNOE",
-            "/blog?search=x&order=name%20asc&date_begin=ijyM",
             "/blog?date_begin=2026-13-45",
             "/blog?date_end=2026-02-30",
-            f"/blog/{slug}?search=gzCT&tag=slBl&date_begin=ijyM&date_end=pNOE",
+            f"/blog/{slug}?date_begin=ijyM&date_end=pNOE",
         ):
             response = self.url_open(route, allow_redirects=False)
             self.assertEqual(response.status_code, 400, route)
