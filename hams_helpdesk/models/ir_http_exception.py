@@ -55,17 +55,32 @@ _NOT_A_NUMBER_MESSAGES = ("invalid literal for int()", "could not convert string
 # value in a search domain, so a ValueError raised inside one means the request carried a date it could not read.
 _DATE_PARSER_FUNCTIONS = frozenset({"parse_date", "parse_iso_date"})
 
+# The ORM's date converters (odoo/orm/fields_temporal.py). A template that formats a date it was handed (stock /blog
+# shows ?date_begin= back to the reader) raises ValueError here for "2026-13-45". Unlike the parsers above, these also
+# read stored values, so an error here is the reader's only when its message quotes a parameter the request carried.
+_DATE_CONVERTER_FUNCTIONS = frozenset({"to_date", "to_datetime"})
+# What Python says of a date with an impossible month, day or year ("2026-02-30"); it does not quote the text.
+_DATE_RANGE_MESSAGES = ("day is out of range for month", "month must be in 1..12", "year ")
+
 
 # [@ANCHOR: hams_helpdesk:error_is_unreadable_date]
-def _error_is_unreadable_date(error):
-    """True when ``error`` was raised inside Odoo's date parser (``parse_date`` or ``parse_iso_date``).
+def _error_is_unreadable_date(error, parameter_values):
+    """True when ``error`` is the request's own unreadable date: raised inside Odoo's date parser (``parse_date``,
+    ``parse_iso_date``), or raised by the ORM's date converter with the text of one of ``parameter_values`` in its
+    message (or Python's impossible-month/day/year message).
 
-    Decided by where the error was raised, not by its message: the parser's messages vary ("Invalid term 'x' in
-    expression date", "Invalid isoformat string", "month must be in 1..12", "day is out of range for month")."""
-    return any(
-        frame.f_code.co_name in _DATE_PARSER_FUNCTIONS and frame.f_code.co_filename.endswith("date_utils.py")
-        for frame, _line in traceback.walk_tb(error.__traceback__)
-    )
+    Decided by where the error was raised, not by its message, because the parser's messages vary ("Invalid term
+    'x' in expression date", "Invalid isoformat string", "month must be in 1..12", "day is out of range")."""
+    message = str(error)
+    for frame, _line in traceback.walk_tb(error.__traceback__):
+        code = frame.f_code
+        if code.co_name in _DATE_PARSER_FUNCTIONS and code.co_filename.endswith("date_utils.py"):
+            return True
+        if code.co_name in _DATE_CONVERTER_FUNCTIONS and code.co_filename.endswith("fields_temporal.py"):
+            return message.startswith(_DATE_RANGE_MESSAGES) or any(
+                value and value in message for value in parameter_values
+            )
+    return False
 
 
 # A route's own type name: "http" for a page, "jsonrpc" (older spelling "json") for a JSON-RPC call.
@@ -187,7 +202,7 @@ class IrHttpExceptionReport(models.AbstractModel):
             # domain, and the ORM raises ValueError while optimizing it. A scanner's /blog and /blog/<blog> requests
             # with date_begin=ijyM were 45 x 500 and server-exception tickets 72 and 73 (2026-10-16 00:34-00:35 UTC).
             # The sender's mistake: 400, logged at warning so a handler that builds a bad date itself stays visible.
-            if _error_is_unreadable_date(error):
+            if _error_is_unreadable_date(error, [value for value in request.params.values() if isinstance(value, str)]):
                 _logger.warning(
                     "Answered 400 for an unreadable date parameter on %s: %s",
                     request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path,
