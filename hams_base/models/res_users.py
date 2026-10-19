@@ -1,4 +1,4 @@
-from odoo import models
+from odoo import api, models
 from odoo.tools.translate import _
 # -*- coding: utf-8 -*-
 # from odoo import models, api, _
@@ -10,11 +10,38 @@ _logger = logging.getLogger(__name__)
 class ResUsers(models.Model):
     _inherit = "res.users"
 
+    @staticmethod
+    def _normalize_login(login):
+        """Logins are stored stripped and lowercase (the sign-up form already does this)."""
+        return login.strip().lower() if isinstance(login, str) else login
+
+    # [@ANCHOR: hams_base:login_case_insensitive]
+    @api.model
+    def _get_login_domain(self, login):
+        """Match the sign-in box case-insensitively.
+
+        Core compares ``login`` with an exact ``=``, but ``reset_password`` falls back to a
+        case-insensitive e-mail match. A member who typed ``N2YCH@icloud.com`` (phone keyboards
+        capitalise a callsign-shaped address) therefore got a working reset e-mail and then a
+        sign-in that still failed. Normalising here and delegating to super keeps every other
+        override in the chain (for example website scoping) and the btree index on ``login``.
+        """
+        return super()._get_login_domain(self._normalize_login(login))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if "login" in vals:
+                vals["login"] = self._normalize_login(vals["login"])
+        return super().create(vals_list)
+
     # [@ANCHOR: hams_base:COMM_res_users_write]
     def write(self, vals):
         """
         Override write to detect email/login changes and notify the old address.
         """
+        if "login" in vals:
+            vals = dict(vals, login=self._normalize_login(vals["login"]))
         # Pre-capture old emails for users being modified
         old_emails = {}
         if 'email' in vals or 'login' in vals:
