@@ -122,14 +122,20 @@ class TestMissingRequiredParams(HamsHttpCase):
     def test_text_where_a_blog_wants_a_date_is_a_400_not_a_500(self):
         # Tests [@ANCHOR: hams_helpdesk:bad_date_is_400]
         # Tests [@ANCHOR: hams_helpdesk:error_is_unreadable_date]
-        # 2026-10-16: /blog?...&date_begin=ijyM&date_end=pNOE was a 500 and a ticket (72, 73) for a scanner.
+        # 2026-10-16: /blog?...&date_begin=ijyM&date_end=pNOE and /blog/<blog>?... were 500s and tickets (72, 73)
+        # for a scanner. /blog redirects to the blog itself when only one exists, as the date is read only when
+        # there are several (production has two), so the test makes two.
         self.assertTrue(self._installed("/blog"), "stock /blog (website_blog) must be installed")
+        blogs = self.env["blog.blog"].create([{"name": "Date test one"}, {"name": "Date test two"}])
+        self.assertGreater(self.env["blog.blog"].search_count([]), 1)
+        slug = self.env["ir.http"]._slug(blogs[0])
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         for route in (
             "/blog?date_begin=ijyM&date_end=pNOE",
             "/blog?search=x&order=name%20asc&date_begin=ijyM",
             "/blog?date_begin=2026-13-45",
             "/blog?date_end=2026-02-30",
+            f"/blog/{slug}?search=gzCT&tag=slBl&date_begin=ijyM&date_end=pNOE",
         ):
             response = self.url_open(route, allow_redirects=False)
             self.assertEqual(response.status_code, 400, route)
