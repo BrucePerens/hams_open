@@ -32,6 +32,9 @@ redis_pool = redis.ConnectionPool(
 )
 redis_client = redis.Redis(connection_pool=redis_pool)
 
+# Pages one run of the view-counter flush takes; a fuller keyspace is finished by _trigger().
+VIEW_FLUSH_BATCH = 500
+
 
 def _remove_keeping_tail(element):
     """Remove `element` from its parent without losing the text that follows it."""
@@ -1034,82 +1037,84 @@ class WebsitePage(models.Model):
     def _flush_redis_view_counters(self):
         """
         Cron job to flush Redis view counters to the PostgreSQL database.
-        Uses _trigger() for batching if there are too many keys (ADR-0022).
+        Takes at most VIEW_FLUSH_BATCH pages per run and uses _trigger() for the rest (ADR-0022).
+
+        Production, 2026-10-19: this cron ran about six times a second, all day (22,925 runs in one hour
+        against its 15-minute interval), because (a) it asked SCAN for one page of the keyspace, not for
+        the keys that match, and treated "the scan has another page" as "there are more of my keys",
+        and (b) it emptied a counter with DECRBY, which leaves the key at "0", and then flushed that
+        "0" as an increment of zero on every run, forever. Each run wrote website_page rows and
+        ir_cron rows (2.5 million updates in 8 days) and made the cron scheduler's own bookkeeping the
+        site's main source of serialization failures. The flush now:
+
+        - iterates the keys that MATCH (scan_iter), so "more" means more of this cron's keys;
+        - takes each counter atomically with GETDEL, which reads and deletes in one step, so a view
+          that arrives meanwhile starts a new key instead of being lost or double counted, and a
+          counter that is "0" is removed rather than flushed;
+        - puts the taken counts back (INCRBY) if the database write fails, so nothing is lost;
+        - re-triggers itself only when this run was full, so it ends.
         """
+        db_name = self.env.cr.dbname
+        keys = []
+        has_more = False
         try:
-            db_name = self.env.cr.dbname
-            cursor, keys = redis_client.scan(
-                cursor=0, match=f"views:{db_name}:page:*", count=1000
-            )
+            for key in redis_client.scan_iter(match=f"views:{db_name}:page:*", count=1000):
+                if len(keys) >= VIEW_FLUSH_BATCH:
+                    has_more = True
+                    break
+                keys.append(key)
+            if not keys:
+                return
+            pipe = redis_client.pipeline()
+            for key in keys:
+                pipe.getdel(key)
+            results = pipe.execute()
         except redis.exceptions.RedisError as e:
-            _logger.error(f"Failed to connect to Redis for view counter flush: {e}")
+            _logger.error(f"Failed to read Redis view counters for the flush: {e}")
             return
 
-        if not keys:
-            return
-
-        pipe = redis_client.pipeline()
-        for key in keys:
-            pipe.get(key)
-
-        results = pipe.execute()
-
-        updates = []
-        for i, key in enumerate(keys):
-            val = results[i]
-            if val:
-                try:
-                    page_id = int(key.split(":")[-1])
-                    increment = int(val)
-                    updates.append((increment, page_id))
-                except ValueError:
-                    _logger.warning(
-                        "Failed to parse Redis key or value for view count."
-                    )
-
-        if updates:
+        taken = []  # (key, increment, page_id) for every counter that held a positive count
+        for key, val in zip(keys, results):
             try:
-                # RACE CONDITION FIX: Delete from Redis first. If PostgreSQL commits, state is perfect.
-                # If PostgreSQL fails and rolls back, we lose views (acceptable), avoiding double-counting (unacceptable).
-                del_pipe = redis_client.pipeline()
-                for i, key in enumerate(keys):
-                    val = results[i]
-                    if val:
-                        del_pipe.decrby(key, int(val))
-                del_pipe.execute()
+                increment = int(val or 0)
+                page_id = int(key.split(":")[-1])
+            except ValueError:
+                _logger.warning("Failed to parse Redis key or value for view count.")
+                continue
+            if increment > 0:
+                taken.append((key, increment, page_id))
 
+        if taken:
+            try:
                 # Optimized multi-record update using Postgres Procedure
                 # Reduces round-trips to exactly one.
                 # Tests [@ANCHOR: procedure_flush_view_counters]
                 self.env.cr.execute(
                     "SELECT user_websites_flush_view_counters(%s)",
-                    (json.dumps([{"inc": inc, "pid": pid} for inc, pid in updates]),),
+                    (json.dumps([{"inc": inc, "pid": pid} for _key, inc, pid in taken]),),
                 )
 
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.commit()
-            # Bug-hunt fix (bug class 20, 2026-09-09): nothing in this try
-            # block can actually raise KeyError or ValueError -- `val`'s
-            # `int(...)` parsing already happened, and already had its own
-            # dedicated `except ValueError` a few lines up, in the separate
-            # loop that builds `updates`. The two real failure modes here
-            # are `del_pipe.execute()` raising `redis.exceptions.RedisError`
-            # (a dropped Redis connection between the scan and this
-            # pipeline) and `self.env.cr.execute(...)` raising a
-            # `psycopg2.Error` (e.g. the stored procedure itself failing) --
-            # neither was ever caught by `(KeyError, ValueError)`, so the
-            # intended graceful-degradation path (log via
-            # `_logger.exception`, roll back, let the cron pick up the rest
-            # next run) never actually ran for either real scenario; the
-            # exception escaped uncaught instead.
+            # The two real failure modes: the stored procedure failing (psycopg2.Error) and Redis
+            # refusing the put-back below (RedisError). The counts were already taken out of Redis, so
+            # they are put back before giving up; the next run counts them.
             except (redis.exceptions.RedisError, psycopg2.Error):  # audit-ignore-catch-all
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.rollback()
-                _logger.exception("Error updating PostgreSQL view counts")
+                _logger.exception("Error updating PostgreSQL view counts; putting the counts back")
+                try:
+                    restore = redis_client.pipeline()
+                    for key, inc, _pid in taken:
+                        restore.incrby(key, inc)
+                    restore.execute()
+                except redis.exceptions.RedisError:
+                    _logger.exception("Could not put %d view counters back into Redis", len(taken))
+                return
 
-        if cursor != 0:
+        if has_more:
             svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "user_websites.user_websites_service_account"
             )

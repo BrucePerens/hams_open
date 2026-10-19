@@ -275,63 +275,109 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         group.unlink()
 
-    def test_06_cron_redis_flush_batching(self):
-        # [@ANCHOR: test_cron_redis_flush]
-
-        # Tests [@ANCHOR: ir_cron_flush_view_counters]
-        """
-        BDD: Given the _flush_redis_view_counters cron
-        When it processes a batch of Redis view keys and the cursor is not 0
-        Then it MUST update the Postgres records, delete the processed keys,
-        and call _trigger() to schedule the next batch (ADR-0022).
-        """
-        page = self.env["website.page"].create(
+    def _view_page(self, name):
+        return self.env["website.page"].create(
             {
-                "url": f"/{self.test_user.website_slug}/redis-flush-test",
-                "name": "Redis Flush Test",
+                "url": f"/{self.test_user.website_slug}/{name}",
+                "name": name,
                 "type": "qweb",
                 "owner_user_id": self.test_user.id,
             }
         )
 
-        initial_views = page.view_count
+    def _view_key(self, page):
+        return f"views:{self.env.cr.dbname}:page:{page.id}"
 
-        mock_client = self.safe_patch(
-            "odoo.addons.user_websites.models.website_page.redis_client"
-        )
-        # Simulate scan returning a cursor of 5 (more data) and one key
-        mock_client.scan.return_value = (5, [f"views:page:{page.id}"])
+    def test_06_cron_redis_flush_batching(self):
+        # [@ANCHOR: test_cron_redis_flush]
 
-        # Simulate pipeline execution returning the view count '42' and a DEL success '1'
-        mock_pipeline = MagicMock()
-        mock_client.pipeline.return_value = mock_pipeline
-        mock_pipeline.execute.return_value = ["42", 1]
+        # Tests [@ANCHOR: ir_cron_flush_view_counters]
+        # Tests [@ANCHOR: website_page_flush_redis_view_counters]
+        """
+        BDD: Given counters in Redis for several pages
+        When the flush cron runs
+        Then every counter is added to its page exactly once and removed from Redis (atomically,
+        GETDEL), a counter left at zero is removed rather than flushed, and a second run changes nothing.
+        """
+        import odoo.addons.user_websites.models.website_page as website_page_module
 
-        cron = self.env.ref(
-            "user_websites.ir_cron_flush_view_counters", raise_if_not_found=False
-        )
-        if not cron:
-            self.fail("Cron record ir_cron_flush_view_counters not found.")
+        redis_client = website_page_module.redis_client
+        first, second, idle = (self._view_page(n) for n in ("flush-a", "flush-b", "flush-idle"))
+        for page in (first, second, idle):
+            self.addCleanup(redis_client.delete, self._view_key(page))
+        redis_client.set(self._view_key(first), 42)
+        redis_client.set(self._view_key(second), 7)
+        redis_client.set(self._view_key(idle), 0)  # what the old DECRBY left behind after every flush
+        before = {p.id: p.view_count for p in (first, second, idle)}
 
-        mock_trigger = self.safe_patch_object(type(cron), "_trigger")
+        mock_trigger = self.safe_patch_object(type(self.env.ref("user_websites.ir_cron_flush_view_counters")), "_trigger")
         self.env["website.page"]._flush_redis_view_counters()
 
-        # Verify Postgres was updated
-        page.invalidate_recordset(["view_count"])
-        self.assertEqual(
-            page.view_count,
-            initial_views + 42,
-            "PostgreSQL view_count must be incremented by the Redis value.",
-        )
+        for page in (first, second, idle):
+            page.invalidate_recordset(["view_count"])
+        self.assertEqual(first.view_count, before[first.id] + 42)
+        self.assertEqual(second.view_count, before[second.id] + 7)
+        self.assertEqual(idle.view_count, before[idle.id], "a zero counter adds nothing")
+        for page in (first, second, idle):
+            self.assertIsNone(redis_client.get(self._view_key(page)), "a flushed or zero counter is removed")
+        mock_trigger.assert_not_called()  # the run was not full: it must not schedule itself again
 
-        # Verify pipeline operations
-        mock_pipeline.get.assert_called_with(f"views:page:{page.id}")
-        # RACE CONDITION FIX: Assert DECRBY is used instead of DELETE to prevent TOCTOU data loss
-        mock_pipeline.decrby.assert_called_with(f"views:page:{page.id}", 42)
+        # Nothing left: running again writes nothing and still does not schedule itself.
+        self.env["website.page"]._flush_redis_view_counters()
+        first.invalidate_recordset(["view_count"])
+        self.assertEqual(first.view_count, before[first.id] + 42)
+        mock_trigger.assert_not_called()
 
-        # Verify looping via _trigger
-        mock_trigger.assert_called_once()
-        cron._trigger()
+    def test_07_cron_redis_flush_continues_only_while_keys_remain(self):
+        # Tests [@ANCHOR: website_page_flush_redis_view_counters]
+        """
+        BDD: Given more counters than one run takes
+        When the flush runs repeatedly
+        Then each run takes one batch and schedules the next, and the run that empties the keyspace
+        does not (the 2026-10-19 production loop: a cron that re-triggered itself forever).
+        """
+        import odoo.addons.user_websites.models.website_page as website_page_module
+
+        redis_client = website_page_module.redis_client
+        pages = [self._view_page(f"flush-many-{i}") for i in range(5)]
+        for page in pages:
+            self.addCleanup(redis_client.delete, self._view_key(page))
+            redis_client.set(self._view_key(page), 3)
+        mock_trigger = self.safe_patch_object(type(self.env.ref("user_websites.ir_cron_flush_view_counters")), "_trigger")
+        self.safe_patch("odoo.addons.user_websites.models.website_page.VIEW_FLUSH_BATCH", 2)
+
+        remaining = lambda: [p for p in pages if redis_client.get(self._view_key(p)) is not None]
+        runs = 0
+        while remaining() and runs < 10:
+            triggers_before = mock_trigger.call_count
+            self.env["website.page"]._flush_redis_view_counters()
+            runs += 1
+            if remaining():
+                self.assertEqual(mock_trigger.call_count, triggers_before + 1, "more keys remain: schedule the next run")
+            else:
+                self.assertEqual(mock_trigger.call_count, triggers_before, "the last run does not schedule another")
+        self.assertEqual(runs, 3, "5 counters in batches of 2 are 3 runs")
+        for page in pages:
+            page.invalidate_recordset(["view_count"])
+            self.assertEqual(page.view_count, 3)
+
+    def test_07b_cron_redis_flush_puts_the_counts_back_when_the_database_write_fails(self):
+        # Tests [@ANCHOR: website_page_flush_redis_view_counters]
+        import odoo.addons.user_websites.models.website_page as website_page_module
+
+        redis_client = website_page_module.redis_client
+        page = self._view_page("flush-fail")
+        key = self._view_key(page)
+        self.addCleanup(redis_client.delete, key)
+        # Larger than the procedure's INTEGER increment, so the write itself fails.
+        redis_client.set(key, 3_000_000_000)
+        with mute_logger("odoo.addons.user_websites.models.website_page", "odoo.sql_db"):
+            self.env["website.page"]._flush_redis_view_counters()
+        self.env.cr.rollback()  # the test cursor does not roll back on its own (the flush skips it in test mode)
+        self.assertEqual(int(redis_client.get(key)), 3_000_000_000, "the taken count is put back, not lost")
+        # A view that arrives after the failed attempt is added to the restored count.
+        redis_client.incr(key)
+        self.assertEqual(int(redis_client.get(key)), 3_000_000_001)
 
     def test_08_cron_pending_reports(self):
         # [@ANCHOR: COMM_test_cron_pending_reports]
