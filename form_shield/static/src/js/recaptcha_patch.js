@@ -41,9 +41,9 @@ patch(ReCaptcha.prototype, {
         if (!this._shield) {
             this._shield = new ShieldSession(null);
         }
-        const session = this._shield;
+        const shield = this._shield;
         try {
-            const token = await session.token(action);
+            const token = await shield.token(action);
             // One answer, one use: the next submit from this form needs a challenge of its own.
             this._shield = new ShieldSession(null);
             return { token };

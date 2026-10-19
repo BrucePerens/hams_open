@@ -111,3 +111,17 @@ class TestFormShieldHttp(HamsHttpCase):
         block = re.search(r"new Set\(\[(.*?)\]\)", source, re.S).group(1)
         client_actions = tuple(re.findall(r'"([a-z_]+)"', block))
         self.assertEqual(sorted(client_actions), sorted(ENFORCED_ACTIONS))
+
+    def test_browser_patch_does_not_shadow_the_session_import(self):
+        """getToken reads the imported `session` (is_website_user). A local `const session` in the
+        same function puts that read in the temporal dead zone and every Contact Us submit throws
+        a ReferenceError before sending (seen in production)."""
+        # Tests [@ANCHOR: form_shield:recaptcha_patch]
+        path = odoo.tools.file_path("form_shield/static/src/js/recaptcha_patch.js")
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("import { session } from", source)
+        self.assertIsNone(
+            re.search(r"\b(?:const|let|var)\s+session\b", source),
+            "a local named session shadows the imported session",
+        )
