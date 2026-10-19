@@ -7,7 +7,6 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.user_websites.models.user_websites_groups import (
     _async_unpublish_group_content,
 )
-from unittest.mock import MagicMock
 
 
 @tagged("post_install", "-at_install")
@@ -275,63 +274,106 @@ class TestAuditEdgeCases(RealTransactionCase):
 
         group.unlink()
 
-    def test_06_cron_redis_flush_batching(self):
-        # [@ANCHOR: test_cron_redis_flush]
-
-        # Tests [@ANCHOR: ir_cron_flush_view_counters]
-        """
-        BDD: Given the _flush_redis_view_counters cron
-        When it processes a batch of Redis view keys and the cursor is not 0
-        Then it MUST update the Postgres records, delete the processed keys,
-        and call _trigger() to schedule the next batch (ADR-0022).
-        """
-        page = self.env["website.page"].create(
+    def _flush_page(self, name):
+        return self.env["website.page"].create(
             {
-                "url": f"/{self.test_user.website_slug}/redis-flush-test",
-                "name": "Redis Flush Test",
+                "url": f"/{self.test_user.website_slug}/{name}",
+                "name": name,
                 "type": "qweb",
                 "owner_user_id": self.test_user.id,
             }
         )
 
+    def _view_key(self, page_id):
+        return f"views:{self.env.cr.dbname}:page:{page_id}"
+
+    def test_06_cron_redis_flush_batching(self):
+        # [@ANCHOR: test_cron_redis_flush]
+
+        # Tests [@ANCHOR: ir_cron_flush_view_counters]
+        """
+        BDD: Given real Redis counters (one with views, one already at zero)
+        When _flush_redis_view_counters runs
+        Then PostgreSQL gets the views, BOTH keys are gone from Redis (a key left at "0" was
+        found again by every run and kept the cron re-triggering itself, ~500k runs a day on
+        hams1, 2026-10), and a scan that finished does not call _trigger().
+        """
+        from odoo.addons.user_websites.models.website_page import redis_client
+
+        page = self._flush_page("redis-flush-test")
+        zero_page = self._flush_page("redis-flush-zero")
         initial_views = page.view_count
+        keys = [self._view_key(page.id), self._view_key(zero_page.id)]
+        self.addCleanup(redis_client.delete, *keys)
+        redis_client.set(keys[0], 42)
+        redis_client.set(keys[1], 0)
 
-        mock_client = self.safe_patch(
-            "odoo.addons.user_websites.models.website_page.redis_client"
-        )
-        # Simulate scan returning a cursor of 5 (more data) and one key
-        mock_client.scan.return_value = (5, [f"views:page:{page.id}"])
-
-        # Simulate pipeline execution returning the view count '42' and a DEL success '1'
-        mock_pipeline = MagicMock()
-        mock_client.pipeline.return_value = mock_pipeline
-        mock_pipeline.execute.return_value = ["42", 1]
-
-        cron = self.env.ref(
-            "user_websites.ir_cron_flush_view_counters", raise_if_not_found=False
-        )
-        if not cron:
-            self.fail("Cron record ir_cron_flush_view_counters not found.")
-
+        cron = self.env.ref("user_websites.ir_cron_flush_view_counters")
         mock_trigger = self.safe_patch_object(type(cron), "_trigger")
         self.env["website.page"]._flush_redis_view_counters()
 
-        # Verify Postgres was updated
         page.invalidate_recordset(["view_count"])
-        self.assertEqual(
-            page.view_count,
-            initial_views + 42,
-            "PostgreSQL view_count must be incremented by the Redis value.",
-        )
+        self.assertEqual(page.view_count, initial_views + 42)
+        self.assertEqual(redis_client.exists(*keys), 0, "drained and zero counters are removed from Redis")
+        mock_trigger.assert_not_called()
 
-        # Verify pipeline operations
-        mock_pipeline.get.assert_called_with(f"views:page:{page.id}")
-        # RACE CONDITION FIX: Assert DECRBY is used instead of DELETE to prevent TOCTOU data loss
-        mock_pipeline.decrby.assert_called_with(f"views:page:{page.id}", 42)
+        # The second run (what the cron did 500k times a day) finds nothing and triggers nothing.
+        self.env["website.page"]._flush_redis_view_counters()
+        mock_trigger.assert_not_called()
+        page.invalidate_recordset(["view_count"])
+        self.assertEqual(page.view_count, initial_views + 42)
 
-        # Verify looping via _trigger
-        mock_trigger.assert_called_once()
-        cron._trigger()
+    def test_06b_flush_walks_the_whole_scan_even_when_a_page_returns_nothing(self):
+        """A non-zero cursor with no keys (SCAN over a big keyspace) is not the end, and not a reason to re-trigger."""
+        from odoo.addons.user_websites.models.website_page import redis_client
+
+        page = self._flush_page("redis-flush-walk")
+        initial_views = page.view_count
+        key = self._view_key(page.id)
+        self.addCleanup(redis_client.delete, key)
+        redis_client.set(key, 5)
+        real_scan = redis_client.scan
+        calls = []
+
+        def scan(cursor=0, match=None, count=None):
+            calls.append(cursor)
+            if cursor == 0:
+                return 7, []  # an empty page, more to come
+            return real_scan(cursor=0, match=match, count=count)
+
+        cron = self.env.ref("user_websites.ir_cron_flush_view_counters")
+        mock_trigger = self.safe_patch_object(type(cron), "_trigger")
+        self.safe_patch_object(redis_client, "scan", side_effect=scan)
+        self.env["website.page"]._flush_redis_view_counters()
+
+        self.assertEqual(calls, [0, 7], "the scan continued from the cursor it was given")
+        page.invalidate_recordset(["view_count"])
+        self.assertEqual(page.view_count, initial_views + 5)
+        mock_trigger.assert_not_called()
+
+    def test_06c_a_full_batch_triggers_the_next_one_and_only_after_draining_something(self):
+        """ADR-0022: more keys than one run takes -> _trigger(); the chain ends because each run drains its batch."""
+        from odoo.addons.user_websites.models.website_page import redis_client
+
+        pages = [self._flush_page(f"redis-flush-batch-{i}") for i in range(3)]
+        keys = [self._view_key(p.id) for p in pages]
+        self.addCleanup(redis_client.delete, *keys)
+        for key in keys:
+            redis_client.set(key, 1)
+        cron = self.env.ref("user_websites.ir_cron_flush_view_counters")
+        mock_trigger = self.safe_patch_object(type(cron), "_trigger")
+        self.safe_patch_object(type(self.env["website.page"]), "_FLUSH_BATCH_KEYS", 2)
+
+        runs = 0
+        while redis_client.exists(*keys) and runs < 5:
+            self.env["website.page"]._flush_redis_view_counters()
+            runs += 1
+        self.assertEqual(redis_client.exists(*keys), 0)
+        self.assertLessEqual(runs, 3)
+        self.assertTrue(mock_trigger.called, "a batch that filled up asked for another run")
+        triggers_so_far = mock_trigger.call_count
+        self.env["website.page"]._flush_redis_view_counters()
+        self.assertEqual(mock_trigger.call_count, triggers_so_far, "nothing left, nothing triggered")
 
     def test_08_cron_pending_reports(self):
         # [@ANCHOR: COMM_test_cron_pending_reports]

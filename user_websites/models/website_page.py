@@ -1029,92 +1029,118 @@ class WebsitePage(models.Model):
 
         return res
 
+    # Lua, so the decrement and the removal of a drained key are one atomic step on the Redis server: an INCR from a
+    # page view can land between a DECRBY and a separate DEL, and that view would be lost. A key that reaches zero (or
+    # below) is deleted; before 2026-10-19 it stayed at "0" for ever, was read again by every run, and kept the cron
+    # re-triggering itself (see _flush_redis_view_counters).
+    _FLUSH_DECREMENT_LUA = (
+        "local v = redis.call('DECRBY', KEYS[1], ARGV[1]) "
+        "if v <= 0 then redis.call('DEL', KEYS[1]) end "
+        "return v"
+    )
+    _FLUSH_BATCH_KEYS = 1000
+
     @api.model
     # [@ANCHOR: website_page_flush_redis_view_counters]
     def _flush_redis_view_counters(self):
         """
         Cron job to flush Redis view counters to the PostgreSQL database.
-        Uses _trigger() for batching if there are too many keys (ADR-0022).
+        Uses _trigger() for batching if there are more keys than one run takes (ADR-0022).
+
+        Root cause of the 2026-10 storm (cron 41 ran ~500k times a day instead of every 15 minutes): (1) a flushed
+        key was only DECRBY'd, so it stayed in Redis at "0", was read again by every run and counted as work;
+        (2) the scan restarted at cursor 0 every run and stopped after one call, and Redis's SCAN returns a non-zero
+        cursor whenever the keyspace is larger than COUNT (hams1 holds ~2000 cache keys), so every run that found any
+        key ended with _trigger() -- which runs the cron again at once. Now: the scan is walked to the end (or until a
+        batch is full), drained keys are deleted, zero values are skipped, and the cron re-triggers itself only when
+        the batch was full AND this run drained at least one key, so each re-trigger makes progress and the chain
+        ends. Nothing found means nothing triggered; the 15-minute schedule does the rest.
         """
+        db_name = self.env.cr.dbname
+        keys = []
+        cursor = 0
         try:
-            db_name = self.env.cr.dbname
-            cursor, keys = redis_client.scan(
-                cursor=0, match=f"views:{db_name}:page:*", count=1000
-            )
+            while True:
+                cursor, found = redis_client.scan(
+                    cursor=cursor, match=f"views:{db_name}:page:*", count=1000
+                )
+                keys.extend(found)
+                if cursor == 0 or len(keys) >= self._FLUSH_BATCH_KEYS:
+                    break
         except redis.exceptions.RedisError as e:
             _logger.error(f"Failed to connect to Redis for view counter flush: {e}")
             return
+        batch_full = cursor != 0 or len(keys) > self._FLUSH_BATCH_KEYS  # keys remain for another run
+        keys = keys[: self._FLUSH_BATCH_KEYS]
 
         if not keys:
             return
 
-        pipe = redis_client.pipeline()
-        for key in keys:
-            pipe.get(key)
-
-        results = pipe.execute()
+        try:
+            pipe = redis_client.pipeline()
+            for key in keys:
+                pipe.get(key)
+            results = pipe.execute()
+        except redis.exceptions.RedisError as e:
+            _logger.error(f"Failed to read Redis view counters: {e}")
+            return
 
         updates = []
-        for i, key in enumerate(keys):
-            val = results[i]
-            if val:
-                try:
-                    page_id = int(key.split(":")[-1])
-                    increment = int(val)
-                    updates.append((increment, page_id))
-                except ValueError:
-                    _logger.warning(
-                        "Failed to parse Redis key or value for view count."
-                    )
+        drained = []  # (key, amount to remove from Redis)
+        for key, val in zip(keys, results):
+            if val is None:
+                continue
+            try:
+                page_id = int(key.split(":")[-1])
+                increment = int(val)
+            except ValueError:
+                _logger.warning(
+                    "Failed to parse Redis key or value for view count."
+                )
+                continue
+            # A counter at zero has nothing to flush, but its key is removed so it is not found again.
+            drained.append((key, increment))
+            if increment > 0:
+                updates.append((increment, page_id))
 
-        if updates:
+        if drained:
             try:
                 # RACE CONDITION FIX: Delete from Redis first. If PostgreSQL commits, state is perfect.
                 # If PostgreSQL fails and rolls back, we lose views (acceptable), avoiding double-counting (unacceptable).
                 del_pipe = redis_client.pipeline()
-                for i, key in enumerate(keys):
-                    val = results[i]
-                    if val:
-                        del_pipe.decrby(key, int(val))
+                for key, increment in drained:
+                    del_pipe.eval(self._FLUSH_DECREMENT_LUA, 1, key, increment)
                 del_pipe.execute()
 
-                # Optimized multi-record update using Postgres Procedure
-                # Reduces round-trips to exactly one.
-                # Tests [@ANCHOR: procedure_flush_view_counters]
-                self.env.cr.execute(
-                    "SELECT user_websites_flush_view_counters(%s)",
-                    (json.dumps([{"inc": inc, "pid": pid} for inc, pid in updates]),),
-                )
+                if updates:
+                    # Optimized multi-record update using Postgres Procedure
+                    # Reduces round-trips to exactly one.
+                    # Tests [@ANCHOR: procedure_flush_view_counters]
+                    self.env.cr.execute(
+                        "SELECT user_websites_flush_view_counters(%s)",
+                        (json.dumps([{"inc": inc, "pid": pid} for inc, pid in updates]),),
+                    )
 
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.commit()
-            # Bug-hunt fix (bug class 20, 2026-09-09): nothing in this try
-            # block can actually raise KeyError or ValueError -- `val`'s
-            # `int(...)` parsing already happened, and already had its own
-            # dedicated `except ValueError` a few lines up, in the separate
-            # loop that builds `updates`. The two real failure modes here
-            # are `del_pipe.execute()` raising `redis.exceptions.RedisError`
-            # (a dropped Redis connection between the scan and this
-            # pipeline) and `self.env.cr.execute(...)` raising a
-            # `psycopg2.Error` (e.g. the stored procedure itself failing) --
-            # neither was ever caught by `(KeyError, ValueError)`, so the
-            # intended graceful-degradation path (log via
-            # `_logger.exception`, roll back, let the cron pick up the rest
-            # next run) never actually ran for either real scenario; the
-            # exception escaped uncaught instead.
+            # Bug-hunt fix (bug class 20, 2026-09-09): the real failure modes here are `del_pipe.execute()` raising
+            # `redis.exceptions.RedisError` (a dropped Redis connection) and `self.env.cr.execute(...)` raising a
+            # `psycopg2.Error` (e.g. the stored procedure itself failing); both are logged, rolled back, and the
+            # cron picks up the rest on its next scheduled run.
             except (redis.exceptions.RedisError, psycopg2.Error):  # audit-ignore-catch-all
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.rollback()
                 _logger.exception("Error updating PostgreSQL view counts")
+                return
 
-        if cursor != 0:
-            svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "user_websites.user_websites_service_account"
-            )
-            cron = self.env.ref(
-                "user_websites.ir_cron_flush_view_counters", raise_if_not_found=False
-            )
-            if cron:
-                cron.with_user(svc_uid).with_context(mail_notrack=True)._trigger()
+            if batch_full:
+                svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                    "user_websites.user_websites_service_account"
+                )
+                cron = self.env.ref(
+                    "user_websites.ir_cron_flush_view_counters", raise_if_not_found=False
+                )
+                if cron:
+                    cron.with_user(svc_uid).with_context(mail_notrack=True)._trigger()
