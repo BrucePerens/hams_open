@@ -4,6 +4,7 @@
 import binascii
 import concurrent.futures
 import datetime
+import fnmatch
 import json
 import logging
 import os
@@ -1503,20 +1504,15 @@ def execute_check(check, client=None):
                 if res.returncode != 0:
                     return False, f"Systemctl list-units failed: {res.stderr.strip()}"
 
-                failed_svcs = []
-                for line in res.stdout.strip().split("\n"):
-                    if not line.strip():
-                        continue
-                    parts = line.split()
-                    if parts:
-                        svc_name = parts[0]
-                        if svc_name not in ignored:
-                            failed_svcs.append(svc_name)
+                failed_svcs = failed_units_report(
+                    exe, parse_failed_unit_names(res.stdout, ignored)
+                )
 
                 if failed_svcs:
                     return (
                         False,
-                        f"Failed systemd services detected: {', '.join(failed_svcs)}",
+                        f"{len(failed_svcs)} failed systemd unit(s): {'; '.join(failed_svcs)}. "
+                        "Clear one that is understood and fixed with `systemctl reset-failed <unit>`.",
                     )
                 return True, "OK (0 failed services)"
             else:
@@ -1550,6 +1546,74 @@ def execute_check(check, client=None):
             return False, f"Systemd execution error: {e}"
 
     return False, "Unknown check type"
+
+
+# [@ANCHOR: pager_duty:parse_failed_unit_names]
+def parse_failed_unit_names(listing, ignored=()):
+    """The unit names in `systemctl list-units --state=failed --no-legend --plain` output, each once, sorted, without the ones
+    the check ignores. An ignored entry is a unit name or a shell pattern (`hams-exception-report@*`), so one entry covers every
+    instance of a template unit."""
+    names = set()
+    for line in listing.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        name = parts[0].lstrip("\u25cf*").strip() or (parts[1] if len(parts) > 1 else "")
+        if not name or "." not in name:
+            continue
+        if any(name == pattern or fnmatch.fnmatchcase(name, pattern) for pattern in ignored):
+            continue
+        names.add(name)
+    return sorted(names)
+
+
+def _failure_detail(exe, unit):
+    """`exit-code since 2026-10-18 18:24:17 UTC` for a failed unit, from systemd's Result and StateChangeTimestamp; "" when
+    unreadable."""
+    try:
+        res = subprocess.run(
+            [exe, "show", unit, "-p", "Result", "-p", "StateChangeTimestamp"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if res.returncode != 0:
+        return ""
+    props = dict(line.split("=", 1) for line in res.stdout.splitlines() if "=" in line)
+    result = props.get("Result", "").strip()
+    stamp = props.get("StateChangeTimestamp", "").strip()
+    # "Sun 2026-10-18 18:24:17 UTC": the weekday adds nothing.
+    words = stamp.split()
+    if words and not words[0][:1].isdigit():
+        words = words[1:]
+    stamp = " ".join(words)
+    return " ".join(part for part in (result, f"since {stamp}" if stamp else "") if part)
+
+
+# [@ANCHOR: pager_duty:failed_units_report]
+def failed_units_report(exe, names):
+    """One entry per failed unit with systemd's Result and when it failed, and the instances of one template unit
+    (`hams-exception-report@a.service.service`, `...@b...`) folded into one entry, so a template is counted once however many
+    instances failed."""
+    templates = {}
+    singles = []
+    for name in names:
+        template, at, _rest = name.partition("@")
+        if at and "." in _rest:
+            templates.setdefault(template + "@", []).append(name)
+        else:
+            singles.append(name)
+    entries = []
+    for name in singles:
+        detail = _failure_detail(exe, name)
+        entries.append(f"{name} ({detail})" if detail else name)
+    for template, instances in sorted(templates.items()):
+        if len(instances) == 1:
+            detail = _failure_detail(exe, instances[0])
+            entries.append(f"{instances[0]} ({detail})" if detail else instances[0])
+        else:
+            entries.append(f"{len(instances)} instances of {template}: {', '.join(instances)}")
+    return sorted(entries)
 
 
 # [@ANCHOR: pager_duty:oneshot_last_run_succeeded]
