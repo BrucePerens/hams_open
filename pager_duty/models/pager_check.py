@@ -210,23 +210,68 @@ class PagerCheck(models.Model):
         )
         return check.id if check else False
 
+    # The pager.check fields action_push_to_json() writes into the daemon's config file (plus `active`, which decides whether a
+    # check is exported at all). The daemon's own runtime writes (status, last_run, last_heartbeat) are not here: a heartbeat write
+    # must not rewrite the file.
+    _CONFIG_EXPORT_FIELDS = frozenset(
+        {
+            "name", "website_id", "check_type", "target", "port", "payload_send", "payload_send_hex", "payload_expect",
+            "dbname", "dbuser", "dbpass", "query", "script", "rpc_method", "rpc_params", "regex", "critical_threshold",
+            "warning_threshold", "snmp_community", "snmp_oid", "partition", "ignored_services", "interval",
+            "grace_period", "failure_threshold", "active", "parent_check_id", "maintenance_start", "maintenance_end",
+            "code_payload", "executable_path", "executable_args", "sandbox_downloads", "sandbox_network_access",
+            "auto_remediate_script", "comment", "heartbeat_uuid",
+        }
+    )
+
+    def _schedule_config_export(self):
+        """Rewrite the daemon's pager_config.json once, after the transaction that changed the checks commits.
+
+        Until now the file was only written by the "Push to Daemon" button, so a check deleted any other way (a migration, a module
+        upgrade, unlink from a shell) stayed in the file and the monitor kept polling it, and paging for it, indefinitely (the
+        retired QRZ Scraper check, incident 39). Deferred to post-commit so a rolled-back change never reaches the file, and
+        coalesced so a bulk change writes it once. A failed export is logged, never raised: the change itself has committed."""
+        callbacks = self.env.cr.postcommit
+        if callbacks.data.get("pager_check_config_export"):
+            return
+        callbacks.data["pager_check_config_export"] = True
+        registry = self.env.registry
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+
+        def export_config():
+            try:
+                with registry.cursor() as cr:
+                    env = api.Environment(cr, svc_uid, {})
+                    result = env["pager.check"].action_push_to_json()
+                    if result["params"]["type"] == "danger":
+                        _logger.warning("Automatic pager config export failed: %s", result["params"]["message"])
+            except (OSError, UserError, AccessError):
+                _logger.exception("Automatic pager config export failed; the daemon keeps its previous configuration")
+
+        callbacks.add(export_config)
+
     @api.model_create_multi
     # [@ANCHOR: pager_duty:pager_check_create]
     def create(self, vals_list):
         records = super(PagerCheck, self).create(vals_list)
         notify_model_invalidation(self.env, self._name)
+        self._schedule_config_export()
         return records
 
     # [@ANCHOR: pager_duty:pager_check_write]
     def write(self, vals):
         res = super(PagerCheck, self).write(vals)
         notify_model_invalidation(self.env, self._name)
+        if self._CONFIG_EXPORT_FIELDS.intersection(vals):
+            self._schedule_config_export()
         return res
 
     # [@ANCHOR: pager_duty:pager_check_unlink]
     def unlink(self):
         notify_model_invalidation(self.env, self._name)
-        return super(PagerCheck, self).unlink()
+        res = super(PagerCheck, self).unlink()
+        self._schedule_config_export()
+        return res
 
     @api.model
     # [@ANCHOR: pager_duty:pager_check_valid_field_parameter]

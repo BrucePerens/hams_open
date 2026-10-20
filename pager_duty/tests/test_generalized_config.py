@@ -215,3 +215,58 @@ class TestGeneralizedConfig(HamsTransactionCase):
             result = check_model.action_push_to_json()
             self.assertTrue(os.path.exists(good_path))
         self.assertEqual(result["params"]["type"], "success")
+
+    def _auto_export_calls(self, change):
+        """Runs `change` and then the transaction's post-commit hooks with the export stubbed; returns how many times the daemon
+        config was rewritten."""
+        calls = []
+        self.safe_patch_object(
+            type(self.env["pager.check"]),
+            "action_push_to_json",
+            side_effect=lambda *a, **k: calls.append(1) or {"params": {"type": "success", "message": ""}},
+        )
+        self.env.cr.postcommit.run()  # drop hooks queued by setUp
+        change()
+        self.env.cr.postcommit.run()
+        return len(calls)
+
+    def test_08_unlinking_a_check_rewrites_the_daemon_config(self):
+        """A check deleted by a migration or a shell, not the Push button, used to stay in pager_config.json and keep paging
+        (the retired QRZ Scraper check, incident 39)."""
+        # Tests [@ANCHOR: pager_duty:pager_check_unlink]
+        check = self.env["pager.check"].create({"name": "Retired Check", "check_type": "system", "target": "cpu"})
+        self.assertEqual(self._auto_export_calls(check.unlink), 1)
+
+    def test_09_creating_and_configuring_a_check_rewrites_the_config_once(self):
+        # Tests [@ANCHOR: pager_duty:pager_check_create]
+        # Tests [@ANCHOR: pager_duty:pager_check_write]
+        Check = self.env["pager.check"]
+
+        def change():
+            made = Check.create(
+                [
+                    {"name": "Auto Export A", "check_type": "system", "target": "cpu"},
+                    {"name": "Auto Export B", "check_type": "system", "target": "memory"},
+                ]
+            )
+            made.write({"interval": 120})
+            made[0].write({"target": "load"})
+
+        self.assertEqual(self._auto_export_calls(change), 1)
+
+    def test_10_a_runtime_status_write_does_not_rewrite_the_config(self):
+        """The daemon's heartbeats and run results write status columns constantly; they are not in the exported file."""
+        # Tests [@ANCHOR: pager_duty:pager_check_write]
+        check = self.env["pager.check"].create({"name": "Status Only", "check_type": "system", "target": "cpu"})
+        self.assertEqual(
+            self._auto_export_calls(lambda: check.write({"last_run": "2026-10-20 00:00:00", "status": "ok"})), 0
+        )
+        self.assertEqual(self._auto_export_calls(lambda: check.write({"active": False})), 1)
+
+    def test_11_a_failing_export_does_not_break_the_committed_change(self):
+        # Tests [@ANCHOR: pager_duty:pager_check_unlink]
+        check = self.env["pager.check"].create({"name": "Export Fails", "check_type": "system", "target": "cpu"})
+        self.safe_patch_object(type(check), "action_push_to_json", side_effect=OSError("disk full"))
+        self.env.cr.postcommit.run()
+        check.unlink()
+        self.env.cr.postcommit.run()  # must not raise
