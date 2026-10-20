@@ -50,6 +50,7 @@
                         <group>
                             <field name="interval"/>
                             <field name="grace_period"/>
+                            <field name="max_age_seconds" invisible="check_type != 'freshness'" required="check_type == 'freshness'"/>
                             <field name="failure_threshold"/>
                             <field name="last_run" readonly="1"/>
                         </group>
