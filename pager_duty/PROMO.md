@@ -52,7 +52,7 @@ The daemon natively understands and monitors the following layers of your infras
 * **PostgreSQL:** Verifies DB health natively via `psycopg2` or raw socket fallbacks. It securely logs in and executes `SELECT 1;` or custom SQL threshold queries for Anomaly Detection. Also simulates `pg_dump` backup processes.
 * **MySQL/MariaDB:** Native client validation that logs in using credentials to execute non-destructive `SELECT 1;` queries to guarantee database responsiveness.
 * **Redis:** Native client simulation. Initiates AUTH sequences and expects synchronous PONG replies.
-* **RabbitMQ:** Native binary protocol simulation via direct AMQP hex handshakes.
+* **RabbitMQ:** A complete AMQP connection: authenticates, opens the vhost and a channel, then closes both with their own handshakes. Failures say which stage failed (refused, timed out, authentication, protocol).
 * **Cloudflare Tunnels:** Pre-flights Zero Trust `cloudflared` daemons to ensure certificates are valid and edge connections are active.
 * **Nginx:** Simulates reverse proxy reloads to catch syntax and path errors.
 * **Host OS Metrics:** Utilizes `psutil` to track RAM, Disk Space, CPU Usage, IO Wait (Disk Saturation), and Hypervisor Steal.
