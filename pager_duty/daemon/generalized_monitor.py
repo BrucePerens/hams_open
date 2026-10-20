@@ -609,7 +609,7 @@ def _freshness_redis():
     )
 
 
-def _freshness_unit(unit, max_age, now):
+def _freshness_one_unit(unit, max_age, now):
     exe, err = ensure_executable("systemctl")
     if not exe:
         return False, err
@@ -644,6 +644,21 @@ def _freshness_unit(unit, max_age, now):
     if age > max_age:
         return False, f"The last successful run of {unit} ended {_human_age(age)} ago (limit {_human_age(max_age)})"
     return True, f"OK (last successful run of {unit} ended {_human_age(age)} ago)"
+
+
+def _freshness_unit(units, max_age, now):
+    """One or several comma-separated units sharing a limit; every stale or failed unit is named in one message."""
+    names = [u.strip() for u in units.split(",") if u.strip()]
+    if len(names) == 1:
+        return _freshness_one_unit(names[0], max_age, now)
+    problems = []
+    for unit in names:
+        ok, msg = _freshness_one_unit(unit, max_age, now)
+        if not ok:
+            problems.append(msg)
+    if problems:
+        return False, f"{len(problems)} of {len(names)} units are stale: " + "; ".join(problems)
+    return True, f"OK (all {len(names)} units ran successfully within {_human_age(max_age)})"
 
 
 # [@ANCHOR: pager_duty:check_freshness]

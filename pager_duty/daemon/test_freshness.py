@@ -172,6 +172,28 @@ class UnitTests(unittest.TestCase):
         with show(LoadState="not-found"):
             self.assertFalse(run("unit:nope.service", 60)[0])
 
+    def test_several_units_report_every_stale_one_in_a_single_message(self):
+        outputs = {
+            "a.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=success\nExecMainExitTimestamp=Tue 2026-10-20 05:17:00 UTC\n",
+            "b.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=success\nExecMainExitTimestamp=Fri 2026-10-09 05:17:00 UTC\n",
+            "c.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=exit-code\nExecMainExitTimestamp=Tue 2026-10-20 05:17:00 UTC\n",
+        }
+
+        def fake(cmd, **kw):
+            unit = cmd[2]
+            return subprocess.CompletedProcess(cmd, 0, outputs[unit], "")
+
+        now = gm.parse_systemd_timestamp("Tue 2026-10-20 06:00:00 UTC")
+        with mock.patch.object(gm.subprocess, "run", side_effect=fake):
+            ok, msg = run("unit:a.service, b.service,c.service", 3 * 86400, now=now)
+            self.assertFalse(ok)
+            self.assertIn("2 of 3", msg)
+            self.assertIn("b.service", msg)
+            self.assertIn("c.service", msg)
+            self.assertNotIn("a.service ended", msg)
+            ok, msg = run("unit:a.service,a.service", 3 * 86400, now=now)
+        self.assertTrue(ok, msg)
+
     def test_systemd_timestamps(self):
         self.assertEqual(gm.parse_systemd_timestamp("Tue 2026-10-20 05:17:00 UTC"), 1792473420.0)
         self.assertIsNone(gm.parse_systemd_timestamp(""))
