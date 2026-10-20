@@ -204,6 +204,37 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertEqual(exported[child.id]["parent"], "Parent Export Check")
         self.assertNotIn("parent_id", exported[parent.id])
 
+    def test_06d_a_freshness_check_exports_its_target_and_maximum_age_and_imports_them_back(self):
+        """The monitor reads `max_age` from the exported file; without it a freshness check could never fail."""
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        check = check_model.create(
+            {
+                "name": "Freshness Export Check",
+                "check_type": "freshness",
+                "target": "redis-zset:hams_prod:ham_dx_spots",
+                "max_age_seconds": 1800,
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "pager_config.json")
+            self.safe_patch_object(type(check_model), "_get_config_path", return_value=path)
+            check_model.action_push_to_json()
+            with open(path, encoding="utf-8") as f:
+                exported = {entry["id"]: entry for entry in json.load(f)["checks"]}
+        self.assertEqual(exported[check.id]["type"], "freshness")
+        self.assertEqual(exported[check.id]["max_age"], 1800)
+        self.assertEqual(exported[check.id]["target"], "redis-zset:hams_prod:ham_dx_spots")
+
+    def test_06e_a_negative_maximum_age_is_refused(self):
+        from psycopg2 import IntegrityError
+        from odoo.tools import mute_logger
+
+        with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.env.cr.savepoint():
+            self.env["pager.check"].with_user(self.admin).create(
+                {"name": "Bad Age", "check_type": "freshness", "target": "file:/x", "max_age_seconds": -1}
+            )
+
     def test_07_export_still_reports_success_when_the_write_works(self):
         # Tests [@ANCHOR: generalized_pager_config]
         check_model = self.env["pager.check"].with_user(self.admin)

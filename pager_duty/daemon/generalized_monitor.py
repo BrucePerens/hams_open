@@ -538,6 +538,162 @@ def amqp_check(host, port, user, password, vhost="/"):
                 logger.warning("closing the RabbitMQ check connection failed", exc_info=True)
 
 
+# A freshness check reads "when did this feed or job last do real work" and fails when that is older than max_age.
+# Liveness checks (systemd is-active, a PING) pass for a daemon that is running but wedged: ham.dx.daemon sat on a dead
+# telnet socket for 8 days with its unit "active". Sources, chosen by the target's scheme:
+#   redis-zset:<key>   newest score of a sorted set (an empty set fails)
+#   redis-key:<key>    a string holding epoch seconds or an ISO 8601 time
+#   file:<path>        modification time
+#   unit:<name>.service  end of the last successful run of a timer-driven Type=oneshot unit
+FRESHNESS_SCHEMES = ("redis-zset", "redis-key", "file", "unit")
+
+
+def _human_age(seconds):
+    seconds = int(max(0, seconds))
+    if seconds < 120:
+        return f"{seconds}s"
+    if seconds < 7200:
+        return f"{seconds // 60}min"
+    if seconds < 172800:
+        return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}"
+    return f"{seconds // 86400}d"
+
+
+def parse_freshness_time(value):
+    """Epoch seconds from a number, a numeric string, or an ISO 8601 / 'YYYY-MM-DD HH:MM:SS' string (UTC when naive).
+    Returns None when it cannot be read."""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    try:
+        parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.timestamp()
+
+
+def parse_systemd_timestamp(text):
+    """Epoch seconds from systemctl's 'Tue 2026-10-20 05:17:00 UTC'; None for an empty value (the event has not happened)."""
+    text = (text or "").strip()
+    if not text or text == "n/a":
+        return None
+    parts = text.split()
+    if len(parts) < 3:
+        return None
+    try:
+        naive = datetime.datetime.strptime(f"{parts[1]} {parts[2]}", "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    zone = parts[3] if len(parts) > 3 else "UTC"
+    if zone in ("UTC", "GMT", "Z"):
+        return naive.replace(tzinfo=datetime.timezone.utc).timestamp()
+    return time.mktime(naive.timetuple())  # the host's own zone, which is what systemd printed
+
+
+def _freshness_redis():
+    return redis_lib.Redis(
+        host=os.environ.get("REDIS_HOST") or "redis",
+        port=int(os.environ.get("REDIS_PORT") or "6379"),
+        username=REDIS_USERNAME,
+        password=REDIS_PASS,
+        socket_timeout=5,
+        socket_connect_timeout=5,
+    )
+
+
+def _freshness_unit(unit, max_age, now):
+    exe, err = ensure_executable("systemctl")
+    if not exe:
+        return False, err
+    res = subprocess.run(
+        [exe, "show", unit, "-p", "LoadState", "-p", "Type", "-p", "ActiveState", "-p", "Result",
+         "-p", "ExecMainStartTimestamp", "-p", "ExecMainExitTimestamp"],
+        capture_output=True, text=True, timeout=10,
+    )
+    props = dict(line.split("=", 1) for line in res.stdout.splitlines() if "=" in line)
+    if res.returncode != 0 or props.get("LoadState") != "loaded":
+        return False, f"{unit} is not a loaded systemd unit"
+    if props.get("Type") != "oneshot":
+        return False, f"{unit} is not a Type=oneshot unit; use a data source (redis-zset:, redis-key:, file:) for a daemon"
+    started = parse_systemd_timestamp(props.get("ExecMainStartTimestamp"))
+    if props.get("ActiveState") in ("activating", "active", "reloading"):
+        if started is not None and now - started > max_age:
+            return False, f"{unit} has been running for {_human_age(now - started)} (limit {_human_age(max_age)}): it looks hung"
+        return True, f"OK ({unit} is running, started {_human_age(now - (started or now))} ago)"
+    if props.get("Result") != "success":
+        return False, f"The last run of {unit} did not succeed (result: {props.get('Result')})"
+    finished = parse_systemd_timestamp(props.get("ExecMainExitTimestamp"))
+    if finished is None:
+        try:
+            with open("/proc/uptime", encoding="ascii") as f:
+                uptime = float(f.read().split()[0])
+        except (OSError, ValueError):
+            uptime = 0.0
+        if uptime < max_age:
+            return True, f"OK ({unit} has not run since boot {_human_age(uptime)} ago)"
+        return False, f"{unit} has not completed a run since boot {_human_age(uptime)} ago"
+    age = now - finished
+    if age > max_age:
+        return False, f"The last successful run of {unit} ended {_human_age(age)} ago (limit {_human_age(max_age)})"
+    return True, f"OK (last successful run of {unit} ended {_human_age(age)} ago)"
+
+
+# [@ANCHOR: pager_duty:check_freshness]
+def check_freshness(check, now=None, redis_factory=None):
+    """Run one freshness check: (ok, message). The message names the source, the age and the limit."""
+    now = time.time() if now is None else now
+    target = parse_env(check.get("target", "")) or ""
+    scheme, _, name = target.partition(":")
+    if scheme not in FRESHNESS_SCHEMES or not name:
+        return False, f"Freshness target must look like one of {', '.join(s + ':<name>' for s in FRESHNESS_SCHEMES)}, not {target!r}"
+    try:
+        max_age = int(check.get("max_age") or 0)
+    except (TypeError, ValueError):
+        max_age = 0
+    if max_age <= 0:
+        return False, "Freshness check has no maximum age (set Maximum Age)"
+    try:
+        if scheme == "unit":
+            return _freshness_unit(name, max_age, now)
+        if scheme == "file":
+            try:
+                newest = os.stat(name).st_mtime
+            except FileNotFoundError:
+                return False, f"{name} does not exist"
+        elif scheme == "redis-zset":
+            r = (redis_factory or _freshness_redis)()
+            top = r.zrevrange(name, 0, 0, withscores=True)
+            if not top:
+                return False, f"{name} is empty: no record has arrived"
+            newest = float(top[0][1])
+        else:  # redis-key
+            r = (redis_factory or _freshness_redis)()
+            value = r.get(name)
+            if value is None:
+                return False, f"{name} is not set: nothing has reported yet"
+            newest = parse_freshness_time(value)
+            if newest is None:
+                return False, f"{name} holds {value!r}, which is not a time"
+    except (redis_lib.RedisError, OSError, subprocess.SubprocessError) as e:
+        logger.warning("Freshness check %s failed: %s", target, e)
+        return False, f"Could not read {target}: {e}"
+    age = now - newest
+    if age > max_age:
+        return False, (
+            f"{target}: newest record is {_human_age(age)} old (limit {_human_age(max_age)}); "
+            "the feed has stopped even if its service looks healthy"
+        )
+    return True, f"OK (newest record {_human_age(age)} old, limit {_human_age(max_age)})"
+
+
 def execute_check(check, client=None):
     # [@ANCHOR: daemon_execute_check]
     ctype = check.get("type")
@@ -1379,7 +1535,7 @@ def execute_check(check, client=None):
                 "pager.check",
                 "check_heartbeat_rpc",
                 hb_uuid=chk_uuid,
-                interval=int(check.get("interval", 60)),
+                interval_sec=int(check.get("interval", 60)),
             )
             if res:
                 return True, "OK"
@@ -1478,6 +1634,9 @@ def execute_check(check, client=None):
         if os.path.exists(target):
             return False, f"File {target} exists"
         return True, "OK"
+
+    elif ctype == "freshness":
+        return check_freshness(check)
 
     elif ctype == "systemd":
         if not target:
