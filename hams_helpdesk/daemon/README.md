@@ -19,6 +19,9 @@ files below.
    quiet). It runs as root (`+`) so a `hamsd_*` account can start the unit, and `-` keeps a failed
    report from failing the daemon. This is how a `hamsd_*` daemon, which cannot read the reporter key,
    gets a ticket for each crash.
+   The report waits out an Odoo that is down or restarting (retries with backoff for up to ten minutes; the template's
+   `TimeoutStartSec=900` outlasts that), because a failure during a deploy is exactly when Odoo is unreachable, and an
+   undelivered report leaves a failed `hams-exception-report@<unit>.service` that the systemd failed-services pager check reports.
 2. **`reporting_failures`** (`exception_reporter.py`, Python, standard library only). A daemon wraps its
    consumer loop: an uncaught `Exception` is reported (the class and the frames, never the message), at
    most once a minute per name in that process, and then raised again, so the daemon still stops and

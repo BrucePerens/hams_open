@@ -35,11 +35,23 @@ DEFAULT_KEY_FILE = "/opt/hams/etc/keys/exception_reporter.env"
 USER_AGENT = "hams.com-daemon-client/1.0"
 REPORT_INTERVAL_SECONDS = 60
 JOURNAL_LINES = 20
+# report-unit (the OnFailure unit) waits this long for an Odoo that is down or restarting before it gives up. A unit that
+# fails during a deploy or restart is exactly when Odoo is unreachable, and giving up at once leaves a failed
+# hams-exception-report@ instance behind that the systemd failed-services check then pages for, with no ticket filed.
+# The template unit's TimeoutStartSec must stay longer than this (hams_shared tools/test_infrastructure.py).
+REPORT_ODOO_WAIT_SECONDS = 600
+REPORT_BACKOFF_FIRST_SECONDS = 5
+REPORT_BACKOFF_MAX_SECONDS = 60
+UNAVAILABLE_HTTP_CODES = frozenset({502, 503, 504})
 _LAST_REPORT = {}
 
 
 class ReportError(Exception):
     """The report could not be delivered. The message never holds a key, URL or response body."""
+
+
+class OdooUnavailable(ReportError):
+    """Odoo did not answer (connection refused or timed out, or a proxy's 502/503/504): worth retrying."""
 
 
 # [@ANCHOR: hams_helpdesk:daemon_load_key]
@@ -83,8 +95,12 @@ def post_report(payload, url=None, database=None, key_file=None, timeout=15):
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
+        if error.code in UNAVAILABLE_HTTP_CODES:
+            raise OdooUnavailable(f"Odoo answered HTTP {error.code}") from None
         raise ReportError(f"Odoo answered HTTP {error.code}") from None
-    except (urllib.error.URLError, OSError, ValueError) as error:
+    except (urllib.error.URLError, OSError) as error:
+        raise OdooUnavailable(f"could not reach Odoo ({type(error).__name__})") from None
+    except ValueError as error:
         raise ReportError(f"could not reach Odoo ({type(error).__name__})") from None
 
 
@@ -115,17 +131,28 @@ def unit_result(unit):
 
 
 # [@ANCHOR: hams_helpdesk:daemon_report_unit]
-def report_unit(unit, **options):
-    """What the OnFailure unit does: report ``unit`` with its result and journal tail."""
-    return post_report(
-        {
-            "unit": unit,
-            "kind": "unit_failed",
-            "result": unit_result(unit),
-            "journal_tail": journal_tail(unit),
-        },
-        **options,
-    )
+def report_unit(unit, wait_seconds=None, sleep=time.sleep, monotonic=time.monotonic, **options):
+    """What the OnFailure unit does: report ``unit`` with its result and journal tail. While Odoo is unavailable (a restart
+    or deploy) it retries with a growing delay for up to ``wait_seconds`` (REPORT_ODOO_WAIT_SECONDS), then raises the last
+    error. Any other failure (a rejected key, a 4xx) is raised at once. The payload is read once, before the first try."""
+    payload = {
+        "unit": unit,
+        "kind": "unit_failed",
+        "result": unit_result(unit),
+        "journal_tail": journal_tail(unit),
+    }
+    budget = REPORT_ODOO_WAIT_SECONDS if wait_seconds is None else wait_seconds
+    started = monotonic()
+    delay = REPORT_BACKOFF_FIRST_SECONDS
+    while True:
+        try:
+            return post_report(payload, **options)
+        except OdooUnavailable as error:
+            if monotonic() - started + delay > budget:
+                raise
+            print(f"Odoo is not answering ({error}); retrying in {delay}s", file=sys.stderr)
+            sleep(delay)  # audit-ignore-sleep: bounded wait for Odoo to come back
+            delay = min(delay * 2, REPORT_BACKOFF_MAX_SECONDS)
 
 
 # [@ANCHOR: hams_helpdesk:daemon_frames_only]
