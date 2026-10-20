@@ -7,6 +7,8 @@ import datetime
 import json
 import logging
 import os
+import pika
+import pika.adapters.utils.connection_workflow
 import psutil
 import re
 import secrets
@@ -457,6 +459,84 @@ def auto_resolve(client, source, website_id=False):
         logger.error(f"Failed to auto-resolve incidents for {source}: {e}")
 
 
+# [@ANCHOR: pager_duty:amqp_check]
+# Seconds. One AMQP check is a one-shot connection: socket_timeout bounds the TCP connect, stack_timeout the whole
+# connect/Start-Ok/Tune/Open handshake. The heartbeat is small only so that pika gives up on a broker that answers the
+# handshake and then goes silent (a BlockingConnection otherwise waits for a channel reply forever; with the heartbeat
+# it gives up after about ten seconds plus twice the interval). A healthy check lasts a few milliseconds, so no
+# heartbeat frame is ever sent.
+AMQP_SOCKET_TIMEOUT = 3
+AMQP_STACK_TIMEOUT = 5
+AMQP_HEARTBEAT = 2
+# pika logs every connection failure as several ERROR lines and a traceback; the check result text carries the cause.
+logging.getLogger("pika").setLevel(logging.CRITICAL)
+
+
+def amqp_check(host, port, user, password, vhost="/"):
+    """
+    Check RabbitMQ the way a client uses it: open a connection, authenticate (Start-Ok), open the vhost, open a channel,
+    then close the channel and the connection with their own handshakes (Channel.Close, Connection.Close). The check
+    used to send only the 8-byte protocol header, read the reply and drop the socket, which the broker logged as an
+    abruptly closed connection with no handshake, 1,440 times a day. Returns (ok, text); the text names the failure
+    class: refused, timeout, authentication, protocol, or lost connection. It never contains the credentials.
+    """
+    if not user or not password:
+        return False, "RabbitMQ check has no credentials: set RMQ_USER and RMQ_PASS (rabbitmq.env) for the monitor"
+    where = f"{host}:{port}"
+    connection = None
+    try:
+        parameters = pika.ConnectionParameters(
+            host=host,
+            port=port,
+            virtual_host=vhost,
+            credentials=pika.PlainCredentials(user, password),
+            heartbeat=AMQP_HEARTBEAT,
+            socket_timeout=AMQP_SOCKET_TIMEOUT,
+            stack_timeout=AMQP_STACK_TIMEOUT,
+            connection_attempts=1,
+            retry_delay=0,
+        )
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.close()
+        connection.close()
+        connection = None
+        return True, "OK"
+    except pika.exceptions.ProbableAuthenticationError:
+        return False, f"RabbitMQ authentication failed at {where} (user {user!r}, vhost {vhost!r})"
+    except pika.exceptions.ProbableAccessDeniedError:
+        return False, f"RabbitMQ access denied at {where} (user {user!r} may not open vhost {vhost!r})"
+    except pika.exceptions.IncompatibleProtocolError as e:
+        return False, f"RabbitMQ protocol error at {where}: the server did not answer as AMQP 0-9-1 ({e})"
+    except pika.adapters.utils.connection_workflow.AMQPConnectorStackTimeout:
+        # Not an AMQPError subclass in pika 1.3: it must be caught by name.
+        return False, f"RabbitMQ timed out at {where}: no AMQP handshake within {AMQP_STACK_TIMEOUT}s"
+    except pika.exceptions.AMQPConnectionError as e:
+        text = repr(e)
+        if "ConnectionRefused" in text:
+            return False, f"RabbitMQ connection refused at {where}"
+        if "timeout" in text.lower() or "timed out" in text.lower():
+            return False, f"RabbitMQ timed out at {where}: {e}"
+        return False, f"RabbitMQ connection failed at {where}: {e}"
+    except pika.exceptions.AMQPError as e:  # channel errors and the rest of pika's own errors
+        return False, f"RabbitMQ protocol error at {where}: {e!r}"
+    except (OSError, socket.timeout) as e:
+        if isinstance(e, (socket.timeout, TimeoutError)):
+            return False, f"RabbitMQ timed out at {where}: {e}"
+        if isinstance(e, ConnectionRefusedError):
+            return False, f"RabbitMQ connection refused at {where}"
+        return False, f"RabbitMQ connection failed at {where}: {e}"
+    finally:
+        # Whatever happened, no connection outlives the check: a clean Connection.Close if the connection is still open,
+        # otherwise nothing is left to close. A close that itself fails has nothing further to release.
+        if connection is not None:
+            try:
+                if connection.is_open:
+                    connection.close()
+            except Exception:  # audit-ignore-catch-all
+                logger.warning("closing the RabbitMQ check connection failed", exc_info=True)
+
+
 def execute_check(check, client=None):
     # [@ANCHOR: daemon_execute_check]
     ctype = check.get("type")
@@ -823,20 +903,13 @@ def execute_check(check, client=None):
 
     elif ctype == "rabbitmq":
         port = int(parse_env(check.get("port", 5672)))
-        try:
-            with socket.create_connection((target, port), timeout=2) as s:
-                s.sendall(b"AMQP\x00\x00\x09\x01")
-                res = s.recv(1024)
-                if len(res) > 0:
-                    return True, "OK"
-                return False, "RabbitMQ handshake mismatch"
-        except (
-            ConnectionError,
-            socket.timeout,
-            Exception,
-        ) as e:  # audit-ignore-catch-all
-            logger.warning("RabbitMQ check failed: %s", e)
-            return False, f"RabbitMQ connection failed: {e}"
+        # A check with no credentials of its own logs in as the RabbitMQ services do: RMQ_USER / RMQ_PASS from the
+        # environment the unit loads (rabbitmq.env on hams1), the account hams_rabbitmq publishes as. There is no
+        # guest fallback. The vhost is the check's own "vhost" or RMQ_VHOST, else "/".
+        user = parse_env(check.get("user", "")) or os.getenv("RMQ_USER") or ""
+        password = parse_env(check.get("password", "")) or os.getenv("RMQ_PASS") or ""
+        vhost = parse_env(check.get("vhost", "")) or os.getenv("RMQ_VHOST") or "/"
+        return amqp_check(target, port, user, password, vhost)
 
     elif ctype == "xmlrpc":
         method = parse_env(check.get("rpc_method", ""))
