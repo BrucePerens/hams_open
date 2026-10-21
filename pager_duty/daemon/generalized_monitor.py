@@ -585,7 +585,7 @@ def parse_freshness_time(value):
     try:
         return float(text)
     except ValueError:
-        pass
+        logger.debug("Freshness value %r is not a plain number; trying an ISO time", text)
     try:
         parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:

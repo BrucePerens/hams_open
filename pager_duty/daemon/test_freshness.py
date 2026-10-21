@@ -13,6 +13,8 @@ import time
 import unittest
 from unittest import mock
 
+import redis as redis_lib
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import generalized_monitor as gm  # noqa: E402
 
@@ -75,7 +77,6 @@ class RedisZsetTests(unittest.TestCase):
         self.assertTrue(ok)
 
     def test_an_unreachable_redis_fails_with_the_reason(self):
-        import redis as redis_lib
         ok, msg = run(f"redis-zset:{self.KEY}", 1800, FakeRedis(error=redis_lib.ConnectionError("refused")))
         self.assertFalse(ok)
         self.assertIn("refused", msg)
