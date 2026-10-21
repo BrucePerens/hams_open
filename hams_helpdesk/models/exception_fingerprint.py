@@ -55,6 +55,9 @@ SAMPLE_LIMIT = 5
 SAMPLE_TRACE_LIMIT = 6000
 GATE_MAX_ENTRIES = 5000
 CLOSED_STAGES = ("resolved", "closed")
+# A closed ticket whose failure was last seen at least this long ago is reopened by the next occurrence
+# even with no release in between: a failure that comes back after a quiet day is not the one that was closed.
+QUIET_REOPEN = timedelta(hours=24)
 
 
 class _ReentryState(threading.local):
@@ -65,20 +68,28 @@ class _ReentryState(threading.local):
 
 _STATE = _ReentryState()
 _GATE_LOCK = threading.Lock()
-# fingerprint -> [monotonic time of the last admitted write, hits refused since the last write]
+# fingerprint -> [monotonic time of the last admitted write, hits refused since the last write,
+# reporters this process has already recorded for it]
 _GATE = {}
+# A reporter label is only ever a check name or a fixed word; the set per fingerprint stays small.
+GATE_MAX_REPORTERS = 50
 _RECENT_WRITES = collections.deque()
 
 
 # [@ANCHOR: hams_helpdesk:exc_admit]
-def _admit(fingerprint):
+def _admit(fingerprint, reporter=None):
     """The per-process gate. Returns the number of earlier hits to fold into this write when this one
-    may write, or None when it is refused (the hit is counted and added to the next write)."""
+    may write, or None when it is refused (the hit is counted and added to the next write).
+
+    A ``reporter`` this process has not yet recorded for the fingerprint is admitted inside the
+    one-minute window (the process-wide cap still applies): a second check reporting the same failure
+    must show up on the ticket at once, and it only happens once per reporter."""
     now = time.monotonic()
     with _GATE_LOCK:
-        entry = _GATE.setdefault(fingerprint, [None, 0])
+        entry = _GATE.setdefault(fingerprint, [None, 0, set()])
         last = entry[0]
-        if last is not None and now - last < PER_FINGERPRINT_SECONDS:
+        new_reporter = bool(reporter) and reporter not in entry[2]
+        if last is not None and now - last < PER_FINGERPRINT_SECONDS and not new_reporter:
             entry[1] += 1
             return None
         while _RECENT_WRITES and now - _RECENT_WRITES[0] >= 60:
@@ -88,6 +99,8 @@ def _admit(fingerprint):
             return None
         _RECENT_WRITES.append(now)
         entry[0] = now
+        if reporter and len(entry[2]) < GATE_MAX_REPORTERS:
+            entry[2].add(reporter)
         if len(_GATE) > GATE_MAX_ENTRIES:
             stale = [key for key, value in _GATE.items() if value[0] is None or now - value[0] >= 60]
             for key in stale:
@@ -154,19 +167,28 @@ def _write_report(registry, data, folded):
 
 
 # [@ANCHOR: hams_helpdesk:exc_report_event]
-def report_event(registry, source, type_name, module, frame, route, trace, name, uid=None):
+def report_event(
+    registry, source, type_name, module, frame, route, trace, name, uid=None, reporter=None, key_parts=None
+):
     """Turns an already-described failure into a ticket. Never raises, never recurses.
 
     The shared tail of ``report_exception`` and of the reporters that have no Python exception to
     describe (a mail that failed to send, an external daemon). The caller supplies text that is
     already safe to store: a fixed vocabulary or counts, never a message, address or body. ``trace``
-    and ``name`` are cut to the storage limits here."""
+    and ``name`` are cut to the storage limits here.
+
+    ``reporter`` says who reported it (a pager check's name, or a fixed word): the ticket lists every
+    reporter, and a new one is recorded at once. ``key_parts`` is a ``(type, module, frame, route)``
+    tuple that sets the fingerprint when it should be shared by reports whose own text differs (every
+    report about one systemd unit, see ``daemon_exception.unit_key_parts``); the row still stores
+    the values of the report that created it."""
     if _STATE.active:
         return False
     _STATE.active = True
     try:
-        key = scrub.fingerprint(type_name, module, frame, route)
-        folded = _admit(key)
+        key = scrub.fingerprint(*(key_parts or (type_name, module, frame, route)))
+        reporter = str(reporter)[:80] if reporter else None
+        folded = _admit(key, reporter)
         if folded is None:
             return False
         data = {
@@ -179,6 +201,7 @@ def report_event(registry, source, type_name, module, frame, route, trace, name,
             "source": source,
             "uid": uid if isinstance(uid, int) else None,
             "trace": str(trace)[:SAMPLE_TRACE_LIMIT],
+            "reporter": reporter,
         }
         written = _write_report(registry, data, folded)
         if written:
@@ -255,6 +278,11 @@ class ExceptionFingerprint(models.Model):
         "recurs under a different marker, it is reopened.",
     )
     samples_json = fields.Text(string="Last sample traces", readonly=True)
+    reporters_json = fields.Text(
+        string="Reported by", readonly=True,
+        help="JSON list of everything that reported this failure: pager check names, the exception "
+        "reporter, the daemon itself. Never message text.",
+    )
     ticket_id = fields.Many2one("hams_helpdesk.ticket", string="Ticket", ondelete="set null", index=True, readonly=True)
     ticket_stage = fields.Selection(related="ticket_id.stage", string="Ticket stage", store=True)
 
@@ -272,6 +300,13 @@ class ExceptionFingerprint(models.Model):
         )
         return self.env.cr.fetchone()[0]
 
+    # [@ANCHOR: hams_helpdesk:exc_reporters]
+    def _reporters(self):
+        """Everything that has reported this failure, oldest first. Empty for a row from before
+        reporters were recorded."""
+        self.ensure_one()
+        return json.loads(self.reporters_json or "[]")
+
     # [@ANCHOR: hams_helpdesk:exc_ticket_body]
     def _ticket_body(self):
         """The ticket description: counters and the newest sample, escaped."""
@@ -287,8 +322,10 @@ class ExceptionFingerprint(models.Model):
             ("Innermost frame", self.frame),
             ("Route", self.route),
             ("Source", self.source),
+            ("Reported by", ", ".join(self._reporters())),
             ("Fingerprint", self.fingerprint),
         )
+        rows = tuple(row for row in rows if row[1] or row[0] != "Reported by")
         # Markup.format escapes every argument, so nothing here is interpolated unescaped.
         item = Markup("<li><b>{}:</b> {}</li>")
         lines = Markup("").join(item.format(label, str(value)) for label, value in rows)
@@ -319,15 +356,22 @@ class ExceptionFingerprint(models.Model):
         }
         record = self.search([("fingerprint", "=", data["fingerprint"])], limit=1)
         reopen = False
+        reporter = data.get("reporter")
         if record:
             if not record.try_lock_for_update():
                 return False
             last = record.last_written_at
-            if last and (now - last).total_seconds() < PER_FINGERPRINT_SECONDS:
+            reporters = record._reporters()
+            # A reporter the row has not listed yet is recorded even inside the window: two checks
+            # that see the same failure at the same moment are both named on the one ticket.
+            new_reporter = bool(reporter) and reporter not in reporters and len(reporters) < GATE_MAX_REPORTERS
+            if last and (now - last).total_seconds() < PER_FINGERPRINT_SECONDS and not new_reporter:
                 return False
+            if new_reporter:
+                reporters.append(reporter)
             samples = (json.loads(record.samples_json or "[]") + [sample])[-SAMPLE_LIMIT:]
             ticket_closed = record.ticket_id.stage in CLOSED_STAGES
-            reopen = bool(ticket_closed and record.release_marker != marker)
+            reopen = ticket_closed and self._reopen_reason(record, marker, now)
             record.write(
                 {
                     "occurrence_count": record.occurrence_count + 1 + folded,
@@ -336,6 +380,7 @@ class ExceptionFingerprint(models.Model):
                     "last_user_id": data["uid"] or record.last_user_id,
                     "release_marker": marker,
                     "samples_json": json.dumps(samples),
+                    "reporters_json": json.dumps(reporters),
                 }
             )
         else:
@@ -355,10 +400,26 @@ class ExceptionFingerprint(models.Model):
                     "last_user_id": data["uid"] or 0,
                     "release_marker": marker,
                     "samples_json": json.dumps([sample]),
+                    "reporters_json": json.dumps([reporter] if reporter else []),
                 }
             )
         self._sync_ticket(record, now, reopen)
         return True
+
+    # [@ANCHOR: hams_helpdesk:exc_reopen_reason]
+    @api.model
+    def _reopen_reason(self, record, marker, now):
+        """Why a recurrence of ``record`` reopens its closed ticket, or "" when it stays closed (counted
+        only). Three rules: a release since the last occurrence; a daemon / systemd unit failing again
+        (always: a unit that fails after its ticket was closed is still broken); and a quiet period of
+        QUIET_REOPEN since the failure was last seen."""
+        if record.source == "daemon":
+            return "a unit failed again after its ticket was closed"
+        if record.release_marker != marker:
+            return "it recurred after a release"
+        if record.last_seen and now - record.last_seen >= QUIET_REOPEN:
+            return "it recurred after a quiet period of 24 hours or more"
+        return ""
 
     # [@ANCHOR: hams_helpdesk:exc_sync_ticket]
     @api.model
@@ -372,10 +433,7 @@ class ExceptionFingerprint(models.Model):
                 vals["stage"] = "new"
             record.ticket_id.write(vals)
             if reopen:
-                record.ticket_id.message_post(
-                    body=self.env._("Recurred after a release; reopened automatically."),
-                    subtype_xmlid="mail.mt_note",
-                )
+                self._announce_reopen(record, reopen, now)
             return
         since = now - timedelta(hours=1)
         recent = Ticket.search_count([("ticket_type", "=", TICKET_TYPE), ("create_date", ">=", since)])
@@ -404,6 +462,27 @@ class ExceptionFingerprint(models.Model):
         )
         record.ticket_id = ticket.id
         if not quiet:
+            record.notified_at = now
+
+    # [@ANCHOR: hams_helpdesk:exc_announce_reopen]
+    @api.model
+    def _announce_reopen(self, record, reason, now):
+        """The note on a reopened ticket. It pages the assignee as a new ticket would, under the same
+        NOTIFY_WINDOW: inside the window of an earlier page it is a plain note."""
+        ticket = record.ticket_id
+        quiet, _silent = self._notification_state(now)
+        assignee = ticket.user_id.partner_id
+        page = bool(assignee) and not quiet
+        ticket.message_post(
+            body=self.env._(
+                "Recurred (%(count)s occurrences in all; %(reason)s); reopened automatically.",
+                count=record.occurrence_count,
+                reason=reason,
+            ),
+            subtype_xmlid="mail.mt_note",
+            partner_ids=assignee.ids if page else [],
+        )
+        if page:
             record.notified_at = now
 
     # [@ANCHOR: hams_helpdesk:exc_notification_state]

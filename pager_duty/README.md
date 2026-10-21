@@ -154,6 +154,17 @@ Handles the lifecycle of monitoring alerts.
         "description": "Critical failure detected"
     })
     ```
+    An incident with no explicit `name` is named after its `source` (the check's name); nothing is called `INC-AUTO`.
+    A check that names failing systemd units adds `"units": ["fcc.uls.sync.service"]` (the systemd check and a
+    `unit:` freshness check do, `generalized_monitor.CHECK_UNITS`). For a high or critical incident the units are
+    reported to the same fingerprints the OnFailure exception report uses (`hams_helpdesk`
+    `_report_unit_failures`), so **one failing unit is one ticket** ("Server exception: Daemon failure: <unit>") no
+    matter how many checks and exception reports see it. The ticket carries an occurrence count, first and last seen
+    and the list of reporters; every repeat counts, at most one ticket write a minute per unit, and a new reporter is
+    named at once. The incident links to that ticket and the adapter opens no `[PAGER]` ticket for it. A closed
+    or resolved ticket is reopened to New, with a note, when its unit fails again (always), when an exception recurs after a release or after 24 hours quiet (`QUIET_REOPEN`); the reopen pages the assignee like a new ticket, inside the 30 minute notify window. If the ticket cannot be
+    opened (the hourly new-ticket cap) the adapter still opens its own, so a page is never lost. An instance of a
+    template unit (`name@x.service`) is not joined.
     [@ANCHOR: report_incident_rate_limit]
     The two mechanisms work as follows. Rate limit: Redis admits one report per `source` per website every 60 seconds; a report inside that window is dropped and the call returns `False`. Deduplication: if an Open or Acknowledged incident with the same `source` already exists, no new incident is created; its occurrence counters are increased and its id is returned. Otherwise a new incident is created and its id is returned.
     Paging depends on severity. A new `high` or `critical` incident notifies the on-call user at once through the incident's chatter, unless the `pager_duty.helpdesk_model` system parameter is set, in which case that notification is suppressed and the Helpdesk ticket is the page. A `low` or `medium` incident does not page; instead, when that incident's occurrence count within its current 60-minute window reaches 5, a separate `high` incident with source `Trend: <source>` is raised, and that one pages.

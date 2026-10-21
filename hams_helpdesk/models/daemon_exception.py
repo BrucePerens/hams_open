@@ -18,7 +18,20 @@ from odoo import api, models
 from odoo.exceptions import AccessError, UserError
 
 from . import exception_scrub as scrub
-from .exception_fingerprint import SERVICE_XMLID, report_event
+from .exception_fingerprint import SERVICE_XMLID, _service_env, report_event
+
+
+_UNIT_SUFFIXES = (".service", ".timer", ".socket", ".target")
+
+
+# [@ANCHOR: hams_helpdesk:exc_unit_key_parts]
+def unit_key_parts(name):
+    """The fingerprint inputs shared by EVERY report about the systemd unit ``name``: the OnFailure
+    template, a daemon's own consumer loop and any pager check that names the unit all land on one row
+    and so on one ticket. They are the inputs a ``unit_failed`` / ``exit-code`` report always used, so a
+    row and ticket opened before this existed keep counting. The report's own kind and result are in
+    the sample trace, not in the key."""
+    return ("daemon.unit_failed", name, "result:exit-code", f"systemd:{name}")
 
 
 class ExceptionFingerprintDaemon(models.Model):
@@ -58,6 +71,57 @@ class ExceptionFingerprintDaemon(models.Model):
             f"result:{result}",
             f"systemd:{name}",
             trace,
-            f"Daemon failure: {name} ({kind}, {result})",
+            f"Daemon failure: {name}",
+            reporter=f"exception report ({kind})",
+            key_parts=unit_key_parts(name),
         )
         return {"recorded": bool(recorded)}
+
+    # [@ANCHOR: hams_helpdesk:exc_report_unit_failures]
+    @api.model
+    def _report_unit_failures(self, units, reporter, message=""):
+        """Reports ``units`` (systemd unit names a pager check says are failing) through the same
+        fingerprint, rate limit and own-cursor writer as ``report_daemon_failure``, so a check and the
+        OnFailure unit land on one row and one ticket per unit. ``reporter`` is the check's name.
+
+        Python only (the leading underscore keeps it off the RPC surface; the pager's own
+        ``report_incident`` is the caller). Returns ``{unit: ticket id}`` for each plain unit named,
+        the ticket id being False when no ticket exists (the new-ticket cap, or the write failed): the
+        caller then keeps its own ticket, so a page is never lost to the dedup. Instances of a template
+        unit are left out; they would all collapse into one bogus row."""
+        found = {}
+        for unit in units or ():
+            text = str(unit or "").strip()
+            if text and not text.endswith(_UNIT_SUFFIXES):
+                # systemd's own default: `odoo` means `odoo.service`.
+                text += ".service"
+            name = scrub.daemon_unit_name(text)
+            if not name or "@" in name or name in found:
+                continue
+            trace = "\n".join(
+                (
+                    f"Reported by the pager check: {reporter}",
+                    scrub.scrub_daemon_tail(str(message).replace("; ", "\n")),
+                )
+            )
+            report_event(
+                self.env.registry,
+                "daemon",
+                "daemon.unit_failed",
+                name,
+                "result:unknown",
+                f"systemd:{name}",
+                trace,
+                f"Daemon failure: {name}",
+                reporter=reporter,
+                key_parts=unit_key_parts(name),
+            )
+            found[name] = False
+        if not found:
+            return found
+        # The writer committed on its own cursor; read what it wrote as the reporter service account.
+        fingerprints = _service_env(self.env.cr)["hams_helpdesk.exception.fingerprint"]
+        keys = {scrub.fingerprint(*unit_key_parts(name)): name for name in found}
+        for row in fingerprints.search([("fingerprint", "in", list(keys))]):
+            found[keys[row.fingerprint]] = row.ticket_id.id or False
+        return found

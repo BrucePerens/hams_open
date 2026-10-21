@@ -194,6 +194,25 @@ class UnitTests(unittest.TestCase):
             ok, msg = run("unit:a.service,a.service", 3 * 86400, now=now)
         self.assertTrue(ok, msg)
 
+    def test_the_stale_units_are_sent_with_the_incident(self):
+        """Tests [@ANCHOR: pager_duty:check_units]."""
+        outputs = {
+            "a.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=success\nExecMainExitTimestamp=Tue 2026-10-20 05:17:00 UTC\n",
+            "b.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=exit-code\nExecMainExitTimestamp=Tue 2026-10-20 05:17:00 UTC\n",
+        }
+        now = gm.parse_systemd_timestamp("Tue 2026-10-20 06:00:00 UTC")
+        check = {"type": "freshness", "target": "unit:a.service,b.service", "max_age": 86400, "id": 11}
+        with mock.patch.object(gm.subprocess, "run", side_effect=lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, outputs[cmd[2]], "")):
+            gm.CHECK_UNITS.clear()
+            self.assertFalse(gm.check_freshness(check, now=now)[0])
+            self.assertEqual(gm.CHECK_UNITS[11], ["b.service"])
+            check = dict(check, id=12, target="unit:b.service")
+            self.assertFalse(gm.check_freshness(check, now=now)[0])
+            self.assertEqual(gm.CHECK_UNITS[12], ["b.service"])
+            gm.CHECK_UNITS.clear()
+            self.assertTrue(gm.check_freshness(dict(check, id=13, target="unit:a.service"), now=now)[0])
+            self.assertNotIn(13, gm.CHECK_UNITS)
+
     def test_systemd_timestamps(self):
         self.assertEqual(gm.parse_systemd_timestamp("Tue 2026-10-20 05:17:00 UTC"), 1792473420.0)
         self.assertIsNone(gm.parse_systemd_timestamp(""))

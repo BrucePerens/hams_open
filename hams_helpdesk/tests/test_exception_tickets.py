@@ -522,6 +522,86 @@ class TestExceptionReopen(ExceptionTicketCase):
 
 
 @tagged("post_install", "-at_install", "standard")
+class TestExceptionQuietPeriodReopen(ExceptionTicketCase):
+    """A closed ticket reopens on a release, after a quiet day, and always for a daemon / unit failure."""
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_reopen_reason]
+    # Tests [@ANCHOR: hams_helpdesk:exc_announce_reopen]
+
+    def setUp(self):
+        super().setUp()
+        self.marker = {"value": "A"}
+        self.safe_patch_object(
+            type(self.Fingerprint), "_release_marker", side_effect=lambda *args: self.marker["value"]
+        )
+
+    def occur_again(self, exc, last_seen_hours_ago=0):
+        row = self.fingerprints()
+        row.last_written_at = fields.Datetime.now() - reporter.timedelta(seconds=120)
+        if last_seen_hours_ago:
+            row.last_seen = fields.Datetime.now() - reporter.timedelta(hours=last_seen_hours_ago)
+        reporter._GATE.clear()
+        return self.report(exc)
+
+    def test_same_release_within_a_day_stays_closed_and_a_day_later_reopens(self):
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc))
+        ticket = self.fingerprints().ticket_id
+        ticket.write({"stage": "resolved"})
+        self.assertTrue(self.occur_again(exc, last_seen_hours_ago=23))
+        self.assertEqual(ticket.stage, "resolved")
+        self.assertTrue(self.occur_again(exc, last_seen_hours_ago=25))
+        self.assertEqual(ticket.stage, "new")
+        self.assertIn("quiet period", ticket.message_ids[0].body)
+        self.assertIn("reopened automatically", ticket.message_ids[0].body)
+
+    def test_release_rule_is_unchanged(self):
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc))
+        ticket = self.fingerprints().ticket_id
+        ticket.write({"stage": "closed"})
+        self.marker["value"] = "B"
+        self.assertTrue(self.occur_again(exc))
+        self.assertEqual(ticket.stage, "new")
+        self.assertIn("after a release", ticket.message_ids[0].body)
+
+    def test_a_daemon_failure_always_reopens(self):
+        uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
+        service = self.Fingerprint.with_user(uid)
+        self.env.flush_all()
+        service.report_daemon_failure("adif-processor.service", "unit_failed", "exit-code", "x")
+        self.env.invalidate_all()
+        row = self.fingerprints()
+        ticket = row.ticket_id
+        ticket.write({"stage": "closed"})
+        row.last_written_at = fields.Datetime.now() - reporter.timedelta(seconds=120)
+        reporter._GATE.clear()
+        self.env.flush_all()
+        service.report_daemon_failure("adif-processor.service", "unit_failed", "exit-code", "x")
+        self.env.invalidate_all()
+        self.assertEqual(ticket.stage, "new")
+        self.assertIn("unit failed again", ticket.message_ids[0].body)
+
+    def test_a_reopen_pages_the_assignee_once_inside_the_window(self):
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc))
+        row = self.fingerprints()
+        ticket = row.ticket_id
+        ticket.user_id = self.env.user
+        row.notified_at = False
+        ticket.write({"stage": "closed"})
+        self.marker["value"] = "B"
+        self.assertTrue(self.occur_again(exc))
+        self.assertTrue(self.fingerprints().notified_at)
+        self.assertIn(self.env.user.partner_id, ticket.message_ids[0].partner_ids)
+        # A second reopen inside NOTIFY_WINDOW is a plain note.
+        ticket.write({"stage": "closed"})
+        self.marker["value"] = "C"
+        self.assertTrue(self.occur_again(exc))
+        self.assertFalse(ticket.message_ids[0].partner_ids)
+
+
+@tagged("post_install", "-at_install", "standard")
 class TestExceptionTicketAccess(ExceptionTicketCase):
     # Tests [@ANCHOR: hams_helpdesk:exc_fingerprint_list]
 

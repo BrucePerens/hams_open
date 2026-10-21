@@ -100,5 +100,51 @@ class FailedUnitsCheckTests(unittest.TestCase):
         self.assertIn("boom", msg)
 
 
+class FailingUnitsAreSentWithTheIncidentTests(unittest.TestCase):
+    """Tests [@ANCHOR: pager_duty:check_units]: the units behind a failure travel with the incident, so the server
+    joins the one ticket per unit (hams_helpdesk's exception fingerprint) instead of opening one per check."""
+
+    def run_check(self, check, listing="", is_active=None):
+        def run(cmd, **_kw):
+            if "is-active" in cmd:
+                state = (is_active or {}).get(cmd[2], "active")
+                return mock.Mock(returncode=0 if state == "active" else 3, stdout=state + "\n", stderr="")
+            return fake_run(listing)(cmd)
+        gm.CHECK_UNITS.clear()
+        with mock.patch.object(gm, "ensure_executable", return_value=("/bin/systemctl", "")), \
+                mock.patch.object(gm.subprocess, "run", side_effect=run):
+            return gm.execute_check(check)
+
+    def test_the_failed_units_tracker_sends_every_failed_unit_once(self):
+        check = {"type": "systemd", "target": "*", "id": 7, "ignored_services": "fwupd-refresh.service"}
+        ok, _msg = self.run_check(check, LISTING)
+        self.assertFalse(ok)
+        self.assertEqual(
+            gm.CHECK_UNITS[7],
+            ["foo.service", "hams-exception-report@club.crawl.service.service"],
+        )
+
+    def test_a_named_services_check_sends_the_units_that_are_not_active(self):
+        check = {"type": "systemd", "target": "a.service, b.service, c.service", "id": 8}
+        ok, _msg = self.run_check(check, is_active={"b.service": "failed", "c.service": "activating"})
+        self.assertFalse(ok)
+        self.assertEqual(gm.CHECK_UNITS[8], ["b.service", "c.service"])
+
+    def test_a_passing_check_sends_no_units(self):
+        check = {"type": "systemd", "target": "*", "id": 9}
+        self.assertTrue(self.run_check(check, "")[0])
+        self.assertNotIn(9, gm.CHECK_UNITS)
+
+    def test_report_puts_the_units_in_the_incident_payload(self):
+        client = mock.Mock()
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("PAGER_WEBHOOK_URL", None)
+            gm.report(client, "Tracker", "1 failed", "high", units=["fcc.uls.sync.service"])
+            gm.report(client, "Disk", "full", "high")
+        first, second = (call.kwargs["vals"] for call in client.execute.call_args_list)
+        self.assertEqual(first["units"], ["fcc.uls.sync.service"])
+        self.assertNotIn("units", second)
+
+
 if __name__ == "__main__":
     unittest.main()

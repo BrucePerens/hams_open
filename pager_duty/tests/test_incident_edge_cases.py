@@ -35,7 +35,7 @@ class TestIncidentEdgeCases(HamsTransactionCase):
         )
 
     def test_02_default_name_assignment(self):
-        """Verify that an omitted or 'New' name is automatically assigned 'INC-AUTO'."""
+        """An omitted or 'New' name becomes the reporting check's name, never a placeholder like 'INC-AUTO'."""
         self.safe_patch_object(type(self.env["bus.bus"]), "_sendone", create=True)
         incident_id = self.incident_model.report_incident(
             {
@@ -47,8 +47,9 @@ class TestIncidentEdgeCases(HamsTransactionCase):
 
         incident = self.incident_model.browse(incident_id)
         self.assertEqual(
-            incident.name, "INC-AUTO", "Default names MUST be translated to INC-AUTO."
+            incident.name, "naming_test", "The default name MUST be the source."
         )
+        self.assertNotIn("INC-AUTO", incident.name)
 
     def test_03_auto_resolve_empty(self):
         """Verify that calling auto_resolve_incidents on a source with no open incidents returns True safely."""
