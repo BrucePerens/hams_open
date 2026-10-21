@@ -124,7 +124,8 @@ class TestUnitTicketDedup(HamsTransactionCase):
         self.assertIn("Reported by", tickets.description)
         self.assertIn(TRACKER, tickets.description)
         self.assertIn("Occurrences", tickets.description)
-        self.assertTrue(row.first_seen and row.last_seen)
+        self.assertTrue(row.first_seen)
+        self.assertTrue(row.last_seen)
 
     def test_the_order_does_not_matter_the_pager_check_may_report_first(self):
         self.pager_report(TRACKER, [FCC])

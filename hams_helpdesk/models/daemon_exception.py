@@ -122,6 +122,7 @@ class ExceptionFingerprintDaemon(models.Model):
         # The writer committed on its own cursor; read what it wrote as the reporter service account.
         fingerprints = _service_env(self.env.cr)["hams_helpdesk.exception.fingerprint"]
         keys = {scrub.fingerprint(*unit_key_parts(name)): name for name in found}
-        for row in fingerprints.search([("fingerprint", "in", list(keys))]):
+        rows = fingerprints.search([("fingerprint", "in", list(keys))])
+        for row in rows:
             found[keys[row.fingerprint]] = row.ticket_id.id or False
         return found
