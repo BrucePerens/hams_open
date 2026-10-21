@@ -256,7 +256,8 @@ class TestGeneralizedConfig(HamsTransactionCase):
             "action_push_to_json",
             side_effect=lambda *a, **k: calls.append(1) or {"params": {"type": "success", "message": ""}},
         )
-        self.env.cr.postcommit.run()  # drop hooks queued by setUp
+        self.env.cr.postcommit.run()  # run (and so discard) the hooks queued before `change`, e.g. by the create that made the check
+        calls.clear()
         change()
         self.env.cr.postcommit.run()
         return len(calls)
@@ -290,7 +291,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
         # Tests [@ANCHOR: pager_duty:pager_check_write]
         check = self.env["pager.check"].create({"name": "Status Only", "check_type": "system", "target": "cpu"})
         self.assertEqual(
-            self._auto_export_calls(lambda: check.write({"last_run": "2026-10-20 00:00:00", "status": "ok"})), 0
+            self._auto_export_calls(lambda: check.write({"last_run": "2026-10-20 00:00:00", "status": "passing"})), 0
         )
         self.assertEqual(self._auto_export_calls(lambda: check.write({"active": False})), 1)
 

@@ -201,24 +201,7 @@
                         </div>
                     </form>
                 </dialog>
-                <script>
-                    (function () {
-                        var dialog = document.getElementById("uw_delete_dialog");
-                        if (!dialog || typeof dialog.showModal !== "function") { return; }
-                        document.querySelectorAll(".uw-delete-link").forEach(function (link) {
-                            link.addEventListener("click", function (ev) {
-                                ev.preventDefault();
-                                document.getElementById("uw_delete_form").setAttribute("action", link.dataset.uwAction);
-                                document.getElementById("uw_delete_what").textContent = link.dataset.uwWhat;
-                                document.getElementById("uw_delete_name").textContent = link.dataset.uwTitle;
-                                dialog.showModal();
-                                document.getElementById("uw_delete_cancel").focus();
-                            });
-                        });
-                        document.getElementById("uw_delete_cancel").addEventListener("click", function () { dialog.close(); });
-                    })();
-                </script>
-
+                <!-- The dialog is opened by static/src/js/owner_delete_dialog.js (the strict CSP allows no inline script). -->
                 <section id="settings" aria-labelledby="uw_settings_h">
                     <h2 id="uw_settings_h" class="h4">Settings and privacy</h2>
                     <ul>
