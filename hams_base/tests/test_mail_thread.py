@@ -97,8 +97,12 @@ class TestMailThread(HamsTransactionCase):
         real_message.set_content(msg_dict['body'])
 
         mock_logger = self.safe_patch('odoo.addons.hams_base.models.mail_thread._logger')
-        with self.assertRaises(ValueError):
+        # With only hams_base installed nothing owns the postmaster alias, so Odoo's routing raises ValueError; with pager_duty installed
+        # (it owns that alias) the message routes. Either way it must fall through to normal routing and not be dropped by this override.
+        try:
             self.env['mail.thread'].message_route(real_message, msg_dict)
+        except ValueError:
+            pass
         for call in mock_logger.info.call_args_list:
             self.assertNotIn(
                 'Dropping', call.args[0],
