@@ -573,7 +573,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
         )
         self.assertTrue(success)
         mock_client.execute.assert_called_with(
-            "pager.check", "check_heartbeat_rpc", hb_uuid="1234", interval=60
+            "pager.check", "check_heartbeat_rpc", hb_uuid="1234", interval_sec=60
         )
 
     def test_14_nagios_checks(self):
