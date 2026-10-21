@@ -89,6 +89,7 @@ This module enables:
     "assets": {
         "web.assets_frontend": [
             "user_websites/static/src/js/violation_report.js",
+            "user_websites/static/src/js/owner_delete_dialog.js",
             "user_websites/static/src/js/toast_notifications.js",
             "user_websites/static/src/js/rich_editor.js",
             "user_websites/static/src/css/member_site.css",
