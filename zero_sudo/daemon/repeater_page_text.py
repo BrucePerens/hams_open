@@ -408,7 +408,7 @@ def grounded_notes(notes, page_text):
         return "", []
     low = page_text.lower() if isinstance(page_text, str) else ""
     kept, dropped = [], []
-    for sentence in re.split(r"(?<=[.!?])\s+", notes.strip()):
+    for sentence in re.split(r"(?<![A-Z]\.)(?<=[.!?])\s+", notes.strip()):
         unsupported = any(not number_on_page(page_text, float(m.group(1).replace(",", "")), 0.001)
                           for m in _UNIT_CLAIM.finditer(sentence) if re.fullmatch(r"[\d,]+(?:\.\d+)?", m.group(1)))
         unsupported = unsupported or any(re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", sentence.lower()) and w not in low
