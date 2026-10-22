@@ -1,6 +1,8 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """ir.http._dispatch: a page route called without a parameter its handler requires is a 400 (QA-014)."""
+import werkzeug.exceptions
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -22,7 +24,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         rules = self.env["ir.http"].routing_map().bind("").match
         try:
             rules(path, method="GET")
-        except Exception:  # audit-ignore-catch-all: NotFound or MethodNotAllowed both mean "not served here"
+        except werkzeug.exceptions.HTTPException:  # NotFound, MethodNotAllowed and RequestRedirect all mean "not served here"
             return False
         return True
 

@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import re
-from unittest import mock
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -236,13 +235,11 @@ class TestHelpdeskTours(HamsHttpCase):
         res_page = self.url_open("/my/tickets/new")
         csrf_token = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text).group(1)
         # The registry class (top of the MRO), so a pager_duty override cannot shadow the patch.
-        with mock.patch.object(
-            type(self.env["calendar.event"]), "get_current_on_duty_admin", return_value=manager
-        ):
-            res = self.url_open(
-                "/my/tickets/submit",
-                data={"name": "Member ticket", "description": "Desc", "callsign": "K1AAA", "csrf_token": csrf_token},
-            )
+        self.safe_patch_object(type(self.env["calendar.event"]), "get_current_on_duty_admin", return_value=manager)
+        res = self.url_open(
+            "/my/tickets/submit",
+            data={"name": "Member ticket", "description": "Desc", "callsign": "K1AAA", "csrf_token": csrf_token},
+        )
         self.assertEqual(res.status_code, 200)
         ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", "Member ticket")])
         self.assertEqual(len(ticket), 1, "the member's ticket must have been created")

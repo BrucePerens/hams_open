@@ -17,6 +17,8 @@ Plain SQL, matching this platform's zero-sudo rule for migration scripts. Runnin
 
 import logging
 
+from odoo.addons.pager_duty.hooks import _PAGER_BOARD_SQL
+
 _logger = logging.getLogger(__name__)
 
 
@@ -29,7 +31,5 @@ def migrate(cr, version):
         "UPDATE pager_check SET grace_period = 300 WHERE last_run IS NULL AND COALESCE(grace_period, 0) = 0"
     )
     _logger.info("pager_duty 1.1: %s never-run check(s) given a 300 second startup grace period.", cr.rowcount)
-
-    from odoo.addons.pager_duty.hooks import _PAGER_BOARD_SQL
 
     cr.execute(_PAGER_BOARD_SQL)

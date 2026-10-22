@@ -113,7 +113,7 @@ def _missing_required_params(endpoint):
     Odoo gives no function to read, a route of another type, or when nothing is missing."""
     if endpoint.routing.get("type") not in _CALLED_WITH_REQUEST_PARAMS:
         return []
-    handler = getattr(endpoint, "original_endpoint", None)
+    handler = getattr(endpoint, "original_endpoint", None)  # burn-ignore-introspection: attribute of Odoo's routing EndPoint objects, absent on other callables
     if handler is None:
         return []
     try:

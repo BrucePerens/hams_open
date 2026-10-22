@@ -814,8 +814,9 @@ class HelpdeskTicket(models.Model):
         ir.rule allow-list still decides which tickets exist for it."""
         # [@ANCHOR: hams_helpdesk:mcp_safe_read]
         rows = []
+        tickets_by_id = {ticket.id: ticket for ticket in self}
         for view in self.safe_view(max_chars=min(int(max_chars or 0), 20000)):
-            ticket = self.browse(view["id"])
+            ticket = tickets_by_id[view["id"]]
             row = {
                 "id": view["id"],
                 "ticket_type": ticket.ticket_type,
@@ -876,7 +877,9 @@ class HelpdeskTicket(models.Model):
         messages_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")["mail.message"]
         found = {}
         for ticket in visible:
-            messages = messages_env.search(
+            # One search per ticket, on purpose: each ticket has its own cutoff and its own cap of 20 messages. A single
+            # search for all of them would have to read every newer message of a flooded ticket to apply the cap in Python.
+            messages = messages_env.search(  # burn-ignore: per-ticket cutoff and per-ticket limit, at most 200 tickets
                 [
                     ("model", "=", self._name),
                     ("res_id", "=", ticket.id),
