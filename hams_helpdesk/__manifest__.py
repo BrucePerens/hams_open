@@ -40,6 +40,7 @@
             # The member-facing manual for the Support menu item (/my/tickets). It is
             # the only member entry here: "Hams Helpdesk" below is developer
             # documentation and stays internal.
+            # Verified by [@ANCHOR: test_member_manual_is_a_published_member_article]
             "name": "Getting help: Support tickets",
             "path": "data/member_manual.html",
             "icon": "🎫",

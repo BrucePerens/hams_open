@@ -108,6 +108,7 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
             bad.with_user(uid).mcp_post_internal_note("note")
 
     def test_11_mcp_safe_read_wraps_and_withholds(self):
+        # Tests [@ANCHOR: hams_helpdesk:mcp_safe_read]
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_ai_triage_service")
         good = self._ticket(description="<p>Antenna question</p>")
         row = good.with_user(uid).mcp_safe_read()[0]
