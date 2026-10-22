@@ -263,6 +263,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.env["ir.module.module"]._bootstrap_knowledge_docs()
 
     def test_daemon_utils_sys_paths(self):
+        # Tests [@ANCHOR: zero_sudo:_start_daemon_process]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         
         captured_env = {}
@@ -282,6 +283,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_ir_http_is_service_account_cached(self):
         # [@ANCHOR: zero_sudo:COMM_test_is_service_account_cached]
+        # Tests [@ANCHOR: zero_sudo:_is_service_account_cached]
         user = self.env["res.users"].create({
             "name": "Service Account IrHttp",
             "login": "service_account_irhttp@example.com",
@@ -311,6 +313,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_poll_health_check(self):
         # [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
+        # Tests [@ANCHOR: zero_sudo:_poll_health_check]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         
         class MockResponse:

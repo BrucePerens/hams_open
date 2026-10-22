@@ -363,7 +363,9 @@ class TestRabbitMQPool(RealTransactionCase):
         plain BlockingConnection with the same parameters, left alone the same time, is closed by the broker,
         which proves the wait is long enough to matter.
         """
-        # Tests [@ANCHOR: rabbitmq_keepalive_thread] [@ANCHOR: rabbitmq_keepalive_loop] [@ANCHOR: rabbitmq_keepalive_tick]
+        # Tests [@ANCHOR: rabbitmq_keepalive_thread]
+        # Tests [@ANCHOR: rabbitmq_keepalive_loop]
+        # Tests [@ANCHOR: rabbitmq_keepalive_tick]
         pool, pool_class, _channel = self._fresh_pool_with_short_heartbeat(4, 1)
         pooled = pool_class._connection
         queue_name = f"hams_rabbitmq_test_{uuid.uuid4().hex[:12]}"
@@ -404,7 +406,11 @@ class TestRabbitMQPool(RealTransactionCase):
         and closes the connection cleanly (twice is harmless), a connection the pool no longer has ends the thread
         by itself within a tick (no work, no leftover thread), and a connection found dead is dropped quietly.
         """
-        # Tests [@ANCHOR: rabbitmq_keepalive_thread] [@ANCHOR: rabbitmq_pool_shutdown] [@ANCHOR: rabbitmq_keepalive_tick] [@ANCHOR: rabbitmq_forget_keepalive] [@ANCHOR: rabbitmq_shutdown_all]
+        # Tests [@ANCHOR: rabbitmq_keepalive_thread]
+        # Tests [@ANCHOR: rabbitmq_pool_shutdown]
+        # Tests [@ANCHOR: rabbitmq_keepalive_tick]
+        # Tests [@ANCHOR: rabbitmq_forget_keepalive]
+        # Tests [@ANCHOR: rabbitmq_shutdown_all]
         pool, pool_class, _channel = self._fresh_pool_with_short_heartbeat(4, 0.5)
 
         def keepalive_threads():
@@ -447,7 +453,8 @@ class TestRabbitMQPool(RealTransactionCase):
         child gets it free; the child has no keepalive entries, a keepalive tick in the child leaves the
         parent's connection alone, and the parent's connection is still open and serviced afterwards.
         """
-        # Tests [@ANCHOR: rabbitmq_keepalive_thread] [@ANCHOR: rabbitmq_reset_after_fork]
+        # Tests [@ANCHOR: rabbitmq_keepalive_thread]
+        # Tests [@ANCHOR: rabbitmq_reset_after_fork]
         pool, pool_class, _channel = self._fresh_pool_with_short_heartbeat(4, 0.5)
         parent_connection = pool_class._connection
 

@@ -169,7 +169,7 @@ registry.category("web_tour.tours").add("test_tour_violation_report", {
     steps: () => reportViolationSteps([fillGuestEmail("normal-page-tour@example.com")]),
 });
 
-// Tests [@ANCHOR: COMM_edge_cache_csrf_refresh]
+// Tests [@ANCHOR: edge_cache:COMM_edge_cache_csrf_refresh]
 // The same report, filed from a page the server marked edge-cacheable and sent without a session
 // cookie, so the CSRF token in the form belongs to no one. cloudflare's edge_cache_csrf.js must
 // fetch a fresh token (and the session it is bound to) before the form posts; without it the post

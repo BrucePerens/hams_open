@@ -1219,6 +1219,27 @@ class TestSecurityUtils(HamsTransactionCase):
             "filter must exclude it.",
         )
 
+    def test_29b_register_hook_rebuilds_the_service_uid_table_for_this_database_only(self):
+        # Tests [@ANCHOR: zero_sudo:register_hook_preload_service_uids]
+        """`_register_hook()` is what fills the table at registry load. Emptying this database's
+        entries and calling it again must restore them, while an entry belonging to a different
+        database name is left alone."""
+        dbname = self.env.cr.dbname
+        utils = self.env["zero_sudo.security.utils"]
+        real_uid = utils._get_service_uid("zero_sudo.mail_service_internal")
+        other_database_key = ("some_other_database", "zero_sudo.mail_service_internal")
+        cache = security_utils_module._SERVICE_UID_CACHE
+        # The hook rebinds the module-level dict, so clean up through the module, not through `cache`.
+        self.addCleanup(lambda: security_utils_module._SERVICE_UID_CACHE.pop(other_database_key, None))
+        cache[other_database_key] = 4242
+        cache.pop((dbname, "zero_sudo.mail_service_internal"), None)
+
+        utils._register_hook()
+
+        rebuilt = security_utils_module._SERVICE_UID_CACHE
+        self.assertEqual(rebuilt.get((dbname, "zero_sudo.mail_service_internal")), real_uid)
+        self.assertEqual(rebuilt.get(other_database_key), 4242)
+
     def test_30_get_service_uid_cache_hit_skips_ir_model_data_but_still_verifies_live(self):
         # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
         """The cache-hit path (a real, preloaded service account) must still return the correct

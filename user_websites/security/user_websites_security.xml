@@ -64,6 +64,9 @@
              and more (see ir.model.access.csv). Those accounts now hold this
              group instead. test_ownership_bypass_group.py enforces the
              "no grants of its own" invariant mechanically. -->
+        <!-- [@ANCHOR: user_websites:ownership_bypass_group] -->
+        <!-- Verified by [@ANCHOR: test_ownership_bypass_group_is_capability_only] -->
+        <!-- Verified by [@ANCHOR: test_ownership_bypass_group_implied_by_provisioning] -->
         <record id="group_user_websites_ownership_bypass" model="res.groups">
             <field name="name">Service Capability: Proxy Ownership Bypass</field>
         </record>

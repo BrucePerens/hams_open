@@ -25,3 +25,5 @@ The documentation injection logic in `zero_sudo` dynamically checks for the pres
 3. **Injection** `[@ANCHOR: zero_sudo:bootstrap_knowledge_docs]`: The utility safely installs all module docs defined in their `knowledge_docs` manifest arrays.
 
 4. **Per-Doc Install** `[@ANCHOR: zero_sudo:install_single_doc]`: Each individual entry in a module's `knowledge_docs` array is installed (or updated, if its content hash changed) as its own `knowledge.article`, defaulting to unpublished (internal-only) unless the manifest entry explicitly opts into `"public": True`.
+
+5. **Path Containment** `[@ANCHOR: zero_sudo:is_path_within_module_dir]`: Before a manifest-declared document is read, its resolved path must be the module's own directory or lie beneath it. The check compares against the directory plus a path separator, not a bare string prefix, so a sibling directory whose name merely begins with the module's name (for example `zero_sudo_evil` next to `zero_sudo`) is rejected, as is any absolute path outside the module.
