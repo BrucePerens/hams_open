@@ -86,6 +86,10 @@ This module is built with security as a primary concern, adhering strictly to th
 - **Configuration Whitelisting**: Only specifically approved parameters are readable through that layer, preventing unauthorized configuration leakage. The one this module reads, `caching.enable_sw_test_hooks`, is on `zero_sudo`'s whitelist. The quota and invalidation version are not system parameters at all: they are per-website fields (`website.caching_safe_quota_mb`, `website.caching_invalidation_version`). (`caching.safe_quota_mb` is also whitelisted, but nothing in this module reads it.)
 - **No Sudo Escalation**: All background operations run within the context of their assigned service accounts without ever requesting global administrative (`sudo`) privileges.
 
+### Service worker details
+- **Offline fallback page** [@ANCHOR: caching_sw_offline_fallback_response]: when a page request fails and even the precached `/offline` page cannot be found (evicted, or its install-time precache failed), the worker answers with a small built-in "You are offline" page, status 503, instead of returning nothing, which the browser would show as a hard network error.
+- **Stale cache cleanup** [@ANCHOR: caching_sw_cache_cleanup_prefix_scoped]: on activation the worker deletes the caches left by older versions of itself, and only those: a cache is deleted only if its name starts with this worker's own prefix and is not the current cache's name, so caches that other scripts on the same origin created are never touched.
+
 ## 4. Stories & Journeys
 Detailed architectural narratives and process flows are documented in the `docs/` directory:
 

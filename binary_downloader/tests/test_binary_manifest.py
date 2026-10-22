@@ -14,10 +14,35 @@ from unittest.mock import MagicMock
 from odoo import tools
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.addons.binary_downloader.models.binary_utils import _safe_response_geturl
+from odoo.addons.binary_downloader.models.binary_utils import _is_ssrf_safe_public_ip, _safe_response_geturl
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
+
+
+@tagged("post_install", "-at_install")
+class TestIsSsrfSafePublicIp(HamsTransactionCase):
+    """The wrapper must give the shared predicate's verdict for every address class."""
+
+    def test_only_a_public_address_is_safe(self):
+        # Tests [@ANCHOR: binary_utils_is_ssrf_safe_public_ip]
+        import ipaddress
+
+        for text in ("8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"):
+            self.assertTrue(_is_ssrf_safe_public_ip(ipaddress.ip_address(text)), text)
+        for text in (
+            "127.0.0.1",  # burn-ignore-ssrf-test-value
+            "10.0.0.5",
+            "172.16.0.1",
+            "192.168.1.1",
+            "169.254.169.254",  # cloud metadata address
+            "0.0.0.0",
+            "224.0.0.1",
+            "::1",
+            "fe80::1",
+            "fc00::1",
+        ):
+            self.assertFalse(_is_ssrf_safe_public_ip(ipaddress.ip_address(text)), text)
 
 
 class TestSafeResponseGeturl(HamsTransactionCase):

@@ -386,3 +386,16 @@ class TestB2Fixes(HamsTransactionCase):
             "a changed invalidation counter must clear this worker's stale _db_configs entry too, "
             "the same as it already clears _local_cache.",
         )
+
+    def test_clear_db_config_cache_drops_only_the_named_databases_entry(self):
+        # Tests [@ANCHOR: distributed_redis_cache:clear_db_config_cache]
+        redis_pool._db_configs["db_a"] = ("host-a", 6379, None)
+        redis_pool._db_configs["db_b"] = ("host-b", 6380, "pw")
+
+        redis_pool.clear_db_config_cache("db_a")
+
+        self.assertNotIn("db_a", redis_pool._db_configs)
+        self.assertEqual(redis_pool._db_configs["db_b"], ("host-b", 6380, "pw"))
+        # A database with no cached entry is not an error.
+        redis_pool.clear_db_config_cache("never_cached")
+
