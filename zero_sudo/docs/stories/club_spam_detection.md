@@ -99,6 +99,25 @@ flags too. Anything that is not a well-formed evidence dict is clean, not an err
 a dropped site after a recheck: restore it when the scan is clean (under 5 percent flagged and under half the significance
 count) and the spam was last seen `clean_days` (30) or more ago; keep it dropped otherwise.
 
+## Is the Spam Still There? `[@ANCHOR: zero_sudo:club_spam_pick_head_sample]`
+
+`pick_head_sample(flagged, size)` chooses up to ten flagged addresses to re-check with HEAD: the oldest dated first, the rest
+spread evenly. `evaluate_head_results(results, today)` `[@ANCHOR: zero_sudo:club_spam_evaluate_head_results]` judges the answers:
+at least half 2xx is `still_spam`, more than half 404/410 (or a redirect to the home page) is `removed`, anything else
+(403, 405, 5xx, a timeout) is `unknown` and is never counted as removed; it also counts the alive pages whose `Last-Modified` is
+`age_days` or older (`http_date_age()` `[@ANCHOR: zero_sudo:club_spam_http_date_age]`) as persistence evidence.
+
+## Cutting Spam Out of a Page `[@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]`
+
+`strip_spam_blocks(markup, url)` removes, by character span, a recent-posts widget most of whose links are flagged, a hidden
+element holding a flagged link, a list item with one flagged link and any other flagged link, so a model reading a suspect site
+sees the club's own content. The parser class `_StripParser` is a stack with `__init__` `[@ANCHOR: zero_sudo:club_spam_strip_init]`,
+`_offset` `[@ANCHOR: zero_sudo:club_spam_strip_offset]`, `handle_starttag` `[@ANCHOR: zero_sudo:club_spam_strip_start]`,
+`handle_data` `[@ANCHOR: zero_sudo:club_spam_strip_data]` and `handle_endtag` `[@ANCHOR: zero_sudo:club_spam_strip_end]`.
+
+`urlopen_ssrf_safe(..., follow_redirects=False)` `[@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]` hands a 3xx to the caller instead
+of following it, so a HEAD check stays on the host it was asked about.
+
 ## Settings `[@ANCHOR: zero_sudo:club_spam_config_from_params]`
 
 `SpamConfig` holds every threshold with its default; `SpamConfig.from_params(get_param)` reads each from the system parameter of

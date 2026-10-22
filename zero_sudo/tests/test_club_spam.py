@@ -555,5 +555,91 @@ class TestEvidenceAndDecision(unittest.TestCase):
             self.assertFalse(any(word in lowered for word in ("secret", "key", "password", "token", "auth", "crypt", "cert")), name)
 
 
+class TestHeadVerification(unittest.TestCase):
+    """Bruce's refinement: a handful of flagged addresses are re-checked with HEAD to see whether the spam is still there."""
+
+    def _flagged_evidence(self, n=40):
+        rows = [{"u": f"{HOST}/best-online-casino-bonus-{i}/", "t": "", "d": 400 - i * 5, "s": "core"} for i in range(n)]
+        rows += [{"u": f"{HOST}/spam-slots-{i}/", "t": "", "d": None, "s": "injected"} for i in range(n)]
+        rows += [{"u": f"{HOST}/club-news-{i}/", "t": "", "d": 900, "s": "core"} for i in range(20)]
+        return {"entries": rows, "known": len(rows), "flagged_total": 2 * n}
+
+    def test_50_the_sample_is_ten_flagged_urls_spread_out_and_the_oldest_dated_first(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_pick_head_sample]
+        verdict = spam.evaluate_evidence(self._flagged_evidence())
+        sample = verdict["head_sample"]
+        self.assertEqual(len(sample), 10)
+        self.assertEqual(len(set(sample)), 10)
+        self.assertTrue(all(spam.score_entry(u).flagged for u in sample))
+        self.assertTrue(all("club-news" not in u for u in sample))
+        # The oldest dated spam is preferred: the first dated addresses are in it.
+        self.assertIn(f"{HOST}/best-online-casino-bonus-0/", sample)
+        # Few flagged URLs: all of them; none: nothing.
+        few = self._flagged_evidence(n=2)
+        self.assertEqual(len(spam.evaluate_evidence(few)["head_sample"]), 4)
+        self.assertEqual(spam.evaluate_evidence(_evidence(home_html(), [], []))["head_sample"], [])
+        self.assertEqual(spam.pick_head_sample([], 10), [])
+
+    def test_51_head_answers_are_judged_still_spam_removed_or_unknown(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_evaluate_head_results]
+        def answers(*codes, **extra):
+            return [dict({"u": f"{HOST}/p{i}/", "status": code}, **extra) for i, code in enumerate(codes)]
+
+        cases = [
+            (answers(200, 200, 200, 200, 404), "still_spam"),
+            (answers(200, 200, 404, 404), "still_spam"),  # at least half answer 2xx
+            (answers(200, 404, 404, 404), "removed"),
+            (answers(404, 410, 404, 410), "removed"),
+            (answers(405, 405, 403, None), "unknown"),  # never "removed"
+            (answers(200, 405, 403, 500), "unknown"),
+            (answers(404, 405, 405, 405), "unknown"),
+            ([{"u": "a", "status": 301, "redirect_home": True}] * 4, "removed"),
+            ([{"u": "a", "status": 301, "redirect_home": False}] * 4, "unknown"),
+            ([], "unknown"),
+        ]
+        for results, expected in cases:
+            with self.subTest(results=results[:2], expected=expected):
+                self.assertEqual(spam.evaluate_head_results(results, TODAY)["result"], expected)
+
+    def test_52_an_old_last_modified_or_a_kept_etag_counts_as_persistence(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_evaluate_head_results]
+        # Tests [@ANCHOR: zero_sudo:club_spam_http_date_age]
+        old = "Mon, 01 Sep 2025 10:00:00 GMT"
+        young = "Mon, 19 Oct 2026 10:00:00 GMT"
+        rows = [{"u": f"{HOST}/p{i}/", "status": 200, "last_modified": old if i < 4 else young} for i in range(6)]
+        judged = spam.evaluate_head_results(rows, TODAY)
+        self.assertEqual((judged["alive"], judged["old_count"], judged["with_validators"]), (6, 4, 6))
+        self.assertGreater(spam.http_date_age("Mon, 01 Sep 2025 10:00:00 GMT", TODAY), 300)
+        for bad in ("", None, "yesterday", "Mon, 99 Foo 2025 10:00:00 GMT"):
+            self.assertIsNone(spam.http_date_age(bad, TODAY))
+        self.assertIsNone(spam.http_date_age("Mon, 01 Sep 2099 10:00:00 GMT", TODAY))
+        # An ETag alone says nothing about age; it is only counted.
+        judged = spam.evaluate_head_results([{"u": "a", "status": 200, "etag": '"x"'}] * 2, TODAY)
+        self.assertEqual((judged["old_count"], judged["with_validators"]), (0, 2))
+
+    def test_53_spam_blocks_are_cut_from_a_page_before_a_model_sees_it(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_init]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_offset]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_start]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_data]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_end]
+        page = home_html(recent=SPAM_RECENT_POSTS)
+        text, removed = spam.strip_spam_blocks(page, HOST + "/")
+        self.assertGreater(removed, 300)
+        self.assertNotIn("Casino", text)
+        self.assertNotIn("Blackjack", text)
+        self.assertIn("Amateur Radio Emergency Service of Example County", text)
+        self.assertIn("146.940", text)
+        self.assertIn("Frequencies / Nets", text)
+        # A clean page is returned untouched, and a hidden link farm is cut.
+        clean = home_html()
+        self.assertEqual(spam.strip_spam_blocks(clean, HOST + "/"), (clean, 0))
+        farm, removed = spam.strip_spam_blocks(home_html(body_extra=hidden_link_block(30)), HOST + "/")
+        self.assertNotIn("free spins", farm)
+        self.assertGreater(removed, 1000)
+        self.assertEqual(spam.strip_spam_blocks("", HOST + "/"), ("", 0))
+
+
 if __name__ == "__main__":
     unittest.main()

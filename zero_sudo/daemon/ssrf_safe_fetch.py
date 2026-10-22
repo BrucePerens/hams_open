@@ -268,7 +268,15 @@ class _SSRFSafeHTTPSHandler(urllib.request.HTTPSHandler):
         )
 
 
-def _build_ssrf_safe_opener(context_label, https_only, ssl_context=None):
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect, so the 3xx answer reaches the caller as an HTTPError (with its Location header)."""
+
+    # [@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _build_ssrf_safe_opener(context_label, https_only, ssl_context=None, follow_redirects=True):
     """Builds a fresh `OpenerDirector` with ONLY the handlers this fetch
     needs -- deliberately NOT `urllib.request.build_opener()`, and deliberately
     no `ProxyHandler`: an opener built by `build_opener()` would end up with
@@ -282,7 +290,7 @@ def _build_ssrf_safe_opener(context_label, https_only, ssl_context=None):
     opener = urllib.request.OpenerDirector()
     opener.add_handler(urllib.request.UnknownHandler())
     opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
-    opener.add_handler(urllib.request.HTTPRedirectHandler())
+    opener.add_handler(urllib.request.HTTPRedirectHandler() if follow_redirects else _NoRedirectHandler())
     opener.add_handler(urllib.request.HTTPErrorProcessor())
     if not https_only:
         opener.add_handler(_SSRFSafeHTTPHandler(context_label))
@@ -291,7 +299,7 @@ def _build_ssrf_safe_opener(context_label, https_only, ssl_context=None):
 
 
 # [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
-def urlopen_ssrf_safe(request, context_label, *, https_only=False, timeout=None, ssl_context=None):
+def urlopen_ssrf_safe(request, context_label, *, https_only=False, timeout=None, ssl_context=None, follow_redirects=True):
     """Drop-in-shaped replacement for `urllib.request.urlopen()`: same
     context-manager-compatible return value, but resolves + validates +
     pins the connection to a safe address on EVERY hop (the original URL and
@@ -307,8 +315,9 @@ def urlopen_ssrf_safe(request, context_label, *, https_only=False, timeout=None,
     lets a caller (namely this module's own tests, against a self-signed
     local test server) supply a non-default `ssl.SSLContext` -- omitted,
     this is `None`, exactly the same default `urllib.request.HTTPSHandler`
-    itself uses."""
-    opener = _build_ssrf_safe_opener(context_label, https_only, ssl_context=ssl_context)
+    itself uses. `follow_redirects=False` makes a redirect an `HTTPError` instead of a second request (a HEAD check must not
+    leave the host it was asked about)."""
+    opener = _build_ssrf_safe_opener(context_label, https_only, ssl_context=ssl_context, follow_redirects=follow_redirects)
     if timeout is None:
         return opener.open(request)
     return opener.open(request, timeout=timeout)

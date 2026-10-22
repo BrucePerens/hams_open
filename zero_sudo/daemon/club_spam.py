@@ -44,6 +44,7 @@ make the age gate fail, only fail to help it.
 Defaults of every threshold are in SpamConfig; the Odoo side reads them from system parameters with the same names.
 """
 
+import email.utils
 import html
 import logging
 import re
@@ -110,6 +111,10 @@ class SpamConfig:
     # A site that is suspect, significantly spammed or (dry run) would be dropped is looked at again this often, so
     # persistence is established without waiting a whole scan_days.
     rescan_flagged_days: int = 7
+    # A flagged site (suspect or worse, dropped included) has a sample of its spam addresses re-checked with HEAD this
+    # often, instead of its home page and sitemaps being read again. At most head_sample_size addresses per site.
+    head_days: int = 7
+    head_sample_size: int = 10
 
     # [@ANCHOR: zero_sudo:club_spam_config_from_params]
     @classmethod
@@ -644,6 +649,8 @@ def evaluate_evidence(evidence, config=None, first_detected_age_days=None):
         reasons.append(f"{n_flagged} of {known} known URLs flagged: below the {config.min_flagged}/{config.min_fraction:.0%} bar")
     else:
         level = LEVEL_CLEAN
+    head_sample = pick_head_sample(
+        [(item["row"]["u"], item["age"]) for item in flagged], config.head_sample_size)
     flagged.sort(key=lambda item: (-item["score"].points, item["row"]["u"]))
     sample = [
         {
@@ -655,7 +662,7 @@ def evaluate_evidence(evidence, config=None, first_detected_age_days=None):
     return {
         "level": level, "flagged": n_flagged, "known": known, "fraction": round(fraction, 4),
         "aged_flagged": len(aged), "dated_flagged": len(dated), "on_topic": on_topic,
-        "persisted": persisted, "basis": basis, "reasons": reasons, "sample": sample,
+        "persisted": persisted, "basis": basis, "reasons": reasons, "sample": sample, "head_sample": head_sample,
         "wordpress": bool(evidence.get("wordpress")) if isinstance(evidence, dict) else False,
     }
 
@@ -674,3 +681,183 @@ def decide_recheck(verdict, days_since_last_detected, config=None):
     if clean and days_since_last_detected is not None and days_since_last_detected >= config.clean_days:
         return "restore"
     return "keep"
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# HEAD verification: is the spam still there?
+
+# [@ANCHOR: zero_sudo:club_spam_pick_head_sample]
+def pick_head_sample(flagged, size=10):
+    """Up to `size` addresses to re-check with HEAD, from `flagged` [(url, age in days or None)] in sitemap order: the oldest
+    dated ones first (they are the ones that show the spam has persisted), the rest spread evenly across the list."""
+    flagged = list(flagged)
+    if size <= 0 or not flagged:
+        return []
+    dated = sorted((item for item in flagged if item[1] is not None), key=lambda item: -item[1])
+    chosen = [url for url, _age in dated[: (size + 1) // 2]]
+    rest = [url for url, _age in flagged if url not in chosen]
+    want = size - len(chosen)
+    if want > 0 and rest:
+        step = max(1, len(rest) / want)
+        chosen += [rest[min(len(rest) - 1, int(i * step))] for i in range(min(want, len(rest)))]
+    seen, out = set(), []
+    for url in chosen:
+        if url not in seen:
+            seen.add(url)
+            out.append(url)
+    return out[:size]
+
+
+# [@ANCHOR: zero_sudo:club_spam_http_date_age]
+def http_date_age(text, today):
+    """Days between an HTTP date (`Mon, 01 Sep 2025 10:00:00 GMT`) and `today`; None for anything else or a future date."""
+    try:
+        when = email.utils.parsedate_to_datetime(str(text or ""))
+    except (TypeError, ValueError, IndexError):
+        return None
+    if when is None:
+        return None
+    return age_days(when.date().isoformat(), today)
+
+
+# [@ANCHOR: zero_sudo:club_spam_evaluate_head_results]
+def evaluate_head_results(results, today, config=None):
+    """Judges HEAD answers for the sampled spam addresses. Each result: {"u", "status" (int or None for a timeout or error),
+    "etag", "last_modified", "redirect_home" (a redirect to the home page)}. A 2xx answer means the page is still there; 404,
+    410 and a redirect to the home page mean it is gone; anything else (405, 403, 5xx, a timeout) is UNKNOWN and is never
+    counted as removed. Returns {"result": "still_spam" (at least half answer 2xx), "removed" (more than half are gone) or
+    "unknown", "alive", "gone", "unknown", "checked", "old_count" (alive pages whose Last-Modified is age_days or more old),
+    "with_validators" (alive pages that sent an ETag or Last-Modified), "confirm_url" (one address to confirm with a single
+    GET when the answer is unknown)}."""
+    config = config or SpamConfig()
+    alive = gone = unknown = old = validators = 0
+    first_unknown = ""
+    for item in results if isinstance(results, list) else []:
+        if not isinstance(item, dict):
+            continue
+        status = item.get("status")
+        if isinstance(status, int) and not isinstance(status, bool) and 200 <= status < 300:
+            alive += 1
+            etag, modified = item.get("etag"), item.get("last_modified")
+            validators += 1 if (etag or modified) else 0
+            age = http_date_age(modified, today)
+            old += 1 if (age is not None and age >= config.age_days) else 0
+        elif status in (404, 410) or (isinstance(status, int) and 300 <= status < 400 and item.get("redirect_home") is True):
+            gone += 1
+        else:
+            unknown += 1
+            first_unknown = first_unknown or str(item.get("u") or "")
+    total = alive + gone + unknown
+    if total and alive * 2 >= total:
+        result = "still_spam"
+    elif total and gone * 2 > total:
+        result = "removed"
+    else:
+        result = "unknown"
+    return {
+        "result": result, "alive": alive, "gone": gone, "unknown": unknown, "checked": total, "old_count": old,
+        "with_validators": validators, "confirm_url": first_unknown if result == "unknown" else "",
+    }
+
+
+class _StripParser(HTMLParser):
+    """Finds the character spans of a page that are spam: a recent-posts widget most of whose links are flagged, a hidden
+    element holding a flagged link, a list item whose only link is flagged, a flagged link anywhere else."""
+
+    # [@ANCHOR: zero_sudo:club_spam_strip_init]
+    def __init__(self, source, base_url):
+        super().__init__(convert_charrefs=True)
+        self.source = source
+        self.base_url = base_url
+        self._line_starts = [0]
+        for index, char in enumerate(source):
+            if char == "\n":
+                self._line_starts.append(index + 1)
+        self._stack = []  # dicts: tag, start, hidden, recent, anchors (flagged flags), li
+        self._anchor_text = None
+        self.spans = []
+
+    # [@ANCHOR: zero_sudo:club_spam_strip_offset]
+    def _offset(self):
+        line, col = self.getpos()
+        return self._line_starts[min(line - 1, len(self._line_starts) - 1)] + col
+
+    # [@ANCHOR: zero_sudo:club_spam_strip_start]
+    def handle_starttag(self, tag, attrs):
+        if tag in _VOID:
+            return
+        attrs = {k: (v or "") for k, v in attrs}
+        frame = {
+            "tag": tag, "start": self._offset(), "anchors": [],
+            "hidden": bool(_HIDDEN_STYLE.search(attrs.get("style", ""))),
+            "recent": bool(_RECENT_WIDGET.search(attrs.get("id", "") + " " + attrs.get("class", ""))),
+            "href": attrs.get("href", "") if tag == "a" else "", "text": "",
+        }
+        self._stack.append(frame)
+
+    # [@ANCHOR: zero_sudo:club_spam_strip_data]
+    def handle_data(self, data):
+        for frame in self._stack:
+            if frame["tag"] == "a":
+                frame["text"] += data
+
+    # [@ANCHOR: zero_sudo:club_spam_strip_end]
+    def handle_endtag(self, tag):
+        index = next((i for i in range(len(self._stack) - 1, -1, -1) if self._stack[i]["tag"] == tag), None)
+        if index is None:
+            return
+        frames = self._stack[index:]
+        del self._stack[index:]
+        frame = frames[0]
+        end = self.source.find(">", self._offset())
+        end = len(self.source) if end < 0 else end + 1
+        if tag == "a" and frame["href"] and not re.match(r"(?i)(?:mailto|tel|javascript|sms|data):|#", frame["href"]):
+            url = frame["href"] if re.match(r"(?i)https?://", frame["href"]) else _join(self.base_url, frame["href"])
+            flagged = score_entry(url, " ".join(frame["text"].split())).flagged
+            frame["anchors"].append(flagged)
+            if self._stack:
+                self._stack[-1]["anchors"].append(flagged)
+            if flagged and not any(f["tag"] in ("li",) and len(f["anchors"]) <= 1 for f in self._stack[-1:]):
+                self.spans.append((frame["start"], end))
+            return
+        flags = frame["anchors"]
+        if self._stack:
+            self._stack[-1]["anchors"].extend(flags)
+        if not flags:
+            return
+        bad = sum(1 for flag in flags if flag)
+        if (frame["recent"] and bad * 2 >= len(flags) and bad) or (frame["hidden"] and bad) or (tag == "li" and len(flags) == 1 and bad):
+            self.spans.append((frame["start"], end))
+
+
+# [@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]
+def strip_spam_blocks(markup, base_url):
+    """(markup without its spam blocks, characters removed). For a site that is suspect but not dropped, so a model reading
+    the page sees the club's own content and not a "recent posts" list of casino posts: a recent-posts widget most of whose
+    links are flagged, a hidden element holding a flagged link, a list item whose one link is flagged, and any other flagged
+    link are cut. A page with nothing flagged comes back unchanged."""
+    markup = str(markup or "")
+    if not markup:
+        return "", 0
+    parser = _StripParser(markup, base_url or "")
+    try:
+        parser.feed(markup)
+        parser.close()
+    except (ValueError, AssertionError):
+        logger.info("club_spam: a page of %s did not parse to the end; the spam found so far is cut", base_url)
+    spans = sorted(set(parser.spans))
+    merged = []
+    for start, end in spans:
+        if merged and start < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    if not merged:
+        return markup, 0
+    out, position = [], 0
+    for start, end in merged:
+        out.append(markup[position:start])
+        position = end
+    out.append(markup[position:])
+    result = "".join(out)
+    return result, len(markup) - len(result)
