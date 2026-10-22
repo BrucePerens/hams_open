@@ -72,7 +72,11 @@ class TestMissingRequiredParams(HamsHttpCase):
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         body = self._rpc("/web/session/authenticate", {}).json()
         self.assertIn("error", body)
-        self.assertEqual(body["error"]["code"], 400, body)
+        # Odoo's JSON-RPC dispatcher puts 0 in error.code for every exception but NotFound and a session
+        # expiry (the nightly of 2026-10-18 says "we don't care of this code"); the 400 is the exception's own
+        # class and message in error.data.
+        self.assertEqual(body["error"]["data"]["name"], "werkzeug.exceptions.BadRequest", body)
+        self.assertIn("400 Bad Request", body["error"]["data"]["message"])
         self.assertIn("Missing required parameter", str(body))
         self.assertNotIn("Traceback", str(body))
         self.assertNotIn("TypeError", str(body))
@@ -103,7 +107,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.authenticate("admin", "admin")
         params = {"model": "res.partner", "method": "search_count", "args": [[["name", "=", "a\u0000b"]]], "kwargs": {}}
         body = self._rpc("/web/dataset/call_kw/res.partner.search_count", params).json()
-        self.assertEqual(body["error"]["code"], 400, body)
+        self.assertEqual(body["error"]["data"]["name"], "werkzeug.exceptions.BadRequest", body)
 
     def test_text_where_a_handler_wants_a_number_is_a_400_not_a_500(self):
         # Tests [@ANCHOR: hams_helpdesk:missing_required_params_is_400]
