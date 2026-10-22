@@ -94,7 +94,7 @@ pub struct RawParameters {
     pub b8: u32,
 }
 
-// [@ANCHOR: extract_raw_parameters]
+// [@ANCHOR: dstar_extract_raw_parameters]
 pub fn extract_raw_parameters(d: u64) -> RawParameters {
     RawParameters {
         b0: (bits(d, 0, 6) << 1) | bit(d, 48),
@@ -302,14 +302,6 @@ pub const GAMMA_MEMORY: f64 = 0.0;
 /// frame on the chip versus 0.65-0.69 on mbelib's constant).
 pub const PREDICTOR_RHO: f64 = 0.8;
 
-/// Dequantizes one frame's decoded 49-bit `d` into real synthesis-ready parameters (or a tone
-/// frame's own payload), advancing `state` in place for the `Speech` case -- the direct,
-/// freshly-written equivalent of mbelib's own `mbe_decodeAmbe2400Parms`, verified stage by stage
-/// against that real source (see this function's own inline citations) rather than guessed. Takes
-/// `d` directly (not just `RawParameters`) because a real tone frame's `index`/`volume` are read
-/// from a different bit scatter than the ordinary speech `b1`/`b2` [`extract_raw_parameters`]
-/// returns -- see [`decode_tone`].
-///
 /// `f0 = 2^(-4.258618 - 0.021766*b0)` cycles per sample: the real chip's D-STAR pitch map, fitted to the harmonic
 /// peak frequencies of the chip's own output at 100 pitch indices (`examples/dstar_field_scan.rs ... f0scan`; maximum
 /// residual 0.2%). It is logarithmic at 45.94 steps per octave, half of the P25-mode chip's 92.02, so the two are
@@ -324,7 +316,14 @@ pub fn b0_from_f0(f0: f64) -> f64 {
     (-f0.log2() - 4.258618) / 0.021766
 }
 
-// [@ANCHOR: dequantize]
+/// Dequantizes one frame's decoded 49-bit `d` into real synthesis-ready parameters (or a tone
+/// frame's own payload), advancing `state` in place for the `Speech` case -- the direct,
+/// freshly-written equivalent of mbelib's own `mbe_decodeAmbe2400Parms`, verified stage by stage
+/// against that real source (see this function's own inline citations) rather than guessed. Takes
+/// `d` directly (not just `RawParameters`) because a real tone frame's `index`/`volume` are read
+/// from a different bit scatter than the ordinary speech `b1`/`b2` [`extract_raw_parameters`]
+/// returns -- see [`decode_tone`].
+// [@ANCHOR: dstar_dequantize]
 pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
     let raw = extract_raw_parameters(d);
     if classify_b0(raw.b0) == FrameKind::Tone {
@@ -550,6 +549,7 @@ mod tests {
     /// spectral amplitude must be finite and non-negative -- catches an indexing panic or a
     /// NaN/negative amplitude across the full parameter space, not just one hand-picked example.
     #[test]
+    // Tests [@ANCHOR: dstar_dequantize]
     fn dequantize_produces_finite_nonnegative_amplitudes_across_the_full_b0_range() {
         for b0 in 0u32..126 {
             let raw = RawParameters {
@@ -579,6 +579,94 @@ mod tests {
                 DequantizedFrame::Tone(_) => panic!("b0={b0} is not a tone value (126/127)"),
             }
         }
+    }
+
+    /// `dequantize` advances the decoder state it is given: after a speech frame `state.l` is that
+    /// frame's `L` (from `L_TABLE[b0]`), `state.gamma` is `GAMMA_SCALE * DG[b2] + GAMMA_MEMORY *
+    /// previous gamma` (the chip-fitted D-STAR constants, not mbelib's `1`/`0.5`), and `log2_ml` has
+    /// one entry per harmonic plus the unused index 0. A tone frame returns its payload and leaves
+    /// the state exactly as it was.
+    #[test]
+    // Tests [@ANCHOR: dstar_dequantize]
+    fn dequantize_advances_the_state_for_speech_and_leaves_it_alone_for_a_tone() {
+        let raw = RawParameters {
+            b0: 40,
+            b1: 5,
+            b2: 21,
+            b3: 100,
+            b4: 20,
+            b5: 3,
+            b6: 3,
+            b7: 3,
+            b8: 3 << 1,
+        };
+        let d = super::super::encode::pack_raw_parameters(&raw);
+        let mut state = DStarDecoderState::initial();
+        state.gamma = 7.0; // would feed through if GAMMA_MEMORY were nonzero
+        let params = match dequantize(d, &mut state) {
+            DequantizedFrame::Speech(p) => p,
+            DequantizedFrame::Tone(_) => panic!("b0=40 is a speech frame"),
+        };
+        let expected_l = tables::L_TABLE[40];
+        assert_eq!(params.l, expected_l);
+        assert_eq!(state.l, expected_l);
+        assert_eq!(state.log2_ml.len(), expected_l as usize + 1);
+        assert_eq!(params.voiced.len(), expected_l as usize + 1);
+        assert_eq!(params.ml.len(), expected_l as usize + 1);
+        let expected_gamma = GAMMA_SCALE * tables::DG[21] + GAMMA_MEMORY * 7.0;
+        assert!((state.gamma - expected_gamma).abs() < 1e-12);
+        assert!((params.w0 - f0_from_b0(40) * 2.0 * std::f64::consts::PI).abs() < 1e-12);
+
+        // A tone frame (b0 = 126) returns the tone payload and does not touch the state.
+        let tone_d = super::super::encode::pack_tone_parameters(32, 200);
+        let before = (state.l, state.gamma, state.log2_ml.clone());
+        match dequantize(tone_d, &mut state) {
+            DequantizedFrame::Tone(t) => assert_eq!((t.index, t.volume), (32, 200)),
+            DequantizedFrame::Speech(_) => panic!("b0=126 must dequantize as a tone"),
+        }
+        assert_eq!((state.l, state.gamma, state.log2_ml.clone()), before);
+    }
+
+    /// Known-answer check of the D-STAR bit scatter, one bit at a time: a single set bit `d[i]`
+    /// (0 = most significant of the 49) lands in exactly the parameter and bit position the table
+    /// in `mod.rs` gives, and `d[24]` (the one bit no parameter reads) changes nothing.
+    #[test]
+    // Tests [@ANCHOR: dstar_extract_raw_parameters]
+    fn extract_raw_parameters_places_each_single_bit_where_the_layout_table_says() {
+        fn only(d_index: usize) -> RawParameters {
+            extract_raw_parameters(1u64 << (48 - d_index))
+        }
+        let zero = extract_raw_parameters(0);
+        let fields = |r: &RawParameters| [r.b0, r.b1, r.b2, r.b3, r.b4, r.b5, r.b6, r.b7, r.b8];
+        assert_eq!(fields(&zero), [0; 9]);
+        // b0 = d[0..6) << 1 | d[48]
+        assert_eq!(only(0).b0, 0b100_0000);
+        assert_eq!(only(5).b0, 0b000_0010);
+        assert_eq!(only(48).b0, 1);
+        // b1 = d[38..42)
+        assert_eq!(only(38).b1, 0b1000);
+        assert_eq!(only(41).b1, 0b0001);
+        // b2 = d[6..10) << 2 | d[42..44)
+        assert_eq!(only(6).b2, 0b10_0000);
+        assert_eq!(only(43).b2, 0b00_0001);
+        // b3 = d[10..12) << 7 | d[12..17) << 2 | d[44..46)
+        assert_eq!(only(10).b3, 1 << 8);
+        assert_eq!(only(12).b3, 1 << 6);
+        assert_eq!(only(45).b3, 1);
+        // b4 = d[17..22) << 2 | d[46..48)
+        assert_eq!(only(17).b4, 1 << 6);
+        assert_eq!(only(47).b4, 1);
+        // b5 = d[22..24) << 2 | d[25..27)
+        assert_eq!(only(22).b5, 0b1000);
+        assert_eq!(only(26).b5, 0b0001);
+        // b6 = d[27..31), b7 = d[31..35)
+        assert_eq!(only(27).b6, 0b1000);
+        assert_eq!(only(34).b7, 0b0001);
+        // b8 = d[35..38) << 1: its low bit is never filled from the wire
+        assert_eq!(only(35).b8, 0b1000);
+        assert_eq!(only(37).b8, 0b0010);
+        // d[24] is read by no parameter.
+        assert_eq!(fields(&only(24)), [0; 9]);
     }
 
     /// `classify_b0` must match mbelib's own real `ambe3600x2400.c` trigger exactly:

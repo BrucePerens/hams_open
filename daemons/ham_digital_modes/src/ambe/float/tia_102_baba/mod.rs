@@ -644,6 +644,7 @@ mod tests {
     /// seeded from `u_0` (Eq. 84-94) leaves textbook Golay/Hamming codewords, and `decode_code_vectors`
     /// recovers every `u` with zero corrected errors.
     #[test]
+    // Tests [@ANCHOR: ambe_mod:decode_code_vectors]
     fn encode_code_vectors_is_modulated_textbook_fec_and_decode_code_vectors_inverts_it() {
         let u = [
             0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010,
@@ -677,6 +678,7 @@ mod tests {
     /// Correctable errors (3 per Golay block, 1 per Hamming block) are repaired and counted, including
     /// an error in `c_0` itself (the demodulation must then be keyed off the corrected `u_0`).
     #[test]
+    // Tests [@ANCHOR: ambe_mod:decode_code_vectors]
     fn decode_code_vectors_corrects_up_to_capacity_in_every_block_including_c0() {
         let u = [0x5A5u32, 0x3C3, 0xF0F, 0x0FF, 0x7A1, 0x2C4, 0x123, 0x55];
         let mut c = encode_code_vectors(u);

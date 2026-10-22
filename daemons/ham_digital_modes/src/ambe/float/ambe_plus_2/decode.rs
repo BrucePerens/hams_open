@@ -34,7 +34,7 @@ pub struct RawParameters {
     pub b8: u32,
 }
 
-// [@ANCHOR: extract_raw_parameters]
+// [@ANCHOR: ambe_plus_2_extract_raw_parameters]
 pub fn extract_raw_parameters(d: u64) -> RawParameters {
     RawParameters {
         b0: (bits(d, 0, 4) << 3) | bits(d, 37, 3),
@@ -357,7 +357,7 @@ pub enum DequantizedFrame {
 /// Dequantizes `RawParameters` into real synthesis-ready parameters (or a special-frame result),
 /// advancing `state` in place for the `Speech` case -- the direct equivalent of mbelib's own
 /// `mbe_decodeAmbe2450Parms`, verified stage by stage against that real source.
-// [@ANCHOR: dequantize]
+// [@ANCHOR: ambe_plus_2_dequantize]
 pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedFrame {
     match classify_b0(raw.b0) {
         FrameKind::Erasure => return DequantizedFrame::Erasure,
@@ -519,10 +519,6 @@ mod tests {
     use crate::ambe::float::dstar::whiten_c1;
     use crate::ambe::general::fec::golay_encode;
 
-    /// The `b0..b8` scatter must be a genuine bijection over all 49 bits of `d[]` -- every index
-    /// used by exactly one parameter, exactly once (`mod.rs`'s own doc comment claims this
-    /// explicitly, unlike D-STAR's own scatter which leaves one bit unused). A missed or doubled
-    /// index here is the exact class of transcription bug the D-STAR build caught twice.
     #[test]
     fn dtmf_tone_idx_inverts_dtmf_digit_from_tone_idx() {
         for row in 0..4u8 {
@@ -535,6 +531,10 @@ mod tests {
         }
     }
 
+    /// The `b0..b8` scatter must be a genuine bijection over all 49 bits of `d[]` -- every index
+    /// used by exactly one parameter, exactly once (`mod.rs`'s own doc comment claims this
+    /// explicitly, unlike D-STAR's own scatter which leaves one bit unused). A missed or doubled
+    /// index here is the exact class of transcription bug the D-STAR build caught twice.
     #[test]
     fn scatter_covers_every_bit_of_d_exactly_once() {
         // Build a d[] where bit i (MSB-relative, matching bits()/bit()'s own convention) is set
@@ -584,6 +584,7 @@ mod tests {
     /// load-bearing check `ambe_dstar::decode`'s own tests use, applied to this generation's own
     /// scatter.
     #[test]
+    // Tests [@ANCHOR: ambe_plus_2_extract_raw_parameters]
     fn extract_raw_parameters_round_trips_through_the_shared_frame_layer() {
         let original = RawParameters {
             b0: 0b101_0110,    // 7 bits, < 120 so a real speech frame
@@ -620,10 +621,128 @@ mod tests {
         assert_eq!(recovered, original);
     }
 
+    /// Known-answer check of the half-rate bit scatter, one bit at a time, against the table in
+    /// `mod.rs`: a single set bit `d[i]` (0 = most significant of the 49) lands in exactly one
+    /// parameter at the listed weight. Every `d[]` bit is used (unlike D-STAR's), so the sum of the
+    /// nine parameters' bit counts, 7+5+5+9+7+5+4+4+3, equals 49.
+    #[test]
+    // Tests [@ANCHOR: ambe_plus_2_extract_raw_parameters]
+    fn extract_raw_parameters_places_each_single_bit_where_the_layout_table_says() {
+        fn only(d_index: usize) -> RawParameters {
+            extract_raw_parameters(1u64 << (48 - d_index))
+        }
+        let fields = |r: &RawParameters| [r.b0, r.b1, r.b2, r.b3, r.b4, r.b5, r.b6, r.b7, r.b8];
+        // (d index, parameter number, resulting value)
+        let cases: [(usize, usize, u32); 18] = [
+            (0, 0, 0b100_0000), // b0 = d[0..4) << 3 | d[37..40)
+            (3, 0, 0b000_1000),
+            (37, 0, 0b000_0100),
+            (39, 0, 0b000_0001),
+            (4, 1, 0b1_0000), // b1 = d[4..8) << 1 | d[35]
+            (35, 1, 0b0_0001),
+            (8, 2, 0b1_0000), // b2 = d[8..12) << 1 | d[36]
+            (36, 2, 0b0_0001),
+            (12, 3, 1 << 8), // b3 = d[12..20) << 1 | d[40]
+            (40, 3, 1),
+            (20, 4, 1 << 6), // b4 = d[20..24) << 3 | d[41..44)
+            (43, 4, 1),
+            (24, 5, 0b1_0000), // b5 = d[24..28) << 1 | d[44]
+            (44, 5, 1),
+            (28, 6, 0b1000), // b6 = d[28..31) << 1 | d[45]
+            (45, 6, 1),
+            (31, 7, 0b1000), // b7 = d[31..34) << 1 | d[46]
+            (34, 8, 0b100),  // b8 = d[34] << 2 | d[47..49)
+        ];
+        for (i, which, value) in cases {
+            let mut expected = [0u32; 9];
+            expected[which] = value;
+            assert_eq!(fields(&only(i)), expected, "d[{i}]");
+        }
+        assert_eq!(only(48).b8, 1);
+        assert_eq!(only(47).b8, 0b10);
+        // And every one of the 49 positions changes exactly one parameter.
+        for i in 0..49 {
+            let changed = fields(&only(i)).iter().filter(|&&v| v != 0).count();
+            assert_eq!(changed, 1, "d[{i}] must feed exactly one parameter");
+        }
+    }
+
+    /// `dequantize` advances the decoder state it is given, per kind of frame: a speech frame sets
+    /// `state.l` to `L_TABLE[b0]`, `state.gamma` to `DG[b2] + 0.5 * previous gamma` (mbelib's
+    /// recursion, which the half-rate generation follows), and resizes `log2_ml`; a silence frame
+    /// forces `L = 14` with gamma and the log amplitudes zeroed; erasure and tone frames leave the
+    /// state untouched.
+    #[test]
+    // Tests [@ANCHOR: ambe_plus_2_dequantize]
+    fn dequantize_advances_the_state_per_frame_kind() {
+        let base = RawParameters {
+            b0: 40,
+            b1: 5,
+            b2: 21,
+            b3: 100,
+            b4: 20,
+            b5: 3,
+            b6: 3,
+            b7: 3,
+            b8: 3,
+        };
+        let mut state = DecoderState::initial();
+        state.gamma = 4.0;
+        let params = match dequantize(&base, &mut state) {
+            DequantizedFrame::Speech(p) => p,
+            _ => panic!("b0=40 is a speech frame"),
+        };
+        let l = tables::L_TABLE[40];
+        assert_eq!(params.l, l);
+        assert_eq!(state.l, l);
+        assert_eq!(state.log2_ml.len(), l as usize + 1);
+        assert!((state.gamma - (tables::DG[21] + 0.5 * 4.0)).abs() < 1e-12);
+        assert!((params.w0 - tables::W0_TABLE[40] * 2.0 * std::f64::consts::PI).abs() < 1e-12);
+
+        // The second speech frame sees the first one's gamma.
+        let gamma_1 = state.gamma;
+        let _ = dequantize(&base, &mut state);
+        assert!((state.gamma - (tables::DG[21] + 0.5 * gamma_1)).abs() < 1e-12);
+
+        // Erasure (121, 123) and tone (120, 122, 126, 127) frames do not touch the state.
+        let snapshot = (state.l, state.gamma, state.log2_ml.clone());
+        for b0 in [120u32, 121, 122, 123, 126, 127] {
+            let raw = RawParameters { b0, ..base };
+            match (dequantize(&raw, &mut state), b0) {
+                (DequantizedFrame::Erasure, 121 | 123) => {}
+                (DequantizedFrame::Tone { raw: r }, 120 | 122 | 126 | 127) => assert_eq!(r, raw),
+                _ => panic!("b0={b0} dequantized to the wrong kind of frame"),
+            }
+            assert_eq!(
+                (state.l, state.gamma, state.log2_ml.clone()),
+                snapshot,
+                "b0={b0}"
+            );
+        }
+
+        // Silence (124, 125): fixed L = 14, w0 = 2 pi / 32, state reset to that.
+        for b0 in [124u32, 125] {
+            let raw = RawParameters { b0, ..base };
+            match dequantize(&raw, &mut state) {
+                DequantizedFrame::Silence { l, w0 } => {
+                    assert_eq!(l, 14);
+                    assert!((w0 - 2.0 * std::f64::consts::PI / 32.0).abs() < 1e-12);
+                }
+                _ => panic!("b0={b0} is silence"),
+            }
+            assert_eq!(state.l, 14);
+            assert_eq!(state.gamma, 0.0);
+            assert_eq!(state.log2_ml, vec![0.0; 15]);
+            state.gamma = 1.0;
+            state.l = 20;
+        }
+    }
+
     /// `dequantize` must never panic across the full 7-bit `b0` space, including every special
     /// range (erasure/silence/tone), and every produced speech-frame amplitude must be finite and
     /// non-negative -- the same full-range sanity sweep `ambe_dstar::decode`'s own tests apply.
     #[test]
+    // Tests [@ANCHOR: ambe_plus_2_dequantize]
     fn dequantize_never_panics_and_produces_sane_output_across_the_full_b0_range() {
         for b0 in 0u32..128 {
             let raw = RawParameters {
