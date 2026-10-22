@@ -30,6 +30,7 @@ import codecs
 import html as _html
 import json
 import logging
+import quopri
 import re
 import secrets
 import unicodedata
@@ -294,12 +295,12 @@ def _scan_views(text):
 def _scan_phrases(text, location, findings, prefix=""):
     seen = 0
     views = _scan_views(text)
-    for name, rx, weight in _PHRASES:
+    for name, phrase_regex, weight in _PHRASES:
         for view in views:
-            match = rx.search(view)
+            match = phrase_regex.search(view)
             if match:
                 seen += 1
-                _add(findings, prefix + name, location, len(rx.findall(view)), match.group(0), weight)
+                _add(findings, prefix + name, location, len(phrase_regex.findall(view)), match.group(0), weight)
                 break
     return seen
 
@@ -336,11 +337,11 @@ def _decoded_variants(text):
         out.append(("html_entity", _html.unescape(text)))
     if re.search(r"=[0-9A-F]{2}", text):
         try:
-            import quopri
-
-            out.append(("quoted_printable", quopri.decodestring(text.encode("utf-8")).decode("utf-8", "ignore")))
+            quoted_printable = quopri.decodestring(text.encode("utf-8")).decode("utf-8", "ignore")
         except (ValueError, binascii.Error):
-            pass
+            quoted_printable = None  # not decodable: nothing to scan
+        if quoted_printable is not None:
+            out.append(("quoted_printable", quoted_printable))
     out.append(("rot13", codecs.decode(text, "rot13")))
     out.append(("reversed", text[::-1]))
     out.append(("leetspeak", text.translate(_LEET)))
@@ -351,17 +352,17 @@ def scan_encodings(text, location, findings):
     """Flag text that only reads as instructions after decoding. Decoded text is never returned."""
     if not text:
         return
-    plain_hits = {n for n, rx, _w in _PHRASES if any(rx.search(v) for v in _scan_views(text))}
+    plain_hits = {n for n, phrase_regex, _w in _PHRASES if any(phrase_regex.search(v) for v in _scan_views(text))}
     for kind, decoded in _decoded_variants(text):
         folded = fold_for_scanning(decoded)
-        for name, rx, weight in _PHRASES:
+        for name, phrase_regex, weight in _PHRASES:
             if name in plain_hits or name in ("fake_role_line", "heading_system", "markdown_exfil_image", "urgency_authority", "delayed_instruction"):
                 continue
             if kind in ("rot13", "reversed", "leetspeak") and name not in (
                 "ignore_instructions", "new_instructions", "chat_template_token", "addressed_to_ai", "conceal", "exfiltrate", "delimiter_closer",
             ):
                 continue
-            match = rx.search(folded)
+            match = phrase_regex.search(folded)
             if match:
                 _add(findings, f"encoded_instruction_{kind}", location, 1, match.group(0), max(weight, 5))
                 break
@@ -505,10 +506,11 @@ def _hidden_reason(tag, attrs, bg):
     for key in ("opacity",):
         if key in style:
             try:
-                if float(style[key].rstrip("%")) / (100 if style[key].endswith("%") else 1) < 0.1:
-                    return "opacity_zero"
+                faded = float(style[key].rstrip("%")) / (100 if style[key].endswith("%") else 1) < 0.1
             except ValueError:
-                pass
+                faded = False  # not a number: not provably hidden
+            if faded:
+                return "opacity_zero"
     size = style.get("font-size")
     if size and _tiny_size(size):
         return "tiny_font"
@@ -721,8 +723,7 @@ class _Sanitizer(HTMLParser):
         self.comments += 1
         self._note_drop("cdata_or_decl", data)
 
-    def handle_decl(self, decl):
-        pass
+    # A <!DOCTYPE ...> declaration is ignored: HTMLParser.handle_decl already does nothing.
 
     def handle_pi(self, data):
         self._note_drop("processing_instruction", data)

@@ -45,8 +45,8 @@ class TestRecordingsDiskUsage(HamsTransactionCase):
     def test_percent_is_df_use_percent_of_the_filesystem(self):
         # 100 blocks, 40 free to root, 30 available to everyone: used 60, df says 60 / (60 + 30) = 66.7 percent.
         stat = mock.Mock(f_blocks=100, f_bfree=40, f_bavail=30, f_frsize=1000)
-        with mock.patch.object(check_mod.os, "statvfs", return_value=stat):
-            percent, used, available = check_mod.filesystem_usage("/")
+        self.safe_patch_object(check_mod.os, "statvfs", return_value=stat)
+        percent, used, available = check_mod.filesystem_usage("/")
         self.assertAlmostEqual(percent, 66.667, places=2)
         self.assertEqual((used, available), (60000, 30000))
 
@@ -126,9 +126,9 @@ class TestRecordingsDiskCheck(HamsTransactionCase):
     # Tests [@ANCHOR: pager_duty:recordings_disk_main]
     def _run(self, percent, argv=()):
         out, err = io.StringIO(), io.StringIO()
+        self.safe_patch_object(check_mod, "filesystem_usage", return_value=(percent, 600 * GB, 400 * GB))
         with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(check_mod, "filesystem_usage", return_value=(percent, 600 * GB, 400 * GB)), \
-                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = check_mod.main([tmp, *argv])
         return code, out.getvalue(), err.getvalue()
 
@@ -165,8 +165,8 @@ class TestRecordingsDiskCheck(HamsTransactionCase):
 
     def test_an_unmeasurable_filesystem_is_high(self):
         err = io.StringIO()
-        with mock.patch.object(check_mod, "filesystem_usage", side_effect=OSError("boom")), \
-                contextlib.redirect_stderr(err):
+        self.safe_patch_object(check_mod, "filesystem_usage", side_effect=OSError("boom"))
+        with contextlib.redirect_stderr(err):
             code = check_mod.main(["/x"])
         self.assertEqual(code, 1)
         self.assertEqual(err.getvalue().splitlines()[0], "SEVERITY:high")

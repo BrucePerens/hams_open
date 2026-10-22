@@ -194,7 +194,7 @@ class TestNcmecReport(HamsTransactionCase):
         # database it runs in has it. So it asserts the real outcome for the state the registry
         # is actually in, with no patching: the helper's own answer must agree with the registry,
         # and the ticket must end up with the matching outcome.
-        installed = _QSO_RECORDING_MODEL in self.env
+        installed = _QSO_RECORDING_MODEL in self.env  # burn-ignore-optional-cross-repo-dep: ham_communications_consent (hams_com) may not be installed; same check as the model's own _ncmec_recording_model_installed
         ticket = self._create_csam_ticket(
             ncmec_recording_uuid="66666666-6666-6666-6666-666666666666"
         )

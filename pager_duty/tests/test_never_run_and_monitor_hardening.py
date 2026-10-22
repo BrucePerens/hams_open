@@ -5,8 +5,11 @@
 """The "never run" check status, and the monitor changes that let it run unattended on a real host (2026-10-12)."""
 import importlib.util
 import io
+import json
 import os
 import socket
+import tempfile
+import unittest
 from contextlib import redirect_stdout
 from unittest.mock import MagicMock
 
@@ -27,6 +30,10 @@ def _load_migration():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+# The address this test's own listener and probe use: a hermetic stand-in for a monitored service, on this machine.
+LOOPBACK = "127.0.0.1"  # burn-ignore-test-local-server: the test binds and probes its own socket, no other service is involved
 
 
 class _Stop(Exception):
@@ -99,9 +106,6 @@ class TestNeverRunStatus(HamsTransactionCase):
 
     def test_04_export_carries_a_threshold_only_when_it_differs_from_one(self):
         # Tests [@ANCHOR: generalized_pager_config]
-        import json
-        import tempfile
-
         Check = self.env["pager.check"]
         Check.create({"name": "Thr Default", "check_type": "system", "target": "cpu"})
         Check.create({"name": "Thr One", "check_type": "system", "target": "cpu", "failure_threshold": 1})
@@ -281,10 +285,8 @@ class TestMonitorHardening(HamsTransactionCase):
 
         self.safe_patch_object(gm.time, "sleep", side_effect=fake_sleep)
         check = {"id": 7003, "name": "Maintenance Check", "type": "system", "interval": 60, "threshold": 3}
-        try:
+        with unittest.TestCase.assertRaises(self, _Stop):
             gm.polling_thread(MagicMock(), check)
-        except _Stop:
-            pass
         # Five failing runs inside maintenance: none counted, none reported. After it ends the normal three consecutive
         # failures are needed again, and the third one reports.
         self.assertEqual(reported.call_count, 1)
@@ -334,21 +336,21 @@ class TestMonitorHardening(HamsTransactionCase):
         self.addCleanup(gm.FAILING_CHECKS.clear)
         self.addCleanup(gm.FAILING_NAMES.clear)
         probe = socket.socket()
-        probe.bind(("127.0.0.1", 0))
+        probe.bind((LOOPBACK, 0))
         port = probe.getsockname()[1]
         probe.close()
         row = self.env["pager.check"].create(
-            {"name": "Injected Failure Check", "check_type": "tcp", "target": "127.0.0.1", "port": port, "failure_threshold": 2}
+            {"name": "Injected Failure Check", "check_type": "tcp", "target": LOOPBACK, "port": port, "failure_threshold": 2}
         )
         self.assertEqual(row.status, "never_run")
-        check = {"id": row.id, "name": row.name, "type": "tcp", "target": "127.0.0.1", "port": port, "interval": 60, "threshold": 2}
+        check = {"id": row.id, "name": row.name, "type": "tcp", "target": LOOPBACK, "port": port, "interval": 60, "threshold": 2}
         listeners = []
         sleeps = []
 
         def fake_sleep(seconds):
             sleeps.append(seconds)
             if len(sleeps) == 2:  # the failure has been reported; bring the service "back"
-                server = socket.create_server(("127.0.0.1", port))
+                server = socket.create_server((LOOPBACK, port))
                 self.addCleanup(server.close)
                 listeners.append(server)
             if len(sleeps) >= 5:
@@ -369,14 +371,11 @@ class TestMonitorHardening(HamsTransactionCase):
             seen["rows"] = self.env.cr.fetchall()
 
         self.safe_patch_object(gm, "report", side_effect=spying_report)
-        # Not assertRaises: Odoo's assertRaises rolls the transaction back to a savepoint when the exception arrives, which
-        # would undo the very work (the incident, the status writes) this test checks.
-        try:
+        # The plain unittest assertRaises, not self.assertRaises: Odoo's rolls the transaction back to a savepoint when the
+        # exception arrives, which would undo the very work (the incident, the status writes) this test checks. The loop never
+        # ends by itself; the patched sleep must stop it.
+        with unittest.TestCase.assertRaises(self, _Stop):
             gm.polling_thread(_InProcessClient(self.env), check)
-        except _Stop:
-            pass
-        else:
-            self.fail("the polling loop never ends by itself; the patched sleep must stop it")
         self.assertEqual(seen["rows"], [("high", "open")], "the confirmed failure created one open, paging incident")
         self.env.flush_all()
         self.env.cr.execute(  # audit-ignore-sql: test read, bound params
