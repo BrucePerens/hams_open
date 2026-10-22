@@ -104,20 +104,13 @@
 //! own noise-ladder table), not a closed-form proof, consistent with
 //! this codebase's own "measure, don't guess" discipline.
 //!
-//! One specific open question within that heuristic, real and not yet
-//! resolved either way: `evidence_to_symbol_values()` computes
-//! `noise_stddev = sqrt((var(winner) + var(loser)) / 2)` (an average of
-//! the two per-symbol tone-magnitude variances). Since `r = v1 - v0` is
-//! a difference of two roughly-independent quantities, the variance of
-//! a *difference* of independent random variables is normally the *sum*
-//! of their variances, not the average -- `sqrt(var(winner) +
-//! var(loser))`, without the `/2`, is the more standard derivation and
-//! was flagged as such during design review. The `/2` form was kept
-//! deliberately for this first version anyway (it's what was reviewed
-//! and is already tested end-to-end), but this is a real fork in the
-//! calibration, not a rounding detail -- step 6's real-capture
-//! verification should sweep both forms against the noise-ladder ground
-//! truth rather than assume the current one is correct.
+//! One specific calibration choice within that heuristic, now settled by
+//! measurement: `evidence_to_symbol_values()` computes
+//! `noise_stddev = sqrt(var(winner) + var(loser))` (the sum, the standard
+//! variance of a difference of independent quantities). The first version
+//! averaged the two variances (`/2`); the sweeps recorded on
+//! `evidence_to_symbol_values()` showed the summed form decodes
+//! substantially more at the failure boundary, so it is the one in use.
 
 use crate::wspr::{SYNC_VECTOR, WSPR_NUM_SYMBOLS, WSPR_SYMBOL_RATE_HZ};
 use crate::wspr_decode::{
@@ -3009,5 +3002,89 @@ mod tests {
         assert_eq!(extract_symbol_evidence(&samples, 0, 0.0, 0), None);
         assert_eq!(extract_impossible_tone_evidence(&samples, 0, 0.0, 0), None);
         assert_eq!(find_sync(&samples, 0, 0.0, 100.0, 10, 0.0), None);
+    }
+
+    // Tests [@ANCHOR: samples_per_symbol]
+    #[test]
+    fn samples_per_symbol_is_the_rounded_symbol_period_in_samples() {
+        // 12000 / (12000/8192) is exactly 8192; the rate scales it linearly.
+        assert_eq!(samples_per_symbol(12000), 8192);
+        assert_eq!(samples_per_symbol(48000), 32768);
+        assert_eq!(samples_per_symbol(6000), 4096);
+        // 8000 / 1.46484375 = 5461.33..., which rounds down to 5461.
+        assert_eq!(samples_per_symbol(8000), 5461);
+        assert_eq!(samples_per_symbol(0), 0);
+    }
+
+    // Tests [@ANCHOR: required_window_samples]
+    #[test]
+    fn required_window_samples_is_162_symbols_of_audio() {
+        assert_eq!(required_window_samples(12000), 162 * 8192);
+        assert_eq!(required_window_samples(12000), 1_327_104);
+        assert_eq!(required_window_samples(8000), 162 * 5461);
+        assert_eq!(required_window_samples(0), 0);
+    }
+
+    // Tests [@ANCHOR: decimate_4x_box_average]
+    #[test]
+    fn decimate_4x_box_average_averages_groups_of_four_and_drops_the_remainder() {
+        assert_eq!(
+            decimate_4x_box_average(&[1, 2, 3, 4, 5, 6, 7, 8]),
+            vec![2, 6]
+        );
+        // A trailing partial group of 1-3 samples is dropped, not padded.
+        assert_eq!(
+            decimate_4x_box_average(&[1, 2, 3, 4, 100, 100, 100]),
+            vec![2]
+        );
+        assert!(decimate_4x_box_average(&[9, 9, 9]).is_empty());
+        assert!(decimate_4x_box_average(&[]).is_empty());
+        // Integer division truncates toward zero: 10/4 = 2, -10/4 = -2.
+        assert_eq!(decimate_4x_box_average(&[1, 2, 3, 4]), vec![2]);
+        assert_eq!(decimate_4x_box_average(&[-1, -2, -3, -4]), vec![-2]);
+        // The sum is taken in i32, so full-scale input neither overflows nor wraps.
+        assert_eq!(decimate_4x_box_average(&[i16::MAX; 4]), vec![i16::MAX]);
+        assert_eq!(decimate_4x_box_average(&[i16::MIN; 4]), vec![i16::MIN]);
+    }
+
+    // Tests [@ANCHOR: evidence_to_symbol_values]
+    #[test]
+    fn evidence_to_symbol_values_uses_the_documented_window_and_summed_variance() {
+        // Evidence (v0, v1) = (0, 1) on even symbols and (0, 2) on odd ones: the loser is always
+        // 0, the winner (v1) alternates 1, 2. Expected values below are worked by hand from the
+        // documented formulas with the production half-width of 20.
+        let mut evidence = [[0.0f64; 2]; WSPR_NUM_SYMBOLS];
+        for (i, e) in evidence.iter_mut().enumerate() {
+            e[1] = 1.0 + (i % 2) as f64;
+        }
+        let (values, amplitude, noise) = evidence_to_symbol_values(&evidence);
+        for (i, v) in values.iter().enumerate() {
+            assert_eq!(*v, 1.0 + (i % 2) as f64, "symbol value is v1 - v0 at {i}");
+        }
+        // Symbol 0: window is symbols 0..=20 (clamped at the start): 11 even, 10 odd.
+        assert!((amplitude[0] - 31.0 / 21.0).abs() < 1e-12);
+        assert!((noise[0] - (110.0f64 / 441.0).sqrt()).abs() < 1e-12);
+        // Symbol 81: window 61..=101, 20 even and 21 odd.
+        assert!((amplitude[81] - 62.0 / 41.0).abs() < 1e-12);
+        assert!((noise[81] - (420.0f64 / 1681.0).sqrt()).abs() < 1e-12);
+        // The window is the same one the explicit-half-width entry point uses.
+        let direct =
+            evidence_to_symbol_values_windowed(&evidence, CHANNEL_ESTIMATE_WINDOW_HALF_WIDTH);
+        assert_eq!((values, amplitude, noise), direct);
+    }
+
+    // Tests [@ANCHOR: evidence_to_symbol_values]
+    #[test]
+    fn evidence_to_symbol_values_floors_a_silent_or_flat_input() {
+        // All-zero evidence (silence) must not give the decoder a zero amplitude or stddev.
+        let (values, amplitude, noise) = evidence_to_symbol_values(&[[0.0; 2]; WSPR_NUM_SYMBOLS]);
+        assert!(values.iter().all(|&v| v == 0.0));
+        assert!(amplitude.iter().all(|&a| a == 1e-9));
+        assert!(noise.iter().all(|&n| n == 1e-9));
+        // A constant (1, 3) pair: separation 2, zero variance so the stddev floor applies.
+        let (values, amplitude, noise) = evidence_to_symbol_values(&[[1.0, 3.0]; WSPR_NUM_SYMBOLS]);
+        assert!(values.iter().all(|&v| v == 2.0));
+        assert!(amplitude.iter().all(|&a| (a - 2.0).abs() < 1e-12));
+        assert!(noise.iter().all(|&n| n == 1e-9));
     }
 }

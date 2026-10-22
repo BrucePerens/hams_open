@@ -148,10 +148,6 @@ impl Default for NoiseState {
     }
 }
 
-/// `U_w(m)` (Eq. 118): the 256-point DFT of the current frame's own windowed noise sequence
-/// `u(n)*w_S(n)`, for `m` in `-128..=127`. Note this range is offset by one bin from
-/// `pitch_refinement::RefinementFrame`'s own `S_w(m)` (`-127..=128`) -- a real difference between the
-/// spec's own Eq. 29 and Eq. 118, not a copy-paste slip (each checked independently at 600 DPI).
 // [@ANCHOR: unvoiced_dft]
 /// `exp(2*pi*j*k/256)` for `k` in `0..256`, computed once: the two 256-point transforms below reduce every product `m*n` to
 /// this table instead of evaluating a sine and cosine per term.
@@ -165,6 +161,10 @@ fn twiddles() -> &'static [(f64, f64); 256] {
     })
 }
 
+/// `U_w(m)` (Eq. 118): the 256-point DFT of the current frame's own windowed noise sequence
+/// `u(n)*w_S(n)`, for `m` in `-128..=127`. Note this range is offset by one bin from
+/// `pitch_refinement::RefinementFrame`'s own `S_w(m)` (`-127..=128`) -- a real difference between the
+/// spec's own Eq. 29 and Eq. 118, not a copy-paste slip (each checked independently at 600 DPI).
 fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256] {
     let mut uw = [Complex::ZERO; 256];
     for (i, slot) in uw.iter_mut().enumerate() {

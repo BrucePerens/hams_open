@@ -9,7 +9,7 @@ use crate::ambe::general::fec::golay_encode;
 /// Scatters `b0..b8` back into the 49-bit `d[]` layout `decode::extract_raw_parameters` reads from
 /// -- each assignment here is the direct algebraic inverse of that function's own extraction, over
 /// the identical bit ranges (see `mod.rs`'s own doc-comment table).
-// [@ANCHOR: pack_raw_parameters]
+// [@ANCHOR: dstar_pack_raw_parameters]
 pub fn pack_raw_parameters(raw: &RawParameters) -> u64 {
     let mut d: u64 = 0;
     let mut set = |msb_index: usize, width: usize, value: u32| {
@@ -43,7 +43,7 @@ pub fn pack_raw_parameters(raw: &RawParameters) -> u64 {
 /// `classify_b0` reads as a tone). `index` and `volume` are the 8-bit payload fields that function returns; the
 /// three per-value lookup tables it uses (`T7TAB`/`T6TAB`/`T5TAB`, keyed on `d[6..9)`) are all distinct across the
 /// eight selector values, so `index`'s top three bits pick the selector uniquely.
-// [@ANCHOR: pack_tone_parameters]
+// [@ANCHOR: dstar_pack_tone_parameters]
 pub fn pack_tone_parameters(index: u32, volume: u32) -> u64 {
     const T7TAB: [u32; 8] = [1, 0, 0, 0, 0, 1, 1, 1];
     const T6TAB: [u32; 8] = [0, 0, 0, 1, 1, 1, 1, 0];
@@ -136,6 +136,8 @@ mod tests {
     /// -- unlike the P25 investigation's own perfect-code caveat) and the extracted parameters
     /// exactly match the originals.
     #[test]
+    // Tests [@ANCHOR: dstar_pack_raw_parameters]
+    // Tests [@ANCHOR: dstar_extract_raw_parameters]
     fn pack_and_parse_round_trips_a_full_set_of_raw_parameters() {
         let original = RawParameters {
             b0: 0b101_0110,    // 7 bits
@@ -218,6 +220,7 @@ mod tone_tests {
     };
 
     #[test]
+    // Tests [@ANCHOR: dstar_pack_tone_parameters]
     fn every_tone_index_and_volume_round_trips() {
         for index in 0u32..256 {
             for &volume in &[0u32, 1, 37, 128, 255] {

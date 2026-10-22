@@ -362,13 +362,15 @@ fn freq_hz_fixed(m: usize, wo_q23: i64) -> i64 {
 
 /// Round-to-nearest division for the OLS fit's own two divisions
 /// (`beta`, `alpha`) -- same shape `lpc.rs`'s own `div_round_i128`
-/// establishes, duplicated locally rather than threaded through as
+/// establishes (that one keeps the bare `div_round_i128` anchor; this
+/// copy is anchored `spectral_bridge_div_round_i128` so the two are
+/// distinct), duplicated locally rather than threaded through as
 /// `pub(crate)` (matching this project's own precedent for small,
 /// self-contained per-module helpers, e.g. `codec2_1600::fallback_lsp`).
 /// `d` is always positive here: an OLS `denom` is a variance sum
 /// (`n*sum_xx - sum_x^2 >= 0` by Cauchy-Schwarz) and `n` is a plain
 /// positive harmonic count.
-// [@ANCHOR: div_round_i128]
+// [@ANCHOR: spectral_bridge_div_round_i128]
 fn div_round_i128(n: i128, d: i128) -> i64 {
     debug_assert!(d > 0, "div_round_i128: divisor must be positive, got {d}");
     let half = d / 2;
@@ -574,7 +576,7 @@ mod tests {
     // Tests [@ANCHOR: extrapolate_amplitudes]
     // Tests [@ANCHOR: extrapolate_amplitudes_fixed]
     // Tests [@ANCHOR: freq_hz_fixed]
-    // Tests [@ANCHOR: div_round_i128]
+    // Tests [@ANCHOR: spectral_bridge_div_round_i128]
     fn extrapolate_amplitudes_fixed_matches_the_float_version_within_tolerance() {
         let wo = 180.0f32.to_radians().max(super::super::W0_MIN);
         let model_f = synthetic_model(wo, true, 9.0);
@@ -763,6 +765,26 @@ mod tests {
                 "enabled={enabled}: clipped at the i16 boundary"
             );
         }
+    }
+
+    /// Known-answer check of the OLS fit's rounding division: ties round away from zero
+    /// (`7/2 -> 4`, `-7/2 -> -4`), non-ties round to the nearest integer in both signs, exact
+    /// quotients are untouched, and zero divides to zero. A plain truncating `n / d` would give
+    /// 3, -3, 3, -3 for the first four cases below, so any loss of the half-divisor bias fails.
+    #[test]
+    // Tests [@ANCHOR: spectral_bridge_div_round_i128]
+    fn div_round_i128_rounds_to_nearest_with_ties_away_from_zero() {
+        assert_eq!(div_round_i128(7, 2), 4);
+        assert_eq!(div_round_i128(-7, 2), -4);
+        assert_eq!(div_round_i128(10, 3), 3); // 3.33 -> 3
+        assert_eq!(div_round_i128(11, 3), 4); // 3.67 -> 4
+        assert_eq!(div_round_i128(-10, 3), -3);
+        assert_eq!(div_round_i128(-11, 3), -4);
+        assert_eq!(div_round_i128(12, 4), 3);
+        assert_eq!(div_round_i128(-12, 4), -3);
+        assert_eq!(div_round_i128(0, 5), 0);
+        // Values far beyond i64 intermediate range still divide exactly (the helper is i128).
+        assert_eq!(div_round_i128((1i128 << 100) + 1, 1i128 << 40), 1i64 << 60);
     }
 
     #[test]

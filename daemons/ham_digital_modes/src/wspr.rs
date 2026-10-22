@@ -330,8 +330,9 @@ pub(crate) fn parity(x: u32) -> u8 {
 }
 
 /// K=32, rate-1/2 convolutional encode of an 11-byte (88-bit) message
-/// (the 50 real payload bits plus 31 zero tail bits already packed in,
-/// matching WSPR's own fixed frame size), producing 176 output bits
+/// (the 50 real payload bits plus 38 zero bits already packed in -- 6 to
+/// finish byte 6 and 32 to flush the 32-bit register -- matching WSPR's
+/// own fixed frame size), producing 176 output bits
 /// (2 per input bit): the first from POLY1, the second from POLY2.
 // [@ANCHOR: convolutional_encode]
 pub(crate) fn convolutional_encode(data: &[u8; 11]) -> [u8; 176] {
@@ -372,7 +373,7 @@ pub fn wspr_encode_symbols(
     data[4] = ((m >> 10) & 0xFF) as u8;
     data[5] = ((m >> 2) & 0xFF) as u8;
     data[6] = ((m & 0x03) << 6) as u8;
-    // data[7..11] stay 0 -- the 31 convolutional-encoder tail bits.
+    // data[7..11] stay 0 -- the 32 convolutional-encoder flush bits.
 
     let channel_bits = convolutional_encode(&data);
     let perm = interleave_permutation();

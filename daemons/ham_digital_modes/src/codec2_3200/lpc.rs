@@ -821,22 +821,21 @@ pub(crate) fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option
 const ACOS_LUT_BITS: u32 = 12;
 const ACOS_LUT_SIZE: usize = (1 << ACOS_LUT_BITS) + 1;
 
-/// `acos(i/levels)` for `i` in `0..=levels`, quantized to the same Q23
-/// this module already uses for LPC coefficients (`COEF_FRAC_BITS`) --
-/// built once, table construction itself isn't the hot path so a plain
-/// float `.acos()`/round is fine here, unlike `acos_lut_fixed` below,
-/// which runs once per LSP root, every frame.
+/// `acos(i/levels)` for `i` in `0..=levels` (`levels = 2^ACOS_LUT_BITS`),
+/// quantized to the same Q23 this module already uses for LPC coefficients
+/// (`COEF_FRAC_BITS`). The values are a precomputed static table
+/// (`tables::LPC_ACOS_LUT_Q23`), so there is no runtime construction cost;
+/// the table is what `acos_lut_q23` interpolates between on every LSP root.
 // [@ANCHOR: acos_lut_table_q23]
 fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE] {
     &super::tables::LPC_ACOS_LUT_Q23
 }
 
-/// `pi` in the same Q23 format, computed once via the exact bit-
-/// extraction conversion (`fixed_point::f32_to_q_exact_round`, no float
-/// multiply) rather than an independently-typed literal -- avoiding
-/// the exact class of table/reality mismatch `BW_GAMMA_Q23` hit
-/// earlier this pass (an independently-computed value disagreeing with
-/// Rust's own real output at a rounding tie).
+/// `pi` in the same Q23 format (`tables::LPC_PI_Q23`, the `f32` value of
+/// `PI` quantized to Q23 -- 26353590, one unit above `round(pi_f64 *
+/// 2^23)` because `f32::PI` is slightly high), as a `const fn` so it can be used wherever a constant is
+/// needed. It is the reflection point of `acos_lut_q23` (`acos(-x) = pi -
+/// acos(x)`) and the upper clamp of `cos_q23`'s angle domain.
 // [@ANCHOR: pi_q23]
 pub(crate) const fn pi_q23() -> i64 {
     super::tables::LPC_PI_Q23
@@ -900,9 +899,10 @@ pub(crate) fn acos_lut_q23(x_q23: i64) -> i64 {
 const COS_LUT_BITS: u32 = 12;
 const COS_LUT_SIZE: usize = (1 << COS_LUT_BITS) + 1;
 
-/// `cos(i/levels * pi)` for `i` in `0..=levels`, Q23 -- built once, same
-/// "table construction isn't the hot path" reasoning as `acos_lut_table_
-/// q23`.
+/// `cos(i/levels * pi)` for `i` in `0..=levels` (`levels = 2^COS_LUT_BITS`),
+/// Q23 -- a precomputed static table (`tables::LPC_COS_LUT_Q23`, generated
+/// with `f32` arithmetic, so entries sit within 2 Q23 units of the exact
+/// cosine), the same way as `acos_lut_table_q23`; `cos_q23` interpolates between its entries.
 // [@ANCHOR: cos_lut_table_q23]
 fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE] {
     &super::tables::LPC_COS_LUT_Q23
@@ -941,15 +941,6 @@ pub(crate) fn cos_q23(angle_q23: i64) -> i64 {
     t0 + ((frac_q23 * (t1 - t0)) >> COEF_FRAC_BITS)
 }
 
-/// Fixed-point `lpc_to_lsp`: `a_q23` (Q8.23, `i64`, e.g. straight from
-/// `apply_bw_gamma_fixed`) in -- genuinely fixed-point all the way
-/// through the LSP frequencies themselves now, via `acos_lut_fixed`
-/// above, not just up to the final `.acos()` (`interp.rs`/`quantise.rs`
-/// downstream still take these as `f32`, matching this port's
-/// established "integer core, float boundary" pattern -- there's
-/// nothing further along the pipeline yet to hand a fixed-point angle
-/// to, but the conversion itself is no longer the boundary).
-// [@ANCHOR: lpc_to_lsp_from_integer_ak]
 /// `LSP_SEARCH_STEP` (0.01) in Q29.
 const LSP_SEARCH_STEP_Q29: i32 = 5_368_709;
 
@@ -1008,6 +999,15 @@ pub fn lpc_to_lsp_q23_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[i64
     Some(freq)
 }
 
+/// Fixed-point `lpc_to_lsp`: `a_q23` (Q8.23, `i64`, e.g. straight from
+/// `apply_bw_gamma_fixed`) in -- genuinely fixed-point all the way
+/// through the LSP frequencies themselves now, via `acos_lut_fixed`
+/// above, not just up to the final `.acos()` (`interp.rs`/`quantise.rs`
+/// downstream still take these as `f32`, matching this port's
+/// established "integer core, float boundary" pattern -- there's
+/// nothing further along the pipeline yet to hand a fixed-point angle
+/// to, but the conversion itself is no longer the boundary).
+// [@ANCHOR: lpc_to_lsp_from_integer_ak]
 #[cfg(feature = "std")]
 pub fn lpc_to_lsp_from_integer_ak(a_q23: &[i64; LPC_ORD + 1]) -> Option<[f32; LPC_ORD]> {
     let (p, q) = build_p_q_fixed(a_q23);
@@ -2214,6 +2214,7 @@ mod levinson_durbin_fixed_tests {
     /// mean this port's own shift/rounding arithmetic is wrong, not the
     /// known, accepted algorithmic sensitivity -- asserted at zero.
     #[test]
+    // Tests [@ANCHOR: levinson_durbin_fixed]
     fn levinson_durbin_fixed_diverges_from_float_only_at_measured_clamp_disagreement_frames() {
         let r_path = fixture!("codec2_r_dump.txt");
         let rs = read_dump(r_path, LPC_ORD + 1);
@@ -2283,6 +2284,7 @@ mod levinson_durbin_fixed_tests {
     /// anything under 0.05 as agreement, and this test's own measured
     /// max on real data sits at ~0.023 -- comfortably under both).
     #[test]
+    // Tests [@ANCHOR: levinson_durbin_fixed]
     fn levinson_durbin_fixed_matches_float_tightly_on_frames_that_never_hit_the_clamp() {
         let r_path = fixture!("codec2_r_dump.txt");
         let rs = read_dump(r_path, LPC_ORD + 1);
@@ -2521,6 +2523,7 @@ mod levinson_durbin_fixed_tests {
         /// `div_round_i128`) -- release matters most here, since that's
         /// the build a real deployed daemon actually runs.
         #[test]
+        // Tests [@ANCHOR: r0_normalize_fixed]
         fn r0_normalize_fixed_does_not_panic_on_an_all_zero_r_q() {
             let r_q = [0i64; LPC_ORD + 1];
             let r_norm_q = r0_normalize_fixed(&r_q);
@@ -2653,6 +2656,168 @@ mod levinson_durbin_fixed_tests {
                 !fired[1],
                 "expected i=1's own k_q (exactly 1<<LEVINSON_FRAC_BITS) to NOT be the `clamped`/`fired` case -- this test is meant to probe the boundary-exact path, not the ordinary clamp"
             );
+        }
+    }
+
+    /// Known-answer check of the white noise correction: only `R[0]` grows,
+    /// by `R[0] / 1000` rounded to nearest (half away from zero), and
+    /// `R[1..]` are left untouched.
+    #[test]
+    // Tests [@ANCHOR: apply_white_noise_correction_fixed]
+    fn apply_white_noise_correction_fixed_adds_a_thousandth_of_r0_and_leaves_the_rest() {
+        let mut r = [0i64; LPC_ORD + 1];
+        for (j, v) in r.iter_mut().enumerate().skip(1) {
+            *v = 12_345 * j as i64 - 7;
+        }
+        let rest = r;
+        r[0] = 1_000_000;
+        apply_white_noise_correction_fixed(&mut r);
+        assert_eq!(r[0], 1_001_000);
+        assert_eq!(r[1..], rest[1..], "R[1..] must not change");
+
+        // Rounding of the added term: 0.499 -> 0, 0.5 -> 1, 1.5 -> 2.
+        for (before, after) in [(499, 499), (500, 501), (1499, 1500), (1500, 1502)] {
+            let mut r = [0i64; LPC_ORD + 1];
+            r[0] = before;
+            apply_white_noise_correction_fixed(&mut r);
+            assert_eq!(r[0], after, "R[0] = {before}");
+        }
+    }
+
+    /// Known-answer check of the `R[]` normalization: each entry becomes
+    /// `R[j] / R[0]` in Q8.40, rounded to nearest (half away from zero).
+    #[test]
+    // Tests [@ANCHOR: r0_normalize_fixed]
+    fn r0_normalize_fixed_scales_every_entry_by_r0_in_q40() {
+        let one = 1i64 << LEVINSON_FRAC_BITS;
+        let mut r = [0i64; LPC_ORD + 1];
+        r[0] = 4;
+        r[1] = 2;
+        r[2] = -1;
+        let n = r0_normalize_fixed(&r);
+        assert_eq!(n[0], one);
+        assert_eq!(n[1], one / 2);
+        assert_eq!(n[2], -(one / 4));
+        assert!(n[3..].iter().all(|&v| v == 0));
+
+        // 1/3 and 2/3 of 2^40 are not integers: 366503875925.33 rounds
+        // down, 733007751850.67 rounds up, and the negative mirrors it.
+        let mut r = [0i64; LPC_ORD + 1];
+        r[0] = 3;
+        r[1] = 1;
+        r[2] = 2;
+        r[3] = -1;
+        let n = r0_normalize_fixed(&r);
+        assert_eq!(n[1], 366_503_875_925);
+        assert_eq!(n[2], 733_007_751_851);
+        assert_eq!(n[3], -366_503_875_925);
+    }
+
+    /// `dequantize_coef_q23` divides by 2^23 exactly (all these values are
+    /// exactly representable in `f32`).
+    #[test]
+    // Tests [@ANCHOR: dequantize_coef_q23]
+    fn dequantize_coef_q23_divides_by_two_to_the_23() {
+        let mut a = [0i64; LPC_ORD + 1];
+        a[0] = 1 << 23;
+        a[1] = -(1 << 22);
+        a[2] = 1;
+        a[3] = 3 << 20;
+        a[4] = -(77 << 23);
+        let f = dequantize_coef_q23(&a);
+        assert_eq!(f[0], 1.0);
+        assert_eq!(f[1], -0.5);
+        assert_eq!(f[2], 2.0f32.powi(-23));
+        assert_eq!(f[3], 0.375);
+        assert_eq!(f[4], -77.0);
+        assert!(f[5..].iter().all(|&v| v == 0.0));
+    }
+
+    /// `f32_to_q`: scale by 2^frac_bits, round half away from zero, and
+    /// saturate to `i32` (so it cannot hold a 40-bit format).
+    #[test]
+    // Tests [@ANCHOR: f32_to_q]
+    fn f32_to_q_rounds_half_away_from_zero_and_saturates_at_i32() {
+        assert_eq!(f32_to_q(1.5, 1), 3);
+        assert_eq!(f32_to_q(0.25, 1), 1, "0.5 rounds away from zero");
+        assert_eq!(f32_to_q(-0.25, 1), -1);
+        assert_eq!(f32_to_q(0.2, 1), 0);
+        assert_eq!(f32_to_q(-1.0, 23), -(1 << 23));
+        assert_eq!(f32_to_q(0.0, 29), 0);
+        // 1.0 at 40 fractional bits does not fit i32: this is the
+        // saturation that `f32_to_q64` exists to avoid.
+        assert_eq!(f32_to_q(1.0, 40), i32::MAX);
+        assert_eq!(f32_to_q(-1.0, 40), i32::MIN);
+    }
+
+    /// `f32_to_q64` is the same conversion with an `i64` result, so a
+    /// 40-bit format works; NaN converts to 0 (what the all-silent-frame
+    /// path in `levinson_durbin_fixed_core` relies on).
+    #[test]
+    // Tests [@ANCHOR: f32_to_q64]
+    fn f32_to_q64_holds_a_40_bit_format_and_maps_nan_to_zero() {
+        assert_eq!(f32_to_q64(1.0, 40), 1i64 << 40);
+        assert_eq!(f32_to_q64(-0.5, 40), -(1i64 << 39));
+        assert_eq!(f32_to_q64(0.25, 1), 1, "0.5 rounds away from zero");
+        assert_eq!(f32_to_q64(-0.25, 1), -1);
+        assert_eq!(f32_to_q64(f32::NAN, 40), 0);
+        for x in [-0.75f32, -0.1, 0.0, 0.3, 0.999] {
+            assert_eq!(f32_to_q64(x, 23), f32_to_q(x, 23) as i64, "x = {x}");
+        }
+    }
+
+    /// Every acos table entry is `acos(i/4096)` in Q23 to within 1 unit,
+    /// with the exact end points acos(0) = pi/2 and acos(1) = 0.
+    #[test]
+    // Tests [@ANCHOR: acos_lut_table_q23]
+    fn acos_lut_table_q23_holds_acos_of_i_over_4096() {
+        let t = acos_lut_table_q23();
+        assert_eq!(t.len(), (1 << ACOS_LUT_BITS) + 1);
+        assert_eq!(t[0], 13_176_795, "acos(0) = pi/2 in Q23");
+        assert_eq!(t[t.len() - 1], 0, "acos(1) = 0");
+        let levels = (1u32 << ACOS_LUT_BITS) as f64;
+        for (i, &v) in t.iter().enumerate() {
+            let want = ((i as f64 / levels).acos() * (1u64 << COEF_FRAC_BITS) as f64).round();
+            assert!((v as f64 - want).abs() <= 1.0, "entry {i}: {v} vs {want}");
+            if i > 0 {
+                assert!(v <= t[i - 1], "acos table must not increase (entry {i})");
+            }
+        }
+    }
+
+    /// `pi_q23` is the `f32` value of pi in Q23 (one unit above the `f64`
+    /// rounding, because `f32::PI` is slightly high).
+    #[test]
+    // Tests [@ANCHOR: pi_q23]
+    fn pi_q23_is_pi_in_q23() {
+        let want = (std::f32::consts::PI as f64 * (1u64 << COEF_FRAC_BITS) as f64).round() as i64;
+        assert_eq!(pi_q23(), want);
+        assert_eq!(pi_q23(), 26_353_590);
+        let exact = std::f64::consts::PI * (1u64 << COEF_FRAC_BITS) as f64;
+        assert!((pi_q23() as f64 - exact).abs() < 1.0);
+    }
+
+    /// Every cos table entry is `cos(pi * i/4096)` in Q23 to within 2 units
+    /// (the table is generated in `f32`):
+    /// 1 at i = 0, -1 at the end, and 0 at the midpoint (cos(pi/2)).
+    #[test]
+    // Tests [@ANCHOR: cos_lut_table_q23]
+    fn cos_lut_table_q23_holds_cos_of_pi_times_i_over_4096() {
+        let t = cos_lut_table_q23();
+        let one = 1i32 << COEF_FRAC_BITS;
+        assert_eq!(t.len(), (1 << COS_LUT_BITS) + 1);
+        assert_eq!(t[0], one);
+        assert_eq!(t[t.len() - 1], -one);
+        assert_eq!(t[t.len() / 2], 0);
+        let levels = (1u32 << COS_LUT_BITS) as f64;
+        for (i, &v) in t.iter().enumerate() {
+            let want = ((std::f64::consts::PI * i as f64 / levels).cos()
+                * (1u64 << COEF_FRAC_BITS) as f64)
+                .round();
+            assert!((v as f64 - want).abs() <= 2.0, "entry {i}: {v} vs {want}");
+            if i > 0 {
+                assert!(v <= t[i - 1], "cos table must not increase (entry {i})");
+            }
         }
     }
 }
