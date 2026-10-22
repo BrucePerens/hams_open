@@ -29,6 +29,9 @@ know when a page is old.
    `[@ANCHOR: zero_sudo:repeater_page_text_number_on_page]`, `[@ANCHOR: zero_sudo:repeater_page_text_grounded_notes]`), and a page that is only an unedited default page has none to list
    `[@ANCHOR: zero_sudo:repeater_page_text_placeholder_page]`.
 
+6. A "repeater" in orbit (the ISS cross-band repeater, an amateur satellite) is recognised from the item's own name, section, address, callsign (NA1SS, RS0ISS, ...) or an uplink/downlink description
+   `[@ANCHOR: zero_sudo:repeater_page_text_orbiting_repeater]`; a terrestrial repeater that only mentions satellites, ISS inside a longer word, a club that makes ARISS contacts, or a club called OSCAR on 145.490 is not.
+
 Helpers: `[@ANCHOR: zero_sudo:repeater_page_text_append_note]`, `[@ANCHOR: zero_sudo:repeater_page_text_clean]`, `[@ANCHOR: zero_sudo:repeater_page_text_frequencies]`, `[@ANCHOR: zero_sudo:repeater_page_text_heading_kind]`, `[@ANCHOR: zero_sudo:repeater_page_text_item_frequency]`, `[@ANCHOR: zero_sudo:repeater_page_text_month]`, `[@ANCHOR: zero_sudo:repeater_page_text_near]`, `[@ANCHOR: zero_sudo:repeater_page_text_occurrences]`, `[@ANCHOR: zero_sudo:repeater_page_text_own_span]`, `[@ANCHOR: zero_sudo:repeater_page_text_page_numbers]`, `[@ANCHOR: zero_sudo:repeater_page_text_structure]`, `[@ANCHOR: zero_sudo:repeater_page_text_title]`, `[@ANCHOR: zero_sudo:repeater_page_text_title_words]`, `[@ANCHOR: zero_sudo:repeater_page_text_to_date]`.
 
 ## Verification

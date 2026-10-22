@@ -15,7 +15,7 @@ from odoo.tests.common import BaseCase, tagged
 
 from odoo.addons.zero_sudo.daemon.repeater_page_text import (
     apply_page_checks, callsign_adjacent, callsign_core, callsigns_in_text, frequency_on_page, ground_item, grounded_notes,
-    header_callsigns, node_operator_callsigns, number_on_page, page_date, placeholder_page, row_ownership,
+    header_callsigns, node_operator_callsigns, number_on_page, orbiting_repeater, page_date, placeholder_page, row_ownership,
     section_scope_for_frequency, stale_page_note, strip_repeater_designator,
 )
 
@@ -313,3 +313,57 @@ class TestRepeaterPageStructure(BaseCase):
                                           "and new members are always welcome. Coming soon: a new DMR repeater, details to follow in the newsletter."), "")
         self.assertEqual(placeholder_page(""), "")
         self.assertEqual(placeholder_page(None), "")
+
+
+@tagged("post_install", "-at_install")
+class TestOrbitingRepeater(BaseCase):
+
+    # [@ANCHOR: zero_sudo:test_repeater_page_text_orbiting]
+    def test_the_iss_and_amateur_satellites_are_orbiting_repeaters_and_terrestrial_ones_are_not(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_orbiting_repeater]
+        positives = (
+            # bdxc.org (candidate 796) and crecj.org (candidate 805)
+            dict(name="ARISS Repeater", notes="ISS repeater; uplink 145.990 MHz (PL 67.0 Hz), downlink 437.800 MHz", url="https://bdxc.org/"),
+            dict(name="Repetidor de la ISS (ARISS)", notes="Repetidor de la Estaci\u00f3n Espacial Internacional: subida 145.990 FM CTCSS 67, bajada 437.800",
+                 url="https://crecj.org/repetidor-de-la-iss-activo/"),
+            dict(name="Repeater", url="https://crecj.org/repetidor-de-la-iss-activo/"),  # the address slug names it
+            dict(name="Repeater", callsign="NA1SS"), dict(name="x", callsign="rs0iss"), dict(name="x", callsign="OR4ISS"),
+            dict(name="x", callsign="DP0ISS"), dict(name="x", callsign="IR0ISS"),
+            dict(name="ISS cross-band repeater"), dict(name="International Space Station repeater"), dict(name="space station"),
+            dict(name="Estaci\u00f3n Espacial"), dict(name="Station spatiale ISS"), dict(name="Raumstation ISS"), dict(name="Esta\u00e7\u00e3o espacial"),
+            dict(name="Stazione spaziale"), dict(name="AO-91"), dict(name="SO-50 FM"), dict(name="FO-29"), dict(name="RS-44"), dict(name="XW-2A"),
+            dict(name="CAS-4A"), dict(name="LO-87"), dict(name="EO-88"), dict(name="QO-100 transponder"), dict(name="Es'hail-2"), dict(name="Tianhe"),
+            dict(name="UKube-1"), dict(name="LilacSat-2"), dict(name="CubeSat"), dict(name="OSCAR 7"), dict(name="OSCAR-51"), dict(name="Oscar 10 linear"),
+            dict(name="Satellite uplink 145.9 downlink 435.1"), dict(name="x", section="Satellites: ARISS"), dict(name="x", section="Amateur satellite transponders"),
+            dict(name="Repeater", notes="Satellite downlink on 435.800, uplink 145.900 (AO-73)"),
+            dict(name="x", notes="Cross-band repeater aboard the ISS: uplink 145.990 downlink 437.800"),
+            dict(name="Cross-band", notes="Uplink 145.990 FM, downlink 437.800 FM, PL 67", frequencies=(145.99, 437.8)),
+        )
+        for case in positives:
+            self.assertTrue(orbiting_repeater(**case), case)
+        negatives = (
+            # oscarmn.org: OSCAR is the Owatonna Steele County Amateur Radio club, 145.490 MHz is a terrestrial repeater (K0HNY)
+            dict(name="OSCAR 145.490", callsign="K0HNY", url="http://oscarmn.org/Repeater.html"), dict(name="OSCAR 145.49"),
+            dict(name="OSCAR repeater"), dict(name="OSCAR 146,94"), dict(name="OSCAR 444"),
+            # W3BAB Towson ATV repeater (candidate 3442): the notes only mention 'satellite' in a video format
+            dict(name="W3BAB ATV", notes="Second output FM satellite format video, PL 107.2"),
+            dict(name="Towson ATV", notes="Satellite receiver feeds the second output"),
+            # ISS inside a longer word, a club that does ARISS contacts, a place called Satellite Beach
+            dict(name="Mississippi River 146.94"), dict(name="Hiss Mountain"), dict(name="MISSION repeater"), dict(name="Wissahickon"), dict(name="Dissolve"),
+            dict(name="Valley 146.94", notes="The club also makes ARISS contacts with schools and has a Field Day satellite station."),
+            dict(name="Satellite Beach 146.76"), dict(name="Hill 147.12", notes="Club meets at the Space Needle."),
+            dict(name="Valley repeater", url="https://club.example/repeaters/valley/"), dict(name="Valley repeater", url="https://club.example/"),
+            dict(name="Valley", callsign="W1AW"), dict(name="Valley", callsign="K0HNY/R"), dict(name="x", section="Our Repeaters"),
+            dict(name="Mount Isis 146.94"), dict(name="Mount Elbert RS 4"), dict(name="AO 91 Road"), dict(name="Station 7"),
+            dict(), dict(name=None, notes=None, section=None, url=None, callsign=None),
+        )
+        for case in negatives:
+            self.assertEqual(orbiting_repeater(**case), "", case)
+
+    def test_the_matched_text_is_returned_and_hostile_input_never_raises(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_orbiting_repeater]
+        self.assertEqual(orbiting_repeater(name="ARISS Repeater").lower(), "ariss")
+        self.assertEqual(orbiting_repeater(name="OSCAR 7"), "OSCAR 7")
+        self.assertEqual(orbiting_repeater(callsign="NA1SS"), "NA1SS")
+        for bad in (5, b"x", [], object()):
+            self.assertEqual(orbiting_repeater(name=bad, notes=bad, section=bad, url=bad, callsign=bad), "")

@@ -31,6 +31,9 @@ Odoo import code and the crawl daemons (imported the same way as glyph_normalize
 - `placeholder_page(page_text)`: an unedited default page (the WordPress sample page, "Lorem ipsum", "Coming soon", a web server's default
   page, a parked domain) whose placeholder text is most of the page has no repeaters to extract.
 
+- `orbiting_repeater(...)` (2026-10-22, bdxc.org and crecj.org): whether an extracted "repeater" is the ISS cross-band repeater (ARISS) or an amateur
+  satellite, which is a satellite and not a terrestrial repeater, from the item's own name, notes, section, callsign and source address.
+
 MUST NOT import anything from `odoo`. Text is read through glyph_normalizer first, so a slashed zero in the page is a zero here.
 """
 import bisect
@@ -641,3 +644,62 @@ def apply_page_checks(items, page_text):
     for index, found in evidence.items():
         checked[index]["listing_ownership"] = found or ("unclear" if len(unknown) >= 2 else "unspecified")
     return checked
+
+
+# ---- repeaters in orbit --------------------------------------------------------------------------------------------------
+
+ISS_CALLSIGNS = frozenset({"NA1SS", "RS0ISS", "OR4ISS", "DP0ISS", "IR0ISS", "LX0ISS", "W5RRR", "N1SS"})
+_ISS_FREQUENCIES = (145.990, 145.800, 145.825, 437.800, 437.550)
+_SPECIFIC_ORBIT = tuple(re.compile(p, re.I) for p in (
+    r"(?<![a-z0-9])ariss(?![a-z0-9])", r"(?<![a-z0-9])iss(?![a-z0-9])", r"international space station", r"\bspace station\b",
+    r"estaci[o\u00f3]n espacial", r"station spatiale", r"\braumstation\b", r"esta[c\u00e7][a\u00e3]o espacial", r"stazione spaziale",
+    r"(?<![a-z0-9])(?:ao|so|fo|rs|xw|cas|lo|eo)-\d{1,3}[a-z]?(?![a-z0-9.])", r"\bqo-100\b", r"\bes['\u2019]?hail\b", r"\btianhe\b",
+    r"\bukube\b", r"\blilacsat\b", r"\bcubesat\b",
+))
+_OSCAR_NUMBER = re.compile(r"\boscar[\s-]*(\d{1,3})(?![\d]|[.,]\d)", re.I)
+_GENERIC_SATELLITE = re.compile(r"sat[e\u00e9]llite|satellit|\bsat\b", re.I)
+_ORBIT_CONTEXT = re.compile(r"\b(?:uplinks?|downlinks?|transponders?|orbits?|orbital|amsat|oscar|linear|subida|bajada|cross-?band)\b", re.I)
+_UPLINK = re.compile(r"\b(?:uplink|downlink|subida|bajada)\b", re.I)
+
+
+# [@ANCHOR: zero_sudo:repeater_page_text_orbiting_repeater]
+# Verified by [@ANCHOR: zero_sudo:test_repeater_page_text_orbiting]
+def orbiting_repeater(name=None, notes=None, section=None, url=None, callsign=None, frequencies=()):
+    """The text that shows the extracted item is a repeater IN ORBIT (the ISS cross-band repeater, an amateur satellite or its transponder), or ''.
+    Evidence is the item itself: its name, section heading, source address, callsign (NA1SS, RS0ISS, OR4ISS, DP0ISS, IR0ISS), or notes that
+    describe an uplink and downlink on the ISS or a satellite. ARISS, ISS as a whole word, 'International Space Station' and its translations,
+    satellite designators (AO-91, RS-44, XW-2A..., QO-100, Es'hail, Tianhe, CubeSat) and OSCAR with a satellite number (OSCAR 7, OSCAR-51, never
+    OSCAR 145.490, which is a frequency) count in the name, section or address; the plain word 'satellite' counts there only beside uplink,
+    downlink, transponder or the like. In the notes only a description of an uplink/downlink on the ISS or a satellite counts, so a terrestrial
+    repeater whose notes mention 'FM satellite format', or a club that makes ARISS contacts, is not rejected. Never raises."""
+    slug = " ".join(re.split(r"[^A-Za-z0-9']+", url.split("://", 1)[-1].split("/", 1)[-1])) if isinstance(url, str) and "/" in url.split("://", 1)[-1] else ""
+    if isinstance(callsign, str) and strip_repeater_designator(_clean(callsign))[0] in ISS_CALLSIGNS:
+        return callsign.strip()
+
+    def oscar(text):
+        return next((m.group(0) for m in _OSCAR_NUMBER.finditer(text) if int(m.group(1)) <= 129), "")
+
+    def specific(text):
+        for pattern in _SPECIFIC_ORBIT:
+            found = pattern.search(text)
+            if found:
+                return found.group(0)
+        return oscar(text)
+
+    for text in (name, section, slug):
+        if isinstance(text, str) and text.strip():
+            found = specific(text)
+            if found:
+                return found
+            if _GENERIC_SATELLITE.search(text) and _ORBIT_CONTEXT.search(text):
+                return _GENERIC_SATELLITE.search(text).group(0)
+    if isinstance(notes, str) and _UPLINK.search(notes):
+        found = specific(notes)
+        if found:
+            return found
+        if _GENERIC_SATELLITE.search(notes):
+            return _GENERIC_SATELLITE.search(notes).group(0)
+        stated = [f for f in _frequencies(notes)]
+        if any(abs(a - b) < _FREQUENCY_TOLERANCE for a in stated for b in _ISS_FREQUENCIES) and len(stated) >= 2:
+            return "uplink and downlink on the ISS frequencies"
+    return ""
