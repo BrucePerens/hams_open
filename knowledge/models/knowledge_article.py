@@ -179,6 +179,8 @@ class KnowledgeArticle(models.Model):
     @api.depends("parent_id")
     def _compute_breadcrumb_article_ids(self):
         # [@ANCHOR: manual_compute_breadcrumbs]
+        # Verified by [@ANCHOR: test_manual_breadcrumb_archived_ancestor]
+        # Verified by [@ANCHOR: test_manual_breadcrumb_inaccessible_ancestor]
         valid_ids = tuple(i for i in self.ids if isinstance(i, int))
         ancestor_map = {article.id: [] for article in self}
 
