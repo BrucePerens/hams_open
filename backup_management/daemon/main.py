@@ -16,15 +16,11 @@ import shlex
 import re
 
 # Reports an uncaught exception to the Odoo exception tickets (Helpdesk > Server Exceptions) and raises it again.
-# hams_helpdesk/daemon/exception_reporter.py is copied to /opt/hams/daemons by deploy_to_production.py --sync-daemons
-# (PYTHONPATH=/opt/hams/daemons). A host without it runs the daemon unwrapped: reporting must never stop the worker.
-try:
-    from exception_reporter import reporting_failures
-except ImportError:
-    import contextlib
-
-    def reporting_failures(daemon_name, **options):
-        return contextlib.nullcontext()
+# hams_helpdesk/daemon/exception_reporter.py is copied flat to /opt/hams/daemons by deploy_to_production.py --sync-daemons
+# (DAEMON_SHARED_FILES) and found through PYTHONPATH=/opt/hams/daemons in backup.worker.service. A missing helper is a
+# deployment fault and stops the worker at start (the burn-list linter forbids a soft ImportError fallback); the helper
+# itself never lets a reporting failure stop the worker.
+from exception_reporter import reporting_failures
 
 
 logging.basicConfig(
