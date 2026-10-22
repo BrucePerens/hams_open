@@ -93,6 +93,10 @@ Safely retrieves the database ID of a Service Account. Only the XML ID to user I
 * **Arguments:** `xml_id` (str): The external ID (e.g., `'your_module.your_service_account'`).
 * **Returns:** `int` (The User ID).
 
+**Start-up preload** `[@ANCHOR: zero_sudo:register_hook_preload_service_uids]` `[@ANCHOR: zero_sudo:preload_service_uid_cache]`. The `_register_hook()` of `zero_sudo.security.utils` runs once for each registry build and calls `_preload_service_uid_cache()`. That method reads every `ir_model_data` row of model `res.users` whose user has `is_service_account` set and stores `(database name, xml_id) -> uid` in a process-wide dict. On the production configuration the registry is built in the master process before any worker forks, so every worker inherits the filled table. Only the resolution is cached, never the verdict. Entries are keyed by database so a multi-database deployment cannot mix them up, and a reload replaces only the entries of the database being loaded. A service account that did not exist at load time falls back to the full lookup and is deliberately not written back, because the dict is not transaction-scoped and a rolled-back test would otherwise leak into later calls.
+
+**No default-env flush** `[@ANCHOR: zero_sudo:COMM_get_service_uid_no_transaction_flush]`. The live check in `_get_service_uid` runs its SELECT inside a savepoint opened with `flush=False`, after flushing through the caller's own environment. The default savepoint flushes the transaction's `default_env`, and a public request has none yet when a service account is resolved before authentication (the case on every anonymous page view), which made Odoo log "Missing default_env, flushing as public user" and look up the public user each time. Flushing the caller's environment still makes a pending ORM write to the service user visible to the check.
+
 #### `_get_deterministic_hash(input_string)` `[@ANCHOR: deterministic_hash]`
 Generates a deterministic 32-bit integer hash for `pg_advisory_xact_lock`.
 * **Returns:** `int`.
@@ -149,9 +153,14 @@ residual risks and the vector list: `docs/stories/svg_allowlist_sanitizer.md`. T
 
 ### `zero_sudo.daemon.utils`
 Provides centralized, private utilities for managing background daemon processes tightly coupled with Odoo.
-* `_start_daemon_process(script_path, args, env_vars)`: Safely forks a background process detached from the web request lifecycle.
+* `_start_daemon_process(script_path, args, env_vars)` `[@ANCHOR: zero_sudo:_start_daemon_process]`: Starts `script_path` under the current Python interpreter (`sys.executable`, falling back to `/usr/bin/python3`) with `shell=False`, in its own session so it is detached from the web request and so `_stop_daemon_process` can signal its whole process group. The child's `PYTHONPATH` is the parent's `sys.path` followed by any `PYTHONPATH` already in the environment, which lets a daemon import Odoo addons; `env_vars` are then merged over that environment. It returns the `Popen` object.
 * `_stop_daemon_process(process)`: Safely terminates a running daemon.
-* `_poll_health_check(url, timeout, interval)`: Polls an HTTP endpoint to verify daemon health before proceeding with tests. It sends `HEAD` requests until one returns 200, accepts only `http` and `https` URLs, and raises `UserError` after `timeout` seconds (default 30).
+* `_poll_health_check(url, timeout, interval)` `[@ANCHOR: zero_sudo:_poll_health_check]`: Polls an HTTP endpoint to verify daemon health before proceeding with tests. It sends `HEAD` requests until one returns 200, accepts only `http` and `https` URLs, and raises `UserError` after `timeout` seconds (default 30).
+
+### Shared offline queue (`static/src/js/offline_store.js`)
+`OfflineStore` is a small IndexedDB-backed queue that frontend modules (the QSO logger in `ham_shack`, `ics_forms`) use to keep a record locally while the browser is offline and send it later. It keeps records in an object store keyed by `uuid` with an index on `timestamp`; the database and store names are constructor arguments whose defaults match the names `ham_shack` first used, so existing browser data survived the move into this module. Its methods are `init()`, `saveLog(logData)`, `getPendingLogs()` and `deleteLog(uuid)`.
+
+`isStorageFullError(err)` `[@ANCHOR: is_storage_full_error]` tells a caller whether a rejected `saveLog()` means the browser refused the write because the disk or the site's storage quota is full. It returns true for a `QuotaExceededError` (code 22) as Chrome and the spec raise it, and for Firefox's `NS_ERROR_DOM_QUOTA_REACHED` (code 1014), and false for anything else, including no error at all. Callers use it to tell the operator "Disk Full" instead of a generic or misleading network error.
 
 ### `zero_sudo.kv`
 A high-performance Key-Value store table with cached reads (`_get_kv()` is `@distributed_cache`-decorated) and atomic writes via PostgreSQL procedures. In this repository it is used by the documentation bootstrap to record each installed document's content hash and article ID.

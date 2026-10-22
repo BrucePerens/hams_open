@@ -93,3 +93,4 @@ from . import test_werkzeug_thread_wait  # noqa: E402
 from . import test_debug_assets_propagation  # noqa: E402
 from . import test_navigator_overrides  # noqa: E402
 from . import test_svg_review_findings  # noqa: E402
+from . import test_harness_helpers  # noqa: E402

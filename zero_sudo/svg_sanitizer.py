@@ -6,7 +6,7 @@
 """
 [@ANCHOR: zero_sudo:svg_allowlist_sanitizer]
 Verified by [@ANCHOR: test_svg_allowlist_sanitizer_unit]
-and [@ANCHOR: test_svg_allowlist_sanitizer_fields]
+Verified by [@ANCHOR: test_svg_allowlist_sanitizer_fields]
 
 Odoo's HTML sanitizer (`odoo.tools.mail.html_sanitize`, run by every
 `fields.Html` write) strips every SVG shape element, because
