@@ -1,9 +1,10 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests [@ANCHOR: pager_duty:parse_failed_unit_names] and [@ANCHOR: pager_duty:failed_units_report]: the
-"Systemd Failed Services Tracker" check (type systemd, target "*") of generalized_monitor.py. Plain unittest, no Odoo:
+"""The "Systemd Failed Services Tracker" check (type systemd, target "*") of generalized_monitor.py. Plain unittest, no Odoo:
     python3 pager_duty/daemon/test_failed_units.py
 """
+# Tests [@ANCHOR: pager_duty:parse_failed_unit_names]
+# Tests [@ANCHOR: pager_duty:failed_units_report]
 import os
 import subprocess
 import sys
