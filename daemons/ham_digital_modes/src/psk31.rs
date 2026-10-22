@@ -323,19 +323,6 @@ pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i
     out
 }
 
-/// Recovers the bitstream from a BPSK31 audio signal, assuming a known
-/// carrier frequency and locked symbol timing (the audio was produced by
-/// `psk31_modulate` at the same carrier/sample rate, or an equally clean
-/// loopback/relay signal). This deliberately does NOT do full carrier/
-/// timing acquisition or tracking (a PLL, AGC, weak-signal correlation
-/// search) -- that's a much larger, separate DSP project, honestly out
-/// of scope here the same way this file's own module doc explains FT8
-/// decode is. What's implemented is a real, working demodulator for a
-/// signal at a known frequency and baud rate: correlates each symbol
-/// period against the local carrier reference to recover I/Q, then
-/// differentially compares consecutive symbols' phase (bit = 1 if the
-/// phase matches the previous symbol, 0 if it flipped 180 degrees) --
-/// exactly mirroring the encoder's own phase-reversal convention.
 /// Correlates exactly one symbol's worth of samples against the local
 /// carrier reference and returns its raw (I, Q) correlation sums.
 /// `sample_idx_start` is the running sample count since the start of the
@@ -417,6 +404,19 @@ fn phase_to_bit(phase: f64, prev_phase: Option<f64>) -> bool {
     }
 }
 
+/// Recovers the bitstream from a BPSK31 audio signal, assuming a known
+/// carrier frequency and locked symbol timing (the audio was produced by
+/// `psk31_modulate` at the same carrier/sample rate, or an equally clean
+/// loopback/relay signal). This deliberately does NOT do full carrier/
+/// timing acquisition or tracking (a PLL, AGC, weak-signal correlation
+/// search) -- that's a much larger, separate DSP project, honestly out
+/// of scope here the same way this file's own module doc explains FT8
+/// decode is. What's implemented is a real, working demodulator for a
+/// signal at a known frequency and baud rate: correlates each symbol
+/// period against the local carrier reference to recover I/Q, then
+/// differentially compares consecutive symbols' phase (bit = 1 if the
+/// phase matches the previous symbol, 0 if it flipped 180 degrees) --
+/// exactly mirroring the encoder's own phase-reversal convention.
 // [@ANCHOR: psk31_demodulate]
 pub fn psk31_demodulate(samples: &[i16], carrier_hz: f64, sample_rate: u32) -> Vec<bool> {
     let samples_per_symbol = (sample_rate as f64 / PSK31_BAUD).round() as usize;
