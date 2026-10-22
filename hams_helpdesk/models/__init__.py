@@ -17,3 +17,5 @@ from . import ir_http_exception
 from . import ir_cron_exception
 from . import mail_exception
 from . import daemon_exception
+from . import browser_exception_schema
+from . import browser_exception
