@@ -77,6 +77,8 @@ class TestAppealsAndViews(RealTransactionCase):
         super(TestAppealsAndViews, self).tearDown()
 
     def test_01_privacy_friendly_view_counter(self):
+        # Tests [@ANCHOR: user_websites:website_page_serve_page_view_counter]
+        # Tests [@ANCHOR: user_websites:website_page_flush_redis_view_counters]
         # Tests [@ANCHOR: test_privacy_friendly_view_counter]
 
         # Tests [@ANCHOR: procedure_flush_view_counters]

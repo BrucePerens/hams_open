@@ -151,7 +151,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
         self.assertEqual(cmd, "Fetch.failRequest")
         self.assertEqual(kwargs["params"]["errorReason"], "Failed")
 
-    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_02_the_standard_host_still_passes_through_with_no_opt_in(self):
         browser = self._fake_browser()
@@ -173,7 +172,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
             "fetch to that exact host proceed, matching HOST's own treatment.",
         )
 
-    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
     # Tests [@ANCHOR: zero_sudo:extra_allowed_fetch_hosts]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_04_opting_in_one_host_does_not_allow_a_different_one(self):
@@ -243,7 +241,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
             "followed by '@', has a different host and must not be let through.",
         )
 
-    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_09_an_opted_in_host_does_not_match_a_longer_host_that_starts_with_it(self):
         browser = self._fake_browser(extra_allowed_fetch_hosts=("127.0.0.2",))
@@ -256,7 +253,6 @@ class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
             "host, not a string prefix of one.",
         )
 
-    # [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
     # Tests [@ANCHOR: zero_sudo:patched_handle_request_paused]
     def test_10_an_opted_in_host_still_passes_with_no_port_and_with_a_path(self):
         browser = self._fake_browser(extra_allowed_fetch_hosts=("127.0.0.2",))

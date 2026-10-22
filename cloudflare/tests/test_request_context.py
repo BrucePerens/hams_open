@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import types
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -145,8 +146,6 @@ class TestCurrentWebsiteWithoutWebsiteAttr(HamsHttpCase):
     def test_get_current_website_id_request_without_website_attribute(self):
         """Backend JSON-RPC requests have no `.website` attribute at all
         (helpdesk ticket 70). Must fall back, not raise AttributeError."""
-        import types
-
         fake = types.SimpleNamespace()
         fake._get_current_object = lambda: fake
         self.safe_patch("odoo.addons.cloudflare.models.edge_context.request", new=fake)
@@ -154,8 +153,6 @@ class TestCurrentWebsiteWithoutWebsiteAttr(HamsHttpCase):
         self.assertEqual(self.env["cloudflare.utils"].get_current_website_id(), expected)
 
     def test_enqueue_tags_request_without_website_attribute(self):
-        import types
-
         fake = types.SimpleNamespace()
         fake._get_current_object = lambda: fake
         self.safe_patch("odoo.addons.cloudflare.models.edge_context.request", new=fake)

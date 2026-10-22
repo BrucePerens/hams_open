@@ -5,6 +5,7 @@ import time
 import pika
 import json
 import os
+import sys
 import logging
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -53,6 +54,11 @@ class TestRealBackupWorker(RealTransactionCase):
         # Fetch the auto-generated API key for the backup service daemon from its secure vault
         env_vars = {}
         env_vars["DB_NAME"] = self.env.cr.dbname
+        # main.py imports exception_reporter (hams_helpdesk/daemon), which production finds through
+        # PYTHONPATH=/opt/hams/daemons; the daemon is a subprocess here, so hand it the source directory.
+        env_vars["PYTHONPATH"] = os.pathsep.join(
+            [os.path.join(os.path.dirname(base_dir), "hams_helpdesk", "daemon")] + sys.path
+        )
         # The daemon now refuses to start without explicit RabbitMQ
         # credentials (no silent guest/guest fallback) -- this local test
         # RabbitMQ genuinely runs with the default guest account, matching

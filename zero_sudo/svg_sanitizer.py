@@ -6,7 +6,7 @@
 """
 [@ANCHOR: zero_sudo:svg_allowlist_sanitizer]
 Verified by [@ANCHOR: test_svg_allowlist_sanitizer_unit]
-and [@ANCHOR: test_svg_allowlist_sanitizer_fields]
+Verified by [@ANCHOR: test_svg_allowlist_sanitizer_fields]
 
 Odoo's HTML sanitizer (`odoo.tools.mail.html_sanitize`, run by every
 `fields.Html` write) strips every SVG shape element, because
@@ -55,6 +55,8 @@ import re
 import secrets
 
 from lxml import etree
+
+from odoo.tools import mail
 
 _logger = logging.getLogger(__name__)
 
@@ -140,7 +142,7 @@ _RE_ASPECT = re.compile(
 _RE_OFFSET = re.compile(rf"{_NUM}%?")
 _RE_STYLE_PROP = re.compile(r"[a-z\-]{3,40}")
 # Defence in depth on every value after it passed its own allowlist.
-_RE_BAD_VALUE = re.compile(
+_BAD_VALUE_RE = re.compile(
     r"javascript|vbscript|data\s*:|expression|@import|&#|\\|<|>|"
     r"[\x00-\x08\x0b\x0c\x0e-\x1f]",
     re.IGNORECASE,
@@ -393,7 +395,7 @@ def _clean_style(value):
         if validator is None:
             continue
         cleaned = validator(raw.strip())
-        if cleaned is None or _RE_BAD_VALUE.search(cleaned):
+        if cleaned is None or _BAD_VALUE_RE.search(cleaned):
             continue
         declarations.append(f"{prop}:{cleaned}")
     return ";".join(declarations) or None
@@ -415,7 +417,7 @@ def _clean_attribute(name, value):
     if canonical is None or len(value) > MAX_ATTR_VALUE:
         return None
     cleaned = _VALIDATORS[canonical](value)
-    if cleaned is None or _RE_BAD_VALUE.search(cleaned):
+    if cleaned is None or _BAD_VALUE_RE.search(cleaned):
         return None
     return canonical, cleaned
 
@@ -656,7 +658,7 @@ _HOSTILE_ELEMENTS = frozenset(
     "script foreignobject use animate animatetransform animatemotion set style iframe object "
     "embed image feimage handler link meta base audio video body html".split()
 )
-_RE_HOSTILE_SCHEME = re.compile(r"(?:javascript|vbscript|data):", re.IGNORECASE)
+_HOSTILE_SCHEME_RE = re.compile(r"(?:javascript|vbscript|data):", re.IGNORECASE)
 _URL_LIKE_ATTRS = frozenset(
     "href src to from by values style action formaction data content".split()
 )
@@ -676,7 +678,7 @@ def _looks_hostile(source):
                 return True
             # Only attributes that carry a URL or a script: "Data: voltage" in an aria-label
             # is not an attack.
-            if attr in _URL_LIKE_ATTRS and _RE_HOSTILE_SCHEME.search(
+            if attr in _URL_LIKE_ATTRS and _HOSTILE_SCHEME_RE.search(
                 _RE_SCHEME_NOISE.sub("", str(value))
             ):
                 return True
@@ -742,18 +744,16 @@ def sanitize_xml_svgs(root):
 
 def install():
     """Make Odoo's HTML sanitizer SVG-aware. Idempotent."""
-    from odoo.tools import mail
-
     cleaner = mail._Cleaner
     current = cleaner.__call__
-    if getattr(current, "_hams_svg_allowlist", False):
+    if current.__dict__.get("_hams_svg_allowlist", False):  # the marker below, set on our own wrapper only
         return
 
     def call_with_svg_allowlist(self, doc):
         dropped = []
-        if getattr(self, "style", False):
+        if self.style:
             dropped.append("style")
-        if getattr(self, "strip_classes", False):
+        if self.strip_classes:
             dropped.append("class")
         return clean_document(
             doc, lambda tree: current(self, tree), tuple(dropped)

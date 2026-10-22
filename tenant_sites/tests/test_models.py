@@ -1,10 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import importlib.util
+import os
+
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import tagged
 
 from .. import request_state
 from ..hooks import post_init_hook
+
+
+# The static file server cloudflared reaches over loopback, and two other loopback services used as "a different service".
+STATIC_SERVICE = "http://localhost:18201"  # burn-ignore-cloudflared-ingress: cloudflared runs on the same host as the static file server
+OTHER_SERVICE = "http://localhost:9"  # burn-ignore-cloudflared-ingress: a different loopback service than the static file server
+OTHER_SERVICE_7 = "http://localhost:7"  # burn-ignore-cloudflared-ingress: a different loopback service than the static file server
 
 
 @tagged("post_install", "-at_install", "tenant_sites")
@@ -154,7 +163,7 @@ class TestTenantSitesModels(HamsTransactionCase):
 
 
     # [@ANCHOR: tenant_sites:COMM_test_static_rule_guard]
-    def _static_ingress(self, hosts, service="http://localhost:18201", drop=()):
+    def _static_ingress(self, hosts, service=STATIC_SERVICE, drop=()):
         rules = [
             {"hostname": host, "path": "^/static/", "service": service} for host in hosts if host not in drop
         ]
@@ -168,7 +177,7 @@ class TestTenantSitesModels(HamsTransactionCase):
         hosts = ["a.tenant.example", "www.a.tenant.example"]
         # No static service recorded: nothing to guard.
         self.assertEqual(tunnel._ingress_problems(self._static_ingress([])), [])
-        self.site.static_service = "http://localhost:18201"
+        self.site.static_service = STATIC_SERVICE
         self.assertEqual(tunnel._ingress_problems(self._static_ingress(hosts)), [])
         # One hostname's rule gone: refused, naming it (and only it).
         problems = tunnel._ingress_problems(self._static_ingress(hosts, drop=("www.a.tenant.example",)))
@@ -180,43 +189,37 @@ class TestTenantSitesModels(HamsTransactionCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("a.tenant.example, www.a.tenant.example", problems[0])
         # A rule to a different service, or with a different path, does not count.
-        self.assertEqual(len(tunnel._ingress_problems(self._static_ingress(hosts, service="http://localhost:9"))), 1)
-        wrong_path = [{"hostname": h, "path": "^/other/", "service": "http://localhost:18201"} for h in hosts]
+        self.assertEqual(len(tunnel._ingress_problems(self._static_ingress(hosts, service=OTHER_SERVICE))), 1)
+        wrong_path = [{"hostname": h, "path": "^/other/", "service": STATIC_SERVICE} for h in hosts]
         wrong_path.append({"service": "http://odoo-test-service:8069"})
         self.assertEqual(len(tunnel._ingress_problems(wrong_path)), 1)
         # A hostless rule does not stand in for the hostname-scoped one.
-        hostless = [{"path": "^/static/", "service": "http://localhost:18201"}, {"service": "http://odoo-test-service:8069"}]
+        hostless = [{"path": "^/static/", "service": STATIC_SERVICE}, {"service": "http://odoo-test-service:8069"}]
         self.assertGreaterEqual(len(tunnel._ingress_problems(hostless)), 1)
         # An inactive site, or a cleared service, is not guarded.
         self.site.static_service = False
         self.assertEqual(tunnel._ingress_problems(self._static_ingress([])), [])
-        self.site.static_service = "http://localhost:18201"
+        self.site.static_service = STATIC_SERVICE
         self.site.active = False
         self.assertEqual(tunnel._ingress_problems(self._static_ingress([])), [])
 
     def test_a_real_push_is_refused_before_anything_is_sent(self):
         """The guard sits behind action_push_configuration: no Cloudflare call is made when it refuses."""
-        from unittest.mock import patch
-        from odoo.exceptions import UserError
-
         tunnel = self.env["cloudflare.tunnel"].create(
             {"name": "guard tunnel", "cf_tunnel_id": "guard-x", "catch_all_service": "http://odoo-test-service:8069",
              "website_id": self.env["website"].search([], limit=1).id}
         )
-        self.site.static_service = "http://localhost:18201"
-        with patch.object(type(tunnel), "_build_ingress", return_value=self._static_ingress([])), \
-             patch.object(type(self.env["website"]), "_get_cloudflare_credentials", return_value=("tok", "zone")), \
-             patch.object(type(self.env["website"]), "cloudflare_account_id", "acct", create=True), \
-             patch("odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration") as push:
-            with self.assertRaises(UserError) as caught:
-                tunnel.action_push_configuration()
-            self.assertIn("serves /static/", str(caught.exception))
-            push.assert_not_called()
+        self.site.static_service = STATIC_SERVICE
+        self.safe_patch_object(type(tunnel), "_build_ingress", return_value=self._static_ingress([]))
+        self.safe_patch_object(type(self.env["website"]), "_get_cloudflare_credentials", return_value=("tok", "zone"))
+        self.safe_patch_object(type(self.env["website"]), "cloudflare_account_id", "acct", create=True)
+        push = self.safe_patch("odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration")
+        with self.assertRaises(UserError) as caught:
+            tunnel.action_push_configuration()
+        self.assertIn("serves /static/", str(caught.exception))
+        push.assert_not_called()
 
     def test_the_1_1_migration_adopts_existing_static_rules_only_when_every_host_has_one(self):
-        import importlib.util
-        import os
-
         path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "migrations", "1.1", "post-adopt-static-services.py")
         spec = importlib.util.spec_from_file_location("tenant_sites_adopt_static", path)
         module = importlib.util.module_from_spec(spec)
@@ -234,17 +237,17 @@ class TestTenantSitesModels(HamsTransactionCase):
         seq = 91000
         for host in ("b.tenant.example", "c.tenant.example"):  # c has only one of its two hosts routed
             seq += 1
-            Route.create({"sequence": seq, "hostname": host, "path": "^/static/", "service_url": "http://localhost:18201"})
+            Route.create({"sequence": seq, "hostname": host, "path": "^/static/", "service_url": STATIC_SERVICE})
         seq += 1
         Route.create({"sequence": seq, "hostname": "a.tenant.example", "path": "^/static/", "service_url": "http_status:404"})
         self.env.flush_all()
         module.migrate(self.env.cr, "1.0")
         self.env.invalidate_all()
-        self.assertEqual(site_b.static_service, "http://localhost:18201")
+        self.assertEqual(site_b.static_service, STATIC_SERVICE)
         self.assertFalse(site_c.static_service)
         self.assertFalse(self.site.static_service)  # an http_status rule is not a service
-        site_b.static_service = "http://localhost:7"
+        site_b.static_service = OTHER_SERVICE_7
         self.env.flush_all()
         module.migrate(self.env.cr, "1.0")
         self.env.invalidate_all()
-        self.assertEqual(site_b.static_service, "http://localhost:7")  # a value already set is left alone
+        self.assertEqual(site_b.static_service, OTHER_SERVICE_7)  # a value already set is left alone

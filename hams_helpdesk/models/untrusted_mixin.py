@@ -260,6 +260,7 @@ class HamsHelpdeskTicketSuspicion(models.Model):
     _description = "What the untrusted-text filter removed or flagged on a ticket (staff evidence)"
     _order = "id desc"
 
+    name = fields.Char(compute="_compute_name")
     ticket_id = fields.Many2one("hams_helpdesk.ticket", required=True, ondelete="cascade", index=True)
     source = fields.Char()
     score = fields.Integer()
@@ -267,6 +268,14 @@ class HamsHelpdeskTicketSuspicion(models.Model):
     findings_json = fields.Text(help="List of {vector, location, count, excerpt, weight}; excerpts are escaped.")
     raw_original = fields.Text(help="The text exactly as received, kept for evidence. Staff only. Never given to an AI.")
     findings_summary = fields.Char(compute="_compute_findings_summary")
+
+    # [@ANCHOR: hams_helpdesk:suspicion_name]
+    # Verified by [@ANCHOR: hams_helpdesk:test_suspicion_record_name]
+    @api.depends("ticket_id", "source")
+    def _compute_name(self):
+        # Never the removed text or the original: only where it came from and which ticket.
+        for rec in self:
+            rec.name = "%s (ticket %s)" % (rec.source or "text", rec.ticket_id.id)
 
     @api.depends("findings_json")
     def _compute_findings_summary(self):

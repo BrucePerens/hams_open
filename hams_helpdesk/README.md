@@ -146,7 +146,9 @@ Helpdesk > Server Exceptions. See `docs/stories/server_exception_tickets.md`.
 
 The static rule (`ai_reader_rule.py`, run by `test_ai_reader_sites`) scans only the files git tracks
 (`[@ANCHOR: hams_helpdesk:ai_reader_tracked_files]`, `[@ANCHOR: hams_helpdesk:ai_reader_candidate_files]`), so a stray
-untracked directory (a leftover nested checkout) cannot fail it. Outside a git checkout it walks the directory instead.
+untracked directory (a leftover nested checkout) cannot fail it. `scan_tree(root)` is the whole-repository entry point: it
+runs the rule over every non-test Python file the scan picks and returns one line per ticket-like text read that skips the
+safe view, and the repository passes only when that list is empty [@ANCHOR: hams_helpdesk:ai_reader_sites_rule]. Outside a git checkout it walks the directory instead.
 Outgoing mail that fails to send, and failures processing an incoming bounce, are reported the same way
 (source "Outgoing / incoming mail"; counts and fixed labels only, never an address or content).
 Failures of external daemons (RabbitMQ consumers, sync and ingest programs) reach the same tickets (source

@@ -15,16 +15,16 @@ import importlib
 import re
 import io
 import time
-from unittest import mock
 
 import lxml.etree as etree
 import lxml.html
 
-from odoo.tests.common import BaseCase, TransactionCase, tagged
+from odoo.tests.common import BaseCase, tagged
 from odoo.tools import convert, html_sanitize, mail
 
 from odoo.addons.zero_sudo import svg_sanitizer
 
+from .common import HamsTransactionCase, SafePatchMixin
 from .svg_corpus import FORGED_TOKEN, SAFE_ELEMENTS, SCHEMATIC_SVG, XSS_CORPUS
 
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -39,7 +39,7 @@ _FORBIDDEN_ATTRS = {
     "href", "xlink:href", "src", "srcdoc", "action", "formaction",
     "data", "filter", "mask",
 }
-_DANGEROUS_VALUE = re.compile(
+_DANGEROUS_VALUE_RE = re.compile(
     r"javascript:|vbscript:|data:|url\((?!#)|@import|expression", re.IGNORECASE
 )
 
@@ -75,7 +75,7 @@ def assert_output_is_safe(test, name, output):
             if inside:
                 test.assertNotIn(lowered, _FORBIDDEN_ATTRS, name)
                 test.assertIsNone(
-                    _DANGEROUS_VALUE.search(value),
+                    _DANGEROUS_VALUE_RE.search(value),
                     f"{name}: dangerous value in {attr}={value!r}",
                 )
         if inside:
@@ -90,7 +90,7 @@ class _DataFile(io.BytesIO):
 
 
 @tagged("post_install", "-at_install")
-class TestSvgAllowlistSanitizerUnit(BaseCase):
+class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
     # [@ANCHOR: test_svg_allowlist_sanitizer_unit]
 
     def _svg_elements(self, output):
@@ -100,11 +100,12 @@ class TestSvgAllowlistSanitizerUnit(BaseCase):
     def test_01_patch_is_installed_exactly_once(self):
         # Tests [@ANCHOR: zero_sudo:svg_allowlist_install]
         call = mail._Cleaner.__call__
-        self.assertTrue(getattr(call, "_hams_svg_allowlist", False))
+        self.assertTrue(call._hams_svg_allowlist)
         svg_sanitizer.install()
         self.assertIs(mail._Cleaner.__call__, call)
-        self.assertFalse(
-            getattr(call.__wrapped__, "_hams_svg_allowlist", False),
+        self.assertNotIn(
+            "_hams_svg_allowlist",
+            vars(call.__wrapped__),
             "the patch wrapped itself",
         )
 
@@ -163,12 +164,11 @@ class TestSvgAllowlistSanitizerUnit(BaseCase):
             "<table><tr><td><img src='a.png' onerror='x'></td></tr></table>",
             "<p>no diagram</p><a href='javascript:alert(1)'>x</a>",
         ]
+        patched = {sample: html_sanitize(sample) for sample in samples}
+        self.safe_patch_object(mail._Cleaner, "__call__", original_call)
         for sample in samples:
             with self.subTest(sample=sample):
-                patched = html_sanitize(sample)
-                with mock.patch.object(mail._Cleaner, "__call__", original_call):
-                    stock = html_sanitize(sample)
-                self.assertEqual(patched, stock)
+                self.assertEqual(patched[sample], html_sanitize(sample))
 
     def test_06_around_svg_is_still_sanitised_by_odoo(self):
         output = html_sanitize(
@@ -404,7 +404,7 @@ class TestSvgAllowlistSanitizerUnit(BaseCase):
 
 
 @tagged("post_install", "-at_install")
-class TestSvgAllowlistHtmlFields(TransactionCase):
+class TestSvgAllowlistHtmlFields(HamsTransactionCase):
     # [@ANCHOR: test_svg_allowlist_sanitizer_fields]
 
     SAFE = (

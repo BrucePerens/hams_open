@@ -40,7 +40,7 @@
 //      part of the web.assets_unit_tests_setup bundle this project's hoot
 //      suites run in.
 // This behavior is instead covered end to end, in a real browser, by the
-// Python tour at [@ANCHOR: test_tour_toast_notifications]
+// Python tour registered under the test anchor test_tour_toast_notifications
 // (user_websites/tests/test_ui_tours.py) -- matching adif_uploader.test.js's
 // own precedent of skipping branches a hoot unit test can't safely reach
 // and relying on the tour instead.
