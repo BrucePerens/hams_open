@@ -51,5 +51,13 @@ a manager sets **Remote Self-Rotation** on the registry:
 A lost reply at either step leaves the daemon with a key that still works; the next run finishes the job.
 Only a key belonging to that registry can rotate it, not another key of the same service account.
 
+### Longer-Lived Keys for a Remote Daemon
+
+A manager may set **Key Lifetime (days)** on a remote self-rotating registry, from 90 up to 400 days, for a daemon whose operator does not want it to depend on a rotation window (the FCC ULS sync on a non-datacenter machine is the first: at least one year). It applies to keys the registry mints from then on, and the daemon is due to rotate 31 days before its key expires, the same margin a 90-day key has. The **Apply Key Lifetime** button extends the key the daemon holds today to the new lifetime, counted from now. It never shortens a key, touches nothing when the row uses the default lifetime, leaves the key string unchanged (so the daemon needs to do nothing), and grants the service account the long-lived key-duration group that allows the longer expiry. Only a Daemon Key Manager may use it [@ANCHOR: COMM_action_apply_key_lifetime].
+
+### A Manager Can See the Keys of Service Accounts
+
+The Daemon Key Manager group implies the ordinary internal-user group, whose record rule shows each user only their own API keys. Without a rule of its own, every search the manager service made for a service account's keys came back empty, so no rotation ever revoked an old key and a remote daemon's confirmation revoked "0 old keys". An additional record rule lets the Daemon Key Manager group read and revoke API keys, but only the keys of service accounts; group rules combine, so no one else's access widens [@ANCHOR: COMM_manager_apikeys_of_service_accounts_rule].
+
 Note: the "30-day buffer" below does not apply to keys a daemon cannot re-read after a rotation. The
 ordinary rotation revokes the old key in the same transaction as it mints the new one.

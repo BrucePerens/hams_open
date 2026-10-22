@@ -131,7 +131,7 @@ def _missing_required_params(endpoint):
 
 
 # [@ANCHOR: hams_helpdesk:request_has_nul_byte]
-# Verified by [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+# Verified by [@ANCHOR: hams_helpdesk:test_nul_byte_is_400]
 def _request_has_nul_byte():
     """True when the path or any text parameter of this request holds a NUL byte (%00), at any depth of a JSON body.
     PostgreSQL refuses such a string, so every route that searched with it answered 500 and filed a

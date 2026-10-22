@@ -23,7 +23,7 @@ The `edge_routing` module is the foundational routing layer for high-speed slug 
     externally, never writes them back) -- Odoo core's `_can_execute_action_on_records()` still
     requires write access to the cron's own `model_id` before it will run at all, so `group_ids` on
     the cron authorizes this specific action for this specific group instead of broadening the
-    model's real ACL. [@ANCHOR: edge_routing_push_pager_duty_cron_runs]
+    model's real ACL. [@ANCHOR: edge_routing_push_pager_duty_cron_runs] [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
 * **`res.users` Extension (`models/res_users.py`)**:
   * Adds `edge.routing.mixin` to `res.users`, so users resolve by `website_slug` exactly like any other routing model, through the same cache. There is no login fallback: a slug that matches no `website_slug` resolves to nothing, even if it equals a user's login. (An earlier fallback to `login` was removed because logins are email addresses, so it let anyone test whether an account existed for an address.)
 
@@ -31,3 +31,6 @@ The `edge_routing` module is the foundational routing layer for high-speed slug 
 * **`utils.py`**:
   * Contains the global `RESERVED_SLUGS` list to prevent users from claiming system routes.
   * Provides the `slugify(s)` utility function for safe string-to-slug conversion.
+  * `reserved_slug_words(env)`: every word a member or group site slug may not be: the fixed `RESERVED_SLUGS` list, the first path segment of every route registered in this database's routing map, and every first path segment Odoo's language handling owns. The slug validators and the unique-slug generator in `edge.routing.mixin` all ask this one function, so a slug that would shadow a platform route or a language prefix is refused or suffixed the same way everywhere. [@ANCHOR: edge_routing:reserved_slug_words]
+  * `routed_first_segments(env)`: the fixed first path segment of every route in the live routing map (lower-cased; dynamic `<converter>` segments and `static` are left out). A static route wins over the `/<slug>` converter route, so a member who claimed one of these words would own a site nobody could reach, and a platform route added next year would silently shadow a slug already claimed; reading the live map means `RESERVED_SLUGS` does not have to be updated by hand for each new route. While modules are still installing it returns an empty set rather than caching a half-built map; the result is kept on the routing-map object, which Odoo rebuilds whenever it invalidates its routing cache, so it is never stale. [@ANCHOR: edge_routing:routed_first_segments]
+  * `language_slugs(env)`: every first path segment Odoo's own language handling owns: for each installed language its code (`en_US`), its URL code (`en`, `fr`) and the bare language prefix (`fr` for `fr_FR`), lower-cased. A site slug equal to one of these would shadow Odoo's `/<lang>/...` routing (`/en_US/` is the home page in English). [@ANCHOR: edge_routing:language_slugs]

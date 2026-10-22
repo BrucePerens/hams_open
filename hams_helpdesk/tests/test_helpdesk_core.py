@@ -400,6 +400,35 @@ class TestHelpdeskCore(HamsTransactionCase):
             ticket_new.callsign, "K1AAA", "Callsign MUST be populated via onchange."
         )
 
+    def test_06b_partner_callsign_follows_the_users_callsign_but_keeps_a_manual_one(self):
+        # Tests [@ANCHOR: hams_helpdesk:res_partner_compute_callsign]
+        """A partner's callsign tracks the callsign of its login user, and a partner whose user has
+        none (or that has no user at all) keeps the value typed in by hand."""
+        self.portal_user.write({"callsign": "K1SYN"})
+        self.assertEqual(self.portal_partner.callsign, "K1SYN")
+
+        # A later change on the user is followed.
+        self.portal_user.write({"callsign": "K1NEW"})
+        self.assertEqual(self.portal_partner.callsign, "K1NEW")
+
+        # A partner with no login keeps what a support agent typed.
+        phone_in = self.env["res.partner"].create({"name": "Phone-in Contact", "callsign": "W1MAN"})
+        self.assertEqual(phone_in.callsign, "W1MAN")
+
+        # A user with no callsign does not clobber the partner's manual value.
+        quiet_partner = self.env["res.partner"].create({"name": "Quiet Partner", "callsign": "W1KEEP"})
+        self.env["res.users"].create(
+            {
+                "name": "Quiet User",
+                "login": "quiet_user_callsign_test",
+                "partner_id": quiet_partner.id,
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        quiet_partner.invalidate_recordset(["callsign"])
+        quiet_partner._compute_callsign()
+        self.assertEqual(quiet_partner.callsign, "W1KEEP")
+
     def test_07_shift_handoff_note_is_internal_not_portal_visible(self):
         # Tests [@ANCHOR: COMM_helpdesk_handoff_execution]
         """Bug-hunt regression (2026-09-09): action_confirm_handoff() used to

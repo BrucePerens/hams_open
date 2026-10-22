@@ -26,6 +26,8 @@ from odoo.exceptions import AccessError, UserError
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.tests import tagged
 
+from odoo.addons.daemon_key_manager.models.key_registry import key_directory_for_group
+
 FAMILY_GROUP = "hamsd_ncvec_sync"
 KEY_ROOT = "/opt/hams/etc/keys"
 # A group file lives in its family's own key directory (owned by the writer, group = the family
@@ -127,6 +129,12 @@ class TestOsGroupKeyFile(RealTransactionCase):
         self.assertEqual(stat.S_IMODE(directory.st_mode), 0o750)
         self.assertEqual(directory.st_gid, self.family_gid)
         self.assertEqual(directory.st_uid, os.geteuid())
+
+    def test_the_key_directory_of_a_group_is_the_directory_named_for_its_family(self):
+        # [@ANCHOR: COMM_test_key_directory_for_group_names_the_family_directory]
+        # Tests [@ANCHOR: COMM_key_directory_for_group]
+        self.assertEqual(key_directory_for_group(FAMILY_GROUP), FAMILY_DIR)
+        self.assertEqual(key_directory_for_group("hamsd_club_crawl"), OTHER_FAMILY_DIR)
 
     def test_an_existing_0700_family_directory_is_regrouped_and_opened_to_its_group(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_group_directory]
@@ -265,6 +273,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
         self.env.flush_all()
         self.assertEqual(good.os_group, FAMILY_GROUP)
         # [@ANCHOR: COMM_test_os_group_registry_directory_constraint]
+        # Tests [@ANCHOR: COMM_security_constraints_os_group_directory]
         for where in (KEY_ROOT, TEST_DIR, OTHER_FAMILY_DIR):
             with self.subTest(directory=where):
                 with self.assertRaises(UserError):

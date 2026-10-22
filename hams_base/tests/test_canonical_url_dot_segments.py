@@ -75,8 +75,7 @@ class TestCanonicalUrlSurvivesDotSegments(HamsHttpCase):
 
     def test_04_double_encoded_dot_segments_are_a_clean_404(self):
         # [@ANCHOR: hams_base:test_url_for_survives_dot_segments]
-        # ---
-        # # Verified by [@ANCHOR: hams_base:url_for_survives_dot_segments]
+        # Tests [@ANCHOR: hams_base:url_for_survives_dot_segments]
         for raw_path in DOUBLE_ENCODED_PATHS:
             with self.subTest(path=raw_path):
                 with self.assertNoLogs("odoo.http", "ERROR"), self.assertNoLogs(

@@ -150,7 +150,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.assertEqual(self.url_open("/blog?date_begin=2026-01-01", allow_redirects=False).status_code, 200)
 
     def test_a_nul_byte_in_the_path_or_a_parameter_is_a_400_not_a_500(self):
-        # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # [@ANCHOR: hams_helpdesk:test_nul_byte_is_400]
         # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         for path in ("/scoped_app?app_id=%00", "/web/login?login=%00"):

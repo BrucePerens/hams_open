@@ -7,6 +7,7 @@ KEY_FILE = "/opt/hams/etc/keys/exception_reporter.env"
 
 
 # [@ANCHOR: hams_helpdesk:register_exception_reporter_key]
+# Verified by [@ANCHOR: hams_helpdesk:test_register_exception_reporter_key]
 def register_exception_reporter_key(env):
     """Has the Daemon Key Manager issue the exception reporter service account's API key and keep it
     in KEY_FILE (rotated like every daemon key). The key lets the OnFailure reporter and a daemon's
