@@ -638,4 +638,61 @@ mod tests {
             "max relative R[] error vs real captured reference: {max_rel_err}"
         );
     }
+
+    /// `find_next_root` evaluates the Chebyshev series `sum coef[5-i] * T_i(x)` and sweeps `x`
+    /// downward from `x_start` in 0.01 steps, then bisects 6 times, so a root is located to
+    /// within `0.01 / 2^5` (the returned value is the last midpoint). `T_1(x) = x` has its
+    /// root at 0 and `T_2(x) = 2x^2 - 1` at +-1/sqrt(2); the polynomials below isolate each.
+    #[test]
+    // Tests [@ANCHOR: find_next_root]
+    fn find_next_root_locates_known_chebyshev_roots_and_only_searches_downward() {
+        let tol = 2.0e-4;
+        let t1 = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+        let root = find_next_root(&t1, 1.0).expect("T_1 has a root at 0");
+        assert!(root.abs() < tol, "T_1 root {root}");
+
+        let t2 = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let half_sqrt2 = std::f32::consts::FRAC_1_SQRT_2;
+        let root = find_next_root(&t2, 1.0).expect("T_2 has a root at +1/sqrt(2)");
+        assert!((root - half_sqrt2).abs() < tol, "T_2 first root {root}");
+
+        // Resuming from just below the first root finds the next one down, the
+        // interleaved-root search `lpc_to_lsp` relies on.
+        let root2 = find_next_root(&t2, root - 0.02).expect("T_2 has a second root");
+        assert!((root2 + half_sqrt2).abs() < tol, "T_2 second root {root2}");
+
+        // The sweep never moves upward: from below both roots there is nothing to find.
+        assert_eq!(find_next_root(&t2, -0.8), None);
+        // A polynomial with no sign change on [-1, 1] (constant T_0) has no root.
+        assert_eq!(find_next_root(&[0.0, 0.0, 0.0, 0.0, 0.0, 1.0], 1.0), None);
+    }
+
+    /// `lpc_energy` is the dot product `sum ak[i] * r[i]` (the prediction-error energy):
+    /// a hand-computed case, then the closed form for a first-order process where
+    /// `r[j] = 0.5^j` gives `ak = [1, -0.5, 0, ...]` and an error energy of `r[0] (1 - 0.25)`.
+    #[test]
+    // Tests [@ANCHOR: lpc_energy]
+    fn lpc_energy_is_the_dot_product_and_matches_the_ar1_residual_energy() {
+        let mut ak = [0.0f32; LPC_ORD + 1];
+        ak[0] = 1.0;
+        ak[1] = -0.5;
+        ak[2] = 0.25;
+        let mut r = [0.0f32; LPC_ORD + 1];
+        r[0] = 2.0;
+        r[1] = 1.0;
+        r[2] = -4.0;
+        // 1*2 + (-0.5)*1 + 0.25*(-4) = 0.5
+        assert_eq!(lpc_energy(&ak, &r), 0.5);
+
+        let r: Autocorr = std::array::from_fn(|j| 0.5f32.powi(j as i32));
+        let ak = levinson_durbin(&r);
+        assert!((ak[1] + 0.5).abs() < 1e-6, "ak[1] = {}", ak[1]);
+        assert!(
+            (lpc_energy(&ak, &r) - 0.75).abs() < 1e-6,
+            "AR(1) error energy {}",
+            lpc_energy(&ak, &r)
+        );
+        // Silence has no energy.
+        assert_eq!(lpc_energy(&ak, &[0.0; LPC_ORD + 1]), 0.0);
+    }
 }

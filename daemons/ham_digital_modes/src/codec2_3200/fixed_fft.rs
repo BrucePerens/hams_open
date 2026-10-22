@@ -2968,6 +2968,40 @@ mod tests {
         sparse_inverse_case::<FFT_ENC_SB, 160>(&mut seed);
     }
 
+    /// `rshift_round_i128` is `(x + 2^(n-1)) >> n`: exact multiples are untouched, a half rounds
+    /// up (toward positive infinity, since `>>` floors), negatives floor after the bias, and an
+    /// accumulator wider than 64 bits narrows correctly while its result fits `i64`.
+    #[test]
+    // Tests [@ANCHOR: fixed_fft:rshift_round_i128]
+    fn rshift_round_i128_rounds_half_up_and_narrows_wide_accumulators() {
+        // Exact multiples.
+        assert_eq!(rshift_round_i128(5 << 23, 23), 5);
+        assert_eq!(rshift_round_i128(-(5i128 << 23), 23), -5);
+        // Just under / exactly / just over one half of the last bit (n = 3, half = 4).
+        assert_eq!(rshift_round_i128(3, 3), 0);
+        assert_eq!(rshift_round_i128(4, 3), 1);
+        assert_eq!(rshift_round_i128(5, 3), 1);
+        // Negative inputs: -4/8 = -0.5 rounds up to 0, -5/8 rounds to -1, -12/8 = -1.5 -> -1.
+        assert_eq!(rshift_round_i128(-4, 3), 0);
+        assert_eq!(rshift_round_i128(-5, 3), -1);
+        assert_eq!(rshift_round_i128(-12, 3), -1);
+        // A product that needs more than 64 bits before the shift still narrows exactly.
+        let big = (i64::MAX as i128) << 20;
+        assert_eq!(rshift_round_i128(big, 20), i64::MAX);
+        assert_eq!(rshift_round_i128(i64::MIN as i128, 1), i64::MIN / 2);
+    }
+
+    /// The narrowing is guarded: a result outside `i64` panics in debug builds instead of
+    /// silently wrapping (this is the contract `nlp.rs`'s documentation warns about; release
+    /// builds compile the assertion out, so the test only exists with debug assertions).
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "doesn't fit i64")]
+    // Tests [@ANCHOR: fixed_fft:rshift_round_i128]
+    fn rshift_round_i128_debug_asserts_when_the_result_does_not_fit_i64() {
+        let _ = rshift_round_i128((i64::MAX as i128 + 1) << 4, 4);
+    }
+
     /// Fast-path complex multiply and squared magnitude equal the exact
     /// `i128` forms on both sides of every fast-path threshold.
     #[test]
