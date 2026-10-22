@@ -74,7 +74,7 @@ class TestCloudflareTunnelDaemon(CloudflareTunnelSimulator, HamsHttpCase):
         self.assertEqual(response.status_code, 101)
         
     def test_unauthorized_bypass(self):
-        # [@ANCHOR: COMM_test_unauthorized_bypass]
+        # [@ANCHOR: edge_cache:COMM_test_unauthorized_bypass]
         """Verify traffic lacking CF headers behaves as a direct access (or is rejected if strict)."""
         response = self.url_open("/")
         self.assertEqual(response.status_code, 200)
