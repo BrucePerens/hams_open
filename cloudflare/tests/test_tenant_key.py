@@ -3,7 +3,9 @@
 
 # -*- coding: utf-8 -*-
 from cryptography.fernet import InvalidToken
+from psycopg2 import IntegrityError
 from odoo.tests.common import tagged
+from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 
@@ -27,6 +29,7 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         self.company_b = self.env["res.company"].create({"name": "Tenant B"})
 
     def test_two_companies_get_independent_keys(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fields]
         fernet_a = self.env["cloudflare.tenant.key"]._get_or_create_fernet(
             self.company_a
         )
@@ -116,3 +119,14 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         self.assertIsNone(
             self.env["cloudflare.tenant.key"]._get_or_create_fernet(self.company_a)
         )
+
+    def test_a_company_can_hold_only_one_wrapped_key(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fields]
+        TenantKey = self.env["cloudflare.tenant.key"]
+        TenantKey._get_or_create_fernet(self.company_a)
+        existing = TenantKey.search([("company_id", "=", self.company_a.id)])
+        self.assertEqual(len(existing), 1)
+        self.assertTrue(existing.wrapped_key)
+        self.assertIn("Tenant A", existing.name)
+        with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.env.cr.savepoint():
+            TenantKey.create({"company_id": self.company_a.id, "wrapped_key": "another"})
