@@ -15,6 +15,7 @@
         "website",
         "ham_callbook",
         "daemon_key_manager",
+        "distributed_redis_cache",
     ],
     "data": [
         "security/helpdesk_security.xml",
@@ -30,6 +31,20 @@
         "data/member_menu_data.xml",
     ],
     "assets": {
+        # The browser JavaScript error reporter (docs/stories/server_exception_tickets.md, section 13). Website,
+        # portal and back office only; the relay-served console does not load these bundles.
+        "web.assets_frontend": [
+            "hams_helpdesk/static/src/js/browser_error_reporter.js",
+            "hams_helpdesk/static/src/js/browser_error_reporter_boot.js",
+        ],
+        "web.assets_backend": [
+            "hams_helpdesk/static/src/js/browser_error_reporter.js",
+            "hams_helpdesk/static/src/js/browser_error_reporter_boot.js",
+        ],
+        "web.assets_unit_tests": [
+            "hams_helpdesk/static/src/js/browser_error_reporter.js",
+            "hams_helpdesk/static/tests/browser_error_reporter.test.js",
+        ],
         "web.assets_tests": [
             "hams_helpdesk/static/src/tours/helpdesk_operator_tour.js",
             "hams_helpdesk/static/src/tours/helpdesk_portal_tour.js",

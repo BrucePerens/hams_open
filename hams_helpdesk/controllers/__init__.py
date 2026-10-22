@@ -4,3 +4,4 @@
 
 from . import github_webhook_api
 from . import portal
+from . import browser_exception_api
