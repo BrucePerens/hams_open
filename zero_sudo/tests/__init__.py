@@ -19,6 +19,8 @@ from . import test_service_uid_no_default_env
 from . import test_service_account_security_notices
 from . import test_session_cookie_hardening
 from . import test_robots_txt_policy
+from . import test_glyph_normalizer
+from . import test_repeater_page_text
 from . import test_ssrf_safe_fetch
 from . import test_club_spam
 from . import test_tdd_fixes
