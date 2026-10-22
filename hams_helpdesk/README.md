@@ -136,6 +136,27 @@ category "Automatic: server exception", one per fingerprint (exception type, inn
 module, normalized route), counted on `hams_helpdesk.exception.fingerprint` and listed under
 Helpdesk > Server Exceptions. See `docs/stories/server_exception_tickets.md`.
 
+### Browser JavaScript errors
+
+Uncaught JavaScript errors on website, portal and back-office pages are posted by
+`static/src/js/browser_error_reporter.js` to `POST /hams_helpdesk/browser_exception` and become "Browser"
+exception tickets through the same fingerprint pipeline. Not loaded by the relay-served console (a future
+opt-in privacy decision). What is sent and stored, the checks and the reasons for them (no nonce; a current
+asset bundle version instead): `docs/stories/server_exception_tickets.md`, section 13.
+
+Production follow-ups, configured on hams1 and Cloudflare, not in this module (edge limits are the first
+layer; the in-code Redis limit of 10 a minute and 60 an hour per visitor is the second):
+
+- Cloudflare: a rate-limiting rule on `http.request.uri.path eq "/hams_helpdesk/browser_exception"` and method POST, counted per
+  client IP, for example 20 requests per minute, action Block for 10 minutes.
+- `nginx/prod/hams-tunnel-origin.conf` (not edited here): inside the catch-all server, a
+  `limit_req_zone $http_cf_connecting_ip zone=hams_browser_exception:10m rate=10r/m;` (in the `http` context) and
+  a `location = /hams_helpdesk/browser_exception { client_max_body_size 16k; limit_req zone=hams_browser_exception burst=10 nodelay; limit_req_status 429; <the catch-all's proxy settings> }`.
+  The 16k cap matters: the application checks the declared size of a JSON body, but Odoo parses a form-encoded body
+  before the controller runs.
+- After deploying: `odoo -u hams_helpdesk` on hams1 (a new selection value, "Browser", and a new dependency on
+  `distributed_redis_cache`), then `systemctl restart odoo`; the asset bundles regenerate by themselves.
+
 ## Recent Improvements
 - Verified and linked all semantic anchors for traceability.
 - Added shift handoff verification to operator tours.

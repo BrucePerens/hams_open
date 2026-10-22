@@ -47,6 +47,9 @@ TICKET_TYPE = "server_exception"
 PER_FINGERPRINT_SECONDS = 60
 GLOBAL_WRITES_PER_MINUTE = 30
 NEW_TICKETS_PER_HOUR = 50
+# Reports from visitors' browsers are anonymous and cheap to invent, so they have a cap of their own, inside the
+# one above: a flood of made-up browser reports can fill this and never the room for real server exceptions.
+BROWSER_NEW_TICKETS_PER_HOUR = 10
 # A new ticket pages the on-duty admin (an email and a toast) only when none did in this long; the
 # others in a burst are still created and assigned, just silent, and the next one that does page says
 # how many were silent. A release that breaks twenty pages is one page, not twenty.
@@ -257,6 +260,7 @@ class ExceptionFingerprint(models.Model):
             ("cron", "Scheduled job"),
             ("mail", "Outgoing / incoming mail"),
             ("daemon", "External daemon"),
+            ("browser", "Browser"),
         ],
         readonly=True,
     )
@@ -321,7 +325,7 @@ class ExceptionFingerprint(models.Model):
             ("Module", self.module),
             ("Innermost frame", self.frame),
             ("Route", self.route),
-            ("Source", self.source),
+            ("Source", dict(self._fields["source"]._description_selection(self.env)).get(self.source, self.source)),
             ("Reported by", ", ".join(self._reporters())),
             ("Fingerprint", self.fingerprint),
         )
@@ -329,11 +333,17 @@ class ExceptionFingerprint(models.Model):
         # Markup.format escapes every argument, so nothing here is interpolated unescaped.
         item = Markup("<li><b>{}:</b> {}</li>")
         lines = Markup("").join(item.format(label, str(value)) for label, value in rows)
+        what = (
+            "a JavaScript error reported by a visitor's browser (anonymous: no user, form value, page text, "
+            "cookie or URL query is sent)"
+            if self.source == "browser"
+            else "an unhandled server exception"
+        )
         intro = Markup(
-            "<p>Created automatically from an unhandled server exception. Personal data, query strings, "
+            "<p>Created automatically from {}. Personal data, query strings, "
             "request bodies and session data are never recorded. The newest sample is below; "
             "the last samples are on the Server Exceptions list.</p>"
-        )
+        ).format(what)
         return intro + Markup("<ul>{}</ul><pre>{}</pre>").format(lines, latest.get("trace", ""))
 
     # [@ANCHOR: hams_helpdesk:exc_record_occurrence]
@@ -437,13 +447,18 @@ class ExceptionFingerprint(models.Model):
             return
         since = now - timedelta(hours=1)
         recent = Ticket.search_count([("ticket_type", "=", TICKET_TYPE), ("create_date", ">=", since)])
-        if recent >= NEW_TICKETS_PER_HOUR:
+        browser_recent = (
+            self.search_count([("source", "=", "browser"), ("ticket_id", "!=", False), ("create_date", ">=", since)])
+            if record.source == "browser"
+            else 0
+        )
+        if recent >= NEW_TICKETS_PER_HOUR or browser_recent >= BROWSER_NEW_TICKETS_PER_HOUR:
             _reporter_logger.warning(
                 "Not opening another server exception ticket: %s already opened in the last hour",
                 recent,
             )
             return
-        name = "Server exception: " + record.name
+        name = ("Browser exception: " if record.source == "browser" else "Server exception: ") + record.name
         quiet, silent_since_page = self._notification_state(now)
         # mail_auto_subscribe_no_notify: Odoo's own "You have been assigned" email would repeat the
         # helpdesk's "Ticket Assigned" one and ignore the window.
