@@ -14,7 +14,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.css_sanitizer import sanitize_stylesheet, sanitize_style_attribute
 
 # Anything that can make a browser fetch or run something, in a sheet that came out.
-_FETCH = re.compile(
+_FETCH_RE = re.compile(
     r"url\s*\((?!\s*#)|@(?!media |keyframes )|image-set|image\s*\(|src\s*\(|element\s*\(|cross-fade|paint\s*\(|attr\s*\(|"
     r"expression|behavior|binding|javascript|vbscript|data\s*:|\\|<|/\*|position\s*:\s*(?:fixed|sticky)",
     re.IGNORECASE,
@@ -70,7 +70,7 @@ class TestCssStylesheetFilter(HamsTransactionCase):
             with self.subTest(vector=name):
                 cleaned, dropped = sanitize_stylesheet(source)
                 self.assertTrue(dropped, f"{name}: removal was not reported")
-                self.assertEqual(_FETCH.findall(cleaned), [], f"{name}: {cleaned!r}")
+                self.assertEqual(_FETCH_RE.findall(cleaned), [], f"{name}: {cleaned!r}")
                 self.assertNotIn("evil.example", cleaned, name)
                 self.assertEqual(
                     sanitize_stylesheet(cleaned), (cleaned, False), f"{name}: not stable"
@@ -197,7 +197,7 @@ class TestStyleAttributeFilter(HamsTransactionCase):
                 cleaned, dropped = sanitize_style_attribute(value)
                 self.assertTrue(dropped)
                 self.assertEqual(cleaned, "", f"{value!r} kept as {cleaned!r}")
-                self.assertFalse(_FETCH.search(cleaned))  # audit-ignore-search: re.Pattern
+                self.assertFalse(_FETCH_RE.search(cleaned))
 
     def test_03_a_hostile_declaration_does_not_take_its_neighbours(self):
         self.assertEqual(
