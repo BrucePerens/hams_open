@@ -5,6 +5,7 @@ import requests
 
 from odoo.tests import tagged
 
+from odoo.addons.hams_base.models.ir_http import _has_dot_segment
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 # Paths a scanner sends. Each reaches Odoo's website 404 page with its dot segments (or bytes that are
@@ -17,6 +18,15 @@ HOSTILE_PATHS = [
     "/a/b/../../../../etc/passwd",
     "/x/..%2fy",
     "/a/%ff/b",
+]
+
+# Double-encoded dot segments: the request path is decoded once, so Odoo sees "%2e%2e" in the path and the
+# strict URL joiner (which decodes again) refuses it. Exception ticket 74 was /@fs/<x>/self/environ.
+DOUBLE_ENCODED_PATHS = [
+    "/@fs/%252e%252e/%252e%252e/self/environ",
+    "/@fs/%252e%252e%252f%252e%252e%252fself/environ",
+    "/@fs/a/%252E%252E/b",
+    "/foo/%252e/x",
 ]
 
 
@@ -62,3 +72,26 @@ class TestCanonicalUrlSurvivesDotSegments(HamsHttpCase):
         response = self._get_raw("/no-such-page-here")
         self.assertEqual(response.status_code, 404)
         self.assertIn('rel="canonical" href="https://hams.com/no-such-page-here"', response.text)
+
+    def test_04_double_encoded_dot_segments_are_a_clean_404(self):
+        # [@ANCHOR: hams_base:test_url_for_survives_dot_segments]
+        # ---
+        # # Verified by [@ANCHOR: hams_base:url_for_survives_dot_segments]
+        for raw_path in DOUBLE_ENCODED_PATHS:
+            with self.subTest(path=raw_path):
+                with self.assertNoLogs("odoo.http", "ERROR"), self.assertNoLogs(
+                    "odoo.addons.http_routing.models.ir_http", "ERROR"
+                ):
+                    response = self._get_raw(raw_path)
+                self.assertEqual(
+                    response.status_code,
+                    404,
+                    f"[!] DIAGNOSTIC FOR AI: {raw_path!r} must answer a clean 404, not a server error. "
+                    "See hams_base/models/ir_http.py _url_for().",
+                )
+
+    def test_05_the_dot_segment_check_matches_odoos_own_refusals(self):
+        for refused in ("/a/../b", "/a/./b", "/a/%2e%2e/b", "/a/%2E/b", "/a/..%2fb", "/a/%ff/b"):
+            self.assertTrue(_has_dot_segment(refused), refused)
+        for fine in ("/", "/a/b", "/a/b..c/", "/a/.hidden", "/a/%252e%252e/b", "/caf%C3%A9"):
+            self.assertFalse(_has_dot_segment(fine), fine)
