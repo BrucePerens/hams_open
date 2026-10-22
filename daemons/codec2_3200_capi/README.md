@@ -96,6 +96,27 @@ against this one -- safer, but a different failure mode a caller
 relying on `NDEBUG`-stripped asserts for its own error recovery would
 need to know about.
 
+## What each entry point does
+
+- `codec2_create(mode)` [@ANCHOR: codec2_3200_capi:codec2_create] returns a new handle, which holds one encoder and one
+  decoder, for `CODEC2_MODE_3200`, and `NULL` for any other mode. The caller owns the handle until it passes it to
+  `codec2_destroy`.
+- `codec2_destroy(state)` [@ANCHOR: codec2_3200_capi:codec2_destroy] frees a handle from `codec2_create`; a `NULL` or
+  already-freed handle is a contract violation, and `NULL` aborts the process.
+- `codec2_encode(state, bytes, speech_in)` [@ANCHOR: codec2_3200_capi:codec2_encode] encodes one frame of 160 16-bit
+  samples into 8 bytes (64 bits); a `NULL` handle or buffer aborts the process.
+- `codec2_decode(state, speech_out, bytes)` [@ANCHOR: codec2_3200_capi:codec2_decode] decodes one 8-byte frame into 160
+  samples; it is `codec2_decode_ber` with a bit-error estimate of 0.
+- `codec2_decode_ber(state, speech_out, bytes, ber_est)` [@ANCHOR: codec2_3200_capi:codec2_decode_ber] decodes one
+  frame like `codec2_decode`; `ber_est` is accepted for source compatibility and ignored, as the reference library
+  ignores it at 3200 bit/s.
+- `codec2_samples_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_samples_per_frame] returns 160, the number of
+  speech samples in a frame.
+- `codec2_bits_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_bits_per_frame] returns 64, the number of bits in an
+  encoded frame.
+- `codec2_bytes_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_bytes_per_frame] returns 8, the number of bytes in
+  an encoded frame.
+
 ## Building and using
 
 ```sh
