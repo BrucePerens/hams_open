@@ -224,6 +224,7 @@ class TestDnsRecordModel(HamsTransactionCase):
         with self.assertRaises(ValidationError):
             self._make(name="hams.com", type="TXT", content="v=spf1 -all", proxied=True)
 
+    # Tests [@ANCHOR: cloudflare:COMM_dns_record_glue_unproxied]
     def test_02_a_nameserver_name_must_be_dns_only_whichever_row_comes_first(self):
         self._make(name="callbook.hams.com", type="NS", content="ns1.hams.com", proxied=False)
         with self.assertRaises(ValidationError):
@@ -236,6 +237,7 @@ class TestDnsRecordModel(HamsTransactionCase):
             self._make(name="x.hams.com", type="NS", content="ns9.hams.com", proxied=False)
         self.assertTrue(other.proxied)
 
+    # Tests [@ANCHOR: cloudflare:COMM_dns_record_constraints]
     def test_03_names_content_and_ids_are_validated(self):
         for bad in ({"name": "Stun.hams.com"}, {"name": "stun.hams.com."}, {"name": "hams"},
                     {"content": "not-an-ip"}, {"type": "AAAA", "content": "66.135.10.56"},
@@ -418,6 +420,7 @@ class TestDnsPush(HamsTransactionCase):
             row.dns_push_apply(plan["hash"])
         self.assertEqual(self.cf.writes(), [])
 
+    # Tests [@ANCHOR: cloudflare:COMM_dns_check_caller_authorized]
     def test_12_only_an_administrator_may_plan_or_apply(self):
         row = self._row("who.hams.com", "A", "192.0.2.42")
         portal_user = new_test_user(self.env, login="dns_push_portal", groups="base.group_portal")
@@ -451,6 +454,8 @@ class TestDnsPush(HamsTransactionCase):
         self.assertFalse((ns1 | ns2).filtered("active"), "retired rows are archived")
         self.assertEqual(sorted(results), ["deleted NS callbook.hams.com", "deleted NS callbook.hams.com"])
 
+    # Tests [@ANCHOR: cloudflare:COMM_dns_push_wizard_plan]
+    # Tests [@ANCHOR: cloudflare:COMM_dns_push_wizard_apply]
     def test_13_the_wizard_shows_the_plan_first_and_applies_exactly_that(self):
         row = self._row("wiz.hams.com", "A", "192.0.2.43")
         wizard = self.env["cloudflare.dns.push.wizard"].create({"record_ids": [(6, 0, row.ids)]})
