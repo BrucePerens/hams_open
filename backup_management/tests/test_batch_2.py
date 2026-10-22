@@ -73,6 +73,27 @@ class TestBatch2Fixes(HamsTransactionCase):
         # back name/display_name as False. Fixed to reuse snapshot_id as name.
         self.assertEqual(snap.name, "snap_empty")
 
+    def test_public_snapshot_ingestion_wrapper_records_the_snapshots(self):
+        # Tests [@ANCHOR: backup_management:COMM_action_process_snapshot_data]
+        # The worker calls this method over JSON-2 after a sync_snapshots job. Odoo refuses to
+        # expose any method whose name starts with an underscore, so the public name must exist
+        # and must do the ingestion itself, not only the private helper behind it.
+        data_kopia = [{
+            "id": "snap_via_public_wrapper",
+            "startTime": "2026-10-01T12:00:00Z",
+            "summary": {"totalBytes": 4096},
+        }]
+        self.config1.action_process_snapshot_data(data_kopia, "kopia")
+        snap = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_via_public_wrapper")])
+        self.assertEqual(len(snap), 1)
+        self.assertEqual(snap.config_id, self.config1)
+        self.assertEqual(snap.size_bytes, 4096)
+
+    def test_public_snapshot_ingestion_wrapper_needs_exactly_one_config(self):
+        # Tests [@ANCHOR: backup_management:COMM_action_process_snapshot_data]
+        with self.assertRaises(ValueError):
+            (self.config1 | self.config_pg).action_process_snapshot_data([], "kopia")
+
     def test_upsert_crash_false(self):
         data_pg = [{
             "backup": [{
