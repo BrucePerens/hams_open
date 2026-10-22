@@ -6,6 +6,7 @@
 # See the LICENSE file in the project root for full license information.
 import hashlib
 import io
+import ipaddress
 import os
 import zipfile
 import stat
@@ -26,8 +27,6 @@ class TestIsSsrfSafePublicIp(HamsTransactionCase):
 
     def test_only_a_public_address_is_safe(self):
         # Tests [@ANCHOR: binary_utils_is_ssrf_safe_public_ip]
-        import ipaddress
-
         for text in ("8.8.8.8", "1.1.1.1", "2606:4700:4700::1111"):
             self.assertTrue(_is_ssrf_safe_public_ip(ipaddress.ip_address(text)), text)
         for text in (
