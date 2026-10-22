@@ -143,6 +143,26 @@ Generates a secure, version-aware filename for the downloaded binary.
 `[@ANCHOR: COMM_binary_utils_unlink]`
 
 Safely removes a binary file from the filesystem.
+
+#### `_is_ssrf_safe_public_ip()`
+`[@ANCHOR: binary_utils_is_ssrf_safe_public_ip]`
+
+Says whether an `ipaddress` object is an address a server-side download may connect to: true only for a public one, false for loopback, private-range, link-local (including the cloud metadata address 169.254.169.254), multicast, reserved and unspecified addresses. It gives the verdict of the shared `zero_sudo.daemon.ssrf_safe_fetch` predicate, which `pager_duty` also uses.
+
+#### `_assert_host_is_ssrf_safe()`
+`[@ANCHOR: binary_utils_assert_host_is_ssrf_safe]`
+
+Resolves a hostname and raises `UserError` ("Security Alert") unless every address it resolves to is safe. `_download_and_extract()` calls it for the URL as given and again for wherever a redirect lands, so a download cannot be steered at an internal address.
+
+#### `_safe_response_geturl()`
+`[@ANCHOR: binary_utils_safe_response_geturl]`
+
+Returns `response.geturl()` for a response object that has one, else `None`; the single place that tolerates `urlopen()`-like objects without a `geturl` method.
+
+#### `_atomic_write_target()`
+`[@ANCHOR: binary_utils_atomic_write_target]`
+
+Writes a downloaded byte stream to its final path without a partly-written file ever being visible there, so an interrupted install cannot leave a truncated executable that later runs.
 </api>
 
 <usage>
