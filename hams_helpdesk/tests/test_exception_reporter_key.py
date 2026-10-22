@@ -32,7 +32,8 @@ class TestExceptionReporterKey(RealTransactionCase):
             os.remove(SCRATCH_KEY_FILE)
 
     def _registries(self):
-        return self.env["daemon.key.registry"].search([("env_file_path", "=", SCRATCH_KEY_FILE)])
+        manager = self.env.ref("daemon_key_manager.user_daemon_key_manager_service")
+        return self.env["daemon.key.registry"].with_user(manager).search([("env_file_path", "=", SCRATCH_KEY_FILE)])
 
     def test_registering_issues_the_key_for_the_reporter_account_and_is_idempotent(self):
         # [@ANCHOR: hams_helpdesk:test_register_exception_reporter_key]

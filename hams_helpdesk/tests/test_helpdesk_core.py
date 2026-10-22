@@ -404,8 +404,8 @@ class TestHelpdeskCore(HamsTransactionCase):
         # Tests [@ANCHOR: hams_helpdesk:res_partner_compute_callsign]
         """A partner's callsign tracks the callsign of its login user, and a partner whose user has
         none (or that has no user at all) keeps the value typed in by hand."""
-        self.portal_user.write({"callsign": "K1SYNC"})
-        self.assertEqual(self.portal_partner.callsign, "K1SYNC")
+        self.portal_user.write({"callsign": "K1SYN"})
+        self.assertEqual(self.portal_partner.callsign, "K1SYN")
 
         # A later change on the user is followed.
         self.portal_user.write({"callsign": "K1NEW"})
