@@ -340,6 +340,16 @@ class TestSsrfSafeFetch(HamsTransactionCase):
             )
         self.assertIsInstance(ctx.exception.reason, ssl.SSLCertVerificationError)
 
+    def test_a_refused_redirect_reaches_the_caller_as_an_http_error(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
+        handler = sf._NoRedirectHandler()
+        self.assertIsNone(handler.redirect_request(None, None, 301, "Moved", {}, "http://elsewhere.example.net/"))
+        follows = sf._build_ssrf_safe_opener("test", https_only=False)
+        refuses = sf._build_ssrf_safe_opener("test", https_only=False, follow_redirects=False)
+        self.assertEqual({type(h).__name__ for h in follows.handle_error["http"][301]}, {"HTTPRedirectHandler"})
+        self.assertEqual({type(h).__name__ for h in refuses.handle_error["http"][301]}, {"_NoRedirectHandler"})
+
     def test_urlopen_ssrf_safe_rejects_an_unsafe_hostname_before_connecting(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
         req = urllib.request.Request("https://internal-target.invalid/")
