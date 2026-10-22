@@ -10,6 +10,7 @@ Manual Administrator, and even an administrator meets it only in the labelled
 administrators-only view, never in Help itself.
 """
 from odoo.tests.common import tagged
+from odoo.addons.knowledge.controllers.main import ManualLibraryController
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 NEEDLE = "Zorkmidquartz"
@@ -194,15 +195,17 @@ class TestHelpAudience(HamsHttpCase):
         self._as("zorkmid_manager")
         self.assertIn(b"/manual/internal", self.url_open("/manual").content)
 
+    def _site_search_found(self, user):
+        """The articles the website search of `user` can reach."""
+        website = self.env["website"].search([], limit=1)
+        Article = self.env["knowledge.article"].with_user(user)
+        detail = Article._search_get_detail(website, "name asc", {"displayDescription": True})
+        return Article.search(detail["base_domain"][0] + detail["base_domain"][1])
+
     def test_10_site_search_never_returns_internal_articles(self):
         # Tests [@ANCHOR: knowledge:COMM_search_get_detail]
-        website = self.env["website"].search([], limit=1)
         for user in (self.portal_user, self.manager_user):
-            Article = self.env["knowledge.article"].with_user(user)
-            detail = Article._search_get_detail(
-                website, "name asc", {"displayDescription": True}
-            )
-            found = Article.search(detail["base_domain"][0] + detail["base_domain"][1])
+            found = self._site_search_found(user)
             self.assertIn(self.manual, found, user.login)
             self.assertNotIn(self.story, found, user.login)
             self.assertNotIn(self.published_internal, found, user.login)
@@ -215,8 +218,6 @@ class TestHelpAudience(HamsHttpCase):
 
     def test_12_a_lower_sequence_leads_its_help_heading(self):
         # Tests [@ANCHOR: knowledge:help_topics]
-        from odoo.addons.knowledge.controllers.main import ManualLibraryController
-
         Article = self.env["knowledge.article"]
         common = {"body": "<p>x</p>", "is_published": True, "internal_permission": "read", "audience": "member", "help_topic": "Getting started and your account"}
         late = Article.create(dict(common, name="Aardvark Zorkmid Guide"))

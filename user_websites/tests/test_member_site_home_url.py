@@ -126,8 +126,8 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
     @staticmethod
     def _is_open_source_route(rule, open_source_root):
         """False only for a route that belongs to an addon outside this repository's addons directory."""
-        endpoint = getattr(rule.endpoint, "method", rule.endpoint)
-        parts = getattr(endpoint, "__module__", "").split(".")
+        endpoint = getattr(rule.endpoint, "method", rule.endpoint)  # burn-ignore-introspection: werkzeug route endpoints, Odoo's EndPoint wrapper or a plain callable
+        parts = getattr(endpoint, "__module__", "").split(".")  # burn-ignore-introspection: a callable of any kind, not a model field
         if parts[:2] != ["odoo", "addons"] or len(parts) < 3:
             return True
         addon_path = get_module_path(parts[2])

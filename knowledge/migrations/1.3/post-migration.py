@@ -32,6 +32,8 @@ import logging
 
 from odoo.modules.module import get_manifest
 
+from odoo.addons.zero_sudo.models.ir_module_module import classify_doc_audience
+
 _logger = logging.getLogger(__name__)
 
 KV_ID_PREFIX = "zero_sudo.doc_article_id_"
@@ -59,10 +61,6 @@ def _expected_classes(cr, classify):
 
 def classify_existing_articles(cr):
     """Set audience, help topic, publication and permission on loader rows."""
-    from odoo.addons.zero_sudo.models.ir_module_module import (
-        classify_doc_audience,
-    )
-
     cr.execute(  # audit-ignore-sql: static SQL, no parameters
         "SELECT to_regclass('zero_sudo_kv') IS NOT NULL"
     )

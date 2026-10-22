@@ -5,7 +5,10 @@ import json
 import os
 import tempfile
 
+from psycopg2 import IntegrityError
+
 from odoo.tests.common import tagged
+from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from unittest.mock import mock_open, MagicMock
 
@@ -227,9 +230,6 @@ class TestGeneralizedConfig(HamsTransactionCase):
         self.assertEqual(exported[check.id]["target"], "redis-zset:hams_prod:ham_dx_spots")
 
     def test_06e_a_negative_maximum_age_is_refused(self):
-        from psycopg2 import IntegrityError
-        from odoo.tools import mute_logger
-
         with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.env.cr.savepoint():
             self.env["pager.check"].with_user(self.admin).create(
                 {"name": "Bad Age", "check_type": "freshness", "target": "file:/x", "max_age_seconds": -1}

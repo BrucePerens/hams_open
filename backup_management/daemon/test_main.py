@@ -3,6 +3,7 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import importlib.util
 import json
 import os
 import sys
@@ -13,7 +14,10 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# main.py imports exception_reporter, which production finds through PYTHONPATH=/opt/hams/daemons.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_helpdesk", "daemon"))
 import main as backup_worker  # noqa: E402
+import pgbackrest_sidecar  # noqa: E402
 
 
 class TestRabbitMQCredentialFailFast(unittest.TestCase):
@@ -765,7 +769,6 @@ class TestPgbackrestRepoNumber(unittest.TestCase):
         self.assertFalse([a for a in cmd if a.startswith("--repo=")], cmd)
 
     def test_the_built_commands_pass_the_sidecars_own_validation(self):
-        import pgbackrest_sidecar
         for engine in ("pgbackrest", "sync_snapshots"):
             for repo in (0, 2):
                 pgbackrest_sidecar._validate_request_cmd(self._run(self._payload(engine, pgbackrest_repo=repo)))
@@ -826,8 +829,6 @@ class TestRunReportsFailures(unittest.TestCase):
 
     @staticmethod
     def _real_helper():
-        import importlib.util
-
         path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_helpdesk", "daemon", "exception_reporter.py"
         )

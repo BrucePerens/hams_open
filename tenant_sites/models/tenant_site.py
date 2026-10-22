@@ -31,7 +31,7 @@ class TenantSite(models.Model):
     static_service = fields.Char(
         string="Static file service",
         help="Where this site's /static/ is served from when it is not Odoo, for example "
-        "http://localhost:18201 (the read-only static file server). Every hostname of the site must then "
+        "http://localhost:18201 (the read-only static file server). Every hostname of the site must then "  # burn-ignore-cloudflared-ingress: cloudflared runs on the same host as the static file server
         "have a tunnel route for ^/static/ to this service, and a tunnel push that lacks one is refused "
         "(it would silently send the site's files to Odoo, which answers 404). Leave empty when Odoo serves it.",
     )

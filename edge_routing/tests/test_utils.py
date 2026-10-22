@@ -6,7 +6,7 @@
 
 from odoo.tests.common import BaseCase
 from odoo.tests import tagged
-from odoo.addons.edge_routing.utils import slugify
+from odoo.addons.edge_routing.utils import RESERVED_SLUGS, slugify
 
 
 @tagged("post_install", "-at_install")
@@ -51,13 +51,9 @@ class TestUtils(BaseCase):
 class TestDirectoryPathsAreReserved(BaseCase):
     def test_top_level_directory_paths_are_not_claimable_as_vanity_slugs(self):
         """/repeaters and /elmers are real site paths (the repeater directory and the Elmer finder)."""
-        from odoo.addons.edge_routing.utils import RESERVED_SLUGS
-
         self.assertLessEqual({"repeaters", "elmers"}, RESERVED_SLUGS)
 
     def test_training_area_words_are_reserved(self):
         """/training is the Training area (courses, glossary, Morse Academy); /auxcomm is its old address and still redirects."""
-        from odoo.addons.edge_routing.utils import RESERVED_SLUGS, slugify
-
         self.assertLessEqual({"training", "auxcomm"}, RESERVED_SLUGS)
         self.assertIn(slugify("Training"), RESERVED_SLUGS)

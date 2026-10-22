@@ -5,8 +5,7 @@
 """Classifier, loader and migration for the article audience."""
 import importlib.util
 import os
-from unittest.mock import patch
-
+from odoo.modules.module import get_manifest
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.models.ir_module_module import (
     classify_doc_audience,
@@ -86,9 +85,8 @@ class TestClassifyDocAudience(common.HamsTransactionCase):
             )
 
     def test_04_every_shipped_member_doc_names_a_help_topic(self):
-        from odoo.modules.module import get_manifest
-
-        modules = self.env["ir.module.module"].search([("state", "=", "installed")])
+        facility_uid = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.odoo_facility_service_internal")
+        modules = self.env["ir.module.module"].with_user(facility_uid).search([("state", "=", "installed")])
         for module in modules:
             for doc in (get_manifest(module.name) or {}).get("knowledge_docs", []):
                 if classify_doc_audience(doc["path"], doc) == "member":
@@ -205,20 +203,20 @@ class TestClassifyExistingArticlesMigration(common.HamsTransactionCase):
             ]
         }
         migration = _load_migration()
-        with patch.object(migration, "get_manifest", return_value=manifest):
-            migration.classify_existing_articles(self.env.cr)
-            first = (guide + story + stale + hand_published + hand_draft)
-            first.invalidate_recordset()
-            snapshot = [
-                (a.audience, a.is_published, a.internal_permission, a.help_topic)
-                for a in first
-            ]
-            migration.classify_existing_articles(self.env.cr)
-            first.invalidate_recordset()
-            again = [
-                (a.audience, a.is_published, a.internal_permission, a.help_topic)
-                for a in first
-            ]
+        self.safe_patch_object(migration, "get_manifest", return_value=manifest)
+        migration.classify_existing_articles(self.env.cr)
+        first = (guide + story + stale + hand_published + hand_draft)
+        first.invalidate_recordset()
+        snapshot = [
+            (a.audience, a.is_published, a.internal_permission, a.help_topic)
+            for a in first
+        ]
+        migration.classify_existing_articles(self.env.cr)
+        first.invalidate_recordset()
+        again = [
+            (a.audience, a.is_published, a.internal_permission, a.help_topic)
+            for a in first
+        ]
         self.assertEqual(snapshot, again, "the migration is idempotent")
         self.assertEqual(snapshot[0], ("member", True, "read", "Community"))
         self.assertEqual(snapshot[1], ("internal", False, "none", False))
