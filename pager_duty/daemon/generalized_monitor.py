@@ -476,6 +476,8 @@ def auto_resolve(client, source, website_id=False):
 
 
 # [@ANCHOR: pager_duty:amqp_check]
+# Verified by [@ANCHOR: pager_duty:test_amqp_check_full_transaction]
+# Verified by [@ANCHOR: pager_duty:test_amqp_check_header_only_gone]
 # Seconds. One AMQP check is a one-shot connection: socket_timeout bounds the TCP connect, stack_timeout the whole
 # connect/Start-Ok/Tune/Open handshake. The heartbeat is small only so that pika gives up on a broker that answers the
 # handshake and then goes silent (a BlockingConnection otherwise waits for a channel reply forever; with the heartbeat

@@ -115,6 +115,36 @@ A non-interactive configuration module that enforces baseline regulatory complia
 
   * `_get_gdpr_streamed_keys()`: returns an empty dict; modules with per-user datasets too large to hold in memory add `{key: generator_function}` entries so the export endpoint can stream each dataset. `[@ANCHOR: compliance_get_gdpr_streamed_keys]`
 
+* **Pages that are not boilerplate.** Besides the four standard legal pages, the module ships three pages written for this
+  deployment. Each is a `website.page` plus a `compliance.document` record, so it is listed on `/compliance` and every
+  visitor, signed in or not, can read it.
+
+  * **Our Certification Authority** (`/compliance/certification-authority`) explains why it is safe to accept the hams.com root
+    certificate: the CA is limited inside the certificates themselves to hams.com and local-network names, its signing keys sit
+    in a Google HSM that nobody can read, and the page says what a thief of the signing permission could and could not do. It
+    lists the permitted names (hams.com, .local, .lan, .home.arpa, .internal and the private address ranges), and a test checks the page names each of them. `[@ANCHOR: compliance:certification_authority_page]`
+
+  * **DMCA Notice and Designated Agent** (`/compliance/dmca`) gives the DMCA notice procedure, the counter-notice steps and the
+    repeat-infringer policy. The registration number and agent name are per deployment (this code is open source and other sites
+    run it), so they are read from the system parameters `compliance.dmca_registration_number` and `compliance.dmca_agent_name`,
+    never written into the template; the postal address, phone and email come from the company record. A site with no
+    registration number says no agent is registered and invents none. The page's template is `[@ANCHOR: compliance:dmca_page]`
+    and its controller route, which reads the parameters bypassing the cache so a change shows at once, is
+    `[@ANCHOR: compliance:dmca_page_route]`.
+
+  * **Intellectual Property** (`/intellectual-property`) records the filed USPTO provisional patent applications by serial number,
+    the project's awareness of related third-party patent activity, and its open-source publication status.
+    `[@ANCHOR: compliance:intellectual_property_page]`
+
+* **Page edits reach installed databases.** The certification authority template used to sit in a `noupdate="1"` data block, so a
+  module update skipped it and the 2026-10-12 rewrite of the page never reached production. The template now sits in an ordinary
+  data block, and the 1.2 pre-migration clears the `noupdate` flag its existing `ir_model_data` row still carried, before the
+  same update reloads the data files. Nothing is changed on a fresh install. `[@ANCHOR: compliance:clear_stale_ca_template_noupdate_flag]`
+
+* **Accessible cookie banner.** Odoo's stock cookie bar is a `role="dialog"` with no name, so a screen reader announced only
+  "dialog" (axe-core `aria-dialog-name`, serious, on every page). The module's inherited template gives it the accessible name
+  "Cookie preferences". `[@ANCHOR: compliance:COMM_compliance_cookies_bar_name]`
+
 ## 3. API & Integration
 ### Standardized Routes
 Dependent modules requiring legal links MUST use:
