@@ -36,6 +36,7 @@ class TestPerformanceORM(HamsHttpCase):
         self.env.flush_all()
 
     def test_01_site_creation_query_scaling(self):
+        # Tests [@ANCHOR: user_websites:website_page_create]
         # [@ANCHOR: test_site_creation_performance_scaling]
 
         # Tests [@ANCHOR: test_site_creation_performance_scaling]
@@ -118,6 +119,7 @@ class TestPerformanceRouting(HamsHttpCase):
         self.test_users = self.env["res.users"].create(users_data)
 
     def test_02_acl_overhead_loop_elimination(self):
+        # Tests [@ANCHOR: user_websites:website_page_check_access]
         # [@ANCHOR: test_acl_overhead_loop_elimination]
 
         # Tests [@ANCHOR: test_acl_overhead_loop_elimination]
@@ -184,6 +186,7 @@ class TestPerformanceRouting(HamsHttpCase):
         )
 
     def test_03_tenant_view_isolation(self):
+        # Tests [@ANCHOR: user_websites:website_page_write]
         # [@ANCHOR: test_tenant_view_isolation]
 
         # Tests [@ANCHOR: test_tenant_view_isolation]

@@ -162,6 +162,7 @@ class WebsitePage(models.Model):
         # [@ANCHOR: website_page_sanitize_arch]
 
         # # Verified by [@ANCHOR: test_website_page_sanitize_arch]
+        # # Verified by [@ANCHOR: test_website_page_sanitize_arch_bare_env_bypass]
         if not arch_content:
             return arch_content, False
         try:

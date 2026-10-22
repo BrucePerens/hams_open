@@ -224,6 +224,7 @@
                                     <i class="fa fa-info-circle mt-1 me-2" aria-hidden="true"/>
                                     <div>Download a copy of your data above <strong>before</strong> erasing anything below. Once this runs, there is no way to get your content back.</div>
                                 </div>
+                                <!-- Verified by [@ANCHOR: user_websites:test_erasure_panel_ban_warning] -->
                                 <div class="alert alert-danger d-flex align-items-start" role="alert" id="user_websites_erasure_ban_warning">
                                     <i class="fa fa-ban mt-1 me-2" aria-hidden="true"/>
                                     <div><strong>Once you erase your data you will be permanently banned from hams.com. This is irreversible.</strong> Your callsign is recorded, and you will never be able to enroll again.</div>

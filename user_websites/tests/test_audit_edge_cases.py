@@ -288,6 +288,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         return f"views:{self.env.cr.dbname}:page:{page_id}"
 
     def test_06_cron_redis_flush_batching(self):
+        # Tests [@ANCHOR: user_websites:website_page_flush_redis_view_counters]
         # [@ANCHOR: test_cron_redis_flush]
 
         # Tests [@ANCHOR: ir_cron_flush_view_counters]
@@ -324,6 +325,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         self.assertEqual(page.view_count, initial_views + 42)
 
     def test_06b_flush_walks_the_whole_scan_even_when_a_page_returns_nothing(self):
+        # Tests [@ANCHOR: user_websites:website_page_flush_redis_view_counters]
         """A non-zero cursor with no keys (SCAN over a big keyspace) is not the end, and not a reason to re-trigger."""
         from odoo.addons.user_websites.models.website_page import redis_client
 
@@ -352,6 +354,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         mock_trigger.assert_not_called()
 
     def test_06c_a_full_batch_triggers_the_next_one_and_only_after_draining_something(self):
+        # Tests [@ANCHOR: user_websites:website_page_flush_redis_view_counters]
         """ADR-0022: more keys than one run takes -> _trigger(); the chain ends because each run drains its batch."""
         from odoo.addons.user_websites.models.website_page import redis_client
 
@@ -603,6 +606,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         )
 
     def test_async_unpublish_survives_non_psycopg2_exception(self):
+        # Tests [@ANCHOR: user_websites:COMM_async_unpublish_group_content]
         # Tests [@ANCHOR: COMM_user_websites_async_unpublish_catch_all]
         """
         _async_unpublish_group_content() runs in a background thread
@@ -631,6 +635,7 @@ class TestAuditEdgeCases(RealTransactionCase):
         )
 
     def test_async_unpublish_survives_registry_acquisition_failure(self):
+        # Tests [@ANCHOR: user_websites:COMM_async_unpublish_group_content]
         # Tests [@ANCHOR: COMM_user_websites_async_unpublish_registry_failure]
         """
         Registry(db_name) and registry.cursor() used to sit outside this

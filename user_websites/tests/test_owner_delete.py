@@ -70,6 +70,7 @@ class TestOwnerDelete(HamsHttpCase):
         return recs
 
     def test_01_confirm_page_wording_and_no_erasure_promise(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_delete_confirm]
         self.authenticate("delowner", "delowner")
         text = self.url_open(f"/my/site/delowner/page/{self.about.id}/delete").text
         self.assertIn("Delete this page?", text)
@@ -78,6 +79,8 @@ class TestOwnerDelete(HamsHttpCase):
             self.assertNotIn(promise, text.lower())
 
     def test_02_delete_page_is_404_everywhere_and_kept_archived(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_delete]
+        # Tests [@ANCHOR: user_websites:field_deleted_by_owner]
         self.authenticate("delowner", "delowner")
         self.assertEqual(self.url_open("/delowner/about", allow_redirects=False).status_code, 200)
         done = self._post(f"/my/site/delowner/page/{self.about.id}/delete")
@@ -99,6 +102,8 @@ class TestOwnerDelete(HamsHttpCase):
         self.assertTrue(again.id)
 
     def test_03_delete_post_is_gone_from_the_public(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_delete]
+        # Tests [@ANCHOR: user_websites:fn_owner_own_post]
         self.authenticate("delowner", "delowner")
         url = self.post.website_url
         self.assertEqual(self.url_open(url, allow_redirects=False).status_code, 200)
@@ -120,6 +125,7 @@ class TestOwnerDelete(HamsHttpCase):
         self.assertTrue(self.env["website.page"].browse(self.about.id).active)
 
     def test_05_restore_brings_it_back_unpublished(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_restore]
         self.authenticate("delowner", "delowner")
         self._post(f"/my/site/delowner/page/{self.about.id}/delete")
         self._post(f"/my/site/delowner/post/{self.post.id}/delete")
