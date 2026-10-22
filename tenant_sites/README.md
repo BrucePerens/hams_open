@@ -35,7 +35,7 @@ any route of a `hams_com` module.
 and a rule has a path but no hostname (it would send tenant and parked hostnames to a daemon port).
 `cloudflare.tunnel._build_ingress()` returns the list a push would send, with no network call.
 
-It also refuses a push that drops a tenant's explicit `/static/` rule. A tenant site whose files are served
+It also refuses a push that drops a tenant's explicit `/static/` rule (`_static_rule_problems`, `[@ANCHOR: tenant_sites:COMM_static_rule_problems]`). A tenant site whose files are served
 by a separate static file server records it in `tenant.site.static_service` (for example
 `http://localhost:18201` for perens.com); every hostname of such a site must then have a rule with that
 hostname, the path `^/static/` and that service, or the push is refused with the missing hostnames named
