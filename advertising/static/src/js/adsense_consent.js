@@ -1,7 +1,5 @@
+/** @odoo-module ignore **/
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-/** @odoo-module **/
-/* The pragma above only tells the asset-bundler lint this file was considered: this file is NOT in any asset bundle. It is served as-is
- * and loaded by a plain <script src> (classic script, globals on purpose), so Odoo never transpiles it and the pragma is inert. */
 
 /*
  * AdSense Consent Mode defaults, loaded with a synchronous <script id="adsense_consent_config" src>
