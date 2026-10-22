@@ -256,7 +256,9 @@ class TestBrowserExceptionEndpoint(RealTransactionCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows.occurrence_count, 1, "the once-a-minute gate holds the repeats back")
         # A minute later: one write carries the two held-back hits and this one.
-        rows.last_written_at = rows.last_written_at - reporter.timedelta(seconds=120)
+        uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
+        service_rows = rows.with_user(uid)
+        service_rows.last_written_at = service_rows.last_written_at - reporter.timedelta(seconds=120)
         self.env.cr.commit()
         reporter._GATE[rows.fingerprint][0] -= 120
         self.assertEqual(self.post().status_code, 204)
@@ -396,10 +398,13 @@ class TestBrowserReporterAssets(HamsHttpCase):
 
     def test_a_public_page_serves_the_reporter_from_its_own_bundle_with_no_inline_script(self):
         page = self.url_open("/").text
-        links = re.findall(r'<script[^>]+src="(/web/assets/[^"]+web\.assets_frontend[^"]*\.js)"', page)
+        # The page names the frontend bundle in two parts (the minimal one in a script tag, the lazy one for a later load),
+        # so look at every frontend bundle the page names, not just the first.
+        links = sorted(set(re.findall(r'/web/assets/[^"\'\s<>]+web\.assets_frontend[^"\'\s<>]*\.js', page)))
         self.assertTrue(links, "the page loads the frontend bundle from its own origin")
-        bundle = self.url_open(links[0]).text
-        self.assertIn("@hams_helpdesk/js/browser_error_reporter", bundle)
+        bundles = {link: self.url_open(link).text for link in links}
+        bundle = "\n".join(bundles.values())
+        self.assertIn("@hams_helpdesk/js/browser_error_reporter", bundle, sorted(bundles))
         self.assertIn("/hams_helpdesk/browser_exception", bundle)
         # The reporter needs no inline script, so the strict policy is untouched.
         self.assertNotIn("browser_exception", re.sub(r"<script[^>]+src=[^>]*>", "", page))
