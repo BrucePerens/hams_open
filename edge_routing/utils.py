@@ -10,6 +10,7 @@ Utility functions for the user_websites module.
 
 import unicodedata
 import re
+import weakref
 
 RESERVED_SLUGS = {
     "community",
@@ -204,6 +205,11 @@ def language_slugs(env):
     return words
 
 
+# First path segments per routing map object. The map is rebuilt whenever Odoo invalidates its routing cache, and a
+# weak key lets an old map (and its entry) go with it, so an entry is never stale.
+_FIRST_SEGMENTS_BY_ROUTING_MAP = weakref.WeakKeyDictionary()
+
+
 def routed_first_segments(env):
     """Every fixed first path segment of a route registered in this database's routing map, lower-cased.
 
@@ -219,9 +225,9 @@ def routed_first_segments(env):
         # far and cached half-made; the data a module ships is covered by the fixed list and the tests.
         return frozenset()
     routing_map = env["ir.http"].routing_map()
-    # The map object is rebuilt whenever Odoo invalidates its routing cache, so a result kept on it
+    # The map object is rebuilt whenever Odoo invalidates its routing cache, so a result kept for it
     # is never stale.
-    words = getattr(routing_map, "_hams_first_segments", None)
+    words = _FIRST_SEGMENTS_BY_ROUTING_MAP.get(routing_map)
     if words is None:
         words = set()
         for rule in routing_map.iter_rules():
@@ -229,7 +235,7 @@ def routed_first_segments(env):
             if parts and "<" not in parts[0] and parts[0] != "static":
                 words.add(parts[0].lower())
         words = frozenset(words)
-        routing_map._hams_first_segments = words
+        _FIRST_SEGMENTS_BY_ROUTING_MAP[routing_map] = words
     return words
 
 

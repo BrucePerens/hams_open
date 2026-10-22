@@ -4,6 +4,7 @@
 from odoo.tools import mute_logger
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.user_websites.models.website_page import redis_client
 from odoo.addons.user_websites.models.user_websites_groups import (
     _async_unpublish_group_content,
 )
@@ -298,8 +299,6 @@ class TestAuditEdgeCases(RealTransactionCase):
         found again by every run and kept the cron re-triggering itself, ~500k runs a day on
         hams1, 2026-10), and a scan that finished does not call _trigger().
         """
-        from odoo.addons.user_websites.models.website_page import redis_client
-
         page = self._flush_page("redis-flush-test")
         zero_page = self._flush_page("redis-flush-zero")
         initial_views = page.view_count
@@ -325,8 +324,6 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_06b_flush_walks_the_whole_scan_even_when_a_page_returns_nothing(self):
         """A non-zero cursor with no keys (SCAN over a big keyspace) is not the end, and not a reason to re-trigger."""
-        from odoo.addons.user_websites.models.website_page import redis_client
-
         page = self._flush_page("redis-flush-walk")
         initial_views = page.view_count
         key = self._view_key(page.id)
@@ -353,8 +350,6 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_06c_a_full_batch_triggers_the_next_one_and_only_after_draining_something(self):
         """ADR-0022: more keys than one run takes -> _trigger(); the chain ends because each run drains its batch."""
-        from odoo.addons.user_websites.models.website_page import redis_client
-
         pages = [self._flush_page(f"redis-flush-batch-{i}") for i in range(3)]
         keys = [self._view_key(p.id) for p in pages]
         self.addCleanup(redis_client.delete, *keys)

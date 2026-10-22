@@ -25,13 +25,7 @@ class CloudflareUtils(models.AbstractModel):
             # routed (website=True routes). Backend JSON-RPC (e.g. web_save in
             # the back office), cron and shell requests have no such attribute,
             # so reading it raised AttributeError (helpdesk ticket 70).
-            try:
-                req_website = request_obj.website
-            except AttributeError as e:  # audit-ignore-catch-all
-                _logger.info(
-                    "Request has no website (not a website-routed request): %s", e
-                )
-                req_website = False
+            req_website = getattr(request_obj, "website", False)  # burn-ignore-introspection: `website` is set only on website-routed requests, not a model field
             if req_website:
                 return req_website.id
         return self.env["website"].get_current_website().id
