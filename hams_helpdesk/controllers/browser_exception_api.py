@@ -77,7 +77,7 @@ class BrowserExceptionApi(http.Controller):
         client = request.env["zero_sudo.security.utils"]._get_trusted_client_ip()
         if model._rate_limited(client or "unknown"):
             return _answer(429)
-        raw = httprequest.stream.read(schema.MAX_BODY_BYTES + 1)
+        raw = httprequest.get_data()[: schema.MAX_BODY_BYTES + 1]
         try:
             data = schema.parse_body(raw)
             report = schema.build_report(
