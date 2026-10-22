@@ -15,9 +15,18 @@ cached at Cloudflare's edge without per-visitor cookies on them, so that most vi
 3. The asset bundles are cached for a year, only when the response is a success with no cookie
    `[@ANCHOR: COMM_ir_http_post_dispatch_headers]`.
 
+4. One visitor's cookie must never reach the next. When Odoo's page cache re-renders an expired entry it
+   stores that very response object and returns it, so everything done to the response afterwards (this
+   visitor's session cookie, a rewritten body) would change the stored entry. The page handler therefore hands
+   the dispatcher a copy of a freshly rendered response and leaves the cache entry intact
+   `[@ANCHOR: COMM_website_page_no_shared_cache_entry]`.
+5. As a second line of defence, any `Set-Cookie` already present on a page response at that point can only have
+   come from a cache entry, since a page's own cookies are added later, so it is removed
+   `[@ANCHOR: COMM_website_page_no_inherited_set_cookie]`.
+
 ## Scenario: A visitor posts a form on a cached page
 
-4. The page's CSRF token belongs to no session. Before the form posts, a script fetches a fresh token and
+6. The page's CSRF token belongs to no session. Before the form posts, a script fetches a fresh token and
    the session cookie it is bound to `[@ANCHOR: COMM_edge_cache_csrf_refresh]`
    `[@ANCHOR: COMM_cloudflare_csrf_token_route]`.
 
