@@ -94,7 +94,7 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, `
 *   `_compute_website_url()`: Generates an SEO-friendly URL slug using the article ID and a sanitized title.
 
 **`controllers/main.py`**
-*   `_compile_markdown(html_body, article_id, write_date)`: Heuristically detects markdown signatures in the text. If found, compiles it to HTML. Results are cached in an LRU cache. Compilation is skipped when the body already contains structural HTML (headings, lists, tables, images, `div`s and similar), because that body is already real HTML; the compiled output is passed through Odoo's HTML sanitizer; if the markdown parser fails, the original HTML body is served.
+*   `_compile_markdown(html_body, article_id, write_date)` `[@ANCHOR: manual_compile_markdown]`: Heuristically detects markdown signatures in the text. If found, compiles it to HTML. Results are cached in an LRU cache. Compilation is skipped when the body already contains structural HTML (headings, lists, tables, images, `div`s and similar), because that body is already real HTML; the compiled output is passed through Odoo's HTML sanitizer; if the markdown parser fails, the original HTML body is served.
 *   `_get_sidebar_articles()`: Fetches root articles for the sidebar, optimized to run in a single combined domain query.
 *   `manual_article_view(article_slug, **kwargs)`: Primary frontend controller. Enforces read access, performs canonical redirects, compiles markdown, and renders the view.
 *   `manual_search(search, **kwargs)`: Controller for case-insensitive substring search on title and body across accessible articles.

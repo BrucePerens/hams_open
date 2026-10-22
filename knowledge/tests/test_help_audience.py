@@ -210,6 +210,7 @@ class TestHelpAudience(HamsHttpCase):
     def test_11_audience_defaults_member_for_hand_written_articles(self):
         # An administrator's own published article keeps working; the
         # documentation loader always sets the audience explicitly.
+        # Tests [@ANCHOR: knowledge:article_audience]
         article = self.env["knowledge.article"].create({"name": "Hand Written"})
         self.assertEqual(article.audience, "member")
 

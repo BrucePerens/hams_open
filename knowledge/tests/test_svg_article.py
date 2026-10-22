@@ -23,7 +23,6 @@ class _DataFile(io.BytesIO):
 
 @tagged("post_install", "-at_install")
 class TestManualArticleInlineSvg(HamsHttpCase):
-    # Tests [@ANCHOR: test_svg_allowlist_sanitizer_fields]
     # Tests [@ANCHOR: zero_sudo:svg_allowlist_sanitizer]
     """knowledge.article.body is a sanitized Html field; a schematic written as inline SVG
     must survive a write, an unsafe SVG must not, and the public page must serve the result."""
