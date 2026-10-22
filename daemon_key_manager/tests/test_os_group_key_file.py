@@ -85,7 +85,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
         if os.path.lexists(TEST_DIR):
             os.chmod(TEST_DIR, 0o700)
             shutil.rmtree(TEST_DIR)
-        before = getattr(self, "_family_dir_before", None)
+        before = self._family_dir_before
         if os.path.isdir(FAMILY_DIR):
             os.chmod(FAMILY_DIR, 0o750)
             keep = before[2] if before else set()
@@ -98,7 +98,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
                 # lchown, not chown: a test that mocks os.chown is still active in tearDown.
                 os.lchown(FAMILY_DIR, -1, before[1])
                 os.chmod(FAMILY_DIR, before[0])
-        if not getattr(self, "_other_dir_existed", True) and os.path.isdir(OTHER_FAMILY_DIR):
+        if not self._other_dir_existed and os.path.isdir(OTHER_FAMILY_DIR):
             shutil.rmtree(OTHER_FAMILY_DIR)
 
     def _family_files(self):

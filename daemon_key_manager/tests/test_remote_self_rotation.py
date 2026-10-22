@@ -264,10 +264,12 @@ class TestRemoteSelfRotation(RealTransactionCase):
         )
         with self.assertRaises(ValidationError), self.env.cr.savepoint():
             local.write({"key_lifetime_days": 365})
+            self.env.flush_all()
         remote, _key = self._remote_registry("Remote Lifetime Test", self.env_paths[1])
         for bad in (89, 401, -5):
             with self.assertRaises(ValidationError), self.env.cr.savepoint():
                 remote.write({"key_lifetime_days": bad})
+                self.env.flush_all()
         remote.write({"key_lifetime_days": 365})
         self.env.cr.commit()
         self.assertEqual(remote._lifetime_days(), 365)

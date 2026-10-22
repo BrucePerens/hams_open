@@ -5,7 +5,6 @@
 import logging
 import os
 import shutil
-from unittest.mock import patch
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -534,8 +533,8 @@ class TestKeyRegistry(RealTransactionCase):
                 raise OSError("simulated unwritable key file")
             return real_rotate(reg, *args, **kwargs)
 
-        with patch.object(type(registry_model), "_rotate_key_and_write_file", _rotate):
-            result = registry_model.action_force_provision_all()  # must not raise
+        self.safe_patch_object(type(registry_model), "_rotate_key_and_write_file", _rotate)
+        result = registry_model.action_force_provision_all()  # must not raise
 
         self.assertEqual(result["params"]["type"], "danger")
         self.assertIn("Partial Bad", result["params"]["message"])
