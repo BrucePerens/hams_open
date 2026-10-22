@@ -144,4 +144,6 @@ class TestJsonRpcErrorBody(HamsHttpCase):
             response = self._post(json=payload)
         self.assertNotIn("Traceback", response.text)
         body = response.json()
-        self.assertEqual(body["error"]["data"]["debug"], "")
+        # The traceback must be absent. This module blanks the `debug` field; content_security_policy,
+        # when installed alongside it (the production module set), drops the field for an anonymous caller.
+        self.assertFalse(body["error"]["data"].get("debug"))

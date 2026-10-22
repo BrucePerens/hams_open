@@ -97,8 +97,16 @@ class TestMailThread(HamsTransactionCase):
         real_message.set_content(msg_dict['body'])
 
         mock_logger = self.safe_patch('odoo.addons.hams_base.models.mail_thread._logger')
-        with self.assertRaises(ValueError):
-            self.env['mail.thread'].message_route(real_message, msg_dict)
+        # Without a postmaster@ alias Odoo's base routing raises ValueError (no possible route). With one
+        # installed (pager_duty's, in the production module set) it returns that alias's route. Either way the
+        # message must not have been swallowed by this override's drop paths, which would return [].
+        postmaster_alias = self.env['mail.alias'].search([('alias_name', '=', 'postmaster')], limit=1)
+        if postmaster_alias:
+            routes = self.env['mail.thread'].message_route(real_message, msg_dict)
+            self.assertTrue(routes, "A genuine postmaster@ message must be routed to the installed alias, not dropped.")
+        else:
+            with self.assertRaises(ValueError):
+                self.env['mail.thread'].message_route(real_message, msg_dict)
         for call in mock_logger.info.call_args_list:
             self.assertNotIn(
                 'Dropping', call.args[0],
