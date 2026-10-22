@@ -2,7 +2,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 
 // The browser half of the JavaScript error tickets (see controllers/browser_exception_api.py and
-// docs/stories/server_exception_tickets.md, section 13). It listens for uncaught errors and unhandled
+// docs/stories/server_exception_tickets.md, section 16). It listens for uncaught errors and unhandled
 // promise rejections on pages of this site (website, portal and the back office) and posts a small,
 // anonymous report to this site's own origin.
 //

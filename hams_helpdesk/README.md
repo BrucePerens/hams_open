@@ -142,7 +142,7 @@ Uncaught JavaScript errors on website, portal and back-office pages are posted b
 `static/src/js/browser_error_reporter.js` to `POST /hams_helpdesk/browser_exception` and become "Browser"
 exception tickets through the same fingerprint pipeline. Not loaded by the relay-served console (a future
 opt-in privacy decision). What is sent and stored, the checks and the reasons for them (no nonce; a current
-asset bundle version instead): `docs/stories/server_exception_tickets.md`, section 13.
+asset bundle version instead): `docs/stories/server_exception_tickets.md`, section 16.
 
 Production follow-ups, configured on hams1 and Cloudflare, not in this module (edge limits are the first
 layer; the in-code Redis limit of 10 a minute and 60 an hour per visitor is the second):

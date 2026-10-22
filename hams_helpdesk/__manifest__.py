@@ -31,7 +31,7 @@
         "data/member_menu_data.xml",
     ],
     "assets": {
-        # The browser JavaScript error reporter (docs/stories/server_exception_tickets.md, section 13). Website,
+        # The browser JavaScript error reporter (docs/stories/server_exception_tickets.md, section 16). Website,
         # portal and back office only; the relay-served console does not load these bundles.
         "web.assets_frontend": [
             "hams_helpdesk/static/src/js/browser_error_reporter.js",
