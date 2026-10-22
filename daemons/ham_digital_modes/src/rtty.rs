@@ -114,10 +114,9 @@ fn char_to_baudot(c: char) -> Option<(u8, bool)> {
 /// insertion (only when the current shift state actually needs to
 /// change, not before every character -- matching real RTTY transmit
 /// practice, which minimizes redundant shift codes) and start/stop
-/// framing per character. Returns `(bit, is_mark)` pairs is not how this
-/// works -- instead returns the framed bit sequence as `bool` (true =
-/// MARK, false = SPACE) at one bit per Baudot bit-period, ready for
-/// `rtty_modulate`'s own tone synthesis.
+/// framing per character. Returns the framed bit sequence as `bool` (true =
+/// MARK, false = SPACE), one entry per bit period, ready for `rtty_modulate`'s
+/// own tone synthesis. Characters with no Baudot code are skipped.
 // [@ANCHOR: text_to_framed_bits]
 fn text_to_framed_bits(text: &str) -> Vec<bool> {
     let mut bits: Vec<bool> = Vec::new();
@@ -1896,6 +1895,54 @@ mod tests {
                 s
             })
             .collect()
+    }
+
+    // Tests [@ANCHOR: characterize_rtty_signature]
+    #[test]
+    fn rtty_signature_reports_flip_rate_run_lengths_and_degenerate_inputs() {
+        let sr = 48000u32;
+        let hop = (sr as f64 / RTTY_BAUD).round() as usize;
+
+        // A steady idle-MARK carrier: 12 whole hops, all MARK, no flips, one run clamped into
+        // the last (>= 8) histogram bucket.
+        let idle = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sr, 12.5 * hop as f64 / sr as f64);
+        let sig = characterize_rtty_signature(&idle, RTTY_DEFAULT_MARK_HZ, sr).unwrap();
+        assert_eq!(sig.sign_flip_rate, 0.0);
+        let mut want = [0usize; RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS];
+        want[RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS - 1] = 1;
+        assert_eq!(sig.run_length_histogram, want);
+
+        // Six single-bit-period hops alternating MARK/SPACE (no stop bit among the first six
+        // framed bits, so every hop is exactly one bit long): every adjacent pair flips and
+        // every run is one hop long.
+        let alt = framed_bits_to_audio(
+            &[true, false, true, false, true, false],
+            RTTY_DEFAULT_MARK_HZ,
+            sr,
+        );
+        let sig = characterize_rtty_signature(&alt, RTTY_DEFAULT_MARK_HZ, sr).unwrap();
+        assert_eq!(sig.sign_flip_rate, 1.0);
+        let mut want = [0usize; RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS];
+        want[0] = 6;
+        assert_eq!(sig.run_length_histogram, want);
+
+        // MARK x3 then SPACE x3: one flip over 5 adjacent pairs; two runs of length 3.
+        let mixed = framed_bits_to_audio(
+            &[true, true, true, false, false, false],
+            RTTY_DEFAULT_MARK_HZ,
+            sr,
+        );
+        let sig = characterize_rtty_signature(&mixed, RTTY_DEFAULT_MARK_HZ, sr).unwrap();
+        assert_eq!(sig.sign_flip_rate, 1.0 / 5.0);
+        let mut want = [0usize; RttySignature::RUN_LENGTH_HISTOGRAM_BUCKETS];
+        want[2] = 2;
+        assert_eq!(sig.run_length_histogram, want);
+
+        // Degenerate inputs: fewer than two whole hops, and a sample rate too low for one whole
+        // sample per bit period.
+        assert!(characterize_rtty_signature(&idle[..hop + hop / 2], RTTY_DEFAULT_MARK_HZ, sr)
+            .is_none());
+        assert!(characterize_rtty_signature(&[1000i16; 64], RTTY_DEFAULT_MARK_HZ, 20).is_none());
     }
 
     #[test]
