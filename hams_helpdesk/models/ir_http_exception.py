@@ -18,6 +18,7 @@ from odoo import models
 from odoo.http import request
 
 from .exception_fingerprint import report_exception
+from .request_input_errors import INPUT_ERROR_TYPES, classify_request_input_error
 
 _logger = logging.getLogger("hams_helpdesk.exception_reporter")
 
@@ -139,6 +140,30 @@ def _request_has_nul_byte():
     /forum/help-1?search=%00 ...)."""
     return "\x00" in request.httprequest.path or _contains_nul(request.params)
 
+# Verbs of a route that cannot change anything. A route that accepts only these is a page; one that accepts a POST may
+# be a webhook or a client API.
+_READ_ONLY_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# [@ANCHOR: hams_helpdesk:input_error_route_scope]
+def _input_errors_are_the_callers(routing):
+    """True for the routes whose malformed-input exceptions are answered 404: a page route (type "http") that a
+    visitor reaches without logging in (auth "public" or "none"). Not JSON-RPC (a client reads the error body),
+    not a route that needs a login, and not a machine endpoint: one with CSRF checking off that accepts a POST
+    (Stripe, SES and Cloudflare webhooks, token APIs) answers a bad payload in its own way and is never rewritten."""
+    if routing.get("type") != "http" or routing.get("auth") not in ("public", "none"):
+        return False
+    methods = routing.get("methods") or ()
+    return routing.get("csrf", True) is not False or (bool(methods) and set(methods) <= _READ_ONLY_METHODS)
+
+
+# [@ANCHOR: hams_helpdesk:render_error_is_the_urls]
+# Messages of odoo.tools.urls.urljoin, which the website layout calls with the request path to build <meta og:url>.
+_URLJOIN_MESSAGES = ("Dot segments are not allowed", "Extra URL must use same scheme and host")
+
+
+def _error_page_failed_on_the_url(error):
+    """True when ``error`` is urljoin refusing the request's own path while the error page was rendered."""
+    return isinstance(error, ValueError) and str(error).startswith(_URLJOIN_MESSAGES)
+
 
 class IrHttpExceptionReport(models.AbstractModel):
     _inherit = "ir.http"
@@ -185,34 +210,69 @@ class IrHttpExceptionReport(models.AbstractModel):
             raise werkzeug.exceptions.BadRequest("Missing required parameter: " + ", ".join(missing))
         try:
             return super()._dispatch(endpoint)
-        except ValueError as error:
-            # A handler that turns a request parameter into a number with int() or float() and gets text raises
-            # ValueError("invalid literal for int() ..."): the sender's mistake, not a server fault (QA pass 2:
-            # /club/apply/submit?club_id=abc, /my/identity/street-quiz/submit?quiz_id=abc and the like, a 500 and
-            # a ticket each). Answered 400; logged at warning so a handler that really has this bug stays visible.
-            if str(error).startswith(_NOT_A_NUMBER_MESSAGES):
-                _logger.warning(
-                    "Answered 400 for a non-numeric parameter on %s: %s",
-                    request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path,
-                    error,
-                )
-                raise werkzeug.exceptions.BadRequest("A request parameter is not a number.") from error
-            # [@ANCHOR: hams_helpdesk:bad_date_is_400]
-            # Text where a date belongs: stock /blog passes ?date_begin= and ?date_end= straight into a search
-            # domain, and the ORM raises ValueError while optimizing it. A scanner's /blog and /blog/<blog> requests
-            # with date_begin=ijyM were 45 x 500 and server-exception tickets 72 and 73 (2026-10-16 00:34-00:35 UTC).
-            # The sender's mistake: 400, logged at warning so a handler that builds a bad date itself stays visible.
-            if _error_is_unreadable_date(error, [value for value in request.params.values() if isinstance(value, str)]):
-                _logger.warning(
-                    "Answered 400 for an unreadable date parameter on %s: %s",
-                    request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path,
-                    error,
-                )
-                raise werkzeug.exceptions.BadRequest("A request parameter is not a date.") from error
+        except INPUT_ERROR_TYPES as error:
+            route_name = request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path
+            if isinstance(error, ValueError):
+                # A handler that turns a request parameter into a number with int() or float() and gets text raises
+                # ValueError("invalid literal for int() ..."): the sender's mistake, not a server fault (QA pass 2:
+                # /club/apply/submit?club_id=abc, /my/identity/street-quiz/submit?quiz_id=abc and the like, a 500 and
+                # a ticket each). Answered 400; logged at warning so a handler that really has this bug stays visible.
+                if str(error).startswith(_NOT_A_NUMBER_MESSAGES):
+                    _logger.warning("Answered 400 for a non-numeric parameter on %s: %s", route_name, error)
+                    raise werkzeug.exceptions.BadRequest("A request parameter is not a number.") from error
+                # [@ANCHOR: hams_helpdesk:bad_date_is_400]
+                # Text where a date belongs: stock /blog passes ?date_begin= and ?date_end= straight into a search
+                # domain, and the ORM raises ValueError while optimizing it. A scanner's /blog and /blog/<blog>
+                # requests with date_begin=ijyM were 45 x 500 and server-exception tickets 72 and 73 (2026-10-16
+                # 00:34-00:35 UTC). The sender's mistake: 400, logged at warning so a handler that builds a bad date
+                # itself stays visible.
+                if _error_is_unreadable_date(
+                    error, [value for value in request.params.values() if isinstance(value, str)]
+                ):
+                    _logger.warning("Answered 400 for an unreadable date parameter on %s: %s", route_name, error)
+                    raise werkzeug.exceptions.BadRequest("A request parameter is not a date.") from error
+            # [@ANCHOR: hams_helpdesk:malformed_input_is_404]
+            # Everything else that the caller's own input caused on a public page route is a 404: the address or
+            # value does not name anything. Bruce's decision, 2026-10-19 ("things will be probing our site
+            # continually"). Only an exception with positive evidence of the caller's input is converted, see
+            # request_input_errors.py; every other exception is raised unchanged and stays a 500 with a ticket.
+            # Logged at INFO with the route and class only (no traceback, no value) so the volume of probes is
+            # visible without filling the log; a handler that really has the bug is the one route that repeats.
+            if _input_errors_are_the_callers(endpoint.routing):
+                reason = classify_request_input_error(error, request.params)
+                if reason:
+                    _logger.info(
+                        "Answered 404 for malformed input on %s: %s (%s)", route_name, type(error).__name__, reason
+                    )
+                    raise werkzeug.exceptions.NotFound() from error
             raise
 
     # [@ANCHOR: hams_helpdesk:exc_ir_http_handle_error]
     @classmethod
     def _handle_error(cls, exception):
+        """Reports the exception, then builds the error page. If the page itself cannot be built because of the
+        request's own address, a 4xx is still answered as a 4xx.
+
+        The website layout builds <meta og:url> from the request path with ``odoo.tools.urls.urljoin``, which raises
+        ValueError for a path with dot segments (/.//.env, /@fs/..%252f..%252fproc/self/environ) or an absolute URL
+        in the path. The 404 page for such a path therefore failed to render, so did the plain error template Odoo
+        falls back to, and the visitor got a 500 and an "Exception during request handling" log entry for a request
+        whose first answer was a correct 404 (21 of 24 such 500s in the production log of 2026-10-17/18). The
+        answer is then werkzeug's own bare page for the original status, which needs no database or template. A
+        failure to render for any other reason is raised as before."""
         report_request_exception(exception)
-        return super()._handle_error(exception)
+        try:
+            return super()._handle_error(exception)
+        except ValueError as render_error:
+            if not _error_page_failed_on_the_url(render_error):
+                raise
+            if not isinstance(exception, werkzeug.exceptions.HTTPException) or (exception.code or 500) >= 500:
+                raise
+            _logger.info(
+                "Answered a bare %s page for %s: the error page cannot be built for this address",
+                exception.code,
+                request.httprequest.path[:80],
+            )
+            response = exception.get_response(request.httprequest.environ)
+            cls._post_dispatch(response)
+            return response

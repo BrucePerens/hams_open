@@ -20,3 +20,5 @@ from . import test_member_menu_item
 from . import test_member_manual
 from . import test_exception_tickets
 from . import test_missing_params
+from . import test_public_route_fuzz
+from . import test_request_input_errors
