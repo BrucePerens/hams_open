@@ -89,14 +89,20 @@ _EDGE_PUNCTUATION = ".,;:()[]\"'"
 _NUMBER_SHAPE = re.compile(r"^[+-]?[0-9]+(?:[.,][0-9]+)*$")
 
 
+# [@ANCHOR: zero_sudo:glyph_normalizer_code]
+# Verified by [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
 def _code(text):
     return " ".join(f"U+{ord(ch):04X}" for ch in text)
 
 
+# [@ANCHOR: zero_sudo:glyph_normalizer_nfkc]
+# Verified by [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
 def _nfkc(ch):
     return unicodedata.normalize("NFKC", ch)
 
 
+# [@ANCHOR: zero_sudo:glyph_normalizer_digit_of]
+# Verified by [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
 def _digit_of(ch):
     """The ASCII digit a non-ASCII character stands for, or None: any Nd character through unicodedata.decimal, any other
     digit-valued character (a No such as a dingbat circled digit) through unicodedata.digit."""
@@ -111,6 +117,8 @@ def _digit_of(ch):
     return None
 
 
+# [@ANCHOR: zero_sudo:glyph_normalizer_clean_units]
+# Verified by [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
 def _clean_units(text, changes):
     """Stages 1 to 4. Returns a list of units [text, original, zero_like] where `original` is the glyph(s) the unit came from."""
     units = []
@@ -157,6 +165,8 @@ def _clean_units(text, changes):
     return units
 
 
+# [@ANCHOR: zero_sudo:glyph_normalizer_callsign_candidate]
+# Verified by [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
 def _callsign_candidate(token_units):
     """(text, zero_like_indexes, homoglyph_indexes) of a token with its zero-like glyphs read as 0 and its homoglyph
     letters as the Latin letter."""
@@ -173,6 +183,8 @@ def _callsign_candidate(token_units):
     return "".join(chars), zeros, homoglyphs
 
 
+# [@ANCHOR: zero_sudo:glyph_normalizer_digit_positions]
+# Verified by [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
 def _digit_positions(match):
     spans = [match.span("d")]
     if match.group("port") is not None:

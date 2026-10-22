@@ -28,6 +28,10 @@ sent to a person to correct and not guessed.
    script, full-width and Arabic decimal and thousands separators, and the Unicode minus become ASCII, and a zero-like glyph
    between digits is a zero. The caller decides what a comma means.
 
+## Internals
+
+The stages are these helpers, each tested through the two public functions: `[@ANCHOR: zero_sudo:glyph_normalizer_code]`, `[@ANCHOR: zero_sudo:glyph_normalizer_nfkc]`, `[@ANCHOR: zero_sudo:glyph_normalizer_digit_of]`, `[@ANCHOR: zero_sudo:glyph_normalizer_clean_units]`, `[@ANCHOR: zero_sudo:glyph_normalizer_callsign_candidate]`, `[@ANCHOR: zero_sudo:glyph_normalizer_digit_positions]`.
+
 ## Verification
 
 `zero_sudo/tests/test_glyph_normalizer.py` (`[@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]`,

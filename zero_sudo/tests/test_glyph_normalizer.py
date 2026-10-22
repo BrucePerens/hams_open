@@ -9,7 +9,7 @@ Tests for `zero_sudo/daemon/glyph_normalizer.py`, the pure callsign / number gly
 and the crawl daemons. The functions are pure, so these call them with the exact text a real page carries. The callsigns
 are the ones real clubs print on their own sites (W0AZR, K0ABC style) or documented, never allocated examples.
 """
-import random
+import random  # audit-ignore-weak-random: a seeded fuzz over code points, no security use
 import time
 import unicodedata
 
@@ -24,6 +24,12 @@ class TestGlyphNormalizer(BaseCase):
     # [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
     def test_callsigns_with_odd_glyphs_are_repaired_and_every_change_is_listed(self):
         # Tests [@ANCHOR: zero_sudo:glyph_normalizer_normalize_callsign_text]
+        # Tests [@ANCHOR: zero_sudo:glyph_normalizer_code]
+        # Tests [@ANCHOR: zero_sudo:glyph_normalizer_nfkc]
+        # Tests [@ANCHOR: zero_sudo:glyph_normalizer_digit_of]
+        # Tests [@ANCHOR: zero_sudo:glyph_normalizer_clean_units]
+        # Tests [@ANCHOR: zero_sudo:glyph_normalizer_callsign_candidate]
+        # Tests [@ANCHOR: zero_sudo:glyph_normalizer_digit_positions]
         cases = {
             "WØAZR": "W0AZR",  # slashed zero (U+00D8), the Austin ARC header
             "KØABC": "K0ABC",
@@ -152,7 +158,9 @@ class TestGlyphNormalizer(BaseCase):
                 clean, changes = function(text)
                 self.assertEqual(function(clean)[0], clean, ascii(text))
                 for original, code, replacement in changes:
-                    self.assertTrue(isinstance(original, str) and code.startswith("U+") and isinstance(replacement, str))
+                    self.assertIsInstance(original, str)
+                    self.assertTrue(code.startswith("U+"))
+                    self.assertIsInstance(replacement, str)
         for bad in (None, 5, b"x", [], object()):
             self.assertEqual(normalize_callsign_text(bad), ("", []))
             self.assertEqual(normalize_number_text(bad), ("", []))
