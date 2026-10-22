@@ -48,7 +48,7 @@ class TestIncidentCreatorPrivilege(RealTransactionCase):
         Incident = self.env["pager.incident"].with_user(self.creator)
         incident = Incident.create(
             {
-                "name": "INC-AUTO",
+                "name": "privilege-audit-test",
                 "source": "privilege-audit-test",
                 "severity": "low",
                 "description": "created directly as the incident creator account",

@@ -280,6 +280,19 @@ THREAD_NAMES = {}
 FAILING_NAMES = set()
 
 
+# [@ANCHOR: pager_duty:check_units]
+# check_key -> the systemd units the check's latest failing run found failing. A check that names units (the systemd
+# check, a unit: freshness check) records them here and polling_thread sends them with the incident, so the incident
+# server joins the one ticket per unit that the OnFailure exception report also uses. Written and read only by the
+# check's own polling thread.
+CHECK_UNITS = {}
+
+
+def note_failing_units(check, units):
+    """Records the units behind this run's failure, in order and once each, for polling_thread to send."""
+    CHECK_UNITS[check_key(check)] = list(dict.fromkeys(u for u in units if u))
+
+
 # [@ANCHOR: pager_duty:check_key]
 # Verified by [@ANCHOR: test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state]
 def check_key(check):
@@ -408,7 +421,7 @@ def extract_severity_prefix(msg, default="high"):
     return match.group(1), match.group(2)
 
 
-def report(client, source, msg, severity="high", website_id=False):
+def report(client, source, msg, severity="high", website_id=False, units=()):
     # [@ANCHOR: daemon_report_incident]
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url:
@@ -435,6 +448,8 @@ def report(client, source, msg, severity="high", website_id=False):
         payload = {"source": source, "description": msg, "severity": severity}
         if website_id:
             payload["website_id"] = website_id
+        if units:
+            payload["units"] = list(units)
         client.execute("pager.incident", "report_incident", vals=payload)
         logger.error(f"Incident reported [{source}]: {msg} (Website: {website_id})")
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
@@ -570,7 +585,7 @@ def parse_freshness_time(value):
     try:
         return float(text)
     except ValueError:
-        pass
+        logger.debug("Freshness value %r is not a plain number; trying an ISO time", text)
     try:
         parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
@@ -646,16 +661,22 @@ def _freshness_one_unit(unit, max_age, now):
     return True, f"OK (last successful run of {unit} ended {_human_age(age)} ago)"
 
 
-def _freshness_unit(units, max_age, now):
-    """One or several comma-separated units sharing a limit; every stale or failed unit is named in one message."""
+def _freshness_unit(units, max_age, now, failing=None):
+    """One or several comma-separated units sharing a limit; every stale or failed unit is named in one message.
+    `failing`, when given, is a list that receives the name of each unit that is stale or failed."""
     names = [u.strip() for u in units.split(",") if u.strip()]
     if len(names) == 1:
-        return _freshness_one_unit(names[0], max_age, now)
+        ok, msg = _freshness_one_unit(names[0], max_age, now)
+        if not ok and failing is not None:
+            failing.append(names[0])
+        return ok, msg
     problems = []
     for unit in names:
         ok, msg = _freshness_one_unit(unit, max_age, now)
         if not ok:
             problems.append(msg)
+            if failing is not None:
+                failing.append(unit)
     if problems:
         return False, f"{len(problems)} of {len(names)} units are stale: " + "; ".join(problems)
     return True, f"OK (all {len(names)} units ran successfully within {_human_age(max_age)})"
@@ -677,7 +698,11 @@ def check_freshness(check, now=None, redis_factory=None):
         return False, "Freshness check has no maximum age (set Maximum Age)"
     try:
         if scheme == "unit":
-            return _freshness_unit(name, max_age, now)
+            failing = []
+            result = _freshness_unit(name, max_age, now, failing)
+            if not result[0]:
+                note_failing_units(check, failing)
+            return result
         if scheme == "file":
             try:
                 newest = os.stat(name).st_mtime
@@ -1678,11 +1703,11 @@ def execute_check(check, client=None):
                 if res.returncode != 0:
                     return False, f"Systemctl list-units failed: {res.stderr.strip()}"
 
-                failed_svcs = failed_units_report(
-                    exe, parse_failed_unit_names(res.stdout, ignored)
-                )
+                failed_names = parse_failed_unit_names(res.stdout, ignored)
+                failed_svcs = failed_units_report(exe, failed_names)
 
                 if failed_svcs:
+                    note_failing_units(check, failed_names)
                     return (
                         False,
                         f"{len(failed_svcs)} failed systemd unit(s): {'; '.join(failed_svcs)}. "
@@ -1692,6 +1717,7 @@ def execute_check(check, client=None):
             else:
                 svcs = [s.strip() for s in target.split(",") if s.strip()]
                 failed_svcs = []
+                failing_names = []
                 for svc in svcs:
                     res = subprocess.run(
                         [exe, "is-active", svc],
@@ -1704,8 +1730,10 @@ def execute_check(check, client=None):
                         if state == "inactive" and _oneshot_last_run_succeeded(exe, svc):
                             continue
                         failed_svcs.append(f"{svc} ({state})")
+                        failing_names.append(svc)
 
                 if failed_svcs:
+                    note_failing_units(check, failing_names)
                     return (
                         False,
                         f"Systemd services not active: {', '.join(failed_svcs)}",
@@ -1876,6 +1904,7 @@ def polling_thread(client, check):
         """Runs the check once, records the result, reports or resolves. Returns seconds to wait before the next run."""
         nonlocal clean_loops, failures_in_a_row, clean_before_streak
         THREAD_HEARTBEATS[key] = time.time()
+        CHECK_UNITS.pop(key, None)
         success, msg = execute_check(check, client)
         record_check_status(client, check, success)
 
@@ -1920,7 +1949,7 @@ def polling_thread(client, check):
             )
             return interval
         severity, clean_msg = extract_severity_prefix(msg)
-        report(client, name, clean_msg, severity, website_id=website_id)
+        report(client, name, clean_msg, severity, website_id=website_id, units=CHECK_UNITS.get(key, ()))
         remedy = check.get("remediate")
         if failures_in_a_row == threshold and clean_before_streak > 0 and remedy and os.path.exists(remedy):
             logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")

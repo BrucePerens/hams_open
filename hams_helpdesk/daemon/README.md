@@ -6,6 +6,15 @@ hook sees them. They reach the same server-exception tickets (Helpdesk > Server 
 "External daemon") by one authenticated Odoo call. Nothing here deploys itself; an operator installs the
 files below.
 
+## One ticket per unit
+
+Every report about one systemd unit lands on one fingerprint row and so on one ticket, whatever its kind or result:
+the OnFailure unit, a daemon's `reporting_failures`, and the pager checks that name the unit (failed units, services not
+active, `unit:` freshness; see `pager_duty` `report_incident` and `_report_unit_failures`). The key is
+`exception_fingerprint`'s `unit_key_parts(unit)`, the inputs of a `unit_failed` / `exit-code` report, so tickets opened
+before this keep counting. The ticket lists who reported it ("Reported by"); a reporter it has not listed yet is
+recorded at once, repeats are counted and written at most once a minute.
+
 ## How a failure reaches a ticket
 
 1. **systemd `OnFailure=`** (`hams-exception-report@.service`, `hams-exception-report.conf`). When a

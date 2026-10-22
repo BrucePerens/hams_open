@@ -335,7 +335,7 @@ class PagerIncident(models.Model):
         IncidentModel = self.env["pager.incident"].with_user(svc_uid)
 
         trend_vals = {
-            "name": "INC-AUTO",
+            "name": f"Trend: {source_incident.source}",
             "source": f"Trend: {source_incident.source}",
             "severity": "high",
             "website_id": website_id,
@@ -359,6 +359,28 @@ class PagerIncident(models.Model):
             trend_incident, website_id, _("New Incident Created (trend escalation)")
         )
         return trend_incident.id
+
+    @api.model
+    def _joins_unit_tickets(self):
+        """True when Helpdesk integration is the stock hams_helpdesk ticket, the only model that
+        carries the per-unit exception tickets."""
+        target = self.env["zero_sudo.security.utils"]._get_system_param(
+            "pager_duty.helpdesk_model", default="hams_helpdesk.ticket"
+        )
+        return target == "hams_helpdesk.ticket"
+
+    def _note_unit_tickets(self, incident, unit_tickets):
+        """Says on the incident which per-unit ticket(s) carry it."""
+        mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "zero_sudo.mail_service_internal"
+        )
+        listing = ", ".join(
+            f"#{ticket} ({unit})" for unit, ticket in sorted(unit_tickets.items())
+        )
+        incident.with_user(mail_svc).message_post(
+            body=_("Tracked on the per-unit ticket(s) %s; no separate ticket was opened.", listing),
+            subtype_xmlid="mail.mt_note",
+        )
 
     @api.model
     def report_incident(self, vals):
@@ -403,6 +425,19 @@ class PagerIncident(models.Model):
             search_domain.append(("website_id", "=", website_id))
             vals["website_id"] = website_id
 
+        # [@ANCHOR: pager_duty:unit_ticket_join]
+        # A check that names failing systemd units sends them in `units`. The units are reported to the
+        # same exception fingerprints the OnFailure unit reports to, so the check, the exception report
+        # and every other check on the same unit share ONE ticket per unit with one occurrence count,
+        # and this incident points at it instead of the adapter opening another. Only a paging severity
+        # joins (low/medium stay tracked, not ticketed, as before).
+        units = vals.pop("units", None)
+        unit_tickets = {}
+        if units and vals.get("severity") not in TREND_TRACKED_SEVERITIES and self._joins_unit_tickets():
+            unit_tickets = self.env[
+                "hams_helpdesk.exception.fingerprint"
+            ]._report_unit_failures(units, source, vals.get("description", ""))
+
         existing = IncidentModel.search(search_domain, limit=1)
         if existing:
             # [@ANCHOR: pager_trend_window_update]
@@ -429,9 +464,17 @@ class PagerIncident(models.Model):
             return existing.id
 
         if vals.get("name", "New") == "New":
-            vals["name"] = "INC-AUTO"
+            # The check's own name, not a placeholder: the board and the ticket title say what failed.
+            vals["name"] = source
 
+        tickets = list(unit_tickets.values())
+        joined = bool(tickets) and all(tickets)
+        if joined:
+            vals["helpdesk_ticket_id"] = tickets[0]
+            vals["helpdesk_ticket_model"] = "hams_helpdesk.ticket"
         incident = IncidentModel.create(vals)
+        if joined:
+            self._note_unit_tickets(incident, unit_tickets)
 
         # [@ANCHOR: pager_trend_severity_gate] low/medium severities are
         # exactly the ones a human on-call engineer would otherwise
