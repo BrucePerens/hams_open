@@ -4,6 +4,7 @@
 # This file is part of hams_open, an open source module.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import hashlib
 import re
 from odoo.tests.common import JsonRpcException, tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
@@ -11,6 +12,22 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 @tagged("post_install", "-at_install")
 class TestZeroSudoControllers(RealTransactionCase):
+
+    def _forget_login_throttle(self, login):
+        """Removes the per-login failure counter a wrong-password sign-in leaves behind.
+
+        When ham_onboarding is installed, every failed password sign-in COMMITS a `ham.invite.throttle` row keyed by the
+        login. The row is created by raw SQL inside a request, so the harness cannot track it: it fails the test in
+        teardown ("Database pollution detected") and, if it survives, makes ham_onboarding's own login-throttle test see two
+        rows. zero_sudo does not depend on ham_onboarding, so the model is only touched when it is in the registry.
+        Registered with addCleanup, which runs before the harness's leak check."""
+        if "ham.invite.throttle" not in self.env:
+            return
+        key = "login:" + hashlib.sha256(login.strip().lower().encode("utf-8", "replace")).hexdigest()[:40]
+        self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup] # fmt: skip
+            "DELETE FROM ham_invite_throttle WHERE name = %s", (key,)
+        )
+        self.env.cr.commit()
 
     def test_01_web_login_interceptor(self):
         # [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
@@ -256,6 +273,7 @@ class TestZeroSudoControllers(RealTransactionCase):
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         self.env.cr.commit()
+        self.addCleanup(self._forget_login_throttle, login)
 
         with self.assertRaises(
             JsonRpcException,
