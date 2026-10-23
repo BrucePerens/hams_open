@@ -20,6 +20,7 @@
                 <field name="first_seen" optional="hide"/>
                 <field name="ticket_id"/>
                 <field name="ticket_stage"/>
+                <field name="last_member_id" optional="hide"/>
             </list>
         </field>
     </record>
@@ -48,6 +49,20 @@
                             <field name="ticket_stage"/>
                         </group>
                     </group>
+                    <separator string="Affected members (staff only; live from the member's own records)"/>
+                    <field name="member_ids" nolabel="1">
+                        <list create="false" delete="false" edit="false">
+                            <field name="member_name"/>
+                            <field name="callsigns"/>
+                            <field name="contact_label"/>
+                            <field name="contact_name"/>
+                            <field name="contact_email" widget="email"/>
+                            <field name="first_seen"/>
+                            <field name="last_seen"/>
+                            <field name="occurrence_count"/>
+                        </list>
+                    </field>
+                    <field name="unlisted_member_count" invisible="not unlisted_member_count"/>
                     <separator string="Last sample traces (scrubbed)"/>
                     <field name="samples_json" nolabel="1"/>
                 </sheet>

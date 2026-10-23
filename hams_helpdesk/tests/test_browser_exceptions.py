@@ -245,7 +245,7 @@ class TestBrowserExceptionEndpoint(RealTransactionCase):
         self.assertTrue(rows.ticket_id.name.startswith("Browser exception: "))
         description = rows.ticket_id.description
         self.assertIn("Browser", description)
-        self.assertIn("JavaScript error reported by a visitor", description)
+        self.assertIn("JavaScript error reported by a browser", description)
         self.assertIn(f"/web/assets/{self.version}/{BUNDLE}.min.js:10:20", description)
         self.assertNotIn("<li><b>Source:</b> browser</li>", description)
 
@@ -276,7 +276,8 @@ class TestBrowserExceptionEndpoint(RealTransactionCase):
         self.assertEqual(self.post(body, headers={"Cookie": "session_id=deadbeef" * 3}).status_code, 204)
         rows = self.rows()
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows.last_user_id, 0, "a browser report never records a user")
+        self.assertEqual(rows.last_user_id, 0, "a session id the server does not know is nobody")
+        self.assertFalse(rows.member_ids)
         stored = " ".join(
             [rows.name, rows.frame, rows.route, rows.samples_json, rows.reporters_json, rows.ticket_id.description]
             + [str(rows.ticket_id.name)]
@@ -285,6 +286,38 @@ class TestBrowserExceptionEndpoint(RealTransactionCase):
             self.assertNotIn(leaked, stored, leaked)
         self.assertNotRegex(rows.frame + rows.route, r"\?")
         self.assertEqual(json.loads(rows.samples_json)[0]["uid"], None)
+
+    # Tests [@ANCHOR: hams_helpdesk:exc_note_member]
+    def test_a_signed_in_member_is_linked_by_the_session_cookie_and_nothing_else_is_sent(self):
+        admin = self.env.ref("base.user_admin")
+        self.authenticate("admin", "admin")
+        body = self.body()
+        self.assertEqual(sorted(body), sorted(good_body()), "the page sends no identity of its own")
+        self.assertEqual(self.post(body).status_code, 204)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows.member_ids.user_id, admin)
+        self.assertEqual(rows.last_member_id, admin)
+        self.assertEqual(rows.last_user_id, admin.id)
+        stored = " ".join([rows.name, rows.frame, rows.route, rows.samples_json, str(rows.ticket_id.description)])
+        for leaked in (admin.name, admin.login, "admin@", self.visitor):
+            self.assertNotIn(leaked, stored, leaked)
+        self.assertIn("the member's account is linked to this report", rows.ticket_id.description)
+
+    def test_a_logged_out_visitor_stays_anonymous(self):
+        self.assertEqual(self.post().status_code, 204)
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(rows.member_ids)
+        self.assertFalse(rows.last_member_id)
+        self.assertEqual(rows.last_user_id, 0)
+        self.assertEqual(json.loads(rows.samples_json)[0]["uid"], None)
+
+    def test_a_cross_site_post_with_the_members_cookie_is_refused_and_links_nobody(self):
+        self.authenticate("admin", "admin")
+        for header in ({"Sec-Fetch-Site": "cross-site"}, {"Origin": "https://evil.example"}):
+            self.assertEqual(self.post(headers=header).status_code, 403)
+        self.assertFalse(self.rows())
 
     def test_a_custom_error_class_keeps_its_stack_but_not_its_message(self):
         self.post(self.body(type="ValidationFailure", message="callsign K6BP rejected for pat@example.com"))

@@ -135,13 +135,16 @@ Unhandled exceptions from pages, RPC/ORM calls and scheduled jobs become tickets
 category "Automatic: server exception", one per fingerprint (exception type, innermost addon frame,
 module, normalized route), counted on `hams_helpdesk.exception.fingerprint` and listed under
 Helpdesk > Server Exceptions. See `docs/stories/server_exception_tickets.md`.
+When the person was signed in, the ticket lists the member (name, callsign if any, email, computed live from their account;
+staff only) so the site team can write to them: a link to the account, never a copy (section 17 of that story). A minor's
+guardian is shown instead of the minor, through the `_contact_user` hook (`ham_communications_consent` in hams_com).
 
 ### Browser JavaScript errors
 
 Uncaught JavaScript errors on website, portal and back-office pages are posted by
 `static/src/js/browser_error_reporter.js` to `POST /hams_helpdesk/browser_exception` and become "Browser"
 exception tickets through the same fingerprint pipeline. Not loaded by the relay-served console (a future
-opt-in privacy decision). What is sent and stored, the checks and the reasons for them (no nonce; a current
+opt-in privacy decision). The browser sends its session cookie; the server links the signed-in member's account (a logged-out visitor stays anonymous). What is sent and stored, the checks and the reasons for them (no nonce; a current
 asset bundle version instead): `docs/stories/server_exception_tickets.md`, section 16.
 
 Production follow-ups, configured on hams1 and Cloudflare, not in this module (edge limits are the first

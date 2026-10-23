@@ -149,6 +149,31 @@ class HelpdeskTicket(models.Model):
     exception_fingerprint_ids = fields.One2many(
         "hams_helpdesk.exception.fingerprint", "ticket_id", string="Exception fingerprints", readonly=True
     )
+    # The members an automatic exception ticket affected (exception_member.py). Staff only: a portal member
+    # reading their own ticket gets neither the rows nor the counts. Links, not copies: the name, callsign and
+    # email are computed live from the member's own records.
+    affected_member_ids = fields.One2many(
+        "hams_helpdesk.exception.member", "ticket_id", string="Reporting member(s)", readonly=True,
+        groups="hams_helpdesk.group_helpdesk_user,base.group_system",
+    )
+    affected_member_count = fields.Integer(
+        string="Members", compute="_compute_affected_members",
+        groups="hams_helpdesk.group_helpdesk_user,base.group_system",
+    )
+    latest_member_label = fields.Char(
+        string="Latest member", compute="_compute_affected_members",
+        groups="hams_helpdesk.group_helpdesk_user,base.group_system",
+    )
+
+    # [@ANCHOR: hams_helpdesk:ticket_affected_members]
+    @api.depends("affected_member_ids")
+    def _compute_affected_members(self):
+        for ticket in self:
+            members = ticket.affected_member_ids
+            ticket.affected_member_count = len(members)
+            latest = members[:1]
+            # A closed account has no name; its label ("account closed") stands in.
+            ticket.latest_member_label = (latest.member_name or latest.contact_label) if latest else False
 
     user_id = fields.Many2one(
         "res.users", string="Assigned To", tracking=True, index=True

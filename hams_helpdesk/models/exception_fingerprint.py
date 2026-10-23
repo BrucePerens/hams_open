@@ -21,7 +21,9 @@ Safety properties, each tested:
 * A storm costs nothing: the per-process gate admits a fingerprint once per minute and the whole
   process at most GLOBAL_WRITES_PER_MINUTE; refused hits only bump an in-memory counter that the
   next admitted write adds to the row. Across workers, the row is locked and rechecked.
-* Nothing but scrubbed text from ``exception_scrub`` is stored. The user is an internal user id.
+* Nothing but scrubbed text from ``exception_scrub`` is stored. The signed-in member is only LINKED
+  (``exception_member.py``: a many2one to res.users, listed on the ticket for staff and computed live); no
+  name, callsign or email is ever written into the ticket text, a sample, a log line or a fingerprint.
 * It runs as ``hams_helpdesk.user_exception_reporter_service``, which can touch only
   ``server_exception`` tickets and the fingerprint rows (no sudo()).
 """
@@ -38,6 +40,7 @@ from markupsafe import Markup
 from odoo import api, fields, http, models
 
 from . import exception_scrub as scrub
+from .exception_member import MEMBER_SOURCES
 
 # Its own logger name: a failure to write a report is logged here and never reported again.
 _reporter_logger = logging.getLogger("hams_helpdesk.exception_reporter")
@@ -72,7 +75,7 @@ class _ReentryState(threading.local):
 _STATE = _ReentryState()
 _GATE_LOCK = threading.Lock()
 # fingerprint -> [monotonic time of the last admitted write, hits refused since the last write,
-# reporters this process has already recorded for it]
+# reporters this process has already recorded for it, member user ids it has already recorded for it]
 _GATE = {}
 # A reporter label is only ever a check name or a fixed word; the set per fingerprint stays small.
 GATE_MAX_REPORTERS = 50
@@ -80,19 +83,22 @@ _RECENT_WRITES = collections.deque()
 
 
 # [@ANCHOR: hams_helpdesk:exc_admit]
-def _admit(fingerprint, reporter=None):
+def _admit(fingerprint, reporter=None, member=None):
     """The per-process gate. Returns the number of earlier hits to fold into this write when this one
     may write, or None when it is refused (the hit is counted and added to the next write).
 
     A ``reporter`` this process has not yet recorded for the fingerprint is admitted inside the
     one-minute window (the process-wide cap still applies): a second check reporting the same failure
-    must show up on the ticket at once, and it only happens once per reporter."""
+    must show up on the ticket at once, and it only happens once per reporter. The same goes for a ``member``
+    (a res.users id): a second member hitting the failure inside the window is listed at once, because the
+    site team writes to every member it affected."""
     now = time.monotonic()
     with _GATE_LOCK:
-        entry = _GATE.setdefault(fingerprint, [None, 0, set()])
+        entry = _GATE.setdefault(fingerprint, [None, 0, set(), set()])
         last = entry[0]
         new_reporter = bool(reporter) and reporter not in entry[2]
-        if last is not None and now - last < PER_FINGERPRINT_SECONDS and not new_reporter:
+        new_member = isinstance(member, int) and member not in entry[3] and len(entry[3]) < GATE_MAX_REPORTERS
+        if last is not None and now - last < PER_FINGERPRINT_SECONDS and not (new_reporter or new_member):
             entry[1] += 1
             return None
         while _RECENT_WRITES and now - _RECENT_WRITES[0] >= 60:
@@ -104,6 +110,8 @@ def _admit(fingerprint, reporter=None):
         entry[0] = now
         if reporter and len(entry[2]) < GATE_MAX_REPORTERS:
             entry[2].add(reporter)
+        if new_member:
+            entry[3].add(member)
         if len(_GATE) > GATE_MAX_ENTRIES:
             stale = [key for key, value in _GATE.items() if value[0] is None or now - value[0] >= 60]
             for key in stale:
@@ -191,7 +199,8 @@ def report_event(
     try:
         key = scrub.fingerprint(*(key_parts or (type_name, module, frame, route)))
         reporter = str(reporter)[:80] if reporter else None
-        folded = _admit(key, reporter)
+        member = uid if source in MEMBER_SOURCES and isinstance(uid, int) and uid > 0 else None
+        folded = _admit(key, reporter, member)
         if folded is None:
             return False
         data = {
@@ -276,6 +285,18 @@ class ExceptionFingerprint(models.Model):
         string="Last user id", readonly=True,
         help="Internal user id of the last logged-in user affected. Never a name or an email.",
     )
+    last_member_id = fields.Many2one(
+        "res.users", string="Last member", readonly=True, ondelete="set null", index=True,
+        help="The last signed-in member this failure was reported for: a link to the account, never a copy of "
+        "the name, callsign or email.",
+    )
+    member_ids = fields.One2many(
+        "hams_helpdesk.exception.member", "fingerprint_id", string="Affected members", readonly=True
+    )
+    unlisted_member_count = fields.Integer(
+        string="Further members (not listed)", readonly=True,
+        help="Reports from members beyond the list's limit, counted only.",
+    )
     release_marker = fields.Char(
         readonly=True,
         help="Newest module-install timestamp when this last happened. When a closed ticket "
@@ -333,17 +354,28 @@ class ExceptionFingerprint(models.Model):
         # Markup.format escapes every argument, so nothing here is interpolated unescaped.
         item = Markup("<li><b>{}:</b> {}</li>")
         lines = Markup("").join(item.format(label, str(value)) for label, value in rows)
-        what = (
-            "a JavaScript error reported by a visitor's browser (anonymous: no user, form value, page text, "
-            "cookie or URL query is sent)"
-            if self.source == "browser"
-            else "an unhandled server exception"
-        )
+        if self.source == "browser":
+            what = (
+                "a JavaScript error reported by a browser on this site (only the error text, the page path and "
+                "the browser family are sent)"
+            )
+        else:
+            what = "an unhandled server exception"
+        if self.source in MEMBER_SOURCES:
+            privacy = (
+                "When the person was signed in, the member's account is linked to this report (staff see it under "
+                "Reporting members, so the site team can write to them); no name, callsign or email is written "
+                "into this text. Request bodies, form values, page text and query strings are never recorded."
+            )
+        else:
+            privacy = (
+                "No member's account is linked to this report. Personal data, query strings, request bodies and "
+                "session data are never recorded."
+            )
         intro = Markup(
-            "<p>Created automatically from {}. Personal data, query strings, "
-            "request bodies and session data are never recorded. The newest sample is below; "
+            "<p>Created automatically from {}. {} The newest sample is below; "
             "the last samples are on the Server Exceptions list.</p>"
-        ).format(what)
+        ).format(what, privacy)
         return intro + Markup("<ul>{}</ul><pre>{}</pre>").format(lines, latest.get("trace", ""))
 
     # [@ANCHOR: hams_helpdesk:exc_record_occurrence]
@@ -365,6 +397,8 @@ class ExceptionFingerprint(models.Model):
             "trace": data["trace"],
         }
         record = self.search([("fingerprint", "=", data["fingerprint"])], limit=1)
+        Member = self.env["hams_helpdesk.exception.member"]
+        member_uid = Member._reportable_member_uid(data["uid"]) if data["source"] in MEMBER_SOURCES else None
         reopen = False
         reporter = data.get("reporter")
         if record:
@@ -375,7 +409,8 @@ class ExceptionFingerprint(models.Model):
             # A reporter the row has not listed yet is recorded even inside the window: two checks
             # that see the same failure at the same moment are both named on the one ticket.
             new_reporter = bool(reporter) and reporter not in reporters and len(reporters) < GATE_MAX_REPORTERS
-            if last and (now - last).total_seconds() < PER_FINGERPRINT_SECONDS and not new_reporter:
+            new_member = bool(member_uid) and not Member._is_listed(record, member_uid)
+            if last and (now - last).total_seconds() < PER_FINGERPRINT_SECONDS and not (new_reporter or new_member):
                 return False
             if new_reporter:
                 reporters.append(reporter)
@@ -414,6 +449,8 @@ class ExceptionFingerprint(models.Model):
                 }
             )
         self._sync_ticket(record, now, reopen)
+        # After the ticket exists, so the member row's stored ticket link is computed from the finished row.
+        Member._note_member(record, member_uid, now)
         return True
 
     # [@ANCHOR: hams_helpdesk:exc_reopen_reason]
