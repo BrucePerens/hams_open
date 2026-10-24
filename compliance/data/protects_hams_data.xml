@@ -26,6 +26,16 @@
                             today -- where something is designed but not yet shipped, that's said
                             plainly, not rounded up.</p>
 
+                            <h3 class="mt-4">Your LoTW certificate never touches our application</h3>
+                            <p>You can use your ARRL Logbook of the World certificate to become a
+                            Verified Ham, or to add a licence, once you are signed in (you sign in
+                            with your password or a hams.com certificate, never with LoTW).
+                            hams.com's application code never receives your LoTW certificate or its
+                            private key, in any form, at any point -- the check happens entirely at
+                            the TLS layer, before your request ever reaches our application, and
+                            your private key never leaves your browser.</p>
+                            <p><a href="/lotw-trust">Read the full LoTW Trust and Certificate Custody page &#8594;</a></p>
+
                             <h3 class="mt-4">We can never remotely control your transmitter</h3>
                             <p>The local relay software that connects your radio to hams.com
                             enforces a frequency safety interlock directly against your radio's own
@@ -104,7 +114,7 @@
 
         <record id="doc_protects_hams" model="compliance.document">
             <field name="name">How Hams.com Protects Hams</field>
-            <field name="description">A central point explaining every real, technical way we protect you: why we can never control your transmitter, disclosed source, signing, and reproducible builds.</field>
+            <field name="description">A central point explaining every real, technical way we protect you: LoTW credential custody, why we can never control your transmitter, disclosed source, signing, and reproducible builds.</field>
             <field name="url">/protects-hams</field>
             <field name="sequence">5</field>
         </record>

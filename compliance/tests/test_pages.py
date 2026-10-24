@@ -128,8 +128,8 @@ class TestCompliancePagesHttp(HamsHttpCase):
         The new central "How Hams.com Protects Hams" page must resolve
         publicly (no login required) and be registered in the shared
         compliance.document registry so it surfaces via /compliance, the
-        same as Privacy/Terms/Transmitter Safety/etc. Also
-        checks it actually links to the existing, real trust pages
+        same as Privacy/Terms/LoTW Trust/Transmitter Safety/etc. Also
+        checks it actually links to the two existing, real trust pages
         rather than re-explaining them (this page is meant to be a central
         index, not a duplicate).
         """
@@ -138,7 +138,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
         msg_status = f"[!] DIAGNOSTIC FOR AI: Page /protects-hams should be reachable (200 OK). Got {response.status_code}."
         self.assertEqual(response.status_code, 200, msg_status)
         self.assertIn("How Hams.com Protects Hams", response.text)
-        self.assertNotIn("/lotw-trust", response.text)
+        self.assertIn('href="/lotw-trust"', response.text)
         self.assertIn('href="/transmitter-safety"', response.text)
         self.assertIn('href="/relay/source"', response.text)
 
