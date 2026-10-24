@@ -969,11 +969,7 @@ class DaemonKeyRegistry(models.Model):
             # being replaced -- so this now correctly and atomically
             # secures the file on every call regardless of what existed
             # there before, rather than merely detecting and refusing a
-            # bad prior state. Same pattern hams_local_relay/src/lotw.rs's
-            # own `master_key()` already uses in this codebase (a
-            # NamedTempFile + persist_noclobber) for the identical
-            # "never corrupt/expose the real target on a partial
-            # failure" reasoning.
+            # bad prior state.
             fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".daemon_key_")
             try:
                 try:
