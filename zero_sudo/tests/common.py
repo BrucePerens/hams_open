@@ -238,6 +238,60 @@ if _original_preexec:
 _original_spawn_chrome = odoo.tests.common.ChromeBrowser._spawn_chrome
 
 
+def _protected_pids():
+    """This process, pid 1 (a namespace's init) and every ancestor of this process: never signalled by the browser
+    clean-up below, whatever pid a stale Popen object or a reused number points at."""
+    pids = {0, 1, os.getpid()}
+    try:
+        pids.update(p.pid for p in psutil.Process().parents())
+    except psutil.Error as e:  # audit-ignore-catch-all
+        _logger.info("Could not list this process's ancestors: %s", e)
+    return pids
+
+
+def _kill_browser_tree(proc, where):
+    """SIGKILLs a test browser (a subprocess.Popen) and its descendants, and its process group only when that group is
+    its own. Two runs (2026-10-24, PID namespace) died with -9 in this clean-up right after tearDown's /odoo/health
+    poll, so this logs pid, pgid and our own group first, and refuses to signal anything that could be the test server:
+    no killpg of our own group (the socat clean-up's guard), nothing <= 1, and no descendant that is this process or an
+    ancestor of it. A browser already reaped (`poll()` is not None) is skipped: its pid number may belong to someone
+    else by now."""
+    pid = proc.pid
+    if not pid or pid <= 1:
+        return
+    try:
+        if proc.poll() is not None:
+            _logger.info("%s: browser pid %s already exited (rc %s); nothing to kill.", where, pid, proc.returncode)
+            return
+    except (AttributeError, OSError) as e:  # audit-ignore-catch-all
+        _logger.info("%s: could not poll browser pid %s: %s", where, pid, e)
+    protected = _protected_pids()
+    try:
+        pgid = os.getpgid(pid)
+    except OSError as e:
+        pgid = None
+        _logger.info("%s: getpgid(%s) failed: %s", where, pid, e)
+    _logger.info("%s: killing browser pid=%s pgid=%s; our pid=%s pgrp=%s", where, pid, pgid, os.getpid(), os.getpgrp())
+    try:
+        for child in psutil.Process(pid).children(recursive=True):
+            if child.pid in protected:
+                _logger.warning("%s: refusing to kill protected pid %s found under the browser.", where, child.pid)
+                continue
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                _logger.debug("Child already dead.")
+    except psutil.NoSuchProcess:
+        _logger.debug("Parent already dead.")
+    if pgid is None or pgid <= 1 or pgid == os.getpgrp() or pgid in protected:
+        _logger.info("%s: not signalling process group %s (not the browser's own group).", where, pgid)
+        return
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except OSError as e:
+        _logger.info("Ignored exception: %s", e)
+
+
 # [@ANCHOR: zero_sudo:kill_all_headless_chrome]
 def _kill_all_headless_chrome_for_this_uid():
     """Unconditionally SIGKILLs every headless chrome/chromium process owned by
@@ -870,10 +924,14 @@ def _patched_chrome_stop(self, *args, **kwargs):
     # odoo/tests/common.py's own ChromeBrowser.__init__). This lookup silently
     # found nothing and skipped this whole block on every prior run.
     proc = getattr(self, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
-    if proc:
+    if proc and proc.poll() is None and proc.pid and proc.pid > 1:
+        protected = _protected_pids()
         try:
             parent = psutil.Process(proc.pid)
             for child in parent.children(recursive=True):
+                if child.pid in protected:
+                    _logger.warning("Refusing to kill protected pid %s found under the browser.", child.pid)
+                    continue
                 try:
                     child.kill()
                 except psutil.NoSuchProcess as e:  # audit-ignore-catch-all
@@ -989,10 +1047,7 @@ def _patched_chrome_start(self, *args, **kwargs):
             except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                 _logger.info("Ignored exception updating children: %s", e)
 
-            try:
-                os.killpg(proc_obj.pid, signal.SIGKILL)
-            except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
-                _logger.info("Ignored exception: %s", e)
+            _kill_browser_tree(proc_obj, "_patched_chrome_start")
             try:
                 proc_obj.terminate()
                 proc_obj.wait(timeout=2.0)
@@ -1004,7 +1059,11 @@ def _patched_chrome_start(self, *args, **kwargs):
             except (KeyError, ValueError, OSError, psutil.NoSuchProcess) as e:  # audit-ignore-catch-all
                 _logger.info("Ignored exception: %s", e)
 
+        protected = _protected_pids()
         for child in set(children_to_kill):
+            if child.pid in protected:
+                _logger.warning("Refusing to kill protected pid %s listed as a browser child.", child.pid)
+                continue
             try:
                 if child.is_running():
                     child.kill()
@@ -1771,20 +1830,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                         # run, every test, ever.
                         proc = getattr(cls.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                         if proc:
-                            try:
-                                parent = psutil.Process(proc.pid)
-                                for child in parent.children(recursive=True):
-                                    try:
-                                        child.kill()
-                                    except psutil.NoSuchProcess:
-                                        _logger.debug("Child already dead.")
-                            except psutil.NoSuchProcess:
-                                _logger.debug("Parent already dead.")
-                            try:
-
-                                os.killpg(proc.pid, signal.SIGKILL)
-                            except Exception as e:  # audit-ignore-catch-all
-                                _logger.info("Ignored exception: %s", e)
+                            _kill_browser_tree(proc, "HamsHttpCase.tearDownClass")
                             try:
                                 proc.terminate()
                                 proc.wait(timeout=2.0)
@@ -1863,20 +1909,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin):
                 # on every run before this fix.
                 proc = getattr(self.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                 if proc:
-                    try:
-                        parent = psutil.Process(proc.pid)
-                        for child in parent.children(recursive=True):
-                            try:
-                                child.kill()
-                            except psutil.NoSuchProcess:
-                                _logger.debug("Child already dead.")
-                    except psutil.NoSuchProcess:
-                        _logger.debug("Parent already dead.")
-                    try:
-
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except Exception as e:  # audit-ignore-catch-all
-                        _logger.info("Ignored exception: %s", e)
+                    _kill_browser_tree(proc, "HamsHttpCase.tearDown")
                     try:
                         proc.terminate()
                         proc.wait(timeout=2.0)
