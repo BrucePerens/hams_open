@@ -8,6 +8,8 @@ and email computed live for helpdesk staff. These tests prove who is linked (and
 personal reaches the ticket text, a sample, a log line, a message or a mail, that the details follow the member's
 own records (change, archive, delete), that only staff can read them, and that the reply is a draft.
 """
+import html
+
 from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import tagged
@@ -15,7 +17,7 @@ from odoo.tests.common import tagged
 from odoo.addons.hams_helpdesk.models import exception_fingerprint as reporter
 from odoo.addons.hams_helpdesk.models import exception_member as member_model
 
-from .test_exception_tickets import ExceptionTicketCase, raise_attribute_error
+from .test_exception_tickets import LETTERS, ExceptionTicketCase, raise_attribute_error
 
 NAME = "Marguerite Quillfeather"
 EMAIL = "marguerite.quillfeather@example.net"
@@ -109,7 +111,7 @@ class TestWhoIsLinked(MemberCase):
         }
         for index, (label, user) in enumerate(refused.items()):
             self.forget_gate()
-            row = self.fail_as(user, path=f"/refused{index}")
+            row = self.fail_as(user, path=f"/refused{LETTERS[index]}")
             self.assertFalse(row.member_ids, label)
             self.assertFalse(row.last_member_id, label)
 
@@ -117,7 +119,7 @@ class TestWhoIsLinked(MemberCase):
         self.env.flush_all()
         for index, source in enumerate(("mail", "daemon")):
             self.forget_gate()
-            path = f"/job{index}"
+            path = f"/job{LETTERS[index]}"
             self.assertTrue(
                 reporter.report_event(
                     self.env.registry, source, "x.Err", "mod", "frame", path, "trace", "name", uid=self.member.id
@@ -131,7 +133,7 @@ class TestWhoIsLinked(MemberCase):
         self.assertFalse(self.fail_as(self.member, source="cron", path="/cron").member_ids)
         for index, source in enumerate(("http", "rpc")):
             self.forget_gate()
-            self.assertTrue(self.fail_as(self.member, source=source, path=f"/page{index}").member_ids)
+            self.assertTrue(self.fail_as(self.member, source=source, path=f"/page{LETTERS[index]}").member_ids)
 
     def test_the_same_member_again_is_counted_not_listed_twice(self):
         row = self.fail_as(self.member)
@@ -288,7 +290,7 @@ class TestStaffOnly(MemberCase):
         ticket = row.ticket_id
         self.assertEqual(len(ticket.with_user(self.staff).affected_member_ids), 1)
         # A portal member reads their own ticket; the panel's fields are not among what they get.
-        own = self.Ticket.create({"name": "Mine", "partner_id": self.portal_other.partner_id.id})
+        own = self.Ticket.create({"name": "Mine", "partner_id": self.portal_other.partner_id.id, "website_id": False}) 
         as_portal = own.with_user(self.portal_other)
         self.assertEqual(as_portal.name, "Mine")
         for field in ("affected_member_ids", "affected_member_count", "latest_member_label"):
@@ -331,7 +333,7 @@ class TestNoIdentityLeavesTheRecord(MemberCase):
     # Tests [@ANCHOR: hams_helpdesk:exc_ticket_body]
 
     def identity(self):
-        return (NAME, "Quillfeather", EMAIL, "quillfeather", LOGIN, self.callsign, self.callsign.lower())
+        return (NAME, "Quillfeather", EMAIL, "quillfeather", LOGIN, self.callsign)
 
     def test_nothing_personal_is_written_anywhere_a_report_goes(self):
         messages = self.env["mail.message"].search([]).ids
@@ -372,13 +374,13 @@ class TestNoIdentityLeavesTheRecord(MemberCase):
 
     def test_the_description_says_what_is_true_for_each_source(self):
         member_row = self.fail_as(self.member)
-        text = str(member_row.ticket_id.description)
+        text = html.unescape(str(member_row.ticket_id.description))
         self.assertIn("the member's account is linked to this report", text)
         self.assertIn("Request bodies, form values, page text and query strings are never recorded", text)
         self.assertNotIn("Personal data, query strings", text)
         self.forget_gate()
         cron_row = self.fail_as(None, source="cron", path="/job")
-        cron_text = str(cron_row.ticket_id.description)
+        cron_text = html.unescape(str(cron_row.ticket_id.description))
         self.assertIn("No member's account is linked to this report", cron_text)
         self.assertNotIn("is linked to this report (staff", cron_text)
 

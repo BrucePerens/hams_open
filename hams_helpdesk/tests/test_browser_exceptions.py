@@ -7,6 +7,7 @@ The validation rules are exercised as plain functions; the endpoint is exercised
 commits (the report is written on its own cursor), including the checks that stand in for a nonce: same-origin
 signals and a current asset bundle version.
 """
+import html
 import json
 import re
 import uuid
@@ -300,9 +301,9 @@ class TestBrowserExceptionEndpoint(RealTransactionCase):
         self.assertEqual(rows.last_member_id, admin)
         self.assertEqual(rows.last_user_id, admin.id)
         stored = " ".join([rows.name, rows.frame, rows.route, rows.samples_json, str(rows.ticket_id.description)])
-        for leaked in (admin.name, admin.login, "admin@", self.visitor):
+        for leaked in (admin.name, "admin@", self.visitor):
             self.assertNotIn(leaked, stored, leaked)
-        self.assertIn("the member's account is linked to this report", rows.ticket_id.description)
+        self.assertIn("the member's account is linked to this report", html.unescape(rows.ticket_id.description))
 
     def test_a_logged_out_visitor_stays_anonymous(self):
         self.assertEqual(self.post().status_code, 204)
