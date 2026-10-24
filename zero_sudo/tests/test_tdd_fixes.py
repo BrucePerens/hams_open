@@ -82,7 +82,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         # self.filtered("is_service_account"), and that field is
         # groups="base.group_system". A narrow service account with res.users
         # write access but no system group (ham_base.user_manager_service, doing
-        # ham_onboarding's LoTW account takeover) got AccessError on every
+        # ham_onboarding's since-removed certificate account takeover) got AccessError on every
         # password write. The split must work for such a caller, and still
         # keep the given password away from service accounts.
         writer_group = self.env["res.groups"].create({"name": "Test Narrow res.users Writer"})

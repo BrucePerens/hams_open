@@ -23,9 +23,9 @@ genuinely arrived over HTTPS via this deployment's reverse proxy.
    left untouched `[@ANCHOR: zero_sudo:hardened_cookie_names]`.
 2. The actual hardening is pure string logic over one raw `Set-Cookie` header value, split out so
    it's directly unit-testable without a real HTTP request context: it adds `Secure` only when the
-   request was actually HTTPS, and `SameSite=Lax` (not `Strict` -- this site's own LoTW
-   passwordless-login and invite-redemption flows land back on hams.com via a cross-site redirect
-   from a third party, and `Strict` would drop the session cookie on exactly that first redirected
+   request was actually HTTPS, and `SameSite=Lax` (not `Strict` -- this site's invite-redemption
+   and emailed-link flows land on hams.com via a top-level navigation from a third-party site such
+   as a webmail page, and `Strict` would drop the session cookie on exactly that first cross-site
    request) `[@ANCHOR: zero_sudo:harden_cookie_header]`.
 3. `ir.http`'s own `_post_dispatch` override calls that pure logic against every `Set-Cookie` header
    on the real outgoing response, reading `request.httprequest.scheme` (already correctly reflecting

@@ -21,7 +21,7 @@
                                 <p>
                                     These emails are critical to your account security and cannot be opted out of without locking your account.
                                     <ul>
-                                        <li><strong>OTP Verification:</strong> One-Time Passcodes for LoTW auth and account registration.</li>
+                                        <li><strong>OTP Verification:</strong> One-Time Passcodes for account registration and sign-in.</li>
                                         <li><strong>Account Status:</strong> Notifications when your verification is approved, rejected, or rescinded.</li>
                                         <li><strong>Security Alerts:</strong> Notifications when your email address or password is changed.</li>
                                     </ul>

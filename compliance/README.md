@@ -141,6 +141,10 @@ A non-interactive configuration module that enforces baseline regulatory complia
   data block, and the 1.2 pre-migration clears the `noupdate` flag its existing `ir_model_data` row still carried, before the
   same update reloads the data files. Nothing is changed on a fresh install. `[@ANCHOR: compliance:clear_stale_ca_template_noupdate_flag]`
 
+* **No retired LoTW claim on the registry.** The "How Hams.com Protects Hams" registry entry is a noupdate record, so the 1.3
+  post-migration rewrites its description, only while it still holds the exact old text, to drop "LoTW credential custody"
+  (hams.com no longer uses ARRL Logbook of the World). `[@ANCHOR: compliance:protects_hams_description_without_lotw]`
+
 * **Accessible cookie banner.** Odoo's stock cookie bar is a `role="dialog"` with no name, so a screen reader announced only
   "dialog" (axe-core `aria-dialog-name`, serious, on every page). The module's inherited template gives it the accessible name
   "Cookie preferences". `[@ANCHOR: compliance:COMM_compliance_cookies_bar_name]`

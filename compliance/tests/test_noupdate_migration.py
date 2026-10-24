@@ -152,3 +152,33 @@ class TestNoupdateMigration12(_NoupdateMigrationChecks, HamsTransactionCase):
     allow_inherited_tests_method = True
     MIGRATION_VERSION = "1.2"
     CONTROL_XMLID = "certification_authority_page"
+
+
+@tagged("post_install", "-at_install")
+class TestProtectsHamsDescriptionMigration13(HamsTransactionCase):
+    # Tests [@ANCHOR: compliance:protects_hams_description_without_lotw]
+
+    def _migration(self):
+        path = os.path.join(MODULE_DIR, "migrations", "1.3", "post-migration.py")
+        spec = importlib.util.spec_from_file_location("compliance_post_migration_1_3", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_the_old_repo_text_is_rewritten_and_matches_the_data_file(self):
+        migration = self._migration()
+        doc = self.env.ref("compliance.doc_protects_hams")
+        doc.write({"description": migration.OLD_DESCRIPTION})
+        migration.migrate(self.env.cr, "1.2")
+        doc.invalidate_recordset(["description"])
+        self.assertEqual(doc.description, migration.NEW_DESCRIPTION)
+        self.assertNotIn("LoTW", doc.description)
+
+    def test_an_administrator_edit_is_left_alone_and_fresh_install_is_a_no_op(self):
+        migration = self._migration()
+        doc = self.env.ref("compliance.doc_protects_hams")
+        doc.write({"description": "Edited by an administrator."})
+        migration.migrate(self.env.cr, "1.2")
+        migration.migrate(self.env.cr, None)
+        doc.invalidate_recordset(["description"])
+        self.assertEqual(doc.description, "Edited by an administrator.")

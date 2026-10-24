@@ -6,15 +6,15 @@ their credentials, their station, and their data -- not a marketing claim, a con
 
 ## Scenario
 A visitor navigates to `/protects-hams`, a single, central, public (no login required) page that
-indexes the real, technical protections already documented elsewhere on the site -- LoTW trust
-and custody (`/lotw-trust`), transmitter safety (`/transmitter-safety`), and the relay daemon's
+indexes the real, technical protections already documented elsewhere on the site -- transmitter
+safety (`/transmitter-safety`) and the relay daemon's
 published source (`/relay/source`) -- rather than re-explaining each one.
 
 ## Story
 1. The visitor lands on `/protects-hams`, reachable without an account, registered in the shared
-   `compliance.document` registry alongside Privacy/Terms/LoTW Trust/Transmitter Safety so it
+   `compliance.document` registry alongside Privacy/Terms/Transmitter Safety so it
    surfaces via `/compliance` like every other real trust page.
-2. The page links out to the existing, real trust pages named above (`/lotw-trust`, `/transmitter-safety`, and the relay source at `/relay/source`) rather than duplicating their
+2. The page links out to the existing, real trust pages named above (`/transmitter-safety` and the relay source at `/relay/source`) rather than duplicating their
    content, so each protection has exactly one canonical explanation.
    *(Reference: [@ANCHOR: compliance:protects_hams_page])*
 3. When this repository edits the page, the edit reaches an already-running site on the next

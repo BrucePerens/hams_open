@@ -1101,7 +1101,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # [!] SECURITY: this used to silently substitute the literal
             # string "default_insecure_secret_fallback" here -- a value
             # anyone reading this open-source repo already knows, making
-            # every LoTW-password Fernet encryption / HMAC signature it
+            # every third-party-password Fernet encryption / HMAC signature it
             # backed forgeable/decryptable by anyone on an unconfigured
             # deployment, with no visible failure. Every real caller of
             # _get_crypto_secret() (blog_post.py, user_websites'

@@ -26,13 +26,6 @@
                             today -- where something is designed but not yet shipped, that's said
                             plainly, not rounded up.</p>
 
-                            <h3 class="mt-4">Your LoTW certificate never touches our application</h3>
-                            <p>hams.com's application code never receives your ARRL Logbook of the
-                            World certificate or its private key, in any form, at any point --
-                            verification happens entirely at the TLS layer, before your request
-                            ever reaches our application.</p>
-                            <p><a href="/lotw-trust">Read the full LoTW Trust and Certificate Custody page &#8594;</a></p>
-
                             <h3 class="mt-4">We can never remotely control your transmitter</h3>
                             <p>The local relay software that connects your radio to hams.com
                             enforces a frequency safety interlock directly against your radio's own
@@ -48,8 +41,7 @@
                             source is published at <a href="/relay/source">/relay/source</a> for
                             anyone to inspect directly, rather than asking you to trust a
                             description of code you can't see. This is the same software
-                            responsible for the frequency-safety interlock above and your LoTW
-                            credential handling.</p>
+                            responsible for the frequency-safety interlock above.</p>
 
                             <h3 class="mt-4">Signed releases and reproducible builds</h3>
                             <p>The relay daemon verifies every self-update against a cryptographic
@@ -112,7 +104,7 @@
 
         <record id="doc_protects_hams" model="compliance.document">
             <field name="name">How Hams.com Protects Hams</field>
-            <field name="description">A central point explaining every real, technical way we protect you: LoTW credential custody, why we can never control your transmitter, disclosed source, signing, and reproducible builds.</field>
+            <field name="description">A central point explaining every real, technical way we protect you: why we can never control your transmitter, disclosed source, signing, and reproducible builds.</field>
             <field name="url">/protects-hams</field>
             <field name="sequence">5</field>
         </record>

@@ -120,8 +120,8 @@ class ResUsersZeroSudo(models.Model):
                 # groups="base.group_system", so filtering through the ORM raised AccessError
                 # whenever a non-system caller wrote a password. That includes the narrow service
                 # accounts this module exists to promote, e.g. ham_base.user_manager_service
-                # handing a squatted account to its callsign's licensee (ham_onboarding's LoTW
-                # takeover), found 2026-09-16. The same raw read as
+                # handing a squatted account to its callsign's licensee (ham_onboarding's since-removed
+                # certificate account takeover), found 2026-09-16. The same raw read as
                 # ir.http._is_service_account_cached; flush first so an is_service_account change
                 # still pending in this transaction is seen.
                 # Verified by [@ANCHOR: test_write_password_as_a_non_system_service_account_splits_by_flag]
