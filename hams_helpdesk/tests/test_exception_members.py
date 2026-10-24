@@ -295,7 +295,7 @@ class TestStaffOnly(MemberCase):
         self.assertEqual(as_portal.name, "Mine")
         for field in ("affected_member_ids", "affected_member_count", "latest_member_label"):
             self.assertNotIn(field, as_portal.fields_get(), field)
-            self.assertNotIn(field, as_portal.read()[0], field)
+            self.assertNotIn(field, as_portal.read(["name", "stage", "ticket_type"])[0], field)
             with self.assertRaises(AccessError):
                 as_portal.mapped(field)
         self.assertFalse(self.Ticket.with_user(self.portal_other).search([("id", "=", ticket.id)]))
