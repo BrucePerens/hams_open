@@ -73,6 +73,33 @@
                             <field name="active" invisible="1"/>
                         </group>
                     </group>
+                    <!-- Reporting member(s) of an automatic exception ticket (models/exception_member.py).
+                         Staff only: the fields carry groups, so a portal user's read of this ticket never
+                         includes them. Name, callsign(s) and email are computed live from the member's own
+                         records (an erased account shows nothing); a minor shows the guardian's contact.
+                         [@ANCHOR: hams_helpdesk:ticket_member_panel] -->
+                    <group invisible="not affected_member_count"
+                           groups="hams_helpdesk.group_helpdesk_user,base.group_system">
+                        <separator string="Reporting member(s)" colspan="2"/>
+                        <field name="affected_member_count" invisible="1"/>
+                        <field name="affected_member_ids" nolabel="1" colspan="2">
+                            <list create="false" delete="false" edit="false">
+                                <field name="member_name"/>
+                                <field name="callsigns"/>
+                                <field name="contact_label"/>
+                                <field name="contact_name"/>
+                                <field name="contact_email" widget="email"/>
+                                <field name="first_seen"/>
+                                <field name="last_seen"/>
+                                <field name="occurrence_count"/>
+                                <field name="contact_kind" column_invisible="1"/>
+                                <button name="action_mailto" type="object" string="Email" icon="fa-envelope"
+                                        invisible="contact_kind not in ('member', 'guardian') or not contact_email"/>
+                                <button name="action_reply_to_member" type="object" string="Reply to member" icon="fa-reply"
+                                        invisible="contact_kind not in ('member', 'guardian') or not contact_email"/>
+                            </list>
+                        </field>
+                    </group>
                     <notebook>
                         <page string="Description">
                             <field name="description"/>
@@ -153,6 +180,8 @@
                 <field name="stage"/>
                 <field name="priority" widget="priority"/>
                 <field name="suspicious" optional="show" decoration-danger="suspicious"/>
+                <field name="affected_member_count" optional="hide" groups="hams_helpdesk.group_helpdesk_user,base.group_system"/>
+                <field name="latest_member_label" optional="hide" groups="hams_helpdesk.group_helpdesk_user,base.group_system"/>
             </list>
         </field>
     </record>

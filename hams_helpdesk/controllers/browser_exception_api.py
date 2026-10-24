@@ -11,11 +11,13 @@
   JSON, 422 it is not a report of this site's own scripts (a browser extension, another site, a stale
   page), 429 the visitor is over the rate limit, 503 the limiter could not count.
 
-CSRF: ``csrf=False`` because the endpoint does nothing on behalf of a session. The session is not read,
-the caller's cookies are not sent (the reporter uses ``credentials: "omit"``), no user is recorded and the only
-effect is an append-only write by the exception reporter service account, bounded by the checks below. A
-forged cross-site request can therefore do no more than a script on the page could, and it is refused
-anyway when the browser says it is cross-site (``Sec-Fetch-Site``, ``Origin``).
+CSRF: ``csrf=False`` because the endpoint does nothing on behalf of a session. The page sends the session
+cookie with the report (the reporter uses ``credentials: "same-origin"``) and the server reads only the user id
+from it, to LINK the signed-in member's account to the ticket so the site team can write to them; a logged-out
+visitor has none and stays anonymous. The only effect is an append-only write by the exception reporter service
+account, bounded by the checks below. A cross-site request cannot carry the member's cookie into a report from a
+browser (``Sec-Fetch-Site`` and ``Origin`` are checked, and a cross-site JSON POST needs a CORS preflight this
+endpoint never answers), so a report cannot be attributed to a member by another site.
 
 A per-response nonce was considered and rejected: Odoo 19 has no CSP nonce support, and website pages are
 cached by Odoo and Cloudflare, so a nonce would be shared by every visitor and prove nothing. What is
@@ -91,7 +93,7 @@ class BrowserExceptionApi(http.Controller):
         try:
             if not model._release_is_current(report.bundle, report.version):
                 return _answer(422)
-            model._record(report)
+            model._record(report, uid=request.session.uid)
         except Exception as error:  # audit-ignore-catch-all: Tested by [@ANCHOR: hams_helpdesk:browser_exception_endpoint]
             # The beacon must never become an error report of its own, or a broken reporter would file itself.
             _logger.error("Could not record a browser exception report: %r", error, exc_info=True)

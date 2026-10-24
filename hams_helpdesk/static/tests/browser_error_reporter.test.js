@@ -144,7 +144,7 @@ describe("hams_helpdesk browser error reporter", () => {
         await sendReport({ v: 1 }, ok);
         expect(calls[0][0]).toBe(ENDPOINT);
         expect(calls[0][1].method).toBe("POST");
-        expect(calls[0][1].credentials).toBe("omit");
+        expect(calls[0][1].credentials).toBe("same-origin");
         expect(calls[0][1].headers["Content-Type"]).toBe("application/json");
         expect(calls[0][1].body).toBe('{"v":1}');
         const failing = () => Promise.reject(new Error("offline"));

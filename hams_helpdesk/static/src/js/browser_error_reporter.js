@@ -4,12 +4,14 @@
 // The browser half of the JavaScript error tickets (see controllers/browser_exception_api.py and
 // docs/stories/server_exception_tickets.md, section 16). It listens for uncaught errors and unhandled
 // promise rejections on pages of this site (website, portal and the back office) and posts a small,
-// anonymous report to this site's own origin.
+// small report to this site's own origin.
 //
 // What a report holds: the error class name, a message cut to 300 characters, up to 8 stack frames
 // reduced to `url:line:col` with no query string, the page's route with every variable part replaced,
 // the browser family and the asset bundle version. It never holds form values, page text, a URL with a
-// query string, a cookie or anything about the user, and the request is sent without cookies.
+// query string or anything about the user. The request is same-origin and carries the browser's own session
+// cookie, which the server reads only to link the signed-in member's account to the ticket so the site team
+// can write to them (a logged-out visitor stays anonymous); the page adds no name, email or callsign.
 //
 // This file has no side effects when imported. browser_error_reporter_boot.js installs it on the page,
 // so the unit tests can load this one without listening to the test runner's own errors.
@@ -174,7 +176,7 @@ export function stripUrlQueries(text) {
 }
 
 // [@ANCHOR: hams_helpdesk:js_send_report]
-// Posts the report with no cookies. A failure to send is ignored: reporting an error must never raise one.
+// Posts the report; the session cookie goes along (same-origin) so the server can link a signed-in member. A failure to send is ignored: reporting an error must never raise one.
 export function sendReport(report, fetchImpl = globalThis.fetch && globalThis.fetch.bind(globalThis)) {
     if (!fetchImpl) {
         return null;
@@ -183,7 +185,7 @@ export function sendReport(report, fetchImpl = globalThis.fetch && globalThis.fe
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(report),
-        credentials: "omit",
+        credentials: "same-origin",
         cache: "no-store",
         keepalive: true,
     }).catch(() => null);
