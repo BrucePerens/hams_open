@@ -169,6 +169,8 @@ class TestProtectsHamsDescriptionMigration13(HamsTransactionCase):
         migration = self._migration()
         doc = self.env.ref("compliance.doc_protects_hams")
         doc.write({"description": migration.OLD_DESCRIPTION})
+        # The migration works on the table: the ORM's pending write must reach it first.
+        doc.flush_recordset(["description"])
         migration.migrate(self.env.cr, "1.2")
         doc.invalidate_recordset(["description"])
         self.assertEqual(doc.description, migration.NEW_DESCRIPTION)
@@ -178,6 +180,7 @@ class TestProtectsHamsDescriptionMigration13(HamsTransactionCase):
         migration = self._migration()
         doc = self.env.ref("compliance.doc_protects_hams")
         doc.write({"description": "Edited by an administrator."})
+        doc.flush_recordset(["description"])
         migration.migrate(self.env.cr, "1.2")
         migration.migrate(self.env.cr, None)
         doc.invalidate_recordset(["description"])
