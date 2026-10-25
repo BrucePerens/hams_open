@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Hardware-in-the-loop tests. Run only with a running RSP2pro attached (nothing connected to
-//! the antenna ports; bias-T stays off):
+//! Hardware-in-the-loop tests. Run only with a running RSP2pro or RSP1A attached (nothing
+//! connected to the antenna ports; bias-T stays off; no test ever switches it on). Tests for
+//! a model that is not on the bus skip themselves. Only PIDs 0x3010 and 0x3000 are opened, and
+//! only at bcdDevice 2.07:
 //!
 //!     cargo test --test hil -- --ignored --nocapture --test-threads=1
+//!     cargo test --test hil hil_rsp1a -- --ignored --nocapture --test-threads=1
 //!
 //! The receiver's own 24 MHz reference harmonics are used as test signals: tuned to
 //! `f`, the harmonic `k * 24 MHz` must appear at `k * 24 MHz - f`.
 
 use rsp_open::dsp::{peak_near, power_spectrum_db};
 use rsp_open::usb::list_devices;
-use rsp_open::{Bandwidth, Error, IqI16, Rsp2, SampleIter, Settings};
+use rsp_open::{Bandwidth, Error, IqI16, Model, Rsp, Rsp2, SampleIter, Settings};
 
 const NWANT: usize = 262_144;
 const NFFT: usize = 16_384;
@@ -68,7 +71,7 @@ fn open(settings: Settings) -> Option<Rsp2> {
         eprintln!("no running RSP2pro: skipping");
         return None;
     }
-    match Rsp2::open_with(settings) {
+    match Rsp2::open_model_with(Model::Rsp2, settings) {
         Ok(r) => Some(r),
         Err(Error::NotRunning) => {
             eprintln!("RSP2pro present but not running: skipping");
@@ -382,4 +385,169 @@ fn hil_live_reconfiguration() {
     assert!((f - 200e3).abs() < 2e3);
     rx.stop_stream().unwrap();
     rx.close().unwrap();
+}
+
+/// The RSP1A, only if it is on the bus with its firmware running (bcdDevice 2.07). Any other
+/// state is refused here, before the driver is asked to open it.
+fn open_rsp1a(settings: Settings) -> Option<Rsp> {
+    let devs = list_devices().expect("list devices");
+    let Some(d) = devs.iter().find(|d| d.pid == rsp_open::PID_RSP1A) else {
+        eprintln!("no RSP1A on the bus: skipping");
+        return None;
+    };
+    if d.bcd_device != rsp_open::BCD_RUNNING {
+        eprintln!(
+            "RSP1A reports bcdDevice {:04x}, not 0207: refusing to touch it",
+            d.bcd_device
+        );
+        return None;
+    }
+    let rx = Rsp::open_model_with(Model::Rsp1a, settings).expect("open RSP1A");
+    assert_eq!(rx.model(), Model::Rsp1a);
+    assert!(!rx.settings().bias_t);
+    Some(rx)
+}
+
+/// RSP1A: the 24 MHz reference harmonics in every band filter range this driver offers, the
+/// 2 MHz filter edge, and a tuning with no harmonic nearby.
+#[test]
+#[ignore]
+// Tests [@ANCHOR: rsp_device_rsp_open_model_with]
+// Tests [@ANCHOR: rsp_device_rsp_open_device]
+fn hil_rsp1a_reference_spurs() {
+    let Some(mut rx) = open_rsp1a(Settings {
+        if_gr_db: 30,
+        rf_hz: 95_800_000,
+        bandwidth: Bandwidth::K1536,
+        ..Settings::default()
+    }) else {
+        return;
+    };
+    println!("RSP1A open, request 0x48 returned 0x{:02x}", rx.read48);
+    let mut it = rx.start_stream_iter(256).unwrap();
+    let mut bad = Vec::new();
+    for (rf, off, what, min_db) in [
+        (95_800_000u64, 200e3, "VHF (96 MHz)", 20.0),
+        (95_900_000, 100e3, "VHF (96 MHz)", 20.0),
+        (96_300_000, -300e3, "VHF (96 MHz)", 20.0),
+        (72_300_000, -300e3, "VHF (72 MHz)", 20.0),
+        (119_800_000, 200e3, "VHF (120 MHz)", 20.0),
+        (143_800_000, 200e3, "B3 (144 MHz)", 10.0),
+        (23_800_000, 200e3, "HF 12-30 MHz filter (24 MHz)", 10.0),
+        (47_800_000, 200e3, "HF 30-60 MHz filter (48 MHz)", 10.0),
+        (264_200_000, -200e3, "AM down-conversion (264 MHz)", 10.0),
+        (312_200_000, -200e3, "300-375 MHz filter (312 MHz)", 10.0),
+        (479_800_000, 200e3, "B4/5 (480 MHz)", 10.0),
+        (1_199_800_000, 200e3, "L band (1200 MHz)", 10.0),
+    ] {
+        let m = measure(&mut rx, &mut it, rf, off);
+        println!(
+            "{what:32} {:>10.3} MHz: expected {:+7.1} kHz, peak {:+9.3} kHz, {:5.1} dB, {} gaps",
+            rf as f64 / 1e6,
+            off / 1e3,
+            m.peak_hz / 1e3,
+            m.over_db,
+            m.gaps
+        );
+        if (m.peak_hz - off).abs() > 2_000.0 || m.over_db < min_db {
+            bad.push(rf);
+        }
+    }
+    // Below 2 MHz (the RSP1A's extra filter) and in the 2-12 MHz filter: no 24 MHz harmonic
+    // is in reach, so report the strongest line and require only a clean stream.
+    for rf in [1_000_000u64, 1_990_000, 2_010_000, 7_000_000, 100_000_000] {
+        rx.set_frequency(rf).unwrap();
+        let s0 = rx.stream_stats();
+        let x = grab(&mut it, 100_000, NWANT);
+        let s1 = rx.stream_stats();
+        assert_eq!(x.len(), NWANT, "short capture at {rf}");
+        let sp = power_spectrum_db(&x, NFFT);
+        let (f, _, over) = peak_near(&sp, rx.output_rate(), 0.0, 700_000.0, 10_000.0);
+        println!(
+            "{:>10.3} MHz: strongest {:+9.3} kHz at {:5.1} dB over floor (no harmonic expected), {} gaps",
+            rf as f64 / 1e6,
+            f / 1e3,
+            over,
+            s1.gaps - s0.gaps
+        );
+    }
+    let st = rx.stream_stats();
+    println!(
+        "stream: {} blocks, {} gaps, {} lost samples, dropped chunks {}",
+        st.blocks,
+        st.gaps,
+        st.lost_samples,
+        it.dropped()
+    );
+    drop(it);
+    rx.stop_stream().unwrap();
+    rx.close().unwrap();
+    assert!(bad.is_empty(), "spur check failed at {bad:?}");
+}
+
+/// RSP1A: FM/MW notch, DAB notch and every LNA state and some IF gain steps while streaming,
+/// reporting the 96 MHz harmonic's level (tuned 95.8 MHz) and counter gaps. Bias-T is never
+/// switched. Asserts that the stream survives, that the harmonic is where expected at state
+/// 0 and that IF gain reduction lowers it.
+#[test]
+#[ignore]
+// Tests [@ANCHOR: rsp_device_rsp_set_dab_notch]
+// Tests [@ANCHOR: rsp_device_rsp_write_gain]
+fn hil_rsp1a_toggles_and_gain() {
+    let Some(mut rx) = open_rsp1a(Settings {
+        if_gr_db: 30,
+        rf_hz: 95_800_000,
+        ..Settings::default()
+    }) else {
+        return;
+    };
+    let mut it = rx.start_stream_iter(512).unwrap();
+    let mut look = |rx: &mut Rsp, what: &str| {
+        let s0 = rx.stream_stats();
+        let x = grab(&mut it, 50_000, NWANT);
+        let s1 = rx.stream_stats();
+        assert_eq!(x.len(), NWANT, "short capture: {what}");
+        let sp = power_spectrum_db(&x, NFFT);
+        let (f, lvl, over) = peak_near(&sp, rx.output_rate(), 200e3, 20_000.0, 10_000.0);
+        println!(
+            "{what:28}: peak {:+9.3} kHz, {:6.1} dB, {:5.1} dB over floor, {} gaps",
+            f / 1e3,
+            lvl,
+            over,
+            s1.gaps - s0.gaps
+        );
+        (f, lvl)
+    };
+    let (f0, l30) = look(&mut rx, "LNA 0, IF GR 30");
+    assert!((f0 - 200e3).abs() < 2e3, "harmonic at {f0}");
+    rx.set_notch(true).unwrap();
+    look(&mut rx, "FM/MW notch on");
+    rx.set_notch(false).unwrap();
+    rx.set_dab_notch(true).unwrap();
+    look(&mut rx, "DAB notch on");
+    rx.set_dab_notch(false).unwrap();
+    look(&mut rx, "notches off");
+    for l in 0..rx.lna_states() {
+        rx.set_gain(30, l).unwrap();
+        look(&mut rx, &format!("LNA state {l}"));
+    }
+    let mut l50 = f64::NAN;
+    for gr in [20u8, 40, 50, 59] {
+        rx.set_gain(gr, 0).unwrap();
+        let (_, lvl) = look(&mut rx, &format!("LNA 0, IF GR {gr}"));
+        if gr == 50 {
+            l50 = lvl;
+        }
+    }
+    let st = rx.stream_stats();
+    println!("stream: {} blocks, {} gaps", st.blocks, st.gaps);
+    assert!(!rx.settings().bias_t);
+    drop(it);
+    rx.stop_stream().unwrap();
+    rx.close().unwrap();
+    assert!(st.blocks > 1000);
+    assert!(
+        l50 < l30 - 10.0,
+        "IF GR 50 ({l50}) not >10 dB below GR 30 ({l30})"
+    );
 }

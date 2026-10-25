@@ -6,7 +6,7 @@
 //!     cargo run --release --example rsp_measure [-- --clock-seconds 120]
 
 use rsp_open::dsp::{fft, median};
-use rsp_open::{Antenna, Bandwidth, IqI16, Rsp2, SampleIter, Settings};
+use rsp_open::{Antenna, Bandwidth, IqI16, Model, Rsp2, SampleIter, Settings};
 use std::f64::consts::PI;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -167,12 +167,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(120.0);
 
-    let mut rx = Rsp2::open_with(Settings {
-        rf_hz: 95_800_000,
-        if_gr_db: 40,
-        bandwidth: Bandwidth::K1536,
-        ..Settings::default()
-    })?;
+    // RSP2pro only (it measures Antenna B and the Hi-Z port too).
+    let mut rx = Rsp2::open_model_with(
+        Model::Rsp2,
+        Settings {
+            rf_hz: 95_800_000,
+            if_gr_db: 40,
+            bandwidth: Bandwidth::K1536,
+            ..Settings::default()
+        },
+    )?;
     println!(
         "# rsp_measure on RSP2pro serial {:?} (request 0x48 returned 0x{:02x})",
         rx.serial, rx.read48
