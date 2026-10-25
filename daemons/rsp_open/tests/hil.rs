@@ -681,3 +681,59 @@ fn hil_boot_rom_rsp1_reference_spurs() {
     rx.stop_stream().unwrap();
     rx.close().unwrap();
 }
+
+/// As `hil_boot_rom_reference_spurs` for an RSP1A in the boot-ROM state. The first three
+/// tunings are asserted; the other bands are reported.
+#[test]
+#[ignore]
+// Tests [@ANCHOR: rsp_device_rsp_open_boot_rom_model_with]
+fn hil_boot_rom_rsp1a_reference_spurs() {
+    let cold = list_devices()
+        .map(|d| {
+            d.iter()
+                .any(|d| d.pid == rsp_open::PID_RSP1A && d.bcd_device == rsp_open::BCD_BOOT_ROM)
+        })
+        .unwrap_or(false);
+    if !cold {
+        eprintln!("no boot-ROM RSP1: skipping");
+        return;
+    }
+    let mut rx = Rsp::open_boot_rom_model_with(Model::Rsp1a, Settings::default()).expect("open");
+    assert!(rx.is_boot_rom());
+    assert!(rx.set_notch(true).is_err());
+    assert!(rx.set_bias_t(true).is_err());
+    let mut it = rx.start_stream_iter(256).expect("start");
+    for (n, (rf, off)) in [
+        (95_800_000u64, 200e3),
+        (95_900_000, 100e3),
+        (96_300_000, -300e3),
+        (23_800_000, 200e3),
+        (71_800_000, 200e3),
+        (119_800_000, 200e3),
+        (264_200_000, -200e3),
+        (383_800_000, 200e3),
+        (407_800_000, 200e3),
+        (480_200_000, -200e3),
+        (1_200_200_000, -200e3),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let m = measure(&mut rx, &mut it, rf, off);
+        eprintln!(
+            "{rf}: peak {:.1} Hz, {:.1} dB, gaps {}",
+            m.peak_hz, m.over_db, m.gaps
+        );
+        if n < 3 {
+            assert!(
+                (m.peak_hz - off).abs() < 400.0,
+                "peak at {} for {rf}",
+                m.peak_hz
+            );
+            assert!(m.over_db > 20.0, "only {} dB over floor at {rf}", m.over_db);
+        }
+    }
+    drop(it);
+    rx.stop_stream().unwrap();
+    rx.close().unwrap();
+}
