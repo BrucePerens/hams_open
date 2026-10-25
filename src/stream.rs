@@ -76,10 +76,10 @@ impl BlockParser {
 
     /// Parse one isochronous packet, appending decoded samples to `out`.
     pub fn push_packet(&mut self, pkt: &[u8], out: &mut Vec<IqI16>) {
-        if pkt.len() % BLOCK_LEN != 0 || pkt.is_empty() {
+        if !pkt.len().is_multiple_of(BLOCK_LEN) || pkt.is_empty() {
             self.stats.short_packets += 1;
         }
-        for block in pkt.chunks_exact(BLOCK_LEN) {
+        for block in pkt.as_chunks::<BLOCK_LEN>().0 {
             let cnt = block_counter(block);
             if let Some(exp) = self.next {
                 if cnt != exp {
@@ -107,20 +107,20 @@ pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>) {
     match format {
         SampleFormat::S14 => {
             // 16-bit little-endian words, I then Q; samples are 14-bit signed.
-            for w in p.chunks_exact(4) {
+            for w in p.as_chunks::<4>().0 {
                 let i = sext(u16::from_le_bytes([w[0], w[1]]) as u32, 14) << 2;
                 let q = sext(u16::from_le_bytes([w[2], w[3]]) as u32, 14) << 2;
                 out.push(IqI16 { i: i as i16, q: q as i16 });
             }
         }
         SampleFormat::S8 => {
-            for w in p.chunks_exact(2) {
+            for w in p.as_chunks::<2>().0 {
                 out.push(IqI16 { i: ((w[0] as i8 as i16) << 8), q: ((w[1] as i8 as i16) << 8) });
             }
         }
         SampleFormat::S12 => {
             // Each 3 bytes hold one I/Q pair: I = low 12 bits, Q = high 12 bits (LE bit order).
-            for w in p.chunks_exact(3) {
+            for w in p.as_chunks::<3>().0 {
                 let v = w[0] as u32 | (w[1] as u32) << 8 | (w[2] as u32) << 16;
                 let i = sext(v & 0xfff, 12) << 4;
                 let q = sext(v >> 12, 12) << 4;

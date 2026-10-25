@@ -310,7 +310,7 @@ pub fn pll(lo_hz: u64, div: u64, ppb: i64) -> Result<Pll, Error> {
     let sub = (q % PLL_SUB as u128) as u32;
     let n = (units / PLL_MOD as u128) as u32;
     let frac = (units % PLL_MOD as u128) as u32;
-    if n > 0xff || n < 1 {
+    if !(1..=0xff).contains(&n) {
         return Err(Error::InvalidArgument(format!("PLL integer {n} out of range")));
     }
     let r2 = tuner_word(2, (n << 12) | frac);

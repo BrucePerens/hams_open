@@ -153,7 +153,7 @@ impl UsbTransport {
             let info = info_of(dev, d);
             let hit = d.idVendor == VID_SDRPLAY
                 && d.idProduct == pid
-                && at.map_or(true, |(b, a)| b == info.bus && a == info.address);
+                && at.is_none_or(|(b, a)| b == info.bus && a == info.address);
             if hit && found.is_none() {
                 unsafe { ffi::libusb_ref_device(dev) };
                 found = Some((dev, info));

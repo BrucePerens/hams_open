@@ -1,0 +1,152 @@
+# rsp_measure on RSP2pro serial <redacted> (request 0x48 returned 0x09)
+Levels are dBFS (full scale = 0 dB for a complex tone); floor is dBFS/Hz. +- = 1 sd over 3 captures of 262144 samples.
+
+## 1. LNA-state steps (IF GR 40 dB, Antenna A)
+
+HF AM 24 MHz (tuned 23.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -41.28 +-0.01 (rel  +0.00)  floor -109.75 +-0.06
+  LNA 1: spur  -42.07 +-0.02 (rel  -0.79)  floor -116.80 +-0.19
+  LNA 2: spur  -42.06 +-0.00 (rel  -0.78)  floor -117.85 +-0.00
+  LNA 3: spur  -42.06 +-0.00 (rel  -0.78)  floor -118.34 +-0.01
+  LNA 4: spur  -51.52 +-0.01 (rel -10.24)  floor -121.43 +-0.01
+  LNA 5: spur  -51.30 +-0.01 (rel -10.02)  floor -121.58 +-0.03
+  LNA 6: spur  -51.33 +-0.00 (rel -10.05)  floor -121.60 +-0.01
+  LNA 7: spur  -51.35 +-0.00 (rel -10.07)  floor -121.63 +-0.03
+  LNA 8: spur  -70.34 +-0.08 (rel -29.06)  floor -125.87 +-0.03
+HF AM 48 MHz (tuned 47.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -55.33 +-0.06 (rel  +0.00)  floor -112.18 +-0.10
+  LNA 1: spur  -52.77 +-0.06 (rel  +2.56)  floor -118.17 +-0.15
+  LNA 2: spur  -52.92 +-0.01 (rel  +2.41)  floor -119.00 +-0.00
+  LNA 3: spur  -53.04 +-0.02 (rel  +2.29)  floor -119.40 +-0.01
+  LNA 4: spur  -62.09 +-0.01 (rel  -6.76)  floor -121.45 +-0.03
+  LNA 5: spur  -61.70 +-0.05 (rel  -6.37)  floor -121.53 +-0.01
+  LNA 6: spur  -61.76 +-0.07 (rel  -6.43)  floor -121.55 +-0.01
+  LNA 7: spur  -61.82 +-0.03 (rel  -6.49)  floor -121.53 +-0.01
+  LNA 8: spur  -80.92 +-0.10 (rel -25.58)  floor -125.88 +-0.06
+VHF 96 MHz (tuned 95.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -46.68 +-0.02 (rel  +0.00)  floor -108.88 +-0.16
+  LNA 1: spur  -47.35 +-0.08 (rel  -0.67)  floor -115.27 +-0.21
+  LNA 2: spur  -47.16 +-0.01 (rel  -0.48)  floor -116.56 +-0.04
+  LNA 3: spur  -46.98 +-0.01 (rel  -0.30)  floor -117.24 +-0.02
+  LNA 4: spur  -70.70 +-0.13 (rel -24.02)  floor -121.11 +-0.02
+  LNA 5: spur  -70.49 +-0.14 (rel -23.81)  floor -121.45 +-0.02
+  LNA 6: spur  -70.33 +-0.03 (rel -23.65)  floor -121.49 +-0.01
+  LNA 7: spur  -70.20 +-0.02 (rel -23.52)  floor -121.51 +-0.03
+  LNA 8: spur  -88.93 +-0.19 (rel -42.25)  floor -125.83 +-0.13
+B3 144 MHz (tuned 143.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -58.43 +-0.67 (rel  +0.00)  floor -106.44 +-0.26
+  LNA 1: spur  -57.79 +-0.60 (rel  +0.64)  floor -113.79 +-0.11
+  LNA 2: spur  -58.97 +-0.04 (rel  -0.54)  floor -115.19 +-0.01
+  LNA 3: spur  -60.41 +-0.07 (rel  -1.98)  floor -115.76 +-0.02
+  LNA 4: spur  -63.29 +-0.08 (rel  -4.86)  floor -120.90 +-0.03
+  LNA 5: spur  -62.88 +-0.04 (rel  -4.45)  floor -121.33 +-0.01
+  LNA 6: spur  -63.03 +-0.02 (rel  -4.61)  floor -121.35 +-0.02
+  LNA 7: spur  -63.16 +-0.03 (rel  -4.73)  floor -121.37 +-0.01
+  LNA 8: spur  -81.48 +-0.16 (rel -23.06)  floor -125.85 +-0.08
+AM-down 264 MHz (tuned 264.200 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -37.55 +-0.02 (rel  +0.00)  floor -115.49 +-0.11
+  LNA 1: spur  -37.58 +-0.01 (rel  -0.03)  floor -116.28 +-0.02
+  LNA 2: spur  -37.64 +-0.00 (rel  -0.09)  floor -116.36 +-0.02
+  LNA 3: spur  -37.68 +-0.00 (rel  -0.14)  floor -116.40 +-0.01
+  LNA 4: spur  -51.19 +-0.00 (rel -13.64)  floor -121.61 +-0.02
+  LNA 5: spur  -51.19 +-0.01 (rel -13.64)  floor -121.59 +-0.01
+  LNA 6: spur  -51.19 +-0.01 (rel -13.64)  floor -121.62 +-0.02
+  LNA 7: spur  -51.18 +-0.00 (rel -13.63)  floor -121.60 +-0.02
+  LNA 8: spur  -70.21 +-0.09 (rel -32.67)  floor -125.90 +-0.05
+B4/5 480 MHz (tuned 479.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -49.09 +-0.11 (rel  +0.00)  floor -108.42 +-0.15
+  LNA 1: spur  -54.46 +-0.02 (rel  -5.37)  floor -114.32 +-0.02
+  LNA 2: spur  -51.08 +-0.20 (rel  -1.99)  floor -113.85 +-0.14
+  LNA 3: spur  -55.92 +-0.01 (rel  -6.83)  floor -117.88 +-0.02
+  LNA 4: spur  -55.46 +-0.01 (rel  -6.37)  floor -118.21 +-0.01
+  LNA 5: spur  -74.32 +-0.08 (rel -25.23)  floor -125.72 +-0.09
+L 1200 MHz (tuned 1199.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -49.74 +-0.02 (rel  +0.00)  floor -116.82 +-0.11
+  LNA 1: spur  -50.77 +-0.00 (rel  -1.03)  floor -117.51 +-0.05
+  LNA 2: spur  -50.15 +-0.03 (rel  -0.41)  floor -120.34 +-0.05
+  LNA 3: spur  -50.23 +-0.01 (rel  -0.49)  floor -120.71 +-0.03
+  LNA 4: spur  -51.39 +-0.00 (rel  -1.65)  floor -121.21 +-0.03
+  LNA 5: spur  -70.66 +-0.15 (rel -20.92)  floor -125.86 +-0.08
+L 1800 MHz (tuned 1799.800 MHz): state: spur dBFS / floor dBFS/Hz
+  LNA 0: spur  -45.40 +-0.02 (rel  +0.00)  floor -113.45 +-0.09
+  LNA 1: spur  -50.86 +-0.01 (rel  -5.46)  floor -117.03 +-0.01
+  LNA 2: spur  -45.80 +-0.02 (rel  -0.40)  floor -118.42 +-0.20
+  LNA 3: spur  -45.78 +-0.01 (rel  -0.38)  floor -118.64 +-0.03
+  LNA 4: spur  -51.02 +-0.02 (rel  -5.62)  floor -120.28 +-0.02
+  LNA 5: spur  -70.26 +-0.09 (rel -24.86)  floor -125.78 +-0.13
+
+## 2. IF gain reduction steps (95.8 MHz, LNA 0)
+
+  GR 20: spur  -26.80 +-0.03 (step  +0.00)  floor  -88.99  rms  2550.0  max|x| 7524  DC (+16.5, -379.2)
+  GR 25: spur  -31.98 +-0.00 (step  -5.18)  floor  -93.93  rms  1415.8  max|x| 4508  DC (+89.2, -450.3)
+  GR 30: spur  -37.02 +-0.02 (step  -5.03)  floor  -98.96  rms   793.3  max|x| 2708  DC (+107.3, -433.6)
+  GR 35: spur  -41.78 +-0.01 (step  -4.77)  floor -103.75  rms   458.4  max|x| 1708  DC (+94.9, -408.2)
+  GR 40: spur  -46.79 +-0.02 (step  -5.01)  floor -108.70  rms   257.8  max|x| 1100  DC (+126.3, -372.3)
+  GR 45: spur  -51.82 +-0.03 (step  -5.03)  floor -113.61  rms   145.6  max|x| 792  DC (+156.6, -352.8)
+  GR 50: spur  -56.75 +-0.03 (step  -4.93)  floor -118.24  rms    83.1  max|x| 580  DC (+155.3, -356.7)
+  GR 55: spur  -61.81 +-0.02 (step  -5.06)  floor -122.34  rms    49.3  max|x| 496  DC (+166.7, -356.8)
+  GR 59: spur  -65.65 +-0.02 (step  -3.85)  floor -124.93  rms    34.3  max|x| 448  DC (+150.1, -340.5)
+
+## 3. Band-switch edges (IF GR 40, LNA 0): floor below/above, harmonic levels
+
+   12.0 MHz:     11.700 MHz floor -108.67 +-0.04     12.300 MHz floor -107.96 +-0.07 
+   30.0 MHz:     29.700 MHz floor -110.86 +-0.01     30.300 MHz floor -111.48 +-0.06 
+   60.0 MHz:     59.700 MHz floor -113.23 +-0.01     60.300 MHz floor -109.35 +-0.09 
+  120.0 MHz:    119.700 MHz floor -106.41 +-0.21    120.300 MHz floor -103.60 +-0.34 5 x 24 MHz at the edge
+  250.0 MHz:    249.700 MHz floor -107.29 +-0.09    250.300 MHz floor -112.85 +-0.07 
+  300.0 MHz:    299.700 MHz floor -116.24 +-0.02    300.300 MHz floor -117.55 +-0.04 
+ 1000.0 MHz:    999.700 MHz floor -113.77 +-0.11   1000.300 MHz floor -119.83 +-0.08 
+  120 MHz harmonic seen from 119.8 MHz:  -37.64 +-0.08 dBFS
+  120 MHz harmonic seen from 120.2 MHz:  -39.64 +-0.08 dBFS
+  (375-420 MHz: not measured; this driver does not implement the 144/168 MHz first-IF mode)
+
+## 4. Reference-harmonic survey (tuned k*24 MHz - 200 kHz; IF GR 40, LNA 0)
+
+   24:  47.6    48:  36.1    72:  49.2    96:  41.2   120:  48.2   144:  26.9 
+  168:  42.6   192:  36.0   216:  44.3   240:  38.0   264:  57.1   288:  48.1 
+  312:  58.2   336:  54.2   360:  70.7   432:  21.9 
+  456:  36.1   480:  38.3   504:  42.8   528:  39.1   552:  42.6   576:  36.4 
+  600:  35.9   624:  34.7   648:  32.2   672:  37.1   696:  30.9   720:  41.5 
+  744:  31.6   768:  37.3   792:  30.6   816:  29.3   840:  28.8   864:  34.6 
+  888:  35.1   912:  42.8   936:  34.2   960:  46.6   984:  31.1  1008:  38.7 
+ 1032:  38.2  1056:  39.2  1080:  41.5  1104:  41.9  1128:  42.5  1152:  43.2 
+ 1176:  41.6  1200:  45.0  1224:  39.2  1248:  44.6  1272:  37.2  1296:  38.0 
+ 1320:  46.3  1344:  38.5  1368:  46.1  1392:  42.4  1416:  47.0  1440:  47.2 
+ 1464:  52.1  1488:  54.3  1512:  44.9  1536:  47.0  1560:  46.5  1584:  35.9 
+ 1608:  46.9  1632:  24.5  1656:  48.8  1680:  15.6  1704:  45.6  1728:  35.8 
+ 1752:  43.4  1776:  39.0  1800:  47.0  1824:  42.8  1848:  52.5  1872:  39.9 
+ 1896:  55.6  1920:  45.7  1944:  52.6  1968:  35.2  1992:  51.1 
+  (values: harmonic MHz: spur level over one-bin floor, dB)
+
+## 5. Broadcast notch (IF GR 40, LNA 0)
+
+FM band, 96 MHz harmonic:  notch off: spur  -46.74 +-0.04 floor -108.88 +-0.14  notch on : spur  -45.64 +-0.01 floor -117.60 +-0.04
+MW 1 MHz floor:  notch off: spur     NaN +- NaN floor  -93.30 +-0.08  notch on : spur     NaN +- NaN floor -113.25 +-0.57
+HF 24 MHz harmonic:  notch off: spur  -41.40 +-0.02 floor -109.82 +-0.06  notch on : spur  -40.54 +-0.09 floor -111.42 +-0.10
+
+## 6. Antenna ports, nothing attached (IF GR 40, LNA 0)
+
+   1.000 MHz floor dBFS/Hz:  A:  -93.30 +-0.09  B:  -97.01 +-0.03  HiZ: -117.76 +-0.01
+  10.000 MHz floor dBFS/Hz:  A: -107.10 +-0.05  B:  -97.46 +-0.02  HiZ: -108.50 +-0.01
+  30.000 MHz floor dBFS/Hz:  A: -111.51 +-0.17  B: -110.73 +-0.15  HiZ: -107.79 +-0.22
+ 100.000 MHz floor dBFS/Hz:  A: -108.90 +-0.19  B: -107.81 +-0.08
+ 446.000 MHz floor dBFS/Hz:  A: -108.64 +-0.26  B: -107.73 +-0.14
+
+## 7. ADC noise and DC/clipping
+
+  100 MHz GR 59 LNA 8: floor -128.43 dBFS/Hz, total noise  -65.4 dBFS (ENOB bound 10.6 bits), rms    19.8 LSB16, DC (+350.5, -224.0) LSB16, max|x| 420, clipped 0.00e0
+  100 MHz GR 59 LNA 0: floor -125.05 dBFS/Hz, total noise  -62.0 dBFS (ENOB bound 10.0 bits), rms    27.2 LSB16, DC (+161.2, -412.3) LSB16, max|x| 488, clipped 0.00e0
+  100 MHz GR 20 LNA 0: floor  -88.81 dBFS/Hz, total noise  -25.8 dBFS (ENOB bound  4.0 bits), rms  2426.8 LSB16, DC (-609.8, -4586.9) LSB16, max|x| 13388, clipped 0.00e0
+  100 MHz GR  0 LNA 0: floor  -69.13 dBFS/Hz, total noise   -6.1 dBFS (ENOB bound  0.7 bits), rms 18379.4 LSB16, DC (+481.5, -947.9) LSB16, max|x| 32768, clipped 1.66e-2
+  ADC  2.000 MHz S14 (GR 59, LNA max): floor -128.43 dBFS/Hz, total  -65.4 dBFS, ENOB bound 10.6, rms   19.9 LSB16
+  ADC  2.048 MHz S12 (GR 59, LNA max): floor -128.02 dBFS/Hz, total  -64.9 dBFS, ENOB bound 10.5, rms   21.7 LSB16
+  ADC  6.000 MHz S14 (GR 59, LNA max): floor -133.13 dBFS/Hz, total  -65.3 dBFS, ENOB bound 10.6, rms   19.9 LSB16
+  ADC  8.000 MHz S12 (GR 59, LNA max): floor -133.33 dBFS/Hz, total  -64.3 dBFS, ENOB bound 10.4, rms   26.4 LSB16
+  ADC  9.000 MHz S10x384 (GR 59, LNA max): floor -133.10 dBFS/Hz, total  -63.6 dBFS, ENOB bound 10.3, rms   34.3 LSB16
+  ADC 10.000 MHz S8 (GR 59, LNA max): floor -123.74 dBFS/Hz, total  -53.7 dBFS, ENOB bound  8.6, rms  125.6 LSB16
+
+## 8. Sample clock vs host clock (120 s)
+
+  18731 points, slope 2000003.298 samples/s, sample clock +1.65 ppm vs host (+-0.25 ppm 1-sigma from the fit; host clock error not included), gaps 0
+
+Done; receiver closed (tuner standby, bias-T off, alt 0).

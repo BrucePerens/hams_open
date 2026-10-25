@@ -282,7 +282,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut nth = 0u64;
     rx.start_stream(move |_, st| {
         nth += 1;
-        if nth % 50 == 0 {
+        if nth.is_multiple_of(50) {
             p2.lock().unwrap().push((t0.elapsed().as_secs_f64(), (st.samples + st.lost_samples) as f64));
         }
     })?;

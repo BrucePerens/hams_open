@@ -171,7 +171,7 @@ fn hil_gaps_during_control() {
     let Some(mut rx) = open(Settings { rf_hz: 95_800_000, ..Settings::default() }) else { return };
     let mut it = rx.start_stream_iter(1024).unwrap();
     let _ = grab(&mut it, 0, 200_000);
-    let mut report = |what: &str, rx: &mut Rsp2, it: &mut SampleIter, f: &mut dyn FnMut(&mut Rsp2, usize)| {
+    let report = |what: &str, rx: &mut Rsp2, it: &mut SampleIter, f: &mut dyn FnMut(&mut Rsp2, usize)| {
         let s0 = rx.stream_stats();
         for k in 0..20 {
             f(rx, k);
