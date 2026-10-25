@@ -81,7 +81,17 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 - Tuning in every supported band: the internal 24 MHz harmonics land within one 122 Hz FFT
   bin of the expected offset in VHF, B3, HF AM, the 250-375 MHz AM down-conversion band,
   B4/5 and L band (`tests/hil.rs`).
-- Gain, antenna A/B/Hi-Z, notch, IF gain, ppm and sample-rate changes while streaming.
+- Changes while streaming, all with 0 counter gaps (`hil_live_reconfiguration`,
+  `hil_gaps_during_control`): retune in band and across bands, gain, antenna A/B, notch,
+  bandwidth, ext-ref output, ppm (+10 ppm moves the LO down 10 ppm: the internal harmonic
+  moves +0.98 kHz at 95.8 MHz, as expected), sample rate 2 -> 6 -> 2 MHz (STOP, alt change,
+  restart handled inside `set_sample_rate`), and the three low-IF modes.
+- Low-IF modes: stream at the halved rate (1, 3, 4.096 MS/s) with the 504-per-block counter
+  step confirmed (no gaps). **Where RF lands in the low-IF output is not characterised yet**
+  (tuned 95.8 MHz, the strongest line was at -200 kHz / -600 kHz / -1712 kHz for the 450 k /
+  1.62 M / 2.048 M modes); `set_frequency` writes the same LO as in zero IF, as the API did,
+  and the host-side IF down-conversion is left to the caller. Hi-Z port: switching verified
+  on the mock and on hardware via `rsp_measure` (floor changes), no signal test.
 - `examples/rsp_measure.rs` characterises the front end; results in
   `docs/measure_2026-10-25.txt` and in the private hardware notes.
 

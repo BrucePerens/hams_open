@@ -190,3 +190,71 @@ fn hil_gaps_during_control() {
     rx.stop_stream().unwrap();
     rx.close().unwrap();
 }
+
+/// Paths that change the stream configuration while streaming: sample rate, low-IF modes,
+/// ppm, bandwidth, ext-ref output. Reports where the 96 MHz harmonic lands (tuned 95.8 MHz).
+#[test]
+#[ignore]
+fn hil_live_reconfiguration() {
+    let Some(mut rx) = open(Settings { rf_hz: 95_800_000, if_gr_db: 30, ..Settings::default() }) else { return };
+    let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::<IqI16>::new()));
+    let g2 = got.clone();
+    rx.start_stream(move |s, _| {
+        let mut g = g2.lock().unwrap();
+        if g.len() < 2_000_000 {
+            g.extend_from_slice(s);
+        }
+    })
+    .unwrap();
+    let mut look = |rx: &mut Rsp2, what: &str| {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        got.lock().unwrap().clear();
+        let s0 = rx.stream_stats();
+        let t0 = std::time::Instant::now();
+        while got.lock().unwrap().len() < NWANT && t0.elapsed().as_secs() < 5 {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let s1 = rx.stream_stats();
+        let x: Vec<IqI16> = got.lock().unwrap().iter().take(NWANT).copied().collect();
+        if x.len() < NWANT {
+            println!("{what:34}: only {} samples (stream stalled?)", x.len());
+            return (f64::NAN, f64::NAN);
+        }
+        let fs = rx.output_rate();
+        let sp = power_spectrum_db(&x, NFFT);
+        let (f, _, over) = peak_near(&sp, fs, 0.0, fs * 0.45, 10_000.0);
+        println!(
+            "{what:34}: out {:.3} MS/s, strongest {:+9.3} kHz {:5.1} dB, gaps {} lost {}",
+            fs / 1e6, f / 1e3, over, s1.gaps - s0.gaps, s1.lost_samples - s0.lost_samples
+        );
+        (f, over)
+    };
+    let (f, _) = look(&mut rx, "2 MHz zero IF");
+    assert!((f - 200e3).abs() < 2e3);
+    rx.set_sample_rate(6_000_000).unwrap();
+    let (f, _) = look(&mut rx, "6 MHz zero IF (changed live)");
+    assert!((f - 200e3).abs() < 2e3);
+    rx.set_sample_rate(2_000_000).unwrap();
+    let (f, _) = look(&mut rx, "2 MHz zero IF (changed live)");
+    assert!((f - 200e3).abs() < 2e3);
+    rx.set_ppm(10.0).unwrap();
+    let (f, _) = look(&mut rx, "ppm +10");
+    assert!((f - 200e3).abs() < 2e3);
+    rx.set_ppm(0.0).unwrap();
+    rx.set_bandwidth(Bandwidth::K600).unwrap();
+    look(&mut rx, "BW 600 kHz");
+    rx.set_bandwidth(Bandwidth::K1536).unwrap();
+    rx.set_ext_ref_out(true).unwrap();
+    look(&mut rx, "ext ref output on");
+    rx.set_ext_ref_out(false).unwrap();
+    for (mode, name) in [(rsp_open::IfMode::Low450k, "low IF 450 kHz (ADC 2 MHz)"), (rsp_open::IfMode::Low1620k, "low IF 1.62 MHz (ADC 6 MHz)"), (rsp_open::IfMode::Low2048k, "low IF 2.048 MHz (ADC 8.192 MHz)")] {
+        rx.set_if_mode(mode).unwrap();
+        rx.set_bandwidth(Bandwidth::K1536).unwrap();
+        look(&mut rx, name);
+    }
+    rx.set_if_mode(rsp_open::IfMode::Zero).unwrap();
+    let (f, _) = look(&mut rx, "back to zero IF");
+    assert!((f - 200e3).abs() < 2e3);
+    rx.stop_stream().unwrap();
+    rx.close().unwrap();
+}

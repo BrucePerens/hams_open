@@ -123,7 +123,7 @@ impl Rsp2<UsbTransport> {
         // Re-check on the opened handle's descriptor snapshot (the device may have re-enumerated).
         check_state(t.info.pid, t.info.bcd_device)?;
         let serial = t.serial();
-        let mut rx = Rsp2::with_transport(t, settings, Duration::from_millis(200))?;
+        let mut rx = Rsp2::with_transport(t, settings, Duration::from_millis(300))?;
         rx.serial = serial;
         Ok(rx)
     }
@@ -373,8 +373,9 @@ impl<T: Transport> Rsp2<T> {
     }
 
     /// Low-IF mode with its ADC clock (450 kHz/2 MHz, 1.62 MHz/6 MHz, 2.048 MHz/8.192 MHz);
-    /// the device then decimates by 2. `IfMode::Zero` returns to zero IF at the current clock
-    /// (or 2 MHz if the clock was a low-IF one).
+    /// the device then decimates by 2 and the host must do the IF down-conversion (the output
+    /// frequency mapping is not yet characterised; see README). `IfMode::Zero` returns to zero
+    /// IF at the current ADC clock.
     pub fn set_if_mode(&mut self, mode: IfMode) -> Result<(), Error> {
         let adc = mode.required_adc_hz().unwrap_or(self.s.adc_hz);
         self.set_sampling(adc, mode)
