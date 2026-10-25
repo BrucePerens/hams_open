@@ -23,6 +23,23 @@ and those calls return `Error::Unsupported` (docs/PROTOCOL.md 5). `Rsp::open` st
 `Error::NotRunning` for a boot-ROM device. Other bcdDevice values are refused
 (`Error::UnknownState`). Other SDRplay products, the RSP1 included, are never opened.
 
+## Linux: the kernel `msi2500` driver must be banned and removed
+
+On Linux the in-kernel `msi2500` driver (with `msi001`) binds to SDRplay receivers as soon as they appear (the RSP1, 1df7:2500, even in its boot-ROM state), creating `/dev/swradio*`. While it is bound, the vendor API cannot load firmware into the device, and `rsp_open` has to detach it first. Decision (Bruce Perens, 2026-10-25): **the relay bans the driver and removes it on Linux**; it does not use the kernel driver for these receivers. The relay's installer/setup must therefore, on Linux:
+
+1. Write `/etc/modprobe.d/blacklist-msi2500.conf`:
+
+   ```
+   blacklist msi2500
+   install msi2500 /bin/false
+   ```
+
+   (`blacklist` stops automatic loading by alias; the `install` line also makes a direct `modprobe msi2500` fail.)
+2. Remove the modules that are loaded now: `rmmod msi2500` and then `rmmod msi001` (as root). This is what was done on the development machine.
+3. Unplug and replug a receiver that was already bound, or unbind it (`echo <busid>:1.0 > /sys/bus/usb/drivers/msi2500/unbind`), if the driver had grabbed it before the ban.
+
+`UsbTransport::open` still asks libusb to detach a bound kernel driver (and reattach it on close), which keeps `rsp_open` working on a machine where the ban has not been applied, but the relay should not rely on that. The ban also stops the driver from serving other Mirics-based dongles on the same machine. See `docs/PROTOCOL.md` 5.14 for the observation that motivated this.
+
 ## Provenance (clean-room record)
 
 - **Specification:** [`docs/PROTOCOL.md`](docs/PROTOCOL.md), a description of the USB
