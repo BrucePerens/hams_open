@@ -79,6 +79,18 @@ updates:
           - "minor"
           - "patch"
   - package-ecosystem: "cargo"
+    directory: "/daemons/rsp_open"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "cargo"
     directory: "/daemons/ham_digital_modes"
     schedule:
       interval: "weekly"
