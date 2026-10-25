@@ -8,7 +8,7 @@ use crate::encode::{self, *};
 use crate::stream::{BlockParser, IqI16, StreamStats};
 use crate::transport::{PacketSink, Transport};
 use crate::usb::{self, UsbTransport};
-use crate::{check_state, rsp1a, Error, Model, PID_RSP1A, PID_RSP2, SUPPORTED_PIDS};
+use crate::{check_state, rsp1a, Error, Model, BCD_BOOT_ROM, PID_RSP1A, PID_RSP2, SUPPORTED_PIDS};
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -113,6 +113,10 @@ pub struct Rsp<T: Transport = UsbTransport> {
     pub read48: u8,
     /// Serial number string, if read.
     pub serial: Option<String>,
+    /// Driven in the boot-ROM personality (bcdDevice 2.00, no firmware loaded). Requests 0x48
+    /// and 0x49 are not answered there, so the board (band filters, antenna, notch, bias-T,
+    /// front-end steps) is not controlled; the tuner, ADC clock and stream are.
+    boot_rom: bool,
 }
 
 /// The name the driver had when it drove only the RSP2pro; the same type.
@@ -160,6 +164,30 @@ impl Rsp<UsbTransport> {
         Self::open_device(info.pid, info.bus, info.address, info.bcd_device, settings)
     }
 
+    /// Open the first RSP2/RSP2pro or RSP1A that is in the boot-ROM personality (bcdDevice
+    /// 2.00, no firmware loaded) and drive it without uploading anything. Board controls
+    /// (antenna, notch, bias-T, band filters, front-end steps) are unavailable; tuner, sample
+    /// rate, IF gain and the stream work (docs/PROTOCOL.md 5).
+    pub fn open_boot_rom_with(settings: Settings) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_open_boot_rom_with]
+        let devs = usb::list_devices()?;
+        let info = devs
+            .iter()
+            .find(|d| SUPPORTED_PIDS.contains(&d.pid) && d.bcd_device == BCD_BOOT_ROM)
+            .ok_or(Error::NotFound)?;
+        let t = UsbTransport::open(info.pid, Some((info.bus, info.address)))?;
+        if t.info.bcd_device != BCD_BOOT_ROM {
+            return Err(Error::UnknownState {
+                bcd_device: t.info.bcd_device,
+            });
+        }
+        let model = t.info.model;
+        let serial = t.serial();
+        let mut rx = Rsp::with_transport_boot_rom(t, model, settings, Duration::from_millis(300))?;
+        rx.serial = serial;
+        Ok(rx)
+    }
+
     fn open_device(
         pid: u16,
         bus: u8,
@@ -195,6 +223,27 @@ impl<T: Transport> Rsp<T> {
         model: Model,
         settings: Settings,
         settle: Duration,
+    ) -> Result<Self, Error> {
+        Self::with_transport_state(t, model, settings, settle, false)
+    }
+
+    /// As [`Rsp::with_transport_model`] for a device in the boot-ROM personality: no request
+    /// 0x48 read and no request 0x49 board write is sent (the ROM does not answer them).
+    pub fn with_transport_boot_rom(
+        t: T,
+        model: Model,
+        settings: Settings,
+        settle: Duration,
+    ) -> Result<Self, Error> {
+        Self::with_transport_state(t, model, settings, settle, true)
+    }
+
+    fn with_transport_state(
+        t: T,
+        model: Model,
+        settings: Settings,
+        settle: Duration,
+        boot_rom: bool,
     ) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp_with_transport_model]
         if !matches!(model, Model::Rsp2 | Model::Rsp1a) {
@@ -240,6 +289,7 @@ impl<T: Transport> Rsp<T> {
             settle,
             read48: 0,
             serial: None,
+            boot_rom,
         };
         rx.init()?;
         Ok(rx)
@@ -279,9 +329,24 @@ impl<T: Transport> Rsp<T> {
     fn board(&mut self, addr: u8, byte: u8) -> Result<(), Error> {
         // [@ANCHOR: rsp_device_rsp_board]
         let (v, i) = board_write_args(addr, byte);
-        self.t.vendor_out(REQ_BOARD, v, i)?;
+        if !self.boot_rom {
+            self.t.vendor_out(REQ_BOARD, v, i)?;
+        }
         if addr == MCP_GPIOB {
             self.last_b = Some(byte);
+        }
+        Ok(())
+    }
+
+    /// True when driving the boot-ROM personality (no firmware): board controls unavailable.
+    pub fn is_boot_rom(&self) -> bool {
+        self.boot_rom
+    }
+    fn need_board(&self, what: &str) -> Result<(), Error> {
+        if self.boot_rom {
+            return Err(Error::Unsupported(format!(
+                "{what} needs the board expander (request 0x49), which the boot ROM does not answer"
+            )));
         }
         Ok(())
     }
@@ -356,10 +421,12 @@ impl<T: Transport> Rsp<T> {
         // [@ANCHOR: rsp_device_rsp2_init]
         self.reg(0x08, REG08_OPEN)?;
         self.t.set_alt(self.cfg.alt)?;
-        let mut b = [0u8; 1];
-        self.t.vendor_in(REQ_READ48, 0, 0, &mut b)?;
-        self.t.vendor_in(REQ_READ48, 0, 0, &mut b)?;
-        self.read48 = b[0];
+        if !self.boot_rom {
+            let mut b = [0u8; 1];
+            self.t.vendor_in(REQ_READ48, 0, 0, &mut b)?;
+            self.t.vendor_in(REQ_READ48, 0, 0, &mut b)?;
+            self.read48 = b[0];
+        }
         self.reg(0x05, REG05_OPEN)?;
         self.tuner(R14_TUNE)?;
         self.reg(0x00, REG00_OPEN)?;
@@ -463,6 +530,7 @@ impl<T: Transport> Rsp<T> {
         if old == ant {
             return Ok(());
         }
+        self.need_board("antenna selection")?;
         self.s.antenna = ant;
         let hiz_change = (old == Antenna::HiZ) != (ant == Antenna::HiZ);
         if hiz_change {
@@ -478,12 +546,14 @@ impl<T: Transport> Rsp<T> {
 
     /// Broadcast (MW/FM) notch (RSP2pro), FM/MW notch (RSP1A). Port B only.
     pub fn set_notch(&mut self, on: bool) -> Result<(), Error> {
+        self.need_board("the notch")?;
         self.s.notch = on;
         self.board(MCP_GPIOB, self.front_byte())
     }
 
     /// DAB notch (RSP1A only): port B, then the gain write, as the API does (2.7).
     pub fn set_dab_notch(&mut self, on: bool) -> Result<(), Error> {
+        self.need_board("the DAB notch")?;
         // [@ANCHOR: rsp_device_rsp_set_dab_notch]
         if !self.is_1a() {
             return Err(Error::Unsupported(format!(
@@ -498,12 +568,14 @@ impl<T: Transport> Rsp<T> {
 
     /// Bias-T (DC power on the antenna port). Off unless explicitly enabled.
     pub fn set_bias_t(&mut self, on: bool) -> Result<(), Error> {
+        self.need_board("the bias-T")?;
         self.s.bias_t = on;
         self.board(MCP_GPIOB, self.front_byte())
     }
 
     /// 24 MHz reference clock output (RSP2pro only).
     pub fn set_ext_ref_out(&mut self, on: bool) -> Result<(), Error> {
+        self.need_board("the reference output")?;
         // [@ANCHOR: rsp_device_rsp_set_ext_ref_out]
         if self.is_1a() {
             return Err(Error::Unsupported(
@@ -794,6 +866,39 @@ mod tests {
         let m = MockTransport::new();
         let rx = Rsp2::with_transport(m.clone(), s, Duration::ZERO).unwrap();
         (rx, m)
+    }
+
+    #[test]
+    fn boot_rom_sends_no_board_or_0x48_requests() {
+        let m = MockTransport::new();
+        let mut rx = Rsp2::with_transport_boot_rom(
+            m.clone(),
+            Model::Rsp2,
+            Settings::default(),
+            Duration::ZERO,
+        )
+        .unwrap();
+        rx.set_frequency(7_074_000).unwrap();
+        rx.set_frequency(95_800_000).unwrap();
+        rx.set_gain(40, 0).unwrap();
+        assert!(rx.set_notch(true).is_err());
+        assert!(rx.set_bias_t(true).is_err());
+        assert!(rx.set_ext_ref_out(true).is_err());
+        assert!(rx.select_antenna(Antenna::B).is_err());
+        rx.start_stream(|_, _| {}).unwrap();
+        rx.stop_stream().unwrap();
+        rx.close().unwrap();
+        for op in m.ops() {
+            match op {
+                Op::Out { req, .. } => assert!(req != 0x49 && req != 0x44 && req != 0x40),
+                Op::In { req, .. } => assert!(req != 0x48),
+                _ => {}
+            }
+        }
+        assert!(m
+            .ops()
+            .iter()
+            .any(|o| matches!(o, Op::Out { req: 0x41, .. })));
     }
 
     fn w(reg: u8, v: u32) -> Op {

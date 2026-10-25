@@ -10,15 +10,18 @@ Licence: AGPL-3.0-or-later (SPDX headers in every source file, `Cargo.toml` `lic
 the repository default described in `LICENSING.md`. The crate is not published to crates.io
 (`publish = false`).
 
-## Important limitation: firmware
+## Firmware: not required for reception
 
-Both models power up in a boot-ROM state (bcdDevice 2.00). SDRplay's software uploads a
-firmware image that turns it into the running device (bcdDevice 2.07). This crate contains
-**no firmware and no firmware-loading code**. It drives only an already-running receiver,
-i.e. one that SDRplay's software has opened at least once since power-up, and reports
-`Error::NotRunning` ("device has no firmware loaded; load it with SDRplay's software first")
-otherwise. Any other bcdDevice is refused (`Error::UnknownState`). Other SDRplay products,
-the RSP1 included, are never opened (`Error::UnsupportedModel`).
+Both models power up in a boot-ROM state (bcdDevice 2.00). SDRplay's software uploads a firmware
+image that turns it into the running device (bcdDevice 2.07). This crate contains **no firmware
+and no firmware-loading code**, and never sends the download (0x44) or reset (0x40) requests.
+It drives a running receiver (`Rsp::open`), or a boot-ROM one with `Rsp::open_boot_rom_with`:
+measured on an RSP2pro, the ROM already handles register writes, start/stop and the isochronous
+stream, so tuning and streaming work. The ROM does not answer requests 0x48 and 0x49, so in
+that mode the board (antenna, band filters, notch, bias-T, front-end steps) is not controlled
+and those calls return `Error::Unsupported` (docs/PROTOCOL.md 5). `Rsp::open` still reports
+`Error::NotRunning` for a boot-ROM device. Other bcdDevice values are refused
+(`Error::UnknownState`). Other SDRplay products, the RSP1 included, are never opened.
 
 ## Provenance (clean-room record)
 

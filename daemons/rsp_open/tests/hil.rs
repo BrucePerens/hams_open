@@ -551,3 +551,63 @@ fn hil_rsp1a_toggles_and_gain() {
         "IF GR 50 ({l50}) not >10 dB below GR 30 ({l30})"
     );
 }
+
+/// A receiver in the boot-ROM state (bcdDevice 2.00): no firmware is uploaded, requests 0x48
+/// and 0x49 are not sent. The tuner and stream must still work: the 24 MHz reference harmonics
+/// appear where the tuning words put them (protocol document 5).
+#[test]
+#[ignore]
+// Tests [@ANCHOR: rsp_device_rsp_open_boot_rom_with]
+fn hil_boot_rom_reference_spurs() {
+    let cold = list_devices()
+        .map(|d| {
+            d.iter()
+                .any(|d| d.pid == rsp_open::PID_RSP2 && d.bcd_device == rsp_open::BCD_BOOT_ROM)
+        })
+        .unwrap_or(false);
+    if !cold {
+        eprintln!("no boot-ROM RSP2pro: skipping");
+        return;
+    }
+    let mut rx = Rsp2::open_boot_rom_with(Settings::default()).expect("open");
+    assert!(rx.is_boot_rom());
+    assert!(rx.set_notch(true).is_err());
+    assert!(rx.set_bias_t(true).is_err());
+    let mut it = rx.start_stream_iter(256).expect("start");
+    for (rf, off) in [
+        (95_800_000u64, 200e3),
+        (95_900_000, 100e3),
+        (96_300_000, -300e3),
+    ] {
+        let m = measure(&mut rx, &mut it, rf, off);
+        eprintln!(
+            "{rf}: peak {:.1} Hz, {:.1} dB, gaps {}",
+            m.peak_hz, m.over_db, m.gaps
+        );
+        assert!(
+            (m.peak_hz - off).abs() < 400.0,
+            "peak at {} for {rf}",
+            m.peak_hz
+        );
+        assert!(m.over_db > 20.0, "only {} dB over floor at {rf}", m.over_db);
+    }
+    // Other bands: reported, not asserted. The board's band filters are not switched in this
+    // state, so the levels show what the power-on filter state passes.
+    for (rf, off) in [
+        (23_800_000u64, 200e3),
+        (71_800_000, 200e3),
+        (119_800_000, 200e3),
+        (264_200_000, -200e3),
+        (480_200_000, -200e3),
+        (1_200_200_000, -200e3),
+    ] {
+        let m = measure(&mut rx, &mut it, rf, off);
+        eprintln!(
+            "{rf}: peak {:.1} Hz, {:.1} dB, gaps {}",
+            m.peak_hz, m.over_db, m.gaps
+        );
+    }
+    drop(it);
+    rx.stop_stream().unwrap();
+    rx.close().unwrap();
+}
