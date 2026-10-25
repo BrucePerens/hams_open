@@ -642,7 +642,7 @@ mod tests {
     }
 
     /// The API's own open sequence for zero IF, 2 MHz, 100 MHz, BW 200 kHz, GR 40, LNA 0
-    /// (capture c20/c21, protocol document 1.5) must be reproduced exactly.
+    /// (basic-open and frequency-sweep captures, protocol document 1.5) must be reproduced exactly.
     #[test]
     // Tests [@ANCHOR: rsp_device_rsp2_with_transport]
     // Tests [@ANCHOR: rsp_device_rsp2_init]

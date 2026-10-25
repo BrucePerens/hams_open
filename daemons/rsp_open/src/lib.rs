@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010).
 //!
-//! Written from a private description of the receiver's USB traffic, recorded from the
-//! author's own unit. See README.md for provenance.
+//! Written from `docs/PROTOCOL.md`, a description of the receiver's USB traffic recorded
+//! from the author's own unit. See README.md for provenance.
 //!
 //! The driver supports only a receiver whose firmware is already running (bcdDevice 2.07,
 //! i.e. SDRplay's software has opened it since power-up). A receiver in its boot-ROM state

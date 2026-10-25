@@ -78,7 +78,8 @@ fn open(settings: Settings) -> Option<Rsp2> {
     }
 }
 
-/// The an earlier stand-alone verification program tunings (protocol document 1.12), through this driver.
+/// The tunings of the earlier stand-alone verification program (protocol document 1.12),
+/// through this driver.
 #[test]
 #[ignore]
 // Tests [@ANCHOR: rsp_device_rsp2_open_with]

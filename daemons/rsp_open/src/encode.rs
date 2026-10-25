@@ -2,7 +2,7 @@
 //! Pure control-to-register encoding for the RSP2pro.
 //!
 //! Every function here turns a receiver setting into the register value or board byte that the
-//! device expects, following the private wire-protocol description (section numbers in comments refer to it).
+//! device expects, following `docs/PROTOCOL.md` (section numbers in comments refer to it).
 //! Nothing in this module touches USB, so all of it is unit-tested against captured values.
 
 use crate::Error;
@@ -451,7 +451,7 @@ const S_D: u8 = 0b1101;
 const S_9: u8 = 0b1001;
 const S_5: u8 = 0b0101;
 
-/// LNA-state tables (1.8, captures c25/c26).
+/// LNA-state tables (1.8, gain and toggle captures).
 pub fn lna_table(t: GainTable) -> &'static [FrontEndStep] {
     // [@ANCHOR: rsp_encode_lna_table]
     const AM: [FrontEndStep; 9] = [
@@ -782,7 +782,7 @@ mod tests {
         (p.r2, p.r3)
     }
 
-    /// (RF Hz, r2, r3) pairs from captures c21/c22 (r3 only where it was written differently).
+    /// (RF Hz, r2, r3) pairs from the frequency-sweep and band-edge captures (r3 only where it was written differently).
     #[test]
     // Tests [@ANCHOR: rsp_encode_pll]
     // Tests [@ANCHOR: rsp_encode_band_for]
@@ -869,7 +869,7 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: rsp_encode_pll]
     fn pll_ppm_matches_capture() {
-        // ppm +10 at 100 MHz: r2 unchanged, r3 = 000003 (capture c26).
+        // ppm +10 at 100 MHz: r2 unchanged, r3 = 000003 (toggle capture).
         let p = pll(100_000_000, 32, 10_000).unwrap();
         assert_eq!(p.r2, 0x213e72);
         assert_eq!(p.r3, 0x000003);
@@ -901,7 +901,7 @@ mod tests {
     // Tests [@ANCHOR: rsp_encode_ifmode_code]
     // Tests [@ANCHOR: rsp_encode_bandwidth_code]
     fn band_table_matches_capture() {
-        // (RF, byte 0x12 with antenna A, r0 with zero IF and 200 kHz BW) from 1.9 / c21 / c22.
+        // (RF, byte 0x12 with antenna A, r0 with zero IF and 200 kHz BW) from 1.9 (frequency-sweep and band-edge captures).
         let cases: &[(u64, u8, u32)] = &[
             (1_000, 0x45, 0x043e10),
             (11_900_000, 0x45, 0x043e10),
@@ -1057,7 +1057,7 @@ mod tests {
         assert_eq!(adc_clock(8_000_000, 0, true).unwrap().reg03, 0x019807);
         assert_eq!(adc_clock(6_000_000, 0, true).unwrap().reg03, 0x01590b);
         assert_eq!(adc_clock(8_192_000, 0, true).unwrap().reg03, 0x01d807);
-        // ppm +10 at 2 MHz (c26).
+        // ppm +10 at 2 MHz (toggle capture).
         let c = adc_clock(2_000_000, 10_000, true).unwrap();
         assert_eq!((c.reg03, c.reg04), (0x01179f, 0x0fff58));
     }

@@ -19,15 +19,15 @@ otherwise. Any other bcdDevice is refused (`Error::UnknownState`).
 
 ## Provenance (clean-room record)
 
-- **Specification:** a private description (not published here) of the
-  USB traffic between SDRplay's software and the author's own receiver, recorded with usbmon and
-  filtered to the receiver only. No SDRplay binary was disassembled, decompiled, traced or
+- **Specification:** [`docs/PROTOCOL.md`](docs/PROTOCOL.md), a description of the USB
+  traffic between SDRplay's software and the author's own receiver, recorded with usbmon and
+  filtered to the receiver only (its section 0 records the method and the clean-room boundary;
+  section numbers in the source comments refer to it). No SDRplay binary was disassembled, decompiled, traced or
   strings-mined; no SDRplay code or documentation text was used.
 - **Extra wire facts:** register values in the unit tests come from decoded private
   captures (the request sequences SDRplay's API sent while one control at a time was
-  changed), read with our own capture-decoding scripts. The captures and the wire-protocol
-  description are not part of this repository; the unit tests carry only the documented
-  byte tables. The r3 "12 extra PLL fraction bits"
+  changed), read with our own capture-decoding scripts. The raw captures are not part of this
+  repository; the unit tests carry only the byte tables documented in `docs/PROTOCOL.md`. The r3 "12 extra PLL fraction bits"
   rule and the "largest integer strictly below the exact quotient" rounding are our own fit
   of those captured values; the 0.05 kHz tuning accuracy on the hardware confirms the fit.
 - **GPL references consulted for facts only** (Linux `drivers/media/usb/msi2500/msi2500.c`,
@@ -47,7 +47,7 @@ otherwise. Any other bcdDevice is refused (`Error::UnknownState`).
 - **Clean-room boundary:** only bus traffic of the author's own receiver was observed;
   SDRplay's software was used only as the front end of the captures. No firmware image was
   captured, stored or inspected, and this crate contains no firmware-loading code.
-- **Requests sent:** only those the wire-protocol description lists as observed: 0x41 (register
+- **Requests sent:** only those `docs/PROTOCOL.md` lists as observed: 0x41 (register
   write), 0x43/0x45 (start/stop), 0x48 (one-byte read at open), 0x49 (board bytes 0x00,
   0x01, 0x12, 0x13), SET_INTERFACE alt 0/1/2, and the standard string-descriptor read.
   The unit test `only_observed_requests_are_emitted` exercises every API call against a
@@ -99,7 +99,7 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
   and the host-side IF down-conversion is left to the caller. Hi-Z port: switching verified
   on the mock and on hardware via `rsp_measure` (floor changes), no signal test.
 - `examples/rsp_measure.rs` characterises the front end; results in
-  `docs/measure_2026-10-25.txt` and in the private hardware notes.
+  `docs/measure_2026-10-25.txt`, summarised in `docs/PROTOCOL.md` section 1.13.7.
 
 ## Not implemented / open
 
