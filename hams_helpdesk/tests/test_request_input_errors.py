@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Malformed input on a public page route is a 404, not a 500 and a ticket (Bruce, 2026-10-19)."""
 
+import logging
+
 import psycopg2.errors
 import werkzeug.exceptions
 
-from odoo.tests.common import TransactionCase, tagged
-from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.tests.common import tagged
+from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 
 from odoo.addons.hams_helpdesk.models.exception_scrub import is_expected
 from odoo.addons.hams_helpdesk.models.ir_http_exception import (
@@ -18,12 +20,15 @@ from odoo.addons.hams_helpdesk.models.request_input_errors import (
     request_values,
 )
 
+_logger = logging.getLogger(__name__)
+
 
 def _raised(function, *args):
     """The exception ``function`` raises, with its real traceback."""
     try:
         function(*args)
     except Exception as error:  # audit-ignore-catch-all: the test needs the raised object itself
+        _logger.info("test handler raised %s", type(error).__name__)
         return error
     raise AssertionError("did not raise")
 
@@ -45,8 +50,11 @@ def _handler_with_a_bug():
 
 
 @tagged("post_install", "-at_install")
-class TestClassifyRequestInputError(TransactionCase):
+class TestClassifyRequestInputError(HamsTransactionCase):
     # Tests [@ANCHOR: hams_helpdesk:classify_request_input_error]
+    # Tests [@ANCHOR: hams_helpdesk:input_error_message_quotes_a_value]
+    # Tests [@ANCHOR: hams_helpdesk:input_error_callers_object_is_a_local]
+    # Tests [@ANCHOR: hams_helpdesk:input_error_inner_frames]
 
     def test_database_data_errors_are_the_callers_when_the_request_had_parameters(self):
         for error_class in (
@@ -101,6 +109,7 @@ class TestClassifyRequestInputError(TransactionCase):
             self.assertIsNone(classify_request_input_error(error, {"key": "zzqq"}))
 
     def test_request_values_walks_nested_parameters_and_ignores_objects(self):
+        # Tests [@ANCHOR: hams_helpdesk:request_input_values]
         record = self.env.user
         values = request_values({"a": "x1", "b": ["y2", {"c": "z3"}], "rec": record, "n": 5})
         self.assertEqual(sorted(v for v in values if isinstance(v, str)), ["x1", "y2", "z3"])
@@ -108,7 +117,7 @@ class TestClassifyRequestInputError(TransactionCase):
 
 
 @tagged("post_install", "-at_install")
-class TestInputErrorRouteScope(TransactionCase):
+class TestInputErrorRouteScope(HamsTransactionCase):
     # Tests [@ANCHOR: hams_helpdesk:input_error_route_scope]
 
     def test_public_page_routes_are_in_scope(self):

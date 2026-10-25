@@ -155,11 +155,11 @@ def _input_errors_are_the_callers(routing):
     return routing.get("csrf", True) is not False or (bool(methods) and set(methods) <= _READ_ONLY_METHODS)
 
 
-# [@ANCHOR: hams_helpdesk:render_error_is_the_urls]
 # Messages of odoo.tools.urls.urljoin, which the website layout calls with the request path to build <meta og:url>.
 _URLJOIN_MESSAGES = ("Dot segments are not allowed", "Extra URL must use same scheme and host")
 
 
+# [@ANCHOR: hams_helpdesk:render_error_is_the_urls]
 def _error_page_failed_on_the_url(error):
     """True when ``error`` is urljoin refusing the request's own path while the error page was rendered."""
     return isinstance(error, ValueError) and str(error).startswith(_URLJOIN_MESSAGES)

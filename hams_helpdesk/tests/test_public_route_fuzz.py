@@ -29,10 +29,10 @@ SKIPPED_ROUTE_PREFIXES = {
     "/web/database/": "database manager: drop, backup and restore; never called against a live database",
     "/web/session/logout": "ends the session the test runs on",
     "/web/session/destroy": "ends the session the test runs on",
-    "/web/become": "switches the session user",
+    "/web/become": "switches the session user",  # burn-ignore: a route prefix the fuzz skips, never a URL we redirect to
     "/report/": "renders PDFs by starting wkhtmltopdf",
     "/odoo/upgrade_modules": "module installer",
-    "/web/binary/upload": "stores a file",
+    "/web/binary/upload": "stores a file",  # burn-ignore: a route prefix the fuzz skips, never a URL we redirect to
 }
 
 # What a scanner puts in the query string. A request carries several of these at once because the parameter names a
@@ -78,13 +78,11 @@ class TestPublicRouteFuzz(HamsHttpCase):
                 continue
             if any(rule.rule.startswith(prefix) for prefix in SKIPPED_ROUTE_PREFIXES):
                 continue
-            names = ()
-            handler = getattr(rule.endpoint, "original_endpoint", None)
-            if handler is not None:
-                try:
-                    names = tuple(list(inspect.signature(handler).parameters)[1:])
-                except (TypeError, ValueError):
-                    names = ()
+            # odoo.http.route sets original_endpoint on every route wrapper it builds.
+            try:
+                names = tuple(list(inspect.signature(rule.endpoint.original_endpoint).parameters)[1:])
+            except (TypeError, ValueError):
+                names = ()
             found[rule.rule] = tuple(n for n in names if n not in ("kw", "kwargs", "post", "args"))
         return sorted(found.items())
 

@@ -51,6 +51,7 @@ INNER_FRAMES = 3
 _EMPTY_RECORDSET_MESSAGE = re.compile(r"Expected singleton: [\w.]+\(\)")
 
 
+# [@ANCHOR: hams_helpdesk:request_input_values]
 def request_values(params):
     """The text/number leaves of a parameter dict, at any depth: the things the caller chose.
 
@@ -70,11 +71,13 @@ def request_values(params):
     return leaves
 
 
+# [@ANCHOR: hams_helpdesk:input_error_inner_frames]
 def _inner_frames(error):
     frames = [frame for frame, _line in traceback.walk_tb(error.__traceback__)]
     return frames[-INNER_FRAMES:]
 
 
+# [@ANCHOR: hams_helpdesk:input_error_message_quotes_a_value]
 def _message_quotes_a_value(error, leaves):
     message = str(error)
     for leaf in leaves:
@@ -83,6 +86,7 @@ def _message_quotes_a_value(error, leaves):
     return False
 
 
+# [@ANCHOR: hams_helpdesk:input_error_callers_object_is_a_local]
 def _callers_object_is_a_local(error, leaves):
     # Identity, so a one-letter parameter equal to some unrelated local string is not a match.
     sent = {id(leaf) for leaf in leaves if len(leaf) >= 2 or not isinstance(leaf, (str, bytes))}
