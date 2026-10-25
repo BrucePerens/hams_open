@@ -27,6 +27,8 @@ no `url()` except `url(#fragment)`, no `image-set()`/`image()`/`src()`/`element(
 or `absolute`. Anything else is dropped rule by rule, so one bad declaration does not cost the
 member the rest of the sheet. The output is stable: filtering it again changes nothing.
 
+A `style="..."` attribute goes through `sanitize_style_attribute` `[@ANCHOR: zero_sudo:css_style_attribute_filter]`, which applies the same declaration rules one declaration at a time and returns `(declarations, dropped)`. An attribute cannot select other elements, but `background:url(https://other-site/x)` is still a third-party request for every visitor and `position:fixed` still covers the site's own chrome. A declaration whose value is refused is removed and the rest are kept. Malformed CSS drops the whole attribute: an unterminated comment, string or parenthesis, a brace, a control character, a declaration with no colon, a property name that is not a plain lower-case identifier, or a value over the size cap. Comments are deleted, not replaced, and running the filter on its own output changes nothing.
+
 Neither removal counts as an injection attempt (no strike): a linked web font or a fixed header is
 not an attack; the removal is logged.
 
@@ -43,4 +45,4 @@ members use it for ordinary layouts. A `style=""` attribute on an element is not
 a question for the site owner, not decided here.
 
 Tests `[@ANCHOR: test_css_stylesheet_filter]` (the filter alone) and
-`[@ANCHOR: test_user_arch_style_link_filter]` (the member save path and the served page).
+`[@ANCHOR: user_websites:test_user_arch_style_link_filter]` (the member save path and the served page).

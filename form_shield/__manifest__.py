@@ -37,6 +37,7 @@ for Odoo's own website forms. Counts refusals per day, with no address or text k
             "icon": "S",
             "category": "workspace",
             "public": True,
+            "help_topic": "Other guides",
         }
     ],
     "assets": {

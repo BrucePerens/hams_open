@@ -8,7 +8,7 @@ use super::decode::RawParameters;
 /// Scatters `b0..b8` back into the 49-bit `d[]` layout `decode::extract_raw_parameters` reads
 /// from -- each assignment here is the direct algebraic inverse of that function's own
 /// extraction, over the identical bit ranges (see `mod.rs`'s own doc-comment table).
-// [@ANCHOR: pack_raw_parameters]
+// [@ANCHOR: ambe_plus_2_pack_raw_parameters]
 pub fn pack_raw_parameters(raw: &RawParameters) -> u64 {
     let mut d: u64 = 0;
     let mut set = |start: usize, width: usize, value: u32| {
@@ -54,7 +54,7 @@ pub fn build_frame(raw: &RawParameters) -> u128 {
 /// `0x80 | nibble`, single tones `round(f/31.25)`, call progress `0xA0/0xA1/0xA2`) is serialized as its low nibble
 /// four times (`d[16..20)`, `d[24..28)`, `d[32..36)`, `d[40..44)`) and its high nibble twice (`d[20..24)`,
 /// `d[28..32)`); `amplitude` is the 12-bit level field `d[4..16)`. `d[36..40)`'s low three bits carry `b0`'s marker.
-// [@ANCHOR: pack_tone_parameters]
+// [@ANCHOR: ambe_plus_2_pack_tone_parameters]
 pub fn pack_tone_parameters(tone_idx: u8, call_progress: bool, amplitude: u16) -> u64 {
     let mut d: u64 = 0;
     let mut set = |msb_index: usize, width: usize, value: u32| {
@@ -90,6 +90,8 @@ mod tests {
     /// parameters into a transmittable frame, parse it back through the shared frame layer, and
     /// confirm both zero corrected FEC errors and an exact `RawParameters` match.
     #[test]
+    // Tests [@ANCHOR: ambe_plus_2_pack_raw_parameters]
+    // Tests [@ANCHOR: ambe_plus_2_extract_raw_parameters]
     fn pack_and_build_frame_round_trips_a_full_set_of_raw_parameters() {
         let original = RawParameters {
             b0: 0b010_1101,    // 7 bits, < 120
@@ -143,6 +145,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ambe_plus_2_pack_tone_parameters]
     fn built_tone_frames_decode_back_to_their_tone_idx_and_kind() {
         use crate::ambe::float::ambe_plus_2::decode::{classify_b0, decode_tone_idx, FrameKind};
         for tone_idx in [0x05u8, 0x20, 0x7A, 0x80, 0x87, 0x8F, 0xA0, 0xA1, 0xA2] {

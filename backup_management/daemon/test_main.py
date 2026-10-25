@@ -3,6 +3,7 @@
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import importlib.util
 import json
 import os
 import sys
@@ -13,7 +14,10 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# main.py imports exception_reporter, which production finds through PYTHONPATH=/opt/hams/daemons.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_helpdesk", "daemon"))
 import main as backup_worker  # noqa: E402
+import pgbackrest_sidecar  # noqa: E402
 
 
 class TestRabbitMQCredentialFailFast(unittest.TestCase):
@@ -431,6 +435,35 @@ class TestEnsureKopiaS3Repository(unittest.TestCase):
         self.assertIn("minio.local:9000", connect_cmd)
 
 
+# [@ANCHOR: backup_management:COMM_test_redact_payload]
+class TestRedactPayload(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_redact_payload]
+    def test_01_every_secret_key_is_masked_and_the_rest_is_kept(self):
+        payload = {
+            "job_id": 7,
+            "engine": "kopia",
+            "kopia_password": "hunter2",
+            "secret_key": "s3-secret",
+            "access_key": "s3-access",
+            "bucket_name": "b",
+        }
+        redacted = backup_worker._redact_payload(payload)
+        for key in ("kopia_password", "secret_key", "access_key"):
+            self.assertEqual(redacted[key], "***REDACTED***")
+        self.assertEqual(redacted["job_id"], 7)
+        self.assertEqual(redacted["bucket_name"], "b")
+        # The original is not changed: execute_job still needs the real credentials.
+        self.assertEqual(payload["secret_key"], "s3-secret")
+
+    def test_02_an_empty_secret_stays_empty_so_a_log_reader_can_tell_it_was_not_set(self):
+        redacted = backup_worker._redact_payload({"secret_key": "", "access_key": None})
+        self.assertEqual(redacted, {"secret_key": "", "access_key": None})
+
+    def test_03_a_payload_that_is_not_a_dict_comes_back_unchanged(self):
+        self.assertEqual(backup_worker._redact_payload("not a dict"), "not a dict")
+        self.assertIsNone(backup_worker._redact_payload(None))
+
+
 # [@ANCHOR: backup_management:COMM_test_execute_job_s3_b2]
 class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
     # Tests [@ANCHOR: backup_management:COMM_test_backup_worker_real]
@@ -765,7 +798,6 @@ class TestPgbackrestRepoNumber(unittest.TestCase):
         self.assertFalse([a for a in cmd if a.startswith("--repo=")], cmd)
 
     def test_the_built_commands_pass_the_sidecars_own_validation(self):
-        import pgbackrest_sidecar
         for engine in ("pgbackrest", "sync_snapshots"):
             for repo in (0, 2):
                 pgbackrest_sidecar._validate_request_cmd(self._run(self._payload(engine, pgbackrest_repo=repo)))
@@ -826,8 +858,6 @@ class TestRunReportsFailures(unittest.TestCase):
 
     @staticmethod
     def _real_helper():
-        import importlib.util
-
         path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "..", "..", "hams_helpdesk", "daemon", "exception_reporter.py"
         )

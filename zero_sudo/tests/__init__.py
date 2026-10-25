@@ -19,7 +19,10 @@ from . import test_service_uid_no_default_env
 from . import test_service_account_security_notices
 from . import test_session_cookie_hardening
 from . import test_robots_txt_policy
+from . import test_glyph_normalizer
+from . import test_repeater_page_text
 from . import test_ssrf_safe_fetch
+from . import test_club_spam
 from . import test_tdd_fixes
 from . import test_views
 from . import test_facility
@@ -27,7 +30,7 @@ from . import test_controllers
 from . import test_offline_store_hoot
 from . import test_hoot_empty_run_guard
 from . import test_confirm_submit_csp
-from . import svg_corpus  # noqa: F401
+from . import svg_corpus
 from . import test_svg_sanitizer
 from . import test_css_sanitizer
 from . import common
@@ -93,3 +96,4 @@ from . import test_werkzeug_thread_wait  # noqa: E402
 from . import test_debug_assets_propagation  # noqa: E402
 from . import test_navigator_overrides  # noqa: E402
 from . import test_svg_review_findings  # noqa: E402
+from . import test_harness_helpers  # noqa: E402

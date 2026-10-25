@@ -1,6 +1,8 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """ir.http._dispatch: a page route called without a parameter its handler requires is a 400 (QA-014)."""
+import werkzeug.exceptions
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -22,7 +24,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         rules = self.env["ir.http"].routing_map().bind("").match
         try:
             rules(path, method="GET")
-        except Exception:  # audit-ignore-catch-all: NotFound or MethodNotAllowed both mean "not served here"
+        except werkzeug.exceptions.HTTPException:  # NotFound, MethodNotAllowed and RequestRedirect all mean "not served here"
             return False
         return True
 
@@ -72,7 +74,11 @@ class TestMissingRequiredParams(HamsHttpCase):
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         body = self._rpc("/web/session/authenticate", {}).json()
         self.assertIn("error", body)
-        self.assertEqual(body["error"]["code"], 400, body)
+        # Odoo's JSON-RPC dispatcher puts 0 in error.code for every exception but NotFound and a session
+        # expiry (the nightly of 2026-10-18 says "we don't care of this code"); the 400 is the exception's own
+        # class and message in error.data.
+        self.assertEqual(body["error"]["data"]["name"], "werkzeug.exceptions.BadRequest", body)
+        self.assertIn("400 Bad Request", body["error"]["data"]["message"])
         self.assertIn("Missing required parameter", str(body))
         self.assertNotIn("Traceback", str(body))
         self.assertNotIn("TypeError", str(body))
@@ -103,7 +109,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.authenticate("admin", "admin")
         params = {"model": "res.partner", "method": "search_count", "args": [[["name", "=", "a\u0000b"]]], "kwargs": {}}
         body = self._rpc("/web/dataset/call_kw/res.partner.search_count", params).json()
-        self.assertEqual(body["error"]["code"], 400, body)
+        self.assertEqual(body["error"]["data"]["name"], "werkzeug.exceptions.BadRequest", body)
 
     def test_text_where_a_handler_wants_a_number_is_a_400_not_a_500(self):
         # Tests [@ANCHOR: hams_helpdesk:missing_required_params_is_400]
@@ -144,7 +150,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.assertEqual(self.url_open("/blog?date_begin=2026-01-01", allow_redirects=False).status_code, 200)
 
     def test_a_nul_byte_in_the_path_or_a_parameter_is_a_400_not_a_500(self):
-        # [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+        # [@ANCHOR: hams_helpdesk:test_nul_byte_is_400]
         # Tests [@ANCHOR: hams_helpdesk:request_has_nul_byte]
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         for path in ("/scoped_app?app_id=%00", "/web/login?login=%00"):

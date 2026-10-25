@@ -135,6 +135,30 @@ Unhandled exceptions from pages, RPC/ORM calls and scheduled jobs become tickets
 category "Automatic: server exception", one per fingerprint (exception type, innermost addon frame,
 module, normalized route), counted on `hams_helpdesk.exception.fingerprint` and listed under
 Helpdesk > Server Exceptions. See `docs/stories/server_exception_tickets.md`.
+When the person was signed in, the ticket lists the member (name, callsign if any, email, computed live from their account;
+staff only) so the site team can write to them: a link to the account, never a copy (section 17 of that story). A minor's
+guardian is shown instead of the minor, through the `_contact_user` hook (`ham_communications_consent` in hams_com).
+
+### Browser JavaScript errors
+
+Uncaught JavaScript errors on website, portal and back-office pages are posted by
+`static/src/js/browser_error_reporter.js` to `POST /hams_helpdesk/browser_exception` and become "Browser"
+exception tickets through the same fingerprint pipeline. Not loaded by the relay-served console (a future
+opt-in privacy decision). The browser sends its session cookie; the server links the signed-in member's account (a logged-out visitor stays anonymous). What is sent and stored, the checks and the reasons for them (no nonce; a current
+asset bundle version instead): `docs/stories/server_exception_tickets.md`, section 16.
+
+Production follow-ups, configured on hams1 and Cloudflare, not in this module (edge limits are the first
+layer; the in-code Redis limit of 10 a minute and 60 an hour per visitor is the second):
+
+- Cloudflare: a rate-limiting rule on `http.request.uri.path eq "/hams_helpdesk/browser_exception"` and method POST, counted per
+  client IP, for example 20 requests per minute, action Block for 10 minutes.
+- `nginx/prod/hams-tunnel-origin.conf` (not edited here): inside the catch-all server, a
+  `limit_req_zone $http_cf_connecting_ip zone=hams_browser_exception:10m rate=10r/m;` (in the `http` context) and
+  a `location = /hams_helpdesk/browser_exception { client_max_body_size 16k; limit_req zone=hams_browser_exception burst=10 nodelay; limit_req_status 429; <the catch-all's proxy settings> }`.
+  The 16k cap matters: the application checks the declared size of a JSON body, but Odoo parses a form-encoded body
+  before the controller runs.
+- After deploying: `odoo -u hams_helpdesk` on hams1 (a new selection value, "Browser", and a new dependency on
+  `distributed_redis_cache`), then `systemctl restart odoo`; the asset bundles regenerate by themselves.
 
 ## Recent Improvements
 - Verified and linked all semantic anchors for traceability.
@@ -146,7 +170,9 @@ Helpdesk > Server Exceptions. See `docs/stories/server_exception_tickets.md`.
 
 The static rule (`ai_reader_rule.py`, run by `test_ai_reader_sites`) scans only the files git tracks
 (`[@ANCHOR: hams_helpdesk:ai_reader_tracked_files]`, `[@ANCHOR: hams_helpdesk:ai_reader_candidate_files]`), so a stray
-untracked directory (a leftover nested checkout) cannot fail it. Outside a git checkout it walks the directory instead.
+untracked directory (a leftover nested checkout) cannot fail it. `scan_tree(root)` is the whole-repository entry point: it
+runs the rule over every non-test Python file the scan picks and returns one line per ticket-like text read that skips the
+safe view, and the repository passes only when that list is empty [@ANCHOR: hams_helpdesk:ai_reader_sites_rule]. Outside a git checkout it walks the directory instead.
 Outgoing mail that fails to send, and failures processing an incoming bounce, are reported the same way
 (source "Outgoing / incoming mail"; counts and fixed labels only, never an address or content).
 Failures of external daemons (RabbitMQ consumers, sync and ingest programs) reach the same tickets (source

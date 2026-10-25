@@ -66,6 +66,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
         )
 
     def test_02_group_member_access(self):
+        # Tests [@ANCHOR: user_websites:COMM_group_create]
         # [@ANCHOR: test_group_site_creation]
 
         # [@ANCHOR: test_group_site_routing]
@@ -319,6 +320,7 @@ class TestLifecycleAndGroups(RealTransactionCase):
         )
 
     def test_08_group_inverse_relationships(self):
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_create]
         # [@ANCHOR: test_group_blog_post_creation]
 
         # Tests [@ANCHOR: UX_CREATE_BLOG_POST]

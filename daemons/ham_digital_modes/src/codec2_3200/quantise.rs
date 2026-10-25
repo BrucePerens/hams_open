@@ -86,9 +86,6 @@ pub fn encode_energy(e_linear: f32) -> u32 {
     quantize_linear(e_db, E_MIN_DB, E_MAX_DB, E_BITS)
 }
 
-/// See `encode_energy`'s own doc comment for why this calls
-/// `fixed_point::exp2_lut` instead of plain `powf`.
-// [@ANCHOR: decode_energy]
 /// Integer energy quantizer: `e_q23` is the linear frame energy in Q23.
 /// Same mapping as `encode_energy` (dB = 10 log10 e, `E_BITS` levels over
 /// `[E_MIN_DB, E_MAX_DB]`, round to nearest, clamp) but computed with the
@@ -112,6 +109,11 @@ pub fn encode_energy_q23(e_q23: i64) -> u32 {
 }
 
 #[cfg(feature = "std")]
+/// Inverse of `encode_energy`: the dB level of quantizer step `index`
+/// (`E_MIN_DB + index * (E_MAX_DB - E_MIN_DB) / 2^E_BITS`) converted back
+/// to linear energy. See `encode_energy`'s own doc comment for why this
+/// calls `fixed_point::exp2_lut` instead of plain `powf`.
+// [@ANCHOR: decode_energy]
 pub fn decode_energy(index: u32) -> f32 {
     let e_db = dequantize_linear(index, E_MIN_DB, E_MAX_DB, E_BITS);
     super::fixed_point::exp2_lut(e_db / 10.0 * std::f32::consts::LOG2_10)

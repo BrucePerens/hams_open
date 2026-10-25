@@ -251,7 +251,7 @@ class TestUserWebsitesUITours(RealTransactionCase):
         self.assertEqual(report.content_owner_id, self.user_test)
 
     def test_11_violation_report_from_edge_cacheable_page(self):
-        # Tests [@ANCHOR: COMM_edge_cache_csrf_refresh]
+        # Tests [@ANCHOR: edge_cache:COMM_edge_cache_csrf_refresh]
         """File a report from a page the server marks edge-cacheable (cloudflare module).
 
         Such a page reaches the browser without a session cookie, so the CSRF token in the report

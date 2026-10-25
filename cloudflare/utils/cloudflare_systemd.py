@@ -137,8 +137,7 @@ def _env_file_path(tunnel_key):
 
 def _write_secure_file(path, content, mandatory_prefix):
     """Writes `content` to `path` at mode 0600, atomically. Same mkstemp + fchmod + os.rename
-    idiom `daemon_key_manager`'s own `_write_secure_env_file` already uses (and
-    `hams_local_relay/src/lotw.rs`'s `master_key()` independently, in Rust) for the identical
+    idiom `daemon_key_manager`'s own `_write_secure_env_file` already uses for the identical
     reason: O_CREAT|O_TRUNC on an existing path can succeed and destroy the previous, possibly
     still-valid content even when the later permission-fixup fails, so this always writes a
     brand-new, correctly-permissioned temp file first and swaps it in atomically."""

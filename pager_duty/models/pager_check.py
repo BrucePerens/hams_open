@@ -76,6 +76,7 @@ class PagerCheck(models.Model):
             ("executable", "Sandboxed Arbitrary Executable"),
             ("smart", "SMART Disk Health"),
             ("file_absent", "File Must Not Exist (e.g. reboot-required)"),
+            ("freshness", "Data Freshness (newest record / last good run too old)"),
             ("memcached", "Memcached Server (Ping)"),
             ("ssh", "SSH Handshake"),
             ("systemd", "Systemd Service Status"),
@@ -132,6 +133,14 @@ class PagerCheck(models.Model):
         string="Startup Grace Period (sec)",
         default=0,
         help="Seconds to wait after daemon startup before reporting failures.",
+    )
+    max_age_seconds = fields.Integer(
+        string="Maximum Age (sec)",
+        default=0,
+        help="Freshness checks: the check fails when the newest record, or the last successful run, is older than this. "
+        "The target says where to look: redis-zset:<key> (newest score of a sorted set), redis-key:<key> (a stored epoch "
+        "or ISO time), file:<path> (modification time) or unit:<name>.service (end of the last successful run of a "
+        "timer-driven oneshot unit).",
     )
     failure_threshold = fields.Integer(
         string="Failures Before Reporting",
@@ -190,6 +199,7 @@ class PagerCheck(models.Model):
     _name_not_empty = models.Constraint("CHECK(LENGTH(TRIM(name)) > 0)", "The check name cannot be empty or just spaces.")
     _interval_positive = models.Constraint("CHECK(interval > 0)", "The polling interval must be strictly greater than zero.")
     _grace_period_non_negative = models.Constraint("CHECK(grace_period >= 0)", "The grace period cannot be negative.")
+    _max_age_non_negative = models.Constraint("CHECK(max_age_seconds >= 0)", "The maximum age cannot be negative.")
     _failure_threshold_positive = models.Constraint(
         "CHECK(failure_threshold >= 1)", "A check must be allowed to fail at least once before it is reported."
     )
@@ -210,23 +220,68 @@ class PagerCheck(models.Model):
         )
         return check.id if check else False
 
+    # The pager.check fields action_push_to_json() writes into the daemon's config file (plus `active`, which decides whether a
+    # check is exported at all). The daemon's own runtime writes (status, last_run, last_heartbeat) are not here: a heartbeat write
+    # must not rewrite the file.
+    _CONFIG_EXPORT_FIELDS = frozenset(
+        {
+            "name", "website_id", "check_type", "target", "port", "payload_send", "payload_send_hex", "payload_expect",
+            "dbname", "dbuser", "dbpass", "query", "script", "rpc_method", "rpc_params", "regex", "critical_threshold",
+            "warning_threshold", "snmp_community", "snmp_oid", "partition", "ignored_services", "interval",
+            "grace_period", "max_age_seconds", "failure_threshold", "active", "parent_check_id", "maintenance_start", "maintenance_end",
+            "code_payload", "executable_path", "executable_args", "sandbox_downloads", "sandbox_network_access",
+            "auto_remediate_script", "comment", "heartbeat_uuid",
+        }
+    )
+
+    def _schedule_config_export(self):
+        """Rewrite the daemon's pager_config.json once, after the transaction that changed the checks commits.
+
+        Until now the file was only written by the "Push to Daemon" button, so a check deleted any other way (a migration, a module
+        upgrade, unlink from a shell) stayed in the file and the monitor kept polling it, and paging for it, indefinitely (the
+        retired QRZ Scraper check, incident 39). Deferred to post-commit so a rolled-back change never reaches the file, and
+        coalesced so a bulk change writes it once. A failed export is logged, never raised: the change itself has committed."""
+        callbacks = self.env.cr.postcommit
+        if callbacks.data.get("pager_check_config_export"):
+            return
+        callbacks.data["pager_check_config_export"] = True
+        registry = self.env.registry
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+
+        def export_config():
+            try:
+                with registry.cursor() as cr:
+                    env = api.Environment(cr, svc_uid, {})
+                    result = env["pager.check"].action_push_to_json()
+                    if result["params"]["type"] == "danger":
+                        _logger.warning("Automatic pager config export failed: %s", result["params"]["message"])
+            except (OSError, UserError, AccessError):
+                _logger.exception("Automatic pager config export failed; the daemon keeps its previous configuration")
+
+        callbacks.add(export_config)
+
     @api.model_create_multi
     # [@ANCHOR: pager_duty:pager_check_create]
     def create(self, vals_list):
         records = super(PagerCheck, self).create(vals_list)
         notify_model_invalidation(self.env, self._name)
+        self._schedule_config_export()
         return records
 
     # [@ANCHOR: pager_duty:pager_check_write]
     def write(self, vals):
         res = super(PagerCheck, self).write(vals)
         notify_model_invalidation(self.env, self._name)
+        if self._CONFIG_EXPORT_FIELDS.intersection(vals):
+            self._schedule_config_export()
         return res
 
     # [@ANCHOR: pager_duty:pager_check_unlink]
     def unlink(self):
         notify_model_invalidation(self.env, self._name)
-        return super(PagerCheck, self).unlink()
+        res = super(PagerCheck, self).unlink()
+        self._schedule_config_export()
+        return res
 
     @api.model
     # [@ANCHOR: pager_duty:pager_check_valid_field_parameter]
@@ -429,6 +484,7 @@ class PagerCheck(models.Model):
                     "ignored_services": check.get("ignored_services", ""),
                     "interval": check.get("interval", 60),
                     "grace_period": check.get("grace", 0),
+                    "max_age_seconds": check.get("max_age", 0),
                     "failure_threshold": check.get("threshold", 1),
                     "auto_remediate_script": check.get("remediate", ""),
                     "comment": check.get("comment", ""),
@@ -517,6 +573,8 @@ class PagerCheck(models.Model):
                 check_dict["ignored_services"] = check.ignored_services
             if check.grace_period:
                 check_dict["grace"] = check.grace_period
+            if check.max_age_seconds:
+                check_dict["max_age"] = check.max_age_seconds
             if check.failure_threshold > 1:
                 check_dict["threshold"] = check.failure_threshold
             if check.parent_check_id:

@@ -33,10 +33,10 @@ def _harden_cookie_header(cookie_header, is_https):
     string logic, split out of _post_dispatch so it's directly unit-testable
     without a real HTTP request context.
 
-    SameSite=Lax rather than Strict: this site's own LoTW passwordless-login
-    and invite-redemption flows both land back on hams.com via a cross-site
-    redirect from a third party (LoTW's own auth gateway) -- Strict would
-    drop the session cookie on exactly that first redirected request, the
+    SameSite=Lax rather than Strict: this site's invite-redemption and
+    emailed-link flows land on hams.com via a top-level navigation from a
+    third-party site (a webmail page) -- Strict would drop the session
+    cookie on exactly that first cross-site request, the
     same well-known SameSite=Strict-breaks-cross-site-auth-redirects failure
     this codebase's own finding already flagged to check for.
     """

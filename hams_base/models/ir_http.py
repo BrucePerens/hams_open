@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import urllib.parse
+
 from odoo import api, models, tools
 from odoo.http import request
 from odoo.service import security
@@ -78,3 +80,34 @@ class IrHttp(models.AbstractModel):
             if not canonical_domain or not isinstance(canonical_domain, str):
                 raise
             return tools.urls.urljoin(canonical_domain, "/")
+
+    @classmethod
+    def _url_for(cls, url_from, lang_code=None):
+        # [@ANCHOR: hams_base:url_for_survives_dot_segments]
+        # Verified by [@ANCHOR: hams_base:test_url_for_survives_dot_segments]
+        """The site root for a local URL that still holds a dot segment after Odoo has tidied it.
+
+        ``website.seo.metadata._default_website_meta`` (the ``og:url`` of every page that has a
+        ``main_object``, including the 404 page) does ``url_join(domain, _url_for(request.httprequest.path))``.
+        ``url_join`` raises ``ValueError("Dot segments are not allowed")``, also for a segment that only becomes
+        ``..`` after percent-decoding. ``_url_for`` resolves a plain ``/a/../b`` itself but leaves a double-encoded
+        ``/@fs/%2e%2e/x`` (the request path is decoded once, so ``%252e%252e`` arrives as ``%2e%2e``) alone, so a
+        scanner's probe made the 404 page, and then the generic error page, raise: a 500 and an exception ticket
+        (ticket 74, ``/@fs/.../self/environ``, 2026-10-16 to 2026-10-21). ``_url_localized`` (above) covers the
+        canonical ``<link>``; this covers the OpenGraph URL. A local URL with a dot segment has no honest value,
+        so it becomes the site root; absolute URLs are left alone.
+        """
+        url = super()._url_for(url_from, lang_code=lang_code)
+        if isinstance(url, str) and url.startswith("/") and not url.startswith("//") and _has_dot_segment(urllib.parse.urlsplit(url).path):
+            return "/"
+        return url
+
+
+def _has_dot_segment(path):
+    """True for a path ``tools.urls.urljoin`` would refuse: a ``.`` or ``..`` segment, also percent-encoded, or
+    bytes that are not UTF-8."""
+    try:
+        decoded = urllib.parse.unquote(path, errors="strict")
+    except UnicodeDecodeError:
+        return True
+    return any(segment in (".", "..") for segment in decoded.split("/"))

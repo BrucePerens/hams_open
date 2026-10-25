@@ -43,18 +43,17 @@ pub fn make_analysis_window() -> [f32; M_PITCH] {
 #[cfg(test)]
 const WINDOW_FRAC_BITS: u32 = 30;
 
-/// `FIXED_POINT_ENCODER_IMPLEMENTATION_PUNCH_LIST.md`'s window.rs
-/// stage: a fixed-point candidate for `make_analysis_window`, quantized
-/// from the same construction (the Hann-window `cos()` computation
-/// itself stays `f32` -- it runs once per `Encoder` lifetime, not
-/// per-frame, so its own float cost is real but negligible; what
-/// matters for the eventual per-frame windowing multiply to go
-/// fixed-point is this function's *output* type). **Not yet wired into
-/// `Encoder`** -- the per-frame consumer (`windowed[i] = s * win` in
-/// `mod.rs`) still expects `f32`, and won't until `autocorrelate`'s own
-/// boundary redesign (the punch list's real gate) is done. Exists now,
-/// validated against the real `f32` construction, so it's ready when
-/// that boundary work lands.
+/// The analysis window in Q30 (`i32`, no integer bits), read from the
+/// committed table `tables::WINDOW_ANALYSIS_Q30` -- a fixed-point copy of
+/// `make_analysis_window`'s result, quantized from the same construction
+/// (the Hann-window `cos()` evaluation is done offline, so no float runs
+/// at encode time). `EncoderFixed::encode` and the 1600bps
+/// `analyse_energy_and_ak_fixed` multiply their samples by that table
+/// directly (`sn[i] * WINDOW_ANALYSIS_Q30[i] >> 7`, giving the Q8.23 input
+/// `autocorrelate_fixed` expects); this accessor returns the same table by
+/// value and, inside this crate, is only called from test code (the test
+/// that validates it against the float window, and the 1600bps
+/// float-boundary reference encoder in `codec2_1600`'s tests).
 // [@ANCHOR: make_analysis_window_fixed]
 pub fn make_analysis_window_fixed() -> [i32; M_PITCH] {
     super::tables::WINDOW_ANALYSIS_Q30

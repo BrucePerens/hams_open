@@ -12,6 +12,7 @@ from odoo.exceptions import ValidationError
 from odoo.modules.module import load_script
 from odoo.tests import tagged
 
+from odoo.addons.user_websites.models import site_slug
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 ARCH = (
@@ -67,6 +68,9 @@ class TestSiteSlugOneSite(HamsHttpCase):
         return self.url_open(path, data=data, method="POST", allow_redirects=False)
 
     def test_01_rename_moves_the_pages_and_the_old_address_redirects(self):
+        # Tests [@ANCHOR: user_websites:fn_main_legacy_slug_redirect]
+        # Tests [@ANCHOR: user_websites:site_slug_module]
+        # Tests [@ANCHOR: user_websites:fn_legacy_slug_target]
         # Tests [@ANCHOR: user_websites:fn_rehome_site]
         self._rename("k6zz")
         self.home.invalidate_recordset()
@@ -107,6 +111,8 @@ class TestSiteSlugOneSite(HamsHttpCase):
         self.assertTrue(self.home.website_published)
 
     def test_04_owner_urls_under_the_retired_slug_redirect(self):
+        # Tests [@ANCHOR: user_websites:fn_answers_site_response]
+        # Tests [@ANCHOR: user_websites:fn_legacy_slug_target]
         # Tests [@ANCHOR: user_websites:owner_redirect_legacy_slug]
         self._rename("k6zz")
         self.authenticate("onesiteowner", "onesiteowner")
@@ -169,10 +175,14 @@ class TestSiteSlugOneSite(HamsHttpCase):
         )
 
     def test_07_open_source_default_slug_follows_the_name(self):
+        # Tests [@ANCHOR: user_websites:fn_slug_policy]
+        # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]
         user = self.env["res.users"].create({"name": "Default Policy (K6DD)", "login": "defpol", "email": "d@example.com"})
         self.assertEqual(user.website_slug, "default-policy-k6dd")
 
     def test_08_callsign_policy_one_slug_from_the_callsign(self):
+        # Tests [@ANCHOR: user_websites:fn_slug_policy]
+        # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]
         self._policy("callsign")
         self._callsign_identity()
         user = self.env["res.users"].create(
@@ -198,6 +208,9 @@ class TestSiteSlugOneSite(HamsHttpCase):
         self.assertTrue(self.env["website.rewrite"].search([("url_from", "=", "/k6pp"), ("url_to", "=", "/w6pp")]))
 
     def test_09_callsign_policy_no_callsign_no_site_and_collisions_fail(self):
+        # Tests [@ANCHOR: user_websites:fn_site_slug_current_slug]
+        # Tests [@ANCHOR: user_websites:fn_assert_slug_free]
+        # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]
         self._policy("callsign")
         self._callsign_identity()
         user = self.env["res.users"].create({"name": "No Callsign Yet", "login": "nocall", "email": "n@example.com"})
@@ -211,3 +224,22 @@ class TestSiteSlugOneSite(HamsHttpCase):
                 {"name": "Dup", "login": "dupcall", "email": "du@example.com", "function": "K6NN"}
             )
             self.env.flush_all()
+
+    def test_10_a_service_account_is_recognised_and_never_given_a_callsign_slug(self):
+        # Tests [@ANCHOR: user_websites:fn_site_slug_is_service_account]
+        # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]
+        service = self.env.ref("user_websites.user_websites_service_account")
+        self.assertTrue(site_slug.is_service_account(self.env, service))
+        self.assertFalse(site_slug.is_service_account(self.env, self.owner))
+        self.assertFalse(site_slug.is_service_account(self.env, None))
+        self.assertFalse(site_slug.is_service_account(self.env, self.env["res.users"]), "an empty record is not one")
+        self._policy("callsign")
+        self._callsign_identity()
+        # A service account's identity is left alone; an ordinary member's becomes the slug.
+        service_vals = {"function": "K6SV", "is_service_account": True}
+        self.assertFalse(self.env["res.users"]._apply_slug_policy(None, service_vals))
+        self.assertNotIn("website_slug", service_vals)
+        member_vals = {"function": "K6SV"}
+        self.assertFalse(self.env["res.users"]._apply_slug_policy(None, member_vals))
+        self.assertEqual(member_vals["website_slug"], "k6sv")
+

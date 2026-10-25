@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import copy
 import json
 import os
+import threading
 import time
 import uuid
 
@@ -8,6 +10,7 @@ import pika
 
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.hams_rabbitmq.models import rabbitmq_pool
 from odoo.addons.hams_rabbitmq.models.rabbitmq_pool import IDLE_RECYCLE_SECONDS, resolve_rabbitmq_credentials
 
 
@@ -24,6 +27,14 @@ class TestRabbitMQPool(RealTransactionCase):
     mocking pika, so a regression in that config-resolution chain would
     show up here as a real connection/publish failure, not a passing mock.
     """
+
+    def setUp(self):
+        super().setUp()
+        # The keepalive thread drives the pooled BlockingConnection under the pool lock, while these tests use the
+        # pooled channel directly from the test thread (BlockingConnection is not thread-safe). A keepalive period
+        # longer than any test keeps the thread from servicing the connection under them; the keepalive tests
+        # (11 to 13) set their own short period.
+        self.safe_patch_object(rabbitmq_pool, "KEEPALIVE_SECONDS", 3600)
 
     def test_01_get_channel_connects_with_real_config(self):
         # [@ANCHOR: COMM_test_01_get_channel_connects_with_real_config]
@@ -328,6 +339,162 @@ class TestRabbitMQPool(RealTransactionCase):
         self.assertTrue(inherited.is_open, "and it is not closed: its owner is still using it")
         own.close()
         inherited.close()
+
+    def _fresh_pool_with_short_heartbeat(self, heartbeat_seconds, keepalive_seconds):
+        # The pool's own code path, with the broker heartbeat timeout and the keepalive period shortened so the test
+        # does not wait minutes. Starts from no pooled connection.
+        pool = self.env["hams_rabbitmq.pool"]
+        pool_class = type(pool)
+        pool_class._shutdown()
+        self.addCleanup(pool_class._shutdown)
+        self.safe_patch_object(rabbitmq_pool, "HEARTBEAT_SECONDS", heartbeat_seconds)
+        self.safe_patch_object(rabbitmq_pool, "KEEPALIVE_SECONDS", keepalive_seconds)
+        channel = pool._get_channel()
+        self.assertIsNotNone(channel, "this test needs the real local RabbitMQ")
+        return pool, pool_class, channel
+
+    def test_11_an_idle_connection_survives_several_heartbeat_timeouts(self):
+        # [@ANCHOR: COMM_test_11_an_idle_connection_survives_several_heartbeat_timeouts]
+        """
+        Production, 2026-10-15..19: 262 pooled connections idle between publishes were reset by the broker
+        ("missed heartbeats from client"), because pika answers heartbeats only inside a pika call. With a 4 s
+        broker heartbeat timeout the broker gives up on a silent client after about 8 s. The pooled connection
+        is left idle for 14 s (several timeouts): it is still open, still publishes, and nothing is logged. A
+        plain BlockingConnection with the same parameters, left alone the same time, is closed by the broker,
+        which proves the wait is long enough to matter.
+        """
+        # Tests [@ANCHOR: rabbitmq_keepalive_thread]
+        # Tests [@ANCHOR: rabbitmq_keepalive_loop]
+        # Tests [@ANCHOR: rabbitmq_keepalive_tick]
+        pool, pool_class, _channel = self._fresh_pool_with_short_heartbeat(4, 1)
+        pooled = pool_class._connection
+        queue_name = f"hams_rabbitmq_test_{uuid.uuid4().hex[:12]}"
+        # Queue setup and the final receive use their own connection: the pooled one belongs to the pool and its
+        # keepalive thread (BlockingConnection is not thread-safe).
+        side_params = copy.copy(pooled._impl.params)
+        side_params.heartbeat = 0  # no heartbeats: this connection is left unserviced for 14 s too
+        side = pika.BlockingConnection(side_params)
+        self.addCleanup(lambda: side.is_open and side.close())
+        side_channel = side.channel()
+        side_channel.queue_declare(queue=queue_name, durable=False, auto_delete=True)
+        control = pika.BlockingConnection(pooled._impl.params)
+        self.addCleanup(lambda: control.is_open and control.close())
+
+        with self.assertNoLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING"), \
+                self.assertNoLogs("pika.adapters.blocking_connection", "ERROR"), \
+                self.assertNoLogs("pika.adapters.base_connection", "ERROR"):
+            time.sleep(14)  # audit-ignore-sleep
+
+        self.assertTrue(pooled.is_open, "the keepalive must hold the idle pooled connection open")
+        self.assertIs(pool_class._connection, pooled, "and it was never replaced")
+        with self.assertRaises(pika.exceptions.AMQPError, msg="control: an unserviced connection is reset"):
+            control.process_data_events(time_limit=0)
+
+        results = []
+        payload = {"marker": queue_name, "after_idle": True}
+        self.assertTrue(pool.publish("", queue_name, payload, on_result=results.append))
+        with self.assertNoLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING"):
+            self.env.cr.commit()
+        self.assertEqual(results, [True])
+        self.assertIs(pool_class._connection, pooled, "the publish used the same connection, no retry")
+        self.assertEqual(self._receive(side_channel, queue_name), payload)
+
+    def test_12_keepalive_thread_is_per_process_and_stops_cleanly(self):
+        # [@ANCHOR: COMM_test_12_keepalive_thread_is_per_process_and_stops_cleanly]
+        """
+        One daemon thread per pool, started with the connection and ending with it: _shutdown() joins the thread
+        and closes the connection cleanly (twice is harmless), a connection the pool no longer has ends the thread
+        by itself within a tick (no work, no leftover thread), and a connection found dead is dropped quietly.
+        """
+        # Tests [@ANCHOR: rabbitmq_keepalive_thread]
+        # Tests [@ANCHOR: rabbitmq_pool_shutdown]
+        # Tests [@ANCHOR: rabbitmq_keepalive_tick]
+        # Tests [@ANCHOR: rabbitmq_forget_keepalive]
+        # Tests [@ANCHOR: rabbitmq_shutdown_all]
+        pool, pool_class, _channel = self._fresh_pool_with_short_heartbeat(4, 0.5)
+
+        def keepalive_threads():
+            return [t for t in threading.enumerate() if t.name == "hams_rabbitmq_keepalive" and t.is_alive()]
+
+        self.assertEqual(len(keepalive_threads()), 1)
+        self.assertTrue(keepalive_threads()[0].daemon)
+        pool._get_channel()
+        self.assertEqual(len(keepalive_threads()), 1, "reusing the connection starts no second thread")
+
+        connection = pool_class._connection
+        pool_class._shutdown()
+        self.assertTrue(connection.is_closed, "shutdown closes the connection cleanly")
+        self.assertIsNone(pool_class._connection)
+        self.assertEqual(keepalive_threads(), [], "and joins the thread")
+        pool_class._shutdown()
+
+        pool._get_channel()
+        self.assertEqual(len(keepalive_threads()), 1, "the pool starts afresh after a shutdown")
+        thread = keepalive_threads()[0]
+        pool._discard_connection(pool_class._channel)
+        thread.join(timeout=3)
+        self.assertFalse(thread.is_alive(), "with no connection the thread ends by itself")
+
+        pool._get_channel()
+        thread = keepalive_threads()[0]
+        with rabbitmq_pool._POOL_LOCK:
+            pool_class._connection.close()
+        with self.assertNoLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING"), \
+                self.assertNoLogs("pika.adapters.blocking_connection", "ERROR"):
+            thread.join(timeout=3)
+        self.assertFalse(thread.is_alive(), "a dead connection ends the thread")
+        self.assertIsNone(pool_class._connection, "and is dropped, quietly")
+
+    def test_13_fork_neither_inherits_the_lock_locked_nor_touches_the_parents_connection(self):
+        # [@ANCHOR: COMM_test_13_fork_neither_inherits_the_lock_locked_nor_touches_the_parents_connection]
+        """
+        An Odoo worker is forked from a process that may hold the pool lock (a keepalive tick or a publish in
+        another thread) and that has a keepalive thread the child does not get. fork() waits for the lock, so the
+        child gets it free; the child has no keepalive entries, a keepalive tick in the child leaves the
+        parent's connection alone, and the parent's connection is still open and serviced afterwards.
+        """
+        # Tests [@ANCHOR: rabbitmq_keepalive_thread]
+        # Tests [@ANCHOR: rabbitmq_reset_after_fork]
+        pool, pool_class, _channel = self._fresh_pool_with_short_heartbeat(4, 0.5)
+        parent_connection = pool_class._connection
+
+        holder_has_lock = threading.Event()
+
+        def hold_lock():
+            with rabbitmq_pool._POOL_LOCK:
+                holder_has_lock.set()
+                time.sleep(1)  # audit-ignore-sleep
+
+        holder = threading.Thread(target=hold_lock, daemon=True)  # burn-ignore-test-daemon-thread: joined below, ends after 1 s
+        holder.start()
+        self.assertTrue(holder_has_lock.wait(5))
+
+        read_end, write_end = os.pipe()
+        child_pid = os.fork()
+        if child_pid == 0:  # pragma: no cover - runs in the child only
+            exit_code = 1
+            try:
+                acquired = rabbitmq_pool._POOL_LOCK.acquire(timeout=2)
+                if acquired:
+                    rabbitmq_pool._POOL_LOCK.release()
+                no_threads = rabbitmq_pool._keepalive_threads == {}
+                tick_continues = pool_class._keepalive_tick(threading.Event())
+                untouched = pool_class._connection is parent_connection
+                exit_code = 0 if (acquired and no_threads and not tick_continues and untouched) else 2
+            finally:
+                os.write(write_end, str(exit_code).encode())
+                os._exit(exit_code)
+        os.close(write_end)
+        holder.join()
+        _pid, status = os.waitpid(child_pid, 0)
+        child_report = os.read(read_end, 8)
+        os.close(read_end)
+        self.assertEqual((os.WIFEXITED(status), os.WEXITSTATUS(status)), (True, 0),
+                         f"the child saw a locked pool lock, a stale thread or the parent's connection "
+                         f"({child_report!r})")
+        time.sleep(3)  # audit-ignore-sleep
+        self.assertTrue(parent_connection.is_open, "the parent's connection was not closed by the child")
+        self.assertIs(pool_class._connection, parent_connection)
 
     def _receive(self, channel, queue_name):
         deadline = time.time() + 15.0

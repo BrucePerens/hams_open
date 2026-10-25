@@ -146,6 +146,7 @@ class IrHttp(models.AbstractModel):
             _logger.info("Request website missing (not a website-routed request): %s", e)
             website = False
         website_id = website.id if website else False
+        # Verified by [@ANCHOR: COMM_test_04_website_cache_tag_localproxy]
 
         if website_id:
             existing_tags = response.headers.get("Cache-Tag", "")
@@ -159,7 +160,7 @@ class IrHttp(models.AbstractModel):
     @classmethod
     def _cloudflare_edge_cacheable(cls, response):
         # [@ANCHOR: COMM_cloudflare_edge_cacheable]
-        # Tests [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
+        # Verified by [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
         """Whether this opted-in, already-dispatched response may be cached at Cloudflare's edge.
 
         Every one of these must hold: a GET/HEAD; status 200/304; the public user; the request
@@ -183,7 +184,7 @@ class IrHttp(models.AbstractModel):
     @classmethod
     def _cloudflare_strip_redundant_cookies(cls, response):
         # [@ANCHOR: COMM_cloudflare_strip_redundant_cookies]
-        # Tests [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
+        # Verified by [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
         """Drop the two cookies Odoo sets on a first anonymous visit that carry nothing for it.
 
         - `session_id`, when the request brought none and the session was never persisted: Odoo

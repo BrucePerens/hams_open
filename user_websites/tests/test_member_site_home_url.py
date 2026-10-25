@@ -54,6 +54,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         self.env.flush_all()
 
     def test_01_home_served_at_slug(self):
+        # Tests [@ANCHOR: user_websites:fn_ir_http_get_converters]
         # Tests [@ANCHOR: user_websites:COMM_user_home_fallback]
         response = self.url_open("/homeurlowner", allow_redirects=False)
         self.assertEqual(response.status_code, 200)
@@ -126,8 +127,8 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
     @staticmethod
     def _is_open_source_route(rule, open_source_root):
         """False only for a route that belongs to an addon outside this repository's addons directory."""
-        endpoint = getattr(rule.endpoint, "method", rule.endpoint)
-        parts = getattr(endpoint, "__module__", "").split(".")
+        endpoint = getattr(rule.endpoint, "method", rule.endpoint)  # burn-ignore-introspection: werkzeug route endpoints, Odoo's EndPoint wrapper or a plain callable
+        parts = getattr(endpoint, "__module__", "").split(".")  # burn-ignore-introspection: a callable of any kind, not a model field
         if parts[:2] != ["odoo", "addons"] or len(parts) < 3:
             return True
         addon_path = get_module_path(parts[2])
@@ -157,7 +158,6 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         self.assertEqual(missing, [], "Add these first path segments to edge_routing.utils.RESERVED_SLUGS")
 
     def test_09b_routed_first_segments_are_reserved_without_the_fixed_list(self):
-        # [@ANCHOR: test_routed_first_segments_are_reserved]
         # Tests [@ANCHOR: edge_routing:routed_first_segments]
         # Tests [@ANCHOR: edge_routing:reserved_slug_words]
         # A route added after the fixed list was written still cannot be shadowed: with the fixed list
@@ -207,6 +207,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         self.assertEqual(self.home_page.url, "/homeurlowner")
 
     def test_11_language_prefixed_paths_still_work(self):
+        # Tests [@ANCHOR: user_websites:fn_site_slug_converter_to_python]
         # [@ANCHOR: test_language_prefixed_paths_still_work]
         # Tests [@ANCHOR: user_websites:site_slug_converter]
         # The /<slug> routes must not shadow Odoo's /<lang>/... handling (found 2026-10-13: /en_US/
@@ -222,6 +223,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         self.assertEqual(self.url_open("/homeurlowner").status_code, 200)
 
     def test_12_second_language_prefix_is_not_a_site(self):
+        # Tests [@ANCHOR: user_websites:fn_site_slug_converter_to_python]
         # Tests [@ANCHOR: user_websites:site_slug_converter]
         french = self.env["res.lang"].with_context(active_test=False).search([("code", "=", "fr_FR")])
         french.active = True
@@ -234,7 +236,6 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
             self.assertNotEqual(response.status_code, 404, path)
 
     def test_13_language_codes_cannot_be_slugs(self):
-        # [@ANCHOR: test_language_codes_are_not_slugs]
         # Tests [@ANCHOR: edge_routing:language_slugs]
         for word in ("en",):
             with self.assertRaises(ValidationError), mute_logger("odoo.sql_db"):

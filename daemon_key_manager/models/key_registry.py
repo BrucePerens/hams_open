@@ -48,6 +48,7 @@ OS_GROUP_RE = re.compile(r"^hamsd_[a-z0-9_]{1,24}$")
 def key_directory_for_group(group):
     """The only directory a key file for the OS group `group` (hamsd_<family>) may live in."""
     # [@ANCHOR: COMM_key_directory_for_group]
+    # Verified by [@ANCHOR: COMM_test_key_directory_for_group_names_the_family_directory]
     return os.path.join(KEY_ROOT_DIR, group[len(OS_GROUP_PREFIX):])
 
 
@@ -174,6 +175,7 @@ class DaemonKeyRegistry(models.Model):
                 )
                 raise UserError(msg % record.os_group)
             # [@ANCHOR: COMM_security_constraints_os_group_directory]
+            # Verified by [@ANCHOR: COMM_test_os_group_registry_directory_constraint]
             if record.os_group and record.env_file_path:
                 expected = key_directory_for_group(record.os_group)
                 actual = os.path.dirname(os.path.normpath(record.env_file_path))
@@ -896,6 +898,7 @@ class DaemonKeyRegistry(models.Model):
             gid = self._resolve_os_group(group) if group else None
             if gid is not None:
                 # [@ANCHOR: COMM_write_secure_env_file_group_directory]
+                # Verified by [@ANCHOR: COMM_test_family_key_directory]
                 # A group file never goes in the shared key root or another family's directory.
                 expected = key_directory_for_group(group)
                 if directory != expected:
@@ -966,11 +969,7 @@ class DaemonKeyRegistry(models.Model):
             # being replaced -- so this now correctly and atomically
             # secures the file on every call regardless of what existed
             # there before, rather than merely detecting and refusing a
-            # bad prior state. Same pattern hams_local_relay/src/lotw.rs's
-            # own `master_key()` already uses in this codebase (a
-            # NamedTempFile + persist_noclobber) for the identical
-            # "never corrupt/expose the real target on a partial
-            # failure" reasoning.
+            # bad prior state.
             fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".daemon_key_")
             try:
                 try:

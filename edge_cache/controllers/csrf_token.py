@@ -24,7 +24,7 @@ class CloudflareCsrfToken(http.Controller):
     )
     def csrf_token(self):
         # [@ANCHOR: COMM_cloudflare_csrf_token_route]
-        # Tests [@ANCHOR: COMM_test_edge_cached_form_posts_after_token_fetch]
+        # Verified by [@ANCHOR: COMM_test_edge_cached_form_posts_after_token_fetch]
         # time_limit=None: the same lifetime as the token the page itself carries
         # (request.csrf_token(None) in the layout's <meta name="csrf_token">).
         return request.make_json_response(

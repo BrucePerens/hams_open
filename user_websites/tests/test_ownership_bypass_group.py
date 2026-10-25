@@ -60,6 +60,7 @@ class TestOwnershipBypassGroup(RealTransactionCase):
         )
 
     # [@ANCHOR: test_ownership_bypass_group_is_capability_only]
+    # Tests [@ANCHOR: user_websites:ownership_bypass_group]
     def test_bypass_group_carries_no_grants_of_its_own(self):
         group = self.env.ref(BYPASS)
         acl = self.env["ir.model.access"].search([("group_id", "=", group.id)])
@@ -69,6 +70,7 @@ class TestOwnershipBypassGroup(RealTransactionCase):
         self.assertFalse(group.implied_ids, group.implied_ids.mapped("name"))
 
     # [@ANCHOR: test_ownership_bypass_group_implied_by_provisioning]
+    # Tests [@ANCHOR: user_websites:ownership_bypass_group]
     def test_provisioning_group_and_account_still_carry_the_bypass(self):
         self.assertIn(self.env.ref(BYPASS), self.env.ref(PROVISIONING).all_implied_ids)
         provisioner = self.env.ref("user_websites.user_websites_service_account")

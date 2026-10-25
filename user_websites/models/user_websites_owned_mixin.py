@@ -88,6 +88,8 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         # # Verified by [@ANCHOR: test_mixin_ownership_validation]
 
         # # Verified by [@ANCHOR: test_api_armor_mandatory_assignment]
+
+        # # Verified by [@ANCHOR: test_ownership_bypass_group_gates_mixin_create]
         """Validates that the current user is legally allowed to assign the provided ownership, enforces mandatory ownership, and prevents dual ownership."""
 
         user_id = self.env.user.id
@@ -189,6 +191,8 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         # # Verified by [@ANCHOR: test_mixin_ownership_validation]
 
         # # Verified by [@ANCHOR: test_api_armor_mutual_exclusion]
+
+        # # Verified by [@ANCHOR: test_ownership_bypass_group_gates_mixin_write]
         """Prevents malicious actors from spoofing or transferring ownership after creation, and prevents admins from creating dual-owned corrupted states."""
         # Same capability-only group as _check_proxy_ownership_create() above.
         if (

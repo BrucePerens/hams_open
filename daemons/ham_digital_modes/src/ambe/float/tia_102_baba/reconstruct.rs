@@ -98,7 +98,7 @@ pub fn inverse_block_dct(dct_coeffs: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-/// Reconstructs every higher-order DCT coefficient `C_i,k` (`2 <= i <= 6`, `2 <= k <= J_i`) from the
+/// Reconstructs every higher-order DCT coefficient `C_i,k` (`1 <= i <= 6`, `2 <= k <= J_i`) from the
 /// quantizer values `b_hat_8..b_hat_{L+1}` (Eq. 71-72), in the same flat, 0-bit-entries-already-
 /// skipped order [`super::quantize::quantize_higher_order_coefficients`] produces. Each block's own
 /// `k=1` slot (the DC term, `C_i,1 = R_hat_i` per Eq. 67) is left at `0.0` here -- filled in by

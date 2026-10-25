@@ -3,6 +3,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
     <!-- Support: /my/tickets (the member's help-desk tickets, "New Ticket" on it). [@ANCHOR: hams_helpdesk:member_menu_item]
+         Verified by [@ANCHOR: test_hams_helpdesk_support_menu_item]
          Signed-in members only: website.menu's record rule hides an item with group_ids from everyone else, in the
          top bar and the mobile menu. ham_init puts it under Learn, next to Help (HAMS_MENU_GROUPS), and its test
          ham_init/tests/test_member_menu_items.py checks it. -->

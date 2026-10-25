@@ -21,3 +21,8 @@ The machine learning library Transformers.js is hosted in the `external` module 
 
 The vendored WASM FT8 decode/encode modules are hosted in the `external` module so a browser can decode/encode real FT8 signals client-side without a network round-trip to any daemon.
 - [@ANCHOR: external:HTTP_REACHABLE_FT8JS]
+
+## SIP.js
+The browser SIP stack SIP.js 0.21.2 (MIT licence, ADR 0101's browser-direct AllStar client) is hosted in the `external` module as plain ES modules under `static/src/node_modules/sipjs/`, so a browser can register with and call an AllStar node itself with no hams.com server in the signalling or audio path. The files are the npm tarball's own, unmodified, and `sipjs/SHA256SUMS` records the SHA-256 of each one. The directory is named `sipjs`, not `sip.js`, because Odoo's asset pre-generation treats any path ending in `.js` as a file. The test fetches the library entry point through the web server, then fetches every listed file and compares its digest with the recorded one, so a damaged or tampered copy fails.
+- [@ANCHOR: external:HTTP_REACHABLE_SIPJS]
+

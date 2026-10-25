@@ -25,6 +25,7 @@ class TestIncidentCreatorPrivilege(RealTransactionCase):
         self.group = self.env.ref("pager_duty.group_pager_incident_creator")
 
     # [@ANCHOR: test_incident_creator_holds_only_its_own_group]
+    # Tests [@ANCHOR: pager_duty:incident_creator_group]
     def test_creator_holds_only_its_own_pager_group(self):
         self.assertTrue(self.creator.has_group("pager_duty.group_pager_incident_creator"))
         self.assertFalse(self.creator.has_group("pager_duty.group_pager_service"))
@@ -32,6 +33,7 @@ class TestIncidentCreatorPrivilege(RealTransactionCase):
         self.assertFalse(self.creator.has_group("pager_duty.group_pager_mcp_triage_service"))
 
     # [@ANCHOR: test_incident_creator_group_grant_is_exactly_pager_incident]
+    # Tests [@ANCHOR: pager_duty:incident_creator_group]
     def test_creator_group_grants_exactly_pager_incident_rwc(self):
         acl = self.env["ir.model.access"].search([("group_id", "=", self.group.id)])
         self.assertEqual(acl.mapped("model_id.model"), ["pager.incident"])
@@ -43,12 +45,13 @@ class TestIncidentCreatorPrivilege(RealTransactionCase):
         self.assertEqual(rules.mapped("model_id.model"), ["pager.incident"])
 
     # [@ANCHOR: test_incident_creator_cannot_reach_pager_check]
+    # Tests [@ANCHOR: pager_duty:incident_creator_group]
     # Tests [@ANCHOR: report_incident_rate_limit]
     def test_creator_can_create_incident_but_cannot_touch_checks_or_unlink(self):
         Incident = self.env["pager.incident"].with_user(self.creator)
         incident = Incident.create(
             {
-                "name": "INC-AUTO",
+                "name": "privilege-audit-test",
                 "source": "privilege-audit-test",
                 "severity": "low",
                 "description": "created directly as the incident creator account",

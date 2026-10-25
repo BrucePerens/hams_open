@@ -11,7 +11,8 @@ class ResUsers(models.Model):
     def _execute_gdpr_erasure(self):
         # [@ANCHOR: compliance_execute_gdpr_erasure]
 
-        # # Verified by [@ANCHOR: COMM_test_execute_gdpr_erasure_deactivates_the_account] [@ANCHOR: COMM_test_execute_gdpr_erasure_uses_the_service_account_not_the_caller]
+        # # Verified by [@ANCHOR: COMM_test_execute_gdpr_erasure_deactivates_the_account]
+        # # Verified by [@ANCHOR: COMM_test_execute_gdpr_erasure_uses_the_service_account_not_the_caller]
         """
         Base architectural contract for GDPR Erasure.
         Modules that manage user-generated content (e.g., user_websites, blog)

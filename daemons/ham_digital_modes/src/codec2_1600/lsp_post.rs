@@ -40,11 +40,14 @@ pub fn check_lsp_order(lsp: &mut [f32; LPC_ORD]) -> usize {
 #[cfg(feature = "std")]
 const HZ_TO_RAD: f32 = std::f32::consts::PI / 4000.0;
 
-/// Bandwidth expansion: prevents any two adjacent LSPs (indices 1..4
-/// use `min_sep_low`, 4..order use `min_sep_high`) from separating by
-/// less than the given Hz margin -- LSP quantization errors under
-/// ~12.5Hz are inaudible, so this is the real reference's own minimum
-/// separation floor, not a tunable choice made here.
+/// Bandwidth expansion: enforces a minimum gap between neighbouring
+/// LSPs, walking upward once. For indices 1..=3 a gap below
+/// `min_sep_low` Hz is widened to exactly `min_sep_low` by raising
+/// `lsp[i]`; for indices 4..`LPC_ORD` the same is done with
+/// `min_sep_high`. The 1600bps decoder calls it with 50 Hz and 100 Hz
+/// (the values the reference decoder uses); Hz are converted to radians
+/// with `pi/4000`. Raising `lsp[i]` can in turn close the gap to
+/// `lsp[i+1]`, which the same upward pass then repairs.
 // [@ANCHOR: bw_expand_lsps]
 #[cfg(feature = "std")]
 pub fn bw_expand_lsps(lsp: &mut [f32; LPC_ORD], min_sep_low: f32, min_sep_high: f32) {
@@ -105,11 +108,12 @@ pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize {
 /// `50.0 * (pi/4000)` in Q23 -- the real reference's own `min_sep_low`
 /// for the 1600bps decoder's two real `bw_expand_lsps_fixed` call sites
 /// (`DecoderFixed::decode` and `DecoderFixed::decode_16k_fixed`, both
-/// passing the identical margin), computed once via `OnceLock` rather
-/// than hand-typed. A no-argument function rather than a value looked
-/// up by Hz: this mode's decoder only ever needs these two specific
-/// margins, so there's no real "wrong Hz value" case to guard against
-/// at runtime.
+/// passing the identical margin). Returns the committed constant
+/// `MIN_SEP_LOW_Q23` (a test checks it against `f32_to_q_exact_round`)
+/// rather than a hand-computed literal at each call site. A no-argument
+/// function rather than a value looked up by Hz: this mode's decoder
+/// only ever needs these two specific margins, so there's no real
+/// "wrong Hz value" case to guard against at runtime.
 pub fn min_sep_low_q23() -> i64 {
     MIN_SEP_LOW_Q23
 }

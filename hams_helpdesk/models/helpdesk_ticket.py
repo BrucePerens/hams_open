@@ -149,6 +149,31 @@ class HelpdeskTicket(models.Model):
     exception_fingerprint_ids = fields.One2many(
         "hams_helpdesk.exception.fingerprint", "ticket_id", string="Exception fingerprints", readonly=True
     )
+    # The members an automatic exception ticket affected (exception_member.py). Staff only: a portal member
+    # reading their own ticket gets neither the rows nor the counts. Links, not copies: the name, callsign and
+    # email are computed live from the member's own records.
+    affected_member_ids = fields.One2many(
+        "hams_helpdesk.exception.member", "ticket_id", string="Reporting member(s)", readonly=True,
+        groups="hams_helpdesk.group_helpdesk_user,base.group_system",
+    )
+    affected_member_count = fields.Integer(
+        string="Members", compute="_compute_affected_members",
+        groups="hams_helpdesk.group_helpdesk_user,base.group_system",
+    )
+    latest_member_label = fields.Char(
+        string="Latest member", compute="_compute_affected_members",
+        groups="hams_helpdesk.group_helpdesk_user,base.group_system",
+    )
+
+    # [@ANCHOR: hams_helpdesk:ticket_affected_members]
+    @api.depends("affected_member_ids")
+    def _compute_affected_members(self):
+        for ticket in self:
+            members = ticket.affected_member_ids
+            ticket.affected_member_count = len(members)
+            latest = members[:1]
+            # A closed account has no name; its label ("account closed") stands in.
+            ticket.latest_member_label = (latest.member_name or latest.contact_label) if latest else False
 
     user_id = fields.Many2one(
         "res.users", string="Assigned To", tracking=True, index=True
@@ -814,8 +839,9 @@ class HelpdeskTicket(models.Model):
         ir.rule allow-list still decides which tickets exist for it."""
         # [@ANCHOR: hams_helpdesk:mcp_safe_read]
         rows = []
+        tickets_by_id = {ticket.id: ticket for ticket in self}
         for view in self.safe_view(max_chars=min(int(max_chars or 0), 20000)):
-            ticket = self.browse(view["id"])
+            ticket = tickets_by_id[view["id"]]
             row = {
                 "id": view["id"],
                 "ticket_type": ticket.ticket_type,
@@ -876,7 +902,9 @@ class HelpdeskTicket(models.Model):
         messages_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")["mail.message"]
         found = {}
         for ticket in visible:
-            messages = messages_env.search(
+            # One search per ticket, on purpose: each ticket has its own cutoff and its own cap of 20 messages. A single
+            # search for all of them would have to read every newer message of a flooded ticket to apply the cap in Python.
+            messages = messages_env.search(  # burn-ignore: per-ticket cutoff and per-ticket limit, at most 200 tickets
                 [
                     ("model", "=", self._name),
                     ("res_id", "=", ticket.id),

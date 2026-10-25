@@ -207,6 +207,7 @@ def check_source(source, filename="<src>"):
     return problems
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_sites_rule]
 def scan_tree(root, daemon_only=False):
     found = []
     for path in _py_files(root, daemon_only):

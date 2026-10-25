@@ -6,6 +6,15 @@ hook sees them. They reach the same server-exception tickets (Helpdesk > Server 
 "External daemon") by one authenticated Odoo call. Nothing here deploys itself; an operator installs the
 files below.
 
+## One ticket per unit
+
+Every report about one systemd unit lands on one fingerprint row and so on one ticket, whatever its kind or result:
+the OnFailure unit, a daemon's `reporting_failures`, and the pager checks that name the unit (failed units, services not
+active, `unit:` freshness; see `pager_duty` `report_incident` and `_report_unit_failures`). The key is
+`exception_fingerprint`'s `unit_key_parts(unit)`, the inputs of a `unit_failed` / `exit-code` report, so tickets opened
+before this keep counting. The ticket lists who reported it ("Reported by"); a reporter it has not listed yet is
+recorded at once, repeats are counted and written at most once a minute.
+
 ## How a failure reaches a ticket
 
 1. **systemd `OnFailure=`** (`hams-exception-report@.service`, `hams-exception-report.conf`). When a
@@ -19,6 +28,9 @@ files below.
    quiet). It runs as root (`+`) so a `hamsd_*` account can start the unit, and `-` keeps a failed
    report from failing the daemon. This is how a `hamsd_*` daemon, which cannot read the reporter key,
    gets a ticket for each crash.
+   The report waits out an Odoo that is down or restarting (retries with backoff for up to ten minutes; the template's
+   `TimeoutStartSec=900` outlasts that), because a failure during a deploy is exactly when Odoo is unreachable, and an
+   undelivered report leaves a failed `hams-exception-report@<unit>.service` that the systemd failed-services pager check reports.
 2. **`reporting_failures`** (`exception_reporter.py`, Python, standard library only). A daemon wraps its
    consumer loop: an uncaught `Exception` is reported (the class and the frames, never the message), at
    most once a minute per name in that process, and then raised again, so the daemon still stops and

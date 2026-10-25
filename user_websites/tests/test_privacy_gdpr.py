@@ -155,6 +155,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         self.assertFalse(record.consumed)
 
     def test_01b_export_token_is_single_use(self):
+        # Tests [@ANCHOR: user_websites:COMM_gdpr_token_consume]
         # [@ANCHOR: test_gdpr_export_token_single_use]
 
         # Tests [@ANCHOR: user_websites:COMM_create_for_current_user]
@@ -179,6 +180,7 @@ class TestPrivacyGDPR(HamsHttpCase):
             Token._consume(token)
 
     def test_01c_export_token_rejects_unknown_token(self):
+        # Tests [@ANCHOR: user_websites:COMM_gdpr_token_consume]
         # [@ANCHOR: test_gdpr_export_token_unknown_rejected]
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_gdpr_export_service"
@@ -187,6 +189,7 @@ class TestPrivacyGDPR(HamsHttpCase):
             self.env["ham.gdpr.export.token"].with_user(svc_uid)._consume("not-a-real-token")
 
     def test_01d_export_token_rejects_expired_token(self):
+        # Tests [@ANCHOR: user_websites:COMM_gdpr_token_consume]
         # [@ANCHOR: test_gdpr_export_token_expiry]
         """A token older than TOKEN_EXPIRY_MINUTES must be refused even
         though it was never consumed -- the narrow expiry window is a real
@@ -211,6 +214,7 @@ class TestPrivacyGDPR(HamsHttpCase):
             Token._consume("an-old-token")
 
     def test_01e_consume_and_export_materializes_data_and_streamed_keys(self):
+        # Tests [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
         # Tests [@ANCHOR: user_websites:COMM_get_gdpr_streamed_keys]
 
         # [@ANCHOR: test_gdpr_consume_and_export_payload]

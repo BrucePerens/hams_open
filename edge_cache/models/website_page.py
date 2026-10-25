@@ -10,7 +10,7 @@ class WebsitePage(models.Model):
 
     def _get_response(self, request):
         # [@ANCHOR: COMM_website_page_edge_cache_opt_in]
-        # Tests [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
+        # Verified by [@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]
         """Offer a page to Cloudflare's edge cache exactly when Odoo's own page cache accepts it.
 
         website.page._allow_to_use_cache() is Odoo's own test for "this HTML is the same for every
@@ -22,7 +22,7 @@ class WebsitePage(models.Model):
         response = super()._get_response(request)
         if response and cacheable and not response.cf_page_cache_hit:
             # [@ANCHOR: COMM_website_page_no_shared_cache_entry]
-            # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
+            # Verified by [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
             # Odoo's page cache, when an entry is older than _CACHE_DURATION, re-renders the page,
             # stores that very response object in the cache AND returns it. Everything after this
             # point then mutates the cached entry: the dispatcher appends this visitor's Set-Cookie
@@ -45,7 +45,7 @@ class WebsitePage(models.Model):
             response = fresh
         if response:
             # [@ANCHOR: COMM_website_page_no_inherited_set_cookie]
-            # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
+            # Verified by [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
             # A page response gets its own cookies only later, from request.future_response, so
             # any Set-Cookie already on it here can only have been inherited from a cache entry.
             # The copy above keeps entries clean; this drops one regardless.
@@ -55,7 +55,7 @@ class WebsitePage(models.Model):
         return response
 
     def _get_response_raw(self, request):
-        # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
+        # Verified by [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         """Flag a freshly rendered page as not a cache hit; see _get_response()."""
         response = super()._get_response_raw(request)
         if response:
@@ -63,7 +63,7 @@ class WebsitePage(models.Model):
         return response
 
     def _post_process_response_from_cache(self, request, response):
-        # Tests [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
+        # Verified by [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         """Flag a response built from Odoo's page cache as a cache hit; see _get_response()."""
         super()._post_process_response_from_cache(request, response)
         response.cf_page_cache_hit = True

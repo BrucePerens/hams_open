@@ -125,6 +125,7 @@ This section documents all public functions, models, and controllers in the `pag
 ### `pager.check` (Models)
 The core model defining monitoring checks.
 *   `rpc_ensure_executable(self, cmd_name)`: Provisions a monitoring binary that the daemon host is missing, restricted to a strict security allow-list (`dig`, `curl`, `systemctl`, and similar). `generalized_monitor.py` calls it at startup for each binary its checks need; a new integration that needs a new binary must be added to that allow-list. For an allow-listed name it asks the `binary_downloader` module (if installed) to provision the binary and returns `{"status": "ok", "path": ...}`; otherwise it returns `{"status": "error", "message": ...}`. Only system administrators, Pager Duty Admins and the Pager Duty service account group may call it (others get an `AccessError`).
+*   Freshness checks (`check_type = freshness`, evaluated by the monitor daemon's `check_freshness()`, [@ANCHOR: pager_duty:check_freshness]): fail when the newest record of a feed, or the last successful run of a timer-driven unit, is older than `max_age_seconds`. A liveness check (systemd `is-active`) passes for a daemon that is running but wedged; this one does not. The `target` names the source: `redis-zset:<key>` (newest score of a sorted set; an empty set fails), `redis-key:<key>` (a stored epoch or ISO time), `file:<path>` (modification time), `unit:<name>.service` (end of the last successful run of a Type=oneshot unit; a run in progress longer than the limit also fails). The message names the source, the age and the limit. The check uses the monitor's `REDIS_*` environment, so it needs no credentials of its own, and it takes part in the normal maintenance and recovery handling: it is not counted while `pagerduty-maintenance` is active and resolves by itself once data flows again.
 *   `check_heartbeat_rpc(self, hb_uuid, interval_sec)`: Reports whether the heartbeat check with this UUID received a heartbeat within the last `interval_sec` seconds (returns `True`/`False`). It does not record a heartbeat; the `heartbeat` HTTP endpoint below does that.
 *   `action_pull_from_json(self)`: Syncs checks from `pager_config.json` into the database. Often mapped to a UI button. It first deletes every existing check (and, when the file has a `log_analyzer` section, every log file and log pattern) and then re-creates them from the file.
 *   `action_push_to_json(self)`: Exports database checks to `pager_config.json` for daemon consumption. Only active checks are written; the file is given mode 0600 because it holds check passwords in plain text.
@@ -153,6 +154,17 @@ Handles the lifecycle of monitoring alerts.
         "description": "Critical failure detected"
     })
     ```
+    An incident with no explicit `name` is named after its `source` (the check's name); nothing is called `INC-AUTO`.
+    A check that names failing systemd units adds `"units": ["fcc.uls.sync.service"]` (the systemd check and a
+    `unit:` freshness check do, `generalized_monitor.CHECK_UNITS`). For a high or critical incident the units are
+    reported to the same fingerprints the OnFailure exception report uses (`hams_helpdesk`
+    `_report_unit_failures`), so **one failing unit is one ticket** ("Server exception: Daemon failure: <unit>") no
+    matter how many checks and exception reports see it. The ticket carries an occurrence count, first and last seen
+    and the list of reporters; every repeat counts, at most one ticket write a minute per unit, and a new reporter is
+    named at once. The incident links to that ticket and the adapter opens no `[PAGER]` ticket for it. A closed
+    or resolved ticket is reopened to New, with a note, when its unit fails again (always), when an exception recurs after a release or after 24 hours quiet (`QUIET_REOPEN`); the reopen pages the assignee like a new ticket, inside the 30 minute notify window. If the ticket cannot be
+    opened (the hourly new-ticket cap) the adapter still opens its own, so a page is never lost. An instance of a
+    template unit (`name@x.service`) is not joined.
     [@ANCHOR: report_incident_rate_limit]
     The two mechanisms work as follows. Rate limit: Redis admits one report per `source` per website every 60 seconds; a report inside that window is dropped and the call returns `False`. Deduplication: if an Open or Acknowledged incident with the same `source` already exists, no new incident is created; its occurrence counters are increased and its id is returned. Otherwise a new incident is created and its id is returned.
     Paging depends on severity. A new `high` or `critical` incident notifies the on-call user at once through the incident's chatter, unless the `pager_duty.helpdesk_model` system parameter is set, in which case that notification is suppressed and the Helpdesk ticket is the page. A `low` or `medium` incident does not page; instead, when that incident's occurrence count within its current 60-minute window reaches 5, a separate `high` incident with source `Trend: <source>` is raised, and that one pages.

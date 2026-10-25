@@ -63,12 +63,19 @@ class TestSiteEligibilityHook(HamsHttpCase):
         return self.safe_patch_object_cm(ResUsersSiteEligibility, "_website_eligibility_gaps", lambda s: list(gaps))
 
     def test_01_open_source_default_everyone_is_eligible(self):
+        # Tests [@ANCHOR: user_websites:site_eligibility]
+        # Tests [@ANCHOR: user_websites:COMM_website_eligibility_gaps]
+        # Tests [@ANCHOR: user_websites:COMM_hams_website_eligible]
         self.assertEqual(self.owner._website_eligibility_gaps(), [])
         self.assertTrue(self.owner._hams_website_eligible())
         self.assertEqual(self.env["res.users"].reconcile_website_eligibility([self.owner.id]), {})
         self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 200)
 
     def test_02_ineligible_public_site_is_404_and_content_is_kept_then_returns(self):
+        # Tests [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
+        # Tests [@ANCHOR: user_websites:COMM_website_publicly_visible]
+        # Tests [@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]
+        # Tests [@ANCHOR: user_websites:field_hidden_by_eligibility]
         with self._gaps(GAP):
             self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 404)
             self.assertEqual(self.url_open("/eligowner/about", allow_redirects=False).status_code, 404)
@@ -97,6 +104,8 @@ class TestSiteEligibilityHook(HamsHttpCase):
         self.assertTrue(self.env["user_websites.public_directory_view"].search([("user_id", "=", self.owner.id)]))
 
     def test_03_owner_is_told_what_is_missing_and_cannot_create(self):
+        # Tests [@ANCHOR: user_websites:owner_site_ineligible]
+        # Tests [@ANCHOR: user_websites:fn_answers_site_response]
         self.authenticate("eligowner", "eligowner")
         with self._gaps(GAP):
             for path in ("/my/site/eligowner", "/my/site/eligowner/page/new"):
@@ -145,3 +154,20 @@ class TestSiteEligibilityHook(HamsHttpCase):
     def test_05_the_flag_is_not_self_service(self):
         self.assertNotIn("website_ineligible", self.owner.SELF_WRITEABLE_FIELDS)
         self.assertTrue(self.env["res.users"]._fields["website_ineligible"].readonly)
+
+    def test_06_the_scheduled_job_runs_the_reconciler_as_the_service_account(self):
+        # Tests [@ANCHOR: user_websites:ir_cron_reconcile_website_eligibility]
+        # Tests [@ANCHOR: user_websites:COMM_cron_reconcile_website_eligibility]
+        cron = self.env.ref("user_websites.ir_cron_reconcile_website_eligibility")
+        self.assertTrue(cron.active)
+        self.assertEqual(cron.model_id.model, "res.users")
+        self.assertEqual(cron.code.strip(), "model._cron_reconcile_website_eligibility()")
+        self.assertEqual(cron.user_id, self.env.ref("user_websites.user_websites_service_account"))
+        with self._gaps(GAP):
+            self.assertEqual(self.env["res.users"]._cron_reconcile_website_eligibility().get(self.owner.id), "hidden")
+            self.home.invalidate_recordset()
+            self.assertFalse(self.home.website_published)
+        self.assertEqual(self.env["res.users"]._cron_reconcile_website_eligibility().get(self.owner.id), "shown")
+        self.home.invalidate_recordset()
+        self.assertTrue(self.home.website_published)
+

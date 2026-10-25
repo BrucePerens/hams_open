@@ -7,7 +7,8 @@ their credentials, their station, and their data -- not a marketing claim, a con
 ## Scenario
 A visitor navigates to `/protects-hams`, a single, central, public (no login required) page that
 indexes the real, technical protections already documented elsewhere on the site -- LoTW trust
-and custody (`/lotw-trust`), transmitter safety (`/transmitter-safety`), and the relay daemon's
+and custody (`/lotw-trust`; an ARRL Logbook of the World certificate is used only to become a
+Verified Ham or add a licence, never to sign in), transmitter safety (`/transmitter-safety`), and the relay daemon's
 published source (`/relay/source`) -- rather than re-explaining each one.
 
 ## Story

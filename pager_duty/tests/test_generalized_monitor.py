@@ -478,18 +478,19 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertTrue(success)
         mock_redis_inst.ping.assert_called_once()
 
-        # 6. Native RabbitMQ
-        mock_conn = self.safe_patch(
-            "odoo.addons.pager_duty.daemon.generalized_monitor.socket.create_connection"
+        # 6. Native RabbitMQ: a real AMQP connection (authenticate, open a channel, close both cleanly), here against a
+        # mocked pika.BlockingConnection. The fake-broker and real-broker coverage is in test_amqp_check.py.
+        mock_blocking = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.pika.BlockingConnection"
         )
-        mock_tcp_sock = MagicMock()
-        mock_conn.return_value.__enter__.return_value = mock_tcp_sock
-        mock_tcp_sock.recv.return_value = b"\x01\x02\x03"
+        mock_blocking.return_value.is_open = False
         success, msg = generalized_monitor.execute_check(
-            {"type": "rabbitmq", "target": "rabbitmq"}
+            {"type": "rabbitmq", "target": "rabbitmq", "user": "u", "password": "p"}
         )
-        self.assertTrue(success)
-        mock_tcp_sock.sendall.assert_called_with(b"AMQP\x00\x00\x09\x01")
+        self.assertTrue(success, msg)
+        mock_blocking.return_value.channel.assert_called_once()
+        mock_blocking.return_value.channel.return_value.close.assert_called_once()
+        mock_blocking.return_value.close.assert_called_once()
 
     def test_13_additional_facilities(self):
         """Verify ICMP, Docker, Memcached, SSH, and Systemd checks."""
@@ -572,7 +573,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
         )
         self.assertTrue(success)
         mock_client.execute.assert_called_with(
-            "pager.check", "check_heartbeat_rpc", hb_uuid="1234", interval=60
+            "pager.check", "check_heartbeat_rpc", hb_uuid="1234", interval_sec=60
         )
 
     def test_14_nagios_checks(self):

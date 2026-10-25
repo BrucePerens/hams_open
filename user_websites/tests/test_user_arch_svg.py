@@ -109,6 +109,7 @@ class TestUserArchSvgSanitizer(HamsHttpCase):
         return self.env["website.page"]._sanitize_user_arch(arch)
 
     def test_01_every_corpus_vector_is_neutralised(self):
+        # Tests [@ANCHOR: user_websites:page_arch_text_is_markup]
         for name, payload in XSS_CORPUS + RAW_TEXT_VECTORS:
             with self.subTest(vector=name):
                 cleaned, _modified = self.sanitize(f"<p>x</p>{payload}")

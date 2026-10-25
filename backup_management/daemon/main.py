@@ -16,15 +16,11 @@ import shlex
 import re
 
 # Reports an uncaught exception to the Odoo exception tickets (Helpdesk > Server Exceptions) and raises it again.
-# hams_helpdesk/daemon/exception_reporter.py is copied to /opt/hams/daemons by deploy_to_production.py --sync-daemons
-# (PYTHONPATH=/opt/hams/daemons). A host without it runs the daemon unwrapped: reporting must never stop the worker.
-try:
-    from exception_reporter import reporting_failures
-except ImportError:
-    import contextlib
-
-    def reporting_failures(daemon_name, **options):
-        return contextlib.nullcontext()
+# hams_helpdesk/daemon/exception_reporter.py is copied flat to /opt/hams/daemons by deploy_to_production.py --sync-daemons
+# (DAEMON_SHARED_FILES) and found through PYTHONPATH=/opt/hams/daemons in backup.worker.service. A missing helper is a
+# deployment fault and stops the worker at start (the burn-list linter forbids a soft ImportError fallback); the helper
+# itself never lets a reporting failure stop the worker.
+from exception_reporter import reporting_failures
 
 
 logging.basicConfig(
@@ -96,6 +92,7 @@ class OdooAPIError(Exception):
 
 
 # [@ANCHOR: backup_management:COMM_strip_endpoint_scheme]
+# Verified by [@ANCHOR: backup_management:COMM_test_strip_endpoint_scheme]
 def _strip_endpoint_scheme(endpoint_url):
     """
     Normalize an admin-entered endpoint_url (e.g. from Backblaze B2's own
@@ -141,6 +138,7 @@ def _kopia_config_file(config_id):
 
 
 # [@ANCHOR: backup_management:COMM_ensure_kopia_s3_repository]
+# Verified by [@ANCHOR: backup_management:COMM_test_ensure_kopia_s3_repository]
 def _ensure_kopia_s3_repository(config, env_vars, config_file):
     """
     Ensure a kopia repository is connected (in config_file) for this
@@ -210,6 +208,7 @@ def _ensure_kopia_s3_repository(config, env_vars, config_file):
 
 
 # [@ANCHOR: backup_management:COMM_pgbackrest_s3_repo_args]
+# Verified by [@ANCHOR: backup_management:COMM_test_pgbackrest_s3_repo_args]
 def _pgbackrest_s3_repo_args(config, target_path):
     """
     Real, non-secret pgbackrest S3/B2-repo CLI flags for this
@@ -436,6 +435,7 @@ _PAYLOAD_SECRET_KEYS = ("kopia_password", "secret_key", "access_key")
 
 def _redact_payload(payload):
     # [@ANCHOR: backup_management:COMM_redact_payload]
+    # Verified by [@ANCHOR: backup_management:COMM_test_redact_payload]
     #
     # Bug-hunt fix (2026-09-09, tier-1 pass): execute_job()'s "missing
     # job_id or engine" branch used to log the raw payload dict with
@@ -489,6 +489,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
 
 
 # [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+# Verified by [@ANCHOR: backup_management:COMM_test_execute_job_s3_b2]
 def execute_job(ch, method, properties, body):
     acked = False
 

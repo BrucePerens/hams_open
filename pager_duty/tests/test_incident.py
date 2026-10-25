@@ -198,6 +198,17 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertTrue(len(data["active"]) > 0)
         self.assertEqual(data["active"][0]["source"], "Dashboard Board Test")
 
+    def test_07b_installing_the_board_procedure_again_replaces_it(self):
+        """The post-init hook's installer is safe to run again (CREATE OR REPLACE) and leaves exactly one board function."""
+        # Tests [@ANCHOR: pager_duty:install_postgres_procedures]
+        from odoo.addons.pager_duty import hooks
+
+        hooks._install_postgres_procedures(self.env)
+        hooks._install_postgres_procedures(self.env)
+        self.env.cr.execute("SELECT count(*) FROM pg_proc WHERE proname = 'pager_get_board_data'")
+        self.assertEqual(self.env.cr.fetchone()[0], 1)
+        self.assertIn("active", self.incident_model.get_board_data())
+
     def test_08_auto_resolve_multi_tenant(self):
         """Tests that auto-resolve respects website isolation when context is provided."""
         website1 = self.env["website"].create({"name": "Site 1"})

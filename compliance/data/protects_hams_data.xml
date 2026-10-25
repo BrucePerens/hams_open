@@ -27,10 +27,13 @@
                             plainly, not rounded up.</p>
 
                             <h3 class="mt-4">Your LoTW certificate never touches our application</h3>
-                            <p>hams.com's application code never receives your ARRL Logbook of the
-                            World certificate or its private key, in any form, at any point --
-                            verification happens entirely at the TLS layer, before your request
-                            ever reaches our application.</p>
+                            <p>You can use your ARRL Logbook of the World certificate to become a
+                            Verified Ham, or to add a licence, once you are signed in (you sign in
+                            with your password or a hams.com certificate, never with LoTW).
+                            hams.com's application code never receives your LoTW certificate or its
+                            private key, in any form, at any point -- the check happens entirely at
+                            the TLS layer, before your request ever reaches our application, and
+                            your private key never leaves your browser.</p>
                             <p><a href="/lotw-trust">Read the full LoTW Trust and Certificate Custody page &#8594;</a></p>
 
                             <h3 class="mt-4">We can never remotely control your transmitter</h3>
@@ -48,8 +51,7 @@
                             source is published at <a href="/relay/source">/relay/source</a> for
                             anyone to inspect directly, rather than asking you to trust a
                             description of code you can't see. This is the same software
-                            responsible for the frequency-safety interlock above and your LoTW
-                            credential handling.</p>
+                            responsible for the frequency-safety interlock above.</p>
 
                             <h3 class="mt-4">Signed releases and reproducible builds</h3>
                             <p>The relay daemon verifies every self-update against a cryptographic

@@ -211,6 +211,7 @@ class TestManualRobustness(HamsHttpCase):
         editor) must not produce a live script tag once the compiled
         output is rendered unescaped via Markup().
         """
+        # Tests [@ANCHOR: manual_compile_markdown]
         malicious_article = self.env["knowledge.article"].create(
             {
                 "name": "Malicious Markdown Article",
@@ -250,6 +251,7 @@ class TestManualRobustness(HamsHttpCase):
             "<ul><li>- first step</li><li>second step</li></ul>"
             "<p>See <b>**this**</b> note.</p>"
         )
+        # Tests [@ANCHOR: manual_compile_markdown]
         compiled = ManualLibraryController()._compile_markdown(body)
         self.assertEqual(str(compiled), body)
 

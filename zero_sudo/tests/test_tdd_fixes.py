@@ -82,7 +82,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         # self.filtered("is_service_account"), and that field is
         # groups="base.group_system". A narrow service account with res.users
         # write access but no system group (ham_base.user_manager_service, doing
-        # ham_onboarding's LoTW account takeover) got AccessError on every
+        # ham_onboarding's since-removed certificate account takeover) got AccessError on every
         # password write. The split must work for such a caller, and still
         # keep the given password away from service accounts.
         writer_group = self.env["res.groups"].create({"name": "Test Narrow res.users Writer"})
@@ -219,7 +219,13 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         mock_notify.assert_not_called()
 
         user.write({"is_service_account": True})
-        mock_notify.assert_called_once_with(self.env, "ir.http")
+        # Not assert_called_once_with(self.env, ...): an Environment has no __eq__, and write() reaches the call with an
+        # environment of its own (the ORM derives one per recordset: context, user), never the test's object. What matters
+        # is the model named and that it is the same database transaction, which the cursor identifies.
+        mock_notify.assert_called_once()
+        notified_env, notified_model = mock_notify.call_args.args
+        self.assertEqual(notified_model, "ir.http")
+        self.assertIs(notified_env.cr, self.env.cr, "the invalidation must be queued on this transaction's cursor")
 
     def test_get_callsign_generates_unique_cached_synthetic_callsigns(self):
         # Tests [@ANCHOR: zero_sudo:get_callsign]
@@ -263,6 +269,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.env["ir.module.module"]._bootstrap_knowledge_docs()
 
     def test_daemon_utils_sys_paths(self):
+        # Tests [@ANCHOR: zero_sudo:_start_daemon_process]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         
         captured_env = {}
@@ -282,6 +289,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_ir_http_is_service_account_cached(self):
         # [@ANCHOR: zero_sudo:COMM_test_is_service_account_cached]
+        # Tests [@ANCHOR: zero_sudo:_is_service_account_cached]
         user = self.env["res.users"].create({
             "name": "Service Account IrHttp",
             "login": "service_account_irhttp@example.com",
@@ -311,6 +319,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_poll_health_check(self):
         # [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
+        # Tests [@ANCHOR: zero_sudo:_poll_health_check]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
         
         class MockResponse:

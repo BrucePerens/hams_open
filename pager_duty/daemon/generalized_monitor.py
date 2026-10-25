@@ -4,9 +4,12 @@
 import binascii
 import concurrent.futures
 import datetime
+import fnmatch
 import json
 import logging
 import os
+import pika
+import pika.adapters.utils.connection_workflow
 import psutil
 import re
 import secrets
@@ -277,6 +280,19 @@ THREAD_NAMES = {}
 FAILING_NAMES = set()
 
 
+# [@ANCHOR: pager_duty:check_units]
+# check_key -> the systemd units the check's latest failing run found failing. A check that names units (the systemd
+# check, a unit: freshness check) records them here and polling_thread sends them with the incident, so the incident
+# server joins the one ticket per unit that the OnFailure exception report also uses. Written and read only by the
+# check's own polling thread.
+CHECK_UNITS = {}
+
+
+def note_failing_units(check, units):
+    """Records the units behind this run's failure, in order and once each, for polling_thread to send."""
+    CHECK_UNITS[check_key(check)] = list(dict.fromkeys(u for u in units if u))
+
+
 # [@ANCHOR: pager_duty:check_key]
 # Verified by [@ANCHOR: test_20b_two_checks_with_the_same_name_on_different_websites_get_distinct_daemon_state]
 def check_key(check):
@@ -405,7 +421,7 @@ def extract_severity_prefix(msg, default="high"):
     return match.group(1), match.group(2)
 
 
-def report(client, source, msg, severity="high", website_id=False):
+def report(client, source, msg, severity="high", website_id=False, units=()):
     # [@ANCHOR: daemon_report_incident]
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url:
@@ -432,6 +448,8 @@ def report(client, source, msg, severity="high", website_id=False):
         payload = {"source": source, "description": msg, "severity": severity}
         if website_id:
             payload["website_id"] = website_id
+        if units:
+            payload["units"] = list(units)
         client.execute("pager.incident", "report_incident", vals=payload)
         logger.error(f"Incident reported [{source}]: {msg} (Website: {website_id})")
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
@@ -455,6 +473,267 @@ def auto_resolve(client, source, website_id=False):
         )
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
         logger.error(f"Failed to auto-resolve incidents for {source}: {e}")
+
+
+# [@ANCHOR: pager_duty:amqp_check]
+# Verified by [@ANCHOR: pager_duty:test_amqp_check_full_transaction]
+# Verified by [@ANCHOR: pager_duty:test_amqp_check_header_only_gone]
+# Seconds. One AMQP check is a one-shot connection: socket_timeout bounds the TCP connect, stack_timeout the whole
+# connect/Start-Ok/Tune/Open handshake. The heartbeat is small only so that pika gives up on a broker that answers the
+# handshake and then goes silent (a BlockingConnection otherwise waits for a channel reply forever; with the heartbeat
+# it gives up after about ten seconds plus twice the interval). A healthy check lasts a few milliseconds, so no
+# heartbeat frame is ever sent.
+AMQP_SOCKET_TIMEOUT = 3
+AMQP_STACK_TIMEOUT = 5
+AMQP_HEARTBEAT = 2
+# pika logs every connection failure as several ERROR lines and a traceback; the check result text carries the cause.
+logging.getLogger("pika").setLevel(logging.CRITICAL)
+
+
+def amqp_check(host, port, user, password, vhost="/"):
+    """
+    Check RabbitMQ the way a client uses it: open a connection, authenticate (Start-Ok), open the vhost, open a channel,
+    then close the channel and the connection with their own handshakes (Channel.Close, Connection.Close). The check
+    used to send only the 8-byte protocol header, read the reply and drop the socket, which the broker logged as an
+    abruptly closed connection with no handshake, 1,440 times a day. Returns (ok, text); the text names the failure
+    class: refused, timeout, authentication, protocol, or lost connection. It never contains the credentials.
+    """
+    if not user or not password:
+        return False, "RabbitMQ check has no credentials: set RMQ_USER and RMQ_PASS (rabbitmq.env) for the monitor"
+    where = f"{host}:{port}"
+    connection = None
+    try:
+        parameters = pika.ConnectionParameters(
+            host=host,
+            port=port,
+            virtual_host=vhost,
+            credentials=pika.PlainCredentials(user, password),
+            heartbeat=AMQP_HEARTBEAT,
+            socket_timeout=AMQP_SOCKET_TIMEOUT,
+            stack_timeout=AMQP_STACK_TIMEOUT,
+            connection_attempts=1,
+            retry_delay=0,
+        )
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.close()
+        connection.close()
+        connection = None
+        return True, "OK"
+    except pika.exceptions.ProbableAuthenticationError:
+        return False, f"RabbitMQ authentication failed at {where} (user {user!r}, vhost {vhost!r})"
+    except pika.exceptions.ProbableAccessDeniedError:
+        return False, f"RabbitMQ access denied at {where} (user {user!r} may not open vhost {vhost!r})"
+    except pika.exceptions.IncompatibleProtocolError as e:
+        return False, f"RabbitMQ protocol error at {where}: the server did not answer as AMQP 0-9-1 ({e})"
+    except pika.adapters.utils.connection_workflow.AMQPConnectorStackTimeout:
+        # Not an AMQPError subclass in pika 1.3: it must be caught by name.
+        return False, f"RabbitMQ timed out at {where}: no AMQP handshake within {AMQP_STACK_TIMEOUT}s"
+    except pika.exceptions.AMQPConnectionError as e:
+        text = repr(e)
+        if "ConnectionRefused" in text:
+            return False, f"RabbitMQ connection refused at {where}"
+        if "timeout" in text.lower() or "timed out" in text.lower():
+            return False, f"RabbitMQ timed out at {where}: {e}"
+        return False, f"RabbitMQ connection failed at {where}: {e}"
+    except pika.exceptions.AMQPError as e:  # channel errors and the rest of pika's own errors
+        return False, f"RabbitMQ protocol error at {where}: {e!r}"
+    except (OSError, socket.timeout) as e:
+        if isinstance(e, (socket.timeout, TimeoutError)):
+            return False, f"RabbitMQ timed out at {where}: {e}"
+        if isinstance(e, ConnectionRefusedError):
+            return False, f"RabbitMQ connection refused at {where}"
+        return False, f"RabbitMQ connection failed at {where}: {e}"
+    finally:
+        # Whatever happened, no connection outlives the check: a clean Connection.Close if the connection is still open,
+        # otherwise nothing is left to close. A close that itself fails has nothing further to release.
+        if connection is not None:
+            try:
+                if connection.is_open:
+                    connection.close()
+            except Exception:  # audit-ignore-catch-all
+                logger.warning("closing the RabbitMQ check connection failed", exc_info=True)
+
+
+# A freshness check reads "when did this feed or job last do real work" and fails when that is older than max_age.
+# Liveness checks (systemd is-active, a PING) pass for a daemon that is running but wedged: ham.dx.daemon sat on a dead
+# telnet socket for 8 days with its unit "active". Sources, chosen by the target's scheme:
+#   redis-zset:<key>   newest score of a sorted set (an empty set fails)
+#   redis-key:<key>    a string holding epoch seconds or an ISO 8601 time
+#   file:<path>        modification time
+#   unit:<name>.service  end of the last successful run of a timer-driven Type=oneshot unit
+FRESHNESS_SCHEMES = ("redis-zset", "redis-key", "file", "unit")
+
+
+def _human_age(seconds):
+    seconds = int(max(0, seconds))
+    if seconds < 120:
+        return f"{seconds}s"
+    if seconds < 7200:
+        return f"{seconds // 60}min"
+    if seconds < 172800:
+        return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}"
+    return f"{seconds // 86400}d"
+
+
+def parse_freshness_time(value):
+    """Epoch seconds from a number, a numeric string, or an ISO 8601 / 'YYYY-MM-DD HH:MM:SS' string (UTC when naive).
+    Returns None when it cannot be read."""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", "replace")
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    try:
+        return float(text)
+    except ValueError:
+        logger.debug("Freshness value %r is not a plain number; trying an ISO time", text)
+    try:
+        parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.timestamp()
+
+
+def parse_systemd_timestamp(text):
+    """Epoch seconds from systemctl's 'Tue 2026-10-20 05:17:00 UTC'; None for an empty value (the event has not happened)."""
+    text = (text or "").strip()
+    if not text or text == "n/a":
+        return None
+    parts = text.split()
+    if len(parts) < 3:
+        return None
+    try:
+        naive = datetime.datetime.strptime(f"{parts[1]} {parts[2]}", "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    zone = parts[3] if len(parts) > 3 else "UTC"
+    if zone in ("UTC", "GMT", "Z"):
+        return naive.replace(tzinfo=datetime.timezone.utc).timestamp()
+    return time.mktime(naive.timetuple())  # the host's own zone, which is what systemd printed
+
+
+def _freshness_redis():
+    return redis_lib.Redis(
+        host=os.environ.get("REDIS_HOST") or "redis",
+        port=int(os.environ.get("REDIS_PORT") or "6379"),
+        username=REDIS_USERNAME,
+        password=REDIS_PASS,
+        socket_timeout=5,
+        socket_connect_timeout=5,
+    )
+
+
+def _freshness_one_unit(unit, max_age, now):
+    exe, err = ensure_executable("systemctl")
+    if not exe:
+        return False, err
+    res = subprocess.run(
+        [exe, "show", unit, "-p", "LoadState", "-p", "Type", "-p", "ActiveState", "-p", "Result",
+         "-p", "ExecMainStartTimestamp", "-p", "ExecMainExitTimestamp"],
+        capture_output=True, text=True, timeout=10,
+    )
+    props = dict(line.split("=", 1) for line in res.stdout.splitlines() if "=" in line)
+    if res.returncode != 0 or props.get("LoadState") != "loaded":
+        return False, f"{unit} is not a loaded systemd unit"
+    if props.get("Type") != "oneshot":
+        return False, f"{unit} is not a Type=oneshot unit; use a data source (redis-zset:, redis-key:, file:) for a daemon"
+    started = parse_systemd_timestamp(props.get("ExecMainStartTimestamp"))
+    if props.get("ActiveState") in ("activating", "active", "reloading"):
+        if started is not None and now - started > max_age:
+            return False, f"{unit} has been running for {_human_age(now - started)} (limit {_human_age(max_age)}): it looks hung"
+        return True, f"OK ({unit} is running, started {_human_age(now - (started or now))} ago)"
+    if props.get("Result") != "success":
+        return False, f"The last run of {unit} did not succeed (result: {props.get('Result')})"
+    finished = parse_systemd_timestamp(props.get("ExecMainExitTimestamp"))
+    if finished is None:
+        try:
+            with open("/proc/uptime", encoding="ascii") as f:
+                uptime = float(f.read().split()[0])
+        except (OSError, ValueError):
+            uptime = 0.0
+        if uptime < max_age:
+            return True, f"OK ({unit} has not run since boot {_human_age(uptime)} ago)"
+        return False, f"{unit} has not completed a run since boot {_human_age(uptime)} ago"
+    age = now - finished
+    if age > max_age:
+        return False, f"The last successful run of {unit} ended {_human_age(age)} ago (limit {_human_age(max_age)})"
+    return True, f"OK (last successful run of {unit} ended {_human_age(age)} ago)"
+
+
+def _freshness_unit(units, max_age, now, failing=None):
+    """One or several comma-separated units sharing a limit; every stale or failed unit is named in one message.
+    `failing`, when given, is a list that receives the name of each unit that is stale or failed."""
+    names = [u.strip() for u in units.split(",") if u.strip()]
+    if len(names) == 1:
+        ok, msg = _freshness_one_unit(names[0], max_age, now)
+        if not ok and failing is not None:
+            failing.append(names[0])
+        return ok, msg
+    problems = []
+    for unit in names:
+        ok, msg = _freshness_one_unit(unit, max_age, now)
+        if not ok:
+            problems.append(msg)
+            if failing is not None:
+                failing.append(unit)
+    if problems:
+        return False, f"{len(problems)} of {len(names)} units are stale: " + "; ".join(problems)
+    return True, f"OK (all {len(names)} units ran successfully within {_human_age(max_age)})"
+
+
+# [@ANCHOR: pager_duty:check_freshness]
+def check_freshness(check, now=None, redis_factory=None):
+    """Run one freshness check: (ok, message). The message names the source, the age and the limit."""
+    now = time.time() if now is None else now
+    target = parse_env(check.get("target", "")) or ""
+    scheme, _, name = target.partition(":")
+    if scheme not in FRESHNESS_SCHEMES or not name:
+        return False, f"Freshness target must look like one of {', '.join(s + ':<name>' for s in FRESHNESS_SCHEMES)}, not {target!r}"
+    try:
+        max_age = int(check.get("max_age") or 0)
+    except (TypeError, ValueError):
+        max_age = 0
+    if max_age <= 0:
+        return False, "Freshness check has no maximum age (set Maximum Age)"
+    try:
+        if scheme == "unit":
+            failing = []
+            result = _freshness_unit(name, max_age, now, failing)
+            if not result[0]:
+                note_failing_units(check, failing)
+            return result
+        if scheme == "file":
+            try:
+                newest = os.stat(name).st_mtime
+            except FileNotFoundError:
+                return False, f"{name} does not exist"
+        elif scheme == "redis-zset":
+            r = (redis_factory or _freshness_redis)()
+            top = r.zrevrange(name, 0, 0, withscores=True)
+            if not top:
+                return False, f"{name} is empty: no record has arrived"
+            newest = float(top[0][1])
+        else:  # redis-key
+            r = (redis_factory or _freshness_redis)()
+            value = r.get(name)
+            if value is None:
+                return False, f"{name} is not set: nothing has reported yet"
+            newest = parse_freshness_time(value)
+            if newest is None:
+                return False, f"{name} holds {value!r}, which is not a time"
+    except (redis_lib.RedisError, OSError, subprocess.SubprocessError) as e:
+        logger.warning("Freshness check %s failed: %s", target, e)
+        return False, f"Could not read {target}: {e}"
+    age = now - newest
+    if age > max_age:
+        return False, (
+            f"{target}: newest record is {_human_age(age)} old (limit {_human_age(max_age)}); "
+            "the feed has stopped even if its service looks healthy"
+        )
+    return True, f"OK (newest record {_human_age(age)} old, limit {_human_age(max_age)})"
 
 
 def execute_check(check, client=None):
@@ -823,20 +1102,13 @@ def execute_check(check, client=None):
 
     elif ctype == "rabbitmq":
         port = int(parse_env(check.get("port", 5672)))
-        try:
-            with socket.create_connection((target, port), timeout=2) as s:
-                s.sendall(b"AMQP\x00\x00\x09\x01")
-                res = s.recv(1024)
-                if len(res) > 0:
-                    return True, "OK"
-                return False, "RabbitMQ handshake mismatch"
-        except (
-            ConnectionError,
-            socket.timeout,
-            Exception,
-        ) as e:  # audit-ignore-catch-all
-            logger.warning("RabbitMQ check failed: %s", e)
-            return False, f"RabbitMQ connection failed: {e}"
+        # A check with no credentials of its own logs in as the RabbitMQ services do: RMQ_USER / RMQ_PASS from the
+        # environment the unit loads (rabbitmq.env on hams1), the account hams_rabbitmq publishes as. There is no
+        # guest fallback. The vhost is the check's own "vhost" or RMQ_VHOST, else "/".
+        user = parse_env(check.get("user", "")) or os.getenv("RMQ_USER") or ""
+        password = parse_env(check.get("password", "")) or os.getenv("RMQ_PASS") or ""
+        vhost = parse_env(check.get("vhost", "")) or os.getenv("RMQ_VHOST") or "/"
+        return amqp_check(target, port, user, password, vhost)
 
     elif ctype == "xmlrpc":
         method = parse_env(check.get("rpc_method", ""))
@@ -1305,7 +1577,7 @@ def execute_check(check, client=None):
                 "pager.check",
                 "check_heartbeat_rpc",
                 hb_uuid=chk_uuid,
-                interval=int(check.get("interval", 60)),
+                interval_sec=int(check.get("interval", 60)),
             )
             if res:
                 return True, "OK"
@@ -1405,6 +1677,9 @@ def execute_check(check, client=None):
             return False, f"File {target} exists"
         return True, "OK"
 
+    elif ctype == "freshness":
+        return check_freshness(check)
+
     elif ctype == "systemd":
         if not target:
             return (
@@ -1430,25 +1705,21 @@ def execute_check(check, client=None):
                 if res.returncode != 0:
                     return False, f"Systemctl list-units failed: {res.stderr.strip()}"
 
-                failed_svcs = []
-                for line in res.stdout.strip().split("\n"):
-                    if not line.strip():
-                        continue
-                    parts = line.split()
-                    if parts:
-                        svc_name = parts[0]
-                        if svc_name not in ignored:
-                            failed_svcs.append(svc_name)
+                failed_names = parse_failed_unit_names(res.stdout, ignored)
+                failed_svcs = failed_units_report(exe, failed_names)
 
                 if failed_svcs:
+                    note_failing_units(check, failed_names)
                     return (
                         False,
-                        f"Failed systemd services detected: {', '.join(failed_svcs)}",
+                        f"{len(failed_svcs)} failed systemd unit(s): {'; '.join(failed_svcs)}. "
+                        "Clear one that is understood and fixed with `systemctl reset-failed <unit>`.",
                     )
                 return True, "OK (0 failed services)"
             else:
                 svcs = [s.strip() for s in target.split(",") if s.strip()]
                 failed_svcs = []
+                failing_names = []
                 for svc in svcs:
                     res = subprocess.run(
                         [exe, "is-active", svc],
@@ -1461,8 +1732,10 @@ def execute_check(check, client=None):
                         if state == "inactive" and _oneshot_last_run_succeeded(exe, svc):
                             continue
                         failed_svcs.append(f"{svc} ({state})")
+                        failing_names.append(svc)
 
                 if failed_svcs:
+                    note_failing_units(check, failing_names)
                     return (
                         False,
                         f"Systemd services not active: {', '.join(failed_svcs)}",
@@ -1477,6 +1750,74 @@ def execute_check(check, client=None):
             return False, f"Systemd execution error: {e}"
 
     return False, "Unknown check type"
+
+
+# [@ANCHOR: pager_duty:parse_failed_unit_names]
+def parse_failed_unit_names(listing, ignored=()):
+    """The unit names in `systemctl list-units --state=failed --no-legend --plain` output, each once, sorted, without the ones
+    the check ignores. An ignored entry is a unit name or a shell pattern (`hams-exception-report@*`), so one entry covers every
+    instance of a template unit."""
+    names = set()
+    for line in listing.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        name = parts[0].lstrip("\u25cf*").strip() or (parts[1] if len(parts) > 1 else "")
+        if not name or "." not in name:
+            continue
+        if any(name == pattern or fnmatch.fnmatchcase(name, pattern) for pattern in ignored):
+            continue
+        names.add(name)
+    return sorted(names)
+
+
+def _failure_detail(exe, unit):
+    """`exit-code since 2026-10-18 18:24:17 UTC` for a failed unit, from systemd's Result and StateChangeTimestamp; "" when
+    unreadable."""
+    try:
+        res = subprocess.run(
+            [exe, "show", unit, "-p", "Result", "-p", "StateChangeTimestamp"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if res.returncode != 0:
+        return ""
+    props = dict(line.split("=", 1) for line in res.stdout.splitlines() if "=" in line)
+    result = props.get("Result", "").strip()
+    stamp = props.get("StateChangeTimestamp", "").strip()
+    # "Sun 2026-10-18 18:24:17 UTC": the weekday adds nothing.
+    words = stamp.split()
+    if words and not words[0][:1].isdigit():
+        words = words[1:]
+    stamp = " ".join(words)
+    return " ".join(part for part in (result, f"since {stamp}" if stamp else "") if part)
+
+
+# [@ANCHOR: pager_duty:failed_units_report]
+def failed_units_report(exe, names):
+    """One entry per failed unit with systemd's Result and when it failed, and the instances of one template unit
+    (`hams-exception-report@a.service.service`, `...@b...`) folded into one entry, so a template is counted once however many
+    instances failed."""
+    templates = {}
+    singles = []
+    for name in names:
+        template, at, _rest = name.partition("@")
+        if at and "." in _rest:
+            templates.setdefault(template + "@", []).append(name)
+        else:
+            singles.append(name)
+    entries = []
+    for name in singles:
+        detail = _failure_detail(exe, name)
+        entries.append(f"{name} ({detail})" if detail else name)
+    for template, instances in sorted(templates.items()):
+        if len(instances) == 1:
+            detail = _failure_detail(exe, instances[0])
+            entries.append(f"{instances[0]} ({detail})" if detail else instances[0])
+        else:
+            entries.append(f"{len(instances)} instances of {template}: {', '.join(instances)}")
+    return sorted(entries)
 
 
 # [@ANCHOR: pager_duty:oneshot_last_run_succeeded]
@@ -1565,6 +1906,7 @@ def polling_thread(client, check):
         """Runs the check once, records the result, reports or resolves. Returns seconds to wait before the next run."""
         nonlocal clean_loops, failures_in_a_row, clean_before_streak
         THREAD_HEARTBEATS[key] = time.time()
+        CHECK_UNITS.pop(key, None)
         success, msg = execute_check(check, client)
         record_check_status(client, check, success)
 
@@ -1609,7 +1951,7 @@ def polling_thread(client, check):
             )
             return interval
         severity, clean_msg = extract_severity_prefix(msg)
-        report(client, name, clean_msg, severity, website_id=website_id)
+        report(client, name, clean_msg, severity, website_id=website_id, units=CHECK_UNITS.get(key, ()))
         remedy = check.get("remediate")
         if failures_in_a_row == threshold and clean_before_streak > 0 and remedy and os.path.exists(remedy):
             logger.info(f"[{name}] Triggering auto-remediation script: {remedy}")

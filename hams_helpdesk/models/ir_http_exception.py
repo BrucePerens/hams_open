@@ -114,7 +114,7 @@ def _missing_required_params(endpoint):
     Odoo gives no function to read, a route of another type, or when nothing is missing."""
     if endpoint.routing.get("type") not in _CALLED_WITH_REQUEST_PARAMS:
         return []
-    handler = getattr(endpoint, "original_endpoint", None)
+    handler = getattr(endpoint, "original_endpoint", None)  # burn-ignore-introspection: attribute of Odoo's routing EndPoint objects, absent on other callables
     if handler is None:
         return []
     try:
@@ -132,7 +132,7 @@ def _missing_required_params(endpoint):
 
 
 # [@ANCHOR: hams_helpdesk:request_has_nul_byte]
-# Verified by [@ANCHOR: hams_helpdesk:nul_byte_is_400]
+# Verified by [@ANCHOR: hams_helpdesk:test_nul_byte_is_400]
 def _request_has_nul_byte():
     """True when the path or any text parameter of this request holds a NUL byte (%00), at any depth of a JSON body.
     PostgreSQL refuses such a string, so every route that searched with it answered 500 and filed a

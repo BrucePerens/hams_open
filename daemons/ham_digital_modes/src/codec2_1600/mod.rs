@@ -1079,6 +1079,51 @@ mod tests {
         encoder.shift_in(&[0i16; 3]);
     }
 
+    /// `EncoderFixed::shift_in`'s sliding-window contract, checked on a history window seeded
+    /// with a distinct value per index so any off-by-one, wrong direction or wrong slice length
+    /// shows up as a mismatch: the oldest `N_SAMP` samples drop out, everything between moves
+    /// left by `N_SAMP`, and the new samples land in order at the end. Two consecutive calls
+    /// compose (the second shifts the first call's samples left too).
+    #[test]
+    // Tests [@ANCHOR: codec2_1600:EncoderFixed::shift_in]
+    fn fixed_shift_in_drops_the_oldest_samples_and_appends_the_new_ones_at_the_end() {
+        let mut encoder = EncoderFixed::new();
+        for (i, s) in encoder.sn.iter_mut().enumerate() {
+            *s = i as i16;
+        }
+        let first: [i16; N_SAMP] = core::array::from_fn(|i| 1000 + i as i16);
+        encoder.shift_in(&first);
+        for i in 0..(M_PITCH - N_SAMP) {
+            assert_eq!(
+                encoder.sn[i],
+                (i + N_SAMP) as i16,
+                "sn[{i}] should be the old sn[{}]",
+                i + N_SAMP
+            );
+        }
+        assert_eq!(&encoder.sn[M_PITCH - N_SAMP..], &first[..]);
+
+        let second: [i16; N_SAMP] = core::array::from_fn(|i| -2000 - i as i16);
+        encoder.shift_in(&second);
+        assert_eq!(
+            &encoder.sn[M_PITCH - 2 * N_SAMP..M_PITCH - N_SAMP],
+            &first[..]
+        );
+        assert_eq!(&encoder.sn[M_PITCH - N_SAMP..], &second[..]);
+        // The untouched middle of the window moved by 2 * N_SAMP in total.
+        assert_eq!(encoder.sn[0], (2 * N_SAMP) as i16);
+    }
+
+    /// The fixed-point sibling fails loudly (slice length mismatch) rather than silently
+    /// truncating, the same convention as the float `Encoder::shift_in`.
+    #[test]
+    #[should_panic(expected = "slice length")]
+    // Tests [@ANCHOR: codec2_1600:EncoderFixed::shift_in]
+    fn fixed_shift_in_panics_on_a_wrong_length_slice() {
+        let mut encoder = EncoderFixed::new();
+        encoder.shift_in(&[0i16; 3]);
+    }
+
     /// Real cross-implementation check for `DecoderFixed`, same two
     /// real captured bitstream/PCM fixtures the float `Decoder`'s own
     /// equivalent tests use.

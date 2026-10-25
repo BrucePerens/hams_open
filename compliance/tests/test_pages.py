@@ -204,6 +204,20 @@ class TestCompliancePagesHttp(HamsHttpCase):
         registered_urls = self.env["compliance.document"].with_user(public_uid).search([]).mapped("url")
         self.assertIn("/compliance/certification-authority", registered_urls)
 
+    def test_intellectual_property_page_reachable_and_registered(self):
+        """The patent-filing and open-source page resolves publicly with its three sections and is listed in /compliance."""
+        # Tests [@ANCHOR: compliance:intellectual_property_page]
+        response = self.url_open("/intellectual-property")
+        self.assertEqual(response.status_code, 200)
+        visible = " ".join(response.text.split())
+        self.assertIn("Intellectual Property: Filed Patent Applications and Open Source Publication", visible)
+        self.assertIn("Filed provisional patent applications (serial numbers)", visible)
+        self.assertIn("Awareness of third-party patent activity", visible)
+        self.assertIn("Open source publication", visible)
+        public_uid = self.env.ref("base.public_user").id
+        registered_urls = self.env["compliance.document"].with_user(public_uid).search([]).mapped("url")
+        self.assertIn("/intellectual-property", registered_urls)
+
     def _dmca_visible(self):
         response = self.url_open("/compliance/dmca")
         self.assertEqual(response.status_code, 200)

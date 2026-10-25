@@ -52,6 +52,7 @@ class TestPagerControllers(HamsHttpCase):
 
     def test_02_board_security_and_render(self):
         # [@ANCHOR: test_pager_board_url]
+        # Tests [@ANCHOR: pager_duty:pager_board_route]
         # The board should redirect to login for unauthenticated users (auth='user')
         response = self.url_open("/pager/board")
         self.assertTrue(
@@ -72,6 +73,23 @@ class TestPagerControllers(HamsHttpCase):
         self.authenticate("tester", "testpassword")
         response_auth = self.url_open("/pager/board")
         self.assertEqual(response_auth.status_code, 200)
+
+    def test_02a_legacy_board_link_redirects_to_the_backend_client_action(self):
+        # Tests [@ANCHOR: pager_duty:pager_board_route]
+        self.env["res.users"].create(
+            {
+                "name": "Board Redirect Tester",
+                "login": "board_redirect_tester",
+                "password": "board_redirect_tester",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        self.env.flush_all()
+        self.authenticate("board_redirect_tester", "board_redirect_tester")
+        response = self.url_open("/pager/board", allow_redirects=False)
+        self.assertIn(response.status_code, (302, 303))
+        action = self.env.ref("pager_duty.action_pager_board_client")
+        self.assertIn(f"/odoo?action={action.id}", response.headers["Location"])
 
     def test_02b_search_logs_poll_reports_job_state(self):
         # Tests [@ANCHOR: pager_duty:search_logs_poll]
@@ -94,6 +112,25 @@ class TestPagerControllers(HamsHttpCase):
         result = response.json()["result"]
         self.assertEqual(result["status"], "done")
         self.assertEqual(result["matches"], ["line 1"])
+
+    def test_02b2_log_files_lists_only_the_registered_active_files_and_only_to_an_admin(self):
+        # Tests [@ANCHOR: pager_duty:get_log_files]
+        self.env["pager.log.file"].create({"filepath": "/var/log/get_log_files_registered.log"})
+        self.env["pager.log.file"].create({"filepath": "/var/log/get_log_files_inactive.log", "active": False})
+        for login, group in (("log_files_admin", "pager_duty.group_pager_admin"), ("log_files_portal", "base.group_portal")):
+            self.env["res.users"].create(
+                {"name": login, "login": login, "password": login, "group_ids": [(6, 0, [self.env.ref(group).id])]}
+            )
+        self.env.flush_all()
+        payload = {"jsonrpc": "2.0", "method": "call", "params": {}}
+        self.authenticate("log_files_admin", "log_files_admin")
+        result = self.url_open("/api/v1/pager/logs/files", json=payload).json()["result"]
+        self.assertIn("/var/log/get_log_files_registered.log", result["files"])
+        self.assertNotIn("/var/log/get_log_files_inactive.log", result["files"])
+        self.authenticate("log_files_portal", "log_files_portal")
+        denied = self.url_open("/api/v1/pager/logs/files", json=payload).json()
+        self.assertNotIn("result", denied)
+        self.assertEqual(denied["error"]["data"]["name"], "odoo.exceptions.AccessError")
 
     def test_02c_search_logs_poll_rejects_a_non_admin(self):
         # Tests [@ANCHOR: pager_duty:search_logs_poll]
