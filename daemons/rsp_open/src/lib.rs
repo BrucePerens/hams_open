@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010) and RSP1A (1df7:3000).
+//! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010), RSP1A (1df7:3000) and
+//! RSP1 (1df7:2500), receive only.
 //!
 //! Written from `docs/PROTOCOL.md`, a description of the receiver's USB traffic recorded
 //! from the author's own unit. See README.md for provenance.
 //!
-//! The driver supports only a receiver whose firmware is already running (bcdDevice 2.07,
-//! i.e. SDRplay's software has opened it since power-up). A receiver in its boot-ROM state
-//! (bcdDevice 2.00) is reported as [`Error::NotRunning`]; this crate contains no firmware and
-//! no firmware-loading code.
+//! A receiver is driven in either of two states. In its boot-ROM state (bcdDevice 2.00, what a
+//! receiver is after power-up) the tuner, sample rate, IF gain and stream all work, without
+//! any firmware; the board controls (antenna selection, band filters, notch, bias-T,
+//! front-end steps) are not reachable there and return [`Error::Unsupported`]. A receiver
+//! that SDRplay's software has already loaded with firmware (bcdDevice 2.07) also gets the
+//! board controls. This crate contains no firmware and no firmware-loading code, never sends
+//! the firmware download or reset requests, and never resets the USB device.
+//! [`Rsp::open_auto`] takes whichever is present; [`Rsp::open`] needs a running receiver.
 //!
 //! ```no_run
 //! use rsp_open::{Rsp, Antenna};
-//! // The first running RSP2/RSP2pro or RSP1A.
-//! let mut rx = Rsp::open()?;
+//! // The first receiver present, running or cold.
+//! let mut rx = Rsp::open_auto(rsp_open::Settings::default())?;
 //! println!("{}", rx.model().name());
 //! rx.set_frequency(95_800_000)?;
 //! rx.set_gain(40, 0)?;

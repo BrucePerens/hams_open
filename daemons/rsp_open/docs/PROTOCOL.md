@@ -1,6 +1,6 @@
 # SDRplay RSP USB protocol, from observed wire traffic
 
-Status: the RSP2pro section is complete as far as captures without a signal source allow (2026-10-25); it was verified by a small stand-alone program (1.12) and by the open driver in this directory, `rsp_open` (1.13). The RSP1A section (2) is complete as far as captures without a signal source allow (2026-10-25) and was checked by the same kind of stand-alone program (2.10); `rsp_open` drives the RSP1A from it (2.13). The RSP1 section is in progress.
+Status (2026-10-25): the RSP2pro section (1) and RSP1A section (2) describe the traffic of the vendor software on a firmware-loaded receiver; section 3 covers the RSP1; section 5 records what a receiver does with no firmware (boot ROM, bcdDevice 2.00): the tuner, ADC clock and stream work on all three models, the board requests 0x48, 0x49 and 0x4b are not answered, and the experiments around reaching the board without the firmware (all negative so far). The open driver `rsp_open` is written from this document and the measurements in it.
 
 Goal: describe, in our own words and only from the USB traffic between SDRplay's software and receivers the author owns, how the RSPs are controlled, so that an open driver can be written. This document is the specification `rsp_open` was written from.
 

@@ -56,6 +56,7 @@ pub(crate) fn inspect_in(
     bus: u8,
     address: u8,
 ) -> Result<Option<KernelDriverUse>, Error> {
+    // [@ANCHOR: rsp_kernel_inspect_in]
     let devices = sys.join("bus/usb/devices");
     let Ok(rd) = std::fs::read_dir(&devices) else {
         return Ok(None);
@@ -108,6 +109,7 @@ pub(crate) fn inspect_in(
 }
 
 fn holders_of(proc_: &Path, nodes: &[PathBuf]) -> (Vec<Holder>, bool) {
+    // [@ANCHOR: rsp_kernel_holders_of]
     let mut holders = Vec::new();
     let mut complete = true;
     if nodes.is_empty() {
@@ -235,6 +237,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_kernel_holders_of]
+    // Tests [@ANCHOR: rsp_kernel_inspect_in]
     fn bound_driver_with_a_process_using_the_node() {
         let t = Tmp::new("busy");
         fake(&t, true, Some((4242, "gqrx")));

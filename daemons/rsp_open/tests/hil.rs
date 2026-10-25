@@ -737,3 +737,39 @@ fn hil_boot_rom_rsp1a_reference_spurs() {
     rx.stop_stream().unwrap();
     rx.close().unwrap();
 }
+
+/// Whichever receiver is present (running or cold) opens through `open_auto`, tunes after the
+/// stream starts, and shows the reference harmonic where it belongs.
+#[test]
+#[ignore]
+// Tests [@ANCHOR: rsp_device_rsp_open_auto]
+fn hil_open_auto() {
+    let any = list_devices()
+        .map(|d| {
+            d.iter().any(|d| {
+                (rsp_open::SUPPORTED_PIDS.contains(&d.pid) && d.is_running())
+                    || (rsp_open::BOOT_ROM_PIDS.contains(&d.pid)
+                        && d.bcd_device == rsp_open::BCD_BOOT_ROM)
+            })
+        })
+        .unwrap_or(false);
+    if !any {
+        eprintln!("no receiver: skipping");
+        return;
+    }
+    let mut rx = Rsp::open_auto(Settings::default()).expect("open_auto");
+    let mut it = rx.start_stream_iter(256).expect("start");
+    let m = measure(&mut rx, &mut it, 95_800_000, 200e3);
+    eprintln!(
+        "{}: {:.1} Hz, {:.1} dB, gaps {}",
+        rx.model().name(),
+        m.peak_hz,
+        m.over_db,
+        m.gaps
+    );
+    assert!((m.peak_hz - 200e3).abs() < 400.0, "peak at {}", m.peak_hz);
+    assert!(m.over_db > 20.0, "only {} dB over floor", m.over_db);
+    drop(it);
+    rx.stop_stream().unwrap();
+    rx.close().unwrap();
+}

@@ -1,10 +1,15 @@
 # rsp_open
 
-An open Rust driver for the SDRplay **RSP2pro** (USB 1df7:3010) and **RSP1A** (USB
-1df7:3000), library crate plus two examples. Status: works on the author's RSP2pro as of
-2026-10-25 (see "What works" below); RSP1A support is written from the RSP1A captures and
-unit-tested against them, and its hardware tests (`hil_rsp1a_*`) have not yet been run on
-the receiver.
+An open Rust driver for the SDRplay **RSP2pro** (USB 1df7:3010), **RSP1A** (USB 1df7:3000)
+and **RSP1** (USB 1df7:2500): library crate plus examples, receive only. Status
+(2026-10-25): all three receivers tune and stream from power-up with no firmware and no
+SDRplay software, checked with each receiver's own 24 MHz reference harmonics (1 kHz-2 GHz
+bands tried from 23.8 MHz to 1.2 GHz, including 375-420 MHz, 0 counter gaps). **Limits:**
+without firmware the RSP2pro's and RSP1A's board controls (antenna selection, band filters,
+notch, bias-T, front-end attenuator steps) cannot be set, and a cold board comes up about 10 dB
+attenuated against its normal state (`docs/PROTOCOL.md` 5.15); whether a cold receiver
+receives a real signal well was not tested (nothing was ever connected to an antenna port).
+The low-IF modes are incomplete (below).
 
 Licence: AGPL-3.0-or-later (SPDX headers in every source file, `Cargo.toml` `license` field),
 the repository default described in `LICENSING.md`. The crate is not published to crates.io
@@ -88,6 +93,7 @@ use rsp_open::{Rsp, Antenna, Bandwidth, IfMode, Model, Settings};
 let mut rx = Rsp::open()?;                     // first running RSP2/RSP2pro or RSP1A
 // or Rsp::open_model_with(Model::Rsp1a, Settings::default())?; (Rsp2 is the same type)
 rx.set_frequency(7_074_000)?;                  // 1 kHz - 2 GHz
+// let mut rx = Rsp::open_auto(Settings::default())?;  // running or cold receiver, whichever is present
 rx.set_sample_rate(6_000_000)?;                // 2.0, 2.048 or 3..10 MHz ADC clock (zero IF)
 rx.set_if_mode(IfMode::Low1620k)?;             // or low IF with its fixed ADC clock
 rx.set_bandwidth(Bandwidth::K1536)?;
@@ -198,6 +204,16 @@ the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 - [@ANCHOR: rsp_open:rsp_encode_sampleformat_pairs_per_block] I/Q pairs per block for each sample format.
 - [@ANCHOR: rsp_open:rsp_encode_adc_clock] ADC clock synthesiser words (MSi2500 registers 0x03/0x04), with ppm correction.
 - [@ANCHOR: rsp_open:rsp_encode_ppm_to_ppb] Validates a ppm correction and converts it to parts per billion.
+- [@ANCHOR: rsp_open:rsp_encode_r0_plan] MSi001 r0 with the first-LO plan bits (120 MHz and non-AM modes 2, 144 MHz 1, 168 MHz 0).
+- [@ANCHOR: rsp_open:rsp_device_rsp_open_auto] Opens whichever supported receiver is present: a running one if there is one, otherwise the first cold one.
+- [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_with] Opens the first receiver in the boot-ROM state (bcdDevice 2.00) and drives it without any firmware.
+- [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_model_with] As above, but only a receiver of one model (RSP2pro, RSP1A or RSP1), so a second receiver on the bus is not driven by mistake.
+- [@ANCHOR: rsp_open:rsp_device_rsp_need_board] Refuses a board control (antenna, notch, bias-T, reference output) in boot-ROM mode, where the board is not reachable.
+- [@ANCHOR: rsp_open:rsp_device_rsp_set_notch] Switches the broadcast notch; `Error::Unsupported` in boot-ROM mode.
+- [@ANCHOR: rsp_open:rsp_device_rsp_set_bias_t] Switches the bias-T (off at open, active low on the board); `Error::Unsupported` in boot-ROM mode.
+- [@ANCHOR: rsp_open:rsp_device_sampleiter_next_chunk] The next sample chunk, or `Error::Stalled` when nothing arrived within the timeout, or `Error::Stream` when the stream ended.
+- [@ANCHOR: rsp_open:rsp_kernel_inspect_in] Finds the kernel driver bound to a receiver's interface 0 and its device nodes from sysfs, and who has them open from /proc (roots given, for tests).
+- [@ANCHOR: rsp_open:rsp_kernel_holders_of] The processes (pid and name) that have one of a set of device nodes open; reports when another user's processes could not be inspected.
 - [@ANCHOR: rsp_open:rsp_stream_blockparser_push_packet] Splits isochronous packets into blocks, checks the sample counter (gaps, lost samples, wrap-around).
 - [@ANCHOR: rsp_open:rsp_stream_decode_payload] Decodes 14-bit, 12-bit packed, 10-bit "384" and 8-bit payloads to 16-bit left-aligned I/Q.
 - [@ANCHOR: rsp_open:rsp_dsp_fft] Radix-2 FFT used by the tests and examples.
