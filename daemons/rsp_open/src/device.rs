@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! The RSP2pro driver: control sequences and streaming on top of a [`Transport`].
 
 use crate::encode::{self, *};
@@ -114,7 +115,10 @@ impl Rsp2<UsbTransport> {
         let devs = usb::list_devices()?;
         let Some(info) = devs.iter().find(|d| d.pid == PID_RSP2) else {
             if let Some(d) = devs.first() {
-                return Err(Error::UnsupportedModel { pid: d.pid, name: d.model.name() });
+                return Err(Error::UnsupportedModel {
+                    pid: d.pid,
+                    name: d.model.name(),
+                });
             }
             return Err(Error::NotFound);
         };
@@ -134,7 +138,9 @@ impl<T: Transport> Rsp2<T> {
     /// Sends the open sequence (1.5) with `settings`.
     pub fn with_transport(t: T, settings: Settings, settle: Duration) -> Result<Self, Error> {
         if settings.bias_t {
-            return Err(Error::InvalidArgument("open with bias-T off; enable it explicitly later".into()));
+            return Err(Error::InvalidArgument(
+                "open with bias-T off; enable it explicitly later".into(),
+            ));
         }
         let band = band_for(settings.rf_hz)?;
         check_antenna(settings.antenna, settings.rf_hz)?;
@@ -142,13 +148,30 @@ impl<T: Transport> Rsp2<T> {
         let mut s = settings;
         let n = lna_table(gain_table(&band, s.antenna)).len() as u8;
         if s.lna_state >= n {
-            return Err(Error::InvalidArgument(format!("LNA state {} >= {n} for this band", s.lna_state)));
+            return Err(Error::InvalidArgument(format!(
+                "LNA state {} >= {n} for this band",
+                s.lna_state
+            )));
         }
         if s.if_gr_db > IF_GR_MAX {
-            return Err(Error::InvalidArgument(format!("IF gain reduction {} > {IF_GR_MAX}", s.if_gr_db)));
+            return Err(Error::InvalidArgument(format!(
+                "IF gain reduction {} > {IF_GR_MAX}",
+                s.if_gr_db
+            )));
         }
         s.ppb = s.ppb.clamp(-1_000_000, 1_000_000);
-        let mut rx = Rsp2 { t, s, band, cfg, core: None, streaming: false, closed: false, settle, read48: 0, serial: None };
+        let mut rx = Rsp2 {
+            t,
+            s,
+            band,
+            cfg,
+            core: None,
+            streaming: false,
+            closed: false,
+            settle,
+            read48: 0,
+            serial: None,
+        };
         rx.init()?;
         Ok(rx)
     }
@@ -197,10 +220,18 @@ impl<T: Transport> Rsp2<T> {
         board_band_byte(self.band.filter, self.s.antenna, self.s.ext_ref_out)
     }
     fn r0_word(&self) -> u32 {
-        r0(mode_byte(self.band.mode, self.s.antenna), self.s.if_mode, self.s.bandwidth)
+        r0(
+            mode_byte(self.band.mode, self.s.antenna),
+            self.s.if_mode,
+            self.s.bandwidth,
+        )
     }
     fn pll(&self) -> Result<Pll, Error> {
-        encode::pll(lo_hz(&self.band, self.s.rf_hz), self.band.mode.lo_div(), self.s.ppb)
+        encode::pll(
+            lo_hz(&self.band, self.s.rf_hz),
+            self.band.mode.lo_div(),
+            self.s.ppb,
+        )
     }
     fn gain_word(&self) -> u32 {
         r1(self.s.if_gr_db, &self.step())
@@ -286,11 +317,15 @@ impl<T: Transport> Rsp2<T> {
     /// Set IF gain reduction (0..=59 dB) and LNA state (0..number of states in the band).
     pub fn set_gain(&mut self, if_gr_db: u8, lna_state: u8) -> Result<(), Error> {
         if if_gr_db > IF_GR_MAX {
-            return Err(Error::InvalidArgument(format!("IF gain reduction {if_gr_db} > {IF_GR_MAX}")));
+            return Err(Error::InvalidArgument(format!(
+                "IF gain reduction {if_gr_db} > {IF_GR_MAX}"
+            )));
         }
         let n = self.table().len() as u8;
         if lna_state >= n {
-            return Err(Error::InvalidArgument(format!("LNA state {lna_state} >= {n} for this band")));
+            return Err(Error::InvalidArgument(format!(
+                "LNA state {lna_state} >= {n} for this band"
+            )));
         }
         self.s.if_gr_db = if_gr_db;
         self.s.lna_state = lna_state;
@@ -430,7 +465,10 @@ impl<T: Transport> Rsp2<T> {
     }
 
     fn restart_stream(&mut self) -> Result<(), Error> {
-        let core = self.core.clone().ok_or_else(|| Error::Stream("no stream callback".into()))?;
+        let core = self
+            .core
+            .clone()
+            .ok_or_else(|| Error::Stream("no stream callback".into()))?;
         {
             let mut c = core.lock().unwrap();
             let stats = c.parser.stats;
@@ -452,7 +490,11 @@ impl<T: Transport> Rsp2<T> {
         if self.streaming {
             return Err(Error::Stream("already streaming".into()));
         }
-        let core = Arc::new(Mutex::new(Core { parser: BlockParser::new(&self.cfg), cb: Box::new(cb), buf: Vec::with_capacity(1512) }));
+        let core = Arc::new(Mutex::new(Core {
+            parser: BlockParser::new(&self.cfg),
+            cb: Box::new(cb),
+            buf: Vec::with_capacity(1512),
+        }));
         self.core = Some(core);
         self.restart_stream()
     }
@@ -467,12 +509,19 @@ impl<T: Transport> Rsp2<T> {
             Err(TrySendError::Full(_)) => *d2.lock().unwrap() += 1,
             Err(TrySendError::Disconnected(_)) => {}
         })?;
-        Ok(SampleIter { rx, dropped, timeout: Duration::from_secs(2) })
+        Ok(SampleIter {
+            rx,
+            dropped,
+            timeout: Duration::from_secs(2),
+        })
     }
 
     /// Statistics of the current or last stream.
     pub fn stream_stats(&self) -> StreamStats {
-        self.core.as_ref().map(|c| c.lock().unwrap().parser.stats).unwrap_or_default()
+        self.core
+            .as_ref()
+            .map(|c| c.lock().unwrap().parser.stats)
+            .unwrap_or_default()
     }
 
     /// Stop streaming (STOP request first, then the transfers are cancelled).
@@ -528,7 +577,9 @@ impl<T: Transport> Drop for Rsp2<T> {
 
 fn check_antenna(ant: Antenna, rf_hz: u64) -> Result<(), Error> {
     if ant == Antenna::HiZ && rf_hz >= HIZ_MAX_HZ {
-        return Err(Error::InvalidArgument("the Hi-Z port works only below 60 MHz".into()));
+        return Err(Error::InvalidArgument(
+            "the Hi-Z port works only below 60 MHz".into(),
+        ));
     }
     Ok(())
 }
@@ -547,30 +598,66 @@ mod tests {
 
     fn w(reg: u8, v: u32) -> Op {
         let (value, index) = reg_write_args(reg, v);
-        Op::Out { req: 0x41, value, index }
+        Op::Out {
+            req: 0x41,
+            value,
+            index,
+        }
     }
     fn t(v: u32) -> Op {
         w(0x09, v)
     }
     fn b(a: u8, v: u8) -> Op {
         let (value, index) = board_write_args(a, v);
-        Op::Out { req: 0x49, value, index }
+        Op::Out {
+            req: 0x49,
+            value,
+            index,
+        }
     }
     fn r48() -> Op {
-        Op::In { req: 0x48, value: 0, index: 0, len: 1 }
+        Op::In {
+            req: 0x48,
+            value: 0,
+            index: 0,
+            len: 1,
+        }
     }
 
     /// The API's own open sequence for zero IF, 2 MHz, 100 MHz, BW 200 kHz, GR 40, LNA 0
     /// (capture c20/c21, protocol document 1.5) must be reproduced exactly.
     #[test]
     fn open_sequence_matches_api_capture() {
-        let s = Settings { bandwidth: Bandwidth::K200, ..Settings::default() };
+        let s = Settings {
+            bandwidth: Bandwidth::K200,
+            ..Settings::default()
+        };
         let (rx, m) = open_mock(s);
         let want = vec![
-            w(0x08, 0x00ee80), Op::Alt(2), r48(), r48(), w(0x05, 0x0c), t(0x00000e), w(0x00, 0x000200),
-            w(0x02, 0x004801), t(0x28bb85), w(0x07, 0x14), t(0x200016), t(0x043420), b(0x12, 0x5d),
-            b(0x13, 0xa5), b(0x00, 0), b(0x01, 0), t(0x00fff3), t(0x213e72), t(0x00000d), t(0x00000e),
-            t(0x00c281), b(0x13, 0xb9), w(0x04, 0), w(0x03, 0x01181f),
+            w(0x08, 0x00ee80),
+            Op::Alt(2),
+            r48(),
+            r48(),
+            w(0x05, 0x0c),
+            t(0x00000e),
+            w(0x00, 0x000200),
+            w(0x02, 0x004801),
+            t(0x28bb85),
+            w(0x07, 0x14),
+            t(0x200016),
+            t(0x043420),
+            b(0x12, 0x5d),
+            b(0x13, 0xa5),
+            b(0x00, 0),
+            b(0x01, 0),
+            t(0x00fff3),
+            t(0x213e72),
+            t(0x00000d),
+            t(0x00000e),
+            t(0x00c281),
+            b(0x13, 0xb9),
+            w(0x04, 0),
+            w(0x03, 0x01181f),
         ];
         assert_eq!(m.ops(), want);
         assert_eq!(rx.read48, 0x04);
@@ -580,7 +667,11 @@ mod tests {
     /// the API's rounding instead of rsp2verify's.
     #[test]
     fn open_sequence_matches_rsp2verify() {
-        let s = Settings { if_gr_db: 30, rf_hz: 95_800_000, ..Settings::default() };
+        let s = Settings {
+            if_gr_db: 30,
+            rf_hz: 95_800_000,
+            ..Settings::default()
+        };
         let (_rx, m) = open_mock(s);
         let ops = m.ops();
         assert_eq!(ops[11], t(0x04f420));
@@ -600,8 +691,17 @@ mod tests {
         // Band change to 10 MHz: full sequence with AM mode, filter 000.
         rx.set_frequency(10_000_000).unwrap();
         let want = vec![
-            t(0x04fe10), b(0x12, 0x45), b(0x13, 0xa5), b(0x00, 0), b(0x01, 0), t(0x00fff3), t(0x157cf2),
-            t(0x0d), t(0x0e), t(0x00c281), b(0x13, 0xb9),
+            t(0x04fe10),
+            b(0x12, 0x45),
+            b(0x13, 0xa5),
+            b(0x00, 0),
+            b(0x01, 0),
+            t(0x00fff3),
+            t(0x157cf2),
+            t(0x0d),
+            t(0x0e),
+            t(0x00c281),
+            b(0x13, 0xb9),
         ];
         assert_eq!(m.ops(), want);
     }
@@ -616,13 +716,34 @@ mod tests {
         rx.set_notch(false).unwrap();
         rx.set_ext_ref_out(true).unwrap();
         rx.set_ext_ref_out(false).unwrap();
-        assert_eq!(m.ops(), vec![b(0x12, 0x5e), b(0x12, 0x5d), b(0x13, 0x79), b(0x13, 0xb9), b(0x12, 0x1d), b(0x12, 0x5d)]);
+        assert_eq!(
+            m.ops(),
+            vec![
+                b(0x12, 0x5e),
+                b(0x12, 0x5d),
+                b(0x13, 0x79),
+                b(0x13, 0xb9),
+                b(0x12, 0x1d),
+                b(0x12, 0x5d)
+            ]
+        );
         m.clear();
         rx.set_ppm(10.0).unwrap();
-        assert_eq!(m.ops(), vec![t(0x000003), t(0x213e72), w(0x04, 0x0fff58), w(0x03, 0x01179f)]);
+        assert_eq!(
+            m.ops(),
+            vec![
+                t(0x000003),
+                t(0x213e72),
+                w(0x04, 0x0fff58),
+                w(0x03, 0x01179f)
+            ]
+        );
         m.clear();
         rx.set_ppm(0.0).unwrap();
-        assert_eq!(m.ops(), vec![t(0x00fff3), t(0x213e72), w(0x04, 0), w(0x03, 0x01181f)]);
+        assert_eq!(
+            m.ops(),
+            vec![t(0x00fff3), t(0x213e72), w(0x04, 0), w(0x03, 0x01181f)]
+        );
         m.clear();
         rx.set_gain(20, 0).unwrap();
         assert_eq!(m.ops(), vec![t(0x00c141), b(0x13, 0xb9)]);
@@ -631,7 +752,10 @@ mod tests {
         rx.set_frequency(10_000_000).unwrap();
         m.clear();
         rx.select_antenna(Antenna::HiZ).unwrap();
-        assert_eq!(m.ops()[0], t((2 << 17) | (3 << 14) | (3 << 12) | (0x61 << 4)));
+        assert_eq!(
+            m.ops()[0],
+            t((2 << 17) | (3 << 14) | (3 << 12) | (0x61 << 4))
+        );
         rx.set_gain(40, 4).unwrap();
         assert_eq!(m.ops().last().cloned(), Some(b(0x13, 0xb9)));
         assert!(rx.set_gain(40, 5).is_err());
@@ -651,7 +775,18 @@ mod tests {
         let (mut rx, m) = open_mock(Settings::default());
         m.clear();
         rx.set_sample_rate(2_048_000).unwrap();
-        assert_eq!(m.ops(), vec![w(0x03, 0x011300), Op::Alt(2), w(0x07, 0x05), w(0x04, 0x0624dd), w(0x03, 0x01081f), t(0x00c281), b(0x13, 0xb9)]);
+        assert_eq!(
+            m.ops(),
+            vec![
+                w(0x03, 0x011300),
+                Op::Alt(2),
+                w(0x07, 0x05),
+                w(0x04, 0x0624dd),
+                w(0x03, 0x01081f),
+                t(0x00c281),
+                b(0x13, 0xb9)
+            ]
+        );
         rx.set_sample_rate(8_192_000).unwrap();
         m.clear();
         rx.set_sample_rate(9_000_000).unwrap();
@@ -668,7 +803,8 @@ mod tests {
         let got = Arc::new(Mutex::new(0usize));
         let g2 = got.clone();
         m.clear();
-        rx.start_stream(move |s, _| *g2.lock().unwrap() += s.len()).unwrap();
+        rx.start_stream(move |s, _| *g2.lock().unwrap() += s.len())
+            .unwrap();
         assert_eq!(*got.lock().unwrap(), 756);
         let st = rx.stream_stats();
         assert_eq!((st.blocks, st.gaps, st.lost_samples), (3, 1, 504));
@@ -676,13 +812,31 @@ mod tests {
         rx.close().unwrap();
         let ops = m.ops();
         assert_eq!(ops[0], Op::IsoStart);
-        assert_eq!(ops[1], Op::Out { req: 0x43, value: 0, index: 0 });
+        assert_eq!(
+            ops[1],
+            Op::Out {
+                req: 0x43,
+                value: 0,
+                index: 0
+            }
+        );
         let tail: Vec<Op> = ops[ops.len() - 9..].to_vec();
         assert_eq!(
             tail,
             vec![
-                Op::Out { req: 0x45, value: 0, index: 0 }, Op::IsoStop, b(0x13, 0xb9), t(0x1c), t(0), w(0x03, 0x091300),
-                w(0x05, 0x04), Op::Alt(0), Op::Release,
+                Op::Out {
+                    req: 0x45,
+                    value: 0,
+                    index: 0
+                },
+                Op::IsoStop,
+                b(0x13, 0xb9),
+                t(0x1c),
+                t(0),
+                w(0x03, 0x091300),
+                w(0x05, 0x04),
+                Op::Alt(0),
+                Op::Release,
             ]
         );
     }
@@ -691,19 +845,46 @@ mod tests {
     fn assert_allowed(ops: &[Op]) {
         for op in ops {
             match op {
-                Op::Out { req: 0x41, value, index } => {
+                Op::Out {
+                    req: 0x41,
+                    value,
+                    index,
+                } => {
                     let reg = (*value & 0xff) as u8;
-                    assert!([0x00, 0x02, 0x03, 0x04, 0x05, 0x07, 0x08, 0x09].contains(&reg), "register {reg:02x}");
+                    assert!(
+                        [0x00, 0x02, 0x03, 0x04, 0x05, 0x07, 0x08, 0x09].contains(&reg),
+                        "register {reg:02x}"
+                    );
                     if reg == 0x09 {
                         let word = ((*index as u32) << 8) | (*value as u32 >> 8);
-                        assert!([0, 1, 2, 3, 5, 6, 12, 13, 14].contains(&(word & 0xf)), "tuner reg {}", word & 0xf);
+                        assert!(
+                            [0, 1, 2, 3, 5, 6, 12, 13, 14].contains(&(word & 0xf)),
+                            "tuner reg {}",
+                            word & 0xf
+                        );
                     }
                 }
-                Op::Out { req: 0x43 | 0x45, value: 0, index: 0 } => {}
-                Op::Out { req: 0x49, value, index: 0x40 } => {
-                    assert!([0x00, 0x01, 0x12, 0x13].contains(&((*value >> 8) as u8)), "board addr");
+                Op::Out {
+                    req: 0x43 | 0x45,
+                    value: 0,
+                    index: 0,
+                } => {}
+                Op::Out {
+                    req: 0x49,
+                    value,
+                    index: 0x40,
+                } => {
+                    assert!(
+                        [0x00, 0x01, 0x12, 0x13].contains(&((*value >> 8) as u8)),
+                        "board addr"
+                    );
                 }
-                Op::In { req: 0x48, value: 0, index: 0, len: 1 } => {}
+                Op::In {
+                    req: 0x48,
+                    value: 0,
+                    index: 0,
+                    len: 1,
+                } => {}
                 Op::Alt(a) => assert!(*a <= 2, "alt {a}"),
                 Op::IsoStart | Op::IsoStop | Op::Release => {}
                 other => panic!("request not in the observed list: {other:?}"),
@@ -714,7 +895,18 @@ mod tests {
     #[test]
     fn only_observed_requests_are_emitted() {
         let (mut rx, m) = open_mock(Settings::default());
-        for f in [1_000u64, 7_074_000, 14_000_000, 50_000_000, 95_800_000, 144_000_000, 300_000_000, 446_000_000, 1_296_000_000, 2_000_000_000] {
+        for f in [
+            1_000u64,
+            7_074_000,
+            14_000_000,
+            50_000_000,
+            95_800_000,
+            144_000_000,
+            300_000_000,
+            446_000_000,
+            1_296_000_000,
+            2_000_000_000,
+        ] {
             rx.set_frequency(f).unwrap();
             for l in 0..rx.lna_states() {
                 rx.set_gain(0, l).unwrap();
@@ -730,10 +922,17 @@ mod tests {
             rx.set_notch(false).unwrap();
         }
         rx.start_stream(|_, _| {}).unwrap();
-        for fs in [2_000_000, 2_048_000, 3_000_000, 6_000_000, 7_000_000, 8_192_000, 9_000_000, 10_000_000] {
+        for fs in [
+            2_000_000, 2_048_000, 3_000_000, 6_000_000, 7_000_000, 8_192_000, 9_000_000, 10_000_000,
+        ] {
             rx.set_sample_rate(fs).unwrap();
         }
-        for mode in [IfMode::Low450k, IfMode::Low1620k, IfMode::Low2048k, IfMode::Zero] {
+        for mode in [
+            IfMode::Low450k,
+            IfMode::Low1620k,
+            IfMode::Low2048k,
+            IfMode::Zero,
+        ] {
             rx.set_if_mode(mode).unwrap();
         }
         for bw in [Bandwidth::K200, Bandwidth::M8] {
@@ -748,7 +947,10 @@ mod tests {
         assert_allowed(&ops);
         // Bias-T was never switched on in this test.
         for op in &ops {
-            if let Op::Out { req: 0x49, value, .. } = op {
+            if let Op::Out {
+                req: 0x49, value, ..
+            } = op
+            {
                 if value >> 8 == 0x13 {
                     assert_eq!(value & 1, 1, "bias-T on");
                 }
@@ -759,10 +961,21 @@ mod tests {
     #[test]
     fn refuses_bias_t_at_open_and_unsupported_band() {
         let m = MockTransport::new();
-        assert!(Rsp2::with_transport(m.clone(), Settings { bias_t: true, ..Settings::default() }, Duration::ZERO).is_err());
+        assert!(Rsp2::with_transport(
+            m.clone(),
+            Settings {
+                bias_t: true,
+                ..Settings::default()
+            },
+            Duration::ZERO
+        )
+        .is_err());
         assert!(m.ops().is_empty());
         let (mut rx, _) = open_mock(Settings::default());
-        assert!(matches!(rx.set_frequency(400_000_000), Err(Error::Unsupported(_))));
+        assert!(matches!(
+            rx.set_frequency(400_000_000),
+            Err(Error::Unsupported(_))
+        ));
         assert_eq!(rx.settings().rf_hz, 100_000_000);
     }
 }

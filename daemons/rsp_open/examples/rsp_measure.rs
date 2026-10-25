@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! rsp_measure: characterise a running RSP2pro using only its own internal signals (the
 //! 24 MHz reference harmonics and the noise floor). Nothing may be connected to the antenna
 //! ports; bias-T stays off throughout.
@@ -35,9 +36,13 @@ fn grab(it: &mut SampleIter, skip: usize, n: usize) -> Vec<IqI16> {
 /// normalised so that a full-scale complex tone integrates to 1.0.
 fn spectrum(x: &[IqI16]) -> Vec<f64> {
     let n = NFFT;
-    let (mi, mq) = x.iter().fold((0.0, 0.0), |(a, b), s| (a + s.i as f64, b + s.q as f64));
+    let (mi, mq) = x
+        .iter()
+        .fold((0.0, 0.0), |(a, b), s| (a + s.i as f64, b + s.q as f64));
     let (mi, mq) = (mi / x.len() as f64, mq / x.len() as f64);
-    let win: Vec<f64> = (0..n).map(|k| 0.5 - 0.5 * (2.0 * PI * k as f64 / n as f64).cos()).collect();
+    let win: Vec<f64> = (0..n)
+        .map(|k| 0.5 - 0.5 * (2.0 * PI * k as f64 / n as f64).cos())
+        .collect();
     let w2: f64 = win.iter().map(|w| w * w).sum();
     let mut acc = vec![0.0; n];
     let segs = x.len() / n;
@@ -53,7 +58,9 @@ fn spectrum(x: &[IqI16]) -> Vec<f64> {
             acc[k] += re[k] * re[k] + im[k] * im[k];
         }
     }
-    (0..n).map(|k| acc[(k + n / 2) % n] / segs as f64 / (w2 * n as f64)).collect()
+    (0..n)
+        .map(|k| acc[(k + n / 2) % n] / segs as f64 / (w2 * n as f64))
+        .collect()
 }
 
 fn db(x: f64) -> f64 {
@@ -78,24 +85,57 @@ fn observe(x: &[IqI16], fs: f64, spur_off: Option<f64>) -> Obs {
     let n = sp.len();
     let bin = fs / n as f64;
     // Floor: median of bins away from DC.
-    let away: Vec<f64> = sp.iter().enumerate().filter(|(k, _)| ((*k as f64 - (n / 2) as f64) * bin).abs() > 20e3).map(|(_, v)| *v).collect();
+    let away: Vec<f64> = sp
+        .iter()
+        .enumerate()
+        .filter(|(k, _)| ((*k as f64 - (n / 2) as f64) * bin).abs() > 20e3)
+        .map(|(_, v)| *v)
+        .collect();
     let floor_bin = median(&away);
     let (mut spur, mut poff) = (f64::NAN, f64::NAN);
     if let Some(off) = spur_off {
         let c = (n / 2) as f64 + off / bin;
         let lo = (c - 2_000.0 / bin).max(0.0) as usize;
         let hi = ((c + 2_000.0 / bin) as usize).min(n - 1);
-        let k = (lo..=hi).max_by(|&a, &b| sp[a].partial_cmp(&sp[b]).unwrap()).unwrap();
-        let p: f64 = (k.saturating_sub(4)..=(k + 4).min(n - 1)).map(|j| sp[j] - floor_bin).sum();
+        let k = (lo..=hi)
+            .max_by(|&a, &b| sp[a].partial_cmp(&sp[b]).unwrap())
+            .unwrap();
+        let p: f64 = (k.saturating_sub(4)..=(k + 4).min(n - 1))
+            .map(|j| sp[j] - floor_bin)
+            .sum();
         spur = db(p.max(1e-30));
         poff = (k as f64 - (n / 2) as f64) * bin;
     }
-    let (si, sq) = x.iter().fold((0.0, 0.0), |(a, b), s| (a + s.i as f64, b + s.q as f64));
+    let (si, sq) = x
+        .iter()
+        .fold((0.0, 0.0), |(a, b), s| (a + s.i as f64, b + s.q as f64));
     let (mi, mq) = (si / x.len() as f64, sq / x.len() as f64);
-    let max_abs = x.iter().map(|s| s.i.unsigned_abs().max(s.q.unsigned_abs())).max().unwrap_or(0);
-    let clip = x.iter().filter(|s| s.i.unsigned_abs() >= 32000 || s.q.unsigned_abs() >= 32000).count() as f64 / x.len() as f64;
-    let rms = (x.iter().map(|s| (s.i as f64 - mi).powi(2) + (s.q as f64 - mq).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
-    Obs { spur_dbfs: spur, floor_dbfs_hz: db(floor_bin / bin), peak_off_hz: poff, mean_i: mi, mean_q: mq, max_abs, clip_frac: clip, rms }
+    let max_abs = x
+        .iter()
+        .map(|s| s.i.unsigned_abs().max(s.q.unsigned_abs()))
+        .max()
+        .unwrap_or(0);
+    let clip = x
+        .iter()
+        .filter(|s| s.i.unsigned_abs() >= 32000 || s.q.unsigned_abs() >= 32000)
+        .count() as f64
+        / x.len() as f64;
+    let rms = (x
+        .iter()
+        .map(|s| (s.i as f64 - mi).powi(2) + (s.q as f64 - mq).powi(2))
+        .sum::<f64>()
+        / x.len() as f64)
+        .sqrt();
+    Obs {
+        spur_dbfs: spur,
+        floor_dbfs_hz: db(floor_bin / bin),
+        peak_off_hz: poff,
+        mean_i: mi,
+        mean_q: mq,
+        max_abs,
+        clip_frac: clip,
+        rms,
+    }
 }
 
 fn stats(v: &[f64]) -> (f64, f64) {
@@ -123,10 +163,23 @@ fn rep(rx: &Rsp2, it: &mut SampleIter, spur_off: Option<f64>) -> (f64, f64, f64,
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
-    let clock_s: f64 = args.iter().position(|a| a == "--clock-seconds").and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(120.0);
+    let clock_s: f64 = args
+        .iter()
+        .position(|a| a == "--clock-seconds")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(120.0);
 
-    let mut rx = Rsp2::open_with(Settings { rf_hz: 95_800_000, if_gr_db: 40, bandwidth: Bandwidth::K1536, ..Settings::default() })?;
-    println!("# rsp_measure on RSP2pro serial {:?} (request 0x48 returned 0x{:02x})", rx.serial, rx.read48);
+    let mut rx = Rsp2::open_with(Settings {
+        rf_hz: 95_800_000,
+        if_gr_db: 40,
+        bandwidth: Bandwidth::K1536,
+        ..Settings::default()
+    })?;
+    println!(
+        "# rsp_measure on RSP2pro serial {:?} (request 0x48 returned 0x{:02x})",
+        rx.serial, rx.read48
+    );
     println!("Levels are dBFS (full scale = 0 dB for a complex tone); floor is dBFS/Hz. +- = 1 sd over {REPEAT} captures of {N} samples.\n");
     let mut it = rx.start_stream_iter(512)?;
 
@@ -144,14 +197,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
     for (name, rf, off) in spur_points {
         rx.set_frequency(rf)?;
-        println!("{name} (tuned {:.3} MHz): state: spur dBFS / floor dBFS/Hz", rf as f64 / 1e6);
+        println!(
+            "{name} (tuned {:.3} MHz): state: spur dBFS / floor dBFS/Hz",
+            rf as f64 / 1e6
+        );
         let mut s0 = None;
         for l in 0..rx.lna_states() {
             rx.set_gain(40, l)?;
             let (sm, ss, fm, fs_, _) = rep(&rx, &mut it, Some(off));
             let d = s0.map(|x: f64| sm - x).unwrap_or(0.0);
             s0.get_or_insert(sm);
-            println!("  LNA {l}: spur {sm:7.2} +-{ss:4.2} (rel {d:+6.2})  floor {fm:7.2} +-{fs_:4.2}");
+            println!(
+                "  LNA {l}: spur {sm:7.2} +-{ss:4.2} (rel {d:+6.2})  floor {fm:7.2} +-{fs_:4.2}"
+            );
         }
         rx.set_gain(40, 0)?;
     }
@@ -171,7 +229,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Band-switch edges: floor (and harmonic where one is near) just below and above.
     println!("\n## 3. Band-switch edges (IF GR 40, LNA 0): floor below/above, harmonic levels\n");
-    for (edge, note) in [(12_000_000u64, ""), (30_000_000, ""), (60_000_000, ""), (120_000_000, "5 x 24 MHz at the edge"), (250_000_000, ""), (300_000_000, ""), (1_000_000_000, "")] {
+    for (edge, note) in [
+        (12_000_000u64, ""),
+        (30_000_000, ""),
+        (60_000_000, ""),
+        (120_000_000, "5 x 24 MHz at the edge"),
+        (250_000_000, ""),
+        (300_000_000, ""),
+        (1_000_000_000, ""),
+    ] {
         let mut row = String::new();
         for rf in [edge - 300_000, edge + 300_000] {
             rx.set_frequency(rf)?;
@@ -183,7 +249,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for (rf, off) in [(119_800_000u64, 200e3), (120_200_000, -200e3)] {
         rx.set_frequency(rf)?;
         let (sm, ss, _, _, _) = rep(&rx, &mut it, Some(off));
-        println!("  120 MHz harmonic seen from {:.1} MHz: {sm:7.2} +-{ss:4.2} dBFS", rf as f64 / 1e6);
+        println!(
+            "  120 MHz harmonic seen from {:.1} MHz: {sm:7.2} +-{ss:4.2} dBFS",
+            rf as f64 / 1e6
+        );
     }
     println!("  (375-420 MHz: not measured; this driver does not implement the 144/168 MHz first-IF mode)");
 
@@ -200,7 +269,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let x = grab(&mut it, 60_000, N);
         let o = observe(&x, rx.output_rate(), Some(200e3));
-        line += &format!("{:5}:{:6.1} ", h / 1_000_000, o.spur_dbfs - (o.floor_dbfs_hz + 10.0 * (rx.output_rate() / NFFT as f64).log10()));
+        line += &format!(
+            "{:5}:{:6.1} ",
+            h / 1_000_000,
+            o.spur_dbfs - (o.floor_dbfs_hz + 10.0 * (rx.output_rate() / NFFT as f64).log10())
+        );
         if k % 6 == 0 {
             println!("{line}");
             line.clear();
@@ -210,13 +283,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Notch on/off.
     println!("\n## 5. Broadcast notch (IF GR 40, LNA 0)\n");
-    for (rf, off, what) in [(95_800_000u64, Some(200e3), "FM band, 96 MHz harmonic"), (1_000_000, None, "MW 1 MHz floor"), (23_800_000, Some(200e3), "HF 24 MHz harmonic")] {
+    for (rf, off, what) in [
+        (95_800_000u64, Some(200e3), "FM band, 96 MHz harmonic"),
+        (1_000_000, None, "MW 1 MHz floor"),
+        (23_800_000, Some(200e3), "HF 24 MHz harmonic"),
+    ] {
         rx.set_frequency(rf)?;
         let mut r = String::new();
         for on in [false, true] {
             rx.set_notch(on)?;
             let (sm, ss, fm, fsd, _) = rep(&rx, &mut it, off);
-            r += &format!("  notch {}: spur {sm:7.2} +-{ss:4.2} floor {fm:7.2} +-{fsd:4.2}", if on { "on " } else { "off" });
+            r += &format!(
+                "  notch {}: spur {sm:7.2} +-{ss:4.2} floor {fm:7.2} +-{fsd:4.2}",
+                if on { "on " } else { "off" }
+            );
         }
         rx.set_notch(false)?;
         println!("{what}:{r}");
@@ -224,7 +304,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 6. Antenna A / B / Hi-Z floors.
     println!("\n## 6. Antenna ports, nothing attached (IF GR 40, LNA 0)\n");
-    for rf in [1_000_000u64, 10_000_000, 30_000_000, 100_000_000, 446_000_000] {
+    for rf in [
+        1_000_000u64,
+        10_000_000,
+        30_000_000,
+        100_000_000,
+        446_000_000,
+    ] {
         rx.set_frequency(rf)?;
         let mut r = String::new();
         for ant in [Antenna::A, Antenna::B, Antenna::HiZ] {
@@ -258,7 +344,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     drop(it);
     rx.stop_stream()?;
     rx.set_gain(59, maxl)?;
-    for fs in [2_000_000u32, 2_048_000, 6_000_000, 8_000_000, 9_000_000, 10_000_000] {
+    for fs in [
+        2_000_000u32,
+        2_048_000,
+        6_000_000,
+        8_000_000,
+        9_000_000,
+        10_000_000,
+    ] {
         rx.set_sample_rate(fs)?;
         let mut it = rx.start_stream_iter(512)?;
         let x = grab(&mut it, 100_000, N);
@@ -283,7 +376,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     rx.start_stream(move |_, st| {
         nth += 1;
         if nth.is_multiple_of(50) {
-            p2.lock().unwrap().push((t0.elapsed().as_secs_f64(), (st.samples + st.lost_samples) as f64));
+            p2.lock().unwrap().push((
+                t0.elapsed().as_secs_f64(),
+                (st.samples + st.lost_samples) as f64,
+            ));
         }
     })?;
     std::thread::sleep(std::time::Duration::from_secs_f64(clock_s));
@@ -297,7 +393,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sxx: f64 = v.iter().map(|(t, _)| (t - mt).powi(2)).sum();
     let sxy: f64 = v.iter().map(|(t, s)| (t - mt) * (s - ms)).sum();
     let slope = sxy / sxx;
-    let resid: f64 = v.iter().map(|(t, s)| (s - ms - slope * (t - mt)).powi(2)).sum::<f64>() / (n - 2.0);
+    let resid: f64 = v
+        .iter()
+        .map(|(t, s)| (s - ms - slope * (t - mt)).powi(2))
+        .sum::<f64>()
+        / (n - 2.0);
     let se = (resid / sxx).sqrt();
     let ppm = (slope / rx.output_rate() - 1.0) * 1e6;
     println!(

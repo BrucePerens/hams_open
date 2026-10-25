@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010).
 //!
 //! Written from the private wire-protocol description, a description of the receiver's USB traffic recorded
@@ -107,10 +108,19 @@ pub enum Error {
     /// The receiver is in its boot-ROM state (bcdDevice 2.00).
     NotRunning,
     /// bcdDevice is neither 2.00 nor 2.07: an unknown personality, not driven.
-    UnknownState { bcd_device: u16 },
+    UnknownState {
+        bcd_device: u16,
+    },
     /// An SDRplay receiver other than the RSP2 family.
-    UnsupportedModel { pid: u16, name: &'static str },
-    Usb { what: String, code: i32, name: String },
+    UnsupportedModel {
+        pid: u16,
+        name: &'static str,
+    },
+    Usb {
+        what: String,
+        code: i32,
+        name: String,
+    },
     InvalidArgument(String),
     /// A setting this driver does not implement (usually because its wire behaviour is not
     /// fully documented).
@@ -122,11 +132,17 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::NotFound => write!(f, "no SDRplay RSP2/RSP2pro found"),
-            Error::NotRunning => write!(f, "device has no firmware loaded; load it with SDRplay's software first"),
+            Error::NotRunning => write!(
+                f,
+                "device has no firmware loaded; load it with SDRplay's software first"
+            ),
             Error::UnknownState { bcd_device } => {
                 write!(f, "device reports bcdDevice {bcd_device:04x}, which this driver does not know; refusing to drive it")
             }
-            Error::UnsupportedModel { pid, name } => write!(f, "{name} (PID {pid:04x}) is not supported yet; only the RSP2/RSP2pro is"),
+            Error::UnsupportedModel { pid, name } => write!(
+                f,
+                "{name} (PID {pid:04x}) is not supported yet; only the RSP2/RSP2pro is"
+            ),
             Error::Usb { what, code, name } => write!(f, "USB error in {what}: {name} ({code})"),
             Error::InvalidArgument(s) => write!(f, "invalid argument: {s}"),
             Error::Unsupported(s) => write!(f, "unsupported: {s}"),
@@ -140,7 +156,10 @@ impl std::error::Error for Error {}
 /// Check a device descriptor's state before anything is sent to it.
 pub fn check_state(pid: u16, bcd_device: u16) -> Result<(), Error> {
     if pid != PID_RSP2 {
-        return Err(Error::UnsupportedModel { pid, name: model_for_pid(pid).name() });
+        return Err(Error::UnsupportedModel {
+            pid,
+            name: model_for_pid(pid).name(),
+        });
     }
     match bcd_device {
         BCD_RUNNING => Ok(()),
@@ -158,8 +177,17 @@ mod tests {
         assert!(check_state(0x3010, 0x0207).is_ok());
         let e = check_state(0x3010, 0x0200).unwrap_err();
         assert!(matches!(e, Error::NotRunning));
-        assert_eq!(e.to_string(), "device has no firmware loaded; load it with SDRplay's software first");
-        assert!(matches!(check_state(0x3010, 0x0208), Err(Error::UnknownState { bcd_device: 0x0208 })));
-        assert!(matches!(check_state(0x3000, 0x0207), Err(Error::UnsupportedModel { pid: 0x3000, .. })));
+        assert_eq!(
+            e.to_string(),
+            "device has no firmware loaded; load it with SDRplay's software first"
+        );
+        assert!(matches!(
+            check_state(0x3010, 0x0208),
+            Err(Error::UnknownState { bcd_device: 0x0208 })
+        ));
+        assert!(matches!(
+            check_state(0x3000, 0x0207),
+            Err(Error::UnsupportedModel { pid: 0x3000, .. })
+        ));
     }
 }

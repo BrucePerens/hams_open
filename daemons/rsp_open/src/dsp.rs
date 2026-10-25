@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Small DSP helpers for tests and examples: radix-2 FFT and averaged power spectra.
 
 use crate::stream::IqI16;
@@ -48,9 +49,13 @@ pub fn fft(re: &mut [f64], im: &mut [f64]) {
 /// Returns power in dB relative to full scale (a full-scale complex tone reads about 0 dB).
 pub fn power_spectrum_db(x: &[IqI16], n: usize) -> Vec<f64> {
     assert!(n.is_power_of_two() && x.len() >= n);
-    let (mi, mq) = x.iter().fold((0.0, 0.0), |(a, b), s| (a + s.i as f64, b + s.q as f64));
+    let (mi, mq) = x
+        .iter()
+        .fold((0.0, 0.0), |(a, b), s| (a + s.i as f64, b + s.q as f64));
     let (mi, mq) = (mi / x.len() as f64, mq / x.len() as f64);
-    let win: Vec<f64> = (0..n).map(|k| 0.5 - 0.5 * (2.0 * PI * k as f64 / n as f64).cos()).collect();
+    let win: Vec<f64> = (0..n)
+        .map(|k| 0.5 - 0.5 * (2.0 * PI * k as f64 / n as f64).cos())
+        .collect();
     let wsum: f64 = win.iter().sum();
     let mut acc = vec![0.0f64; n];
     let segs = x.len() / n;
@@ -83,7 +88,13 @@ pub fn median(v: &[f64]) -> f64 {
 
 /// Strongest bin within `half_width_hz` of `offset_hz`, ignoring `exclude_dc_hz` around 0 Hz.
 /// Returns (offset of the peak in Hz, level dB, level over the spectrum median dB).
-pub fn peak_near(spec_db: &[f64], fs: f64, offset_hz: f64, half_width_hz: f64, exclude_dc_hz: f64) -> (f64, f64, f64) {
+pub fn peak_near(
+    spec_db: &[f64],
+    fs: f64,
+    offset_hz: f64,
+    half_width_hz: f64,
+    exclude_dc_hz: f64,
+) -> (f64, f64, f64) {
     let n = spec_db.len();
     let bin = fs / n as f64;
     let floor = median(spec_db);
@@ -108,7 +119,10 @@ mod tests {
         let x: Vec<IqI16> = (0..8192)
             .map(|k| {
                 let ph = 2.0 * PI * f0 * k as f64 / fs;
-                IqI16 { i: (8000.0 * ph.cos()) as i16, q: (8000.0 * ph.sin()) as i16 }
+                IqI16 {
+                    i: (8000.0 * ph.cos()) as i16,
+                    q: (8000.0 * ph.sin()) as i16,
+                }
             })
             .collect();
         let s = power_spectrum_db(&x, 1024);

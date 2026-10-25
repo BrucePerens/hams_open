@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Parsing of the isochronous sample stream (protocol document 1.7).
 //!
 //! Each isochronous packet carries one to three 1024-byte blocks. A block is a 16-byte header
@@ -26,7 +27,10 @@ pub struct IqF32 {
 
 impl From<IqI16> for IqF32 {
     fn from(s: IqI16) -> Self {
-        IqF32 { i: s.i as f32 / 32768.0, q: s.q as f32 / 32768.0 }
+        IqF32 {
+            i: s.i as f32 / 32768.0,
+            q: s.q as f32 / 32768.0,
+        }
     }
 }
 
@@ -66,7 +70,12 @@ pub fn block_counter(block: &[u8]) -> u32 {
 
 impl BlockParser {
     pub fn new(cfg: &StreamConfig) -> Self {
-        BlockParser { format: cfg.format, step: cfg.counter_step(), next: None, stats: StreamStats::default() }
+        BlockParser {
+            format: cfg.format,
+            step: cfg.counter_step(),
+            next: None,
+            stats: StreamStats::default(),
+        }
     }
 
     /// Forget the expected counter (after a restart).
@@ -110,12 +119,18 @@ pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>) {
             for w in p.as_chunks::<4>().0 {
                 let i = sext(u16::from_le_bytes([w[0], w[1]]) as u32, 14) << 2;
                 let q = sext(u16::from_le_bytes([w[2], w[3]]) as u32, 14) << 2;
-                out.push(IqI16 { i: i as i16, q: q as i16 });
+                out.push(IqI16 {
+                    i: i as i16,
+                    q: q as i16,
+                });
             }
         }
         SampleFormat::S8 => {
             for w in p.as_chunks::<2>().0 {
-                out.push(IqI16 { i: ((w[0] as i8 as i16) << 8), q: ((w[1] as i8 as i16) << 8) });
+                out.push(IqI16 {
+                    i: ((w[0] as i8 as i16) << 8),
+                    q: ((w[1] as i8 as i16) << 8),
+                });
             }
         }
         SampleFormat::S12 => {
@@ -124,7 +139,10 @@ pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>) {
                 let v = w[0] as u32 | (w[1] as u32) << 8 | (w[2] as u32) << 16;
                 let i = sext(v & 0xfff, 12) << 4;
                 let q = sext(v >> 12, 12) << 4;
-                out.push(IqI16 { i: i as i16, q: q as i16 });
+                out.push(IqI16 {
+                    i: i as i16,
+                    q: q as i16,
+                });
             }
         }
         SampleFormat::S10x384 => {
@@ -141,11 +159,17 @@ pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>) {
                         1 => 5,
                         _ => 6,
                     };
-                    let bits = run.iter().enumerate().fold(0u128, |a, (n, &b)| a | (b as u128) << (8 * n));
+                    let bits = run
+                        .iter()
+                        .enumerate()
+                        .fold(0u128, |a, (n, &b)| a | (b as u128) << (8 * n));
                     for j in 0..4 {
                         let iv = sext(((bits >> (20 * j)) & 0x3ff) as u32, 10) << shift;
                         let qv = sext(((bits >> (20 * j + 10)) & 0x3ff) as u32, 10) << shift;
-                        out.push(IqI16 { i: iv as i16, q: qv as i16 });
+                        out.push(IqI16 {
+                            i: iv as i16,
+                            q: qv as i16,
+                        });
                     }
                 }
             }
@@ -166,7 +190,9 @@ pub(crate) mod tests {
         for k in 0..252usize {
             let i = (k as i16) * 30 - 3000;
             let q = -i;
-            b[16 + 4 * k..18 + 4 * k].copy_from_slice(&(i as u16 & 0x3fff | if i < 0 { 0xc000 } else { 0 }).to_le_bytes());
+            b[16 + 4 * k..18 + 4 * k].copy_from_slice(
+                &(i as u16 & 0x3fff | if i < 0 { 0xc000 } else { 0 }).to_le_bytes(),
+            );
             b[18 + 4 * k..20 + 4 * k].copy_from_slice(&(q as u16).to_le_bytes());
         }
         b
@@ -186,8 +212,20 @@ pub(crate) mod tests {
         assert_eq!(p.stats.lost_samples, 252);
         assert_eq!(p.stats.blocks, 3);
         assert_eq!(out.len(), 3 * 252);
-        assert_eq!(out[0], IqI16 { i: -3000 * 4, q: 3000 * 4 });
-        assert_eq!(out[251], IqI16 { i: (251 * 30 - 3000) * 4, q: -(251 * 30 - 3000) * 4 });
+        assert_eq!(
+            out[0],
+            IqI16 {
+                i: -3000 * 4,
+                q: 3000 * 4
+            }
+        );
+        assert_eq!(
+            out[251],
+            IqI16 {
+                i: (251 * 30 - 3000) * 4,
+                q: -(251 * 30 - 3000) * 4
+            }
+        );
     }
 
     #[test]
@@ -225,7 +263,13 @@ pub(crate) mod tests {
         let mut out = Vec::new();
         decode_payload(SampleFormat::S8, &pl, &mut out);
         assert_eq!(out.len(), 504);
-        assert_eq!(out[0], IqI16 { i: 127 << 8, q: -128 << 8 });
+        assert_eq!(
+            out[0],
+            IqI16 {
+                i: 127 << 8,
+                q: -128 << 8
+            }
+        );
         assert_eq!(out[1], IqI16 { i: -256, q: 256 });
     }
 
@@ -242,7 +286,13 @@ pub(crate) mod tests {
         let mut out = Vec::new();
         decode_payload(SampleFormat::S12, &pl, &mut out);
         assert_eq!(out.len(), 336);
-        assert_eq!(out[0], IqI16 { i: 0x7ff << 4, q: -2048 << 4 });
+        assert_eq!(
+            out[0],
+            IqI16 {
+                i: 0x7ff << 4,
+                q: -2048 << 4
+            }
+        );
         assert_eq!(out[1], IqI16 { i: -16, q: 16 });
     }
 
@@ -266,14 +316,29 @@ pub(crate) mod tests {
         decode_payload(SampleFormat::S10x384, &pl, &mut out);
         assert_eq!(out.len(), 384);
         assert_eq!(out[0], IqI16 { i: 16, q: -16 });
-        assert_eq!(out[1], IqI16 { i: 511 << 4, q: -512 << 4 });
+        assert_eq!(
+            out[1],
+            IqI16 {
+                i: 511 << 4,
+                q: -512 << 4
+            }
+        );
         assert_eq!(out[4], IqI16 { i: 64, q: -64 });
-        assert_eq!(out[5], IqI16 { i: 511 << 6, q: -512 << 6 });
+        assert_eq!(
+            out[5],
+            IqI16 {
+                i: 511 << 6,
+                q: -512 << 6
+            }
+        );
     }
 
     #[test]
     fn f32_conversion() {
-        let v = to_f32(&[IqI16 { i: 16384, q: -32768 }]);
+        let v = to_f32(&[IqI16 {
+            i: 16384,
+            q: -32768,
+        }]);
         assert_eq!(v[0], IqF32 { i: 0.5, q: -1.0 });
     }
 }

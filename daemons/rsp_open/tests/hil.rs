@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Hardware-in-the-loop tests. Run only with a running RSP2pro attached (nothing connected to
 //! the antenna ports; bias-T stays off):
 //!
@@ -15,7 +16,9 @@ const NFFT: usize = 16_384;
 
 fn running_device() -> bool {
     match list_devices() {
-        Ok(d) => d.iter().any(|d| d.pid == rsp_open::PID_RSP2 && d.is_running()),
+        Ok(d) => d
+            .iter()
+            .any(|d| d.pid == rsp_open::PID_RSP2 && d.is_running()),
         Err(_) => false,
     }
 }
@@ -53,7 +56,11 @@ fn measure(rx: &mut Rsp2, it: &mut SampleIter, rf: u64, expect_off: f64) -> Meas
     let fs = rx.output_rate();
     let s = power_spectrum_db(&x, NFFT);
     let (f, _lvl, over) = peak_near(&s, fs, expect_off, 20_000.0, 10_000.0);
-    Meas { peak_hz: f, over_db: over, gaps: after.gaps - before.gaps }
+    Meas {
+        peak_hz: f,
+        over_db: over,
+        gaps: after.gaps - before.gaps,
+    }
 }
 
 fn open(settings: Settings) -> Option<Rsp2> {
@@ -75,7 +82,13 @@ fn open(settings: Settings) -> Option<Rsp2> {
 #[test]
 #[ignore]
 fn hil_vhf_reference_spurs() {
-    let s = Settings { if_gr_db: 30, lna_state: 0, bandwidth: Bandwidth::K1536, rf_hz: 95_800_000, ..Settings::default() };
+    let s = Settings {
+        if_gr_db: 30,
+        lna_state: 0,
+        bandwidth: Bandwidth::K1536,
+        rf_hz: 95_800_000,
+        ..Settings::default()
+    };
     let Some(mut rx) = open(s) else { return };
     println!("serial {:?}, read48 0x{:02x}", rx.serial, rx.read48);
     let mut it = rx.start_stream_iter(256).unwrap();
@@ -89,7 +102,14 @@ fn hil_vhf_reference_spurs() {
     let mut failures = Vec::new();
     for (rf, off) in cases {
         let m = measure(&mut rx, &mut it, rf, off);
-        println!("{:>9.3} MHz: expected {:+8.1} kHz, peak {:+9.3} kHz, {:5.1} dB over floor, {} gaps", rf as f64 / 1e6, off / 1e3, m.peak_hz / 1e3, m.over_db, m.gaps);
+        println!(
+            "{:>9.3} MHz: expected {:+8.1} kHz, peak {:+9.3} kHz, {:5.1} dB over floor, {} gaps",
+            rf as f64 / 1e6,
+            off / 1e3,
+            m.peak_hz / 1e3,
+            m.over_db,
+            m.gaps
+        );
         if (m.peak_hz - off).abs() > 2_000.0 || m.over_db < 25.0 {
             failures.push(rf);
         }
@@ -99,9 +119,19 @@ fn hil_vhf_reference_spurs() {
     let x = grab(&mut it, 100_000, NWANT);
     let sp = power_spectrum_db(&x, NFFT);
     let (f, _, over) = peak_near(&sp, 2e6, 0.0, 700_000.0, 10_000.0);
-    println!("  100.000 MHz: strongest {:+9.3} kHz at {:5.1} dB over floor (no harmonic expected)", f / 1e3, over);
+    println!(
+        "  100.000 MHz: strongest {:+9.3} kHz at {:5.1} dB over floor (no harmonic expected)",
+        f / 1e3,
+        over
+    );
     let st = rx.stream_stats();
-    println!("stream: {} blocks, {} gaps, {} lost samples, dropped chunks {}", st.blocks, st.gaps, st.lost_samples, it.dropped());
+    println!(
+        "stream: {} blocks, {} gaps, {} lost samples, dropped chunks {}",
+        st.blocks,
+        st.gaps,
+        st.lost_samples,
+        it.dropped()
+    );
     rx.stop_stream().unwrap();
     rx.close().unwrap();
     assert!(failures.is_empty(), "spur check failed at {failures:?}");
@@ -112,20 +142,45 @@ fn hil_vhf_reference_spurs() {
 #[test]
 #[ignore]
 fn hil_other_bands_and_formats() {
-    let s = Settings { if_gr_db: 30, rf_hz: 95_800_000, ..Settings::default() };
+    let s = Settings {
+        if_gr_db: 30,
+        rf_hz: 95_800_000,
+        ..Settings::default()
+    };
     let Some(mut rx) = open(s) else { return };
     let mut it = rx.start_stream_iter(256).unwrap();
     let mut bad = Vec::new();
-    for (rf, off, what) in [(143_800_000u64, 200e3, "B3 (6 x 24 MHz)"), (23_800_000, 200e3, "HF AM mode (24 MHz)"), (47_800_000, 200e3, "HF AM mode (48 MHz)"), (264_200_000, -200e3, "AM down-conversion (264 MHz)"), (479_800_000, 200e3, "B4/5 (480 MHz)"), (1_199_800_000, 200e3, "L band (1200 MHz)")] {
+    for (rf, off, what) in [
+        (143_800_000u64, 200e3, "B3 (6 x 24 MHz)"),
+        (23_800_000, 200e3, "HF AM mode (24 MHz)"),
+        (47_800_000, 200e3, "HF AM mode (48 MHz)"),
+        (264_200_000, -200e3, "AM down-conversion (264 MHz)"),
+        (479_800_000, 200e3, "B4/5 (480 MHz)"),
+        (1_199_800_000, 200e3, "L band (1200 MHz)"),
+    ] {
         let m = measure(&mut rx, &mut it, rf, off);
-        println!("{what:30} {:>10.3} MHz: expected {:+7.1} kHz, peak {:+9.3} kHz, {:5.1} dB, {} gaps", rf as f64 / 1e6, off / 1e3, m.peak_hz / 1e3, m.over_db, m.gaps);
+        println!(
+            "{what:30} {:>10.3} MHz: expected {:+7.1} kHz, peak {:+9.3} kHz, {:5.1} dB, {} gaps",
+            rf as f64 / 1e6,
+            off / 1e3,
+            m.peak_hz / 1e3,
+            m.over_db,
+            m.gaps
+        );
         if (m.peak_hz - off).abs() > 2_000.0 || m.over_db < 15.0 {
             bad.push(what);
         }
     }
     drop(it);
     rx.set_frequency(95_800_000).unwrap();
-    for fs in [2_048_000u32, 3_000_000, 6_000_000, 8_000_000, 9_000_000, 10_000_000] {
+    for fs in [
+        2_048_000u32,
+        3_000_000,
+        6_000_000,
+        8_000_000,
+        9_000_000,
+        10_000_000,
+    ] {
         rx.stop_stream().unwrap();
         rx.set_sample_rate(fs).unwrap();
         let mut it = rx.start_stream_iter(512).unwrap();
@@ -134,7 +189,11 @@ fn hil_other_bands_and_formats() {
         let st1 = rx.stream_stats();
         let sp = power_spectrum_db(&x, NFFT);
         let (f, _, over) = peak_near(&sp, rx.output_rate(), 200e3, 20_000.0, 10_000.0);
-        let maxabs = x.iter().map(|s| s.i.unsigned_abs().max(s.q.unsigned_abs())).max().unwrap_or(0);
+        let maxabs = x
+            .iter()
+            .map(|s| s.i.unsigned_abs().max(s.q.unsigned_abs()))
+            .max()
+            .unwrap_or(0);
         println!(
             "ADC {:>6.3} MHz {:?}: peak {:+9.3} kHz {:5.1} dB, gaps {}, dropped {}, max |sample| {}",
             fs as f64 / 1e6, rx.stream_config().format, f / 1e3, over, st1.gaps - st0.gaps, it.dropped(), maxabs
@@ -168,22 +227,52 @@ fn hil_state_check() {
 #[test]
 #[ignore]
 fn hil_gaps_during_control() {
-    let Some(mut rx) = open(Settings { rf_hz: 95_800_000, ..Settings::default() }) else { return };
+    let Some(mut rx) = open(Settings {
+        rf_hz: 95_800_000,
+        ..Settings::default()
+    }) else {
+        return;
+    };
     let mut it = rx.start_stream_iter(1024).unwrap();
     let _ = grab(&mut it, 0, 200_000);
-    let report = |what: &str, rx: &mut Rsp2, it: &mut SampleIter, f: &mut dyn FnMut(&mut Rsp2, usize)| {
-        let s0 = rx.stream_stats();
-        for k in 0..20 {
-            f(rx, k);
-            let _ = grab(it, 0, 20_000);
-        }
-        let s1 = rx.stream_stats();
-        println!("{what:28}: {} gaps, {} lost samples over 20 operations", s1.gaps - s0.gaps, s1.lost_samples - s0.lost_samples);
-    };
-    report("in-band retune (r3, r2)", &mut rx, &mut it, &mut |rx, k| { rx.set_frequency(95_800_000 + (k as u64 % 2) * 100_000).unwrap(); });
-    report("band change (full tune)", &mut rx, &mut it, &mut |rx, k| { rx.set_frequency(if k % 2 == 0 { 143_800_000 } else { 95_800_000 }).unwrap(); });
-    report("gain (r1 + board byte)", &mut rx, &mut it, &mut |rx, k| { rx.set_gain(40 + (k as u8 % 2), 0).unwrap(); });
-    report("antenna A/B (board byte)", &mut rx, &mut it, &mut |rx, k| { rx.select_antenna(if k % 2 == 0 { rsp_open::Antenna::B } else { rsp_open::Antenna::A }).unwrap(); });
+    let report =
+        |what: &str, rx: &mut Rsp2, it: &mut SampleIter, f: &mut dyn FnMut(&mut Rsp2, usize)| {
+            let s0 = rx.stream_stats();
+            for k in 0..20 {
+                f(rx, k);
+                let _ = grab(it, 0, 20_000);
+            }
+            let s1 = rx.stream_stats();
+            println!(
+                "{what:28}: {} gaps, {} lost samples over 20 operations",
+                s1.gaps - s0.gaps,
+                s1.lost_samples - s0.lost_samples
+            );
+        };
+    report("in-band retune (r3, r2)", &mut rx, &mut it, &mut |rx, k| {
+        rx.set_frequency(95_800_000 + (k as u64 % 2) * 100_000)
+            .unwrap();
+    });
+    report("band change (full tune)", &mut rx, &mut it, &mut |rx, k| {
+        rx.set_frequency(if k % 2 == 0 { 143_800_000 } else { 95_800_000 })
+            .unwrap();
+    });
+    report("gain (r1 + board byte)", &mut rx, &mut it, &mut |rx, k| {
+        rx.set_gain(40 + (k as u8 % 2), 0).unwrap();
+    });
+    report(
+        "antenna A/B (board byte)",
+        &mut rx,
+        &mut it,
+        &mut |rx, k| {
+            rx.select_antenna(if k % 2 == 0 {
+                rsp_open::Antenna::B
+            } else {
+                rsp_open::Antenna::A
+            })
+            .unwrap();
+        },
+    );
     let st = rx.stream_stats();
     assert!(st.blocks > 1000);
     drop(it);
@@ -196,7 +285,13 @@ fn hil_gaps_during_control() {
 #[test]
 #[ignore]
 fn hil_live_reconfiguration() {
-    let Some(mut rx) = open(Settings { rf_hz: 95_800_000, if_gr_db: 30, ..Settings::default() }) else { return };
+    let Some(mut rx) = open(Settings {
+        rf_hz: 95_800_000,
+        if_gr_db: 30,
+        ..Settings::default()
+    }) else {
+        return;
+    };
     let got = std::sync::Arc::new(std::sync::Mutex::new(Vec::<IqI16>::new()));
     let g2 = got.clone();
     rx.start_stream(move |s, _| {
@@ -225,7 +320,11 @@ fn hil_live_reconfiguration() {
         let (f, _, over) = peak_near(&sp, fs, 0.0, fs * 0.45, 10_000.0);
         println!(
             "{what:34}: out {:.3} MS/s, strongest {:+9.3} kHz {:5.1} dB, gaps {} lost {}",
-            fs / 1e6, f / 1e3, over, s1.gaps - s0.gaps, s1.lost_samples - s0.lost_samples
+            fs / 1e6,
+            f / 1e3,
+            over,
+            s1.gaps - s0.gaps,
+            s1.lost_samples - s0.lost_samples
         );
         (f, over)
     };
@@ -247,7 +346,14 @@ fn hil_live_reconfiguration() {
     rx.set_ext_ref_out(true).unwrap();
     look(&mut rx, "ext ref output on");
     rx.set_ext_ref_out(false).unwrap();
-    for (mode, name) in [(rsp_open::IfMode::Low450k, "low IF 450 kHz (ADC 2 MHz)"), (rsp_open::IfMode::Low1620k, "low IF 1.62 MHz (ADC 6 MHz)"), (rsp_open::IfMode::Low2048k, "low IF 2.048 MHz (ADC 8.192 MHz)")] {
+    for (mode, name) in [
+        (rsp_open::IfMode::Low450k, "low IF 450 kHz (ADC 2 MHz)"),
+        (rsp_open::IfMode::Low1620k, "low IF 1.62 MHz (ADC 6 MHz)"),
+        (
+            rsp_open::IfMode::Low2048k,
+            "low IF 2.048 MHz (ADC 8.192 MHz)",
+        ),
+    ] {
         rx.set_if_mode(mode).unwrap();
         rx.set_bandwidth(Bandwidth::K1536).unwrap();
         look(&mut rx, name);

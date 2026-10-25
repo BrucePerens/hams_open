@@ -3,7 +3,7 @@ name = "rsp_open"
 version = "0.1.0"
 edition = "2021"
 description = "Open driver for the SDRplay RSP2pro, written from observed USB wire traffic"
-# TODO(Bruce): choose a licence. No licence has been granted yet; see README.md.
+license = "AGPL-3.0-or-later"
 publish = false
 
 [dependencies]

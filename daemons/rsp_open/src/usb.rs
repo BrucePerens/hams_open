@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! libusb-1.0 implementation of [`Transport`], including isochronous streaming.
 
 use crate::transport::{PacketSink, Transport};
@@ -18,11 +19,19 @@ const N_TRANSFERS: usize = 16;
 const N_PACKETS: usize = 32;
 
 fn err_name(code: c_int) -> String {
-    unsafe { CStr::from_ptr(ffi::libusb_error_name(code)).to_string_lossy().into_owned() }
+    unsafe {
+        CStr::from_ptr(ffi::libusb_error_name(code))
+            .to_string_lossy()
+            .into_owned()
+    }
 }
 
 pub(crate) fn usb_err(what: &str, code: c_int) -> Error {
-    Error::Usb { what: what.to_string(), code, name: err_name(code) }
+    Error::Usb {
+        what: what.to_string(),
+        code,
+        name: err_name(code),
+    }
 }
 
 /// Owned libusb context.
@@ -45,7 +54,10 @@ impl Drop for Context {
     }
 }
 
-fn with_devices<T>(ctx: &Context, mut f: impl FnMut(*mut ffi::libusb_device, &ffi::libusb_device_descriptor) -> Option<T>) -> Result<Vec<T>, Error> {
+fn with_devices<T>(
+    ctx: &Context,
+    mut f: impl FnMut(*mut ffi::libusb_device, &ffi::libusb_device_descriptor) -> Option<T>,
+) -> Result<Vec<T>, Error> {
     let mut list = ptr::null();
     let n = unsafe { ffi::libusb_get_device_list(ctx.0, &mut list) };
     if n < 0 {
@@ -80,7 +92,9 @@ fn info_of(dev: *mut ffi::libusb_device, d: &ffi::libusb_device_descriptor) -> D
 /// List every SDRplay-VID device on the system (descriptors only; nothing is opened).
 pub fn list_devices() -> Result<Vec<DeviceInfo>, Error> {
     let ctx = Context::new()?;
-    with_devices(&ctx, |dev, d| (d.idVendor == VID_SDRPLAY).then(|| info_of(dev, d)))
+    with_devices(&ctx, |dev, d| {
+        (d.idVendor == VID_SDRPLAY).then(|| info_of(dev, d))
+    })
 }
 
 struct Shared {
@@ -115,7 +129,10 @@ extern "system" fn iso_callback(t: *mut ffi::libusb_transfer) {
                     if d.actual_length == 0 {
                         continue;
                     }
-                    let p = std::slice::from_raw_parts((*t).buffer.add(i * shared.pkt_len), d.actual_length as usize);
+                    let p = std::slice::from_raw_parts(
+                        (*t).buffer.add(i * shared.pkt_len),
+                        d.actual_length as usize,
+                    );
                     (sink)(p);
                 }
             }
@@ -173,34 +190,76 @@ impl UsbTransport {
             unsafe { ffi::libusb_close(handle) };
             return Err(usb_err("libusb_claim_interface", r));
         }
-        Ok(UsbTransport { ctx, handle, info, alt: 0, stream: None, released: false })
+        Ok(UsbTransport {
+            ctx,
+            handle,
+            info,
+            alt: 0,
+            stream: None,
+            released: false,
+        })
     }
 
     /// Serial number string (string descriptor 1, present only when the device is running).
     pub fn serial(&self) -> Option<String> {
         let mut buf = [0u8; 64];
-        let n = unsafe { ffi::libusb_get_string_descriptor_ascii(self.handle, 1, buf.as_mut_ptr(), buf.len() as c_int) };
+        let n = unsafe {
+            ffi::libusb_get_string_descriptor_ascii(
+                self.handle,
+                1,
+                buf.as_mut_ptr(),
+                buf.len() as c_int,
+            )
+        };
         (n > 0).then(|| String::from_utf8_lossy(&buf[..n as usize]).into_owned())
     }
 
     /// Isochronous packets that completed with an error status so far.
     pub fn packet_errors(&self) -> u64 {
-        self.stream.as_ref().map_or(0, |s| s.shared.packet_errors.load(Ordering::Relaxed))
+        self.stream
+            .as_ref()
+            .map_or(0, |s| s.shared.packet_errors.load(Ordering::Relaxed))
     }
 }
 
 impl Transport for UsbTransport {
     fn vendor_out(&mut self, request: u8, value: u16, index: u16) -> Result<(), Error> {
-        let r = unsafe { ffi::libusb_control_transfer(self.handle, 0x40, request, value, index, ptr::null_mut(), 0, CTRL_TIMEOUT_MS) };
+        let r = unsafe {
+            ffi::libusb_control_transfer(
+                self.handle,
+                0x40,
+                request,
+                value,
+                index,
+                ptr::null_mut(),
+                0,
+                CTRL_TIMEOUT_MS,
+            )
+        };
         if r < 0 {
             return Err(usb_err(&format!("vendor OUT 0x{request:02x}"), r));
         }
         Ok(())
     }
 
-    fn vendor_in(&mut self, request: u8, value: u16, index: u16, buf: &mut [u8]) -> Result<usize, Error> {
+    fn vendor_in(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+    ) -> Result<usize, Error> {
         let r = unsafe {
-            ffi::libusb_control_transfer(self.handle, 0xc0, request, value, index, buf.as_mut_ptr(), buf.len() as u16, CTRL_TIMEOUT_MS)
+            ffi::libusb_control_transfer(
+                self.handle,
+                0xc0,
+                request,
+                value,
+                index,
+                buf.as_mut_ptr(),
+                buf.len() as u16,
+                CTRL_TIMEOUT_MS,
+            )
         };
         if r < 0 {
             return Err(usb_err(&format!("vendor IN 0x{request:02x}"), r));
@@ -211,7 +270,9 @@ impl Transport for UsbTransport {
     fn set_alt(&mut self, alt: u8) -> Result<(), Error> {
         // Alt 3 (bulk) hung the device once (protocol document 1.10): never select it.
         if alt > 2 {
-            return Err(Error::Unsupported(format!("alternate setting {alt} is not used by this driver")));
+            return Err(Error::Unsupported(format!(
+                "alternate setting {alt} is not used by this driver"
+            )));
         }
         let r = unsafe { ffi::libusb_set_interface_alt_setting(self.handle, 0, alt as c_int) };
         if r != 0 {
@@ -229,7 +290,11 @@ impl Transport for UsbTransport {
         let pkt_len = match self.alt {
             1 => 3 * 1024,
             2 => 1024,
-            a => return Err(Error::InvalidArgument(format!("no isochronous endpoint in alt {a}"))),
+            a => {
+                return Err(Error::InvalidArgument(format!(
+                    "no isochronous endpoint in alt {a}"
+                )))
+            }
         };
         let shared = Arc::new(Shared {
             sink: Mutex::new(sink),
@@ -238,7 +303,9 @@ impl Transport for UsbTransport {
             packet_errors: AtomicU64::new(0),
             pkt_len,
         });
-        let mut buffers: Vec<Vec<u8>> = (0..N_TRANSFERS).map(|_| vec![0u8; pkt_len * N_PACKETS]).collect();
+        let mut buffers: Vec<Vec<u8>> = (0..N_TRANSFERS)
+            .map(|_| vec![0u8; pkt_len * N_PACKETS])
+            .collect();
         let mut transfers = Vec::new();
         for b in buffers.iter_mut() {
             let t = unsafe { ffi::libusb_alloc_transfer(N_PACKETS as c_int) };
@@ -247,8 +314,15 @@ impl Transport for UsbTransport {
             }
             unsafe {
                 ffi::libusb_fill_iso_transfer(
-                    t, self.handle, EP_IN, b.as_mut_ptr(), b.len() as c_int, N_PACKETS as c_int,
-                    iso_callback, Arc::as_ptr(&shared) as *mut c_void, 1000,
+                    t,
+                    self.handle,
+                    EP_IN,
+                    b.as_mut_ptr(),
+                    b.len() as c_int,
+                    N_PACKETS as c_int,
+                    iso_callback,
+                    Arc::as_ptr(&shared) as *mut c_void,
+                    1000,
                 );
                 ffi::libusb_set_iso_packet_lengths(t, pkt_len as c_uint);
             }
@@ -283,12 +357,22 @@ impl Transport for UsbTransport {
                             break;
                         }
                     }
-                    let tv = libc::timeval { tv_sec: 0, tv_usec: 50_000 };
-                    unsafe { ffi::libusb_handle_events_timeout_completed(ctx.0, &tv, ptr::null_mut()) };
+                    let tv = libc::timeval {
+                        tv_sec: 0,
+                        tv_usec: 50_000,
+                    };
+                    unsafe {
+                        ffi::libusb_handle_events_timeout_completed(ctx.0, &tv, ptr::null_mut())
+                    };
                 }
             })
             .map_err(|e| Error::InvalidArgument(format!("cannot start USB thread: {e}")))?;
-        self.stream = Some(IsoStream { shared, transfers, _buffers: buffers, thread: Some(thread) });
+        self.stream = Some(IsoStream {
+            shared,
+            transfers,
+            _buffers: buffers,
+            thread: Some(thread),
+        });
         if let Some(e) = submit_err {
             let _ = self.stop_iso();
             return Err(e);
@@ -297,7 +381,9 @@ impl Transport for UsbTransport {
     }
 
     fn stop_iso(&mut self) -> Result<(), Error> {
-        let Some(mut s) = self.stream.take() else { return Ok(()) };
+        let Some(mut s) = self.stream.take() else {
+            return Ok(());
+        };
         s.shared.running.store(false, Ordering::Release);
         for &t in &s.transfers {
             unsafe { ffi::libusb_cancel_transfer(t) };
@@ -314,7 +400,9 @@ impl Transport for UsbTransport {
             // memory the kernel may still write.
             std::mem::forget(s._buffers);
             std::mem::forget(s.shared);
-            return Err(Error::Stream("isochronous transfers did not finish cancelling".into()));
+            return Err(Error::Stream(
+                "isochronous transfers did not finish cancelling".into(),
+            ));
         }
         Ok(())
     }

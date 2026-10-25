@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! The narrow USB interface the driver needs, plus a recording mock for tests.
 
 use crate::Error;
@@ -11,7 +12,13 @@ pub trait Transport: Send {
     /// Vendor OUT request on EP0 without data stage (bmRequestType 0x40).
     fn vendor_out(&mut self, request: u8, value: u16, index: u16) -> Result<(), Error>;
     /// Vendor IN request on EP0 (bmRequestType 0xc0).
-    fn vendor_in(&mut self, request: u8, value: u16, index: u16, buf: &mut [u8]) -> Result<usize, Error>;
+    fn vendor_in(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+    ) -> Result<usize, Error>;
     /// SET_INTERFACE on interface 0.
     fn set_alt(&mut self, alt: u8) -> Result<(), Error>;
     /// Submit isochronous IN transfers on EP 0x81 and deliver packets to `sink` until stopped.
@@ -25,8 +32,17 @@ pub trait Transport: Send {
 /// One recorded operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
-    Out { req: u8, value: u16, index: u16 },
-    In { req: u8, value: u16, index: u16, len: usize },
+    Out {
+        req: u8,
+        value: u16,
+        index: u16,
+    },
+    In {
+        req: u8,
+        value: u16,
+        index: u16,
+        len: usize,
+    },
     Alt(u8),
     IsoStart,
     IsoStop,
@@ -61,8 +77,19 @@ impl Transport for MockTransport {
         self.log.lock().unwrap().push(Op::Out { req, value, index });
         Ok(())
     }
-    fn vendor_in(&mut self, req: u8, value: u16, index: u16, buf: &mut [u8]) -> Result<usize, Error> {
-        self.log.lock().unwrap().push(Op::In { req, value, index, len: buf.len() });
+    fn vendor_in(
+        &mut self,
+        req: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+    ) -> Result<usize, Error> {
+        self.log.lock().unwrap().push(Op::In {
+            req,
+            value,
+            index,
+            len: buf.len(),
+        });
         if req == 0x48 && !buf.is_empty() {
             buf[0] = 0x04;
             return Ok(1);

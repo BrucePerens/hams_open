@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! rsp_spectrum: tune a running RSP2pro and print a coarse spectrum.
 //!
 //!     cargo run --release --example rsp_spectrum -- 95.8 [IF_GR_DB [LNA_STATE [ADC_MHZ]]]
@@ -19,7 +20,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lo = rx.set_frequency((mhz * 1e6).round() as u64)?;
     rx.set_gain(gr, lna)?;
     let fs = rx.output_rate();
-    println!("RSP2pro {:?}: tuned {:.6} MHz (LO {:.3} Hz), {:.3} MS/s, IF GR {gr}, LNA {lna}", rx.serial, mhz, lo, fs / 1e6);
+    println!(
+        "RSP2pro {:?}: tuned {:.6} MHz (LO {:.3} Hz), {:.3} MS/s, IF GR {gr}, LNA {lna}",
+        rx.serial,
+        mhz,
+        lo,
+        fs / 1e6
+    );
 
     let it = rx.start_stream_iter(256)?;
     let mut x = Vec::new();
@@ -49,6 +56,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let bar = ((p - floor).max(0.0) / 1.0) as usize;
         println!("{f:11.4} MHz {p:7.1} dBFS |{}", "#".repeat(bar.min(70)));
     }
-    println!("floor (median bin) {floor:.1} dBFS; {} blocks, {} counter gaps", st.blocks, st.gaps);
+    println!(
+        "floor (median bin) {floor:.1} dBFS; {} blocks, {} counter gaps",
+        st.blocks, st.gaps
+    );
     Ok(())
 }

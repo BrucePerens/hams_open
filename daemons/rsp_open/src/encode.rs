@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
 //! Pure control-to-register encoding for the RSP2pro.
 //!
 //! Every function here turns a receiver setting into the register value or board byte that the
@@ -89,8 +90,9 @@ impl Bandwidth {
         }
     }
     pub fn hz(self) -> u32 {
-        [200_000, 300_000, 600_000, 1_536_000, 5_000_000, 6_000_000, 7_000_000, 8_000_000]
-            [self.code() as usize]
+        [
+            200_000, 300_000, 600_000, 1_536_000, 5_000_000, 6_000_000, 7_000_000, 8_000_000,
+        ][self.code() as usize]
     }
     /// Widest bandwidth not above `hz` (at least 200 kHz).
     pub fn at_most(hz: u32) -> Bandwidth {
@@ -182,18 +184,88 @@ const M: u64 = 1_000_000;
 /// Band table (1.9). 375-420 MHz is left out on purpose: the API moves the AM-mode first IF to
 /// 144/168 MHz there and runs a VCO calibration whose read-back mapping is not fully documented.
 pub const BANDS: [Band; 10] = [
-    Band { lo_hz: RF_MIN_HZ, hi_hz: 12 * M, mode: TunerMode::Am, lo_plan: LoPlan::UpBy120M, filter: 0b000, gain_table: GainTable::Am },
-    Band { lo_hz: 12 * M, hi_hz: 30 * M, mode: TunerMode::Am, lo_plan: LoPlan::UpBy120M, filter: 0b100, gain_table: GainTable::Am },
-    Band { lo_hz: 30 * M, hi_hz: 60 * M, mode: TunerMode::Am, lo_plan: LoPlan::UpBy120M, filter: 0b010, gain_table: GainTable::Am },
-    Band { lo_hz: 60 * M, hi_hz: 120 * M, mode: TunerMode::Vhf, lo_plan: LoPlan::Direct, filter: 0b011, gain_table: GainTable::Vhf },
-    Band { lo_hz: 120 * M, hi_hz: 250 * M, mode: TunerMode::B3, lo_plan: LoPlan::Direct, filter: 0b111, gain_table: GainTable::Vhf },
-    Band { lo_hz: 250 * M, hi_hz: 300 * M, mode: TunerMode::Am, lo_plan: LoPlan::DownBy120M, filter: 0b110, gain_table: GainTable::Am },
-    Band { lo_hz: 300 * M, hi_hz: 375 * M, mode: TunerMode::Am, lo_plan: LoPlan::DownBy120M, filter: 0b001, gain_table: GainTable::Am },
+    Band {
+        lo_hz: RF_MIN_HZ,
+        hi_hz: 12 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::UpBy120M,
+        filter: 0b000,
+        gain_table: GainTable::Am,
+    },
+    Band {
+        lo_hz: 12 * M,
+        hi_hz: 30 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::UpBy120M,
+        filter: 0b100,
+        gain_table: GainTable::Am,
+    },
+    Band {
+        lo_hz: 30 * M,
+        hi_hz: 60 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::UpBy120M,
+        filter: 0b010,
+        gain_table: GainTable::Am,
+    },
+    Band {
+        lo_hz: 60 * M,
+        hi_hz: 120 * M,
+        mode: TunerMode::Vhf,
+        lo_plan: LoPlan::Direct,
+        filter: 0b011,
+        gain_table: GainTable::Vhf,
+    },
+    Band {
+        lo_hz: 120 * M,
+        hi_hz: 250 * M,
+        mode: TunerMode::B3,
+        lo_plan: LoPlan::Direct,
+        filter: 0b111,
+        gain_table: GainTable::Vhf,
+    },
+    Band {
+        lo_hz: 250 * M,
+        hi_hz: 300 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::DownBy120M,
+        filter: 0b110,
+        gain_table: GainTable::Am,
+    },
+    Band {
+        lo_hz: 300 * M,
+        hi_hz: 375 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::DownBy120M,
+        filter: 0b001,
+        gain_table: GainTable::Am,
+    },
     // 375-380 MHz (filter 001) and 380-420 MHz (filter 101) need the 144/168 MHz first IF: unsupported.
-    Band { lo_hz: 420 * M, hi_hz: 1000 * M, mode: TunerMode::B45, lo_plan: LoPlan::Direct, filter: 0b011, gain_table: GainTable::Uhf },
-    Band { lo_hz: 1000 * M, hi_hz: RF_MAX_HZ + 1, mode: TunerMode::L, lo_plan: LoPlan::Direct, filter: 0b111, gain_table: GainTable::L },
+    Band {
+        lo_hz: 420 * M,
+        hi_hz: 1000 * M,
+        mode: TunerMode::B45,
+        lo_plan: LoPlan::Direct,
+        filter: 0b011,
+        gain_table: GainTable::Uhf,
+    },
+    Band {
+        lo_hz: 1000 * M,
+        hi_hz: RF_MAX_HZ + 1,
+        mode: TunerMode::L,
+        lo_plan: LoPlan::Direct,
+        filter: 0b111,
+        gain_table: GainTable::L,
+    },
     // Sentinel never matched (keeps the array length documenting 10 hardware filter ranges).
-    Band { lo_hz: u64::MAX, hi_hz: u64::MAX, mode: TunerMode::L, lo_plan: LoPlan::Direct, filter: 0, gain_table: GainTable::L },
+    Band {
+        lo_hz: u64::MAX,
+        hi_hz: u64::MAX,
+        mode: TunerMode::L,
+        lo_plan: LoPlan::Direct,
+        filter: 0,
+        gain_table: GainTable::L,
+    },
 ];
 
 /// Find the band for an RF frequency.
@@ -311,12 +383,22 @@ pub fn pll(lo_hz: u64, div: u64, ppb: i64) -> Result<Pll, Error> {
     let n = (units / PLL_MOD as u128) as u32;
     let frac = (units % PLL_MOD as u128) as u32;
     if !(1..=0xff).contains(&n) {
-        return Err(Error::InvalidArgument(format!("PLL integer {n} out of range")));
+        return Err(Error::InvalidArgument(format!(
+            "PLL integer {n} out of range"
+        )));
     }
     let r2 = tuner_word(2, (n << 12) | frac);
     let r3 = tuner_word(3, sub);
-    let vco = 96e6 * (n as f64 + (frac as f64 + (sub as f64 + 1.0) / PLL_SUB as f64) / PLL_MOD as f64);
-    Ok(Pll { n, frac, sub, r2, r3, lo_hz: vco / div as f64 })
+    let vco =
+        96e6 * (n as f64 + (frac as f64 + (sub as f64 + 1.0) / PLL_SUB as f64) / PLL_MOD as f64);
+    Ok(Pll {
+        n,
+        frac,
+        sub,
+        r2,
+        r3,
+        lo_hz: vco / div as f64,
+    })
 }
 
 /// MSi001 r1 gain word: IF gain reduction (bits 9:4), AM buffer step (11:10), mixer GR (12),
@@ -344,7 +426,12 @@ pub struct FrontEndStep {
 }
 
 const fn st(board_step: u8, am_buf: u8, mixer_gr: bool, lna_gr: bool) -> FrontEndStep {
-    FrontEndStep { board_step, am_buf, mixer_gr, lna_gr }
+    FrontEndStep {
+        board_step,
+        am_buf,
+        mixer_gr,
+        lna_gr,
+    }
 }
 
 // Board step codes seen in byte 0x13 bits 5:2 (0xb9, 0xb5, 0xa5, 0x95 with notch/bias-T off).
@@ -356,25 +443,48 @@ const S_5: u8 = 0b0101;
 /// LNA-state tables (1.8, captures c25/c26).
 pub fn lna_table(t: GainTable) -> &'static [FrontEndStep] {
     const AM: [FrontEndStep; 9] = [
-        st(S_E, 0, false, false), st(S_D, 0, false, false), st(S_9, 0, false, false), st(S_5, 0, false, false),
-        st(S_E, 3, false, false), st(S_D, 3, false, false), st(S_9, 3, false, false), st(S_5, 3, false, false),
+        st(S_E, 0, false, false),
+        st(S_D, 0, false, false),
+        st(S_9, 0, false, false),
+        st(S_5, 0, false, false),
+        st(S_E, 3, false, false),
+        st(S_D, 3, false, false),
+        st(S_9, 3, false, false),
+        st(S_5, 3, false, false),
         st(S_5, 3, true, false),
     ];
     const VHF: [FrontEndStep; 9] = [
-        st(S_E, 0, false, false), st(S_D, 0, false, false), st(S_9, 0, false, false), st(S_5, 0, false, false),
-        st(S_E, 0, false, true), st(S_D, 0, false, true), st(S_9, 0, false, true), st(S_5, 0, false, true),
+        st(S_E, 0, false, false),
+        st(S_D, 0, false, false),
+        st(S_9, 0, false, false),
+        st(S_5, 0, false, false),
+        st(S_E, 0, false, true),
+        st(S_D, 0, false, true),
+        st(S_9, 0, false, true),
+        st(S_5, 0, false, true),
         st(S_5, 0, true, true),
     ];
     const UHF: [FrontEndStep; 6] = [
-        st(S_E, 0, false, false), st(S_E, 0, false, true), st(S_D, 0, false, false), st(S_D, 0, false, true),
-        st(S_9, 0, false, true), st(S_9, 0, true, true),
+        st(S_E, 0, false, false),
+        st(S_E, 0, false, true),
+        st(S_D, 0, false, false),
+        st(S_D, 0, false, true),
+        st(S_9, 0, false, true),
+        st(S_9, 0, true, true),
     ];
     const L: [FrontEndStep; 6] = [
-        st(S_E, 0, false, false), st(S_E, 0, false, true), st(S_5, 0, false, false), st(S_9, 0, false, false),
-        st(S_D, 0, false, true), st(S_D, 0, true, true),
+        st(S_E, 0, false, false),
+        st(S_E, 0, false, true),
+        st(S_5, 0, false, false),
+        st(S_9, 0, false, false),
+        st(S_D, 0, false, true),
+        st(S_D, 0, true, true),
     ];
     const HIZ: [FrontEndStep; 5] = [
-        st(S_E, 0, false, false), st(S_E, 1, false, false), st(S_E, 2, false, false), st(S_E, 3, false, false),
+        st(S_E, 0, false, false),
+        st(S_E, 1, false, false),
+        st(S_E, 2, false, false),
+        st(S_E, 3, false, false),
         st(S_E, 3, true, false),
     ];
     match t {
@@ -481,29 +591,69 @@ pub fn stream_config(adc_hz: u32, if_mode: IfMode) -> Result<StreamConfig, Error
             )));
         }
         return Ok(if adc_hz < 3_000_000 {
-            StreamConfig { alt: 2, format: SampleFormat::S14, reg07: 0x000414, decim2: true }
+            StreamConfig {
+                alt: 2,
+                format: SampleFormat::S14,
+                reg07: 0x000414,
+                decim2: true,
+            }
         } else {
-            StreamConfig { alt: 1, format: SampleFormat::S14, reg07: 0x000494, decim2: true }
+            StreamConfig {
+                alt: 1,
+                format: SampleFormat::S14,
+                reg07: 0x000494,
+                decim2: true,
+            }
         });
     }
     let f = adc_hz as u64;
     let fits = |pairs: u64, blocks_per_s: u64| f <= pairs * blocks_per_s;
     let c = if fits(252, 8000) {
-        StreamConfig { alt: 2, format: SampleFormat::S14, reg07: 0x000014, decim2: false }
+        StreamConfig {
+            alt: 2,
+            format: SampleFormat::S14,
+            reg07: 0x000014,
+            decim2: false,
+        }
     } else if fits(336, 8000) {
-        StreamConfig { alt: 2, format: SampleFormat::S12, reg07: 0x000005, decim2: false }
+        StreamConfig {
+            alt: 2,
+            format: SampleFormat::S12,
+            reg07: 0x000005,
+            decim2: false,
+        }
     } else if f < 3_000_000 {
         return Err(Error::Unsupported(format!(
             "ADC clock {adc_hz} Hz between 2.688 and 3 MHz was not observed"
         )));
     } else if fits(252, 24000) {
-        StreamConfig { alt: 1, format: SampleFormat::S14, reg07: 0x000094, decim2: false }
+        StreamConfig {
+            alt: 1,
+            format: SampleFormat::S14,
+            reg07: 0x000094,
+            decim2: false,
+        }
     } else if fits(336, 24000) {
-        StreamConfig { alt: 1, format: SampleFormat::S12, reg07: 0x000085, decim2: false }
+        StreamConfig {
+            alt: 1,
+            format: SampleFormat::S12,
+            reg07: 0x000085,
+            decim2: false,
+        }
     } else if fits(384, 24000) {
-        StreamConfig { alt: 1, format: SampleFormat::S10x384, reg07: 0x0000a5, decim2: false }
+        StreamConfig {
+            alt: 1,
+            format: SampleFormat::S10x384,
+            reg07: 0x0000a5,
+            decim2: false,
+        }
     } else {
-        StreamConfig { alt: 1, format: SampleFormat::S8, reg07: 0x000c94, decim2: false }
+        StreamConfig {
+            alt: 1,
+            format: SampleFormat::S8,
+            reg07: 0x000c94,
+            decim2: false,
+        }
     };
     Ok(c)
 }
@@ -528,10 +678,17 @@ pub const REG03_CLOSE: u32 = 0x091300;
 /// by the API on the write made at open and on ppm changes, clear on sample-rate changes.
 pub fn adc_clock(adc_hz: u32, ppb: i64, flag12: bool) -> Result<AdcClock, Error> {
     if !(ADC_MIN_HZ..=ADC_MAX_HZ).contains(&adc_hz) {
-        return Err(Error::InvalidArgument(format!("ADC clock {adc_hz} Hz out of range")));
+        return Err(Error::InvalidArgument(format!(
+            "ADC clock {adc_hz} Hz out of range"
+        )));
     }
     let f = adc_hz as u64;
-    let pick = |hi: u64| (1..=8u64).rev().map(|k| 2 * k).find(|&div| f * div >= 32 * M && f * div <= hi);
+    let pick = |hi: u64| {
+        (1..=8u64)
+            .rev()
+            .map(|k| 2 * k)
+            .find(|&div| f * div >= 32 * M && f * div <= hi)
+    };
     let div = pick(40 * M)
         .or_else(|| pick(42 * M))
         .ok_or_else(|| Error::Unsupported(format!("no ADC clock divider for {adc_hz} Hz")))?;
@@ -543,7 +700,9 @@ pub fn adc_clock(adc_hz: u32, ppb: i64, flag12: bool) -> Result<AdcClock, Error>
     let n = (q >> 21) as u32;
     let frac = (q & 0x1f_ffff) as u32;
     if !(1..=15).contains(&n) {
-        return Err(Error::InvalidArgument("ADC synthesiser out of range".into()));
+        return Err(Error::InvalidArgument(
+            "ADC synthesiser out of range".into(),
+        ));
     }
     let range: u32 = if adc_hz < 6_000_000 {
         0
@@ -563,13 +722,20 @@ pub fn adc_clock(adc_hz: u32, ppb: i64, flag12: bool) -> Result<AdcClock, Error>
         | 3;
     let reg04 = frac & 0xf_ffff;
     let actual_hz = 4e6 * (n as f64 + frac as f64 / (1u64 << 21) as f64) / div as f64;
-    Ok(AdcClock { reg03, reg04, actual_hz })
+    Ok(AdcClock {
+        reg03,
+        reg04,
+        actual_hz,
+    })
 }
 
 /// Encode a 24-bit write to an MSi2500 register as request 0x41 (wValue, wIndex) (1.4).
 pub fn reg_write_args(reg: u8, value: u32) -> (u16, u16) {
     let value = value & 0xff_ffff;
-    ((((value & 0xff) << 8) | reg as u32) as u16, (value >> 8) as u16)
+    (
+        (((value & 0xff) << 8) | reg as u32) as u16,
+        (value >> 8) as u16,
+    )
 }
 
 /// Encode a board byte write as request 0x49 (wValue, wIndex) (1.8).
@@ -580,7 +746,9 @@ pub fn board_write_args(addr: u8, byte: u8) -> (u16, u16) {
 /// Convert a ppm correction to parts per billion, rejecting absurd values.
 pub fn ppm_to_ppb(ppm: f64) -> Result<i64, Error> {
     if !ppm.is_finite() || ppm.abs() > 1000.0 {
-        return Err(Error::InvalidArgument(format!("ppm {ppm} out of range (|ppm| <= 1000)")));
+        return Err(Error::InvalidArgument(format!(
+            "ppm {ppm} out of range (|ppm| <= 1000)"
+        )));
     }
     Ok((ppm * 1000.0).round() as i64)
 }
@@ -599,29 +767,76 @@ mod tests {
     #[test]
     fn pll_matches_captures() {
         let cases: &[(u64, u32)] = &[
-            (1_000, 0x140002), (10_000, 0x140042), (100_000, 0x140312), (200_000, 0x140632),
-            (500_000, 0x140f92), (1_000_000, 0x141f32), (2_000_000, 0x143e72), (5_000_000, 0x149c32),
-            (10_000_000, 0x157cf2), (10_100_000, 0x158012), (11_900_000, 0x15b852), (12_000_000, 0x15bb72),
-            (12_100_000, 0x160312), (14_000_000, 0x163e72), (20_000_000, 0x173e72), (29_500_000, 0x18abd2),
-            (30_000_000, 0x18bb72), (40_000_000, 0x1a7cf2), (55_250_000, 0x1d2702), (59_750_000, 0x1db3a2),
-            (60_000_000, 0x13bb72), (60_250_000, 0x140f92), (61_000_000, 0x143e72), (100_000_000, 0x213e72),
-            (107_000_000, 0x237cf2), (119_000_000, 0x277cf2), (120_000_000, 0x13bb72), (121_000_000, 0x141f32),
-            (200_000_000, 0x213e72), (247_500_000, 0x292ed2), (250_000_000, 0x157cf2), (260_000_000, 0x173e72),
-            (300_000_000, 0x1dbb72), (330_000_000, 0x22bb72), (331_000_000, 0x231f32), (420_000_000, 0x115db2),
-            (421_000_000, 0x116582), (422_500_000, 0x117142), (430_000_000, 0x11abd2), (500_000_000, 0x149c32),
-            (800_000_000, 0x213e72), (900_000_000, 0x255db2), (952_500_000, 0x2780e2), (961_000_000, 0x2807c2),
-            (997_500_000, 0x296972), (1_000_000_000, 0x149c32), (1_002_500_000, 0x14a602),
-            (1_005_000_000, 0x14afc2), (1_007_500_000, 0x14b982), (1_100_000_000, 0x16abd2),
-            (1_500_000_000, 0x1f2ed2), (1_800_000_000, 0x255db2), (2_000_000_000, 0x297cf2),
+            (1_000, 0x140002),
+            (10_000, 0x140042),
+            (100_000, 0x140312),
+            (200_000, 0x140632),
+            (500_000, 0x140f92),
+            (1_000_000, 0x141f32),
+            (2_000_000, 0x143e72),
+            (5_000_000, 0x149c32),
+            (10_000_000, 0x157cf2),
+            (10_100_000, 0x158012),
+            (11_900_000, 0x15b852),
+            (12_000_000, 0x15bb72),
+            (12_100_000, 0x160312),
+            (14_000_000, 0x163e72),
+            (20_000_000, 0x173e72),
+            (29_500_000, 0x18abd2),
+            (30_000_000, 0x18bb72),
+            (40_000_000, 0x1a7cf2),
+            (55_250_000, 0x1d2702),
+            (59_750_000, 0x1db3a2),
+            (60_000_000, 0x13bb72),
+            (60_250_000, 0x140f92),
+            (61_000_000, 0x143e72),
+            (100_000_000, 0x213e72),
+            (107_000_000, 0x237cf2),
+            (119_000_000, 0x277cf2),
+            (120_000_000, 0x13bb72),
+            (121_000_000, 0x141f32),
+            (200_000_000, 0x213e72),
+            (247_500_000, 0x292ed2),
+            (250_000_000, 0x157cf2),
+            (260_000_000, 0x173e72),
+            (300_000_000, 0x1dbb72),
+            (330_000_000, 0x22bb72),
+            (331_000_000, 0x231f32),
+            (420_000_000, 0x115db2),
+            (421_000_000, 0x116582),
+            (422_500_000, 0x117142),
+            (430_000_000, 0x11abd2),
+            (500_000_000, 0x149c32),
+            (800_000_000, 0x213e72),
+            (900_000_000, 0x255db2),
+            (952_500_000, 0x2780e2),
+            (961_000_000, 0x2807c2),
+            (997_500_000, 0x296972),
+            (1_000_000_000, 0x149c32),
+            (1_002_500_000, 0x14a602),
+            (1_005_000_000, 0x14afc2),
+            (1_007_500_000, 0x14b982),
+            (1_100_000_000, 0x16abd2),
+            (1_500_000_000, 0x1f2ed2),
+            (1_800_000_000, 0x255db2),
+            (2_000_000_000, 0x297cf2),
         ];
         for &(rf, r2) in cases {
             assert_eq!(t2(rf).0, r2, "r2 at {rf} Hz");
         }
         let r3_cases: &[(u64, u32)] = &[
-            (1_000, 0x007ff3), (10_000, 0x00fff3), (100_000_000, 0x00fff3), (422_500_000, 0x007ff3),
-            (425_000_000, 0x00fff3), (952_500_000, 0x007ff3), (955_000_000, 0x00fff3),
-            (1_000_000_000, 0x00fff3), (1_002_500_000, 0x003ff3), (1_005_000_000, 0x007ff3),
-            (1_007_500_000, 0x00bff3), (1_010_000_000, 0x00fff3),
+            (1_000, 0x007ff3),
+            (10_000, 0x00fff3),
+            (100_000_000, 0x00fff3),
+            (422_500_000, 0x007ff3),
+            (425_000_000, 0x00fff3),
+            (952_500_000, 0x007ff3),
+            (955_000_000, 0x00fff3),
+            (1_000_000_000, 0x00fff3),
+            (1_002_500_000, 0x003ff3),
+            (1_005_000_000, 0x007ff3),
+            (1_007_500_000, 0x00bff3),
+            (1_010_000_000, 0x00fff3),
         ];
         for &(rf, r3) in r3_cases {
             assert_eq!(t2(rf).1, r3, "r3 at {rf} Hz");
@@ -638,7 +853,14 @@ mod tests {
 
     #[test]
     fn pll_lo_is_close() {
-        for rf in [1_000u64, 7_074_000, 95_800_000, 143_800_000, 446_000_000, 1_296_000_000] {
+        for rf in [
+            1_000u64,
+            7_074_000,
+            95_800_000,
+            143_800_000,
+            446_000_000,
+            1_296_000_000,
+        ] {
             let b = band_for(rf).unwrap();
             let lo = lo_hz(&b, rf);
             let p = pll(lo, b.mode.lo_div(), 0).unwrap();
@@ -650,17 +872,36 @@ mod tests {
     fn band_table_matches_capture() {
         // (RF, byte 0x12 with antenna A, r0 with zero IF and 200 kHz BW) from 1.9 / c21 / c22.
         let cases: &[(u64, u8, u32)] = &[
-            (1_000, 0x45, 0x043e10), (11_900_000, 0x45, 0x043e10), (12_000_000, 0x65, 0x043e10),
-            (29_500_000, 0x65, 0x043e10), (30_000_000, 0x55, 0x043e10), (59_750_000, 0x55, 0x043e10),
-            (60_000_000, 0x5d, 0x043420), (119_000_000, 0x5d, 0x043420), (120_000_000, 0x7d, 0x043440),
-            (247_500_000, 0x7d, 0x043440), (250_000_000, 0x75, 0x043e10), (297_500_000, 0x75, 0x043e10),
-            (300_000_000, 0x4d, 0x043e10), (330_000_000, 0x4d, 0x043e10), (420_000_000, 0x5d, 0x043480),
-            (997_500_000, 0x5d, 0x043480), (1_000_000_000, 0x7d, 0x043500), (2_000_000_000, 0x7d, 0x043500),
+            (1_000, 0x45, 0x043e10),
+            (11_900_000, 0x45, 0x043e10),
+            (12_000_000, 0x65, 0x043e10),
+            (29_500_000, 0x65, 0x043e10),
+            (30_000_000, 0x55, 0x043e10),
+            (59_750_000, 0x55, 0x043e10),
+            (60_000_000, 0x5d, 0x043420),
+            (119_000_000, 0x5d, 0x043420),
+            (120_000_000, 0x7d, 0x043440),
+            (247_500_000, 0x7d, 0x043440),
+            (250_000_000, 0x75, 0x043e10),
+            (297_500_000, 0x75, 0x043e10),
+            (300_000_000, 0x4d, 0x043e10),
+            (330_000_000, 0x4d, 0x043e10),
+            (420_000_000, 0x5d, 0x043480),
+            (997_500_000, 0x5d, 0x043480),
+            (1_000_000_000, 0x7d, 0x043500),
+            (2_000_000_000, 0x7d, 0x043500),
         ];
         for &(rf, b12, r0v) in cases {
             let b = band_for(rf).unwrap();
-            assert_eq!(board_band_byte(b.filter, Antenna::A, false), b12, "B12 at {rf}");
-            let w = tuner_word(0, r0(mode_byte(b.mode, Antenna::A), IfMode::Zero, Bandwidth::K200) >> 4);
+            assert_eq!(
+                board_band_byte(b.filter, Antenna::A, false),
+                b12,
+                "B12 at {rf}"
+            );
+            let w = tuner_word(
+                0,
+                r0(mode_byte(b.mode, Antenna::A), IfMode::Zero, Bandwidth::K200) >> 4,
+            );
             assert_eq!(w, r0v, "r0 at {rf}");
         }
         assert!(matches!(band_for(380_000_000), Err(Error::Unsupported(_))));
@@ -685,14 +926,28 @@ mod tests {
         assert_eq!(v(0x42, IfMode::Low1620k, Bandwidth::K1536), 0x04d420);
         assert_eq!(v(0x42, IfMode::Low2048k, Bandwidth::K1536), 0x04c420);
         assert_eq!(v(0x42, IfMode::Low2048k, Bandwidth::M5), 0x050420);
-        assert_eq!(v(mode_byte(TunerMode::Am, Antenna::HiZ), IfMode::Zero, Bandwidth::K200), 0x043610);
+        assert_eq!(
+            v(
+                mode_byte(TunerMode::Am, Antenna::HiZ),
+                IfMode::Zero,
+                Bandwidth::K200
+            ),
+            0x043610
+        );
     }
 
     #[test]
     fn gain_words_match_capture() {
         let vhf = lna_table(GainTable::Vhf);
         assert_eq!(r1(40, &vhf[0]), 0x00c281);
-        for (gr, w) in [(20, 0x00c141), (21, 0x00c151), (25, 0x00c191), (30, 0x00c1e1), (45, 0x00c2d1), (50, 0x00c321)] {
+        for (gr, w) in [
+            (20, 0x00c141),
+            (21, 0x00c151),
+            (25, 0x00c191),
+            (30, 0x00c1e1),
+            (45, 0x00c2d1),
+            (50, 0x00c321),
+        ] {
             assert_eq!(r1(gr, &vhf[0]), w);
         }
         let hiz = lna_table(GainTable::HiZ);
@@ -702,9 +957,20 @@ mod tests {
             assert_eq!(board_front_byte(hiz[i].board_step, false, false), 0xb9);
         }
         // Front-end bytes per state (1.8 table).
-        let fe = |t| lna_table(t).iter().map(|s| board_front_byte(s.board_step, false, false)).collect::<Vec<_>>();
-        assert_eq!(fe(GainTable::Am), vec![0xb9, 0xb5, 0xa5, 0x95, 0xb9, 0xb5, 0xa5, 0x95, 0x95]);
-        assert_eq!(fe(GainTable::Vhf), vec![0xb9, 0xb5, 0xa5, 0x95, 0xb9, 0xb5, 0xa5, 0x95, 0x95]);
+        let fe = |t| {
+            lna_table(t)
+                .iter()
+                .map(|s| board_front_byte(s.board_step, false, false))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            fe(GainTable::Am),
+            vec![0xb9, 0xb5, 0xa5, 0x95, 0xb9, 0xb5, 0xa5, 0x95, 0x95]
+        );
+        assert_eq!(
+            fe(GainTable::Vhf),
+            vec![0xb9, 0xb5, 0xa5, 0x95, 0xb9, 0xb5, 0xa5, 0x95, 0x95]
+        );
         assert_eq!(fe(GainTable::Uhf), vec![0xb9, 0xb9, 0xb5, 0xb5, 0xa5, 0xa5]);
         assert_eq!(fe(GainTable::L), vec![0xb9, 0xb9, 0x95, 0xa5, 0xb5, 0xb5]);
         // AM states 4..7 set AM buffer 3; state 8 adds mixer GR; VHF uses the LNA GR bit.
@@ -730,10 +996,17 @@ mod tests {
     #[test]
     fn adc_clock_matches_capture() {
         let cases: &[(u32, u32, u32)] = &[
-            (2_000_000, 0x01081f, 0), (2_048_000, 0x01081f, 0x0624dd), (3_000_000, 0x010917, 0),
-            (4_000_000, 0x010a13, 0), (5_000_000, 0x010a0f, 0), (6_000_000, 0x01490b, 0),
-            (7_000_000, 0x018a8b, 0), (8_000_000, 0x018807, 0), (8_192_000, 0x01c807, 0x0624dd),
-            (9_000_000, 0x01c907, 0), (10_000_000, 0x01ca07, 0),
+            (2_000_000, 0x01081f, 0),
+            (2_048_000, 0x01081f, 0x0624dd),
+            (3_000_000, 0x010917, 0),
+            (4_000_000, 0x010a13, 0),
+            (5_000_000, 0x010a0f, 0),
+            (6_000_000, 0x01490b, 0),
+            (7_000_000, 0x018a8b, 0),
+            (8_000_000, 0x018807, 0),
+            (8_192_000, 0x01c807, 0x0624dd),
+            (9_000_000, 0x01c907, 0),
+            (10_000_000, 0x01ca07, 0),
         ];
         for &(f, r3, r4) in cases {
             let c = adc_clock(f, 0, false).unwrap();
