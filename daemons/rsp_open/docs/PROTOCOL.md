@@ -1,6 +1,6 @@
 # SDRplay RSP USB protocol, from observed wire traffic
 
-Status: the RSP2pro section is complete as far as captures without a signal source allow (2026-10-25); it was verified by a small stand-alone program (1.12) and by the open driver in this directory, `rsp_open` (1.13). The RSP1A and RSP1 sections are in progress.
+Status: the RSP2pro section is complete as far as captures without a signal source allow (2026-10-25); it was verified by a small stand-alone program (1.12) and by the open driver in this directory, `rsp_open` (1.13). The RSP1A section (2) is complete as far as captures without a signal source allow (2026-10-25) and was checked by the same kind of stand-alone program (2.10); `rsp_open` drives the RSP1A from it (2.13). The RSP1 section is in progress.
 
 Goal: describe, in our own words and only from the USB traffic between SDRplay's software and receivers the author owns, how the RSPs are controlled, so that an open driver can be written. This document is the specification `rsp_open` was written from.
 
@@ -191,9 +191,9 @@ Sources: **[photo]** part marking read from a photograph of the author's RSP2pro
 - In the expander's default register map (IOCON.BANK = 0, DS22103A Table 1-1), address 0x00 is IODIRA, 0x01 IODIRB, 0x0A/0x0B IOCON, **0x12 GPIOA, 0x13 GPIOB**, 0x14/0x15 OLATA/OLATB [ds]. So "byte 0x12" is port A (GPA7:0) and "byte 0x13" is port B (GPB7:0); antenna = GPA1:0, band filter = GPA5:3, ext-ref output = GPA6; bias-T = GPB0, front-end step = GPB5:2, notch = GPB7:6 [fit].
 - Its SPI control byte is 0100 000 followed by the R/W bit, i.e. **0x40 for a write** (DS22103A Figure 1-7) [ds]. That is exactly request 0x49's constant wIndex 0x0040, so request 0x49 is most likely "write register (wValue high byte) = data (wValue low byte) over SPI with control byte wIndex", forwarded by the MSi2500's firmware [fit].
 - At power-on reset IODIRA/IODIRB are 0xFF (all pins inputs) [ds], and a write to a GPIO register goes to its output latch (OLAT) [ds]. Every capture shows the same pattern: GPIOA, GPIOB (the transient 0xa5), then **IODIRA = 0x00, IODIRB = 0x00** (all 16 pins outputs), then the final GPIOB value. So the writes to 0x00/0x01 described in 1.8 as a "latch/commit" guess are the direction registers: the API loads the output values first and then turns the pins into outputs, and repeats this on every full tune (redundant after the first, harmless) [obs + ds]. Single-control changes (antenna, notch, bias-T, ext-ref) write only GPIOA or GPIOB [obs].
-- Across every RSP2pro capture (open, sweeps, toggles, rate changes, the bulk-mode attempt and the verification run; 566 request-0x49 writes) and every RSP1A capture made so far, request 0x49 addressed only 0x00, 0x01, 0x12 and 0x13, always with wIndex 0x0040. **No write to IOCON (0x0A/0x0B), OLAT (0x14/0x15) or any other expander register was seen**, so the board relies on the power-on IOCON default (BANK = 0) [obs]. The firmware-load capture has no request-0x49 traffic at all; the first expander writes come with the first open after the load [obs]. Whether the board bytes would work without the IODIR writes was not tested: after power-up the pins would stay inputs, and rsp_open always writes IODIR as the API does [ds, inference].
+- Across every RSP2pro capture (open, sweeps, toggles, rate changes, the bulk-mode attempt and the verification run; 566 request-0x49 writes) and every RSP1A capture, request 0x49 addressed only 0x00, 0x01, 0x12 and 0x13, always with wIndex 0x0040. **No write to IOCON (0x0A/0x0B), OLAT (0x14/0x15) or any other expander register was seen**, so the board relies on the power-on IOCON default (BANK = 0) [obs]. The firmware-load capture has no request-0x49 traffic at all; the first expander writes come with the first open after the load [obs]. Whether the board bytes would work without the IODIR writes was not tested: after power-up the pins would stay inputs, and rsp_open always writes IODIR as the API does [ds, inference].
 - In every RSP2pro capture GPA2 is always written 1 and GPA7 and GPB1 always 0; their function is unknown (open-drain 0 = pin pulled low) [obs, guess].
-- The same four addresses and wIndex on the RSP1A suggest the RSP1A uses the same expander arrangement, with a different bit map (section 2) [fit].
+- The same four addresses and wIndex on the RSP1A suggest the RSP1A uses the same expander arrangement, with a different bit map (section 2) [fit]. The expander part on the RSP1A board has not been identified from a photograph.
 - A 25640-family SPI EEPROM (8-pin SOIC, marking partly hidden) sits next to the expander [photo]. Whether it is what request 0x46 reads is not known.
 
 ### 1.9 Frequency -> band switching (frequency-sweep and band-edge captures; steps 0.1-2.5 MHz)
@@ -280,9 +280,118 @@ Result (2026-10-25), 262144 samples per tuning, **0 counter gaps**:
 
 So the receiver's own 24 MHz reference harmonics land exactly where our tuning words put them, move the right way when retuned, and I/Q order is I then Q. (A weaker image at -3x the offset, e.g. -597 kHz for +199 kHz, is probably a mixer harmonic response [guess].) Our PLL rounds the fraction (100 MHz -> frac 1000) where the API truncates (999). The device was returned to standby and alt 0 afterwards.
 
-## 2. RSP1A (USB 1df7:3000)
+## 2. RSP1A (USB 1df7:3000, API hwVer 255)
 
-**In progress.** A capture round on an RSP1A is under way with the same method as section 0 (API service and our own API client as the only front end); this section will be filled from it.
+Status: complete as far as captures without a signal source allow (2026-10-25). Front end: the API service and our own API client only (section 0); SDRconnect was not used for this round. Same confidence tags as section 1. The receiver was first opened under capture from its cold state, so the round includes one firmware load (2.3; length only, as in 1.3).
+
+### 2.1 Descriptors (read cold, `lsusb -v`)
+Identical in layout to the RSP2pro [obs]: USB 2.0 high speed, class 0xff, MaxPower 400 mA, bcdDevice 2.00 cold / 2.07 warm, no strings cold, a 10-character serial string warm; interface 0 alt 0 (no endpoints), alt 1 isochronous EP 0x81 3 x 1024, alt 2 isochronous 1 x 1024, alt 3 bulk 512 (bulk not tried on the RSP1A, after the RSP2pro hang of 1.10).
+
+### 2.2 API service
+The API service had only a Unix datagram socket (the system log) and no TCP/UDP sockets while it drove the RSP1A [obs].
+
+### 2.3 Firmware load [obs]
+Vendor 0x44 wValue 0x0000 wIndex 0 wLength 4096, then 0x44 wValue 0x1000 wLength 1987: 6083 bytes in two transfers, the same block sizes as the RSP2pro (content not recorded or compared). Then REG 08 = 000080 and request 0x40 wValue 1; the device leaves the bus and re-enumerates about 0.75 s later at a new address with bcdDevice 2.07; the host reads strings 0 and 1 and the EEPROM block of request 0x46 at 0x40 (16 x 0xff).
+
+### 2.4 Open/start/stop, MSi2500, tuner, stream
+Same sequence as 1.5 with only these differences [obs]: request **0x48 returns 0x0d** (RSP2pro 0x04; possibly a board or hardware ID [guess]); the board bytes in the full tune are `B 12 = e4, B 13 = df, B 00 = 00, B 01 = 00`, and after the gain write **both** `B 12 = e4` and `B 13 = dd` are written (the RSP2pro writes only B 13 there). MSi2500 registers, the ADC clock formula (reg 0x03/0x04, including ppm), the format register 0x07 table, the alternate-setting choice, the block header and counter, low-IF decimate-by-2 and the host-side DC/IQ/decimation/AGC are **all identical to 1.7** (every value in the sample-rate and IF/bandwidth captures matches the RSP2pro's value for value). The tuner (MSi001-compatible) words r0/r1/r2/r3/r5/r6/r12-r14, band modes, IF/bandwidth fields, the AM-mode first-LO plans (120/144/168 MHz) and the calibration read 0x42 are also identical to 1.6. The close sequence is the RSP2pro's (STOP, B 13 = dd, r12 = 1c, r0 = 0, 0x42 read, r13/r14, r0 = 063000, r14 = 00800e, REG 03 = 091300, REG 05 = 000004, alt 0).
+
+A second init inside the same API session (the IF/bandwidth capture re-initialises after each IF-mode change) omits the two 0x48 reads and REG 05/00/02 and starts at REG 08, SET_INTERFACE, TUNER r14, r5, REG 07, r6, r0 [obs]; `rsp_open` always sends the first-open form.
+
+### 2.5 Board byte 0x12 (band filter + front-end attenuator) [obs, roles fit]
+- bits 4:0: RF band filter, set by frequency (2.6).
+- bits 7:5: front-end attenuator step selected by the LNA state: `111`, `110`, `101`, `011` (byte values 0xe_, 0xc_, 0xa_, 0x6_).
+- No antenna select (one SMA port) and no reference-output control are offered by the API for this model.
+
+### 2.6 Band switching (frequency-sweep and band-edge captures; edges bracketed to the step shown)
+| RF range (MHz) | B 12 bits 4:0 (B 12 at LNA 0) | MSi001 mode | edge resolution |
+|---|---|---|---|
+| 0.001 - <2 | 00000 (e0) | 0xe1 AM | 1.95-2.0 |
+| 2 - <12 | 00010 (e2) | 0xe1 AM | 11.9-12.0 |
+| 12 - <30 | 00001 (e1) | 0xe1 AM | 29.75-30.0 |
+| 30 - <60 | 00011 (e3) | 0xe1 AM | 59.75-60.0 |
+| 60 - <120 | 00100 (e4) | 0x42 VHF | 119.75-120.0 |
+| 120 - <250 | 10100 (f4) | 0x44 B3 | 249.5-250.0 |
+| 250 - <300 | 10000 (f0) | 0xe1 AM (down-converting) | 299.5-300.0 |
+| 300 - <380 | 01000 (e8) | 0xe1 AM; first LO 144 MHz from ~375 | 377.5-380.0 |
+| 380 - <420 | 11000 (f8) | 0xe1 AM; first LO 168 MHz from ~395 | 417.5-420.0 |
+| 420 - <1000 | 00100 (e4) | 0x48 B4/5 | |
+| 1000 - 2000 | 10100 (f4) | 0x50 L | 999-1000 |
+
+The tuner PLL words (r2/r3) at every captured frequency are those of the 1.6.4 rule, as on the RSP2pro. As on the RSP2pro, the API also rewrites the full tune sequence without a value change at some frequencies (0.5 and 50 MHz seen; gain-table boundaries [guess]).
+
+### 2.7 Board byte 0x13 [obs]
+Base value 0xdd (all off, LNA states 0-3). Active-low switches:
+- bit 0: **DAB notch**, 0 = on (dd -> dc).
+- bit 2: **FM/MW broadcast notch**, 0 = on (dd -> d9). One bit for both; the API sets it the same at 1, 10, 100, 200 and 450 MHz (no band gating in the bytes).
+- bit 4: **bias-T**, 0 = on (dd -> cd). Toggled once on and off **with nothing connected**, then left off.
+- bit 1: front-end step used by LNA states >= 4 (>= 3 in L band): 1 = set (dd -> df).
+- bits 7, 6, 3 are 1 and bit 5 is 0 in every capture (function unknown).
+
+Write order [obs]: FM/MW notch and bias-T write B 13 only. The DAB notch writes B 13 and then repeats the gain write (TUNER r1, B 12, B 13). Combined example: notch on, then LNA state 5 at 100 MHz gives `B 12 = c4, B 13 = db`; back to LNA 0, `B 12 = e4, B 13 = d9`.
+
+The B 13 value written between B 12 and the direction registers in the full tune is 0xdf in every captured open and the B 13 value already in force (0xdd) in every captured retune and bandwidth change [obs]; all of those were made with LNA state 0 and both notches off, so "the value in force" is a fit for other states [fit].
+
+### 2.8 LNA state tables (IF GR 40; entries are B 12 bits 7:5 code / B 13 bit 1 / MSi001 r1 bits 13:10) [obs, gain capture]
+"-" = r1 bits 13:10 zero; mix = bit 12; LNA = bit 13; AM3 = bits 11:10 = 3. Codes: e = 111, c = 110, a = 101, 6 = 011.
+
+| Band (MHz measured) | states | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| <60 AM (1, 10, 30, 55) | 7 | e/0/- | c/0/- | a/0/- | 6/0/- | 6/0/mix | 6/0/AM3 | 6/0/AM3+mix | x | x | x |
+| 60-250 (100, 200) | 10 | e/0/- | c/0/- | a/0/- | 6/0/- | e/1/- | c/1/- | a/1/- | 6/1/- | 6/1/mix | 6/1/LNA |
+| 250-420 AM (300) | 10 | e/0/- | c/0/- | a/0/- | 6/0/- | e/1/- | c/1/- | a/1/- | 6/1/- | 6/1/mix | 6/1/AM3 |
+| 420-1000 (450) | 10 | e/0/- | e/0/LNA | c/0/LNA | a/0/LNA | e/1/- | e/1/LNA | c/1/LNA | a/1/LNA | 6/1/LNA | 6/1/LNA+mix |
+| 1000-2000 (1500) | 9 | e/0/- | c/0/- | a/0/- | e/1/- | c/1/- | a/1/- | 6/1/- | 6/1/LNA | 6/1/LNA+mix | x |
+
+(x = refused by the API, OutOfRange.) At 60-420 MHz states 8 and 9 use the tuner's mixer and LNA bits singly, not cumulatively. Every gain change (IF gain reduction or LNA state, including the host AGC's) writes TUNER r1, B 12, B 13 in that order [obs]. IF gain reduction (r1 bits 9:4, 20-59 dB; 0-19 with extended min-GR) and the host AGC behave as on the RSP2pro.
+
+### 2.9 Control-to-bytes summary (RSP1A)
+| Control | Bytes that change |
+|---|---|
+| Centre frequency | TUNER r2/r3; band change: r0 mode, B 12 bits 4:0, B 13 rewrite; AM-mode LO plan change: calibration (1.6.6) |
+| Sample rate / IF mode / ppm / LO mode | as RSP2pro (1.11); the sample-rate sequence ends with the gain write r1, B 12, B 13 |
+| IF bandwidth | TUNER r0, B 12, B 13 (value in force), B 00, B 01, r3, r2, r1, B 12, B 13 (no r13/r14) |
+| LNA state | B 12 bits 7:5, B 13 bit 1, TUNER r1 bits 13:10 (2.8) |
+| IF gain reduction | TUNER r1 bits 9:4 (then B 12, B 13 rewritten) |
+| FM/MW notch | B 13 bit 2 (0 = on) |
+| DAB notch | B 13 bit 0 (0 = on), then r1, B 12, B 13 |
+| Bias-T | B 13 bit 4 (0 = on) |
+| DC/IQ correction, decimation, AGC loop | nothing on the wire (host) / host-driven gain writes |
+
+### 2.10 Standalone check
+The stand-alone program of 1.12 with only the product ID and the two board bytes changed (B 12 = e4, B 13 = df then dd); it refuses unless bcdDevice is 2.07 (it never talks to a cold device and never sends 0x44/0x40). No SDRplay software was running. Result: 262144 samples per tuning, **0 counter gaps**; the 24 MHz harmonics exactly where predicted: 95.8 MHz -> +199.2 kHz (27.9 dB over the floor), 95.9 -> +99.1 kHz (28.7 dB), 96.3 -> -300.8 kHz (27.9 dB), 72.3 -> -300.8 kHz (35.2 dB), 119.8 -> +199.2 kHz (33.1 dB); 100.0 MHz shows no spur. (As in 1.12, that program rounded the PLL fraction; the 1.6.4 rule removes the 0.8 kHz offset.)
+
+### 2.11 Differences from the RSP2pro
+| Item | RSP2pro | RSP1A |
+|---|---|---|
+| USB ID / API hwVer | 1df7:3010 / 2 | 1df7:3000 / 255 |
+| Descriptors, alt settings | as 1.1 | identical |
+| Firmware load | 4096 + 1987 = 6083 bytes, 0x44 then 0x40 | identical block sizes and sequence |
+| Request 0x48 reply (API opens) | 0x04 | 0x0d |
+| Other vendor requests (0x40-0x46, 0x49 with wIndex 0x40) | as 1.4 | identical set; no new requests |
+| MSi2500 registers, ADC clock, stream formats, header, decimate-by-2 | 1.7 | identical, value for value |
+| Tuner registers, band modes, LO plans, calibration | 1.6 | identical |
+| B 12 role | filter bits 5:3, antenna bits 1:0, ref-out bit 6 | filter bits 4:0, front-end attenuator bits 7:5 |
+| B 13 role | front-end step bits 5:2, notch bits 7:6, bias-T bit 0 | DAB notch bit 0, FM/MW notch bit 2, bias-T bit 4, front-end step bit 1 |
+| Gain write | r1, B 13 | r1, B 12, B 13 |
+| B 13 in the middle of a full tune | 0xa5 | 0xdf at open, the value in force later |
+| Band-filter edges (MHz) | 12, 30, 60, 120, 250, 300, 380, 420, 1000 | **2**, 12, 30, 60, 120, 250, 300, 380, 420, 1000 (extra filter below 2 MHz) |
+| LNA states (HF / VHF / 250-420 / 420-1000 / L) | 9 / 9 / 9 / 6 / 6 (Hi-Z 5) | 7 / 10 / 10 / 10 / 9 |
+| Antenna ports | A, B, Hi-Z | one port; no antenna control |
+| Notches | one RF (broadcast) notch | FM/MW notch and a separate DAB notch |
+| Reference output | yes (B 12 bit 6) | not offered |
+| Bias-T | B 13 bit 0, active low | B 13 bit 4, active low |
+
+### 2.12 Open questions (RSP1A)
+Same as section 4 items 2-8 (they are common to both), plus: dB values of the B 12 bits 7:5 attenuator steps and of B 13 bit 1; whether the FM and MW notches are physically one filter or two switched together; the B 13 value mid-tune with LNA state >= 4 or a notch on (2.7); the function of B 13 bits 3, 5, 6, 7; exact edges (bracketed above); bulk mode untested; the request 0x48 value under `rsp_open`.
+
+### 2.13 rsp_open on the RSP1A (2026-10-25)
+`rsp_open` drives the RSP1A with the same chipset code as the RSP2pro and the RSP1A board layer of 2.5-2.9. Its unit tests reproduce the captured RSP1A byte sequences exactly: the open sequence, B 12 / r0 / r2 at 23 frequencies including the 2 MHz edge, every LNA state of 2.8 in eight bands (r1, B 12, B 13), the notch, DAB notch and bias-T toggles and the notch + LNA combination, ppm, the sample-rate and bandwidth sequences and the close. Like the RSP2pro path it sends only the requests of 1.4 that are marked observed, refuses 375-420 MHz, never switches the bias-T on in tests, and drives only a receiver at bcdDevice 2.07. Hardware tests are written; their results will be added here when they have been run on the receiver.
+
+### 2.14 Low-IF tuning and bandwidth changes (both models) [obs]
+Re-reading the IF/bandwidth captures of both models while writing the RSP1A path:
+- In the low-IF modes the API offsets the tuner LO above RF: tuned 100 MHz, r2 is 0x215a92 (100.45 MHz) with the 450 kHz IF, 0x21a132 (101.58 MHz) with the 1.62 MHz IF and 0x2202f2 (102.048 MHz) with the 2.048 MHz IF, on the RSP2pro and on the RSP1A alike. So the low-IF LO is not the zero-IF LO, as the `rsp_open` work had assumed: it moves up by the IF (by 1.58 rather than 1.62 MHz in the 1.62 MHz mode, unexplained). This probably explains the unexpected line positions `rsp_open` saw in the low-IF outputs [guess]. `rsp_open` does not apply the offset yet (deferred; see the README).
+- A bandwidth change is not "r0 only" (correcting 1.13.3): on both models the API writes r0, B 12, B 13 (RSP2pro 0xa5, RSP1A the value in force), B 00, B 01, r3, r2, r1 and then the gain bytes, without r13/r14. `rsp_open` uses this sequence on the RSP1A and keeps the hardware-verified r0-only write on the RSP2pro.
 
 ## 3. RSP1 (USB 1df7:2500)
 
@@ -290,9 +399,9 @@ So the receiver's own 24 MHz reference harmonics land exactly where our tuning w
 
 ## 4. Open questions
 
-0. (rsp_open, 2026-10-25) Answered or narrowed: r3 role (1.6.4); ADC divider (1.13.1); format choice (1.13.2); front-end dB values partly (1.13.7). New: 0x48 = 0x09 under rsp_open (1.13.6); where RF lands in the low-IF outputs.
+0. (rsp_open, 2026-10-25) Answered or narrowed: r3 role (1.6.4); ADC divider (1.13.1); format choice (1.13.2); front-end dB values partly (1.13.7); the low-IF LO offset (2.14). New: 0x48 = 0x09 under rsp_open (1.13.6); where RF lands in the low-IF outputs once the LO offset is applied; the 1.58 MHz offset of the 1.62 MHz mode (2.14).
 1. A cold device (bcdDevice 2.00) needs SDRplay's firmware load (1.3) before it can be used; that is out of scope here, and `rsp_open` requires SDRplay's software to have opened the receiver since power-up.
-2. Meaning of request 0x48 (0x04 in the API's opens, 0x09 in rsp_open's, 1.13.6) and of the 4-byte 0x42 read (wIndex 0x10) used in VCO calibration; how its bytes map into r13/r14.
+2. Meaning of request 0x48 (RSP2pro: 0x04 in the API's opens, 0x09 in rsp_open's, 1.13.6; RSP1A: 0x0d in the API's opens, 2.4) and of the 4-byte 0x42 read (wIndex 0x10) used in VCO calibration; how its bytes map into r13/r14.
 3. Header bytes 4-15 of each stream block.
 4. dB values of the B 13 front-end steps and of LNA states (need a signal generator; no antenna may be connected).
 5. Exact band edges (bracketed to 0.1-2.5 MHz).

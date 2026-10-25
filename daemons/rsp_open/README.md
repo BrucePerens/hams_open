@@ -117,7 +117,8 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 - Low-IF modes: stream at the halved rate (1, 3, 4.096 MS/s) with the 504-per-block counter
   step confirmed (no gaps). **Where RF lands in the low-IF output is not characterised yet**
   (tuned 95.8 MHz, the strongest line was at -200 kHz / -600 kHz / -1712 kHz for the 450 k /
-  1.62 M / 2.048 M modes); `set_frequency` writes the same LO as in zero IF, as the API did,
+  1.62 M / 2.048 M modes); `set_frequency` writes the same LO as in zero IF, whereas the API moves the LO up by the IF
+  in these modes (`docs/PROTOCOL.md` 2.14; correcting it is deferred),
   and the host-side IF down-conversion is left to the caller. Hi-Z port: switching verified
   on the mock and on hardware via `rsp_measure` (floor changes), no signal test.
 - `examples/rsp_measure.rs` characterises the front end; results in
