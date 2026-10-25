@@ -51,9 +51,11 @@ Every route goes through `ir.http._dispatch`, which `hams_helpdesk` wraps.
    `/web/assets/...` asserts that `?assets_params=` is a dict. Either is the caller's, and a 404, when the error was
    raised in Odoo's `str2bool` called from a controller on a value the request carried (compared after lower-casing,
    so `?download=` and `?download=x` count too), or by an `assert` in one of Odoo's stock controllers on a parameter
-   as sent: the names the `assert` statement reads are taken from its source line
-   `[@ANCHOR: hams_helpdesk:input_error_assert_names]`, and one of them must hold the very object the caller sent.
-   `str2bool` on a setting, or an `assert` in our own code or on a value the handler built, stays a 500
+   as sent, or on a text built from one (`assert not '%' in url`, url made from the caller's filename): the names
+   the `assert` statement reads are taken from its source line
+   `[@ANCHOR: hams_helpdesk:input_error_assert_names]`, and one of them must hold the very object the caller sent or a
+   text containing a sent value of three characters or more.
+   `str2bool` on a setting, or an `assert` in our own code or on a value the handler built with nothing sent in it, stays a 500
    `[@ANCHOR: hams_helpdesk:input_error_odoo_parameter_parsing]`. A non-numeric `?width=` or `?height=` on
    `/web/image` is the not-a-number 400 of item 3.
 8. **An error page that cannot be built for the address.** The website layout builds `<meta og:url>` from the request

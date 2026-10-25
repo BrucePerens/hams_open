@@ -146,8 +146,9 @@ def _odoo_refused_a_parameter(error, leaves):
       not looked up by identity; an empty or one-letter string carries no identity anyway (CPython shares them),
       which is why the generic identity rule missed ``?download=`` and ``?download=x``.
     * ``assert`` in one of Odoo's stock controllers whose condition reads a local that is the very object the caller
-      sent (``assert isinstance(assets_params, dict)`` for ``?assets_params=x``). An assert on a value the handler
-      built (``assert not '%' in url``) or anywhere in our own code is not converted."""
+      sent (``assert isinstance(assets_params, dict)`` for ``?assets_params=x``), or a text local that contains a sent
+      text of three characters or more (``assert not '%' in url``, url built from the caller's filename). An assert on
+      a value the handler built with nothing sent in it, or anywhere in our own code, is not converted."""
     if not leaves:
         return None
     frames = list(traceback.walk_tb(error.__traceback__))
@@ -169,10 +170,18 @@ def _odoo_refused_a_parameter(error, leaves):
     in_an_odoo_controller = _CONTROLLERS_DIRECTORY in filename and os.path.realpath(filename).startswith(_ODOO_DISTRIBUTION)
     if type(error) is AssertionError and in_an_odoo_controller:
         sent = {id(leaf) for leaf in leaves}
+        sent_text = [leaf for leaf in leaves if isinstance(leaf, str) and len(leaf) >= MIN_QUOTED_VALUE_LENGTH]
         local_values = innermost.f_locals
         for name in _assert_names(innermost, innermost_line):
-            if name in local_values and id(local_values[name]) in sent:
+            if name not in local_values:
+                continue
+            value = local_values[name]
+            if id(value) in sent:
                 return "an Odoo controller refused a parameter as sent"
+            if isinstance(value, str) and any(text in value for text in sent_text):
+                # A value the handler built from what was sent: content_assets' `assert not '%' in url`, where url
+                # is made from the caller's filename (/web/assets/x/..%252f..%252fetc%252fpasswd).
+                return "an Odoo controller refused a value built from a parameter"
     return None
 
 

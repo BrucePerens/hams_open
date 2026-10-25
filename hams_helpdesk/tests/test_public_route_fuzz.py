@@ -32,6 +32,9 @@ SKIPPED_ROUTE_PREFIXES = {
     "/web/become": "switches the session user",  # burn-ignore: a route prefix the fuzz skips, never a URL we redirect to
     "/report/": "renders PDFs by starting wkhtmltopdf",
     "/odoo/upgrade_modules": "module installer",
+    # Odoo's own deliberate answer: the controller catches the UserError "Profiling is not enabled on this database"
+    # and returns Response(status=500) itself. Nothing is raised and no ticket is filed.
+    "/web/set_profiling": "answers its own 500 when profiling is off; raises nothing, files no ticket",  # burn-ignore: a route prefix the fuzz skips, never a URL we redirect to
     "/web/binary/upload": "stores a file",  # burn-ignore: a route prefix the fuzz skips, never a URL we redirect to
 }
 

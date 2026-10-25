@@ -202,12 +202,20 @@ def _asserts_on_its_own_value(filename=None, **kw):
     return url
 
 
+def _asserts_on_a_value_it_built(filename=None, **kw):
+    url = "/web/assets/%s/" % len(filename or "")
+    assert url.endswith("x")
+    return url
+
+
 def _fake_odoo_controller():
-    """The four stand-ins above, as if they lived in an Odoo controller file."""
+    """The stand-ins above, as if they lived in an Odoo controller file."""
     own_lines = linecache.getlines(__file__)
     linecache.cache[_FAKE_ODOO_CONTROLLER] = (sum(map(len, own_lines)), None, own_lines, _FAKE_ODOO_CONTROLLER)
     controller = {}
-    for function in (_content_common, _content_assets, _reads_a_setting, _asserts_on_its_own_value):
+    for function in (
+        _content_common, _content_assets, _reads_a_setting, _asserts_on_its_own_value, _asserts_on_a_value_it_built,
+    ):
         stand_in = types.FunctionType(
             function.__code__.replace(co_filename=_FAKE_ODOO_CONTROLLER), function.__globals__, function.__name__,
             function.__defaults__,
@@ -264,11 +272,24 @@ class TestOdooParameterParsing(HamsTransactionCase):
         self.assertIsInstance(error, AssertionError)
         self.assertTrue(classify_request_input_error(error, params))
 
-    def test_an_odoo_controller_asserting_on_its_own_value_stays_a_500(self):
+    def test_an_odoo_controller_asserting_on_a_value_built_from_a_parameter_is_the_callers(self):
+        # This was a negative test ("url is built by the handler, not sent") until the fuzz run of 2026-10-25 found
+        # stock content_assets answering 500 to /web/assets/<x>/..%252f..%252fetc%252fpasswd: its `assert not '%' in
+        # url` fails because url is built from the caller's own filename. A text local that contains a value sent (three
+        # characters or more) is now evidence too.
         params = {"filename": "a%b.css"}
         error = _raised(lambda: self.controller["asserts_on_its_own_value"](**params))
         self.assertIsInstance(error, AssertionError)
-        self.assertIsNone(classify_request_input_error(error, params), "url is built by the handler, not sent")
+        self.assertTrue(classify_request_input_error(error, params))
+        short = {"filename": "%"}
+        error = _raised(lambda: self.controller["asserts_on_its_own_value"](**short))
+        self.assertIsNone(classify_request_input_error(error, short), "a one-letter value is not looked for")
+
+    def test_an_odoo_controller_asserting_on_a_value_it_built_with_nothing_sent_in_it_stays_a_500(self):
+        params = {"filename": "web.assets_frontend.min.css"}
+        error = _raised(lambda: self.controller["asserts_on_a_value_it_built"](**params))
+        self.assertIsInstance(error, AssertionError)
+        self.assertIsNone(classify_request_input_error(error, params), "url holds nothing the caller sent")
 
     def test_assert_names_reads_only_an_assert_statement(self):
         # Tests [@ANCHOR: hams_helpdesk:input_error_assert_names]
