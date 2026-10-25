@@ -100,10 +100,11 @@ class BrowserException(models.AbstractModel):
 
     # [@ANCHOR: hams_helpdesk:browser_record]
     @api.model
-    def _record(self, report):
+    def _record(self, report, uid=None):
         """Hands a validated ``schema.Report`` to the shared pipeline. Returns True when it wrote (False
-        when the once-a-minute gate or a cap held it back). No user id is passed: a browser report is
-        anonymous by design."""
+        when the once-a-minute gate or a cap held it back). ``uid`` is the request session's user id, an
+        integer, or None for a logged-out visitor, who stays anonymous. The pipeline links the account only
+        when it is a real member's (not the public, system or a service user)."""
         return report_event(
             self.env.registry,
             "browser",
@@ -113,6 +114,6 @@ class BrowserException(models.AbstractModel):
             report.route,
             report.trace,
             report.name,
-            uid=None,
+            uid=uid if isinstance(uid, int) else None,
             reporter="browser JavaScript error report",
         )
