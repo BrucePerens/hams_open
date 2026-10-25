@@ -33,4 +33,33 @@ Every route goes through `ir.http._dispatch`, which `hams_helpdesk` wraps.
    impossible month, day or year message). A date the server built wrongly itself is not matched, so that
    bug still surfaces as a 500 and a ticket `[@ANCHOR: hams_helpdesk:error_is_unreadable_date]`.
 
-**Status:** Verified by `tests/test_missing_params.py`.
+6. **Any other malformed input on a public page is a 404.** On a public page route (type `http`, no login, not a
+   CSRF-off POST endpoint such as a webhook) an exception that the caller's own input caused, and that none of the
+   400s above matched, is answered 404 and logged at INFO with the route and class only (Bruce, 2026-10-19: "things
+   will be probing our site continually") `[@ANCHOR: hams_helpdesk:malformed_input_is_404]`. Which routes count is
+   decided from the route's own declaration `[@ANCHOR: hams_helpdesk:input_error_route_scope]`. Only positive evidence
+   converts `[@ANCHOR: hams_helpdesk:classify_request_input_error]`: the database refused a value, a lookup found no
+   record, the message quotes a value sent (three letters or more)
+   `[@ANCHOR: hams_helpdesk:input_error_message_quotes_a_value]`, or the handler failed on the very object sent, found
+   by identity among the locals of the innermost frames `[@ANCHOR: hams_helpdesk:input_error_callers_object_is_a_local]`
+   `[@ANCHOR: hams_helpdesk:input_error_inner_frames]`. "Sent" means the text, number and list leaves of the request's
+   parameters, never a record a URL converter looked up `[@ANCHOR: hams_helpdesk:request_input_values]`. Every other
+   exception stays a 500 and a ticket.
+7. **Odoo's own parsing of a parameter.** Stock `/web/content` and `/web/image` read `?download=` with
+   `str2bool`, which raises `ValueError("Use 0/1/yes/no/true/false/on/off")` for anything but its words; a scanner's
+   `/web/content/1297/<file>.pdf?download=514750499` on perens.com was a 500 and ticket 103 (2026-10-25). Stock
+   `/web/assets/...` asserts that `?assets_params=` is a dict. Either is the caller's, and a 404, when the error was
+   raised in Odoo's `str2bool` called from a controller on a value the request carried (compared after lower-casing,
+   so `?download=` and `?download=x` count too), or by an `assert` in one of Odoo's stock controllers on a parameter
+   as sent: the names the `assert` statement reads are taken from its source line
+   `[@ANCHOR: hams_helpdesk:input_error_assert_names]`, and one of them must hold the very object the caller sent.
+   `str2bool` on a setting, or an `assert` in our own code or on a value the handler built, stays a 500
+   `[@ANCHOR: hams_helpdesk:input_error_odoo_parameter_parsing]`. A non-numeric `?width=` or `?height=` on
+   `/web/image` is the not-a-number 400 of item 3.
+8. **An error page that cannot be built for the address.** The website layout builds `<meta og:url>` from the request
+   path with `urljoin`, which refuses a path with dot segments (`/.//.env`) or an absolute URL in it, so the 404 page
+   for a scanner's path failed to render and the visitor got a 500. When the original answer was a 4xx, werkzeug's
+   own bare page for that status is sent instead `[@ANCHOR: hams_helpdesk:render_error_is_the_urls]`.
+
+**Status:** Verified by `tests/test_missing_params.py` and `tests/test_request_input_errors.py` (items 6 and 7, with
+`tests/test_public_route_fuzz.py` sending scanner garbage to every public GET route).

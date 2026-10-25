@@ -2,12 +2,17 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Malformed input on a public page route is a 404, not a 500 and a ticket (Bruce, 2026-10-19)."""
 
+import linecache
 import logging
+import os
+import traceback
+import types
 
 import psycopg2.errors
 import werkzeug.exceptions
 
 from odoo.tests.common import tagged
+from odoo.tools import misc as odoo_misc
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 
 from odoo.addons.hams_helpdesk.models.exception_scrub import is_expected
@@ -16,6 +21,7 @@ from odoo.addons.hams_helpdesk.models.ir_http_exception import (
     _input_errors_are_the_callers,
 )
 from odoo.addons.hams_helpdesk.models.request_input_errors import (
+    _assert_names,
     classify_request_input_error,
     request_values,
 )
@@ -163,3 +169,156 @@ class TestUnbuildableErrorPage(HamsHttpCase):
 
     def test_a_not_found_is_never_a_ticket(self):
         self.assertTrue(is_expected(werkzeug.exceptions.NotFound(), "http", False))
+
+
+# Where Odoo keeps its controllers. The stand-in handlers below are given a code object whose file name is such a path,
+# so they raise from frames that look, to the classifier, exactly like content_common or content_assets in
+# odoo/addons/web/controllers/binary.py. linecache serves that name this file's own lines, so an assert's line can be
+# read back as it can for the real file.
+_FAKE_ODOO_CONTROLLER = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(odoo_misc.__file__)))),
+    "odoo", "addons", "hams_test_fake", "controllers", "binary.py",
+)
+
+
+def _content_common(download=False, **kw):
+    download = odoo_misc.str2bool(download)
+    return download
+
+
+def _content_assets(filename=None, assets_params=None, **kw):
+    assets_params = assets_params or {}
+    assert isinstance(assets_params, dict)
+    return filename
+
+
+def _reads_a_setting(value):
+    return odoo_misc.str2bool(value)
+
+
+def _asserts_on_its_own_value(filename=None, **kw):
+    url = "/web/assets/" + (filename or "")
+    assert "%" not in url
+    return url
+
+
+def _fake_odoo_controller():
+    """The four stand-ins above, as if they lived in an Odoo controller file."""
+    own_lines = linecache.getlines(__file__)
+    linecache.cache[_FAKE_ODOO_CONTROLLER] = (sum(map(len, own_lines)), None, own_lines, _FAKE_ODOO_CONTROLLER)
+    controller = {}
+    for function in (_content_common, _content_assets, _reads_a_setting, _asserts_on_its_own_value):
+        stand_in = types.FunctionType(
+            function.__code__.replace(co_filename=_FAKE_ODOO_CONTROLLER), function.__globals__, function.__name__,
+            function.__defaults__,
+        )
+        stand_in.__kwdefaults__ = function.__kwdefaults__
+        controller[function.__name__.lstrip("_")] = stand_in
+    return controller
+
+
+@tagged("post_install", "-at_install")
+class TestOdooParameterParsing(HamsTransactionCase):
+    """Odoo's own controllers parse some parameters themselves; their refusal of what the caller sent is the caller's.
+
+    Ticket 103 (2026-10-25): /web/content/1297/<file>.pdf?download=514750499 raised
+    ValueError("Use 0/1/yes/no/true/false/on/off") in str2bool, called by content_common for ?download=. The message
+    quotes nothing, so only the sent value's identity pointed at the caller, and that evidence is absent for an empty or
+    one-letter value (CPython shares those string objects)."""
+
+    # Tests [@ANCHOR: hams_helpdesk:input_error_odoo_parameter_parsing]
+    # Tests [@ANCHOR: hams_helpdesk:classify_request_input_error]
+
+    def setUp(self):
+        super().setUp()
+        self.controller = _fake_odoo_controller()
+
+    def _classify(self, function, params):
+        return classify_request_input_error(_raised(lambda: function(**params)), params)
+
+    def test_str2bool_refusing_the_download_flag_is_the_callers(self):
+        for value in ("bogus", "514750499", "", "x", "2", "TRUE ", "Maybe"):
+            params = {"id": 1, "filename": "x.txt", "download": value}
+            self.assertTrue(self._classify(self.controller["content_common"], params), repr(value))
+
+    def test_str2bool_refusing_a_value_the_caller_did_not_send_stays_a_500(self):
+        error = _raised(self.controller["reads_a_setting"], "enabled-ish")
+        self.assertIsNone(classify_request_input_error(error, {"download": "1", "q": "other"}))
+        self.assertIsNone(classify_request_input_error(error, {}), "no parameters at all")
+
+    def test_str2bool_called_outside_a_controller_stays_a_500(self):
+        # Our own model code reading a setting, with the same text as a parameter by coincidence: not the caller's.
+        error = _raised(odoo_misc.str2bool, "")
+        self.assertIsNone(classify_request_input_error(error, {"q": ""}))
+
+    def test_a_different_value_error_from_a_controller_stays_a_500(self):
+        self.assertIsNone(
+            classify_request_input_error(ValueError("Use 0/1/yes/no/true/false/on/off"), {"download": "x"}),
+            "the message alone, with no str2bool frame, is not evidence",
+        )
+
+    def test_an_odoo_controller_asserting_on_a_parameter_as_sent_is_the_callers(self):
+        # /web/assets/<unique>/<filename>?assets_params=ijyM: content_assets asserts the parameter is a dict.
+        params = {"unique": "1", "filename": "web.assets_frontend.min.css", "assets_params": "ijyM"}
+        error = _raised(lambda: self.controller["content_assets"](**params))
+        self.assertIsInstance(error, AssertionError)
+        self.assertTrue(classify_request_input_error(error, params))
+
+    def test_an_odoo_controller_asserting_on_its_own_value_stays_a_500(self):
+        params = {"filename": "a%b.css"}
+        error = _raised(lambda: self.controller["asserts_on_its_own_value"](**params))
+        self.assertIsInstance(error, AssertionError)
+        self.assertIsNone(classify_request_input_error(error, params), "url is built by the handler, not sent")
+
+    def test_assert_names_reads_only_an_assert_statement(self):
+        # Tests [@ANCHOR: hams_helpdesk:input_error_assert_names]
+        error = _raised(lambda: self.controller["content_assets"](assets_params="ijyM"))
+        frame, line = list(traceback.walk_tb(error.__traceback__))[-1]
+        self.assertEqual(_assert_names(frame, line), {"isinstance", "assets_params", "dict"})
+        error = _raised(lambda: self.controller["content_common"](download="bogus"))
+        frame, line = list(traceback.walk_tb(error.__traceback__))[-2]
+        self.assertEqual(_assert_names(frame, line), set(), "not an assert statement")
+
+    def test_an_assertion_in_our_own_code_stays_a_500(self):
+        def our_handler(assets_params=None):
+            assert isinstance(assets_params, dict)
+
+        params = {"assets_params": "ijyM"}
+        self.assertIsNone(classify_request_input_error(_raised(lambda: our_handler(**params)), params))
+
+
+@tagged("post_install", "-at_install")
+class TestOdooBinaryRoutesWithBadParameters(HamsHttpCase):
+    """Odoo's /web/content, /web/image and /web/assets routes, called with parameter values they cannot parse, answer a
+    4xx with no ticket and nothing logged at error (ticket 103: ?download=514750499 on /web/content was a 500)."""
+
+    # Tests [@ANCHOR: hams_helpdesk:malformed_input_is_404]
+    # Tests [@ANCHOR: hams_helpdesk:input_error_odoo_parameter_parsing]
+
+    def _assert_answered(self, url, status):
+        fingerprints = self.env["hams_helpdesk.exception.fingerprint"]
+        before = fingerprints.search_count([])
+        with self.assertNoLogs(level="ERROR"):
+            response = self.url_open(url, allow_redirects=False)
+        self.assertEqual(response.status_code, status, url)
+        self.assertEqual(fingerprints.search_count([]), before, f"{url} filed an exception fingerprint")
+
+    def test_a_download_flag_that_is_not_a_boolean_is_a_404(self):
+        for url in (
+            "/web/content/1/x.txt?download=bogus",
+            "/web/content/1/x.txt?download=514750499",  # the request of ticket 103
+            "/web/content/1/x.txt?download=",
+            "/web/content/1/x.txt?download=x",
+            "/web/content?download=2",
+            "/web/image/1?download=x",
+            "/web/image/1/x.png?download=",
+        ):
+            self._assert_answered(url, 404)
+
+    def test_asset_parameters_that_are_not_a_dict_are_a_404(self):
+        self._assert_answered("/web/assets/1/web.assets_frontend.min.css?assets_params=ijyM", 404)
+
+    def test_an_image_size_that_is_not_a_number_stays_main_s_400(self):
+        # int("abc") in content_image: the existing not-a-number rule, a 400 logged at warning.
+        self._assert_answered("/web/image/1?width=abc", 400)
+        self._assert_answered("/web/image/1?height=", 400)

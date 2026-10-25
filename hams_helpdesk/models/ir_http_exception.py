@@ -18,7 +18,7 @@ from odoo import models
 from odoo.http import request
 
 from .exception_fingerprint import report_exception
-from .request_input_errors import INPUT_ERROR_TYPES, classify_request_input_error
+from .request_input_errors import CAUGHT_ERROR_TYPES, classify_request_input_error
 
 _logger = logging.getLogger("hams_helpdesk.exception_reporter")
 
@@ -210,7 +210,7 @@ class IrHttpExceptionReport(models.AbstractModel):
             raise werkzeug.exceptions.BadRequest("Missing required parameter: " + ", ".join(missing))
         try:
             return super()._dispatch(endpoint)
-        except INPUT_ERROR_TYPES as error:
+        except CAUGHT_ERROR_TYPES as error:
             route_name = request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path
             if isinstance(error, ValueError):
                 # A handler that turns a request parameter into a number with int() or float() and gets text raises
@@ -238,6 +238,8 @@ class IrHttpExceptionReport(models.AbstractModel):
             # request_input_errors.py; every other exception is raised unchanged and stays a 500 with a ticket.
             # Logged at INFO with the route and class only (no traceback, no value) so the volume of probes is
             # visible without filling the log; a handler that really has the bug is the one route that repeats.
+            # This includes Odoo's own parsing of a parameter refusing what was sent: str2bool on /web/content's
+            # ?download=514750499 was ticket 103 (2026-10-25), and content_assets asserts ?assets_params= is a dict.
             if _input_errors_are_the_callers(endpoint.routing):
                 reason = classify_request_input_error(error, request.params)
                 if reason:
