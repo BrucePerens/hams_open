@@ -23,22 +23,18 @@ and those calls return `Error::Unsupported` (docs/PROTOCOL.md 5). `Rsp::open` st
 `Error::NotRunning` for a boot-ROM device. Other bcdDevice values are refused
 (`Error::UnknownState`). Other SDRplay products, the RSP1 included, are never opened.
 
-## Linux: the kernel `msi2500` driver must be banned and removed
+## Linux: the kernel `msi2500` driver and opening a receiver
 
-On Linux the in-kernel `msi2500` driver (with `msi001`) binds to SDRplay receivers as soon as they appear (the RSP1, 1df7:2500, even in its boot-ROM state), creating `/dev/swradio*`. While it is bound, the vendor API cannot load firmware into the device, and `rsp_open` has to detach it first. Decision (Bruce Perens, 2026-10-25): **the relay bans the driver and removes it on Linux**; it does not use the kernel driver for these receivers. The relay's installer/setup must therefore, on Linux:
+On Linux the in-kernel `msi2500` driver (with `msi001`) binds to SDRplay receivers as soon as they appear (the RSP1, 1df7:2500, even in its boot-ROM state), creating `/dev/swradio*`. While it is bound, the vendor API cannot load firmware into the device, and the interface cannot be claimed without first detaching it. Decision (Bruce Perens, 2026-10-25): the relay does not use the kernel driver for these receivers, and **it makes sure the driver is out of the way just before it opens a receiver**, rather than banning the driver in advance. The driver stays available to everything else on the machine.
 
-1. Write `/etc/modprobe.d/blacklist-msi2500.conf`:
+Before opening, the relay (on Linux):
 
-   ```
-   blacklist msi2500
-   install msi2500 /bin/false
-   ```
+1. Finds the receiver by enumeration (`rsp_open::usb::list_devices`, equivalent to `lsusb -d 1df7:`): vendor 1df7 with product ID 2500, 3000 or 3010. Nothing is opened or sent at this step.
+2. If a kernel driver is bound to its interface 0 (`/sys/bus/usb/devices/<bus>-<port>:1.0/driver` points at `msi2500`), tries the least harmful step first: `UsbTransport::open` asks libusb to detach the driver from this one interface (no root needed when the device node is accessible) and to reattach it on close.
+3. If that fails because of permissions, and the relay can run a privileged helper: `rmmod msi2500` then `rmmod msi001` (or unbind just this device: `echo <bus>-<port>:1.0 > /sys/bus/usb/drivers/msi2500/unbind`), then open. `rmmod` refuses while another program has `/dev/swradio*` open, so it cannot pull the driver from under another user; the relay should report that case rather than force it.
+4. Opens the receiver.
 
-   (`blacklist` stops automatic loading by alias; the `install` line also makes a direct `modprobe msi2500` fail.)
-2. Remove the modules that are loaded now: `rmmod msi2500` and then `rmmod msi001` (as root). This is what was done on the development machine.
-3. Unplug and replug a receiver that was already bound, or unbind it (`echo <busid>:1.0 > /sys/bus/usb/drivers/msi2500/unbind`), if the driver had grabbed it before the ban.
-
-`UsbTransport::open` still asks libusb to detach a bound kernel driver (and reattach it on close), which keeps `rsp_open` working on a machine where the ban has not been applied, but the relay should not rely on that. The ban also stops the driver from serving other Mirics-based dongles on the same machine. See `docs/PROTOCOL.md` 5.14 for the observation that motivated this.
+`rmmod` does not last: plugging a receiver in (or rebooting) loads the driver again, which is why the step is done before every open and not once at install time. A permanent ban (`/etc/modprobe.d/blacklist-msi2500.conf` with `blacklist msi2500` and `install msi2500 /bin/false`) remains an option for a machine dedicated to the relay; it also stops the driver serving other Mirics dongles on that machine. The development machine has the ban applied. See `docs/PROTOCOL.md` 5.14 for the observation that motivated this.
 
 ## Provenance (clean-room record)
 
