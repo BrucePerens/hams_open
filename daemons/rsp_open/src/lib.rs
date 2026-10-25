@@ -42,6 +42,11 @@ pub const VID_SDRPLAY: u16 = 0x1df7;
 pub const PID_RSP2: u16 = 0x3010;
 /// RSP1A product ID.
 pub const PID_RSP1A: u16 = 0x3000;
+/// RSP1 product ID. Driven only in the boot-ROM personality (no firmware), see
+/// [`Rsp::open_boot_rom_model_with`]; a firmware-loaded RSP1 (bcdDevice 2.06) is never opened.
+pub const PID_RSP1: u16 = 0x2500;
+/// Product IDs that [`Rsp::open_boot_rom_with`] accepts.
+pub const BOOT_ROM_PIDS: [u16; 3] = [PID_RSP2, PID_RSP1A, PID_RSP1];
 /// Product IDs this driver drives. Every other SDRplay device (the RSP1 included) is never
 /// opened.
 pub const SUPPORTED_PIDS: [u16; 2] = [PID_RSP2, PID_RSP1A];

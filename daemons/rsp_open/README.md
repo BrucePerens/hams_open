@@ -15,7 +15,7 @@ the repository default described in `LICENSING.md`. The crate is not published t
 Both models power up in a boot-ROM state (bcdDevice 2.00). SDRplay's software uploads a firmware
 image that turns it into the running device (bcdDevice 2.07). This crate contains **no firmware
 and no firmware-loading code**, and never sends the download (0x44) or reset (0x40) requests.
-It drives a running receiver (`Rsp::open`), or a boot-ROM one with `Rsp::open_boot_rom_with`:
+It drives a running receiver (`Rsp::open`), or a boot-ROM one with `Rsp::open_boot_rom_with` / `open_boot_rom_model_with` (RSP2pro and RSP1 work cold; the cold RSP1A enumerates but delivers no samples, PROTOCOL.md 5.8):
 measured on an RSP2pro, the ROM already handles register writes, start/stop and the isochronous
 stream, so tuning and streaming work. The ROM does not answer requests 0x48 and 0x49, so in
 that mode the board (antenna, band filters, notch, bias-T, front-end steps) is not controlled

@@ -8,7 +8,10 @@ use crate::encode::{self, *};
 use crate::stream::{BlockParser, IqI16, StreamStats};
 use crate::transport::{PacketSink, Transport};
 use crate::usb::{self, UsbTransport};
-use crate::{check_state, rsp1a, Error, Model, BCD_BOOT_ROM, PID_RSP1A, PID_RSP2, SUPPORTED_PIDS};
+use crate::{
+    check_state, rsp1a, Error, Model, BCD_BOOT_ROM, BOOT_ROM_PIDS, PID_RSP1, PID_RSP1A, PID_RSP2,
+    SUPPORTED_PIDS,
+};
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -169,11 +172,38 @@ impl Rsp<UsbTransport> {
     /// (antenna, notch, bias-T, band filters, front-end steps) are unavailable; tuner, sample
     /// rate, IF gain and the stream work (docs/PROTOCOL.md 5).
     pub fn open_boot_rom_with(settings: Settings) -> Result<Self, Error> {
+        Self::open_boot_rom_filtered(None, settings)
+    }
+
+    /// As [`Rsp::open_boot_rom_with`] but only a device of `model` (`Model::Rsp2` or
+    /// `Model::Rsp1a`; also `Model::Rsp1`, which is driven only in this mode), so a second
+    /// receiver on the bus is never driven by mistake.
+    pub fn open_boot_rom_model_with(model: Model, settings: Settings) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_open_boot_rom_model_with]
+        let pid = match model {
+            Model::Rsp2 => PID_RSP2,
+            Model::Rsp1a => PID_RSP1A,
+            Model::Rsp1 => PID_RSP1,
+            other => {
+                return Err(Error::UnsupportedModel {
+                    pid: 0,
+                    name: other.name(),
+                })
+            }
+        };
+        Self::open_boot_rom_filtered(Some(pid), settings)
+    }
+
+    fn open_boot_rom_filtered(only_pid: Option<u16>, settings: Settings) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp_open_boot_rom_with]
         let devs = usb::list_devices()?;
         let info = devs
             .iter()
-            .find(|d| SUPPORTED_PIDS.contains(&d.pid) && d.bcd_device == BCD_BOOT_ROM)
+            .find(|d| {
+                BOOT_ROM_PIDS.contains(&d.pid)
+                    && only_pid.is_none_or(|p| p == d.pid)
+                    && d.bcd_device == BCD_BOOT_ROM
+            })
             .ok_or(Error::NotFound)?;
         let t = UsbTransport::open(info.pid, Some((info.bus, info.address)))?;
         if t.info.bcd_device != BCD_BOOT_ROM {
@@ -246,7 +276,7 @@ impl<T: Transport> Rsp<T> {
         boot_rom: bool,
     ) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp_with_transport_model]
-        if !matches!(model, Model::Rsp2 | Model::Rsp1a) {
+        if !(matches!(model, Model::Rsp2 | Model::Rsp1a) || (boot_rom && model == Model::Rsp1)) {
             return Err(Error::UnsupportedModel {
                 pid: 0,
                 name: model.name(),
@@ -846,10 +876,11 @@ fn check_model_options(model: Model, s: &Settings) -> Result<(), Error> {
 
 fn check_antenna(model: Model, ant: Antenna, rf_hz: u64) -> Result<(), Error> {
     // [@ANCHOR: rsp_device_check_antenna]
-    if model == Model::Rsp1a && ant != Antenna::A {
-        return Err(Error::Unsupported(
-            "the RSP1A has a single antenna port (Antenna::A)".into(),
-        ));
+    if matches!(model, Model::Rsp1a | Model::Rsp1) && ant != Antenna::A {
+        return Err(Error::Unsupported(format!(
+            "the {} has a single antenna port (Antenna::A)",
+            model.name()
+        )));
     }
     if ant == Antenna::HiZ && rf_hz >= HIZ_MAX_HZ {
         return Err(Error::InvalidArgument(
