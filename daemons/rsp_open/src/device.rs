@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The RSP2pro driver: control sequences and streaming on top of a [`Transport`].
+//! The driver: control sequences and streaming on top of a [`Transport`], for the RSP2pro and
+//! the RSP1A. The two share every MSi2500/tuner write; they differ in the board bytes written
+//! with request 0x49 and in which of them each control rewrites (protocol document 1.13.3 and
+//! 2.9).
 
 use crate::encode::{self, *};
 use crate::stream::{BlockParser, IqI16, StreamStats};
 use crate::transport::{PacketSink, Transport};
 use crate::usb::{self, UsbTransport};
-use crate::{check_state, Error, PID_RSP2};
+use crate::{check_state, rsp1a, Error, Model, PID_RSP1A, PID_RSP2, SUPPORTED_PIDS};
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -35,8 +38,12 @@ pub struct Settings {
     pub ppb: i64,
     pub if_gr_db: u8,
     pub lna_state: u8,
+    /// RSP2pro: the broadcast (MW/FM) notch. RSP1A: the FM/MW notch.
     pub notch: bool,
+    /// RSP1A only: the DAB notch.
+    pub dab_notch: bool,
     pub bias_t: bool,
+    /// RSP2pro only: 24 MHz reference output.
     pub ext_ref_out: bool,
 }
 
@@ -52,6 +59,7 @@ impl Default for Settings {
             if_gr_db: 40,
             lna_state: 0,
             notch: false,
+            dab_notch: false,
             bias_t: false,
             ext_ref_out: false,
         }
@@ -87,9 +95,12 @@ impl Iterator for SampleIter {
     }
 }
 
-/// An open RSP2pro.
-pub struct Rsp2<T: Transport = UsbTransport> {
+/// An open receiver (RSP2/RSP2pro or RSP1A).
+pub struct Rsp<T: Transport = UsbTransport> {
     t: T,
+    model: Model,
+    /// Last value written to expander port B (byte 0x13), if any.
+    last_b: Option<u8>,
     s: Settings,
     band: Band,
     cfg: StreamConfig,
@@ -97,24 +108,29 @@ pub struct Rsp2<T: Transport = UsbTransport> {
     streaming: bool,
     closed: bool,
     settle: Duration,
-    /// Value returned by request 0x48 at open (0x04 on every observed open).
+    /// Value returned by request 0x48 at open (API opens: 0x04 on the RSP2pro, 0x0d on the
+    /// RSP1A; rsp_open opens of the RSP2pro: 0x09). Recorded only; its meaning is unknown.
     pub read48: u8,
     /// Serial number string, if read.
     pub serial: Option<String>,
 }
 
-impl Rsp2<UsbTransport> {
-    /// Open the first RSP2/RSP2pro with default settings.
+/// The name the driver had when it drove only the RSP2pro; the same type.
+pub type Rsp2<T = UsbTransport> = Rsp<T>;
+
+impl Rsp<UsbTransport> {
+    /// Open the first running RSP2/RSP2pro or RSP1A with default settings.
     pub fn open() -> Result<Self, Error> {
         Self::open_with(Settings::default())
     }
 
-    /// Open the first RSP2/RSP2pro. The device state is checked from its descriptor before
-    /// the device is opened; a boot-ROM device gives [`Error::NotRunning`].
+    /// Open the first RSP2/RSP2pro or RSP1A on the bus. No other SDRplay product (the RSP1
+    /// included) is ever opened. The device state is checked from its descriptor before the
+    /// device is opened; a boot-ROM device gives [`Error::NotRunning`].
     pub fn open_with(settings: Settings) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp2_open_with]
         let devs = usb::list_devices()?;
-        let Some(info) = devs.iter().find(|d| d.pid == PID_RSP2) else {
+        let Some(info) = devs.iter().find(|d| SUPPORTED_PIDS.contains(&d.pid)) else {
             if let Some(d) = devs.first() {
                 return Err(Error::UnsupportedModel {
                     pid: d.pid,
@@ -123,32 +139,81 @@ impl Rsp2<UsbTransport> {
             }
             return Err(Error::NotFound);
         };
-        check_state(info.pid, info.bcd_device)?;
-        let t = UsbTransport::open(PID_RSP2, Some((info.bus, info.address)))?;
+        Self::open_device(info.pid, info.bus, info.address, info.bcd_device, settings)
+    }
+
+    /// Open the first device of one model (`Model::Rsp2` or `Model::Rsp1a`).
+    pub fn open_model_with(model: Model, settings: Settings) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_open_model_with]
+        let pid = match model {
+            Model::Rsp2 => PID_RSP2,
+            Model::Rsp1a => PID_RSP1A,
+            other => {
+                return Err(Error::UnsupportedModel {
+                    pid: 0,
+                    name: other.name(),
+                })
+            }
+        };
+        let devs = usb::list_devices()?;
+        let info = devs.iter().find(|d| d.pid == pid).ok_or(Error::NotFound)?;
+        Self::open_device(info.pid, info.bus, info.address, info.bcd_device, settings)
+    }
+
+    fn open_device(
+        pid: u16,
+        bus: u8,
+        address: u8,
+        bcd_device: u16,
+        settings: Settings,
+    ) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_open_device]
+        check_state(pid, bcd_device)?;
+        let t = UsbTransport::open(pid, Some((bus, address)))?;
         // Re-check on the opened handle's descriptor snapshot (the device may have re-enumerated).
         check_state(t.info.pid, t.info.bcd_device)?;
+        let model = t.info.model;
         let serial = t.serial();
-        let mut rx = Rsp2::with_transport(t, settings, Duration::from_millis(300))?;
+        let mut rx = Rsp::with_transport_model(t, model, settings, Duration::from_millis(300))?;
         rx.serial = serial;
         Ok(rx)
     }
 }
 
-impl<T: Transport> Rsp2<T> {
-    /// Drive an already-opened transport whose device state was checked by the caller.
-    /// Sends the open sequence (1.5) with `settings`.
+impl<T: Transport> Rsp<T> {
+    /// Drive an already-opened RSP2/RSP2pro transport whose device state was checked by the
+    /// caller. Sends the open sequence (1.5) with `settings`.
     pub fn with_transport(t: T, settings: Settings, settle: Duration) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp2_with_transport]
+        Self::with_transport_model(t, Model::Rsp2, settings, settle)
+    }
+
+    /// Drive an already-opened transport of `model` (RSP2/RSP2pro or RSP1A) whose device state
+    /// was checked by the caller. Sends the open sequence (1.5, 2.4) with `settings`.
+    pub fn with_transport_model(
+        t: T,
+        model: Model,
+        settings: Settings,
+        settle: Duration,
+    ) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_with_transport_model]
+        if !matches!(model, Model::Rsp2 | Model::Rsp1a) {
+            return Err(Error::UnsupportedModel {
+                pid: 0,
+                name: model.name(),
+            });
+        }
         if settings.bias_t {
             return Err(Error::InvalidArgument(
                 "open with bias-T off; enable it explicitly later".into(),
             ));
         }
-        let band = band_for(settings.rf_hz)?;
-        check_antenna(settings.antenna, settings.rf_hz)?;
+        let band = model_band(model, settings.rf_hz)?;
+        check_antenna(model, settings.antenna, settings.rf_hz)?;
+        check_model_options(model, &settings)?;
         let cfg = stream_config(settings.adc_hz, settings.if_mode)?;
         let mut s = settings;
-        let n = lna_table(gain_table(&band, s.antenna)).len() as u8;
+        let n = model_table(model, &band, s.antenna).len() as u8;
         if s.lna_state >= n {
             return Err(Error::InvalidArgument(format!(
                 "LNA state {} >= {n} for this band",
@@ -162,8 +227,10 @@ impl<T: Transport> Rsp2<T> {
             )));
         }
         s.ppb = s.ppb.clamp(-1_000_000, 1_000_000);
-        let mut rx = Rsp2 {
+        let mut rx = Rsp {
             t,
+            model,
+            last_b: None,
             s,
             band,
             cfg,
@@ -178,6 +245,10 @@ impl<T: Transport> Rsp2<T> {
         Ok(rx)
     }
 
+    /// The receiver model being driven.
+    pub fn model(&self) -> Model {
+        self.model
+    }
     pub fn settings(&self) -> &Settings {
         &self.s
     }
@@ -206,21 +277,62 @@ impl<T: Transport> Rsp2<T> {
         self.reg(REG_TUNER, word)
     }
     fn board(&mut self, addr: u8, byte: u8) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_board]
         let (v, i) = board_write_args(addr, byte);
-        self.t.vendor_out(REQ_BOARD, v, i)
+        self.t.vendor_out(REQ_BOARD, v, i)?;
+        if addr == MCP_GPIOB {
+            self.last_b = Some(byte);
+        }
+        Ok(())
     }
 
+    fn is_1a(&self) -> bool {
+        self.model == Model::Rsp1a
+    }
     fn table(&self) -> &'static [FrontEndStep] {
-        lna_table(gain_table(&self.band, self.s.antenna))
+        model_table(self.model, &self.band, self.s.antenna)
     }
     fn step(&self) -> FrontEndStep {
         self.table()[self.s.lna_state as usize]
     }
     fn front_byte(&self) -> u8 {
-        board_front_byte(self.step().board_step, self.s.notch, self.s.bias_t)
+        // [@ANCHOR: rsp_device_rsp_front_byte]
+        let step = self.step().board_step;
+        if self.is_1a() {
+            rsp1a::board_b_byte(step, self.s.notch, self.s.dab_notch, self.s.bias_t)
+        } else {
+            board_front_byte(step, self.s.notch, self.s.bias_t)
+        }
     }
     fn band_byte(&self) -> u8 {
-        board_band_byte(self.band.filter, self.s.antenna, self.s.ext_ref_out)
+        // [@ANCHOR: rsp_device_rsp_band_byte]
+        if self.is_1a() {
+            rsp1a::board_a_byte(self.band.filter, self.step().board_step)
+        } else {
+            board_band_byte(self.band.filter, self.s.antenna, self.s.ext_ref_out)
+        }
+    }
+    /// Port-B value written between port A and the direction registers in a full tune: the
+    /// RSP2pro writes the constant 0xa5 (with the current bias-T bit); the RSP1A writes 0xdf
+    /// at open and the port-B value already in force on every later tune (2.7).
+    fn transient_b(&self) -> u8 {
+        // [@ANCHOR: rsp_device_rsp_transient_b]
+        if self.is_1a() {
+            self.last_b
+                .unwrap_or_else(|| rsp1a::open_transient_b(self.s.notch, self.s.dab_notch))
+        } else {
+            board_front_transient(self.s.bias_t)
+        }
+    }
+    /// The gain write: tuner r1, then the board bytes that carry the LNA state (RSP2pro: port
+    /// B; RSP1A: port A then port B).
+    fn write_gain(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_write_gain]
+        self.tuner(self.gain_word())?;
+        if self.is_1a() {
+            self.board(MCP_GPIOA, self.band_byte())?;
+        }
+        self.board(MCP_GPIOB, self.front_byte())
     }
     fn r0_word(&self) -> u32 {
         r0(
@@ -268,16 +380,14 @@ impl<T: Transport> Rsp2<T> {
         let p = self.pll()?;
         self.tuner(self.r0_word())?;
         self.board(MCP_GPIOA, self.band_byte())?;
-        self.board(MCP_GPIOB, board_front_transient(self.s.bias_t))?;
+        self.board(MCP_GPIOB, self.transient_b())?;
         self.board(MCP_IODIRA, 0)?;
         self.board(MCP_IODIRB, 0)?;
         self.tuner(p.r3)?;
         self.tuner(p.r2)?;
         self.tuner(R13_TUNE)?;
         self.tuner(R14_TUNE)?;
-        self.tuner(self.gain_word())?;
-        self.board(MCP_GPIOB, self.front_byte())?;
-        Ok(())
+        self.write_gain()
     }
 
     /// Tune to `rf_hz` (1 kHz to 2 GHz, except 375-420 MHz). Returns the LO actually set, Hz.
@@ -285,8 +395,8 @@ impl<T: Transport> Rsp2<T> {
     /// the band's highest state (see [`Settings::lna_state`] afterwards).
     pub fn set_frequency(&mut self, rf_hz: u64) -> Result<f64, Error> {
         // [@ANCHOR: rsp_device_rsp2_set_frequency]
-        let band = band_for(rf_hz)?;
-        check_antenna(self.s.antenna, rf_hz)?;
+        let band = model_band(self.model, rf_hz)?;
+        check_antenna(self.model, self.s.antenna, rf_hz)?;
         let old_band = self.band;
         let old_rf = self.s.rf_hz;
         let old_lna = self.s.lna_state;
@@ -336,8 +446,7 @@ impl<T: Transport> Rsp2<T> {
         }
         self.s.if_gr_db = if_gr_db;
         self.s.lna_state = lna_state;
-        self.tuner(self.gain_word())?;
-        self.board(MCP_GPIOB, self.front_byte())
+        self.write_gain()
     }
 
     /// Number of LNA states in the current band and port.
@@ -345,10 +454,11 @@ impl<T: Transport> Rsp2<T> {
         self.table().len() as u8
     }
 
-    /// Select Antenna A, B or the Hi-Z port (Hi-Z only below 60 MHz).
+    /// Select Antenna A, B or the Hi-Z port (Hi-Z only below 60 MHz). The RSP1A has one port,
+    /// `Antenna::A`; the others are refused.
     pub fn select_antenna(&mut self, ant: Antenna) -> Result<(), Error> {
         // [@ANCHOR: rsp_device_rsp2_select_antenna]
-        check_antenna(ant, self.s.rf_hz)?;
+        check_antenna(self.model, ant, self.s.rf_hz)?;
         let old = self.s.antenna;
         if old == ant {
             return Ok(());
@@ -366,10 +476,24 @@ impl<T: Transport> Rsp2<T> {
         }
     }
 
-    /// Broadcast (MW/FM) notch.
+    /// Broadcast (MW/FM) notch (RSP2pro), FM/MW notch (RSP1A). Port B only.
     pub fn set_notch(&mut self, on: bool) -> Result<(), Error> {
         self.s.notch = on;
         self.board(MCP_GPIOB, self.front_byte())
+    }
+
+    /// DAB notch (RSP1A only): port B, then the gain write, as the API does (2.7).
+    pub fn set_dab_notch(&mut self, on: bool) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_set_dab_notch]
+        if !self.is_1a() {
+            return Err(Error::Unsupported(format!(
+                "the {} has no DAB notch",
+                self.model.name()
+            )));
+        }
+        self.s.dab_notch = on;
+        self.board(MCP_GPIOB, self.front_byte())?;
+        self.write_gain()
     }
 
     /// Bias-T (DC power on the antenna port). Off unless explicitly enabled.
@@ -378,16 +502,35 @@ impl<T: Transport> Rsp2<T> {
         self.board(MCP_GPIOB, self.front_byte())
     }
 
-    /// 24 MHz reference clock output.
+    /// 24 MHz reference clock output (RSP2pro only).
     pub fn set_ext_ref_out(&mut self, on: bool) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_set_ext_ref_out]
+        if self.is_1a() {
+            return Err(Error::Unsupported(
+                "the RSP1A has no reference output".into(),
+            ));
+        }
         self.s.ext_ref_out = on;
         self.board(MCP_GPIOA, self.band_byte())
     }
 
-    /// Tuner IF bandwidth.
+    /// Tuner IF bandwidth. RSP2pro: r0 only (the sequence verified on hardware). RSP1A: the
+    /// API's bandwidth sequence, a full tune without r13/r14 (2.9).
     pub fn set_bandwidth(&mut self, bw: Bandwidth) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_set_bandwidth]
         self.s.bandwidth = bw;
-        self.tuner(self.r0_word())
+        if !self.is_1a() {
+            return self.tuner(self.r0_word());
+        }
+        let p = self.pll()?;
+        self.tuner(self.r0_word())?;
+        self.board(MCP_GPIOA, self.band_byte())?;
+        self.board(MCP_GPIOB, self.transient_b())?;
+        self.board(MCP_IODIRA, 0)?;
+        self.board(MCP_IODIRB, 0)?;
+        self.tuner(p.r3)?;
+        self.tuner(p.r2)?;
+        self.write_gain()
     }
 
     /// Reference correction in ppm (positive when the reference runs fast); applied to the
@@ -456,8 +599,7 @@ impl<T: Transport> Rsp2<T> {
         if was {
             self.restart_stream()?;
         }
-        self.tuner(self.gain_word())?;
-        self.board(MCP_GPIOB, self.front_byte())
+        self.write_gain()
     }
 
     fn sink_for(core: Arc<Mutex<Core>>) -> PacketSink {
@@ -585,14 +727,55 @@ impl<T: Transport> Rsp2<T> {
     }
 }
 
-impl<T: Transport> Drop for Rsp2<T> {
+impl<T: Transport> Drop for Rsp<T> {
     fn drop(&mut self) {
         let _ = self.shutdown();
     }
 }
 
-fn check_antenna(ant: Antenna, rf_hz: u64) -> Result<(), Error> {
+/// Band table of a model.
+fn model_band(model: Model, rf_hz: u64) -> Result<Band, Error> {
+    // [@ANCHOR: rsp_device_model_band]
+    if model == Model::Rsp1a {
+        band_in(&rsp1a::BANDS, rf_hz)
+    } else {
+        band_for(rf_hz)
+    }
+}
+
+/// LNA-state table of a model for a band and port.
+fn model_table(model: Model, band: &Band, ant: Antenna) -> &'static [FrontEndStep] {
+    // [@ANCHOR: rsp_device_model_table]
+    if model == Model::Rsp1a {
+        rsp1a::lna_table(band.gain_table)
+    } else {
+        lna_table(gain_table(band, ant))
+    }
+}
+
+/// Settings that exist on one model only.
+fn check_model_options(model: Model, s: &Settings) -> Result<(), Error> {
+    // [@ANCHOR: rsp_device_check_model_options]
+    if model == Model::Rsp1a && s.ext_ref_out {
+        return Err(Error::Unsupported(
+            "the RSP1A has no reference output".into(),
+        ));
+    }
+    if model == Model::Rsp2 && s.dab_notch {
+        return Err(Error::Unsupported(
+            "the RSP2/RSP2pro has no DAB notch".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_antenna(model: Model, ant: Antenna, rf_hz: u64) -> Result<(), Error> {
     // [@ANCHOR: rsp_device_check_antenna]
+    if model == Model::Rsp1a && ant != Antenna::A {
+        return Err(Error::Unsupported(
+            "the RSP1A has a single antenna port (Antenna::A)".into(),
+        ));
+    }
     if ant == Antenna::HiZ && rf_hz >= HIZ_MAX_HZ {
         return Err(Error::InvalidArgument(
             "the Hi-Z port works only below 60 MHz".into(),
@@ -1015,6 +1198,392 @@ mod tests {
             {
                 if value >> 8 == 0x13 {
                     assert_eq!(value & 1, 1, "bias-T on");
+                }
+            }
+        }
+    }
+
+    fn open_1a(s: Settings) -> (Rsp<MockTransport>, MockTransport) {
+        let m = MockTransport::new();
+        let rx = Rsp::with_transport_model(m.clone(), Model::Rsp1a, s, Duration::ZERO).unwrap();
+        (rx, m)
+    }
+
+    /// The API's RSP1A open: zero IF, 2 MHz, 100 MHz, BW 200 kHz, GR 40, LNA 0 (RSP1A
+    /// basic-open capture, protocol document 2.4).
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp_with_transport_model]
+    // Tests [@ANCHOR: rsp_device_rsp_transient_b]
+    // Tests [@ANCHOR: rsp_device_rsp_write_gain]
+    // Tests [@ANCHOR: rsp_device_rsp_band_byte]
+    // Tests [@ANCHOR: rsp_device_rsp_front_byte]
+    // Tests [@ANCHOR: rsp_device_model_band]
+    // Tests [@ANCHOR: rsp_device_model_table]
+    // Tests [@ANCHOR: rsp_device_rsp_board]
+    fn rsp1a_open_sequence_matches_api_capture() {
+        let s = Settings {
+            bandwidth: Bandwidth::K200,
+            ..Settings::default()
+        };
+        let (rx, m) = open_1a(s);
+        let want = vec![
+            w(0x08, 0x00ee80),
+            Op::Alt(2),
+            r48(),
+            r48(),
+            w(0x05, 0x0c),
+            t(0x00000e),
+            w(0x00, 0x000200),
+            w(0x02, 0x004801),
+            t(0x28bb85),
+            w(0x07, 0x14),
+            t(0x200016),
+            t(0x043420),
+            b(0x12, 0xe4),
+            b(0x13, 0xdf),
+            b(0x00, 0),
+            b(0x01, 0),
+            t(0x00fff3),
+            t(0x213e72),
+            t(0x00000d),
+            t(0x00000e),
+            t(0x00c281),
+            b(0x12, 0xe4),
+            b(0x13, 0xdd),
+            w(0x04, 0),
+            w(0x03, 0x01181f),
+        ];
+        assert_eq!(m.ops(), want);
+        assert_eq!(rx.model(), Model::Rsp1a);
+    }
+
+    /// RSP1A retunes (frequency-sweep and band-edge captures): in-band r3/r2 only; on a band
+    /// change the full sequence with port A written twice; the extra filter edge at 2 MHz.
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_frequency]
+    // Tests [@ANCHOR: rsp_device_rsp2_full_tune]
+    // Tests [@ANCHOR: rsp_device_rsp_transient_b]
+    fn rsp1a_retune_sequences() {
+        let (mut rx, m) = open_1a(Settings::default());
+        rx.set_frequency(1_000_000).unwrap();
+        m.clear();
+        rx.set_frequency(1_950_000).unwrap();
+        assert_eq!(m.ops(), vec![t(0x00fff3), t(0x143ce2)]);
+        m.clear();
+        rx.set_frequency(2_000_000).unwrap();
+        let want = vec![
+            t(0x043e10 | (3 << 14)),
+            b(0x12, 0xe2),
+            b(0x13, 0xdd),
+            b(0x00, 0),
+            b(0x01, 0),
+            t(0x00fff3),
+            t(0x143e72),
+            t(0x0d),
+            t(0x0e),
+            t(0x00c281),
+            b(0x12, 0xe2),
+            b(0x13, 0xdd),
+        ];
+        assert_eq!(m.ops(), want);
+        m.clear();
+        rx.set_frequency(120_000_000).unwrap();
+        assert_eq!(m.ops()[1], b(0x12, 0xf4));
+        assert!(matches!(
+            rx.set_frequency(400_000_000),
+            Err(Error::Unsupported(_))
+        ));
+        assert_eq!(rx.settings().rf_hz, 120_000_000);
+    }
+
+    /// RSP1A gain writes (gain capture): r1, port A, port B; LNA-state counts per band.
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_gain]
+    // Tests [@ANCHOR: rsp_device_rsp_write_gain]
+    // Tests [@ANCHOR: rsp_device_model_table]
+    fn rsp1a_gain_sequences() {
+        let (mut rx, m) = open_1a(Settings::default());
+        m.clear();
+        rx.set_gain(20, 0).unwrap();
+        rx.set_gain(40, 5).unwrap();
+        rx.set_gain(40, 9).unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                t(0x00c141),
+                b(0x12, 0xe4),
+                b(0x13, 0xdd),
+                t(0x00c281),
+                b(0x12, 0xc4),
+                b(0x13, 0xdf),
+                t(0x00e281),
+                b(0x12, 0x64),
+                b(0x13, 0xdf),
+            ]
+        );
+        assert_eq!(rx.lna_states(), 10);
+        assert!(rx.set_gain(40, 10).is_err());
+        // 10 -> 7 states below 60 MHz: the state is clamped on the band change.
+        rx.set_frequency(10_000_000).unwrap();
+        assert_eq!(rx.lna_states(), 7);
+        assert_eq!(rx.settings().lna_state, 6);
+        for (f, n) in [
+            (300_000_000u64, 10u8),
+            (450_000_000, 10),
+            (1_500_000_000, 9),
+        ] {
+            rx.set_frequency(f).unwrap();
+            assert_eq!(rx.lna_states(), n, "{f}");
+        }
+    }
+
+    /// RSP1A toggles (toggle capture): FM/MW notch and bias-T rewrite port B only; the DAB
+    /// notch rewrites port B and then the gain bytes; notch and LNA state combine.
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp_set_dab_notch]
+    // Tests [@ANCHOR: rsp_device_rsp_front_byte]
+    // Tests [@ANCHOR: rsp_device_check_model_options]
+    // Tests [@ANCHOR: rsp_device_check_antenna]
+    // Tests [@ANCHOR: rsp_device_rsp_set_ext_ref_out]
+    fn rsp1a_toggles_match_capture() {
+        let (mut rx, m) = open_1a(Settings::default());
+        m.clear();
+        rx.set_notch(true).unwrap();
+        rx.set_notch(false).unwrap();
+        rx.set_dab_notch(true).unwrap();
+        rx.set_dab_notch(false).unwrap();
+        rx.set_bias_t(true).unwrap();
+        rx.set_bias_t(false).unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                b(0x13, 0xd9),
+                b(0x13, 0xdd),
+                b(0x13, 0xdc),
+                t(0x00c281),
+                b(0x12, 0xe4),
+                b(0x13, 0xdc),
+                b(0x13, 0xdd),
+                t(0x00c281),
+                b(0x12, 0xe4),
+                b(0x13, 0xdd),
+                b(0x13, 0xcd),
+                b(0x13, 0xdd),
+            ]
+        );
+        m.clear();
+        rx.set_notch(true).unwrap();
+        rx.set_gain(40, 5).unwrap();
+        rx.set_gain(40, 0).unwrap();
+        rx.set_notch(false).unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                b(0x13, 0xd9),
+                t(0x00c281),
+                b(0x12, 0xc4),
+                b(0x13, 0xdb),
+                t(0x00c281),
+                b(0x12, 0xe4),
+                b(0x13, 0xd9),
+                b(0x13, 0xdd),
+            ]
+        );
+        m.clear();
+        rx.set_ppm(10.0).unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                t(0x000003),
+                t(0x213e72),
+                w(0x04, 0x0fff58),
+                w(0x03, 0x01179f)
+            ]
+        );
+        rx.set_ppm(0.0).unwrap();
+        m.clear();
+        // One port, no reference output; nothing is written for refused settings.
+        assert!(rx.select_antenna(Antenna::A).is_ok());
+        assert!(matches!(
+            rx.select_antenna(Antenna::B),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(rx.select_antenna(Antenna::HiZ).is_err());
+        assert!(matches!(
+            rx.set_ext_ref_out(true),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(m.ops().is_empty());
+        let m2 = MockTransport::new();
+        for bad in [
+            Settings {
+                antenna: Antenna::B,
+                ..Settings::default()
+            },
+            Settings {
+                ext_ref_out: true,
+                ..Settings::default()
+            },
+        ] {
+            assert!(
+                Rsp::with_transport_model(m2.clone(), Model::Rsp1a, bad, Duration::ZERO).is_err()
+            );
+        }
+        assert!(Rsp::with_transport_model(
+            m2.clone(),
+            Model::Rsp2,
+            Settings {
+                dab_notch: true,
+                ..Settings::default()
+            },
+            Duration::ZERO
+        )
+        .is_err());
+        assert!(Rsp::with_transport_model(
+            m2.clone(),
+            Model::Rsp1,
+            Settings::default(),
+            Duration::ZERO
+        )
+        .is_err());
+        assert!(m2.ops().is_empty());
+        let (mut rsp2, _) = open_mock(Settings::default());
+        assert!(matches!(
+            rsp2.set_dab_notch(true),
+            Err(Error::Unsupported(_))
+        ));
+    }
+
+    /// RSP1A sample-rate and bandwidth changes (sample-rate and IF/bandwidth captures).
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_sampling]
+    // Tests [@ANCHOR: rsp_device_rsp_set_bandwidth]
+    fn rsp1a_rate_and_bandwidth_sequences() {
+        let (mut rx, m) = open_1a(Settings::default());
+        m.clear();
+        rx.set_sample_rate(2_048_000).unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                w(0x03, 0x011300),
+                Op::Alt(2),
+                w(0x07, 0x05),
+                w(0x04, 0x0624dd),
+                w(0x03, 0x01081f),
+                t(0x00c281),
+                b(0x12, 0xe4),
+                b(0x13, 0xdd)
+            ]
+        );
+        rx.set_sample_rate(2_000_000).unwrap();
+        m.clear();
+        rx.set_bandwidth(Bandwidth::K300).unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                t(0x047420),
+                b(0x12, 0xe4),
+                b(0x13, 0xdd),
+                b(0x00, 0),
+                b(0x01, 0),
+                t(0x00fff3),
+                t(0x213e72),
+                t(0x00c281),
+                b(0x12, 0xe4),
+                b(0x13, 0xdd)
+            ]
+        );
+        // The RSP2pro keeps its hardware-verified r0-only bandwidth write.
+        let (mut rsp2, m2) = open_mock(Settings::default());
+        m2.clear();
+        rsp2.set_bandwidth(Bandwidth::K300).unwrap();
+        assert_eq!(m2.ops(), vec![t(0x047420)]);
+    }
+
+    /// RSP1A close (basic-open capture, without the API's VCO-calibration read): STOP, port B
+    /// with bias-T off, tuner standby, ADC sleep, alt 0.
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_shutdown]
+    fn rsp1a_close_sequence() {
+        let (mut rx, m) = open_1a(Settings::default());
+        rx.start_stream(|_, _| {}).unwrap();
+        rx.set_bias_t(true).unwrap();
+        m.clear();
+        rx.close().unwrap();
+        assert_eq!(
+            m.ops(),
+            vec![
+                Op::Out {
+                    req: 0x45,
+                    value: 0,
+                    index: 0
+                },
+                Op::IsoStop,
+                b(0x13, 0xdd),
+                t(0x1c),
+                t(0),
+                w(0x03, 0x091300),
+                w(0x05, 0x04),
+                Op::Alt(0),
+                Op::Release,
+            ]
+        );
+    }
+
+    /// Every request the RSP1A path can emit is in the observed list, and the bias-T bit
+    /// (port B bit 4) stays off.
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp_set_bandwidth]
+    // Tests [@ANCHOR: rsp_device_rsp_set_dab_notch]
+    fn rsp1a_only_observed_requests_are_emitted() {
+        let (mut rx, m) = open_1a(Settings::default());
+        for f in [
+            1_000u64,
+            1_999_999,
+            7_074_000,
+            14_000_000,
+            50_000_000,
+            95_800_000,
+            144_000_000,
+            264_000_000,
+            300_000_000,
+            446_000_000,
+            1_296_000_000,
+            2_000_000_000,
+        ] {
+            rx.set_frequency(f).unwrap();
+            for l in 0..rx.lna_states() {
+                rx.set_gain(0, l).unwrap();
+                rx.set_gain(59, l).unwrap();
+            }
+            rx.set_notch(true).unwrap();
+            rx.set_dab_notch(true).unwrap();
+            rx.set_notch(false).unwrap();
+            rx.set_dab_notch(false).unwrap();
+        }
+        rx.start_stream(|_, _| {}).unwrap();
+        for fs in [2_000_000, 2_048_000, 6_000_000, 8_192_000, 10_000_000] {
+            rx.set_sample_rate(fs).unwrap();
+        }
+        for mode in [IfMode::Low450k, IfMode::Low1620k, IfMode::Zero] {
+            rx.set_if_mode(mode).unwrap();
+        }
+        for bw in [Bandwidth::K200, Bandwidth::M8] {
+            rx.set_bandwidth(bw).unwrap();
+        }
+        rx.set_ppm(-3.5).unwrap();
+        rx.stop_stream().unwrap();
+        rx.close().unwrap();
+        let ops = m.ops();
+        assert!(ops.len() > 300);
+        assert_allowed(&ops);
+        for op in &ops {
+            if let Op::Out {
+                req: 0x49, value, ..
+            } = op
+            {
+                if value >> 8 == 0x13 {
+                    assert_eq!(value & 0x10, 0x10, "bias-T on: {value:04x}");
                 }
             }
         }

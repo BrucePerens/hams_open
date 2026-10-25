@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Pure control-to-register encoding for the RSP2pro.
+//! Pure control-to-register encoding: the chipset layer shared by every model (tuner words,
+//! ADC clock, stream formats) and the RSP2pro's board layer (the RSP1A's is in `rsp1a`).
 //!
 //! Every function here turns a receiver setting into the register value or board byte that the
 //! device expects, following `docs/PROTOCOL.md` (section numbers in comments refer to it).
@@ -153,8 +154,11 @@ pub enum LoPlan {
 /// Which LNA-state table applies (1.8).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GainTable {
-    /// AM mode bands (below 60 MHz and 250-420 MHz) on Antenna A/B.
+    /// AM mode bands (below 60 MHz and, on the RSP2pro, 250-420 MHz) on Antenna A/B.
     Am,
+    /// AM-mode down-conversion band 250-420 MHz where it has its own table (RSP1A, 2.8).
+    /// The RSP2pro's band table never selects it; its LNA table maps it to the AM table.
+    AmDown,
     /// 60-250 MHz.
     Vhf,
     /// 420-1000 MHz.
@@ -277,6 +281,13 @@ pub const BANDS: [Band; 10] = [
 /// Find the band for an RF frequency.
 pub fn band_for(rf_hz: u64) -> Result<Band, Error> {
     // [@ANCHOR: rsp_encode_band_for]
+    band_in(&BANDS, rf_hz)
+}
+
+/// Find the band for an RF frequency in a model's band table. Refuses frequencies outside
+/// 1 kHz..=2 GHz and the 375-420 MHz range (both models) before the table is searched.
+pub fn band_in(bands: &[Band], rf_hz: u64) -> Result<Band, Error> {
+    // [@ANCHOR: rsp_encode_band_in]
     if !(RF_MIN_HZ..=RF_MAX_HZ).contains(&rf_hz) {
         return Err(Error::InvalidArgument(format!(
             "frequency {rf_hz} Hz outside {RF_MIN_HZ}..={RF_MAX_HZ} Hz"
@@ -289,7 +300,7 @@ pub fn band_for(rf_hz: u64) -> Result<Band, Error> {
                 .into(),
         ));
     }
-    BANDS
+    bands
         .iter()
         .find(|b| rf_hz >= b.lo_hz && rf_hz < b.hi_hz)
         .copied()
@@ -500,7 +511,7 @@ pub fn lna_table(t: GainTable) -> &'static [FrontEndStep] {
         st(S_E, 3, true, false),
     ];
     match t {
-        GainTable::Am => &AM,
+        GainTable::Am | GainTable::AmDown => &AM,
         GainTable::Vhf => &VHF,
         GainTable::Uhf => &UHF,
         GainTable::L => &L,

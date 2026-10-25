@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010).
+//! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010) and RSP1A (1df7:3000).
 //!
 //! Written from `docs/PROTOCOL.md`, a description of the receiver's USB traffic recorded
 //! from the author's own unit. See README.md for provenance.
@@ -10,8 +10,10 @@
 //! no firmware-loading code.
 //!
 //! ```no_run
-//! use rsp_open::{Rsp2, Antenna};
-//! let mut rx = Rsp2::open()?;
+//! use rsp_open::{Rsp, Antenna};
+//! // The first running RSP2/RSP2pro or RSP1A.
+//! let mut rx = Rsp::open()?;
+//! println!("{}", rx.model().name());
 //! rx.set_frequency(95_800_000)?;
 //! rx.set_gain(40, 0)?;
 //! rx.select_antenna(Antenna::A)?;
@@ -25,11 +27,12 @@
 pub mod device;
 pub mod dsp;
 pub mod encode;
+pub mod rsp1a;
 pub mod stream;
 pub mod transport;
 pub mod usb;
 
-pub use device::{Rsp2, SampleIter, Settings};
+pub use device::{Rsp, Rsp2, SampleIter, Settings};
 pub use encode::{Antenna, Bandwidth, IfMode};
 pub use stream::{IqF32, IqI16, StreamStats};
 
@@ -37,12 +40,18 @@ pub use stream::{IqF32, IqI16, StreamStats};
 pub const VID_SDRPLAY: u16 = 0x1df7;
 /// RSP2 / RSP2pro product ID.
 pub const PID_RSP2: u16 = 0x3010;
+/// RSP1A product ID.
+pub const PID_RSP1A: u16 = 0x3000;
+/// Product IDs this driver drives. Every other SDRplay device (the RSP1 included) is never
+/// opened.
+pub const SUPPORTED_PIDS: [u16; 2] = [PID_RSP2, PID_RSP1A];
 /// bcdDevice of the boot-ROM personality (no firmware loaded).
 pub const BCD_BOOT_ROM: u16 = 0x0200;
 /// bcdDevice once SDRplay's software has loaded the firmware.
 pub const BCD_RUNNING: u16 = 0x0207;
 
-/// Receiver models by USB product ID (public USB ID lists; only the RSP2 family is driven).
+/// Receiver models by USB product ID (public USB ID lists; only the RSP2 family and the RSP1A
+/// are driven).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
     Rsp1,
@@ -113,7 +122,7 @@ pub enum Error {
     UnknownState {
         bcd_device: u16,
     },
-    /// An SDRplay receiver other than the RSP2 family.
+    /// An SDRplay receiver other than the RSP2 family and the RSP1A.
     UnsupportedModel {
         pid: u16,
         name: &'static str,
@@ -134,7 +143,10 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // [@ANCHOR: rsp_lib_error_fmt]
         match self {
-            Error::NotFound => write!(f, "no SDRplay RSP2/RSP2pro found"),
+            Error::NotFound => write!(
+                f,
+                "no supported SDRplay receiver (RSP2/RSP2pro, RSP1A) found"
+            ),
             Error::NotRunning => write!(
                 f,
                 "device has no firmware loaded; load it with SDRplay's software first"
@@ -144,7 +156,7 @@ impl std::fmt::Display for Error {
             }
             Error::UnsupportedModel { pid, name } => write!(
                 f,
-                "{name} (PID {pid:04x}) is not supported yet; only the RSP2/RSP2pro is"
+                "{name} (PID {pid:04x}) is not supported yet; only the RSP2/RSP2pro and RSP1A are"
             ),
             Error::Usb { what, code, name } => write!(f, "USB error in {what}: {name} ({code})"),
             Error::InvalidArgument(s) => write!(f, "invalid argument: {s}"),
@@ -159,7 +171,7 @@ impl std::error::Error for Error {}
 /// Check a device descriptor's state before anything is sent to it.
 pub fn check_state(pid: u16, bcd_device: u16) -> Result<(), Error> {
     // [@ANCHOR: rsp_lib_check_state]
-    if pid != PID_RSP2 {
+    if !SUPPORTED_PIDS.contains(&pid) {
         return Err(Error::UnsupportedModel {
             pid,
             name: model_for_pid(pid).name(),
@@ -193,18 +205,28 @@ mod tests {
             check_state(0x3010, 0x0208),
             Err(Error::UnknownState { bcd_device: 0x0208 })
         ));
+        assert!(check_state(0x3000, 0x0207).is_ok());
         assert!(matches!(
-            check_state(0x3000, 0x0207),
-            Err(Error::UnsupportedModel { pid: 0x3000, .. })
+            check_state(0x3000, 0x0200),
+            Err(Error::NotRunning)
+        ));
+        assert!(matches!(
+            check_state(0x3000, 0x0208),
+            Err(Error::UnknownState { bcd_device: 0x0208 })
+        ));
+        // The RSP1 is never driven, warm or cold.
+        assert!(matches!(
+            check_state(0x2500, 0x0200),
+            Err(Error::UnsupportedModel { pid: 0x2500, .. })
         ));
         assert_eq!(model_for_pid(0x2500).name(), "RSP1");
         assert_eq!(model_for_pid(0x3010).name(), "RSP2/RSP2pro");
         assert_eq!(model_for_pid(0x3030), Model::RspDx);
         assert_eq!(model_for_pid(0x1234), Model::Unknown);
         let e = Error::UnsupportedModel {
-            pid: 0x3000,
-            name: model_for_pid(0x3000).name(),
+            pid: 0x2500,
+            name: model_for_pid(0x2500).name(),
         };
-        assert!(e.to_string().starts_with("RSP1A (PID 3000)"));
+        assert!(e.to_string().starts_with("RSP1 (PID 2500)"));
     }
 }
