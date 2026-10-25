@@ -40,6 +40,7 @@ unsafe impl Send for Context {}
 unsafe impl Sync for Context {}
 impl Context {
     fn new() -> Result<Arc<Context>, Error> {
+        // [@ANCHOR: rsp_usb_context_new]
         let mut c = ptr::null_mut();
         let r = unsafe { ffi::libusb_init(&mut c) };
         if r != 0 {
@@ -58,6 +59,7 @@ fn with_devices<T>(
     ctx: &Context,
     mut f: impl FnMut(*mut ffi::libusb_device, &ffi::libusb_device_descriptor) -> Option<T>,
 ) -> Result<Vec<T>, Error> {
+    // [@ANCHOR: rsp_usb_with_devices]
     let mut list = ptr::null();
     let n = unsafe { ffi::libusb_get_device_list(ctx.0, &mut list) };
     if n < 0 {
@@ -114,6 +116,7 @@ struct IsoStream {
 unsafe impl Send for IsoStream {}
 
 extern "system" fn iso_callback(t: *mut ffi::libusb_transfer) {
+    // [@ANCHOR: rsp_usb_iso_callback]
     unsafe {
         let shared = &*((*t).user_data as *const Shared);
         let status = (*t).status;
@@ -164,6 +167,7 @@ impl UsbTransport {
     /// Open the device at (`bus`, `address`), or the first SDRplay device with `pid` if `None`,
     /// and claim interface 0. Only descriptors are read before the caller checks the state.
     pub fn open(pid: u16, at: Option<(u8, u8)>) -> Result<UsbTransport, Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_open]
         let ctx = Context::new()?;
         let mut found: Option<(*mut ffi::libusb_device, DeviceInfo)> = None;
         with_devices(&ctx, |dev, d| {
@@ -202,6 +206,7 @@ impl UsbTransport {
 
     /// Serial number string (string descriptor 1, present only when the device is running).
     pub fn serial(&self) -> Option<String> {
+        // [@ANCHOR: rsp_usb_usbtransport_serial]
         let mut buf = [0u8; 64];
         let n = unsafe {
             ffi::libusb_get_string_descriptor_ascii(
@@ -224,6 +229,7 @@ impl UsbTransport {
 
 impl Transport for UsbTransport {
     fn vendor_out(&mut self, request: u8, value: u16, index: u16) -> Result<(), Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_vendor_out]
         let r = unsafe {
             ffi::libusb_control_transfer(
                 self.handle,
@@ -249,6 +255,7 @@ impl Transport for UsbTransport {
         index: u16,
         buf: &mut [u8],
     ) -> Result<usize, Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_vendor_in]
         let r = unsafe {
             ffi::libusb_control_transfer(
                 self.handle,
@@ -268,6 +275,7 @@ impl Transport for UsbTransport {
     }
 
     fn set_alt(&mut self, alt: u8) -> Result<(), Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_set_alt]
         // Alt 3 (bulk) hung the device once (protocol document 1.10): never select it.
         if alt > 2 {
             return Err(Error::Unsupported(format!(
@@ -283,6 +291,7 @@ impl Transport for UsbTransport {
     }
 
     fn start_iso(&mut self, sink: PacketSink) -> Result<(), Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_start_iso]
         if self.stream.is_some() {
             return Err(Error::InvalidArgument("stream already running".into()));
         }
@@ -381,6 +390,7 @@ impl Transport for UsbTransport {
     }
 
     fn stop_iso(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_stop_iso]
         let Some(mut s) = self.stream.take() else {
             return Ok(());
         };
@@ -408,6 +418,7 @@ impl Transport for UsbTransport {
     }
 
     fn release(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_usb_usbtransport_release]
         if self.released {
             return Ok(());
         }

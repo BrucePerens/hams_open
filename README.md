@@ -41,6 +41,13 @@ against the code itself rather than assumed:
   shim, verified end to end against real K1JT reference tools (`wsjtx`) across a swept SNR range,
   not just a single clean case.
 
+`daemons/rsp_open` is a separate, AGPL-3.0-or-later Rust library: an open driver for the SDRplay
+RSP2pro receiver (USB 1df7:3010), written clean-room from the observed USB traffic of the author's
+own receiver. It tunes, sets gain, antenna, notch and sample rate, and streams I/Q samples over
+isochronous USB, for a receiver whose firmware SDRplay's own software has already loaded (it
+contains no firmware and reports a cold receiver as not running). See
+[`daemons/rsp_open/README.md`](daemons/rsp_open/README.md) for provenance, scope and test results.
+
 ---
 
 ## 🤖 Deterministic AI Management & Tooling

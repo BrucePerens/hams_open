@@ -81,6 +81,18 @@ fn open(settings: Settings) -> Option<Rsp2> {
 /// The an earlier stand-alone verification program tunings (protocol document 1.12), through this driver.
 #[test]
 #[ignore]
+// Tests [@ANCHOR: rsp_device_rsp2_open_with]
+// Tests [@ANCHOR: rsp_usb_context_new]
+// Tests [@ANCHOR: rsp_usb_with_devices]
+// Tests [@ANCHOR: rsp_usb_usbtransport_open]
+// Tests [@ANCHOR: rsp_usb_usbtransport_serial]
+// Tests [@ANCHOR: rsp_usb_usbtransport_vendor_out]
+// Tests [@ANCHOR: rsp_usb_usbtransport_vendor_in]
+// Tests [@ANCHOR: rsp_usb_usbtransport_set_alt]
+// Tests [@ANCHOR: rsp_usb_usbtransport_start_iso]
+// Tests [@ANCHOR: rsp_usb_iso_callback]
+// Tests [@ANCHOR: rsp_usb_usbtransport_stop_iso]
+// Tests [@ANCHOR: rsp_usb_usbtransport_release]
 fn hil_vhf_reference_spurs() {
     let s = Settings {
         if_gr_db: 30,
@@ -284,6 +296,12 @@ fn hil_gaps_during_control() {
 /// ppm, bandwidth, ext-ref output. Reports where the 96 MHz harmonic lands (tuned 95.8 MHz).
 #[test]
 #[ignore]
+// Tests [@ANCHOR: rsp_usb_usbtransport_set_alt]
+// Tests [@ANCHOR: rsp_usb_usbtransport_start_iso]
+// Tests [@ANCHOR: rsp_usb_usbtransport_stop_iso]
+// Tests [@ANCHOR: rsp_device_rsp2_set_sampling]
+// Tests [@ANCHOR: rsp_device_rsp2_restart_stream]
+// Tests [@ANCHOR: rsp_device_rsp2_set_ppm]
 fn hil_live_reconfiguration() {
     let Some(mut rx) = open(Settings {
         rf_hz: 95_800_000,
@@ -301,7 +319,7 @@ fn hil_live_reconfiguration() {
         }
     })
     .unwrap();
-    let mut look = |rx: &mut Rsp2, what: &str| {
+    let look = |rx: &mut Rsp2, what: &str| {
         std::thread::sleep(std::time::Duration::from_millis(150));
         got.lock().unwrap().clear();
         let s0 = rx.stream_stats();

@@ -43,6 +43,10 @@ since it handles legal/compliance pages and data. That carve-out was deliberatel
 it caused (headers within the same file sometimes disagreeing with each other on which variant
 applied). `compliance/` is AGPL-3.0-or-later now, same as everything else.
 
+**`daemons/rsp_open/` (the open SDRplay RSP2pro driver, added 2026-10-25) is AGPL-3.0-or-later**,
+the repository default, in every file's SPDX header and in its `Cargo.toml` `license` field. Not
+counted in the 2026-08-25 survey table above.
+
 **`daemons/ham_digital_modes/` is LGPL-3.0-or-later** -- a standalone Rust daemon (PSK31/FT8/WSPR
 decoding), not an Odoo addon, and license-compatible with being linked into other programs more
 permissively than AGPL would allow. Its `Cargo.toml` license field agrees.

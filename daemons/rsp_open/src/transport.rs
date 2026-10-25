@@ -84,6 +84,7 @@ impl Transport for MockTransport {
         index: u16,
         buf: &mut [u8],
     ) -> Result<usize, Error> {
+        // [@ANCHOR: rsp_transport_mocktransport_vendor_in]
         self.log.lock().unwrap().push(Op::In {
             req,
             value,
@@ -101,6 +102,7 @@ impl Transport for MockTransport {
         Ok(())
     }
     fn start_iso(&mut self, mut sink: PacketSink) -> Result<(), Error> {
+        // [@ANCHOR: rsp_transport_mocktransport_start_iso]
         self.log.lock().unwrap().push(Op::IsoStart);
         for p in self.packets.lock().unwrap().drain(..) {
             sink(&p);

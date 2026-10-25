@@ -36,6 +36,7 @@ pub enum IfMode {
 
 impl IfMode {
     pub fn code(self) -> u32 {
+        // [@ANCHOR: rsp_encode_ifmode_code]
         match self {
             IfMode::Zero => 3,
             IfMode::Low450k => 2,
@@ -45,6 +46,7 @@ impl IfMode {
     }
     /// IF frequency in Hz (0 for zero IF).
     pub fn hz(self) -> u32 {
+        // [@ANCHOR: rsp_encode_ifmode_hz]
         match self {
             IfMode::Zero => 0,
             IfMode::Low450k => 450_000,
@@ -54,6 +56,7 @@ impl IfMode {
     }
     /// The only ADC clock each low-IF mode was observed with.
     pub fn required_adc_hz(self) -> Option<u32> {
+        // [@ANCHOR: rsp_encode_ifmode_required_adc_hz]
         match self {
             IfMode::Zero => None,
             IfMode::Low450k => Some(2_000_000),
@@ -78,6 +81,7 @@ pub enum Bandwidth {
 
 impl Bandwidth {
     pub fn code(self) -> u32 {
+        // [@ANCHOR: rsp_encode_bandwidth_code]
         match self {
             Bandwidth::K200 => 0,
             Bandwidth::K300 => 1,
@@ -96,6 +100,7 @@ impl Bandwidth {
     }
     /// Widest bandwidth not above `hz` (at least 200 kHz).
     pub fn at_most(hz: u32) -> Bandwidth {
+        // [@ANCHOR: rsp_encode_bandwidth_at_most]
         use Bandwidth::*;
         let all = [K200, K300, K600, K1536, M5, M6, M7, M8];
         let mut best = K200;
@@ -123,6 +128,7 @@ pub enum TunerMode {
 impl TunerMode {
     /// Local-oscillator output divider (1.6.2).
     pub fn lo_div(self) -> u64 {
+        // [@ANCHOR: rsp_encode_tunermode_lo_div]
         match self {
             TunerMode::Am => 16,
             TunerMode::Vhf => 32,
@@ -270,6 +276,7 @@ pub const BANDS: [Band; 10] = [
 
 /// Find the band for an RF frequency.
 pub fn band_for(rf_hz: u64) -> Result<Band, Error> {
+    // [@ANCHOR: rsp_encode_band_for]
     if !(RF_MIN_HZ..=RF_MAX_HZ).contains(&rf_hz) {
         return Err(Error::InvalidArgument(format!(
             "frequency {rf_hz} Hz outside {RF_MIN_HZ}..={RF_MAX_HZ} Hz"
@@ -291,6 +298,7 @@ pub fn band_for(rf_hz: u64) -> Result<Band, Error> {
 
 /// Band-mode byte for r0 (1.6.1); the Hi-Z port uses the MSi001's other AM input.
 pub fn mode_byte(mode: TunerMode, antenna: Antenna) -> u32 {
+    // [@ANCHOR: rsp_encode_mode_byte]
     match (mode, antenna) {
         (TunerMode::Am, Antenna::HiZ) => 0x61,
         (TunerMode::Am, _) => 0xe1,
@@ -303,6 +311,7 @@ pub fn mode_byte(mode: TunerMode, antenna: Antenna) -> u32 {
 
 /// The gain table that applies, given band and antenna.
 pub fn gain_table(band: &Band, antenna: Antenna) -> GainTable {
+    // [@ANCHOR: rsp_encode_gain_table]
     if antenna == Antenna::HiZ && band.mode == TunerMode::Am && band.hi_hz <= HIZ_MAX_HZ {
         GainTable::HiZ
     } else {
@@ -355,6 +364,7 @@ pub struct Pll {
 
 /// First-LO frequency for an RF frequency in a band.
 pub fn lo_hz(band: &Band, rf_hz: u64) -> u64 {
+    // [@ANCHOR: rsp_encode_lo_hz]
     match band.lo_plan {
         LoPlan::Direct => rf_hz,
         LoPlan::UpBy120M => rf_hz + 120 * M,
@@ -370,6 +380,7 @@ pub fn lo_hz(band: &Band, rf_hz: u64) -> u64 {
 /// as `frac - 1` with r3 = 0xfff (e.g. 100 MHz -> r2 0x213e72, r3 0x00fff3). `ppb` is the
 /// reference correction in parts per billion (positive = reference runs fast).
 pub fn pll(lo_hz: u64, div: u64, ppb: i64) -> Result<Pll, Error> {
+    // [@ANCHOR: rsp_encode_pll]
     // q = ceil(lo * div * 3000 * 4096 / (96e6 * (1 + ppb/1e9))) - 1, in exact integers.
     let num: u128 = lo_hz as u128 * div as u128 * (PLL_MOD * PLL_SUB) as u128 * 1_000_000_000u128;
     let den_i: i128 = 96_000_000i128 * (1_000_000_000i128 + ppb as i128);
@@ -442,6 +453,7 @@ const S_5: u8 = 0b0101;
 
 /// LNA-state tables (1.8, captures c25/c26).
 pub fn lna_table(t: GainTable) -> &'static [FrontEndStep] {
+    // [@ANCHOR: rsp_encode_lna_table]
     const AM: [FrontEndStep; 9] = [
         st(S_E, 0, false, false),
         st(S_D, 0, false, false),
@@ -505,6 +517,7 @@ pub const BOARD_LATCH1: u8 = 0x01;
 /// Byte 0x12: antenna (bits 1:0), band filter (5:3), bit 2 always set, ext-ref output (bit 6,
 /// 0 = output enabled).
 pub fn board_band_byte(filter: u8, antenna: Antenna, ext_ref_out: bool) -> u8 {
+    // [@ANCHOR: rsp_encode_board_band_byte]
     let ant = match antenna {
         Antenna::A | Antenna::HiZ => 0b01,
         Antenna::B => 0b10,
@@ -516,6 +529,7 @@ pub fn board_band_byte(filter: u8, antenna: Antenna, ext_ref_out: bool) -> u8 {
 /// Byte 0x13: notch (bits 7:6, 10 = off, 01 = on), front-end step (5:2), bias-T (bit 0,
 /// 0 = on).
 pub fn board_front_byte(board_step: u8, notch: bool, bias_t: bool) -> u8 {
+    // [@ANCHOR: rsp_encode_board_front_byte]
     let notch_bits = if notch { 0b01 } else { 0b10 };
     let bias = if bias_t { 0 } else { 1 };
     (notch_bits << 6) | ((board_step & 0xf) << 2) | bias
@@ -543,6 +557,7 @@ pub enum SampleFormat {
 
 impl SampleFormat {
     pub fn pairs_per_block(self) -> u32 {
+        // [@ANCHOR: rsp_encode_sampleformat_pairs_per_block]
         match self {
             SampleFormat::S14 => 252,
             SampleFormat::S12 => 336,
@@ -566,6 +581,7 @@ pub struct StreamConfig {
 impl StreamConfig {
     /// Advance of the block sample counter per 1024-byte block.
     pub fn counter_step(&self) -> u32 {
+        // [@ANCHOR: rsp_encode_streamconfig_counter_step]
         self.format.pairs_per_block() * if self.decim2 { 2 } else { 1 }
     }
 }
@@ -578,6 +594,7 @@ pub const ADC_MAX_HZ: u32 = 10_000_000;
 /// microframe (8000/s), alt 1 three (24000/s); the API picks the widest format whose block
 /// rate fits. Only the (alt, format, reg 0x07) combinations seen on the wire are produced.
 pub fn stream_config(adc_hz: u32, if_mode: IfMode) -> Result<StreamConfig, Error> {
+    // [@ANCHOR: rsp_encode_stream_config]
     if !(ADC_MIN_HZ..=ADC_MAX_HZ).contains(&adc_hz) {
         return Err(Error::InvalidArgument(format!(
             "ADC clock {adc_hz} Hz outside {ADC_MIN_HZ}..={ADC_MAX_HZ} Hz"
@@ -677,6 +694,7 @@ pub const REG03_CLOSE: u32 = 0x091300;
 /// `f * divider` within 32..40 MHz, else within 32..42 MHz) is applied. `flag12` is bit 12, set
 /// by the API on the write made at open and on ppm changes, clear on sample-rate changes.
 pub fn adc_clock(adc_hz: u32, ppb: i64, flag12: bool) -> Result<AdcClock, Error> {
+    // [@ANCHOR: rsp_encode_adc_clock]
     if !(ADC_MIN_HZ..=ADC_MAX_HZ).contains(&adc_hz) {
         return Err(Error::InvalidArgument(format!(
             "ADC clock {adc_hz} Hz out of range"
@@ -745,6 +763,7 @@ pub fn board_write_args(addr: u8, byte: u8) -> (u16, u16) {
 
 /// Convert a ppm correction to parts per billion, rejecting absurd values.
 pub fn ppm_to_ppb(ppm: f64) -> Result<i64, Error> {
+    // [@ANCHOR: rsp_encode_ppm_to_ppb]
     if !ppm.is_finite() || ppm.abs() > 1000.0 {
         return Err(Error::InvalidArgument(format!(
             "ppm {ppm} out of range (|ppm| <= 1000)"
@@ -765,6 +784,10 @@ mod tests {
 
     /// (RF Hz, r2, r3) pairs from captures c21/c22 (r3 only where it was written differently).
     #[test]
+    // Tests [@ANCHOR: rsp_encode_pll]
+    // Tests [@ANCHOR: rsp_encode_band_for]
+    // Tests [@ANCHOR: rsp_encode_lo_hz]
+    // Tests [@ANCHOR: rsp_encode_tunermode_lo_div]
     fn pll_matches_captures() {
         let cases: &[(u64, u32)] = &[
             (1_000, 0x140002),
@@ -844,6 +867,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_pll]
     fn pll_ppm_matches_capture() {
         // ppm +10 at 100 MHz: r2 unchanged, r3 = 000003 (capture c26).
         let p = pll(100_000_000, 32, 10_000).unwrap();
@@ -852,6 +876,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_pll]
+    // Tests [@ANCHOR: rsp_encode_lo_hz]
     fn pll_lo_is_close() {
         for rf in [
             1_000u64,
@@ -869,6 +895,11 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_band_for]
+    // Tests [@ANCHOR: rsp_encode_board_band_byte]
+    // Tests [@ANCHOR: rsp_encode_mode_byte]
+    // Tests [@ANCHOR: rsp_encode_ifmode_code]
+    // Tests [@ANCHOR: rsp_encode_bandwidth_code]
     fn band_table_matches_capture() {
         // (RF, byte 0x12 with antenna A, r0 with zero IF and 200 kHz BW) from 1.9 / c21 / c22.
         let cases: &[(u64, u8, u32)] = &[
@@ -912,6 +943,9 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_ifmode_code]
+    // Tests [@ANCHOR: rsp_encode_bandwidth_code]
+    // Tests [@ANCHOR: rsp_encode_mode_byte]
     fn r0_variants() {
         let v = |m, i, b| r0(m, i, b);
         assert_eq!(v(0x42, IfMode::Zero, Bandwidth::K1536), 0x04f420);
@@ -937,6 +971,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_lna_table]
+    // Tests [@ANCHOR: rsp_encode_board_front_byte]
     fn gain_words_match_capture() {
         let vhf = lna_table(GainTable::Vhf);
         assert_eq!(r1(40, &vhf[0]), 0x00c281);
@@ -981,6 +1017,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_board_band_byte]
+    // Tests [@ANCHOR: rsp_encode_board_front_byte]
     fn board_bytes() {
         assert_eq!(board_band_byte(0b011, Antenna::A, false), 0x5d);
         assert_eq!(board_band_byte(0b011, Antenna::B, false), 0x5e);
@@ -994,6 +1032,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_adc_clock]
     fn adc_clock_matches_capture() {
         let cases: &[(u32, u32, u32)] = &[
             (2_000_000, 0x01081f, 0),
@@ -1024,6 +1063,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_stream_config]
+    // Tests [@ANCHOR: rsp_encode_streamconfig_counter_step]
+    // Tests [@ANCHOR: rsp_encode_ifmode_required_adc_hz]
+    // Tests [@ANCHOR: rsp_encode_sampleformat_pairs_per_block]
     fn stream_configs_match_capture() {
         let z = IfMode::Zero;
         let c = |f| stream_config(f, z).unwrap();
@@ -1055,5 +1098,44 @@ mod tests {
         assert_eq!(reg_write_args(0x08, 0x00ee80), (0x8008, 0x00ee));
         assert_eq!(reg_write_args(REG_TUNER, 0x213e72), (0x7209, 0x213e));
         assert_eq!(reg_write_args(0x03, 0x01181f), (0x1f03, 0x0118));
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_encode_ifmode_hz]
+    // Tests [@ANCHOR: rsp_encode_bandwidth_at_most]
+    // Tests [@ANCHOR: rsp_encode_ifmode_required_adc_hz]
+    fn if_and_bandwidth_helpers() {
+        assert_eq!(IfMode::Zero.hz(), 0);
+        assert_eq!(IfMode::Low450k.hz(), 450_000);
+        assert_eq!(IfMode::Low1620k.hz(), 1_620_000);
+        assert_eq!(IfMode::Low2048k.hz(), 2_048_000);
+        assert_eq!(IfMode::Low1620k.required_adc_hz(), Some(6_000_000));
+        assert_eq!(IfMode::Zero.required_adc_hz(), None);
+        assert_eq!(Bandwidth::at_most(100_000), Bandwidth::K200);
+        assert_eq!(Bandwidth::at_most(1_600_000), Bandwidth::K1536);
+        assert_eq!(Bandwidth::at_most(6_000_000), Bandwidth::M6);
+        assert_eq!(Bandwidth::at_most(20_000_000), Bandwidth::M8);
+        assert_eq!(Bandwidth::M7.hz(), 7_000_000);
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_encode_ppm_to_ppb]
+    fn ppm_conversion_and_limits() {
+        assert_eq!(ppm_to_ppb(10.0).unwrap(), 10_000);
+        assert_eq!(ppm_to_ppb(-3.5).unwrap(), -3_500);
+        assert!(ppm_to_ppb(1000.1).is_err());
+        assert!(ppm_to_ppb(f64::NAN).is_err());
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_encode_gain_table]
+    fn hiz_uses_its_own_gain_table_only_below_60_mhz() {
+        let hf = band_for(10_000_000).unwrap();
+        assert_eq!(gain_table(&hf, Antenna::HiZ), GainTable::HiZ);
+        assert_eq!(gain_table(&hf, Antenna::A), GainTable::Am);
+        let am_down = band_for(264_000_000).unwrap();
+        assert_eq!(gain_table(&am_down, Antenna::HiZ), GainTable::Am);
+        let vhf = band_for(100_000_000).unwrap();
+        assert_eq!(gain_table(&vhf, Antenna::B), GainTable::Vhf);
     }
 }

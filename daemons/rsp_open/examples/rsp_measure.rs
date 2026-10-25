@@ -72,7 +72,6 @@ struct Obs {
     spur_dbfs: f64,
     /// Noise floor, dBFS per Hz (median bin).
     floor_dbfs_hz: f64,
-    peak_off_hz: f64,
     mean_i: f64,
     mean_q: f64,
     max_abs: u16,
@@ -92,7 +91,7 @@ fn observe(x: &[IqI16], fs: f64, spur_off: Option<f64>) -> Obs {
         .map(|(_, v)| *v)
         .collect();
     let floor_bin = median(&away);
-    let (mut spur, mut poff) = (f64::NAN, f64::NAN);
+    let mut spur = f64::NAN;
     if let Some(off) = spur_off {
         let c = (n / 2) as f64 + off / bin;
         let lo = (c - 2_000.0 / bin).max(0.0) as usize;
@@ -104,7 +103,6 @@ fn observe(x: &[IqI16], fs: f64, spur_off: Option<f64>) -> Obs {
             .map(|j| sp[j] - floor_bin)
             .sum();
         spur = db(p.max(1e-30));
-        poff = (k as f64 - (n / 2) as f64) * bin;
     }
     let (si, sq) = x
         .iter()
@@ -129,7 +127,6 @@ fn observe(x: &[IqI16], fs: f64, spur_off: Option<f64>) -> Obs {
     Obs {
         spur_dbfs: spur,
         floor_dbfs_hz: db(floor_bin / bin),
-        peak_off_hz: poff,
         mean_i: mi,
         mean_q: mq,
         max_abs,

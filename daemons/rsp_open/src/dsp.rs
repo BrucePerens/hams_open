@@ -6,6 +6,7 @@ use std::f64::consts::PI;
 
 /// In-place radix-2 FFT over (re, im) pairs; `n` must be a power of two.
 pub fn fft(re: &mut [f64], im: &mut [f64]) {
+    // [@ANCHOR: rsp_dsp_fft]
     let n = re.len();
     assert!(n.is_power_of_two() && im.len() == n);
     let mut j = 0;
@@ -48,6 +49,7 @@ pub fn fft(re: &mut [f64], im: &mut [f64]) {
 /// Averaged power spectrum (Hann window, DC removed), FFT-shifted so that bin `n/2` is 0 Hz.
 /// Returns power in dB relative to full scale (a full-scale complex tone reads about 0 dB).
 pub fn power_spectrum_db(x: &[IqI16], n: usize) -> Vec<f64> {
+    // [@ANCHOR: rsp_dsp_power_spectrum_db]
     assert!(n.is_power_of_two() && x.len() >= n);
     let (mi, mq) = x
         .iter()
@@ -81,6 +83,7 @@ pub fn power_spectrum_db(x: &[IqI16], n: usize) -> Vec<f64> {
 
 /// Median of a slice.
 pub fn median(v: &[f64]) -> f64 {
+    // [@ANCHOR: rsp_dsp_median]
     let mut s = v.to_vec();
     s.sort_by(|a, b| a.partial_cmp(b).unwrap());
     s[s.len() / 2]
@@ -95,6 +98,7 @@ pub fn peak_near(
     half_width_hz: f64,
     exclude_dc_hz: f64,
 ) -> (f64, f64, f64) {
+    // [@ANCHOR: rsp_dsp_peak_near]
     let n = spec_db.len();
     let bin = fs / n as f64;
     let floor = median(spec_db);
@@ -113,6 +117,10 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: rsp_dsp_fft]
+    // Tests [@ANCHOR: rsp_dsp_power_spectrum_db]
+    // Tests [@ANCHOR: rsp_dsp_peak_near]
+    // Tests [@ANCHOR: rsp_dsp_median]
     fn tone_lands_in_right_bin() {
         let fs = 2e6;
         let f0 = 250_000.0;

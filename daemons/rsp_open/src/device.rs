@@ -112,6 +112,7 @@ impl Rsp2<UsbTransport> {
     /// Open the first RSP2/RSP2pro. The device state is checked from its descriptor before
     /// the device is opened; a boot-ROM device gives [`Error::NotRunning`].
     pub fn open_with(settings: Settings) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp2_open_with]
         let devs = usb::list_devices()?;
         let Some(info) = devs.iter().find(|d| d.pid == PID_RSP2) else {
             if let Some(d) = devs.first() {
@@ -137,6 +138,7 @@ impl<T: Transport> Rsp2<T> {
     /// Drive an already-opened transport whose device state was checked by the caller.
     /// Sends the open sequence (1.5) with `settings`.
     pub fn with_transport(t: T, settings: Settings, settle: Duration) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp2_with_transport]
         if settings.bias_t {
             return Err(Error::InvalidArgument(
                 "open with bias-T off; enable it explicitly later".into(),
@@ -184,6 +186,7 @@ impl<T: Transport> Rsp2<T> {
     }
     /// Output sample rate in samples/s (ADC clock, halved in the low-IF modes).
     pub fn output_rate(&self) -> f64 {
+        // [@ANCHOR: rsp_device_rsp2_output_rate]
         let f = self.s.adc_hz as f64;
         if self.cfg.decim2 {
             f / 2.0
@@ -238,6 +241,7 @@ impl<T: Transport> Rsp2<T> {
     }
 
     fn init(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_init]
         self.reg(0x08, REG08_OPEN)?;
         self.t.set_alt(self.cfg.alt)?;
         let mut b = [0u8; 1];
@@ -260,6 +264,7 @@ impl<T: Transport> Rsp2<T> {
 
     /// Full tune sequence used at open and on every band, antenna-port or gain-table change.
     fn full_tune(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_full_tune]
         let p = self.pll()?;
         self.tuner(self.r0_word())?;
         self.board(BOARD_BAND, self.band_byte())?;
@@ -279,6 +284,7 @@ impl<T: Transport> Rsp2<T> {
     /// If the new band has fewer LNA states than the current one, the LNA state is clamped to
     /// the band's highest state (see [`Settings::lna_state`] afterwards).
     pub fn set_frequency(&mut self, rf_hz: u64) -> Result<f64, Error> {
+        // [@ANCHOR: rsp_device_rsp2_set_frequency]
         let band = band_for(rf_hz)?;
         check_antenna(self.s.antenna, rf_hz)?;
         let old_band = self.band;
@@ -316,6 +322,7 @@ impl<T: Transport> Rsp2<T> {
 
     /// Set IF gain reduction (0..=59 dB) and LNA state (0..number of states in the band).
     pub fn set_gain(&mut self, if_gr_db: u8, lna_state: u8) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_set_gain]
         if if_gr_db > IF_GR_MAX {
             return Err(Error::InvalidArgument(format!(
                 "IF gain reduction {if_gr_db} > {IF_GR_MAX}"
@@ -340,6 +347,7 @@ impl<T: Transport> Rsp2<T> {
 
     /// Select Antenna A, B or the Hi-Z port (Hi-Z only below 60 MHz).
     pub fn select_antenna(&mut self, ant: Antenna) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_select_antenna]
         check_antenna(ant, self.s.rf_hz)?;
         let old = self.s.antenna;
         if old == ant {
@@ -385,6 +393,7 @@ impl<T: Transport> Rsp2<T> {
     /// Reference correction in ppm (positive when the reference runs fast); applied to the
     /// ADC clock and to the tuner PLL.
     pub fn set_ppm(&mut self, ppm: f64) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_set_ppm]
         let ppb = ppm_to_ppb(ppm)?;
         let old = self.s.ppb;
         self.s.ppb = ppb;
@@ -417,6 +426,7 @@ impl<T: Transport> Rsp2<T> {
     }
 
     fn set_sampling(&mut self, adc_hz: u32, if_mode: IfMode) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_set_sampling]
         let cfg = stream_config(adc_hz, if_mode)?;
         let clk = adc_clock(adc_hz, self.s.ppb, false)?;
         if cfg == self.cfg && if_mode == self.s.if_mode {
@@ -451,6 +461,7 @@ impl<T: Transport> Rsp2<T> {
     }
 
     fn sink_for(core: Arc<Mutex<Core>>) -> PacketSink {
+        // [@ANCHOR: rsp_device_rsp2_sink_for]
         Box::new(move |pkt: &[u8]| {
             if let Ok(mut c) = core.lock() {
                 let Core { parser, cb, buf } = &mut *c;
@@ -465,6 +476,7 @@ impl<T: Transport> Rsp2<T> {
     }
 
     fn restart_stream(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_restart_stream]
         let core = self
             .core
             .clone()
@@ -487,6 +499,7 @@ impl<T: Transport> Rsp2<T> {
     where
         F: FnMut(&[IqI16], &StreamStats) + Send + 'static,
     {
+        // [@ANCHOR: rsp_device_rsp2_start_stream]
         if self.streaming {
             return Err(Error::Stream("already streaming".into()));
         }
@@ -501,6 +514,7 @@ impl<T: Transport> Rsp2<T> {
 
     /// Start streaming into a bounded channel; returns a blocking iterator of sample chunks.
     pub fn start_stream_iter(&mut self, capacity: usize) -> Result<SampleIter, Error> {
+        // [@ANCHOR: rsp_device_rsp2_start_stream_iter]
         let (tx, rx) = sync_channel(capacity.max(1));
         let dropped = Arc::new(Mutex::new(0u64));
         let d2 = dropped.clone();
@@ -526,6 +540,7 @@ impl<T: Transport> Rsp2<T> {
 
     /// Stop streaming (STOP request first, then the transfers are cancelled).
     pub fn stop_stream(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_stop_stream]
         if !self.streaming {
             return Ok(());
         }
@@ -546,6 +561,7 @@ impl<T: Transport> Rsp2<T> {
     }
 
     fn shutdown(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp2_shutdown]
         if self.closed {
             return Ok(());
         }
@@ -576,6 +592,7 @@ impl<T: Transport> Drop for Rsp2<T> {
 }
 
 fn check_antenna(ant: Antenna, rf_hz: u64) -> Result<(), Error> {
+    // [@ANCHOR: rsp_device_check_antenna]
     if ant == Antenna::HiZ && rf_hz >= HIZ_MAX_HZ {
         return Err(Error::InvalidArgument(
             "the Hi-Z port works only below 60 MHz".into(),
@@ -627,6 +644,10 @@ mod tests {
     /// The API's own open sequence for zero IF, 2 MHz, 100 MHz, BW 200 kHz, GR 40, LNA 0
     /// (capture c20/c21, protocol document 1.5) must be reproduced exactly.
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_with_transport]
+    // Tests [@ANCHOR: rsp_device_rsp2_init]
+    // Tests [@ANCHOR: rsp_device_rsp2_full_tune]
+    // Tests [@ANCHOR: rsp_transport_mocktransport_vendor_in]
     fn open_sequence_matches_api_capture() {
         let s = Settings {
             bandwidth: Bandwidth::K200,
@@ -666,6 +687,8 @@ mod tests {
     /// an earlier stand-alone verification program's sequence (BW 1.536 MHz, GR 30) except for r2, where this driver follows
     /// the API's rounding instead of rsp2verify's.
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_with_transport]
+    // Tests [@ANCHOR: rsp_device_rsp2_init]
     fn open_sequence_matches_rsp2verify() {
         let s = Settings {
             if_gr_db: 30,
@@ -681,6 +704,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_frequency]
+    // Tests [@ANCHOR: rsp_device_rsp2_full_tune]
     fn retune_sequences() {
         let (mut rx, m) = open_mock(Settings::default());
         m.clear();
@@ -707,6 +732,11 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_select_antenna]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_ppm]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_gain]
+    // Tests [@ANCHOR: rsp_device_check_antenna]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_frequency]
     fn toggles_match_capture() {
         let (mut rx, m) = open_mock(Settings::default());
         m.clear();
@@ -763,6 +793,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_frequency]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_gain]
     fn lna_state_clamped_on_band_change() {
         let (mut rx, _m) = open_mock(Settings::default());
         rx.set_gain(40, 8).unwrap();
@@ -771,6 +803,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_sampling]
+    // Tests [@ANCHOR: rsp_device_rsp2_output_rate]
     fn sample_rate_change_sequence() {
         let (mut rx, m) = open_mock(Settings::default());
         m.clear();
@@ -792,9 +826,33 @@ mod tests {
         rx.set_sample_rate(9_000_000).unwrap();
         assert_eq!(m.ops(), vec![w(0x04, 0), w(0x03, 0x01c907)]);
         assert!(rx.set_sample_rate(1_536_000).is_err());
+        assert_eq!(rx.output_rate(), 9_000_000.0);
+        rx.set_if_mode(IfMode::Low1620k).unwrap();
+        assert_eq!(rx.output_rate(), 3_000_000.0);
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_start_stream_iter]
+    // Tests [@ANCHOR: rsp_device_rsp2_start_stream]
+    fn stream_iterator_delivers_packets() {
+        let (mut rx, m) = open_mock(Settings::default());
+        m.queue_packet(s14_block(0));
+        m.queue_packet(s14_block(252));
+        let it = rx.start_stream_iter(8).unwrap();
+        let chunks: Vec<Vec<IqI16>> = it.take(2).collect();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].len(), 252);
+        assert!(rx.start_stream(|_, _| {}).is_err());
+        rx.stop_stream().unwrap();
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_start_stream]
+    // Tests [@ANCHOR: rsp_device_rsp2_sink_for]
+    // Tests [@ANCHOR: rsp_device_rsp2_restart_stream]
+    // Tests [@ANCHOR: rsp_device_rsp2_stop_stream]
+    // Tests [@ANCHOR: rsp_device_rsp2_shutdown]
+    // Tests [@ANCHOR: rsp_transport_mocktransport_start_iso]
     fn streaming_and_close() {
         let (mut rx, m) = open_mock(Settings::default());
         m.queue_packet(s14_block(0));
@@ -893,6 +951,10 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_sampling]
+    // Tests [@ANCHOR: rsp_device_rsp2_restart_stream]
+    // Tests [@ANCHOR: rsp_device_rsp2_shutdown]
+    // Tests [@ANCHOR: rsp_device_rsp2_select_antenna]
     fn only_observed_requests_are_emitted() {
         let (mut rx, m) = open_mock(Settings::default());
         for f in [
@@ -959,6 +1021,8 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_with_transport]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_frequency]
     fn refuses_bias_t_at_open_and_unsupported_band() {
         let m = MockTransport::new();
         assert!(Rsp2::with_transport(

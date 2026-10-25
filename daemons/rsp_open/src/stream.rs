@@ -85,6 +85,7 @@ impl BlockParser {
 
     /// Parse one isochronous packet, appending decoded samples to `out`.
     pub fn push_packet(&mut self, pkt: &[u8], out: &mut Vec<IqI16>) {
+        // [@ANCHOR: rsp_stream_blockparser_push_packet]
         if !pkt.len().is_multiple_of(BLOCK_LEN) || pkt.is_empty() {
             self.stats.short_packets += 1;
         }
@@ -112,6 +113,7 @@ fn sext(v: u32, bits: u32) -> i32 {
 
 /// Decode the 1008-byte payload of one block.
 pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>) {
+    // [@ANCHOR: rsp_stream_decode_payload]
     debug_assert_eq!(p.len(), PAYLOAD_LEN);
     match format {
         SampleFormat::S14 => {
@@ -199,6 +201,8 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_stream_blockparser_push_packet]
+    // Tests [@ANCHOR: rsp_stream_decode_payload]
     fn s14_packet_with_gap() {
         let cfg = stream_config(2_000_000, IfMode::Zero).unwrap();
         let mut p = BlockParser::new(&cfg);
@@ -229,6 +233,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_stream_blockparser_push_packet]
     fn counter_wraps() {
         let cfg = stream_config(2_000_000, IfMode::Zero).unwrap();
         let mut p = BlockParser::new(&cfg);
@@ -239,6 +244,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_stream_blockparser_push_packet]
     fn three_blocks_per_packet_and_decim2_step() {
         let cfg = stream_config(6_000_000, IfMode::Low1620k).unwrap();
         let mut p = BlockParser::new(&cfg);
@@ -254,6 +260,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_stream_decode_payload]
     fn s8_decode() {
         let mut pl = vec![0u8; PAYLOAD_LEN];
         pl[0] = 0x7f;
@@ -274,6 +281,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_stream_decode_payload]
     fn s12_decode() {
         // I = 0x7ff (max), Q = 0x800 (min); then I = -1 (0xfff), Q = 1.
         let mut pl = vec![0u8; PAYLOAD_LEN];
@@ -297,6 +305,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_stream_decode_payload]
     fn s384_decode() {
         let mut pl = vec![0u8; PAYLOAD_LEN];
         // First run of group 0: values 1, -1, 511, -512, then zeros; scale code 0 (x1 -> <<4).
@@ -305,8 +314,8 @@ pub(crate) mod tests {
         for (n, v) in vals.iter().enumerate() {
             bits |= ((*v as u32 & 0x3ff) as u128) << (10 * n);
         }
-        for n in 0..10 {
-            pl[n] = (bits >> (8 * n)) as u8;
+        for (n, byte) in pl.iter_mut().take(10).enumerate() {
+            *byte = (bits >> (8 * n)) as u8;
         }
         // Second run of group 0 the same values with scale code 2 (<<6).
         let r1: Vec<u8> = pl[0..10].to_vec();

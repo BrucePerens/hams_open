@@ -4,8 +4,9 @@ An open Rust driver for the SDRplay **RSP2pro** (USB 1df7:3010), library crate p
 examples. Status: works on the author's RSP2pro as of 2026-10-25; see
 "What works" below.
 
-**Licence: TODO (Bruce to choose).** No licence has been granted yet; do not publish or
-redistribute until one is chosen. The `Cargo.toml` has `publish = false`.
+Licence: AGPL-3.0-or-later (SPDX headers in every source file, `Cargo.toml` `license` field),
+the repository default described in `LICENSING.md`. The crate is not published to crates.io
+(`publish = false`).
 
 ## Important limitation: firmware
 
@@ -22,9 +23,11 @@ otherwise. Any other bcdDevice is refused (`Error::UnknownState`).
   USB traffic between SDRplay's software and the author's own receiver, recorded with usbmon and
   filtered to the receiver only. No SDRplay binary was disassembled, decompiled, traced or
   strings-mined; no SDRplay code or documentation text was used.
-- **Extra wire facts:** register values in the unit tests come from the decoded captures
-  the private capture files c20..c26 (the request sequences the API sent), read with
-  our own capture-decoding scripts. The r3 "12 extra PLL fraction bits"
+- **Extra wire facts:** register values in the unit tests come from decoded private
+  captures (the request sequences SDRplay's API sent while one control at a time was
+  changed), read with our own capture-decoding scripts. The captures and the wire-protocol
+  description are not part of this repository; the unit tests carry only the documented
+  byte tables. The r3 "12 extra PLL fraction bits"
   rule and the "largest integer strictly below the exact quotient" rounding are our own fit
   of those captured values; the 0.05 kHz tuning accuracy on the hardware confirms the fit.
 - **GPL references consulted for facts only** (Linux `drivers/media/usb/msi2500/msi2500.c`,
@@ -41,7 +44,10 @@ otherwise. Any other bcdDevice is refused (`Error::UnknownState`).
   Everything else (band table, board bytes 0x12/0x13, LNA tables, ADC clock rules, alt and
   format selection, open/close sequences) comes from the wire captures.
 
-- **Requests sent:** only those the protocol document lists as observed: 0x41 (register
+- **Clean-room boundary:** only bus traffic of the author's own receiver was observed;
+  SDRplay's software was used only as the front end of the captures. No firmware image was
+  captured, stored or inspected, and this crate contains no firmware-loading code.
+- **Requests sent:** only those the wire-protocol description lists as observed: 0x41 (register
   write), 0x43/0x45 (start/stop), 0x48 (one-byte read at open), 0x49 (board bytes 0x00,
   0x01, 0x12, 0x13), SET_INTERFACE alt 0/1/2, and the standard string-descriptor read.
   The unit test `only_observed_requests_are_emitted` exercises every API call against a
@@ -108,9 +114,75 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 - Bias-T is never switched on by tests or examples (nothing is connected to the ports).
 - Other models (RSP1, RSP1A, RSPduo, RSPdx) are recognised by PID and refused.
 
+## Function reference
+
+Each entry is a semantic anchor in the source with a test citing it (`// Tests [@ANCHOR: ...]`);
+the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
+
+- [@ANCHOR: rsp_open:rsp_lib_check_state] Refuses a device before anything is sent to it: boot-ROM (bcdDevice 2.00) gives `NotRunning`, any other unknown bcdDevice `UnknownState`, other SDRplay products `UnsupportedModel`.
+- [@ANCHOR: rsp_open:rsp_lib_model_for_pid] Maps an SDRplay USB product ID to a model.
+- [@ANCHOR: rsp_open:rsp_lib_model_name] The model's display name.
+- [@ANCHOR: rsp_open:rsp_lib_error_fmt] Human-readable error text, including the exact `NotRunning` message.
+- [@ANCHOR: rsp_open:rsp_encode_band_for] RF frequency to band: tuner mode, first-LO plan, band-filter code, LNA table; refuses 375-420 MHz.
+- [@ANCHOR: rsp_open:rsp_encode_mode_byte] MSi001 band-mode byte for r0 (Hi-Z selects the second AM input).
+- [@ANCHOR: rsp_open:rsp_encode_gain_table] Which LNA-state table applies for a band and antenna port.
+- [@ANCHOR: rsp_open:rsp_encode_lna_table] The LNA-state tables: board front-end step plus MSi001 gain-reduction bits per state.
+- [@ANCHOR: rsp_open:rsp_encode_lo_hz] First-LO frequency for an RF frequency (direct, +120 MHz up-conversion, -120 MHz down-conversion).
+- [@ANCHOR: rsp_open:rsp_encode_tunermode_lo_div] LO output divider per tuner mode.
+- [@ANCHOR: rsp_open:rsp_encode_pll] Tuner PLL words r2 and r3 (integer, 3000-step fraction, 12 extra fraction bits in r3), with ppm correction.
+- [@ANCHOR: rsp_open:rsp_encode_ifmode_code] IF-mode code for r0.
+- [@ANCHOR: rsp_open:rsp_encode_ifmode_hz] IF frequency of each IF mode.
+- [@ANCHOR: rsp_open:rsp_encode_ifmode_required_adc_hz] The only ADC clock each low-IF mode was observed with.
+- [@ANCHOR: rsp_open:rsp_encode_bandwidth_code] IF-bandwidth code for r0.
+- [@ANCHOR: rsp_open:rsp_encode_bandwidth_at_most] Widest IF bandwidth not above a given width.
+- [@ANCHOR: rsp_open:rsp_encode_board_band_byte] Board byte 0x12: antenna A/B, band filter, reference-clock output.
+- [@ANCHOR: rsp_open:rsp_encode_board_front_byte] Board byte 0x13: notch, front-end step, bias-T.
+- [@ANCHOR: rsp_open:rsp_encode_stream_config] Alternate setting, sample format and MSi2500 register 0x07 for an ADC clock and IF mode.
+- [@ANCHOR: rsp_open:rsp_encode_streamconfig_counter_step] Block sample-counter advance per 1024-byte block.
+- [@ANCHOR: rsp_open:rsp_encode_sampleformat_pairs_per_block] I/Q pairs per block for each sample format.
+- [@ANCHOR: rsp_open:rsp_encode_adc_clock] ADC clock synthesiser words (MSi2500 registers 0x03/0x04), with ppm correction.
+- [@ANCHOR: rsp_open:rsp_encode_ppm_to_ppb] Validates a ppm correction and converts it to parts per billion.
+- [@ANCHOR: rsp_open:rsp_stream_blockparser_push_packet] Splits isochronous packets into blocks, checks the sample counter (gaps, lost samples, wrap-around).
+- [@ANCHOR: rsp_open:rsp_stream_decode_payload] Decodes 14-bit, 12-bit packed, 10-bit "384" and 8-bit payloads to 16-bit left-aligned I/Q.
+- [@ANCHOR: rsp_open:rsp_dsp_fft] Radix-2 FFT used by the tests and examples.
+- [@ANCHOR: rsp_open:rsp_dsp_power_spectrum_db] Averaged, windowed power spectrum in dBFS.
+- [@ANCHOR: rsp_open:rsp_dsp_median] Median of a spectrum (noise-floor estimate).
+- [@ANCHOR: rsp_open:rsp_dsp_peak_near] Strongest spectral line near an expected offset, and its level over the floor.
+- [@ANCHOR: rsp_open:rsp_transport_mocktransport_vendor_in] Recording mock: answers request 0x48 as the device does.
+- [@ANCHOR: rsp_open:rsp_transport_mocktransport_start_iso] Recording mock: delivers queued packets when streaming starts.
+- [@ANCHOR: rsp_open:rsp_usb_context_new] Owned libusb context.
+- [@ANCHOR: rsp_open:rsp_usb_with_devices] Walks the USB device list reading descriptors only.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_open] Opens and claims interface 0 of the selected device.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_serial] Reads the serial-number string descriptor.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_vendor_out] Vendor OUT request on EP0.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_vendor_in] Vendor IN request on EP0.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_set_alt] SET_INTERFACE, refusing the bulk alternate setting 3.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_start_iso] Submits isochronous transfers and runs the USB event thread.
+- [@ANCHOR: rsp_open:rsp_usb_iso_callback] Per-transfer completion: delivers packets, resubmits while running.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_stop_iso] Cancels the transfers, joins the event thread, frees the transfers.
+- [@ANCHOR: rsp_open:rsp_usb_usbtransport_release] Releases the interface and closes the device.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_open_with] Finds the first RSP2/RSP2pro, checks its state from the descriptor, opens it.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_with_transport] Validates the settings and runs the open sequence on a transport.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_init] The open sequence, in the order SDRplay's API uses.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_full_tune] The full tune sequence used on band, port and gain-table changes.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_set_frequency] Tunes (r3/r2 only inside a band, full sequence across bands), clamping the LNA state to the new band.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_set_gain] IF gain reduction and LNA state.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_select_antenna] Antenna A, B or Hi-Z (Hi-Z only below 60 MHz).
+- [@ANCHOR: rsp_open:rsp_device_check_antenna] Refuses Hi-Z at or above 60 MHz.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_set_ppm] Reference correction applied to the ADC clock and the tuner PLL.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_set_sampling] Sample-rate and IF-mode changes, with the STOP/alt/restart sequence when the format changes.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_output_rate] Output sample rate (halved in the low-IF modes).
+- [@ANCHOR: rsp_open:rsp_device_rsp2_sink_for] Packet sink that parses blocks and calls the user callback.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_restart_stream] (re)starts streaming: transfers first, then the START request.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream] Starts streaming to a callback.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream_iter] Starts streaming into a bounded channel and returns a blocking iterator.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_stop_stream] STOP request, then cancel the transfers.
+- [@ANCHOR: rsp_open:rsp_device_rsp2_shutdown] Close: stop, bias-T off, tuner and ADC standby, alt 0, release (also on drop).
+
 ## Tests
 
 ```
-CARGO_TARGET_DIR=... cargo test -j 3                     # unit tests (no hardware)
+cd daemons/rsp_open
+CARGO_TARGET_DIR=<a directory of its own> cargo test -j 3   # unit tests (no hardware)
 cargo test -j 3 --release --test hil -- --ignored --nocapture --test-threads=1   # hardware
 ```

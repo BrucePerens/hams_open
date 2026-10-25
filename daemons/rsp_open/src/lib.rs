@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010).
 //!
-//! Written from the private wire-protocol description, a description of the receiver's USB traffic recorded
-//! from Bruce Perens's own unit. See README.md for provenance.
+//! Written from a private description of the receiver's USB traffic, recorded from the
+//! author's own unit. See README.md for provenance.
 //!
 //! The driver supports only a receiver whose firmware is already running (bcdDevice 2.07,
 //! i.e. SDRplay's software has opened it since power-up). A receiver in its boot-ROM state
@@ -57,6 +57,7 @@ pub enum Model {
 
 impl Model {
     pub fn name(self) -> &'static str {
+        // [@ANCHOR: rsp_lib_model_name]
         match self {
             Model::Rsp1 => "RSP1",
             Model::Rsp1a => "RSP1A",
@@ -71,6 +72,7 @@ impl Model {
 }
 
 pub fn model_for_pid(pid: u16) -> Model {
+    // [@ANCHOR: rsp_lib_model_for_pid]
     match pid {
         0x2500 => Model::Rsp1,
         0x3000 => Model::Rsp1a,
@@ -130,6 +132,7 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // [@ANCHOR: rsp_lib_error_fmt]
         match self {
             Error::NotFound => write!(f, "no SDRplay RSP2/RSP2pro found"),
             Error::NotRunning => write!(
@@ -155,6 +158,7 @@ impl std::error::Error for Error {}
 
 /// Check a device descriptor's state before anything is sent to it.
 pub fn check_state(pid: u16, bcd_device: u16) -> Result<(), Error> {
+    // [@ANCHOR: rsp_lib_check_state]
     if pid != PID_RSP2 {
         return Err(Error::UnsupportedModel {
             pid,
@@ -173,6 +177,10 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: rsp_lib_check_state]
+    // Tests [@ANCHOR: rsp_lib_error_fmt]
+    // Tests [@ANCHOR: rsp_lib_model_for_pid]
+    // Tests [@ANCHOR: rsp_lib_model_name]
     fn state_detection() {
         assert!(check_state(0x3010, 0x0207).is_ok());
         let e = check_state(0x3010, 0x0200).unwrap_err();
@@ -189,5 +197,14 @@ mod tests {
             check_state(0x3000, 0x0207),
             Err(Error::UnsupportedModel { pid: 0x3000, .. })
         ));
+        assert_eq!(model_for_pid(0x2500).name(), "RSP1");
+        assert_eq!(model_for_pid(0x3010).name(), "RSP2/RSP2pro");
+        assert_eq!(model_for_pid(0x3030), Model::RspDx);
+        assert_eq!(model_for_pid(0x1234), Model::Unknown);
+        let e = Error::UnsupportedModel {
+            pid: 0x3000,
+            name: model_for_pid(0x3000).name(),
+        };
+        assert!(e.to_string().starts_with("RSP1A (PID 3000)"));
     }
 }
