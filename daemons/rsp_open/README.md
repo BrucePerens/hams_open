@@ -10,15 +10,18 @@ Licence: AGPL-3.0-or-later (SPDX headers in every source file, `Cargo.toml` `lic
 the repository default described in `LICENSING.md`. The crate is not published to crates.io
 (`publish = false`).
 
-## Important limitation: firmware
+## Firmware: not required for reception
 
-Both models power up in a boot-ROM state (bcdDevice 2.00). SDRplay's software uploads a
-firmware image that turns it into the running device (bcdDevice 2.07). This crate contains
-**no firmware and no firmware-loading code**. It drives only an already-running receiver,
-i.e. one that SDRplay's software has opened at least once since power-up, and reports
-`Error::NotRunning` ("device has no firmware loaded; load it with SDRplay's software first")
-otherwise. Any other bcdDevice is refused (`Error::UnknownState`). Other SDRplay products,
-the RSP1 included, are never opened (`Error::UnsupportedModel`).
+Both models power up in a boot-ROM state (bcdDevice 2.00). SDRplay's software uploads a firmware
+image that turns it into the running device (bcdDevice 2.07). This crate contains **no firmware
+and no firmware-loading code**, and never sends the download (0x44) or reset (0x40) requests.
+It drives a running receiver (`Rsp::open`), or a boot-ROM one with `Rsp::open_boot_rom_with`:
+measured on an RSP2pro, the ROM already handles register writes, start/stop and the isochronous
+stream, so tuning and streaming work. The ROM does not answer requests 0x48 and 0x49, so in
+that mode the board (antenna, band filters, notch, bias-T, front-end steps) is not controlled
+and those calls return `Error::Unsupported` (docs/PROTOCOL.md 5). `Rsp::open` still reports
+`Error::NotRunning` for a boot-ROM device. Other bcdDevice values are refused
+(`Error::UnknownState`). Other SDRplay products, the RSP1 included, are never opened.
 
 ## Provenance (clean-room record)
 
@@ -64,7 +67,7 @@ the RSP1 included, are never opened (`Error::UnsupportedModel`).
 use rsp_open::{Rsp, Antenna, Bandwidth, IfMode, Model, Settings};
 let mut rx = Rsp::open()?;                     // first running RSP2/RSP2pro or RSP1A
 // or Rsp::open_model_with(Model::Rsp1a, Settings::default())?; (Rsp2 is the same type)
-rx.set_frequency(7_074_000)?;                  // 1 kHz - 2 GHz except 375-420 MHz
+rx.set_frequency(7_074_000)?;                  // 1 kHz - 2 GHz
 rx.set_sample_rate(6_000_000)?;                // 2.0, 2.048 or 3..10 MHz ADC clock (zero IF)
 rx.set_if_mode(IfMode::Low1620k)?;             // or low IF with its fixed ADC clock
 rx.set_bandwidth(Bandwidth::K1536)?;
@@ -126,9 +129,10 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 
 ## Not implemented / open
 
-- **375-420 MHz**: the API switches the AM-mode first IF to 144/168 MHz there and runs a
-  tuner VCO calibration (request 0x42 read, r13/r14 writes) whose byte mapping is only
-  partly known; returns `Error::Unsupported`.
+- **375-420 MHz**: tuned with the 144/168 MHz first-IF plans, but the API's calibration
+  handshake at each plan change (request 0x42 read, r13/r14 writes) is not replicated; the
+  reference spurs land correctly without it (PROTOCOL.md 5.6). Its effect on sensitivity and
+  phase noise is not measured, and the plan edges (about 375 and 395 MHz) are only bracketed.
 - The API's close-time VCO calibration (0x42 read and r13/r14/063000/00800e writes) is not
   replicated; the driver closes the way `an earlier stand-alone verification program` did (works).
 - No AGC, DC/IQ correction or decimation (all host-side in SDRplay's API).
@@ -150,8 +154,8 @@ the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 - [@ANCHOR: rsp_open:rsp_lib_model_for_pid] Maps an SDRplay USB product ID to a model.
 - [@ANCHOR: rsp_open:rsp_lib_model_name] The model's display name.
 - [@ANCHOR: rsp_open:rsp_lib_error_fmt] Human-readable error text, including the exact `NotRunning` message.
-- [@ANCHOR: rsp_open:rsp_encode_band_for] RF frequency to RSP2pro band: tuner mode, first-LO plan, band-filter code, LNA table; refuses 375-420 MHz.
-- [@ANCHOR: rsp_open:rsp_encode_band_in] Band lookup in a model's band table; refuses frequencies outside 1 kHz-2 GHz and 375-420 MHz.
+- [@ANCHOR: rsp_open:rsp_encode_band_for] RF frequency to RSP2pro band: tuner mode, first-LO plan, band-filter code, LNA table.
+- [@ANCHOR: rsp_open:rsp_encode_band_in] Band lookup in a model's band table; refuses frequencies outside 1 kHz-2 GHz.
 - [@ANCHOR: rsp_open:rsp_rsp1a_lna_table] The RSP1A LNA-state tables: attenuator code, port-B step bit and MSi001 gain-reduction bits per state.
 - [@ANCHOR: rsp_open:rsp_rsp1a_board_a_byte] RSP1A port A ("byte 0x12"): band filter and attenuator step.
 - [@ANCHOR: rsp_open:rsp_rsp1a_board_b_byte] RSP1A port B ("byte 0x13"): DAB notch, step bit, FM/MW notch, bias-T (all active low).

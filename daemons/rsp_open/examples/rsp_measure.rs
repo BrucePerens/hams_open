@@ -255,16 +255,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rf as f64 / 1e6
         );
     }
-    println!("  (375-420 MHz: not measured; this driver does not implement the 144/168 MHz first-IF mode)");
+    println!("  (375-420 MHz: harmonics there are covered by the survey below)");
 
     // 4. Harmonic survey: every k x 24 MHz (k = 1..83) tuned 200 kHz below.
     println!("\n## 4. Reference-harmonic survey (tuned k*24 MHz - 200 kHz; IF GR 40, LNA 0)\n");
     let mut line = String::new();
     for k in 1..=83u64 {
         let h = k * 24_000_000;
-        if (375_000_000..420_000_000 + 200_000).contains(&h) {
-            continue;
-        }
         if rx.set_frequency(h - 200_000).is_err() {
             continue;
         }

@@ -147,8 +147,12 @@ pub enum LoPlan {
     Direct,
     /// f_LO = f_RF + 120 MHz (below 60 MHz).
     UpBy120M,
-    /// f_LO = f_RF - 120 MHz (250 to 375 MHz in this driver).
+    /// f_LO = f_RF - 120 MHz (250 to 375 MHz).
     DownBy120M,
+    /// f_LO = f_RF - 144 MHz (about 375 to 395 MHz; first IF 144 MHz, r0 bits 19:17 = 1).
+    DownBy144M,
+    /// f_LO = f_RF - 168 MHz (about 395 to 420 MHz; first IF 168 MHz, r0 bits 19:17 = 0).
+    DownBy168M,
 }
 
 /// Which LNA-state table applies (1.8).
@@ -191,9 +195,11 @@ pub const HIZ_MAX_HZ: u64 = 60_000_000;
 
 const M: u64 = 1_000_000;
 
-/// Band table (1.9). 375-420 MHz is left out on purpose: the API moves the AM-mode first IF to
-/// 144/168 MHz there and runs a VCO calibration whose read-back mapping is not fully documented.
-pub const BANDS: [Band; 10] = [
+/// Band table (1.9). In 375-420 MHz the AM-mode first IF moves to 144 MHz (from about 375 MHz)
+/// and 168 MHz (from about 395 MHz); the plan edges are only bracketed (PROTOCOL.md 1.6.1).
+/// The vendor API runs a calibration handshake at each plan change (1.6.6); this driver does
+/// not, and the 24 MHz reference spurs still land where expected (PROTOCOL.md 5.6).
+pub const BANDS: [Band; 13] = [
     Band {
         lo_hz: RF_MIN_HZ,
         hi_hz: 12 * M,
@@ -250,7 +256,30 @@ pub const BANDS: [Band; 10] = [
         filter: 0b001,
         gain_table: GainTable::Am,
     },
-    // 375-380 MHz (filter 001) and 380-420 MHz (filter 101) need the 144/168 MHz first IF: unsupported.
+    Band {
+        lo_hz: 375 * M,
+        hi_hz: 380 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::DownBy144M,
+        filter: 0b001,
+        gain_table: GainTable::Am,
+    },
+    Band {
+        lo_hz: 380 * M,
+        hi_hz: 395 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::DownBy144M,
+        filter: 0b101,
+        gain_table: GainTable::Am,
+    },
+    Band {
+        lo_hz: 395 * M,
+        hi_hz: 420 * M,
+        mode: TunerMode::Am,
+        lo_plan: LoPlan::DownBy168M,
+        filter: 0b101,
+        gain_table: GainTable::Am,
+    },
     Band {
         lo_hz: 420 * M,
         hi_hz: 1000 * M,
@@ -285,20 +314,13 @@ pub fn band_for(rf_hz: u64) -> Result<Band, Error> {
 }
 
 /// Find the band for an RF frequency in a model's band table. Refuses frequencies outside
-/// 1 kHz..=2 GHz and the 375-420 MHz range (both models) before the table is searched.
+/// 1 kHz..=2 GHz before the table is searched.
 pub fn band_in(bands: &[Band], rf_hz: u64) -> Result<Band, Error> {
     // [@ANCHOR: rsp_encode_band_in]
     if !(RF_MIN_HZ..=RF_MAX_HZ).contains(&rf_hz) {
         return Err(Error::InvalidArgument(format!(
             "frequency {rf_hz} Hz outside {RF_MIN_HZ}..={RF_MAX_HZ} Hz"
         )));
-    }
-    if (375 * M..420 * M).contains(&rf_hz) {
-        return Err(Error::Unsupported(
-            "375-420 MHz needs the 144/168 MHz AM-mode first IF and a VCO calibration that this \
-             driver does not implement"
-                .into(),
-        ));
     }
     bands
         .iter()
@@ -338,7 +360,17 @@ pub fn tuner_word(addr: u8, payload: u32) -> u32 {
 /// MSi001 r0: band mode, IF mode, bandwidth, first-LO plan bits (1.6.1).
 /// Bits 19:17 are 2 for the 120 MHz first IF and for the non-AM modes.
 pub fn r0(mode_byte: u32, if_mode: IfMode, bw: Bandwidth) -> u32 {
-    let lo_bits: u32 = 2;
+    r0_plan(mode_byte, LoPlan::Direct, if_mode, bw)
+}
+
+/// r0 with the first-LO plan bits of `plan` (bits 19:17: 2 for 120 MHz and the non-AM modes,
+/// 1 for 144 MHz, 0 for 168 MHz).
+pub fn r0_plan(mode_byte: u32, plan: LoPlan, if_mode: IfMode, bw: Bandwidth) -> u32 {
+    let lo_bits: u32 = match plan {
+        LoPlan::DownBy144M => 1,
+        LoPlan::DownBy168M => 0,
+        _ => 2,
+    };
     (lo_bits << 17) | (bw.code() << 14) | (if_mode.code() << 12) | (mode_byte << 4)
 }
 
@@ -380,6 +412,8 @@ pub fn lo_hz(band: &Band, rf_hz: u64) -> u64 {
         LoPlan::Direct => rf_hz,
         LoPlan::UpBy120M => rf_hz + 120 * M,
         LoPlan::DownBy120M => rf_hz - 120 * M,
+        LoPlan::DownBy144M => rf_hz - 144 * M,
+        LoPlan::DownBy168M => rf_hz - 168 * M,
     }
 }
 
@@ -957,8 +991,10 @@ mod tests {
             );
             assert_eq!(w, r0v, "r0 at {rf}");
         }
-        assert!(matches!(band_for(380_000_000), Err(Error::Unsupported(_))));
-        assert!(matches!(band_for(375_000_000), Err(Error::Unsupported(_))));
+        assert_eq!(band_for(375_000_000).unwrap().lo_plan, LoPlan::DownBy144M);
+        assert_eq!(band_for(394_999_999).unwrap().lo_plan, LoPlan::DownBy144M);
+        assert_eq!(band_for(395_000_000).unwrap().lo_plan, LoPlan::DownBy168M);
+        assert_eq!(band_for(419_999_999).unwrap().lo_plan, LoPlan::DownBy168M);
         assert!(band_for(374_999_999).is_ok());
         assert!(band_for(999).is_err());
         assert!(band_for(2_000_000_001).is_err());

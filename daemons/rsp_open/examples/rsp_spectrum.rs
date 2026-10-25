@@ -3,7 +3,8 @@
 //!
 //!     cargo run --release --example rsp_spectrum -- 95.8 [IF_GR_DB [LNA_STATE [ADC_MHZ [MODEL]]]]
 //!
-//! MODEL is `rsp2` or `rsp1a`; without it the first running RSP2/RSP2pro or RSP1A is used.
+//! MODEL is `rsp2`, `rsp1a` or `cold` (the first RSP in the boot-ROM state, bcdDevice 2.00, driven
+//! without any firmware; board controls are unavailable); without it the first running RSP2/RSP2pro or RSP1A is used.
 //! Bias-T stays off. Prints 64 rows, one per 1/64 of the sampled band, as dBFS bars.
 
 use rsp_open::dsp::{median, power_spectrum_db};
@@ -20,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => Rsp::open_with(Settings::default())?,
         Some("rsp2") => Rsp::open_model_with(Model::Rsp2, Settings::default())?,
         Some("rsp1a") => Rsp::open_model_with(Model::Rsp1a, Settings::default())?,
+        Some("cold") => Rsp::open_boot_rom_with(Settings::default())?,
         Some(other) => return Err(format!("unknown model {other:?} (rsp2 or rsp1a)").into()),
     };
     rx.set_sample_rate((adc * 1e6).round() as u32)?;

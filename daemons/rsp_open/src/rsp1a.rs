@@ -13,10 +13,9 @@ use crate::encode::{Band, FrontEndStep, GainTable, LoPlan, TunerMode, RF_MAX_HZ,
 
 const M: u64 = 1_000_000;
 
-/// Band table (2.6). The filter field is byte 0x12 bits 4:0. As on the RSP2pro, 375-420 MHz is
-/// not offered (the API moves the AM-mode first IF to 144/168 MHz there and runs a VCO
-/// calibration); `encode::band_in` refuses that range before this table is searched.
-pub const BANDS: [Band; 10] = [
+/// Band table (2.6). The filter field is byte 0x12 bits 4:0. 375-420 MHz uses the 144/168 MHz
+/// first IF as on the RSP2pro (edges bracketed only).
+pub const BANDS: [Band; 13] = [
     band(
         RF_MIN_HZ,
         2 * M,
@@ -73,14 +72,38 @@ pub const BANDS: [Band; 10] = [
         0x10,
         GainTable::AmDown,
     ),
-    // 300-380 MHz uses filter 0x08; this driver stops at 375 MHz (see above). 380-420 MHz
-    // (filter 0x18) is not offered.
+    // 300-380 MHz uses filter 0x08, 380-420 MHz filter 0x18; the first IF moves to 144 MHz at
+    // about 375 MHz and 168 MHz at about 395 MHz (PROTOCOL.md 1.6.1, 2.6).
     band(
         300 * M,
         375 * M,
         TunerMode::Am,
         LoPlan::DownBy120M,
         0x08,
+        GainTable::AmDown,
+    ),
+    band(
+        375 * M,
+        380 * M,
+        TunerMode::Am,
+        LoPlan::DownBy144M,
+        0x08,
+        GainTable::AmDown,
+    ),
+    band(
+        380 * M,
+        395 * M,
+        TunerMode::Am,
+        LoPlan::DownBy144M,
+        0x18,
+        GainTable::AmDown,
+    ),
+    band(
+        395 * M,
+        420 * M,
+        TunerMode::Am,
+        LoPlan::DownBy168M,
+        0x18,
         GainTable::AmDown,
     ),
     band(
@@ -278,8 +301,11 @@ mod tests {
             let p = pll(lo_hz(&b, rf), b.mode.lo_div(), 0).unwrap();
             assert_eq!(p.r2, r2v, "r2 at {rf}");
         }
-        assert!(band_in(&BANDS, 380_000_000).is_err());
-        assert!(band_in(&BANDS, 400_000_000).is_err());
+        assert_eq!(band_in(&BANDS, 380_000_000).unwrap().filter, 0x18);
+        assert_eq!(
+            band_in(&BANDS, 400_000_000).unwrap().lo_plan,
+            LoPlan::DownBy168M
+        );
         assert!(band_in(&BANDS, 374_999_999).is_ok());
     }
 
