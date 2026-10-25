@@ -8,7 +8,10 @@ use crate::encode::{self, *};
 use crate::stream::{BlockParser, IqI16, StreamStats};
 use crate::transport::{PacketSink, Transport};
 use crate::usb::{self, UsbTransport};
-use crate::{check_state, rsp1a, Error, Model, BCD_BOOT_ROM, PID_RSP1A, PID_RSP2, SUPPORTED_PIDS};
+use crate::{
+    check_state, rsp1a, Error, Model, BCD_BOOT_ROM, BCD_RUNNING, BOOT_ROM_PIDS, PID_RSP1,
+    PID_RSP1A, PID_RSP2, SUPPORTED_PIDS,
+};
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -88,6 +91,22 @@ impl SampleIter {
     }
 }
 
+impl SampleIter {
+    /// The next chunk, or why there is none: [`Error::Stalled`] when nothing arrived within
+    /// the iterator's timeout (2 s), [`Error::Stream`] when the stream has ended.
+    pub fn next_chunk(&mut self) -> Result<Vec<IqI16>, Error> {
+        // [@ANCHOR: rsp_device_sampleiter_next_chunk]
+        use std::sync::mpsc::RecvTimeoutError;
+        match self.rx.recv_timeout(self.timeout) {
+            Ok(c) => Ok(c),
+            Err(RecvTimeoutError::Timeout) => Err(Error::Stalled {
+                waited_ms: self.timeout.as_millis() as u64,
+            }),
+            Err(RecvTimeoutError::Disconnected) => Err(Error::Stream("stream ended".into())),
+        }
+    }
+}
+
 impl Iterator for SampleIter {
     type Item = Vec<IqI16>;
     fn next(&mut self) -> Option<Vec<IqI16>> {
@@ -126,6 +145,27 @@ impl Rsp<UsbTransport> {
     /// Open the first running RSP2/RSP2pro or RSP1A with default settings.
     pub fn open() -> Result<Self, Error> {
         Self::open_with(Settings::default())
+    }
+
+    /// Open whichever supported receiver is present: a receiver that already has firmware
+    /// running (as [`Rsp::open_with`]) is preferred, otherwise the first receiver in the
+    /// boot-ROM state (as [`Rsp::open_boot_rom_with`]: no firmware is needed for the tuner and
+    /// the stream, but the board controls are unavailable). Nothing is sent to a device that
+    /// is not opened.
+    pub fn open_auto(settings: Settings) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_open_auto]
+        let devs = usb::list_devices()?;
+        let running = devs
+            .iter()
+            .any(|d| SUPPORTED_PIDS.contains(&d.pid) && d.bcd_device == BCD_RUNNING);
+        let cold = devs
+            .iter()
+            .any(|d| BOOT_ROM_PIDS.contains(&d.pid) && d.bcd_device == BCD_BOOT_ROM);
+        if !running && cold {
+            Self::open_boot_rom_with(settings)
+        } else {
+            Self::open_with(settings)
+        }
     }
 
     /// Open the first RSP2/RSP2pro or RSP1A on the bus. No other SDRplay product (the RSP1
@@ -169,11 +209,38 @@ impl Rsp<UsbTransport> {
     /// (antenna, notch, bias-T, band filters, front-end steps) are unavailable; tuner, sample
     /// rate, IF gain and the stream work (docs/PROTOCOL.md 5).
     pub fn open_boot_rom_with(settings: Settings) -> Result<Self, Error> {
+        Self::open_boot_rom_filtered(None, settings)
+    }
+
+    /// As [`Rsp::open_boot_rom_with`] but only a device of `model` (`Model::Rsp2` or
+    /// `Model::Rsp1a`; also `Model::Rsp1`, which is driven only in this mode), so a second
+    /// receiver on the bus is never driven by mistake.
+    pub fn open_boot_rom_model_with(model: Model, settings: Settings) -> Result<Self, Error> {
+        // [@ANCHOR: rsp_device_rsp_open_boot_rom_model_with]
+        let pid = match model {
+            Model::Rsp2 => PID_RSP2,
+            Model::Rsp1a => PID_RSP1A,
+            Model::Rsp1 => PID_RSP1,
+            other => {
+                return Err(Error::UnsupportedModel {
+                    pid: 0,
+                    name: other.name(),
+                })
+            }
+        };
+        Self::open_boot_rom_filtered(Some(pid), settings)
+    }
+
+    fn open_boot_rom_filtered(only_pid: Option<u16>, settings: Settings) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp_open_boot_rom_with]
         let devs = usb::list_devices()?;
         let info = devs
             .iter()
-            .find(|d| SUPPORTED_PIDS.contains(&d.pid) && d.bcd_device == BCD_BOOT_ROM)
+            .find(|d| {
+                BOOT_ROM_PIDS.contains(&d.pid)
+                    && only_pid.is_none_or(|p| p == d.pid)
+                    && d.bcd_device == BCD_BOOT_ROM
+            })
             .ok_or(Error::NotFound)?;
         let t = UsbTransport::open(info.pid, Some((info.bus, info.address)))?;
         if t.info.bcd_device != BCD_BOOT_ROM {
@@ -246,7 +313,7 @@ impl<T: Transport> Rsp<T> {
         boot_rom: bool,
     ) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp_with_transport_model]
-        if !matches!(model, Model::Rsp2 | Model::Rsp1a) {
+        if !(matches!(model, Model::Rsp2 | Model::Rsp1a) || (boot_rom && model == Model::Rsp1)) {
             return Err(Error::UnsupportedModel {
                 pid: 0,
                 name: model.name(),
@@ -343,6 +410,7 @@ impl<T: Transport> Rsp<T> {
         self.boot_rom
     }
     fn need_board(&self, what: &str) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_need_board]
         if self.boot_rom {
             return Err(Error::Unsupported(format!(
                 "{what} needs the board expander (request 0x49), which the boot ROM does not answer"
@@ -549,6 +617,7 @@ impl<T: Transport> Rsp<T> {
 
     /// Broadcast (MW/FM) notch (RSP2pro), FM/MW notch (RSP1A). Port B only.
     pub fn set_notch(&mut self, on: bool) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_set_notch]
         self.need_board("the notch")?;
         self.s.notch = on;
         self.board(MCP_GPIOB, self.front_byte())
@@ -571,6 +640,7 @@ impl<T: Transport> Rsp<T> {
 
     /// Bias-T (DC power on the antenna port). Off unless explicitly enabled.
     pub fn set_bias_t(&mut self, on: bool) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_set_bias_t]
         self.need_board("the bias-T")?;
         self.s.bias_t = on;
         self.board(MCP_GPIOB, self.front_byte())
@@ -846,10 +916,11 @@ fn check_model_options(model: Model, s: &Settings) -> Result<(), Error> {
 
 fn check_antenna(model: Model, ant: Antenna, rf_hz: u64) -> Result<(), Error> {
     // [@ANCHOR: rsp_device_check_antenna]
-    if model == Model::Rsp1a && ant != Antenna::A {
-        return Err(Error::Unsupported(
-            "the RSP1A has a single antenna port (Antenna::A)".into(),
-        ));
+    if matches!(model, Model::Rsp1a | Model::Rsp1) && ant != Antenna::A {
+        return Err(Error::Unsupported(format!(
+            "the {} has a single antenna port (Antenna::A)",
+            model.name()
+        )));
     }
     if ant == Antenna::HiZ && rf_hz >= HIZ_MAX_HZ {
         return Err(Error::InvalidArgument(
@@ -872,6 +943,28 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_device_sampleiter_next_chunk]
+    fn next_chunk_reports_a_stall_and_the_end() {
+        let (tx, rx) = sync_channel(4);
+        let mut it = SampleIter {
+            rx,
+            dropped: Arc::new(Mutex::new(0)),
+            timeout: Duration::from_millis(20),
+        };
+        tx.send(vec![]).unwrap();
+        assert!(it.next_chunk().is_ok());
+        assert!(matches!(
+            it.next_chunk(),
+            Err(Error::Stalled { waited_ms: 20 })
+        ));
+        drop(tx);
+        assert!(matches!(it.next_chunk(), Err(Error::Stream(_))));
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp_need_board]
+    // Tests [@ANCHOR: rsp_device_rsp_set_notch]
+    // Tests [@ANCHOR: rsp_device_rsp_set_bias_t]
     fn boot_rom_sends_no_board_or_0x48_requests() {
         let m = MockTransport::new();
         let mut rx = Rsp2::with_transport_boot_rom(
@@ -905,6 +998,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: rsp_encode_r0_plan]
     fn first_if_plan_bits_follow_the_band_in_375_to_420_mhz() {
         let (mut rx, m) = open_mock(Settings::default());
         let s = Settings::default();

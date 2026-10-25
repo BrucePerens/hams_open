@@ -366,6 +366,7 @@ pub fn r0(mode_byte: u32, if_mode: IfMode, bw: Bandwidth) -> u32 {
 /// r0 with the first-LO plan bits of `plan` (bits 19:17: 2 for 120 MHz and the non-AM modes,
 /// 1 for 144 MHz, 0 for 168 MHz).
 pub fn r0_plan(mode_byte: u32, plan: LoPlan, if_mode: IfMode, bw: Bandwidth) -> u32 {
+    // [@ANCHOR: rsp_encode_r0_plan]
     let lo_bits: u32 = match plan {
         LoPlan::DownBy144M => 1,
         LoPlan::DownBy168M => 0,

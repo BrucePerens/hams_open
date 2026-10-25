@@ -1,10 +1,15 @@
 # rsp_open
 
-An open Rust driver for the SDRplay **RSP2pro** (USB 1df7:3010) and **RSP1A** (USB
-1df7:3000), library crate plus two examples. Status: works on the author's RSP2pro as of
-2026-10-25 (see "What works" below); RSP1A support is written from the RSP1A captures and
-unit-tested against them, and its hardware tests (`hil_rsp1a_*`) have not yet been run on
-the receiver.
+An open Rust driver for the SDRplay **RSP2pro** (USB 1df7:3010), **RSP1A** (USB 1df7:3000)
+and **RSP1** (USB 1df7:2500): library crate plus examples, receive only. Status
+(2026-10-25): all three receivers tune and stream from power-up with no firmware and no
+SDRplay software, checked with each receiver's own 24 MHz reference harmonics (1 kHz-2 GHz
+bands tried from 23.8 MHz to 1.2 GHz, including 375-420 MHz, 0 counter gaps). **Limits:**
+without firmware the RSP2pro's and RSP1A's board controls (antenna selection, band filters,
+notch, bias-T, front-end attenuator steps) cannot be set, and a cold board comes up about 10 dB
+attenuated against its normal state (`docs/PROTOCOL.md` 5.15); whether a cold receiver
+receives a real signal well was not tested (nothing was ever connected to an antenna port).
+The low-IF modes are incomplete (below).
 
 Licence: AGPL-3.0-or-later (SPDX headers in every source file, `Cargo.toml` `license` field),
 the repository default described in `LICENSING.md`. The crate is not published to crates.io
@@ -15,13 +20,33 @@ the repository default described in `LICENSING.md`. The crate is not published t
 Both models power up in a boot-ROM state (bcdDevice 2.00). SDRplay's software uploads a firmware
 image that turns it into the running device (bcdDevice 2.07). This crate contains **no firmware
 and no firmware-loading code**, and never sends the download (0x44) or reset (0x40) requests.
-It drives a running receiver (`Rsp::open`), or a boot-ROM one with `Rsp::open_boot_rom_with`:
+It drives a running receiver (`Rsp::open`), or a boot-ROM one with `Rsp::open_boot_rom_with` / `open_boot_rom_model_with` (RSP2pro, RSP1A and RSP1 all work cold; see PROTOCOL.md 5.8 for one unexplained empty-stream episode on the RSP1A):
 measured on an RSP2pro, the ROM already handles register writes, start/stop and the isochronous
 stream, so tuning and streaming work. The ROM does not answer requests 0x48 and 0x49, so in
 that mode the board (antenna, band filters, notch, bias-T, front-end steps) is not controlled
 and those calls return `Error::Unsupported` (docs/PROTOCOL.md 5). `Rsp::open` still reports
 `Error::NotRunning` for a boot-ROM device. Other bcdDevice values are refused
 (`Error::UnknownState`). Other SDRplay products, the RSP1 included, are never opened.
+
+## Stress testing on a port you can power-cycle
+
+`examples/rsp_coldcheck.rs` is a one-shot pass/fail check of a receiver (prints one JSON line, exit 0 or 1; a stream that delivers nothing is reported as `stalled`, not waited on). `tools/power_cycle_stress.py` wraps it in a loop: switch the port's power off, check the receiver leaves the bus, switch it on, check it comes back in its cold state (bcdDevice 2.00) with the expected USB ID, then run the check, optionally several open/close cycles per power cycle (`--hammer`). It logs one JSON line per iteration, stops at the first failure with a snapshot (lsusb, kernel log tail) and leaves the device powered for inspection. Power backends: `uhubctl` (a hub that really switches port power), `cmd` (relay boards, smart plugs), `sysfs` (does not cut VBUS on many machines, including the development laptop, so it is not a real power cycle), `manual`, and `none`. USB port power on a given machine must be verified first: the receiver has to disappear from the bus and come back at bcdDevice 2.00.
+
+## Linux: the kernel `msi2500` driver and opening a receiver
+
+On Linux the in-kernel `msi2500` driver (with `msi001`) binds to SDRplay receivers as soon as they appear (the RSP1, 1df7:2500, even in its boot-ROM state), creating `/dev/swradio*`. While it is bound, the vendor API cannot load firmware into the device, and the interface cannot be claimed without first detaching it. Decision (Bruce Perens, 2026-10-25): the relay does not use the kernel driver for these receivers, and **it makes sure the driver is out of the way just before it opens a receiver**, rather than banning the driver in advance. The driver stays available to everything else on the machine.
+
+Before opening, the relay (on Linux):
+
+1. Finds the receiver by enumeration (`rsp_open::usb::list_devices`, equivalent to `lsusb -d 1df7:`): vendor 1df7 with product ID 2500, 3000 or 3010. Nothing is opened or sent at this step.
+2. Checks whether anyone is using the kernel driver's device: a process with `/dev/swradio*` open (look for it with `fuser /dev/swradioN`, or by scanning `/proc/*/fd`). **If it is in use, the relay does not take the receiver**: it reports who has it (process name and ID) and asks the user to close that program, or to confirm. Detaching a bound driver while another program is streaming from it removes the device from under that program (its reads fail), so libusb's detach is not safe in that case; only `rmmod` refuses on its own.
+3. If a kernel driver is bound to its interface 0 (`/sys/bus/usb/devices/<bus>-<port>:1.0/driver` points at `msi2500`), tries the least harmful step first: `UsbTransport::open` asks libusb to detach the driver from this one interface (no root needed when the device node is accessible) and to reattach it on close.
+4. If that fails because of permissions, and the relay can run a privileged helper: `rmmod msi2500` then `rmmod msi001` (or unbind just this device: `echo <bus>-<port>:1.0 > /sys/bus/usb/drivers/msi2500/unbind`), then open. `rmmod` refuses while another program has `/dev/swradio*` open, so it cannot pull the driver from under another user; the relay should report that case rather than force it.
+5. Opens the receiver.
+
+The crate does steps 2 and the libusb detach of step 3 itself: `UsbTransport::open` returns `Error::KernelDriverInUse` (driver, device nodes, `pid (name)` of each program) instead of detaching a driver that a program is using, and `rsp_open::kernel::inspect` exposes the same check. Programs of other users cannot be inspected without root (`KernelDriverUse::holders_complete` is false then). The `rmmod`/unbind step 4 is for the relay's privileged helper. A stream that delivers nothing is reported by `SampleIter::next_chunk` as `Error::Stalled`. The crate never issues a USB reset (a unit test checks the source).
+
+`rmmod` does not last: plugging a receiver in (or rebooting) loads the driver again, which is why the step is done before every open and not once at install time. A permanent ban (`/etc/modprobe.d/blacklist-msi2500.conf` with `blacklist msi2500` and `install msi2500 /bin/false`) remains an option for a machine dedicated to the relay; it also stops the driver serving other Mirics dongles on that machine. The development machine has no ban applied (it was removed on request). See `docs/PROTOCOL.md` 5.14 for the observation that motivated this.
 
 ## Provenance (clean-room record)
 
@@ -68,6 +93,7 @@ use rsp_open::{Rsp, Antenna, Bandwidth, IfMode, Model, Settings};
 let mut rx = Rsp::open()?;                     // first running RSP2/RSP2pro or RSP1A
 // or Rsp::open_model_with(Model::Rsp1a, Settings::default())?; (Rsp2 is the same type)
 rx.set_frequency(7_074_000)?;                  // 1 kHz - 2 GHz
+// let mut rx = Rsp::open_auto(Settings::default())?;  // running or cold receiver, whichever is present
 rx.set_sample_rate(6_000_000)?;                // 2.0, 2.048 or 3..10 MHz ADC clock (zero IF)
 rx.set_if_mode(IfMode::Low1620k)?;             // or low IF with its fixed ADC clock
 rx.set_bandwidth(Bandwidth::K1536)?;
@@ -178,6 +204,16 @@ the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 - [@ANCHOR: rsp_open:rsp_encode_sampleformat_pairs_per_block] I/Q pairs per block for each sample format.
 - [@ANCHOR: rsp_open:rsp_encode_adc_clock] ADC clock synthesiser words (MSi2500 registers 0x03/0x04), with ppm correction.
 - [@ANCHOR: rsp_open:rsp_encode_ppm_to_ppb] Validates a ppm correction and converts it to parts per billion.
+- [@ANCHOR: rsp_open:rsp_encode_r0_plan] MSi001 r0 with the first-LO plan bits (120 MHz and non-AM modes 2, 144 MHz 1, 168 MHz 0).
+- [@ANCHOR: rsp_open:rsp_device_rsp_open_auto] Opens whichever supported receiver is present: a running one if there is one, otherwise the first cold one.
+- [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_with] Opens the first receiver in the boot-ROM state (bcdDevice 2.00) and drives it without any firmware.
+- [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_model_with] As above, but only a receiver of one model (RSP2pro, RSP1A or RSP1), so a second receiver on the bus is not driven by mistake.
+- [@ANCHOR: rsp_open:rsp_device_rsp_need_board] Refuses a board control (antenna, notch, bias-T, reference output) in boot-ROM mode, where the board is not reachable.
+- [@ANCHOR: rsp_open:rsp_device_rsp_set_notch] Switches the broadcast notch; `Error::Unsupported` in boot-ROM mode.
+- [@ANCHOR: rsp_open:rsp_device_rsp_set_bias_t] Switches the bias-T (off at open, active low on the board); `Error::Unsupported` in boot-ROM mode.
+- [@ANCHOR: rsp_open:rsp_device_sampleiter_next_chunk] The next sample chunk, or `Error::Stalled` when nothing arrived within the timeout, or `Error::Stream` when the stream ended.
+- [@ANCHOR: rsp_open:rsp_kernel_inspect_in] Finds the kernel driver bound to a receiver's interface 0 and its device nodes from sysfs, and who has them open from /proc (roots given, for tests).
+- [@ANCHOR: rsp_open:rsp_kernel_holders_of] The processes (pid and name) that have one of a set of device nodes open; reports when another user's processes could not be inspected.
 - [@ANCHOR: rsp_open:rsp_stream_blockparser_push_packet] Splits isochronous packets into blocks, checks the sample counter (gaps, lost samples, wrap-around).
 - [@ANCHOR: rsp_open:rsp_stream_decode_payload] Decodes 14-bit, 12-bit packed, 10-bit "384" and 8-bit payloads to 16-bit left-aligned I/Q.
 - [@ANCHOR: rsp_open:rsp_dsp_fft] Radix-2 FFT used by the tests and examples.

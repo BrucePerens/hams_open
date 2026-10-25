@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010) and RSP1A (1df7:3000).
+//! `rsp_open`: an open driver for the SDRplay RSP2pro (USB 1df7:3010), RSP1A (1df7:3000) and
+//! RSP1 (1df7:2500), receive only.
 //!
 //! Written from `docs/PROTOCOL.md`, a description of the receiver's USB traffic recorded
 //! from the author's own unit. See README.md for provenance.
 //!
-//! The driver supports only a receiver whose firmware is already running (bcdDevice 2.07,
-//! i.e. SDRplay's software has opened it since power-up). A receiver in its boot-ROM state
-//! (bcdDevice 2.00) is reported as [`Error::NotRunning`]; this crate contains no firmware and
-//! no firmware-loading code.
+//! A receiver is driven in either of two states. In its boot-ROM state (bcdDevice 2.00, what a
+//! receiver is after power-up) the tuner, sample rate, IF gain and stream all work, without
+//! any firmware; the board controls (antenna selection, band filters, notch, bias-T,
+//! front-end steps) are not reachable there and return [`Error::Unsupported`]. A receiver
+//! that SDRplay's software has already loaded with firmware (bcdDevice 2.07) also gets the
+//! board controls. This crate contains no firmware and no firmware-loading code, never sends
+//! the firmware download or reset requests, and never resets the USB device.
+//! [`Rsp::open_auto`] takes whichever is present; [`Rsp::open`] needs a running receiver.
 //!
 //! ```no_run
 //! use rsp_open::{Rsp, Antenna};
-//! // The first running RSP2/RSP2pro or RSP1A.
-//! let mut rx = Rsp::open()?;
+//! // The first receiver present, running or cold.
+//! let mut rx = Rsp::open_auto(rsp_open::Settings::default())?;
 //! println!("{}", rx.model().name());
 //! rx.set_frequency(95_800_000)?;
 //! rx.set_gain(40, 0)?;
@@ -27,6 +32,7 @@
 pub mod device;
 pub mod dsp;
 pub mod encode;
+pub mod kernel;
 pub mod rsp1a;
 pub mod stream;
 pub mod transport;
@@ -42,6 +48,11 @@ pub const VID_SDRPLAY: u16 = 0x1df7;
 pub const PID_RSP2: u16 = 0x3010;
 /// RSP1A product ID.
 pub const PID_RSP1A: u16 = 0x3000;
+/// RSP1 product ID. Driven only in the boot-ROM personality (no firmware), see
+/// [`Rsp::open_boot_rom_model_with`]; a firmware-loaded RSP1 (bcdDevice 2.06) is never opened.
+pub const PID_RSP1: u16 = 0x2500;
+/// Product IDs that [`Rsp::open_boot_rom_with`] accepts.
+pub const BOOT_ROM_PIDS: [u16; 3] = [PID_RSP2, PID_RSP1A, PID_RSP1];
 /// Product IDs this driver drives. Every other SDRplay device (the RSP1 included) is never
 /// opened.
 pub const SUPPORTED_PIDS: [u16; 2] = [PID_RSP2, PID_RSP1A];
@@ -137,6 +148,18 @@ pub enum Error {
     /// fully documented).
     Unsupported(String),
     Stream(String),
+    /// A Linux kernel driver is bound to the receiver and a program is using its device node;
+    /// the receiver is not taken from under that program.
+    KernelDriverInUse {
+        driver: String,
+        nodes: Vec<String>,
+        /// `pid (name)` of each program that has a node open.
+        holders: Vec<String>,
+    },
+    /// The stream delivered no samples for `waited_ms` milliseconds.
+    Stalled {
+        waited_ms: u64,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -162,6 +185,20 @@ impl std::fmt::Display for Error {
             Error::InvalidArgument(s) => write!(f, "invalid argument: {s}"),
             Error::Unsupported(s) => write!(f, "unsupported: {s}"),
             Error::Stream(s) => write!(f, "stream error: {s}"),
+            Error::KernelDriverInUse {
+                driver,
+                nodes,
+                holders,
+            } => write!(
+                f,
+                "the kernel driver {driver} is bound to this receiver and {} is in use by {}; \
+                 close that program first (the receiver is not taken from under it)",
+                nodes.join(", "),
+                holders.join(", ")
+            ),
+            Error::Stalled { waited_ms } => {
+                write!(f, "no samples for {waited_ms} ms: the stream has stalled")
+            }
         }
     }
 }

@@ -182,6 +182,22 @@ impl UsbTransport {
             None::<()>
         })?;
         let (dev, info) = found.ok_or(Error::NotFound)?;
+        // libusb detaches a bound kernel driver below; do not do that to a driver that
+        // another program is using.
+        if let Some(k) = crate::kernel::inspect(&info)? {
+            if !k.holders.is_empty() {
+                unsafe { ffi::libusb_unref_device(dev) };
+                return Err(Error::KernelDriverInUse {
+                    driver: k.driver,
+                    nodes: k.nodes.iter().map(|n| n.display().to_string()).collect(),
+                    holders: k
+                        .holders
+                        .iter()
+                        .map(|h| format!("{} ({})", h.pid, h.name))
+                        .collect(),
+                });
+            }
+        }
         let mut handle = ptr::null_mut();
         let r = unsafe { ffi::libusb_open(dev, &mut handle) };
         unsafe { ffi::libusb_unref_device(dev) };
@@ -436,5 +452,20 @@ impl Transport for UsbTransport {
 impl Drop for UsbTransport {
     fn drop(&mut self) {
         let _ = self.release();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// A USB reset of a wedged receiver hung its re-enumeration (docs/PROTOCOL.md 5.7): this
+    /// crate must never issue one.
+    #[test]
+    fn never_resets_the_device() {
+        let src = include_str!("usb.rs");
+        let call = concat!("libusb_", "reset_device");
+        let uses = src.matches(call).count();
+        assert_eq!(uses, 0, "{call} must not be called");
+        let dev = include_str!("device.rs");
+        assert_eq!(dev.matches(call).count(), 0);
     }
 }
