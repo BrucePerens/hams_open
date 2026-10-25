@@ -607,6 +607,20 @@ fn hil_boot_rom_reference_spurs() {
             m.peak_hz, m.over_db, m.gaps
         );
     }
+    // 375-420 MHz: first IF 144 MHz (384 MHz harmonic) and 168 MHz (408 MHz harmonic).
+    for (rf, off) in [(383_800_000u64, 200e3), (407_800_000, 200e3)] {
+        let m = measure(&mut rx, &mut it, rf, off);
+        eprintln!(
+            "{rf}: peak {:.1} Hz, {:.1} dB, gaps {}",
+            m.peak_hz, m.over_db, m.gaps
+        );
+        assert!(
+            (m.peak_hz - off).abs() < 400.0,
+            "peak at {} for {rf}",
+            m.peak_hz
+        );
+        assert!(m.over_db > 20.0, "only {} dB over floor at {rf}", m.over_db);
+    }
     drop(it);
     rx.stop_stream().unwrap();
     rx.close().unwrap();

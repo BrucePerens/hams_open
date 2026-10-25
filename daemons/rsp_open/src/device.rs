@@ -400,8 +400,9 @@ impl<T: Transport> Rsp<T> {
         self.board(MCP_GPIOB, self.front_byte())
     }
     fn r0_word(&self) -> u32 {
-        r0(
+        r0_plan(
             mode_byte(self.band.mode, self.s.antenna),
+            self.band.lo_plan,
             self.s.if_mode,
             self.s.bandwidth,
         )
@@ -457,7 +458,7 @@ impl<T: Transport> Rsp<T> {
         self.write_gain()
     }
 
-    /// Tune to `rf_hz` (1 kHz to 2 GHz, except 375-420 MHz). Returns the LO actually set, Hz.
+    /// Tune to `rf_hz` (1 kHz to 2 GHz). Returns the LO actually set, Hz.
     /// If the new band has fewer LNA states than the current one, the LNA state is clamped to
     /// the band's highest state (see [`Settings::lna_state`] afterwards).
     pub fn set_frequency(&mut self, rf_hz: u64) -> Result<f64, Error> {
@@ -494,6 +495,8 @@ impl<T: Transport> Rsp<T> {
             LoPlan::Direct => lo,
             LoPlan::UpBy120M => lo - 120e6,
             LoPlan::DownBy120M => lo + 120e6,
+            LoPlan::DownBy144M => lo + 144e6,
+            LoPlan::DownBy168M => lo + 168e6,
         })
     }
 
@@ -899,6 +902,30 @@ mod tests {
             .ops()
             .iter()
             .any(|o| matches!(o, Op::Out { req: 0x41, .. })));
+    }
+
+    #[test]
+    fn first_if_plan_bits_follow_the_band_in_375_to_420_mhz() {
+        let (mut rx, m) = open_mock(Settings::default());
+        let s = Settings::default();
+        for (rf, plan) in [
+            (300_000_000u64, LoPlan::DownBy120M),
+            (376_000_000, LoPlan::DownBy144M),
+            (394_900_000, LoPlan::DownBy144M),
+            (395_000_000, LoPlan::DownBy168M),
+        ] {
+            m.clear();
+            rx.set_frequency(rf).unwrap();
+            let want = r0_plan(0xe1, plan, s.if_mode, s.bandwidth);
+            assert!(
+                m.ops().contains(&Op::Out {
+                    req: 0x41,
+                    value: (((want & 0xff) << 8) | 9) as u16,
+                    index: (want >> 8) as u16
+                }),
+                "r0 {want:06x} at {rf}"
+            );
+        }
     }
 
     fn w(reg: u8, v: u32) -> Op {
@@ -1395,8 +1422,8 @@ mod tests {
         rx.set_frequency(120_000_000).unwrap();
         assert_eq!(m.ops()[1], b(0x12, 0xf4));
         assert!(matches!(
-            rx.set_frequency(400_000_000),
-            Err(Error::Unsupported(_))
+            rx.set_frequency(3_000_000_000),
+            Err(Error::InvalidArgument(_))
         ));
         assert_eq!(rx.settings().rf_hz, 120_000_000);
     }
@@ -1711,8 +1738,8 @@ mod tests {
         assert!(m.ops().is_empty());
         let (mut rx, _) = open_mock(Settings::default());
         assert!(matches!(
-            rx.set_frequency(400_000_000),
-            Err(Error::Unsupported(_))
+            rx.set_frequency(3_000_000_000),
+            Err(Error::InvalidArgument(_))
         ));
         assert_eq!(rx.settings().rf_hz, 100_000_000);
     }
