@@ -39,6 +39,8 @@ Before opening, the relay (on Linux):
 4. If that fails because of permissions, and the relay can run a privileged helper: `rmmod msi2500` then `rmmod msi001` (or unbind just this device: `echo <bus>-<port>:1.0 > /sys/bus/usb/drivers/msi2500/unbind`), then open. `rmmod` refuses while another program has `/dev/swradio*` open, so it cannot pull the driver from under another user; the relay should report that case rather than force it.
 5. Opens the receiver.
 
+The crate does steps 2 and the libusb detach of step 3 itself: `UsbTransport::open` returns `Error::KernelDriverInUse` (driver, device nodes, `pid (name)` of each program) instead of detaching a driver that a program is using, and `rsp_open::kernel::inspect` exposes the same check. Programs of other users cannot be inspected without root (`KernelDriverUse::holders_complete` is false then). The `rmmod`/unbind step 4 is for the relay's privileged helper. A stream that delivers nothing is reported by `SampleIter::next_chunk` as `Error::Stalled`. The crate never issues a USB reset (a unit test checks the source).
+
 `rmmod` does not last: plugging a receiver in (or rebooting) loads the driver again, which is why the step is done before every open and not once at install time. A permanent ban (`/etc/modprobe.d/blacklist-msi2500.conf` with `blacklist msi2500` and `install msi2500 /bin/false`) remains an option for a machine dedicated to the relay; it also stops the driver serving other Mirics dongles on that machine. The development machine has no ban applied (it was removed on request). See `docs/PROTOCOL.md` 5.14 for the observation that motivated this.
 
 ## Provenance (clean-room record)

@@ -91,6 +91,21 @@ impl SampleIter {
     }
 }
 
+impl SampleIter {
+    /// The next chunk, or why there is none: [`Error::Stalled`] when nothing arrived within
+    /// the iterator's timeout (2 s), [`Error::Stream`] when the stream has ended.
+    pub fn next_chunk(&mut self) -> Result<Vec<IqI16>, Error> {
+        use std::sync::mpsc::RecvTimeoutError;
+        match self.rx.recv_timeout(self.timeout) {
+            Ok(c) => Ok(c),
+            Err(RecvTimeoutError::Timeout) => Err(Error::Stalled {
+                waited_ms: self.timeout.as_millis() as u64,
+            }),
+            Err(RecvTimeoutError::Disconnected) => Err(Error::Stream("stream ended".into())),
+        }
+    }
+}
+
 impl Iterator for SampleIter {
     type Item = Vec<IqI16>;
     fn next(&mut self) -> Option<Vec<IqI16>> {
@@ -900,6 +915,24 @@ mod tests {
         let m = MockTransport::new();
         let rx = Rsp2::with_transport(m.clone(), s, Duration::ZERO).unwrap();
         (rx, m)
+    }
+
+    #[test]
+    fn next_chunk_reports_a_stall_and_the_end() {
+        let (tx, rx) = sync_channel(4);
+        let mut it = SampleIter {
+            rx,
+            dropped: Arc::new(Mutex::new(0)),
+            timeout: Duration::from_millis(20),
+        };
+        tx.send(vec![]).unwrap();
+        assert!(it.next_chunk().is_ok());
+        assert!(matches!(
+            it.next_chunk(),
+            Err(Error::Stalled { waited_ms: 20 })
+        ));
+        drop(tx);
+        assert!(matches!(it.next_chunk(), Err(Error::Stream(_))));
     }
 
     #[test]

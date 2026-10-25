@@ -27,6 +27,7 @@
 pub mod device;
 pub mod dsp;
 pub mod encode;
+pub mod kernel;
 pub mod rsp1a;
 pub mod stream;
 pub mod transport;
@@ -142,6 +143,18 @@ pub enum Error {
     /// fully documented).
     Unsupported(String),
     Stream(String),
+    /// A Linux kernel driver is bound to the receiver and a program is using its device node;
+    /// the receiver is not taken from under that program.
+    KernelDriverInUse {
+        driver: String,
+        nodes: Vec<String>,
+        /// `pid (name)` of each program that has a node open.
+        holders: Vec<String>,
+    },
+    /// The stream delivered no samples for `waited_ms` milliseconds.
+    Stalled {
+        waited_ms: u64,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -167,6 +180,20 @@ impl std::fmt::Display for Error {
             Error::InvalidArgument(s) => write!(f, "invalid argument: {s}"),
             Error::Unsupported(s) => write!(f, "unsupported: {s}"),
             Error::Stream(s) => write!(f, "stream error: {s}"),
+            Error::KernelDriverInUse {
+                driver,
+                nodes,
+                holders,
+            } => write!(
+                f,
+                "the kernel driver {driver} is bound to this receiver and {} is in use by {}; \
+                 close that program first (the receiver is not taken from under it)",
+                nodes.join(", "),
+                holders.join(", ")
+            ),
+            Error::Stalled { waited_ms } => {
+                write!(f, "no samples for {waited_ms} ms: the stream has stalled")
+            }
         }
     }
 }
