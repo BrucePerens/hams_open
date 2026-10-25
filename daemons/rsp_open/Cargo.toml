@@ -1,0 +1,15 @@
+[package]
+name = "rsp_open"
+version = "0.1.0"
+edition = "2021"
+description = "Open driver for the SDRplay RSP2pro, written from observed USB wire traffic"
+# TODO(Bruce): choose a licence. No licence has been granted yet; see README.md.
+publish = false
+
+[dependencies]
+# Isochronous transfers go through libusb 1.0 (the system library, found with pkg-config).
+libusb1-sys = "0.7.0"
+libc = "0.2"
+
+[[example]]
+name = "rsp_spectrum"
