@@ -267,16 +267,16 @@ impl<T: Transport> Rsp2<T> {
         // [@ANCHOR: rsp_device_rsp2_full_tune]
         let p = self.pll()?;
         self.tuner(self.r0_word())?;
-        self.board(BOARD_BAND, self.band_byte())?;
-        self.board(BOARD_FRONT, board_front_transient(self.s.bias_t))?;
-        self.board(BOARD_LATCH0, 0)?;
-        self.board(BOARD_LATCH1, 0)?;
+        self.board(MCP_GPIOA, self.band_byte())?;
+        self.board(MCP_GPIOB, board_front_transient(self.s.bias_t))?;
+        self.board(MCP_IODIRA, 0)?;
+        self.board(MCP_IODIRB, 0)?;
         self.tuner(p.r3)?;
         self.tuner(p.r2)?;
         self.tuner(R13_TUNE)?;
         self.tuner(R14_TUNE)?;
         self.tuner(self.gain_word())?;
-        self.board(BOARD_FRONT, self.front_byte())?;
+        self.board(MCP_GPIOB, self.front_byte())?;
         Ok(())
     }
 
@@ -337,7 +337,7 @@ impl<T: Transport> Rsp2<T> {
         self.s.if_gr_db = if_gr_db;
         self.s.lna_state = lna_state;
         self.tuner(self.gain_word())?;
-        self.board(BOARD_FRONT, self.front_byte())
+        self.board(MCP_GPIOB, self.front_byte())
     }
 
     /// Number of LNA states in the current band and port.
@@ -362,26 +362,26 @@ impl<T: Transport> Rsp2<T> {
             }
             self.full_tune()
         } else {
-            self.board(BOARD_BAND, self.band_byte())
+            self.board(MCP_GPIOA, self.band_byte())
         }
     }
 
     /// Broadcast (MW/FM) notch.
     pub fn set_notch(&mut self, on: bool) -> Result<(), Error> {
         self.s.notch = on;
-        self.board(BOARD_FRONT, self.front_byte())
+        self.board(MCP_GPIOB, self.front_byte())
     }
 
     /// Bias-T (DC power on the antenna port). Off unless explicitly enabled.
     pub fn set_bias_t(&mut self, on: bool) -> Result<(), Error> {
         self.s.bias_t = on;
-        self.board(BOARD_FRONT, self.front_byte())
+        self.board(MCP_GPIOB, self.front_byte())
     }
 
     /// 24 MHz reference clock output.
     pub fn set_ext_ref_out(&mut self, on: bool) -> Result<(), Error> {
         self.s.ext_ref_out = on;
-        self.board(BOARD_BAND, self.band_byte())
+        self.board(MCP_GPIOA, self.band_byte())
     }
 
     /// Tuner IF bandwidth.
@@ -457,7 +457,7 @@ impl<T: Transport> Rsp2<T> {
             self.restart_stream()?;
         }
         self.tuner(self.gain_word())?;
-        self.board(BOARD_FRONT, self.front_byte())
+        self.board(MCP_GPIOB, self.front_byte())
     }
 
     fn sink_for(core: Arc<Mutex<Core>>) -> PacketSink {
@@ -574,7 +574,7 @@ impl<T: Transport> Rsp2<T> {
         };
         keep(self.stop_stream());
         self.s.bias_t = false;
-        keep(self.board(BOARD_FRONT, self.front_byte()));
+        keep(self.board(MCP_GPIOB, self.front_byte()));
         keep(self.tuner(R12_CLOSE));
         keep(self.tuner(R0_STANDBY));
         keep(self.reg(0x03, REG03_CLOSE));

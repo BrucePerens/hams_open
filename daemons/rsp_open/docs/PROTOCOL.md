@@ -73,7 +73,7 @@ All vendor requests use EP0, bmRequestType 0x40 (OUT) or 0xc0 (IN). [obs] for fi
 | 0x45 | OUT | 0 | 0 | 0 | stop streaming |
 | 0x46 | IN | 0x0040 | 0 | 16 | read EEPROM at 0x40 (blank, 0xff) |
 | 0x48 | IN | 0 | 0 | 1 | read one byte, twice at every open: always 0x04 in the API's opens; **0x09 in every rsp_open open** (rsp_open: [obs]). Meaning unknown; see 1.13.6 |
-| 0x49 | OUT | `addr << 8 \| byte` | 0x0040 | 0 | write one byte to a board register `addr` (0x00, 0x01, 0x12, 0x13 seen). libmirisdr calls 0x49 "WGPIO"; on the RSP2 it behaves as byte-register writes to the board's control logic [fit] |
+| 0x49 | OUT | `addr << 8 \| byte` | 0x0040 | 0 | write one byte to a board register `addr` (0x00, 0x01, 0x12, 0x13 seen). libmirisdr calls 0x49 "WGPIO"; on the RSP2 these are register writes to the board's MCP23S18 SPI I/O expander, wIndex 0x40 being its SPI write control byte (1.8.1) [fit] |
 
 Standard requests: SET_INTERFACE (alt 1/2 at start, alt 0 at close), GET_DESCRIPTOR string 0/1.
 
@@ -170,7 +170,7 @@ Register writes seen: 0x00 = 000200, 0x02 = 004801, 0x05 = 00000c (open) / 00000
 - bit 0: bias-T, **0 = on** (0xb9 -> 0xb8). Toggled twice (Antenna A selected and Antenna B selected) **with nothing connected to any port**, then left off.
 - bits 7:6 RF notch (the API's FM/MW broadcast notch for RSP2): `10` off, `01` on (0xb9 -> 0x79), same at 10 MHz, 100 MHz and on Hi-Z.
 - bits 5:2 front-end gain step selected by the LNA state (below); 0xa5 is written transiently during every retune.
-- Bytes 0x00 and 0x01 are always written 0x00 after 0x12/0x13 (latch/commit) [guess].
+- Bytes 0x00 and 0x01 are always written 0x00 after 0x12/0x13: these are the expander's direction registers IODIRA/IODIRB (all pins outputs), see 1.8.1 (this replaces the earlier "latch/commit" guess).
 
 **LNA state -> (byte 0x13 bits 5:2, MSi001 r1 bits 13:10)**, IF GR 40, Antenna A [obs, gain and toggle captures]:
 
@@ -183,6 +183,18 @@ Register writes seen: 0x00 = 000200, 0x02 = 004801, 0x05 = 00000c (open) / 00000
 | Hi-Z port (10 MHz) | 5 | b9 / - | b9 / AMbuf1 | b9 / AMbuf2 | b9 / AMbuf3 | b9 / AMbuf3+mixer | (5 rejected) | | | |
 
 (`-` = r1 bits 13:10 all 0; "LNA" = r1 bit 13; "mixer" = bit 12; "AMbufN" = bits 11:10 = N.) Byte 0x13 bits 5:2 therefore encode the board's attenuator/LNA bypass steps: `1110` (0xb9), `1101` (0xb5), `1001` (0xa5), `0101` (0x95); their dB values are not measurable here without a signal source. States above the band's count are refused by the API (OutOfRange).
+
+#### 1.8.1 Board control expander (MCP23S18)
+
+Sources: **[photo]** part marking read from a photograph of the author's RSP2pro board; **[ds]** Microchip datasheet DS22103A (MCP23018/MCP23S18, public, read for facts only); **[obs]** our captures.
+- The board-control bytes go to a **Microchip MCP23S18-E/SO**, a 16-bit SPI I/O expander, on the left side of the board (marking `MCP23S18-E/SO`, date code 1641) [photo]. Its outputs are open-drain [ds].
+- In the expander's default register map (IOCON.BANK = 0, DS22103A Table 1-1), address 0x00 is IODIRA, 0x01 IODIRB, 0x0A/0x0B IOCON, **0x12 GPIOA, 0x13 GPIOB**, 0x14/0x15 OLATA/OLATB [ds]. So "byte 0x12" is port A (GPA7:0) and "byte 0x13" is port B (GPB7:0); antenna = GPA1:0, band filter = GPA5:3, ext-ref output = GPA6; bias-T = GPB0, front-end step = GPB5:2, notch = GPB7:6 [fit].
+- Its SPI control byte is 0100 000 followed by the R/W bit, i.e. **0x40 for a write** (DS22103A Figure 1-7) [ds]. That is exactly request 0x49's constant wIndex 0x0040, so request 0x49 is most likely "write register (wValue high byte) = data (wValue low byte) over SPI with control byte wIndex", forwarded by the MSi2500's firmware [fit].
+- At power-on reset IODIRA/IODIRB are 0xFF (all pins inputs) [ds], and a write to a GPIO register goes to its output latch (OLAT) [ds]. Every capture shows the same pattern: GPIOA, GPIOB (the transient 0xa5), then **IODIRA = 0x00, IODIRB = 0x00** (all 16 pins outputs), then the final GPIOB value. So the writes to 0x00/0x01 described in 1.8 as a "latch/commit" guess are the direction registers: the API loads the output values first and then turns the pins into outputs, and repeats this on every full tune (redundant after the first, harmless) [obs + ds]. Single-control changes (antenna, notch, bias-T, ext-ref) write only GPIOA or GPIOB [obs].
+- Across every RSP2pro capture (open, sweeps, toggles, rate changes, the bulk-mode attempt and the verification run; 566 request-0x49 writes) and every RSP1A capture made so far, request 0x49 addressed only 0x00, 0x01, 0x12 and 0x13, always with wIndex 0x0040. **No write to IOCON (0x0A/0x0B), OLAT (0x14/0x15) or any other expander register was seen**, so the board relies on the power-on IOCON default (BANK = 0) [obs]. The firmware-load capture has no request-0x49 traffic at all; the first expander writes come with the first open after the load [obs]. Whether the board bytes would work without the IODIR writes was not tested: after power-up the pins would stay inputs, and rsp_open always writes IODIR as the API does [ds, inference].
+- In every RSP2pro capture GPA2 is always written 1 and GPA7 and GPB1 always 0; their function is unknown (open-drain 0 = pin pulled low) [obs, guess].
+- The same four addresses and wIndex on the RSP1A suggest the RSP1A uses the same expander arrangement, with a different bit map (section 2) [fit].
+- A 25640-family SPI EEPROM (8-pin SOIC, marking partly hidden) sits next to the expander [photo]. Whether it is what request 0x46 reads is not known.
 
 ### 1.9 Frequency -> band switching (frequency-sweep and band-edge captures; steps 0.1-2.5 MHz)
 

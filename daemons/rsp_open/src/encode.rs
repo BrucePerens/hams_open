@@ -508,14 +508,24 @@ pub fn lna_table(t: GainTable) -> &'static [FrontEndStep] {
     }
 }
 
-/// Board byte register addresses written with request 0x49 (1.8).
-pub const BOARD_BAND: u8 = 0x12;
-pub const BOARD_FRONT: u8 = 0x13;
-pub const BOARD_LATCH0: u8 = 0x00;
-pub const BOARD_LATCH1: u8 = 0x01;
+/// Board-control register addresses written with request 0x49 (1.8, 1.8.1). The board's
+/// control bits sit on a Microchip MCP23S18 SPI I/O expander (identified from a photograph of
+/// the board); in its default register map (IOCON.BANK = 0, datasheet DS22103A Table 1-1) these
+/// addresses are the port registers below. Request 0x49's wIndex 0x40 is the expander's SPI
+/// write control byte.
+/// GPIOA: antenna, band filter, reference output ("byte 0x12" in the protocol document).
+pub const MCP_GPIOA: u8 = 0x12;
+/// GPIOB: notch, front-end step, bias-T ("byte 0x13").
+pub const MCP_GPIOB: u8 = 0x13;
+/// IODIRA: written 0x00 (all port A pins outputs) after the port values, as the API does.
+pub const MCP_IODIRA: u8 = 0x00;
+/// IODIRB: written 0x00 (all port B pins outputs).
+pub const MCP_IODIRB: u8 = 0x01;
+/// The expander's SPI write control byte, carried in request 0x49's wIndex.
+pub const MCP_SPI_WRITE: u16 = 0x0040;
 
-/// Byte 0x12: antenna (bits 1:0), band filter (5:3), bit 2 always set, ext-ref output (bit 6,
-/// 0 = output enabled).
+/// MCP23S18 GPIOA ("byte 0x12"): antenna (GPA1:0), band filter (GPA5:3), GPA2 always set,
+/// ext-ref output (GPA6, 0 = output enabled; the expander's outputs are open-drain).
 pub fn board_band_byte(filter: u8, antenna: Antenna, ext_ref_out: bool) -> u8 {
     // [@ANCHOR: rsp_encode_board_band_byte]
     let ant = match antenna {
@@ -526,8 +536,8 @@ pub fn board_band_byte(filter: u8, antenna: Antenna, ext_ref_out: bool) -> u8 {
     refbit | ((filter & 7) << 3) | (1 << 2) | ant
 }
 
-/// Byte 0x13: notch (bits 7:6, 10 = off, 01 = on), front-end step (5:2), bias-T (bit 0,
-/// 0 = on).
+/// MCP23S18 GPIOB ("byte 0x13"): notch (GPB7:6, 10 = off, 01 = on), front-end step (GPB5:2),
+/// bias-T (GPB0, 0 = on).
 pub fn board_front_byte(board_step: u8, notch: bool, bias_t: bool) -> u8 {
     // [@ANCHOR: rsp_encode_board_front_byte]
     let notch_bits = if notch { 0b01 } else { 0b10 };
@@ -756,9 +766,10 @@ pub fn reg_write_args(reg: u8, value: u32) -> (u16, u16) {
     )
 }
 
-/// Encode a board byte write as request 0x49 (wValue, wIndex) (1.8).
+/// Encode a write to an MCP23S18 register as request 0x49 (wValue, wIndex) (1.8):
+/// wValue = register << 8 | data, wIndex = the expander's SPI write control byte.
 pub fn board_write_args(addr: u8, byte: u8) -> (u16, u16) {
-    (((addr as u16) << 8) | byte as u16, 0x0040)
+    (((addr as u16) << 8) | byte as u16, MCP_SPI_WRITE)
 }
 
 /// Convert a ppm correction to parts per billion, rejecting absurd values.

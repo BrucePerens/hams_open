@@ -48,8 +48,8 @@ otherwise. Any other bcdDevice is refused (`Error::UnknownState`).
   SDRplay's software was used only as the front end of the captures. No firmware image was
   captured, stored or inspected, and this crate contains no firmware-loading code.
 - **Requests sent:** only those `docs/PROTOCOL.md` lists as observed: 0x41 (register
-  write), 0x43/0x45 (start/stop), 0x48 (one-byte read at open), 0x49 (board bytes 0x00,
-  0x01, 0x12, 0x13), SET_INTERFACE alt 0/1/2, and the standard string-descriptor read.
+  write), 0x43/0x45 (start/stop), 0x48 (one-byte read at open), 0x49 (writes to the board's MCP23S18 I/O expander: IODIRA 0x00,
+  IODIRB 0x01, GPIOA 0x12, GPIOB 0x13), SET_INTERFACE alt 0/1/2, and the standard string-descriptor read.
   The unit test `only_observed_requests_are_emitted` exercises every API call against a
   recording mock and fails on anything else. Never sent: 0x40, 0x42, 0x44, 0x46, 0x47, bulk
   alt 3, USB resets.
@@ -135,8 +135,8 @@ the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 - [@ANCHOR: rsp_open:rsp_encode_ifmode_required_adc_hz] The only ADC clock each low-IF mode was observed with.
 - [@ANCHOR: rsp_open:rsp_encode_bandwidth_code] IF-bandwidth code for r0.
 - [@ANCHOR: rsp_open:rsp_encode_bandwidth_at_most] Widest IF bandwidth not above a given width.
-- [@ANCHOR: rsp_open:rsp_encode_board_band_byte] Board byte 0x12: antenna A/B, band filter, reference-clock output.
-- [@ANCHOR: rsp_open:rsp_encode_board_front_byte] Board byte 0x13: notch, front-end step, bias-T.
+- [@ANCHOR: rsp_open:rsp_encode_board_band_byte] Board-control port A (MCP23S18 GPIOA, "byte 0x12"): antenna A/B, band filter, reference-clock output.
+- [@ANCHOR: rsp_open:rsp_encode_board_front_byte] Board-control port B (MCP23S18 GPIOB, "byte 0x13"): notch, front-end step, bias-T.
 - [@ANCHOR: rsp_open:rsp_encode_stream_config] Alternate setting, sample format and MSi2500 register 0x07 for an ADC clock and IF mode.
 - [@ANCHOR: rsp_open:rsp_encode_streamconfig_counter_step] Block sample-counter advance per 1024-byte block.
 - [@ANCHOR: rsp_open:rsp_encode_sampleformat_pairs_per_block] I/Q pairs per block for each sample format.
