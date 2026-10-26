@@ -255,6 +255,27 @@ its level, and refuses a point with more than 2 Hz or 3 % (a healthy burst shows
 0.1 %); a PLL that has slipped or a window that crosses a stage boundary fails it (a window from 20 to 100 ms at 60 ms per point
 shows 5 Hz and 200 %). The summary of `bench_vna_sweep` reports the worst values.
 
+## Signal generator (usbmon capture v07_generator, 2026-10-26)
+
+The vendor program's "Signal Generator" mode was driven through its `-tcpip` remote control (`sg_atten`, `sg_freq`, `sg on`,
+`sg off`) with the unit already set up by an earlier measurement block. Every transfer is a vendor control transfer; the reads
+have no data stage of interest (the transfer is the command).
+
+| Action | Transfers, in order |
+|---|---|
+| `sg on` (first frequency) | read 0x62 (`wValue` 0x0002), read 0x61 (0x0000), read 0x98 (0x0815), read 0x9a (0x00c8), read 0x0e, write 0x4c (`wValue` 0x00c8, `00 00 00 00` + tuning word), read 0x04 (`wValue` 0x090a, 8 bytes), read 0x58 (`wValue` = amplitude) |
+| `sg_freq` while on | read 0x0e, write 0x4c (`wValue` 0), read 0x04 (0x090a) |
+| `sg_atten` while on | read 0x58 (`wValue` = amplitude) |
+| `sg off`, and `sg_atten` while off | read 0x91 (0x0000), read 0x58 (0x0000), read 0x66 (0x0000) |
+
+The amplitude is about 16383 x 10^(dB/20): -50, -40 and -30 dB sent 0x0034, 0x00a3 and 0x0206 (one count below the exact value
+at -40 dB). The remote control allows -50 to 0 dB. The tuning word is the same as the sweep's (100 MHz is `c7 71 1c 47`).
+
+Not yet confirmed: that this sequence puts a tone on the TX port. Driven from `vnwa_open::generator` and from the vendor
+program alike, a receiver on the TX cable saw no tone near the frequency, only a weak symmetric pair of lines at +/-1.5 MHz drifting
+inward that began about a second after "on" and ignored the frequency and level steps and "off". The next step is to look at the TX
+port with the scope.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).

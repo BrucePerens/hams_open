@@ -17,6 +17,7 @@ measured signal arrives as audio from the two codecs):
 | Item | Request | Status |
 |---|---|---|
 | Generator frequency | 0x4c | confirmed at 1, 2, 10, 20 MHz |
+| Generator on, off, level (`generator.rs`) | 0x62, 0x61, 0x98, 0x9a, 0x0e, 0x04, 0x58, 0x91, 0x66 | sequences from a capture of the vendor program; the output itself is not yet verified |
 | RF level | 0x58 (14 bits in `wValue`) | confirmed |
 | Sweep frequency word and per-chip tuning words | 0x49 | confirmed at 1 to 100 MHz (nRF 10, nLO 9) |
 | Offset between old and new frequency | 0x49 tail | confirmed, 14 values |
@@ -70,6 +71,7 @@ offset, IF word).
 Each is a test against bytes or samples recorded from the vendor program.
 
 * Frequency to the generator's tuning word. [@ANCHOR: vnwa_open_tuning_word]
+* The generator amplitude for an attenuation of 0 to -50 dB. [@ANCHOR: vnwa_open_generator_level]
 * The sweep word (start, step and count) of a captured sweep. [@ANCHOR: vnwa_open_sweep_word]
 * The per-chip tuning word of the RF chip equals the generator read-back. [@ANCHOR: vnwa_open_chip_tuning_word]
 * The IF word of the set-up request. [@ANCHOR: vnwa_open_if_word]
