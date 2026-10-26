@@ -4,6 +4,7 @@
 //! firmware is used or sent. This first cut only encodes the requests that were confirmed against
 //! the wire; it makes no USB transfers yet.
 
+pub mod ad9859;
 pub mod protocol;
 
 /// USB vendor ID and product ID of the VNWA control chip.

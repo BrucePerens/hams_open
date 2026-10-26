@@ -25,6 +25,22 @@ overclock offer) the core clock is 360 MHz.
 | RF level: request 0x58, 14-bit level in `wValue` (0x3fff maximum) | user set 3fff; the program's level search stepped 0x3e8a down to 0x0fb5 and back |
 | Measurement set-up block: nine writes 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64 | identical order every time; only the 0x49 payload changes between points |
 
+## Decoded against the AD9859 data sheet (Rev. B, Table 5)
+
+The set-up block is a load of AD9859 registers, sent little endian:
+
+* Request 0x40, 7 bytes = CFR1 (4 bytes) then CFR2 (3 bytes). Seen: CFR1 `0x01080002`, CFR2 `0x00007d`.
+  CFR2<7:3> = 15, so the REFCLK multiplier is 15; CFR2<2> = 1 (VCO range high); CFR2<1:0> = 1 (charge pump).
+  With the 360 MHz core clock the tuning words imply, the reference is 24 MHz. CFR1<8> (LSB first) is clear.
+  The bit that differs between "generator off" and "on" (CFR1 `0x01000002` against `0x01080002`) is CFR1<19>,
+  which the data sheet lists as not used, so it is probably a board-level control bit carried in that word by the
+  microcontroller (hypothesis).
+* The first four bytes of requests 0x41, 0x42, 0x43, 0x44 and 0x4b are frequency tuning words (FTW0) at 360 MHz:
+  0x41 145.92 MHz, 0x42 3.4133 MHz, 0x43 5.12 MHz, 0x44 85.3333 MHz, 0x4b 48.8889 MHz. The remaining bytes
+  (0x41 `d8 15 02`, 0x47 `01 40`, 0x4b `65 00 03`) are not decoded. Which chip each request addresses is not known.
+* Request 0x49: the low 32 bits of the 6-byte tail are an FTW (e.g. `0x22c3f35c`, 48.8889 MHz, one more than the
+  word in 0x4b); the upper 16 bits are not decoded.
+
 ## Seen but not decoded
 
 * Request 0x49 payload (15 bytes): `[b0][00 0a 09 ..][6-byte tail]`. `b0` varies (0x21, 0x05, 0x06, 0x04,
