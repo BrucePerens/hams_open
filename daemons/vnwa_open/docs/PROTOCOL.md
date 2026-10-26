@@ -71,12 +71,21 @@ exactly two set-up requests, each to half its value, and the codec audio moved f
 
 ## Time per point (request 0x40)
 
-Setting the time per measurement point changes request 0x40's payload `[b0][00][b2][01][7d][b5][00]`: **b0 = round(1.5 x
-milliseconds)** (1.33 ms: 2, 8 ms: 12, 30 ms: 45, 60 ms: 90; the prediction for 30 ms from the 60 ms run was exact).
-b2 and b5 also depend on it (b2: 8, 2, 1, 1 and b5: 8, 1, 1, 1 at those settings) but are not decoded. The pre- and
-post-sample counts did not change anything on the wire (they are PC-side processing). The step counter byte of
-request 0x49 was 2 in the 60 ms and 30 ms runs and 3 to 5 before; its meaning is still unknown. So 0x40 is not
-CFR1/CFR2 (see the correction above) but a timing block.
+The program sends one block when a new time per point takes effect (at the next `setgrid` or sweep). Its first byte, the third
+and the sixth follow the time per point exactly (84 distinct settings from 0.2 to 100 ms, one steady-state block each, IF 4 kHz,
+through the vendor program's remote control `timeperpoint`):
+
+* **b0 = ceil(1.5 x milliseconds)**, at least 1 (0.7 ms: 2, 1.4 ms: 3, 2.1 ms: 4, 15 ms: 23, 100 ms: 150). An earlier rounding rule fitted
+  only the few settings seen at the time.
+* **b5 = ceil(16 / b0)** (16, 8, 6, 4, 4, 3, 3, 2 ... 2 for b0 = 1 ... 15, then 1) and **b2** the same except 3 at b0 = 5; both are 1 from
+  b0 = 16 up. Why the program has two such counts is not known. An earlier block with bytes (2, 1) at 8 ms was captured while the
+  setting was still being stepped with the arrow keys and conflicts with the steady-state value (2, 2); it is not used.
+* The block these settings produce carries a placeholder 0x49 payload (step counter 31, the 1 MHz word); the step counter in real
+  sweep blocks is still understood only for 3 and 4 (the offset divisor `3 x (counter - 1)`).
+  In the GUI-driven runs the step counter byte of request 0x49 was 2 at 30 and 60 ms and 3 to 5 before; its meaning is still unknown.
+
+The pre- and post-sample counts did not change anything on the wire (they are PC-side processing). So 0x40 is a timing block, not
+CFR1/CFR2 (see the correction above). `setup::setup_block` accepts any time per point from 0.2 to 100 ms.
 
 ## The set-up block as a whole (173 captured blocks)
 

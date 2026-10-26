@@ -30,20 +30,31 @@ pub struct SetupParams {
     pub rf_level: u16,
 }
 
-/// Bytes 2 and 5 of request 0x40 for a time per point. Only the four settings that were captured are known:
-/// 1.33 ms (8, 8), 8 ms (2, 1), 30 ms (1, 1) and 60 ms (1, 1).
+/// Bytes 2 and 5 of request 0x40 from the first byte `b0` (the time per point in the program's 0.667 ms units): byte 5 is
+/// `ceil(16 / b0)`, byte 2 the same except that it is 3 at `b0` = 5 (where byte 5 is 4); both are 1 from `b0` = 16 up. This is
+/// the rule that fits the 84 settings in `TIMING_OBSERVED`; why the program has two such counts is not known.
+fn timing_pair(b0: u8) -> (u8, u8) {
+    match b0 {
+        1 => (16, 16),
+        2 => (8, 8),
+        3 => (6, 6),
+        4 => (4, 4),
+        5 => (3, 4),
+        6 | 7 => (3, 3),
+        8..=15 => (2, 2),
+        _ => (1, 1),
+    }
+}
+
+/// Bytes 2 and 5 of request 0x40 for a time per point of 0.2 to 100 ms (the program's range).
 pub fn point_time_fields(point_ms: f64) -> Result<(u8, u8), String> {
     // [@ANCHOR: vnwa_open_point_time_fields]
-    let near = |t: f64| (point_ms - t).abs() < 0.01 * t;
-    if near(4.0 / 3.0) {
-        Ok((8, 8))
-    } else if near(8.0) {
-        Ok((2, 1))
-    } else if near(30.0) || near(60.0) {
-        Ok((1, 1))
-    } else {
-        Err(format!("time per point {point_ms} ms: bytes 2 and 5 of request 0x40 are only known for 1.33, 8, 30 and 60 ms"))
+    if !(0.2..=100.0).contains(&point_ms) {
+        return Err(format!(
+            "time per point {point_ms} ms is outside the program's 0.2 to 100 ms"
+        ));
     }
+    Ok(timing_pair(point_time_byte(point_ms)))
 }
 
 fn out(request: u8, value: u16, index: u16, data: Vec<u8>) -> Request {
@@ -133,6 +144,7 @@ mod tests {
     }
 
     include!("setup_vectors.rs");
+    include!("timing_vectors.rs");
 
     // Tests [@ANCHOR: vnwa_open_setup_block]
     // Tests [@ANCHOR: vnwa_open_point_time_fields]
@@ -168,6 +180,20 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: vnwa_open_point_time_fields]
+    // Tests [@ANCHOR: vnwa_open_point_time_byte]
+    #[test]
+    fn the_timing_rule_reproduces_all_84_observed_settings() {
+        for &(t, b0, b2, b5) in TIMING_OBSERVED.iter() {
+            assert_eq!(point_time_byte(t), b0, "{t} ms byte 0");
+            assert_eq!(
+                point_time_fields(t).unwrap(),
+                (b2, b5),
+                "{t} ms bytes 2 and 5"
+            );
+        }
+    }
+
     #[test]
     fn unverified_combinations_are_refused() {
         let base = SetupParams {
@@ -184,11 +210,11 @@ mod tests {
         assert!(setup_block(&base).unwrap_err().contains("counter"));
         assert!(setup_block(&SetupParams {
             counter: 3,
-            point_ms: 17.0,
+            point_ms: 150.0,
             ..base
         })
         .unwrap_err()
-        .contains("17"));
+        .contains("150"));
         assert!(setup_block(&SetupParams {
             counter: 3,
             rf_level: 0x4000,
