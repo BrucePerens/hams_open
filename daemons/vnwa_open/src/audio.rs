@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//! From codec samples to a complex measurement. At each frequency the VNWA mixes the signal down to an IF (12, 6 or 4
+//! kHz seen, i.e. fs / (4 n) with n = 1, 2, 3 at 48 kHz) and the PC finds its amplitude and phase from whole IF periods
+//! of the audio, skipping the presamples after a frequency change and the postsamples before the next one. The right
+//! channel is the reference, the left channel the thru/reflect signal; the measurement is left divided by right.
+//! (The vendor's Help file says one IF period is the minimum; this code uses as many whole periods as fit, which for a
+//! rectangular window and whole periods is the exact least-squares amplitude and phase of a tone.)
+
+use std::f64::consts::PI;
+
+/// A complex number (no dependency for this).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Complex {
+    pub re: f64,
+    pub im: f64,
+}
+
+impl Complex {
+    pub fn abs(self) -> f64 {
+        self.re.hypot(self.im)
+    }
+
+    /// The angle in degrees, -180 to 180.
+    pub fn phase_deg(self) -> f64 {
+        self.im.atan2(self.re).to_degrees()
+    }
+
+    pub fn divided_by(self, o: Complex) -> Complex {
+        let d = o.re * o.re + o.im * o.im;
+        Complex {
+            re: (self.re * o.re + self.im * o.im) / d,
+            im: (self.im * o.re - self.re * o.im) / d,
+        }
+    }
+}
+
+/// The complex amplitude of the component at `if_hz` in `x` (a cosine of amplitude A and phase p gives `A e^(jp)`).
+/// Exact when `x` holds a whole number of IF periods.
+pub fn tone_at_if(x: &[f64], fs: f64, if_hz: f64) -> Complex {
+    // [@ANCHOR: vnwa_open_tone_at_if]
+    let w = 2.0 * PI * if_hz / fs;
+    let (mut re, mut im) = (0.0, 0.0);
+    for (n, v) in x.iter().enumerate() {
+        let a = w * n as f64;
+        re += v * a.cos();
+        im -= v * a.sin();
+    }
+    let k = 2.0 / x.len() as f64;
+    Complex {
+        re: re * k,
+        im: im * k,
+    }
+}
+
+/// How many samples to analyse out of one point's `len` samples: whole IF periods between the presamples and
+/// the postsamples. `None` when not even one period fits (the vendor program refuses to sweep in that case).
+pub fn analysis_span(
+    len: usize,
+    fs: f64,
+    if_hz: f64,
+    presamples: usize,
+    postsamples: usize,
+) -> Option<(usize, usize)> {
+    let per = fs / if_hz;
+    let usable = len.checked_sub(presamples + postsamples)?;
+    let periods = (usable as f64 / per).floor();
+    if periods < 1.0 {
+        None
+    } else {
+        Some((presamples, (periods * per).round() as usize))
+    }
+}
+
+/// The measurement of one point: the left channel's tone divided by the right (reference) channel's, at the IF.
+/// `min_reference` is the smallest reference amplitude (in sample counts) that is accepted as a signal.
+#[allow(clippy::too_many_arguments)]
+pub fn measure_point(
+    left: &[f64],
+    right: &[f64],
+    fs: f64,
+    if_hz: f64,
+    presamples: usize,
+    postsamples: usize,
+    min_reference: f64,
+) -> Result<Complex, String> {
+    // [@ANCHOR: vnwa_open_measure_point]
+    if left.len() != right.len() {
+        return Err("the two channels have different lengths".into());
+    }
+    let (start, n) = analysis_span(left.len(), fs, if_hz, presamples, postsamples).ok_or_else(|| {
+        format!("{} samples do not hold one IF period plus {presamples} presamples and {postsamples} postsamples", left.len())
+    })?;
+    let l = tone_at_if(&left[start..start + n], fs, if_hz);
+    let r = tone_at_if(&right[start..start + n], fs, if_hz);
+    if r.abs() < min_reference {
+        return Err(format!(
+            "reference amplitude {:.2} is below {min_reference}: no signal",
+            r.abs()
+        ));
+    }
+    Ok(l.divided_by(r))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    include!("audio_vectors.rs");
+
+    fn tone(a: f64, phase_deg: f64, fs: f64, f: f64, n: usize) -> Vec<f64> {
+        (0..n)
+            .map(|i| a * (2.0 * PI * f * i as f64 / fs + phase_deg.to_radians()).cos())
+            .collect()
+    }
+
+    // Tests [@ANCHOR: vnwa_open_tone_at_if]
+    #[test]
+    fn amplitude_and_phase_of_a_synthetic_tone_are_exact() {
+        for &(f, n) in &[(12_000.0, 48usize), (6_000.0, 96), (4_000.0, 96)] {
+            let c = tone_at_if(&tone(0.8, 30.0, 48_000.0, f, n), 48_000.0, f);
+            assert!((c.abs() - 0.8).abs() < 1e-12, "{f}");
+            assert!((c.phase_deg() - 30.0).abs() < 1e-9, "{f}");
+        }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_measure_point]
+    #[test]
+    fn the_ratio_of_two_tones_is_their_amplitude_ratio_and_phase_difference() {
+        let l = tone(0.5, 100.0, 48_000.0, 12_000.0, 40);
+        let r = tone(0.25, 40.0, 48_000.0, 12_000.0, 40);
+        // 40 samples, 2 pre and 2 post, leaves 36 = nine 4-sample periods.
+        let m = measure_point(&l, &r, 48_000.0, 12_000.0, 2, 2, 0.01).unwrap();
+        assert!((m.abs() - 2.0).abs() < 1e-12);
+        assert!((m.phase_deg() - 60.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn too_short_or_silent_points_are_refused() {
+        let x = tone(1.0, 0.0, 48_000.0, 12_000.0, 8);
+        assert!(measure_point(&x, &x, 48_000.0, 12_000.0, 2, 3, 0.01).is_err()); // 8 - 5 = 3 < one 4-sample period
+        assert!(measure_point(&x, &x, 48_000.0, 12_000.0, 2, 2, 0.01).is_ok()); // exactly one period
+        let silent = vec![0.0; 40];
+        assert!(
+            measure_point(&x.repeat(5), &silent, 48_000.0, 12_000.0, 0, 0, 0.5)
+                .unwrap_err()
+                .contains("no signal")
+        );
+        assert!(measure_point(&x, &x[..7], 48_000.0, 12_000.0, 0, 0, 0.0).is_err());
+    }
+
+    #[test]
+    fn real_loopback_samples_give_the_independently_computed_ratio_and_the_expected_phase() {
+        for e in EXCERPTS {
+            let l: Vec<f64> = e.left.iter().map(|&v| f64::from(v)).collect();
+            let r: Vec<f64> = e.right.iter().map(|&v| f64::from(v)).collect();
+            let m = measure_point(&l, &r, 48_000.0, e.if_hz, 0, 0, 10.0).unwrap();
+            assert!(
+                (m.re - e.ratio_re).abs() < 1e-9 && (m.im - e.ratio_im).abs() < 1e-9,
+                "{}",
+                e.name
+            );
+            // TX connected to RX: the two channels are about 180 degrees apart and within 30 percent in amplitude.
+            assert!(m.phase_deg().abs() > 170.0, "{}: {}", e.name, m.phase_deg());
+            assert!((0.8..1.4).contains(&m.abs()), "{}: {}", e.name, m.abs());
+        }
+    }
+}

@@ -4,7 +4,9 @@
 //! firmware is used or sent. This first cut only encodes the requests that were confirmed against
 //! the wire; it makes no USB transfers yet.
 
+pub mod audio;
 pub mod protocol;
+pub mod setup;
 
 /// USB vendor ID and product ID of the VNWA control chip.
 pub const VID: u16 = 0x20a0;
