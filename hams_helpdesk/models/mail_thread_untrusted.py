@@ -13,6 +13,7 @@ See docs/security/TICKET_PROMPT_INJECTION.md.
 from odoo import api, models
 
 from . import untrusted_text as ut
+from .inbound_spam_filter import ses_verdicts
 
 MAIL_STASH_KEY = "hams_helpdesk_untrusted_mail"
 
@@ -28,6 +29,7 @@ class MailThread(models.AbstractModel):
     def message_parse(self, message, save_original=False):
         msg_dict = super().message_parse(message, save_original=save_original)
         result = ut.inspect_mail(message)  # never raises: an error is itself a finding
+        msg_dict["ses_verdicts"] = ses_verdicts(message)
         key = (msg_dict or {}).get("message_id") or ""
         stash_for(self.env)[key] = {
             "findings": result.findings,

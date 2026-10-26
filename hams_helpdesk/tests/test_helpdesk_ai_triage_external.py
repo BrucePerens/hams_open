@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -187,4 +187,31 @@ class TestHelpdeskAiTriageExternalAllowlist(HamsTransactionCase):
             excluded_ticket.with_user(self.ai_triage_uid).mcp_post_internal_note(
                 "should never be posted"
             )
+            self.env.flush_all()
+
+    def test_07_mcp_mark_spam_moves_a_new_ticket_to_the_spam_stage_with_a_note(self):
+        # Tests [@ANCHOR: hams_helpdesk:mcp_mark_spam]
+        # Tests [@ANCHOR: hams_helpdesk:COMM_mcp_mark_spam]
+        ticket = self.general_ticket
+        self.assertEqual(ticket.stage, "new")
+        ticket.with_user(self.ai_triage_uid).mcp_mark_spam("Domain-renewal solicitation; see http://evil.example/x")
+        self.assertEqual(ticket.stage, "spam")
+        last_message = ticket.message_ids.sorted(key=lambda m: m.id)[-1]
+        self.assertIn("Marked as spam by the AI triage agent", last_message.body)
+        self.assertTrue(last_message.subtype_id.internal)
+        self.assertNotIn("evil.example", last_message.body, "a link in the model's reason must not survive")
+        # The quarantine never mails the sender (COMM_helpdesk_no_mailback_on_spam_stage).
+        self.assertFalse(any(m.message_type == "email" and m.partner_ids for m in ticket.message_ids))
+
+    def test_08_mcp_mark_spam_refuses_a_ticket_a_human_already_picked_up(self):
+        ticket = self.general_ticket
+        ticket.write({"stage": "in_progress"})
+        with self.assertRaises(UserError):
+            ticket.with_user(self.ai_triage_uid).mcp_mark_spam("looks like spam")
+        self.assertEqual(ticket.stage, "in_progress")
+
+    def test_09_mcp_mark_spam_enforces_allowlist_before_elevating(self):
+        excluded_ticket = self._make_out_of_allowlist_ticket()
+        with self.assertRaises(AccessError):
+            excluded_ticket.with_user(self.ai_triage_uid).mcp_mark_spam("should never apply")
             self.env.flush_all()

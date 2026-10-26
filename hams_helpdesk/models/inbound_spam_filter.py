@@ -219,3 +219,36 @@ def detect_inbound_spam_signals(subject, body_html):
             )
 
     return reasons
+
+
+# [@ANCHOR: hams_helpdesk:ses_verdicts]
+# Amazon SES scans mail when the receipt rule has ScanEnabled (hams.com's does) and writes the result into the
+# stored message as X-SES-Spam-Verdict and X-SES-Virus-Verdict, each PASS, FAIL, GRAY or PROCESSING_FAILED.
+# Only a FAIL is used: GRAY and PROCESSING_FAILED mean SES could not decide. The authentication verdicts
+# (DKIM, SPF, DMARC) are deliberately not used: mailing lists and forwarders legitimately fail them.
+_SES_VERDICT_HEADERS = (
+    ("spam", "X-SES-Spam-Verdict"),
+    ("virus", "X-SES-Virus-Verdict"),
+)
+
+
+def ses_verdicts(message):
+    """The SES scan verdicts of a parsed ``email.message.Message``, as {"spam": "FAIL", "virus": "PASS"}; a
+    verdict header that is absent is absent from the dict. Values are upper-cased and cut to 32 characters
+    (the sender controls any header that SES did not itself write)."""
+    found = {}
+    for key, header in _SES_VERDICT_HEADERS:
+        value = message.get(header)
+        if value:
+            found[key] = str(value).strip().upper()[:32]
+    return found
+
+
+def ses_verdict_reasons(verdicts):
+    """Plain-English reasons for the verdicts that say FAIL; empty for anything else."""
+    reasons = []
+    if (verdicts or {}).get("spam") == "FAIL":
+        reasons.append("Amazon SES spam scan verdict: FAIL")
+    if (verdicts or {}).get("virus") == "FAIL":
+        reasons.append("Amazon SES virus scan verdict: FAIL")
+    return reasons
