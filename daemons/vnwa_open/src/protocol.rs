@@ -28,6 +28,14 @@ pub fn tuning_word(freq_hz: f64) -> u32 {
     (freq_hz * 4_294_967_296.0 / DDS_CLOCK_HZ).round() as u32
 }
 
+/// The sweep-frequency word carried in bytes 4 to 8 of request 0x49's payload (a 40-bit little-endian
+/// number): `round(f / 9 * 2^40 / clock)`. The divisor 9 is what the wire shows (10 MHz gave 10/9 MHz worth,
+/// 25 MHz gave 25/9 MHz worth); why the program divides by nine is not known.
+pub fn sweep_word(freq_hz: f64) -> u64 {
+    // [@ANCHOR: vnwa_open_sweep_word]
+    (freq_hz / 9.0 * 1_099_511_627_776.0 / DDS_CLOCK_HZ).round() as u64
+}
+
 /// Set the generator frequency (request 0x4c): eight bytes, four zero bytes and then the tuning
 /// word, little endian. `value` is 0x090a in the form the vendor program sends while it is
 /// stepping the generator and 0x0000 or 0x00c8 in the first set-up; its meaning is not decoded.
@@ -68,6 +76,16 @@ mod tests {
         assert_eq!(tuning_word(2.0e6), 0x016c_16c1);
         assert_eq!(tuning_word(10.0e6), 0x071c_71c7);
         assert_eq!(tuning_word(20.0e6), 0x0e38_e38e);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_sweep_word]
+    #[test]
+    fn sweep_words_match_the_two_single_point_sweeps() {
+        assert_eq!(sweep_word(10.0e6), 0x0000_ca45_87e7);
+        assert_eq!(sweep_word(25.0e6), 0x0001_f9ad_d3c1);
+        // The two other words seen in the 25 MHz sweep: 1 MHz and 2 MHz.
+        assert_eq!(sweep_word(1.0e6), 0x143a_2731);
+        assert_eq!(sweep_word(2.0e6), 0x2874_4e61);
     }
 
     // Tests [@ANCHOR: vnwa_open_generator_frequency]
