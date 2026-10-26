@@ -6,6 +6,7 @@
 
 pub mod audio;
 pub mod capture;
+pub mod generator;
 pub mod protocol;
 pub mod setup;
 pub mod sweep;
