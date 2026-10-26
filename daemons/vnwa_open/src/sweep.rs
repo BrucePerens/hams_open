@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use crate::audio::{measure_point, vendor_convention, Complex, Reference};
+use crate::audio::{measure_point, tone_at_if, vendor_convention, Complex, Reference};
 use crate::capture::{Capture, SAMPLE_RATE};
 use crate::setup::{setup_block, SetupParams};
 use crate::usb::Vnwa;
@@ -97,12 +97,48 @@ pub fn check(c: &Config) -> Result<(), String> {
     Ok(())
 }
 
+/// The largest IF error (Hz) and level change between the two halves of the window that a point may show. The codec's clock is not
+/// the unit's, so a healthy unit shows about 0.15 Hz of IF error (12 ppm); a DDS whose PLL has slipped, a retune inside the
+/// window or a stage boundary shows far more.
+pub const MAX_IF_ERROR_HZ: f64 = 2.0;
+pub const MAX_LEVEL_CHANGE: f64 = 0.03;
+
+/// How steady the tone at the IF is across a window, from the two halves of the reference channel: the frequency error in Hz
+/// (from the phase advance between the halves) and the relative change of the amplitude. A healthy burst gives about 0.15 Hz and
+/// under 0.1 %.
+pub fn stability(x: &[f64], fs: f64, if_hz: f64) -> (f64, f64) {
+    // [@ANCHOR: vnwa_open_stability]
+    let half = x.len() / 2;
+    let (a, b) = (
+        tone_at_if(&x[..half], fs, if_hz),
+        tone_at_if(&x[half..2 * half], fs, if_hz),
+    );
+    let mut dphi = b.phase_deg() - a.phase_deg();
+    while dphi > 180.0 {
+        dphi -= 360.0;
+    }
+    while dphi <= -180.0 {
+        dphi += 360.0;
+    }
+    let df = dphi / 360.0 / (half as f64 / fs);
+    let mean = (a.abs() + b.abs()) / 2.0;
+    let change = if mean > 0.0 {
+        (b.abs() - a.abs()).abs() / mean
+    } else {
+        f64::INFINITY
+    };
+    (df, change)
+}
+
 /// One measured point.
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
     pub freq_hz: f64,
     pub s11: Complex,
     pub s21: Complex,
+    /// The larger IF error of the two reference channels (Hz) and the larger relative level change between the window's halves.
+    pub if_error_hz: f64,
+    pub level_change: f64,
 }
 
 pub struct Vna {
@@ -162,6 +198,17 @@ impl Vna {
         };
         let (l1, r1) = split(&f11);
         let (l2, r2) = split(&f21);
+        // The reference channel of each codec (left on codec 1, right on codec 2) must hold a steady tone at the IF.
+        let (e1, c1) = stability(&l1, fs, c.if_hz);
+        let (e2, c2) = stability(&r2, fs, c.if_hz);
+        let (if_error_hz, level_change) = (e1.abs().max(e2.abs()), c1.max(c2));
+        if if_error_hz > MAX_IF_ERROR_HZ || level_change > MAX_LEVEL_CHANGE {
+            return Err(format!(
+                "point at {freq_hz} Hz is not steady: IF error {if_error_hz:.2} Hz (limit {MAX_IF_ERROR_HZ}), level change {:.1} % (limit {:.0} %): the DDS may be out of lock, or the window spans a change of the unit's stage",
+                level_change * 100.0,
+                MAX_LEVEL_CHANGE * 100.0
+            ));
+        }
         let s11 = measure_point(
             &l1,
             &r1,
@@ -188,6 +235,8 @@ impl Vna {
             freq_hz,
             s11: vendor_convention(s11),
             s21: vendor_convention(s21),
+            if_error_hz,
+            level_change,
         })
     }
 
@@ -206,5 +255,40 @@ impl Vna {
                 self.measure(f, f)
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tone(f: f64, fs: f64, n: usize, level: impl Fn(usize) -> f64) -> Vec<f64> {
+        (0..n)
+            .map(|i| level(i) * (2.0 * std::f64::consts::PI * f * i as f64 / fs).sin())
+            .collect()
+    }
+
+    // Tests [@ANCHOR: vnwa_open_stability]
+    #[test]
+    fn a_steady_tone_at_the_if_is_stable_and_an_error_or_a_level_step_is_seen() {
+        let fs = 48_000.0;
+        let n = 5760; // 120 ms
+        let (df, change) = stability(&tone(12_000.0, fs, n, |_| 8000.0), fs, 12_000.0);
+        assert!(df.abs() < 0.01 && change < 0.001, "{df} {change}");
+        // The unit's IF 5 Hz high (a slipped PLL, or a codec clock error of 400 ppm): the phase advance gives it back.
+        let (df, _) = stability(&tone(12_005.0, fs, n, |_| 8000.0), fs, 12_000.0);
+        assert!((df - 5.0).abs() < 0.2, "{df}");
+        let (df, _) = stability(&tone(11_996.0, fs, n, |_| 8000.0), fs, 12_000.0);
+        assert!((df + 4.0).abs() < 0.2, "{df}");
+        // A step in level between the halves (a stage boundary): 8000 then 9800 is a change of about 20 %.
+        let (_, change) = stability(
+            &tone(12_000.0, fs, n, |i| if i < n / 2 { 8000.0 } else { 9800.0 }),
+            fs,
+            12_000.0,
+        );
+        assert!((change - 0.204).abs() < 0.01, "{change}");
+        // No signal at all is not "stable".
+        let (_, change) = stability(&vec![0.0; n], fs, 12_000.0);
+        assert!(change.is_infinite());
     }
 }

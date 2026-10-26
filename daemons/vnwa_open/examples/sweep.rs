@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! `cargo run --example sweep -- start_hz stop_hz points [if_hz] [point_ms]`: an uncalibrated S11 and S21 sweep.
+//! `cargo run --example sweep -- start_hz stop_hz points [if_hz] [point_ms] [settle_ms] [window_ms]`: an uncalibrated S11 and S21 sweep.
 use vnwa_open::sweep::{Config, Vna};
 
 fn main() -> Result<(), String> {
@@ -8,6 +8,8 @@ fn main() -> Result<(), String> {
     let cfg = Config {
         if_hz: num(4, 12000.0),
         point_ms: num(5, 60.0),
+        settle_ms: a.get(6).and_then(|s| s.parse().ok()),
+        window_ms: a.get(7).and_then(|s| s.parse().ok()),
         ..Config::default()
     };
     let vna = Vna::open(cfg)?;

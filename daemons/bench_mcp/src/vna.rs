@@ -160,6 +160,8 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         "note": "raw ratios of the unit's own channels (cable, bridge and front-end not removed); S21 from the RX channel, S11 from the reflection channel",
         "s21_db_min": lo,
         "s21_db_max": hi,
+        "max_if_error_hz": points.iter().map(|p| p.if_error_hz).fold(0.0, f64::max),
+        "max_level_change": points.iter().map(|p| p.level_change).fold(0.0, f64::max),
         "file": file.display().to_string(),
         "rows": rows,
     }))
@@ -208,6 +210,8 @@ mod tests {
     #[test]
     fn the_csv_has_a_header_and_one_row_per_point() {
         let p = Point {
+            if_error_hz: 0.0,
+            level_change: 0.0,
             freq_hz: 10e6,
             s21: Complex { re: -0.5, im: 0.0 },
             s11: Complex { re: 0.0, im: 1.0 },

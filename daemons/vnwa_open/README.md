@@ -83,3 +83,4 @@ Each is a test against bytes or samples recorded from the vendor program.
 * Amplitude and phase of a tone at the IF are exact on a synthetic tone. [@ANCHOR: vnwa_open_tone_at_if]
 * The ratio of two tones is their amplitude ratio and phase difference, in the vendor program's convention. [@ANCHOR: vnwa_open_vendor_convention]
 * A measurement of a recorded sweep agrees with the vendor program's own S21, and the reference channel can be swapped. [@ANCHOR: vnwa_open_measure_point]
+* A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
