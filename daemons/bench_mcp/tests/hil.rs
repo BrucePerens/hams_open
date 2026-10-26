@@ -91,3 +91,30 @@ fn supply_state_is_readable_with_the_output_off() {
         "{s}"
     );
 }
+
+/// Needs a `vna` instrument (driver `vnwa_open`, tier read_config) and a cable from the TX port to the RX port.
+#[test]
+#[ignore]
+fn vna_sweeps_the_loopback_and_saves_a_csv() {
+    let r = rpc(&[
+        &call("bench_status", r#"{"instrument":"vna"}"#),
+        &call(
+            "bench_vna_sweep",
+            r#"{"start_hz":10000000,"stop_hz":30000000,"points":3}"#,
+        ),
+    ]);
+    let status: serde_json::Value = serde_json::from_str(&text(&r[0])).unwrap();
+    assert_eq!(status["usb"], "present", "{status}");
+    let sweep: serde_json::Value = serde_json::from_str(&text(&r[1])).unwrap();
+    assert_eq!(sweep["points"], 3, "{sweep}");
+    let rows = sweep["rows"].as_array().unwrap();
+    for row in rows {
+        // A cable between the ports: well within a few dB of through, on both channels.
+        for key in ["s21_db", "s11_db"] {
+            let db = row[key].as_f64().unwrap();
+            assert!((-6.0..6.0).contains(&db), "{key} {db} dB in {row}");
+        }
+    }
+    let file = sweep["file"].as_str().unwrap();
+    assert_eq!(std::fs::read_to_string(file).unwrap().lines().count(), 4);
+}

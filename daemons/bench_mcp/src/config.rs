@@ -24,6 +24,8 @@ pub enum Tier {
 pub enum Kind {
     Scope,
     Psu,
+    /// The DG8SAQ VNWA vector network analyser, driven directly by the `vnwa_open` crate (USB and its two codecs).
+    Vna,
 }
 
 #[derive(Clone, Debug)]
@@ -38,6 +40,8 @@ pub struct Instrument {
     pub baud: u32,
     pub max_volts: f64,
     pub max_amps: f64,
+    /// VNA only: the settings of `vnwa_open::sweep::Config` (defaults for the other kinds, unused).
+    pub vna: vnwa_open::sweep::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -47,6 +51,38 @@ fn tier_of(s: Option<&str>) -> Result<Tier, String> {
         Some("full") => Ok(Tier::Full),
         Some(o) => Err(format!("unknown tier {o:?} (read_only, read_config, full)")),
     }
+}
+
+/// The VNA settings of an instrument entry: `codec_s11`, `codec_s21` (parts of the ALSA ids), `if_hz`, `point_ms`, `rf_level`,
+/// `settle_ms`, `window_ms`; anything omitted keeps the default of `vnwa_open::sweep::Config`.
+fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
+    let mut v = vnwa_open::sweep::Config::default();
+    let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
+    let num = |k: &str| c.get(k).and_then(|x| x.as_f64());
+    if let Some(t) = text("codec_s11") {
+        v.codec_s11 = t;
+    }
+    if let Some(t) = text("codec_s21") {
+        v.codec_s21 = t;
+    }
+    if let Some(x) = num("if_hz") {
+        v.if_hz = x;
+    }
+    if let Some(x) = num("point_ms") {
+        v.point_ms = x;
+    }
+    if let Some(x) = num("settle_ms") {
+        v.settle_ms = x;
+    }
+    if let Some(x) = num("window_ms") {
+        v.window_ms = x;
+    }
+    if let Some(x) = c.get("rf_level").and_then(|x| x.as_u64()) {
+        v.rf_level = u16::try_from(x)
+            .map_err(|_| "rf_level is above the 14-bit maximum 16383".to_string())?;
+    }
+    vnwa_open::sweep::check(&v)?;
+    Ok(v)
 }
 
 pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
@@ -66,9 +102,10 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
         let kind = match driver.as_str() {
             "siglent_sds" => Kind::Scope,
             "atm6301" => Kind::Psu,
+            "vnwa_open" => Kind::Vna,
             o => {
                 return Err(format!(
-                    "{name}: unknown driver {o:?} (siglent_sds, atm6301)"
+                    "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open)"
                 ))
             }
         };
@@ -84,6 +121,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             baud: c.get("baud").and_then(|b| b.as_u64()).unwrap_or(115200) as u32,
             max_volts: c.get("max_volts").and_then(|m| m.as_f64()).unwrap_or(5.5),
             max_amps: c.get("max_amps").and_then(|m| m.as_f64()).unwrap_or(1.0),
+            vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),
@@ -136,6 +174,32 @@ mod tests {
             (p.kind, p.tier, p.baud, p.max_amps),
             (Kind::Psu, Tier::Full, 115200, 1.0)
         );
+    }
+
+    #[test]
+    fn a_vnwa_instrument_takes_its_settings_with_defaults_and_refuses_bad_ones() {
+        let v = parse(
+            r#"{"instruments":{"vna":{"driver":"vnwa_open","tier":"read_config","if_hz":4000,"point_ms":30}}}"#,
+        )
+        .unwrap();
+        assert_eq!(v[0].kind, Kind::Vna);
+        assert_eq!(
+            (v[0].vna.if_hz, v[0].vna.point_ms, v[0].vna.rf_level),
+            (4000.0, 30.0, 0x3fff)
+        );
+        let bad = |extra: &str| {
+            parse(&format!(
+                r#"{{"instruments":{{"vna":{{"driver":"vnwa_open"{extra}}}}}}}"#
+            ))
+            .is_err()
+        };
+        assert!(
+            bad(r#","if_hz":7000"#),
+            "48 kHz must hold a whole number of IF periods"
+        );
+        assert!(bad(r#","point_ms":500"#));
+        assert!(bad(r#","rf_level":20000"#));
+        assert!(bad(r#","settle_ms":250,"window_ms":100"#));
     }
 
     #[test]

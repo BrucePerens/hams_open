@@ -194,6 +194,29 @@ sweep started (intermediate words do not change it), `new` the frequency of the 
 captured bytes exactly, including rounding. What the first byte and the divisor mean is not known (possibly the
 number of stages the chip takes to move from the old frequency to the new one).
 
+## Driving the unit directly (2026-10-26, TX connected to RX)
+
+What a program that is not the vendor's has to do, found by sending the confirmed requests from `usb.rs` and recording
+both codecs from the instant the block is sent:
+
+* The set-up block alone makes the unit emit nothing. The vendor program asks for the level before each block
+  (IN 0x58, `wValue` = `wIndex` = level, 64 bytes asked) and reads 0x0d (`wValue` 0x0303) after it; with both, the tone
+  appears. The replies are empty and not used. Which of the two is the necessary one is not known.
+* The unit emits for only about 0.36 s after the block (measured at a 60 ms point; a probe at 1.333 ms that recorded from 250 ms
+  later saw nothing, so the duration for short points is not established): at a 60 ms point the level of the codec audio steps at about 60 ms, 300 ms and 360 ms (rms about 8000, 9800, 8000, then 0).
+  Recordings that start a quarter second late see almost nothing, which is why the first attempts found no signal.
+* Between 60 ms and 300 ms the measured ratio is steady to better than 0.1 % (10 MHz, IF 12 kHz: S21 0.8970 at 178.8 deg,
+  S11 0.8898 at 178.7 deg). `sweep.rs` analyses a window inside that stretch (80 to 180 ms after the block by default).
+* Codec 1 (`hw:CARD=CODEC,`) has the reference on its left channel and gives S11; codec 2 (`hw:CARD=CODEC_1,`) has it on the
+  right and gives S21. With the cable between the ports the two agree to 1 %, as the vendor program's S11 and S21 do.
+* The unit's own response with the cable: S21 0.878 at 1 MHz, 0.90 at 13 MHz, 1.00 at 100 MHz, 1.35 at 300 MHz, and a
+  phase that rises linearly with frequency (the cable's delay). The vendor program, set to IF 4 kHz, gave 0.780 at 10 MHz
+  and this driver 0.803 at 4 kHz: the difference is of the order the unit's own drift with time (the earlier comparison
+  agreed to 0.1 to 1 % when the two were aligned in time), not a different method.
+* Each point takes about 0.2 s (block, 80 ms settle, 100 ms window); a 9 point sweep of 1 to 100 MHz took 1.7 s.
+* Only the codec's 16 bit modes exist (the vendor program's "ADC resolution 24 bit" fails to open the device on this
+  hardware); the capture is 48 kHz, 16 bit, stereo.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).

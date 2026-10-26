@@ -10,6 +10,7 @@ mod config;
 mod link;
 mod psu;
 mod scope;
+mod vna;
 
 use config::{Instrument, Kind, Tier};
 use link::Link;
@@ -36,12 +37,13 @@ struct ToolSpec {
 }
 
 const ANY: &[Kind] = &[Kind::Scope, Kind::Psu];
+const WITH_VNA: &[Kind] = &[Kind::Scope, Kind::Psu, Kind::Vna];
 
 const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_list", tier: Tier::ReadOnly, kinds: ANY, desc: "List the configured instruments with their driver and permission tier.", props: "{}", required: &[] },
-    ToolSpec { name: "bench_identify", tier: Tier::ReadOnly, kinds: ANY, desc: "Instrument identity (*IDN?).", props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
-    ToolSpec { name: "bench_status", tier: Tier::ReadOnly, kinds: ANY,
-        desc: "Scope: running/stopped, timebase, sample rate, per-channel volts/div, offset, coupling, probe attenuation. Supply: output on/off, setpoints, protection limits, measured volts and amps.",
+    ToolSpec { name: "bench_identify", tier: Tier::ReadOnly, kinds: WITH_VNA, desc: "Instrument identity (*IDN?).", props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
+    ToolSpec { name: "bench_status", tier: Tier::ReadOnly, kinds: WITH_VNA,
+        desc: "Scope: running/stopped, timebase, sample rate, per-channel volts/div, offset, coupling, probe attenuation. Supply: output on/off, setpoints, protection limits, measured volts and amps. VNA: USB and codecs found, IF, time per point, RF level.",
         props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
     ToolSpec { name: "bench_measure", tier: Tier::ReadOnly, kinds: ANY,
         desc: "Scope: the scope's own parameter measurements on a channel (values **** mean it could not measure them). Supply: measured voltage, current and power.",
@@ -56,6 +58,9 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_psu_output", tier: Tier::ReadConfig, kinds: &[Kind::Psu],
         desc: "Switch the supply output. Off is allowed at read_config. On needs the instrument's tier to be full, and is refused unless the setpoints stored in the supply are within the configured caps.",
         props: r#"{"instrument":{"type":"string"},"on":{"type":"boolean"}}"#, required: &["on"] },
+    ToolSpec { name: "bench_vna_sweep", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA: a linear sweep of start_hz to stop_hz in `points` points (1 to 401, about 0.2 s each) with RF on the TX port, measuring S21 (RX channel) and S11 (reflection channel). The results are raw ratios, not calibrated: the cable, bridge and front-end are not removed. Saves a CSV (frequency, S21 and S11 as re/im, dB and degrees) and returns a summary, and the rows themselves when there are at most 51 points. if_hz (a divisor of 48 kHz such as 12000, 6000 or 4000), point_ms (0.2 to 100) and rf_level (0 to 16383) override the instrument's settings for this sweep.",
+        props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"}}"#, required: &["start_hz"] },
     ToolSpec { name: "bench_scope_self_cal", tier: Tier::Full, kinds: &[Kind::Scope],
         desc: "Run the scope's self-calibration (*CAL?). It rewrites the stored calibration, takes a minute or two and drives its own levels onto the inputs. All probes and cables must be disconnected first; confirm_inputs_disconnected must be true, and that must come from the person at the bench.",
         props: r#"{"instrument":{"type":"string"},"confirm_inputs_disconnected":{"type":"boolean"}}"#, required: &["confirm_inputs_disconnected"] },
@@ -106,6 +111,7 @@ fn connect(i: &Instrument) -> Result<Link, String> {
     match i.kind {
         Kind::Scope => Link::tcp(i.host.as_deref().unwrap_or_default(), i.port),
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
+        Kind::Vna => Err("the VNA has no SCPI link".into()),
     }
 }
 
@@ -148,6 +154,14 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     }
     let lock = instrument_lock(&inst.name);
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
+    if inst.kind == Kind::Vna {
+        return match name {
+            "bench_identify" => Ok(vna::identify(&inst.vna)),
+            "bench_status" => vna::status(&inst.vna),
+            "bench_vna_sweep" => vna::sweep(&inst.vna, args, &out_dir()),
+            _ => Err(format!("{name} does not apply to {:?}", inst.name)),
+        };
+    }
     let mut l = connect(inst)?;
     let lim = psu::Limits {
         max_volts: inst.max_volts,
@@ -304,6 +318,37 @@ mod tests {
                 && names.contains(&"bench_psu_output".to_string())
         );
         assert!(!names.contains(&"bench_scope_self_cal".to_string()));
+    }
+
+    #[test]
+    fn the_vna_sweep_tool_is_listed_and_allowed_only_at_read_config() {
+        let vna = |tier: &str| {
+            config::parse(&format!(
+                r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let listed = |v: &[Instrument]| tool_defs(v).iter().any(|t| t.name == "bench_vna_sweep");
+        assert!(listed(&vna("read_config")));
+        assert!(!listed(&vna("read_only")));
+        let e = call(
+            &vna("read_only"),
+            "bench_vna_sweep",
+            &json!({"start_hz": 10e6}),
+        )
+        .unwrap_err();
+        assert!(e.contains("needs tier"), "{e}");
+        // Nothing but the VNA's own tools apply to it: no SCPI tool reaches it.
+        let e = call(&vna("full"), "bench_set", &json!({})).unwrap_err();
+        assert!(e.contains("applies to no configured instrument"), "{e}");
+        // And a bad sweep is refused before any hardware is touched.
+        let e = call(
+            &vna("read_config"),
+            "bench_vna_sweep",
+            &json!({"start_hz": 10e6, "points": 0}),
+        )
+        .unwrap_err();
+        assert!(e.contains("points"), "{e}");
     }
 
     #[test]

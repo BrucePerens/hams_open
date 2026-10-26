@@ -7,3 +7,5 @@ license = "AGPL-3.0-or-later"
 publish = false
 
 [dependencies]
+rusb = "0.9"
+cpal = "0.18"

@@ -7,5 +7,6 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 serde_json = "1"
 libc = "0.2"
+vnwa_open = { path = "../vnwa_open" }
 rmcp = { version = "3.7", features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
