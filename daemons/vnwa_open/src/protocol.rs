@@ -58,6 +58,16 @@ pub fn if_word(if_hz: f64) -> u32 {
     (if_hz * 256.0 * 4_294_967_296.0 / LO_CLOCK_HZ).round() as u32
 }
 
+/// The two fields of request 0x41 that scale with the IF (payload: a 32-bit word, a 16-bit field, then the byte
+/// `02`, all little endian). The 32-bit word is `IF * 10944` worth of LO tuning word (`round(IF * 10944 * 2^32 /
+/// clock_lo)`) and the 16-bit field is `IF * 0.466`. Confirmed for IF 12 kHz, 6 kHz and 4 kHz. What they drive is
+/// not known (10944 = 2^6 * 171 and 0.466 are unexplained constants).
+pub fn if_scaled_fields(if_hz: f64) -> (u32, u16) {
+    // [@ANCHOR: vnwa_open_if_scaled_fields]
+    let word = (if_hz * 10_944.0 * 4_294_967_296.0 / LO_CLOCK_HZ).round() as u32;
+    (word, (if_hz * 0.466).round() as u16)
+}
+
 /// The LO chip's clock on the observed unit: 12 MHz x 3 x 9.
 pub const LO_CLOCK_HZ: f64 = 324_000_000.0;
 
@@ -152,6 +162,15 @@ mod tests {
         assert_eq!(if_word(6_000.0), 0x0136_b06e); // request 0x42, n = 2
         assert_eq!(if_word(18_000.0), 0x03a4_114b); // request 0x43
         assert_eq!(if_word(300_000.0), 0x3cae_7592); // request 0x44
+    }
+
+    // Tests [@ANCHOR: vnwa_open_if_scaled_fields]
+    #[test]
+    fn the_request_0x41_fields_follow_the_if() {
+        assert_eq!(if_scaled_fields(12_000.0), (0x67c3_ece3, 0x15d8));
+        assert_eq!(if_scaled_fields(6_000.0), (0x33e1_f671, 0x0aec));
+        assert_eq!(if_scaled_fields(4_000.0), (0x2296_a44c, 0x0748));
+        assert_eq!(if_word(4_000.0), 0x00cf_204a); // request 0x42 at n = 3
     }
 
     // Tests [@ANCHOR: vnwa_open_sweep_offset]

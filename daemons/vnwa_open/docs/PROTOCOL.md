@@ -62,6 +62,9 @@ exactly two set-up requests, each to half its value, and the codec audio moved f
   1.536 MHz worth (`6e b0 36 01`). The fifth byte (0) is unchanged.
 * **0x41** (7 bytes): the 32-bit word (131.328 MHz worth at n = 1, 65.664 MHz at n = 2) and the following 16-bit field
   (`0x15d8` at n = 1, `0x0aec` at n = 2) both halve; the last byte (`02`) stays. Meaning not known.
+* **n = 3 (IF 4 kHz)** confirmed both ways: the codec audio showed a 4.000 kHz tone, 0x42 became `4a 20 cf 00 00`
+  (1.024 MHz worth), and 0x41 became `4c a4 96 22 | 48 07 | 02`: the 32-bit word is `round(IF * 10944 * 2^32 / 324 MHz)`
+  and the 16-bit field is `IF * 0.466` (12 kHz: 5592, 6 kHz: 2796, 4 kHz: 1864), a fit exact at all three settings.
 * Unchanged by n: 0x40, 0x43, 0x44, 0x47, 0x4b and the 0x49 words. 0x43 = 4.608 MHz worth = 18 kHz x 256, and an
   18.000 kHz tone appears in the codec audio just before every sweep (a calibration/level burst); 0x44 = 76.8 MHz
   worth = 300 kHz x 256 (not matched to anything yet). 0x4b = 44.0 MHz worth (not matched).
