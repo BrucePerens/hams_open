@@ -23,14 +23,15 @@ measured signal arrives as audio from the two codecs):
 | The whole set-up block (nine requests) | 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64 | built by `setup::setup_block`, verified byte for byte against nine captured blocks |
 | Everything else in the set-up block (0x40, 0x44, 0x47, 0x4b), the step counter, the audio to S-parameter maths | | not decoded |
 
-| Audio to a complex measurement (`audio::measure_point`) | codec audio | tested on synthetic tones, on real loopback samples at 12, 6 and 4 kHz, and compared with the vendor program's own S21 (0.7 to 0.9 percent apart at four frequencies) |
+| Audio to a complex measurement (`audio::measure_point`) | codec audio | tested on synthetic tones, on real loopback samples at 12, 6 and 4 kHz, and compared with the vendor program's own S21 (0.1 to 1 percent apart at three IFs, both codecs, four RF frequencies) |
 
 **What the audio step is and is not.** It finds the amplitude and phase of the tone at the IF in whole IF periods (skipping
 presamples and postsamples) and divides the left channel by the right (reference) channel; `vendor_convention` conjugates the
 result to the vendor program's sign. Against the vendor program's own uncalibrated S21 on a TX-to-RX loopback (codec 2) it agrees
 to 0.7 to 0.9 percent in magnitude and phase at 1, 10, 20 and 30 MHz, and to 1.5 percent rms over the first 15 points of a sweep when
-the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in frequency).
-Not covered: a frequency-dependent device under test, the open/short/load/through calibration, the vendor's low-frequency digital
+the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in RF frequency). It also
+reproduces the unit's IF-dependent response (|S21| 0.874, 0.799 and 0.782 at IF 12, 6 and 4 kHz) to 0.1 to 1 percent on both codecs
+(`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration, the vendor's low-frequency digital
 filtering (below the codec's cut-off) and the windowing used for time-domain transforms, none of which is implemented
 (details in `docs/PROTOCOL.md`).
 
