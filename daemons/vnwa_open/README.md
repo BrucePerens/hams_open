@@ -1,8 +1,10 @@
 # vnwa_open
 
 An open Rust driver for the DG8SAQ **VNWA 3E** vector network analyzer (USB 20a0:4118, plus two PCM2900C
-audio codecs), written from observed USB and audio traffic of the owner's own unit. Status (2026-10-26): early.
-The crate encodes only requests that were confirmed on the wire; it makes **no USB transfers yet**.
+audio codecs), written from observed USB and audio traffic of the owner's own unit. Status (2026-10-26): it measures.
+`usb` sends the confirmed requests (control transfers only, no reset, no interface claim), `capture` records the two
+codecs (48 kHz, 16 bit, stereo: all they offer) and `sweep` turns a frequency list into uncalibrated S11 and S21 on the
+loopback. No calibration yet. `bench_mcp` uses it (`bench_vna_sweep`). Examples: `probe`, `sweep`.
 
 Licence: AGPL-3.0-or-later. Not published to crates.io (`publish = false`). No vendor code and no vendor firmware
 is used, loaded or flashed.
