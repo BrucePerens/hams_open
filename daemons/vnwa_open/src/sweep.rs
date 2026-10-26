@@ -198,6 +198,19 @@ impl Vna {
         };
         let (l1, r1) = split(&f11);
         let (l2, r2) = split(&f21);
+        // The reference channel of each codec (left on codec 1, right on codec 2) must carry the tone at all: when it does not
+        // (the unit's reference inputs lost the signal while the measured channels still see it, seen 2026-10-26) the cause is
+        // not the DDS lock and the steadiness check below would only report noise, so say what is missing.
+        let level = |x: &[f64]| tone_at_if(x, fs, c.if_hz).abs();
+        let (ref1, ref2) = (level(&l1), level(&r2));
+        if ref1 < c.min_reference || ref2 < c.min_reference {
+            return Err(format!(
+                "point at {freq_hz} Hz: no signal on the reference channel(s) at the IF (codec 1 left {ref1:.1}, codec 2 right {ref2:.1} counts, minimum {}); the measured channels read codec 1 right {:.1}, codec 2 left {:.1}. The tone is reaching the receivers, so this is the unit's reference input or its cabling, not the DDS lock",
+                c.min_reference,
+                level(&r1),
+                level(&l2)
+            ));
+        }
         // The reference channel of each codec (left on codec 1, right on codec 2) must hold a steady tone at the IF.
         let (e1, c1) = stability(&l1, fs, c.if_hz);
         let (e2, c2) = stability(&r2, fs, c.if_hz);
