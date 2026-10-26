@@ -1,0 +1,14 @@
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/deps/serde-ca2f93406a35cd48.d: /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/build/serde-389ddd2416ac0a39/out/private.rs
+
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/deps/libserde-ca2f93406a35cd48.rlib: /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/build/serde-389ddd2416ac0a39/out/private.rs
+
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/deps/libserde-ca2f93406a35cd48.rmeta: /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs /home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/build/serde-389ddd2416ac0a39/out/private.rs
+
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/lib.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/integer128.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/mod.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/de.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.229/src/private/ser.rs:
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/build/serde-389ddd2416ac0a39/out/private.rs:
+
+# env-dep:OUT_DIR=/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/release/build/serde-389ddd2416ac0a39/out

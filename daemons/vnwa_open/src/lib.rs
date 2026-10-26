@@ -5,8 +5,11 @@
 //! the wire; it makes no USB transfers yet.
 
 pub mod audio;
+pub mod capture;
 pub mod protocol;
 pub mod setup;
+pub mod sweep;
+pub mod usb;
 
 /// USB vendor ID and product ID of the VNWA control chip.
 pub const VID: u16 = 0x20a0;

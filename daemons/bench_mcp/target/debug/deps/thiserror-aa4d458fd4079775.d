@@ -1,0 +1,12 @@
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/debug/deps/thiserror-aa4d458fd4079775.d: /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/lib.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/aserror.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/display.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/var.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/private.rs /home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/debug/build/thiserror-2a2ace9117c7add0/out/private.rs
+
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/debug/deps/libthiserror-aa4d458fd4079775.rmeta: /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/lib.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/aserror.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/display.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/var.rs /home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/private.rs /home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/debug/build/thiserror-2a2ace9117c7add0/out/private.rs
+
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/lib.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/aserror.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/display.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/var.rs:
+/home/bruce/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.21/src/private.rs:
+/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/debug/build/thiserror-2a2ace9117c7add0/out/private.rs:
+
+# env-dep:OUT_DIR=/home/bruce/workspace/tmp/wt_open_vna/daemons/bench_mcp/target/debug/build/thiserror-2a2ace9117c7add0/out
