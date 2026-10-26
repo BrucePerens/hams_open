@@ -222,6 +222,7 @@ def detect_inbound_spam_signals(subject, body_html):
 
 
 # [@ANCHOR: hams_helpdesk:ses_verdicts]
+# Verified by [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
 # Amazon SES scans mail when the receipt rule has ScanEnabled (hams.com's does) and writes the result into the
 # stored message as X-SES-Spam-Verdict and X-SES-Virus-Verdict, each PASS, FAIL, GRAY or PROCESSING_FAILED.
 # Only a FAIL is used: GRAY and PROCESSING_FAILED mean SES could not decide. The authentication verdicts

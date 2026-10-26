@@ -196,7 +196,7 @@ class TestInboundSpamFilter(HamsTransactionCase):
 
     # ------------------------------------------------------------------
     # Amazon SES scan verdicts [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
-    # Verifies [@ANCHOR: hams_helpdesk:ses_verdicts]
+    # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
     # ------------------------------------------------------------------
 
     def _ses_message(self, spam, virus):
