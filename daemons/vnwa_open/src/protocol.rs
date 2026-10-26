@@ -28,12 +28,26 @@ pub fn tuning_word(freq_hz: f64) -> u32 {
     (freq_hz * 4_294_967_296.0 / DDS_CLOCK_HZ).round() as u32
 }
 
-/// The sweep-frequency word carried in bytes 4 to 8 of request 0x49's payload (a 40-bit little-endian
-/// number): `round(f / 9 * 2^40 / clock)`. The divisor 9 is what the wire shows (10 MHz gave 10/9 MHz worth,
-/// 25 MHz gave 25/9 MHz worth); why the program divides by nine is not known.
-pub fn sweep_word(freq_hz: f64) -> u64 {
+/// The common input clock of both DDS chips on the unit that was observed: a 12 MHz TCXO times the
+/// premultiplier 3. Each chip multiplies it again (nRF and nLO; 10 and 9 for the 1 to 100 MHz sweeps), so the
+/// RF clock was 360 MHz and the LO clock 324 MHz.
+pub const INPUT_CLOCK_HZ: f64 = 36_000_000.0;
+
+/// The 40-bit sweep-frequency word of request 0x49 (bytes 4 to 8, little endian): the frequency normalised to
+/// both chips' clock multipliers, `round(f * 2^40 / (36 MHz * nRF * nLO))`. Each chip's tuning word is then one
+/// integer multiply of it (`chip_tuning_word`). Confirmed at 1, 2, 5, 10, 25, 50 and 100 MHz with nRF 10, nLO 9.
+pub fn sweep_word(freq_hz: f64, n_rf: u8, n_lo: u8) -> u64 {
     // [@ANCHOR: vnwa_open_sweep_word]
-    (freq_hz / 9.0 * 1_099_511_627_776.0 / DDS_CLOCK_HZ).round() as u64
+    (freq_hz * 1_099_511_627_776.0 / (INPUT_CLOCK_HZ * f64::from(n_rf) * f64::from(n_lo))).round()
+        as u64
+}
+
+/// The 32-bit tuning word for one chip from the sweep word: `floor(word * n_other / 256)`, where `n_other` is the
+/// OTHER chip's multiplier (nLO for the RF chip, nRF for the LO chip). For the RF chip this equals the word the
+/// unit reports when the generator's setting is read back (request 0x35).
+pub fn chip_tuning_word(sweep_word: u64, n_other: u8) -> u32 {
+    // [@ANCHOR: vnwa_open_chip_tuning_word]
+    ((u128::from(sweep_word) * u128::from(n_other)) / 256) as u32
 }
 
 /// The signed 48-bit offset carried in the tail of request 0x49's payload (little endian):
@@ -93,12 +107,31 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_sweep_word]
     #[test]
-    fn sweep_words_match_the_two_single_point_sweeps() {
-        assert_eq!(sweep_word(10.0e6), 0x0000_ca45_87e7);
-        assert_eq!(sweep_word(25.0e6), 0x0001_f9ad_d3c1);
-        // The two other words seen in the 25 MHz sweep: 1 MHz and 2 MHz.
-        assert_eq!(sweep_word(1.0e6), 0x143a_2731);
-        assert_eq!(sweep_word(2.0e6), 0x2874_4e61);
+    fn sweep_words_match_the_captured_sweeps() {
+        assert_eq!(sweep_word(10.0e6, 10, 9), 0x0000_ca45_87e7);
+        assert_eq!(sweep_word(25.0e6, 10, 9), 0x0001_f9ad_d3c1);
+        assert_eq!(sweep_word(1.0e6, 10, 9), 0x143a_2731);
+        assert_eq!(sweep_word(2.0e6, 10, 9), 0x2874_4e61);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_chip_tuning_word]
+    #[test]
+    fn the_rf_chip_word_equals_the_generator_read_back() {
+        // (frequency Hz, sweep word seen, tuning word the unit reported for the RF chip), nRF 10, nLO 9.
+        let seen = [
+            (1.0e6, 339_355_441u64, 0x00b6_0b60u32),
+            (5.0e6, 1_696_777_203, 0x038e_38e3),
+            (10.0e6, 3_393_554_407, 0x071c_71c7),
+            (25.0e6, 8_483_886_017, 0x11c7_1c71),
+            (50.0e6, 16_967_772_034, 0x238e_38e3),
+            (100.0e6, 33_935_544_068, 0x471c_71c7),
+        ];
+        for (f, w, rf) in seen {
+            assert_eq!(chip_tuning_word(w, 9), rf, "{f} Hz");
+            // The LO chip, clocked at 324 MHz, lands on the same frequency.
+            let lo = f64::from(chip_tuning_word(w, 10)) * 324.0e6 / 4_294_967_296.0;
+            assert!((lo - f).abs() < 0.2, "{f} Hz: LO {lo}");
+        }
     }
 
     // Tests [@ANCHOR: vnwa_open_sweep_offset]

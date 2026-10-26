@@ -25,21 +25,25 @@ overclock offer) the core clock is 360 MHz.
 | RF level: request 0x58, 14-bit level in `wValue` (0x3fff maximum) | user set 3fff; the program's level search stepped 0x3e8a down to 0x0fb5 and back |
 | Measurement set-up block: nine writes 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64 | identical order every time; only the 0x49 payload changes between points |
 
-## Decoded against the AD9859 data sheet (Rev. B, Table 5)
+## Clock structure (from the vendor program's Instrument Settings page, owner's unit)
 
-The set-up block is a load of AD9859 registers, sent little endian:
+The unit's two DDS chips are an **AD9859** and an **AD9951** (the program lists both). Their register maps are
+identical (CFR1 0x00, CFR2 0x01, ASF 0x02, ARR 0x03, FTW0 0x04, POW0 0x05; REFCLK multiplier CFR2<7:3>, 4x to 20x),
+and neither has a frequency-sweep engine, so a sweep is arithmetic done by the unit's microcontroller. Both chips are
+fed 12 MHz (TCXO) x 3 (premultiplier, constant) = 36 MHz, then multiplied by nRF = 10 (RF clock 360 MHz) and
+nLO = 9 (LO clock 324 MHz).
 
-* Request 0x40, 7 bytes = CFR1 (4 bytes) then CFR2 (3 bytes). Seen: CFR1 `0x01080002`, CFR2 `0x00007d`.
-  CFR2<7:3> = 15, so the REFCLK multiplier is 15; CFR2<2> = 1 (VCO range high); CFR2<1:0> = 1 (charge pump).
-  With the 360 MHz core clock the tuning words imply, the reference is 24 MHz. CFR1<8> (LSB first) is clear.
-  The bit that differs between "generator off" and "on" (CFR1 `0x01000002` against `0x01080002`) is CFR1<19>,
-  which the data sheet lists as not used, so it is probably a board-level control bit carried in that word by the
-  microcontroller (hypothesis).
-* The first four bytes of requests 0x41, 0x42, 0x43, 0x44 and 0x4b are frequency tuning words (FTW0) at 360 MHz:
-  0x41 145.92 MHz, 0x42 3.4133 MHz, 0x43 5.12 MHz, 0x44 85.3333 MHz, 0x4b 48.8889 MHz. The remaining bytes
-  (0x41 `d8 15 02`, 0x47 `01 40`, 0x4b `65 00 03`) are not decoded. Which chip each request addresses is not known.
-* Request 0x49: the low 32 bits of the 6-byte tail are an FTW (e.g. `0x22c3f35c`, 48.8889 MHz, one more than the
-  word in 0x4b); the upper 16 bits are not decoded.
+**Correction.** An earlier version of these notes read request 0x40's 7-byte payload as CFR1 and CFR2 and derived a
+x15 multiplier and a 24 MHz reference. That does not fit the settings above (x10 and x9 on 36 MHz) and was a
+misreading; the meaning of request 0x40 and of 0x41, 0x42, 0x43, 0x44, 0x47 and 0x4b is not known.
+
+## Request 0x49 payload (15 bytes)
+
+`[step][00][nRF][nLO][sweep word, 5 bytes][offset, 6 bytes]`, with nRF = 0x0a and nLO = 0x09 in every capture
+(read back as `0a 09` by request 0x3a). The sweep word is `round(f * 2^40 / (36 MHz * nRF * nLO))`, little endian, and
+each chip's tuning word is one integer multiply of it: `FTW_RF = floor(w * nLO / 256)`, `FTW_LO = floor(w * nRF / 256)`.
+The RF value equals the tuning word the unit reports when the generator setting is read back (request 0x35) at all of
+1, 5, 10, 25, 50 and 100 MHz. The factor nine seen earlier is nLO.
 
 ## Single-point sweep capture (v04_points)
 
@@ -70,12 +74,9 @@ number of stages the chip takes to move from the old frequency to the new one).
 
 ## Seen but not decoded
 
-* Request 0x49 payload (15 bytes): `[b0][00 0a 09 ..][6-byte tail]`. `b0` varies (0x21, 0x05, 0x06, 0x04,
-  0x2b, 0x19, 0xca). The tail, read as a little-endian number, is proportional to a frequency (ratios
-  1:2:15, 1:10:15:30 seen), but it does not map one-to-one onto the sweep points: in a 3-point 10 to 20 MHz
-  sweep the last four writes were identical.
-* The first byte pair of the 0x40 payload: `02 00 08 01 7d 00 00` with the generator on and `02 00 00 01 ..`
-  off (bit 0x08 of the third byte).
+* The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
+* Request 0x40: `02 00 08 01 7d 00 00` with the generator on and `02 00 00 01 7d 00 00` off (bit 0x08 of the third
+  byte); not CFR1/CFR2 (see the correction above).
 * Reads at start-up: 0x00 (5 bytes), 0xee (64 bytes, a rising table), 0x3f, 0xf7, 0xff, 0x97, 0xf2, 0x58,
   0x86, 0x46 (8 bytes), 0x4f, 0xf3, 0x71, 0x60, 0x0e (polled), 0x85 (2 bytes, jitters), 0x91, 0x66, 0x62,
   0x61, 0x98, 0x9a, 0x04, 0x0d, 0x02.
