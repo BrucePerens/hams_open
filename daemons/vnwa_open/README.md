@@ -23,14 +23,16 @@ measured signal arrives as audio from the two codecs):
 | The whole set-up block (nine requests) | 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64 | built by `setup::setup_block`, verified byte for byte against nine captured blocks |
 | Everything else in the set-up block (0x40, 0x44, 0x47, 0x4b), the step counter, the audio to S-parameter maths | | not decoded |
 
-| Audio to a complex measurement (`audio::measure_point`) | codec audio | tested on synthetic tones and on real loopback samples at 12, 6 and 4 kHz |
+| Audio to a complex measurement (`audio::measure_point`) | codec audio | tested on synthetic tones, on real loopback samples at 12, 6 and 4 kHz, and compared with the vendor program's own S21 (scale and sign agree, trend only roughly: see PROTOCOL.md) |
 
 **What the audio step is and is not.** It finds the amplitude and phase of the tone at the IF in whole IF periods
 (skipping presamples and postsamples) and divides the left channel by the right (reference) channel. With TX connected to
 RX the real samples give |L/R| of 1.12 to 1.24 and a phase of about 180 degrees, the same at all three IFs. It is not
 calibrated: the open/short/load/through correction, the vendor's low-frequency digital filtering (below the codec's
-cut-off) and the windowing used for time-domain transforms are not implemented, and nothing here has been checked against
-the vendor program's own S-parameter output.
+cut-off) and the windowing used for time-domain transforms are not implemented. Against the vendor program's own uncalibrated
+S21 (a 1 to 30 MHz loopback sweep) the magnitude agrees to about 1 percent on average (scale 1.006) and the vendor's phase
+is the complex conjugate plus a constant offset of about 6 degrees, but the vendor's values change about twice as fast across
+the sweep as mine, leaving a 5.6 percent residual that is not explained (details in `docs/PROTOCOL.md`).
 
 The two DDS chips are an AD9859 and an AD9951 (identical register maps, no sweep engine), clocked from a 12 MHz TCXO
 times a premultiplier of 3, then times nRF = 10 (RF, 360 MHz) and nLO = 9 (LO, 324 MHz).

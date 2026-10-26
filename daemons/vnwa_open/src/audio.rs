@@ -71,6 +71,17 @@ pub fn analysis_span(
     }
 }
 
+/// The vendor program's convention for the same measurement: the complex conjugate of `measure_point`'s value (its phase
+/// has the opposite sign, as it would for a mixer whose LO is above the RF). Established against the vendor program's
+/// own S21, see the reference test below.
+pub fn vendor_convention(c: Complex) -> Complex {
+    // [@ANCHOR: vnwa_open_vendor_convention]
+    Complex {
+        re: c.re,
+        im: -c.im,
+    }
+}
+
 /// The measurement of one point: the left channel's tone divided by the right (reference) channel's, at the IF.
 /// `min_reference` is the smallest reference amplitude (in sample counts) that is accepted as a signal.
 #[allow(clippy::too_many_arguments)]
@@ -106,6 +117,7 @@ mod tests {
     use super::*;
 
     include!("audio_vectors.rs");
+    include!("reference_vectors.rs");
 
     fn tone(a: f64, phase_deg: f64, fs: f64, f: f64, n: usize) -> Vec<f64> {
         (0..n)
@@ -132,6 +144,46 @@ mod tests {
         let m = measure_point(&l, &r, 48_000.0, 12_000.0, 2, 2, 0.01).unwrap();
         assert!((m.abs() - 2.0).abs() < 1e-12);
         assert!((m.phase_deg() - 60.0).abs() < 1e-9);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_vendor_convention]
+    #[test]
+    fn against_the_vendor_programs_own_s21_the_scale_and_sign_agree_and_the_trend_roughly_does() {
+        let mine: Vec<Complex> = CHUNKS
+            .iter()
+            .map(|c| {
+                let l: Vec<f64> = c.iter().map(|f| f64::from(f[0])).collect();
+                let r: Vec<f64> = c.iter().map(|f| f64::from(f[1])).collect();
+                vendor_convention(measure_point(&l, &r, 48_000.0, 4_000.0, 0, 0, 100.0).unwrap())
+            })
+            .collect();
+        let vendor: Vec<Complex> = VENDOR_S21
+            .iter()
+            .map(|&(re, im)| Complex { re, im })
+            .collect();
+        // Best complex constant a minimising |vendor - a * mine|, a = <mine, vendor> / <mine, mine>.
+        let (mut num_re, mut num_im, mut den) = (0.0, 0.0, 0.0);
+        for (m, v) in mine.iter().zip(&vendor) {
+            num_re += m.re * v.re + m.im * v.im;
+            num_im += m.re * v.im - m.im * v.re;
+            den += m.re * m.re + m.im * m.im;
+        }
+        let a = Complex {
+            re: num_re / den,
+            im: num_im / den,
+        };
+        let (mut err, mut norm) = (0.0, 0.0);
+        for (m, v) in mine.iter().zip(&vendor) {
+            let (re, im) = (a.re * m.re - a.im * m.im, a.re * m.im + a.im * m.re);
+            err += (v.re - re).powi(2) + (v.im - im).powi(2);
+            norm += v.re * v.re + v.im * v.im;
+        }
+        let residual = (err / norm).sqrt();
+        // Measured when this was written: |a| = 1.006, phase 6 degrees, residual 5.6 percent. The 6 degree offset and the
+        // vendor's steeper trend with frequency are not explained, so this only bounds them.
+        assert!((0.97..1.03).contains(&a.abs()), "scale {}", a.abs());
+        assert!(a.phase_deg().abs() < 10.0, "phase offset {}", a.phase_deg());
+        assert!(residual < 0.08, "residual {residual}");
     }
 
     #[test]
