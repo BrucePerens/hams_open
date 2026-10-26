@@ -95,6 +95,16 @@ Limits of the builder: the bytes 2 and 5 of 0x40 are known only for 1.33, 8, 30 
 `3 x (counter - 1)` only for counters 3 and 4 (other counters, seen in the first blocks after start-up, give offsets
 that do not follow it), so it refuses those combinations.
 
+## Audio to a complex number (`audio.rs`)
+
+From the vendor's Help file: amplitude and phase come from at least one whole IF period of samples, after skipping the
+presamples that follow a frequency change and before the postsamples that precede the next; the right channel is the
+reference. `audio::measure_point` does that with the exact tone-at-IF sum over whole periods. Real loopback samples
+(10 MHz, TX to RX, both codecs) give left/right = 1.12 at 179 degrees (12 kHz), 1.22 at -178 degrees (6 kHz) and 1.24 at
+-177 degrees (4 kHz): a constant inversion and a slowly rising gain ratio, so the IF-dependent part is the unit's analogue
+path and the calibration is meant to remove it. The recording also shows the signal arriving in bursts (a single sweep
+gives the tone for part of a second only), so a reader must gate on the reference amplitude.
+
 ## Single-point sweep capture (v04_points)
 
 * The 6-byte tail of request 0x49 is a **signed 48-bit** little-endian word: offset = word x 360 MHz / 2^48.
