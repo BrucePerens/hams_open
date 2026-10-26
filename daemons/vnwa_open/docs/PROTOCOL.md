@@ -45,6 +45,21 @@ each chip's tuning word is one integer multiply of it: `FTW_RF = floor(w * nLO /
 The RF value equals the tuning word the unit reports when the generator setting is read back (request 0x35) at all of
 1, 5, 10, 25, 50 and 100 MHz. The factor nine seen earlier is nLO.
 
+## Audio path (loopback, TX connected to RX, 10 MHz single sweep, both codecs recorded at 48 kHz stereo)
+
+Each codec gives a clean tone in both channels during the sweep: **12.000 kHz** (about 1100 to 1200 rms) at 10 MHz.
+An earlier run in the same recording showed 18.000 kHz. So the IF is a few kHz, fs/4 at 48 kHz for the 12 kHz tone.
+How the commands produce the IF is not decoded: the LO tuning word computed from the sweep word lands on the RF
+frequency to within 0.2 Hz, so the 12 kHz difference comes from something else (an offset sent elsewhere, or the
+alias scheme the Help file describes).
+
+## Set-up constants read at the LO clock
+
+The first four bytes of requests 0x41, 0x42, 0x43, 0x44 and 0x4b, read as 32-bit tuning words at the 324 MHz LO clock,
+are round frequencies: 131.328, 3.072, 4.608, 76.8 and 44.0 MHz (at 360 MHz they are not round). Their role is not
+known. (Bytes 1 to 4 of request 0x42 also equal 159072, the 12 kHz word at 324 MHz, but the first-four-byte reading
+is rounder, so that match is probably a coincidence.)
+
 ## Single-point sweep capture (v04_points)
 
 * The 6-byte tail of request 0x49 is a **signed 48-bit** little-endian word: offset = word x 360 MHz / 2^48.
