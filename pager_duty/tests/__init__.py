@@ -21,6 +21,7 @@ from . import test_pager_mcp_triage
 from . import test_pager_smart_spooler
 from . import test_pagerduty_maintenance
 from . import test_pager_security
+from . import test_pager_personas
 from . import test_schedule
 from . import test_schedule_edge_cases
 from . import test_synthetic_spooler

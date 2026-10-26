@@ -13,6 +13,9 @@ from . import real_transaction
 from . import test_integration
 from . import test_json_rpc_client
 from . import test_cron_service_access
+from . import test_persona_support
+from . import test_personas
+from . import test_persona_sweeps
 from . import test_purge_cron_migration
 from . import test_security_utils
 from . import test_service_uid_no_default_env
