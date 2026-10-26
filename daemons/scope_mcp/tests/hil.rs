@@ -3,9 +3,13 @@
 //! run with `SCOPE_MCP_HOST=<ip> cargo test --release -- --ignored` (the probe on the calibrator,
 //! scope running).
 
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
+const INIT: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"hil","version":"1"}}}"#;
+const INITIALIZED: &str = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+
+/// Complete handshake, then each request in turn; returns the responses after the initialize one.
 fn rpc(requests: &[&str]) -> Vec<serde_json::Value> {
     let mut child = Command::new(env!("CARGO_BIN_EXE_scope_mcp"))
         .stdin(Stdio::piped())
@@ -13,26 +17,29 @@ fn rpc(requests: &[&str]) -> Vec<serde_json::Value> {
         .spawn()
         .unwrap();
     let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut next =
+        || serde_json::from_str::<serde_json::Value>(&lines.next().unwrap().unwrap()).unwrap();
+    writeln!(stdin, "{INIT}").unwrap();
+    assert_eq!(next()["result"]["serverInfo"]["name"], "scope_mcp");
+    writeln!(stdin, "{INITIALIZED}").unwrap();
+    let mut out = Vec::new();
     for r in requests {
         writeln!(stdin, "{r}").unwrap();
+        out.push(next());
     }
     drop(stdin);
-    let out = child.wait_with_output().unwrap();
-    String::from_utf8(out.stdout)
-        .unwrap()
-        .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
-        .collect()
+    let _ = child.wait();
+    out
 }
 
 #[test]
 #[ignore]
 fn identify_and_status_on_a_real_scope() {
     let r = rpc(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"scope_identify","arguments":{}}}"#,
     ]);
-    let text = r[1]["result"]["content"][0]["text"].as_str().unwrap();
+    let text = r[0]["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("Siglent"), "{text}");
 }
 
@@ -40,7 +47,7 @@ fn identify_and_status_on_a_real_scope() {
 #[ignore]
 fn self_cal_is_refused_at_the_default_tier() {
     let r = rpc(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"scope_self_cal","arguments":{"confirm_inputs_disconnected":true}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"scope_self_cal","arguments":{"confirm_inputs_disconnected":true}}}"#,
     ]);
     assert_eq!(r[0]["result"]["isError"], true);
 }
