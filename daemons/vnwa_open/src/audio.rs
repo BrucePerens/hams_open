@@ -132,6 +132,7 @@ mod tests {
     include!("audio_vectors.rs");
     include!("reference_vectors.rs");
     include!("if_reference_vectors.rs");
+    include!("level_vectors.rs");
 
     fn tone(a: f64, phase_deg: f64, fs: f64, f: f64, n: usize) -> Vec<f64> {
         (0..n)
@@ -261,6 +262,28 @@ mod tests {
                     r.if_hz
                 );
             }
+        }
+    }
+
+    #[test]
+    fn the_ratio_does_not_depend_on_the_signal_level_over_24_db() {
+        // Real samples at five TX levels (reference amplitude about 17000 down to about 1000 counts): the ratio stays within 0.3
+        // percent and 0.2 degrees (measured: 0.7876 to 0.7882, 176.13 to 176.18 degrees; the vendor program's own values scatter
+        // by 1 to 2.5 percent at the lower levels).
+        let m: Vec<Complex> = LEVEL_CHUNKS.iter().map(|c| mine(c)).collect();
+        for z in &m {
+            assert!(
+                (z.abs() - m[0].abs()).abs() / m[0].abs() < 0.003,
+                "{} against {}",
+                z.abs(),
+                m[0].abs()
+            );
+            assert!(
+                (z.phase_deg() - m[0].phase_deg()).abs() < 0.2,
+                "{} against {}",
+                z.phase_deg(),
+                m[0].phase_deg()
+            );
         }
     }
 
