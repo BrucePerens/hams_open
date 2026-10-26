@@ -105,6 +105,30 @@ reference. `audio::measure_point` does that with the exact tone-at-IF sum over w
 path and the calibration is meant to remove it. The recording also shows the signal arriving in bursts (a single sweep
 gives the tone for part of a second only), so a reader must gate on the reference amplitude.
 
+## Reference check against the vendor program's own S21 (2026-10-26)
+
+Method. The vendor program was started with its documented `-tcpip 55555` remote control (listening only inside the
+private network namespace), driven with `setgrid lin 1e6 30e6 30`, `timeperpoint 60` and `sweep s21`, and the S21 it returned on
+its data port was recorded (three runs; the first point's |S21| was 0.7805, 0.7844 and 0.7779). The codecs can be opened by
+only one program at a time, and the program paces its sweep by its audio capture, so my own recording could not run
+alongside it. Instead the same sweep was run with no audio device selected (the hardware still sweeps) while both codecs
+were recorded, and the tone at the 4 kHz IF was cut into 30 equal intervals.
+
+Result (codec 2, TX connected to RX, no calibration, no averaging beyond a point): after taking the complex conjugate
+(`audio::vendor_convention`) my left/right ratio equals the vendor's S21 times 1.006 with a constant phase offset of about 6
+degrees, residual 5.6 percent of the vendor's rms. Alignment (point shifts of -0.5 to +0.5) does not change this.
+Not reproduced exactly: the vendor's |S21| rises from 0.783 to 0.829 and its phase by about 21 degrees across the sweep,
+mine from 0.793 to 0.813 and by about 9 degrees. Possible causes (not tested): a correction the vendor applies to the
+uncalibrated values, and the unsynchronised recorded run. Codec 1 gives a different amplitude (1.28 against codec 2's 0.79 at the
+start; the vendor's value matches codec 2). `audio::tests` keeps the recorded chunks and the vendor values as a regression test
+with loose bounds (scale 0.97 to 1.03, phase offset under 10 degrees, residual under 8 percent).
+
+Wine audio notes for this setup. The vendor's Linux guide is right: in a fresh prefix Wine 10 under PipeWire shows the codecs only
+with the ALSA driver (`HKCU\Software\Wine\Drivers` `Audio` = `alsa`); with the Pulse driver the two codecs have the same name and a
+sweep returned no data. `autosetupaudio` failed (error 6) even then, so the capture device names were written into `VNWA.ini`
+(`SoundDevice=In: USB AUDIO  CODEC - USB Audi`, `AuxSoundDevice=In: 2-USB AUDIO  CODEC - USB Au`). Without a selected device the
+program shows "No Sync Found" and the remote control returns zero for every S value.
+
 ## Single-point sweep capture (v04_points)
 
 * The 6-byte tail of request 0x49 is a **signed 48-bit** little-endian word: offset = word x 360 MHz / 2^48.
