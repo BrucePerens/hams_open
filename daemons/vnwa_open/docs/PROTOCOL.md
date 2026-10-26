@@ -243,6 +243,18 @@ the stages are the same. The earlier run-to-run scatter (100 MHz read 0.93 to 1.
 analysis window of two point times starting at T plus 20 ms that spilled over the boundary at 3T by an amount that depends on the audio
 latency; a window inside T to 3T is clean (the ratio is constant to 0.0003 there). The drift of the unit is small: 30 measurements of 10 MHz over 2.5 minutes spread by 0.011 %.
 
+### Firmware or DDS chip, and lock
+
+The AD9859 has no sweep, ramp or profile sequencing: its data sheet offers one frequency tuning word, one phase offset and
+software or pin power-down, and says the longest wake-up time out of power-down is the reference clock multiplier PLL relocking.
+So the timed stages (the quiet first stage, the frequency steps, the quiet last stage) are made by the unit's microcontroller
+writing the chip at multiples of the time per point; the chip only follows. The quiet first stage may be the DDS waking up and its PLL
+locking, which would fit the data sheet but is not proved. The chip has no lock output, so lock can only be inferred from the signal.
+`sweep.rs` does that: it measures the frequency error of the reference tone from its phase advance across the window and the change of
+its level, and refuses a point with more than 2 Hz or 3 % (a healthy burst shows about 0.15 Hz, the codec clock's 12 ppm, and under
+0.1 %); a PLL that has slipped or a window that crosses a stage boundary fails it (a window from 20 to 100 ms at 60 ms per point
+shows 5 Hz and 200 %). The summary of `bench_vna_sweep` reports the worst values.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
