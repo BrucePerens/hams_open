@@ -241,8 +241,7 @@ unit measures up to three frequencies in one burst when the offset in request 0x
 blocks with that offset, probably uses them. This driver does not: it sends every point with its own frequency as `previous`, so
 the stages are the same. The earlier run-to-run scatter (100 MHz read 0.93 to 1.56 with the sweep start as `previous`) was an
 analysis window of two point times starting at T plus 20 ms that spilled over the boundary at 3T by an amount that depends on the audio
-latency; a window inside T to 3T is clean (the ratio is constant to 0.0005 there). The levels below also vary with stage, which is the rms
-steps seen in the earlier recordings. The drift of the unit is small: 30 measurements of 10 MHz over 2.5 minutes spread by 0.011 %.
+latency; a window inside T to 3T is clean (the ratio is constant to 0.0003 there). The drift of the unit is small: 30 measurements of 10 MHz over 2.5 minutes spread by 0.011 %.
 
 ## Seen but not decoded
 
