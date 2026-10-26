@@ -41,6 +41,19 @@ The set-up block is a load of AD9859 registers, sent little endian:
 * Request 0x49: the low 32 bits of the 6-byte tail are an FTW (e.g. `0x22c3f35c`, 48.8889 MHz, one more than the
   word in 0x4b); the upper 16 bits are not decoded.
 
+## Single-point sweep capture (v04_points)
+
+* The 6-byte tail of request 0x49 is a **signed 48-bit** little-endian word: offset = word x 360 MHz / 2^48.
+  Three tails seen decode to exactly +5/9 MHz (`5c f3 c3 22 65 00`), -4/9 MHz (`50 3d 63 17 af ff`) and
+  -1/2 MHz (`fa a4 4f fa a4 ff`), so the 0x49 word is a frequency offset, not an absolute frequency. (Earlier
+  readings as an unsigned or 32-bit word only looked arbitrary.)
+* The first byte of the 0x49 payload counted down 5, 5, 5, 5, 4, 3, 3, 3 during one sweep: a step or phase
+  counter. Its meaning is not decoded.
+* New read requests during the sweep: 0x3a (2 bytes, `0a 09`, the 0x090a that the generator's 0x4c request
+  carries in its `wValue`), 0x72 (1 byte, `01`) and 0x35 with `wValue` 1 (4 bytes, `c7 71 1c 07`: the generator's
+  current tuning word, 10 MHz, read back).
+* The absolute sweep frequency has not yet been identified in any request.
+
 ## Seen but not decoded
 
 * Request 0x49 payload (15 bytes): `[b0][00 0a 09 ..][6-byte tail]`. `b0` varies (0x21, 0x05, 0x06, 0x04,
