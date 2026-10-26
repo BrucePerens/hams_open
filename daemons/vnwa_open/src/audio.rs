@@ -133,6 +133,7 @@ mod tests {
     include!("reference_vectors.rs");
     include!("if_reference_vectors.rs");
     include!("level_vectors.rs");
+    include!("if_scan_vectors.rs");
 
     fn tone(a: f64, phase_deg: f64, fs: f64, f: f64, n: usize) -> Vec<f64> {
         (0..n)
@@ -284,6 +285,42 @@ mod tests {
                 z.phase_deg(),
                 m[0].phase_deg()
             );
+        }
+    }
+
+    #[test]
+    fn the_ifs_response_over_12_to_1_khz_matches_the_vendor_programs_s21_on_both_codecs() {
+        // Six IFs from 3 kHz to 1 kHz (with 12, 6 and 4 kHz above, nine in all): the unit's own response is not flat (|S21| 0.874 to
+        // 0.767, phase 172.3 to 178.9 degrees). Measured when written: at most 0.36 percent (codec 1) and 0.96 percent (codec 2),
+        // phase within 0.2 degrees.
+        for s in IF_SCAN.iter() {
+            let v = complex_of(&s.vendor);
+            for (chunk, reference, limit) in [
+                (&s.codec1, Reference::Left, 0.01),
+                (&s.codec2, Reference::Right, 0.02),
+            ] {
+                let l: Vec<f64> = chunk.iter().map(|f| f64::from(f[0])).collect();
+                let r: Vec<f64> = chunk.iter().map(|f| f64::from(f[1])).collect();
+                let m = vendor_convention(
+                    measure_point(&l, &r, 48_000.0, s.if_hz, 0, 0, reference, 100.0).unwrap(),
+                );
+                let diff = Complex {
+                    re: m.re - v.re,
+                    im: m.im - v.im,
+                }
+                .abs()
+                    / v.abs();
+                assert!(
+                    diff < limit,
+                    "{} Hz {reference:?}: relative difference {diff}",
+                    s.if_hz
+                );
+                assert!(
+                    (m.phase_deg() - v.phase_deg()).abs() < 0.5,
+                    "{} Hz {reference:?}: phase",
+                    s.if_hz
+                );
+            }
         }
     }
 
