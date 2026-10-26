@@ -124,13 +124,22 @@ What it showed:
   (best-fit scale 0.995, phase offset 0.8 degrees) over the first 15 points.
 * At single frequencies (1, 10, 20, 30 MHz, two runs each) my conjugated left/right ratio from codec 2 is 0.7881 at 176.17
   degrees, the vendor's 0.781 to 0.783 at 176.1 to 176.4 degrees: 0.7 to 0.9 percent apart.
-* The vendor's phase is the complex conjugate of `measure_point`'s (`audio::vendor_convention`). Codec 1 carries the channels the
-  other way round (ratio 1.279, phase -176.1), so the vendor's values correspond to codec 2.
+* The vendor's phase is the complex conjugate of `measure_point`'s (`audio::vendor_convention`).
+* Both codecs match once the reference channel is right: codec 2 carries the reference on its right channel (the default) and
+  codec 1 on its **left** (`audio::Reference::Left`; the vendor program has a "Reference = Right/Left Channel" setting).
+  Without that option codec 1 looked like a different measurement (ratio 1.279, the inverse).
 
-Not covered: the loopback is flat, so the check says nothing about frequency-dependent phase or amplitude (a calibrated, frequency-
-dependent DUT was not measured), and the unit's time drift is not explained. `audio::tests` keeps the recorded chunks and the vendor
+IF dependence (a non-flat check). The unit's own path has an amplitude and phase response that depends on the IF, and the
+vendor program reports it: S21 on the TX-to-RX loopback is 0.874 at 172.3 degrees at IF 12 kHz, 0.799 at 174.7 at 6 kHz and
+0.782 at 176.2 at 4 kHz, the same from 1 to 300 MHz (S11 returns the same numbers there). Single-point sweeps at 5 and 25 MHz with
+IF 12 kHz and 6 kHz (`VNWA_SamplesPerPeriod` 4 and 8 in `VNWA.ini`), recorded on both codecs, match the vendor values to 0.1 to 0.3
+percent (codec 1, reference left) and 0.5 to 1.0 percent (codec 2, reference right), with phase within 0.2 degrees.
+
+Not covered: the loopback is flat in RF frequency (to 300 MHz), so a device under test with a frequency-dependent response was not
+measured (the IF dependence above is the only non-flat response that was available without one), and the unit's time drift is
+not explained. `audio::tests` keeps the recorded chunks and the vendor
 values as regression tests (sweep laid out in time: scale 0.98 to 1.02, phase offset under 2 degrees, residual under 3 percent;
-four single frequencies: under 2 percent).
+four single frequencies: under 2 percent; IF 12 kHz and 6 kHz with both codecs: under 1 and 2 percent, phase within 1 degree).
 
 Wine audio notes for this setup. The vendor's Linux guide is right: in a fresh prefix Wine 10 under PipeWire shows the codecs only
 with the ALSA driver (`HKCU\Software\Wine\Drivers` `Audio` = `alsa`); with the Pulse driver the two codecs have the same name and a

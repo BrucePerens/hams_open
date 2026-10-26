@@ -2,7 +2,7 @@
 //! From codec samples to a complex measurement. At each frequency the VNWA mixes the signal down to an IF (12, 6 or 4
 //! kHz seen, i.e. fs / (4 n) with n = 1, 2, 3 at 48 kHz) and the PC finds its amplitude and phase from whole IF periods
 //! of the audio, skipping the presamples after a frequency change and the postsamples before the next one. The right
-//! channel is the reference, the left channel the thru/reflect signal; the measurement is left divided by right.
+//! channel is the reference on one codec and the left channel on the other; the measurement is the other channel divided by it.
 //! (The vendor's Help file says one IF period is the minimum; this code uses as many whole periods as fit, which for a
 //! rectangular window and whole periods is the exact least-squares amplitude and phase of a tone.)
 
@@ -82,7 +82,15 @@ pub fn vendor_convention(c: Complex) -> Complex {
     }
 }
 
-/// The measurement of one point: the left channel's tone divided by the right (reference) channel's, at the IF.
+/// Which channel of a codec carries the reference signal (the vendor program's "Reference = Right Channel" setting). On the
+/// observed unit the second codec has it on the right and the first codec on the left.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reference {
+    Left,
+    Right,
+}
+
+/// The measurement of one point: the measured channel's tone divided by the reference channel's, at the IF.
 /// `min_reference` is the smallest reference amplitude (in sample counts) that is accepted as a signal.
 #[allow(clippy::too_many_arguments)]
 pub fn measure_point(
@@ -92,6 +100,7 @@ pub fn measure_point(
     if_hz: f64,
     presamples: usize,
     postsamples: usize,
+    reference: Reference,
     min_reference: f64,
 ) -> Result<Complex, String> {
     // [@ANCHOR: vnwa_open_measure_point]
@@ -103,13 +112,17 @@ pub fn measure_point(
     })?;
     let l = tone_at_if(&left[start..start + n], fs, if_hz);
     let r = tone_at_if(&right[start..start + n], fs, if_hz);
-    if r.abs() < min_reference {
+    let (measured, reference_tone) = match reference {
+        Reference::Right => (l, r),
+        Reference::Left => (r, l),
+    };
+    if reference_tone.abs() < min_reference {
         return Err(format!(
             "reference amplitude {:.2} is below {min_reference}: no signal",
-            r.abs()
+            reference_tone.abs()
         ));
     }
-    Ok(l.divided_by(r))
+    Ok(measured.divided_by(reference_tone))
 }
 
 #[cfg(test)]
@@ -118,6 +131,7 @@ mod tests {
 
     include!("audio_vectors.rs");
     include!("reference_vectors.rs");
+    include!("if_reference_vectors.rs");
 
     fn tone(a: f64, phase_deg: f64, fs: f64, f: f64, n: usize) -> Vec<f64> {
         (0..n)
@@ -141,7 +155,7 @@ mod tests {
         let l = tone(0.5, 100.0, 48_000.0, 12_000.0, 40);
         let r = tone(0.25, 40.0, 48_000.0, 12_000.0, 40);
         // 40 samples, 2 pre and 2 post, leaves 36 = nine 4-sample periods.
-        let m = measure_point(&l, &r, 48_000.0, 12_000.0, 2, 2, 0.01).unwrap();
+        let m = measure_point(&l, &r, 48_000.0, 12_000.0, 2, 2, Reference::Right, 0.01).unwrap();
         assert!((m.abs() - 2.0).abs() < 1e-12);
         assert!((m.phase_deg() - 60.0).abs() < 1e-9);
     }
@@ -153,7 +167,9 @@ mod tests {
     fn mine(chunk: &[[i16; 2]]) -> Complex {
         let l: Vec<f64> = chunk.iter().map(|f| f64::from(f[0])).collect();
         let r: Vec<f64> = chunk.iter().map(|f| f64::from(f[1])).collect();
-        vendor_convention(measure_point(&l, &r, 48_000.0, 4_000.0, 0, 0, 100.0).unwrap())
+        vendor_convention(
+            measure_point(&l, &r, 48_000.0, 4_000.0, 0, 0, Reference::Right, 100.0).unwrap(),
+        )
     }
 
     // Tests [@ANCHOR: vnwa_open_vendor_convention]
@@ -201,18 +217,74 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: vnwa_open_vendor_convention]
+    #[test]
+    fn the_reference_channel_option_swaps_numerator_and_denominator() {
+        let l = tone(0.5, 100.0, 48_000.0, 12_000.0, 40);
+        let r = tone(0.25, 40.0, 48_000.0, 12_000.0, 40);
+        let a = measure_point(&l, &r, 48_000.0, 12_000.0, 0, 0, Reference::Right, 0.01).unwrap();
+        let b = measure_point(&l, &r, 48_000.0, 12_000.0, 0, 0, Reference::Left, 0.01).unwrap();
+        assert!((a.abs() - 2.0).abs() < 1e-12 && (b.abs() - 0.5).abs() < 1e-12);
+        assert!((a.phase_deg() + b.phase_deg()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn at_other_ifs_both_codecs_match_the_vendor_programs_s21_with_their_reference_channels() {
+        // The unit's own response differs by IF (|S21| 0.874 at 172.3 degrees at 12 kHz, 0.799 at 174.7 at 6 kHz, 0.782 at
+        // 176.2 at 4 kHz), so this is a check that is not flat. Measured when written: 0.1 to 0.3 percent (codec 1, reference
+        // on the left) and 0.5 to 1.0 percent (codec 2, reference on the right).
+        for r in IF_REFS.iter() {
+            let v = complex_of(&r.vendor);
+            for (chunk, reference, limit) in [
+                (&r.codec1, Reference::Left, 0.01),
+                (&r.codec2, Reference::Right, 0.02),
+            ] {
+                let l: Vec<f64> = chunk.iter().map(|f| f64::from(f[0])).collect();
+                let rr: Vec<f64> = chunk.iter().map(|f| f64::from(f[1])).collect();
+                let m = vendor_convention(
+                    measure_point(&l, &rr, 48_000.0, r.if_hz, 0, 0, reference, 100.0).unwrap(),
+                );
+                let diff = Complex {
+                    re: m.re - v.re,
+                    im: m.im - v.im,
+                }
+                .abs()
+                    / v.abs();
+                assert!(
+                    diff < limit,
+                    "{} Hz {reference:?}: relative difference {diff}",
+                    r.if_hz
+                );
+                assert!(
+                    (m.phase_deg() - v.phase_deg()).abs() < 1.0,
+                    "{} Hz {reference:?}: phase",
+                    r.if_hz
+                );
+            }
+        }
+    }
+
     #[test]
     fn too_short_or_silent_points_are_refused() {
         let x = tone(1.0, 0.0, 48_000.0, 12_000.0, 8);
-        assert!(measure_point(&x, &x, 48_000.0, 12_000.0, 2, 3, 0.01).is_err()); // 8 - 5 = 3 < one 4-sample period
-        assert!(measure_point(&x, &x, 48_000.0, 12_000.0, 2, 2, 0.01).is_ok()); // exactly one period
+        assert!(measure_point(&x, &x, 48_000.0, 12_000.0, 2, 3, Reference::Right, 0.01).is_err()); // 8 - 5 = 3 < one 4-sample period
+        assert!(measure_point(&x, &x, 48_000.0, 12_000.0, 2, 2, Reference::Right, 0.01).is_ok()); // exactly one period
         let silent = vec![0.0; 40];
+        assert!(measure_point(
+            &x.repeat(5),
+            &silent,
+            48_000.0,
+            12_000.0,
+            0,
+            0,
+            Reference::Right,
+            0.5
+        )
+        .unwrap_err()
+        .contains("no signal"));
         assert!(
-            measure_point(&x.repeat(5), &silent, 48_000.0, 12_000.0, 0, 0, 0.5)
-                .unwrap_err()
-                .contains("no signal")
+            measure_point(&x, &x[..7], 48_000.0, 12_000.0, 0, 0, Reference::Right, 0.0).is_err()
         );
-        assert!(measure_point(&x, &x[..7], 48_000.0, 12_000.0, 0, 0, 0.0).is_err());
     }
 
     #[test]
@@ -220,7 +292,7 @@ mod tests {
         for e in EXCERPTS {
             let l: Vec<f64> = e.left.iter().map(|&v| f64::from(v)).collect();
             let r: Vec<f64> = e.right.iter().map(|&v| f64::from(v)).collect();
-            let m = measure_point(&l, &r, 48_000.0, e.if_hz, 0, 0, 10.0).unwrap();
+            let m = measure_point(&l, &r, 48_000.0, e.if_hz, 0, 0, Reference::Right, 10.0).unwrap();
             assert!(
                 (m.re - e.ratio_re).abs() < 1e-9 && (m.im - e.ratio_im).abs() < 1e-9,
                 "{}",
