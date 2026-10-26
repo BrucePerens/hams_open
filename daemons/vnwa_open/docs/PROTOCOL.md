@@ -224,6 +224,26 @@ both codecs from the instant the block is sent:
 * Only the codec's 16 bit modes exist (the vendor program's "ADC resolution 24 bit" fails to open the device on this
   hardware); the capture is 48 kHz, 16 bit, stereo.
 
+## What happens inside a burst (2026-10-26, `examples/burst.rs`)
+
+One block makes the unit run six stages of one point time each (T). The codec audio, analysed in 10 ms windows at the 12 kHz IF:
+
+| Stage | Time | Single point (`previous` = frequency, 100 MHz) | `previous` 20 MHz, target 100 MHz |
+|---|---|---|---|
+| 0 | 0 to T | no tone (rms about 0.5 counts) | no tone |
+| 1, 2 | T to 3T | tone, ratio 0.9978 at 119.82 deg | the same: the target |
+| 3 | 3T to 4T | the same tone | ratio 0.9107 at -157.7 deg (the magnitude of the 20 MHz response: the previous frequency, with an extra phase of 16 deg) |
+| 4 | 4T to 5T | the same tone | ratio 1.0447 at -76.6 deg (about 140 MHz by magnitude, that is the target plus half the step: probable, not proved; the same extra 16 deg) |
+| 5 | 5T to 6T | no tone | no tone |
+
+The same sequence appears in every run (two compared; the tone's frequency offset from 12 kHz is 0.15 Hz or less in each stage). So the
+unit measures up to three frequencies in one burst when the offset in request 0x49 is not zero; the vendor program, whose sweep sends
+blocks with that offset, probably uses them. This driver does not: it sends every point with its own frequency as `previous`, so
+the stages are the same. The earlier run-to-run scatter (100 MHz read 0.93 to 1.56 with the sweep start as `previous`) was an
+analysis window of two point times starting at T plus 20 ms that spilled over the boundary at 3T by an amount that depends on the audio
+latency; a window inside T to 3T is clean (the ratio is constant to 0.0005 there). The levels below also vary with stage, which is the rms
+steps seen in the earlier recordings. The drift of the unit is small: 30 measurements of 10 MHz over 2.5 minutes spread by 0.011 %.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
