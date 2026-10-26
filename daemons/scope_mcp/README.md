@@ -1,6 +1,6 @@
 # scope_mcp
 
-An MCP server (JSON-RPC over stdio) that lets an AI agent drive a Siglent **SDS1000X-E** series
+An MCP server (built on the official `rmcp` SDK, stdio transport) that lets an AI agent drive a Siglent **SDS1000X-E** series
 oscilloscope (written against an SDS1202X-E) over the LAN with SCPI on TCP port 5025. Status
 (2026-10-25): identify, status, measurements, waveform capture (7 Mpts at 1 GSa/s) and settings were
 checked on a real SDS1202X-E (firmware 1.3.27) with the probe on the calibrator (1.000 kHz, 50 %).
@@ -44,4 +44,4 @@ Waveforms are `#9nnnnnnnnn` blocks; the screenshot has no header and is read unt
 
 ## Tests
 
-`cargo test` runs the pure checks; `cargo test -- --ignored` needs a scope (see `tests/hil.rs`).
+`cargo test` runs the pure checks; `cargo test -- --ignored` needs a scope (see `tests/hil.rs`); it starts the real server binary, does the MCP initialize handshake and calls tools.

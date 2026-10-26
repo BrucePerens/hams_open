@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! scope_mcp: an MCP server (JSON-RPC over stdio) for a Siglent SDS1000X-E series oscilloscope on
+//! scope_mcp: an MCP server (rmcp, stdio) for a Siglent SDS1000X-E series oscilloscope on
 //! the LAN (SCPI, TCP 5025). There is no raw-SCPI tool. Every tool belongs to a permission tier and
 //! the server, not the model, refuses tools above `SCOPE_MCP_TIER` (`read_only` default,
 //! `read_config`, `full`). Settings: `SCOPE_MCP_HOST` (required), `SCOPE_MCP_PORT` (5025),
@@ -7,10 +7,17 @@
 
 mod scpi;
 
+use rmcp::model::{
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+};
+use rmcp::service::{RequestContext, RoleServer};
+use rmcp::transport::stdio;
+use rmcp::{ErrorData as McpError, ServerHandler, ServiceExt};
 use scpi::Scope;
 use serde_json::{json, Value};
-use std::io::{BufRead, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
 enum Tier {
@@ -19,7 +26,7 @@ enum Tier {
     Full = 2,
 }
 
-struct Tool {
+struct ToolSpec {
     name: &'static str,
     tier: Tier,
     desc: &'static str,
@@ -27,20 +34,20 @@ struct Tool {
     required: &'static [&'static str],
 }
 
-const TOOLS: &[Tool] = &[
-    Tool { name: "scope_identify", tier: Tier::ReadOnly, desc: "Instrument identity (*IDN?).", props: "{}", required: &[] },
-    Tool { name: "scope_status", tier: Tier::ReadOnly, desc: "Acquisition state (running/stopped), timebase, sample rate and per-channel volts/div, offset, coupling, probe attenuation.", props: "{}", required: &[] },
-    Tool { name: "scope_measure", tier: Tier::ReadOnly,
+const TOOLS: &[ToolSpec] = &[
+    ToolSpec { name: "scope_identify", tier: Tier::ReadOnly, desc: "Instrument identity (*IDN?).", props: "{}", required: &[] },
+    ToolSpec { name: "scope_status", tier: Tier::ReadOnly, desc: "Acquisition state (running/stopped), timebase, sample rate and per-channel volts/div, offset, coupling, probe attenuation.", props: "{}", required: &[] },
+    ToolSpec { name: "scope_measure", tier: Tier::ReadOnly,
         desc: "Built-in parameter measurements on a channel (the scope's own, from its current frame). Values with **** mean the scope could not measure them.",
         props: r#"{"channel":{"type":"integer","enum":[1,2]},"items":{"type":"array","items":{"type":"string","enum":["PKPK","MAX","MIN","MEAN","RMS","FREQ","PER","DUTY","RISE","FALL"]},"description":"default PKPK,MEAN,FREQ,DUTY"}}"#, required: &["channel"] },
-    Tool { name: "scope_capture", tier: Tier::ReadOnly,
+    ToolSpec { name: "scope_capture", tier: Tier::ReadOnly,
         desc: "Read the channel's waveform memory, scale to volts, save it as little-endian f32 and return a summary (min, max, mean, peak-to-peak, rising edges, estimated frequency, sample interval, file). Refuses a stopped scope unless allow_stopped is true, because a stopped scope returns a frozen old frame.",
         props: r#"{"channel":{"type":"integer","enum":[1,2]},"allow_stopped":{"type":"boolean"}}"#, required: &["channel"] },
-    Tool { name: "scope_screenshot", tier: Tier::ReadOnly, desc: "Save the screen as an image file and return its path.", props: "{}", required: &[] },
-    Tool { name: "scope_set", tier: Tier::ReadConfig,
+    ToolSpec { name: "scope_screenshot", tier: Tier::ReadOnly, desc: "Save the screen as an image file and return its path.", props: "{}", required: &[] },
+    ToolSpec { name: "scope_set", tier: Tier::ReadConfig,
         desc: "Change acquisition settings. Any field may be omitted. timebase_s: seconds per division. vdiv_v: volts per division. offset_v: vertical offset. coupling: A1M/D1M/GND. attenuation: probe ratio (1, 10, ...). trigger_mode: AUTO/NORM/SINGLE/STOP.",
         props: r#"{"channel":{"type":"integer","enum":[1,2]},"timebase_s":{"type":"number"},"vdiv_v":{"type":"number"},"offset_v":{"type":"number"},"coupling":{"type":"string","enum":["A1M","D1M","GND"]},"attenuation":{"type":"number"},"trigger_mode":{"type":"string","enum":["AUTO","NORM","SINGLE","STOP"]}}"#, required: &[] },
-    Tool { name: "scope_self_cal", tier: Tier::Full,
+    ToolSpec { name: "scope_self_cal", tier: Tier::Full,
         desc: "Run the scope's self-calibration (*CAL?). It rewrites the scope's stored calibration, takes a minute or two and drives its own levels onto the inputs. All probes and cables must be disconnected from the inputs first; confirm_inputs_disconnected must be true, and that must come from the person at the bench.",
         props: r#"{"confirm_inputs_disconnected":{"type":"boolean"}}"#, required: &["confirm_inputs_disconnected"] },
 ];
@@ -295,57 +302,64 @@ fn call(name: &str, args: &Value) -> Result<Value, String> {
     }
 }
 
-fn tools_list() -> Value {
-    let list: Vec<Value> = TOOLS.iter().filter(|t| t.tier <= tier_from_env()).map(|t| {
-        json!({"name": t.name, "description": format!("[{:?}] {}", t.tier, t.desc),
-               "inputSchema": {"type": "object", "properties": serde_json::from_str::<Value>(t.props).unwrap(), "required": t.required}})
-    }).collect();
-    json!({"tools": list})
+fn tool_defs() -> Vec<Tool> {
+    TOOLS
+        .iter()
+        .filter(|t| t.tier <= tier_from_env())
+        .map(|t| {
+            let schema = json!({"type": "object", "properties": serde_json::from_str::<Value>(t.props).unwrap(), "required": t.required});
+            let Value::Object(schema) = schema else { unreachable!() };
+            Tool::new(t.name, format!("[{:?}] {}", t.tier, t.desc), Arc::new(schema))
+        })
+        .collect()
 }
 
-fn handle(req: &Value) -> Option<Value> {
-    let id = req.get("id")?.clone();
-    let method = req.get("method").and_then(|m| m.as_str()).unwrap_or("");
-    let result = match method {
-        "initialize" => Ok(
-            json!({"protocolVersion": req["params"]["protocolVersion"].as_str().unwrap_or("2024-11-05"),
-            "capabilities": {"tools": {}}, "serverInfo": {"name": "scope_mcp", "version": env!("CARGO_PKG_VERSION")}}),
-        ),
-        "ping" => Ok(json!({})),
-        "tools/list" => Ok(tools_list()),
-        "tools/call" => {
-            let p = &req["params"];
-            let name = p["name"].as_str().unwrap_or("");
-            Ok(match call(name, &p["arguments"]) {
-                Ok(v) => {
-                    json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&v).unwrap()}]})
-                }
-                Err(e) => json!({"isError": true, "content": [{"type": "text", "text": e}]}),
-            })
-        }
-        _ => Err(json!({"code": -32601, "message": format!("method not found: {method}")})),
-    };
-    Some(match result {
-        Ok(r) => json!({"jsonrpc": "2.0", "id": id, "result": r}),
-        Err(e) => json!({"jsonrpc": "2.0", "id": id, "error": e}),
-    })
-}
+struct ScopeServer;
 
-fn main() {
-    let stdin = std::io::stdin();
-    let mut out = std::io::stdout();
-    for line in stdin.lock().lines().map_while(Result::ok) {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let Ok(req) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        if let Some(resp) = handle(&req) {
-            let _ = writeln!(out, "{resp}");
-            let _ = out.flush();
-        }
+impl ServerHandler for ScopeServer {
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("scope_mcp", env!("CARGO_PKG_VERSION")))
+            .with_instructions("Siglent SDS1000X-E oscilloscope over LAN SCPI. Tools above the server's tier are not offered.")
     }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, McpError> {
+        Ok(ListToolsResult {
+            tools: tool_defs(),
+            ..Default::default()
+        })
+    }
+
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, McpError> {
+        let name = request.name.to_string();
+        let args = Value::Object(request.arguments.unwrap_or_default());
+        // The scope is a blocking TCP peer, so keep it off the async runtime threads.
+        let out = tokio::task::spawn_blocking(move || call(&name, &args))
+            .await
+            .map_err(|e| McpError::internal_error(format!("tool task: {e}"), None))?;
+        let result = match out {
+            Ok(v) => CallToolResult::success(vec![ContentBlock::text(
+                serde_json::to_string_pretty(&v).unwrap(),
+            )]),
+            Err(e) => CallToolResult::error(vec![ContentBlock::text(e)]),
+        };
+        Ok(result.into())
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let service = ScopeServer.serve(stdio()).await?;
+    service.waiting().await?;
+    Ok(())
 }
 
 #[cfg(test)]
