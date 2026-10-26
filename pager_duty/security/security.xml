@@ -68,7 +68,9 @@
                  two rules let a record from ANY other company become
                  visible merely by having no website_id set (and vice
                  versa), a real multi-tenant isolation bypass caught by
-                 test_04_multi_tenant_isolation/test_05_multi_website_isolation. -->
+                 test_04_multi_tenant_isolation/test_05_multi_website_isolation.
+                 See pager_incident_website_company_rule for the one model where a
+                 website-less admin is not confined to a website. -->
             <field name="name">Pager Check Multi-Website/Multi-Company</field>
             <field name="model_id" ref="model_pager_check"/>
             <field name="domain_force">['&amp;', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
@@ -84,10 +86,21 @@
 
         <record id="pager_incident_website_company_rule" model="ir.rule">
             <!-- See pager_check_website_company_rule above: two separate
-                 same-group rules are OR'ed, not AND'ed, in Odoo. -->
+                 same-group rules are OR'ed, not AND'ed, in Odoo.
+                 Unlike the other three admin rules, a user with no website of
+                 their own (the internal admins: res.users.website_id is empty
+                 for them) is confined here only by company, not by website. The
+                 old test against user.website_id.id compared every record's
+                 website to an empty id and hid all of them, so the "View Pager
+                 Duty Incident" link in an incident email opened Discuss instead
+                 of the incident. pager.log.file keeps the strict test on purpose:
+                 search_logs() must not let an admin read another website's log
+                 file (test_05_path_registered_for_another_website_is_rejected).
+                 [@ANCHOR: pager_duty:admin_without_website_sees_all]
+                 Verified by [@ANCHOR: test_admin_without_website_sees_every_website] -->
             <field name="name">Pager Incident Multi-Website/Multi-Company</field>
             <field name="model_id" ref="model_pager_incident"/>
-            <field name="domain_force">['&amp;', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
+            <field name="domain_force">(['|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)] if user.website_id else []) + ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
             <field name="groups" eval="[(4, ref('pager_duty.group_pager_admin'))]"/>
         </record>
 
