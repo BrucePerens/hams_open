@@ -25,3 +25,17 @@ write access to the ticket model at all.
 `test_05_mcp_post_internal_note_posts_as_internal_note_on_allowlisted_ticket` and
 `test_06_mcp_post_internal_note_enforces_allowlist_before_elevating`
 (tests/test_helpdesk_ai_triage_external.py).
+
+## The triage agent moves clear spam to the spam stage
+
+Bruce, 2026-10-26: "have it close spam tickets". Besides its one internal note, the triage agent can call `mark_spam`
+on a ticket in the New stage that it was offered in the current run. The tool calls `mcp_mark_spam()` on the ticket
+[@ANCHOR: hams_helpdesk:COMM_mcp_mark_spam], which re-reads the ticket under the agent's own allow-list before it
+elevates [@ANCHOR: hams_helpdesk:mcp_mark_spam], moves it to the Spam / Phishing (Quarantined) stage and posts the agent's
+reason, filtered like every note it writes, as an internal note. "Close" means this reversible quarantine stage: nothing is
+deleted, staff move the ticket back to New to undo it, and the sender is never mailed (a move into the spam stage sends no
+"your issue has been updated" message). A ticket a human has already picked up is refused.
+
+**Status:** Verified by `test_07_mcp_mark_spam_moves_a_new_ticket_to_the_spam_stage_with_a_note`,
+`test_08_mcp_mark_spam_refuses_a_ticket_a_human_already_picked_up` and
+`test_09_mcp_mark_spam_enforces_allowlist_before_elevating` (tests/test_helpdesk_ai_triage_external.py).

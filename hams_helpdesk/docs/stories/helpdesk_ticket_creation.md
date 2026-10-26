@@ -30,3 +30,14 @@ The portal provides detailed views for individual tickets.
 
 Customers can submit a new ticket directly from the portal.
 **[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_new]**
+
+## Amazon SES scan verdicts count as spam signals
+
+Mail to the support addresses passes through Amazon SES, whose receipt rule has scanning on, so each stored message carries
+`X-SES-Spam-Verdict` and `X-SES-Virus-Verdict`. `message_parse` keeps them and `message_new` treats a `FAIL` of either like
+any other spam signal: the ticket starts in the Spam / Phishing stage with the reason in its first note, the same reversible
+quarantine as the filter's own signals. `PASS`, `GRAY` and `PROCESSING_FAILED` are ignored, and the DKIM, SPF and DMARC
+verdicts are not used because mailing lists and forwarders legitimately fail them. [@ANCHOR: hams_helpdesk:ses_verdicts]
+
+**Status:** Verified by `test_17_ses_verdicts_flag_only_a_fail`, `test_18_a_message_without_ses_headers_has_no_verdicts` and
+`test_19_a_hostile_verdict_value_is_bounded` (tests/test_inbound_spam_filter.py).
