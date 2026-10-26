@@ -71,12 +71,8 @@ fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
     if let Some(x) = num("point_ms") {
         v.point_ms = x;
     }
-    if let Some(x) = num("settle_ms") {
-        v.settle_ms = x;
-    }
-    if let Some(x) = num("window_ms") {
-        v.window_ms = x;
-    }
+    v.settle_ms = num("settle_ms");
+    v.window_ms = num("window_ms");
     if let Some(x) = c.get("rf_level").and_then(|x| x.as_u64()) {
         v.rf_level = u16::try_from(x)
             .map_err(|_| "rf_level is above the 14-bit maximum 16383".to_string())?;
@@ -200,6 +196,10 @@ mod tests {
         assert!(bad(r#","point_ms":500"#));
         assert!(bad(r#","rf_level":20000"#));
         assert!(bad(r#","settle_ms":250,"window_ms":100"#));
+        assert!(
+            bad(r#","point_ms":10,"window_ms":0.05"#),
+            "a window shorter than one IF period"
+        );
     }
 
     #[test]

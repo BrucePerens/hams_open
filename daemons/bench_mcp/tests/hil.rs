@@ -115,6 +115,19 @@ fn vna_sweeps_the_loopback_and_saves_a_csv() {
             assert!((-6.0..6.0).contains(&db), "{key} {db} dB in {row}");
         }
     }
+    // The same sweep again: the points repeat (a block per point, each its own previous frequency).
+    let again = rpc(&[&call(
+        "bench_vna_sweep",
+        r#"{"start_hz":10000000,"stop_hz":30000000,"points":3}"#,
+    )]);
+    let again: serde_json::Value = serde_json::from_str(&text(&again[0])).unwrap();
+    for (a, b) in rows.iter().zip(again["rows"].as_array().unwrap()) {
+        let d = (a["s21_db"].as_f64().unwrap() - b["s21_db"].as_f64().unwrap()).abs();
+        assert!(
+            d < 0.05,
+            "S21 changed by {d} dB between two sweeps: {a} then {b}"
+        );
+    }
     let file = sweep["file"].as_str().unwrap();
     assert_eq!(std::fs::read_to_string(file).unwrap().lines().count(), 4);
 }
