@@ -53,12 +53,18 @@ How the commands produce the IF is not decoded: the LO tuning word computed from
 frequency to within 0.2 Hz, so the 12 kHz difference comes from something else (an offset sent elsewhere, or the
 alias scheme the Help file describes).
 
-## Set-up constants read at the LO clock
+## The IF, and the set-up constants (one-variable test: n = 2)
 
-The first four bytes of requests 0x41, 0x42, 0x43, 0x44 and 0x4b, read as 32-bit tuning words at the 324 MHz LO clock,
-are round frequencies: 131.328, 3.072, 4.608, 76.8 and 44.0 MHz (at 360 MHz they are not round). Their role is not
-known. (Bytes 1 to 4 of request 0x42 also equal 159072, the 12 kHz word at 324 MHz, but the first-four-byte reading
-is rounder, so that match is probably a coincidence.)
+The program's "n" setting gives IF = 48 kHz / (4 n): n = 1 is 12 kHz, n = 2 is 6 kHz. Changing n from 1 to 2 changed
+exactly two set-up requests, each to half its value, and the codec audio moved from a 12.000 kHz to a 6.000 kHz tone:
+
+* **0x42**, bytes 0 to 3 = `round(IF * 256 * 2^32 / 324 MHz)`: 12 kHz gives 3.072 MHz worth (`dd 60 6d 02`), 6 kHz gives
+  1.536 MHz worth (`6e b0 36 01`). The fifth byte (0) is unchanged.
+* **0x41** (7 bytes): the 32-bit word (131.328 MHz worth at n = 1, 65.664 MHz at n = 2) and the following 16-bit field
+  (`0x15d8` at n = 1, `0x0aec` at n = 2) both halve; the last byte (`02`) stays. Meaning not known.
+* Unchanged by n: 0x40, 0x43, 0x44, 0x47, 0x4b and the 0x49 words. 0x43 = 4.608 MHz worth = 18 kHz x 256, and an
+  18.000 kHz tone appears in the codec audio just before every sweep (a calibration/level burst); 0x44 = 76.8 MHz
+  worth = 300 kHz x 256 (not matched to anything yet). 0x4b = 44.0 MHz worth (not matched).
 
 ## Single-point sweep capture (v04_points)
 

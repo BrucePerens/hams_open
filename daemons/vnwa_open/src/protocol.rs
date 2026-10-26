@@ -50,6 +50,17 @@ pub fn chip_tuning_word(sweep_word: u64, n_other: u8) -> u32 {
     ((u128::from(sweep_word) * u128::from(n_other)) / 256) as u32
 }
 
+/// The 32-bit word of request 0x42 (bytes 0 to 3, little endian) that sets the measurement IF, and the same
+/// encoding for 0x43 (the 18 kHz burst before a sweep) and 0x44 (300 kHz): `round(if * 256 * 2^32 / clock_lo)`.
+/// Confirmed for 12 kHz and 6 kHz (the program's n = 1 and n = 2) by the 12 kHz and 6 kHz tones in the codec audio.
+pub fn if_word(if_hz: f64) -> u32 {
+    // [@ANCHOR: vnwa_open_if_word]
+    (if_hz * 256.0 * 4_294_967_296.0 / LO_CLOCK_HZ).round() as u32
+}
+
+/// The LO chip's clock on the observed unit: 12 MHz x 3 x 9.
+pub const LO_CLOCK_HZ: f64 = 324_000_000.0;
+
 /// The signed 48-bit offset carried in the tail of request 0x49's payload (little endian):
 /// `round((previous - new) / divisor * 2^48 / clock)`, where `previous` is the frequency before the sweep
 /// started and `divisor` is 6 when the payload's first byte is 3 and 9 when it is 4 (that is, 3 x (byte - 1);
@@ -132,6 +143,15 @@ mod tests {
             let lo = f64::from(chip_tuning_word(w, 10)) * 324.0e6 / 4_294_967_296.0;
             assert!((lo - f).abs() < 0.2, "{f} Hz: LO {lo}");
         }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_if_word]
+    #[test]
+    fn if_words_match_the_captured_setup_requests() {
+        assert_eq!(if_word(12_000.0), 0x026d_60dd); // request 0x42, n = 1
+        assert_eq!(if_word(6_000.0), 0x0136_b06e); // request 0x42, n = 2
+        assert_eq!(if_word(18_000.0), 0x03a4_114b); // request 0x43
+        assert_eq!(if_word(300_000.0), 0x3cae_7592); // request 0x44
     }
 
     // Tests [@ANCHOR: vnwa_open_sweep_offset]
