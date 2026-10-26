@@ -59,6 +59,9 @@
                     </div>
                     <group>
                         <group>
+                            <!-- The record id is the ticket number everything else quotes
+                                 ("per-unit ticket #104", incident notes, e-mails). -->
+                            <field name="id" string="Ticket #" readonly="1" invisible="not id"/>
                             <field name="name"/>
                             <field name="callsign"/>
                             <field name="user_id"/>
@@ -174,6 +177,7 @@
         <field name="model">hams_helpdesk.ticket</field>
         <field name="arch" type="xml">
             <list string="Helpdesk Tickets">
+                <field name="id" string="#"/>
                 <field name="name"/>
                 <field name="callsign"/>
                 <field name="user_id"/>

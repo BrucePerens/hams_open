@@ -527,6 +527,17 @@ class TestHelpdeskCore(HamsTransactionCase):
             view_id=self.env.ref("hams_helpdesk.view_hams_helpdesk_ticket_pivot").id
         )
 
+    def test_ticket_number_is_shown_in_the_list_and_the_form(self):
+        """The record id is the ticket number that incident notes and e-mails quote, so the operator
+        list and form must show it."""
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_list]
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_form]
+        Ticket = self.env["hams_helpdesk.ticket"].with_user(self.manager_user)
+        lists = Ticket.get_view(self.env.ref("hams_helpdesk.view_hams_helpdesk_ticket_list").id)
+        self.assertIn('name="id"', lists["arch"])
+        form = Ticket.get_view(self.env.ref("hams_helpdesk.view_hams_helpdesk_ticket_form").id)
+        self.assertIn('name="id"', form["arch"])
+
     def test_bug_dynamic_selection(self):
         """Verify dynamic stage selection conversion does not crash."""
         ticket = self.env["hams_helpdesk.ticket"].create({
