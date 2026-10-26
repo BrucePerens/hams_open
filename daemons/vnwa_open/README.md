@@ -20,8 +20,8 @@ measured signal arrives as audio from the two codecs):
 | Offset between old and new frequency | 0x49 tail | confirmed, 14 values |
 | IF (12 kHz / 6 kHz) | 0x42, 0x41 | confirmed by the codec audio |
 | 18 kHz burst before a sweep | 0x43 | probable |
-| The whole set-up block (nine requests) | 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64 | built by `setup::setup_block`, verified byte for byte against nine captured blocks |
-| Everything else in the set-up block (0x40, 0x44, 0x47, 0x4b), the step counter, the audio to S-parameter maths | | not decoded |
+| The whole set-up block (nine requests) | 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64 | built by `setup::setup_block`, verified byte for byte against eight captured blocks; the time-per-point bytes against 84 settings from 0.2 to 100 ms |
+| Everything else in the set-up block (0x44, 0x47, 0x4b and the constants in 0x40), the step counter, the audio to S-parameter maths | | not decoded |
 
 | Audio to a complex measurement (`audio::measure_point`) | codec audio | tested on synthetic tones, on real loopback samples at 12, 6 and 4 kHz, and compared with the vendor program's own S21 (0.1 to 1 percent apart at three IFs, both codecs, four RF frequencies) |
 

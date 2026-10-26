@@ -68,12 +68,12 @@ pub fn if_scaled_fields(if_hz: f64) -> (u32, u16) {
     (word, (if_hz * 0.466).round() as u16)
 }
 
-/// The first byte of request 0x40's payload for a time per measurement point: `round(1.5 * milliseconds)`.
-/// Confirmed at 1.33, 8, 30 and 60 ms (bytes 2, 12, 45 and 90). Bytes 2 and 5 of the same payload also depend on the
-/// time per point (8, 2, 1, 1 and 8, 1, 1, 1 at those four settings) and are not decoded.
+/// The first byte of request 0x40's payload for a time per point: `ceil(1.5 * milliseconds)` (at least 1), the 0.667 ms
+/// units the program counts in. Confirmed at 84 settings from 0.2 to 100 ms (`TIMING_OBSERVED`); an earlier rounding rule
+/// fitted only the few settings seen then.
 pub fn point_time_byte(milliseconds: f64) -> u8 {
     // [@ANCHOR: vnwa_open_point_time_byte]
-    (milliseconds * 1.5).round().clamp(0.0, 255.0) as u8
+    (milliseconds * 1.5 - 1e-9).ceil().clamp(1.0, 255.0) as u8
 }
 
 /// The LO chip's clock on the observed unit: 12 MHz x 3 x 9.
@@ -188,6 +188,9 @@ mod tests {
         assert_eq!(point_time_byte(8.0), 12);
         assert_eq!(point_time_byte(30.0), 45);
         assert_eq!(point_time_byte(60.0), 90);
+        // Where `ceil` and rounding differ: 0.7 ms is 1.05 units, which the program counts as 2.
+        assert_eq!(point_time_byte(0.7), 2);
+        assert_eq!(point_time_byte(2.1), 4);
     }
 
     // Tests [@ANCHOR: vnwa_open_sweep_offset]
