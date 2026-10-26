@@ -317,7 +317,7 @@ class TestPagerSecurity(HamsTransactionCase):
         # The /mail/view redirect reads the record as the clicking user; this is the same check.
         self.assertTrue(inc_a.with_user(self.admin).has_access("read"))
 
-    def test_migration_1_2_rewrites_the_four_admin_rules_and_is_repeatable(self):
+    def test_migration_1_2_rewrites_the_incident_admin_rule_and_is_repeatable(self):
         # Tests [@ANCHOR: pager_duty:admin_rule_migration]
         path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations", "1.2", "post-migration.py")
         spec = importlib.util.spec_from_file_location("pager_duty_post_migration_1_2", path)
@@ -327,7 +327,7 @@ class TestPagerSecurity(HamsTransactionCase):
         rules = self.env["ir.rule"].browse(
             [self.env.ref("pager_duty." + name).id for name in migration._RULES]
         )
-        self.assertEqual(len(rules), 4)
+        self.assertEqual(len(rules), 1)
         self.env.cr.execute("UPDATE ir_rule SET domain_force = %s WHERE id IN %s", (old, tuple(rules.ids)))
         rules.invalidate_recordset()
         migration.migrate(self.env.cr, "1.1")
