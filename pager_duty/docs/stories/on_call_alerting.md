@@ -41,3 +41,9 @@ The MCP server (`daemon/pager_mcp_server.py`) is a thin, stateless adapter proce
 4.  **Reading One Incident:** The `get_incident` tool [@ANCHOR: mcp_get_incident_tool] forwards to `mcp_get_incident_detail()`, giving the assistant the full chatter history for one incident by id.
 
 5.  **Leaving a Note:** The `add_incident_note` tool [@ANCHOR: mcp_add_incident_note_tool] forwards to `mcp_add_note()` -- and, deliberately, there is no fourth tool that would let the assistant change an incident's status; that boundary is enforced by the tool registry itself, not just by convention.
+
+## Opening an Incident From Its Email Link
+
+The incident email's "View Pager Duty Incident" button goes to `/mail/view?model=pager.incident&res_id=...`. Odoo opens the incident only if the person who clicked can read it, and sends them to the Discuss app otherwise. A pager admin who has no website of their own (the internal admins, whose `website_id` is empty) can read the incidents of every website in their companies, so the link opens the incident. An admin who does have a website sees that website's incidents and those with no website, and an incident from another company stays hidden, as before. [@ANCHOR: pager_duty:admin_without_website_sees_all]
+
+The four admin record rules are in a `noupdate` block, which an upgrade does not rewrite, so the 1.2 migration rewrites their domain in place and running it again changes nothing. [@ANCHOR: pager_duty:admin_rule_migration]

@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import importlib.util
+import os
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError
@@ -299,3 +302,36 @@ class TestPagerSecurity(HamsTransactionCase):
         incs_b_sees = self.env["pager.incident"].with_user(admin_b).search([])
         self.assertIn(inc_b, incs_b_sees)
         self.assertNotIn(inc_a, incs_b_sees)
+
+    def test_admin_without_website_sees_every_website(self):
+        """[@ANCHOR: test_admin_without_website_sees_every_website] An admin with no website of their own sees the incidents of all websites."""
+        # Tests [@ANCHOR: pager_duty:admin_without_website_sees_all]
+        website_a = self.env["website"].create({"name": "Website A"})
+        website_b = self.env["website"].create({"name": "Website B"})
+        self.admin.write({"website_id": False})
+        inc_a = self.env["pager.incident"].create({"source": "No web A", "severity": "low", "description": "A", "website_id": website_a.id})
+        inc_b = self.env["pager.incident"].create({"source": "No web B", "severity": "low", "description": "B", "website_id": website_b.id})
+        seen = self.env["pager.incident"].with_user(self.admin).search([])
+        self.assertIn(inc_a, seen)
+        self.assertIn(inc_b, seen)
+        # The /mail/view redirect reads the record as the clicking user; this is the same check.
+        self.assertTrue(inc_a.with_user(self.admin).has_access("read"))
+
+    def test_migration_1_2_rewrites_the_four_admin_rules_and_is_repeatable(self):
+        # Tests [@ANCHOR: pager_duty:admin_rule_migration]
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations", "1.2", "post-migration.py")
+        spec = importlib.util.spec_from_file_location("pager_duty_post_migration_1_2", path)
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        old = "['&', '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id), '|', ('company_id', '=', False), ('company_id', 'in', company_ids)]"
+        rules = self.env["ir.rule"].browse(
+            [self.env.ref("pager_duty." + name).id for name in migration._RULES]
+        )
+        self.assertEqual(len(rules), 4)
+        self.env.cr.execute("UPDATE ir_rule SET domain_force = %s WHERE id IN %s", (old, tuple(rules.ids)))
+        rules.invalidate_recordset()
+        migration.migrate(self.env.cr, "1.1")
+        rules.invalidate_recordset()
+        self.assertEqual({rule.domain_force for rule in rules}, {migration._DOMAIN})
+        migration.migrate(self.env.cr, "1.1")  # again: nothing further changes
+        self.assertEqual(self.env.cr.rowcount, 0)
