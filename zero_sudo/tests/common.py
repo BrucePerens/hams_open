@@ -34,6 +34,7 @@ import socket
 from unittest.mock import MagicMock, patch
 from cryptography.fernet import Fernet
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, ChromeBrowserException, HOST, BaseCase
+from .test_persona_support import PersonaMixin
 import odoo.tests.common
 import odoo
 from odoo import fields
@@ -1213,7 +1214,7 @@ class SafePatchMixin:
         return cls._callsign_map[key]
 
 
-class HamsTransactionCase(TransactionCase, SafePatchMixin):
+class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin):
     # [@ANCHOR: zero_sudo:COMM_hams_transaction_case]
     _active_daemons = []
 
@@ -1449,7 +1450,7 @@ class _HootEmptyRunDetector(logging.Handler):
             self.saw_empty_run = True
 
 
-class HamsHttpCase(HttpCase, SafePatchMixin):
+class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
     # [@ANCHOR: zero_sudo:COMM_hams_http_case]
     _hams_tour_failed = False
     server_thread = None

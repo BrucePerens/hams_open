@@ -4,12 +4,10 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
-import os
-
-from odoo.modules.module import get_module_path
 from odoo.tests.common import tagged
 
 from . import common
+from . import test_persona_support as personas
 
 
 @tagged("post_install", "-at_install")
@@ -23,26 +21,8 @@ class TestCronServiceAccess(common.HamsTransactionCase):
 
     # [@ANCHOR: test_every_cron_of_this_repository_is_allowed_to_run_as_its_own_user]
     def test_every_cron_of_this_repository_is_allowed_to_run_as_its_own_user(self):
-        repo_dir = os.path.dirname(get_module_path("zero_sudo"))
-        cron_data = self.env["ir.model.data"].search([("model", "=", "ir.cron")], limit=2000)
-        crons = self.env["ir.cron"].browse([row.res_id for row in cron_data if self._own_module(row.module, repo_dir)])
         # zero_sudo and ses_webhook no longer ship a cron (their purge jobs were removed); a database with none of
-        # this repository's cron-carrying modules installed has no cron to check, and the loop below runs zero times.
-        refused = []
-        for cron in crons.with_context(active_test=False):
-            server_action = cron.ir_actions_server_id
-            user = cron.user_id
-            if user.id == 1 or user.has_group("base.group_system") and not user.is_service_account:
-                continue
-            model = server_action.model_id.model
-            if server_action.group_ids:
-                allowed = bool(server_action.group_ids & user.all_group_ids)
-            else:
-                allowed = self.env[model].with_user(user).has_access("write")
-            if not allowed:
-                refused.append(f"{cron.cron_name} (as {user.login} on {model})")
+        # this repository's cron-carrying modules installed has no cron to check, and the sweep checks nothing.
+        # The gate is the one Odoo calls (personas.cron_refusal); superuser crons are checked too, and pass it.
+        refused = personas.cron_sweep(self.env, "zero_sudo")
         self.assertEqual(refused, [], "these crons would be refused by Odoo before they run: " + "; ".join(refused))
-
-    def _own_module(self, module, repo_dir):
-        path = get_module_path(module, display_warning=False)
-        return bool(path) and os.path.dirname(path) == repo_dir
