@@ -146,24 +146,26 @@ mod tests {
         assert!((m.phase_deg() - 60.0).abs() < 1e-9);
     }
 
+    fn complex_of(&(re, im): &(f64, f64)) -> Complex {
+        Complex { re, im }
+    }
+
+    fn mine(chunk: &[[i16; 2]]) -> Complex {
+        let l: Vec<f64> = chunk.iter().map(|f| f64::from(f[0])).collect();
+        let r: Vec<f64> = chunk.iter().map(|f| f64::from(f[1])).collect();
+        vendor_convention(measure_point(&l, &r, 48_000.0, 4_000.0, 0, 0, 100.0).unwrap())
+    }
+
     // Tests [@ANCHOR: vnwa_open_vendor_convention]
     #[test]
-    fn against_the_vendor_programs_own_s21_the_scale_and_sign_agree_and_the_trend_roughly_does() {
-        let mine: Vec<Complex> = CHUNKS
-            .iter()
-            .map(|c| {
-                let l: Vec<f64> = c.iter().map(|f| f64::from(f[0])).collect();
-                let r: Vec<f64> = c.iter().map(|f| f64::from(f[1])).collect();
-                vendor_convention(measure_point(&l, &r, 48_000.0, 4_000.0, 0, 0, 100.0).unwrap())
-            })
-            .collect();
-        let vendor: Vec<Complex> = VENDOR_S21
-            .iter()
-            .map(|&(re, im)| Complex { re, im })
-            .collect();
-        // Best complex constant a minimising |vendor - a * mine|, a = <mine, vendor> / <mine, mine>.
+    fn against_the_vendor_programs_own_s21_in_a_sweep_laid_out_in_time() {
+        // The loopback path is flat in frequency (the vendor's single-point S21 is the same from 1 to 30 MHz), and the
+        // values drift with time over a sweep (settling). Laying my windows out at k * 60 ms like the vendor's points gives
+        // a match to about 1.5 percent rms, scale 0.995, phase offset 0.8 degrees (measured when this was written).
+        let m: Vec<Complex> = SWEEP_CHUNKS.iter().map(|c| mine(c)).collect();
+        let v: Vec<Complex> = VENDOR_S21.iter().map(complex_of).collect();
         let (mut num_re, mut num_im, mut den) = (0.0, 0.0, 0.0);
-        for (m, v) in mine.iter().zip(&vendor) {
+        for (m, v) in m.iter().zip(&v) {
             num_re += m.re * v.re + m.im * v.im;
             num_im += m.re * v.im - m.im * v.re;
             den += m.re * m.re + m.im * m.im;
@@ -173,17 +175,30 @@ mod tests {
             im: num_im / den,
         };
         let (mut err, mut norm) = (0.0, 0.0);
-        for (m, v) in mine.iter().zip(&vendor) {
+        for (m, v) in m.iter().zip(&v) {
             let (re, im) = (a.re * m.re - a.im * m.im, a.re * m.im + a.im * m.re);
             err += (v.re - re).powi(2) + (v.im - im).powi(2);
             norm += v.re * v.re + v.im * v.im;
         }
         let residual = (err / norm).sqrt();
-        // Measured when this was written: |a| = 1.006, phase 6 degrees, residual 5.6 percent. The 6 degree offset and the
-        // vendor's steeper trend with frequency are not explained, so this only bounds them.
-        assert!((0.97..1.03).contains(&a.abs()), "scale {}", a.abs());
-        assert!(a.phase_deg().abs() < 10.0, "phase offset {}", a.phase_deg());
-        assert!(residual < 0.08, "residual {residual}");
+        assert!((0.98..1.02).contains(&a.abs()), "scale {}", a.abs());
+        assert!(a.phase_deg().abs() < 2.0, "phase offset {}", a.phase_deg());
+        assert!(residual < 0.03, "residual {residual}");
+    }
+
+    #[test]
+    fn against_the_vendor_programs_own_s21_at_four_single_frequencies() {
+        for p in POINTS.iter() {
+            let (f, m, v) = (p.f_mhz, mine(&p.chunk), complex_of(&p.vendor));
+            let diff = Complex {
+                re: m.re - v.re,
+                im: m.im - v.im,
+            }
+            .abs()
+                / v.abs();
+            // Measured 0.7 to 0.9 percent at 1, 10, 20 and 30 MHz.
+            assert!(diff < 0.02, "{f} MHz: relative difference {diff}");
+        }
     }
 
     #[test]

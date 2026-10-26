@@ -107,21 +107,30 @@ gives the tone for part of a second only), so a reader must gate on the referenc
 
 ## Reference check against the vendor program's own S21 (2026-10-26)
 
-Method. The vendor program was started with its documented `-tcpip 55555` remote control (listening only inside the
-private network namespace), driven with `setgrid lin 1e6 30e6 30`, `timeperpoint 60` and `sweep s21`, and the S21 it returned on
-its data port was recorded (three runs; the first point's |S21| was 0.7805, 0.7844 and 0.7779). The codecs can be opened by
-only one program at a time, and the program paces its sweep by its audio capture, so my own recording could not run
-alongside it. Instead the same sweep was run with no audio device selected (the hardware still sweeps) while both codecs
-were recorded, and the tone at the 4 kHz IF was cut into 30 equal intervals.
+Method. The vendor program was started with its documented `-tcpip 55555` remote control (listening only inside the private
+network namespace) and driven with `setgrid`, `timeperpoint 60` and `sweep s21`; the S21 it returned on its data port is the
+reference (TX connected to RX, no calibration, IF 4 kHz). The codecs can be opened by only one program at a time and the program
+paces its sweep by its audio capture, so my own recording could not run alongside it. Instead the same sweep was run with no
+audio device selected in the vendor program (the hardware still performs the first point) while both codecs were recorded.
 
-Result (codec 2, TX connected to RX, no calibration, no averaging beyond a point): after taking the complex conjugate
-(`audio::vendor_convention`) my left/right ratio equals the vendor's S21 times 1.006 with a constant phase offset of about 6
-degrees, residual 5.6 percent of the vendor's rms. Alignment (point shifts of -0.5 to +0.5) does not change this.
-Not reproduced exactly: the vendor's |S21| rises from 0.783 to 0.829 and its phase by about 21 degrees across the sweep,
-mine from 0.793 to 0.813 and by about 9 degrees. Possible causes (not tested): a correction the vendor applies to the
-uncalibrated values, and the unsynchronised recorded run. Codec 1 gives a different amplitude (1.28 against codec 2's 0.79 at the
-start; the vendor's value matches codec 2). `audio::tests` keeps the recorded chunks and the vendor values as a regression test
-with loose bounds (scale 0.97 to 1.03, phase offset under 10 degrees, residual under 8 percent).
+What it showed:
+* The loopback path is flat in frequency: the vendor's single-point S21 is -0.780 + 0.052j (|S21| 0.782, 176.2 degrees) at 1, 3,
+  5, 10, 15, 20, 25 and 30 MHz, repeatable to 0.3 percent.
+* Over a sweep, both the vendor's values and my recording drift smoothly with **time** (|S21| 0.783 to 0.803 in the first 0.84 s,
+  phase by about 2 degrees): a settling transient of the unit. An earlier comparison that spread my 0.88 s recording over the
+  vendor's 30 points (1.8 s) looked like a frequency trend that did not agree; that was the wrong time axis, not a measurement
+  difference. The recorded run only produced the tone for the first 0.88 s (the program stops without sync).
+* With the vendor's point k placed at t = k x 60 ms after the tone starts, my S21 matches the vendor's to 1.3 to 1.5 percent rms
+  (best-fit scale 0.995, phase offset 0.8 degrees) over the first 15 points.
+* At single frequencies (1, 10, 20, 30 MHz, two runs each) my conjugated left/right ratio from codec 2 is 0.7881 at 176.17
+  degrees, the vendor's 0.781 to 0.783 at 176.1 to 176.4 degrees: 0.7 to 0.9 percent apart.
+* The vendor's phase is the complex conjugate of `measure_point`'s (`audio::vendor_convention`). Codec 1 carries the channels the
+  other way round (ratio 1.279, phase -176.1), so the vendor's values correspond to codec 2.
+
+Not covered: the loopback is flat, so the check says nothing about frequency-dependent phase or amplitude (a calibrated, frequency-
+dependent DUT was not measured), and the unit's time drift is not explained. `audio::tests` keeps the recorded chunks and the vendor
+values as regression tests (sweep laid out in time: scale 0.98 to 1.02, phase offset under 2 degrees, residual under 3 percent;
+four single frequencies: under 2 percent).
 
 Wine audio notes for this setup. The vendor's Linux guide is right: in a fresh prefix Wine 10 under PipeWire shows the codecs only
 with the ALSA driver (`HKCU\Software\Wine\Drivers` `Audio` = `alsa`); with the Pulse driver the two codecs have the same name and a
