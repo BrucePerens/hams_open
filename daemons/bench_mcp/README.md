@@ -60,3 +60,10 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 `cargo test` runs the pure checks. `BENCH_MCP_CONFIG=<file> cargo test -- --ignored` needs the real
 instruments: it starts the server binary, does the MCP handshake and calls tools; it never switches
 the supply output on.
+
+## Checks this crate makes (anchors)
+
+* The supply's limits refuse out-of-range and non-finite values before any command is sent. [@ANCHOR: bench_mcp_psu_caps]
+* An instrument is picked by name, or implicitly when exactly one configured instrument fits the tool. [@ANCHOR: bench_mcp_pick]
+* The configuration file parses both drivers (scope over TCP, supply over serial) with their defaults. [@ANCHOR: bench_mcp_config]
+* The scope waveform analysis returns the edges and the frequency of a square wave. [@ANCHOR: scope_mcp_analyse]

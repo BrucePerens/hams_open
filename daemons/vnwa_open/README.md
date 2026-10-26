@@ -62,3 +62,22 @@ inside the data sheets' 400 MSPS limit). The identity table the vendor program r
 
 `cargo test` checks every encoding against bytes seen on the wire (generator word, sweep word, per-chip words,
 offset, IF word).
+
+## Checks this crate makes (anchors)
+
+Each is a test against bytes or samples recorded from the vendor program.
+
+* Frequency to the generator's tuning word. [@ANCHOR: vnwa_open_tuning_word]
+* The sweep word (start, step and count) of a captured sweep. [@ANCHOR: vnwa_open_sweep_word]
+* The per-chip tuning word of the RF chip equals the generator read-back. [@ANCHOR: vnwa_open_chip_tuning_word]
+* The IF word of the set-up request. [@ANCHOR: vnwa_open_if_word]
+* The fields of request 0x41 that follow the IF. [@ANCHOR: vnwa_open_if_scaled_fields]
+* The point-time byte that follows the time per point. [@ANCHOR: vnwa_open_point_time_byte]
+* The offset tails of captured sweeps. [@ANCHOR: vnwa_open_sweep_offset]
+* The generator payload: four zero bytes, then the little-endian word. [@ANCHOR: vnwa_open_generator_frequency]
+* The RF level is fourteen bits. [@ANCHOR: vnwa_open_rf_level]
+* The time-per-point fields reproduce all 84 observed settings. [@ANCHOR: vnwa_open_point_time_fields]
+* The set-up block reproduces every captured block byte for byte. [@ANCHOR: vnwa_open_setup_block]
+* Amplitude and phase of a tone at the IF are exact on a synthetic tone. [@ANCHOR: vnwa_open_tone_at_if]
+* The ratio of two tones is their amplitude ratio and phase difference, in the vendor program's convention. [@ANCHOR: vnwa_open_vendor_convention]
+* A measurement of a recorded sweep agrees with the vendor program's own S21, and the reference channel can be swapped. [@ANCHOR: vnwa_open_measure_point]
