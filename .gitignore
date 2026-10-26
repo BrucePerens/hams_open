@@ -65,3 +65,7 @@ pager_duty/daemon/pager_config.json
 # Go packages -- env/ dropped go.opentelemetry.io/otel/sdk/trace/internal/env/env.go, which left
 # the committed tree unbuildable with -mod=vendor from a clean checkout. Keep this rule last.
 !daemons/cloudflared/vendor/**
+
+# Rust build output (cargo target directories): hundreds of MB per crate, never committed.
+daemons/*/target/
+daemons/**/target/
