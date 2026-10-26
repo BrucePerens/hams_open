@@ -78,6 +78,23 @@ post-sample counts did not change anything on the wire (they are PC-side process
 request 0x49 was 2 in the 60 ms and 30 ms runs and 3 to 5 before; its meaning is still unknown. So 0x40 is not
 CFR1/CFR2 (see the correction above) but a timing block.
 
+## The set-up block as a whole (173 captured blocks)
+
+Every block is the same nine writes in the same order: 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64.
+`wValue`: 0x40 and 0x41 carry a "mode" (0 mostly, also 1, 2, 0x0302, 0x0303 and 8; meaning unknown); 0x42 is 7,
+0x43, 0x44 and 0x47 are 5, 0x4b is 6, 0x49 and 0x64 are 0. `wIndex`: the RF level (14 bits) on the first seven
+requests, 0 on 0x49 and 0x64. In 120 blocks the level is 0 on all nine and in 50 it is on the first seven; in a few
+blocks it appeared on only the first one or the first four, which looks like a race inside the vendor program (a
+variable changing while the block is being sent), so the builder does not reproduce it. The bytes that are not
+derived from the settings (0x47 `00 00 00 00 01 40`, 0x4b `5b f3 c3 22 65 00 03`, 0x40 bytes 1, 3, 4 and 6, the
+last byte of 0x41) are the same in all blocks. `setup::setup_block` builds the block from a frequency, the previous
+frequency, the IF, the time per point, the step counter, the mode and the level, and reproduces nine captured blocks
+byte for byte (frequencies 1 to 100 MHz, IF 12, 6 and 4 kHz, 1.33, 8 and 60 ms).
+
+Limits of the builder: the bytes 2 and 5 of 0x40 are known only for 1.33, 8, 30 and 60 ms, and the offset divisor
+`3 x (counter - 1)` only for counters 3 and 4 (other counters, seen in the first blocks after start-up, give offsets
+that do not follow it), so it refuses those combinations.
+
 ## Single-point sweep capture (v04_points)
 
 * The 6-byte tail of request 0x49 is a **signed 48-bit** little-endian word: offset = word x 360 MHz / 2^48.
