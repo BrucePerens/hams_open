@@ -15,7 +15,8 @@ Power backends (--backend):
              switches port power; check with `uhubctl` and by watching the device disappear).
   sysfs      writes the port's `disable` file (does NOT cut VBUS on many machines, including
              the one this was written on: the receiver kept its state; use only to test).
-  cmd        --cmd-off and --cmd-on are shell commands (relay boards, smart plugs, ...).
+  cmd        --cmd-off and --cmd-on are commands (relay boards, smart plugs, ...), split like a shell
+             line and run without a shell: no pipes or redirections; wrap those in a script.
   manual     asks you to unplug and replug, and waits for the device to appear.
 
 Example (a Raspberry Pi whose USB port power is switchable):
@@ -28,6 +29,7 @@ rsp_open documents; it never issues a USB reset.
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -36,9 +38,9 @@ VID = "1df7"
 PIDS = {"rsp2": "3010", "rsp1a": "3000", "rsp1": "2500"}
 
 
-def run(cmd, timeout=60, shell=False):
+def run(cmd, timeout=60):
     try:
-        p = subprocess.run(cmd, shell=shell, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
@@ -57,7 +59,7 @@ def sdrplay_devices():
             bcd = open(os.path.join(p, "bcdDevice")).read().strip()
             out.append((pid, bcd, p))
         except OSError:
-            pass
+            continue  # not a readable USB device entry
     return out
 
 
@@ -91,7 +93,7 @@ class Power:
         if b == "sysfs":
             return self._sysfs("1")
         if b == "cmd":
-            rc, out, err = run(self.a.cmd_off, shell=True, timeout=30)
+            rc, out, err = run(shlex.split(self.a.cmd_off), timeout=30)
             return rc == 0, (out + err)[-300:]
         if b == "manual":
             input("Unplug the receiver, then press Enter... ")
@@ -107,7 +109,7 @@ class Power:
         if b == "sysfs":
             return self._sysfs("0")
         if b == "cmd":
-            rc, out, err = run(self.a.cmd_on, shell=True, timeout=30)
+            rc, out, err = run(shlex.split(self.a.cmd_on), timeout=30)
             return rc == 0, (out + err)[-300:]
         if b == "manual":
             input("Plug the receiver back in, then press Enter... ")

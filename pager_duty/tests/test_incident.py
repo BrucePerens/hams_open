@@ -8,6 +8,7 @@ import logging
 import datetime
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.pager_duty import hooks
 from odoo.addons.pager_duty.models.incident import TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
 from odoo import fields, _
@@ -201,8 +202,6 @@ class TestPagerIncidentStandard(HamsTransactionCase):
     def test_07b_installing_the_board_procedure_again_replaces_it(self):
         """The post-init hook's installer is safe to run again (CREATE OR REPLACE) and leaves exactly one board function."""
         # Tests [@ANCHOR: pager_duty:install_postgres_procedures]
-        from odoo.addons.pager_duty import hooks
-
         hooks._install_postgres_procedures(self.env)
         hooks._install_postgres_procedures(self.env)
         self.env.cr.execute("SELECT count(*) FROM pg_proc WHERE proname = 'pager_get_board_data'")
