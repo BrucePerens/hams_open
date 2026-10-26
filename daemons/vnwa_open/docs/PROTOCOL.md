@@ -69,6 +69,15 @@ exactly two set-up requests, each to half its value, and the codec audio moved f
   18.000 kHz tone appears in the codec audio just before every sweep (a calibration/level burst); 0x44 = 76.8 MHz
   worth = 300 kHz x 256 (not matched to anything yet). 0x4b = 44.0 MHz worth (not matched).
 
+## Time per point (request 0x40)
+
+Setting the time per measurement point changes request 0x40's payload `[b0][00][b2][01][7d][b5][00]`: **b0 = round(1.5 x
+milliseconds)** (1.33 ms: 2, 8 ms: 12, 30 ms: 45, 60 ms: 90; the prediction for 30 ms from the 60 ms run was exact).
+b2 and b5 also depend on it (b2: 8, 2, 1, 1 and b5: 8, 1, 1, 1 at those settings) but are not decoded. The pre- and
+post-sample counts did not change anything on the wire (they are PC-side processing). The step counter byte of
+request 0x49 was 2 in the 60 ms and 30 ms runs and 3 to 5 before; its meaning is still unknown. So 0x40 is not
+CFR1/CFR2 (see the correction above) but a timing block.
+
 ## Single-point sweep capture (v04_points)
 
 * The 6-byte tail of request 0x49 is a **signed 48-bit** little-endian word: offset = word x 360 MHz / 2^48.

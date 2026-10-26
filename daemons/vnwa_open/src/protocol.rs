@@ -68,6 +68,14 @@ pub fn if_scaled_fields(if_hz: f64) -> (u32, u16) {
     (word, (if_hz * 0.466).round() as u16)
 }
 
+/// The first byte of request 0x40's payload for a time per measurement point: `round(1.5 * milliseconds)`.
+/// Confirmed at 1.33, 8, 30 and 60 ms (bytes 2, 12, 45 and 90). Bytes 2 and 5 of the same payload also depend on the
+/// time per point (8, 2, 1, 1 and 8, 1, 1, 1 at those four settings) and are not decoded.
+pub fn point_time_byte(milliseconds: f64) -> u8 {
+    // [@ANCHOR: vnwa_open_point_time_byte]
+    (milliseconds * 1.5).round().clamp(0.0, 255.0) as u8
+}
+
 /// The LO chip's clock on the observed unit: 12 MHz x 3 x 9.
 pub const LO_CLOCK_HZ: f64 = 324_000_000.0;
 
@@ -171,6 +179,15 @@ mod tests {
         assert_eq!(if_scaled_fields(6_000.0), (0x33e1_f671, 0x0aec));
         assert_eq!(if_scaled_fields(4_000.0), (0x2296_a44c, 0x0748));
         assert_eq!(if_word(4_000.0), 0x00cf_204a); // request 0x42 at n = 3
+    }
+
+    // Tests [@ANCHOR: vnwa_open_point_time_byte]
+    #[test]
+    fn the_point_time_byte_follows_the_time_per_point() {
+        assert_eq!(point_time_byte(4.0 / 3.0), 2);
+        assert_eq!(point_time_byte(8.0), 12);
+        assert_eq!(point_time_byte(30.0), 45);
+        assert_eq!(point_time_byte(60.0), 90);
     }
 
     // Tests [@ANCHOR: vnwa_open_sweep_offset]
