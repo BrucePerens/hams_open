@@ -58,6 +58,16 @@ The set-up block is a load of AD9859 registers, sent little endian:
   (1/9 and 2/9). The factor nine is unexplained. The generator's read-back (request 0x35, wValue 1) returned the
   tuning words of 10 MHz (`c7 71 1c 07`) and then 25 MHz (`71 1c c7 11`), confirming request 0x4c's word.
 
+## The offset tail (found with single-point sweeps, 1 to 100 MHz)
+
+The signed 48-bit tail of request 0x49 is `(previous - new) / divisor` MHz, with `previous` the frequency before the
+sweep started (intermediate words do not change it), `new` the frequency of the word in the same payload, and
+`divisor` = 3 x (first byte - 1): 6 when the first byte is 3, 9 when it is 4. Checked on 14 values, e.g. 1 to 4 MHz
+-0.5, 1 to 5 MHz -0.6667, 5 to 50 MHz -7.5, 50 to 100 MHz -8.3333, 50 to 1 MHz +8.1667, 50 to 10 MHz +6.6667,
+10 to 100 MHz -15, 25 to 10 MHz +2.5 (byte 3) and +1.6667 (byte 4). The encoder in `protocol.rs` reproduces the
+captured bytes exactly, including rounding. What the first byte and the divisor mean is not known (possibly the
+number of stages the chip takes to move from the old frequency to the new one).
+
 ## Seen but not decoded
 
 * Request 0x49 payload (15 bytes): `[b0][00 0a 09 ..][6-byte tail]`. `b0` varies (0x21, 0x05, 0x06, 0x04,

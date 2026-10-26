@@ -36,6 +36,19 @@ pub fn sweep_word(freq_hz: f64) -> u64 {
     (freq_hz / 9.0 * 1_099_511_627_776.0 / DDS_CLOCK_HZ).round() as u64
 }
 
+/// The signed 48-bit offset carried in the tail of request 0x49's payload (little endian):
+/// `round((previous - new) / divisor * 2^48 / clock)`, where `previous` is the frequency before the sweep
+/// started and `divisor` is 6 when the payload's first byte is 3 and 9 when it is 4 (that is, 3 x (byte - 1);
+/// not explained). Returns the six bytes.
+pub fn sweep_offset_tail(previous_hz: f64, new_hz: f64, counter: u8) -> [u8; 6] {
+    // [@ANCHOR: vnwa_open_sweep_offset]
+    let divisor = 3.0 * f64::from(counter.saturating_sub(1).max(1));
+    let word =
+        ((previous_hz - new_hz) / divisor * 281_474_976_710_656.0 / DDS_CLOCK_HZ).round() as i64;
+    let b = word.to_le_bytes();
+    [b[0], b[1], b[2], b[3], b[4], b[5]]
+}
+
 /// Set the generator frequency (request 0x4c): eight bytes, four zero bytes and then the tuning
 /// word, little endian. `value` is 0x090a in the form the vendor program sends while it is
 /// stepping the generator and 0x0000 or 0x00c8 in the first set-up; its meaning is not decoded.
@@ -86,6 +99,20 @@ mod tests {
         // The two other words seen in the 25 MHz sweep: 1 MHz and 2 MHz.
         assert_eq!(sweep_word(1.0e6), 0x143a_2731);
         assert_eq!(sweep_word(2.0e6), 0x2874_4e61);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_sweep_offset]
+    #[test]
+    fn offset_tails_match_the_captured_sweeps() {
+        let hex = |t: [u8; 6]| t.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        // 1 -> 4 MHz, 1 -> 5 MHz, 5 -> 50 MHz at counter 3.
+        assert_eq!(hex(sweep_offset_tail(1.0e6, 4.0e6, 3)), "faa44ffaa4ff");
+        assert_eq!(hex(sweep_offset_tail(1.0e6, 5.0e6, 3)), "f8db14a386ff");
+        assert_eq!(hex(sweep_offset_tail(5.0e6, 50.0e6, 3)), "abaaaaaaaafa");
+        // 25 -> 10 MHz at counter 3 is +2.5 MHz; at counter 4 it is +5/3 MHz.
+        assert_eq!(hex(sweep_offset_tail(25.0e6, 10.0e6, 4)), "13da4b682f01");
+        // No change means a zero tail.
+        assert_eq!(sweep_offset_tail(25.0e6, 25.0e6, 3), [0; 6]);
     }
 
     // Tests [@ANCHOR: vnwa_open_generator_frequency]
