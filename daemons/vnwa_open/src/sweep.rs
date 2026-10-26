@@ -2,9 +2,10 @@
 //! A measurement through the real unit: one set-up block per point, both codecs recorded from the moment the block is
 //! sent, and the tone at the IF measured on whole IF periods after the unit has settled.
 //!
-//! What the unit does (observed, 10 MHz loopback, `docs/PROTOCOL.md`): after the block it emits for roughly 0.36 s, the level
-//! changing in steps at the point time (the first plateau), at about 60 ms and at about 300 ms; the values measured between
-//! 60 ms and 300 ms are steady to better than 0.1 %. So the analysis window sits inside that stretch.
+//! What the unit does (observed, 10 MHz loopback, `docs/PROTOCOL.md`): after the block it emits for six times the time per
+//! point (360 ms at 60 ms, 180 ms at 30 ms, 600 ms at 100 ms), plus about 10 to 20 ms of audio latency, the level changing in
+//! steps at 1, 5 and 6 point times; the values measured between 1 and 5 point times are steady to better than 0.1 %. So
+//! the analysis window sits inside that stretch and scales with the time per point.
 //!
 //! Results are uncalibrated ratios in the vendor program's convention (see `audio::vendor_convention`). Codec 1 has the
 //! reference on its left channel and gives S11, codec 2 has it on the right and gives S21.
@@ -28,9 +29,10 @@ pub struct Config {
     pub point_ms: f64,
     /// The RF level, 14 bits (0x3fff is the maximum).
     pub rf_level: u16,
-    /// How long after the block is sent the analysis window starts, and how long it is.
-    pub settle_ms: f64,
-    pub window_ms: f64,
+    /// How long after the block is sent the analysis window starts, and how long it is; `None` takes one point time plus
+    /// 20 ms (the audio latency) and two point times.
+    pub settle_ms: Option<f64>,
+    pub window_ms: Option<f64>,
     /// The smallest reference amplitude (sample counts) accepted as a signal.
     pub min_reference: f64,
 }
@@ -43,10 +45,22 @@ impl Default for Config {
             if_hz: 12_000.0,
             point_ms: 60.0,
             rf_level: 0x3fff,
-            settle_ms: 80.0,
-            window_ms: 100.0,
+            settle_ms: None,
+            window_ms: None,
             min_reference: 200.0,
         }
+    }
+}
+
+impl Config {
+    /// The start of the analysis window after the block is sent, in milliseconds.
+    pub fn settle(&self) -> f64 {
+        self.settle_ms.unwrap_or(self.point_ms + 20.0)
+    }
+
+    /// The length of the analysis window in milliseconds.
+    pub fn window(&self) -> f64 {
+        self.window_ms.unwrap_or(2.0 * self.point_ms)
     }
 }
 
@@ -67,8 +81,18 @@ pub fn check(c: &Config) -> Result<(), String> {
             c.rf_level
         ));
     }
-    if !(c.settle_ms >= 0.0 && c.window_ms > 0.0 && c.settle_ms + c.window_ms <= 300.0) {
-        return Err("settle_ms must be at least 0, window_ms above 0, and together at most 300 ms (the unit stops emitting near 360 ms)".into());
+    let (settle, window) = (c.settle(), c.window());
+    let steady_end = 5.0 * c.point_ms;
+    if !(settle >= 0.0 && window > 0.0 && settle + window <= steady_end + 15.0) {
+        return Err(format!(
+            "the analysis window ({settle} ms + {window} ms) must end by 5 point times plus the audio latency ({} ms): after that the unit's level steps",
+            steady_end + 15.0
+        ));
+    }
+    if window < 1000.0 / c.if_hz {
+        return Err(format!(
+            "the analysis window of {window} ms is shorter than one IF period"
+        ));
     }
     Ok(())
 }
@@ -103,8 +127,9 @@ impl Vna {
         })
     }
 
-    /// One point. `previous_hz` is the frequency before the sweep started (the unit sends the offset to it); a single point
-    /// passes its own frequency.
+    /// One point. `previous_hz` is the frequency the offset in the block is taken from; every point of `sweep` passes its own
+    /// frequency (no offset), because the later points of a block-per-point sweep with the sweep start as `previous_hz` were
+    /// not repeatable (100 MHz measured 0.93, 1.20, 1.56 and 0.94 in four runs, against 0.998 every time as a single point).
     pub fn measure(&self, freq_hz: f64, previous_hz: f64) -> Result<Point, String> {
         let c = &self.cfg;
         let block = setup_block(&SetupParams {
@@ -124,7 +149,7 @@ impl Vna {
         let _ = self.usb.read(0x58, c.rf_level, c.rf_level, 64);
         self.usb.send_all(&block)?;
         let _ = self.usb.read(0x0d, 0x0303, 0, 64);
-        let (skip, n) = (frames(c.settle_ms), frames(c.window_ms));
+        let (skip, n) = (frames(c.settle()), frames(c.window()));
         let timeout = Duration::from_secs(3);
         let f11 = self.s11.frames_after(m11, skip, n, timeout)?;
         let f21 = self.s21.frames_after(m21, skip, n, timeout)?;
@@ -178,7 +203,7 @@ impl Vna {
                 } else {
                     start_hz + (stop_hz - start_hz) * i as f64 / (points - 1) as f64
                 };
-                self.measure(f, start_hz)
+                self.measure(f, f)
             })
             .collect()
     }
