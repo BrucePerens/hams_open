@@ -144,6 +144,11 @@ vendor program reports it: S21 on the TX-to-RX loopback is 0.874 at 172.3 degree
 IF 12 kHz and 6 kHz (`VNWA_SamplesPerPeriod` 4 and 8 in `VNWA.ini`), recorded on both codecs, match the vendor values to 0.1 to 0.3
 percent (codec 1, reference left) and 0.5 to 1.0 percent (codec 2, reference right), with phase within 0.2 degrees.
 
+Level check. With the vendor program's `setTXpower` at 16383, 8192, 4096, 2048 and 1024 (a 24 dB range; reference amplitude about
+17000 down to about 1000 counts), my ratio stays at 0.7876 to 0.7882 and 176.13 to 176.18 degrees, run to run within 0.001. The
+vendor program's own values scatter by 1 to 2.5 percent at the lower levels (they come from a much shorter window), and my values
+agree with their mean within that scatter at every level (0.2 to 2.5 percent). `audio::tests` keeps the five chunks as a test.
+
 Not covered: the loopback is flat in RF frequency (to 300 MHz), so a device under test with a frequency-dependent response was not
 measured (the IF dependence above is the only non-flat response that was available without one), and the unit's time drift is
 not explained. `audio::tests` keeps the recorded chunks and the vendor
