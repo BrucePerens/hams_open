@@ -10,8 +10,12 @@ proving the heuristic does not flag ordinary support requests."""
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
+from email import message_from_bytes
+
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     detect_inbound_spam_signals,
+    ses_verdict_reasons,
+    ses_verdicts,
 )
 
 
@@ -189,3 +193,32 @@ class TestInboundSpamFilter(HamsTransactionCase):
             body_html='<p>Pay in QuickBooks: <a href="https://Accounts.INTUIT.com/pay">open</a></p>',
         )
         self.assertEqual(reasons, [])
+
+    # ------------------------------------------------------------------
+    # Amazon SES scan verdicts [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
+    # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
+    # ------------------------------------------------------------------
+
+    def _ses_message(self, spam, virus):
+        raw = ("X-SES-Spam-Verdict: %s\r\nX-SES-Virus-Verdict: %s\r\nSubject: hi\r\n\r\nbody\r\n" % (spam, virus)).encode()
+        return message_from_bytes(raw)
+
+    def test_17_ses_verdicts_flag_only_a_fail(self):
+        self.assertEqual(ses_verdict_reasons(ses_verdicts(self._ses_message("PASS", "PASS"))), [])
+        self.assertEqual(ses_verdict_reasons(ses_verdicts(self._ses_message("GRAY", "PROCESSING_FAILED"))), [])
+        spam = ses_verdict_reasons(ses_verdicts(self._ses_message("FAIL", "PASS")))
+        self.assertEqual(len(spam), 1)
+        self.assertIn("spam scan verdict: FAIL", spam[0])
+        both = ses_verdict_reasons(ses_verdicts(self._ses_message("fail", "FAIL")))
+        self.assertEqual(len(both), 2)
+
+    def test_18_a_message_without_ses_headers_has_no_verdicts(self):
+        message = message_from_bytes(b"Subject: hi\r\n\r\nbody\r\n")
+        self.assertEqual(ses_verdicts(message), {})
+        self.assertEqual(ses_verdict_reasons(ses_verdicts(message)), [])
+        self.assertEqual(ses_verdict_reasons(None), [])
+
+    def test_19_a_hostile_verdict_value_is_bounded(self):
+        verdicts = ses_verdicts(self._ses_message("FAIL" + "x" * 500, "PASS"))
+        self.assertLessEqual(len(verdicts["spam"]), 32)
+        self.assertEqual(ses_verdict_reasons(verdicts), [])

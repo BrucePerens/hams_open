@@ -13,6 +13,7 @@ See docs/security/TICKET_PROMPT_INJECTION.md.
 from odoo import api, models
 
 from . import untrusted_text as ut
+from .inbound_spam_filter import ses_verdicts
 
 MAIL_STASH_KEY = "hams_helpdesk_untrusted_mail"
 
@@ -33,5 +34,8 @@ class MailThread(models.AbstractModel):
             "findings": result.findings,
             "score": result.score,
             "removed": result.removed,
+            # Amazon SES's scan verdicts, for message_new(); not a key of msg_dict, because Odoo passes every key of msg_dict on to
+            # mail.message.create() and an unknown one is refused.
+            "ses_verdicts": ses_verdicts(message),
         }
         return msg_dict

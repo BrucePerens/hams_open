@@ -18,7 +18,8 @@ from markupsafe import Markup
 
 from odoo.tools import html2plaintext
 
-from .inbound_spam_filter import detect_inbound_spam_signals
+from .inbound_spam_filter import detect_inbound_spam_signals, ses_verdict_reasons
+from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
 from .triage_wakeup import write_triage_wakeups
 
@@ -830,6 +831,38 @@ class HelpdeskTicket(models.Model):
         self.with_env(hd_env).message_post(body=body, subtype_xmlid="mail.mt_note")
         return True
 
+    # [@ANCHOR: hams_helpdesk:COMM_mcp_mark_spam]
+    def mcp_mark_spam(self, reason):
+        """Moves this ticket from "new" to the "spam" quarantine stage and records ``reason`` as an
+        internal note, for the external-AI ticket-triage MCP server's mark_spam tool
+        (daemons/hams_ticket_triage_mcp/main.py in hams_com). Bruce, 2026-10-26: "have it close spam
+        tickets". "Close" here is the existing quarantine stage, not "closed": that stage is a plain
+        reversible stage change a human can undo, it never mails the sender (see
+        COMM_helpdesk_no_mailback_on_spam_stage in write()), and the filter's own flagged mail already
+        lands in it. Nothing is deleted.
+
+        Same shape as mcp_post_internal_note(): the ``self.read(["stage"])`` runs BEFORE the
+        elevation, under the CALLING identity, so the ir.rule allow-list still decides which tickets this
+        account can touch, and the write itself runs as hams_helpdesk.user_helpdesk_service because the
+        calling group (group_ai_triage_external_service) is read-only. Only a ticket still in "new" can be
+        moved: a ticket a human has already picked up is never re-staged by the model.
+        """
+        # [@ANCHOR: hams_helpdesk:mcp_mark_spam]
+        self.ensure_one()
+        if self.read(["stage"])[0]["stage"] != "new":
+            raise UserError(_("Only a ticket in the New stage can be marked as spam by the triage agent."))
+        utils = self.env["zero_sudo.security.utils"]
+        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
+        visible = ut.sanitize_any(reason or "", 2000, "ai_note").plain
+        text = ut.filter_ai_output(visible).text
+        body = Markup("<p>%s</p>") % Markup("<br/>").join(
+            Markup.escape(line) for line in ("Marked as spam by the AI triage agent:\n" + text).split("\n")
+        )
+        ticket = self.with_env(hd_env)
+        ticket.write({"stage": "spam"})
+        ticket.message_post(body=body, subtype_xmlid="mail.mt_note")
+        return True
+
     def mcp_safe_read(self, max_chars=0):
         """The ONLY ticket view the external-AI triage server reads: for each ticket in self, the
         subject, callsign and description as plain visible text that went through the shared filter
@@ -983,6 +1016,8 @@ class HelpdeskTicket(models.Model):
         spam_reasons = detect_inbound_spam_signals(
             subject=msg_dict.get("subject") or "",
             body_html=msg_dict.get("body") or "",
+        ) + ses_verdict_reasons(
+            (stash_for(self.env).get(msg_dict.get("message_id") or "") or {}).get("ses_verdicts")
         )
         if spam_reasons:
             values["stage"] = "spam"
