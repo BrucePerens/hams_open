@@ -30,7 +30,7 @@ presamples and postsamples) and divides the left channel by the right (reference
 result to the vendor program's sign. Against the vendor program's own uncalibrated S21 on a TX-to-RX loopback (codec 2) it agrees
 to 0.7 to 0.9 percent in magnitude and phase at 1, 10, 20 and 30 MHz, and to 1.5 percent rms over the first 15 points of a sweep when
 the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in RF frequency). It also
-reproduces the unit's IF-dependent response (|S21| 0.874, 0.799 and 0.782 at IF 12, 6 and 4 kHz) to 0.1 to 1 percent on both codecs
+reproduces the unit's IF-dependent response (|S21| 0.874 at IF 12 kHz down to 0.767 at 1 kHz, nine IFs) to 0.1 to 1 percent on both codecs
 (`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration, the vendor's low-frequency digital
 filtering (below the codec's cut-off) and the windowing used for time-domain transforms, none of which is implemented
 (details in `docs/PROTOCOL.md`).

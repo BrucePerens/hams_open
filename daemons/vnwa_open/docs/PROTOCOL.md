@@ -144,6 +144,12 @@ vendor program reports it: S21 on the TX-to-RX loopback is 0.874 at 172.3 degree
 IF 12 kHz and 6 kHz (`VNWA_SamplesPerPeriod` 4 and 8 in `VNWA.ini`), recorded on both codecs, match the vendor values to 0.1 to 0.3
 percent (codec 1, reference left) and 0.5 to 1.0 percent (codec 2, reference right), with phase within 0.2 degrees.
 
+IF scan. Six more IFs (3, 2.4, 2, 1.5, 1.2 and 1 kHz; `VNWA_SamplesPerPeriod` 16 to 48) at 10 MHz, vendor against both codecs: the vendor's
+S21 falls smoothly from 0.7773 at 177.09 degrees to 0.7667 at 178.85 degrees, and my values match to 0.06 to 0.36 percent (codec 1,
+reference left) and 0.5 to 0.96 percent (codec 2, reference right), phase within 0.2 degrees. With 12, 6 and 4 kHz that is nine IFs
+over a 12:1 range on a response that is not flat (|S21| 0.874 down to 0.767, phase 172.3 up to 178.9 degrees). The chunks are in
+`audio::tests`.
+
 Level check. With the vendor program's `setTXpower` at 16383, 8192, 4096, 2048 and 1024 (a 24 dB range; reference amplitude about
 17000 down to about 1000 counts), my ratio stays at 0.7876 to 0.7882 and 176.13 to 176.18 degrees, run to run within 0.001. The
 vendor program's own values scatter by 1 to 2.5 percent at the lower levels (they come from a much shorter window), and my values
