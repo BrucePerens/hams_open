@@ -19,6 +19,7 @@ from markupsafe import Markup
 from odoo.tools import html2plaintext
 
 from .inbound_spam_filter import detect_inbound_spam_signals, ses_verdict_reasons
+from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
 from .triage_wakeup import write_triage_wakeups
 
@@ -1015,7 +1016,9 @@ class HelpdeskTicket(models.Model):
         spam_reasons = detect_inbound_spam_signals(
             subject=msg_dict.get("subject") or "",
             body_html=msg_dict.get("body") or "",
-        ) + ses_verdict_reasons(msg_dict.get("ses_verdicts"))
+        ) + ses_verdict_reasons(
+            (stash_for(self.env).get(msg_dict.get("message_id") or "") or {}).get("ses_verdicts")
+        )
         if spam_reasons:
             values["stage"] = "spam"
             _logger.info(

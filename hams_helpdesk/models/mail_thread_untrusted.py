@@ -29,11 +29,13 @@ class MailThread(models.AbstractModel):
     def message_parse(self, message, save_original=False):
         msg_dict = super().message_parse(message, save_original=save_original)
         result = ut.inspect_mail(message)  # never raises: an error is itself a finding
-        msg_dict["ses_verdicts"] = ses_verdicts(message)
         key = (msg_dict or {}).get("message_id") or ""
         stash_for(self.env)[key] = {
             "findings": result.findings,
             "score": result.score,
             "removed": result.removed,
+            # Amazon SES's scan verdicts, for message_new(); not a key of msg_dict, because Odoo passes every key of msg_dict on to
+            # mail.message.create() and an unknown one is refused.
+            "ses_verdicts": ses_verdicts(message),
         }
         return msg_dict

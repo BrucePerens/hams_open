@@ -38,8 +38,9 @@ class TestMailIngest(HamsTransactionCase):
 
         cls.ingest_user = cls.env.ref("hams_helpdesk.user_mail_ingest_service")
 
-    def _raw_email(self, to_addr, subject="Test inquiry", from_addr="customer@example.com"):
+    def _raw_email(self, to_addr, subject="Test inquiry", from_addr="customer@example.com", extra_headers=""):
         return (
+            f"{extra_headers}"
             f"From: {from_addr}\r\n"
             f"To: {to_addr}\r\n"
             f"Subject: {subject}\r\n"
@@ -335,3 +336,29 @@ class TestMailIngest(HamsTransactionCase):
         self.assertTrue(ticket)
         self.assertEqual(ticket.stage, "new")
         self.assertFalse(self._spam_notes(ticket))
+
+    def test_10_an_ses_spam_fail_verdict_quarantines_an_otherwise_ordinary_message(self):
+        # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
+        # SES writes X-SES-Spam-Verdict and X-SES-Virus-Verdict into the stored message; a FAIL is one more spam signal.
+        raw = self._raw_email(
+            "support@hams.com",
+            subject="Question about my rotator",
+            extra_headers="X-SES-Spam-Verdict: FAIL\r\nX-SES-Virus-Verdict: PASS\r\n",
+        )
+        self._ingest(raw)
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "ilike", "Question about my rotator")], order="id desc", limit=1)
+        self.assertTrue(ticket, "a flagged message must still become a ticket")
+        self.assertEqual(ticket.stage, "spam")
+        self.assertTrue(any("Amazon SES spam scan verdict: FAIL" in (m.body or "") for m in ticket.message_ids))
+
+    def test_11_ses_pass_and_gray_verdicts_leave_an_ordinary_message_in_new(self):
+        for index, verdict in enumerate(("PASS", "GRAY")):
+            raw = self._raw_email(
+                "support@hams.com",
+                subject=f"Question about my mast {index}",
+                extra_headers=f"X-SES-Spam-Verdict: {verdict}\r\nX-SES-Virus-Verdict: PASS\r\n",
+            )
+            self._ingest(raw)
+            ticket = self.env["hams_helpdesk.ticket"].search([("name", "ilike", f"Question about my mast {index}")], limit=1)
+            self.assertTrue(ticket)
+            self.assertEqual(ticket.stage, "new", verdict)
