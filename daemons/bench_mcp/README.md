@@ -17,11 +17,20 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
       "scope": {"driver": "siglent_sds", "tier": "read_config", "host": "192.168.10.51", "port": 5025},
       "psu":   {"driver": "atm6301", "tier": "read_config", "serial": "/dev/ttyUSB0", "baud": 115200,
                 "max_volts": 5.5, "max_amps": 1.0},
-      "vna":   {"driver": "vnwa_open", "tier": "read_config", "if_hz": 12000, "point_ms": 60, "rf_level": 16383}}}
+      "vna":   {"driver": "vnwa_open", "tier": "read_config", "if_hz": 12000, "point_ms": 60, "rf_level": 16383},
+      "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
+      "lime":  {"driver": "limesdr", "tier": "read_config"}}}
 
 The VNA entry's settings are all optional: `codec_s11` and `codec_s21` (parts of the ALSA ids of the two codecs, default
 `hw:CARD=CODEC,` and `hw:CARD=CODEC_1,`), `if_hz` (a divisor of 48 kHz: 12000, 6000 or 4000), `point_ms` (0.2 to 100),
 `rf_level` (0 to 16383), `settle_ms` and `window_ms`. A bad value is refused when the file is read.
+
+The SDR entries need SoapySDR with the radio's module (`libsoapysdr0.8`, `soapysdr-module-bladerf`, `soapysdr-module-lms7`); the
+library is loaded at run time, so the server runs without it and the SDR tools then say so. Optional: `serial` (hex digits, to
+pick one board of several) and, for the bladeRF only, `xb200` (`50M`, `144M`, `222M`, `auto`, `auto1db`, `auto3db`, `custom`),
+which switches on the XB-200 transverter and its filter bank so the receiver tunes from 9 kHz instead of 237.5 MHz.
+The bladeRF needs its FPGA loaded (`bladeRF-cli -L hostedx115.rbf` writes it to flash for autoloading) and firmware 2.4 or later
+for the FPGA 0.16; the LimeSDR needs firmware 4 and gateware 2.23 (`LimeUtil --update`).
 
 `BENCH_MCP_OUT` is the directory for captures and screenshots (default: the temp dir). Each
 instrument has its own permission tier (`read_only` when omitted). There is no raw-SCPI tool. The
@@ -40,6 +49,7 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_psu_output` | read_config to switch off, **full** to switch on | supply |
 | `bench_scope_self_cal` | full (needs `confirm_inputs_disconnected: true`) | scope |
 | `bench_vna_sweep` | read_config (it puts RF on the TX port) | VNA |
+| `bench_sdr_capture`, `bench_sdr_survey`, `bench_sdr_coherence` | read_config (they tune the radio; receive only) | SDR |
 
 `bench_identify` and `bench_status` also answer for the VNA (USB present, both codecs found, IF, time per point, level).
 `bench_vna_sweep` takes `start_hz`, optionally `stop_hz`, `points` (1 to 401, about 0.2 s each), `if_hz`, `point_ms`
@@ -48,6 +58,17 @@ summary (and the rows when there are at most 51). The values are **raw ratios of
 the cable, bridge and front-end are not removed, so a cable between TX and RX is not 0 dB (about -1 dB at 10 MHz rising to
 +2.6 dB at 300 MHz, with a phase that is linear in frequency). While a sweep runs the codecs belong to the server: the
 vendor program cannot use them at the same time.
+
+`bench_identify` and `bench_status` answer for an SDR with its driver's hardware key and info (firmware, gateware, serial) and
+receive channel count. `bench_sdr_capture` tunes to `freq_hz`, captures `samples` (up to 16 777 216) at `sample_rate_hz` and
+`gain_db`, saves the raw I/Q (little-endian f32 pairs, full scale 1.0) into `BENCH_MCP_OUT` and returns RMS, peak, DC offset,
+clipping, the noise floor, the strongest peaks and `stream_seconds` against `real_time_seconds` and `continuous`, whether the samples arrived at the sample rate (the bladeRF
+with a newer FPGA than libbladeRF knows reports an overrun about every 504 samples without losing any, so the timing is trusted
+and the driver's count is only reported). `bench_sdr_survey` steps the tuning over `start_hz` to `stop_hz` (at most 400 steps,
+70 % of each capture's bandwidth kept, the radio's DC spike removed) and returns the floor and strongest peaks with a CSV.
+`bench_sdr_coherence` (LimeSDR, two receivers on one oscillator) captures both channels, repeats with a fresh tune each time and
+reports the phase and gain of channel 0 against channel 1 at the strongest tone, plus coherence; it needs one signal on both
+inputs. Levels are dBFS at the set gain, **not calibrated power**. Nothing transmits: there is no transmit tool.
 
 `bench_capture` refuses a stopped scope (its memory is an old frozen frame) unless `allow_stopped`.
 The supply's output is switched on only if the setpoints stored in it are within the caps, since a
@@ -74,6 +95,16 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 
 * The arguments of a sweep are checked and override the instrument's settings for that sweep. [@ANCHOR: bench_mcp_vna_sweep_args]
 * A sweep is written as a CSV with a header and one row per point. [@ANCHOR: bench_mcp_vna_csv]
+
+## Checks this crate makes for the SDRs (anchors)
+
+* The SoapySDR argument string is built from the config and a serial or XB-200 value cannot carry another argument. [@ANCHOR: bench_mcp_sdr_args]
+* A capture's arguments are checked against each radio's tuning, rate and gain limits before the radio is opened. [@ANCHOR: bench_mcp_sdr_capture_args]
+* A survey is bounded to 400 steps and a power-of-two FFT length. [@ANCHOR: bench_mcp_sdr_survey_args]
+* The coherence tool checks its arguments before touching hardware. [@ANCHOR: bench_mcp_sdr_coherence_args]
+* The averaged spectrum reads a tone's amplitude and offset, and peaks skip the DC spike. [@ANCHOR: bench_mcp_sdr_spectrum_math]
+* The phase between two channels is measured block by block with its stability and coherence. [@ANCHOR: bench_mcp_sdr_phase_math]
+* A capture that takes longer than its signal lasts is flagged as having lost samples. [@ANCHOR: bench_mcp_sdr_continuous]
 
 ## Tests
 

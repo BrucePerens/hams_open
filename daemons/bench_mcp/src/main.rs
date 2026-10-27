@@ -7,9 +7,11 @@
 //! is the directory for captures and screenshots.
 
 mod config;
+mod dsp;
 mod link;
 mod psu;
 mod scope;
+mod sdr;
 mod vna;
 
 use config::{Instrument, Kind, Tier};
@@ -37,7 +39,7 @@ struct ToolSpec {
 }
 
 const ANY: &[Kind] = &[Kind::Scope, Kind::Psu];
-const WITH_VNA: &[Kind] = &[Kind::Scope, Kind::Psu, Kind::Vna];
+const WITH_VNA: &[Kind] = &[Kind::Scope, Kind::Psu, Kind::Vna, Kind::Sdr];
 
 const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_list", tier: Tier::ReadOnly, kinds: ANY, desc: "List the configured instruments with their driver and permission tier.", props: "{}", required: &[] },
@@ -61,6 +63,15 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_vna_sweep", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA: a linear sweep of start_hz to stop_hz in `points` points (1 to 401, about 0.2 s each at 60 ms per point; the unit emits for six point times) with RF on the TX port, measuring S21 (RX channel) and S11 (reflection channel). The results are raw ratios, not calibrated: the cable, bridge and front-end are not removed. Saves a CSV (frequency, S21 and S11 as re/im, dB and degrees) and returns a summary, and the rows themselves when there are at most 51 points. if_hz (a divisor of 48 kHz such as 12000, 6000 or 4000), point_ms (0.2 to 100) and rf_level (0 to 16383) override the instrument's settings for this sweep.",
         props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"}}"#, required: &["start_hz"] },
+    ToolSpec { name: "bench_sdr_capture", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
+        desc: "SDR (bladeRF, LimeSDR): tune to freq_hz, capture `samples` complex baseband samples (default 262144, up to 16777216) at sample_rate_hz (default 2 MHz) and gain_db (default 30), receive only. Saves the raw I/Q as little-endian f32 pairs and returns RMS level, peak, DC offset, clipped sample count, the noise floor and the strongest peaks (dBFS at the set gain, not calibrated power). A bladeRF below 237.5 MHz needs its XB-200 configured (\"xb200\" in the config). channel 1 is the LimeSDR's second receiver.",
+        props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"samples":{"type":"integer"},"channel":{"type":"integer","enum":[0,1]}}"#, required: &["freq_hz"] },
+    ToolSpec { name: "bench_sdr_survey", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
+        desc: "SDR: a power survey from start_hz to stop_hz, stepping the tuning and stitching the spectra (70 % of each capture's bandwidth is kept; at most 400 steps). Saves a CSV of frequency and dBFS and returns the median floor and the ten strongest peaks. The radio's own DC spike is removed from every step. Use it to look for signals or noise sources; levels are relative to full scale at the set gain.",
+        props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"fft_len":{"type":"integer"},"samples_per_step":{"type":"integer"}}"#, required: &["start_hz"] },
+    ToolSpec { name: "bench_sdr_coherence", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
+        desc: "SDR with two receivers (LimeSDR): capture both channels together at freq_hz, repeat `repeats` times with a fresh tune each time, and report the phase and gain of channel 0 relative to channel 1 at the strongest tone, how stable the phase is within a capture and across retunes, and the coherence. Needs one signal on both inputs (a splitter).",
+        props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"repeats":{"type":"integer"}}"#, required: &["freq_hz"] },
     ToolSpec { name: "bench_scope_self_cal", tier: Tier::Full, kinds: &[Kind::Scope],
         desc: "Run the scope's self-calibration (*CAL?). It rewrites the stored calibration, takes a minute or two and drives its own levels onto the inputs. All probes and cables must be disconnected first; confirm_inputs_disconnected must be true, and that must come from the person at the bench.",
         props: r#"{"instrument":{"type":"string"},"confirm_inputs_disconnected":{"type":"boolean"}}"#, required: &["confirm_inputs_disconnected"] },
@@ -112,6 +123,7 @@ fn connect(i: &Instrument) -> Result<Link, String> {
         Kind::Scope => Link::tcp(i.host.as_deref().unwrap_or_default(), i.port),
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
         Kind::Vna => Err("the VNA has no SCPI link".into()),
+        Kind::Sdr => Err("an SDR has no SCPI link".into()),
     }
 }
 
@@ -159,6 +171,15 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             "bench_identify" => Ok(vna::identify(&inst.vna)),
             "bench_status" => vna::status(&inst.vna),
             "bench_vna_sweep" => vna::sweep(&inst.vna, args, &out_dir()),
+            _ => Err(format!("{name} does not apply to {:?}", inst.name)),
+        };
+    }
+    if inst.kind == Kind::Sdr {
+        return match name {
+            "bench_identify" | "bench_status" => sdr::identify(&inst.sdr),
+            "bench_sdr_capture" => sdr::capture(&inst.sdr, args, &out_dir()),
+            "bench_sdr_survey" => sdr::survey(&inst.sdr, args, &out_dir()),
+            "bench_sdr_coherence" => sdr::coherence(&inst.sdr, args),
             _ => Err(format!("{name} does not apply to {:?}", inst.name)),
         };
     }
