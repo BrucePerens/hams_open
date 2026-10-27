@@ -201,6 +201,27 @@ class TestDnsPlan(HamsTransactionCase):
         self.assertEqual(dns_plan.plan_row(self._row(cf_record_id=txt["id"], retire=True), [txt])["action"],
                          dns_plan.CONFLICT)
 
+    def test_12_a_comment_is_written_with_a_create_and_added_by_an_update_without_touching_the_rest(self):
+        created = dns_plan.plan_row(self._row(comment="ACME challenge delegation"), [])
+        self.assertEqual((created["action"], created["comment"]), (dns_plan.CREATE, "ACME challenge delegation"))
+        self.assertIn("comment 'ACME challenge delegation'", dns_plan.render([created]))
+        remote = self._remote()
+        entry = dns_plan.plan_row(self._row(cf_record_id=remote["id"], comment="why"), [remote])
+        self.assertEqual(entry["action"], dns_plan.UPDATE)
+        self.assertEqual(entry["reason"], "comment added: 'why'")
+        same = self._remote(comment="why")
+        self.assertEqual(dns_plan.plan_row(self._row(cf_record_id=same["id"], comment="why"), [same])["action"], dns_plan.UNCHANGED)
+        changed = dns_plan.plan_row(self._row(cf_record_id=same["id"], comment="new"), [same])
+        self.assertEqual((changed["action"], changed["reason"]), (dns_plan.UPDATE, "comment 'why' -> 'new'"))
+
+    def test_13_an_empty_comment_never_clears_one_set_at_cloudflare_and_the_hash_follows_the_comment(self):
+        remote = self._remote(comment="set by hand")
+        entry = dns_plan.plan_row(self._row(cf_record_id=remote["id"], comment=""), [remote])
+        self.assertEqual(entry["action"], dns_plan.UNCHANGED)
+        a = dns_plan.plan_row(self._row(comment="one"), [])
+        b = dns_plan.plan_row(self._row(comment="two"), [])
+        self.assertNotEqual(dns_plan.plan_hash([a]), dns_plan.plan_hash([b]))
+
 
 @tagged("post_install", "-at_install")
 class TestDnsRecordModel(HamsTransactionCase):
@@ -498,6 +519,21 @@ class TestDnsPush(HamsTransactionCase):
         self.assertIn("plan_text", form["arch"])
         action = self.env.ref("cloudflare.action_cf_dns_push_wizard")
         self.assertEqual(action.res_model, "cloudflare.dns.push.wizard")
+
+    def test_15_a_comment_reaches_cloudflare_on_create_and_on_a_later_update(self):
+        row = self._row("_acme-challenge.hams.com", "CNAME", "x.acme.hams.com", comment="ACME DNS-01 delegation to our PowerDNS")
+        self._apply(row)
+        create = [c for c in self.cf.writes() if c[0] == "create"][0]
+        self.assertEqual(create[2]["comment"], "ACME DNS-01 delegation to our PowerDNS")
+        bare = self._row("plain.hams.com", "A", "192.0.2.7")
+        self._apply(bare)
+        self.assertNotIn("comment", [c for c in self.cf.writes() if c[0] == "create"][-1][2])
+        bare.write({"comment": "documentation example address"})
+        plan, results = self._apply(bare)
+        self.assertEqual([e["action"] for e in plan["entries"]], ["update"])
+        update = [c for c in self.cf.writes() if c[0] == "update"][-1]
+        self.assertEqual(update[3]["comment"], "documentation example address")
+        self.assertEqual([e["action"] for e in bare.dns_push_plan()["entries"]], ["unchanged"])
 
 
 @tagged("post_install", "-at_install")

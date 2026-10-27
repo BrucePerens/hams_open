@@ -77,6 +77,11 @@ class CloudflareDNSRecord(models.Model):
         "The plan shows the delete first; afterwards the row is archived. Nothing else is ever deleted.",
     )
     active = fields.Boolean(default=True)
+    comment = fields.Char(
+        string="Comment", size=500, copy=False,
+        help="Why this record exists, for anything not obvious from its name (an ACME challenge CNAME, a DNS-only record "
+             "and the reason). Sent to Cloudflare as the record's comment, which the dashboard shows. Empty means Odoo "
+             "says nothing: a comment someone set at Cloudflare is left alone.")
     cf_last_result = fields.Char(string="Last push result", readonly=True, copy=False)
 
     @api.model_create_multi
@@ -206,7 +211,7 @@ class CloudflareDNSRecord(models.Model):
         for row in self.sorted("id"):
             plain = {"id": row.id, "name": row.name, "type": row.type, "content": row.content,
                      "proxied": row.proxied, "manage": row.manage, "cf_record_id": row.cf_record_id or "",
-                     "retire": row.retire}
+                     "retire": row.retire, "comment": row.comment or ""}
             website, token, problem = self._dns_credential_website(row, websites)
             if problem:
                 entries.append(self._dns_problem_entry(plain, problem))
@@ -341,6 +346,8 @@ class CloudflareDNSRecord(models.Model):
                     token = tokens[website.id] = website._get_cloudflare_credentials()[0]
                 payload = {"type": entry["type"], "name": entry["name"], "content": row.content,
                            "proxied": entry["proxied"], "ttl": entry.get("ttl", 1)}
+                if entry.get("comment"):
+                    payload["comment"] = entry["comment"]
                 if action == dns_plan.DELETE:
                     ok, value = delete_dns_record(entry["zone_id"], entry["remote_id"], token)
                     if ok:
