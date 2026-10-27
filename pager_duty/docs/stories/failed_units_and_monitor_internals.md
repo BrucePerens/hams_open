@@ -51,3 +51,16 @@ channel and the connection with their own handshakes. It used to send only the p
 broker logged as an abruptly closed connection 1,440 times a day. It returns a flag and a text that names the failure class
 (refused, timeout, authentication, access denied, protocol or lost connection) and never contains the credentials, gives up on
 a silent broker after a few seconds, and reports missing `RMQ_USER`/`RMQ_PASS` instead of trying. [@ANCHOR: pager_duty:amqp_check]
+
+## Things we built that are not in operation
+
+Alice also wants to hear about a unit that was built, tracked and never installed, or a timer that was never enabled: nothing fails, so the
+failed-units check stays quiet. `daemon/check_provisioned_units.py` starts from what the hams_shared MANIFEST installs and asks systemd
+about each unit.
+
+1.  **What is expected.** `expected_units()` lists the production unit files for this host (not templates, not other host classes), noting which
+    are opt-in and which are one-shot services. [@ANCHOR: pager_duty:provisioned_units]
+2.  **What is reported.** `units_not_in_operation()` reports a unit systemd does not know ("not installed"), a timer or path unit that is not
+    active, and a long-running service (not one-shot, with no timer or path of its own, its condition met on this host) that is not active. An
+    opt-in timer that is only linked is deliberately off and is left alone; one that is enabled must run. The result is `high`, which pages.
+    [@ANCHOR: pager_duty:units_not_in_operation]
