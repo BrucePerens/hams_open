@@ -28,7 +28,8 @@ Exit 0 healthy, 1 failing, with a short message on stdout/stderr and, past the w
 the sibling expiry scripts).
 
 Environment overrides (used by this script's tests): HAMS_AUTH_CERT_PATH, HAMS_AUTH_CERT_HOST,
-HAMS_AUTH_CERT_PORT, HAMS_AUTH_CERT_WARN_DAYS, HAMS_AUTH_CERT_PAGE_DAYS.
+HAMS_AUTH_CERT_PORT, HAMS_AUTH_CERT_WARN_DAYS, HAMS_AUTH_CERT_PAGE_DAYS. `--profile turn` checks the TURN server's certificate
+(/etc/hams/turn/turn.crt, turn.hams.com) the same way, with HAMS_TURN_CERT_* in place of HAMS_AUTH_CERT_*.
 """
 
 import datetime
@@ -41,6 +42,12 @@ import sys
 DEFAULT_CERT_PATH = "/etc/hams/auth/auth.crt"
 DEFAULT_HOST = "auth.hams.com"
 DEFAULT_PORT = 443
+# `--profile turn` watches the members-only TURN server's certificate (coturn, renewed by hams-turn-cert-renew.timer) with the
+# same ladder. Its environment overrides are the auth ones with TURN in place of AUTH (HAMS_TURN_CERT_PATH and so on).
+PROFILES = {
+    "auth": {"prefix": "HAMS_AUTH_CERT", "path": DEFAULT_CERT_PATH, "host": DEFAULT_HOST},
+    "turn": {"prefix": "HAMS_TURN_CERT", "path": "/etc/hams/turn/turn.crt", "host": "turn.hams.com"},
+}
 DEFAULT_WARN_DAYS = 30
 DEFAULT_PAGE_DAYS = 14
 CRITICAL_DAYS = 2
@@ -95,29 +102,39 @@ def read_expiry(path, host, port):
 
 
 # [@ANCHOR: pager_duty:auth_cert_main]
-def main():
-    path = os.environ.get("HAMS_AUTH_CERT_PATH", DEFAULT_CERT_PATH)
-    host = os.environ.get("HAMS_AUTH_CERT_HOST", DEFAULT_HOST)
-    port = int(os.environ.get("HAMS_AUTH_CERT_PORT", DEFAULT_PORT))
-    warn_days = int(os.environ.get("HAMS_AUTH_CERT_WARN_DAYS", DEFAULT_WARN_DAYS))
-    page_days = int(os.environ.get("HAMS_AUTH_CERT_PAGE_DAYS", DEFAULT_PAGE_DAYS))
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    profile = "auth"
+    if "--profile" in argv:
+        profile = argv[argv.index("--profile") + 1] if argv.index("--profile") + 1 < len(argv) else ""
+    if profile not in PROFILES:
+        print(f"unknown --profile {profile!r}; one of {', '.join(sorted(PROFILES))}", file=sys.stderr)
+        return 2
+    settings = PROFILES[profile]
+    prefix = settings["prefix"]
+    path = os.environ.get(f"{prefix}_PATH", settings["path"])
+    host = os.environ.get(f"{prefix}_HOST", settings["host"])
+    port = int(os.environ.get(f"{prefix}_PORT", DEFAULT_PORT))
+    warn_days = int(os.environ.get(f"{prefix}_WARN_DAYS", DEFAULT_WARN_DAYS))
+    page_days = int(os.environ.get(f"{prefix}_PAGE_DAYS", DEFAULT_PAGE_DAYS))
+    name = settings["host"]
 
     try:
         expiry, source = read_expiry(path, host, port)
     except (ValueError, OSError, ssl.SSLError, socket.timeout, subprocess.SubprocessError) as e:
         # An unreadable certificate is more urgent than a near one: no expiry can be computed at all.
         print("SEVERITY:high", file=sys.stderr)
-        print(f"auth certificate unreadable: {e}", file=sys.stderr)
+        print(f"{profile} certificate unreadable: {e}", file=sys.stderr)
         return 1
 
     days_left = (expiry - datetime.datetime.now(datetime.timezone.utc)).total_seconds() / 86400.0
     severity = severity_for_auth_cert(days_left, warn_days, page_days)
     if severity:
         print(f"SEVERITY:{severity}", file=sys.stderr)
-        print(f"auth.hams.com certificate expires in {days_left:.1f} days ({expiry:%Y-%m-%d}, {source})", file=sys.stderr)
+        print(f"{name} certificate expires in {days_left:.1f} days ({expiry:%Y-%m-%d}, {source})", file=sys.stderr)
         return 1
 
-    print(f"auth.hams.com certificate healthy, expires in {days_left:.0f} days ({expiry:%Y-%m-%d}, {source})")
+    print(f"{name} certificate healthy, expires in {days_left:.0f} days ({expiry:%Y-%m-%d}, {source})")
     return 0
 
 
