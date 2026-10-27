@@ -59,10 +59,10 @@ class TestAuthCertExpiryCheck(HamsTransactionCase):
         self.orig_env = dict(os.environ)
         self.addCleanup(lambda: os.environ.clear() or os.environ.update(self.orig_env))
 
-    def _run_main(self):
+    def _run_main(self, argv=None):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = check_mod.main()
+            code = check_mod.main(argv or [])
         return code, out.getvalue(), err.getvalue()
 
     # Tests [@ANCHOR: pager_duty:auth_cert_parse_enddate]
@@ -82,6 +82,25 @@ class TestAuthCertExpiryCheck(HamsTransactionCase):
         self.assertEqual(code, 0, err)
         self.assertIn("healthy", out)
         self.assertEqual(err, "")
+
+    def test_the_turn_profile_reads_its_own_certificate_and_names_it(self):
+        os.environ["HAMS_TURN_CERT_PATH"] = _make_cert(self.tmpdir.name, 90)
+        os.environ["HAMS_AUTH_CERT_PATH"] = os.path.join(self.tmpdir.name, "must-not-be-read.crt")
+        code, out, err = self._run_main(["--profile", "turn"])
+        self.assertEqual(code, 0, err)
+        self.assertIn("turn.hams.com certificate healthy", out)
+
+    def test_the_turn_profile_pages_on_its_own_ladder(self):
+        os.environ["HAMS_TURN_CERT_PATH"] = _make_cert(self.tmpdir.name, 10)
+        code, _, err = self._run_main(["--profile", "turn"])
+        self.assertEqual(code, 1)
+        self.assertIn("SEVERITY:high", err)
+        self.assertIn("turn.hams.com certificate expires in", err)
+
+    def test_an_unknown_profile_is_refused(self):
+        code, _, err = self._run_main(["--profile", "nope"])
+        self.assertEqual(code, 2)
+        self.assertIn("unknown --profile", err)
 
     def test_under_thirty_days_warns_with_low_severity(self):
         os.environ["HAMS_AUTH_CERT_PATH"] = _make_cert(self.tmpdir.name, 20)
