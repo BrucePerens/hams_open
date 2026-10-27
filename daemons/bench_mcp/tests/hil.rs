@@ -11,7 +11,16 @@ const INITIALIZED: &str = r#"{"jsonrpc":"2.0","method":"notifications/initialize
 
 /// Complete handshake, then each request in turn; returns the responses after the initialize one.
 fn rpc(requests: &[&str]) -> Vec<serde_json::Value> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_bench_mcp"))
+    rpc_cfg(None, requests)
+}
+
+/// As `rpc`, with the server reading the given config file instead of `BENCH_MCP_CONFIG`.
+fn rpc_cfg(config: Option<&str>, requests: &[&str]) -> Vec<serde_json::Value> {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bench_mcp"));
+    if let Some(c) = config {
+        cmd.env("BENCH_MCP_CONFIG", c);
+    }
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -130,4 +139,101 @@ fn vna_sweeps_the_loopback_and_saves_a_csv() {
     }
     let file = sweep["file"].as_str().unwrap();
     assert_eq!(std::fs::read_to_string(file).unwrap().lines().count(), 4);
+}
+
+// The SDR checks need `BENCH_MCP_SDR_CONFIG=<file>` naming a config with a bladeRF instrument "blade" (with its XB-200) and a
+// LimeSDR instrument "lime" at read_config, both plugged in and with the antennas disconnected or not (nothing here needs a signal).
+fn sdr_rpc(requests: &[&str]) -> Vec<serde_json::Value> {
+    let cfg = std::env::var("BENCH_MCP_SDR_CONFIG").expect("BENCH_MCP_SDR_CONFIG");
+    rpc_cfg(Some(&cfg), requests)
+}
+
+#[test]
+#[ignore]
+fn sdr_identify_reports_firmware_and_channels() {
+    let r = sdr_rpc(&[
+        &call("bench_identify", r#"{"instrument":"blade"}"#),
+        &call("bench_identify", r#"{"instrument":"lime"}"#),
+    ]);
+    let (b, l) = (text(&r[0]), text(&r[1]));
+    assert!(
+        b.contains("fw_version") && b.contains("\"rx_channels\": 1"),
+        "{b}"
+    );
+    assert!(
+        l.contains("gatewareVersion") && l.contains("\"rx_channels\": 2"),
+        "{l}"
+    );
+}
+
+#[test]
+#[ignore]
+fn sdr_captures_are_continuous_and_have_a_floor() {
+    let r = sdr_rpc(&[
+        &call(
+            "bench_sdr_capture",
+            r#"{"instrument":"blade","freq_hz":433920000,"samples":1048576,"sample_rate_hz":4000000}"#,
+        ),
+        &call(
+            "bench_sdr_capture",
+            r#"{"instrument":"blade","freq_hz":7100000,"samples":262144}"#,
+        ),
+        &call(
+            "bench_sdr_capture",
+            r#"{"instrument":"lime","freq_hz":433920000,"samples":1048576,"sample_rate_hz":4000000}"#,
+        ),
+        &call(
+            "bench_sdr_capture",
+            r#"{"instrument":"lime","freq_hz":433920000,"channel":1}"#,
+        ),
+    ]);
+    for x in &r {
+        let t = text(x);
+        assert_ne!(x["result"]["isError"], true, "{t}");
+        assert!(t.contains("\"continuous\": true"), "samples were lost: {t}");
+        assert!(
+            t.contains("noise_floor_dbfs") && t.contains("iq_file"),
+            "{t}"
+        );
+    }
+}
+
+#[test]
+#[ignore]
+fn sdr_survey_steps_and_writes_a_csv() {
+    let r = sdr_rpc(&[&call(
+        "bench_sdr_survey",
+        r#"{"instrument":"lime","start_hz":88000000,"stop_hz":108000000}"#,
+    )]);
+    let t = text(&r[0]);
+    assert!(t.contains("\"steps\": 3") && t.contains("csv_file"), "{t}");
+    let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+    let csv = std::fs::read_to_string(v["csv_file"].as_str().unwrap()).unwrap();
+    assert!(csv.starts_with("freq_hz,power_dbfs\n") && csv.lines().count() > 1000);
+}
+
+#[test]
+#[ignore]
+fn sdr_coherence_needs_two_receivers_and_runs_on_the_lime() {
+    let r = sdr_rpc(&[
+        &call(
+            "bench_sdr_coherence",
+            r#"{"instrument":"blade","freq_hz":433920000}"#,
+        ),
+        &call(
+            "bench_sdr_coherence",
+            r#"{"instrument":"lime","freq_hz":433920000,"repeats":2}"#,
+        ),
+    ]);
+    assert_eq!(r[0]["result"]["isError"], true);
+    assert!(
+        text(&r[0]).contains("coherence needs two"),
+        "{}",
+        text(&r[0])
+    );
+    assert!(
+        text(&r[1]).contains("phase_std_across_retunes_deg"),
+        "{}",
+        text(&r[1])
+    );
 }

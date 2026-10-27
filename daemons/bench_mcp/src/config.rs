@@ -26,6 +26,7 @@ pub enum Kind {
     Psu,
     /// The DG8SAQ VNWA vector network analyser, driven directly by the `vnwa_open` crate (USB and its two codecs).
     Vna,
+    Sdr,
 }
 
 #[derive(Clone, Debug)]
@@ -42,6 +43,7 @@ pub struct Instrument {
     pub max_amps: f64,
     /// VNA only: the settings of `vnwa_open::sweep::Config` (defaults for the other kinds, unused).
     pub vna: vnwa_open::sweep::Config,
+    pub sdr: crate::sdr::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -81,6 +83,25 @@ fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
     Ok(v)
 }
 
+fn sdr_config(driver: &str, c: &Value) -> Result<crate::sdr::Config, String> {
+    let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
+    let cfg = crate::sdr::Config {
+        driver: driver.to_string(),
+        serial: if matches!(driver, "bladerf" | "limesdr") {
+            text("serial")
+        } else {
+            None
+        },
+        xb200: text("xb200"),
+    };
+    if matches!(driver, "bladerf" | "limesdr") {
+        crate::sdr::check_config(&cfg)?;
+    } else if cfg.xb200.is_some() {
+        return Err("xb200 applies to the bladeRF only".into());
+    }
+    Ok(cfg)
+}
+
 pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
     // [@ANCHOR: bench_mcp_config]
     let v: Value = serde_json::from_str(text).map_err(|e| format!("config: {e}"))?;
@@ -99,12 +120,14 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             "siglent_sds" => Kind::Scope,
             "atm6301" => Kind::Psu,
             "vnwa_open" => Kind::Vna,
+            "bladerf" | "limesdr" => Kind::Sdr,
             o => {
                 return Err(format!(
-                    "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open)"
-                ))
+                "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open, bladerf, limesdr)"
+            ))
             }
         };
+        let driver_name = driver.clone();
         let inst = Instrument {
             name: name.clone(),
             kind,
@@ -118,6 +141,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             max_volts: c.get("max_volts").and_then(|m| m.as_f64()).unwrap_or(5.5),
             max_amps: c.get("max_amps").and_then(|m| m.as_f64()).unwrap_or(1.0),
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
+            sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),
