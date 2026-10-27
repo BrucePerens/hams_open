@@ -68,7 +68,8 @@ and the driver's count is only reported). `bench_sdr_survey` steps the tuning ov
 70 % of each capture's bandwidth kept, the radio's DC spike removed) and returns the floor and strongest peaks with a CSV.
 `bench_sdr_coherence` (LimeSDR, two receivers on one oscillator) captures both channels, repeats with a fresh tune each time and
 reports the phase and gain of channel 0 against channel 1 at the strongest tone, plus coherence; it needs one signal on both
-inputs. Levels are dBFS at the set gain, **not calibrated power**. Nothing transmits: there is no transmit tool.
+inputs. `antenna` (LimeSDR only: `LNAH`, `LNAL` or `LNAW`) selects the receive connector; without it the driver uses LNAL at every
+frequency, so a signal on an H or W connector is not heard. Levels are dBFS at the set gain, **not calibrated power**. Nothing transmits: there is no transmit tool.
 
 `bench_capture` refuses a stopped scope (its memory is an old frozen frame) unless `allow_stopped`.
 The supply's output is switched on only if the setpoints stored in it are within the caps, since a

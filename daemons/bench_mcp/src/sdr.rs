@@ -140,9 +140,37 @@ pub struct Capture {
     pub gain_db: f64,
     pub samples: usize,
     pub channels: Vec<usize>,
+    /// The LimeSDR receive input ("LNAH", "LNAL" or "LNAW"); `None` leaves the driver's default, which is LNAL.
+    pub antenna: Option<String>,
 }
 
 const MAX_SAMPLES: usize = 1 << 24;
+
+/// The LimeSDR receive inputs the tools may select: the H, L and W connectors of each channel.
+const LIME_INPUTS: &[&str] = &["LNAH", "LNAL", "LNAW"];
+
+/// The `antenna` argument: which receive input to use. Only the LimeSDR has a choice; the bladeRF has one receive input.
+fn antenna_arg(args: &Value, c: &Config) -> Result<Option<String>, String> {
+    match args.get("antenna") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => {
+            let name = v
+                .as_str()
+                .ok_or("antenna must be a string")?
+                .to_ascii_uppercase();
+            if c.driver != "limesdr" {
+                return Err("the bladeRF has one receive input; leave antenna out".into());
+            }
+            if !LIME_INPUTS.contains(&name.as_str()) {
+                return Err(format!(
+                    "antenna {name:?} must be one of {}",
+                    LIME_INPUTS.join(", ")
+                ));
+            }
+            Ok(Some(name))
+        }
+    }
+}
 
 /// The arguments of a capture call, checked against the radio's limits.
 pub fn capture_args(args: &Value, c: &Config) -> Result<Capture, String> {
@@ -165,6 +193,7 @@ pub fn capture_args(args: &Value, c: &Config) -> Result<Capture, String> {
         gain_db,
         samples,
         channels: vec![channel],
+        antenna: antenna_arg(args, c)?,
     })
 }
 
@@ -177,6 +206,7 @@ pub struct Survey {
     pub gain_db: f64,
     pub fft_len: usize,
     pub samples_per_step: usize,
+    pub antenna: Option<String>,
 }
 
 /// The fraction of each capture's bandwidth that is kept (the band edges are rolled off by the radio's filters).
@@ -215,6 +245,7 @@ pub fn survey_args(args: &Value, c: &Config) -> Result<Survey, String> {
         gain_db,
         fft_len,
         samples_per_step,
+        antenna: antenna_arg(args, c)?,
     };
     if s.steps() > MAX_STEPS {
         return Err(format!(
@@ -243,6 +274,7 @@ struct Api {
     set_rate: unsafe extern "C" fn(Dev, c_int, usize, f64) -> c_int,
     set_freq: unsafe extern "C" fn(Dev, c_int, usize, f64, *const Kwargs) -> c_int,
     set_gain: unsafe extern "C" fn(Dev, c_int, usize, f64) -> c_int,
+    set_antenna: unsafe extern "C" fn(Dev, c_int, usize, *const c_char) -> c_int,
     setup_stream: unsafe extern "C" fn(
         Dev,
         c_int,
@@ -301,6 +333,7 @@ fn load_api() -> Result<Api, String> {
         set_rate: sym(h, "SoapySDRDevice_setSampleRate")?,
         set_freq: sym(h, "SoapySDRDevice_setFrequency")?,
         set_gain: sym(h, "SoapySDRDevice_setGain")?,
+        set_antenna: sym(h, "SoapySDRDevice_setAntenna")?,
         setup_stream: sym(h, "SoapySDRDevice_setupStream")?,
         close_stream: sym(h, "SoapySDRDevice_closeStream")?,
         activate: sym(h, "SoapySDRDevice_activateStream")?,
@@ -378,6 +411,12 @@ impl Radio {
     fn capture(&self, cap: &Capture) -> Result<(Vec<Vec<Iq>>, usize, f64), String> {
         let a = self.a;
         for &ch in &cap.channels {
+            if let Some(name) = &cap.antenna {
+                let c = CString::new(name.as_str()).map_err(|e| e.to_string())?;
+                self.check("antenna", unsafe {
+                    (a.set_antenna)(self.dev, RX, ch, c.as_ptr())
+                })?;
+            }
             self.check("sample rate", unsafe {
                 (a.set_rate)(self.dev, RX, ch, cap.rate_hz)
             })?;
@@ -571,6 +610,7 @@ pub fn capture(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
         "gain_db": cap.gain_db,
         "samples": x.len(),
         "channel": cap.channels[0],
+        "antenna": cap.antenna.clone().unwrap_or_else(|| "driver default (LNAL on the LimeSDR)".into()),
         "rms_dbfs": round(db10(rms * rms), 1),
         "peak_amplitude": round(peak, 4),
         "dc_offset": [round(dc.0, 5), round(dc.1, 5)],
@@ -607,6 +647,7 @@ pub fn survey(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
             gain_db: sv.gain_db,
             samples: sv.samples_per_step,
             channels: vec![0],
+            antenna: sv.antenna.clone(),
         };
         let (chans, o, _) = r.capture(&cap)?;
         overflows += o;
@@ -649,6 +690,7 @@ pub fn survey(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
         "steps": steps,
         "sample_rate_hz": sv.rate_hz,
         "gain_db": sv.gain_db,
+        "antenna": sv.antenna.clone().unwrap_or_else(|| "driver default (LNAL on the LimeSDR)".into()),
         "bin_hz": round(sv.rate_hz / sv.fft_len as f64, 1),
         "points": power.len(),
         "median_floor_dbfs": round(floor, 1),
@@ -685,6 +727,7 @@ pub fn coherence(c: &Config, args: &Value) -> Result<Value, String> {
         gain_db,
         samples: 1 << 18,
         channels: vec![0, 1],
+        antenna: antenna_arg(args, c)?,
     };
     let mut runs = Vec::new();
     let mut phases = Vec::new();
@@ -798,6 +841,30 @@ mod tests {
             continuous(0.17, 0.13),
             "short captures include the tuning time"
         );
+    }
+
+    #[test]
+    fn the_receive_input_can_be_chosen_on_the_lime_only() {
+        let a = |driver: &Config, v: &str| {
+            capture_args(&json!({"freq_hz": 2.4e9, "antenna": v}), driver)
+        };
+        assert_eq!(a(&lime(), "lnah").unwrap().antenna.as_deref(), Some("LNAH"));
+        assert_eq!(a(&lime(), "LNAW").unwrap().antenna.as_deref(), Some("LNAW"));
+        assert!(
+            a(&lime(), "LB1").is_err(),
+            "the loopback inputs are not offered"
+        );
+        assert!(a(&lime(), "RX1_H").is_err());
+        assert!(a(&blade(None), "LNAL").is_err());
+        assert_eq!(
+            capture_args(&json!({"freq_hz": 2.4e9}), &lime())
+                .unwrap()
+                .antenna,
+            None
+        );
+        let s = survey_args(&json!({"start_hz": 2.4e9, "antenna": "LNAH"}), &lime()).unwrap();
+        assert_eq!(s.antenna.as_deref(), Some("LNAH"));
+        assert!(survey_args(&json!({"start_hz": 2.4e9, "antenna": 3}), &lime()).is_err());
     }
 
     // Tests [@ANCHOR: bench_mcp_sdr_survey_args]
