@@ -742,6 +742,13 @@ class PagerCheck(models.Model):
                     "comment": "Autodiscovered global systemd failure tracker",
                 },
                 {
+                    "name": "Provisioned Units In Operation",
+                    "check_type": "synthetic",
+                    "script": "python3 /opt/hams/src/hams_open/pager_duty/daemon/check_provisioned_units.py",
+                    "interval": 300,
+                    "comment": "Warns when a unit the hams_shared MANIFEST installs is missing, or its timer or service is not running",
+                },
+                {
                     "name": "IPv4 Root DNS Reachability",
                     "check_type": "synthetic",
                     "script": "dig -4 +time=3 +tries=1 @198.41.0.4 . NS",
