@@ -55,7 +55,8 @@ def effective_proxied(record_type, proxied):
 def _entry(action, row, reason="", **extra):
     entry = {"action": action, "row_id": row["id"], "type": row["type"], "name": row["name"],
              "content": row["content"], "reason": reason,
-             "proxied": effective_proxied(row["type"], row["proxied"])}
+             "proxied": effective_proxied(row["type"], row["proxied"]),
+             "comment": (row.get("comment") or "").strip()}
     entry.update(extra)
     return entry
 
@@ -63,7 +64,8 @@ def _entry(action, row, reason="", **extra):
 def plan_row(row, remote):
     """One row against what Cloudflare holds under the same name.
 
-    row: {id, name, type, content, proxied, manage, cf_record_id}.
+    row: {id, name, type, content, proxied, manage, cf_record_id, comment}. An empty comment means Odoo has none to say: the
+    record's comment at Cloudflare is left alone and never cleared. A comment Odoo does hold is written when it differs.
     remote: every record Cloudflare has under that exact name (all types), as the API returned them.
     """
     kind = row["type"]
@@ -86,13 +88,17 @@ def plan_row(row, remote):
             return _entry(CONFLICT, row, f"the linked record is a {rec.get('type')} record, this row is {kind}; "
                           "a record's type is never changed, make a new row")
         have_content, have_proxied = view(rec)
-        if (have_content, have_proxied) == (want_content, want_proxied):
+        want_comment = (row.get("comment") or "").strip()
+        comment_differs = bool(want_comment) and (rec.get("comment") or "").strip() != want_comment
+        if (have_content, have_proxied) == (want_content, want_proxied) and not comment_differs:
             return _entry(UNCHANGED, row, "already as Odoo has it", remote_id=rec["id"])
         diff = []
         if have_content != want_content:
             diff.append(f"content {have_content!r} -> {want_content!r}")
         if have_proxied != want_proxied:
             diff.append(f"proxied {have_proxied} -> {want_proxied}")
+        if comment_differs:
+            diff.append("comment " + (f"{(rec.get('comment') or '').strip()!r} -> " if rec.get("comment") else "added: ") + repr(want_comment))
         if not row.get("manage"):
             return _entry(DRIFT, row, "observe only, not changed: " + "; ".join(diff), remote_id=rec["id"])
         return _entry(UPDATE, row, "; ".join(diff), remote_id=rec["id"], ttl=rec.get("ttl", 1))
@@ -146,7 +152,7 @@ def plan_hash(entries):
     """A digest of the writing part of a plan, so that applying can insist on exactly what was shown."""
     body = [
         [e["action"], e["row_id"], e["type"], e["name"], normalize_content(e["type"], e["content"]),
-         e.get("remote_id", ""), e.get("proxied"), e.get("zone_id", "")]
+         e.get("remote_id", ""), e.get("proxied"), e.get("zone_id", ""), e.get("comment", "")]
         for e in entries if e["action"] in WRITING_ACTIONS or e["action"] == ADOPT or e.get("already_gone")
     ]
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode("utf-8")).hexdigest()
@@ -157,7 +163,10 @@ def render(entries):
     order = {CREATE: 0, UPDATE: 1, DELETE: 2, ADOPT: 3, CONFLICT: 4, PROBLEM: 5, DRIFT: 6, UNCHANGED: 7}
     lines = []
     for e in sorted(entries, key=lambda e: (order[e["action"]], e["name"], e["type"])):
-        tail = f"  ({e['reason']})" if e.get("reason") else ""
+        reason = e.get("reason") or ""
+        if e["action"] == CREATE and e.get("comment"):
+            reason = (reason + "; " if reason else "") + f"comment {e['comment']!r}"
+        tail = f"  ({reason})" if reason else ""
         lines.append(f"{e['action'].upper():9} {e['type']:5} {e['name']} -> {e['content']}{tail}")
     counts = {}
     for e in entries:

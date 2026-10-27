@@ -28,6 +28,7 @@
                             <field name="proxied" readonly="type in ('NS', 'TXT')" force_save="1"/>
                             <field name="website_id" groups="website.group_multi_website"/>
                             <field name="manage"/>
+                            <field name="comment"/>
                             <field name="retire" invisible="not cf_record_id"/>
                             <field name="cf_record_id"/>
                             <field name="cf_last_result"/>
@@ -49,6 +50,7 @@
                     <field name="content"/>
                     <field name="proxied"/>
                     <field name="manage"/>
+                    <field name="comment" optional="show"/>
                     <field name="cf_record_id" optional="hide"/>
                     <field name="cf_last_result" optional="show"/>
                     <field name="website_id" groups="website.group_multi_website"/>
