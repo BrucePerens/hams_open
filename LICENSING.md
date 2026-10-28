@@ -60,6 +60,9 @@ is a patch against a file of PipeWire's `pipewire-bin` package (LGPL-2.1-or-late
 and contains lines of that file as context; `debian/copyright` records this. Not counted in the
 2026-08-25 survey table above.
 
+**`hardware/convertible_unrotate/` (a GNOME Shell extension, added 2026-10-28) is GPL-3.0-or-later**, for the same reason as the
+extension in `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
+
 **`daemons/ham_digital_modes/` is LGPL-3.0-or-later** -- a standalone Rust daemon (PSK31/FT8/WSPR
 decoding), not an Odoo addon, and license-compatible with being linked into other programs more
 permissively than AGPL would allow. Its `Cargo.toml` license field agrees.
