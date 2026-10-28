@@ -187,6 +187,32 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
             handle.write("junk")
         self._fallback(self.path).assert_called_once()
 
+    def _anomaly_suppressed(self, flag_path):
+        saved = os.environ.get("PAGERDUTY_MAINTENANCE_FILE")
+        os.environ["PAGERDUTY_MAINTENANCE_FILE"] = flag_path
+        try:
+            return generalized_monitor.log_anomaly_in_maintenance(
+                {"source": "Log Analyzer: PostgreSQL Crash", "description": "PANIC: restart"})
+        finally:
+            if saved is None:
+                os.environ.pop("PAGERDUTY_MAINTENANCE_FILE", None)
+            else:
+                os.environ["PAGERDUTY_MAINTENANCE_FILE"] = saved
+
+    def test_08b_log_anomalies_are_dropped_only_during_maintenance(self):
+        # Tests [@ANCHOR: pager_duty:log_anomaly_in_maintenance]
+        self._write(set_at=time.time(), until=time.time() + 600)
+        with self.assertLogs("generalized_monitor", level="WARNING") as logs:
+            self.assertTrue(self._anomaly_suppressed(self.path))
+        self.assertTrue(any("NOT reported" in line and "PANIC" in line for line in logs.output))
+        with mute_logger("generalized_monitor"):
+            self.assertFalse(self._anomaly_suppressed(os.path.join(self.dir, "none")), "absent")
+            self._write(set_at=time.time() - 600, until=time.time() - 60)
+            self.assertFalse(self._anomaly_suppressed(self.path), "expired")
+            with open(self.path, "w") as handle:
+                handle.write("junk")
+            self.assertFalse(self._anomaly_suppressed(self.path), "malformed is not maintenance")
+
     def test_09_site_monitor_reader_agrees_with_this_one(self):
         """hams_shared's site monitor must not import this module, so it carries a copy: the two must not drift."""
         self.assertEqual(site_monitor.MAINTENANCE_DEFAULT_PATH, pm.DEFAULT_PATH)

@@ -175,11 +175,30 @@ def redis_search_listener(r_client):
 # tail_file()/redis_search_listener() now take r_client as an explicit
 # parameter instead of reading a module-global connection, which is what
 # makes them callable against a real *test* Redis double at all.
+# [@ANCHOR: pager_duty:log_analyzer_resolve_config_path]
+def resolve_config_path(environ=None):
+    """The configuration file to read, by the same rule as generalized_monitor.resolve_config_path.
+
+    PAGER_CONFIG_PATH (an explicit file), then pager_config.json in PAGER_CONFIG_DIR (default /opt/hams/etc) if it exists,
+    then the file next to this script. This daemon used to read only the file next to itself, ignoring PAGER_CONFIG_PATH, so
+    the log patterns an administrator pushed from Odoo never reached it. (It cannot import generalized_monitor, which is
+    large and starts threads; the two rules are kept equal by a test.)"""
+    environ = os.environ if environ is None else environ
+    explicit = environ.get("PAGER_CONFIG_PATH")
+    if explicit:
+        return explicit
+    system_path = os.path.join(environ.get("PAGER_CONFIG_DIR", "/opt/hams/etc"), "pager_config.json")
+    if os.path.exists(system_path):
+        return system_path
+    return os.path.join(os.path.dirname(__file__), "pager_config.json")
+
+
 # [@ANCHOR: pager_duty:log_analyzer_main]
 def main():
-    config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
+    config_path = resolve_config_path()
+    logger.info(f"Reading configuration from {config_path}")
     if not os.path.exists(config_path):
-        logger.critical("pager_config.json not found.")
+        logger.critical(f"Configuration file not found at {config_path}.")
         sys.exit(1)
 
     try:

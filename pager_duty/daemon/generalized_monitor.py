@@ -314,6 +314,27 @@ def parent_suppresses(check):
     return bool(parent) and parent in FAILING_NAMES
 
 
+# [@ANCHOR: pager_duty:log_anomaly_in_maintenance]
+def log_anomaly_in_maintenance(payload):
+    """True when a log-analyzer anomaly must be dropped because the pagerduty maintenance flag is active.
+
+    A planned restart writes CRITICAL / "terminating connection" lines to the Odoo and PostgreSQL logs; those are expected
+    and must not page. The check monitor and the SMTP fallback already honour the flag; this gives the log-pattern reports
+    the same rule (the analyzer itself is chrooted to /var/log and cannot read the flag, so the decision is made here, on
+    the side that forwards the report to Odoo). A malformed flag is not maintenance, so the report is sent."""
+    flag = pagerduty_maintenance.read_flag()
+    if flag["state"] == pagerduty_maintenance.MALFORMED:
+        logger.error("pagerduty maintenance flag ignored, so the log anomaly is reported: %s", flag["error"])
+        return False
+    if flag["state"] != pagerduty_maintenance.ACTIVE:
+        return False
+    logger.warning(
+        "pagerduty maintenance active (%s): log anomaly NOT reported. %s - %s",
+        pagerduty_maintenance.describe(flag), payload.get("source"), payload.get("description"),
+    )
+    return True
+
+
 # [@ANCHOR: pager_duty:is_in_maintenance]
 def is_in_maintenance(check):
     maint_start_str = check.get("maint_start")
@@ -2181,6 +2202,8 @@ if __name__ == "__main__":
                 if res:
                     _, data = res
                     payload = json.loads(data)
+                    if log_anomaly_in_maintenance(payload):
+                        continue
                     report(
                         cl,
                         payload["source"],
