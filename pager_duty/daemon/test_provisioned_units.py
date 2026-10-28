@@ -83,7 +83,7 @@ class NotInOperationTests(unittest.TestCase):
 
 class MainTests(unittest.TestCase):
     def run_main(self, problems, units=None):
-        with mock.patch.object(check, "load_infrastructure", return_value=FakeInfra), \
+        with mock.patch.object(check, "infrastructure", FakeInfra), \
                 mock.patch.object(check, "units_not_in_operation", return_value=problems), \
                 mock.patch("sys.stdout") as out, mock.patch("sys.stderr") as err:
             code = check.main([])
@@ -103,7 +103,7 @@ class MainTests(unittest.TestCase):
         self.assertIn("u5.timer (not running)", err)
 
     def test_an_unloadable_manifest_fails_loudly(self):
-        with mock.patch.object(check, "load_infrastructure", side_effect=ImportError("no infrastructure")), \
+        with mock.patch.object(check, "expected_units", side_effect=KeyError("static_files")), \
                 mock.patch("sys.stderr") as err:
             code = check.main([])
         self.assertEqual(code, 1)

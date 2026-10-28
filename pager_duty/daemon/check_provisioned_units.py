@@ -38,14 +38,13 @@ UNIT_SUFFIXES = (".service", ".timer", ".path")
 SHOW_PROPERTIES = "LoadState,ActiveState,UnitFileState,Type,ConditionResult"
 SHORT_LIST = 4
 
-
-def load_infrastructure(directory=None):
-    directory = directory or os.environ.get("HAMS_INFRASTRUCTURE_DIR") or DEFAULT_INFRASTRUCTURE_DIR
-    if directory not in sys.path:
-        sys.path.insert(0, directory)
-    import infrastructure
-
-    return infrastructure
+# The MANIFEST module is a hard dependency: reached by a sys.path hop (the odoo.addons namespace is not importable in this
+# script's standalone process), imported at the top, and a missing one stops the script with a traceback (non-zero exit, so
+# the check fails loudly) instead of being papered over by a soft-import fallback.
+_INFRASTRUCTURE_DIR = os.environ.get("HAMS_INFRASTRUCTURE_DIR") or DEFAULT_INFRASTRUCTURE_DIR
+if _INFRASTRUCTURE_DIR not in sys.path:
+    sys.path.insert(0, _INFRASTRUCTURE_DIR)
+import infrastructure  # noqa: E402
 
 
 # [@ANCHOR: pager_duty:provisioned_units]
@@ -97,8 +96,8 @@ def units_not_in_operation(units, show=systemctl_show, expected_off=()):
 def main(argv=None):
     expected_off = {name.strip() for name in os.environ.get("HAMS_UNITS_EXPECTED_OFF", "").split(",") if name.strip()}
     try:
-        units = expected_units(load_infrastructure())
-    except (ImportError, OSError, KeyError) as problem:
+        units = expected_units(infrastructure)
+    except (OSError, KeyError) as problem:
         print("SEVERITY:high", file=sys.stderr)
         print(f"provisioned units cannot be checked: the MANIFEST did not load ({problem})", file=sys.stderr)
         return 1
