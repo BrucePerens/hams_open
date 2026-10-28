@@ -1,3 +1,12 @@
+panasonic-cf19 (1.2.0) unstable; urgency=medium
+
+  * panasonic-cf19-support: the GNOME Shell extension now handles the rotation
+    button itself (new schema key "rotate"), so it works while a dialog or menu
+    is open.  GNOME's own rotate-monitor shortcut is switched off while the
+    extension runs and restored when it is disabled.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 28 Oct 2026 12:30:00 -0700
+
 panasonic-cf19 (1.1.0) unstable; urgency=medium
 
   * panasonic-cf19-support: replace the libinput calibration rule by a relay

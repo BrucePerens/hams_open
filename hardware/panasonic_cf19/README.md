@@ -56,8 +56,9 @@ volume rocker).
 
 The even code is the press, the odd code the release. Buttons 1 and 4 are sent as a single tap so a
 held button does not trigger keyboard auto-repeat. The keys were chosen below code 256 because higher
-evdev codes have no X keysym and cannot be bound in GNOME. GNOME's compositor already rotates the
-screen on `XF86RotateWindows` (`org.gnome.mutter.keybindings rotate-monitor`).
+evdev codes have no X keysym and cannot be bound in GNOME. GNOME's own shortcut for this key
+(`org.gnome.mutter.keybindings rotate-monitor`) is ignored while a dialog or menu is open, so the extension
+handles the rotation button itself (see below).
 
 `/sys/bus/acpi/devices/MAT0020:00/tablet_mode` (read-only, `0` laptop, `1` tablet) is read from the
 firmware method `SINF` on every read, for desktop components that cannot see the input switch.
@@ -96,13 +97,17 @@ the accessibility setting `screen-keyboard-enabled` is on, and then raises it wh
 focus. The extension calls the shell's own `Main.keyboard.open()` / `close()` and also exposes them on the
 session bus as `org.cf19.OSK` (`Toggle`, `Show`, `Hide`). It registers the two button shortcuts itself,
 with key auto-repeat ignored, through its own schema `org.gnome.shell.extensions.cf19-osk` (keys
-`toggle-osk`, default `XF86Launch2`, and `security`, default `XF86Launch1`; change them with `gsettings`).
+`toggle-osk`, default `XF86Launch2`, `security`, default `XF86Launch1`, and `rotate`, default `XF86RotateWindows`;
+change them with `gsettings`).
 
 * Button 1 shows and hides the keyboard. The keyboard follows `tablet_mode`: in tablet position the
   setting is on, so the keyboard pops up when a text field is focused; in laptop position there is no
   pop-up, the button turns the setting on and shows the keyboard, and the setting is switched off again
   when the keyboard is hidden. Without the driver (no `tablet_mode` file) the extension leaves the
   setting alone.
+* Button 3 (rotate) rotates the screen one step clockwise through mutter's `DisplayConfig` D-Bus API, in any
+  shell state. While the extension runs it empties `org.gnome.mutter.keybindings rotate-monitor` so a press
+  does not rotate twice, and restores it when disabled.
 * Button 4 ("security") runs `gnome-session-quit --logout`, GNOME's log-out dialog, the nearest Linux
   equivalent of Ctrl-Alt-Del (it logs out by itself after its 60 second countdown unless cancelled).
 
@@ -137,6 +142,8 @@ Verified on the CF-19 Mk5 named above:
   taps stay accurate with the stylus (about 5 px) and GNOME rotates the touch mapping together with the display
   (tested by tapping the corners in both orientations, using a hand-installed copy of the same relay; the
   packaged service is the same code and runs and hides the physical panel).
+* The rotation button works in any shell state, including while GNOME's log-out dialog is open (tested
+  after a fresh login; GNOME's own shortcut ignores the key in that state), and rotates once per press.
 * The panel gives no way to tell finger from stylus: a raw capture of its HID reports (nine alternating
   presses) shows only a button bit and the two coordinates, and the unused high bits of each 28-bit
   coordinate field are always zero. There is no pressure, tilt or tool information.
