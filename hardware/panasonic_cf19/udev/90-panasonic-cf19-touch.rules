@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Panasonic Toughbook CF-19: calibration of the Fujitsu USB touch panel
-# (0430:0502, "USB Touch Panel").  The panel is a single-touch, mouse-class
-# absolute pointer reporting 0..16383 on both axes, while the LCD is 1024x768, so
-# libinput needs a calibration matrix.  The matrix is a least-squares fit of nine
-# stylus touches (maximum residual about 5 px on 1024x768).  A finger lands about
-# 22 px higher than the stylus on this resistive panel; one panel cannot be
-# calibrated for both tools.
+# Panasonic Toughbook CF-19: Fujitsu USB touch panel (0430:0502, "USB Touch Panel").
+# The panel is a single-touch, boot-mouse-class absolute pointer without touch
+# capability or axis resolution, so libinput and GNOME treat it as a pointer and
+# GNOME does not rotate its mapping with the display.  The relay service
+# (panasonic-cf19-touch@.service) reads it, applies the calibration and presents a
+# proper touchscreen device; libinput is told to ignore the physical panel.
+#
+# A finger lands about 22 px higher than the stylus on this resistive panel; the
+# calibration (in cf19-touch-relay) is fitted to the stylus.
 #
 # Applied only when the DMI product name is a CF-19.
 ACTION=="remove", GOTO="panasonic_cf19_touch_end"
@@ -14,6 +16,6 @@ SUBSYSTEM!="input", GOTO="panasonic_cf19_touch_end"
 KERNEL!="event[0-9]*", GOTO="panasonic_cf19_touch_end"
 ATTR{[dmi/id]product_name}!="CF-19*", GOTO="panasonic_cf19_touch_end"
 
-ENV{ID_VENDOR_ID}=="0430", ENV{ID_MODEL_ID}=="0502", ENV{LIBINPUT_CALIBRATION_MATRIX}="1.108201 0.001341 -0.065810 -0.006886 1.124566 -0.038159"
+ENV{ID_BUS}=="usb", ENV{ID_VENDOR_ID}=="0430", ENV{ID_MODEL_ID}=="0502", ENV{LIBINPUT_IGNORE_DEVICE}="1", TAG+="systemd", ENV{SYSTEMD_WANTS}="panasonic-cf19-touch@%k.service"
 
 LABEL="panasonic_cf19_touch_end"

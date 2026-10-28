@@ -55,7 +55,7 @@ by John Belmonte; those sources state version 2 of the GPL only and no "or later
 reworked file keeps GPL-2.0-only (full text in [`licenses/GPL-2.0.txt`](licenses/GPL-2.0.txt)).
 Everything else there (the GNOME Shell extension, which runs inside the GPL-2.0-or-later GNOME
 Shell, the udev rule, the Debian packaging) is GPL-3.0-or-later rather than the repository's
-AGPL-3.0-or-later default, because none of it is a network service. `pipewire/analog-output-speaker.patch`
+AGPL-3.0-or-later default, because none of it is a network service. `pipewire/analog-output-speaker.diff`
 is a patch against a file of PipeWire's `pipewire-bin` package (LGPL-2.1-or-later, from PulseAudio)
 and contains lines of that file as context; `debian/copyright` records this. Not counted in the
 2026-08-25 survey table above.
