@@ -21,11 +21,11 @@ import re
 import tempfile
 import threading
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.addons.pager_duty.daemon import pager_log_analyzer
+from odoo.addons.pager_duty.daemon import generalized_monitor, pager_log_analyzer
 
 
 @tagged("post_install", "-at_install")
@@ -110,6 +110,23 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         self.assertEqual(payload["source"], "Log Analyzer: OOM")
         self.assertIn("Out Of Memory", payload["description"])
 
+    def test_02b_config_path_follows_the_same_rule_as_the_monitor(self):
+        # Tests [@ANCHOR: pager_duty:log_analyzer_resolve_config_path]
+        with tempfile.TemporaryDirectory() as d:
+            explicit = os.path.join(d, "explicit.json")
+            open(os.path.join(d, "pager_config.json"), "w").close()
+            for env in ({"PAGER_CONFIG_PATH": explicit}, {"PAGER_CONFIG_DIR": d},
+                        {"PAGER_CONFIG_DIR": os.path.join(d, "none")}):
+                self.assertEqual(
+                    pager_log_analyzer.resolve_config_path(env),
+                    generalized_monitor.resolve_config_path(env), env)
+            self.assertEqual(pager_log_analyzer.resolve_config_path({"PAGER_CONFIG_PATH": explicit}), explicit)
+            self.assertEqual(pager_log_analyzer.resolve_config_path({"PAGER_CONFIG_DIR": d}),
+                             os.path.join(d, "pager_config.json"))
+            self.assertEqual(
+                pager_log_analyzer.resolve_config_path({"PAGER_CONFIG_DIR": os.path.join(d, "none")}),
+                os.path.join(os.path.dirname(pager_log_analyzer.__file__), "pager_config.json"))
+
     def test_03_redis_search_listener_answers_a_real_query_against_a_real_file(self):
         # Tests [@ANCHOR: pager_duty:redis_search_listener]
         with tempfile.NamedTemporaryFile(
@@ -144,16 +161,11 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"log_analyzer": {"files": [], "patterns": []}}, f)
 
-            # main() computes its config path from this module's own
-            # __file__ -- patch that one module-scoped attribute (not
-            # os.path.dirname globally, which every other piece of code
-            # running in this process also calls) to redirect it at a
-            # throwaway temp config instead of the real, already-populated
-            # daemon/pager_config.json on this dev box.
-            self.safe_patch(
-                "odoo.addons.pager_duty.daemon.pager_log_analyzer.__file__",
-                os.path.join(tmpdir, "pager_log_analyzer.py"),
-            )
+            # main() resolves its config file with PAGER_CONFIG_PATH first (an explicit file), so point it at a
+            # throwaway config instead of the real, already-populated one on this dev box (/opt/hams/etc).
+            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path})
+            env_patch.start()
+            self.addCleanup(env_patch.stop)
             mock_redis_cls = self.safe_patch(
                 "odoo.addons.pager_duty.daemon.pager_log_analyzer.redis.Redis"
             )
