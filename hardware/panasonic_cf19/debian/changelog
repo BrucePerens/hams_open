@@ -1,0 +1,13 @@
+panasonic-cf19 (1.0.0) unstable; urgency=medium
+
+  * Initial release: Panasonic Toughbook CF-19 support for Debian 13 (trixie)
+    with GNOME 48, verified on a CF-19 Mk5 (CF-19AHUAX1M).
+  * panasonic-hbtn-dkms: tablet button driver for kernel 6.12 (rework of the
+    2012 panasonic-hbtn driver); adds the SW_TABLET_MODE switch for the swivel
+    screen and the tablet_mode sysfs attribute.
+  * panasonic-cf19-support: touch screen calibration (udev), GNOME Shell
+    extension for the keyboard and "security" buttons (with its own
+    GSettings schema and a default that enables it), speaker fix for
+    PipeWire's mixer path.
+
+ -- Bruce Perens <bruce@perens.com>  Tue, 27 Oct 2026 19:52:15 -0700

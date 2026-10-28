@@ -1,0 +1,59 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+PKG=panasonic-cf19-support
+ACP_FILE=/usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf
+PATCH=/usr/share/$PKG/analog-output-speaker.patch
+
+is_cf19() {
+    grep -q '^CF-19' /sys/class/dmi/id/product_name 2>/dev/null
+}
+
+# On a CF-19 the speaker is driven through the codec's Headphone mixer element.
+# PipeWire's speaker path switches that element off, so patch a copy of the
+# file with a dpkg diversion (removed again in prerm).
+apply_speaker_fix() {
+    is_cf19 || return 0
+    owner=$(dpkg-divert --listpackage "$ACP_FILE")
+    created=no
+    if [ -z "$owner" ]; then
+        [ -f "$ACP_FILE" ] || return 0   # pipewire-bin is not installed
+        dpkg-divert --package "$PKG" --add --rename \
+            --divert "$ACP_FILE.distrib" "$ACP_FILE"
+        created=yes
+    elif [ "$owner" != "$PKG" ]; then
+        echo "$PKG: $ACP_FILE is already diverted by $owner; speaker fix not applied" >&2
+        return 0
+    fi
+
+    tmp=$(mktemp)
+    if patch --silent -o "$tmp" "$ACP_FILE.distrib" "$PATCH"; then
+        install -m 0644 "$tmp" "$ACP_FILE"
+        rm -f "$tmp"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    if [ "$created" = yes ]; then
+        dpkg-divert --package "$PKG" --remove --rename "$ACP_FILE"
+    fi
+    echo "$PKG: WARNING: $PATCH does not apply to this version of" >&2
+    echo "$PKG: pipewire-bin's speaker path; the CF-19 speaker will stay silent." >&2
+    echo "$PKG: See /usr/share/doc/$PKG/README.md." >&2
+}
+
+case "$1" in
+    configure)
+        if [ -d /run/systemd/system ]; then
+            udevadm control --reload
+            udevadm trigger --subsystem-match=input --action=change
+        fi
+        apply_speaker_fix
+        ;;
+    triggered)
+        apply_speaker_fix
+        ;;
+esac
+
+#DEBHELPER#

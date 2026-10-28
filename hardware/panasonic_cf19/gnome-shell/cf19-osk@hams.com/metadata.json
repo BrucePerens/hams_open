@@ -1,0 +1,8 @@
+{
+  "uuid": "cf19-osk@hams.com",
+  "name": "Panasonic CF-19 on-screen keyboard button",
+  "description": "Shows/hides GNOME's on-screen keyboard from the Toughbook CF-19 tablet button and follows the screen swivel position (D-Bus org.cf19.OSK: Toggle/Show/Hide).",
+  "shell-version": ["48"],
+  "url": "https://github.com/BrucePerens/hams_open/tree/main/hardware/panasonic_cf19",
+  "version": 1
+}

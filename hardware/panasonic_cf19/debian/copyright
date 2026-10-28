@@ -1,0 +1,49 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: panasonic-cf19
+Source: https://github.com/BrucePerens/hams_open/tree/main/hardware/panasonic_cf19
+
+Files: *
+Copyright: 2026 Bruce Perens <bruce@perens.com>
+License: GPL-3+
+
+Files: driver/*
+Copyright: 2012 Heiher <admin@heiher.info>
+           2002-2004 John Belmonte
+           2026 Bruce Perens <bruce@perens.com>
+License: GPL-2
+Comment: Derived from the panasonic-hbtn driver by Heiher (2012), itself
+ derived from the kernel's panasonic-laptop.c by John Belmonte.  The sources
+ state version 2 of the GPL only.
+
+Files: pipewire/analog-output-speaker.patch
+Copyright: The PulseAudio and PipeWire authors
+License: LGPL-2.1+
+Comment: A patch against the file /usr/share/alsa-card-profile/mixer/paths/
+ analog-output-speaker.conf shipped by pipewire-bin; it contains lines of
+ that file as context.
+
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify it under
+ the terms of the GNU General Public License as published by the Free Software
+ Foundation, either version 3 of the License, or (at your option) any later
+ version.
+ .
+ On Debian systems, the full text of the GNU General Public License version 3
+ can be found in the file /usr/share/common-licenses/GPL-3.
+
+License: GPL-2
+ This program is free software; you can redistribute it and/or modify it under
+ the terms of the GNU General Public License version 2 as published by the
+ Free Software Foundation.
+ .
+ On Debian systems, the full text of the GNU General Public License version 2
+ can be found in the file /usr/share/common-licenses/GPL-2.
+
+License: LGPL-2.1+
+ This library is free software; you can redistribute it and/or modify it under
+ the terms of the GNU Lesser General Public License as published by the Free
+ Software Foundation; either version 2.1 of the License, or (at your option)
+ any later version.
+ .
+ On Debian systems, the full text of the GNU Lesser General Public License
+ version 2.1 can be found in the file /usr/share/common-licenses/LGPL-2.1.

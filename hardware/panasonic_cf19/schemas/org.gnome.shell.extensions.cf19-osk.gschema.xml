@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<schemalist>
+  <schema id="org.gnome.shell.extensions.cf19-osk" path="/org/gnome/shell/extensions/cf19-osk/">
+    <key name="toggle-osk" type="as">
+      <default>["XF86Launch2"]</default>
+      <summary>Show or hide the on-screen keyboard</summary>
+      <description>Accelerator sent by the Toughbook CF-19 keyboard button (tablet button 1).</description>
+    </key>
+    <key name="security" type="as">
+      <default>["XF86Launch1"]</default>
+      <summary>Open the log-out dialog</summary>
+      <description>Accelerator sent by the Toughbook CF-19 security button (tablet button 4), the Ctrl-Alt-Del equivalent.</description>
+    </key>
+  </schema>
+</schemalist>

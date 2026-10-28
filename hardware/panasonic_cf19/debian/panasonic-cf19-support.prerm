@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+PKG=panasonic-cf19-support
+ACP_FILE=/usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf
+
+case "$1" in
+    remove|deconfigure)
+        if [ "$(dpkg-divert --listpackage "$ACP_FILE")" = "$PKG" ]; then
+            rm -f "$ACP_FILE"
+            dpkg-divert --package "$PKG" --remove --rename "$ACP_FILE"
+        fi
+        ;;
+esac
+
+#DEBHELPER#
