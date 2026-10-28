@@ -65,3 +65,8 @@ A cold boot or a battery-removed power cycle (the register's state may be lost),
 desktops. 
 
 Licence: GPL-3.0-or-later.
+
+## GRUB
+
+The package depends on `grub-large-console` (`../grub_large_console`), which sizes a font so that GRUB's menu is
+readable, about 80x24, on this machine's screen. Not yet tried on this machine: it needs a reboot someone can look at.

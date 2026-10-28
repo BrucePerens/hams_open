@@ -1,0 +1,68 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Make GRUB's text console readable: about 80 columns by 24 rows on the machine's own screen.
+#
+# GRUB draws text with a fixed font, so on a high-resolution panel the menu is microscopic.  This reads the
+# screen's native mode from the DRM layer, generates a monospace font (DejaVu Sans Mono) sized so that 80
+# columns fill the width (and at least 24 rows fit), and points GRUB at it through a drop-in file.
+#
+# usage: configure-grub-font                 configure this machine and run update-grub
+#        configure-grub-font --dry-run WxH   print what would be written for a screen of WxH, change nothing
+set -e
+
+TTF=/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+FONT_DIR=/boot/grub/fonts
+FONT_NAME=convertible-80x24.pf2
+DROPIN=/etc/default/grub.d/90-convertible-large-console.cfg
+COLS=80
+ROWS=24
+
+native_mode() {
+    for status in /sys/class/drm/card*-*/status; do
+        [ "$(cat "$status" 2>/dev/null)" = connected ] || continue
+        dir=$(dirname "$status")
+        mode=$(head -n 1 "$dir/modes" 2>/dev/null) || continue
+        case "$mode" in
+            [0-9]*x[0-9]*) echo "${mode%%[ip]*}"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+font_size() {          # width height -> font size in pixels
+    awk -v w="$1" -v h="$2" -v c="$COLS" -v r="$ROWS" 'BEGIN {
+        by_width = w / c / 0.602         # DejaVu Sans Mono advance is 0.602 em
+        by_height = h / r / 1.17         # line height is about 1.17 em
+        s = (by_width < by_height) ? by_width : by_height
+        printf "%d\n", (s < 12) ? 12 : s
+    }'
+}
+
+if [ "$1" = "--dry-run" ]; then
+    mode="$2"
+else
+    mode=$(native_mode) || { echo "configure-grub-font: no connected display found; leaving GRUB alone" >&2; exit 0; }
+fi
+width=${mode%x*}
+height=${mode#*x}
+size=$(font_size "$width" "$height")
+
+if [ "$1" = "--dry-run" ]; then
+    echo "mode $width x $height -> font size $size px"
+    printf 'GRUB_FONT=%s/%s\nGRUB_GFXMODE=%sx%s,auto\nGRUB_GFXPAYLOAD_LINUX=keep\n' "$FONT_DIR" "$FONT_NAME" "$width" "$height"
+    exit 0
+fi
+
+[ -r "$TTF" ] || { echo "configure-grub-font: $TTF missing (package fonts-dejavu-core)" >&2; exit 1; }
+install -d "$FONT_DIR" /etc/default/grub.d
+grub-mkfont -s "$size" -o "$FONT_DIR/$FONT_NAME" "$TTF"
+cat > "$DROPIN" <<CFG
+# Written by grub-large-console (configure-grub-font) for a ${width}x${height} screen; rerun
+# "dpkg-reconfigure grub-large-console" after changing the display.
+GRUB_FONT=$FONT_DIR/$FONT_NAME
+GRUB_GFXMODE=${width}x${height},auto
+GRUB_GFXPAYLOAD_LINUX=keep
+CFG
+if command -v update-grub >/dev/null 2>&1; then
+    update-grub
+fi

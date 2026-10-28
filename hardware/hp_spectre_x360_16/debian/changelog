@@ -1,3 +1,10 @@
+hp-spectre-x360-16 (1.1.0) unstable; urgency=medium
+
+  * Depend on grub-large-console (readable GRUB text, about 80x24, on the
+    3840x2400 screen; replaces a hand-set GRUB_FONT).
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 03:30:00 -0700
+
 hp-spectre-x360-16 (1.0.0) unstable; urgency=medium
 
   * Initial release: depends on convertible-helper and convertible-power, and

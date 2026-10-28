@@ -9,7 +9,8 @@ Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/panasonic_
 
 Package: panasonic-fz-g1-support
 Architecture: all
-Depends: convertible-helper (>= 1.3.0), convertible-power (>= 1.0.0), panasonic-hbtn-dkms (>= 1.4.0), kmod,
+Depends: convertible-helper (>= 1.3.0), convertible-power (>= 1.0.0), grub-large-console (>= 1.0.0),
+         panasonic-hbtn-dkms (>= 1.4.0), kmod,
          ${misc:Depends}
 Recommends: thermald
 Description: Panasonic Toughpad FZ-G1 hardware support for Debian

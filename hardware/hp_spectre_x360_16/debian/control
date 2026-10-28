@@ -9,7 +9,8 @@ Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/hp_spectre
 
 Package: hp-spectre-x360-16-support
 Architecture: all
-Depends: convertible-helper (>= 1.3.0), convertible-power (>= 1.0.0), udev, ${misc:Depends}
+Depends: convertible-helper (>= 1.3.0), convertible-power (>= 1.0.0), grub-large-console (>= 1.0.0),
+         udev, ${misc:Depends}
 Recommends: thermald
 Description: HP Spectre x360 2-in-1 16-f2xxx hardware support for Debian
  Settings for the HP Spectre x360 2-in-1 Laptop 16-f2xxx on a stock Debian

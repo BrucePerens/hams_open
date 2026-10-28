@@ -24,3 +24,8 @@ than `quiet` for the battery profile follows what `power-profiles-daemon` does o
 could not be seen in the RAPL limits.
 
 Licence: GPL-3.0-or-later.
+
+## GRUB
+
+The package depends on `grub-large-console` (`../grub_large_console`), which sizes a font so that GRUB's menu is
+readable, about 80x24, on this machine's screen. Not yet tried on this machine: it needs a reboot someone can look at.

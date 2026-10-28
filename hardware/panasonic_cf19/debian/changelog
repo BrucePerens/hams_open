@@ -1,3 +1,10 @@
+panasonic-cf19 (1.6.0) unstable; urgency=medium
+
+  * panasonic-cf19-support depends on grub-large-console (readable GRUB text,
+    about 80x24; the CF-19 boots in legacy BIOS mode, not yet tried there).
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 03:30:00 -0700
+
 panasonic-cf19 (1.5.0) unstable; urgency=medium
 
   * Power: depend on convertible-power and install this machine's TLP

@@ -27,6 +27,7 @@ Architecture: all
 Depends: panasonic-hbtn-dkms (= ${binary:Version}),
          convertible-helper (>= 1.2.0),
          convertible-power (>= 1.0.0),
+         grub-large-console (>= 1.0.0),
          patch,
          python3,
          udev,
