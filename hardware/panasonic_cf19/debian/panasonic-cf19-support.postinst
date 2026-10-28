@@ -50,6 +50,12 @@ case "$1" in
             udevadm trigger --subsystem-match=input --action=change
         fi
         apply_speaker_fix
+        if is_cf19; then
+            install -D -m 0644 /usr/share/panasonic-cf19-support/20-panasonic-cf19.conf /etc/tlp.d/20-panasonic-cf19.conf
+            if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+                tlp start >/dev/null 2>&1 || true
+            fi
+        fi
         ;;
     triggered)
         apply_speaker_fix

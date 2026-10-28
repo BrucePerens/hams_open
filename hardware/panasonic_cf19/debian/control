@@ -26,11 +26,12 @@ Package: panasonic-cf19-support
 Architecture: all
 Depends: panasonic-hbtn-dkms (= ${binary:Version}),
          convertible-helper (>= 1.2.0),
+         convertible-power (>= 1.0.0),
          patch,
          python3,
          udev,
          ${misc:Depends}
-Recommends: gnome-shell (>= 48~), pipewire-bin
+Recommends: gnome-shell (>= 48~), pipewire-bin, thermald
 Description: Panasonic Toughbook CF-19 hardware support for GNOME on Debian
  Settings and helpers that make a Panasonic Toughbook CF-19 work on a stock
  Debian GNOME desktop:
@@ -46,7 +47,10 @@ Description: Panasonic Toughbook CF-19 hardware support for GNOME on Debian
   * a patch to PipeWire's speaker mixer path so the internal speaker is
     audible (on this machine the speaker is driven through the codec's
     Headphone element);
-  * a GSettings default that enables the extension for every user.
+  * a GSettings default that enables the extension for every user;
+  * power settings (convertible-power: maximum performance on AC, maximum
+    battery life on battery) with this machine's CPU governors and a USB
+    autosuspend exclusion for the touch panel.
  .
  The speaker patch is applied only on a CF-19, through a dpkg diversion that
  is removed again when the package is removed.

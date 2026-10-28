@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -D -m 0644 tlp.d/10-convertible-power.conf debian/convertible-power/etc/tlp.d/10-convertible-power.conf
+	install -D -m 0644 upower/UPower.conf debian/convertible-power/etc/convertible-power/UPower.conf
+	install -D -m 0644 battery.conf debian/convertible-power/etc/convertible-power/battery.conf
+	install -D -m 0644 upower/upower.service.d.conf debian/convertible-power/usr/lib/systemd/system/upower.service.d/10-convertible-power.conf
+	install -D -m 0755 convertible-battery-notify debian/convertible-power/usr/bin/convertible-battery-notify
+	install -D -m 0644 systemd/convertible-battery-notify.service debian/convertible-power/usr/lib/systemd/user/convertible-battery-notify.service
+	install -D -m 0644 convertible-battery-notify.1 debian/convertible-power/usr/share/man/man1/convertible-battery-notify.1
+
+override_dh_installsystemduser:
+	dh_installsystemduser --name=convertible-battery-notify

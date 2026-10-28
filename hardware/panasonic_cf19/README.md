@@ -133,6 +133,14 @@ Speaker element being left alone.
 file in place (the speaker stays silent); re-run `sudo dpkg-reconfigure panasonic-cf19-support` after
 adjusting the patch.
 
+## Power
+
+The package depends on `convertible-power` (TLP: maximum performance on AC, efficiency on battery; see
+`../convertible_power`) and, on a CF-19, installs `/etc/tlp.d/20-panasonic-cf19.conf`: governors `performance` (AC) and
+`schedutil` (battery), assuming kernel 6.12's passive `intel_pstate` as on the Toughpad FZ-G1, and a USB autosuspend
+denylist for the touch panel (`0430:0502`). **Not yet tried on a CF-19**; the charge-limit options have not been
+checked on this model either.
+
 ## Verified and not verified
 
 Verified on the CF-19 Mk5 named above:

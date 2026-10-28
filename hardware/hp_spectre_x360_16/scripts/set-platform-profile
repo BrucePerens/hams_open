@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# HP Spectre x360 16-f2xxx: hp-wmi's platform profile can be written but not read back (reading returns EINVAL),
+# so TLP treats it as unavailable and never sets it.  Set it from the power source instead:
+# "performance" on AC, "cool" on battery.  An argument (ac or bat) forces the choice, for testing.
+PROFILE=/sys/firmware/acpi/platform_profile
+[ -w "$PROFILE" ] || exit 0
+grep -q '^HP Spectre x360 2-in-1 Laptop 16-f' /sys/class/dmi/id/product_name 2>/dev/null || exit 0
+
+source="$1"
+if [ -z "$source" ]; then
+    source=bat
+    for supply in /sys/class/power_supply/*; do
+        [ "$(cat "$supply/type" 2>/dev/null)" = Mains ] || continue
+        [ "$(cat "$supply/online" 2>/dev/null)" = 1 ] && source=ac
+    done
+fi
+
+case "$source" in
+    ac)  echo performance > "$PROFILE" ;;
+    bat) echo cool > "$PROFILE" ;;
+    *)   echo "usage: set-platform-profile [ac|bat]" >&2; exit 2 ;;
+esac

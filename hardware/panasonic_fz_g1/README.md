@@ -50,6 +50,15 @@ Debian 13, kernel 6.12.107, GNOME 48 on Wayland. Other FZ-G1 revisions (Mk2 to M
   tablet mode). The `[autorotate]` profile makes `convertible-helper` follow the accelerometer (HID sensor hub
   `04b5:0680`, IIO device `accel_3d`, with `flip-x`) while undocked.
 
+## Power
+
+The package depends on `convertible-power` (TLP: maximum performance on AC, efficiency on battery; see
+`../convertible_power`) and installs `/etc/tlp.d/20-panasonic-fz-g1.conf` on an FZ-G1: governors `performance` (AC) and
+`schedutil` (battery), because kernel 6.12 runs `intel_pstate` in passive mode on this CPU (no HWP, so no
+`powersave` governor and no energy preference), and a USB autosuspend denylist for the touch panel, pen, sensor hub
+and keyboard dock. No charge limit is available: the firmware has no handler for one (the Panasonic `eco_mode`
+register reads as an error, and the ACPI tables have no charge-threshold method).
+
 ## Not verified
 
 A cold boot or a battery-removed power cycle (the register's state may be lost), other FZ-G1 revisions, and other

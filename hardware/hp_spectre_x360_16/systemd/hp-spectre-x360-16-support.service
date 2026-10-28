@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Set the HP Spectre x360 16 platform profile for the power source
+Documentation=file:///usr/share/doc/hp-spectre-x360-16-support/README.md
+After=tlp.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/hp-spectre-x360-16-support/set-platform-profile
+
+[Install]
+WantedBy=multi-user.target
