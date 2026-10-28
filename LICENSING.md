@@ -7,7 +7,7 @@ applies everywhere it doesn't. When in doubt, the license header at the top of t
 governs, not this summary.
 
 Full license texts are in [`licenses/`](licenses/): [`AGPL-3.0.txt`](licenses/AGPL-3.0.txt),
-[`GPL-3.0.txt`](licenses/GPL-3.0.txt), [`LGPL-3.0.txt`](licenses/LGPL-3.0.txt). LGPL-3.0 is short
+[`GPL-2.0.txt`](licenses/GPL-2.0.txt), [`GPL-3.0.txt`](licenses/GPL-3.0.txt), [`LGPL-3.0.txt`](licenses/LGPL-3.0.txt). LGPL-3.0 is short
 because it's legally an addendum to GPL-3.0 ("this version of the GNU Lesser General Public
 License incorporates the terms and conditions of version 3 of the GNU General Public License,
 supplemented by the additional permissions listed below") -- both files apply together wherever
@@ -46,6 +46,19 @@ applied). `compliance/` is AGPL-3.0-or-later now, same as everything else.
 **`daemons/rsp_open/` (the open SDRplay RSP2pro driver, added 2026-10-25) is AGPL-3.0-or-later**,
 the repository default, in every file's SPDX header and in its `Cargo.toml` `license` field. Not
 counted in the 2026-08-25 survey table above.
+
+**`hardware/panasonic_cf19/` (Debian packages for the Panasonic Toughbook CF-19, added 2026-10-27)
+is GPL-3.0-or-later, except `driver/panasonic-hbtn.c`, which is GPL-2.0-only.** It is a standalone
+Debian source package, not an Odoo addon. The driver is a Linux kernel module reworked from the
+2012 `panasonic-hbtn` driver by Heiher, itself derived from the kernel's `panasonic-laptop.c`
+by John Belmonte; those sources state version 2 of the GPL only and no "or later", so the
+reworked file keeps GPL-2.0-only (full text in [`licenses/GPL-2.0.txt`](licenses/GPL-2.0.txt)).
+Everything else there (the GNOME Shell extension, which runs inside the GPL-2.0-or-later GNOME
+Shell, the udev rule, the Debian packaging) is GPL-3.0-or-later rather than the repository's
+AGPL-3.0-or-later default, because none of it is a network service. `pipewire/analog-output-speaker.patch`
+is a patch against a file of PipeWire's `pipewire-bin` package (LGPL-2.1-or-later, from PulseAudio)
+and contains lines of that file as context; `debian/copyright` records this. Not counted in the
+2026-08-25 survey table above.
 
 **`daemons/ham_digital_modes/` is LGPL-3.0-or-later** -- a standalone Rust daemon (PSK31/FT8/WSPR
 decoding), not an Odoo addon, and license-compatible with being linked into other programs more

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Panasonic Toughbook CF-19: calibration of the Fujitsu USB touch panel
+# (0430:0502, "USB Touch Panel").  The panel is a single-touch, mouse-class
+# absolute pointer reporting 0..16383 on both axes, while the LCD is 1024x768, so
+# libinput needs a calibration matrix.  The matrix is a least-squares fit of nine
+# stylus touches (maximum residual about 5 px on 1024x768).  A finger lands about
+# 22 px higher than the stylus on this resistive panel; one panel cannot be
+# calibrated for both tools.
+#
+# Applied only when the DMI product name is a CF-19.
+ACTION=="remove", GOTO="panasonic_cf19_touch_end"
+SUBSYSTEM!="input", GOTO="panasonic_cf19_touch_end"
+KERNEL!="event[0-9]*", GOTO="panasonic_cf19_touch_end"
+ATTR{[dmi/id]product_name}!="CF-19*", GOTO="panasonic_cf19_touch_end"
+
+ENV{ID_VENDOR_ID}=="0430", ENV{ID_MODEL_ID}=="0502", ENV{LIBINPUT_CALIBRATION_MATRIX}="1.108201 0.001341 -0.065810 -0.006886 1.124566 -0.038159"
+
+LABEL="panasonic_cf19_touch_end"

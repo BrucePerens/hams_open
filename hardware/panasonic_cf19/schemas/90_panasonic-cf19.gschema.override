@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Enable the CF-19 extension by default for every user of this machine.
+[org.gnome.shell]
+enabled-extensions=['cf19-osk@hams.com']

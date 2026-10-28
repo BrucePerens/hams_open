@@ -1,0 +1,5 @@
+udev/90-panasonic-cf19-touch.rules usr/lib/udev/rules.d
+gnome-shell/cf19-osk@hams.com usr/share/gnome-shell/extensions
+schemas/org.gnome.shell.extensions.cf19-osk.gschema.xml usr/share/glib-2.0/schemas
+schemas/90_panasonic-cf19.gschema.override usr/share/glib-2.0/schemas
+pipewire/analog-output-speaker.patch usr/share/panasonic-cf19-support

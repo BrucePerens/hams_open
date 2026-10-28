@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+VERSION := $(shell dpkg-parsechangelog -S Version)
+DKMS_SRC := debian/panasonic-hbtn-dkms/usr/src/panasonic-hbtn-$(VERSION)
+
+%:
+	dh $@ --with dkms
+
+# Nothing to compile here: the module is built on the target by DKMS.
+override_dh_auto_build:
+
+override_dh_auto_install:
+	install -D -m 0644 driver/panasonic-hbtn.c $(DKMS_SRC)/panasonic-hbtn.c
+	install -D -m 0644 driver/Makefile $(DKMS_SRC)/Makefile
+
+override_dh_dkms:
+	dh_dkms -V $(VERSION)
