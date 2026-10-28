@@ -1,0 +1,21 @@
+Source: panasonic-fz-g1
+Section: kernel
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/panasonic_fz_g1
+
+Package: panasonic-fz-g1-support
+Architecture: all
+Depends: convertible-helper (>= 1.1.0), kmod, ${misc:Depends}
+Description: Panasonic Toughpad FZ-G1 hardware support for Debian
+ Settings that make the brightness control of a Panasonic Toughpad FZ-G1
+ (first generation) work from the GNOME settings panel on Debian: it makes
+ sure the panasonic_laptop module is loaded (a leftover blacklist file for it
+ is moved aside), and re-writes the Panasonic brightness register once at
+ boot. When the keyboard dock is detached it counts as tablet mode
+ (through convertible-helper), so GNOME raises its full on-screen keyboard.
+ .
+ The files are applied only when the DMI product name begins with FZ-G1.

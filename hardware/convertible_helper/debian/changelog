@@ -1,3 +1,12 @@
+convertible-helper (1.1.0) unstable; urgency=medium
+
+  * Tablets without a tablet-mode switch: optional profile files
+    (/usr/share/convertible-helper/profiles/*.conf, /etc/convertible-helper.d)
+    name the USB id of the dock keyboard; while it is detached the tablet
+    counts as in tablet mode (keyboard setting on, screen reset on re-dock).
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 28 Oct 2026 17:30:00 -0700
+
 convertible-helper (1.0.0) unstable; urgency=medium
 
   * Initial release: resets the screen to normal when a convertible leaves

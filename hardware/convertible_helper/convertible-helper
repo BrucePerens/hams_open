@@ -14,11 +14,16 @@ org.gnome.Mutter.DisplayConfig D-Bus API.  It does not use any GNOME Shell code.
    setting org.gnome.desktop.a11y.applications screen-keyboard-enabled), so GNOME
    raises it when a text field gets focus; on leaving tablet mode the value from
    before is restored.
+ * Tablets without a tablet-mode switch (Panasonic Toughpad FZ-G1): a profile file
+   in /usr/share/convertible-helper/profiles or /etc/convertible-helper.d names the
+   USB id of the dock keyboard; while it is absent the tablet counts as in tablet
+   mode, with the same effects.
  * KEY_PROG3 (the Toughbook CF-19 rotation button): rotate the built-in display one
    step clockwise, in any shell state.
  * KEY_PROG1 (the Toughbook CF-19 "security" button): the log-out dialog of the
    running desktop.
 """
+import configparser
 import fcntl
 import glob
 import os
@@ -37,6 +42,8 @@ KEY_PROG1, KEY_PROG3 = 148, 202
 BUTTON_DEVICES = ('Panasonic Tablet Button Support',)
 EVIOCGSW = (2 << 30) | (1 << 16) | (ord('E') << 8) | 0x1b      # read switch state, 1 byte
 A11Y_SCHEMA, A11Y_KEY = 'org.gnome.desktop.a11y.applications', 'screen-keyboard-enabled'
+PROFILE_DIRS = ('/etc/convertible-helper.d', '/usr/share/convertible-helper/profiles')
+DOCK_POLL_SECONDS = 1
 RESET_DELAY_MS = 400            # the switch flickers 1,0,1 while the screen is turned
 
 BUS, PATH = 'org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig'
@@ -78,6 +85,39 @@ def set_rotation(step):
     return changed
 
 
+def dock_usb_ids():
+    """USB ids (vid:pid) of the dock keyboard, from the profile files that match this
+    machine (an optional dmi-product-prefix in a [dock] section)."""
+    try:
+        product = open('/sys/class/dmi/id/product_name').read().strip()
+    except OSError:
+        product = ''
+    ids = set()
+    for directory in PROFILE_DIRS:
+        for path in sorted(glob.glob(os.path.join(directory, '*.conf'))):
+            profile = configparser.ConfigParser()
+            profile.read(path)
+            if not profile.has_section('dock'):
+                continue
+            prefix = profile.get('dock', 'dmi-product-prefix', fallback='')
+            if prefix and not product.startswith(prefix):
+                continue
+            ids.update(i.lower() for i in profile.get('dock', 'usb-keyboard', fallback='').split())
+    return ids
+
+
+def usb_present(ids):
+    for dev in glob.glob('/sys/bus/usb/devices/*'):
+        try:
+            vid = open(os.path.join(dev, 'idVendor')).read().strip()
+            pid = open(os.path.join(dev, 'idProduct')).read().strip()
+        except OSError:
+            continue
+        if f'{vid}:{pid}'.lower() in ids:
+            return True
+    return False
+
+
 def a11y_settings():
     source = Gio.SettingsSchemaSource.get_default()
     if source is None or source.lookup(A11Y_SCHEMA, True) is None:
@@ -99,6 +139,8 @@ class Helper:
         self.reset_id = 0
         self.a11y = a11y_settings()
         self.saved_keyboard = None      # a11y value to restore when tablet mode ends
+        self.dock_ids = dock_usb_ids()
+        self.docked = None              # last known state of the dock keyboard
 
     def wanted(self, path):
         base = os.path.basename(path)
@@ -175,6 +217,20 @@ class Helper:
                     run_logout()
         return GLib.SOURCE_CONTINUE
 
+    def poll_dock(self):
+        """Tablets without a tablet-mode switch: detached from the dock keyboard = tablet mode."""
+        present = usb_present(self.dock_ids)
+        if self.docked is None:
+            self.docked = present
+            log(f'dock keyboard {"present" if present else "absent"} at start')
+            if not present:
+                self.keyboard(True)
+        elif present != self.docked:
+            self.docked = present
+            log(f'dock keyboard {"attached" if present else "detached"}')
+            self.tablet(0 if present else 1)
+        return GLib.SOURCE_CONTINUE
+
     def tablet(self, value):
         log(f'tablet mode {value}')
         self.keyboard(bool(value))
@@ -201,6 +257,10 @@ def main():
     helper = Helper()
     helper.scan()
     GLib.timeout_add_seconds(5, helper.scan)          # pick up devices that appear later
+    if helper.dock_ids:
+        log(f'dock keyboard ids: {sorted(helper.dock_ids)}')
+        helper.poll_dock()
+        GLib.timeout_add_seconds(DOCK_POLL_SECONDS, helper.poll_dock)
     GLib.MainLoop().run()
 
 
