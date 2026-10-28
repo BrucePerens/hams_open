@@ -3,3 +3,5 @@ PACKAGE_VERSION="#MODULE_VERSION#"
 BUILT_MODULE_NAME[0]="panasonic-hbtn"
 DEST_MODULE_LOCATION[0]="/updates/dkms"
 AUTOINSTALL="yes"
+# Written for the 6.12 ACPI driver interfaces; skip older kernels instead of failing the package.
+BUILD_EXCLUSIVE_KERNEL="^(6\.(1[2-9]|[2-9][0-9])|([7-9]|[1-9][0-9])\.)"

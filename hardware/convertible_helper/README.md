@@ -9,11 +9,14 @@ break when GNOME Shell changes.
   accelerometer reports `normal` (captured 2026-10-28: switch 0 at 2.5 s, `normal` at 2.6 s), the later
   `normal` is ignored and the screen stays turned. The helper waits 400 ms (the switch flickers 1, 0, 1 as
   the screen is turned) and then sets the built-in panel upright.
-* **Toughbook CF-19 rotation button** (`KEY_PROG3`, sent by `panasonic-hbtn` 1.3.0 and later): rotates the
-  built-in panel one step clockwise, in any shell state (GNOME's own shortcut is ignored while a dialog is
-  open).
-* **Toughbook CF-19 "security" button** (`KEY_PROG1`): opens the log-out dialog of GNOME
-  (`gnome-session-quit --logout`), Xfce (`xfce4-session-logout`) or KDE (`qdbus6 org.kde.LogoutPrompt`).
+* **Tablet buttons named in a profile.** A `[buttons]` section in a profile file (`rotate = KEY_PROG3`,
+  `security = KEY_PROG1`, optional `dmi-product-prefix`) makes the helper act on those keys from the
+  `Panasonic Tablet Button Support` device, and only on matching machines. `rotate` turns the built-in panel one
+  step clockwise, in any shell state (GNOME's own shortcut is ignored while a dialog is open); `security` opens
+  the log-out dialog of GNOME (`gnome-session-quit --logout`), Xfce (`xfce4-session-logout`) or KDE
+  (`qdbus6 org.kde.LogoutPrompt`). The Toughbook CF-19 profile is in `hardware/panasonic_cf19/profiles`. Buttons
+  not named in a profile (for example the Toughpad FZ-G1's A1 and A2) are left to GNOME's own
+  Settings, Keyboard, Custom Shortcuts.
 
 * **Tablets without a tablet-mode switch** (the Panasonic Toughpad FZ-G1 has none; GNOME otherwise shows only its
   emoji key when you touch a text field undocked): a profile file in `/usr/share/convertible-helper/profiles/` or

@@ -1,3 +1,11 @@
+panasonic-fz-g1 (1.1.0) unstable; urgency=medium
+
+  * Depend on panasonic-hbtn-dkms 1.4.0, which reports the bezel buttons A1
+    and A2 as XF86Launch1 and XF86Launch2 keys; bind them in GNOME's Settings,
+    Keyboard, Custom Shortcuts.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 28 Oct 2026 19:00:00 -0700
+
 panasonic-fz-g1 (1.0.0) unstable; urgency=medium
 
   * Initial release: unblock the panasonic_laptop module and re-write the

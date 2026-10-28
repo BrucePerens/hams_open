@@ -10,6 +10,7 @@ Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/convertibl
 Package: convertible-helper
 Architecture: all
 Depends: python3, python3-gi, gir1.2-glib-2.0, udev, ${misc:Depends}
+Breaks: panasonic-cf19-support (<< 1.4.0)
 Recommends: gnome-session-bin | xfce4-session | plasma-workspace
 Description: tablet-mode and tablet-button helper for convertible laptops
  A small user service for convertible laptops that uses no desktop-shell
