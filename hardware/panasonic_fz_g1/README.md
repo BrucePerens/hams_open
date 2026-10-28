@@ -50,6 +50,17 @@ Debian 13, kernel 6.12.107, GNOME 48 on Wayland. Other FZ-G1 revisions (Mk2 to M
   tablet mode). The `[autorotate]` profile makes `convertible-helper` follow the accelerometer (HID sensor hub
   `04b5:0680`, IIO device `accel_3d`, with `flip-x`) while undocked.
 
+## Dock keyboard (iKey)
+
+The iKey dock keyboard (`2047:0318`, a TI MSP430 behind hub `0424:2514`) has four USB interfaces: a boot keyboard
+(with the usual five LEDs, no backlight control), a mouse, a consumer-control device (media keys and screen-brightness
+keys) and a 63-byte vendor-defined report channel (usage page `0xFF00`, report id `0x3F`, in and out). Its backlight, if
+it has one, is not controllable through any standard interface here; the vendor channel is the only candidate, and it
+was **not** probed: its protocol is undocumented and a blind write to a keyboard controller could do damage.
+
+The firmware's `SINF` flag (read through `panasonic-hbtn`'s `tablet_mode` attribute) reads 1 while docked; it has not
+been read undocked, so it is not yet known whether it could replace the USB dock detection.
+
 ## Power
 
 The package depends on `convertible-power` (TLP: maximum performance on AC, efficiency on battery; see

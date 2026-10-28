@@ -1,3 +1,10 @@
+hp-spectre-x360-16 (1.2.0) unstable; urgency=medium
+
+  * Exclude the i915 driver from TLP's runtime power management: applying
+    battery mode made i915 log kernel warnings on kernel 7.1.2.
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 04:00:00 -0700
+
 hp-spectre-x360-16 (1.1.0) unstable; urgency=medium
 
   * Depend on grub-large-console (readable GRUB text, about 80x24, on the
