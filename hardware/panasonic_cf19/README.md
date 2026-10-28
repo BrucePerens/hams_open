@@ -109,7 +109,8 @@ ignored, through its own schema `org.gnome.shell.extensions.cf19-osk` (key `togg
   button turns the setting on and shows the keyboard, and the setting is switched off again when the
   keyboard is hidden. Without the driver (no `tablet_mode` file) the extension leaves the setting alone.
 
-The other buttons are handled by `convertible-helper`, which uses no shell code: button 3 (rotate) rotates
+The other buttons are handled by `convertible-helper` (named in `profiles/panasonic-cf19.conf`; the same driver also reports
+the Toughpad FZ-G1's bezel buttons A1 and A2 as `XF86Launch1`/`XF86Launch2`), which uses no shell code: button 3 (rotate) rotates
 the built-in display one step clockwise, in any shell state; button 4 ("security") opens the desktop's log-out
 dialog (`gnome-session-quit --logout` on GNOME), the nearest Linux equivalent of Ctrl-Alt-Del; and leaving
 tablet mode puts the screen back to normal.
@@ -145,6 +146,8 @@ Verified on the CF-19 Mk5 named above:
   taps stay accurate with the stylus (about 5 px) and GNOME rotates the touch mapping together with the display
   (tested by tapping the corners in both orientations, using a hand-installed copy of the same relay; the
   packaged service is the same code and runs and hides the physical panel).
+* Not yet retested on a CF-19: package 1.4.0 with `convertible-helper` 1.2.0, where the rotate and security keys come
+  from the profile file and not from the helper's code. The behaviour below was tested with 1.3.0 and helper 1.0.0.
 * With `convertible-helper` (package 1.0.0) and this package at 1.3.0, tested on 2026-10-28 after a fresh login:
   the rotation button rotates once per press in any shell state, including while GNOME's log-out dialog is
   open (GNOME's own shortcut ignores the key in that state); the "security" button opens the log-out dialog

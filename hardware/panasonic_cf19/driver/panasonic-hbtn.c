@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Panasonic Toughbook CF-18/19 tablet button driver
+ * Panasonic Toughbook CF-18/19 and Toughpad FZ-G1 tablet button driver
  *
  * Based on panasonic-hbtn (C) 2012 Heiher, itself derived from
  * panasonic-laptop.c (C) 2002-2004 John Belmonte.  Reworked for Linux 6.12:
@@ -18,6 +18,11 @@
  * SW_TABLET_MODE).  The current state is also readable as a sysfs attribute
  * (tablet_mode) on the ACPI device for desktop components that cannot see the
  * input switch.
+ *
+ * Toughpad FZ-G1 (_HID MAT002A or MAT002B): the same queue carries two buttons,
+ * codes 0x38/0x39 and 0x42/0x43 (press/release).  They are reported as taps on the
+ * press edge.  The FZ-G1's SINF value is exposed through the same sysfs attribute
+ * but is not reported as a tablet-mode switch.
  */
 #include <linux/module.h>
 #include <linux/acpi.h>
@@ -37,9 +42,13 @@ static bool debug;
 module_param(debug, bool, 0644);
 MODULE_PARM_DESC(debug, "Log raw HINF codes (default: off)");
 
+#define PCC_HBTN_VARIANT_FZG1	1
+
 static const struct acpi_device_id pcc_hbtn_ids[] = {
 	{ "MAT001F", 0 },
 	{ "MAT0020", 0 },
+	{ "MAT002A", PCC_HBTN_VARIANT_FZG1 },
+	{ "MAT002B", PCC_HBTN_VARIANT_FZG1 },
 	{ }
 };
 MODULE_DEVICE_TABLE(acpi, pcc_hbtn_ids);
@@ -50,6 +59,13 @@ static const struct key_entry pcc_hbtn_keymap[] = {
 	{ KE_KEY, 0x6, { KEY_PROG3 } },		/* screen rotate: handled by convertible-helper (XF86Launch3; not bound by GNOME) */
 	{ KE_KEY, 0x8, { KEY_ENTER } },			/* enter */
 	{ KE_KEY, 0xa, { KEY_PROG2 } },			/* on-screen keyboard toggle (XF86Launch2; keycodes > 255 have no X keysym) */
+	{ KE_END, 0 }
+};
+
+/* Toughpad FZ-G1: scancode = HINF code with the release bit cleared */
+static const struct key_entry pcc_hbtn_fzg1_keymap[] = {
+	{ KE_KEY, 0x38, { KEY_PROG1 } },		/* bezel button, codes 0x38/0x39 (XF86Launch1) */
+	{ KE_KEY, 0x42, { KEY_PROG2 } },		/* bezel button, codes 0x42/0x43 (XF86Launch2) */
 	{ KE_END, 0 }
 };
 
@@ -65,6 +81,7 @@ static bool pcc_hbtn_tap_only(unsigned int scancode)
 
 struct pcc_hbtn {
 	struct input_dev *input;
+	bool fzg1;
 };
 
 
@@ -153,6 +170,15 @@ static void pcc_hbtn_notify(struct acpi_device *device, u32 event)
 						dev_name(&device->dev),
 						PCC_HBTN_NOTIFY, result);
 
+		if (pcc->fzg1) {
+			ke = sparse_keymap_entry_from_scancode(pcc->input, result & ~0x1ULL);
+			if (!ke)
+				dev_dbg(&device->dev, "unknown FZ-G1 button code 0x%llx\n", result);
+			else if (!(result & 0x1))		/* tap on the press edge */
+				sparse_keymap_report_entry(pcc->input, ke, 1, true);
+			continue;
+		}
+
 		if ((result & 0xe) == PCC_HBTN_TABLET_SCAN) {
 			pcc_hbtn_report_tablet(device, pcc);
 			continue;
@@ -195,9 +221,11 @@ static int pcc_hbtn_add(struct acpi_device *device)
 	input->id.product = 0x0001;
 	input->id.version = 0x0100;
 
-	input_set_capability(input, EV_SW, SW_TABLET_MODE);
+	pcc->fzg1 = acpi_match_acpi_device(pcc_hbtn_ids, device)->driver_data == PCC_HBTN_VARIANT_FZG1;
+	if (!pcc->fzg1)
+		input_set_capability(input, EV_SW, SW_TABLET_MODE);
 
-	err = sparse_keymap_setup(input, pcc_hbtn_keymap, NULL);
+	err = sparse_keymap_setup(input, pcc->fzg1 ? pcc_hbtn_fzg1_keymap : pcc_hbtn_keymap, NULL);
 	if (err)
 		return err;
 
@@ -211,7 +239,8 @@ static int pcc_hbtn_add(struct acpi_device *device)
 
 	pcc->input = input;
 	device->driver_data = pcc;
-	pcc_hbtn_report_tablet(device, pcc);	/* initial switch state */
+	if (!pcc->fzg1)
+		pcc_hbtn_report_tablet(device, pcc);	/* initial switch state */
 	strscpy(acpi_device_name(device), "TabletButton", sizeof(acpi_device_name(device)));
 	strscpy(acpi_device_class(device), PCC_HBTN_CLASS, sizeof(acpi_device_class(device)));
 	return 0;
@@ -229,5 +258,5 @@ static struct acpi_driver pcc_hbtn_driver = {
 module_acpi_driver(pcc_hbtn_driver);
 
 MODULE_AUTHOR("Heiher; reworked for Linux 6.12");
-MODULE_DESCRIPTION("ACPI tablet button driver for Panasonic CF-18/19 Toughbooks");
+MODULE_DESCRIPTION("ACPI tablet button driver for Panasonic CF-18/19 Toughbooks and the Toughpad FZ-G1");
 MODULE_LICENSE("GPL");

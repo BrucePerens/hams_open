@@ -40,10 +40,16 @@ Debian 13, kernel 6.12.107, GNOME 48 on Wayland. Other FZ-G1 revisions (Mk2 to M
   (`/usr/share/convertible-helper/profiles/panasonic-fz-g1.conf`) treats the absence of `2047:0318` as tablet mode:
   undocked, the full on-screen keyboard appears; re-docked, the setting is restored (verified 2026-10-28).
 
+* The bezel buttons A1 and A2 arrive through the ACPI `TBTN` device (`MAT002A`): HINF codes `0x38`/`0x39` (A1) and
+  `0x42`/`0x43` (A2). `panasonic-hbtn` 1.4.0 (in the `panasonic-hbtn-dkms` package) reports them as `XF86Launch1`
+  and `XF86Launch2`; bind them to anything in GNOME's Settings, Keyboard, Custom Shortcuts (press the button when
+  asked for the key). The Windows and folder buttons send the PS/2 Super key, which opens the GNOME overview (the
+  folder button adds an unmapped scancode `0x65`). Volume buttons work through `panasonic_laptop`.
+
 ## Not verified
 
 A cold boot or a battery-removed power cycle (the register's state may be lost), other FZ-G1 revisions, and other
-desktops. Auto-rotation of the screen when undocked was not tested. The front-bezel buttons (ACPI device `MAT002A`) are
-**not handled yet**.
+desktops. Auto-rotation of the screen when undocked does not work yet (GNOME does not consider the tablet to be in tablet
+mode, so it ignores the accelerometer).
 
 Licence: GPL-3.0-or-later.

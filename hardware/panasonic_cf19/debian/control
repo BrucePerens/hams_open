@@ -11,9 +11,10 @@ Package: panasonic-hbtn-dkms
 Architecture: all
 Depends: dkms, ${misc:Depends}
 Recommends: linux-headers-amd64 | linux-headers-generic
-Description: Panasonic Toughbook CF-18/19 tablet button driver (DKMS source)
+Description: Panasonic Toughbook/Toughpad tablet button driver (DKMS source)
  Kernel driver for the tablet buttons of the Panasonic Toughbook CF-18 and
- CF-19 (ACPI device MAT001F/MAT0020, "TBTN").  The firmware queues one code per
+ CF-19 (ACPI device MAT001F/MAT0020, "TBTN") and the Toughpad FZ-G1 (MAT002A/
+ MAT002B).  The firmware queues one code per
  button press or release; the driver turns them into key events and reports the
  swivel screen position as the SW_TABLET_MODE switch.  It also exposes the
  current position as the read-only sysfs file
@@ -24,7 +25,7 @@ Description: Panasonic Toughbook CF-18/19 tablet button driver (DKMS source)
 Package: panasonic-cf19-support
 Architecture: all
 Depends: panasonic-hbtn-dkms (= ${binary:Version}),
-         convertible-helper (>= 1.0.0),
+         convertible-helper (>= 1.2.0),
          patch,
          python3,
          udev,

@@ -9,7 +9,7 @@ Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/panasonic_
 
 Package: panasonic-fz-g1-support
 Architecture: all
-Depends: convertible-helper (>= 1.1.0), kmod, ${misc:Depends}
+Depends: convertible-helper (>= 1.1.0), panasonic-hbtn-dkms (>= 1.4.0), kmod, ${misc:Depends}
 Description: Panasonic Toughpad FZ-G1 hardware support for Debian
  Settings that make the brightness control of a Panasonic Toughpad FZ-G1
  (first generation) work from the GNOME settings panel on Debian: it makes

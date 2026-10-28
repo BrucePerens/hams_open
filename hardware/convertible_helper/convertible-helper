@@ -18,10 +18,11 @@ org.gnome.Mutter.DisplayConfig D-Bus API.  It does not use any GNOME Shell code.
    in /usr/share/convertible-helper/profiles or /etc/convertible-helper.d names the
    USB id of the dock keyboard; while it is absent the tablet counts as in tablet
    mode, with the same effects.
- * KEY_PROG3 (the Toughbook CF-19 rotation button): rotate the built-in display one
-   step clockwise, in any shell state.
- * KEY_PROG1 (the Toughbook CF-19 "security" button): the log-out dialog of the
-   running desktop.
+ * Tablet buttons named in a [buttons] profile section (the Toughbook CF-19 profile:
+   rotate = KEY_PROG3, security = KEY_PROG1): "rotate" turns the built-in display one
+   step clockwise, in any shell state; "security" opens the log-out dialog of the
+   running desktop.  Buttons not named in a profile are left alone, for GNOME's own
+   keyboard shortcut settings.
 """
 import configparser
 import fcntl
@@ -38,7 +39,7 @@ from gi.repository import Gio, GLib
 EVENT = struct.Struct('llHHi')
 EV_KEY, EV_SW = 1, 5
 SW_TABLET_MODE = 1
-KEY_PROG1, KEY_PROG3 = 148, 202
+KEY_NAMES = {'KEY_PROG1': 148, 'KEY_PROG2': 149, 'KEY_PROG3': 202, 'KEY_PROG4': 203}
 BUTTON_DEVICES = ('Panasonic Tablet Button Support',)
 EVIOCGSW = (2 << 30) | (1 << 16) | (ord('E') << 8) | 0x1b      # read switch state, 1 byte
 A11Y_SCHEMA, A11Y_KEY = 'org.gnome.desktop.a11y.applications', 'screen-keyboard-enabled'
@@ -85,25 +86,48 @@ def set_rotation(step):
     return changed
 
 
-def dock_usb_ids():
-    """USB ids (vid:pid) of the dock keyboard, from the profile files that match this
-    machine (an optional dmi-product-prefix in a [dock] section)."""
+def profiles():
+    """Yield (section, ConfigParser) for the profile sections that match this machine:
+    a [dock] or [buttons] section is used when its optional dmi-product-prefix matches
+    the DMI product name."""
     try:
         product = open('/sys/class/dmi/id/product_name').read().strip()
     except OSError:
         product = ''
-    ids = set()
     for directory in PROFILE_DIRS:
         for path in sorted(glob.glob(os.path.join(directory, '*.conf'))):
             profile = configparser.ConfigParser()
             profile.read(path)
-            if not profile.has_section('dock'):
-                continue
-            prefix = profile.get('dock', 'dmi-product-prefix', fallback='')
-            if prefix and not product.startswith(prefix):
-                continue
+            for section in ('dock', 'buttons'):
+                if not profile.has_section(section):
+                    continue
+                prefix = profile.get(section, 'dmi-product-prefix', fallback='')
+                if prefix and not product.startswith(prefix):
+                    continue
+                yield section, profile
+
+
+def dock_usb_ids():
+    """USB ids (vid:pid) of the dock keyboard, from the matching [dock] profile sections."""
+    ids = set()
+    for section, profile in profiles():
+        if section == 'dock':
             ids.update(i.lower() for i in profile.get('dock', 'usb-keyboard', fallback='').split())
     return ids
+
+
+def button_actions():
+    """{evdev key code: action} from the matching [buttons] profile sections; the actions
+    are 'security' (log-out dialog) and 'rotate' (rotate the built-in display)."""
+    actions = {}
+    for section, profile in profiles():
+        if section != 'buttons':
+            continue
+        for action in ('security', 'rotate'):
+            name = profile.get('buttons', action, fallback='').strip()
+            if name in KEY_NAMES:
+                actions[KEY_NAMES[name]] = action
+    return actions
 
 
 def usb_present(ids):
@@ -140,6 +164,7 @@ class Helper:
         self.a11y = a11y_settings()
         self.saved_keyboard = None      # a11y value to restore when tablet mode ends
         self.dock_ids = dock_usb_ids()
+        self.button_actions = button_actions()
         self.docked = None              # last known state of the dock keyboard
 
     def wanted(self, path):
@@ -150,7 +175,7 @@ class Helper:
             sw = int(open(f'{sysdir}/capabilities/sw').read().split()[-1], 16)
         except (OSError, ValueError):
             return None
-        if sw & (1 << SW_TABLET_MODE) or name in BUTTON_DEVICES:
+        if sw & (1 << SW_TABLET_MODE) or (name in BUTTON_DEVICES and self.button_actions):
             return name
         return None
 
@@ -210,9 +235,10 @@ class Helper:
             if etype == EV_SW and code == SW_TABLET_MODE:
                 self.tablet(value)
             elif etype == EV_KEY and value == 1:
-                if code == KEY_PROG3:
+                action = self.button_actions.get(code)
+                if action == 'rotate':
                     self.safely('rotate', lambda: set_rotation(1))
-                elif code == KEY_PROG1:
+                elif action == 'security':
                     log('security button: log-out dialog')
                     run_logout()
         return GLib.SOURCE_CONTINUE
