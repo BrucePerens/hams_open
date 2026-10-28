@@ -128,13 +128,10 @@ Verified on the CF-19 Mk5 named above:
 * The touch calibration matrix reaches the device through the packaged udev rule, and gave about 5 px
   accuracy with the stylus (measured with an identical hand-installed rule).
 * The speaker is audible with the patched mixer path (test tones heard), and not without it.
-* An earlier form of the extension (D-Bus methods plus ordinary GNOME custom shortcuts) showed and hid the
-  keyboard from the button, and the log-out button opened GNOME's log-out dialog.
-
-**Not yet verified, at the time of writing:** the shipped extension itself in a login session, that is, its
-own shortcut registration through `org.gnome.shell.extensions.cf19-osk` and the tablet-position-only pop-up
-of the keyboard. It builds, installs and its schema and default are active, but nobody has yet pressed the
-buttons with it running.
+* The shipped extension, in a fresh GNOME login session on 2026-10-28: it loads active from the package with
+  its own schema keys and the session-bus name. In laptop position, tapping a text field does not raise the
+  keyboard; button 1 shows and hides it; button 4 opens the log-out dialog. In tablet position, tapping a
+  text field raises the keyboard by itself.
 
 Not verified at all: other CF-19 revisions (a dual-touch capacitive screen, or a different speaker or codec
 wiring); other Toughbooks (CF-18, CF-31...); Debian releases other than 13; GNOME other than 48 (the
