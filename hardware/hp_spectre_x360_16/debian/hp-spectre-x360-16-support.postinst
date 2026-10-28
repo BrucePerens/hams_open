@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+case "$1" in
+    configure)
+        if grep -q '^HP Spectre x360 2-in-1 Laptop 16-f' /sys/class/dmi/id/product_name 2>/dev/null; then
+            install -D -m 0644 /usr/share/hp-spectre-x360-16-support/20-hp-spectre-x360-16.conf \
+                /etc/tlp.d/20-hp-spectre-x360-16.conf
+            if [ -d /run/systemd/system ]; then
+                udevadm control --reload || true
+            fi
+            if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+                tlp start >/dev/null 2>&1 || true
+            fi
+        fi
+        ;;
+esac
+#DEBHELPER#

@@ -7,6 +7,7 @@ override_dh_auto_install:
 	install -D -m 0644 systemd/panasonic-fz-g1-support.service debian/panasonic-fz-g1-support/usr/lib/systemd/system/panasonic-fz-g1-support.service
 	install -D -m 0644 modules-load/panasonic-fz-g1.conf debian/panasonic-fz-g1-support/usr/lib/modules-load.d/panasonic-fz-g1.conf
 	install -D -m 0644 profiles/panasonic-fz-g1.conf debian/panasonic-fz-g1-support/usr/share/convertible-helper/profiles/panasonic-fz-g1.conf
+	install -D -m 0644 tlp.d/20-panasonic-fz-g1.conf debian/panasonic-fz-g1-support/usr/share/panasonic-fz-g1-support/20-panasonic-fz-g1.conf
 
 override_dh_installsystemd:
 	dh_installsystemd --name=panasonic-fz-g1-support

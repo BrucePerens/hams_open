@@ -1,0 +1,22 @@
+Source: hp-spectre-x360-16
+Section: kernel
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/hp_spectre_x360_16
+
+Package: hp-spectre-x360-16-support
+Architecture: all
+Depends: convertible-helper (>= 1.3.0), convertible-power (>= 1.0.0), udev, ${misc:Depends}
+Recommends: thermald
+Description: HP Spectre x360 2-in-1 16-f2xxx hardware support for Debian
+ Settings for the HP Spectre x360 2-in-1 Laptop 16-f2xxx on a stock Debian
+ GNOME desktop: it pulls in convertible-helper (tablet mode: the on-screen
+ keyboard in tablet position, the screen reset to normal when the laptop
+ leaves tablet mode) and convertible-power (maximum performance on AC, maximum
+ battery life on battery), and adds this laptop's power settings.
+ .
+ The power settings are applied only when the DMI product name begins with
+ "HP Spectre x360 2-in-1 Laptop 16-f".

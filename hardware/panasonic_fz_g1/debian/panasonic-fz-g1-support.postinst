@@ -14,6 +14,10 @@ case "$1" in
                 echo "panasonic-fz-g1-support: moved $BLACKLIST aside" >&2
             fi
             modprobe panasonic_laptop 2>/dev/null || true
+            install -D -m 0644 /usr/share/panasonic-fz-g1-support/20-panasonic-fz-g1.conf /etc/tlp.d/20-panasonic-fz-g1.conf
+            if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+                tlp start >/dev/null 2>&1 || true
+            fi
         fi
         ;;
 esac

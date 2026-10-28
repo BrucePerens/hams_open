@@ -1,0 +1,21 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH CONVERTIBLE-BATTERY-NOTIFY 1 "October 2026" "convertible-power" "User Commands"
+.SH NAME
+convertible-battery-notify \- charge-limit reminder for laptops without a firmware charge limit
+.SH SYNOPSIS
+.B convertible-battery-notify
+.SH DESCRIPTION
+Runs as a systemd user service (convertible-battery-notify.service). While the battery is charging it
+shows one desktop notification, once per charge, when the charge reaches the maximum in
+.IR /etc/convertible-power/battery.conf
+(default 80%), asking you to unplug. It stays silent when a battery exposes a hardware limit
+(charge_control_end_threshold) at or below that value, because the firmware then stops charging by itself.
+.PP
+The environment variable CONVERTIBLE_POWER_BATTERY_CONF names another configuration file (for testing).
+.SH FILES
+.TP
+.I /etc/convertible-power/battery.conf
+The maximum and minimum charge.
+.SH SEE ALSO
+.BR tlp (8),
+.BR upower (1)

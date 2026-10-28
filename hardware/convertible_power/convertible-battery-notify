@@ -1,0 +1,95 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Charge-limit reminder for laptops whose firmware cannot stop charging.
+
+Runs as a user service.  When the battery is charging on AC and reaches the maximum charge from
+/etc/convertible-power/battery.conf (default 80%), it shows one notification asking you to unplug,
+once per charge.  If a battery exposes a hardware charge limit at or below that value
+(charge_control_end_threshold, set by TLP), nothing is shown: the firmware stops charging itself.
+
+The low-battery side is handled by UPower and the desktop: the package's UPower settings do the
+critical action (hibernate, or power off) at the minimum charge, default 10%.
+"""
+import configparser
+import glob
+import os
+import sys
+
+from gi.repository import Gio, GLib
+
+CONFIG = os.environ.get('CONVERTIBLE_POWER_BATTERY_CONF', '/etc/convertible-power/battery.conf')
+UPOWER = 'org.freedesktop.UPower'
+DISPLAY_DEVICE = '/org/freedesktop/UPower/devices/DisplayDevice'
+STATE_CHARGING = 1
+
+
+def log(msg):
+    print(f'convertible-battery-notify: {msg}', flush=True)
+
+
+def max_charge():
+    config = configparser.ConfigParser()
+    config.read(CONFIG)
+    return config.getfloat('battery', 'max-charge', fallback=80.0)
+
+
+def hardware_limit(limit):
+    """True when a battery stops charging at or below `limit` by itself."""
+    for path in glob.glob('/sys/class/power_supply/BAT*/charge_control_end_threshold'):
+        try:
+            if int(open(path).read()) <= limit:
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+class Notifier:
+    def __init__(self):
+        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        self.system = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        self.limit = max_charge()
+        self.notified = False
+        self.last_id = 0
+
+    def read(self):
+        proxy = Gio.DBusProxy.new_sync(self.system, Gio.DBusProxyFlags.NONE, None, UPOWER, DISPLAY_DEVICE,
+                                       'org.freedesktop.UPower.Device', None)
+        return proxy.get_cached_property('Percentage').unpack(), proxy.get_cached_property('State').unpack()
+
+    def check(self, *_):
+        try:
+            percentage, state = self.read()
+        except (GLib.Error, AttributeError) as exc:
+            log(f'cannot read UPower: {exc}')
+            return GLib.SOURCE_CONTINUE
+        if state != STATE_CHARGING:
+            self.notified = False                       # unplugged or full: re-arm for the next charge
+        elif percentage >= self.limit and not self.notified:
+            self.notified = True
+            if not hardware_limit(self.limit):
+                self.notify(percentage)
+        return GLib.SOURCE_CONTINUE
+
+    def notify(self, percentage):
+        log(f'battery at {percentage:.0f}%: reminder to unplug')
+        self.bus.call_sync('org.freedesktop.Notifications', '/org/freedesktop/Notifications',
+                           'org.freedesktop.Notifications', 'Notify',
+                           GLib.Variant('(susssasa{sv}i)', (
+                               'Battery', self.last_id, 'battery-full-charged-symbolic',
+                               f'Battery at {percentage:.0f}%',
+                               f'Unplug the charger to keep the battery healthy (limit {self.limit:.0f}%).',
+                               [], {'urgency': GLib.Variant('y', 1)}, 0)),
+                           None, Gio.DBusCallFlags.NONE, -1, None)
+
+
+def main():
+    notifier = Notifier()
+    GLib.timeout_add_seconds(30, notifier.check)        # simple and robust; the state changes slowly
+    notifier.check()
+    log(f'watching: reminder at {notifier.limit:.0f}% while charging')
+    GLib.MainLoop().run()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

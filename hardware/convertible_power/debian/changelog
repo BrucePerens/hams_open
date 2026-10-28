@@ -1,0 +1,7 @@
+convertible-power (1.0.0) unstable; urgency=medium
+
+  * Initial release: TLP settings (AC = performance, battery = efficiency),
+    UPower critical action at 10%, and convertible-battery-notify, a reminder
+    to unplug at 80% for firmware without a charge limit.
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 00:30:00 -0700

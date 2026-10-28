@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -D -m 0644 tlp.d/20-hp-spectre-x360-16.conf debian/hp-spectre-x360-16-support/usr/share/hp-spectre-x360-16-support/20-hp-spectre-x360-16.conf
+	install -D -m 0755 scripts/set-platform-profile debian/hp-spectre-x360-16-support/usr/lib/hp-spectre-x360-16-support/set-platform-profile
+	install -D -m 0644 udev/90-hp-spectre-x360-16-power.rules debian/hp-spectre-x360-16-support/usr/lib/udev/rules.d/90-hp-spectre-x360-16-power.rules
+	install -D -m 0644 systemd/hp-spectre-x360-16-support.service debian/hp-spectre-x360-16-support/usr/lib/systemd/system/hp-spectre-x360-16-support.service
+
+override_dh_installsystemd:
+	dh_installsystemd --name=hp-spectre-x360-16-support

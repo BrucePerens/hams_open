@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Charge-limit reminder (convertible-power)
+Documentation=file:///usr/share/doc/convertible-power/README.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/convertible-battery-notify
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

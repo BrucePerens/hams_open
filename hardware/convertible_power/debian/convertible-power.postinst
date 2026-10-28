@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    configure)
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true   # the drop-in for upower.service changed
+            deb-systemd-invoke try-restart upower.service || true
+            if command -v tlp >/dev/null 2>&1; then
+                tlp start >/dev/null 2>&1 || true
+            fi
+        fi
+        ;;
+esac
+#DEBHELPER#

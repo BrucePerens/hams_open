@@ -1,0 +1,26 @@
+Source: convertible-power
+Section: utils
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/convertible_power
+
+Package: convertible-power
+Architecture: all
+Depends: tlp (>= 1.6), upower, python3, python3-gi, ${misc:Depends}
+Recommends: thermald, powertop, gir1.2-glib-2.0
+Conflicts: power-profiles-daemon
+Description: power settings: performance on AC, efficiency on battery
+ Shared power settings for the device packages in this family: TLP settings
+ (maximum performance on AC power, maximum battery life on battery), UPower
+ settings that hibernate at 10% charge, and a small user service that reminds
+ you to unplug at 80% on machines whose firmware cannot stop charging itself.
+ .
+ Device packages add their own TLP drop-in after this one, for the parts that
+ depend on the hardware (CPU frequency driver, USB devices that must never be
+ suspended, platform profiles).
+ .
+ TLP replaces power-profiles-daemon (the two cannot run together), so the
+ GNOME "Power Mode" switch goes away; AC and battery are handled automatically.
