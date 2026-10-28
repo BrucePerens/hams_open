@@ -31,8 +31,17 @@ Platform profile: `hp-wmi` accepts writes to `/sys/firmware/acpi/platform_profil
 TLP reports the profile as "not available" and ignores `PLATFORM_PROFILE_*`. The package sets it instead from a udev
 rule (when the charger changes) and a boot service: `performance` on AC, `cool` on battery.
 
-`i915` is excluded from TLP's runtime power management: forcing it to `auto` on kernel 7.1.2 produced two kernel
-WARNINGs (`gen2_assert_iir_is_zero`, from `pm_runtime_work`) the first time battery mode was applied.
+Runtime power management: TLP's `RUNTIME_PM_DENYLIST` keeps the integrated GPU (`00:02.0`, which drives the panel) awake
+and lets the discrete Arc A370M (`03:00.0`) suspend. Measured on battery with the same settings (idle, 4K panel, no
+other load, 2026-10-29): 30.8 to 32.4 W with the Arc GPU held awake by a driver-level exclusion, **27.6 W** with it
+suspended. On kernel 7.1.2 each suspend of the Arc GPU logs one i915 kernel WARNING (`gen2_assert_iir_is_zero`, from
+`pm_runtime_work`); the GPU suspends and resumes normally. Forcing runtime PM on both GPUs the first time produced
+that warning twice plus an `intel_uncore` unclaimed-write warning, which is why the integrated GPU is left alone. The
+earlier belief that the warnings came from the integrated GPU was wrong. If the warning is unwelcome, add `03:00.0` to
+`RUNTIME_PM_DENYLIST` in `/etc/tlp.conf`, at a cost of about 3 to 5 W.
+
+Measured idle power (battery, same brightness): AC-style settings 36.8 to 38.8 W, battery settings 30.8 to 32.4 W (the
+Arc GPU still awake), about 16% lower.
 
 Not verified: the battery-side settings were not measured (the laptop was on AC), and the choice of `cool` rather
 than `quiet` for the battery profile follows what `power-profiles-daemon` does on this firmware; the profile switch
