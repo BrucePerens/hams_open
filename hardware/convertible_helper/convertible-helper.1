@@ -1,0 +1,34 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH CONVERTIBLE-HELPER 1 "October 2026" "convertible-helper" "User Commands"
+.SH NAME
+convertible-helper \- tablet-mode and tablet-button helper for convertible laptops
+.SH SYNOPSIS
+.B convertible-helper
+.SH DESCRIPTION
+.B convertible-helper
+runs as a systemd user service (convertible-helper.service) and uses only the
+kernel's input events and mutter's org.gnome.Mutter.DisplayConfig D-Bus
+interface. It watches every input device that has a tablet-mode switch, and the
+Panasonic Toughbook CF-19 tablet button device.
+.PP
+When the laptop enters tablet mode it enables the on-screen keyboard setting
+(org.gnome.desktop.a11y.applications screen-keyboard-enabled) and restores the
+previous value when tablet mode ends. When tablet mode ends it also sets the
+built-in display back to normal orientation, after a 400 ms delay because the
+switch can flicker while the screen is being turned.
+.PP
+The CF-19 rotation button (KEY_PROG3) rotates the built-in display one step
+clockwise; the CF-19 "security" button (KEY_PROG1) opens the log-out dialog of
+GNOME, Xfce or KDE.
+.PP
+The user must be able to read the input devices; the package's udev rule gives
+that to the user on the seat through the "uaccess" tag.
+.SH FILES
+.TP
+.I /usr/lib/udev/rules.d/70-convertible-helper.rules
+Access rule for the switch and button devices.
+.SH SEE ALSO
+.BR journalctl (1)
+(use
+.B journalctl --user -u convertible-helper
+for the log).

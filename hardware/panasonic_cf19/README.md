@@ -18,14 +18,16 @@ The source package `panasonic-cf19` builds two binary packages.
 | Package | What it installs |
 |---|---|
 | `panasonic-hbtn-dkms` | The `panasonic-hbtn` kernel module as DKMS source (built for each installed kernel, signed by the DKMS key). |
-| `panasonic-cf19-support` | The touch relay service and its udev rule, the GNOME Shell extension `cf19-osk@hams.com` (with its GSettings schema and a default that enables it), and the PipeWire speaker patch. Depends on `panasonic-hbtn-dkms`. |
+| `panasonic-cf19-support` | The touch relay service and its udev rule, the GNOME Shell extension `cf19-osk@hams.com` (keyboard button only) (with its GSettings schema and a default that enables it), and the PipeWire speaker patch. Depends on `panasonic-hbtn-dkms` and on `convertible-helper`. |
 
 ### Install
 
 ```
+# build hardware/convertible_helper and hardware/panasonic_cf19 the same way (each in a copy outside the repository;
+# dpkg-buildpackage writes to the parent directory)
 cd hardware/panasonic_cf19
-dpkg-buildpackage -us -uc -b      # run in a copy outside the repository; it writes to the parent directory
-sudo apt install ../panasonic-hbtn-dkms_*_all.deb ../panasonic-cf19-support_*_all.deb
+dpkg-buildpackage -us -uc -b
+sudo apt install ./convertible-helper_*_all.deb ./panasonic-hbtn-dkms_*_all.deb ./panasonic-cf19-support_*_all.deb
 ```
 
 Build dependencies: `debhelper`, `dh-dkms`. Then **log out and in once** (GNOME loads a new extension
@@ -50,15 +52,17 @@ volume rocker).
 |---|---|---|
 | `0x3a` / `0x3b` | Button 1, on-screen keyboard | `KEY_PROG2` (`XF86Launch2`) |
 | `0x38` / `0x39` | Button 2, Enter | `KEY_ENTER` |
-| `0x36` / `0x37` | Button 3, rotate | `KEY_ROTATE_DISPLAY` (`XF86RotateWindows`) |
+| `0x36` / `0x37` | Button 3, rotate | `KEY_PROG3` (`XF86Launch3`) |
 | `0x34` / `0x35` | Button 4, "security" (Ctrl-Alt-Del on Windows) | `KEY_PROG1` (`XF86Launch1`) |
 | `0x32` / `0x33` | The screen was swivelled into / out of tablet position | `SW_TABLET_MODE` |
 
 The even code is the press, the odd code the release. Buttons 1 and 4 are sent as a single tap so a
 held button does not trigger keyboard auto-repeat. The keys were chosen below code 256 because higher
-evdev codes have no X keysym and cannot be bound in GNOME. GNOME's own shortcut for this key
-(`org.gnome.mutter.keybindings rotate-monitor`) is ignored while a dialog or menu is open, so the extension
-handles the rotation button itself (see below).
+evdev codes have no X keysym and cannot be bound in GNOME. The rotate button deliberately does not send
+`KEY_ROTATE_DISPLAY`: GNOME's own shortcut for that key is ignored while a dialog or menu is open, so
+`convertible-helper` (a separate package, see `../convertible_helper`) reads the key events itself and rotates
+through mutter's `DisplayConfig` D-Bus API; `KEY_PROG3` is a key GNOME does not bind, so nothing else reacts.
+The helper also handles button 4 and sets the keyboard setting in tablet mode.
 
 `/sys/bus/acpi/devices/MAT0020:00/tablet_mode` (read-only, `0` laptop, `1` tablet) is read from the
 firmware method `SINF` on every read, for desktop components that cannot see the input switch.
@@ -94,22 +98,21 @@ both. After installing, reboot or re-plug the panel so GNOME stops using the phy
 
 GNOME has no public command to raise or lower its on-screen keyboard; it builds the keyboard only while
 the accessibility setting `screen-keyboard-enabled` is on, and then raises it whenever a text field gets
-focus. The extension calls the shell's own `Main.keyboard.open()` / `close()` and also exposes them on the
-session bus as `org.cf19.OSK` (`Toggle`, `Show`, `Hide`). It registers the two button shortcuts itself,
-with key auto-repeat ignored, through its own schema `org.gnome.shell.extensions.cf19-osk` (keys
-`toggle-osk`, default `XF86Launch2`, `security`, default `XF86Launch1`, and `rotate`, default `XF86RotateWindows`;
-change them with `gsettings`).
+focus. The extension is the one piece that has to live in the shell: it calls the shell's own
+`Main.keyboard.open()` / `close()` for the keyboard button and exposes them on the session bus as
+`org.cf19.OSK` (`Toggle`, `Show`, `Hide`). It registers the button shortcut itself, with key auto-repeat
+ignored, through its own schema `org.gnome.shell.extensions.cf19-osk` (key `toggle-osk`, default
+`XF86Launch2`; change it with `gsettings`).
 
-* Button 1 shows and hides the keyboard. The keyboard follows `tablet_mode`: in tablet position the
-  setting is on, so the keyboard pops up when a text field is focused; in laptop position there is no
-  pop-up, the button turns the setting on and shows the keyboard, and the setting is switched off again
-  when the keyboard is hidden. Without the driver (no `tablet_mode` file) the extension leaves the
-  setting alone.
-* Button 3 (rotate) rotates the screen one step clockwise through mutter's `DisplayConfig` D-Bus API, in any
-  shell state. While the extension runs it empties `org.gnome.mutter.keybindings rotate-monitor` so a press
-  does not rotate twice, and restores it when disabled.
-* Button 4 ("security") runs `gnome-session-quit --logout`, GNOME's log-out dialog, the nearest Linux
-  equivalent of Ctrl-Alt-Del (it logs out by itself after its 60 second countdown unless cancelled).
+* Button 1 shows and hides the keyboard. In tablet position `convertible-helper` has turned the setting on,
+  so the keyboard also pops up when a text field is focused; in laptop position there is no pop-up, the
+  button turns the setting on and shows the keyboard, and the setting is switched off again when the
+  keyboard is hidden. Without the driver (no `tablet_mode` file) the extension leaves the setting alone.
+
+The other buttons are handled by `convertible-helper`, which uses no shell code: button 3 (rotate) rotates
+the built-in display one step clockwise, in any shell state; button 4 ("security") opens the desktop's log-out
+dialog (`gnome-session-quit --logout` on GNOME), the nearest Linux equivalent of Ctrl-Alt-Del; and leaving
+tablet mode puts the screen back to normal.
 
 A GSettings override (`schemas/90_panasonic-cf19.gschema.override`) sets `org.gnome.shell enabled-extensions`
 to this extension by default. Note that an override replaces the whole default list, and a user's own
@@ -142,8 +145,12 @@ Verified on the CF-19 Mk5 named above:
   taps stay accurate with the stylus (about 5 px) and GNOME rotates the touch mapping together with the display
   (tested by tapping the corners in both orientations, using a hand-installed copy of the same relay; the
   packaged service is the same code and runs and hides the physical panel).
-* The rotation button works in any shell state, including while GNOME's log-out dialog is open (tested
-  after a fresh login; GNOME's own shortcut ignores the key in that state), and rotates once per press.
+* With `convertible-helper` (package 1.0.0) and this package at 1.3.0, tested on 2026-10-28 after a fresh login:
+  the rotation button rotates once per press in any shell state, including while GNOME's log-out dialog is
+  open (GNOME's own shortcut ignores the key in that state); the "security" button opens the log-out dialog
+  once; the keyboard button shows and hides the keyboard in laptop position with no automatic pop-up; in
+  tablet position tapping a text field raises the keyboard; swivelling back to laptop position while the
+  screen is rotated returns it upright.
 * The panel gives no way to tell finger from stylus: a raw capture of its HID reports (nine alternating
   presses) shows only a button bit and the two coordinates, and the unused high bits of each 28-bit
   coordinate field are always zero. There is no pressure, tilt or tool information.

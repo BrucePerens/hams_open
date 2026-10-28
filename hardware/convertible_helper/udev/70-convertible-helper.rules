@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Let the user logged in on the seat read the tablet-mode switch of a convertible
+# laptop and the Toughbook CF-19 tablet buttons (read-only evdev nodes of the
+# switch and button-only devices; the main keyboard and pointers are not touched).
+ACTION=="remove", GOTO="convertible_helper_end"
+SUBSYSTEM!="input", GOTO="convertible_helper_end"
+KERNEL!="event[0-9]*", GOTO="convertible_helper_end"
+
+ENV{ID_INPUT_SWITCH}=="1", TAG+="uaccess"
+ATTRS{name}=="Panasonic Tablet Button Support", TAG+="uaccess"
+
+LABEL="convertible_helper_end"
