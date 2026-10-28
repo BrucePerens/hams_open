@@ -22,7 +22,8 @@ again at every change. TLP and `power-profiles-daemon` cannot run together, so i
 | SATA link power | `max_performance` | `med_power_with_dipm` |
 | Disk APM level | 254 | 128 |
 | Audio codec power saving | off | on |
-| NMI watchdog, wake-on-LAN | off | off |
+| NMI watchdog | off | off |
+| Wake-on-LAN | left as the hardware has it | left as the hardware has it |
 | USB autosuspend | on | on (the device packages exclude input and sensor devices) |
 
 Each device package adds `/etc/tlp.d/20-<device>.conf`, which TLP reads after this file. Local changes belong in
