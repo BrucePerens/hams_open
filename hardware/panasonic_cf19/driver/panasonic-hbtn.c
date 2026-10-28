@@ -47,7 +47,7 @@ MODULE_DEVICE_TABLE(acpi, pcc_hbtn_ids);
 /* scancode = (HINF code & 0xe) */
 static const struct key_entry pcc_hbtn_keymap[] = {
 	{ KE_KEY, 0x4, { KEY_PROG1 } },			/* "security" button, Ctrl-Alt-Del equivalent (XF86Launch1) */
-	{ KE_KEY, 0x6, { KEY_ROTATE_DISPLAY } },	/* screen rotate */
+	{ KE_KEY, 0x6, { KEY_PROG3 } },		/* screen rotate: handled by convertible-helper (XF86Launch3; not bound by GNOME) */
 	{ KE_KEY, 0x8, { KEY_ENTER } },			/* enter */
 	{ KE_KEY, 0xa, { KEY_PROG2 } },			/* on-screen keyboard toggle (XF86Launch2; keycodes > 255 have no X keysym) */
 	{ KE_END, 0 }

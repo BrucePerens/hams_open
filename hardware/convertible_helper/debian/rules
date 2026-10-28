@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -D -m 0755 convertible-helper debian/convertible-helper/usr/bin/convertible-helper
+	install -D -m 0644 udev/70-convertible-helper.rules debian/convertible-helper/usr/lib/udev/rules.d/70-convertible-helper.rules
+	install -D -m 0644 systemd/convertible-helper.service debian/convertible-helper/usr/lib/systemd/user/convertible-helper.service
+
+override_dh_installsystemduser:
+	dh_installsystemduser --name=convertible-helper

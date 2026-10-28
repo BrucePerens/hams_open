@@ -24,6 +24,7 @@ Description: Panasonic Toughbook CF-18/19 tablet button driver (DKMS source)
 Package: panasonic-cf19-support
 Architecture: all
 Depends: panasonic-hbtn-dkms (= ${binary:Version}),
+         convertible-helper (>= 1.0.0),
          patch,
          python3,
          udev,
@@ -38,9 +39,9 @@ Description: Panasonic Toughbook CF-19 hardware support for GNOME on Debian
     rotates the touch mapping with the display (udev rule and systemd
     service, applied only when the DMI product name is a CF-19);
   * a GNOME Shell extension that handles the tablet buttons: the keyboard
-    button shows and hides the on-screen keyboard, the keyboard pops up on its
-    own only in tablet position, and the "security" button opens GNOME's
-    log-out dialog (the Ctrl-Alt-Del equivalent);
+    button shows and hides the on-screen keyboard (the keyboard pops up on its
+    own only in tablet position, set by convertible-helper, which also handles
+    the rotation and "security" buttons);
   * a patch to PipeWire's speaker mixer path so the internal speaker is
     audible (on this machine the speaker is driven through the codec's
     Headphone element);

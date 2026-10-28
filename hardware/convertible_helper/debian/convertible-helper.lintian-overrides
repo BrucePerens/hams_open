@@ -1,0 +1,3 @@
+# The udev rule only grants the seat user read access to switch and button
+# devices; there is no hardware-specific modalias to provide.
+convertible-helper: appstream-metadata-missing-modalias-provide usr/lib/udev/rules.d/70-convertible-helper.rules

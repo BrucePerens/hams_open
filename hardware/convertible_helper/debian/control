@@ -1,0 +1,22 @@
+Source: convertible-helper
+Section: utils
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/convertible_helper
+
+Package: convertible-helper
+Architecture: all
+Depends: python3, python3-gi, gir1.2-glib-2.0, udev, ${misc:Depends}
+Recommends: gnome-session-bin | xfce4-session | plasma-workspace
+Description: tablet-mode and tablet-button helper for convertible laptops
+ A small user service for convertible laptops that uses no desktop-shell
+ code: it resets the screen to normal orientation when the laptop leaves tablet
+ mode (otherwise GNOME can leave it turned), and it handles the rotation and
+ "security" buttons of the Panasonic Toughbook CF-19 in any shell state.
+ .
+ It reads the tablet-mode switch and button events from the input devices
+ (made readable for the seat's user by a udev rule) and rotates the built-in
+ display through mutter's DisplayConfig D-Bus interface.

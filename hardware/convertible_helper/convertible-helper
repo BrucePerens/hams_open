@@ -1,0 +1,208 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Tablet-mode and tablet-button helper for convertible laptops.
+
+Runs as the logged-in user and talks only to stable interfaces: evdev switch/key
+events (made readable for the seat's user by a udev "uaccess" rule) and mutter's
+org.gnome.Mutter.DisplayConfig D-Bus API.  It does not use any GNOME Shell code.
+
+ * When the laptop leaves tablet mode (SW_TABLET_MODE goes to 0 and stays there
+   briefly), the screen is set back to normal orientation.  GNOME follows the
+   accelerometer only while the switch is on, so a screen turned just as the
+   switch drops would otherwise stay turned.
+ * In tablet mode the on-screen keyboard is enabled (the public accessibility
+   setting org.gnome.desktop.a11y.applications screen-keyboard-enabled), so GNOME
+   raises it when a text field gets focus; on leaving tablet mode the value from
+   before is restored.
+ * KEY_PROG3 (the Toughbook CF-19 rotation button): rotate the built-in display one
+   step clockwise, in any shell state.
+ * KEY_PROG1 (the Toughbook CF-19 "security" button): the log-out dialog of the
+   running desktop.
+"""
+import fcntl
+import glob
+import os
+import shutil
+import struct
+import subprocess
+import sys
+
+import gi
+from gi.repository import Gio, GLib
+
+EVENT = struct.Struct('llHHi')
+EV_KEY, EV_SW = 1, 5
+SW_TABLET_MODE = 1
+KEY_PROG1, KEY_PROG3 = 148, 202
+BUTTON_DEVICES = ('Panasonic Tablet Button Support',)
+EVIOCGSW = (2 << 30) | (1 << 16) | (ord('E') << 8) | 0x1b      # read switch state, 1 byte
+A11Y_SCHEMA, A11Y_KEY = 'org.gnome.desktop.a11y.applications', 'screen-keyboard-enabled'
+RESET_DELAY_MS = 400            # the switch flickers 1,0,1 while the screen is turned
+
+BUS, PATH = 'org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig'
+LOGOUT = (['gnome-session-quit', '--logout'], ['xfce4-session-logout'],
+          ['qdbus6', 'org.kde.LogoutPrompt', '/LogoutPrompt', 'promptLogout'])
+
+
+def log(msg):
+    print(f'convertible-helper: {msg}', flush=True)
+
+
+def display_call(method, args=None):
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    return bus.call_sync(BUS, PATH, BUS, method, args, None, Gio.DBusCallFlags.NONE, -1, None)
+
+
+def set_rotation(step):
+    """step: None = set normal, 1 = one step clockwise.  Only built-in panels are
+    changed (all logical monitors if none is marked built-in)."""
+    serial, monitors, logicals, _ = display_call('GetCurrentState').unpack()
+    mode_of, builtin = {}, set()
+    for (connector, *_), modes, props in monitors:
+        if props.get('is-builtin'):
+            builtin.add(connector)
+        for mode in modes:
+            if mode[6].get('is-current'):
+                mode_of[connector] = mode[0]
+    out, changed = [], False
+    for x, y, scale, transform, primary, mons, _props in logicals:
+        mine = any(m[0] in builtin for m in mons) or not builtin
+        new = transform
+        if mine:
+            new = 0 if step is None else (transform + step) % 4
+        changed |= new != transform
+        out.append((x, y, scale, new, primary, [(m[0], mode_of[m[0]], {}) for m in mons]))
+    if changed:
+        display_call('ApplyMonitorsConfig',
+                     GLib.Variant('(uua(iiduba(ssa{sv}))a{sv})', (serial, 1, out, {})))
+    return changed
+
+
+def a11y_settings():
+    source = Gio.SettingsSchemaSource.get_default()
+    if source is None or source.lookup(A11Y_SCHEMA, True) is None:
+        return None
+    return Gio.Settings.new(A11Y_SCHEMA)
+
+
+def run_logout():
+    for cmd in LOGOUT:
+        if shutil.which(cmd[0]):
+            subprocess.Popen(cmd)
+            return
+    log('no known log-out command found')
+
+
+class Helper:
+    def __init__(self):
+        self.devices = {}        # path -> (fd, watch id)
+        self.reset_id = 0
+        self.a11y = a11y_settings()
+        self.saved_keyboard = None      # a11y value to restore when tablet mode ends
+
+    def wanted(self, path):
+        base = os.path.basename(path)
+        sysdir = f'/sys/class/input/{base}/device'
+        try:
+            name = open(f'{sysdir}/name').read().strip()
+            sw = int(open(f'{sysdir}/capabilities/sw').read().split()[-1], 16)
+        except (OSError, ValueError):
+            return None
+        if sw & (1 << SW_TABLET_MODE) or name in BUTTON_DEVICES:
+            return name
+        return None
+
+    def scan(self):
+        for path in glob.glob('/dev/input/event*'):
+            if path in self.devices:
+                continue
+            name = self.wanted(path)
+            if name is None:
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            except OSError as exc:
+                log(f'cannot open {path} ({name}): {exc}')
+                self.devices[path] = (None, 0)      # do not retry every scan
+                continue
+            self.initial_state(fd)
+            watch = GLib.io_add_watch(fd, GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR,
+                                      self.readable, path)
+            self.devices[path] = (fd, watch)
+            log(f'watching {path} ({name})')
+        for path in [p for p in self.devices if not os.path.exists(p)]:
+            self.devices.pop(path)
+        return GLib.SOURCE_CONTINUE
+
+    def initial_state(self, fd):
+        try:
+            state = fcntl.ioctl(fd, EVIOCGSW, bytes(1))[0]
+        except OSError:
+            return
+        if state & (1 << SW_TABLET_MODE):
+            log('tablet mode is on at start')
+            self.keyboard(True)
+
+    def keyboard(self, tablet):
+        if self.a11y is None:
+            return
+        if tablet:
+            if self.saved_keyboard is None:
+                self.saved_keyboard = self.a11y.get_boolean(A11Y_KEY)
+            self.a11y.set_boolean(A11Y_KEY, True)
+        elif self.saved_keyboard is not None:
+            self.a11y.set_boolean(A11Y_KEY, self.saved_keyboard)
+            self.saved_keyboard = None
+
+    def readable(self, fd, cond, path):
+        try:
+            data = os.read(fd, EVENT.size * 32)
+        except OSError:
+            data = b''
+        if not data:
+            os.close(fd)
+            self.devices.pop(path, None)
+            return GLib.SOURCE_REMOVE
+        for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
+            _, _, etype, code, value = EVENT.unpack_from(data, off)
+            if etype == EV_SW and code == SW_TABLET_MODE:
+                self.tablet(value)
+            elif etype == EV_KEY and value == 1:
+                if code == KEY_PROG3:
+                    self.safely('rotate', lambda: set_rotation(1))
+                elif code == KEY_PROG1:
+                    log('security button: log-out dialog')
+                    run_logout()
+        return GLib.SOURCE_CONTINUE
+
+    def tablet(self, value):
+        log(f'tablet mode {value}')
+        self.keyboard(bool(value))
+        if self.reset_id:
+            GLib.source_remove(self.reset_id)
+            self.reset_id = 0
+        if value == 0:
+            self.reset_id = GLib.timeout_add(RESET_DELAY_MS, self.reset)
+
+    def reset(self):
+        self.reset_id = 0
+        self.safely('reset to normal', lambda: set_rotation(None))
+        return GLib.SOURCE_REMOVE
+
+    @staticmethod
+    def safely(what, fn):
+        try:
+            log(f'{what}: {"changed" if fn() else "no change"}')
+        except GLib.Error as exc:
+            log(f'{what} failed: {exc.message}')
+
+
+def main():
+    helper = Helper()
+    helper.scan()
+    GLib.timeout_add_seconds(5, helper.scan)          # pick up devices that appear later
+    GLib.MainLoop().run()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

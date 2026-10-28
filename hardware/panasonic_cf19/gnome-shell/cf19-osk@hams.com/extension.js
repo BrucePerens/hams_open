@@ -5,7 +5,6 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import {rotateMonitors} from './rotate.js';
 
 const IFACE = `<node>
   <interface name="org.cf19.OSK">
@@ -21,23 +20,19 @@ const KEY = 'screen-keyboard-enabled';
 const TABLET_MODE_PATH = '/sys/bus/acpi/devices/MAT0020:00/tablet_mode';
 
 /*
- * Panasonic Toughbook CF-19 tablet buttons, in GNOME Shell.
+ * Panasonic Toughbook CF-19 keyboard button, in GNOME Shell.
  *
- * Keyboard button (XF86Launch2): shows and hides GNOME's on-screen keyboard,
- * and the keyboard follows the swivel position of the screen:
- *  - Tablet position: the shell's keyboard is enabled, so it pops up by itself
- *    when a text field gets focus.  The button shows/hides it.
- *  - Laptop position: no automatic pop-up.  The button enables the keyboard and
- *    shows it; once it is hidden again the setting is switched back off.
- * Without the panasonic-hbtn driver (no tablet_mode file) the extension leaves
- * the keyboard setting alone.
+ * GNOME has no public command to raise or lower its on-screen keyboard, so this
+ * is the one piece of the CF-19 support that has to live in the shell; the
+ * rotation button, the "security" button and the keyboard setting in tablet
+ * mode are handled by convertible-helper, which uses no shell code.
  *
- * Rotation button (XF86RotateWindows): rotates the screen one step, also while a
- * dialog or menu is open (GNOME's own shortcut is ignored in those states, so it
- * is switched off while this extension runs and restored afterwards).
- *
- * Security button (XF86Launch1): the Ctrl-Alt-Del equivalent, GNOME's log-out
- * dialog.
+ * Keyboard button (XF86Launch2): shows and hides GNOME's on-screen keyboard.
+ *  - Tablet position: convertible-helper has enabled the keyboard setting, so it
+ *    also pops up by itself when a text field gets focus.  The button
+ *    shows/hides it.
+ *  - Laptop position: no automatic pop-up.  The button enables the keyboard
+ *    and shows it; once it is hidden again the setting is switched back off.
  *
  * The same actions are available on the session bus as org.cf19.OSK
  * (Toggle, Show, Hide).
@@ -50,20 +45,7 @@ export default class Cf19OskExtension extends Extension {
             this._settings = new Gio.Settings({schema_id: 'org.gnome.shell.extensions.cf19-osk'});
             this._haveSwitch = GLib.file_test(TABLET_MODE_PATH, GLib.FileTest.EXISTS);
             if (this._haveSwitch) {
-                this._tablet = this._readTablet();
-                console.log(`${TAG} initial tablet state=${this._tablet}`);
-                this._applyMode();
-
                 this._visId = Main.keyboard.connect('visibility-changed', () => this._onVisibility());
-                this._pollId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
-                    const t = this._readTablet();
-                    if (t !== this._tablet) {
-                        console.log(`${TAG} tablet state ${this._tablet} -> ${t}`);
-                        this._tablet = t;
-                        this._applyMode();
-                    }
-                    return GLib.SOURCE_CONTINUE;
-                });
             } else {
                 console.log(`${TAG} no tablet_mode switch (driver not loaded): keyboard setting left alone`);
             }
@@ -71,18 +53,6 @@ export default class Cf19OskExtension extends Extension {
             Main.wm.addKeybinding('toggle-osk', this._settings,
                 Meta.KeyBindingFlags.IGNORE_AUTOREPEAT, Shell.ActionMode.ALL,
                 () => this.Toggle());
-            Main.wm.addKeybinding('security', this._settings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT, Shell.ActionMode.ALL,
-                () => this._logout());
-
-            this._mutterKeys = new Gio.Settings({schema_id: 'org.gnome.mutter.keybindings'});
-            this._savedRotate = this._mutterKeys.get_value('rotate-monitor');
-            if (this._savedRotate.get_strv().length === 0)   // left empty by an earlier crash
-                this._savedRotate = new GLib.Variant('as', ['XF86RotateWindows']);
-            this._mutterKeys.set_strv('rotate-monitor', []);
-            Main.wm.addKeybinding('rotate', this._settings,
-                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT, Shell.ActionMode.ALL,
-                () => this._rotate());
 
             this._dbus = Gio.DBusExportedObject.wrapJSObject(IFACE, this);
             this._nameId = Gio.bus_own_name(
@@ -102,16 +72,6 @@ export default class Cf19OskExtension extends Extension {
     disable() {
         console.log(`${TAG} disable()`);
         Main.wm.removeKeybinding('toggle-osk');
-        Main.wm.removeKeybinding('security');
-        Main.wm.removeKeybinding('rotate');
-        if (this._mutterKeys && this._savedRotate)
-            this._mutterKeys.set_value('rotate-monitor', this._savedRotate);
-        this._mutterKeys = null;
-        this._savedRotate = null;
-        if (this._pollId) {
-            GLib.source_remove(this._pollId);
-            this._pollId = 0;
-        }
         if (this._visId) {
             Main.keyboard.disconnect(this._visId);
             this._visId = 0;
@@ -122,7 +82,7 @@ export default class Cf19OskExtension extends Extension {
         }
         this._dbus?.unexport();
         this._dbus = null;
-        if (this._haveSwitch && this._a11y)
+        if (this._haveSwitch && this._a11y && !this._readTablet())
             this._setEnabled(false);
         this._a11y = null;
         this._settings = null;
@@ -144,30 +104,15 @@ export default class Cf19OskExtension extends Extension {
         Main.keyboard._syncEnabled?.();
     }
 
-    _applyMode() {
-        this._setEnabled(this._tablet);
-    }
-
     _onVisibility() {
         // Laptop position: once the keyboard is hidden, stop it popping up on its own.
-        if (!this._tablet && !Main.keyboard.visible)
+        if (!this._readTablet() && !Main.keyboard.visible)
             this._setEnabled(false);
-    }
-
-    _rotate() {
-        rotateMonitors(m => console.log(`${TAG} ${m}`))
-            .then(t => console.log(`${TAG} rotate button: primary transform now ${t}`))
-            .catch(e => console.error(`${TAG} rotate failed: ${e}`));
-    }
-
-    _logout() {
-        console.log(`${TAG} security button: opening the log-out dialog`);
-        Gio.Subprocess.new(['gnome-session-quit', '--logout'], Gio.SubprocessFlags.NONE);
     }
 
     Toggle() {
         const vis = !!Main.keyboard.visible;
-        console.log(`${TAG} Toggle() visible=${vis} tablet=${this._tablet}`);
+        console.log(`${TAG} Toggle() visible=${vis} tablet=${this._readTablet()}`);
         if (vis)
             this.Hide();
         else
