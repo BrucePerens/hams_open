@@ -18,7 +18,7 @@ The source package `panasonic-cf19` builds two binary packages.
 | Package | What it installs |
 |---|---|
 | `panasonic-hbtn-dkms` | The `panasonic-hbtn` kernel module as DKMS source (built for each installed kernel, signed by the DKMS key). |
-| `panasonic-cf19-support` | The touch calibration udev rule, the GNOME Shell extension `cf19-osk@hams.com` (with its GSettings schema and a default that enables it), and the PipeWire speaker patch. Depends on `panasonic-hbtn-dkms`. |
+| `panasonic-cf19-support` | The touch relay service and its udev rule, the GNOME Shell extension `cf19-osk@hams.com` (with its GSettings schema and a default that enables it), and the PipeWire speaker patch. Depends on `panasonic-hbtn-dkms`. |
 
 ### Install
 
@@ -29,7 +29,7 @@ sudo apt install ../panasonic-hbtn-dkms_*_all.deb ../panasonic-cf19-support_*_al
 ```
 
 Build dependencies: `debhelper`, `dh-dkms`. Then **log out and in once** (GNOME loads a new extension
-and the touch calibration only at login), and `sudo modprobe panasonic_hbtn` if you do not reboot.
+and the touch relay at login or boot), and `sudo modprobe panasonic_hbtn` if you do not reboot. Reboot (or re-plug the touch panel) once so GNOME stops using the physical panel.
 
 ### Remove
 
@@ -66,20 +66,28 @@ This is a rework of the 2012 `panasonic-hbtn` driver (Heiher, from John Belmonte
 for kernel 6.12: `devm` resources, `void` remove callback, a `debug` module parameter, draining the
 firmware queue, the tablet switch and the sysfs attribute.
 
-### Touch screen (`udev/90-panasonic-cf19-touch.rules`)
+### Touch screen (`touch-relay/`, `udev/90-panasonic-cf19-touch.rules`)
 
 The touch panel is a Fujitsu USB device `0430:0502`. It is **single-touch**: one USB interface declared
-as a boot mouse, reporting `ABS_X`/`ABS_Y` 0..16383 and button clicks, no multitouch axes and no pressure.
-Two fingers on a resistive panel produce one point between them (confirmed by capture). libinput sees it
-as a plain absolute pointer, not a touchscreen.
+as a boot mouse, reporting `ABS_X`/`ABS_Y` 0..16383 and button clicks, no touch capability, no pressure and
+no axis resolution. Two fingers on a resistive panel produce one point between them (confirmed by capture).
+libinput therefore treats it as a plain absolute pointer, and GNOME does not rotate a pointer's mapping when
+the display is rotated. Giving the panel a touch capability and a size through udev and hwdb was tried
+(`BTN_TOUCH` remap, `ID_INPUT_TOUCHSCREEN`, `EVDEV_ABS_*`): libinput still reported "pointer touch" and GNOME
+still did not rotate it.
 
-The rule sets `LIBINPUT_CALIBRATION_MATRIX` (a least-squares fit of nine stylus touches: maximum residual
-about 5 px) only when the DMI product name begins `CF-19`. The matrix is `1.108201 0.001341 -0.065810
--0.006886 1.124566 -0.038159`.
+So on a CF-19 the udev rule tells libinput to ignore the physical panel and starts
+`panasonic-cf19-touch@eventN.service`, which runs `cf19-touch-relay`: it reads the panel, applies the
+calibration and re-emits the result through uinput as a direct-input, touch-only device. GNOME treats that
+as a touchscreen and rotates it with the display. The calibration matrix is the one the previous libinput
+rule used (a least-squares fit of nine stylus touches, maximum residual about 5 px on 1024x768):
+`1.108201 0.001341 -0.065810 -0.006886 1.124566 -0.038159`, now applied by the relay. The service stops when
+the panel disappears and starts again when it returns. It needs `python3` and runs as root (it opens
+`/dev/uinput`).
 
-Known limits: a finger lands about 22 px higher than the stylus on this panel and one calibration cannot
-serve both. Because GNOME does not treat the panel as a touchscreen, rotating the display does not rotate
-the touch mapping.
+Because the panel is now a touchscreen, taps are touch events (long-press is right-click in GNOME, a drag
+scrolls). A finger lands about 22 px higher than the stylus on this panel and one calibration cannot serve
+both. After installing, reboot or re-plug the panel so GNOME stops using the physical device.
 
 ### Tablet buttons in GNOME (`gnome-shell/cf19-osk@hams.com`, `schemas/`)
 
@@ -102,7 +110,7 @@ A GSettings override (`schemas/90_panasonic-cf19.gschema.override`) sets `org.gn
 to this extension by default. Note that an override replaces the whole default list, and a user's own
 `enabled-extensions` setting takes precedence over it.
 
-### Internal speaker (`pipewire/analog-output-speaker.patch`)
+### Internal speaker (`pipewire/analog-output-speaker.diff`)
 
 On this machine the Realtek ALC269VB's internal speaker pin plays only while the codec's **Headphone**
 mixer element is switched on, but PipeWire's `analog-output-speaker.conf` switches that element off
@@ -125,8 +133,13 @@ Verified on the CF-19 Mk5 named above:
   the DKMS module, the udev rule, the extension and the schema.
 * All four buttons and both swivel codes arrive from the firmware in real time in both screen positions;
   Enter and rotate work in GNOME; `tablet_mode` reads back correctly.
-* The touch calibration matrix reaches the device through the packaged udev rule, and gave about 5 px
-  accuracy with the stylus (measured with an identical hand-installed rule).
+* The touch relay (built into the package, started by the udev rule) presents a touch-only device; with it,
+  taps stay accurate with the stylus (about 5 px) and GNOME rotates the touch mapping together with the display
+  (tested by tapping the corners in both orientations, using a hand-installed copy of the same relay; the
+  packaged service is the same code and runs and hides the physical panel).
+* The panel gives no way to tell finger from stylus: a raw capture of its HID reports (nine alternating
+  presses) shows only a button bit and the two coordinates, and the unused high bits of each 28-bit
+  coordinate field are always zero. There is no pressure, tilt or tool information.
 * The speaker is audible with the patched mixer path (test tones heard), and not without it.
 * The shipped extension, in a fresh GNOME login session on 2026-10-28: it loads active from the package with
   its own schema keys and the session-bus name. In laptop position, tapping a text field does not raise the

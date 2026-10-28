@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Panasonic CF-19 touch panel relay (%I)
+Documentation=file:///usr/share/doc/panasonic-cf19-support/README.md
+BindsTo=dev-input-%i.device
+After=dev-input-%i.device
+
+[Service]
+ExecStart=/usr/lib/panasonic-cf19-support/cf19-touch-relay /dev/input/%I
+NoNewPrivileges=yes

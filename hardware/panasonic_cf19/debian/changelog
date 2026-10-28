@@ -1,3 +1,14 @@
+panasonic-cf19 (1.1.0) unstable; urgency=medium
+
+  * panasonic-cf19-support: replace the libinput calibration rule by a relay
+    service (cf19-touch-relay) that reads the touch panel, applies the same
+    calibration and re-emits it as a touchscreen device.  GNOME treated the
+    panel as a pointer and did not rotate its mapping with the display; the
+    touchscreen device is rotated.  Needs python3.  Reboot (or re-plug the
+    panel) after installing.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 28 Oct 2026 11:10:00 -0700
+
 panasonic-cf19 (1.0.0) unstable; urgency=medium
 
   * Initial release: Panasonic Toughbook CF-19 support for Debian 13 (trixie)

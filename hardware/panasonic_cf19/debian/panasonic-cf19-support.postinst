@@ -4,7 +4,7 @@ set -e
 
 PKG=panasonic-cf19-support
 ACP_FILE=/usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf
-PATCH=/usr/share/$PKG/analog-output-speaker.patch
+PATCH=/usr/share/$PKG/analog-output-speaker.diff
 
 is_cf19() {
     grep -q '^CF-19' /sys/class/dmi/id/product_name 2>/dev/null

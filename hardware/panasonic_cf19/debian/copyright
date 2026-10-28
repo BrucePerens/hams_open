@@ -15,7 +15,7 @@ Comment: Derived from the panasonic-hbtn driver by Heiher (2012), itself
  derived from the kernel's panasonic-laptop.c by John Belmonte.  The sources
  state version 2 of the GPL only.
 
-Files: pipewire/analog-output-speaker.patch
+Files: pipewire/analog-output-speaker.diff
 Copyright: The PulseAudio and PipeWire authors
 License: LGPL-2.1+
 Comment: A patch against the file /usr/share/alsa-card-profile/mixer/paths/

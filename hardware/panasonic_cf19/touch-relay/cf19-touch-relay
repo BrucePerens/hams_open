@@ -1,0 +1,116 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Re-emit the CF-19's Fujitsu USB touch panel as a single-touch touchscreen.
+
+The panel (0430:0502) is a boot-mouse-class absolute pointer: no touch
+capability, no axis resolution. libinput and GNOME therefore treat it as a pointer,
+and GNOME does not rotate a pointer's mapping when the display is rotated.  This
+relay reads the panel, applies the calibration matrix, and presents the result as
+a direct-input multitouch device that GNOME rotates with the display.  The
+physical panel is hidden from libinput by the udev rule (LIBINPUT_IGNORE_DEVICE).
+
+Usage: cf19-touch-relay /dev/input/eventN
+"""
+import fcntl
+import os
+import struct
+import sys
+
+# 3x2 calibration, applied to coordinates normalised to 0..1 (libinput's
+# LIBINPUT_CALIBRATION_MATRIX convention): a stylus-fitted least-squares result.
+MATRIX = (1.108201, 0.001341, -0.065810, -0.006886, 1.124566, -0.038159)
+RANGE = 16383
+RES_X, RES_Y = 78, 104          # units/mm for a 10.4" 4:3 panel (211 x 158 mm)
+
+EV_SYN, EV_KEY, EV_ABS = 0, 1, 3
+SYN_REPORT = 0
+BTN_LEFT, BTN_TOUCH = 0x110, 0x14A
+ABS_X, ABS_Y = 0, 1
+ABS_MT_SLOT, ABS_MT_POSITION_X, ABS_MT_POSITION_Y, ABS_MT_TRACKING_ID = 0x2F, 0x35, 0x36, 0x39
+INPUT_PROP_DIRECT = 1
+
+EVIOCGRAB = 0x40044590
+UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_ABSBIT, UI_SET_PROPBIT = 0x40045564, 0x40045565, 0x40045567, 0x4004556E
+UI_DEV_SETUP, UI_ABS_SETUP, UI_DEV_CREATE, UI_DEV_DESTROY = 0x405C5503, 0x401C5504, 0x5501, 0x5502
+
+EVENT = struct.Struct('llHHi')
+
+
+def calibrate(x, y):
+    nx, ny = x / RANGE, y / RANGE
+    cx = MATRIX[0] * nx + MATRIX[1] * ny + MATRIX[2]
+    cy = MATRIX[3] * nx + MATRIX[4] * ny + MATRIX[5]
+    return (round(min(max(cx, 0.0), 1.0) * RANGE),
+            round(min(max(cy, 0.0), 1.0) * RANGE))
+
+
+def create_device():
+    fd = os.open('/dev/uinput', os.O_WRONLY | os.O_NONBLOCK)
+    fcntl.ioctl(fd, UI_SET_EVBIT, EV_KEY)
+    fcntl.ioctl(fd, UI_SET_KEYBIT, BTN_TOUCH)
+    fcntl.ioctl(fd, UI_SET_EVBIT, EV_ABS)
+    fcntl.ioctl(fd, UI_SET_PROPBIT, INPUT_PROP_DIRECT)
+    for code, res in ((ABS_X, RES_X), (ABS_Y, RES_Y),
+                      (ABS_MT_POSITION_X, RES_X), (ABS_MT_POSITION_Y, RES_Y)):
+        fcntl.ioctl(fd, UI_SET_ABSBIT, code)
+        fcntl.ioctl(fd, UI_ABS_SETUP, struct.pack('Hxxiiiiii', code, 0, 0, RANGE, 0, 0, res))
+    fcntl.ioctl(fd, UI_SET_ABSBIT, ABS_MT_SLOT)
+    fcntl.ioctl(fd, UI_ABS_SETUP, struct.pack('Hxxiiiiii', ABS_MT_SLOT, 0, 0, 0, 0, 0, 0))
+    fcntl.ioctl(fd, UI_SET_ABSBIT, ABS_MT_TRACKING_ID)
+    fcntl.ioctl(fd, UI_ABS_SETUP, struct.pack('Hxxiiiiii', ABS_MT_TRACKING_ID, 0, 0, 65535, 0, 0, 0))
+    name = b'Panasonic CF-19 touch panel (relay)'
+    fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack('HHHH80sI', 0x03, 0x0430, 0x0502, 1, name, 0))
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    return fd
+
+
+def main():
+    src = os.open(sys.argv[1], os.O_RDONLY)
+    out = create_device()
+    fcntl.ioctl(src, EVIOCGRAB, 1)
+
+    def emit(etype, code, value):
+        os.write(out, EVENT.pack(0, 0, etype, code, value))
+
+    x = y = 0
+    touching = was_touching = False
+    tracking = 0
+    try:
+        while True:
+            data = os.read(src, EVENT.size * 64)
+            for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
+                _, _, etype, code, value = EVENT.unpack_from(data, off)
+                if etype == EV_ABS and code == ABS_X:
+                    x = value
+                elif etype == EV_ABS and code == ABS_Y:
+                    y = value
+                elif etype == EV_KEY and code == BTN_LEFT:
+                    touching = bool(value)
+                elif etype == EV_SYN and code == SYN_REPORT:
+                    if touching:
+                        cx, cy = calibrate(x, y)
+                        if not was_touching:
+                            tracking = (tracking + 1) % 65535
+                            emit(EV_ABS, ABS_MT_SLOT, 0)
+                            emit(EV_ABS, ABS_MT_TRACKING_ID, tracking)
+                            emit(EV_KEY, BTN_TOUCH, 1)
+                        emit(EV_ABS, ABS_MT_POSITION_X, cx)
+                        emit(EV_ABS, ABS_MT_POSITION_Y, cy)
+                        emit(EV_ABS, ABS_X, cx)
+                        emit(EV_ABS, ABS_Y, cy)
+                        emit(EV_SYN, SYN_REPORT, 0)
+                    elif was_touching:
+                        emit(EV_ABS, ABS_MT_SLOT, 0)
+                        emit(EV_ABS, ABS_MT_TRACKING_ID, -1)
+                        emit(EV_KEY, BTN_TOUCH, 0)
+                        emit(EV_SYN, SYN_REPORT, 0)
+                    was_touching = touching
+    finally:
+        fcntl.ioctl(out, UI_DEV_DESTROY)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (BrokenPipeError, OSError) as exc:
+        sys.exit(f'cf19-touch-relay: {exc}')

@@ -1,0 +1,27 @@
+--- a/usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf
++++ b/usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf
+@@ -98,8 +98,11 @@
+ ; This profile path is intended to control the speaker, let's mute headphones
+ ; else there will be a spike when plugging in headphones
+ [Element Headphone]
+-switch = off
+-volume = off
++; CF-19: speaker is driven through the Headphone mixer element, so it must be on and follow the volume
++switch = mute
++volume = merge
++override-map.1 = all
++override-map.2 = all-left,all-right
+ 
+ [Element Headphone,1]
+ switch = off
+@@ -123,9 +126,7 @@
+ [Element Speaker]
+ required-any = any
+ switch = mute
+-volume = merge
+-override-map.1 = all
+-override-map.2 = all-left,all-right
++volume = off
+ 
+ [Element Desktop Speaker]
+ required-any = any

@@ -25,6 +25,7 @@ Package: panasonic-cf19-support
 Architecture: all
 Depends: panasonic-hbtn-dkms (= ${binary:Version}),
          patch,
+         python3,
          udev,
          ${misc:Depends}
 Recommends: gnome-shell (>= 48~), pipewire-bin
@@ -32,8 +33,10 @@ Description: Panasonic Toughbook CF-19 hardware support for GNOME on Debian
  Settings and helpers that make a Panasonic Toughbook CF-19 work on a stock
  Debian GNOME desktop:
  .
-  * touch screen calibration for the Fujitsu USB touch panel (udev rule,
-    applied only when the DMI product name is a CF-19);
+  * a relay service for the Fujitsu USB touch panel: it applies the
+    calibration and presents the panel as a real touchscreen, so GNOME
+    rotates the touch mapping with the display (udev rule and systemd
+    service, applied only when the DMI product name is a CF-19);
   * a GNOME Shell extension that handles the tablet buttons: the keyboard
     button shows and hides the on-screen keyboard, the keyboard pops up on its
     own only in tablet position, and the "security" button opens GNOME's
