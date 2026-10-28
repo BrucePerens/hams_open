@@ -180,3 +180,8 @@ module signing was not exercised).
 
 Machine-specific or personal settings stay local: Wi-Fi credentials, and power behaviour such as keeping
 the machine awake with the lid closed on external power. Nothing here changes power management.
+
+## GRUB
+
+The package depends on `grub-large-console` (`../grub_large_console`), which sizes a font so that GRUB's menu is
+readable, about 80x24, on this machine's screen. Not yet tried on this machine: it needs a reboot someone can look at.

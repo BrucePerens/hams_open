@@ -1,0 +1,20 @@
+Source: grub-large-console
+Section: admin
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/grub_large_console
+
+Package: grub-large-console
+Architecture: all
+Depends: grub-common, fonts-dejavu-core, ${misc:Depends}
+Description: readable GRUB text on high-resolution screens
+ GRUB draws its menu with a small fixed font, which is microscopic on a
+ high-resolution panel.  This package reads the screen's native mode and
+ generates a monospace font sized for roughly 80 columns by 24 rows on that
+ screen, then points GRUB at it (a drop-in in /etc/default/grub.d) and runs
+ update-grub.
+ .
+ Run "dpkg-reconfigure grub-large-console" after changing the display.

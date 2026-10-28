@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    configure)
+        /usr/lib/grub-large-console/configure-grub-font || \
+            echo "grub-large-console: could not configure GRUB; run dpkg-reconfigure grub-large-console" >&2
+        ;;
+esac
+#DEBHELPER#

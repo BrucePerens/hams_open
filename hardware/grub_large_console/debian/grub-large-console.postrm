@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    remove|purge)
+        rm -f /etc/default/grub.d/90-convertible-large-console.cfg /boot/grub/fonts/convertible-80x24.pf2
+        if command -v update-grub >/dev/null 2>&1; then
+            update-grub || true
+        fi
+        ;;
+esac
+#DEBHELPER#
