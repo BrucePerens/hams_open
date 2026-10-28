@@ -61,9 +61,10 @@ def display_call(method, args=None):
     return bus.call_sync(BUS, PATH, BUS, method, args, None, Gio.DBusCallFlags.NONE, -1, None)
 
 
-def set_rotation(step):
-    """step: None = set normal, 1 = one step clockwise.  Only built-in panels are
-    changed (all logical monitors if none is marked built-in)."""
+def set_rotation(step, target=None):
+    """step: None = set normal, 1 = one step clockwise; target (0..3) sets that transform
+    instead.  Only built-in panels are changed (all logical monitors if none is marked
+    built-in)."""
     serial, monitors, logicals, _ = display_call('GetCurrentState').unpack()
     mode_of, builtin = {}, set()
     for (connector, *_), modes, props in monitors:
@@ -77,7 +78,7 @@ def set_rotation(step):
         mine = any(m[0] in builtin for m in mons) or not builtin
         new = transform
         if mine:
-            new = 0 if step is None else (transform + step) % 4
+            new = target if target is not None else 0 if step is None else (transform + step) % 4
         changed |= new != transform
         out.append((x, y, scale, new, primary, [(m[0], mode_of[m[0]], {}) for m in mons]))
     if changed:
@@ -88,7 +89,7 @@ def set_rotation(step):
 
 def profiles():
     """Yield (section, ConfigParser) for the profile sections that match this machine:
-    a [dock] or [buttons] section is used when its optional dmi-product-prefix matches
+    a [dock], [buttons] or [autorotate] section is used when its optional dmi-product-prefix matches
     the DMI product name."""
     try:
         product = open('/sys/class/dmi/id/product_name').read().strip()
@@ -98,7 +99,7 @@ def profiles():
         for path in sorted(glob.glob(os.path.join(directory, '*.conf'))):
             profile = configparser.ConfigParser()
             profile.read(path)
-            for section in ('dock', 'buttons'):
+            for section in ('dock', 'buttons', 'autorotate'):
                 if not profile.has_section(section):
                     continue
                 prefix = profile.get(section, 'dmi-product-prefix', fallback='')
@@ -128,6 +129,54 @@ def button_actions():
             if name in KEY_NAMES:
                 actions[KEY_NAMES[name]] = action
     return actions
+
+
+def autorotate_config():
+    """{'iio-name', 'flip-x', 'flip-y'} from the matching [autorotate] profile section, or None."""
+    for section, profile in profiles():
+        if section == 'autorotate':
+            return {'iio-name': profile.get('autorotate', 'iio-name', fallback='accel_3d'),
+                    'flip-x': profile.getboolean('autorotate', 'flip-x', fallback=False),
+                    'flip-y': profile.getboolean('autorotate', 'flip-y', fallback=False)}
+    return None
+
+
+def find_accelerometer(name):
+    for dev in glob.glob('/sys/bus/iio/devices/iio:device*'):
+        try:
+            if open(os.path.join(dev, 'name')).read().strip() == name and \
+               os.path.exists(os.path.join(dev, 'in_accel_x_raw')):
+                return dev
+        except OSError:
+            continue
+    return None
+
+
+def read_accel(dev):
+    try:
+        return tuple(int(open(os.path.join(dev, f'in_accel_{axis}_raw')).read()) for axis in 'xyz')
+    except (OSError, ValueError):
+        return None
+
+
+def orientation_transform(x, y, z, flip_x, flip_y):
+    """Mutter transform (0 normal, 1 left-up, 2 bottom-up, 3 right-up) for a gravity reading, or
+    None when the tablet lies flat or sits too close to a boundary.  The sensor reads gravity's
+    reaction: y negative = upright; x positive = the screen's right edge is up."""
+    if flip_x:
+        x = -x
+    if flip_y:
+        y = -y
+    norm = (x * x + y * y + z * z) ** 0.5
+    if norm == 0 or abs(z) > 0.8 * norm:
+        return None                                     # lying flat: keep the current orientation
+    if abs(y) >= abs(x):
+        if abs(y) < 0.6 * norm:
+            return None
+        return 0 if y < 0 else 2
+    if abs(x) < 0.6 * norm:
+        return None
+    return 3 if x > 0 else 1
 
 
 def usb_present(ids):
@@ -166,6 +215,11 @@ class Helper:
         self.dock_ids = dock_usb_ids()
         self.button_actions = button_actions()
         self.docked = None              # last known state of the dock keyboard
+        self.autorotate = autorotate_config()
+        self.accel = find_accelerometer(self.autorotate['iio-name']) if self.autorotate else None
+        self.in_tablet = False
+        self.pending = None             # (transform, count) while a new orientation settles
+        self.applied = None
 
     def wanted(self, path):
         base = os.path.basename(path)
@@ -209,6 +263,7 @@ class Helper:
         if state & (1 << SW_TABLET_MODE):
             log('tablet mode is on at start')
             self.keyboard(True)
+            self.in_tablet = True
 
     def keyboard(self, tablet):
         if self.a11y is None:
@@ -251,14 +306,39 @@ class Helper:
             log(f'dock keyboard {"present" if present else "absent"} at start')
             if not present:
                 self.keyboard(True)
+                self.in_tablet = True
         elif present != self.docked:
             self.docked = present
             log(f'dock keyboard {"attached" if present else "detached"}')
             self.tablet(0 if present else 1)
         return GLib.SOURCE_CONTINUE
 
+    def poll_orientation(self):
+        """Tablets whose GNOME does not rotate by itself: follow the accelerometer while undocked."""
+        if not self.in_tablet or self.accel is None:
+            return GLib.SOURCE_CONTINUE
+        reading = read_accel(self.accel)
+        if reading is None:
+            return GLib.SOURCE_CONTINUE
+        want = orientation_transform(*reading, self.autorotate['flip-x'], self.autorotate['flip-y'])
+        if want is None or want == self.applied:
+            self.pending = None
+            return GLib.SOURCE_CONTINUE
+        if self.pending is None or self.pending[0] != want:
+            self.pending = (want, 1)
+        else:
+            self.pending = (want, self.pending[1] + 1)
+        if self.pending[1] >= 2:                         # settled for two polls
+            self.pending = None
+            self.applied = want
+            self.safely(f'auto-rotate to {want}', lambda: set_rotation(None, target=want))
+        return GLib.SOURCE_CONTINUE
+
     def tablet(self, value):
         log(f'tablet mode {value}')
+        self.in_tablet = bool(value)
+        self.applied = None
+        self.pending = None
         self.keyboard(bool(value))
         if self.reset_id:
             GLib.source_remove(self.reset_id)
@@ -287,6 +367,9 @@ def main():
         log(f'dock keyboard ids: {sorted(helper.dock_ids)}')
         helper.poll_dock()
         GLib.timeout_add_seconds(DOCK_POLL_SECONDS, helper.poll_dock)
+    if helper.autorotate and helper.accel:
+        log(f'auto-rotate from {helper.accel} while in tablet mode')
+        GLib.timeout_add(300, helper.poll_orientation)
     GLib.MainLoop().run()
 
 

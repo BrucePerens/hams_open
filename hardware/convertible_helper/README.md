@@ -24,6 +24,12 @@ break when GNOME Shell changes.
   (`usb-keyboard = 2047:0318`, optional `dmi-product-prefix = FZ-G1`). While that USB device is absent the tablet
   counts as in tablet mode, with the same effects as the switch; the state is polled once a second from sysfs.
 
+* **Auto-rotate for tablets GNOME does not rotate** (an `[autorotate]` profile section: `iio-name = accel_3d`,
+  optional `flip-x`/`flip-y`): while the tablet counts as in tablet mode the helper reads the accelerometer from sysfs
+  every 300 ms and sets the built-in display to match. It needs the same orientation twice in a row, keeps the current
+  orientation when the tablet lies flat or sits near a boundary, and docking still resets to normal. The sensor's
+  reading is gravity's reaction: y negative means the screen is upright, x positive means its right edge is up.
+
 Only the built-in panel is rotated or reset (monitors that report `is-builtin`); external monitors are left
 alone. A udev rule (`70-convertible-helper.rules`) gives the user on the seat read access, via `uaccess`, to
 switch-type input devices and to the CF-19 button device, and to nothing else.
