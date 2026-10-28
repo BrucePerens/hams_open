@@ -12,5 +12,10 @@
       <summary>Open the log-out dialog</summary>
       <description>Accelerator sent by the Toughbook CF-19 security button (tablet button 4), the Ctrl-Alt-Del equivalent.</description>
     </key>
+    <key name="rotate" type="as">
+      <default>["XF86RotateWindows"]</default>
+      <summary>Rotate the screen</summary>
+      <description>Accelerator sent by the Toughbook CF-19 rotation button (tablet button 3). Handled by the extension so it also works while a dialog or menu is open.</description>
+    </key>
   </schema>
 </schemalist>

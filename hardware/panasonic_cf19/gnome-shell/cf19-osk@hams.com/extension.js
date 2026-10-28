@@ -5,6 +5,7 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {rotateMonitors} from './rotate.js';
 
 const IFACE = `<node>
   <interface name="org.cf19.OSK">
@@ -30,6 +31,10 @@ const TABLET_MODE_PATH = '/sys/bus/acpi/devices/MAT0020:00/tablet_mode';
  *    shows it; once it is hidden again the setting is switched back off.
  * Without the panasonic-hbtn driver (no tablet_mode file) the extension leaves
  * the keyboard setting alone.
+ *
+ * Rotation button (XF86RotateWindows): rotates the screen one step, also while a
+ * dialog or menu is open (GNOME's own shortcut is ignored in those states, so it
+ * is switched off while this extension runs and restored afterwards).
  *
  * Security button (XF86Launch1): the Ctrl-Alt-Del equivalent, GNOME's log-out
  * dialog.
@@ -70,6 +75,15 @@ export default class Cf19OskExtension extends Extension {
                 Meta.KeyBindingFlags.IGNORE_AUTOREPEAT, Shell.ActionMode.ALL,
                 () => this._logout());
 
+            this._mutterKeys = new Gio.Settings({schema_id: 'org.gnome.mutter.keybindings'});
+            this._savedRotate = this._mutterKeys.get_value('rotate-monitor');
+            if (this._savedRotate.get_strv().length === 0)   // left empty by an earlier crash
+                this._savedRotate = new GLib.Variant('as', ['XF86RotateWindows']);
+            this._mutterKeys.set_strv('rotate-monitor', []);
+            Main.wm.addKeybinding('rotate', this._settings,
+                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT, Shell.ActionMode.ALL,
+                () => this._rotate());
+
             this._dbus = Gio.DBusExportedObject.wrapJSObject(IFACE, this);
             this._nameId = Gio.bus_own_name(
                 Gio.BusType.SESSION, 'org.cf19.OSK', Gio.BusNameOwnerFlags.NONE,
@@ -89,6 +103,11 @@ export default class Cf19OskExtension extends Extension {
         console.log(`${TAG} disable()`);
         Main.wm.removeKeybinding('toggle-osk');
         Main.wm.removeKeybinding('security');
+        Main.wm.removeKeybinding('rotate');
+        if (this._mutterKeys && this._savedRotate)
+            this._mutterKeys.set_value('rotate-monitor', this._savedRotate);
+        this._mutterKeys = null;
+        this._savedRotate = null;
         if (this._pollId) {
             GLib.source_remove(this._pollId);
             this._pollId = 0;
@@ -133,6 +152,12 @@ export default class Cf19OskExtension extends Extension {
         // Laptop position: once the keyboard is hidden, stop it popping up on its own.
         if (!this._tablet && !Main.keyboard.visible)
             this._setEnabled(false);
+    }
+
+    _rotate() {
+        rotateMonitors(m => console.log(`${TAG} ${m}`))
+            .then(t => console.log(`${TAG} rotate button: primary transform now ${t}`))
+            .catch(e => console.error(`${TAG} rotate failed: ${e}`));
     }
 
     _logout() {
