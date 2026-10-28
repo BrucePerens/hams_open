@@ -1,3 +1,13 @@
+convertible-helper (1.3.0) unstable; urgency=medium
+
+  * Auto-rotate for tablets whose desktop does not rotate by itself: an
+    [autorotate] profile section names the accelerometer (iio device name);
+    while the tablet counts as in tablet mode the helper reads it from sysfs
+    and sets the built-in display to the matching orientation, with a short
+    settling delay and no change while the tablet lies flat.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 28 Oct 2026 21:00:00 -0700
+
 convertible-helper (1.2.0) unstable; urgency=medium
 
   * The rotation and "security" button actions are now named per machine in a

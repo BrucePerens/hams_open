@@ -46,10 +46,13 @@ Debian 13, kernel 6.12.107, GNOME 48 on Wayland. Other FZ-G1 revisions (Mk2 to M
   asked for the key). The Windows and folder buttons send the PS/2 Super key, which opens the GNOME overview (the
   folder button adds an unmapped scancode `0x65`). Volume buttons work through `panasonic_laptop`.
 
+* GNOME does not auto-rotate this tablet (no tablet-mode switch and a built-in keyboard, so it never counts as in
+  tablet mode). The `[autorotate]` profile makes `convertible-helper` follow the accelerometer (HID sensor hub
+  `04b5:0680`, IIO device `accel_3d`, with `flip-x`) while undocked.
+
 ## Not verified
 
 A cold boot or a battery-removed power cycle (the register's state may be lost), other FZ-G1 revisions, and other
-desktops. Auto-rotation of the screen when undocked does not work yet (GNOME does not consider the tablet to be in tablet
-mode, so it ignores the accelerometer).
+desktops. 
 
 Licence: GPL-3.0-or-later.
