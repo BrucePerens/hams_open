@@ -1,3 +1,12 @@
+hp-spectre-x360-16 (1.3.0) unstable; urgency=medium
+
+  * Runtime PM: exclude only the integrated GPU (00:02.0) by PCI address, not
+    the i915 driver.  The driver exclusion held the discrete Arc A370M awake
+    as well, which cost 3 to 5 W at idle; the earlier changelog entry and README
+    blamed the wrong GPU for the i915 warnings.
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 07:00:00 -0700
+
 hp-spectre-x360-16 (1.2.0) unstable; urgency=medium
 
   * Exclude the i915 driver from TLP's runtime power management: applying
