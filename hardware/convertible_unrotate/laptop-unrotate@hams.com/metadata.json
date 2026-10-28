@@ -1,0 +1,7 @@
+{
+  "uuid": "laptop-unrotate@hams.com",
+  "name": "Reset rotation in laptop mode",
+  "description": "When a convertible leaves tablet mode, set the screen back to normal orientation. GNOME only follows the accelerometer in tablet mode, so a screen turned while the tablet-mode switch flickers can otherwise stay turned.",
+  "shell-version": ["48"],
+  "version": 1
+}
