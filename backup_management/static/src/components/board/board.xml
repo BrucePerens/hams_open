@@ -16,7 +16,7 @@
                 <t t-if="state.isLoading">
                     <div class="row">
                         <div class="col-md-6 mb-4" t-foreach="[1, 2]" t-as="i" t-key="i">
-                            <div class="card shadow-sm h-100 border-2">
+                            <div class="card text-body shadow-sm h-100 border-2">
                                 <div class="card-body">
                                     <h3 class="card-title text-muted d-flex justify-content-between">
                                         <span class="placeholder col-6 bg-secondary"></span>
@@ -37,9 +37,9 @@
                     <div class="row">
                         <t t-foreach="state.configs || []" t-as="conf" t-key="conf.id">
                             <div class="col-md-6 mb-4">
-                                <div t-attf-class="card shadow-sm h-100 {{ conf.is_stale ? 'border-danger' : 'border-success' }} border-2">
+                                <div t-attf-class="card text-body shadow-sm h-100 {{ conf.is_stale ? 'border-danger' : 'border-success' }} border-2">
                                     <div class="card-body">
-                                        <h3 class="card-title text-dark d-flex justify-content-between align-items-center">
+                                        <h3 class="card-title d-flex justify-content-between align-items-center">
                                             <span><t t-out="conf.name"/></span>
                                             <span t-attf-class="badge rounded-pill border {{ conf.is_stale ? 'bg-danger border-danger' : 'bg-success border-success' }}">
                                                 <t t-out="conf.is_stale ? 'STALE / FAILED' : 'HEALTHY'"/>
