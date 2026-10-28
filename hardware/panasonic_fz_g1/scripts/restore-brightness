@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Re-write the Panasonic EC brightness register with the value it already holds.
+# On an FZ-G1 the panel was left dim while this register read 255, until the
+# register was written once; GNOME's brightness control then worked again.
+# The driver (panasonic_laptop) creates the attribute shortly after boot, so wait for it.
+ATTR=/sys/devices/LNXSYSTM:00/LNXSYBUS:00/MAT0019:00/current_brightness
+
+grep -q '^FZ-G1' /sys/class/dmi/id/product_name 2>/dev/null || exit 0
+
+i=0
+while [ ! -e "$ATTR" ] && [ "$i" -lt 30 ]; do
+    sleep 1
+    i=$((i + 1))
+done
+[ -e "$ATTR" ] || { echo "panasonic-fz-g1-support: $ATTR did not appear" >&2; exit 0; }
+
+value=$(cat "$ATTR" 2>/dev/null) || exit 0
+case "$value" in
+    ''|*[!0-9]*) exit 0 ;;
+esac
+echo "$value" > "$ATTR"
+echo "panasonic-fz-g1-support: brightness register re-written ($value)"

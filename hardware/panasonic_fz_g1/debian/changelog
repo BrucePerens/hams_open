@@ -1,0 +1,9 @@
+panasonic-fz-g1 (1.0.0) unstable; urgency=medium
+
+  * Initial release: unblock the panasonic_laptop module and re-write the
+    Panasonic brightness register once at boot, so GNOME's brightness control
+    works on the Panasonic Toughpad FZ-G1 (Mk1, Debian 13, kernel 6.12).
+  * Profile for convertible-helper: detaching the keyboard dock (USB 2047:0318
+    disappears) counts as tablet mode.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 28 Oct 2026 16:30:00 -0700

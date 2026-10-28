@@ -15,6 +15,12 @@ break when GNOME Shell changes.
 * **Toughbook CF-19 "security" button** (`KEY_PROG1`): opens the log-out dialog of GNOME
   (`gnome-session-quit --logout`), Xfce (`xfce4-session-logout`) or KDE (`qdbus6 org.kde.LogoutPrompt`).
 
+* **Tablets without a tablet-mode switch** (the Panasonic Toughpad FZ-G1 has none; GNOME otherwise shows only its
+  emoji key when you touch a text field undocked): a profile file in `/usr/share/convertible-helper/profiles/` or
+  `/etc/convertible-helper.d/` names the USB id of the dock keyboard in a `[dock]` section
+  (`usb-keyboard = 2047:0318`, optional `dmi-product-prefix = FZ-G1`). While that USB device is absent the tablet
+  counts as in tablet mode, with the same effects as the switch; the state is polled once a second from sysfs.
+
 Only the built-in panel is rotated or reset (monitors that report `is-builtin`); external monitors are left
 alone. A udev rule (`70-convertible-helper.rules`) gives the user on the seat read access, via `uaccess`, to
 switch-type input devices and to the CF-19 button device, and to nothing else.

@@ -60,6 +60,9 @@ is a patch against a file of PipeWire's `pipewire-bin` package (LGPL-2.1-or-late
 and contains lines of that file as context; `debian/copyright` records this. Not counted in the
 2026-08-25 survey table above.
 
+**`hardware/panasonic_fz_g1/` (shell scripts and Debian packaging for the Panasonic Toughpad FZ-G1, added 2026-10-28) is GPL-3.0-or-later**, for the
+same reason as `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
+
 **`hardware/convertible_helper/` (a user service and udev rule for convertible laptops, added 2026-10-28) is GPL-3.0-or-later**, for the same reason as
 `hardware/panasonic_cf19/`: it is a desktop-side tool, not a network service. Not counted in the 2026-08-25 survey table above.
 

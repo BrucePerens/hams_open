@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+BLACKLIST=/etc/modprobe.d/panasonic-blacklist.conf
+
+case "$1" in
+    configure)
+        if grep -q '^FZ-G1' /sys/class/dmi/id/product_name 2>/dev/null; then
+            # A common workaround from older kernels blocks the driver that provides
+            # the hotkeys and the brightness register; move it aside (never delete it).
+            if [ -f "$BLACKLIST" ] && [ "$(tr -d ' \t\r\n' < "$BLACKLIST")" = "blacklistpanasonic_laptop" ]; then
+                mv "$BLACKLIST" "$BLACKLIST.disabled-by-panasonic-fz-g1-support"
+                echo "panasonic-fz-g1-support: moved $BLACKLIST aside" >&2
+            fi
+            modprobe panasonic_laptop 2>/dev/null || true
+        fi
+        ;;
+esac
+#DEBHELPER#

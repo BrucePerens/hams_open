@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=Re-assert the Panasonic FZ-G1 brightness register
+Documentation=file:///usr/share/doc/panasonic-fz-g1-support/README.md
+After=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/panasonic-fz-g1-support/restore-brightness
+
+[Install]
+WantedBy=multi-user.target
