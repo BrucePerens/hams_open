@@ -112,6 +112,7 @@ pub fn alert(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     if !want_tone && !want_speech {
         return Err("nothing to do: tone and speak are both off".into());
     }
+    let dry = args.get("dry_run").and_then(|v| v.as_bool()) == Some(true);
     let repeat = args.get("repeat").and_then(|v| v.as_u64()).unwrap_or(1);
     if !(1..=5).contains(&repeat) {
         return Err("repeat must be 1 to 5".into());
@@ -132,6 +133,11 @@ pub fn alert(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         } else {
             None
         };
+        if dry {
+            let would = json!({"severity": sev.word(), "repeat": repeat, "tone": want_tone, "spoken": want_speech,
+                "engine": req.as_ref().map(|r| r.engine.name()), "longest_total_s": MAX_ALERT_S});
+            return super::tools::dry_plan(ctx, dev, &lim, Want::Level(volume), would);
+        }
         let dir = ctx.cfg.capture_dir();
         let tone_path = if want_tone {
             let p = store::new_path(&dir, "tone", Some("alert"))?;
@@ -189,6 +195,15 @@ pub fn alert(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         }
         result
     })();
+    if dry {
+        return Ok(match sound {
+            Ok(mut v) => {
+                v["text_to_send"] = json!(text);
+                v
+            }
+            Err(e) => json!({"dry_run": true, "would_fail": e, "text_to_send": text}),
+        });
+    }
     Ok(match sound {
         Ok(v) => json!({"text_to_send": text, "audible": true, "sound": v,
             "note": "The operator may be away: send text_to_send by another channel as well if the alert matters."}),
@@ -226,5 +241,45 @@ mod tests {
         assert!(pattern(Severity::Urgent).iter().all(|x| x.abs() < 0.26));
         assert!(Severity::parse("panic").is_err());
         assert_eq!(Severity::parse("urgent").unwrap().word(), "URGENT");
+    }
+
+    // Tests [@ANCHOR: audio_alert_tool]
+    #[test]
+    fn a_dry_run_of_an_alert_returns_the_text_and_the_plan_and_makes_no_sound() {
+        use crate::audio::testkit::{devbox_devices, scratch, Scripted};
+        let devs = devbox_devices();
+        let spk = devs
+            .iter()
+            .find(|d| d.description.ends_with("Speaker"))
+            .unwrap();
+        let d = scratch("dry-alert");
+        let cfg = crate::audio::Config {
+            capture_dir: Some(d.clone()),
+            ..crate::audio::Config::default()
+        };
+        let run = Scripted::new(&[(spk.id, 0.9, true)]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let v = alert(&ctx, &json!({"message": "rotor stuck", "severity": "warning", "tone": true, "output": "Speaker", "dry_run": true})).unwrap();
+        assert_eq!(v["dry_run"], true);
+        assert_eq!(v["text_to_send"], "[WARNING] rotor stuck");
+        assert_eq!(v["would"]["severity"], "WARNING");
+        assert!((v["volume_would_be"].as_f64().unwrap() - 0.4).abs() < 1e-9);
+        assert!(!run
+            .calls
+            .borrow()
+            .iter()
+            .any(|c| c.starts_with("wpctl set-")));
+        assert!(std::fs::read_dir(&d).unwrap().next().is_none());
+        // No output named and none configured: still no sound and the text comes back.
+        let v = alert(&ctx, &json!({"message": "x", "dry_run": true})).unwrap();
+        assert!(v["would_fail"].as_str().unwrap().contains("never used"));
+        assert_eq!(v["text_to_send"], "[INFO] x");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

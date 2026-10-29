@@ -116,8 +116,8 @@ const TOOLS: &[ToolSpec] = &[
         desc: "SDR with two receivers (LimeSDR): capture both channels together at freq_hz, repeat `repeats` times with a fresh tune each time, and report the phase and gain of channel 0 relative to channel 1 at the strongest tone, how stable the phase is within a capture and across retunes, and the coherence. Needs one signal on both inputs (a splitter).",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"repeats":{"type":"integer"}}"#, required: &["freq_hz"] },
     ToolSpec { name: "bench_scope_self_cal", tier: Tier::Full, kinds: &[Kind::Scope],
-        desc: "Run the scope's self-calibration (*CAL?). It rewrites the stored calibration, takes a minute or two and drives its own levels onto the inputs. All probes and cables must be disconnected first; confirm_inputs_disconnected must be true, and that must come from the person at the bench.",
-        props: r#"{"instrument":{"type":"string"},"confirm_inputs_disconnected":{"type":"boolean"}}"#, required: &["confirm_inputs_disconnected"] },
+        desc: "Run the scope's self-calibration (*CAL?). It rewrites the stored calibration, takes a minute or two and drives its own levels onto the inputs. All probes and cables must be disconnected first; confirm_inputs_disconnected must be true, and that must come from the person at the bench. dry_run: true returns the plan and sends nothing.",
+        props: r#"{"instrument":{"type":"string"},"confirm_inputs_disconnected":{"type":"boolean"},"dry_run":{"type":"boolean","description":"true: return the plan, send nothing"}}"#, required: &[] },
 ];
 
 pub(crate) fn out_dir() -> PathBuf {

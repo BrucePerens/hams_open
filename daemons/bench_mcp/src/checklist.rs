@@ -44,14 +44,29 @@ fn files(dir: &str, exts: &[&str]) -> Vec<PathBuf> {
     out
 }
 
-/// Tools that actuate (tier `full`) and have no `dry_run` argument because they were written before the rule. Do not add to it.
-const LEGACY_FULL_WITHOUT_DRY_RUN: &[&str] = &[
-    "bench_scope_self_cal",
-    "bench_audio_play",
-    "bench_audio_speak",
-    "bench_audio_loopback",
-    "bench_audio_alert",
-    "bench_audio_set_volume",
+/// Every tool of tier `full` and the tool that puts its instrument in the safe state (tier `read_config` or lower, same
+/// instrument family). A new `full` tool is added here with its companion, or to `FULL_WITHOUT_SAFE_STATE` with the reason.
+const SAFE_STATE_COMPANION: &[(&str, &str)] = &[
+    ("bench_psu_output", "bench_psu_safe_state"),
+    ("bench_audio_play", "bench_audio_safe_state"),
+    ("bench_audio_speak", "bench_audio_safe_state"),
+    ("bench_audio_loopback", "bench_audio_safe_state"),
+    ("bench_audio_alert", "bench_audio_safe_state"),
+    ("bench_audio_set_volume", "bench_audio_safe_state"),
+    ("bench_audio_discover", "bench_audio_safe_state"),
+    ("bench_example_pulse", "bench_example_safe_state"),
+    ("bench_hamlib_load_baseline", "bench_hamlib_safe_state"),
+    ("bench_hamlib_tx_key_test", "bench_hamlib_safe_state"),
+    ("bench_hamlib_tx_power_sweep", "bench_hamlib_safe_state"),
+];
+
+/// `full` tools that have no safe-state companion, and why. The reason must be one that stays true: the effect ends by itself
+/// inside the call and leaves nothing running or energised. Do not add to it without the owner agreeing.
+const FULL_WITHOUT_SAFE_STATE: &[(&str, &str)] = &[
+    (
+        "bench_scope_self_cal",
+        "the scope runs its own calibration to the end inside the call and nothing is left driven afterwards; it cannot be aborted",
+    ),
 ];
 
 /// Anchors cited by a test whose declaration is missing from the source (found when the checklist was written). Do not add to it.
@@ -121,7 +136,7 @@ fn every_tool_has_the_house_shape() {
 #[test]
 fn tools_that_actuate_have_a_dry_run() {
     for (name, info) in registered_tools() {
-        if info.tier != "full" || LEGACY_FULL_WITHOUT_DRY_RUN.contains(&name.as_str()) {
+        if info.tier != "full" {
             continue;
         }
         let props = info
@@ -134,12 +149,56 @@ fn tools_that_actuate_have_a_dry_run() {
             "{name} is tier full and has no `dry_run` argument: every tool that can radiate, drive or actuate returns its plan and sends nothing when dry_run is true (manual: concepts/extending/standing-rules)"
         );
     }
-    for legacy in LEGACY_FULL_WITHOUT_DRY_RUN {
-        let info = registered_tools().get(*legacy);
-        let props = info.and_then(|i| i.schema.get("properties")?.as_object());
+}
+
+// Tests [@ANCHOR: bench_mcp_checklist]
+#[test]
+fn every_full_tool_names_its_safe_state_companion_or_says_why_it_has_none() {
+    let tools = registered_tools();
+    let companions: BTreeMap<&str, &str> = SAFE_STATE_COMPANION.iter().copied().collect();
+    let exempt: BTreeMap<&str, &str> = FULL_WITHOUT_SAFE_STATE.iter().copied().collect();
+    for (name, info) in tools {
+        if info.tier != "full" {
+            continue;
+        }
+        let n = name.as_str();
         assert!(
-            info.is_some_and(|i| i.tier == "full") && props.is_some_and(|p| !p.contains_key("dry_run")),
-            "{legacy} is gone, not tier full, or has a dry_run now: remove it from LEGACY_FULL_WITHOUT_DRY_RUN"
+            companions.contains_key(n) || exempt.contains_key(n),
+            "{name} is tier full and is in neither SAFE_STATE_COMPANION nor FULL_WITHOUT_SAFE_STATE (src/checklist.rs): every tool that can actuate has a tool that puts the instrument in its safe state and reads it back (manual: concepts/extending/standing-rules)"
+        );
+        assert!(
+            !(companions.contains_key(n) && exempt.contains_key(n)),
+            "{name} is in both tables"
+        );
+    }
+    for (full, safe) in &companions {
+        assert!(
+            tools.get(*full).is_some_and(|i| i.tier == "full"),
+            "{full} is not a registered full tool: remove it from SAFE_STATE_COMPANION"
+        );
+        let c = tools
+            .get(*safe)
+            .unwrap_or_else(|| panic!("{full}: the companion {safe} is not a registered tool"));
+        assert!(
+            c.tier == "read_config" || c.tier == "read_only",
+            "{safe} is tier {}: a safe-state tool is allowed one tier below the tool it makes safe",
+            c.tier
+        );
+        let family = |t: &str| t.splitn(3, '_').take(2).collect::<Vec<_>>().join("_");
+        assert_eq!(
+            family(full),
+            family(safe),
+            "{full} and {safe} are for different instruments"
+        );
+        assert!(
+            safe.ends_with("_safe_state"),
+            "{safe}: a safe-state tool is named bench_<instrument>_safe_state"
+        );
+    }
+    for (full, why) in &exempt {
+        assert!(
+            tools.get(*full).is_some_and(|i| i.tier == "full") && why.len() > 40,
+            "{full} is not a registered full tool, or its reason is missing: remove it from FULL_WITHOUT_SAFE_STATE"
         );
     }
 }

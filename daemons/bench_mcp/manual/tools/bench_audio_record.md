@@ -12,7 +12,7 @@ verified: run on the dev box (virtual sink and source, and the speaker with the 
 
 Record an input to a WAV in the managed directory and report levels.
 
-Arguments: `input`, `seconds`, `sample_rate_hz`, `start_on_threshold_dbfs`, `max_wait_s`, `silence_threshold_dbfs`, `label`, `monitor_of_output`. It hears the room; the file can contain speech and stays on this machine. Returns the file, duration, peak and RMS dBFS, clipped samples, silence fraction and an all-zero flag (a muted or dead input records exact zeros).
+Arguments: `input`, `seconds`, `sample_rate_hz`, `start_on_threshold_dbfs`, `max_wait_s`, `silence_threshold_dbfs`, `label`, `monitor_of_output`. `input` is named, else the configured `verify_input`, else the input the last discovery found; the system default source is never used, so with none of these the call is refused. It hears the room; the file can contain speech and stays on this machine. Returns the file, duration, peak and RMS dBFS, clipped samples, silence fraction and an all-zero flag (a muted or dead input records exact zeros).
 
 ## Arguments
 

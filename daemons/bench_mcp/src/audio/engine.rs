@@ -14,6 +14,9 @@ use std::time::{Duration, Instant};
 // [@ANCHOR: audio_engine_no_fallback]
 const NO_FALLBACK: &str = "node.dont-fallback=true node.dont-reconnect=true";
 
+/// The start of the command line of every playback this server starts, for `bench_audio_safe_state`.
+pub const PLAY_SIGNATURE: &str = "pw-play -P node.dont-fallback=true node.dont-reconnect=true";
+
 pub struct Recorder {
     child: Child,
     buf: Arc<Mutex<Vec<f32>>>,
