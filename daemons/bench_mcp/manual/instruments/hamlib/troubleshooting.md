@@ -20,3 +20,7 @@ In escalation order: retry the read, restart the daemon, power-cycle the rig's U
 | `rigctld ... has been started 4 times in 10 minutes` | the daemon keeps dying | read the log in the managed directory (`<rig>.rigctld.log`), fix the cause, then `bench_hamlib_rigctld` start |
 | `managed by another bench_mcp process` | two servers use one rig | use that server, or stop it |
 | values look stale or wrong | many rigs cache a value for a moment; the rig's panel may disagree after a knob turn | read again; compare with the rig's display |
+| `RELEASE NOT CONFIRMED` or `SAFE STATE NOT CONFIRMED` | the rig did not read back as un-keyed | switch the rig off at its front panel or pull its power or antenna feed; call `bench_hamlib_safe_state`; do not use it until the owner has looked |
+| `the transmit watchdog did not report armed` | the `bench_mcp` program could not be started again, or could not reach rigctld | nothing was keyed; check the watchdog log `<rig>.guard.log` in the managed directory and `bench_hamlib_diagnose` |
+| `startup_release` in a result | the first contact with the rig found a record of a keyed rig, or the rig keyed | the PTT was released and the power set to the minimum; look at the keyed-interval log `<rig>.keyed.log` and ask what killed the previous server |
+| `not transmitting: the load plausibility check says ...` | no baseline, or the path looks antenna-like | `bench_hamlib_load_check` shows the readings; the owner records a baseline with the load connected |

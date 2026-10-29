@@ -66,7 +66,7 @@ const TRANSMIT_SIDE: &[&str] = &[
 /// The receive ranges in force: the rig's own (from `dump_state`) narrowed by the owner's `rx_ranges_hz`. The text says where the limit came from.
 pub fn rx_ranges(c: &mut Client, cfg: &Config) -> Result<(Vec<(f64, f64)>, String), String> {
     // [@ANCHOR: hamlib_rx_ranges]
-    let rig = match tolerate(c.read("dump_state"))? {
+    let rig = match tolerate(c.dump_state())? {
         Ok(r) => parse_dump_ranges(&r.lines).0,
         Err(_) => vec![],
     };

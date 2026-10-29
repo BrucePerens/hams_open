@@ -17,7 +17,7 @@ This manual is inside the server. Read it with `bench_manual_index`, `bench_manu
 3. Read [safety tiers](concepts/safety-tiers) and [etiquette](concepts/etiquette) before the first call that changes something.
 4. `bench_status` (with `"instrument"` when several fit) says what an instrument is doing and whether it answers.
 5. Measure with the read-only tools first: `bench_measure`, `bench_capture`, `bench_scope_spectrum`, `bench_sdr_capture`.
-6. Change settings with `bench_set` and the instrument tools. Nothing here transmits on the air; the VNA and generator put low-level RF on a cable port only.
+6. Change settings with `bench_set` and the instrument tools. Nothing here transmits on the air: the VNA and generator put low-level RF on a cable port only, and the Hamlib transmit tools exist only for a rig the owner has attested into a dummy load (and the software cannot know what is connected: read [Hamlib limits](instruments/hamlib/limits) first).
 7. A tool error is plain text. Read [errors](concepts/errors) for what to retry and when to stop and ask the person at the bench.
 8. Files (captures, CSVs, screenshots) go to the output directory; the result names the file and its format.
 9. A page's `verified` line says what was checked on real hardware and when. Trust it, and do not assume more.

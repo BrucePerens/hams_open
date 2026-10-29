@@ -75,6 +75,8 @@ pub struct Transmit {
     pub swr_probe_s: f64,
     /// May a tool lower the rig's power setting to the requested level (the old setting is restored)?
     pub allow_lowering_power: bool,
+    /// Sound an alert for the operator (through the audio module) before keying; if it cannot be heard, nothing is sent.
+    pub operator_alert: bool,
     pub load: LoadCheck,
 }
 
@@ -200,6 +202,10 @@ pub fn parse_transmit(c: &Value) -> Result<Transmit, String> {
         allow_lowering_power: c.get("allow_lowering_power").map_or(Ok(false), |v| {
             v.as_bool()
                 .ok_or("transmit.allow_lowering_power must be true or false")
+        })?,
+        operator_alert: c.get("operator_alert").map_or(Ok(false), |v| {
+            v.as_bool()
+                .ok_or("transmit.operator_alert must be true or false")
         })?,
         load,
     })

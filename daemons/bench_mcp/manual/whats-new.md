@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/hamlib: transmit into an attested dummy load (bench_hamlib_tx_key_test, bench_hamlib_tx_power_sweep, bench_hamlib_safe_state), the transmit watchdog process, the keyed-interval log, the safety model and its limits; procedures/test-a-transmitter-into-a-dummy-load
 - instruments/hamlib: reference stations (bench_hamlib_stations, bench_hamlib_station_set), receiver test with audio (bench_hamlib_rx_check), the dummy-load plausibility check and baseline (bench_hamlib_load_check, bench_hamlib_load_baseline), the transmit attestation in setup, measurement recipes
 - procedures/check-a-receiver: read a rig, listen on a time station, judge the audio chain
 - instruments/hamlib: receiver control tools bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan and the connection test bench_hamlib_diagnose

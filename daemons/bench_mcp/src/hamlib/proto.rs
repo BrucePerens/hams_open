@@ -270,6 +270,61 @@ impl Client {
         }
     }
 
+    /// The rig's limits and level ranges (`dump_state`). rigctld prints the second half of it, with the level ranges, only after a client
+    /// has sent `chk_vfo`, as other clients of the daemon do; `chk_vfo` itself answers with one line and no `RPRT`.
+    pub fn dump_state(&mut self) -> Result<Reply, RigError> {
+        // [@ANCHOR: hamlib_dump_state]
+        // rigctld sometimes drops a connection that follows a burst of short ones; the question is a read, so it is asked again once.
+        if let Err(RigError::Link(_)) = self.chk_vfo() {
+            std::thread::sleep(Duration::from_millis(100));
+            self.conn = None;
+            self.chk_vfo()?;
+        }
+        self.read("dump_state")
+    }
+
+    fn chk_vfo(&mut self) -> Result<(), RigError> {
+        // [@ANCHOR: hamlib_chk_vfo]
+        if self.conn.is_none() {
+            self.reopen()?;
+        }
+        let who = self.describe();
+        let timeout = self.timeout;
+        let (w, r) = self.conn.as_mut().expect("connected");
+        r.get_ref().set_read_timeout(Some(timeout)).ok();
+        let fail = |what: String| {
+            RigError::Link(format!("{who}: {what} (command chk_vfo). Next: bench_hamlib_diagnose; then bench_hamlib_rigctld restart."))
+        };
+        w.write_all(b"+\\chk_vfo\n")
+            .map_err(|e| fail(format!("write failed ({e})")))?;
+        let mut line = String::new();
+        r.read_line(&mut line)
+            .map_err(|e| fail(format!("read failed ({e})")))?;
+        let first = line.trim();
+        if first.starts_with("ChkVFO") {
+            return Ok(());
+        }
+        // Some versions answer in the extended form: an echo, the value and a RPRT line.
+        if first.starts_with("chk_vfo:") {
+            loop {
+                let mut l = String::new();
+                if r.read_line(&mut l)
+                    .map_err(|e| fail(format!("read failed ({e})")))?
+                    == 0
+                {
+                    return Err(fail("the connection was closed".into()));
+                }
+                if l.starts_with("RPRT") {
+                    return Ok(());
+                }
+            }
+        }
+        self.conn = None;
+        Err(RigError::Link(format!(
+            "{who}: an unexpected reply to chk_vfo: {first:?}"
+        )))
+    }
+
     /// The same, for a number in `key` (or the bare line).
     pub fn read_number(&mut self, cmd: &str, key: Option<&str>) -> Result<f64, RigError> {
         self.read(cmd)?.number(key)

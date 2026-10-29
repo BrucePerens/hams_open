@@ -403,7 +403,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if argv.first().map(|a| a.as_str()) == Some(usb_hub::privileged::FLAG) {
         std::process::exit(usb_hub::privileged::main(&argv[1..]));
     }
+    // The transmit watchdog of the hamlib tools: this program run again, with the rig's rigctld address and a deadline.
+    if argv.first().map(|a| a.as_str()) == Some(hamlib::guard::FLAG) {
+        std::process::exit(hamlib::guard::main(&argv[1..]));
+    }
     let insts = config::load()?;
+    // A termination signal releases a keyed rig and stops the daemons this server started, then exits.
+    tokio::spawn(async {
+        use tokio::signal::unix::{signal, SignalKind};
+        let (Ok(mut term), Ok(mut int)) = (
+            signal(SignalKind::terminate()),
+            signal(SignalKind::interrupt()),
+        ) else {
+            return;
+        };
+        tokio::select! { _ = term.recv() => {}, _ = int.recv() => {} }
+        let _ = tokio::task::spawn_blocking(hamlib::shutdown).await;
+        std::process::exit(143);
+    });
     let service = BenchServer {
         insts: Arc::new(insts),
     }

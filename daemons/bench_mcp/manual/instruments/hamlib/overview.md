@@ -2,7 +2,7 @@
 title: Hamlib tools
 summary: What the bench_hamlib_* tools do, the tiers, how a rig is reached (rigctld on localhost) and what is left out.
 see_also: [instruments/hamlib/setup, instruments/hamlib/operation, instruments/hamlib/limits, instruments/hamlib/troubleshooting, instruments/hamlib/protocol]
-tools: [bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_diagnose, bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan, bench_hamlib_rigctld, bench_hamlib_stations, bench_hamlib_station_set, bench_hamlib_rx_check, bench_hamlib_load_check, bench_hamlib_load_baseline]
+tools: [bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_diagnose, bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan, bench_hamlib_rigctld, bench_hamlib_stations, bench_hamlib_station_set, bench_hamlib_rx_check, bench_hamlib_load_check, bench_hamlib_load_baseline, bench_hamlib_safe_state, bench_hamlib_tx_key_test, bench_hamlib_tx_power_sweep]
 instrument: hamlib
 tier: read_only
 verified: dummy rig only, 2026-10-29
@@ -30,8 +30,11 @@ Hamlib is a library of drivers for amateur and shortwave radios. bench_mcp does 
 | [bench_hamlib_rx_check](tools/bench_hamlib_rx_check) | read_config | receiver test with the rig's audio: S-meter against audio level, noise floor, tone offset, station in the audio |
 | [bench_hamlib_load_check](tools/bench_hamlib_load_check) | read_config | dummy-load plausibility check, receive only; only for a rig with a transmit attestation |
 | [bench_hamlib_load_baseline](tools/bench_hamlib_load_baseline) | full | record the check's baseline; `confirm_dummy_load`, `dry_run`; only for a rig with a transmit attestation |
+| [bench_hamlib_safe_state](tools/bench_hamlib_safe_state) | read_config | PTT off and read back, power to the minimum; works while another call runs |
+| [bench_hamlib_tx_key_test](tools/bench_hamlib_tx_key_test) | full | key into the attested dummy load at a bounded power and time, meters read; watchdog, `dry_run`, `confirm_dummy_load` |
+| [bench_hamlib_tx_power_sweep](tools/bench_hamlib_tx_power_sweep) | full | the same in rising steps, one keyed interval each |
 
-The transmit tools are added in a later step; `bench_manual_whats_new` lists what has been merged.
+The transmit tools radiate only into a dummy load that the owner has attested in the config, and the software cannot know what is connected: read [limits](instruments/hamlib/limits) and the procedure [test a transmitter into a dummy load](procedures/test-a-transmitter-into-a-dummy-load) first. Left out: rotator control (`rotctld`), transceive event watching, an audio-through-the-rig transmit check, and automatic generator sweeps (see [measurement recipes](instruments/hamlib/measurement-recipes)).
 
 ## How a rig is reached
 

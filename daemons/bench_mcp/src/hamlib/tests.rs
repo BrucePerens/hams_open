@@ -342,9 +342,15 @@ fn a_daemon_left_by_a_dead_server_is_stopped_but_a_live_owners_is_never_touched(
 // Tests [@ANCHOR: hamlib_release_after_crash]
 #[test]
 fn releasing_after_a_crash_sends_ptt_off_to_the_daemon() {
-    let fake = FakeRigctld::serve(|_| ok(&[]));
+    let fake = FakeRigctld::serve(|c| {
+        if c == "get_ptt" {
+            ok(&["PTT: 0"])
+        } else {
+            ok(&[])
+        }
+    });
     assert!(tx::release_after_crash("r", fake.port));
-    assert_eq!(fake.received(), ["set_ptt 0"]);
+    assert_eq!(fake.received(), ["set_ptt 0", "get_ptt"]);
     assert!(
         !tx::release_after_crash("r", 1),
         "nothing listens: quiet false"
@@ -1046,6 +1052,7 @@ fn the_baseline_needs_the_confirmation_the_attested_range_and_a_quiet_path() {
 // Tests [@ANCHOR: hamlib_load_restore]
 // Tests [@ANCHOR: hamlib_loadtools_measure]
 // Tests [@ANCHOR: hamlib_loadtools_prepare]
+// Tests [@ANCHOR: hamlib_load_gate]
 #[test]
 fn the_load_check_passes_at_the_baseline_and_refuses_a_signal_a_station_a_dead_input_and_a_broken_meter(
 ) {
@@ -1280,4 +1287,1093 @@ fn every_tool_schema_is_valid_json() {
     for spec in SPECS {
         serde_json::from_str::<Value>(spec.props).unwrap_or_else(|e| panic!("{}: {e}", spec.name));
     }
+}
+
+// ---- transmitting into the dummy load ----
+
+/// The test rig's attestation: 20 W cap, 7.000 to 7.100 MHz, short intervals and probe so that the tests are quick.
+const TX_CFG: &str = r#","transmit":{"dummy_load":true,"attested_by":"K6BP","attested_on":"2026-10-29","cabling":"50 ohm load on the antenna port","max_power_w":20,"max_seconds":2,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["USB","CW"],"swr_probe_s":0.2,"allow_lowering_power":true,"load_check":{"readings":3,"dwell_ms":50,"references":3}}"#;
+
+/// A rig that can transmit, a recorded baseline, and everything to call the transmit tools with.
+#[cfg(test)]
+struct TxBench {
+    _fake: FakeRigctld,
+    sim: Arc<Mutex<Sim>>,
+    insts: Vec<Instrument>,
+    dir: Dir,
+    audio: SimAudio,
+    spawner: ThreadSpawner,
+}
+
+#[cfg(test)]
+impl TxBench {
+    fn new(name: &str, with_baseline: bool) -> TxBench {
+        let dir = Dir::new(name);
+        let mut sim = Sim::new();
+        sim.rfpower = 0.1;
+        let (fake, shared) = serve_sim(sim);
+        let insts = crate::config::parse(&format!(
+            r#"{{"instruments":{{"{name}":{{"driver":"hamlib","tier":"full","rigctld_port":{},"managed_dir":"{}"{TX_CFG}}}}}}}"#,
+            fake.port,
+            dir.0.display()
+        ))
+        .unwrap();
+        let b = TxBench {
+            audio: SimAudio(shared.clone()),
+            sim: shared,
+            _fake: fake,
+            insts,
+            dir,
+            spawner: ThreadSpawner {
+                events: Arc::new(Mutex::new(vec![])),
+            },
+        };
+        if with_baseline {
+            let mut c = open(&b.insts[0]).unwrap();
+            loadtools::load_baseline(
+                &mut c,
+                &b.insts[0].hamlib,
+                Some(&b.audio),
+                name,
+                &json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+            )
+            .unwrap();
+        }
+        // The first contact with a rig that can transmit asks it to stop transmitting; that is not what the tests count.
+        drop(open(&b.insts[0]).unwrap());
+        {
+            let mut s = b.sim.lock().unwrap();
+            s.ptt_commands.clear();
+            s.log.clear();
+        }
+        b
+    }
+
+    fn deps<'a>(&'a self, alert: Option<&'a dyn txtools::Alerter>) -> txtools::Deps<'a> {
+        txtools::Deps {
+            spawner: &self.spawner,
+            alert,
+            audio: Some(&self.audio),
+        }
+    }
+
+    fn key(&self, args: Value) -> Result<Value, String> {
+        let mut c = open(&self.insts[0]).unwrap();
+        txtools::key_test(&mut c, &self.insts[0], &self.deps(None), &args)
+    }
+
+    fn ptt_log(&self) -> Vec<u8> {
+        self.sim.lock().unwrap().ptt_commands.clone()
+    }
+
+    fn log_lines(&self) -> Vec<Value> {
+        std::fs::read_to_string(tx::log_file(&self.dir.0, &self.insts[0].name))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect()
+    }
+}
+
+/// (PTT, power setting) of a simulated rig, read under one lock: a test that takes the lock twice in one expression deadlocks.
+#[cfg(test)]
+fn snap(sim: &Arc<Mutex<Sim>>) -> (bool, f64) {
+    let s = sim.lock().unwrap();
+    (s.ptt, s.rfpower)
+}
+
+#[cfg(test)]
+fn good_args() -> Value {
+    json!({"frequency_hz": 7.05e6, "mode": "usb", "power_w": 10, "seconds": 0.5, "sample_every_ms": 100, "reason": "K6BP: check the PA into the load", "confirm_dummy_load": true})
+}
+
+// Tests [@ANCHOR: hamlib_tx_args]
+#[test]
+fn a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowed_or_too_long() {
+    let b = TxBench::new("tx_args", false);
+    let tx_cfg = b.insts[0].hamlib.transmit.as_ref().unwrap();
+    let with = |k: &str, v: Value| {
+        let mut a = good_args();
+        a[k] = v;
+        txtools::check_args(&a, tx_cfg)
+    };
+    let ok = txtools::check_args(&good_args(), tx_cfg).unwrap();
+    assert_eq!(
+        (ok.mode.as_str(), ok.power_w, ok.seconds),
+        ("USB", 10.0, 0.5)
+    );
+    assert!(
+        with("power_w", json!(25))
+            .unwrap_err()
+            .contains("max_power_w"),
+        "above the power cap"
+    );
+    assert!(
+        with("frequency_hz", json!(7.2e6))
+            .unwrap_err()
+            .contains("frequency_ranges"),
+        "outside the owner's ranges"
+    );
+    assert!(with("frequency_hz", json!(14.1e6))
+        .unwrap_err()
+        .contains("There is no default"));
+    assert!(
+        with("mode", json!("fm"))
+            .unwrap_err()
+            .contains("allowed_modes"),
+        "a mode the owner did not allow"
+    );
+    assert!(with("seconds", json!(5))
+        .unwrap_err()
+        .contains("max_seconds"));
+    assert!(with("seconds", json!(0)).is_err() && with("seconds", json!(-1)).is_err());
+    assert!(with("power_w", json!(0)).is_err() && with("power_w", json!("x")).is_err());
+    assert!(with("reason", json!("x".repeat(121))).is_err());
+    assert!(with("confirm_dummy_load", json!("yes")).is_err());
+    let mut none = good_args();
+    none.as_object_mut().unwrap().remove("frequency_hz");
+    assert!(txtools::check_args(&none, tx_cfg)
+        .unwrap_err()
+        .contains("frequency_hz is required"));
+    // Nothing reaches the rig for any of these.
+    let before = b.sim.lock().unwrap().log.len();
+    for (k, v) in [
+        ("power_w", json!(25)),
+        ("frequency_hz", json!(7.2e6)),
+        ("mode", json!("fm")),
+        ("seconds", json!(5)),
+    ] {
+        let mut a = good_args();
+        a[k] = v;
+        assert!(b.key(a).is_err());
+    }
+    assert_eq!(b.sim.lock().unwrap().ptt_commands.len(), 0);
+    assert_eq!(
+        b.sim.lock().unwrap().log.len(),
+        before,
+        "arguments are checked before the rig is asked anything"
+    );
+    assert!(b
+        .sim
+        .lock()
+        .unwrap()
+        .log
+        .iter()
+        .all(|c| !c.starts_with("set_ptt")));
+}
+
+// Tests [@ANCHOR: hamlib_dump_state]
+// Tests [@ANCHOR: hamlib_chk_vfo]
+#[test]
+fn the_level_ranges_of_dump_state_need_a_chk_vfo_first_and_the_client_sends_it() {
+    let dir = Dir::new("dumpstate");
+    // The real daemon: a plain dump_state has no level ranges; the client's dump_state does.
+    let b = dummy_bench("t_dump", &dir, "read_config", "");
+    let mut c = open(&b[0]).unwrap();
+    let full = c.dump_state().unwrap();
+    let min = txtools::rfpower_min(&full.lines);
+    assert_eq!(min, Some(0.05), "the dummy rig's lowest RFPOWER setting");
+    // The simulation behaves the same way and the client copes with its one-line chk_vfo reply.
+    let (fake, _sim) = serve_sim(Sim::new());
+    let mut c = Client::connect("127.0.0.1", fake.port, Duration::from_secs(2)).unwrap();
+    let short = c.read("dump_state").unwrap();
+    assert_eq!(txtools::rfpower_min(&short.lines), None);
+    assert_eq!(
+        txtools::rfpower_min(&c.dump_state().unwrap().lines),
+        Some(0.05)
+    );
+    assert!(fake.received().contains(&"chk_vfo".to_string()));
+    // A daemon that answers chk_vfo in the extended form is also understood; garbage is an error.
+    let ext = FakeRigctld::serve(|c| {
+        if c == "chk_vfo" {
+            ok(&["ChkVFO: 0"])
+        } else {
+            ok(&["x"])
+        }
+    });
+    assert!(
+        Client::connect("127.0.0.1", ext.port, Duration::from_secs(1))
+            .unwrap()
+            .dump_state()
+            .is_ok()
+    );
+    let junk = FakeRigctld::serve(|_| Reply::Raw("what\n".into()));
+    assert!(
+        Client::connect("127.0.0.1", junk.port, Duration::from_secs(1))
+            .unwrap()
+            .dump_state()
+            .is_err()
+    );
+}
+
+// Tests [@ANCHOR: hamlib_tx_min_power]
+// Tests [@ANCHOR: hamlib_tx_power_convert]
+// Tests [@ANCHOR: hamlib_tx_preflight]
+#[test]
+fn the_rig_is_read_first_and_a_split_xit_keyed_or_over_cap_rig_is_refused_without_a_byte_sent() {
+    let b = TxBench::new("tx_pre", false);
+    let mut c = open(&b.insts[0]).unwrap();
+    let tx_cfg = b.insts[0].hamlib.transmit.as_ref().unwrap();
+    let a = txtools::check_args(&good_args(), tx_cfg).unwrap();
+    let rig = txtools::preflight(&mut c, tx_cfg, &a).unwrap();
+    assert_eq!(
+        (rig.f_min, rig.f_req, rig.f_prev, rig.w_full),
+        (0.05, 0.1, 0.1, 100.0)
+    );
+    assert_eq!(
+        txtools::rfpower_min(&["level_gran=0=0,0,0;12=0.05,1,0.002;".into()]),
+        Some(0.05)
+    );
+    assert_eq!(
+        txtools::rfpower_min(&["level_gran=12=0,0,0;".into()]),
+        None,
+        "an unsupported level has no minimum"
+    );
+    assert_eq!(txtools::rfpower_min(&["nothing".into()]), None);
+    let expect_refusal = |c: &mut Client, change: &dyn Fn(&mut Sim), args: Value, text: &str| {
+        let old = {
+            let s = b.sim.lock().unwrap();
+            (s.split, s.xit, s.ptt, s.rfpower)
+        };
+        change(&mut b.sim.lock().unwrap());
+        let a = txtools::check_args(&args, tx_cfg).unwrap();
+        let e = txtools::preflight(c, tx_cfg, &a).unwrap_err();
+        assert!(
+            e.contains(text) && e.contains("Nothing was sent"),
+            "{text}: {e}"
+        );
+        let mut s = b.sim.lock().unwrap();
+        (s.split, s.xit, s.ptt, s.rfpower) = old;
+    };
+    expect_refusal(&mut c, &|s| s.split = true, good_args(), "split is on");
+    expect_refusal(&mut c, &|s| s.xit = 100.0, good_args(), "XIT");
+    expect_refusal(
+        &mut c,
+        &|s| s.ptt = true,
+        good_args(),
+        "already reports PTT on",
+    );
+    // A power setting above the cap needs the owner's allow_lowering_power; the test config has it, so build one without.
+    let mut strict = tx_cfg.clone();
+    strict.allow_lowering_power = false;
+    b.sim.lock().unwrap().rfpower = 0.5;
+    let e = txtools::preflight(&mut c, &strict, &a).unwrap_err();
+    assert!(
+        e.contains("above the cap") && e.contains("allow_lowering_power"),
+        "{e}"
+    );
+    assert!(
+        txtools::preflight(&mut c, tx_cfg, &a).is_ok(),
+        "with allow_lowering_power the tool may lower it"
+    );
+    b.sim.lock().unwrap().rfpower = 0.1;
+    // Below the rig's lowest power setting, and outside the rig's own transmit range.
+    let low = txtools::check_args(
+        &json!({"frequency_hz": 7.05e6, "power_w": 2, "seconds": 0.5}),
+        tx_cfg,
+    )
+    .unwrap();
+    assert!(txtools::preflight(&mut c, tx_cfg, &low)
+        .unwrap_err()
+        .contains("lowest power setting"));
+    let mut wide = tx_cfg.clone();
+    wide.frequency_ranges = vec![(7.0e6, 7.5e6)];
+    let out = txtools::check_args(
+        &json!({"frequency_hz": 7.4e6, "power_w": 10, "seconds": 0.5}),
+        &wide,
+    )
+    .unwrap();
+    assert!(txtools::preflight(&mut c, &wide, &out)
+        .unwrap_err()
+        .contains("rig's own transmit range"));
+    assert!(
+        b.sim
+            .lock()
+            .unwrap()
+            .log
+            .iter()
+            .all(|c| !c.starts_with("set_")),
+        "a refusal changes nothing on the rig: {:?}",
+        b.sim.lock().unwrap().log
+    );
+}
+
+// Tests [@ANCHOR: hamlib_tx_key_test]
+// Tests [@ANCHOR: hamlib_tx_gate]
+// Tests [@ANCHOR: hamlib_tx_probe]
+// Tests [@ANCHOR: hamlib_tx_key]
+// Tests [@ANCHOR: hamlib_tx_release]
+// Tests [@ANCHOR: hamlib_tx_log]
+// Tests [@ANCHOR: hamlib_tx_read_meters]
+// Tests [@ANCHOR: hamlib_tx_keyed]
+// Tests [@ANCHOR: hamlib_tx_restore]
+// Tests [@ANCHOR: hamlib_tx_set_verified]
+// Tests [@ANCHOR: hamlib_tx_summary]
+#[test]
+fn a_key_test_passes_every_gate_probes_keys_releases_restores_and_logs_each_interval() {
+    let b = TxBench::new("tx_ok", true);
+    let alert = RecordingAlert {
+        sent: Mutex::new(vec![]),
+        audible: true,
+    };
+    let mut c = open(&b.insts[0]).unwrap();
+    // The owner asked for an operator alert.
+    let mut inst = b.insts[0].clone();
+    inst.hamlib.transmit.as_mut().unwrap().operator_alert = true;
+    let v = txtools::key_test(&mut c, &inst, &b.deps(Some(&alert)), &good_args()).unwrap();
+    assert_eq!(v["load_check"]["verdict"], "consistent_with_a_load", "{v}");
+    assert_eq!(v["swr_probe"]["done"], true);
+    assert!(
+        v["keyed"]["aborted"].is_null() && v["keyed"]["ptt_read_back_off"] == true,
+        "{v}"
+    );
+    assert!(
+        v["keyed"]["meters"]["power_w"]["max"].as_f64().unwrap() > 9.0,
+        "{v}"
+    );
+    assert!(v["keyed"]["meters"]["swr"]["max"].as_f64().unwrap() < 2.0);
+    assert_eq!(v["rig_settings_not_restored"], json!([]));
+    // PTT: the probe on and off, the test on and off; and the rig is not left keyed.
+    assert_eq!(b.ptt_log(), [1, 0, 1, 0]);
+    {
+        let s = b.sim.lock().unwrap();
+        assert!(!s.ptt);
+        assert_eq!(
+            (s.freq, s.mode.as_str(), s.rfpower),
+            (7_100_000.0, "USB", 0.1),
+            "frequency, mode and power put back"
+        );
+    }
+    // The watchdog was armed for each interval and stood down after the verified release.
+    let ev = b.spawner.events.lock().unwrap().clone();
+    assert_eq!(ev.iter().filter(|e| *e == "armed").count(), 2, "{ev:?}");
+    assert_eq!(
+        ev.iter()
+            .filter(|e| e.starts_with("stood down (0)"))
+            .count(),
+        2,
+        "{ev:?}"
+    );
+    assert!(
+        !tx::state_file(&b.dir.0, "tx_ok").exists(),
+        "no state file once released"
+    );
+    assert!(!tx::is_active("tx_ok"));
+    // The operator alert gave the frequency, the power and the reason.
+    let msg = alert.sent.lock().unwrap()[0].clone();
+    assert!(
+        msg.contains("7050000") && msg.contains("10 watts") && msg.contains("K6BP"),
+        "{msg}"
+    );
+    // The log: a begin and an end line for each interval, with time, frequency, power, duration and reason.
+    let log = b.log_lines();
+    let begins: Vec<&Value> = log.iter().filter(|l| l["event"] == "begin").collect();
+    let ends: Vec<&Value> = log.iter().filter(|l| l["event"] == "end").collect();
+    assert_eq!((begins.len(), ends.len()), (2, 2), "{log:?}");
+    assert_eq!(begins[0]["kind"], "probe");
+    assert_eq!(begins[1]["kind"], "test");
+    assert_eq!(begins[1]["frequency_hz"], 7.05e6);
+    assert_eq!(begins[1]["power_w"], 10.0);
+    assert!(
+        begins[1]["time"].as_str().unwrap().len() == 15
+            && begins[1]["reason"]
+                .as_str()
+                .unwrap()
+                .contains("check the PA")
+    );
+    assert_eq!(begins[1]["by"], "K6BP");
+    assert_eq!(ends[1]["outcome"], "completed");
+    assert!(ends[1]["seconds_keyed"].as_f64().unwrap() >= 0.5);
+    // dry_run sends nothing at all and shows the plan.
+    let n = b.sim.lock().unwrap().log.len();
+    let mut dry = good_args();
+    dry["dry_run"] = json!(true);
+    dry["confirm_dummy_load"] = json!(false);
+    let v = txtools::key_test(&mut c, &b.insts[0], &b.deps(None), &dry).unwrap();
+    assert_eq!(v["dry_run"], true);
+    assert!(
+        v["would"].as_array().unwrap().len() >= 5
+            && v["note"].as_str().unwrap().contains("cannot know")
+    );
+    assert!(
+        b.sim.lock().unwrap().log[n..]
+            .iter()
+            .all(|c| c.starts_with("get_")
+                || c.starts_with("chk_vfo")
+                || c.starts_with("dump_state")
+                || c.starts_with("mW2power")
+                || c.starts_with("power2mW")),
+        "{:?}",
+        &b.sim.lock().unwrap().log[n..]
+    );
+    assert_eq!(b.ptt_log().len(), 4);
+}
+
+// Tests [@ANCHOR: hamlib_tx_operator_alert]
+#[test]
+fn a_key_test_is_refused_without_confirmation_without_a_reason_without_a_baseline_and_when_the_alert_cannot_be_heard(
+) {
+    let b = TxBench::new("tx_gates", false);
+    let mut args = good_args();
+    // No confirmation.
+    args["confirm_dummy_load"] = json!(false);
+    let e = b.key(args).unwrap_err();
+    assert!(
+        e.contains("confirm_dummy_load: true") && e.contains("cannot know what is connected"),
+        "{e}"
+    );
+    // No reason.
+    let mut args = good_args();
+    args["reason"] = json!("");
+    assert!(b.key(args).unwrap_err().contains("reason is required"));
+    // No baseline: the check reports and the test is refused, saying what the owner does.
+    let e = b.key(good_args()).unwrap_err();
+    assert!(
+        e.contains("no_baseline") && e.contains("bench_hamlib_load_baseline"),
+        "{e}"
+    );
+    assert_eq!(b.ptt_log().len(), 0, "never keyed");
+    // With a baseline, an alert that cannot be heard refuses when the owner asked for one.
+    let mut c = open(&b.insts[0]).unwrap();
+    loadtools::load_baseline(
+        &mut c,
+        &b.insts[0].hamlib,
+        Some(&b.audio),
+        "tx_gates",
+        &json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+    )
+    .unwrap();
+    let mut with_alert = b.insts[0].hamlib.clone();
+    with_alert.transmit.as_mut().unwrap().operator_alert = true;
+    let mut inst = b.insts[0].clone();
+    inst.hamlib = with_alert;
+    let quiet = RecordingAlert {
+        sent: Mutex::new(vec![]),
+        audible: false,
+    };
+    let e = txtools::key_test(&mut c, &inst, &b.deps(Some(&quiet)), &good_args()).unwrap_err();
+    assert!(
+        e.contains("not audible") && e.contains("nothing was sent") && e.contains("Text to send"),
+        "{e}"
+    );
+    assert!(
+        txtools::key_test(&mut c, &inst, &b.deps(None), &good_args())
+            .unwrap_err()
+            .contains("no audio instrument")
+    );
+    assert_eq!(b.ptt_log().len(), 0);
+}
+
+#[test]
+fn a_path_that_hears_a_time_station_is_refused_even_with_a_baseline() {
+    let b = TxBench::new("tx_wwv", true);
+    b.sim.lock().unwrap().signals = vec![
+        Signal {
+            hz: 10e6,
+            db: 25.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 5e6,
+            db: 25.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 15e6,
+            db: 25.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 2.5e6,
+            db: 25.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 20e6,
+            db: 25.0,
+            audio: "wwv",
+        },
+    ];
+    let e = b.key(good_args()).unwrap_err();
+    assert!(
+        e.contains("not transmitting") && e.contains("refuse") && e.contains("time station"),
+        "{e}"
+    );
+    assert_eq!(b.ptt_log().len(), 0);
+    let refused: Vec<Value> = b
+        .log_lines()
+        .into_iter()
+        .filter(|l| l["event"] == "refused")
+        .collect();
+    assert_eq!(refused.len(), 1, "a refusal is logged too");
+}
+
+#[test]
+fn an_swr_over_the_limit_or_not_reported_at_the_probe_stops_the_test_after_the_probe_and_the_rig_is_released(
+) {
+    let b = TxBench::new("tx_swr", true);
+    b.sim.lock().unwrap().swr = 4.5;
+    let e = b.key(good_args()).unwrap_err();
+    assert!(
+        e.contains("probe") && (e.contains("over the limit") || e.contains("SWR 4.50")),
+        "{e}"
+    );
+    assert_eq!(
+        b.ptt_log(),
+        [1, 0],
+        "only the low-power probe keyed the rig"
+    );
+    assert!(!b.sim.lock().unwrap().ptt);
+    assert_eq!(
+        b.sim.lock().unwrap().rfpower,
+        0.1,
+        "the power setting is back"
+    );
+    // A rig that reports 0 (as the dummy rig does) or nothing: an open connection cannot be ruled out.
+    b.sim.lock().unwrap().swr = 0.0;
+    let e = b.key(good_args()).unwrap_err();
+    assert!(
+        e.contains("no usable SWR") && e.contains("swr_probe: false"),
+        "{e}"
+    );
+    assert_eq!(b.ptt_log(), [1, 0, 1, 0]);
+    assert!(!b.sim.lock().unwrap().ptt);
+    assert!(
+        tx::believable_swr(1.0).is_some()
+            && tx::believable_swr(0.0).is_none()
+            && tx::believable_swr(f64::NAN).is_none()
+    );
+}
+
+// Tests [@ANCHOR: hamlib_tx_swr_valid]
+#[test]
+fn an_swr_reading_is_believed_only_from_one_up() {
+    assert_eq!(tx::believable_swr(1.5), Some(1.5));
+    assert_eq!(tx::believable_swr(0.99), None);
+    assert_eq!(tx::believable_swr(250.0), None);
+}
+
+#[test]
+fn the_rig_is_released_when_a_meter_read_fails_while_keyed() {
+    let b = TxBench::new("tx_err", true);
+    // The probe passes; then every level read fails with an I/O error while keyed.
+    let sim = b.sim.clone();
+    let _watch = std::thread::spawn(move || {
+        // Turn the fault on only for the second keyed interval.
+        loop {
+            std::thread::sleep(Duration::from_millis(10));
+            let mut s = sim.lock().unwrap();
+            if s.ptt_commands.len() >= 2 {
+                s.error_when_keyed = Some(-6);
+                return;
+            }
+        }
+    });
+    let v = b.key(good_args());
+    let s = b.sim.lock().unwrap();
+    assert!(!s.ptt, "released after the error: {:?}", s.ptt_commands);
+    let e = v.unwrap();
+    assert!(
+        e["keyed"]["aborted"]
+            .as_str()
+            .unwrap()
+            .contains("meter while keyed failed"),
+        "{e}"
+    );
+    assert_eq!(e["keyed"]["ptt_read_back_off"], true);
+    assert!(b
+        .log_lines()
+        .iter()
+        .any(|l| l["event"] == "end" && l["outcome"] == "aborted"));
+}
+
+#[test]
+fn a_connection_dropped_while_keyed_is_retried_and_the_rig_is_released_at_the_end() {
+    let b = TxBench::new("tx_hup", true);
+    let sim = b.sim.clone();
+    let _watch = std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(10));
+        let mut s = sim.lock().unwrap();
+        if s.ptt_commands.len() >= 3 {
+            s.hangup_when_keyed = true;
+            return;
+        }
+    });
+    let v = b.key(good_args());
+    let s = b.sim.lock().unwrap();
+    assert!(!s.ptt, "released: {:?} {:?}", s.ptt_commands, v);
+    let e = v.unwrap();
+    assert!(
+        e["keyed"]["aborted"].is_null(),
+        "a read is asked again over a new connection: {e}"
+    );
+    assert_eq!(e["keyed"]["ptt_read_back_off"], true);
+}
+
+#[test]
+fn the_release_goes_over_a_new_connection_when_the_one_in_use_is_lost_at_the_moment_of_release() {
+    let b = TxBench::new("tx_hup2", true);
+    let sim = b.sim.clone();
+    let _watch = std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(5));
+        let mut s = sim.lock().unwrap();
+        if s.ptt_commands.len() >= 3 {
+            s.hangup_on_unkey = true;
+            return;
+        }
+    });
+    let v = b.key(good_args()).unwrap();
+    let s = b.sim.lock().unwrap();
+    assert!(
+        !s.ptt,
+        "released over a new connection: {:?}",
+        s.ptt_commands
+    );
+    assert_eq!(v["keyed"]["ptt_read_back_off"], true);
+    assert!(
+        !s.hangup_on_unkey,
+        "the fault was used: the first set_ptt 0 was dropped"
+    );
+}
+
+#[test]
+fn a_rig_that_will_not_unkey_is_reported_loudly_and_left_to_the_watchdog() {
+    let b = TxBench::new("tx_stuck", true);
+    let sim = b.sim.clone();
+    let _watch = std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(10));
+        let mut s = sim.lock().unwrap();
+        if s.ptt_commands.len() >= 3 {
+            s.ptt_sticks = true;
+            return;
+        }
+    });
+    let e = b.key(good_args()).unwrap_err();
+    assert!(
+        e.contains("RELEASE NOT CONFIRMED") && e.contains("Switch it off at the rig"),
+        "{e}"
+    );
+    let ev = b.spawner.events.lock().unwrap().clone();
+    assert!(ev.iter().any(|x| x == "left to guard"), "{ev:?}");
+    assert!(
+        ev.iter().any(|x| x.contains("FAILED")),
+        "the watchdog also tried and says so: {ev:?}"
+    );
+    assert!(
+        tx::state_file(&b.dir.0, "tx_stuck").exists(),
+        "the record stays so that the next start looks again"
+    );
+    assert!(b
+        .log_lines()
+        .iter()
+        .any(|l| l["outcome"] == "release_not_confirmed"));
+    b.sim.lock().unwrap().ptt_sticks = false;
+    b.sim.lock().unwrap().ptt = false;
+    let _ = tx::release_prefix("tx_stuck");
+}
+
+// Tests [@ANCHOR: hamlib_guard_run]
+// Tests [@ANCHOR: hamlib_guard_unkey]
+#[test]
+fn the_watchdog_unkeys_on_its_deadline_on_a_closed_pipe_and_on_abort_and_stands_down_on_done() {
+    let run = |send: Option<&str>,
+               close: bool,
+               deadline_ms: u64|
+     -> (Arc<Mutex<Sim>>, i32, f64, Vec<String>) {
+        let mut sim = Sim::new();
+        sim.ptt = true;
+        sim.rfpower = 0.4;
+        let (fake, shared) = serve_sim(sim);
+        let (tx_w, rx_w) = std::sync::mpsc::channel();
+        if let Some(w) = send {
+            tx_w.send(guard::Word::Line(w.into())).unwrap();
+        }
+        if close {
+            tx_w.send(guard::Word::Closed).unwrap();
+        }
+        let mut armed = Vec::new();
+        let mut report = Vec::new();
+        let t = std::time::Instant::now();
+        let code = guard::run(
+            "127.0.0.1",
+            fake.port,
+            Duration::from_millis(deadline_ms),
+            Some(0.05),
+            &rx_w,
+            &mut armed,
+            &mut report,
+        );
+        assert!(String::from_utf8_lossy(&armed).contains("armed"));
+        let report: Vec<String> = String::from_utf8_lossy(&report)
+            .lines()
+            .map(String::from)
+            .collect();
+        drop(tx_w);
+        (shared, code, t.elapsed().as_secs_f64(), report)
+    };
+    // The deadline passes with nothing said: un-key, set the minimum power.
+    let (sim, code, took, report) = run(None, false, 700);
+    assert_eq!(code, 0);
+    assert!((0.6..2.0).contains(&took), "{took}");
+    assert!(snap(&sim) == (false, 0.05), "on timeout");
+    assert!(
+        report.iter().any(|l| l.contains("deadline passed")),
+        "{report:?}"
+    );
+    // The pipe closes without done (the server died): at once, long before the deadline.
+    let (sim, _, took, report) = run(None, true, 30_000);
+    assert!(
+        took < 2.0 && snap(&sim) == (false, 0.05),
+        "on a closed pipe: {took}"
+    );
+    assert!(report.iter().any(|l| l.contains("pipe closed")));
+    // abort.
+    let (sim, _, took, _) = run(Some("abort"), false, 30_000);
+    assert!(took < 2.0 && !sim.lock().unwrap().ptt, "on abort");
+    // done: the tool has released the rig; the guard leaves it alone (a keyed rig stays as the test left it).
+    let (sim, code, _, _) = run(Some("done"), false, 30_000);
+    assert_eq!(code, 0);
+    let untouched = sim.lock().unwrap().ptt_commands.is_empty();
+    assert!(
+        untouched && snap(&sim).1 == 0.4,
+        "done: the guard does nothing"
+    );
+    // A guard that cannot reach the rig does not arm, so nothing could be keyed under it.
+    let (_t, rx_w) = std::sync::mpsc::channel::<guard::Word>();
+    let mut armed = Vec::new();
+    let mut report = Vec::new();
+    assert_eq!(
+        guard::run(
+            "127.0.0.1",
+            1,
+            Duration::from_secs(1),
+            None,
+            &rx_w,
+            &mut armed,
+            &mut report
+        ),
+        3
+    );
+    assert!(armed.is_empty());
+}
+
+// Tests [@ANCHOR: hamlib_tx_release_all]
+// Tests [@ANCHOR: hamlib_shutdown_all]
+#[test]
+fn stopping_the_server_releases_a_rig_that_is_keyed_before_the_daemons_are_stopped() {
+    let b = TxBench::new("tx_stop", true);
+    let mut args = good_args();
+    args["seconds"] = json!(2);
+    let sim = b.sim.clone();
+    let key = {
+        let (insts, audio) = (b.insts.clone(), SimAudio(sim.clone()));
+        let events = b.spawner.events.clone();
+        std::thread::spawn(move || {
+            let mut c = open(&insts[0]).unwrap();
+            let spawner = ThreadSpawner { events };
+            txtools::key_test(
+                &mut c,
+                &insts[0],
+                &txtools::Deps {
+                    spawner: &spawner,
+                    alert: None,
+                    audio: Some(&audio),
+                },
+                &args,
+            )
+        })
+    };
+    // Wait for the main interval to be keyed.
+    let until = std::time::Instant::now() + Duration::from_secs(10);
+    while sim.lock().unwrap().ptt_commands.len() < 3 && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(tx::is_active("tx_stop") && sim.lock().unwrap().ptt);
+    let failed = tx::release_prefix("tx_stop");
+    assert!(failed.is_empty(), "{failed:?}");
+    assert!(!sim.lock().unwrap().ptt, "released by the shutdown path");
+    assert_eq!(
+        sim.lock().unwrap().rfpower,
+        0.05,
+        "and the power is at the minimum"
+    );
+    let r = key.join().unwrap().unwrap();
+    assert!(
+        r["keyed"]["aborted"]
+            .as_str()
+            .unwrap()
+            .contains("un-keyed by something else"),
+        "{r}"
+    );
+    assert!(sim.lock().unwrap().ptt_commands.len() >= 4);
+}
+
+// Tests [@ANCHOR: hamlib_tx_safe_state]
+#[test]
+fn the_safe_state_unkeys_reads_it_back_lowers_the_power_and_works_while_another_call_runs() {
+    let b = TxBench::new("tx_safe", false);
+    {
+        let mut s = b.sim.lock().unwrap();
+        s.ptt = true;
+        s.rfpower = 0.5;
+    }
+    let mut c = open(&b.insts[0]).unwrap();
+    let v = txtools::safe_state(&mut c, &b.insts[0], &json!({})).unwrap();
+    assert_eq!(
+        (
+            v["ptt"].clone(),
+            v["verified"].clone(),
+            v["ptt_was"].clone()
+        ),
+        (json!("receive"), json!(true), json!("on"))
+    );
+    assert_eq!(
+        (
+            v["power_setting_before"].clone(),
+            v["power_set_to_minimum"].clone()
+        ),
+        (json!(0.5), json!(0.05))
+    );
+    assert_eq!(snap(&b.sim), (false, 0.05));
+    // Without lowering the power the setting stays.
+    b.sim.lock().unwrap().rfpower = 0.3;
+    let v = txtools::safe_state(&mut c, &b.insts[0], &json!({"lower_power": false})).unwrap();
+    assert!(v["power_set_to_minimum"].is_null() && b.sim.lock().unwrap().rfpower == 0.3);
+    assert!(txtools::safe_state(&mut c, &b.insts[0], &json!({"lower_power": "yes"})).is_err());
+    // Through the server's dispatch it takes no instrument lock, so it runs while the lock is held.
+    let held = crate::instrument_lock("tx_safe");
+    let _g = held.lock().unwrap();
+    assert!(
+        call(&b.insts, "bench_hamlib_safe_state", &json!({})).is_ok(),
+        "the safe state does not wait for another call"
+    );
+    // A rig that sticks is reported as not confirmed, with what to do by hand.
+    b.sim.lock().unwrap().ptt = true;
+    b.sim.lock().unwrap().ptt_sticks = true;
+    let e = call(&b.insts, "bench_hamlib_safe_state", &json!({})).unwrap_err();
+    assert!(
+        e.contains("SAFE STATE NOT CONFIRMED") && e.contains("front panel"),
+        "{e}"
+    );
+}
+
+// Tests [@ANCHOR: hamlib_tx_startup_check]
+// Tests [@ANCHOR: hamlib_tx_take_note]
+// Tests [@ANCHOR: hamlib_startup_note]
+#[test]
+fn the_first_contact_releases_a_rig_left_keyed_by_a_crash_and_says_so_in_the_result() {
+    let b = TxBench::new("tx_start", false);
+    // The server before this one died with the rig keyed: its record is on disk and the rig is transmitting.
+    std::fs::write(
+        tx::state_file(&b.dir.0, "tx_start"),
+        json!({"pid": 4_000_000, "host": "127.0.0.1", "port": 1, "min_power": 0.05}).to_string(),
+    )
+    .unwrap();
+    {
+        let mut s = b.sim.lock().unwrap();
+        s.ptt = true;
+        s.rfpower = 0.5;
+    }
+    tx::forget_checked("tx_start");
+    let v = call(&b.insts, "bench_hamlib_get", &json!({"item": "frequency"})).unwrap();
+    assert_eq!(v["startup_release"]["stuck_ptt_found"], true, "{v}");
+    assert_eq!(v["startup_release"]["released"], true);
+    assert!(
+        snap(&b.sim) == (false, 0.05),
+        "released, and the power at the minimum"
+    );
+    assert!(!tx::state_file(&b.dir.0, "tx_start").exists());
+    assert!(b
+        .log_lines()
+        .iter()
+        .any(|l| l["event"] == "startup_release"));
+    // The note is given once.
+    assert!(
+        call(&b.insts, "bench_hamlib_get", &json!({"item": "frequency"}))
+            .unwrap()
+            .get("startup_release")
+            .is_none()
+    );
+    // A rig that was not transmitting gets only a precaution, and no note in the result.
+    tx::forget_checked("tx_start");
+    let v = call(&b.insts, "bench_hamlib_get", &json!({"item": "frequency"})).unwrap();
+    assert!(v.get("startup_release").is_none());
+    assert!(
+        b.log_lines()
+            .iter()
+            .filter(|l| l["event"] == "startup_release")
+            .count()
+            == 3
+    );
+}
+
+// Tests [@ANCHOR: hamlib_tx_sweep]
+#[test]
+fn a_power_sweep_keys_each_step_separately_stops_at_an_abort_and_obeys_the_same_gates() {
+    let b = TxBench::new("tx_sweep", true);
+    let mut c = open(&b.insts[0]).unwrap();
+    let args = json!({"frequency_hz": 7.05e6, "powers_w": [5, 10, 15], "dwell_s": 0.3, "sample_every_ms": 100, "reason": "K6BP: PA linearity", "confirm_dummy_load": true});
+    let v = txtools::power_sweep(&mut c, &b.insts[0], &b.deps(None), &args).unwrap();
+    let steps = v["steps"].as_array().unwrap();
+    assert_eq!(steps.len(), 3, "{v}");
+    assert!(steps
+        .iter()
+        .all(|s| s["ptt_read_back_off"] == true && s["aborted"].is_null()));
+    assert!(
+        steps[2]["meters"]["power_w"]["max"].as_f64().unwrap()
+            > steps[0]["meters"]["power_w"]["max"].as_f64().unwrap()
+    );
+    assert_eq!(
+        b.ptt_log(),
+        [1, 0, 1, 0, 1, 0, 1, 0],
+        "the probe and three steps, each released before the next"
+    );
+    assert_eq!(snap(&b.sim), (false, 0.1));
+    let ends = b
+        .log_lines()
+        .into_iter()
+        .filter(|l| l["event"] == "end")
+        .count();
+    assert_eq!(ends, 4);
+    // The rules of the single test apply: a power above the cap, falling steps, no confirmation, too much keyed time.
+    let mut run = |a: Value| txtools::power_sweep(&mut c, &b.insts[0], &b.deps(None), &a);
+    let with = |k: &str, v: Value| {
+        let mut a = args.clone();
+        a[k] = v;
+        a
+    };
+    assert!(run(with("powers_w", json!([5, 25])))
+        .unwrap_err()
+        .contains("max_power_w"));
+    assert!(run(with("powers_w", json!([10, 5])))
+        .unwrap_err()
+        .contains("rise"));
+    assert!(run(with("powers_w", json!([]))).is_err());
+    assert!(run(with("powers_w", json!([1, 2, 3, 4, 5, 6, 7, 8, 9]))).is_err());
+    assert!(run(with("confirm_dummy_load", json!(false)))
+        .unwrap_err()
+        .contains("confirm_dummy_load: true"));
+    assert!(run(with("dwell_s", json!(3))).is_err());
+    let before = b.ptt_log().len();
+    let mut dry = with("dry_run", json!(true));
+    dry["confirm_dummy_load"] = json!(false);
+    assert_eq!(run(dry).unwrap()["dry_run"], true);
+    assert_eq!(b.ptt_log().len(), before);
+    // An SWR that climbs past the limit ends the sweep at that step.
+    b.sim.lock().unwrap().swr = 1.2;
+    let sim = b.sim.clone();
+    let _t = std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(10));
+        let mut s = sim.lock().unwrap();
+        if s.ptt_commands.len() >= before + 4 {
+            s.swr = 6.0;
+            return;
+        }
+    });
+    let v = run(args.clone()).unwrap();
+    let steps = v["steps"].as_array().unwrap();
+    assert!(
+        steps.len() < 3
+            && steps.last().unwrap()["aborted"]
+                .as_str()
+                .unwrap()
+                .contains("SWR"),
+        "{v}"
+    );
+    assert!(!b.sim.lock().unwrap().ptt);
+}
+
+#[test]
+fn the_transmit_tools_exist_only_with_the_attestation_at_the_full_tier_and_the_safe_state_always() {
+    let dir = Dir::new("tx_list");
+    let names = |b: &[Instrument]| {
+        tool_defs(b)
+            .iter()
+            .map(|t| t.name.to_string())
+            .collect::<Vec<_>>()
+    };
+    let plain = dummy_bench("t_nolist", &dir, "full", "");
+    assert!(names(&plain).contains(&"bench_hamlib_safe_state".to_string()));
+    assert!(!names(&plain).contains(&"bench_hamlib_tx_key_test".to_string()));
+    let e = call(&plain, "bench_hamlib_tx_key_test", &json!(good_args())).unwrap_err();
+    assert!(e.contains("no transmit attestation"), "{e}");
+    let e = call(
+        &plain,
+        "bench_hamlib_tx_power_sweep",
+        &json!({"frequency_hz": 7.05e6, "powers_w": [1]}),
+    )
+    .unwrap_err();
+    assert!(e.contains("no transmit attestation"), "{e}");
+    let b = TxBench::new("tx_list", false);
+    assert!(
+        names(&b.insts).contains(&"bench_hamlib_tx_key_test".to_string())
+            && names(&b.insts).contains(&"bench_hamlib_tx_power_sweep".to_string())
+    );
+    let read_config = crate::config::parse(&format!(r#"{{"instruments":{{"t_rc":{{"driver":"hamlib","tier":"read_config","rigctld_port":1{TX_CFG}}}}}}}"#)).unwrap();
+    assert!(
+        !names(&read_config).contains(&"bench_hamlib_tx_key_test".to_string()),
+        "transmitting is a full-tier act"
+    );
+    assert!(names(&read_config).contains(&"bench_hamlib_safe_state".to_string()));
+    let e = call(
+        &read_config,
+        "bench_hamlib_tx_key_test",
+        &json!(good_args()),
+    )
+    .unwrap_err();
+    assert!(e.contains("needs tier"), "{e}");
+}
+
+// Tests [@ANCHOR: hamlib_tx_alert]
+#[test]
+fn the_operator_alert_goes_to_the_audio_instrument_and_an_unknown_one_is_an_error_without_sound() {
+    let none: Vec<Instrument> = vec![];
+    let a = txtools::AudioAlert {
+        insts: &none,
+        instrument: "nosuch".into(),
+    };
+    // No audio instrument is configured, so the sound tools refuse before they could make any sound.
+    let e = txtools::Alerter::alert(&a, "test").unwrap_err();
+    assert!(e.contains("no audio instrument"), "{e}");
+}
+
+// Tests [@ANCHOR: hamlib_guard_main]
+#[test]
+fn the_watchdog_entry_point_refuses_bad_arguments_before_it_reads_anything() {
+    let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert_eq!(guard::main(&args(&["127.0.0.1"])), 64);
+    assert_eq!(guard::main(&args(&["127.0.0.1", "x", "5000", "none"])), 64);
+    assert_eq!(
+        guard::main(&args(&["127.0.0.1", "4532", "100", "none"])),
+        64,
+        "a deadline under half a second"
+    );
+    assert_eq!(
+        guard::main(&args(&["127.0.0.1", "4532", "5000", "2"])),
+        64,
+        "a power setting above 1"
+    );
+}
+
+// Tests [@ANCHOR: hamlib_guard_spawn]
+#[test]
+fn a_watchdog_that_does_not_report_armed_stops_the_keying_before_it_starts() {
+    // In a test binary the program that is started again is the test harness, which does not know the flag and never says armed;
+    // the real process is tried in tests/hamlib_guard.rs and tests/hamlib_e2e.rs.
+    let dir = Dir::new("spawn");
+    let log = dir.0.join("guard.log");
+    let e = guard::Spawner::spawn(
+        &guard::ProcessSpawner,
+        "127.0.0.1",
+        1,
+        Duration::from_secs(5),
+        None,
+        &log,
+    )
+    .err()
+    .unwrap();
+    assert!(
+        e.contains("did not report armed") && e.contains("not keying"),
+        "{e}"
+    );
 }
