@@ -59,6 +59,7 @@ impl Vnwa {
     }
 
     fn remember(&self, what: &str, outcome: &str) {
+        // [@ANCHOR: vnwa_open_transfer_remember]
         let ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis())
@@ -213,6 +214,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_transfer_log]
+    // Tests [@ANCHOR: vnwa_open_transfer_remember]
     #[test]
     fn the_last_transfer_tries_are_kept_with_their_outcome() {
         let (u, _) = unit(vec![
@@ -248,6 +250,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_patient_read]
+    // Tests [@ANCHOR: vnwa_open_scripted_read]
     #[test]
     fn a_patient_read_follows_its_own_pauses_and_gives_up_after_the_last() {
         let (u, s) = unit(vec![
@@ -273,6 +276,7 @@ mod tests {
         assert_eq!(s.seen().len(), 3);
     }
 
+    // Tests [@ANCHOR: vnwa_open_transfer_error_text]
     #[test]
     fn a_vanished_unit_is_reported_without_resending() {
         let (u, s) = unit(vec![Err(TransferError::NoDevice("No such device".into()))]);

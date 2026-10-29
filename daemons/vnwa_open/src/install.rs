@@ -85,6 +85,7 @@ pub struct ProcessExec;
 
 impl Exec for ProcessExec {
     fn run(&self, argv: &[String]) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_install_process_exec]
         let (prog, args) = argv.split_first().ok_or("empty command")?;
         let out = std::process::Command::new(prog)
             .args(args)
@@ -147,6 +148,7 @@ pub struct Installer<'a> {
 
 impl Installer<'_> {
     fn path(&self, dest: &str) -> PathBuf {
+        // [@ANCHOR: vnwa_open_install_path]
         match &self.opts.root {
             Some(r) => r.join(dest.trim_start_matches('/')),
             None => PathBuf::from(dest),
@@ -154,6 +156,7 @@ impl Installer<'_> {
     }
 
     pub fn state(&self, m: &Managed) -> State {
+        // [@ANCHOR: vnwa_open_install_state]
         match std::fs::read_to_string(self.path(m.dest)) {
             Err(_) => State::Missing,
             Ok(s) if s == m.content => State::Current,
@@ -162,6 +165,7 @@ impl Installer<'_> {
     }
 
     fn command(&self, mut argv: Vec<String>) -> Vec<String> {
+        // [@ANCHOR: vnwa_open_install_sudo_prefix]
         if self.opts.root.is_none() && !self.root_user {
             argv.insert(0, "-n".into());
             argv.insert(0, "sudo".into());
@@ -170,6 +174,7 @@ impl Installer<'_> {
     }
 
     fn do_run(&self, argv: Vec<String>, done: &mut Vec<String>) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_install_do_run]
         let argv = self.command(argv);
         if !allowed(&argv, self.opts.restart_audio) {
             return Err(format!(
@@ -184,6 +189,7 @@ impl Installer<'_> {
     }
 
     fn note(&self, line: &str) {
+        // [@ANCHOR: vnwa_open_install_note]
         use std::io::Write;
         if let Some(d) = self.log.parent() {
             let _ = std::fs::create_dir_all(d);
@@ -203,6 +209,7 @@ impl Installer<'_> {
 
     /// A codec that a sweep or soak holds open (its capture stream is not closed).
     pub fn busy(&self) -> Vec<String> {
+        // [@ANCHOR: vnwa_open_install_busy]
         let mut busy = Vec::new();
         for c in crate::topology::find_cards(&self.sys) {
             if !crate::reserved::is_vnwa_codec(&self.sys, &c.usb_path) {
@@ -232,6 +239,7 @@ impl Installer<'_> {
 
     /// The plan as text: for each file its action, and the commands. In a dry run this is all that happens.
     pub fn plan(&self) -> String {
+        // [@ANCHOR: vnwa_open_install_plan]
         let mut out = String::new();
         let restore = self.opts.mode == Mode::Uninstall;
         for m in managed() {
@@ -289,6 +297,7 @@ impl Installer<'_> {
 
     /// Does what was asked. Without `apply` it only returns the plan.
     pub fn run(&self) -> Result<String, String> {
+        // [@ANCHOR: vnwa_open_install_run]
         let mut text = self.plan();
         if self.opts.mode == Mode::Check || !self.opts.apply {
             if self.opts.mode != Mode::Check {
@@ -333,6 +342,7 @@ impl Installer<'_> {
     }
 
     fn install(&self, done: &mut Vec<(Managed, Undo)>) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_install_install]
         let mut udev_changed = false;
         static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let tmp = std::env::temp_dir().join(format!(
@@ -403,6 +413,7 @@ impl Installer<'_> {
     }
 
     fn uninstall(&self) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_install_uninstall]
         let mut udev_changed = false;
         for m in managed() {
             let st = self.state(&m);
@@ -469,6 +480,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_install_commands]
+    // Tests [@ANCHOR: vnwa_open_install_plan]
+    // Tests [@ANCHOR: vnwa_open_install_run]
+    // Tests [@ANCHOR: vnwa_open_install_state]
+    // Tests [@ANCHOR: vnwa_open_install_path]
     #[test]
     fn a_dry_run_prints_the_files_and_changes_nothing_and_every_packaged_file_keeps_its_comment_block(
     ) {
@@ -501,6 +516,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // Tests [@ANCHOR: vnwa_open_install_process_exec]
+    // Tests [@ANCHOR: vnwa_open_install_path]
+    // Tests [@ANCHOR: vnwa_open_install_state]
+    // Tests [@ANCHOR: vnwa_open_install_do_run]
+    // Tests [@ANCHOR: vnwa_open_install_note]
+    // Tests [@ANCHOR: vnwa_open_install_run]
+    // Tests [@ANCHOR: vnwa_open_install_install]
+    // Tests [@ANCHOR: vnwa_open_install_uninstall]
     #[test]
     fn apply_installs_is_idempotent_backs_up_what_it_replaces_and_uninstall_restores_it() {
         let root = tmp("inst_apply");
@@ -547,6 +570,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // Tests [@ANCHOR: vnwa_open_install_do_run]
     #[test]
     fn no_command_outside_the_allow_list_is_ever_issued_and_trigger_restart_and_reload_are_refused()
     {
@@ -594,6 +618,8 @@ mod tests {
         ));
     }
 
+    // Tests [@ANCHOR: vnwa_open_install_install]
+    // Tests [@ANCHOR: vnwa_open_install_uninstall]
     #[test]
     fn a_failure_midway_is_a_clear_error_and_the_steps_done_are_undone() {
         let root = tmp("inst_fail");
@@ -623,6 +649,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // Tests [@ANCHOR: vnwa_open_install_busy]
     #[test]
     fn it_refuses_while_a_codec_is_open_unless_forced() {
         let root = tmp("inst_busy");
@@ -652,5 +679,38 @@ mod tests {
         std::fs::write(pcm.join("status"), "closed\n").unwrap();
         installer(&root, &rec, Mode::Install, true).run().unwrap();
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_install_sudo_prefix]
+    #[test]
+    fn a_command_outside_a_staging_root_runs_under_sudo_unless_the_user_is_root() {
+        let root = tmp("inst_sudo");
+        let rec = Recording(Mutex::new(Vec::new()));
+        let mut i = installer(&root, &rec, Mode::Install, false);
+        let argv = || vec!["udevadm".to_string(), "control".to_string()];
+        // Under a staging root nothing is raised.
+        assert_eq!(i.command(argv()), argv());
+        i.opts.root = None;
+        assert_eq!(
+            i.command(argv()),
+            ["sudo", "-n", "udevadm", "control"].map(String::from)
+        );
+        i.root_user = true;
+        assert_eq!(i.command(argv()), argv());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_install_process_exec]
+    #[test]
+    fn the_process_exec_runs_a_real_command_and_reports_its_failure_text() {
+        assert_eq!(ProcessExec.run(&["true".to_string()]), Ok(()));
+        let e = ProcessExec
+            .run(&["sh".into(), "-c".into(), "echo boom >&2; exit 3".into()])
+            .unwrap_err();
+        assert!(e.contains("failed: boom"), "{e}");
+        assert!(ProcessExec.run(&[]).unwrap_err().contains("empty command"));
+        assert!(ProcessExec
+            .run(&["/nonexistent/vnwa_open_test_program".to_string()])
+            .is_err());
     }
 }

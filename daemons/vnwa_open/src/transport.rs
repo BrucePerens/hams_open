@@ -22,6 +22,7 @@ pub enum TransferError {
 
 impl std::fmt::Display for TransferError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // [@ANCHOR: vnwa_open_transfer_error_text]
         match self {
             TransferError::Transient(m) => write!(f, "{m} (transient)"),
             TransferError::NoDevice(m) | TransferError::Other(m) => write!(f, "{m}"),
@@ -70,6 +71,7 @@ pub struct RusbTransport {
 
 impl RusbTransport {
     pub fn open(vid: u16, pid: u16) -> Result<RusbTransport, String> {
+        // [@ANCHOR: vnwa_open_rusb_transport_open]
         let context = rusb::Context::new().map_err(|e| format!("libusb: {e}"))?;
         let handle = context.open_device_with_vid_pid(vid, pid).ok_or_else(|| {
             format!("no VNWA ({vid:04x}:{pid:04x}) found, or no permission to open it")
@@ -159,6 +161,7 @@ impl Transport for Scripted {
         _index: u16,
         buf: &mut [u8],
     ) -> Result<usize, TransferError> {
+        // [@ANCHOR: vnwa_open_scripted_read]
         let bytes = self.next(false, request)?;
         let n = bytes.len().min(buf.len());
         buf[..n].copy_from_slice(&bytes[..n]);

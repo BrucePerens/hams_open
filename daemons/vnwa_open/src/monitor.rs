@@ -37,6 +37,7 @@ impl Vnwa {
     /// The internal temperature sensor in raw counts (uncalibrated; only differences are meaningful). An error if the firmware is older
     /// than the sensor.
     pub fn temperature_counts(&self) -> Result<u16, String> {
+        // [@ANCHOR: vnwa_open_temperature_counts]
         let v = self.firmware_version()?;
         if v < SENSOR_MIN_VERSION {
             return Err(format!(
@@ -95,6 +96,7 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: vnwa_open_temperature_counts]
     #[test]
     fn an_old_firmware_gives_a_clear_error_and_a_new_one_reads_the_sensor() {
         let old = Vnwa::with_transport(Box::new(Shared(Arc::new(Scripted::new(vec![Ok(vec![

@@ -28,6 +28,7 @@ pub enum Window {
 
 impl Window {
     pub fn from_name(s: &str) -> Result<Window, String> {
+        // [@ANCHOR: vnwa_open_window_from_name]
         match s.to_lowercase().as_str() {
             "rectangular" | "rect" | "none" => Ok(Window::Rectangular),
             "hamming" => Ok(Window::Hamming),
@@ -74,6 +75,7 @@ pub enum Response {
 
 /// A uniform frequency grid: `f = start + k step`.
 fn check_grid(freqs: &[f64]) -> Result<(f64, f64), String> {
+    // [@ANCHOR: vnwa_open_time_domain_check_grid]
     if freqs.len() < 4 {
         return Err("a time-domain transform needs at least four points".into());
     }
@@ -187,6 +189,7 @@ pub fn transform(
 
 /// The delay of the largest peak of `|z|`, by parabolic interpolation around it.
 pub fn peak_time(times_s: &[f64], z: &[Complex]) -> Option<f64> {
+    // [@ANCHOR: vnwa_open_time_domain_peak_time]
     let (i, _) = z
         .iter()
         .enumerate()
@@ -217,6 +220,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_window]
+    // Tests [@ANCHOR: vnwa_open_window_from_name]
     #[test]
     fn the_windows_have_their_textbook_shapes() {
         let n = 11;
@@ -239,6 +243,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_time_domain]
+    // Tests [@ANCHOR: vnwa_open_time_domain_peak_time]
     #[test]
     fn a_delay_line_gives_a_peak_at_its_delay_in_both_modes_and_windows_lower_the_sidelobes() {
         let tau = 10.3e-9;
@@ -314,6 +319,7 @@ mod tests {
         assert!((late - 0.5).abs() < 0.03, "after it: {late}");
     }
 
+    // Tests [@ANCHOR: vnwa_open_time_domain_check_grid]
     #[test]
     fn bad_input_is_refused() {
         let f = grid(10, 1e6, 1);

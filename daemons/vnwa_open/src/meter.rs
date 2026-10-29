@@ -121,6 +121,7 @@ impl Vna {
     }
 
     fn meter_once(&mut self, center_hz: f64, point_ms: f64) -> Result<Reading, String> {
+        // [@ANCHOR: vnwa_open_meter_once]
         let c = &self.cfg;
         let block = setup_block(&SetupParams {
             freq_hz: center_hz,

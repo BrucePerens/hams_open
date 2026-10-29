@@ -123,6 +123,7 @@ pub fn set_attenuation(usb: &Vnwa, attenuation_db: f64) -> Result<(), String> {
 /// real time and stalls most control requests (0x91 among them), so the only way to stop it is a power cycle. The last request usually
 /// stalls too, which is not an error.
 pub fn am_captured_500hz_100pct(usb: &Vnwa, freq_hz: f64) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_generator_am_captured]
     let level: u16 = 1638;
     usb.read(0x91, 0, 0, 64)?;
     usb.read(0x0e, 0, 0, 64)?;
@@ -171,5 +172,76 @@ mod tests {
         assert_eq!(level_for_attenuation(0.0), Ok(0x3fff));
         assert!(level_for_attenuation(-50.5).is_err());
         assert!(level_for_attenuation(0.5).is_err());
+    }
+
+    struct Shared(std::sync::Arc<crate::transport::Scripted>);
+    impl crate::transport::Transport for Shared {
+        fn write(
+            &self,
+            t: u8,
+            r: u8,
+            v: u16,
+            i: u16,
+            d: &[u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            self.0.write(t, r, v, i, d)
+        }
+        fn read(
+            &self,
+            r: u8,
+            v: u16,
+            i: u16,
+            b: &mut [u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            self.0.read(r, v, i, b)
+        }
+    }
+
+    fn unit(
+        outcomes: Vec<Result<Vec<u8>, crate::transport::TransferError>>,
+    ) -> (Vnwa, std::sync::Arc<crate::transport::Scripted>) {
+        let s = std::sync::Arc::new(crate::transport::Scripted::new(outcomes));
+        (Vnwa::with_transport(Box::new(Shared(s.clone()))), s)
+    }
+
+    // Tests [@ANCHOR: vnwa_open_generator_am_captured]
+    #[test]
+    fn the_captured_am_sequence_is_sent_in_order_and_a_stalled_last_request_is_not_an_error() {
+        use crate::transport::{Seen, TransferError};
+        let stall = || Err(TransferError::Transient("Pipe error".into()));
+        // The script is used up by the 22 requests before the last one; the last one (0x90) and its three resends all stall.
+        let mut outcomes: Vec<_> = (0..22).map(|_| Ok(vec![0u8; 8])).collect();
+        outcomes.extend((0..4).map(|_| stall()));
+        let (u, s) = unit(outcomes);
+        assert_eq!(am_captured_500hz_100pct(&u, 10e6), Ok(()));
+        let seen = s.seen();
+        let read = |r: u8| Seen {
+            write: false,
+            request: r,
+        };
+        assert_eq!(seen[0], read(0x91));
+        assert_eq!(seen[1], read(0x0e));
+        assert_eq!(
+            seen.iter().filter(|t| t.write).count(),
+            2,
+            "two frequency writes"
+        );
+        assert_eq!(
+            seen.iter()
+                .filter(|t| !t.write && t.request == 0x9e)
+                .count(),
+            1
+        );
+        assert_eq!(seen.last(), Some(&read(0x90)));
+        assert_eq!(seen.iter().filter(|t| t.request == 0x90).count(), 4);
+    }
+
+    #[test]
+    fn a_failure_before_the_last_request_is_an_error() {
+        use crate::transport::TransferError;
+        let (u, s) = unit(vec![Err(TransferError::NoDevice("No such device".into()))]);
+        let e = am_captured_500hz_100pct(&u, 10e6).unwrap_err();
+        assert!(e.contains("No such device"), "{e}");
+        assert_eq!(s.seen().len(), 1);
     }
 }
