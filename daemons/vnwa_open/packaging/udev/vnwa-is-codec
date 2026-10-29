@@ -1,0 +1,24 @@
+#!/bin/sh
+# ADDED BY: bench_mcp / vnwa_open (https://github.com/BrucePerens/hams_open, daemons/vnwa_open), installed by
+#           `vnwa_open install-system-config` on <date generated at install time>.
+# WHAT: vnwa-is-codec <devpath>: exit 0 if the sound card with that udev DEVPATH (for example
+#       /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.0/sound/card1) is a codec of a DG8SAQ VNWA:
+#       its USB device is 08bb:29c0 and a sibling USB device under the same hub is 20a0:4118. Exit 1 otherwise.
+# WHY:  08bb:29c0 alone is the generic Texas Instruments PCM2900C id of many USB sound dongles. Called by
+#       /etc/udev/rules.d/60-vnwa-codecs.rules. Reads sysfs only; changes nothing.
+# TO REMOVE: `vnwa_open install-system-config --uninstall --apply`.
+root="${VNWA_SYSFS:-/sys}"
+p="$root$1"
+[ -d "$p" ] || exit 1
+# walk up to the USB device (the directory with idVendor)
+d="$p"
+while [ "$d" != "/" ] && [ ! -f "$d/idVendor" ]; do d=$(dirname "$d"); done
+[ -f "$d/idVendor" ] || exit 1
+[ "$(cat "$d/idVendor")" = "08bb" ] && [ "$(cat "$d/idProduct")" = "29c0" ] || exit 1
+hub=$(dirname "$d")
+for s in "$hub"/*; do
+  [ "$s" = "$d" ] && continue
+  [ -f "$s/idVendor" ] || continue
+  if [ "$(cat "$s/idVendor")" = "20a0" ] && [ "$(cat "$s/idProduct")" = "4118" ]; then exit 0; fi
+done
+exit 1
