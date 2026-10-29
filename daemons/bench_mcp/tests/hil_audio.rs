@@ -356,3 +356,87 @@ fn events_lists_three_beeps_played_by_another_process() {
     );
     let _ = std::fs::remove_dir_all(&d);
 }
+
+// Tests [@ANCHOR: audio_speak_tool]
+#[test]
+#[ignore]
+fn speech_goes_to_a_wav_file_and_to_a_virtual_output_where_it_is_heard() {
+    let _v = Virtual::start();
+    let d = scratch("speak");
+    let cfg = config(&d);
+    let (ok, s) = call(&cfg, &d, "bench_audio_synthesizers", "{}");
+    assert!(ok, "{s}");
+    assert_eq!(s["engines"][1]["installed"], true, "{s}");
+    assert!(s["espeak_voices"].as_array().unwrap().len() > 50);
+    let (ok, w) = call(
+        &cfg,
+        &d,
+        "bench_audio_speak",
+        r#"{"text":"Antenna rotor stopped.","wav_file":"rotor note","engine":"espeak-ng"}"#,
+    );
+    assert!(ok, "{w}");
+    assert_eq!(w["audible"], false);
+    assert!(w["seconds"].as_f64().unwrap() > 0.5, "{w}");
+    assert!(Path::new(w["wav_file"].as_str().unwrap()).exists());
+    let (cfg2, d2) = (cfg.clone(), d.clone());
+    let listener =
+        std::thread::spawn(move || call(&cfg2, &d2, "bench_audio_events", r#"{"seconds":6}"#));
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let (ok, sp) = call(
+        &cfg,
+        &d,
+        "bench_audio_speak",
+        r#"{"text":"Rotor stopped.","engine":"espeak-ng","unmute":true}"#,
+    );
+    assert!(ok, "{sp}");
+    assert_eq!(sp["engine"], "espeak-ng");
+    let (ok, ev) = listener.join().unwrap();
+    assert!(ok, "{ev}");
+    assert!(ev["event_count"].as_u64().unwrap() >= 1, "{ev}");
+    let (ok, e) = call(
+        &cfg,
+        &d,
+        "bench_audio_speak",
+        r#"{"text":"x","voice":"-v; rm"}"#,
+    );
+    assert!(
+        !ok && e.as_str().unwrap().contains("voice or language"),
+        "{e}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+// Tests [@ANCHOR: audio_alert_tool]
+#[test]
+#[ignore]
+fn an_alert_makes_sound_and_always_returns_the_text_even_when_it_cannot() {
+    let _v = Virtual::start();
+    let d = scratch("alert");
+    let cfg = config(&d);
+    let (ok, a) = call(
+        &cfg,
+        &d,
+        "bench_audio_alert",
+        r#"{"message":"Rotor stopped","severity":"warning","engine":"espeak-ng"}"#,
+    );
+    assert!(ok, "{a}");
+    assert_eq!(a["audible"], true, "{a}");
+    assert_eq!(a["text_to_send"], "[WARNING] Rotor stopped");
+    assert_eq!(a["sound"]["spoken"], true);
+    let (ok, t) = call(&cfg, &d, "bench_audio_alert", r#"{"severity":"info"}"#);
+    assert!(ok && t["audible"] == true, "{t}");
+    assert_eq!(t["text_to_send"], "[INFO] alert");
+    let (ok, n) = call(
+        &cfg,
+        &d,
+        "bench_audio_alert",
+        r#"{"message":"Door open","severity":"urgent","output":"no-such-output"}"#,
+    );
+    assert!(ok, "{n}");
+    assert_eq!(n["audible"], false, "{n}");
+    assert_eq!(n["text_to_send"], "[URGENT] Door open");
+    assert!(n["error"].as_str().unwrap().contains("no output"), "{n}");
+    let (ok, r) = call(&cfg, &d, "bench_audio_alert", r#"{"repeat":9}"#);
+    assert!(!ok, "{r}");
+    let _ = std::fs::remove_dir_all(&d);
+}

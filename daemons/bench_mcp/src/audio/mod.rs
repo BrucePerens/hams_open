@@ -9,6 +9,7 @@
 //! The sound cards inside the VNWA are reserved (`08bb:29c0` by default): the VNA driver opens them exclusively, so these
 //! tools list them, mark them reserved and never open them.
 
+pub mod alert;
 pub mod analysis;
 pub mod devices;
 pub mod engine;
@@ -16,6 +17,7 @@ pub mod events;
 pub mod heard;
 pub mod levels;
 pub mod safety;
+pub mod speak;
 pub mod store;
 #[cfg(test)]
 pub mod testkit;
@@ -101,6 +103,12 @@ pub struct Config {
     pub max_play_s: f64,
     /// Named commands that `bench_audio_verify` may run as its action (argument lists, no shell).
     pub verify_actions: BTreeMap<String, Vec<String>>,
+    /// Speech: `auto`, `speech-dispatcher`, `espeak-ng` or `piper`; the default voice, language and rate in words per minute; the Piper model file.
+    pub tts_engine: String,
+    pub tts_voice: Option<String>,
+    pub tts_language: String,
+    pub tts_rate: u32,
+    pub piper_model: Option<String>,
     /// `vid:pid` values and lower-case node-name fragments that are never opened. Always includes `08bb:29c0`.
     pub reserved: Vec<String>,
 }
@@ -126,6 +134,11 @@ impl Default for Config {
             max_record_s: 30.0,
             max_play_s: 10.0,
             verify_actions: BTreeMap::new(),
+            tts_engine: "auto".into(),
+            tts_voice: None,
+            tts_language: "en-us".into(),
+            tts_rate: 160,
+            piper_model: None,
             reserved: vec![VNWA_CODEC.into()],
         }
     }
@@ -222,7 +235,7 @@ fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
 /// Reads the `audio` settings of an instrument entry: `outputs` and `inputs` (alias to a name fragment, or
 /// `{"match": ..., "volume_cap": ...}`), `alert_output` and `verify_input` (`auto` or an alias), `volume_cap` and
 /// `quiet_volume` (wpctl scale, 0 to 1), `quiet_hours` (`{"start":"22:00","end":"07:00"}` or `false`), `capture_dir`,
-/// `retention_files`, `retention_days`, `max_record_s`, `max_play_s`, `verify_actions` (name to program and arguments, the only
+/// `retention_files`, `retention_days`, `max_record_s`, `max_play_s`, `tts_engine`, `tts_voice`, `tts_language`, `tts_rate`, `piper_model`, `verify_actions` (name to program and arguments, the only
 /// commands `bench_audio_verify` runs), and `reserved` (more `vid:pid` values or node-name fragments;
 /// `08bb:29c0` is always reserved).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
@@ -301,6 +314,29 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
         }
         cfg.max_play_s = m;
     }
+    if let Some(e) = text("tts_engine") {
+        if !["auto", "speech-dispatcher", "espeak-ng", "piper"].contains(&e.as_str()) {
+            return Err(format!(
+                "tts_engine {e:?} is not auto, speech-dispatcher, espeak-ng or piper"
+            ));
+        }
+        cfg.tts_engine = e;
+    }
+    if let Some(v) = text("tts_voice") {
+        speak::safe_code(&v).map_err(|e| format!("tts_voice: {e}"))?;
+        cfg.tts_voice = Some(v);
+    }
+    if let Some(v) = text("tts_language") {
+        speak::safe_code(&v).map_err(|e| format!("tts_language: {e}"))?;
+        cfg.tts_language = v;
+    }
+    if let Some(r) = c.get("tts_rate").and_then(|x| x.as_u64()) {
+        if !(80..=450).contains(&r) {
+            return Err("tts_rate must be 80 to 450 words per minute".into());
+        }
+        cfg.tts_rate = r as u32;
+    }
+    cfg.piper_model = text("piper_model");
     if let Some(actions) = c.get("verify_actions") {
         for (name, argv) in actions
             .as_object()
@@ -436,6 +472,27 @@ pub const SPECS: &[Spec] = &[
         props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"seconds":{"type":"number"},"min_over_noise_db":{"type":"number"},"threshold_dbfs":{"type":"number"},"merge_gap_ms":{"type":"number"},"min_event_ms":{"type":"number"},"decode_morse":{"type":"boolean"},"sample_rate_hz":{"type":"integer"}"#),
         required: &[],
     },
+    Spec {
+        name: "bench_audio_synthesizers",
+        tier: Tier::ReadOnly,
+        desc: "Which speech synthesizers are installed (speech-dispatcher with its server state, espeak-ng, Piper), their voices (espeak-ng's list), the configured defaults, and what is missing and how to install it. Installs nothing and makes no sound.",
+        props: props!(r#""instrument":{"type":"string"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_speak",
+        tier: Tier::Full,
+        desc: "MAKES NOISE IN THE ROOM: speaks `text` (up to 600 characters) on an output (default: the configured alert output, else the system default sink), or writes it to a WAV file in the capture directory (`wav_file`: a label; nothing is played). Engine auto picks speech-dispatcher only when its server is running and the output is the system default (it cannot target another device), otherwise espeak-ng, then Piper; engine can be named. voice, language (default en-us), rate_wpm (80 to 450). The output's volume is limited to the cap (quiet volume in quiet hours) and restored afterwards, like bench_audio_play. Reserved devices are refused.",
+        props: props!(r#""instrument":{"type":"string"},"text":{"type":"string"},"output":{"type":"string"},"engine":{"type":"string","enum":["auto","speech-dispatcher","espeak-ng","piper"]},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"},"wav_file":{"type":"string"},"volume":{"type":"number"},"unmute":{"type":"boolean"}"#),
+        required: &["text"],
+    },
+    Spec {
+        name: "bench_audio_alert",
+        tier: Tier::Full,
+        desc: "ALERTS THE OPERATOR with sound: a tone pattern by severity (info: one beep; warning: two; urgent: a siren) and/or the spoken message, on the alert output, repeated `repeat` times (1 to 5, at most 30 s in all). Volume is a share of the limit by severity; in quiet hours (default 22:00 to 07:00) only the lowest volume is used unless severity is urgent; the volume cap is never exceeded; the volume and mute are restored afterwards. The result ALWAYS carries text_to_send, because the operator may be away: send it by another channel when the alert matters. If no sound can be made, audible is false with the error, and text_to_send is still returned.",
+        props: props!(r#""instrument":{"type":"string"},"message":{"type":"string"},"severity":{"type":"string","enum":["info","warning","urgent"]},"tone":{"type":"boolean"},"speak":{"type":"boolean"},"repeat":{"type":"integer"},"output":{"type":"string"},"engine":{"type":"string"},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"}"#),
+        required: &[],
+    },
 ];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
@@ -472,8 +529,13 @@ pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
         .collect()
 }
 
+/// The user's runtime directory (`XDG_RUNTIME_DIR`).
+pub fn runtime_dir() -> Option<PathBuf> {
+    std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from)
+}
+
 /// Where to find a program on `PATH`.
-fn on_path(program: &str) -> Option<PathBuf> {
+pub(crate) fn on_path(program: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|p| {
         std::env::split_paths(&p)
             .map(|d| d.join(program))
@@ -608,6 +670,9 @@ pub fn call_with(
         "bench_audio_loopback" => tools::loopback(&ctx, args),
         "bench_audio_verify" => verify::verify(&ctx, args),
         "bench_audio_events" => verify::events(&ctx, args),
+        "bench_audio_synthesizers" => speak::synthesizers(&ctx, args),
+        "bench_audio_speak" => speak::speak(&ctx, args),
+        "bench_audio_alert" => alert::alert(&ctx, args),
         _ => Err(format!("{name} is not implemented")),
     }
 }
@@ -678,6 +743,32 @@ mod tests {
             .audio
             .quiet_hours
             .is_none());
+    }
+
+    #[test]
+    fn speech_settings_parse_and_bad_ones_are_refused() {
+        let i = insts(
+            r#","tts_engine":"espeak-ng","tts_voice":"en-us+f3","tts_language":"en","tts_rate":140,"piper_model":"/m/en.onnx""#,
+        );
+        let c = &i[0].audio;
+        assert_eq!(
+            (c.tts_engine.as_str(), c.tts_rate, c.tts_language.as_str()),
+            ("espeak-ng", 140, "en")
+        );
+        assert_eq!(
+            (c.tts_voice.as_deref(), c.piper_model.as_deref()),
+            (Some("en-us+f3"), Some("/m/en.onnx"))
+        );
+        let bad = |extra: &str| {
+            crate::config::parse(&format!(
+                r#"{{"instruments":{{"s":{{"driver":"audio"{extra}}}}}}}"#
+            ))
+            .is_err()
+        };
+        assert!(bad(r#","tts_engine":"festival""#));
+        assert!(bad(r#","tts_voice":"-x""#));
+        assert!(bad(r#","tts_rate":10"#));
+        assert_eq!(insts("")[0].audio.tts_rate, 160);
     }
 
     #[test]

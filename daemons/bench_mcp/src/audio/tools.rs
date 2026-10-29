@@ -266,6 +266,24 @@ fn source(ctx: &Ctx, args: &Value) -> Result<Source, String> {
     })
 }
 
+/// Sets the output's volume within the limits, runs `sound` (which makes the noise and returns how long it took), and puts the
+/// volume and mute back whether or not it succeeded.
+pub fn play_guarded(
+    ctx: &Ctx,
+    dev: &Device,
+    lim: &super::safety::Limits,
+    want: Want,
+    unmute: bool,
+    sound: impl FnOnce() -> Result<Duration, String>,
+) -> Result<(super::safety::Applied, Duration), String> {
+    let (mut guard, applied) = VolumeGuard::apply(ctx.run, dev, lim, want, unmute)?;
+    let played = sound();
+    let restored = guard.restore();
+    let took = played?;
+    restored?;
+    Ok((applied, took))
+}
+
 pub fn play(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: audio_play_tool]
     let dev = pick(ctx, args, "output", Dir::Output)?;
@@ -277,13 +295,10 @@ pub fn play(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     };
     let src = source(ctx, args)?;
     let result = (|| {
-        let (mut guard, applied) =
-            VolumeGuard::apply(ctx.run, dev, &lim, want, flag(args, "unmute"))?;
-        let played = Playing::start(&dev.node_name, &src.path, 1.0)
-            .and_then(|p| p.wait(Duration::from_secs_f64(src.seconds + 5.0)));
-        let restored = guard.restore();
-        let took = played?;
-        restored?;
+        let (applied, took) = play_guarded(ctx, dev, &lim, want, flag(args, "unmute"), || {
+            Playing::start(&dev.node_name, &src.path, 1.0)
+                .and_then(|p| p.wait(Duration::from_secs_f64(src.seconds + 5.0)))
+        })?;
         let mut out = json!({
             "output": dev.node_name, "alias": dev.alias, "played": src.description, "seconds": round3(src.seconds),
             "took_s": round3(took.as_secs_f64()), "volume_used": applied.volume, "volume_limit": lim.volume,
