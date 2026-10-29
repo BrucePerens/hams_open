@@ -1,0 +1,11 @@
+Current status for hub 3-2 [14b0:013a, USB 2.10, 5 ports, ppps]
+  Port 1: 0100 power
+  Port 2: 0103 power enable connect [0451:2036, USB 1.10, 3 ports, ganged]
+  Port 3: 0100 power
+  Port 4: 0100 power
+  Port 5: 0100 power
+Current status for hub 2-3 [14b0:0131, USB 3.20, 4 ports, ppps]
+  Port 1: 02a0 power 5gbps Rx.Detect
+  Port 2: 02a0 power 5gbps Rx.Detect
+  Port 3: 02a0 power 5gbps Rx.Detect
+  Port 4: 02a0 power 5gbps Rx.Detect

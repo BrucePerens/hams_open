@@ -27,6 +27,8 @@ pub enum Kind {
     /// The DG8SAQ VNWA vector network analyser, driven directly by the `vnwa_open` crate (USB and its two codecs).
     Vna,
     Sdr,
+    /// The host's USB hubs and ports (`usb_hub` module): read from sysfs, switched with uhubctl.
+    UsbHub,
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +46,7 @@ pub struct Instrument {
     /// VNA only: the settings of `vnwa_open::sweep::Config` (defaults for the other kinds, unused).
     pub vna: vnwa_open::sweep::Config,
     pub sdr: crate::sdr::Config,
+    pub usb: crate::usb_hub::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -133,9 +136,10 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             "atm6301" => Kind::Psu,
             "vnwa_open" => Kind::Vna,
             "bladerf" | "limesdr" => Kind::Sdr,
+            "usb_hub" => Kind::UsbHub,
             o => {
                 return Err(format!(
-                "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open, bladerf, limesdr)"
+                "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open, bladerf, limesdr, usb_hub)"
             ))
             }
         };
@@ -154,6 +158,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             max_amps: c.get("max_amps").and_then(|m| m.as_f64()).unwrap_or(1.0),
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
+            usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),

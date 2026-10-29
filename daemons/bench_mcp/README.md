@@ -154,3 +154,12 @@ the real kit's published numbers, see vnwa_open `cal::KitDefinition`), `bench_vn
 `bench_vna_power_cycle`. There is no spectrum-analyzer tool: the vendor's rudimentary VNA spectrum mode has not been decoded (the scope's `bench_scope_spectrum` is the
 spectrum tool). The AM tool reproduces the one captured setting (500 Hz, 100 %, -20 dB) and only a power cycle stops it. A running generator and a sweep or the meter must not
 overlap (the burst overwrites the generator's settings): one VNA call at a time is enforced by the server's per-instrument lock, but switch the generator off before a sweep.
+
+## USB hub tools (`usb_hub` driver)
+
+`bench_usb_topology`, `bench_usb_find` and the tools that follow describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
+Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`. Tests read a recording of this development machine's `/sys`, `uhubctl`, `lsusb` and kernel journal in
+`tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`).
+
+* The USB tree, its per-device JSON and the label lookup are checked against the recorded tree. [@ANCHOR: usb_hub_sysfs_tree]
+* The `usb_hub` config entry (labels, critical ports and devices) parses and refuses bad entries. [@ANCHOR: usb_hub_config]

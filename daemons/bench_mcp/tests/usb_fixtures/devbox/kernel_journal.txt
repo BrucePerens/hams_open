@@ -1,0 +1,418 @@
+1793251994.952640 devbox kernel: usb 3-2.2.2: cannot submit urb (err = -19)
+1793251994.952777 devbox kernel: usb 3-2.2.3: cannot submit urb (err = -19)
+1793251994.960312 devbox kernel: usb 3-2.2.3: cannot submit urb 0, error -19: no device
+1793251994.960747 devbox kernel: usb 3-2.2.3: cannot submit urb 0, error -19: no device
+1793251994.960903 devbox kernel: usb 3-2.2.3: cannot submit urb 0, error -19: no device
+1793251994.961035 devbox kernel: usb 3-2.2.3: cannot submit urb 0, error -19: no device
+1793254613.572439 devbox kernel: usb 3-2.2-port1: attempt power cycle
+1793254614.156659 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254614.360349 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254614.564370 devbox kernel: usb 3-2.2.1: device not accepting address 112, error -71
+1793254614.636612 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254614.840552 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254615.044504 devbox kernel: usb 3-2.2.1: device not accepting address 113, error -71
+1793254615.044592 devbox kernel: usb 3-2.2-port1: unable to enumerate USB device
+1793254652.064282 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254688.336320 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254688.516309 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254688.776356 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254717.076286 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254717.256286 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254717.508414 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254717.688552 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254717.796614 devbox kernel: usb 3-2.2-port1: attempt power cycle
+1793254718.380496 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254718.584335 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254718.788563 devbox kernel: usb 3-2.2.1: device not accepting address 4, error -71
+1793254718.860448 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254719.064525 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254719.268589 devbox kernel: usb 3-2.2.1: device not accepting address 5, error -71
+1793254719.268696 devbox kernel: usb 3-2.2-port1: unable to enumerate USB device
+1793254756.312567 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254756.488343 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254787.468570 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254818.708325 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254846.856558 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254847.032364 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254847.280515 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254847.456542 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254847.560455 devbox kernel: usb 3-2.2-port1: attempt power cycle
+1793254848.148664 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254848.352570 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254848.556464 devbox kernel: usb 3-2.2.1: device not accepting address 25, error -71
+1793254848.632685 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254848.836516 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254849.040431 devbox kernel: usb 3-2.2.1: device not accepting address 26, error -71
+1793254849.040547 devbox kernel: usb 3-2.2-port1: unable to enumerate USB device
+1793254886.096552 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254886.272288 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254886.520410 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254886.696485 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254886.800556 devbox kernel: usb 3-2.2-port1: attempt power cycle
+1793254887.384676 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254887.592454 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254887.796545 devbox kernel: usb 3-2.2.1: device not accepting address 32, error -71
+1793254887.872610 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254888.076390 devbox kernel: usb 3-2.2.1: Device not responding to setup address.
+1793254888.280444 devbox kernel: usb 3-2.2.1: device not accepting address 33, error -71
+1793254888.280526 devbox kernel: usb 3-2.2-port1: unable to enumerate USB device
+1793254925.316452 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254925.492337 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254925.740445 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254925.916415 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793254926.020381 devbox kernel: usb 3-2.2-port1: attempt power cycle
+1793255097.104439 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793255097.280428 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793255097.528284 devbox kernel: usb 3-2.2.1: device descriptor read/64, error -32
+1793276477.772518 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793276477.772556 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793276477.848315 devbox kernel: usb 3-2.2.2: new full-speed USB device number 113 using xhci_hcd
+1793276477.944285 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793276477.944431 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793276477.944474 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793276477.944511 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793276477.968361 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.006B/input/input144
+1793276478.096318 devbox kernel: usb 3-2.2.3: new full-speed USB device number 114 using xhci_hcd
+1793276478.192334 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793276478.192560 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793276478.192607 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793276478.192644 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793276478.216389 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.006C/input/input145
+1793278305.812295 devbox kernel: usb 3-2.2: USB disconnect, device number 111
+1793278305.812524 devbox kernel: usb 3-2.2.1: USB disconnect, device number 112
+1793278305.812565 devbox kernel: usb 3-2.2.2: USB disconnect, device number 113
+1793278305.868311 devbox kernel: usb 3-2.2.3: USB disconnect, device number 114
+1793278310.452513 devbox kernel: usb 3-2.2: new full-speed USB device number 115 using xhci_hcd
+1793278310.540350 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793278310.540635 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793278310.540680 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793278310.544340 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793278310.544489 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793278310.828441 devbox kernel: usb 3-2.2.1: new low-speed USB device number 116 using xhci_hcd
+1793278310.924463 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793278310.924669 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793278310.924750 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793278310.924821 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793278310.924887 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793278311.000461 devbox kernel: usb 3-2.2.2: new full-speed USB device number 117 using xhci_hcd
+1793278311.100289 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793278311.100477 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793278311.100530 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793278311.100567 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793278311.124328 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.006D/input/input146
+1793278311.252398 devbox kernel: usb 3-2.2.3: new full-speed USB device number 118 using xhci_hcd
+1793278311.344633 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793278311.344732 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793278311.344769 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793278311.344802 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793278311.368387 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.006E/input/input147
+1793280149.296298 devbox kernel: usb 3-2.2: USB disconnect, device number 115
+1793280149.296735 devbox kernel: usb 3-2.2.1: USB disconnect, device number 116
+1793280149.296783 devbox kernel: usb 3-2.2.2: USB disconnect, device number 117
+1793280149.348305 devbox kernel: usb 3-2.2.3: USB disconnect, device number 118
+1793280153.936457 devbox kernel: usb 3-2.2: new full-speed USB device number 119 using xhci_hcd
+1793280154.024402 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793280154.024550 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793280154.024589 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793280154.028360 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793280154.028513 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793280154.308431 devbox kernel: usb 3-2.2.1: new low-speed USB device number 120 using xhci_hcd
+1793280154.400392 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793280154.400585 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793280154.400634 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793280154.400668 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793280154.400700 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793280154.476317 devbox kernel: usb 3-2.2.2: new full-speed USB device number 121 using xhci_hcd
+1793280154.568294 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793280154.568408 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793280154.568449 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793280154.568484 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793280154.592399 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.006F/input/input148
+1793280154.720543 devbox kernel: usb 3-2.2.3: new full-speed USB device number 122 using xhci_hcd
+1793280154.820460 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793280154.820651 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793280154.820704 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793280154.820741 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793280154.844292 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0070/input/input149
+1793281982.396329 devbox kernel: usb 3-2.2: USB disconnect, device number 119
+1793281982.396623 devbox kernel: usb 3-2.2.1: USB disconnect, device number 120
+1793281982.396669 devbox kernel: usb 3-2.2.2: USB disconnect, device number 121
+1793281982.456467 devbox kernel: usb 3-2.2.3: USB disconnect, device number 122
+1793281987.048364 devbox kernel: usb 3-2.2: new full-speed USB device number 123 using xhci_hcd
+1793281987.144283 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793281987.144408 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793281987.144461 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793281987.148321 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793281987.148442 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793281987.436418 devbox kernel: usb 3-2.2.1: new low-speed USB device number 124 using xhci_hcd
+1793281987.532442 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793281987.532624 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793281987.532666 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793281987.532698 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793281987.532730 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793281987.612395 devbox kernel: usb 3-2.2.2: new full-speed USB device number 125 using xhci_hcd
+1793281987.708288 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793281987.708417 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793281987.708461 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793281987.708512 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793281987.732337 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0071/input/input150
+1793281987.860525 devbox kernel: usb 3-2.2.3: new full-speed USB device number 126 using xhci_hcd
+1793281987.952284 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793281987.952365 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793281987.952401 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793281987.952437 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793281987.976283 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0072/input/input151
+1793283816.620348 devbox kernel: usb 3-2.2: USB disconnect, device number 123
+1793283816.620619 devbox kernel: usb 3-2.2.1: USB disconnect, device number 124
+1793283816.620680 devbox kernel: usb 3-2.2.2: USB disconnect, device number 125
+1793283816.656311 devbox kernel: usb 3-2.2.3: USB disconnect, device number 126
+1793283821.324567 devbox kernel: usb 3-2.2: new full-speed USB device number 127 using xhci_hcd
+1793283821.412285 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793283821.412434 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793283821.412501 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793283821.412555 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793283821.412645 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793283821.700287 devbox kernel: usb 3-2.2.1: new low-speed USB device number 4 using xhci_hcd
+1793283821.796378 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793283821.796493 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793283821.796531 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793283821.796563 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793283821.796596 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793283821.868475 devbox kernel: usb 3-2.2.2: new full-speed USB device number 5 using xhci_hcd
+1793283821.960298 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793283821.960547 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793283821.960629 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793283821.960703 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793283821.984349 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0073/input/input152
+1793283822.116304 devbox kernel: usb 3-2.2.3: new full-speed USB device number 6 using xhci_hcd
+1793283822.208281 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793283822.208447 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793283822.208490 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793283822.208536 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793283822.232326 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0074/input/input153
+1793285643.952288 devbox kernel: usb 3-2.2: USB disconnect, device number 127
+1793285643.952464 devbox kernel: usb 3-2.2.1: USB disconnect, device number 4
+1793285643.952485 devbox kernel: usb 3-2.2.2: USB disconnect, device number 5
+1793285644.024298 devbox kernel: usb 3-2.2.3: USB disconnect, device number 6
+1793285648.612573 devbox kernel: usb 3-2.2: new full-speed USB device number 7 using xhci_hcd
+1793285648.704444 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793285648.704632 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793285648.704707 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793285648.704775 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793285648.704877 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793285648.992517 devbox kernel: usb 3-2.2.1: new low-speed USB device number 8 using xhci_hcd
+1793285649.088446 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793285649.088635 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793285649.088713 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793285649.088781 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793285649.088846 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793285649.160339 devbox kernel: usb 3-2.2.2: new full-speed USB device number 9 using xhci_hcd
+1793285649.260338 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793285649.260531 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793285649.260592 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793285649.260631 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793285649.284342 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0075/input/input154
+1793285649.420472 devbox kernel: usb 3-2.2.3: new full-speed USB device number 10 using xhci_hcd
+1793285649.512327 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793285649.512417 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793285649.512463 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793285649.512501 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793285649.536328 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0076/input/input155
+1793287459.436383 devbox kernel: usb 3-2.2: USB disconnect, device number 7
+1793287459.436847 devbox kernel: usb 3-2.2.1: USB disconnect, device number 8
+1793287459.436882 devbox kernel: usb 3-2.2.2: USB disconnect, device number 9
+1793287459.504324 devbox kernel: usb 3-2.2.3: USB disconnect, device number 10
+1793287464.124302 devbox kernel: usb 3-2.2: new full-speed USB device number 11 using xhci_hcd
+1793287464.220366 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793287464.220627 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793287464.220676 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793287464.220712 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793287464.220773 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793287464.508604 devbox kernel: usb 3-2.2.1: new low-speed USB device number 12 using xhci_hcd
+1793287464.608400 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793287464.608553 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793287464.608598 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793287464.608635 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793287464.608677 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793287464.684414 devbox kernel: usb 3-2.2.2: new full-speed USB device number 13 using xhci_hcd
+1793287464.780302 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793287464.780503 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793287464.780552 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793287464.780590 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793287464.804302 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0077/input/input156
+1793287464.932478 devbox kernel: usb 3-2.2.3: new full-speed USB device number 14 using xhci_hcd
+1793287465.028373 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793287465.028516 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793287465.028556 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793287465.028597 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793287465.056334 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0078/input/input157
+1793288686.568295 devbox kernel: usb 3-2.2: USB disconnect, device number 11
+1793288686.568519 devbox kernel: usb 3-2.2.1: USB disconnect, device number 12
+1793288686.568545 devbox kernel: usb 3-2.2.2: USB disconnect, device number 13
+1793288686.726757 devbox kernel: usb 3-2.2.3: USB disconnect, device number 14
+1793288686.727542 devbox kernel: usb 3-2.2.3: cannot submit urb 0, error -19: no device
+1793288686.727565 devbox kernel: usb 3-2.2.3: cannot submit urb 0, error -19: no device
+1793288691.224487 devbox kernel: usb 3-2.2: new full-speed USB device number 15 using xhci_hcd
+1793288691.316317 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793288691.316456 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793288691.316499 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793288691.320320 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793288691.320412 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793288691.608374 devbox kernel: usb 3-2.2.1: new low-speed USB device number 16 using xhci_hcd
+1793288691.700314 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793288691.700470 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793288691.700511 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793288691.700546 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793288691.700581 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793288691.776338 devbox kernel: usb 3-2.2.2: new full-speed USB device number 18 using xhci_hcd
+1793288691.872401 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288691.872555 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288691.872598 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793288691.872638 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793288691.896289 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0079/input/input158
+1793288692.032455 devbox kernel: usb 3-2.2.3: new full-speed USB device number 19 using xhci_hcd
+1793288692.124413 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288692.124575 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288692.124653 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793288692.124722 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793288692.152446 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.007A/input/input159
+1793288704.200345 devbox kernel: usb 3-2.2: USB disconnect, device number 15
+1793288704.200575 devbox kernel: usb 3-2.2.1: USB disconnect, device number 16
+1793288704.200613 devbox kernel: usb 3-2.2.2: USB disconnect, device number 18
+1793288704.260304 devbox kernel: usb 3-2.2.3: USB disconnect, device number 19
+1793288708.836295 devbox kernel: usb 3-2.2: new full-speed USB device number 20 using xhci_hcd
+1793288708.924431 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793288708.924576 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793288708.924636 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793288708.928425 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793288708.928517 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793288709.212633 devbox kernel: usb 3-2.2.1: new low-speed USB device number 21 using xhci_hcd
+1793288709.308398 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793288709.308566 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793288709.308605 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793288709.308639 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793288709.308670 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793288709.384514 devbox kernel: usb 3-2.2.2: new full-speed USB device number 22 using xhci_hcd
+1793288709.480374 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288709.480525 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288709.480568 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793288709.480610 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793288709.504471 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.007B/input/input160
+1793288709.632528 devbox kernel: usb 3-2.2.3: new full-speed USB device number 23 using xhci_hcd
+1793288709.724493 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288709.724596 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288709.724639 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793288709.724672 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793288709.752523 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.007C/input/input161
+1793288816.692312 devbox kernel: usb 3-2.2: USB disconnect, device number 20
+1793288816.700670 devbox kernel: usb 3-2.2.1: USB disconnect, device number 21
+1793288816.700717 devbox kernel: usb 3-2.2.2: USB disconnect, device number 22
+1793288816.756365 devbox kernel: usb 3-2.2.3: USB disconnect, device number 23
+1793288821.428537 devbox kernel: usb 3-2.2: new full-speed USB device number 24 using xhci_hcd
+1793288821.520334 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793288821.520453 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793288821.520497 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793288821.524433 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793288821.524540 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793288821.808450 devbox kernel: usb 3-2.2.1: new low-speed USB device number 25 using xhci_hcd
+1793288821.900354 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793288821.900486 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793288821.900524 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793288821.900574 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793288821.900607 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793288821.976334 devbox kernel: usb 3-2.2.2: new full-speed USB device number 26 using xhci_hcd
+1793288822.068320 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288822.068509 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288822.068599 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793288822.068675 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793288822.092353 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.007D/input/input162
+1793288822.224339 devbox kernel: usb 3-2.2.3: new full-speed USB device number 27 using xhci_hcd
+1793288822.320397 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288822.320556 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288822.320598 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793288822.320639 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793288822.344385 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.007E/input/input163
+1793288893.220295 devbox kernel: usb 3-2.2: USB disconnect, device number 24
+1793288893.220539 devbox kernel: usb 3-2.2.1: USB disconnect, device number 25
+1793288893.220576 devbox kernel: usb 3-2.2.2: USB disconnect, device number 26
+1793288893.296305 devbox kernel: usb 3-2.2.3: USB disconnect, device number 27
+1793288906.932438 devbox kernel: usb 3-2.2: new full-speed USB device number 28 using xhci_hcd
+1793288907.024450 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793288907.024628 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793288907.024715 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793288907.024783 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793288907.024885 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793288907.308538 devbox kernel: usb 3-2.2.1: new low-speed USB device number 29 using xhci_hcd
+1793288907.400290 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793288907.400507 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793288907.400589 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793288907.400660 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793288907.400728 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793288907.472313 devbox kernel: usb 3-2.2.2: new full-speed USB device number 30 using xhci_hcd
+1793288907.564290 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288907.564413 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288907.564458 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793288907.564496 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793288907.588449 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.007F/input/input164
+1793288907.716292 devbox kernel: usb 3-2.2.3: new full-speed USB device number 31 using xhci_hcd
+1793288907.816297 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793288907.816477 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793288907.816537 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793288907.816592 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793288907.844303 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0080/input/input165
+1793288972.484297 devbox kernel: usb 3-2.2: USB disconnect, device number 28
+1793288972.484548 devbox kernel: usb 3-2.2.1: USB disconnect, device number 29
+1793288972.484596 devbox kernel: usb 3-2.2.2: USB disconnect, device number 30
+1793288972.532327 devbox kernel: usb 3-2.2.3: USB disconnect, device number 31
+1793289071.864398 devbox kernel: usb 3-2.2: new full-speed USB device number 32 using xhci_hcd
+1793289071.952400 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793289071.952559 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793289071.952605 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793289071.956338 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793289071.956463 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793289072.240395 devbox kernel: usb 3-2.2.1: new low-speed USB device number 33 using xhci_hcd
+1793289072.332289 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793289072.332440 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793289072.332487 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793289072.332527 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793289072.332567 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793289072.408342 devbox kernel: usb 3-2.2.2: new full-speed USB device number 34 using xhci_hcd
+1793289072.500289 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793289072.500435 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793289072.500480 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793289072.500518 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793289072.524333 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0081/input/input166
+1793289072.652449 devbox kernel: usb 3-2.2.3: new full-speed USB device number 35 using xhci_hcd
+1793289072.748337 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793289072.748490 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793289072.748543 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793289072.748584 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793289072.772307 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0082/input/input167
+1793289135.352295 devbox kernel: usb 3-2.2: USB disconnect, device number 32
+1793289135.352586 devbox kernel: usb 3-2.2.1: USB disconnect, device number 33
+1793289135.352636 devbox kernel: usb 3-2.2.2: USB disconnect, device number 34
+1793289135.404307 devbox kernel: usb 3-2.2.3: USB disconnect, device number 35
+1793289140.016396 devbox kernel: usb 3-2.2: new full-speed USB device number 36 using xhci_hcd
+1793289140.108292 devbox kernel: usb 3-2.2: New USB device found, idVendor=0451, idProduct=2036, bcdDevice= 1.01
+1793289140.108496 devbox kernel: usb 3-2.2: New USB device strings: Mfr=0, Product=1, SerialNumber=0
+1793289140.108575 devbox kernel: usb 3-2.2: Product: General Purpose USB Hub
+1793289140.108676 devbox kernel: hub 3-2.2:1.0: USB hub found
+1793289140.112339 devbox kernel: hub 3-2.2:1.0: 3 ports detected
+1793289140.396295 devbox kernel: usb 3-2.2.1: new low-speed USB device number 37 using xhci_hcd
+1793289140.492357 devbox kernel: usb 3-2.2.1: New USB device found, idVendor=20a0, idProduct=4118, bcdDevice= 1.00
+1793289140.492580 devbox kernel: usb 3-2.2.1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+1793289140.492671 devbox kernel: usb 3-2.2.1: Product: DG8SAQ-VNWA 3.0 
+1793289140.492755 devbox kernel: usb 3-2.2.1: Manufacturer: www.sdr-kits.net
+1793289140.492833 devbox kernel: usb 3-2.2.1: SerialNumber: None
+1793289140.568349 devbox kernel: usb 3-2.2.2: new full-speed USB device number 38 using xhci_hcd
+1793289140.660315 devbox kernel: usb 3-2.2.2: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793289140.660556 devbox kernel: usb 3-2.2.2: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793289140.660657 devbox kernel: usb 3-2.2.2: Product: USB AUDIO  CODEC
+1793289140.660745 devbox kernel: usb 3-2.2.2: Manufacturer: BurrBrown from Texas Instruments
+1793289140.684305 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.3/0003:08BB:29C0.0083/input/input168
+1793289140.812335 devbox kernel: usb 3-2.2.3: new full-speed USB device number 39 using xhci_hcd
+1793289140.904295 devbox kernel: usb 3-2.2.3: New USB device found, idVendor=08bb, idProduct=29c0, bcdDevice= 1.00
+1793289140.904464 devbox kernel: usb 3-2.2.3: New USB device strings: Mfr=1, Product=2, SerialNumber=0
+1793289140.904512 devbox kernel: usb 3-2.2.3: Product: USB AUDIO  CODEC
+1793289140.904560 devbox kernel: usb 3-2.2.3: Manufacturer: BurrBrown from Texas Instruments
+1793289140.928314 devbox kernel: input: BurrBrown from Texas Instruments USB AUDIO  CODEC as /devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.3/0003:08BB:29C0.0084/input/input169

@@ -1,0 +1,6 @@
+DEVTYPE=usb_interface
+DRIVER=snd-usb-audio
+PRODUCT=8bb/29c0/100
+TYPE=0/0/0
+INTERFACE=1/1/0
+MODALIAS=usb:v08BBp29C0d0100dc00dsc00dp00ic01isc01ip00in00
