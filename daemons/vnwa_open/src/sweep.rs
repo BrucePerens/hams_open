@@ -47,11 +47,26 @@ pub struct Config {
     /// How many times a point is measured again because audio was lost to a buffer overrun inside its window. These retries are
     /// separate from `retries` and never lead to a power cycle (the unit is not at fault); when they are used up the point fails.
     pub overrun_retries: u32,
+    /// Throw-away measurements at the start frequency before the first point of a sweep, and a wait before them (milliseconds). Both 0
+    /// unless an experiment shows the first point of a sweep is worse than the rest (`examples/settle_probe.rs`).
+    pub discard_points: u32,
+    pub first_wait_ms: f64,
+    /// Pauses (ms) between the tries of the 0x0d read that ends the set-up block, which the unit stalls in about 0.6 % of the points (a stall is
+    /// an error of the read, not of the audio). Empty uses the default transfer retry.
+    pub stall_pauses_ms: Vec<u64>,
+    /// The shortest time (ms) from the end of one point's send to the start of the next one's; 0 sends as soon as the last point's
+    /// analysis is done. The unit emits for 5 point times after each block (`docs/PROTOCOL.md`).
+    pub min_gap_ms: f64,
 }
 
 /// Where the analysis window starts, after the first level step (one point time after the end of the block send): 11 ms, which is where it
 /// started on average when it was timed from before the send (60 + 20 ms minus the median send of 9 ms).
 pub const SETTLE_AFTER_STEP_MS: f64 = 11.0;
+
+/// The pauses between the tries of a stalled 0x0d read (6 resends, 315 ms in all at worst). With the default transfer retry (3 resends, 5 ms apart)
+/// 0.61 % of all attempts (25 of 4,105) failed on a stalled read; with these, 0.05 % (2 of 4,082). Waiting 360 ms between points instead did
+/// not help (13 of 2,053) and made a sweep 80 % slower. See `docs/PROTOCOL.md`.
+pub const STALL_PAUSES_MS: [u64; 6] = [5, 10, 20, 40, 80, 160];
 
 impl Default for Config {
     fn default() -> Config {
@@ -68,6 +83,10 @@ impl Default for Config {
             min_reference: 200.0,
             capture: crate::capture::Options::default(),
             overrun_retries: 10,
+            discard_points: 0,
+            first_wait_ms: 0.0,
+            stall_pauses_ms: STALL_PAUSES_MS.to_vec(),
+            min_gap_ms: 0.0,
         }
     }
 }
@@ -360,6 +379,7 @@ pub struct Vna {
     last_levels: std::sync::Mutex<String>,
     /// How long the last attempt took to send its block and the 0x0d read (milliseconds); the analysis window is timed from before it.
     last_send_ms: std::sync::Mutex<f64>,
+    last_send_end: std::sync::Mutex<Option<std::time::Instant>>,
     /// (block send time in ms, attempt succeeded) of the attempts since the handle was opened, the newest `ATTEMPT_LOG`.
     attempt_log: std::sync::Mutex<Vec<(f64, bool)>>,
 }
@@ -410,6 +430,7 @@ impl Vna {
             power_log: Vec::new(),
             last_levels: std::sync::Mutex::new(String::new()),
             last_send_ms: std::sync::Mutex::new(0.0),
+            last_send_end: std::sync::Mutex::new(None),
             attempt_log: std::sync::Mutex::new(Vec::new()),
         })
     }
@@ -502,9 +523,23 @@ impl Vna {
         // The analysis window is placed relative to the instant the block is sent, so the mark is taken right before it.
         // Resent transfers wait only a few milliseconds (`usb::RETRY_PAUSE`) so they do not move the window.
         // [@ANCHOR: vnwa_open_window_from_send_end]
+        if c.min_gap_ms > 0.0 {
+            let last = *self.last_send_end.lock().unwrap();
+            if let Some(t) = last {
+                let want = Duration::from_secs_f64(c.min_gap_ms / 1000.0);
+                if t.elapsed() < want {
+                    std::thread::sleep(want - t.elapsed());
+                }
+            }
+        }
         let sent_at = std::time::Instant::now();
         usb.send_all(&block)?;
-        usb.read(0x0d, 0x0303, 0, 64)?;
+        if c.stall_pauses_ms.is_empty() {
+            usb.read(0x0d, 0x0303, 0, 64)?;
+        } else {
+            usb.read_patient(0x0d, 0x0303, 0, 64, &c.stall_pauses_ms)?;
+        }
+        *self.last_send_end.lock().unwrap() = Some(std::time::Instant::now());
         *self.last_send_ms.lock().unwrap() = sent_at.elapsed().as_secs_f64() * 1000.0;
         // The unit starts emitting when the block and the 0x0d read are done, so the window is timed from this instant. (It was timed from
         // before the send, and the send takes 7 to 27 ms: a send over about 20 ms put the window start on the 60 ms level step, which is
@@ -593,6 +628,14 @@ impl Vna {
     ) -> Result<Vec<Point>, String> {
         if points == 0 {
             return Err("a sweep needs at least one point".into());
+        }
+        if self.cfg.first_wait_ms > 0.0 {
+            std::thread::sleep(Duration::from_secs_f64(self.cfg.first_wait_ms / 1000.0));
+        }
+        // [@ANCHOR: vnwa_open_discard_points]
+        for _ in 0..self.cfg.discard_points {
+            // The result is thrown away; a failure of a discarded point is still counted in the recovery tallies and the failure log.
+            let _ = self.measure(start_hz, start_hz);
         }
         (0..points)
             .map(|i| {

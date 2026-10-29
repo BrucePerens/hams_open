@@ -43,7 +43,7 @@ fn main() -> Result<(), String> {
         println!("period {period:?}: {sweeps} sweeps ({errs} failed) in {el:.1} s; overruns reported {} = {:.3}/s; points re-measured for overruns {}; {r:?}", r.overruns_reported, r.overruns_reported as f64 / el, r.overrun_retries);
     } else {
         let c = vnwa_open::topology::codecs()?;
-        let (mut c1, mut c2) = (
+        let (c1, c2) = (
             Capture::open_with(&c.s11, o)?,
             Capture::open_with(&c.s21, o)?,
         );

@@ -23,7 +23,18 @@ struct Ring {
     /// When the audio layer last delivered a period, and its length in frames (0 before the first).
     last_delivery: Option<Instant>,
     period: u64,
+    /// Overrun reports since the last delivery of audio; a stream that restarts and fails again reports one every millisecond or so.
+    reports_since_delivery: u64,
 }
+
+/// True once this many overrun reports have come with no audio between them (see `STORM_REPORTS`).
+fn is_storm(reports_since_delivery: u64) -> bool {
+    reports_since_delivery >= STORM_REPORTS
+}
+
+/// This many overrun reports with no audio delivered between them mean the stream cannot run (its codec is gone), not that one buffer
+/// overran: `frames_after` then closes the stream and fails.
+pub const STORM_REPORTS: u64 = 100;
 
 /// One buffer overrun reported by the audio layer: the capture ring lost frames at this point. `at_frame` is the running frame
 /// count when it was reported (frames before it were delivered; the lost ones would have followed), `at` the instant.
@@ -42,7 +53,7 @@ const MAX_OVERRUNS_KEPT: usize = 4096;
 pub struct Capture {
     ring: Arc<(Mutex<Ring>, Condvar)>,
     /// `None` after `close`.
-    stream: Option<cpal::Stream>,
+    stream: Mutex<Option<cpal::Stream>>,
 }
 
 /// How a stream is opened.
@@ -104,6 +115,7 @@ impl Capture {
                 overrun_count: 0,
                 last_delivery: None,
                 period: 0,
+                reports_since_delivery: 0,
             }),
             Condvar::new(),
         ));
@@ -115,6 +127,7 @@ impl Capture {
                 move |data: &[i16], _| {
                     let (lock, wake) = &*writer;
                     let mut ring = lock.lock().unwrap();
+                    ring.reports_since_delivery = 0;
                     ring.last_delivery = Some(Instant::now());
                     ring.period = (data.len() / 2) as u64;
                     for f in data.as_chunks::<2>().0 {
@@ -133,6 +146,10 @@ impl Capture {
                     if e.kind() == cpal::ErrorKind::Xrun {
                         let at_frame = ring.total;
                         ring.overrun_count += 1;
+                        ring.reports_since_delivery += 1;
+                        if ring.reports_since_delivery == STORM_REPORTS {
+                            reporter.1.notify_all();
+                        }
                         ring.overruns.push_back(Overrun {
                             at: Instant::now(),
                             at_frame,
@@ -152,21 +169,23 @@ impl Capture {
         stream.play().map_err(|e| format!("audio: {e}"))?;
         Ok(Capture {
             ring,
-            stream: Some(stream),
+            stream: Mutex::new(Some(stream)),
         })
     }
 
     /// Stops the stream and releases the device. It must be done before the unit's power is cut: a stream left open on a codec that
     /// vanishes keeps restarting and failing, and the audio layer reports an overrun for each try, about a thousand a second until
     /// the stream is dropped (seen in the 2026-10-29 soak: three storms of about 16,700 reports, each during a power cycle).
-    pub fn close(&mut self) {
+    pub fn close(&self) {
         // [@ANCHOR: vnwa_open_capture_close]
-        self.stream = None;
+        // Dropped outside every other lock: the stream's worker thread takes the ring lock in its callbacks and drop waits for it.
+        let stream = self.stream.lock().unwrap().take();
+        drop(stream);
     }
 
     /// True until `close`.
     pub fn is_open(&self) -> bool {
-        self.stream.is_some()
+        self.stream.lock().unwrap().is_some()
     }
 
     /// The frame count at this instant: the "mark" for `frames_after`. The audio layer delivers a period at a time, so the frames
@@ -206,7 +225,7 @@ impl Capture {
         timeout: Duration,
     ) -> Result<Vec<[i16; 2]>, String> {
         // [@ANCHOR: vnwa_open_overrun_window]
-        if self.stream.is_none() {
+        if !self.is_open() {
             return Err("audio: the stream was closed".into());
         }
         let (lock, wake) = &*self.ring;
@@ -215,6 +234,14 @@ impl Capture {
         let deadline = Instant::now() + timeout;
         let mut ring = lock.lock().unwrap();
         while ring.total < last {
+            if is_storm(ring.reports_since_delivery) {
+                let reports = ring.overrun_count;
+                drop(ring);
+                self.close();
+                return Err(format!(
+                    "audio: the stream was closed because it reports an overrun every few milliseconds and delivers no audio (its codec is gone; {reports} reports): the unit needs a power cycle or the codec a new stream"
+                ));
+            }
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
                 return Err(format!(
@@ -270,6 +297,15 @@ fn overruns_in(overruns: &std::collections::VecDeque<Overrun>, mark: u64, last: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: vnwa_open_capture_close]
+    #[test]
+    fn a_storm_of_reports_is_told_from_single_overruns_by_the_count_without_audio_between() {
+        // One overrun every few hundred ms (a loaded host) never reaches the bound; 100 in a row with no audio is a stream that cannot run.
+        assert!(!is_storm(1) && !is_storm(STORM_REPORTS - 1) && is_storm(STORM_REPORTS));
+        // The dry run of 2026-10-29: 72,337 reports in 26 s, about 2,800 a second, so the bound is reached in 36 ms.
+        assert!(STORM_REPORTS as f64 / 2_800.0 < 0.05);
+    }
 
     // Tests [@ANCHOR: vnwa_open_capture_mark]
     #[test]

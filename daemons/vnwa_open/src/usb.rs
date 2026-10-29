@@ -121,6 +121,47 @@ impl Vnwa {
         block.iter().try_for_each(|r| self.send(r))
     }
 
+    /// Like `read`, but a transient error is followed by the given pauses (milliseconds), one per resend, instead of the default
+    /// `TRANSFER_RETRIES` of `RETRY_PAUSE`. For the 0x0d read, which the unit stalls while it is busy.
+    pub fn read_patient(
+        &self,
+        request: u8,
+        value: u16,
+        index: u16,
+        len: usize,
+        pauses_ms: &[u64],
+    ) -> Result<Vec<u8>, String> {
+        // [@ANCHOR: vnwa_open_patient_read]
+        let mut buf = vec![0u8; len];
+        let what = format!("read request {request:#04x}");
+        let mut last = String::new();
+        for n in 0..=pauses_ms.len() {
+            match self.link.read(request, value, index, &mut buf) {
+                Ok(got) => {
+                    self.remember(&what, "ok");
+                    buf.truncate(got);
+                    return Ok(buf);
+                }
+                Err(TransferError::Transient(m)) => {
+                    self.remember(&what, &format!("{m} (transient, try {})", n + 1));
+                    self.resends.fetch_add(1, Ordering::Relaxed);
+                    last = m;
+                    if let Some(p) = pauses_ms.get(n) {
+                        std::thread::sleep(Duration::from_millis(*p));
+                    }
+                }
+                Err(e) => {
+                    self.remember(&what, &format!("{e}"));
+                    return Err(format!("{what}: {e}"));
+                }
+            }
+        }
+        Err(format!(
+            "{what}: still failing after {} resends ({last})",
+            pauses_ms.len()
+        ))
+    }
+
     /// A device-to-host vendor request of at most `len` bytes (for example 0x3a, the generator's read-back).
     pub fn read(&self, request: u8, value: u16, index: u16, len: usize) -> Result<Vec<u8>, String> {
         let mut buf = vec![0u8; len];
@@ -204,6 +245,32 @@ mod tests {
         let e = u.read(0x58, 0, 0, 64).unwrap_err();
         assert!(e.contains("still failing after 3 resends"), "{e}");
         assert_eq!(s.seen().len(), 1 + TRANSFER_RETRIES as usize);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_patient_read]
+    #[test]
+    fn a_patient_read_follows_its_own_pauses_and_gives_up_after_the_last() {
+        let (u, s) = unit(vec![
+            eproto(),
+            eproto(),
+            eproto(),
+            eproto(),
+            eproto(),
+            Ok(vec![7]),
+        ]);
+        let t = std::time::Instant::now();
+        assert_eq!(
+            u.read_patient(0x0d, 0x0303, 0, 64, &[1, 1, 1, 1, 1])
+                .unwrap(),
+            vec![7]
+        );
+        assert_eq!(s.seen().len(), 6);
+        assert_eq!(u.resends(), 5);
+        assert!(t.elapsed() >= Duration::from_millis(5));
+        let (u, s) = unit((0..10).map(|_| eproto()).collect());
+        let e = u.read_patient(0x0d, 0x0303, 0, 64, &[1, 1]).unwrap_err();
+        assert!(e.contains("still failing after 2 resends"), "{e}");
+        assert_eq!(s.seen().len(), 3);
     }
 
     #[test]
