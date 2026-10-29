@@ -13,6 +13,18 @@ As a **Community Member**, I want to create and manage my own personal website a
   routed by [@ANCHOR: user_websites:COMM_create_site]). Verified by `[@ANCHOR: test_tour_create_site]`.
 - **And** I am redirected to my new home page where I can start editing.
 
+### A Home Page That Already Exists
+- **Given** my home page already exists at `/<callsign>` but is unpublished, or I deleted it
+- **When** I open my address
+- **Then** the page offers "Publish Your Home" or "Restore Your Home" instead of "Create Your Home",
+  because the page and the Create button ask the same question
+  ([@ANCHOR: user_websites:fn_main_owner_home]).
+- **When** I click the button
+- **Then** the existing page is published (or brought back from its parked `/<callsign>/deleted-<id>`
+  address) and no second page is made, so the address is never in conflict. A home page archived by
+  moderation is not revived: I am pointed to the site tools instead. Verified by
+  `[@ANCHOR: test_create_site_reuses_existing_home]`.
+
 ### Writing a Blog Post
 - **Given** I have an active site
 - **When** I navigate to my blog index ([@ANCHOR: user_websites:COMM_user_blog_index])

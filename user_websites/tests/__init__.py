@@ -45,6 +45,7 @@ from . import test_user_arch_style_link
 from . import test_member_site_home_url
 from . import test_site_slug_one_site
 from . import test_site_eligibility_hook
+from . import test_create_site_existing_home
 from . import test_owner_delete
 from . import test_owner_site
 from . import test_report_shield

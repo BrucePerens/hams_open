@@ -637,14 +637,25 @@
                         <t t-if="is_owner">
                             <t t-set="help_hash" t-value="'#UX_CREATE_SITE' if page_type == 'home' else '#UX_CREATE_BLOG_POST'"/>
                             <h2 class="fw-bold">Welcome, <t t-out="entity_name"/>! <a t-attf-href="/user-websites/documentation#{help_hash}" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h2>
-                            <p class="text-muted mt-3 mb-4">
+                            <p t-if="page_type == 'home' and home_state == 'unpublished'" class="text-muted mt-3 mb-4">
+                                Your home page exists but is not published, so visitors cannot see it yet. Click the button below to publish it.
+                            </p>
+                            <p t-elif="page_type == 'home' and home_state == 'deleted'" class="text-muted mt-3 mb-4">
+                                You deleted your home page. Click the button below to bring it back and publish it.
+                            </p>
+                            <p t-elif="page_type == 'home' and home_state == 'blocked'" class="text-muted mt-3 mb-4">
+                                Your home page was removed from the site and cannot be recreated here. Open your site tools for details.
+                            </p>
+                            <p t-else="" class="text-muted mt-3 mb-4">
                                 Your <t t-out="page_type"/> has not been initialized yet. Click the button below to generate your initial layout and start editing.
                             </p>
                             <form t-attf-action="/#{entity_slug}/create_#{'site' if page_type == 'home' else 'blog'}" method="post">
                                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                 <button type="submit" class="btn btn-primary btn-lg o_tour_create_site_btn">
                                     <i t-attf-class="fa #{'fa-paint-brush' if page_type == 'home' else 'fa-pencil'} me-2" aria-hidden="true"/>
-                                    Create Your <span style="text-transform: capitalize;"><t t-out="page_type"/></span>
+                                    <t t-if="page_type == 'home' and home_state == 'unpublished'">Publish Your Home</t>
+                                    <t t-elif="page_type == 'home' and home_state == 'deleted'">Restore Your Home</t>
+                                    <t t-else="">Create Your <span style="text-transform: capitalize;"><t t-out="page_type"/></span></t>
                                 </button>
                             </form>
                         </t>

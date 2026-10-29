@@ -216,6 +216,62 @@ def _legacy_slug_redirect(website_slug, rest=""):
     return request.redirect("/" + quote(target, safe="") + rest, code=301, local=True)
 
 
+HOME_NONE = "none"
+HOME_PUBLISHED = "published"
+HOME_UNPUBLISHED = "unpublished"
+HOME_DELETED = "deleted"
+HOME_BLOCKED = "blocked"
+
+
+def _owner_home(env_svc, profile_user, profile_group, slug, website_id):
+    """(page, state) for the owner's home page at /<slug>, whatever its state.
+
+    [@ANCHOR: user_websites:fn_main_owner_home]
+    Verified by [@ANCHOR: test_create_site_reuses_existing_home]
+    One question, asked by the page that shows the "Create" button and by create_site() that
+    acts on it, so they cannot disagree (found 2026-10-29: an unpublished home at /k6bp made the
+    public page offer "Create your site", and the button then failed on the unique address).
+    States: HOME_NONE (nothing: create one), HOME_UNPUBLISHED (the page exists, hidden: publish
+    it), HOME_DELETED (the owner deleted it and its address is parked at /<slug>/deleted-<id>:
+    restore it), HOME_BLOCKED (archived by moderation, not by the owner, or the address is held
+    by a page of another owner: neither reused nor overwritten). A published home is served by
+    user_home_fallback() before this is asked (HOME_PUBLISHED is for create_site()).
+    """
+    owner_domain = (
+        [("owner_user_id", "=", profile_user.id)]
+        if profile_user
+        else [("user_websites_group_id", "=", profile_group.id)]
+    )
+    pages = env_svc["website.page"].with_context(active_test=False)
+    at_address = pages.search(
+        [("url", "=", f"/{slug}"), ("website_id", "=", website_id)], limit=1
+    )
+    if at_address:
+        owner = (
+            at_address.owner_user_id == profile_user
+            if profile_user
+            else at_address.user_websites_group_id == profile_group
+        )
+        if not owner or not at_address.active:
+            return at_address, HOME_BLOCKED
+        if at_address.website_published:
+            return at_address, HOME_PUBLISHED
+        return at_address, HOME_UNPUBLISHED
+    parked = pages.search(
+        owner_domain
+        + [
+            ("deleted_original_url", "=", f"/{slug}"),
+            ("deleted_by_owner", "!=", False),
+            ("website_id", "=", website_id),
+        ],
+        order="deleted_by_owner desc, id desc",
+        limit=1,
+    )
+    if parked:
+        return parked, HOME_DELETED
+    return pages.browse(), HOME_NONE
+
+
 def _serve_core_fallback():
     # [@ANCHOR: user_websites:fn_main_serve_core_fallback]
     """Odoo's own page / redirect / attachment lookup for the request's path.
@@ -644,6 +700,11 @@ class UserWebsitesController(http.Controller):
             is_owner = True
 
         main_object = profile_user or profile_group
+        home_state = HOME_NONE
+        if is_owner:
+            _home, home_state = _owner_home(
+                env_svc, profile_user, profile_group, canonical, request.website.id
+            )
         values = {
             "profile_user": profile_user,
             "profile_group": profile_group,
@@ -651,6 +712,7 @@ class UserWebsitesController(http.Controller):
             "resolved_slug": website_slug,
             "page_type": "home",
             "is_owner": is_owner,
+            "home_state": home_state,
         }
         return request.render("user_websites.placeholder_page", values)
 
@@ -698,6 +760,29 @@ class UserWebsitesController(http.Controller):
             )
             if not is_member:
                 raise request.not_found()
+
+        existing, home_state = _owner_home(
+            env_svc, profile_user, profile_group, website_slug, request.website.id
+        )
+        if home_state == HOME_BLOCKED:
+            return request.redirect(
+                f"/my/site/{quote(website_slug, safe='')}?error=home_blocked", code=303
+            )
+        if home_state == HOME_DELETED:
+            # Back at its own address, published: the owner just asked for the home to exist.
+            existing.with_context(no_cow=True).write(
+                {
+                    "url": f"/{website_slug}",
+                    "active": True,
+                    "deleted_by_owner": False,
+                    "deleted_original_url": False,
+                    "website_published": True,
+                }
+            )
+        if home_state == HOME_UNPUBLISHED:
+            existing.with_context(no_cow=True).write({"website_published": True})
+        if home_state != HOME_NONE:
+            return request.redirect(f"/{website_slug}")
 
         entity_name = profile_user.name if profile_user else profile_group.name
         # [!] SECURITY: entity_name is a user-controlled res.users/group name
