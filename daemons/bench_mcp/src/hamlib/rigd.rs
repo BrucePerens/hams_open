@@ -342,11 +342,6 @@ pub fn kill_slot(name: &str) -> bool {
     running
 }
 
-/// Stops every managed daemon: called when the server stops.
-pub fn shutdown() {
-    shutdown_prefix("");
-}
-
 /// Stops the managed daemons of the rigs whose names start with `prefix` (all of them for an empty prefix).
 pub fn shutdown_prefix(prefix: &str) {
     // [@ANCHOR: hamlib_shutdown]

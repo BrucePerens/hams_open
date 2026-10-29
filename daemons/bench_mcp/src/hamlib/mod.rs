@@ -16,6 +16,7 @@ pub mod audio_in;
 pub mod control;
 pub mod detect;
 pub mod diag;
+pub mod guard;
 pub mod load;
 pub mod loadtools;
 pub mod models;
@@ -25,6 +26,7 @@ pub mod rxcheck;
 pub mod stations;
 pub mod status;
 pub mod tx;
+pub mod txtools;
 
 use crate::audio::Process;
 use crate::config::{Instrument, Kind, Tier};
@@ -232,6 +234,9 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     if let Some(t) = c.get("transmit") {
         cfg.transmit = Some(attest::parse_transmit(t).map_err(|e| format!("transmit: {e}"))?);
     }
+    if cfg.transmit.as_ref().is_some_and(|t| t.operator_alert) && cfg.audio.is_none() {
+        return Err("transmit.operator_alert needs audio: the alert is played through the audio instrument named there".into());
+    }
     Ok(cfg)
 }
 
@@ -347,10 +352,36 @@ pub const SPECS: &[Spec] = &[
         props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"a frequency inside one of the owner's transmit.frequency_ranges"},"confirm_dummy_load":{"type":"boolean","description":"true: the person at the bench says the rig's antenna port is on the dummy load"},"dry_run":{"type":"boolean","description":"return the plan and do nothing"}"#),
         required: &["frequency_hz"],
     },
+    Spec {
+        name: "bench_hamlib_safe_state",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB: puts the rig in its safe state: PTT off, read back, and (unless `lower_power` is false) the power setting set to the rig's minimum; says what the power setting was. Safe at any time and does not wait for any other call, so it also ends a keyed interval that is running. Use it first when anything went wrong. If the rig will not confirm PTT off, the answer says what to do by hand.",
+        props: props!(r#""instrument":{"type":"string"},"lower_power":{"type":"boolean","description":"also set the power setting to the rig's minimum, default true"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_hamlib_tx_key_test",
+        tier: Tier::Full,
+        desc: "HAMLIB TRANSMIT TEST INTO A DUMMY LOAD, DESTROYS NOTHING BUT RADIATES IF THE LOAD IS NOT THERE: keys the rig on `frequency_hz` in `mode` at `power_w` for `seconds`, reading power, SWR, ALC and temperature meters every `sample_every_ms`, then releases PTT and reads it back. Only for a rig whose config has the owner's dummy-load attestation (transmit block), and only inside the owner's frequency ranges, modes, power cap and time cap. Needs `confirm_dummy_load: true` from the person at the bench and `reason` (who and why, logged). Before keying: the load plausibility check must say consistent with a load (a baseline must exist), the operator alert if configured, then a low-power probe key that reads the SWR (an open or shorted connection receives nothing, so only the SWR shows it). A separate watchdog process un-keys the rig on timeout, error, crash or exit. `dry_run` returns the plan and sends nothing. THE SOFTWARE CANNOT KNOW WHAT IS CONNECTED: the attestation is the control; the checks are evidence, not proof. Licence compliance is the owner's responsibility.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"transmit frequency in Hz, inside the owner's transmit.frequency_ranges"},"mode":{"type":"string","description":"a mode in transmit.allowed_modes, default the first"},"power_w":{"type":"number","description":"power in watts, at most transmit.max_power_w"},"seconds":{"type":"number","description":"keyed duration in seconds, at most transmit.max_seconds and 60"},"sample_every_ms":{"type":"number","description":"meter sampling interval, 100 to 2000, default 250"},"reason":{"type":"string","description":"who is asking and why, up to 120 characters; written to the keyed-interval log"},"confirm_dummy_load":{"type":"boolean","description":"true: the person at the bench says the rig's antenna port is on the dummy load"},"dry_run":{"type":"boolean","description":"return the plan and send nothing"}"#),
+        required: &["frequency_hz", "power_w", "seconds"],
+    },
+    Spec {
+        name: "bench_hamlib_tx_power_sweep",
+        tier: Tier::Full,
+        desc: "HAMLIB TRANSMIT SWEEP INTO A DUMMY LOAD: like bench_hamlib_tx_key_test, but `powers_w` lists 1 to 8 rising power levels and each is a separate keyed interval of `dwell_s` seconds with its own watchdog, its meters read, stopping at the first interval that is aborted (SWR over the limit, a power meter far over the cap). The total keyed time is at most 60 s. All the conditions of the key test apply: attestation, owner's ranges, caps, `confirm_dummy_load`, `reason`, the load plausibility check, the low-power probe. `dry_run` returns the plan and sends nothing. THE SOFTWARE CANNOT KNOW WHAT IS CONNECTED; licence compliance is the owner's.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"transmit frequency in Hz, inside the owner's transmit.frequency_ranges"},"mode":{"type":"string","description":"a mode in transmit.allowed_modes, default the first"},"powers_w":{"type":"array","items":{"type":"number"},"description":"rising power levels in watts, 1 to 8, each at most transmit.max_power_w"},"dwell_s":{"type":"number","description":"seconds keyed at each level, 0.1 to transmit.max_seconds, default 1"},"sample_every_ms":{"type":"number","description":"meter sampling interval, 100 to 2000, default 250"},"reason":{"type":"string","description":"who is asking and why, up to 120 characters"},"confirm_dummy_load":{"type":"boolean","description":"true: the person at the bench says the rig's antenna port is on the dummy load"},"dry_run":{"type":"boolean","description":"return the plan and send nothing"}"#),
+        required: &["frequency_hz", "powers_w"],
+    },
 ];
 
 /// Tools that exist only for a rig whose config carries a transmit attestation.
-const NEEDS_ATTESTATION: &[&str] = &["bench_hamlib_load_check", "bench_hamlib_load_baseline"];
+const NEEDS_ATTESTATION: &[&str] = &[
+    "bench_hamlib_load_check",
+    "bench_hamlib_load_baseline",
+    "bench_hamlib_tx_key_test",
+    "bench_hamlib_tx_power_sweep",
+];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
     // [@ANCHOR: hamlib_instrument]
@@ -398,6 +429,10 @@ pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
 pub fn open(inst: &Instrument) -> Result<Client, String> {
     // [@ANCHOR: hamlib_open]
     let (host, port) = rigd::endpoint(&inst.name, &inst.hamlib)?;
+    if inst.hamlib.transmit.is_some() {
+        // The first contact with a rig that can be keyed: make sure a crash did not leave it transmitting.
+        tx::startup_check(&inst.name, &rigd::dir(&inst.hamlib), &host, port);
+    }
     Client::connect(
         &host,
         port,
@@ -449,9 +484,14 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
             spec.tier, inst.name, inst.tier
         ));
     }
+    // The safe state does not wait for any other call: it must work while a keyed interval is running, and end it.
+    if name == "bench_hamlib_safe_state" {
+        let r = open(inst).and_then(|mut c| txtools::safe_state(&mut c, inst, args));
+        return with_startup_note(inst, r);
+    }
     let lock = crate::instrument_lock(&inst.name);
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
-    match name {
+    let result = match name {
         "bench_hamlib_status" => status::status(&mut open(inst)?, &inst.name),
         "bench_hamlib_get" => status::get(&mut open(inst)?, args),
         "bench_hamlib_set" => control::set(&mut open(inst)?, &inst.hamlib, args),
@@ -486,10 +526,40 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
                 args,
             )
         }
+        "bench_hamlib_tx_key_test" | "bench_hamlib_tx_power_sweep" => {
+            let audio = audio_in::resolve(insts, inst)?;
+            let alert_for = inst.hamlib.audio.as_ref().map(|a| txtools::AudioAlert {
+                insts,
+                instrument: a.instrument.clone(),
+            });
+            let deps = txtools::Deps {
+                spawner: &guard::ProcessSpawner,
+                alert: alert_for.as_ref().map(|a| a as &dyn txtools::Alerter),
+                audio: audio.as_ref().map(|a| a as &dyn audio_in::AudioSource),
+            };
+            let mut c = open(inst)?;
+            if name == "bench_hamlib_tx_key_test" {
+                txtools::key_test(&mut c, inst, &deps, args)
+            } else {
+                txtools::power_sweep(&mut c, inst, &deps, args)
+            }
+        }
         "bench_hamlib_diagnose" => diag::diagnose(&Process, &inst.name, &inst.hamlib),
         "bench_hamlib_rigctld" => rigctld_action(inst, args),
         _ => Err(format!("{name} does not apply to {:?}", inst.name)),
-    }
+    };
+    with_startup_note(inst, result)
+}
+
+/// A result, with the note of the first-contact PTT check if that found a rig left keyed.
+fn with_startup_note(inst: &Instrument, r: Result<Value, String>) -> Result<Value, String> {
+    // [@ANCHOR: hamlib_startup_note]
+    r.map(|mut v| {
+        if let (Some(note), Some(o)) = (tx::take_note(&inst.name), v.as_object_mut()) {
+            o.insert("startup_release".into(), note);
+        }
+        v
+    })
 }
 
 /// `bench_hamlib_rigctld`: status, start, stop, restart.
@@ -557,7 +627,17 @@ fn rigs(insts: &[Instrument], args: &Value) -> Result<Value, String> {
 
 /// Stops what this module started: the managed daemons. Called when the server stops.
 pub fn shutdown() {
-    rigd::shutdown();
+    shutdown_prefix("");
+}
+
+/// The same for the rigs whose names start with `prefix`.
+pub fn shutdown_prefix(prefix: &str) {
+    // [@ANCHOR: hamlib_shutdown_all]
+    // Whatever is keyed is released first: stopping the daemons would make that impossible.
+    for failed in tx::release_prefix(prefix) {
+        eprintln!("bench_mcp hamlib: could not confirm the release of a keyed rig: {failed}");
+    }
+    rigd::shutdown_prefix(prefix);
 }
 
 #[cfg(test)]

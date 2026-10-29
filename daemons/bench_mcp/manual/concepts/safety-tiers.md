@@ -20,7 +20,7 @@ Rules that go beyond the tier:
 * Switching the supply output on needs `full`; the check is repeated inside the tool, and it still refuses when the setpoints stored in the supply exceed the configured `max_volts` and `max_amps`.
 * `bench_scope_self_cal` needs `confirm_inputs_disconnected: true`, and that must come from the person at the bench who unplugged every probe. Do not pass it on your own judgement.
 * Supply setpoints are capped by the instrument's `max_volts` and `max_amps` in the configuration (defaults 5.5 V and 1.0 A) whatever the tier.
-* Nothing in bench_mcp transmits on the air. The SDRs only receive; the VNA and its generator drive a cable port at about -17 dBm at the highest setting. See [etiquette](concepts/etiquette).
+* Nothing in bench_mcp is meant to transmit on the air. The SDRs only receive; the Hamlib transmit tools key a rig only if the owner has attested in the config that its antenna port is on a dummy load, and the software cannot know what is connected ([limits](instruments/hamlib/limits)); the VNA and its generator drive a cable port at about -17 dBm at the highest setting. See [etiquette](concepts/etiquette).
 * USB and sound tools have their own protections (a protected-device list, volume caps, quiet hours); see the [USB hub](instruments/usb-hubs/overview) and [sound](instruments/sound/overview) pages.
 
 To get a tool that is not listed, the person who owns the configuration raises the tier of the instrument; the model cannot.

@@ -122,6 +122,33 @@ fn report(
     })
 }
 
+/// The check itself: the decision and the report. The transmit tools call this as their gate; `bench_hamlib_load_check` shows it.
+pub fn gate(
+    c: &mut Client,
+    cfg: &Config,
+    audio: Option<&dyn AudioSource>,
+    rig: &str,
+    f: f64,
+) -> Result<(Decision, Value), String> {
+    // [@ANCHOR: hamlib_load_gate]
+    let p = prepare(cfg, &json!({"frequency_hz": f}))?;
+    let base = load::load_baseline(&p.dir, rig, p.range)?;
+    let (m, table) = measure(c, cfg, &p, f, audio)?;
+    let d = load::decide(base.as_ref(), &m.readings, &p.tx.load, &m.settings);
+    let today = now_local().0;
+    let heard: Vec<String> = table
+        .stations
+        .iter()
+        .filter(|s| {
+            s.last_heard.as_deref() == Some(today.as_str())
+                && m.stations_used.iter().any(|u| u.id == s.id)
+        })
+        .map(|s| s.id.clone())
+        .collect();
+    let r = report(&m, &d, base.as_ref(), audio, &heard);
+    Ok((d, r))
+}
+
 /// `bench_hamlib_load_check`: receive-only readings compared with the baseline. Never keys.
 pub fn load_check(
     c: &mut Client,
@@ -131,21 +158,11 @@ pub fn load_check(
     args: &Value,
 ) -> Result<Value, String> {
     // [@ANCHOR: hamlib_load_check_tool]
-    let p = prepare(cfg, args)?;
-    let f = args["frequency_hz"].as_f64().unwrap_or_default();
-    let base = load::load_baseline(&p.dir, rig, p.range)?;
-    let (m, table) = measure(c, cfg, &p, f, audio)?;
-    let d = load::decide(base.as_ref(), &m.readings, &p.tx.load, &m.settings);
-    let heard: Vec<String> = table
-        .stations
-        .iter()
-        .filter(|s| {
-            s.last_heard.as_deref() == Some(now_local().0.as_str())
-                && m.stations_used.iter().any(|u| u.id == s.id)
-        })
-        .map(|s| s.id.clone())
-        .collect();
-    Ok(report(&m, &d, base.as_ref(), audio, &heard))
+    let f = args
+        .get("frequency_hz")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(f64::NAN);
+    gate(c, cfg, audio, rig, f).map(|(_, r)| r)
 }
 
 /// What makes a set of readings unfit to be a baseline.
