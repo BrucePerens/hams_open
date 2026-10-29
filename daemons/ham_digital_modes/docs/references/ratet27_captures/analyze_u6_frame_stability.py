@@ -35,7 +35,9 @@ def extract_block(natural_bits, start, length):
 
 from collections import defaultdict
 freqs_hex = defaultdict(list)
-with open('/home/bruce/workspace/hams_open/daemons/ham_digital_modes/docs/references/ratet27_captures/rms_normalized_pitch_sweep_57to444hz.tsv') as f:
+import os
+data_path = os.path.join(os.path.dirname(__file__), 'rms_normalized_pitch_sweep_57to444hz.tsv')
+with open(data_path) as f:
     for line in f:
         parts = line.strip().split('\t')
         if len(parts) != 3: continue

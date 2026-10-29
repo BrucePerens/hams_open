@@ -6,13 +6,15 @@
 """
 Tests of `zero_sudo/daemon/club_spam.py`, the pure rules that decide a club website is spam-compromised
 (docs/stories/club_spam_detection.md). Table-driven, over fixtures built to the real markup of a hacked WordPress club site
-(the fixtures are at the top of this file). Plain `unittest`: the module is loaded by path, so the file runs the same under
-Odoo's test runner and under pytest, with no database and no network.
+(the fixtures are at the top of this file). Plain `unittest`: the module is loaded by path, with no database and no network.
 """
+import datetime
 import importlib.util
 import os
 import sys
 import unittest
+
+from odoo.tests.common import tagged
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -38,7 +40,6 @@ spam = _load("club_spam_under_test", "..", "daemon", "club_spam.py")
 #   WordPress writes for a post with no date), and the spam plugin's `?feed=xmlsitemapNNNN` file in which every URL carries
 #   the day the file was generated;
 # * `ROBOTS_*`: a clean robots.txt and the one the spam plugin edited.
-import datetime
 
 HOST = "http://club.example.org"
 TODAY = datetime.date(2026, 10, 22)
@@ -206,6 +207,7 @@ def _sitemap(name, xml):
     return {"name": name, "url": name, "entries": entries, "total": total, "kind": kind}
 
 
+@tagged("post_install", "-at_install")
 class TestScoring(unittest.TestCase):
     """The lexicon: what is flagged, and what an amateur radio club legitimately writes is not."""
 
@@ -270,6 +272,7 @@ class TestScoring(unittest.TestCase):
         self.assertEqual(branded.ham, 2)
 
 
+@tagged("post_install", "-at_install")
 class TestSitemaps(unittest.TestCase):
     def test_10_a_core_index_and_a_urlset_are_read_without_an_xml_parser(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_parse_sitemap]
@@ -334,6 +337,7 @@ class TestSitemaps(unittest.TestCase):
         self.assertEqual([a for _l, a in spam.dated_entries(short, TODAY)], [4] * 5)
 
 
+@tagged("post_install", "-at_install")
 class TestHomePage(unittest.TestCase):
     def test_20_the_recent_posts_widget_and_links_of_a_hacked_page_are_read(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
@@ -393,6 +397,7 @@ class TestHomePage(unittest.TestCase):
         self.assertFalse(spam.is_suspicious(None, None))
 
 
+@tagged("post_install", "-at_install")
 class TestEvidenceAndDecision(unittest.TestCase):
     def _hacked(self, **kw):
         """The hacked site as the daemon sees it: spam widget, a core sitemap with dated spam posts, two injected sitemaps."""
@@ -555,6 +560,7 @@ class TestEvidenceAndDecision(unittest.TestCase):
             self.assertFalse(any(word in lowered for word in ("secret", "key", "password", "token", "auth", "crypt", "cert")), name)
 
 
+@tagged("post_install", "-at_install")
 class TestHeadVerification(unittest.TestCase):
     """Bruce's refinement: a handful of flagged addresses are re-checked with HEAD to see whether the spam is still there."""
 

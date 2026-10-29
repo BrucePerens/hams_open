@@ -11,10 +11,11 @@ They are expected to fail until the sanitizer is fixed; none changes the sanitiz
 import re
 import time
 
-from odoo.tests.common import BaseCase
+from odoo.tests.common import BaseCase, tagged
 from odoo.tools import html_sanitize
 
 
+@tagged("post_install", "-at_install")
 class TestSvgReviewFindings(BaseCase):
 
     def test_01_many_sibling_svgs_are_sanitised_in_roughly_linear_time(self):

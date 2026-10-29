@@ -27,6 +27,7 @@ pager_duty/tests fails if they disagree. This one file is the whole command: cop
 """
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -61,7 +62,7 @@ def read_flag(path=None, now=None):
     try:
         set_at = float(data["set_at"])
         until = float(data["until"])
-        if not (set_at == set_at and until == until) or abs(set_at) == float("inf") or abs(until) == float("inf"):
+        if not (math.isfinite(set_at) and math.isfinite(until)):
             raise ValueError("not a finite number")
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         return {"state": MALFORMED, "error": f"{path}: needs numeric set_at and until ({exc!r})"}

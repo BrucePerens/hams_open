@@ -16,6 +16,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 # finding, 2026-09-22: session_id (the real auth token) and frontend_lang had
 # neither Secure nor SameSite even over a real HTTPS connection through the
 # reverse proxy.
+@tagged("post_install", "-at_install")
 class TestHardenCookieHeader(unittest.TestCase):
     def test_session_id_gets_secure_and_samesite_over_https(self):
         raw = "session_id=abc123; Expires=Thu, 01-Jan-2026; Max-Age=604800; HttpOnly; Path=/"

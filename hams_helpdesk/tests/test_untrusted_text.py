@@ -389,3 +389,18 @@ class TestUntrustedTextCorpus(BaseCase):
     def test_deeply_nested_html_does_not_crash(self):
         result = ut.sanitize_html("<div>" * 5000 + "x" + "</div>" * 5000, 100)
         self.assertIsNotNone(result)
+
+    def test_css_numbers_that_are_not_finite_or_not_numbers_never_raise(self):
+        huge = "9" * 400  # float() of this is inf, with no exception
+        for value in (f"rgb({huge},0,0)", f"rgb(0,0,{huge}%)", "rgb(1.2.3,0,0)", "rgb(.,0,0)", f"rgba(0,0,0,{huge})", "rgba(0,0,0,1..2)"):
+            with self.subTest(value):
+                self.assertIsNone(ut._parse_color(value))
+        self.assertEqual(ut._parse_color("rgb(10, 20, 30)"), (10, 20, 30))
+        self.assertEqual(ut._parse_color("rgba(0,0,0,0.05)"), "invisible")
+        self.assertEqual(ut._parse_color("hsl(0, 0%, 99%)"), (255, 255, 255))
+        self.assertIsNone(ut._css_number("inf"))
+        self.assertIsNone(ut._css_number("nan"))
+        self.assertEqual(ut._css_number("0.5"), 0.5)
+        # An opacity that is not a finite number is not provably hidden, and does not raise.
+        result = ut.sanitize_html(f"<p>Hi</p><span style=\"opacity:{huge}\">shown</span>")
+        self.assertIn("shown", result.plain)

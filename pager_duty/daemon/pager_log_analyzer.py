@@ -36,8 +36,8 @@ def translate_path(fp):
     #
     # Bug-hunt fix (2026-09-13): a plain fp.replace("/var/log", "") stripped
     # every occurrence of the substring anywhere in fp, not just a leading
-    # "/var/log" prefix -- e.g. translate_path("/home/var/log/x") silently
-    # returned "/home/x" instead of leaving the unexpected prefix alone.
+    # "/var/log" prefix -- e.g. translate_path("/srv/var/log/x") silently
+    # returned "/srv/x" instead of leaving the unexpected prefix alone.
     # Not exploitable (both call sites only ever pass config-controlled or
     # already-gated internal paths, per translate_path.md), but a real
     # correctness gap. removeprefix only strips a genuine leading match.

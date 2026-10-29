@@ -16,8 +16,6 @@ import xml.etree.ElementTree as ET
 
 from markupsafe import Markup
 
-from odoo.tools import html2plaintext
-
 from .inbound_spam_filter import detect_inbound_spam_signals, ses_verdict_reasons
 from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut

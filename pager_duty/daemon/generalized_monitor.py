@@ -7,6 +7,7 @@ import datetime
 import fnmatch
 import json
 import logging
+import math
 import os
 import pika
 import pika.adapters.utils.connection_workflow
@@ -603,12 +604,15 @@ def parse_freshness_time(value):
     if isinstance(value, bytes):
         value = value.decode("utf-8", "replace")
     if isinstance(value, (int, float)):
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     text = str(value).strip()
     try:
-        return float(text)
+        number = float(text)
     except ValueError:
         logger.debug("Freshness value %r is not a plain number; trying an ISO time", text)
+    else:
+        return number if math.isfinite(number) else None  # "nan" / "inf" parse as floats but are no time
     try:
         parsed = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
@@ -673,6 +677,8 @@ def _freshness_one_unit(unit, max_age, now):
         try:
             with open("/proc/uptime", encoding="ascii") as f:
                 uptime = float(f.read().split()[0])
+            if not math.isfinite(uptime):
+                raise ValueError("uptime is not finite")
         except (OSError, ValueError):
             uptime = 0.0
         if uptime < max_age:
