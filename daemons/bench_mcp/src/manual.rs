@@ -63,6 +63,7 @@ pub struct Page {
 }
 
 fn split_front_matter(text: &str) -> Result<(Vec<(String, String)>, String), String> {
+    // [@ANCHOR: bench_mcp_manual_split_front_matter]
     let mut lines = text.lines();
     if lines.next().map(str::trim_end) != Some("---") {
         return Err("no front matter: the file must start with a --- line".into());
@@ -90,6 +91,7 @@ fn split_front_matter(text: &str) -> Result<(Vec<(String, String)>, String), Str
 }
 
 fn parse_list(key: &str, v: &str) -> Result<Vec<String>, String> {
+    // [@ANCHOR: bench_mcp_manual_parse_list]
     if let Some(inner) = v.strip_prefix('[') {
         let inner = inner
             .strip_suffix(']')
@@ -109,6 +111,7 @@ fn parse_list(key: &str, v: &str) -> Result<Vec<String>, String> {
 
 /// The page path of a file name relative to `manual/`.
 fn path_of_file(file: &str) -> Result<(String, String, bool), String> {
+    // [@ANCHOR: bench_mcp_manual_path_of_file]
     let stem = file
         .strip_suffix(".md")
         .ok_or_else(|| format!("{file}: only .md files belong in the manual"))?;
@@ -368,6 +371,7 @@ fn cell(s: &str) -> String {
 }
 
 fn type_of(prop: &Value) -> String {
+    // [@ANCHOR: bench_mcp_manual_type_of]
     match prop.get("type").and_then(|t| t.as_str()) {
         Some("array") => {
             let item = prop.get("items").and_then(|i| i.get("type"));
@@ -382,6 +386,7 @@ fn type_of(prop: &Value) -> String {
 }
 
 fn notes_of(prop: &Value) -> String {
+    // [@ANCHOR: bench_mcp_manual_notes_of]
     let mut parts = Vec::new();
     let values = |v: &Value| -> Option<String> {
         v.as_array().map(|a| {
@@ -419,6 +424,7 @@ fn notes_of(prop: &Value) -> String {
 const INSTRUMENT_NOTE: &str = "the alias of the configured instrument (see bench_list); may be left out when exactly one configured instrument fits the tool";
 
 fn notes_for(name: &str, prop: &Value) -> String {
+    // [@ANCHOR: bench_mcp_manual_notes_for]
     let n = notes_of(prop);
     if name == "instrument" && n.is_empty() {
         return INSTRUMENT_NOTE.to_string();
@@ -598,6 +604,7 @@ fn excerpt(text: &str, query: &[String]) -> (String, String) {
 }
 
 fn clip_around(text: &str, query: &[String], max: usize) -> String {
+    // [@ANCHOR: bench_mcp_manual_clip_around]
     let chars: Vec<char> = text.chars().collect();
     if chars.len() <= max {
         return text.to_string();
@@ -1052,6 +1059,7 @@ fn whats_new(m: &Manual, args: &Value) -> Result<Value, String> {
 // MCP resources
 
 fn page_text_for_resource(m: &Manual, p: &Page) -> String {
+    // [@ANCHOR: bench_mcp_manual_page_text_for_resource]
     let mut head = format!("{}\n", p.title);
     head.push_str(&format!("Summary: {}\n", p.summary));
     if let Some(t) = &p.tier {
@@ -1081,6 +1089,7 @@ pub fn list_resources() -> Result<ListResourcesResult, McpError> {
 
 /// `resources/read` of one `bench-manual://<path>`.
 pub fn read_resource(uri: &str) -> Result<ReadResourceResponse, McpError> {
+    // [@ANCHOR: bench_mcp_manual_read_resource]
     let m = manual().map_err(|e| McpError::internal_error(e, None))?;
     let path = uri.strip_prefix(URI_PREFIX).ok_or_else(|| {
         McpError::invalid_params(

@@ -87,6 +87,9 @@ fn every_file_in_the_manual_is_a_page_with_the_required_front_matter() {
     assert!(embedded::FILES.len() > 10);
 }
 
+// Tests [@ANCHOR: bench_mcp_manual_split_front_matter]
+// Tests [@ANCHOR: bench_mcp_manual_parse_list]
+// Tests [@ANCHOR: bench_mcp_manual_path_of_file]
 #[test]
 fn front_matter_parser_rejects_malformed_pages() {
     assert!(parse_page("a.md", "no fence").is_err());
@@ -249,6 +252,9 @@ fn argument_tables_follow_the_schema_and_every_argument_is_explained() {
     );
 }
 
+// Tests [@ANCHOR: bench_mcp_manual_type_of]
+// Tests [@ANCHOR: bench_mcp_manual_notes_of]
+// Tests [@ANCHOR: bench_mcp_manual_notes_for]
 #[test]
 fn the_table_generator_reads_types_enums_and_requirements() {
     let t = arguments_table("bench_capture");
@@ -742,6 +748,8 @@ fn the_manual_tools_are_listed_whatever_the_bench_has_and_are_read_only() {
 }
 
 // Tests [@ANCHOR: bench_mcp_manual_resources]
+// Tests [@ANCHOR: bench_mcp_manual_read_resource]
+// Tests [@ANCHOR: bench_mcp_manual_page_text_for_resource]
 #[test]
 fn every_page_is_an_mcp_resource_that_reads_back() {
     let l = list_resources().unwrap();
@@ -780,4 +788,105 @@ fn the_server_advertises_resources_next_to_tools() {
         v.get("resources").is_some() && v.get("tools").is_some(),
         "{v}"
     );
+}
+
+// Tests [@ANCHOR: bench_mcp_manual_split_front_matter]
+// Tests [@ANCHOR: bench_mcp_manual_parse_list]
+// Tests [@ANCHOR: bench_mcp_manual_path_of_file]
+#[test]
+fn the_front_matter_helpers_split_pairs_lists_and_paths() {
+    let (pairs, body) = split_front_matter("---\na: 1\n\nb: x: y\n---\n\nbody\nmore").unwrap();
+    assert_eq!(
+        pairs,
+        [("a".into(), "1".into()), ("b".into(), "x: y".into())]
+    );
+    assert_eq!(body, "body\nmore");
+    assert!(split_front_matter("a: 1\n---\n").is_err());
+    assert!(split_front_matter("---\nno colon\n---\n").is_err());
+    assert!(split_front_matter("---\na: 1\n").is_err());
+
+    assert_eq!(parse_list("k", "[a, b ,, c]").unwrap(), ["a", "b", "c"]);
+    assert_eq!(parse_list("k", "one").unwrap(), ["one"]);
+    assert!(parse_list("k", "").unwrap().is_empty());
+    assert!(parse_list("k", "[a").unwrap_err().starts_with("k:"));
+
+    assert_eq!(
+        path_of_file("tools/bench_list.md").unwrap(),
+        ("tools/bench_list".into(), "tools".into(), false)
+    );
+    assert_eq!(
+        path_of_file("tools/index.md").unwrap(),
+        ("tools".into(), "tools".into(), true)
+    );
+    assert_eq!(
+        path_of_file("index.md").unwrap(),
+        ("index".into(), String::new(), true)
+    );
+    assert!(path_of_file("x.txt").is_err());
+}
+
+// Tests [@ANCHOR: bench_mcp_manual_type_of]
+// Tests [@ANCHOR: bench_mcp_manual_notes_of]
+// Tests [@ANCHOR: bench_mcp_manual_notes_for]
+#[test]
+fn schema_properties_become_type_and_note_cells() {
+    use serde_json::json;
+    assert_eq!(type_of(&json!({"type": "integer"})), "integer");
+    assert_eq!(
+        type_of(&json!({"type": "array", "items": {"type": "string"}})),
+        "array of string"
+    );
+    assert_eq!(type_of(&json!({"type": "array"})), "array of any");
+    assert_eq!(type_of(&json!({})), "any");
+
+    let p = json!({"enum": ["a", 2], "minimum": 1, "maximum": 9, "default": 3, "description": "d"});
+    assert_eq!(
+        notes_of(&p),
+        "one of `a`, `2`; minimum 1; maximum 9; default 3; d"
+    );
+    assert_eq!(
+        notes_of(&json!({"items": {"enum": ["x"]}})),
+        "each one of `x`"
+    );
+    assert_eq!(notes_of(&json!({})), "");
+
+    assert_eq!(notes_for("instrument", &json!({})), INSTRUMENT_NOTE);
+    assert_eq!(
+        notes_for("instrument", &json!({"description": "mine"})),
+        "mine"
+    );
+    assert_eq!(notes_for("other", &json!({})), "");
+}
+
+// Tests [@ANCHOR: bench_mcp_manual_clip_around]
+#[test]
+fn clipping_keeps_short_text_and_centres_long_text_on_the_first_hit() {
+    assert_eq!(
+        clip_around("short text", &["text".into()], 320),
+        "short text"
+    );
+    let long = format!("{}needle{}", "a ".repeat(200), " b".repeat(200));
+    let c = clip_around(&long, &["needle".into()], 100);
+    assert!(c.starts_with("... ") && c.ends_with(" ..."), "{c}");
+    assert!(c.contains("needle"), "{c}");
+    assert!(c.chars().count() <= 100 + 8, "{c}");
+    // No hit: the clip starts at the top, with only the trailing ellipsis.
+    let top = clip_around(&long, &["zzz".into()], 50);
+    assert!(top.starts_with("a a") && top.ends_with(" ..."), "{top}");
+}
+
+// Tests [@ANCHOR: bench_mcp_manual_page_text_for_resource]
+#[test]
+fn a_resource_text_starts_with_the_title_summary_and_verification() {
+    let page = m().get("instruments/vna").unwrap();
+    let t = page_text_for_resource(m(), page);
+    assert!(
+        t.starts_with(&format!("{}\nSummary: {}\n", page.title, page.summary)),
+        "{t}"
+    );
+    assert!(
+        t.contains(&format!("Verified: {}\n\n", page.verified)),
+        "{t}"
+    );
+    assert!(t.ends_with(m().rendered(&page.path).unwrap()), "{t}");
 }
