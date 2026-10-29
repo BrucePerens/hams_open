@@ -23,10 +23,13 @@ pub struct Why {
 /// Device path to the reasons it is critical.
 pub type Critical = BTreeMap<String, Vec<Why>>;
 
-/// A bench instrument that uses a USB serial adapter: its name and serial device path.
-pub struct BenchSerial {
+/// What a bench instrument uses on the USB tree: a serial device path (a power supply), the hub port its unit hangs from and its
+/// vid:pid (the VNA).
+pub struct BenchRef {
     pub instrument: String,
-    pub path: String,
+    pub path: Option<String>,
+    pub hub_port: Option<(String, u32)>,
+    pub vidpid: Option<String>,
 }
 
 fn add(c: &mut Critical, dev: &str, text: String, overridable: bool) {
@@ -73,7 +76,7 @@ fn mount_sources(proc_root: &Path) -> Vec<(String, String)> {
 pub fn critical_set(
     t: &Tree,
     cfg: &Config,
-    bench: &[BenchSerial],
+    bench: &[BenchRef],
     sysfs: &Path,
     proc_root: &Path,
 ) -> Critical {
@@ -148,20 +151,35 @@ pub fn critical_set(
         }
     }
     for b in bench {
-        let real = std::fs::canonicalize(&b.path)
-            .ok()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
-        let name = real.unwrap_or_else(|| b.path.trim_start_matches("/dev/").to_string());
-        if let Some(owner) = node_owner(&name) {
-            add(
-                &mut c,
-                &owner,
-                format!(
+        if let Some(path) = &b.path {
+            let real = std::fs::canonicalize(path)
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()));
+            let name = real.unwrap_or_else(|| path.trim_start_matches("/dev/").to_string());
+            if let Some(owner) = node_owner(&name) {
+                let text = format!(
                     "is the serial adapter of bench instrument {:?}",
                     b.instrument
-                ),
-                false,
-            );
+                );
+                add(&mut c, &owner, text, false);
+            }
+        }
+        // The VNA is measured through its hub port: a reset or power cycle by a hub tool would spoil a measurement, so it is protected
+        // unless the caller says override_protection (its own power cycle tool does not go through this list).
+        if let Some((hub, port)) = &b.hub_port {
+            for d in t.subtree(&child_path(hub, *port)) {
+                let text = format!(
+                    "is on the hub port {hub}/{port} of bench instrument {:?}",
+                    b.instrument
+                );
+                add(&mut c, &d.path, text, true);
+            }
+        }
+        if let Some(v) = &b.vidpid {
+            for d in t.devices.values().filter(|d| d.vidpid() == *v) {
+                let text = format!("is the unit of bench instrument {:?}", b.instrument);
+                add(&mut c, &d.path, text, true);
+            }
         }
     }
     c
@@ -418,9 +436,11 @@ pub mod tests {
             path: Some("/dev/ttyUSB7".into()),
             id: None,
         });
-        let bench = [BenchSerial {
+        let bench = [BenchRef {
             instrument: "psu".into(),
-            path: "/dev/ttyUSB7".into(),
+            path: Some("/dev/ttyUSB7".into()),
+            hub_port: None,
+            vidpid: None,
         }];
         let crit = critical_set(&kb, &cfg(json!({})), &bench, &fixture(), none().path());
         let w = &crit["3-2.2.1"];
@@ -435,6 +455,28 @@ pub mod tests {
             rep["critical_devices"][0]["hubs_on_the_path"],
             json!(["3-2.2", "3-2"])
         );
+    }
+
+    #[test]
+    fn the_vna_hub_port_and_everything_below_it_is_protected_but_overridable() {
+        let t = Tree::read(&fixture()).unwrap();
+        let bench = [BenchRef {
+            instrument: "vna".into(),
+            path: None,
+            hub_port: Some(("3-2".into(), 2)),
+            vidpid: None,
+        }];
+        let c = cfg(json!({"ports": {"3-2/2": {"hub_uplink_ok": true}}}));
+        let crit = critical_set(&t, &c, &bench, &fixture(), none().path());
+        for d in ["3-2.2", "3-2.2.1", "3-2.2.2", "3-2.2.3"] {
+            assert!(crit[d][0].text.contains("bench instrument \"vna\""), "{d}");
+        }
+        let leaf = check_device(&t, &c, &crit, "3-2.2.2");
+        assert!(!leaf.clear() && leaf.overridable());
+        assert!(leaf.permit("reset", false).is_err());
+        assert!(leaf.permit("reset", true).is_ok());
+        assert!(!check_port(&t, &c, &crit, "3-2", 2).clear());
+        assert!(check_port(&t, &c, &crit, "3-2", 4).clear());
     }
 
     #[test]

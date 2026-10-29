@@ -39,9 +39,20 @@ full-speed devices report 2.0 in `bcdUSB`.
 | `bench_usb_hubs` | read_only | Per hub: ports, TT mode, uplink, what uhubctl says about switching, the hub class descriptor (power-switching mode, over-current mode, TT think time, as the hub claims them), per-port status bits and the verification level. Runs `sudo -n uhubctl` and `sudo -n lsusb -v`. |
 | `bench_usb_protection` | read_only | The protection list with reasons, and the verdict for one target. |
 | `bench_usb_port_power` | read_config (on), full (off, cycle) | Switch one port off, on or cycle it; `dry_run`, `off_time_s` (default 5 s), re-enumeration check, verification level. |
+| `bench_usb_reset` | read_config | Soft reset (USBDEVFS_RESET) of one device; it keeps power and device number. |
+| `bench_usb_authorize` | read_config | Deauthorize (software disconnect, power kept) or authorize a device. |
+| `bench_usb_driver` | read_config | Unbind or bind one interface. |
+| `bench_usb_autosuspend` | read_config | Runtime power management on or auto. |
 
 The topology and find tools read `/sys/bus/usb/devices` and need no privilege. `bench_usb_hubs` and `bench_usb_port_power` use `sudo -n`; without a NOPASSWD rule, or
 without uhubctl, they fail with a message that says which.
+
+## Privilege for the middle tier
+
+Resetting, authorizing, binding and autosuspend need root. The tools run `sudo -n <bench_mcp binary> --usb-priv <operation>`; that mode of the same binary accepts only the four
+operations (`reset`, `authorize`, `unbind`/`bind`, `autosuspend`), checks every argument against the real sysfs (a device path of a device behind a port, an interface name, an installed
+USB driver, bounded numbers) and does nothing else. It is a different route from `sudo -n uhubctl`, which only the port power tool uses.
+A sudoers rule must name the binary with `--usb-priv *`, and the binary must be root-owned and not writable by the user.
 
 ## Verification levels of port power control
 
@@ -53,7 +64,7 @@ data lines and leave VBUS on. The VNWA on hub 3-2 port 2 is confirmed by eye to 
 ## Safety rules
 
 * Only ports of hubs uhubctl lists as per-port switching can be switched (ganged and unlisted hubs are refused). A SuperSpeed hub is addressed with `-e`.
-* Refused by default: the device carrying the root filesystem or another mounted USB filesystem, boot-protocol keyboards and mice, config-critical ports and devices, the serial adapter of a bench instrument, any hub on the path to those, and the uplink of any hub (unless the port has `hub_uplink_ok`). Reasons from the config and from bench instruments cannot be overridden; the others can with `override_protection: true`.
+* Refused by default: the device carrying the root filesystem or another mounted USB filesystem, boot-protocol keyboards and mice, config-critical ports and devices, the serial adapter of a bench instrument, the hub port of a configured VNA with everything below it and the VNA's USB id (overridable), any hub on the path to those, and the uplink of any hub (unless the port has `hub_uplink_ok`). Reasons from the config and from bench instruments cannot be overridden; the others can with `override_protection: true`.
 * `dry_run: true` on a mutating tool says what would happen (commands, devices affected, protection verdict) and changes nothing.
 * The off time is a parameter (1 to 60 s, default 5 s); the actual off time is reported.
 * A failed power-on after a power-off is retried once and, if it still fails, the error says the port is still off.

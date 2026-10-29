@@ -157,7 +157,7 @@ overlap (the burst overwrites the generator's settings): one VNA call at a time 
 
 ## USB hub tools (`usb_hub` driver)
 
-`bench_usb_topology`, `bench_usb_find`, `bench_usb_hubs`, `bench_usb_protection` and `bench_usb_port_power` describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
+`bench_usb_topology`, `bench_usb_find`, `bench_usb_hubs`, `bench_usb_protection` and `bench_usb_port_power` (and the ladder tools `bench_usb_reset`, `_authorize`, `_driver`, `_autosuspend`) describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
 Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`. Tests read a recording of this development machine's `/sys`, `uhubctl`, `lsusb` and kernel journal in
 `tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`).
 
@@ -169,3 +169,5 @@ Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`.
 * A unit that does not come back gets a second cycle with a longer off time. [@ANCHOR: usb_hub_power_escalation]
 * Port power: tiers, dry run, protection refusals, ganged and unlisted hubs refused. [@ANCHOR: usb_hub_port_power]
 * The verification levels 1 to 4 and their honest note. [@ANCHOR: usb_hub_verification_levels]
+* The root helper accepts only its four operations and refuses every other argument before a write. [@ANCHOR: usb_hub_privileged_ops]
+* The escalation ladder (reset, authorize, driver, autosuspend) goes through the helper, honours protection and dry run. [@ANCHOR: usb_hub_ladder]
