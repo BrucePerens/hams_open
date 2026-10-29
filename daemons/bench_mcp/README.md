@@ -52,9 +52,10 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_psu_output` | read_config to switch off, **full** to switch on | supply |
 | `bench_scope_self_cal` | full (needs `confirm_inputs_disconnected: true`) | scope |
 | `bench_vna_sweep` | read_config (it puts RF on the TX port) | VNA |
+| `bench_vna_power_cycle` | read_config (switches the unit's hub port; the verification puts RF on the TX port) | VNA |
 | `bench_sdr_capture`, `bench_sdr_survey`, `bench_sdr_coherence` | read_config (they tune the radio; receive only) | SDR |
 
-`bench_identify` and `bench_status` also answer for the VNA (USB present, both codecs found, IF, time per point, level).
+`bench_identify` and `bench_status` also answer for the VNA (USB present and answering a harmless read, hub, both codecs found from the USB tree, IF, time per point, level, power cycles done by this server).
 `bench_vna_sweep` takes `start_hz`, optionally `stop_hz`, `points` (1 to 401, about 0.2 s each), `if_hz`, `point_ms`
 and `rf_level`, measures S21 (RX channel) and S11 (reflection channel), saves a CSV into `BENCH_MCP_OUT` and returns a
 summary (and the rows when there are at most 51). The values are **raw ratios of the unit's own channels, not calibrated**:
@@ -99,6 +100,7 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 
 * The arguments of a sweep are checked and override the instrument's settings for that sweep. [@ANCHOR: bench_mcp_vna_sweep_args]
 * The hub port and retries of the VNA entry are read, and only as a pair. [@ANCHOR: bench_mcp_config]
+* The power-cycle tool needs a hub in the config and read_config, and the VNA's lock does not hold up the scope or the supply. [@ANCHOR: bench_mcp_vna_power_cycle]
 * A sweep is written as a CSV with a header and one row per point. [@ANCHOR: bench_mcp_vna_csv]
 
 ## Checks this crate makes for the SDRs (anchors)
