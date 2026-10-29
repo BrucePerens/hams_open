@@ -550,6 +550,26 @@ no sync, "F_Sync = F_Start"). This driver sends one set-up block per point, so i
   (0.005 % worst) and 0.001 degrees rms with no discarded point, and by 0.002 % and 0.001 degrees with one discarded point; the failure rate was 0.31 % and 0.57 % (1 and 2 stalled reads). So a discarded first point or a wait
   (`Config::discard_points`, `first_wait_ms`, both 0 by default) buys nothing measurable and is kept only as a parameter.
 
+## The second soak: harness, dry runs, what it must not share the box with (2026-10-29)
+
+`examples/soak.rs` (see its header) writes a run directory: `soak.log` (stdout), `events.jsonl` (one line per anomaly: epoch, ISO time, class, summary, the whole evidence text, and the kernel journal five
+seconds either side), `events.md` (for the watcher's notes), `journal.log` (`sudo -n journalctl -k -f`), `host.log` (load and every thermal zone once a minute), `lsusb_*.txt` (at the start and after each power
+cycle; a change of the tree is an event), `PAUSE` and `STOP` flag files. Event classes: `unsteady_tone`, `usb_transfer_error`, `silent_state`, `audio_overrun`, `audio_timeout`, `usb_device_gone`,
+`unscheduled_power_cycle` (+ `_record` with the reason and the seconds it took), `sweep_straddled_power_cycle`, `scheduled_power_cycle`, `unexpected_disconnect` (a kernel disconnect no power cycle of ours explains),
+`overrun_storm`, `wrong_number` (sweep over 1 % or 1 degree from the baseline taken after the last power cycle, the repeat at once recorded; meter over 0.01 Hz; generator over 8 %), `long_term_drift` (over 1 % / 1 degree from the
+first baseline), `retries_high`, `usb_topology_changed`, `hang` (with the threads' kernel waits), `paused`/`resumed`, `unrecovered_failure`, `temperature_read_failed`.
+
+Dry runs (injected from outside by `tools/soak_inject.sh`; the soak has no test-only code):
+* 30 minutes: power cut for 4 s mid-run, generator-off bursts, a PAUSE of 68 s, 16 busy threads. Recorded: 4 `unexpected_disconnect` (the four kernel disconnect lines), the recovery's power cycle with its reason and 12.3 s,
+  the straddling sweep, a new baseline, the PAUSE and fresh baselines, the topology identical after both scheduled cycles (`lsusb_cycle_*.txt`), 30 stalled-0x0d events with the full transfer log, two isolated overruns in
+  3,400 points (no kernel message; host load 1.0 to 1.7): retried.
+* 15 minutes with generator-off bursts every 11 s: 8 recovery power cycles, each with its failed attempts on record (a burst that silences the reference for the 3 attempts of a point is, by the recovery's rule, a unit that
+  needs a power cycle). The disconnect storm of 99,057 reports in 20 s seen there was fixed (the stream now closes itself after 100 reports with no audio between them); a rerun with a power cut shows no `overrun_storm`.
+* Not injectable from outside: a hang (the watchdog is the first soak's, 0 hangs in 8.6 h), a change of the USB topology, a true silent state of the unit.
+
+Do not run on the dev box during the soak: any `cargo build` or test (CPU load made two overruns in the first minutes of a dry run), anything that uses the VNA or the scope (bench_mcp calls, `drift_probe`, vendor program),
+`uhubctl` on hub 3-2 or any other power or reset of the unit's USB tree, anything that restarts WirePlumber or PipeWire, heavy disk or network jobs. Pause the run with the `PAUSE` file to use the hardware.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).

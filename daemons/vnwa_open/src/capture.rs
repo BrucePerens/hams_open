@@ -25,6 +25,8 @@ struct Ring {
     period: u64,
     /// Overrun reports since the last delivery of audio; a stream that restarts and fails again reports one every millisecond or so.
     reports_since_delivery: u64,
+    /// Set when the stream was closed because of a storm of reports.
+    storm: bool,
 }
 
 /// True once this many overrun reports have come with no audio between them (see `STORM_REPORTS`).
@@ -53,7 +55,7 @@ const MAX_OVERRUNS_KEPT: usize = 4096;
 pub struct Capture {
     ring: Arc<(Mutex<Ring>, Condvar)>,
     /// `None` after `close`.
-    stream: Mutex<Option<cpal::Stream>>,
+    stream: Arc<Mutex<Option<cpal::Stream>>>,
 }
 
 /// How a stream is opened.
@@ -116,11 +118,14 @@ impl Capture {
                 last_delivery: None,
                 period: 0,
                 reports_since_delivery: 0,
+                storm: false,
             }),
             Condvar::new(),
         ));
         let writer = ring.clone();
         let reporter = ring.clone();
+        let slot: Arc<Mutex<Option<cpal::Stream>>> = Arc::new(Mutex::new(None));
+        let storm_slot = slot.clone();
         let stream = device
             .build_input_stream(
                 config,
@@ -148,7 +153,15 @@ impl Capture {
                         ring.overrun_count += 1;
                         ring.reports_since_delivery += 1;
                         if ring.reports_since_delivery == STORM_REPORTS {
+                            ring.storm = true;
                             reporter.1.notify_all();
+                            // The stream cannot run: close it now, from another thread (dropping it waits for this callback), so it does not
+                            // report a thousand times a second until the next measurement finds out.
+                            let s = storm_slot.clone();
+                            std::thread::spawn(move || {
+                                let stream = s.lock().unwrap().take();
+                                drop(stream);
+                            });
                         }
                         ring.overruns.push_back(Overrun {
                             at: Instant::now(),
@@ -167,10 +180,8 @@ impl Capture {
             )
             .map_err(|e| format!("audio: {e}"))?;
         stream.play().map_err(|e| format!("audio: {e}"))?;
-        Ok(Capture {
-            ring,
-            stream: Mutex::new(Some(stream)),
-        })
+        *slot.lock().unwrap() = Some(stream);
+        Ok(Capture { ring, stream: slot })
     }
 
     /// Stops the stream and releases the device. It must be done before the unit's power is cut: a stream left open on a codec that
@@ -226,7 +237,12 @@ impl Capture {
     ) -> Result<Vec<[i16; 2]>, String> {
         // [@ANCHOR: vnwa_open_overrun_window]
         if !self.is_open() {
-            return Err("audio: the stream was closed".into());
+            let storm = self.ring.0.lock().unwrap().storm;
+            return Err(if storm {
+                "audio: the stream was closed because it reported an overrun every few milliseconds and delivered no audio (its codec is gone): the unit needs a power cycle or the codec a new stream".into()
+            } else {
+                "audio: the stream was closed".into()
+            });
         }
         let (lock, wake) = &*self.ring;
         let first = mark + skip as u64;
