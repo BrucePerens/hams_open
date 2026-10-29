@@ -51,7 +51,8 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_capture`, `bench_screenshot` | read_only | scope |
 | `bench_scope_spectrum` | read_config (it may set the timebase and memory depth) | scope |
 | `bench_set` | read_config | both (supply setpoints are capped by `max_volts`/`max_amps`) |
-| `bench_psu_output` | read_config to switch off, **full** to switch on | supply |
+| `bench_psu_output` | **full** (needs `confirm_load_connected: true`, has `dry_run`, switches itself off after `for_s`, at most `max_on_s`) | supply |
+| `bench_psu_safe_state` | read_config (output off, read back) | supply |
 | `bench_scope_self_cal` | full (needs `confirm_inputs_disconnected: true`) | scope |
 | `bench_vna_sweep` | read_config (it puts RF on the TX port) | VNA |
 | `bench_vna_generator_on`, `_off`, `_level`, `_am` | read_config (RF on the TX port at the unit's own level, about -17 dBm at 0 dB) | VNA |

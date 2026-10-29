@@ -2,7 +2,7 @@
 title: ATM6301 supply overview
 summary: What the bench power supply is and what the tools can do with it.
 see_also: [instruments/psu/setup, instruments/psu/operation, instruments/psu/limits]
-tools: [bench_status, bench_measure, bench_set, bench_psu_output]
+tools: [bench_status, bench_measure, bench_set, bench_psu_output, bench_psu_safe_state]
 instrument: psu
 verified: code only, 2026-10-29
 ---

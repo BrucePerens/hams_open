@@ -5,7 +5,7 @@
 //! {"instruments": {
 //!   "scope": {"driver": "siglent_sds", "tier": "read_config", "host": "192.168.10.51", "port": 5025},
 //!   "psu":   {"driver": "atm6301", "tier": "read_config", "serial": "/dev/ttyUSB0", "baud": 115200,
-//!             "max_volts": 5.5, "max_amps": 1.0}
+//!             "max_volts": 5.5, "max_amps": 1.0, "max_on_s": 600}
 //! }}
 //! ```
 //!
@@ -63,6 +63,8 @@ pub struct Instrument {
     pub baud: u32,
     pub max_volts: f64,
     pub max_amps: f64,
+    /// Supply only: the longest the output may stay on after one switch-on, seconds.
+    pub max_on_s: f64,
     /// VNA only: the settings of `vnwa_open::sweep::Config` (defaults for the other kinds, unused).
     pub vna: vnwa_open::sweep::Config,
     pub sdr: crate::sdr::Config,
@@ -183,6 +185,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             baud: c.get("baud").and_then(|b| b.as_u64()).unwrap_or(115200) as u32,
             max_volts: c.get("max_volts").and_then(|m| m.as_f64()).unwrap_or(5.5),
             max_amps: c.get("max_amps").and_then(|m| m.as_f64()).unwrap_or(1.0),
+            max_on_s: c.get("max_on_s").and_then(|m| m.as_f64()).unwrap_or(600.0),
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
             usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
@@ -213,10 +216,12 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
         if !(inst.max_volts.is_finite()
             && inst.max_volts > 0.0
             && inst.max_amps.is_finite()
-            && inst.max_amps > 0.0)
+            && inst.max_amps > 0.0
+            && inst.max_on_s.is_finite()
+            && inst.max_on_s >= 1.0)
         {
             return Err(format!(
-                "{name}: max_volts and max_amps must be positive numbers"
+                "{name}: max_volts and max_amps must be positive numbers and max_on_s at least 1"
             ));
         }
         out.push(inst);

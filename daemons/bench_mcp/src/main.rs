@@ -70,9 +70,12 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_set", tier: Tier::ReadConfig, kinds: ANY,
         desc: "Scope: timebase_s (seconds per division), vdiv_v, offset_v, coupling (A1M/D1M/GND), attenuation (probe ratio), trigger_mode (AUTO/NORM/SINGLE/STOP); channel selects which channel. Supply: voltage_v and current_a setpoints, each capped by the max_volts and max_amps in the server's config; does not change the output state.",
         props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"timebase_s":{"type":"number"},"vdiv_v":{"type":"number"},"offset_v":{"type":"number"},"coupling":{"type":"string","enum":["A1M","D1M","GND"]},"attenuation":{"type":"number"},"trigger_type":{"type":"string","enum":["EDGE","SLEW","GLIT","INTV","RUNT","TV"],"description":"trigger type on `channel`; the type's other parameters keep the scope's own values"},"trigger_mode":{"type":"string","enum":["AUTO","NORM","SINGLE","STOP"]},"voltage_v":{"type":"number"},"current_a":{"type":"number"}}"#, required: &[] },
-    ToolSpec { name: "bench_psu_output", tier: Tier::ReadConfig, kinds: &[Kind::Psu],
-        desc: "Switch the supply output. Off is allowed at read_config. On needs the instrument's tier to be full, and is refused unless the setpoints stored in the supply are within the configured caps.",
-        props: r#"{"instrument":{"type":"string"},"on":{"type":"boolean"}}"#, required: &["on"] },
+    ToolSpec { name: "bench_psu_output", tier: Tier::Full, kinds: &[Kind::Psu],
+        desc: "DRIVES A LOAD: switch the supply output on (or off). On is refused unless the setpoints stored in the supply are within the configured max_volts and max_amps, needs confirm_load_connected: true from the person at the bench, and this server switches the output off again after for_s seconds (default and ceiling: the config's max_on_s, 600 s unless set) because the supply has no output timer. dry_run: true reads the stored setpoints and returns the plan without switching anything. To put the supply in its safe state use bench_psu_safe_state.",
+        props: r#"{"instrument":{"type":"string"},"on":{"type":"boolean"},"for_s":{"type":"number","description":"seconds until this server switches the output off again, 1 to the config's max_on_s"},"confirm_load_connected":{"type":"boolean","description":"true: the person at the bench says the load is connected and this output may be driven"},"dry_run":{"type":"boolean","description":"true: return the plan, switch nothing"}}"#, required: &["on"] },
+    ToolSpec { name: "bench_psu_safe_state", tier: Tier::ReadConfig, kinds: &[Kind::Psu],
+        desc: "Supply: switch the output off and read it back to prove it (up to three tries). Safe at any time; use it first when anything went wrong. If the supply will not confirm off, the error says what to do by hand.",
+        props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
     ToolSpec { name: "bench_vna_sweep", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA: a linear sweep of start_hz to stop_hz in `points` points (1 to 401, about 0.2 s each at 60 ms per point; the unit emits for six point times) with RF on the TX port, measuring S21 (RX channel) and S11 (reflection channel). The results are raw ratios, not calibrated: the cable, bridge and front-end are not removed. Saves a CSV (frequency, S21 and S11 as re/im, dB and degrees) and returns a summary, and the rows themselves when there are at most 51 points. if_hz (a divisor of 48 kHz such as 12000, 6000 or 4000), point_ms (0.2 to 100) and rf_level (0 to 16383) override the instrument's settings for this sweep.",
         props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"},"calibration":{"type":"string","description":"a .cal file from bench_vna_calibrate_build"},"cable":{"type":"string","description":"required with calibration: the cable text given when the standards were measured"}}"#, required: &["start_hz"] },
@@ -213,15 +216,6 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             tool.tier, inst.name, inst.tier
         ));
     }
-    if name == "bench_psu_output"
-        && args.get("on").and_then(|v| v.as_bool()) == Some(true)
-        && inst.tier < Tier::Full
-    {
-        return Err(format!(
-            "switching the output on needs tier Full; {:?} is configured at {:?}",
-            inst.name, inst.tier
-        ));
-    }
     let lock = instrument_lock(&inst.name);
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
     if inst.kind == Kind::Vna {
@@ -259,6 +253,7 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     let lim = psu::Limits {
         max_volts: inst.max_volts,
         max_amps: inst.max_amps,
+        max_on_s: inst.max_on_s,
     };
     match (name, inst.kind) {
         ("bench_identify", _) => Ok(json!({"idn": l.query("*IDN?")?})),
@@ -271,22 +266,73 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
         ("bench_screenshot", _) => scope::screenshot(&mut l, &out_dir()),
         ("bench_set", Kind::Scope) => scope::set(&mut l, args),
         ("bench_set", Kind::Psu) => psu::set(&mut l, args, &lim),
-        ("bench_psu_output", _) => {
-            let on = args
-                .get("on")
-                .and_then(|v| v.as_bool())
-                .ok_or("on must be true or false")?;
-            if on && inst.tier < Tier::Full {
-                return Err(format!(
-                    "switching the output on needs tier Full; {:?} is configured at {:?}",
-                    inst.name, inst.tier
-                ));
-            }
-            psu::output(&mut l, on, &lim)
+        ("bench_psu_safe_state", _) => {
+            psu::safe_state(&mut l, &psu_timer(&inst.name, lock.clone()))
         }
+        ("bench_psu_output", _) => psu_output(
+            inst,
+            &mut l,
+            args,
+            &lim,
+            &psu_timer(&inst.name, lock.clone()),
+        ),
         ("bench_scope_self_cal", _) => scope::self_cal(&mut l, args),
         _ => Err(format!("{name} does not apply to {:?}", inst.name)),
     }
+}
+
+/// The switch-off timer state of a supply, one per instrument name, sharing the instrument's lock.
+fn psu_timer(name: &str, lock: Arc<Mutex<()>>) -> psu::Timer {
+    // [@ANCHOR: bench_mcp_main_psu_timer]
+    static TIMERS: Mutex<Option<HashMap<String, Arc<std::sync::atomic::AtomicU64>>>> =
+        Mutex::new(None);
+    let mut g = TIMERS.lock().unwrap_or_else(|e| e.into_inner());
+    let generation = g
+        .get_or_insert_with(HashMap::new)
+        .entry(name.to_string())
+        .or_default()
+        .clone();
+    psu::Timer { lock, generation }
+}
+
+/// `bench_psu_output`: the arguments are checked before the supply is asked anything.
+fn psu_output(
+    inst: &Instrument,
+    l: &mut Link,
+    args: &Value,
+    lim: &psu::Limits,
+    timer: &psu::Timer,
+) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_main_psu_output]
+    let flag = |k: &str| match args.get(k) {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(_) => Err(format!("{k} must be true or false")),
+    };
+    let on = args
+        .get("on")
+        .and_then(|v| v.as_bool())
+        .ok_or("on must be true or false")?;
+    let (dry, confirmed) = (flag("dry_run")?, flag("confirm_load_connected")?);
+    if !on {
+        return if dry {
+            Ok(json!({"dry_run": true, "sent": [], "would": ["OUTP OFF", "OUTP? (must read OFF)"]}))
+        } else {
+            psu::safe_state(l, timer)
+        };
+    }
+    let for_s = psu::on_seconds(args, lim)?;
+    if dry {
+        return psu::plan_on(l, lim, for_s);
+    }
+    if !confirmed {
+        return Err(format!(
+            "bench_psu_output on drives whatever is connected to {:?}; call it with confirm_load_connected: true only when the person at the bench has said the load is connected and may be driven (dry_run: true shows the plan)",
+            inst.name
+        ));
+    }
+    let (serial, baud) = (inst.serial.clone().unwrap_or_default(), inst.baud);
+    psu::output_on(l, lim, for_s, timer, move || Link::serial(&serial, baud))
 }
 
 /// Every tool this server can offer, as listed for a bench with each driver configured at the top
@@ -485,7 +531,8 @@ mod tests {
             .collect();
         assert!(
             names.contains(&"bench_set".to_string())
-                && names.contains(&"bench_psu_output".to_string())
+                && names.contains(&"bench_psu_safe_state".to_string())
+                && !names.contains(&"bench_psu_output".to_string())
         );
         assert!(!names.contains(&"bench_scope_self_cal".to_string()));
     }
@@ -525,7 +572,7 @@ mod tests {
         assert!(e.contains("points"), "{e}");
     }
 
-    // Tests [@ANCHOR: bench_mcp_vna_power_cycle]
+    // Tests [@ANCHOR: bench_vna_power_cycle]
     #[test]
     fn the_power_cycle_tool_needs_a_hub_and_read_config_and_does_not_block_other_instruments() {
         let _evidence = crate::usb_hub::testkit::evidence_lock();
@@ -600,6 +647,80 @@ mod tests {
             let e = call(&vna("read_only"), n, &json!({})).unwrap_err();
             assert!(e.contains("needs tier"), "{n}: {e}");
         }
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_psu_output]
+    // Tests [@ANCHOR: bench_mcp_main_psu_timer]
+    #[test]
+    fn psu_output_needs_confirmation_honours_dry_run_and_switches_off_by_the_safe_state() {
+        use crate::example::testkit::FakeDevice;
+        let dev = FakeDevice::start(|c| match c {
+            "VOLT?" => Some("3.3".into()),
+            "CURR?" => Some("0.5".into()),
+            "OUTP?" => Some("OFF".into()),
+            c if c.ends_with('?') => Some("0".into()),
+            _ => None,
+        });
+        let v = insts();
+        let psu_inst = v.iter().find(|i| i.name == "psu").unwrap();
+        let lim = psu::Limits {
+            max_volts: 5.5,
+            max_amps: 1.0,
+            max_on_s: 600.0,
+        };
+        let timer = psu_timer("main_test_psu", Arc::new(Mutex::new(())));
+        assert!(Arc::ptr_eq(
+            &timer.generation,
+            &psu_timer("main_test_psu", Arc::new(Mutex::new(()))).generation
+        ));
+        let mut l = dev.link()().unwrap();
+        let e = psu_output(psu_inst, &mut l, &json!({"on": true}), &lim, &timer).unwrap_err();
+        assert!(e.contains("confirm_load_connected"), "{e}");
+        let e = psu_output(
+            psu_inst,
+            &mut l,
+            &json!({"on": true, "dry_run": "yes"}),
+            &lim,
+            &timer,
+        )
+        .unwrap_err();
+        assert!(e.contains("dry_run"), "{e}");
+        let e = psu_output(
+            psu_inst,
+            &mut l,
+            &json!({"on": true, "for_s": 9999, "confirm_load_connected": true}),
+            &lim,
+            &timer,
+        )
+        .unwrap_err();
+        assert!(e.contains("max_on_s"), "{e}");
+        let d = psu_output(
+            psu_inst,
+            &mut l,
+            &json!({"on": true, "dry_run": true}),
+            &lim,
+            &timer,
+        )
+        .unwrap();
+        assert_eq!(d["dry_run"], true);
+        let d = psu_output(
+            psu_inst,
+            &mut l,
+            &json!({"on": false, "dry_run": true}),
+            &lim,
+            &timer,
+        )
+        .unwrap();
+        assert_eq!(d["dry_run"], true);
+        assert!(
+            !dev.received()
+                .iter()
+                .any(|c| c.starts_with("OUTP ") && !c.ends_with('?')),
+            "{:?}",
+            dev.received()
+        );
+        let off = psu_output(psu_inst, &mut l, &json!({"on": false}), &lim, &timer).unwrap();
+        assert_eq!(off["verified"], true);
     }
 
     #[test]
