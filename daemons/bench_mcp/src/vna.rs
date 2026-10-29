@@ -133,6 +133,7 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
     Ok(json!({
         "usb": usb,
         "usb_read": answers,
+        "reference_clock": "internal 12 MHz TCXO (this driver never selects the external clock input; nothing may be connected to it, see docs/PROTOCOL.md)",
         "hub": cfg.hub.as_ref().map(|h| format!("{} port {}", h.hub, h.port)),
         "power_cycles_by_this_server": POWER_CYCLES.load(Ordering::Relaxed),
         "codec_s11": s11,
