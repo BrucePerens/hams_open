@@ -58,6 +58,11 @@ pub struct Capture {
     stream: Arc<Mutex<Option<cpal::Stream>>>,
 }
 
+/// The ALSA period (frames; the buffer is two periods) the sweeps ask for. The driver's default of 241 frames (5 ms) gave 33 overruns in 15 minutes of continuous
+/// sweeps (0.037 per second, 22 points measured again) on the dev box under a load of up to 17; 1024 frames (21 ms) gave none in the same time. The capture mark
+/// is exact for any period (`mark`), so the longer period costs nothing in timing.
+pub const DEFAULT_PERIOD_FRAMES: u32 = 1024;
+
 /// How a stream is opened.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Options {

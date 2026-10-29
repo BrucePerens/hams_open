@@ -81,7 +81,9 @@ impl Default for Config {
             settle_ms: None,
             window_ms: None,
             min_reference: 200.0,
-            capture: crate::capture::Options::default(),
+            capture: crate::capture::Options {
+                period_frames: Some(crate::capture::DEFAULT_PERIOD_FRAMES),
+            },
             overrun_retries: 10,
             discard_points: 0,
             first_wait_ms: 0.0,
@@ -908,6 +910,12 @@ mod tests {
         };
         assert_eq!(recover(&mut u, "p", |_| Ok(2)), Ok(2));
         assert!(u.noted.is_empty());
+    }
+
+    // Tests [@ANCHOR: vnwa_open_capture_mark]
+    #[test]
+    fn the_sweep_asks_the_audio_layer_for_a_1024_frame_period() {
+        assert_eq!(Config::default().capture.period_frames, Some(1024));
     }
 
     // Tests [@ANCHOR: vnwa_open_vendor_agreement]

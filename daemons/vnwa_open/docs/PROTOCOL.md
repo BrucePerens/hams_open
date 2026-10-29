@@ -489,7 +489,7 @@ Source: measurement on the dev box (`examples/overrun_probe.rs`, the soak log, t
   `bench_vna_sweep` and `bench_vna_status`. Other stream errors are still printed.
 * Larger periods: `Options::period_frames` sets the ALSA period (cpal makes the buffer two periods). With the old `mark` a period of 1024 or 4096 broke every point (level
   change 12 % and 94 %: the mark trails real time by up to one period, so the window started inside the previous stage). `Capture::mark` now adds the frames elapsed
-  since the last delivery, and 1024 and 4096 sweeps (25 s each) were clean. The default period is kept: it never overran in normal operation.
+  since the last delivery, and 1024 and 4096 sweeps (25 s each) were clean. The default period of the sweeps is now 1024 frames: in 15 minutes of continuous sweeps (about 4,200 points each, host load up to 17) the driver's default of 241 frames gave 33 overruns (0.037 per second, 22 points measured again) and 1024 frames gave none. (A run at 4096 frames was spoiled by the unit losing its TX output, see below, so periods above 1024 are untested.)
 * Real-time priority for the callback thread was not tried: `ulimit -r` is 0 for this user and cpal's `realtime` feature needs rtkit.
 * Bus: the codecs and the unit sit behind the StarTech hub 3-2 and the unit's TUSB2036 hub (full speed, one transaction translator) on xHCI 0000:00:14.0 (bus 3, 480 M), shared
   with the Bluetooth adapter and one other device; no overruns were seen with them present.
@@ -634,6 +634,14 @@ Sources: usbmon captures of the vendor program in VNA mode (`saref`) and in SA m
   characterised**, because they need a calibrated external tone at the RX port and none was available (the unit's own TX in loopback is the only source on the bench, and it moves with the LO). What would
   settle it: a stable generator at 10 MHz into RX with the LO stepped over 1 to 100 MHz, looking for lines at harmonics and subharmonics of the LO, and the scope's FFT of the same tone for comparison.
 * No calibration (dBm): the result is in counts. The vendor's level offset is a user entry, and its "crosstalk thru calibration" removes the codec's DC offset; neither is implemented.
+
+## The TX output vanished (2026-10-29 15:16, cause open)
+
+After about 30 minutes of continuous sweeps with no power event the unit stopped delivering a TX signal: every sweep failed with "no signal on the reference channel(s)" (all four audio channels at 0.1 to 0.2 counts), and
+the scope on the tee (CH1, 1 MOhm, through the pad) saw no generator carrier: commanded 1, 2, 5, 15 MHz gave nothing but a 9.79 MHz broadcast station that the open scope input picks up (60 counts amplitude, the same at every setting),
+and 10 and 20 MHz gave a 1.2 count line (25 counts normally at -6 dB). The unit itself was healthy by every software measure: it answered every request, firmware v5.22, internal temperature 23210 counts (normal), 0x91 answers 0x73. It did not
+recover with power cycles of 4 s, 30 s and 9 minutes, nor with a USB reset of the control chip. The same condition (reference channels at 0.1 count, "silent state") had been seen three times before and cleared by a vendor-program run or
+a power cycle; this one did not. Either the TX cabling (TX connector, pad, tee, leads) was disturbed or the TX path is damaged. Entry to be completed when the cabling has been checked.
 
 ## Seen but not decoded
 
