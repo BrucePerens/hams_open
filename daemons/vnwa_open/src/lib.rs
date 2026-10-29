@@ -16,6 +16,7 @@ pub mod setup;
 pub mod sweep;
 pub mod timedomain;
 pub mod topology;
+pub mod trace;
 pub mod transport;
 pub mod usb;
 

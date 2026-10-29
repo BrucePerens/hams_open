@@ -129,3 +129,6 @@ Each is a test against bytes or samples recorded from the vendor program.
 The sensor of the unit shows a warm-up of about 100 counts in the first 5 minutes after a power-up, during which a loopback sweep changes by less than 0.04 % and 0.01 degrees on average
 (`docs/PROTOCOL.md`). `examples/soak.rs` therefore judges a sweep against two baselines (the first of the run and one taken right after each power cycle) with a tolerance of 0.3 % and 0.3 degrees
 plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that baseline, and records an event for every deviation (the constants are to be refined from the second soak's data).
+* A stalled 0x0d read is tried again after growing pauses, up to 6 times. [@ANCHOR: vnwa_open_patient_read]
+* The IF tone starts 61 ms and the 18 kHz burst about 1 ms after the end of the send, in a recorded point. [@ANCHOR: vnwa_open_emission_onset]
+* A storm of overrun reports with no audio between them closes the stream and fails the window at once. [@ANCHOR: vnwa_open_capture_close]

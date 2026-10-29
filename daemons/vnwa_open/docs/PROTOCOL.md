@@ -524,6 +524,32 @@ and 80 ms minus 20 ms is the 60 ms level step. The window is now timed from the 
 up to 26.5 ms all passed, and 4 of 724 attempts failed (0.6 %), all before the send finished (a transfer error). The frequency meter's mark is still taken before the send; its window starts 120 ms in and
 tolerates the jitter.
 
+## The sync burst, the emission onset and the stalled 0x0d read (2026-10-29)
+
+Source: measurement only (`examples/envelope.rs`: the audio of both codecs from 20 ms before a set-up send until 420 ms after it, 39 points at 10 MHz, IF 4 kHz, 60 ms per point;
+`examples/stall_probe.rs`, `examples/settle_probe.rs`). The Help file describes "sync bursts" that the vendor program finds in the audio to align a free-running sweep ("No Sync Found", restart on
+no sync, "F_Sync = F_Start"). This driver sends one set-up block per point, so it does not need that mechanism; this is what the burst is on the wire:
+
+* **The 18 kHz burst** (the tone request 0x43 sets): a steady 18.000 kHz tone in the reference channel of both codecs (codec 1 left, codec 2 right), amplitude about 3,735 counts against 5,708 for
+  the IF tone (0.65), starting when the block's last request has been processed (median 0.5 ms after the end of the send, from 1.4 ms after to 12.5 ms before it when a send is slow) and ending when the IF tone starts.
+  It is gone in the measured channels' ratio; it is the unit's marker that a point has been accepted.
+* **The IF tone** starts 60.0 to 61.4 ms (median 60.8 ms; codec 2 the same within 0.1 ms, the resolution of the 1 ms blocks) after the end of the 0x0d read that ends the send, whether the send took 7.6 ms or 21.5 ms:
+  one point time (60 ms) after the read. It stays level for about 5 point times (304 ms) and ends with a partial block, then a 15 to 43 count blip about 15 ms later. So the emission is timed from the successful 0x0d read,
+  which is what the analysis window now uses; detecting the onset in the audio would gain less than the 1 ms spread. (`trace::onset_block`, `vnwa_open_emission_onset`, tested on a recorded stretch.)
+* **Lost sync** cannot happen in the vendor sense here: every point is its own send, its window is timed from the read, and a point whose tone is missing, unsteady or overrun is measured again (`sweep::recover`).
+  That is the "restart on no sync" behaviour, bounded and counted. No separate handler is needed.
+* **The remaining failures were all the 0x0d read.** In the 2026-10-29 dry run 30 of 30 recovered failures, and in the A/B runs below 25 of 25, were `read request 0x0d: Pipe error` (a stall, -32), four tries 6 ms apart; none was an
+  unsteady tone or an overrun any more. The read normally succeeds in the first try, about 1 ms after the last request. Results (60-point sweeps, attempts counted by `Vna::attempt_timings`):
+  | policy | attempts | failed at the first try |
+  |---|---|---|
+  | 3 resends 5 ms apart (before) | 2,051 and 2,054 | 11 and 14 (0.61 % together) |
+  | 6 resends after 5, 10, 20, 40, 80, 160 ms (now `STALL_PAUSES_MS`) | 2,041 and 2,041 | 1 and 1 (0.05 %) |
+  | 3 resends, and 360 ms minimum between sends | 2,053 | 13 (0.63 %), and a point took 372 ms instead of 208 ms |
+  The stall is therefore not the unit still being busy with the previous point (waiting for its emission to end did nothing); it clears within a few tens of ms in all but about 1 in 2,000 points.
+* **A settle step does not help.** `settle_probe` waits 10 s with the unit idle, sweeps 12 points from 100 kHz to 150 MHz and measures 100 kHz again, 25 times: the first point of the sweep differs from the repeat by 0.003 % rms
+  (0.005 % worst) and 0.001 degrees rms with no discarded point, and by 0.002 % and 0.001 degrees with one discarded point; the failure rate was 0.31 % and 0.57 % (1 and 2 stalled reads). So a discarded first point or a wait
+  (`Config::discard_points`, `first_wait_ms`, both 0 by default) buys nothing measurable and is kept only as a parameter.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
