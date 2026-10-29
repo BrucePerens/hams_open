@@ -456,6 +456,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_hubs]
     #[test]
     fn hubs_merge_sysfs_uhubctl_and_descriptor_and_claim_only_what_uhubctl_says() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let hub = FakeHub::new(&recorded_sys(), Behaviour::Switches);
         let v = hubs(&hub, &recorded_sys(), &cfg(), &json!({"privileged": false})).unwrap();
         assert_eq!(v["uhubctl"]["available"], false);
@@ -476,24 +477,25 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_verification_levels]
     #[test]
     fn verification_levels_are_claimed_rechecked_and_manual() {
-        // Ports on a hub nothing else in the test run cycles, so the evidence of this process (`power::proven`) cannot reach them.
-        let c = crate::usb_hub::parse_config(&json!({"ports": {"77-7/2": {"label": "VNWA 3E", "hub_uplink_ok": true, "confirmed_by_hand": "goes dark and keeps no settings"}, "77-7/4": {"label": "spare"}}})).unwrap();
-        let a = verification(&c, "77-7/4", true);
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
+        power::forget_all();
+        let c = cfg();
+        let a = verification(&c, "3-2/4", true);
         assert_eq!(
             (a["level"].as_u64(), a["name"].as_str()),
             (Some(1), Some("claimed"))
         );
-        let none = verification(&c, "77-7/4", false);
+        let none = verification(&c, "3-2/4", false);
         assert_eq!(none["level"], 0);
-        let b = verification(&c, "77-7/2", true);
+        let b = verification(&c, "3-2/2", true);
         assert_eq!(b["level"], 2);
         assert!(b["evidence"][1]
             .as_str()
             .unwrap()
             .contains("manually confirmed"));
         assert!(b["note"].as_str().unwrap().contains("not that VBUS fell"));
-        let c4 = crate::usb_hub::parse_config(&json!({"ports": {"77-7/2": {"state_cleared": "VNA reverts to defaults", "vbus_measured": "0.02 V"}}})).unwrap();
-        assert_eq!(verification(&c4, "77-7/2", true)["level"], 4);
+        let c4 = crate::usb_hub::parse_config(&json!({"ports": {"3-2/2": {"state_cleared": "VNA reverts to defaults", "vbus_measured": "0.02 V"}}})).unwrap();
+        assert_eq!(verification(&c4, "3-2/2", true)["level"], 4);
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_protection]
@@ -547,6 +549,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
     #[test]
     fn dry_run_says_what_would_happen_and_changes_nothing() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -577,6 +580,7 @@ mod tests {
 
     #[test]
     fn power_off_and_cycle_need_tier_full_and_on_needs_read_config() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -606,6 +610,7 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_port_power]
     #[test]
     fn a_protected_hub_uplink_is_refused_and_the_override_works_only_where_allowed() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -649,6 +654,7 @@ mod tests {
 
     #[test]
     fn a_cycle_on_a_labelled_port_runs_through_uhubctl_and_reports_levels_and_actual_off_time() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -670,6 +676,7 @@ mod tests {
 
     #[test]
     fn ports_of_ganged_or_unlisted_hubs_are_refused() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -702,6 +709,7 @@ mod tests {
 
     #[test]
     fn a_superspeed_hub_is_addressed_with_exact_location() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Ignores);
         let proc = Dir::new();
@@ -732,6 +740,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port]
     #[test]
     fn off_time_is_bounded_and_ports_resolve_by_device() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();

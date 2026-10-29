@@ -511,6 +511,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_vna_power_cycle]
     #[test]
     fn the_power_cycle_tool_needs_a_hub_and_read_config_and_does_not_block_other_instruments() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let vna = |tier: &str, hub: &str| {
             config::parse(&format!(
                 r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"{hub}}}}}}}"#
@@ -547,6 +548,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_main_tool_defs]
     #[test]
     fn every_vna_function_has_its_own_tool_at_read_config_and_none_reaches_other_instruments() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let vna = |tier: &str| {
             config::parse(&format!(r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"}},"psu":{{"driver":"atm6301","tier":"full","serial":"/dev/null"}}}}}}"#)).unwrap()
         };

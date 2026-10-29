@@ -91,6 +91,12 @@ pub fn proven(key: &str) -> Option<Evidence> {
         .and_then(|m| m.get(key).cloned())
 }
 
+/// Empties the evidence store, for a test that needs a port nothing has cycled yet (it holds `testkit::evidence_lock`).
+#[cfg(test)]
+pub fn forget_all() {
+    *PROVEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 fn remember(key: &str, e: Evidence) {
     PROVEN
         .lock()
@@ -435,6 +441,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_power_wait_until]
     #[test]
     fn a_cycle_is_off_then_on_through_sudo_uhubctl_and_proves_re_enumeration() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let o = opts(300, 5000);
@@ -474,6 +481,7 @@ mod tests {
 
     #[test]
     fn a_hub_that_ignores_the_command_is_reported_and_the_cycle_fails_clearly() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Ignores);
         let e = cycle(&hub, &sys, &port(), &opts(0, 300), None).unwrap_err();
@@ -485,6 +493,7 @@ mod tests {
 
     #[test]
     fn a_failing_power_off_stops_before_power_on() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Fails);
         let e = cycle(&hub, &sys, &port(), &opts(0, 300), None).unwrap_err();
@@ -501,6 +510,7 @@ mod tests {
 
     #[test]
     fn a_ready_check_is_waited_for_after_the_device_is_back() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let mut polls = 0;

@@ -351,6 +351,7 @@ mod tests {
     // Tests [@ANCHOR: bench_vna_power_cycle]
     #[test]
     fn the_vna_power_hook_runs_the_hub_modules_ladder_and_lists_every_failed_rung() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         struct Failing(std::sync::Mutex<Vec<String>>);
         impl crate::usb_hub::uhubctl::Runner for Failing {
             fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
