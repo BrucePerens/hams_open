@@ -187,6 +187,7 @@ impl Config {
 }
 
 fn hhmm(s: &str) -> Result<u32, String> {
+    // [@ANCHOR: bench_mcp_audio_hhmm]
     let (h, m) = s.split_once(':').ok_or("time must look like \"22:00\"")?;
     let (h, m): (u32, u32) = (
         h.parse().map_err(|_| "bad hour")?,
@@ -199,6 +200,7 @@ fn hhmm(s: &str) -> Result<u32, String> {
 }
 
 fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
+    // [@ANCHOR: bench_mcp_audio_ports]
     let mut out = BTreeMap::new();
     let Some(v) = c.get(key) else { return Ok(out) };
     for (alias, p) in v.as_object().ok_or(format!("{key} must be an object"))? {
@@ -383,6 +385,7 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
 
 /// Minutes since local midnight now.
 pub fn local_minute_of_day() -> u32 {
+    // [@ANCHOR: bench_mcp_audio_local_minute_of_day]
     let mut t: libc::time_t = 0;
     // SAFETY: time and localtime_r write only to the locals given; tm is fully initialised by localtime_r on success.
     let tm = unsafe {
@@ -771,6 +774,8 @@ mod tests {
         assert_eq!(i[0].audio.reserved, vec![VNWA_CODEC, "1234:abcd", "radio"]);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_hhmm]
+    // Tests [@ANCHOR: bench_mcp_audio_ports]
     #[test]
     fn aliases_caps_and_quiet_hours_parse_and_bad_ones_are_refused() {
         let i = insts(
@@ -1159,5 +1164,22 @@ mod tests {
             &json!({})
         )
         .is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_local_minute_of_day]
+    #[test]
+    fn the_minute_of_the_local_day_matches_the_local_clock() {
+        let hm = |t: String| -> u32 {
+            let time = t.split('-').nth(1).unwrap();
+            time[..2].parse::<u32>().unwrap() * 60 + time[2..4].parse::<u32>().unwrap()
+        };
+        let before = hm(store::timestamp());
+        let got = local_minute_of_day();
+        let after = hm(store::timestamp());
+        assert!(got < 24 * 60);
+        assert!(
+            got == before || got == after,
+            "{got} is not {before} or {after}"
+        );
     }
 }

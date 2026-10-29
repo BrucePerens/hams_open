@@ -603,6 +603,7 @@ pub fn run(ctx: &Ctx, args: &Value) -> Result<Value, String> {
 
 /// `bench_audio_discovery`: the stored result, whether it is stale, and what `auto` selects now.
 pub fn report(ctx: &Ctx, _args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_discover_report]
     let Some(st) = ctx.discovery else {
         return Ok(
             json!({"stored": false, "note": "no discovery has been run on this machine; bench_audio_discover makes the (short, quiet) test tones"}),
@@ -936,5 +937,68 @@ mod tests {
         );
         assert!(load(std::path::Path::new("/nonexistent/x")).is_none());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_discover_report]
+    #[test]
+    fn the_report_says_whether_a_discovery_is_stored_stale_and_what_auto_selects() {
+        let devs = devbox_devices();
+        let cfg = crate::audio::Config::default();
+        let run = crate::audio::testkit::Scripted::new(&[]);
+        fn mk<'a>(
+            run: &'a crate::audio::testkit::Scripted,
+            cfg: &'a crate::audio::Config,
+            devs: &'a [Device],
+            d: Option<&'a Stored>,
+        ) -> Ctx<'a> {
+            Ctx {
+                run,
+                cfg,
+                devs,
+                minute: 720,
+                discovery: d,
+            }
+        }
+        let none = report(&mk(&run, &cfg, &devs, None), &json!({})).unwrap();
+        assert_eq!(none["stored"], false);
+        assert!(none["note"].as_str().unwrap().contains("no discovery"));
+        let mic = devs
+            .iter()
+            .find(|d| d.dir == Dir::Input && d.reserved.is_none() && !d.is_default)
+            .unwrap();
+        let mut st = Stored {
+            at_epoch: epoch() - 90,
+            fingerprint: fingerprint(&devs),
+            alert_output: None,
+            verify_input: Some(mic.node_name.clone()),
+            raw: json!({"selection": "kept"}),
+        };
+        let fresh = report(&mk(&run, &cfg, &devs, Some(&st)), &json!({})).unwrap();
+        assert_eq!(
+            (fresh["stored"].clone(), fresh["stale"].clone()),
+            (json!(true), json!(false))
+        );
+        assert!(fresh["changes_since"].as_array().unwrap().is_empty());
+        assert!((90..95).contains(&fresh["age_s"].as_u64().unwrap()));
+        assert_eq!(fresh["result"]["selection"], "kept");
+        assert_eq!(
+            fresh["auto_selects_now"]["verify_input"],
+            json!(mic.node_name)
+        );
+        let default_out = devs
+            .iter()
+            .find(|d| d.dir == Dir::Output && d.is_default && d.reserved.is_none())
+            .unwrap();
+        assert_eq!(
+            fresh["auto_selects_now"]["alert_output"],
+            json!(default_out.node_name)
+        );
+        st.fingerprint.push("output|gone|-".into());
+        let stale = report(&mk(&run, &cfg, &devs, Some(&st)), &json!({})).unwrap();
+        assert_eq!(stale["stale"], true);
+        assert!(stale["changes_since"][0]
+            .as_str()
+            .unwrap()
+            .starts_with("gone or changed"));
     }
 }

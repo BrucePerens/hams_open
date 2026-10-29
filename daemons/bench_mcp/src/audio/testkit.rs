@@ -72,3 +72,61 @@ impl Run for Scripted {
         }
     }
 }
+
+/// The directory of stand-in programs that `fake_programs` put at the front of `PATH`.
+static FAKES: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Puts stand-ins for `espeak-ng`, `spd-say`, `pw-play` and `pw-record` at the front of `PATH` (once per test process) so the
+/// code that starts those programs by name runs unchanged and nothing reaches the sound server. `espeak-ng -w FILE` copies
+/// `espeak-<voice>.wav` from the returned directory (written by the test) and `espeak-ng --voices` prints the recorded list;
+/// `pw-record --target NODE` prints the raw f32 samples of `rec-NODE.f32` there and then stays open like a live stream;
+/// `pw-play` and `spd-say` read their input and succeed.
+pub fn fake_programs() -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    FAKES
+        .get_or_init(|| {
+            let dir = std::env::temp_dir().join(format!("audio-fakes-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let d = dir.display();
+            let scripts = [
+                (
+                    "espeak-ng",
+                    format!(
+                        "#!/bin/sh\nif [ \"$1\" = \"--voices\" ]; then cat '{}'; exit 0; fi\n\
+                         while [ $# -gt 0 ]; do case \"$1\" in -v) v=\"$2\";; -w) o=\"$2\";; esac; shift; done\n\
+                         cat > /dev/null\ncp '{d}'/espeak-\"$v\".wav \"$o\"\n",
+                        recorded().join("espeak-voices.txt").display()
+                    ),
+                ),
+                ("spd-say", "#!/bin/sh\ncat > /dev/null\n".to_string()),
+                ("pw-play", "#!/bin/sh\nexit 0\n".to_string()),
+                (
+                    "pw-record",
+                    format!(
+                        "#!/bin/sh\nwhile [ $# -gt 0 ]; do case \"$1\" in --target) t=\"$2\";; esac; shift; done\n\
+                         cat '{d}'/rec-\"$t\".f32\nexec sleep 60\n"
+                    ),
+                ),
+            ];
+            for (name, body) in scripts {
+                let p = dir.join(name);
+                std::fs::write(&p, body).unwrap();
+                std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            let old = std::env::var_os("PATH").unwrap_or_default();
+            let mut paths = vec![dir.clone()];
+            paths.extend(std::env::split_paths(&old));
+            std::env::set_var("PATH", std::env::join_paths(paths).unwrap());
+            dir
+        })
+        .clone()
+}
+
+/// A scratch directory unique to the test process and `tag`.
+pub fn scratch(tag: &str) -> PathBuf {
+    let d = std::env::temp_dir().join(format!("audio-test-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}

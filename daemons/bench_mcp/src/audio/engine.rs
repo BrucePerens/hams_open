@@ -226,6 +226,7 @@ impl Playing {
 
 impl Drop for Playing {
     fn drop(&mut self) {
+        // [@ANCHOR: bench_mcp_audio_engine_playing_drop]
         if matches!(self.child.try_wait(), Ok(None)) {
             let _ = self.child.kill();
             let _ = self.child.wait();
@@ -252,5 +253,28 @@ mod tests {
             "{e}"
         );
         assert_eq!(rec.len(), 0);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_engine_playing_drop]
+    #[test]
+    fn dropping_a_playback_stops_the_process_that_is_still_running() {
+        let child = Command::new("sleep")
+            .arg("60")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        let playing = Playing {
+            child,
+            started: Instant::now(),
+        };
+        assert!(Path::new(&format!("/proc/{pid}")).exists());
+        drop(playing);
+        assert!(
+            !Path::new(&format!("/proc/{pid}")).exists(),
+            "the process is stopped and reaped"
+        );
     }
 }

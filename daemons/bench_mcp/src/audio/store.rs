@@ -29,6 +29,7 @@ pub fn timestamp() -> String {
 
 /// A file name part made of letters, digits and dashes only.
 pub fn slug(s: &str) -> String {
+    // [@ANCHOR: bench_mcp_audio_store_slug]
     let t: String = s
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
@@ -184,6 +185,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_store_new_path]
+    // Tests [@ANCHOR: bench_mcp_audio_store_slug]
     // Tests [@ANCHOR: bench_mcp_audio_store_timestamp]
     #[test]
     fn new_paths_are_unique_private_and_labelled_safely() {
@@ -204,5 +206,14 @@ mod tests {
             0o700
         );
         let _ = std::fs::remove_dir_all(d.parent().unwrap());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_store_slug]
+    #[test]
+    fn a_slug_has_only_letters_digits_and_inner_dashes_and_is_short() {
+        assert_eq!(slug("relay ../click!"), "relay----click");
+        assert_eq!(slug("--Door beep--"), "Door-beep");
+        assert_eq!(slug("é"), "");
+        assert_eq!(slug(&"a".repeat(80)).len(), 40);
     }
 }
