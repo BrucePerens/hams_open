@@ -12,6 +12,7 @@ pub mod power;
 pub mod protocol;
 pub mod setup;
 pub mod sweep;
+pub mod timedomain;
 pub mod topology;
 pub mod transport;
 pub mod usb;

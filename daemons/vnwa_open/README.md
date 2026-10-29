@@ -34,9 +34,8 @@ result to the vendor program's sign. Against the vendor program's own uncalibrat
 to 0.7 to 0.9 percent in magnitude and phase at 1, 10, 20 and 30 MHz, and to 1.5 percent rms over the first 15 points of a sweep when
 the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in RF frequency). It also
 reproduces the unit's IF-dependent response (|S21| 0.874 at IF 12 kHz down to 0.767 at 1 kHz, nine IFs) to 0.1 to 1 percent on both codecs
-(`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration, the vendor's low-frequency digital
-filtering (below the codec's cut-off) and the windowing used for time-domain transforms, none of which is implemented
-(details in `docs/PROTOCOL.md`).
+(`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration (now `cal`, see below); the low-frequency range needs no special filtering down to 200 Hz
+and the time-domain transforms with their windows are in `timedomain` (details in `docs/PROTOCOL.md`).
 
 The two DDS chips are an AD9859 and an AD9951 (identical register maps, no sweep engine), clocked from a 12 MHz TCXO
 times a premultiplier of 3, then times nRF = 10 (RF, 360 MHz) and nLO = 9 (LO, 324 MHz).
@@ -110,4 +109,6 @@ Each is a test against bytes or samples recorded from the vendor program.
 * This driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, a constant 0.8 % offset). [@ANCHOR: vnwa_open_vendor_agreement]
 * The one-port error terms are recovered from open, short and load, and a known load is corrected. [@ANCHOR: vnwa_open_cal_one_port]
 * A calibration survives its text file and a damaged file is refused. [@ANCHOR: vnwa_open_cal_file]
+* The windows have their textbook shapes. [@ANCHOR: vnwa_open_window]
+* A delay line peaks at its delay in low-pass and band-pass mode, windows lower the sidelobes, a reflection's step settles at its coefficient. [@ANCHOR: vnwa_open_time_domain]
 * A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! `cargo run --example sweep -- start_hz stop_hz points [if_hz] [point_ms] [settle_ms] [window_ms]`: an uncalibrated S11 and S21 sweep.
+//! `cargo run --example sweep -- start_hz stop_hz points [if_hz] [point_ms] [settle_ms] [window_ms] [min_reference]`: an uncalibrated S11 and S21 sweep.
 use vnwa_open::sweep::{Config, Vna};
 
 fn main() -> Result<(), String> {
@@ -10,6 +10,7 @@ fn main() -> Result<(), String> {
         point_ms: num(5, 60.0),
         settle_ms: a.get(6).and_then(|s| s.parse().ok()),
         window_ms: a.get(7).and_then(|s| s.parse().ok()),
+        min_reference: num(8, 200.0),
         // VNWA_HUB=3-2:2 names the power-switching hub port, so a point that cannot be recovered gets a cold reset.
         hub: std::env::var("VNWA_HUB").ok().and_then(|h| {
             let (hub, port) = h.split_once(':')?;
