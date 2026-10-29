@@ -176,3 +176,12 @@ Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`.
 * Bandwidth: the VNWA's four full-speed devices share one translator and the endpoint arithmetic follows the USB reservation rules. [@ANCHOR: usb_hub_bandwidth]
 * Diagnose: missing, powered-off, deauthorized and journal-backed findings. [@ANCHOR: usb_hub_diagnose]
 * The power budget flags a bus-powered hub asked for more current than it has. [@ANCHOR: usb_hub_power_budget]
+
+## Audio tools (`audio` driver)
+
+`bench_audio_*` tools work with the host's sound devices through PipeWire: device list, status and limits, then record, play, verify a sound, detect events, speak, alert and discovery by listening.
+Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs are in `docs/AUDIO_TOOLS.md`. Tests read a recording of this development machine's PipeWire graph in `tests/audio_fixtures/devbox`.
+
+* The `audio` config entry parses and refuses bad entries; the VNWA codec is always reserved. [@ANCHOR: audio_config]
+* The device list comes from `pw-dump`; the VNWA codecs are reserved by usb id. [@ANCHOR: audio_devices_parse]
+* `wpctl get-volume` output parses. [@ANCHOR: audio_levels_parse]

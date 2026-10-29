@@ -1,0 +1,2446 @@
+[
+ {
+  "id": 32,
+  "metadata": [],
+  "type": "PipeWire:Interface:Metadata"
+ },
+ {
+  "id": 36,
+  "metadata": [],
+  "type": "PipeWire:Interface:Metadata"
+ },
+ {
+  "id": 38,
+  "metadata": [],
+  "type": "PipeWire:Interface:Metadata"
+ },
+ {
+  "id": 40,
+  "metadata": [
+   {
+    "key": "default.configured.audio.sink",
+    "subject": 0,
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "alsa_output.usb-1130_USB_AUDIO-00.analog-stereo"
+    }
+   },
+   {
+    "key": "default.configured.audio.source",
+    "subject": 0,
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "bluez_input.00:00:00:00:00:00"
+    }
+   },
+   {
+    "key": "default.audio.sink",
+    "subject": 0,
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Speaker__sink"
+    }
+   },
+   {
+    "key": "default.audio.source",
+    "subject": 0,
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
+    }
+   },
+   {
+    "key": "default.video.source",
+    "subject": 0,
+    "type": "Spa:String:JSON",
+    "value": {
+     "name": "libcamera_input.__SB_.PC00.LNK0"
+    }
+   }
+  ],
+  "type": "PipeWire:Interface:Metadata"
+ },
+ {
+  "id": 42,
+  "metadata": [],
+  "type": "PipeWire:Interface:Metadata"
+ },
+ {
+  "id": 48,
+  "info": {
+   "params": {
+    "Route": [
+     {
+      "available": "no",
+      "description": "HDMI / DisplayPort 1 Output",
+      "device": 2,
+      "devices": [
+       2
+      ],
+      "direction": "Output",
+      "index": 2,
+      "info": [
+       6,
+       "port.type",
+       "hdmi",
+       "port.availability-group",
+       "HDMI/DP,pcm=3",
+       "device.icon_name",
+       "video-display",
+       "card.profile.port",
+       "2",
+       "route.hw-mute",
+       "false",
+       "route.hw-volume",
+       "false"
+      ],
+      "name": "[Out] HDMI1",
+      "priority": 500,
+      "profile": 2,
+      "profiles": [
+       2,
+       1
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        1.0,
+        1.0
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        1.0,
+        1.0
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05
+      },
+      "save": true
+     },
+     {
+      "available": "unknown",
+      "description": "Speaker",
+      "device": 3,
+      "devices": [
+       3
+      ],
+      "direction": "Output",
+      "index": 3,
+      "info": [
+       5,
+       "port.type",
+       "speaker",
+       "device.icon_name",
+       "audio-speakers",
+       "card.profile.port",
+       "3",
+       "route.hw-mute",
+       "true",
+       "route.hw-volume",
+       "true"
+      ],
+      "name": "[Out] Speaker",
+      "priority": 100,
+      "profile": 2,
+      "profiles": [
+       2
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        0.140624,
+        0.140624
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        0.939861,
+        0.939861
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05
+      },
+      "save": false
+     },
+     {
+      "available": "unknown",
+      "description": "Digital Microphone",
+      "device": 5,
+      "devices": [
+       5
+      ],
+      "direction": "Input",
+      "index": 5,
+      "info": [
+       5,
+       "port.type",
+       "mic",
+       "device.icon_name",
+       "audio-input-microphone",
+       "card.profile.port",
+       "5",
+       "route.hw-mute",
+       "true",
+       "route.hw-volume",
+       "true"
+      ],
+      "name": "[In] Mic1",
+      "priority": 100,
+      "profile": 2,
+      "profiles": [
+       2,
+       1
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        0.148375,
+        0.148375
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        1.0504,
+        1.0504
+       ],
+       "volumeBase": 0.099999,
+       "volumeStep": 1.5e-05
+      },
+      "save": true
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "sofhdadsp",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_name": "Realtek ALC245",
+    "api.acp.auto-port": false,
+    "api.acp.auto-profile": false,
+    "api.alsa.card": 0,
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.path": "hw:0",
+    "api.alsa.split-enable": true,
+    "api.alsa.use-acp": true,
+    "api.dbus.ReserveDevice1": "Audio0",
+    "api.dbus.ReserveDevice1.Priority": -20,
+    "client.id": 47,
+    "device.api": "alsa",
+    "device.bus": "pci",
+    "device.bus-path": "pci-0000:00:1f.3-platform-skl_hda_dsp_generic",
+    "device.description": "Raptor Lake-P/U/H cAVS",
+    "device.enum.api": "udev",
+    "device.icon-name": "audio-card-analog-pci",
+    "device.name": "alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic",
+    "device.nick": "sof-hda-dsp",
+    "device.plugged.usec": 12056296,
+    "device.product.id": "0x51ca",
+    "device.product.name": "Raptor Lake-P/U/H cAVS",
+    "device.string": 0,
+    "device.subsystem": "sound",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card0",
+    "device.vendor.id": "0x8086",
+    "device.vendor.name": "Intel Corporation",
+    "factory.id": 15,
+    "media.class": "Audio/Device",
+    "object.id": 48,
+    "object.path": "alsa:acp:sofhdadsp",
+    "object.serial": 48,
+    "spa.object.id": 2
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 52,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video0",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20736 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928450,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video0",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 52,
+    "object.path": "v4l2:/dev/video0",
+    "object.serial": 52
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 53,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video1",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20737 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928476,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video1",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 53,
+    "object.path": "v4l2:/dev/video1",
+    "object.serial": 53
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 54,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video10",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20746 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928723,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video10",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 54,
+    "object.path": "v4l2:/dev/video10",
+    "object.serial": 54
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 55,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video11",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20747 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928742,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video11",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 55,
+    "object.path": "v4l2:/dev/video11",
+    "object.serial": 55
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 56,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video12",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20748 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928768,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video12",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 56,
+    "object.path": "v4l2:/dev/video12",
+    "object.serial": 56
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 57,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video13",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20749 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928788,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video13",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 57,
+    "object.path": "v4l2:/dev/video13",
+    "object.serial": 57
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 58,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video14",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20750 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928808,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video14",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 58,
+    "object.path": "v4l2:/dev/video14",
+    "object.serial": 58
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 59,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video15",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20751 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928828,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video15",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 59,
+    "object.path": "v4l2:/dev/video15",
+    "object.serial": 59
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 60,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video16",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20752 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928847,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video16",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 60,
+    "object.path": "v4l2:/dev/video16",
+    "object.serial": 60
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 61,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video17",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20753 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928867,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video17",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 61,
+    "object.path": "v4l2:/dev/video17",
+    "object.serial": 61
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 62,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video18",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20754 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928886,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video18",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 62,
+    "object.path": "v4l2:/dev/video18",
+    "object.serial": 62
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 63,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video19",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20755 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928907,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video19",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 63,
+    "object.path": "v4l2:/dev/video19",
+    "object.serial": 63
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 64,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video2",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20738 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928493,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video2",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 64,
+    "object.path": "v4l2:/dev/video2",
+    "object.serial": 64
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 65,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video20",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20756 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928927,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video20",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 65,
+    "object.path": "v4l2:/dev/video20",
+    "object.serial": 65
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 66,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video21",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20757 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928946,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video21",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 66,
+    "object.path": "v4l2:/dev/video21",
+    "object.serial": 66
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 67,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video22",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20758 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928964,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video22",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 67,
+    "object.path": "v4l2:/dev/video22",
+    "object.serial": 67
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 68,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video23",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20759 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928989,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video23",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 68,
+    "object.path": "v4l2:/dev/video23",
+    "object.serial": 68
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 69,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video24",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20760 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929009,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video24",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 69,
+    "object.path": "v4l2:/dev/video24",
+    "object.serial": 69
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 70,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video25",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20761 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929028,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video25",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 70,
+    "object.path": "v4l2:/dev/video25",
+    "object.serial": 70
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 71,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video26",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20762 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929055,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video26",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 71,
+    "object.path": "v4l2:/dev/video26",
+    "object.serial": 71
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 72,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video27",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20763 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929074,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video27",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 72,
+    "object.path": "v4l2:/dev/video27",
+    "object.serial": 72
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 73,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video28",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20764 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929094,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video28",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 73,
+    "object.path": "v4l2:/dev/video28",
+    "object.serial": 73
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 74,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video29",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20765 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929114,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video29",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 74,
+    "object.path": "v4l2:/dev/video29",
+    "object.serial": 74
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 75,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video3",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20739 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928560,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video3",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 75,
+    "object.path": "v4l2:/dev/video3",
+    "object.serial": 75
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 76,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video30",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20766 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929134,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video30",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 76,
+    "object.path": "v4l2:/dev/video30",
+    "object.serial": 76
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 77,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video31",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20767 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10929154,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video31",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 77,
+    "object.path": "v4l2:/dev/video31",
+    "object.serial": 77
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 78,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video4",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20740 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928589,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video4",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 78,
+    "object.path": "v4l2:/dev/video4",
+    "object.serial": 78
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 79,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video5",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20741 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928610,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video5",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 79,
+    "object.path": "v4l2:/dev/video5",
+    "object.serial": 79
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 80,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video6",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20742 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928630,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video6",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 80,
+    "object.path": "v4l2:/dev/video6",
+    "object.serial": 80
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 81,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video7",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20743 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928664,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video7",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 81,
+    "object.path": "v4l2:/dev/video7",
+    "object.serial": 81
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 82,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video8",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20744 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928684,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video8",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 82,
+    "object.path": "v4l2:/dev/video8",
+    "object.serial": 82
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 83,
+  "info": {
+   "params": {},
+   "props": {
+    "api.v4l2.cap.bus_info": "PCI:0000:00:05.0",
+    "api.v4l2.cap.capabilities": "a4a00001",
+    "api.v4l2.cap.card": "ipu6",
+    "api.v4l2.cap.device-caps": "24a00001",
+    "api.v4l2.cap.driver": "isys",
+    "api.v4l2.cap.version": "7.1.2",
+    "api.v4l2.path": "/dev/video9",
+    "client.id": 47,
+    "device.api": "v4l2",
+    "device.bus-path": "pci-0000:00:05.0",
+    "device.capabilities": ":capture:",
+    "device.description": "ipu6",
+    "device.devids": "[ 20745 ]",
+    "device.enum.api": "udev",
+    "device.name": "v4l2_device.pci-0000_00_05.0",
+    "device.plugged.usec": 10928704,
+    "device.product.name": "ipu6",
+    "device.subsystem": "video4linux",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:05.0/video4linux/video9",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 83,
+    "object.path": "v4l2:/dev/video9",
+    "object.serial": 83
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 84,
+  "info": {
+   "params": {},
+   "props": {
+    "api.libcamera.path": "\\_SB_.PC00.LNK0",
+    "api.libcamera.rotation": 0,
+    "client.id": 47,
+    "device.api": "libcamera",
+    "device.description": "hi556",
+    "device.devids": "[ 20736 20737 20738 20739 20740 20741 20742 20743 20744 20745 20746 20747 20748 20749 20750 20751 20752 20753 20754 20755 20756 20757 20758 20759 20760 20761 20762 20763 20764 20765 20766 20767 ]",
+    "device.enum.api": "libcamera.manager",
+    "device.name": "libcamera_device.\\_SB_.PC00.LNK0",
+    "device.product.name": "hi556",
+    "factory.id": 15,
+    "media.class": "Video/Device",
+    "object.id": 84,
+    "object.path": "libcamera:\\_SB_.PC00.LNK0",
+    "object.serial": 84
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 44,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S24_32LE",
+       "alt2": "S16LE",
+       "default": "S24_32LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": 48000
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.class": "generic",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.device": 5,
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "HDMI3 (*)",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_device": "_ucm0001.hw:sofhdadsp",
+    "alsa.mixer_name": "Realtek ALC245",
+    "alsa.name": "HDMI 3",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.open.ucm": true,
+    "api.alsa.path": "hw:sofhdadsp,5",
+    "api.alsa.pcm.card": 0,
+    "api.alsa.pcm.stream": "playback",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 0,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.icon_name": "video-display",
+    "device.id": 48,
+    "device.profile.description": "HDMI / DisplayPort 3 Output",
+    "device.profile.name": "HiFi: HDMI3: sink",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.sink",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Sink",
+    "node.description": "Raptor Lake-P/U/H cAVS HDMI / DisplayPort 3 Output",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI3__sink",
+    "node.nick": "HDMI 3",
+    "node.pause-on-idle": false,
+    "object.id": 44,
+    "object.path": "alsa:acp:sofhdadsp:0:playback",
+    "object.serial": 1163,
+    "port.group": "playback",
+    "priority.driver": 664,
+    "priority.session": 664
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 93,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S24_32LE",
+       "alt2": "S16LE",
+       "default": "S24_32LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": 48000
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.class": "generic",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.device": 4,
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "HDMI2 (*)",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_device": "_ucm0001.hw:sofhdadsp",
+    "alsa.mixer_name": "Realtek ALC245",
+    "alsa.name": "HDMI 2",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.open.ucm": true,
+    "api.alsa.path": "hw:sofhdadsp,4",
+    "api.alsa.pcm.card": 0,
+    "api.alsa.pcm.stream": "playback",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 1,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.icon_name": "video-display",
+    "device.id": 48,
+    "device.profile.description": "HDMI / DisplayPort 2 Output",
+    "device.profile.name": "HiFi: HDMI2: sink",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.sink",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Sink",
+    "node.description": "Raptor Lake-P/U/H cAVS HDMI / DisplayPort 2 Output",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI2__sink",
+    "node.nick": "HDMI 2",
+    "node.pause-on-idle": false,
+    "object.id": 93,
+    "object.path": "alsa:acp:sofhdadsp:1:playback",
+    "object.serial": 1164,
+    "port.group": "playback",
+    "priority.driver": 680,
+    "priority.session": 680
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 90,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S24_32LE",
+       "alt2": "S16LE",
+       "default": "S24_32LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": 48000
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.class": "generic",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.device": 3,
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "HDMI1 (*)",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_device": "_ucm0001.hw:sofhdadsp",
+    "alsa.mixer_name": "Realtek ALC245",
+    "alsa.name": "HDMI 1",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.open.ucm": true,
+    "api.alsa.path": "hw:sofhdadsp,3",
+    "api.alsa.pcm.card": 0,
+    "api.alsa.pcm.stream": "playback",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 2,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.icon_name": "video-display",
+    "device.id": 48,
+    "device.profile.description": "HDMI / DisplayPort 1 Output",
+    "device.profile.name": "HiFi: HDMI1: sink",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.sink",
+    "iec958.codecs": "[\"PCM\"]",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Sink",
+    "node.description": "Raptor Lake-P/U/H cAVS HDMI / DisplayPort 1 Output",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__HDMI1__sink",
+    "node.nick": "HDMI 1",
+    "node.pause-on-idle": false,
+    "object.id": 90,
+    "object.path": "alsa:acp:sofhdadsp:2:playback",
+    "object.serial": 1165,
+    "port.group": "playback",
+    "priority.driver": 696,
+    "priority.session": 696
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 95,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S32LE",
+       "alt2": "S24_32LE",
+       "alt3": "S16LE",
+       "default": "S32LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": 48000
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.class": "generic",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.device": 0,
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "HDA Analog (*)",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_device": "_ucm0001.hw:sofhdadsp",
+    "alsa.mixer_name": "Realtek ALC245",
+    "alsa.name": "",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.open.ucm": true,
+    "api.alsa.path": "hw:sofhdadsp",
+    "api.alsa.pcm.card": 0,
+    "api.alsa.pcm.stream": "playback",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 3,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.icon_name": "audio-speakers",
+    "device.id": 48,
+    "device.profile.description": "Speaker",
+    "device.profile.name": "HiFi: Speaker: sink",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.sink",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Sink",
+    "node.description": "Raptor Lake-P/U/H cAVS Speaker",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_output.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Speaker__sink",
+    "node.nick": "Speaker",
+    "node.pause-on-idle": false,
+    "object.id": 95,
+    "object.path": "alsa:acp:sofhdadsp:3:playback",
+    "object.serial": 1166,
+    "port.group": "playback",
+    "priority.driver": 1000,
+    "priority.session": 1000
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 96,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S24_32LE",
+       "alt2": "S16LE",
+       "default": "S24_32LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": 48000
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.class": "generic",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.device": 0,
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "HDA Analog (*)",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_device": "_ucm0001.hw:sofhdadsp",
+    "alsa.mixer_name": "Realtek ALC245",
+    "alsa.name": "",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.open.ucm": true,
+    "api.alsa.path": "hw:sofhdadsp",
+    "api.alsa.pcm.card": 0,
+    "api.alsa.pcm.stream": "capture",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 4,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.icon_name": "audio-input-microphone",
+    "device.id": 48,
+    "device.profile.description": "Stereo Microphone",
+    "device.profile.name": "HiFi: Mic2: source",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.source",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Source",
+    "node.description": "Raptor Lake-P/U/H cAVS Stereo Microphone",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic2__source",
+    "node.nick": "Stereo Microphone",
+    "node.pause-on-idle": false,
+    "object.id": 96,
+    "object.path": "alsa:acp:sofhdadsp:4:capture",
+    "object.serial": 1167,
+    "port.group": "capture",
+    "priority.driver": 2000,
+    "priority.session": 2000
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 98,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S32LE",
+       "alt2": "S24_32LE",
+       "alt3": "S16LE",
+       "default": "S32LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": 48000
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 0,
+    "alsa.card_name": "sof-hda-dsp",
+    "alsa.class": "generic",
+    "alsa.components": "HDA:8086281f,80860101,00100000 HDA:10ec0245,103c891f,00100001 cfg-dmics:2",
+    "alsa.device": 6,
+    "alsa.driver_name": "snd_soc_skl_hda_dsp",
+    "alsa.id": "DMIC (*)",
+    "alsa.long_card_name": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "alsa.mixer_device": "_ucm0001.hw:sofhdadsp",
+    "alsa.mixer_name": "Realtek ALC245",
+    "alsa.name": "",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F",
+    "api.alsa.card.name": "sof-hda-dsp",
+    "api.alsa.open.ucm": true,
+    "api.alsa.path": "hw:sofhdadsp,6",
+    "api.alsa.pcm.card": 0,
+    "api.alsa.pcm.stream": "capture",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 5,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.icon_name": "audio-input-microphone",
+    "device.id": 48,
+    "device.profile.description": "Digital Microphone",
+    "device.profile.name": "HiFi: Mic1: source",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.source",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Source",
+    "node.description": "Raptor Lake-P/U/H cAVS Digital Microphone",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source",
+    "node.nick": "Digital Microphone",
+    "node.pause-on-idle": false,
+    "object.id": 98,
+    "object.path": "alsa:acp:sofhdadsp:5:capture",
+    "object.serial": 1168,
+    "port.group": "capture",
+    "priority.driver": 1648,
+    "priority.session": 1648
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 121,
+  "info": {
+   "params": {
+    "Route": [
+     {
+      "available": "unknown",
+      "description": "Analog Input",
+      "device": 0,
+      "devices": [
+       0
+      ],
+      "direction": "Input",
+      "index": 0,
+      "info": [
+       4,
+       "port.type",
+       "analog",
+       "card.profile.port",
+       "0",
+       "route.hw-mute",
+       "false",
+       "route.hw-volume",
+       "false"
+      ],
+      "name": "analog-input",
+      "priority": 10000,
+      "profile": 1,
+      "profiles": [
+       10,
+       1,
+       4,
+       7
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        1.0,
+        1.0
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        1.0,
+        1.0
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05
+      },
+      "save": false
+     },
+     {
+      "available": "unknown",
+      "description": "Analog Output",
+      "device": 4,
+      "devices": [
+       4
+      ],
+      "direction": "Output",
+      "index": 2,
+      "info": [
+       4,
+       "port.type",
+       "analog",
+       "card.profile.port",
+       "2",
+       "route.hw-mute",
+       "true",
+       "route.hw-volume",
+       "true"
+      ],
+      "name": "analog-output",
+      "priority": 9900,
+      "profile": 1,
+      "profiles": [
+       3,
+       1,
+       2
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        0.063997,
+        0.063997
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        0.904004,
+        0.904004
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05
+      },
+      "save": false
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 1,
+    "alsa.card_name": "USB AUDIO  CODEC",
+    "alsa.components": "USB08bb:29c0",
+    "alsa.driver_name": "snd_usb_audio",
+    "alsa.id": "CODEC",
+    "alsa.long_card_name": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu",
+    "alsa.mixer_name": "USB Mixer",
+    "api.acp.auto-port": false,
+    "api.acp.auto-profile": false,
+    "api.alsa.card": 1,
+    "api.alsa.card.longname": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu",
+    "api.alsa.card.name": "USB AUDIO  CODEC",
+    "api.alsa.path": "hw:1",
+    "api.alsa.split-enable": true,
+    "api.alsa.use-acp": true,
+    "api.dbus.ReserveDevice1": "Audio1",
+    "api.dbus.ReserveDevice1.Priority": -20,
+    "client.id": 47,
+    "device.api": "alsa",
+    "device.bus": "usb",
+    "device.bus-id": "usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00",
+    "device.bus-path": "pci-0000:00:14.0-usb-0:2.2.2:1.0",
+    "device.description": "PCM2900C Audio CODEC",
+    "device.enum.api": "udev",
+    "device.icon-name": "audio-card-analog-usb",
+    "device.name": "alsa_card.usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00",
+    "device.nick": "USB AUDIO  CODEC",
+    "device.plugged.usec": 58617924110,
+    "device.product.id": "0x29c0",
+    "device.product.name": "PCM2900C Audio CODEC",
+    "device.serial": "BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC",
+    "device.string": 1,
+    "device.subsystem": "sound",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.2/3-2.2.2:1.0/sound/card1",
+    "device.vendor.id": "0x08bb",
+    "device.vendor.name": "Texas Instruments",
+    "factory.id": 15,
+    "media.class": "Audio/Device",
+    "object.id": 121,
+    "object.path": "alsa:acp:CODEC",
+    "object.serial": 2010,
+    "spa.object.id": 4
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 120,
+  "info": {
+   "params": {
+    "Route": [
+     {
+      "available": "unknown",
+      "description": "Analog Input",
+      "device": 0,
+      "devices": [
+       0
+      ],
+      "direction": "Input",
+      "index": 0,
+      "info": [
+       4,
+       "port.type",
+       "analog",
+       "card.profile.port",
+       "0",
+       "route.hw-mute",
+       "false",
+       "route.hw-volume",
+       "false"
+      ],
+      "name": "analog-input",
+      "priority": 10000,
+      "profile": 1,
+      "profiles": [
+       10,
+       1,
+       4,
+       7
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        1.0,
+        1.0
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        1.0,
+        1.0
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05
+      },
+      "save": false
+     },
+     {
+      "available": "unknown",
+      "description": "Analog Output",
+      "device": 4,
+      "devices": [
+       4
+      ],
+      "direction": "Output",
+      "index": 2,
+      "info": [
+       4,
+       "port.type",
+       "analog",
+       "card.profile.port",
+       "2",
+       "route.hw-mute",
+       "true",
+       "route.hw-volume",
+       "true"
+      ],
+      "name": "analog-output",
+      "priority": 9900,
+      "profile": 1,
+      "profiles": [
+       3,
+       1,
+       2
+      ],
+      "props": {
+       "channelMap": [
+        "FL",
+        "FR"
+       ],
+       "channelVolumes": [
+        0.063997,
+        0.063997
+       ],
+       "latencyOffsetNsec": 0,
+       "mute": false,
+       "softVolumes": [
+        0.904004,
+        0.904004
+       ],
+       "volumeBase": 1.0,
+       "volumeStep": 1.5e-05
+      },
+      "save": false
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 2,
+    "alsa.card_name": "USB AUDIO  CODEC",
+    "alsa.components": "USB08bb:29c0",
+    "alsa.driver_name": "snd_usb_audio",
+    "alsa.id": "CODEC_1",
+    "alsa.long_card_name": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu",
+    "alsa.mixer_name": "USB Mixer",
+    "api.acp.auto-port": false,
+    "api.acp.auto-profile": false,
+    "api.alsa.card": 2,
+    "api.alsa.card.longname": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu",
+    "api.alsa.card.name": "USB AUDIO  CODEC",
+    "api.alsa.path": "hw:2",
+    "api.alsa.split-enable": true,
+    "api.alsa.use-acp": true,
+    "api.dbus.ReserveDevice1": "Audio2",
+    "api.dbus.ReserveDevice1.Priority": -20,
+    "client.id": 47,
+    "device.api": "alsa",
+    "device.bus": "usb",
+    "device.bus-id": "usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00",
+    "device.bus-path": "pci-0000:00:14.0-usb-0:2.2.3:1.0",
+    "device.description": "PCM2900C Audio CODEC",
+    "device.enum.api": "udev",
+    "device.icon-name": "audio-card-analog-usb",
+    "device.name": "alsa_card.usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00.2",
+    "device.nick": "USB AUDIO  CODEC",
+    "device.plugged.usec": 58618170969,
+    "device.product.id": "0x29c0",
+    "device.product.name": "PCM2900C Audio CODEC",
+    "device.serial": "BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC",
+    "device.string": 2,
+    "device.subsystem": "sound",
+    "device.sysfs.path": "/devices/pci0000:00/0000:00:14.0/usb3/3-2/3-2.2/3-2.2.3/3-2.2.3:1.0/sound/card2",
+    "device.vendor.id": "0x08bb",
+    "device.vendor.name": "Texas Instruments",
+    "factory.id": 15,
+    "media.class": "Audio/Device",
+    "object.id": 120,
+    "object.path": "alsa:acp:CODEC_1",
+    "object.serial": 2011,
+    "spa.object.id": 6
+   }
+  },
+  "type": "PipeWire:Interface:Device"
+ },
+ {
+  "id": 113,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S16LE",
+       "alt2": "S8",
+       "default": "S16LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": {
+       "default": 48000,
+       "max": 48000,
+       "min": 32000
+      }
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 1,
+    "alsa.card_name": "USB AUDIO  CODEC",
+    "alsa.class": "generic",
+    "alsa.components": "USB08bb:29c0",
+    "alsa.device": 0,
+    "alsa.driver_name": "snd_usb_audio",
+    "alsa.id": "USB Audio",
+    "alsa.long_card_name": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu",
+    "alsa.mixer_name": "USB Mixer",
+    "alsa.name": "USB Audio",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu",
+    "api.alsa.card.name": "USB AUDIO  CODEC",
+    "api.alsa.path": "front:1",
+    "api.alsa.pcm.card": 1,
+    "api.alsa.pcm.stream": "playback",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 4,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.id": 121,
+    "device.profile.description": "Analog Stereo",
+    "device.profile.name": "analog-stereo",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.sink",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Sink",
+    "node.description": "PCM2900C Audio CODEC Analog Stereo",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_output.usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00.analog-stereo",
+    "node.nick": "USB AUDIO  CODEC",
+    "node.pause-on-idle": false,
+    "object.id": 113,
+    "object.path": "alsa:acp:CODEC:4:playback",
+    "object.serial": 2012,
+    "port.group": "playback",
+    "priority.driver": 1009,
+    "priority.session": 1009
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 136,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S16LE",
+       "alt2": "S8",
+       "default": "S16LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": {
+       "default": 48000,
+       "max": 48000,
+       "min": 8000
+      }
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 1,
+    "alsa.card_name": "USB AUDIO  CODEC",
+    "alsa.class": "generic",
+    "alsa.components": "USB08bb:29c0",
+    "alsa.device": 0,
+    "alsa.driver_name": "snd_usb_audio",
+    "alsa.id": "USB Audio",
+    "alsa.long_card_name": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu",
+    "alsa.mixer_name": "USB Mixer",
+    "alsa.name": "USB Audio",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu",
+    "api.alsa.card.name": "USB AUDIO  CODEC",
+    "api.alsa.path": "front:1",
+    "api.alsa.pcm.card": 1,
+    "api.alsa.pcm.stream": "capture",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 0,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.id": 121,
+    "device.profile.description": "Analog Stereo",
+    "device.profile.name": "analog-stereo",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.source",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Source",
+    "node.description": "PCM2900C Audio CODEC Analog Stereo",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_input.usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00.analog-stereo",
+    "node.nick": "USB AUDIO  CODEC",
+    "node.pause-on-idle": false,
+    "object.id": 136,
+    "object.path": "alsa:acp:CODEC:0:capture",
+    "object.serial": 2013,
+    "port.group": "capture",
+    "priority.driver": 2009,
+    "priority.session": 2009
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 130,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S16LE",
+       "alt2": "S8",
+       "default": "S16LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": {
+       "default": 48000,
+       "max": 48000,
+       "min": 32000
+      }
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 2,
+    "alsa.card_name": "USB AUDIO  CODEC",
+    "alsa.class": "generic",
+    "alsa.components": "USB08bb:29c0",
+    "alsa.device": 0,
+    "alsa.driver_name": "snd_usb_audio",
+    "alsa.id": "USB Audio",
+    "alsa.long_card_name": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu",
+    "alsa.mixer_name": "USB Mixer",
+    "alsa.name": "USB Audio",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu",
+    "api.alsa.card.name": "USB AUDIO  CODEC",
+    "api.alsa.path": "front:2",
+    "api.alsa.pcm.card": 2,
+    "api.alsa.pcm.stream": "playback",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 4,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.id": 120,
+    "device.profile.description": "Analog Stereo",
+    "device.profile.name": "analog-stereo",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.sink",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Sink",
+    "node.description": "PCM2900C Audio CODEC Analog Stereo",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_output.usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00.2.analog-stereo",
+    "node.nick": "USB AUDIO  CODEC",
+    "node.pause-on-idle": false,
+    "object.id": 130,
+    "object.path": "alsa:acp:CODEC_1:4:playback",
+    "object.serial": 2014,
+    "port.group": "playback",
+    "priority.driver": 1009,
+    "priority.session": 1009
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ },
+ {
+  "id": 118,
+  "info": {
+   "params": {
+    "EnumFormat": [
+     {
+      "channels": 2,
+      "format": {
+       "alt1": "S16LE",
+       "alt2": "S8",
+       "default": "S16LE"
+      },
+      "mediaSubtype": "raw",
+      "mediaType": "audio",
+      "position": [
+       "FL",
+       "FR"
+      ],
+      "rate": {
+       "default": 48000,
+       "max": 48000,
+       "min": 8000
+      }
+     }
+    ]
+   },
+   "props": {
+    "alsa.card": 2,
+    "alsa.card_name": "USB AUDIO  CODEC",
+    "alsa.class": "generic",
+    "alsa.components": "USB08bb:29c0",
+    "alsa.device": 0,
+    "alsa.driver_name": "snd_usb_audio",
+    "alsa.id": "USB Audio",
+    "alsa.long_card_name": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu",
+    "alsa.mixer_name": "USB Mixer",
+    "alsa.name": "USB Audio",
+    "alsa.resolution_bits": 16,
+    "alsa.subclass": "generic-mix",
+    "alsa.subdevice": 0,
+    "alsa.subdevice_name": "subdevice #0",
+    "alsa.sync.id": "00000000:00000000:00000000:00000000",
+    "api.alsa.card.longname": "BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu",
+    "api.alsa.card.name": "USB AUDIO  CODEC",
+    "api.alsa.path": "front:2",
+    "api.alsa.pcm.card": 2,
+    "api.alsa.pcm.stream": "capture",
+    "audio.channels": 2,
+    "audio.position": "FL,FR",
+    "card.profile.device": 0,
+    "client.id": 47,
+    "clock.quantum-limit": 8192,
+    "device.api": "alsa",
+    "device.class": "sound",
+    "device.icon-name": "audio-card-analog",
+    "device.id": 120,
+    "device.profile.description": "Analog Stereo",
+    "device.profile.name": "analog-stereo",
+    "device.routes": 1,
+    "factory.id": 19,
+    "factory.name": "api.alsa.pcm.source",
+    "library.name": "audioconvert/libspa-audioconvert",
+    "media.class": "Audio/Source",
+    "node.description": "PCM2900C Audio CODEC Analog Stereo",
+    "node.driver": true,
+    "node.loop.name": "data-loop.0",
+    "node.name": "alsa_input.usb-BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC-00.2.analog-stereo",
+    "node.nick": "USB AUDIO  CODEC",
+    "node.pause-on-idle": false,
+    "object.id": 118,
+    "object.path": "alsa:acp:CODEC_1:0:capture",
+    "object.serial": 2015,
+    "port.group": "capture",
+    "priority.driver": 2009,
+    "priority.session": 2009
+   },
+   "state": "suspended"
+  },
+  "type": "PipeWire:Interface:Node"
+ }
+]
