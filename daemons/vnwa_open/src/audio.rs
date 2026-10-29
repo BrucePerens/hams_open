@@ -34,6 +34,43 @@ impl Complex {
     }
 }
 
+impl std::ops::Add for Complex {
+    type Output = Complex;
+    fn add(self, o: Complex) -> Complex {
+        Complex {
+            re: self.re + o.re,
+            im: self.im + o.im,
+        }
+    }
+}
+
+impl std::ops::Sub for Complex {
+    type Output = Complex;
+    fn sub(self, o: Complex) -> Complex {
+        Complex {
+            re: self.re - o.re,
+            im: self.im - o.im,
+        }
+    }
+}
+
+impl std::ops::Mul for Complex {
+    type Output = Complex;
+    fn mul(self, o: Complex) -> Complex {
+        Complex {
+            re: self.re * o.re - self.im * o.im,
+            im: self.re * o.im + self.im * o.re,
+        }
+    }
+}
+
+impl std::ops::Div for Complex {
+    type Output = Complex;
+    fn div(self, o: Complex) -> Complex {
+        self.divided_by(o)
+    }
+}
+
 /// The complex amplitude of the component at `if_hz` in `x` (a cosine of amplitude A and phase p gives `A e^(jp)`).
 /// Exact when `x` holds a whole number of IF periods.
 pub fn tone_at_if(x: &[f64], fs: f64, if_hz: f64) -> Complex {
