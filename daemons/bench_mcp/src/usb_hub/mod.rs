@@ -60,6 +60,7 @@ impl Config {
 }
 
 fn port_key(k: &str) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_usb_hub_port_key]
     let ok = k.split_once('/').is_some_and(|(h, p)| {
         !h.is_empty()
             && !p.is_empty()
@@ -239,6 +240,7 @@ pub const SPECS: &[Spec] = &[
 ];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_instrument]
     let hubs: Vec<&Instrument> = insts.iter().filter(|i| i.kind == Kind::UsbHub).collect();
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
         return hubs
@@ -274,6 +276,7 @@ pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
 
 /// Resolves a device argument: a sysfs path in the tree, or a port label.
 pub fn resolve_device(t: &sysfs::Tree, cfg: &Config, s: &str) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_resolve_device]
     if t.get(s).is_some() {
         return Ok(s.to_string());
     }
@@ -300,6 +303,7 @@ fn labeler(cfg: &Config) -> impl Fn(&str, u32) -> Option<String> + '_ {
 }
 
 fn topology(root: &Path, cfg: &Config, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_topology]
     let t = sysfs::Tree::read(root)?;
     let lab = labeler(cfg);
     let flat = args.get("flat").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -339,6 +343,7 @@ fn topology(root: &Path, cfg: &Config, args: &Value) -> Result<Value, String> {
 }
 
 fn find(root: &Path, cfg: &Config, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_find]
     let t = sysfs::Tree::read(root)?;
     let text = |k: &str| {
         args.get(k)
@@ -428,6 +433,7 @@ pub fn call_with(
     name: &str,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_call_with]
     let spec = SPECS
         .iter()
         .find(|s| s.name == name)
@@ -530,6 +536,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_config]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_port_key]
     #[test]
     fn config_keeps_labels_flags_and_refuses_bad_entries() {
         let c = cfg();
@@ -546,6 +553,8 @@ mod tests {
         assert!(bad(json!({"ports": {"3-2/2": {"label": " "}}})).contains("empty"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_resolve_device]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_topology]
     #[test]
     fn topology_lists_buses_a_subtree_by_label_and_refuses_unknowns() {
         let all = topology(&fixture(), &cfg(), &json!({})).unwrap();
@@ -569,6 +578,7 @@ mod tests {
         assert_eq!(one.as_array().unwrap().len(), 1);
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_find]
     #[test]
     fn find_answers_which_device_is_this_node() {
         let hit = find(&fixture(), &cfg(), &json!({"node": "/dev/hidraw3"}));
@@ -584,6 +594,8 @@ mod tests {
         assert!(find(&fixture(), &cfg(), &json!({})).is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_call_with]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_instrument]
     #[test]
     fn tools_are_listed_by_the_tier_of_the_instrument() {
         let c = |tier: &str| {

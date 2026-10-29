@@ -44,6 +44,7 @@ pub struct Process;
 
 impl Run for Process {
     fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+        // [@ANCHOR: bench_mcp_audio_process_run]
         let out = Command::new(program).args(args).output().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 format!("{program} is not installed (not found on PATH)")
@@ -74,6 +75,7 @@ pub struct QuietHours {
 
 impl QuietHours {
     pub fn contains(&self, minute: u32) -> bool {
+        // [@ANCHOR: bench_mcp_audio_quiethours_contains]
         if self.start <= self.end {
             (self.start..self.end).contains(&minute)
         } else {
@@ -148,6 +150,7 @@ impl Default for Config {
 impl Config {
     /// The alias, if any, that names this device.
     pub fn alias_of(&self, d: &devices::Device) -> Option<String> {
+        // [@ANCHOR: bench_mcp_audio_config_alias_of]
         let map = match d.dir {
             devices::Dir::Output => &self.outputs,
             devices::Dir::Input => &self.inputs,
@@ -164,6 +167,7 @@ impl Config {
 
     /// The volume cap that applies to a device: its own, never above the global cap.
     pub fn cap_for(&self, d: &devices::Device) -> f64 {
+        // [@ANCHOR: bench_mcp_audio_config_cap_for]
         let own = d
             .alias
             .as_ref()
@@ -511,6 +515,7 @@ pub const SPECS: &[Spec] = &[
 ];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
+    // [@ANCHOR: bench_mcp_audio_instrument]
     let audio: Vec<&Instrument> = insts.iter().filter(|i| i.kind == Kind::Audio).collect();
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
         return audio
@@ -589,6 +594,7 @@ pub fn status(cfg: &Config, now_minute: u32) -> Value {
 }
 
 fn list_devices(run: &dyn Run, asound: &Path, cfg: &Config, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_list_devices]
     let mut devs = devices::list(run, asound, cfg)?;
     if let Some(name) = args.get("device").and_then(|d| d.as_str()) {
         let dir = match args.get("direction").and_then(|d| d.as_str()) {
@@ -652,6 +658,7 @@ pub fn call_with(
     name: &str,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_call_with]
     let spec = SPECS
         .iter()
         .find(|s| s.name == name)
@@ -816,6 +823,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_select_auto]
+    // Tests [@ANCHOR: bench_mcp_audio_config_alias_of]
+    // Tests [@ANCHOR: bench_mcp_audio_quiethours_contains]
     #[test]
     fn auto_follows_the_discovery_and_falls_back_to_the_default_when_the_device_is_gone_or_reserved(
     ) {
@@ -1036,6 +1045,12 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_devices_list]
+    // Tests [@ANCHOR: bench_mcp_audio_config_cap_for]
+    // Tests [@ANCHOR: bench_mcp_audio_process_run]
+    // Tests [@ANCHOR: bench_mcp_audio_call_with]
+    // Tests [@ANCHOR: bench_mcp_audio_instrument]
+    // Tests [@ANCHOR: bench_mcp_audio_list_devices]
     #[test]
     fn the_device_list_reads_levels_for_free_devices_and_not_for_reserved_ones() {
         let i = insts(r#","outputs":{"desk":"Speaker"}"#);

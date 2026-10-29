@@ -107,6 +107,7 @@ impl<'a> VolumeGuard<'a> {
 
     /// Puts the volume and mute back. Idempotent.
     pub fn restore(&mut self) -> Result<(), String> {
+        // [@ANCHOR: bench_mcp_audio_safety_volumeguard_restore]
         if self.done {
             return Ok(());
         }
@@ -206,6 +207,9 @@ mod tests {
         assert_eq!(*run.volumes.borrow(), vec![(d.id, 0.9, true)]);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_engine_playing_wait]
+    // Tests [@ANCHOR: bench_mcp_audio_engine_recorder_shutdown]
+    // Tests [@ANCHOR: bench_mcp_audio_safety_volumeguard_restore]
     #[test]
     fn keep_never_raises_and_a_level_request_never_passes_the_limit() {
         let d = speaker();

@@ -33,6 +33,7 @@ pub struct BenchRef {
 }
 
 fn add(c: &mut Critical, dev: &str, text: String, overridable: bool) {
+    // [@ANCHOR: bench_mcp_usb_hub_protect_add]
     let list = c.entry(dev.to_string()).or_default();
     if !list.iter().any(|w| w.text == text) {
         list.push(Why { text, overridable });
@@ -42,6 +43,7 @@ fn add(c: &mut Critical, dev: &str, text: String, overridable: bool) {
 /// The names a block device is known by to the USB tree: itself, its whole disk and, for device-mapper or md devices, the
 /// devices underneath it.
 fn block_names(sysfs: &Path, name: &str, out: &mut BTreeSet<String>, depth: u32) {
+    // [@ANCHOR: bench_mcp_usb_hub_protect_block_names]
     if depth > 6 || !out.insert(name.to_string()) {
         return;
     }
@@ -199,6 +201,7 @@ impl Verdict {
     }
     /// Ok to go ahead, given the caller's `override_protection` argument; the error says what blocks and whether it can be overridden.
     pub fn permit(&self, what: &str, override_protection: bool) -> Result<(), String> {
+        // [@ANCHOR: bench_mcp_usb_hub_protect_verdict_permit]
         if self.clear() {
             return Ok(());
         }
@@ -236,6 +239,7 @@ fn uplink_ok(cfg: &Config, device: &str, t: &Tree) -> bool {
 
 /// The verdict for acting on `device` and everything below it (a power-off or cycle of its port, a reset, a deauthorize).
 pub fn check_device(t: &Tree, cfg: &Config, crit: &Critical, device: &str) -> Verdict {
+    // [@ANCHOR: bench_mcp_usb_hub_protect_check_device]
     let mut reasons = Vec::new();
     for d in t.subtree(device) {
         for w in crit.get(&d.path).into_iter().flatten() {
@@ -265,6 +269,7 @@ pub fn check_device(t: &Tree, cfg: &Config, crit: &Critical, device: &str) -> Ve
 
 /// The verdict for a port: its own config flag, then whatever is plugged into it.
 pub fn check_port(t: &Tree, cfg: &Config, crit: &Critical, hub: &str, port: u32) -> Verdict {
+    // [@ANCHOR: bench_mcp_usb_hub_protect_check_port]
     let mut v = match t.get(&child_path(hub, port)) {
         Some(d) => check_device(t, cfg, crit, &d.path),
         None => Verdict { reasons: vec![] },
@@ -284,6 +289,7 @@ pub fn check_port(t: &Tree, cfg: &Config, crit: &Critical, hub: &str, port: u32)
 }
 
 pub fn report(t: &Tree, cfg: &Config, crit: &Critical) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_protect_report]
     let devices: Vec<Value> = crit
         .iter()
         .map(|(d, why)| {
@@ -324,6 +330,10 @@ pub mod tests {
         Dir::new()
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_verdict_permit]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_add]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_block_names]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_check_port]
     #[test]
     fn a_hub_uplink_is_refused_unless_the_config_says_it_is_the_target() {
         let t = Tree::read(&fixture()).unwrap();
@@ -375,6 +385,7 @@ pub mod tests {
         assert!(flagged.reasons[0].text.contains("critical in the config"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_check_device]
     #[test]
     fn the_root_filesystem_device_and_mounts_on_usb_storage_are_found_through_dm_and_partitions() {
         let t = Tree::read(&fixture()).unwrap();
@@ -421,6 +432,7 @@ pub mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_report]
     #[test]
     fn keyboards_and_bench_serial_adapters_are_critical() {
         let t = Tree::read(&fixture()).unwrap();

@@ -299,6 +299,7 @@ pub fn ladder(quiet: f64, limit: f64) -> Vec<f64> {
 
 /// A stable description of the candidate devices: a change means a device came or went or a port changed state.
 pub fn fingerprint(devs: &[Device]) -> Vec<String> {
+    // [@ANCHOR: bench_mcp_audio_discover_fingerprint]
     let mut v: Vec<String> = devs
         .iter()
         .filter(|d| d.reserved.is_none() && d.transport() == "alsa")
@@ -326,6 +327,7 @@ pub struct Stored {
 }
 
 pub fn load(dir: &std::path::Path) -> Option<Stored> {
+    // [@ANCHOR: bench_mcp_audio_discover_load]
     let text = std::fs::read_to_string(dir.join(FILE)).ok()?;
     let raw: Value = serde_json::from_str(&text).ok()?;
     let list = |k: &str| -> Vec<String> {
@@ -374,6 +376,7 @@ impl Stored {
 }
 
 fn save(dir: &std::path::Path, v: &Value) -> Result<PathBuf, String> {
+    // [@ANCHOR: bench_mcp_audio_discover_save]
     use std::os::unix::fs::PermissionsExt;
     store::new_path(dir, "disc", None)?; // makes the directory, owner only
     let p = dir.join(FILE);
@@ -860,6 +863,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_discover_stale]
+    // Tests [@ANCHOR: bench_mcp_audio_discover_fingerprint]
     #[test]
     fn a_changed_device_list_makes_the_result_stale_and_reserved_devices_do_not() {
         let devs = devbox_devices();
@@ -908,6 +912,8 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_discover_load]
+    // Tests [@ANCHOR: bench_mcp_audio_discover_save]
     #[test]
     fn the_stored_result_round_trips_with_its_selection() {
         let dir = std::env::temp_dir().join(format!("audio-disc-{}", std::process::id()));

@@ -26,12 +26,14 @@ pub struct Event {
 
 /// `3-2.2-port1` is port 1 of hub `3-2.2`, so the device `3-2.2.1`; `usb3-port2` is root-hub port 2, device `3-2`.
 fn port_target(tok: &str) -> Option<String> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_port_target]
     let (hub, port) = tok.rsplit_once("-port")?;
     let port: u32 = port.trim_end_matches(':').parse().ok()?;
     Some(child_path(hub, port))
 }
 
 fn errno_of(msg: &str) -> Option<i32> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_errno_of]
     for key in ["error ", "err = ", "err ", "error=", "status "] {
         let mut from = 0;
         while let Some(i) = msg[from..].find(key) {
@@ -148,6 +150,7 @@ pub fn parse_line(line: &str) -> Option<Event> {
 }
 
 pub fn parse(text: &str) -> Vec<Event> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_parse]
     let mut v: Vec<Event> = text.lines().filter_map(parse_line).collect();
     v.sort_by(|a, b| a.ts.total_cmp(&b.ts));
     v
@@ -164,6 +167,7 @@ pub struct Query {
 
 /// A device that connected `connects` times within `window_s`, starting at `from`.
 fn flaps(times: &[f64], window_s: f64, min: usize) -> Option<(usize, f64)> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_flaps]
     let mut best: Option<(usize, f64)> = None;
     let mut lo = 0;
     for hi in 0..times.len() {
@@ -184,6 +188,7 @@ fn under(path: &str, dev: &str) -> bool {
 
 /// The summary of the events selected by the query.
 pub fn analyze(events: &[Event], q: &Query) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_history_analyze]
     let sel: Vec<&Event> = events
         .iter()
         .filter(|e| e.kind != "info" || q.device.is_some())
@@ -248,6 +253,7 @@ pub fn journal(
     all_boots: bool,
     use_sudo: bool,
 ) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_journal]
     let mut args: Vec<String> = ["-k", "-o", "short-unix", "--no-pager", "-q"]
         .iter()
         .map(|s| s.to_string())
@@ -273,6 +279,7 @@ pub fn journal(
 }
 
 fn num(args: &Value, k: &str) -> Result<Option<f64>, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_num]
     match args.get(k) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
@@ -291,6 +298,7 @@ pub fn history(
     now: f64,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_history]
     let device = match args.get("device").and_then(|v| v.as_str()) {
         Some(d) => {
             let t = Tree::read(sysfs)?;
@@ -351,6 +359,7 @@ struct Snap {
 type Snaps = (BTreeMap<String, Snap>, BTreeMap<String, (String, u64)>);
 
 fn snapshot(t: &Tree) -> Snaps {
+    // [@ANCHOR: bench_mcp_usb_hub_history_snapshot]
     let devs = t
         .devices
         .values()
@@ -383,6 +392,7 @@ fn snapshot(t: &Tree) -> Snaps {
 
 /// The differences between two snapshots as events.
 fn diff(at: f64, a: &Snaps, b: &Snaps) -> Vec<Value> {
+    // [@ANCHOR: bench_mcp_usb_hub_history_diff]
     let mut out = Vec::new();
     for (p, s) in &b.0 {
         match a.0.get(p) {
@@ -477,6 +487,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_history_parse]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_errno_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_port_target]
     #[test]
     fn lines_are_classified_with_device_and_error_numbers() {
         let l = |m: &str| parse_line(&format!("1793289140.5 devbox kernel: {m}")).unwrap();
@@ -518,6 +530,8 @@ mod tests {
         assert!(parse_line("garbage").is_none());
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_analyze]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_parse]
     #[test]
     fn the_recorded_journal_shows_the_vnwa_chain_flapping_and_its_errors() {
         let ev = parse(&fx());
@@ -590,6 +604,7 @@ mod tests {
         assert!(!under("3-22", "3-2") && under("3-2.2", "3-2"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_flaps]
     #[test]
     fn flapping_needs_enough_connects_inside_the_window() {
         assert_eq!(flaps(&[0.0, 10.0, 20.0], 30.0, 3), Some((3, 0.0)));
@@ -614,6 +629,9 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_history]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_journal]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_num]
     #[test]
     fn an_unreadable_journal_fails_with_the_fix_and_sudo_is_opt_in() {
         let (_d, sys) = writable_sys();
@@ -644,6 +662,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_watch]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_diff]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_snapshot]
     #[test]
     fn a_watch_reports_a_device_leaving_and_returning_with_a_new_number() {
         let (_d, sys) = writable_sys();

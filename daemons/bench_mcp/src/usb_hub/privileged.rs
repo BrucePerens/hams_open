@@ -16,6 +16,7 @@ use std::path::Path;
 pub const FLAG: &str = "--usb-priv";
 
 fn device_dir(sysfs: &Path, dev: &str) -> Result<std::path::PathBuf, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_device_dir]
     if !is_device_name(dev) || dev.starts_with("usb") {
         return Err(format!(
             "{dev:?} is not the path of a USB device behind a hub port (root hubs are not allowed)"
@@ -30,6 +31,7 @@ fn device_dir(sysfs: &Path, dev: &str) -> Result<std::path::PathBuf, String> {
 }
 
 fn interface_name(i: &str) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_interface_name]
     let ok = i.split_once(':').is_some_and(|(d, rest)| {
         is_device_name(d)
             && !rest.is_empty()
@@ -45,6 +47,7 @@ fn interface_name(i: &str) -> Result<(), String> {
 }
 
 fn driver_dir(sysfs: &Path, driver: &str) -> Result<std::path::PathBuf, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_driver_dir]
     let ok = !driver.is_empty()
         && driver
             .bytes()
@@ -74,6 +77,7 @@ fn read_num(dir: &Path, f: &str) -> Result<u32, String> {
 const USBDEVFS_RESET: libc::c_ulong = 0x5514;
 
 fn reset(sysfs: &Path, dev: &str) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_reset]
     let dir = device_dir(sysfs, dev)?;
     let (bus, num) = (read_num(&dir, "busnum")?, read_num(&dir, "devnum")?);
     let node = format!("/dev/bus/usb/{bus:03}/{num:03}");
@@ -157,6 +161,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_privileged_ops]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_device_dir]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_driver_dir]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_interface_name]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_reset]
     #[test]
     fn authorize_and_autosuspend_write_only_their_files_after_checking_the_device() {
         let (_d, sys) = writable_sys();

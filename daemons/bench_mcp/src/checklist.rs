@@ -81,6 +81,7 @@ const LEGACY_MISSING_PAGES: &[(&str, &[&str])] = &[
 ];
 
 // Tests [@ANCHOR: bench_mcp_checklist]
+// Tests [@ANCHOR: bench_mcp_manual_tool_registry]
 #[test]
 fn every_tool_has_the_house_shape() {
     for (name, info) in registered_tools() {
@@ -113,6 +114,10 @@ fn every_tool_has_the_house_shape() {
 }
 
 // Tests [@ANCHOR: bench_mcp_checklist]
+// Tests [@ANCHOR: bench_mcp_manual_manual_build]
+// Tests [@ANCHOR: bench_mcp_manual_manual_render_body]
+// Tests [@ANCHOR: bench_mcp_manual_searchindex_build]
+// Tests [@ANCHOR: bench_mcp_manual_tokens]
 #[test]
 fn tools_that_actuate_have_a_dry_run() {
     for (name, info) in registered_tools() {
@@ -209,6 +214,12 @@ fn template_wording_does_not_survive_the_copy() {
 }
 
 // Tests [@ANCHOR: bench_mcp_checklist]
+// Tests [@ANCHOR: bench_mcp_manual_manual_up_of]
+// Tests [@ANCHOR: bench_mcp_manual_not_found]
+// Tests [@ANCHOR: bench_mcp_manual_section_of]
+// Tests [@ANCHOR: bench_mcp_manual_str_arg]
+// Tests [@ANCHOR: bench_mcp_manual_truncate_chars]
+// Tests [@ANCHOR: bench_mcp_manual_uint_arg]
 #[test]
 fn every_driver_has_a_config_example_in_the_readme() {
     let readme = read("README.md");

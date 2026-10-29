@@ -20,6 +20,7 @@ const HS_PERIODIC_BYTES_PER_MS: f64 = 48000.0;
 
 /// Protocol overhead per packet in bytes on the wire.
 fn overhead(speed: f64, iso: bool) -> f64 {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_overhead]
     match (speed >= 480.0, iso) {
         (true, true) => 38.0,
         (true, false) => 55.0,
@@ -31,6 +32,7 @@ fn overhead(speed: f64, iso: bool) -> f64 {
 /// Bytes per millisecond a periodic endpoint reserves. `interval_us` is the polling interval; `mps` the raw wMaxPacketSize
 /// (bits 11 and 12 add transactions per microframe at high speed).
 pub fn endpoint_load(speed: f64, iso: bool, mps: u32, interval_us: u32) -> Option<f64> {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_endpoint_load]
     if speed >= 5000.0 || interval_us == 0 {
         return None;
     }
@@ -46,6 +48,7 @@ pub fn endpoint_load(speed: f64, iso: bool, mps: u32, interval_us: u32) -> Optio
 
 /// The polling interval in us from the endpoint descriptor's bInterval.
 fn interval_us(speed: f64, iso: bool, b: u8) -> u32 {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_interval_us]
     let exp = |b: u8| 1u32 << (b.clamp(1, 16) - 1);
     if speed >= 480.0 {
         125 * exp(b)
@@ -67,6 +70,7 @@ pub struct Stream {
 
 /// Every periodic endpoint of every alternate setting in the device's configuration descriptors.
 pub fn potential_streams(sysfs: &Path, d: &Device) -> Vec<Stream> {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_streams]
     let bytes = std::fs::read(
         sysfs
             .join("bus/usb/devices")
@@ -125,6 +129,7 @@ pub fn active_load(d: &Device) -> f64 {
 
 /// The worst case: for each interface the alternate setting with the largest periodic load, summed.
 pub fn potential_load(streams: &[Stream]) -> f64 {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_load]
     let mut worst: BTreeMap<u32, BTreeMap<u32, f64>> = BTreeMap::new();
     for s in streams {
         *worst
@@ -150,6 +155,7 @@ pub struct Domain {
 }
 
 pub fn domain_of(t: &Tree, d: &Device) -> Domain {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_domain_of]
     let speed = d.speed_mbps();
     if speed >= 5000.0 {
         return Domain {
@@ -203,6 +209,7 @@ pub fn domain_of(t: &Tree, d: &Device) -> Domain {
 }
 
 fn capacity(kind: &str) -> Option<f64> {
+    // [@ANCHOR: bench_mcp_usb_hub_bandwidth_capacity]
     if kind.starts_with("TT") || kind.starts_with("full-speed") {
         Some(FS_PERIODIC_BYTES_PER_MS)
     } else if kind.starts_with("high-speed") {
@@ -305,6 +312,9 @@ mod tests {
     use super::*;
     use crate::usb_hub::testkit::recorded_sys;
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_endpoint_load]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_interval_us]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_overhead]
     #[test]
     fn endpoint_loads_follow_the_usb_arithmetic() {
         // A full-speed isochronous endpoint of 192 bytes every 1 ms: (192 + 9) * 1.
@@ -323,6 +333,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_bandwidth]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_capacity]
     #[test]
     fn the_three_full_speed_devices_of_the_vnwa_share_one_translator_and_the_codecs_can_reserve_most_of_it(
     ) {
@@ -383,6 +394,7 @@ mod tests {
             .any(|x| x == "usb4"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_domain_of]
     #[test]
     fn the_domain_of_a_device_is_its_translator_or_its_bus() {
         let t = Tree::read(&recorded_sys()).unwrap();
@@ -398,6 +410,8 @@ mod tests {
         assert_eq!(d("2-3").kind, "SuperSpeed bus");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_load]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_streams]
     #[test]
     fn descriptors_give_every_alternate_settings_periodic_endpoints() {
         let t = Tree::read(&recorded_sys()).unwrap();

@@ -128,6 +128,7 @@ pub fn parse_voices(text: &str) -> Vec<Voice> {
 
 /// A voice or language code is passed as a command argument, so it is limited to the characters such codes use.
 pub fn safe_code(s: &str) -> Result<&str, String> {
+    // [@ANCHOR: bench_mcp_audio_speak_safe_code]
     let ok = !s.is_empty()
         && s.len() <= 40
         && !s.starts_with('-')
@@ -169,6 +170,7 @@ pub fn spd_rate(wpm: u32) -> i32 {
 }
 
 pub fn spd_args(lang: &str, voice: Option<&str>, rate_wpm: u32) -> Vec<String> {
+    // [@ANCHOR: bench_mcp_audio_speak_spd_args]
     let mut a: Vec<String> = vec![
         "--wait".into(),
         "-e".into(),
@@ -532,6 +534,8 @@ mod tests {
         assert!(parse_voices("").is_empty());
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_speak_safe_code]
+    // Tests [@ANCHOR: bench_mcp_audio_speak_spd_args]
     #[test]
     fn commands_carry_the_text_on_stdin_and_codes_are_checked() {
         let a = espeak_args("en-us", 150, Path::new("/x/y.wav"));

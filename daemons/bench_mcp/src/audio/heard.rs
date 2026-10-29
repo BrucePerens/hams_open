@@ -46,6 +46,7 @@ pub fn round3(x: f64) -> f64 {
 }
 
 fn tracks(s: &[f32], rate: u32, hz: f64, from: usize, to: usize) -> Vec<(f64, f64)> {
+    // [@ANCHOR: bench_mcp_audio_heard_tracks]
     let win = (WIN_S * f64::from(rate)) as usize;
     let hop = (HOP_S * f64::from(rate)) as usize;
     let mut v = Vec::new();
@@ -168,6 +169,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_heard_tone]
+    // Tests [@ANCHOR: bench_mcp_audio_heard_tracks]
     #[test]
     fn a_clear_tone_over_room_noise_is_heard_with_its_times() {
         let h = hear_tone(&rec(Some(-30.0), 0.003, 1300.0), R, 1300.0, 0.5, 12.0);

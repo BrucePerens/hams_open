@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 
 /// `YYYYMMDD-HHMMSS` in local time.
 pub fn timestamp() -> String {
+    // [@ANCHOR: bench_mcp_audio_store_timestamp]
     let mut t: libc::time_t = 0;
     // SAFETY: time and localtime_r write only to the locals given.
     let tm = unsafe {
@@ -37,6 +38,7 @@ pub fn slug(s: &str) -> String {
 
 /// Creates the directory (owner only) and returns a fresh path `<prefix>-<timestamp>[-<label>].wav` in it.
 pub fn new_path(dir: &Path, prefix: &str, label: Option<&str>) -> Result<PathBuf, String> {
+    // [@ANCHOR: bench_mcp_audio_store_new_path]
     use std::os::unix::fs::DirBuilderExt;
     std::fs::DirBuilder::new()
         .recursive(true)
@@ -181,6 +183,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_store_new_path]
+    // Tests [@ANCHOR: bench_mcp_audio_store_timestamp]
     #[test]
     fn new_paths_are_unique_private_and_labelled_safely() {
         let d = scratch("new").join("sub");

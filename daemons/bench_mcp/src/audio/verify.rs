@@ -20,6 +20,7 @@ fn num(args: &Value, k: &str) -> Option<f64> {
 }
 
 fn bounded(args: &Value, k: &str, default: f64, lo: f64, hi: f64) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_audio_verify_bounded]
     let v = num(args, k).unwrap_or(default);
     if !v.is_finite() || !(lo..=hi).contains(&v) {
         return Err(format!("{k} {v} is outside {lo} to {hi}"));
@@ -58,6 +59,7 @@ pub struct Expect {
 }
 
 pub fn expectations(args: &Value) -> Result<Expect, String> {
+    // [@ANCHOR: bench_mcp_audio_verify_expectations]
     let hz = num(args, "expect_hz");
     let tol = match (num(args, "tolerance_hz"), hz) {
         (Some(t), _) => t,
@@ -267,6 +269,7 @@ fn active_samples(s: &[f32], rate: u32, events: &[Event]) -> Vec<f32> {
 
 /// Runs a configured action and waits for it; the result says how it ended.
 fn run_action(argv: &[String], timeout: Duration) -> Value {
+    // [@ANCHOR: bench_mcp_audio_verify_run_action]
     let started = Instant::now();
     let child = Command::new(&argv[0])
         .args(&argv[1..])
@@ -631,6 +634,8 @@ mod tests {
         assert!(judge(&expect(json!({"min_similarity": 0.9})), &e).0);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_verify_bounded]
+    // Tests [@ANCHOR: bench_mcp_audio_verify_expectations]
     #[test]
     fn expectation_arguments_are_validated_and_the_tolerance_defaults_to_five_percent() {
         assert_eq!(expect(json!({"expect_hz": 2000})).tolerance_hz, 100.0);
@@ -638,6 +643,7 @@ mod tests {
         assert!(expectations(&json!({"min_similarity": 2})).is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_verify_run_action]
     #[test]
     fn a_configured_action_runs_and_reports_how_it_ended() {
         let ok = run_action(&["true".into()], Duration::from_secs(2));

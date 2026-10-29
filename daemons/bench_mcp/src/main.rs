@@ -473,6 +473,10 @@ mod tests {
         assert!(!names.contains(&"bench_scope_self_cal".to_string()));
     }
 
+    // Tests [@ANCHOR: bench_mcp_manual_searchindex_score]
+    // Tests [@ANCHOR: bench_mcp_manual_call]
+    // Tests [@ANCHOR: bench_mcp_manual_excerpt]
+    // Tests [@ANCHOR: bench_mcp_manual_releases]
     #[test]
     fn the_vna_sweep_tool_is_listed_and_allowed_only_at_read_config() {
         let vna = |tier: &str| {

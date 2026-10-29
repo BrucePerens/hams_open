@@ -26,6 +26,7 @@ pub enum Severity {
 
 impl Severity {
     pub fn parse(s: &str) -> Result<Severity, String> {
+        // [@ANCHOR: bench_mcp_audio_alert_severity_parse]
         match s {
             "info" => Ok(Severity::Info),
             "warning" => Ok(Severity::Warning),
@@ -35,6 +36,7 @@ impl Severity {
     }
 
     pub fn word(self) -> &'static str {
+        // [@ANCHOR: bench_mcp_audio_alert_severity_word]
         match self {
             Severity::Info => "INFO",
             Severity::Warning => "WARNING",
@@ -44,6 +46,7 @@ impl Severity {
 
     /// The share of the volume limit used outside quiet hours.
     pub fn volume_share(self) -> f64 {
+        // [@ANCHOR: bench_mcp_audio_alert_severity_volume_share]
         match self {
             Severity::Info => 0.6,
             Severity::Warning => 0.8,
@@ -64,6 +67,7 @@ pub fn alert_volume(sev: Severity, limit: f64, quiet: bool) -> f64 {
 
 /// The tone pattern for a severity: one soft beep, two beeps, or a fast alternating two-tone siren.
 pub fn pattern(sev: Severity) -> Vec<f32> {
+    // [@ANCHOR: bench_mcp_audio_alert_pattern]
     let beep = |hz: f64, secs: f64| generate(Tone::Sine { hz }, RATE, secs, -12.0);
     let gap = |secs: f64| vec![0.0f32; (secs * f64::from(RATE)) as usize];
     let mut v = Vec::new();
@@ -198,6 +202,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: audio_alert_volume]
+    // Tests [@ANCHOR: bench_mcp_audio_alert_severity_volume_share]
     #[test]
     fn quiet_hours_give_the_lowest_volume_except_for_urgent() {
         // Outside quiet hours the limit is the cap (0.5); inside, it is the quiet volume (0.15) unless urgent (cap).
@@ -209,6 +214,9 @@ mod tests {
         assert_eq!(alert_volume(Severity::Urgent, 0.5, true), 0.5);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_alert_severity_parse]
+    // Tests [@ANCHOR: bench_mcp_audio_alert_severity_word]
+    // Tests [@ANCHOR: bench_mcp_audio_alert_pattern]
     #[test]
     fn the_patterns_grow_with_severity_and_stay_short() {
         let secs = |s| pattern(s).len() as f64 / f64::from(RATE);

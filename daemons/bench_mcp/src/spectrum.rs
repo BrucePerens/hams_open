@@ -16,6 +16,7 @@ pub enum Window {
 
 impl Window {
     pub fn parse(s: &str) -> Result<Window, String> {
+        // [@ANCHOR: bench_mcp_spectrum_window_parse]
         match s.to_lowercase().as_str() {
             "rect" | "rectangular" | "none" => Ok(Window::Rect),
             "hann" | "hanning" => Ok(Window::Hanning),
@@ -28,6 +29,7 @@ impl Window {
     }
 
     fn weight(self, k: usize, n: usize) -> f64 {
+        // [@ANCHOR: bench_mcp_spectrum_window_weight]
         let x = 2.0 * PI * k as f64 / n as f64; // periodic form, for spectral analysis
         match self {
             Window::Rect => 1.0,
@@ -40,6 +42,7 @@ impl Window {
 
 /// In-place iterative radix-2 FFT; `re.len()` must be a power of two.
 fn fft(re: &mut [f64], im: &mut [f64]) {
+    // [@ANCHOR: bench_mcp_spectrum_fft]
     let n = re.len();
     let mut j = 0;
     for i in 1..n {
@@ -128,6 +131,7 @@ pub fn spectrum(x: &[f32], fs: f64, w: Window) -> Result<Spectrum, String> {
 /// The level of a peak is its interpolated bin value (exact for a tone centred on a bin, within the window's scalloping loss
 /// otherwise: 0 dB rect to 1.4 dB for Hanning at worst).
 pub fn peaks(sp: &Spectrum, count: usize, min_below_max_db: f64) -> Vec<Peak> {
+    // [@ANCHOR: bench_mcp_spectrum_peaks]
     let v = &sp.vrms;
     let max = v[2..].iter().cloned().fold(0.0, f64::max); // skip DC and the first bin
     let mut found = Vec::new();
@@ -178,6 +182,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_spectrum]
+    // Tests [@ANCHOR: bench_mcp_spectrum_window_weight]
+    // Tests [@ANCHOR: bench_mcp_spectrum_fft]
+    // Tests [@ANCHOR: bench_mcp_spectrum_peaks]
     #[test]
     fn a_tone_is_found_at_its_frequency_and_level_in_every_window() {
         let (n, fs) = (1 << 16, 500e6);
@@ -221,6 +228,7 @@ mod tests {
         assert!(far(Window::Blackman) < far(Window::Rect) / 10.0);
     }
 
+    // Tests [@ANCHOR: bench_mcp_spectrum_window_parse]
     #[test]
     fn bad_sizes_and_windows_are_refused() {
         assert!(spectrum(&vec![0.0; 1000], 1e6, Window::Rect).is_err());

@@ -203,6 +203,7 @@ pub fn manual() -> Result<&'static Manual, String> {
 
 impl Manual {
     pub fn build(files: &[(&str, &str)]) -> Result<Manual, String> {
+        // [@ANCHOR: bench_mcp_manual_manual_build]
         let mut pages = Vec::new();
         for (file, text) in files {
             pages.push(parse_page(file, text)?);
@@ -264,6 +265,7 @@ impl Manual {
 
     /// The page that lists this one (the index of its directory).
     fn up_of(&self, page: &Page) -> Option<&Page> {
+        // [@ANCHOR: bench_mcp_manual_manual_up_of]
         let dir = if page.is_index {
             match page.dir.rsplit_once('/') {
                 Some((up, _)) => up.to_string(),
@@ -283,6 +285,7 @@ impl Manual {
     }
 
     fn render_body(&self, i: usize) -> String {
+        // [@ANCHOR: bench_mcp_manual_manual_render_body]
         let p = &self.pages[i];
         let mut text = p.body.clone();
         if text.contains(ARGUMENTS_MARKER) {
@@ -326,6 +329,7 @@ pub struct ToolInfo {
 }
 
 fn tool_registry() -> &'static BTreeMap<String, ToolInfo> {
+    // [@ANCHOR: bench_mcp_manual_tool_registry]
     static REG: OnceLock<BTreeMap<String, ToolInfo>> = OnceLock::new();
     REG.get_or_init(|| {
         let mut m = BTreeMap::new();
@@ -483,6 +487,7 @@ struct SearchIndex {
 
 /// Lower-case words; a word with underscores (a tool or argument name) is also indexed in parts.
 fn tokens(text: &str) -> Vec<String> {
+    // [@ANCHOR: bench_mcp_manual_tokens]
     let mut out = Vec::new();
     let lower = text.to_lowercase();
     for w in lower.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
@@ -500,6 +505,7 @@ fn tokens(text: &str) -> Vec<String> {
 
 impl SearchIndex {
     fn build(m: &Manual) -> SearchIndex {
+        // [@ANCHOR: bench_mcp_manual_searchindex_build]
         let mut idx = SearchIndex::default();
         for (i, p) in m.pages.iter().enumerate() {
             let mut tf: HashMap<String, f32> = HashMap::new();
@@ -525,6 +531,7 @@ impl SearchIndex {
     }
 
     fn score(&self, doc: usize, query: &[String]) -> f32 {
+        // [@ANCHOR: bench_mcp_manual_searchindex_score]
         const K1: f32 = 1.5;
         const B: f32 = 0.75;
         let n = self.docs.len() as f32;
@@ -544,6 +551,7 @@ impl SearchIndex {
 
 /// The paragraph of `text` that matches most of the query words, with the heading it is under.
 fn excerpt(text: &str, query: &[String]) -> (String, String) {
+    // [@ANCHOR: bench_mcp_manual_excerpt]
     let mut heading = String::new();
     let mut best: (usize, usize, String, String) = (0, usize::MAX, String::new(), String::new());
     let mut in_fence = false;
@@ -649,6 +657,7 @@ fn headings(text: &str) -> Vec<Heading> {
 /// The text from the heading that matches `want` (exact, then prefix, then substring, ignoring
 /// case) to the next heading of the same or a higher level.
 fn section_of(text: &str, want: &str) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_manual_section_of]
     let hs = headings(text);
     let w = want.trim().trim_start_matches('#').trim().to_lowercase();
     let pos = hs
@@ -678,6 +687,7 @@ fn section_of(text: &str, want: &str) -> Result<String, String> {
 }
 
 fn truncate_chars(text: &str, max: usize) -> (String, bool) {
+    // [@ANCHOR: bench_mcp_manual_truncate_chars]
     if text.chars().count() <= max {
         return (text.to_string(), false);
     }
@@ -751,6 +761,7 @@ pub fn is_manual_tool(name: &str) -> bool {
 }
 
 fn str_arg<'a>(args: &'a Value, key: &str) -> Result<Option<&'a str>, String> {
+    // [@ANCHOR: bench_mcp_manual_str_arg]
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(s)) => Ok(Some(s.as_str())),
@@ -759,6 +770,7 @@ fn str_arg<'a>(args: &'a Value, key: &str) -> Result<Option<&'a str>, String> {
 }
 
 fn uint_arg(args: &Value, key: &str, min: u64, max: u64) -> Result<Option<usize>, String> {
+    // [@ANCHOR: bench_mcp_manual_uint_arg]
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => match v.as_u64() {
@@ -769,6 +781,7 @@ fn uint_arg(args: &Value, key: &str, min: u64, max: u64) -> Result<Option<usize>
 }
 
 pub fn call(name: &str, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_manual_call]
     let m = manual()?;
     match name {
         "bench_manual_index" => Ok(index(m)),
@@ -851,6 +864,7 @@ fn read(m: &Manual, args: &Value) -> Result<Value, String> {
 }
 
 fn not_found(m: &Manual, path: &str) -> String {
+    // [@ANCHOR: bench_mcp_manual_not_found]
     let want = normalize(path);
     let mut near: Vec<&str> = m
         .pages
@@ -992,6 +1006,7 @@ fn for_tool(m: &Manual, args: &Value) -> Result<Value, String> {
 
 /// The releases in `whats-new`: `## <version>` sections of `- <path>: <note>` lines.
 pub fn releases(body: &str) -> Vec<(String, Vec<(String, String)>)> {
+    // [@ANCHOR: bench_mcp_manual_releases]
     let mut out: Vec<(String, Vec<(String, String)>)> = Vec::new();
     for l in body.lines() {
         if let Some(v) = l.strip_prefix("## ") {

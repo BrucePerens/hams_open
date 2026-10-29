@@ -131,6 +131,7 @@ pub const SPECS: &[Spec] = &[
 ];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
+    // [@ANCHOR: bench_mcp_example_instrument]
     let ours: Vec<&Instrument> = insts.iter().filter(|i| i.kind == Kind::Example).collect();
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
         return ours
@@ -167,6 +168,7 @@ pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
 
 /// A boolean argument that may be absent (false) but must not be anything else.
 fn flag(args: &Value, key: &str) -> Result<bool, String> {
+    // [@ANCHOR: bench_mcp_example_flag]
     match args.get(key) {
         None | Some(Value::Null) => Ok(false),
         Some(Value::Bool(b)) => Ok(*b),
@@ -230,6 +232,7 @@ fn finite(cmd: &str, reply: &str) -> Result<f64, String> {
 
 /// `ON` or `OFF`, exactly. Any other word is a fault, not a guess.
 fn on_off(reply: &str) -> Result<bool, String> {
+    // [@ANCHOR: bench_mcp_example_on_off]
     match reply.trim().to_ascii_uppercase().as_str() {
         "ON" | "1" => Ok(true),
         "OFF" | "0" => Ok(false),
@@ -256,6 +259,7 @@ fn open(connect: &Connector, inst: &Instrument) -> Result<(Link, Vec<String>), S
 }
 
 pub fn status(connect: &Connector, inst: &Instrument) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_example_status]
     let (mut l, idn) = open(connect, inst)?;
     let out = on_off(&ask(&mut l, "OUTP?", READ_TRIES)?)?;
     let level = finite("LEV?", &ask(&mut l, "LEV?", READ_TRIES)?)?;
@@ -268,6 +272,7 @@ pub fn status(connect: &Connector, inst: &Instrument) -> Result<Value, String> {
 }
 
 pub fn measure(connect: &Connector, inst: &Instrument, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_example_measure]
     let count = match args.get("count") {
         None | Some(Value::Null) => 1,
         Some(_) => number(args, "count", 1.0, 10.0, "readings per call")? as usize,
@@ -308,6 +313,7 @@ fn ensure_off(l: &mut Link) -> Result<(), String> {
 }
 
 pub fn safe_state(connect: &Connector, inst: &Instrument) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_example_safe_state]
     let (mut l, _) = open(connect, inst)?;
     ensure_off(&mut l)?;
     Ok(json!({"output": "off", "verified": true}))
@@ -381,6 +387,7 @@ pub fn pulse(connect: &Connector, inst: &Instrument, args: &Value) -> Result<Val
 }
 
 fn run_pulse(l: &mut Link, p: &Pulse) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_example_run_pulse]
     l.send(&format!("OUTP:TMO {:.1}", p.pulse_s + 1.0))?;
     l.send(&format!("LEV {:.3}", p.level_v))?;
     l.send("OUTP ON")?;
@@ -407,6 +414,7 @@ pub fn call_with(
     name: &str,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_example_call_with]
     let spec = SPECS
         .iter()
         .find(|s| s.name == name)
@@ -480,6 +488,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: example_readings]
+    // Tests [@ANCHOR: bench_mcp_example_on_off]
     #[test]
     fn a_reply_that_is_not_a_finite_number_is_an_error_not_a_zero() {
         assert_eq!(finite("c", "1.250V"), Ok(1.25));
@@ -494,6 +503,13 @@ mod tests {
     }
 
     // Tests [@ANCHOR: example_identity]
+    // Tests [@ANCHOR: bench_mcp_example_call_with]
+    // Tests [@ANCHOR: bench_mcp_example_flag]
+    // Tests [@ANCHOR: bench_mcp_example_instrument]
+    // Tests [@ANCHOR: bench_mcp_example_measure]
+    // Tests [@ANCHOR: bench_mcp_example_run_pulse]
+    // Tests [@ANCHOR: bench_mcp_example_safe_state]
+    // Tests [@ANCHOR: bench_mcp_example_status]
     #[test]
     fn status_reads_the_recorded_session_and_a_stranger_is_sent_nothing() {
         let dev = FakeDevice::from_transcript("tests/example_fixtures/status.txt");

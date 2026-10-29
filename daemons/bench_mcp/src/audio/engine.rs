@@ -25,6 +25,7 @@ impl Recorder {
     /// Starts recording one channel of `node` as 32-bit float at `rate`. With `monitor`, `node` is an output (a sink) and what is
     /// recorded is what it plays.
     pub fn start(node: &str, rate: u32, monitor: bool) -> Result<Recorder, String> {
+        // [@ANCHOR: bench_mcp_audio_engine_recorder_start]
         let mut child = Command::new("pw-record")
             .args([
                 "-P",
@@ -104,6 +105,7 @@ impl Recorder {
 
     /// Waits until `n` samples have arrived. The error says what pw-record reported when nothing arrives at all.
     pub fn wait_samples(&mut self, n: usize, patience: Duration) -> Result<(), String> {
+        // [@ANCHOR: bench_mcp_audio_engine_recorder_wait_samples]
         let t = Instant::now();
         loop {
             if self.len() >= n {
@@ -140,6 +142,7 @@ impl Recorder {
     }
 
     fn shutdown(&mut self) {
+        // [@ANCHOR: bench_mcp_audio_engine_recorder_shutdown]
         let _ = self.child.kill();
         let _ = self.child.wait();
         for h in self.readers.drain(..) {
@@ -163,6 +166,7 @@ pub struct Playing {
 impl Playing {
     /// Starts playing `path` on `node` with the stream volume `stream_volume` (1.0 leaves the file's own level).
     pub fn start(node: &str, path: &Path, stream_volume: f64) -> Result<Playing, String> {
+        // [@ANCHOR: bench_mcp_audio_engine_playing_start]
         let child = Command::new("pw-play")
             .arg("-P")
             .arg(NO_FALLBACK)
@@ -190,6 +194,7 @@ impl Playing {
 
     /// Waits for the end of playback; after `limit` the process is killed and that is an error.
     pub fn wait(mut self, limit: Duration) -> Result<Duration, String> {
+        // [@ANCHOR: bench_mcp_audio_engine_playing_wait]
         loop {
             match self.child.try_wait() {
                 Ok(Some(status)) => {
@@ -234,6 +239,9 @@ mod tests {
 
     // Tests [@ANCHOR: audio_engine_no_fallback]
     /// Needs PipeWire: `cargo test engine -- --ignored`. A target that does not exist must fail, not record the default source.
+    // Tests [@ANCHOR: bench_mcp_audio_engine_playing_start]
+    // Tests [@ANCHOR: bench_mcp_audio_engine_recorder_start]
+    // Tests [@ANCHOR: bench_mcp_audio_engine_recorder_wait_samples]
     #[test]
     #[ignore]
     fn a_missing_target_fails_and_never_falls_back_to_the_default_device() {

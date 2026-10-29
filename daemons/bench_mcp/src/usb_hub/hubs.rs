@@ -64,6 +64,7 @@ fn hub_json(
     desc: Option<&Result<uhubctl::HubDescriptor, String>>,
     ur: &Result<Vec<UHub>, String>,
 ) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_hub_json]
     let loc = d.path.strip_prefix("usb").unwrap_or(&d.path);
     let usb3 = d.speed_mbps() >= 5000.0;
     let switching = match (u, ur) {
@@ -117,6 +118,7 @@ pub fn hubs(
     cfg: &Config,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_hubs]
     let t = Tree::read(sysfs_root)?;
     let only = args.get("hub").and_then(|v| v.as_str());
     let privileged = args
@@ -172,6 +174,7 @@ pub fn bench_refs(insts: &[crate::config::Instrument]) -> Vec<BenchRef> {
 
 /// The port an argument set names: `hub` and `port`, a port `label`, or a `device` path (the port it is plugged into).
 pub fn resolve_port(t: &Tree, cfg: &Config, args: &Value) -> Result<PortRef, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port]
     if let Some(l) = args.get("label").and_then(|v| v.as_str()) {
         let (key, _) = cfg
             .ports
@@ -221,6 +224,7 @@ fn secs(
     min: Duration,
     max: Duration,
 ) -> Result<Duration, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
     let Some(v) = args.get(key).filter(|v| !v.is_null()) else {
         return Ok(default);
     };
@@ -240,6 +244,7 @@ fn secs(
 }
 
 pub fn flag(args: &Value, key: &str) -> Result<bool, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_flag]
     match args.get(key) {
         None | Some(Value::Null) => Ok(false),
         Some(v) => v
@@ -262,6 +267,7 @@ pub fn plan(
     run: &dyn Runner,
     port: &PortRef,
 ) -> Result<Plan, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_plan]
     let hub = t
         .get(&port.hub)
         .ok_or_else(|| format!("no hub {} in the USB tree", port.hub))?;
@@ -445,6 +451,8 @@ mod tests {
         crate::usb_hub::parse_config(&json!({"ports": {"3-2/2": {"label": "VNWA 3E", "hub_uplink_ok": true, "confirmed_by_hand": "goes dark and keeps no settings"}, "3-2/4": {"label": "spare"}}})).unwrap()
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_hub_json]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_hubs]
     #[test]
     fn hubs_merge_sysfs_uhubctl_and_descriptor_and_claim_only_what_uhubctl_says() {
         let hub = FakeHub::new(&recorded_sys(), Behaviour::Switches);
@@ -486,6 +494,9 @@ mod tests {
         assert_eq!(verification(&c4, "3-2/2", true)["level"], 4);
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_flag]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_plan]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
     #[test]
     fn dry_run_says_what_would_happen_and_changes_nothing() {
         let (_d, sys) = writable_sys();
@@ -670,6 +681,7 @@ mod tests {
         assert_eq!(v["steps"][0], "sudo -n uhubctl -N -l 3-2 -p 4 -a off");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port]
     #[test]
     fn off_time_is_bounded_and_ports_resolve_by_device() {
         let (_d, sys) = writable_sys();

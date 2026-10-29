@@ -112,6 +112,7 @@ impl Device {
 
     /// The speed class the device was negotiated at.
     pub fn speed_name(&self) -> &'static str {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_device_speed_name]
         match self.speed_mbps() {
             s if s >= 20000.0 => "SuperSpeed+ 20 Gb/s",
             s if s >= 10000.0 => "SuperSpeed+ 10 Gb/s",
@@ -126,6 +127,7 @@ impl Device {
     /// The transaction translator arrangement of a hub: the device protocol of a high-speed hub is 1 for a single TT and 2 for one
     /// per port; the multi-TT mode is the interface's alternate setting 1 (protocol 2), which the kernel selects when it can.
     pub fn tt_mode(&self) -> &'static str {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_device_tt_mode]
         if !self.is_hub() {
             return "not a hub";
         }
@@ -162,6 +164,7 @@ fn link_name(p: &Path) -> Option<String> {
 }
 
 pub fn is_device_name(n: &str) -> bool {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_is_device_name]
     if let Some(rest) = n.strip_prefix("usb") {
         return !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit());
     }
@@ -178,6 +181,7 @@ pub fn is_device_name(n: &str) -> bool {
 
 /// The hub and port a device path hangs from: `3-2.2.1` is port 1 of `3-2.2`; `3-2` is port 2 of root hub `usb3`.
 pub fn parent_of(path: &str) -> Option<(String, u32)> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_parent_of]
     if path.starts_with("usb") {
         return None;
     }
@@ -190,6 +194,7 @@ pub fn parent_of(path: &str) -> Option<(String, u32)> {
 
 /// The path of the port-`port` child of `hub`: the inverse of `parent_of`.
 pub fn child_path(hub: &str, port: u32) -> String {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_child_path]
     match hub.strip_prefix("usb") {
         Some(bus) => format!("{bus}-{port}"),
         None => format!("{hub}.{port}"),
@@ -326,6 +331,7 @@ fn class_nodes(class: &str, dir: &Path, out: &mut Vec<Node>) {
 }
 
 fn interface_of(dir: &Path, name: &str) -> Interface {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of]
     let num = |f: &str| read(&dir.join(f)).and_then(|s| s.parse().ok()).unwrap_or(0);
     let mut nodes = Vec::new();
     collect_nodes(dir, 0, &mut nodes);
@@ -343,6 +349,7 @@ fn interface_of(dir: &Path, name: &str) -> Interface {
 }
 
 fn ports_of(hub: &str, dir: &Path, nports: u32) -> Vec<Port> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_ports_of]
     let mut out = Vec::new();
     let Ok(rd) = std::fs::read_dir(dir) else {
         return out;
@@ -390,6 +397,7 @@ fn ports_of(hub: &str, dir: &Path, nports: u32) -> Vec<Port> {
 }
 
 fn controller_of(real_root_hub: &Path) -> Option<Controller> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_controller_of]
     let pci = real_root_hub.parent()?;
     let driver = link_name(&pci.join("driver"))?;
     Some(Controller {
@@ -401,6 +409,7 @@ fn controller_of(real_root_hub: &Path) -> Option<Controller> {
 }
 
 fn device_at(dir: &Path, path: &str) -> Option<Device> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_device_at]
     let vid = read(&dir.join("idVendor"))?;
     let pid = read(&dir.join("idProduct"))?;
     let parent = parent_of(path);
@@ -529,6 +538,7 @@ impl Tree {
 
     /// Children of a device, in port order.
     pub fn children(&self, path: &str) -> Vec<&Device> {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_children]
         let mut v: Vec<&Device> = self
             .devices
             .values()
@@ -540,6 +550,7 @@ impl Tree {
 
     /// The root hubs, by bus number.
     pub fn roots(&self) -> Vec<&Device> {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_roots]
         let mut v: Vec<&Device> = self.devices.values().filter(|d| d.is_root_hub()).collect();
         v.sort_by_key(|d| d.bus);
         v
@@ -547,6 +558,7 @@ impl Tree {
 
     /// The device and everything above it, root hub last.
     pub fn ancestry(&self, path: &str) -> Vec<&Device> {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_ancestry]
         let mut out = Vec::new();
         let mut cur = self.get(path);
         while let Some(d) = cur {
@@ -579,6 +591,7 @@ impl Tree {
 /// A `bcdUSB` of 2.x does not prove high-speed capability (many full-speed devices report 2.0), so that case is a note and
 /// only a USB 3 device on a slower link is a warning.
 pub fn speed_finding(d: &Device, parent: Option<&Device>) -> Option<Value> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_speed_finding]
     let ver: f64 = d.bcd_usb.parse().unwrap_or(0.0);
     let speed = d.speed_mbps();
     if d.is_root_hub() || speed == 0.0 {
@@ -646,6 +659,7 @@ fn port_json(p: &Port, label: Option<&str>) -> Value {
 
 /// One device as JSON. `labels` maps a port key (`hub/port`) to its label.
 pub fn device_json(t: &Tree, d: &Device, labels: &dyn Fn(&str, u32) -> Option<String>) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_device_json]
     let parent = d.parent.as_deref().and_then(|p| t.get(p));
     let label = d
         .parent
@@ -676,6 +690,7 @@ pub fn device_json(t: &Tree, d: &Device, labels: &dyn Fn(&str, u32) -> Option<St
 
 /// The tree as nested JSON: each device with its `children`.
 pub fn tree_json(t: &Tree, root: &str, labels: &dyn Fn(&str, u32) -> Option<String>) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_json]
     let Some(d) = t.get(root) else {
         return Value::Null;
     };
@@ -699,6 +714,14 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_sysfs_tree]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_device_tt_mode]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_ancestry]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_children]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_roots]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_controller_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_device_at]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_ports_of]
     #[test]
     fn the_recorded_tree_has_the_vnwa_chain_and_its_topology() {
         let t = Tree::read(&fixture()).unwrap();
@@ -763,6 +786,9 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_child_path]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_is_device_name]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_parent_of]
     #[test]
     fn path_arithmetic_round_trips() {
         assert_eq!(parent_of("3-2.2.1"), Some(("3-2.2".into(), 1)));
@@ -778,6 +804,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_speed_finding]
     #[test]
     fn speed_findings_separate_a_warning_from_a_note() {
         let t = Tree::read(&fixture()).unwrap();
@@ -798,6 +825,9 @@ mod tests {
         assert_eq!(f["level"], "warn");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_device_speed_name]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_device_json]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_json]
     #[test]
     fn the_json_tree_nests_children_and_labels_ports() {
         let t = Tree::read(&fixture()).unwrap();

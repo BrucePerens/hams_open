@@ -145,6 +145,7 @@ pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> 
 /// windowed and transformed, and the strongest peaks are listed. Levels are dBV rms at the scope input, and dBm into 50 ohms (the level
 /// the 50 ohm source side would read; the scope input is 1 MOhm).
 pub fn spectrum(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_spectrum]
     let c = ch(args)?;
     let window = crate::spectrum::Window::parse(
         args.get("window")
@@ -375,6 +376,7 @@ mod spectrum_tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_spectrum]
+    // Tests [@ANCHOR: bench_mcp_scope_spectrum]
     #[test]
     fn the_spectrum_tool_finds_the_tone_and_its_harmonic_through_a_scope_link() {
         let port = fake_scope();

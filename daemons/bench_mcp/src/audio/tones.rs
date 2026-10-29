@@ -61,6 +61,7 @@ pub fn generate(t: Tone, rate: u32, seconds: f64, level_dbfs: f64) -> Vec<f32> {
 }
 
 fn hz(args: &Value, k: &str, default: Option<f64>, rate: u32) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_audio_tones_hz]
     let v = args.get(k).and_then(|x| x.as_f64()).or(default);
     let v = v.ok_or_else(|| format!("{k} is required for this tone"))?;
     let top = f64::from(rate) * 0.45;
@@ -72,6 +73,7 @@ fn hz(args: &Value, k: &str, default: Option<f64>, rate: u32) -> Result<f64, Str
 
 /// Reads a tone from tool arguments: `tone` (sine, sweep, two_tone, noise), `freq_hz`, `freq2_hz` (sweep end, second tone).
 pub fn parse(args: &Value, rate: u32) -> Result<Tone, String> {
+    // [@ANCHOR: bench_mcp_audio_tones_parse]
     match args.get("tone").and_then(|t| t.as_str()).unwrap_or("sine") {
         "sine" => Ok(Tone::Sine {
             hz: hz(args, "freq_hz", Some(1000.0), rate)?,
@@ -91,6 +93,7 @@ pub fn parse(args: &Value, rate: u32) -> Result<Tone, String> {
 
 /// The level argument, `level_dbfs` (default -12), limited to [`MAX_LEVEL_DBFS`].
 pub fn level(args: &Value, default: f64) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_audio_tones_level]
     let v = args
         .get("level_dbfs")
         .and_then(|x| x.as_f64())
@@ -109,6 +112,7 @@ mod tests {
     use serde_json::json;
 
     // Tests [@ANCHOR: audio_tones]
+    // Tests [@ANCHOR: bench_mcp_audio_tones_hz]
     #[test]
     fn a_sine_has_the_requested_peak_and_fades_at_its_edges() {
         let s = generate(Tone::Sine { hz: 1000.0 }, 48000, 0.5, -12.0);
@@ -141,6 +145,8 @@ mod tests {
         assert!(mean.abs() < 0.01);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_tones_level]
+    // Tests [@ANCHOR: bench_mcp_audio_tones_parse]
     #[test]
     fn tone_arguments_are_validated() {
         assert_eq!(parse(&json!({}), 48000).unwrap(), Tone::Sine { hz: 1000.0 });
