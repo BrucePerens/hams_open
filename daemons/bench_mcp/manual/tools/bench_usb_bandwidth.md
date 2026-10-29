@@ -1,10 +1,10 @@
 ---
 title: bench_usb_bandwidth
 summary: Which devices share a translator, root hub or controller, and the periodic bandwidth they use and could reserve.
-see_also: [usb-hubs/operation, bench_usb_diagnose]
+see_also: [instruments/usb-hubs/operation, tools/bench_usb_diagnose]
 tools: [bench_usb_bandwidth]
 instrument: usb-hubs
-tier: read
+tier: read_only
 verified: run on the dev box tree: the VNWA chain, 2026-10-29
 ---
 
@@ -19,3 +19,7 @@ Worked example (the dev box, 2026-10-29): the VNWA's two audio codecs and its co
 that one port's translator. The idle codecs reserve nothing; each could reserve about 407 bytes/ms when streaming (two interfaces' busiest alternate settings), so the pair can reserve about
 60 % of the translator's periodic budget. Two codecs streaming at once fit; adding another full-speed isochronous device behind the same hub would not leave much room.
 The figures are the host's reservation arithmetic, an estimate and not a measurement of what the devices send.
+
+## Arguments
+
+<!-- arguments -->

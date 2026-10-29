@@ -10,6 +10,7 @@ mod audio;
 mod config;
 mod dsp;
 mod link;
+mod manual;
 mod psu;
 mod scope;
 mod sdr;
@@ -22,7 +23,8 @@ use config::{Instrument, Kind, Tier};
 use link::Link;
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+    ListResourcesResult, ListToolsResult, PaginatedRequestParams, ReadResourceRequestParams,
+    ReadResourceResponse, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::transport::stdio;
@@ -167,6 +169,9 @@ fn instrument_lock(name: &str) -> Arc<Mutex<()>> {
 }
 
 fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
+    if manual::is_manual_tool(name) {
+        return manual::call(name, args);
+    }
     if name.starts_with("bench_audio_") {
         return audio::call(insts, name, args);
     }
@@ -262,10 +267,27 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     }
 }
 
+/// Every tool this server can offer, as listed for a bench with each driver configured at the top
+/// tier. No hardware is touched. The manual's argument tables and its tests read the schemas here.
+pub(crate) fn all_tool_defs() -> Vec<Tool> {
+    let bench = config::parse(
+        r#"{"instruments":{
+        "scope":{"driver":"siglent_sds","tier":"full","host":"127.0.0.1"},
+        "psu":{"driver":"atm6301","tier":"full","serial":"/dev/null"},
+        "vna":{"driver":"vnwa_open","tier":"full"},
+        "blade":{"driver":"bladerf","tier":"full"},
+        "lime":{"driver":"limesdr","tier":"full"},
+        "usb":{"driver":"usb_hub","tier":"full"},
+        "sound":{"driver":"audio","tier":"full"}}}"#,
+    )
+    .expect("the all-instruments bench configuration parses");
+    tool_defs(&bench)
+}
+
 fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
     let usb = usb_hub::tool_defs(insts);
     let audio = audio::tool_defs(insts);
-    TOOLS
+    let tools: Vec<Tool> = TOOLS
         .iter()
         .filter(|t| t.name == "bench_list" || insts.iter().any(|i| t.kinds.contains(&i.kind) && i.tier >= t.tier))
         .map(|t| {
@@ -275,7 +297,9 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
         })
         .chain(usb)
         .chain(audio)
-        .collect()
+        .chain(manual::tool_defs())
+        .collect();
+    manual::with_pointers(tools)
 }
 
 struct BenchServer {
@@ -284,9 +308,14 @@ struct BenchServer {
 
 impl ServerHandler for BenchServer {
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
             .with_server_info(Implementation::new("bench_mcp", env!("CARGO_PKG_VERSION")))
-            .with_instructions("Bench test equipment over SCPI. Use bench_list for the instruments; tools above an instrument's tier are refused.")
+            .with_instructions("Bench test equipment. Use bench_list for the instruments; tools above an instrument's tier are refused. The manual is in this server: start with bench_manual_index, bench_manual_search or bench_manual_for_tool (the same pages are MCP resources bench-manual://<path>).")
     }
 
     async fn list_tools(
@@ -298,6 +327,22 @@ impl ServerHandler for BenchServer {
             tools: tool_defs(&self.insts),
             ..Default::default()
         })
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, McpError> {
+        manual::list_resources()
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, McpError> {
+        manual::read_resource(&request.uri)
     }
 
     async fn call_tool(

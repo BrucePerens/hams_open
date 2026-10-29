@@ -1,10 +1,10 @@
 ---
 title: bench_audio_discovery
 summary: The stored discovery result, its staleness and the current auto selection.
-see_also: [sound/discovery, sound/safety]
+see_also: [instruments/sound/discovery, instruments/sound/safety]
 tools: [bench_audio_discovery]
 instrument: sound
-tier: read
+tier: read_only
 verified: dev box 2026-10-29
 ---
 
@@ -13,3 +13,7 @@ verified: dev box 2026-10-29
 The stored discovery result, its staleness and the current auto selection.
 
 Makes no sound.
+
+## Arguments
+
+<!-- arguments -->

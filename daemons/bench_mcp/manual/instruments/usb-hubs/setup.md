@@ -1,14 +1,14 @@
 ---
 title: Registering and configuring the USB hub tools
 summary: The usb_hub entry of the bench config: port labels, critical ports and devices, and the sudo rule uhubctl needs.
-see_also: [overview, operation]
+see_also: [instruments/usb-hubs/overview, instruments/usb-hubs/operation]
 tools: [bench_usb_hubs, bench_usb_port_power]
 instrument: usb-hubs
-tier: read
+tier: read_only
 verified: config parser tested; sudo -n uhubctl and lsusb used on the dev box, 2026-10-29
 ---
 
-# Setup
+# Registering and configuring the USB hub tools
 
 Add an instrument with `"driver": "usb_hub"` to the bench config (`BENCH_MCP_CONFIG`):
 

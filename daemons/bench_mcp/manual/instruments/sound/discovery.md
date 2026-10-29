@@ -1,7 +1,7 @@
 ---
 title: Finding what works by listening
 summary: How audio path discovery decides which outputs make sound and which inputs hear, and how auto selection uses it.
-see_also: [overview, setup, safety]
+see_also: [instruments/sound/overview, instruments/sound/setup, instruments/sound/safety]
 tools: [bench_audio_discover, bench_audio_discovery, bench_audio_alert, bench_audio_verify]
 instrument: sound
 tier: full

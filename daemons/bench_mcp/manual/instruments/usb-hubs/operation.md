@@ -1,14 +1,14 @@
 ---
 title: Using the USB hub tools
 summary: Finding a device, reading hub capabilities, switching a port, the verification levels and the protection rules.
-see_also: [setup, limits, troubleshooting]
+see_also: [instruments/usb-hubs/setup, instruments/usb-hubs/limits, instruments/usb-hubs/troubleshooting]
 tools: [bench_usb_topology, bench_usb_find, bench_usb_hubs, bench_usb_protection, bench_usb_port_power]
 instrument: usb-hubs
 tier: full
 verified: read tools on the dev box; off and on through the tool on an empty port of hub 2-3 with the real uhubctl; cycle with a device only against a scripted hub (2026-10-29)
 ---
 
-# Operation
+# Using the USB hub tools
 
 **Which device is this?** `bench_usb_find` with `node` (`ttyUSB0`, `hidraw3`, a sound card id such as `CODEC`, an interface name or a block name), `vidpid`, `product` or `label`. `bench_usb_topology` shows the tree, with the negotiated speed of each device and a finding when it is below what the device can do (a USB 3 device below SuperSpeed is a warning; a device that reports USB 2.x at 12 Mb/s is a note only, since many full-speed devices report 2.0).
 

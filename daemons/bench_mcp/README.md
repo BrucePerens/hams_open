@@ -119,6 +119,29 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 * The phase between two channels is measured block by block with its stability and coherence. [@ANCHOR: bench_mcp_sdr_phase_math]
 * A capture that takes longer than its signal lasts is flagged as having lost samples. [@ANCHOR: bench_mcp_sdr_continuous]
 
+## The manual (every tool and instrument function ships its page)
+
+The documentation is part of the server: `manual/` holds one markdown page per topic, embedded in the binary by `build.rs`, and the agent reads it through the MCP with `bench_manual_index`, `bench_manual_read`, `bench_manual_search`, `bench_manual_for_tool` and `bench_manual_whats_new`, or as resources `bench-manual://<path>`. The framework is `src/manual.rs`. Every tool description ends with `Manual: tools/<tool name>`.
+
+**Contributor rule: a new tool, a new function of an instrument or a changed behaviour ships its manual page in the same pull request, and the tests fail until it does.** What to add:
+
+* `manual/tools/<tool name>.md` for every new tool: front matter `title` (the tool name), `summary` (one line), `see_also` (page paths from the root of the manual, no `.md`), `tools: [<tool name>]` first, `instrument` (names of directories under `manual/instruments/`), `tier` (`read_only`, `read_config` or `full`: the tool's own, as registered), `verified` (see below); the body has one `# <title>` heading, the purpose, a `## Arguments` section containing the line `<!-- arguments -->` (the argument table is generated from the tool's JSON schema; explain each argument that its schema does not describe, naming it in backticks, with unit, range and default), the return fields with units, side effects, failure modes and what to do, and a real example request and answer.
+* The instrument's pages under `manual/instruments/<name>/` (`overview`, `setup`, `operation`, `measurement-recipes`, `limits`, `troubleshooting`, `protocol` as they apply). A new instrument is a new directory with an `index.md` whose body contains `<!-- children -->` (the list of pages is generated).
+* A line in `manual/whats-new.md` under the build version.
+* `verified` says what was checked on real hardware and when (`measured on the unit (...), 2026-10-29`), or starts with `fixtures only`, `code only`, `in progress`, `see <page>` or `n/a`. Do not claim more than was run.
+* Pages are at most 16000 characters (split them), have exactly one `#` heading equal to the title, and link to other pages as `[text](instruments/vna/limits)` (paths from the root).
+
+Checks this crate makes for the manual (anchors):
+
+* Every file is a page with the required front matter, an honest `verified` line and a known tier. [@ANCHOR: bench_mcp_manual_front_matter]
+* Every registered tool has a page under `tools/` with its own tier, every `tools:` entry names a registered tool. [@ANCHOR: bench_mcp_manual_tool_pages]
+* The argument tables are generated from the schemas and every argument is explained. [@ANCHOR: bench_mcp_manual_arguments]
+* Every tool description ends with its manual path. [@ANCHOR: bench_mcp_manual_pointers]
+* `see_also` entries and links resolve. [@ANCHOR: bench_mcp_manual_links]
+* Every directory has an index page that lists all its children, and every page is reachable from the top. [@ANCHOR: bench_mcp_manual_index_pages]
+* Pages are valid markdown of bounded length. [@ANCHOR: bench_mcp_manual_markdown]
+* The five tools (index, read with sections and cutting, BM25 search with filters, for-tool, whats-new) and the resources. [@ANCHOR: bench_mcp_manual_index] [@ANCHOR: bench_mcp_manual_read] [@ANCHOR: bench_mcp_manual_search] [@ANCHOR: bench_mcp_manual_for_tool] [@ANCHOR: bench_mcp_manual_whats_new] [@ANCHOR: bench_mcp_manual_resources]
+
 ## Tests
 
 `cargo test` runs the pure checks. `BENCH_MCP_CONFIG=<file> cargo test -- --ignored` needs the real

@@ -1,16 +1,16 @@
 ---
 title: Unit monitoring, failures and recovery
 summary: What the VNA reports about itself (firmware, temperature, overruns, recovered failures) and what the driver does when a measurement fails.
-see_also: [troubleshooting, limits]
-tools: [bench_vna_status, bench_vna_sweep, bench_vna_power_cycle]
+see_also: [instruments/vna/troubleshooting, instruments/vna/limits]
+tools: [bench_status, bench_vna_sweep, bench_vna_power_cycle]
 instrument: vna
-tier: read
+tier: read_only
 verified: measured on the unit (VNWA 3E, firmware v5.22), 2026-10-29
 ---
 
 # Unit monitoring, failures and recovery
 
-**Temperature.** `bench_vna_status` reports `instrument_monitoring` with the firmware (v5.22 on the unit under test) and `temperature_counts`: the unit's internal sensor in raw counts.
+**Temperature.** `bench_status` reports `instrument_monitoring` with the firmware (v5.22 on the unit under test) and `temperature_counts`: the unit's internal sensor in raw counts.
 The scale in degrees is not known; only changes mean anything. After a power-up the reading rises by about 100 counts in the first 5 minutes and then holds within a few counts. A loopback
 sweep changes by less than 0.04 % in magnitude and 0.01 degrees in phase over that warm-up. `bench_vna_sweep` returns `temperature_counts_after`.
 

@@ -1,14 +1,14 @@
 ---
 title: Limits of the USB hub tools
 summary: What the tools cannot know or do: VBUS, ganged hubs, USB 3 hubs, unlisted hubs.
-see_also: [operation, troubleshooting]
+see_also: [instruments/usb-hubs/operation, instruments/usb-hubs/troubleshooting]
 tools: [bench_usb_hubs, bench_usb_port_power]
 instrument: usb-hubs
-tier: read
+tier: read_only
 verified: hub 3-2 and hub 2-3 on the dev box, 2026-10-29
 ---
 
-# Limits
+# Limits of the USB hub tools
 
 * Software cannot see VBUS. The hub descriptor says what the hub claims; uhubctl says what it will try; a cycle shows the device left and returned. Only a meter on VBUS shows power fell.
 * Only hubs uhubctl lists as per-port (`ppps`) are switched. A ganged hub, or a hub uhubctl does not list (root hubs here), is refused, because switching one port would not affect only that port. On this machine uhubctl lists hub 3-2 (the VNWA's hub) and the USB 3 hub 2-3; the VNWA's own internal hub 3-2.2 is ganged.

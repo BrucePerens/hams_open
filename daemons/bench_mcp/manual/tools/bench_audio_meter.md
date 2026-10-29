@@ -1,7 +1,7 @@
 ---
 title: bench_audio_meter
 summary: Level readings from an input every interval for N seconds.
-see_also: [sound/overview, sound/safety]
+see_also: [instruments/sound/overview, instruments/sound/safety]
 tools: [bench_audio_meter]
 instrument: sound
 tier: read_config
@@ -13,3 +13,7 @@ verified: run on the dev box (virtual sink and source, and the speaker with the 
 Level readings from an input every interval for N seconds.
 
 Arguments: `input`, `seconds`, `interval_ms`. Nothing is saved.
+
+## Arguments
+
+<!-- arguments -->
