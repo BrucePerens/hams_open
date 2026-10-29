@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    remove|purge)
+        rm -f /etc/tlp.d/20-hp-notebook-81ff.conf /etc/modprobe.d/rtl8188ee-hp-notebook-81ff.conf \
+            /etc/default/grub.d/50-hp-notebook-81ff.cfg \
+            /etc/systemd/logind.conf.d/50-hp-notebook-81ff.conf /etc/dconf/db/local.d/50-hp-notebook-81ff
+        if command -v dconf >/dev/null 2>&1; then
+            dconf update >/dev/null 2>&1 || true
+        fi
+        if command -v update-grub >/dev/null 2>&1; then
+            update-grub >/dev/null 2>&1 || true
+        fi
+        if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+            tlp start >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+#DEBHELPER#

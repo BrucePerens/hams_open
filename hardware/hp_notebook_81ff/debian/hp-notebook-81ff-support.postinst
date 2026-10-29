@@ -1,0 +1,37 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+case "$1" in
+    configure)
+        if [ "$(cat /sys/class/dmi/id/board_name 2>/dev/null)" = "81FF" ]; then
+            S=/usr/share/hp-notebook-81ff-support
+            install -D -m 0644 $S/20-hp-notebook-81ff.conf /etc/tlp.d/20-hp-notebook-81ff.conf
+            install -D -m 0644 $S/rtl8188ee-hp-notebook-81ff.conf /etc/modprobe.d/rtl8188ee-hp-notebook-81ff.conf
+            install -D -m 0644 $S/50-hp-notebook-81ff.cfg /etc/default/grub.d/50-hp-notebook-81ff.cfg
+            install -D -m 0644 $S/logind-50-hp-notebook-81ff.conf /etc/systemd/logind.conf.d/50-hp-notebook-81ff.conf
+            install -D -m 0644 $S/dconf-50-hp-notebook-81ff /etc/dconf/db/local.d/50-hp-notebook-81ff
+            if [ ! -e /etc/dconf/profile/user ]; then
+                install -D -m 0644 /dev/null /etc/dconf/profile/user
+                printf 'user-db:user\nsystem-db:local\n' > /etc/dconf/profile/user
+            elif ! grep -q '^system-db:local' /etc/dconf/profile/user; then
+                printf 'system-db:local\n' >> /etc/dconf/profile/user
+            fi
+            if command -v dconf >/dev/null 2>&1; then
+                dconf update >/dev/null 2>&1 || true
+            fi
+            if command -v update-grub >/dev/null 2>&1; then
+                update-grub >/dev/null 2>&1 || true
+            fi
+            if [ -d /run/systemd/system ]; then
+                # Weekly TRIM for SSDs; harmless on a hard disk.  Debian enables it already.
+                systemctl enable fstrim.timer >/dev/null 2>&1 || true
+            fi
+            if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+                tlp start >/dev/null 2>&1 || true
+            fi
+            echo "hp-notebook-81ff-support: the PCI Express setting takes effect at the next boot." >&2
+        fi
+        ;;
+esac
+#DEBHELPER#

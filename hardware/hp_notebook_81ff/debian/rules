@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+P = debian/hp-notebook-81ff-support/usr/share/hp-notebook-81ff-support
+
+override_dh_auto_install:
+	install -D -m 0644 tlp.d/20-hp-notebook-81ff.conf $(P)/20-hp-notebook-81ff.conf
+	install -D -m 0644 modprobe.d/rtl8188ee-hp-notebook-81ff.conf $(P)/rtl8188ee-hp-notebook-81ff.conf
+	install -D -m 0644 grub.d/50-hp-notebook-81ff.cfg $(P)/50-hp-notebook-81ff.cfg
+	install -D -m 0644 logind.d/50-hp-notebook-81ff.conf $(P)/logind-50-hp-notebook-81ff.conf
+	install -D -m 0644 dconf.d/50-hp-notebook-81ff $(P)/dconf-50-hp-notebook-81ff
