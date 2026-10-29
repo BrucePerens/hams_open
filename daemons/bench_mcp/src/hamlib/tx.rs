@@ -376,6 +376,30 @@ pub fn release_prefix(prefix: &str) -> Vec<String> {
     failed
 }
 
+/// Before the daemon of a rig is stopped on purpose: a rig this process has keyed, or a record of one, is released first, and the stop is
+/// refused when that cannot be confirmed (the daemon is the only way to reach the rig). Ok(true): something was released.
+pub fn release_rig(rig: &str, dir: &Path) -> Result<bool, String> {
+    // [@ANCHOR: hamlib_tx_release_rig]
+    let active = lock(&ACTIVE).get(rig).cloned();
+    let recorded = std::fs::read_to_string(state_file(dir, rig))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| {
+            Some(Active {
+                host: v["host"].as_str()?.to_string(),
+                port: v["port"].as_u64()? as u16,
+                min_power: v["min_power"].as_f64(),
+            })
+        });
+    let Some(a) = active.or(recorded) else {
+        return Ok(false);
+    };
+    guard::unkey(&a.host, a.port, a.min_power).map_err(|e| format!("the rig may be keyed and could not be released first ({e}). Stopping its daemon would leave it keyed. Next: bench_hamlib_safe_state"))?;
+    lock(&ACTIVE).remove(rig);
+    let _ = std::fs::remove_file(state_file(dir, rig));
+    Ok(true)
+}
+
 /// The leftover daemon of a dead server is about to be stopped: release a rig it may have left keyed, first.
 pub fn release_after_crash(_rig: &str, port: u16) -> bool {
     // [@ANCHOR: hamlib_release_after_crash]

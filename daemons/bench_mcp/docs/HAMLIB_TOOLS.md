@@ -33,6 +33,7 @@ that can transmit (which also need the owner's dummy-load attestation in the ent
 | `bench_hamlib_rigs` | read_only |
 | `bench_hamlib_status` | read_only |
 | `bench_hamlib_get` | read_only |
+| `bench_hamlib_watch` | read_only |
 | `bench_hamlib_diagnose` | read_only |
 | `bench_hamlib_set` | read_config |
 | `bench_hamlib_memory` | read_config |
@@ -57,4 +58,4 @@ start. Nothing here has run on a real rig: see `instruments/hamlib/limits`.
 
 A rig can transmit through these tools only if its entry has the `transmit` block: the owner's statement that the rig's antenna port is on a dummy load (name, date, cabling), `max_power_w`, `max_seconds`, `frequency_ranges` (the owner's list; no default), `allowed_modes`, and optional `max_swr`, `swr_probe`, `allow_lowering_power`, `operator_alert` and `load_check` settings. **The software cannot know what is connected.** The attestation is the control; the load plausibility check (receive-only, against a baseline recorded with the load) and the low-power SWR probe are evidence, not proof. A separate watchdog process (`bench_mcp --hamlib-guard`) un-keys the rig and sets the lowest power on a deadline, a dead server or an abort. Every keyed interval is logged. Licence compliance for any transmission is the owner's responsibility. Details: manual pages `instruments/hamlib/limits` and `procedures/test-a-transmitter-into-a-dummy-load`.
 
-Left out: rotator control, transceive event watching, an audio-through-the-rig transmit check, automatic generator sweeps and an S-meter calibration table (the recipes are in `instruments/hamlib/measurement-recipes`).
+Left out: rotator control, rigctld's own event channel (the watch polls), an audio-through-the-rig transmit check, automatic generator sweeps and an S-meter calibration table (the recipes are in `instruments/hamlib/measurement-recipes`).
