@@ -775,6 +775,23 @@ fn main() -> Result<(), String> {
             sc.send("TRMD AUTO")?;
             sc.send("WFSU SP,1,NP,0,FP,0")?; // every point, no decimation
             std::thread::sleep(Duration::from_secs(2));
+            // The scope may have been left stopped (or at another time base) by someone else: a stopped scope returns its frozen last
+            // waveform, which read as the same level for every generator state in a smoke run on 2026-10-29. Check the state, and ask again.
+            let mut state = String::new();
+            for _ in 0..10 {
+                state = format!("{} {}", sc.q("SAST?")?, sc.q("TDIV?")?);
+                if !state.contains("Stop") && state.contains("1.00E-07") {
+                    break;
+                }
+                sc.send("TDIV 100NS")?;
+                sc.send("TRMD AUTO")?;
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            if state.contains("Stop") || !state.contains("1.00E-07") {
+                return Err(format!(
+                    "the scope would not run at 100 ns per division: {state}"
+                ));
+            }
             generator::on(&usb, 10e6, -6.0)?;
             std::thread::sleep(Duration::from_secs(3));
             let v6 = sc.rms()?;
