@@ -300,6 +300,38 @@ open-ended 3-foot scope lead (a quarter wave near 54 MHz), not the generator.
   sweeps before to 0.09 % and 0.05 degrees (60 points, 100 kHz to 150 MHz). Power removed in the middle of a sweep: the audio
   streams report the lost device, the retries fail, one cold reset follows and all 60 points complete (0.02 % from the others).
 
+## Comparison with the vendor program on the same cables (2026-10-28, stage 03)
+
+Method. The vendor program (36.8.2, licensed from the licence file already in the Wine prefix) ran on its own virtual display
+(`Xvfb :99`, so Bruce's screen and keyboard are not touched), inside the private network namespace `vnwa` with its USB bridge,
+`-tcpip 55555`. A script sent its documented remote commands (`timeperpoint 60`, `setgrid LIN 100000 150000000 60`, `sweep s11 s21`,
+`writes2p <file>`; the sweep is asynchronous, so the file is written about 9 s later) and read the Touchstone file. The program had
+been left in Frequency Meter mode (every sweep read zero); a real key press (`ctrl+m` through xdotool on the virtual display) put it
+back in VNA mode. The vendor program and this driver cannot run at the same time (the codecs are open in one program only), so each
+was run in turn without touching the cabling: TX through the 10 dB pad to the tee, three feet of lead to the scope (1 MOhm) and to the
+RX input. Both used IF 4 kHz (`VNWA_SamplesPerPeriod` 12) and 60 ms per point, uncalibrated (the instrument calibration file holds
+none). The vendor program's three sweeps repeat to 0.010 % and 0.03 degrees; this driver's sweeps to 0.09 % and 0.04 degrees.
+
+Result (60 points, 100 kHz to 150 MHz, stub resonance near 52 MHz included; the mean of three sweeps each):
+
+| Channel | Magnitude difference | Phase difference |
+|---|---|---|
+| S11 (codec 1) | 0.00 to 0.10 % | under 0.12 degrees (0.5 at worst in the every-fifth subset) |
+| S21 (codec 2) | +0.74 to +0.90 %, a constant +0.79 % with a spread of 0.08 % | under 0.15 degrees |
+
+Both are inside 1 % and 1 degree, but the S21 offset is systematic. The vendor program's S11 and S21 are identical on this loopback to
+0.005 %, while the raw codec ratios differ: at 10.26 MHz codec 1 (reference left) gives 14051 / 5682 = 2.4727 and codec 2 (reference
+right) 14112 / 5663 = 2.4921, and the vendor's value is 2.4727 in both columns, whether `sweep s21`, `sweep s11` or both are asked for. So the vendor
+program either takes both from codec 1 or equalises codec 2 against it by a step this driver does not know (the ini has a
+`PhaseCalInt` setting). A 0.8 % gain mismatch between the codecs is of the order of the PCM2900C's channel matching. A through
+calibration (stage 04) divides it out, since the same offset is in the through measurement; the earlier comparisons at nine IFs showed
+the same pattern (codec 2 0.5 to 1.0 % away, codec 1 under 0.4 %). `examples/channels.rs` prints the tone in all four codec channels
+of one point for this kind of check. A 12-point subset of both sweeps is in `src/vendor_comparison_vectors.rs` and checked by
+`sweep::tests` (`agreement` gives the percent and degree differences).
+
+The vendor bridge's debug window lists every control transfer it forwards (`ctrlmsg ...`), which is a second way, besides usbmon, to
+capture what the vendor program sends.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
