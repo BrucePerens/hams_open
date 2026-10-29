@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from unittest import mock
 
@@ -89,6 +88,8 @@ class RedisKeyAndFileTests(unittest.TestCase):
                       "2027-01-15T09:00:00+01:00"):
             self.assertEqual(gm.parse_freshness_time(value), expected, value)
         self.assertIsNone(gm.parse_freshness_time("soon"))
+        for value in ("nan", "inf", "-inf", float("nan"), float("inf"), b"NaN"):
+            self.assertIsNone(gm.parse_freshness_time(value), value)
 
     def test_iso_time_age_is_computed_in_utc(self):
         iso = "2027-01-15 08:00:00"

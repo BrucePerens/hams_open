@@ -30,6 +30,7 @@ import codecs
 import html as _html
 import json
 import logging
+import math
 import quopri
 import re
 import secrets
@@ -416,6 +417,17 @@ _NAMED_COLORS = {
 }
 
 
+def _css_number(text):
+    """A CSS number as a finite float, or None. float() accepts "nan", "inf" and a 400-digit integer (which is
+    inf) without an exception, and rejects "1.2.3" and "." that the colour regexes let through; all of those
+    are None here, so a caller never meets OverflowError or ValueError from attacker-written CSS."""
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    return number if math.isfinite(number) else None
+
+
 def _parse_color(value):
     value = (value or "").strip().lower().replace("!important", "").strip()
     if value in _NAMED_COLORS:
@@ -434,15 +446,22 @@ def _parse_color(value):
     if m:
         chans = []
         for part in m.groups()[:3]:
-            chans.append(round(float(part[:-1]) * 2.55) if part.endswith("%") else int(float(part)))
+            number = _css_number(part[:-1] if part.endswith("%") else part)
+            if number is None:
+                return None
+            chans.append(round(number * 2.55) if part.endswith("%") else int(number))
         alpha = m.group(4)
         if alpha is not None:
-            a = float(alpha[:-1]) / 100 if alpha.endswith("%") else float(alpha)
+            a = _css_number(alpha[:-1] if alpha.endswith("%") else alpha)
+            if a is None:
+                return None
+            if alpha.endswith("%"):
+                a /= 100
             if a < 0.15:
                 return "invisible"
         return tuple(min(255, max(0, c)) for c in chans)
     m = re.fullmatch(r"hsla?\(\s*[\d.]+(?:deg)?[\s,]+[\d.]+%[\s,]+([\d.]+)%.*\)", value)
-    if m and float(m.group(1)) >= 97:
+    if m and (_css_number(m.group(1)) or 0) >= 97:
         return (255, 255, 255)
     return None
 
@@ -505,10 +524,8 @@ def _hidden_reason(tag, attrs, bg):
         return "content_visibility_hidden"
     for key in ("opacity",):
         if key in style:
-            try:
-                faded = float(style[key].rstrip("%")) / (100 if style[key].endswith("%") else 1) < 0.1
-            except ValueError:
-                faded = False  # not a number: not provably hidden
+            opacity = _css_number(style[key].rstrip("%"))  # None: not a finite number, so not provably hidden
+            faded = opacity is not None and opacity / (100 if style[key].endswith("%") else 1) < 0.1
             if faded:
                 return "opacity_zero"
     size = style.get("font-size")

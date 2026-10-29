@@ -14,6 +14,7 @@ from datetime import date
 from odoo.tests.common import BaseCase, tagged
 
 from odoo.addons.zero_sudo.daemon.repeater_page_text import (
+    _page_numbers,
     apply_page_checks, callsign_adjacent, callsign_core, callsigns_in_text, frequency_on_page, ground_item, grounded_notes,
     header_callsigns, node_operator_callsigns, number_on_page, orbiting_repeater, page_date, placeholder_page, row_ownership,
     section_scope_for_frequency, stale_page_note, strip_repeater_designator,
@@ -158,6 +159,12 @@ class TestRepeaterPageStructure(BaseCase):
             self.assertEqual(section_scope_for_frequency(RASC, freq), ("club", heading), freq)
         self.assertEqual(section_scope_for_frequency(RASC, 147.93), (None, ""))  # not on the page
         self.assertEqual(section_scope_for_frequency(None, 145.19), (None, ""))
+
+    def test_a_page_number_of_hundreds_of_digits_is_not_read_as_infinity(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_page_numbers]
+        numbers = _page_numbers("Frequency: 146.940 MHz, ticket " + "9" * 400)
+        self.assertIn(146.94, numbers)
+        self.assertTrue(all(value < float("inf") for value in numbers))
 
     def test_headings_that_set_repeaters_apart_are_recognised_in_several_wordings_and_languages(self):
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_section_scope_for_frequency]

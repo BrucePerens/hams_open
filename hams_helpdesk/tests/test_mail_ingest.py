@@ -359,6 +359,7 @@ class TestMailIngest(HamsTransactionCase):
                 extra_headers=f"X-SES-Spam-Verdict: {verdict}\r\nX-SES-Virus-Verdict: PASS\r\n",
             )
             self._ingest(raw)
-            ticket = self.env["hams_helpdesk.ticket"].search([("name", "ilike", f"Question about my mast {index}")], limit=1)
-            self.assertTrue(ticket)
+        tickets = self.env["hams_helpdesk.ticket"].search([("name", "ilike", "Question about my mast ")], order="name")
+        self.assertEqual(len(tickets), 2)
+        for ticket, verdict in zip(tickets, ("PASS", "GRAY")):
             self.assertEqual(ticket.stage, "new", verdict)

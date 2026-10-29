@@ -34,7 +34,9 @@ def extract_block(natural_bits, start, length):
 
 from collections import defaultdict
 by_amp = defaultdict(list)
-with open('/home/bruce/workspace/hams_open/daemons/ham_digital_modes/docs/references/ratet27_captures/amplitude_sweep_200hz.tsv') as f:
+import os
+data_path = os.path.join(os.path.dirname(__file__), 'amplitude_sweep_200hz.tsv')
+with open(data_path) as f:
     for line in f:
         parts = line.strip().split('\t')
         if len(parts) != 3: continue

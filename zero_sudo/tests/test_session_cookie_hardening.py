@@ -3,9 +3,8 @@
 #
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
-import unittest
 
-from odoo.tests.common import tagged
+from odoo.tests.common import BaseCase, tagged
 
 from odoo.addons.zero_sudo.models.ir_http import _harden_cookie_header
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -16,7 +15,8 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 # finding, 2026-09-22: session_id (the real auth token) and frontend_lang had
 # neither Secure nor SameSite even over a real HTTPS connection through the
 # reverse proxy.
-class TestHardenCookieHeader(unittest.TestCase):
+@tagged("post_install", "-at_install")
+class TestHardenCookieHeader(BaseCase):
     def test_session_id_gets_secure_and_samesite_over_https(self):
         raw = "session_id=abc123; Expires=Thu, 01-Jan-2026; Max-Age=604800; HttpOnly; Path=/"
         hardened = _harden_cookie_header(raw, is_https=True)

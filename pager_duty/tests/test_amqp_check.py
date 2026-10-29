@@ -15,7 +15,6 @@ import threading
 import time
 from unittest.mock import patch
 
-import pika
 from pika import frame as pika_frame
 from pika import spec
 

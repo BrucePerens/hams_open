@@ -71,4 +71,4 @@ def report(env):
 
 
 if __name__ == "__main__":
-    report(env)  # `env` is provided by `odoo shell`
+    report(globals()["env"])  # `env` is provided by `odoo shell`

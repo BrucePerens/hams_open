@@ -44,6 +44,7 @@ class TestIsSsrfSafePublicIp(HamsTransactionCase):
             self.assertFalse(_is_ssrf_safe_public_ip(ipaddress.ip_address(text)), text)
 
 
+@tagged("post_install", "-at_install")
 class TestSafeResponseGeturl(HamsTransactionCase):
     # Tests [@ANCHOR: binary_utils_safe_response_geturl]
     # Bug-hunt fix, 2026-09-11: was inline `getattr(response, "geturl", lambda: None)()`

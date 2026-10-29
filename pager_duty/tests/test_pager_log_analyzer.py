@@ -41,7 +41,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         # somewhere other than a leading prefix silently produced a wrong
         # chroot-relative path instead of being left alone.
         self.assertEqual(
-            pager_log_analyzer.translate_path("/home/var/log/x"), "/home/var/log/x"
+            pager_log_analyzer.translate_path("/srv/var/log/x"), "/srv/var/log/x"
         )
 
     def test_02_tail_file_reports_a_matching_line_and_ignores_others(self):

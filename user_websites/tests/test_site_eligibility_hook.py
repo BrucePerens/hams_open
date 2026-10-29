@@ -142,7 +142,7 @@ class TestSiteEligibilityHook(HamsHttpCase):
                 "group_ids": [(6, 0, [self.env.ref("base.group_system").id, self.env.ref("user_websites.group_user_websites_user").id])],
             }
         )
-        _admin_page = self.env["website.page"].create(
+        self.env["website.page"].create(
             {"url": "/adminsite", "name": "A", "type": "qweb", "owner_user_id": admin_site.id, "website_published": True,
              "arch": ARCH.format(key="adminsite", body="admin body")}
         )

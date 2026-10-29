@@ -38,6 +38,7 @@ MUST NOT import anything from `odoo`. Text is read through glyph_normalizer firs
 """
 import bisect
 import functools
+import math
 import re
 from datetime import date, timedelta
 
@@ -367,6 +368,8 @@ def _page_numbers(page_text):
             try:
                 value = float(reading)
             except ValueError:
+                continue
+            if not math.isfinite(value):  # a page "number" of hundreds of digits parses as inf
                 continue
             found.add(value)
             if 1000 <= value < 1e7:
