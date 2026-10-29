@@ -404,10 +404,15 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
         let block_len = ji[block] as usize;
         for j in 1..=block_len {
             let mut sum = 0.0;
-            for k in 1..=block_len {
+            for (k, &cik_k) in cik[block + 1]
+                .iter()
+                .enumerate()
+                .take(block_len + 1)
+                .skip(1)
+            {
                 let ak = if k == 1 { 1.0 } else { 2.0 };
                 sum += ak
-                    * cik[block + 1][k]
+                    * cik_k
                     * (std::f64::consts::PI * (k as f64 - 1.0) * (j as f64 - 0.5)
                         / block_len as f64)
                         .cos();
