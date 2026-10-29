@@ -178,7 +178,7 @@ fn main() -> Result<(), String> {
                     wrong += 1;
                     log("WRONG", &format!("round {round}: sweep differs from the baseline by {m:.3} % and {ph:.3} deg"));
                 } else {
-                    log("OK", &format!("round {round}: sweep within {m:.3} % {ph:.3} deg; recovery remeasured {} resends {} cycles {}", r.remeasured, r.transfer_resends, r.power_cycles));
+                    log("OK", &format!("round {round}: sweep within {m:.3} % {ph:.3} deg; recovery remeasured {} resends {} cycles {} overruns reported {} points retried for them {}", r.remeasured, r.transfer_resends, r.power_cycles, r.overruns_reported, r.overrun_retries));
                 }
             }
             Err(e) => {

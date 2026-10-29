@@ -476,6 +476,28 @@ Traps found: (1) a generator command sent while the frequency meter's burst (abo
 allowed), a frequency-meter loopback reading (under 0.01 Hz), the generator at -6 and -12 dB and off read on the scope (8 % allowed), a cold reset through the hub every 30 minutes; a clear
 error is counted as ERROR, a wrong number as WRONG, a step over its deadline as HANG (exit 3, restart). Started 2026-10-28 23:46 (PDT) for 8.6 hours.
 
+## Audio buffer overruns (2026-10-29): cause, fix
+
+Source: measurement on the dev box (`examples/overrun_probe.rs`, the soak log, the kernel journal); no vendor input.
+
+* The soak log's roughly 50,000 "buffer underrun or overrun" lines were not a steady 1.7 per second. They came in three storms of about 16,700 lines each
+  (one sweep each), and each storm is a power cycle done by the sweep recovery (`cycles 1`, `cycles 2` in the log) while the two audio streams were still open: the kernel
+  journal shows the unit and both codecs disconnecting in the same second and `cannot submit urb, error -19` hundreds of times, and cpal's ALSA worker then
+  tries `prepare` and `start` on the vanished codec in a loop and reports an overrun for each try, about 5,100 per second on the S21 codec
+  (measured: a cold reset with the streams left open gave 90,069 reports in the 14.6 s the reset takes; with the streams closed first, 0).
+* Normal operation has none: 90 s of 20-point sweeps at the default period (241 frames, buffer 482 frames, 5 ms) gave 0; 10 minutes of the real soak rounds (sweep, meter, generator
+  with the scope; 21 rounds, 1,260 points) gave 0; 60 s idle gave 0. Sixteen busy-loop threads on the 16 cores (CPU starvation) gave 3 in 45 s (0.07 per second) with the default period.
+* Fix: `Capture::close` before the power goes (`Recoverable for Vna::cold_reset`), overruns recorded with their instant and frame position and not printed
+  (`Capture::overruns`, count exact, the record bounded), a window that contains an overrun is an error (`capture::is_overrun_error`) and not frames, the point is
+  measured again from its own budget (`Config::overrun_retries`, 10) that never leads to a power cycle, and `Recovery::{overrun_retries, overruns_reported}` reach
+  `bench_vna_sweep` and `bench_vna_status`. Other stream errors are still printed.
+* Larger periods: `Options::period_frames` sets the ALSA period (cpal makes the buffer two periods). With the old `mark` a period of 1024 or 4096 broke every point (level
+  change 12 % and 94 %: the mark trails real time by up to one period, so the window started inside the previous stage). `Capture::mark` now adds the frames elapsed
+  since the last delivery, and 1024 and 4096 sweeps (25 s each) were clean. The default period is kept: it never overran in normal operation.
+* Real-time priority for the callback thread was not tried: `ulimit -r` is 0 for this user and cpal's `realtime` feature needs rtkit.
+* Bus: the codecs and the unit sit behind the StarTech hub 3-2 and the unit's TUSB2036 hub (full speed, one transaction translator) on xHCI 0000:00:14.0 (bus 3, 480 M), shared
+  with the Bluetooth adapter and one other device; no overruns were seen with them present.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
