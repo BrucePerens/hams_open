@@ -63,6 +63,9 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_vna_sweep", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA: a linear sweep of start_hz to stop_hz in `points` points (1 to 401, about 0.2 s each at 60 ms per point; the unit emits for six point times) with RF on the TX port, measuring S21 (RX channel) and S11 (reflection channel). The results are raw ratios, not calibrated: the cable, bridge and front-end are not removed. Saves a CSV (frequency, S21 and S11 as re/im, dB and degrees) and returns a summary, and the rows themselves when there are at most 51 points. if_hz (a divisor of 48 kHz such as 12000, 6000 or 4000), point_ms (0.2 to 100) and rf_level (0 to 16383) override the instrument's settings for this sweep.",
         props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"}}"#, required: &["start_hz"] },
+    ToolSpec { name: "bench_vna_power_cycle", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA: cold-reset the unit by switching its power-switching hub port off, waiting, and on again (about 12 s in all), then wait for the unit and both codecs and, unless verify is false, check it with a one-point sweep at 10 MHz (RF at the unit's own level, about -17 dBm, on the TX port). The unit keeps no settings across it, so use it to clear the silent state (reference channels read about zero) or a unit that does not answer. Needs hub and hub_port in the instrument's config. bench_vna_sweep already does this by itself once when a point fails after its retries.",
+        props: r#"{"instrument":{"type":"string"},"verify":{"type":"boolean","description":"default true"}}"#, required: &[] },
     ToolSpec { name: "bench_sdr_capture", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
         desc: "SDR (bladeRF, LimeSDR): tune to freq_hz, capture `samples` complex baseband samples (default 262144, up to 16777216) at sample_rate_hz (default 2 MHz) and gain_db (default 30), receive only. Saves the raw I/Q as little-endian f32 pairs and returns RMS level, peak, DC offset, clipped sample count, the noise floor and the strongest peaks (dBFS at the set gain, not calibrated power). A bladeRF below 237.5 MHz needs its XB-200 configured (\"xb200\" in the config). channel 1 is the LimeSDR's second receiver. antenna picks the LimeSDR receive input (LNAH, LNAL or LNAW, the H, L and W connectors of each channel); the default is LNAL, which is what the driver selects at every frequency. The bladeRF has one input.",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"samples":{"type":"integer"},"channel":{"type":"integer","enum":[0,1]}}"#, required: &["freq_hz"] },
@@ -171,6 +174,7 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             "bench_identify" => Ok(vna::identify(&inst.vna)),
             "bench_status" => vna::status(&inst.vna),
             "bench_vna_sweep" => vna::sweep(&inst.vna, args, &out_dir()),
+            "bench_vna_power_cycle" => vna::power_cycle(&inst.vna, args),
             _ => Err(format!("{name} does not apply to {:?}", inst.name)),
         };
     }
@@ -370,6 +374,42 @@ mod tests {
         )
         .unwrap_err();
         assert!(e.contains("points"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_vna_power_cycle]
+    #[test]
+    fn the_power_cycle_tool_needs_a_hub_and_read_config_and_does_not_block_other_instruments() {
+        let vna = |tier: &str, hub: &str| {
+            config::parse(&format!(
+                r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"{hub}}}}}}}"#
+            ))
+            .unwrap()
+        };
+        let e = call(&vna("read_only", ""), "bench_vna_power_cycle", &json!({})).unwrap_err();
+        assert!(e.contains("needs tier"), "{e}");
+        let e = call(&vna("read_config", ""), "bench_vna_power_cycle", &json!({})).unwrap_err();
+        assert!(e.contains("no hub configured"), "{e}");
+        // A hub that does not exist is a clear error from uhubctl, before anything else happens.
+        let e = call(
+            &vna("read_config", r#","hub":"9-9","hub_port":1"#),
+            "bench_vna_power_cycle",
+            &json!({"verify": false}),
+        )
+        .unwrap_err();
+        assert!(e.contains("uhubctl off on hub 9-9"), "{e}");
+        let e = call(
+            &vna("read_config", r#","hub":"9-9","hub_port":1"#),
+            "bench_vna_power_cycle",
+            &json!({"verify": "yes"}),
+        )
+        .unwrap_err();
+        assert!(e.contains("verify"), "{e}");
+        // Each instrument has its own lock: a long VNA call does not hold up the scope or the supply.
+        let held = instrument_lock("lock_test_vna");
+        let _g = held.lock().unwrap();
+        assert!(instrument_lock("lock_test_scope").try_lock().is_ok());
+        assert!(instrument_lock("lock_test_psu").try_lock().is_ok());
+        assert!(instrument_lock("lock_test_vna").try_lock().is_err());
     }
 
     #[test]

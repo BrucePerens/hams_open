@@ -237,3 +237,53 @@ fn sdr_coherence_needs_two_receivers_and_runs_on_the_lime() {
         text(&r[1])
     );
 }
+
+/// Needs `vna` (with `hub` and `hub_port`) and `scope` instruments at read_config. Cold-resets the unit through the hub while a
+/// scope measurement is requested on the same server: the scope answers first (its lock is its own), the unit is back with both
+/// codecs and a good one-point sweep, and the status reports the cycle.
+#[test]
+#[ignore]
+fn vna_power_cycle_leaves_the_scope_usable() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_bench_mcp"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut next =
+        || serde_json::from_str::<serde_json::Value>(&lines.next().unwrap().unwrap()).unwrap();
+    writeln!(stdin, "{INIT}").unwrap();
+    next();
+    writeln!(stdin, "{INITIALIZED}").unwrap();
+    let with_id = |id: u32, name: &str, args: &str| {
+        call(name, args).replace(r#""id":2"#, &format!(r#""id":{id}"#))
+    };
+    writeln!(stdin, "{}", with_id(21, "bench_vna_power_cycle", "{}")).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    writeln!(
+        stdin,
+        "{}",
+        with_id(22, "bench_measure", r#"{"instrument":"scope","channel":1}"#)
+    )
+    .unwrap();
+    let (first, second) = (next(), next());
+    assert_eq!(first["id"], 22, "the scope must answer first: {first}");
+    assert_eq!(second["id"], 21, "{second}");
+    assert!(first["result"]["isError"] != true, "{first}");
+    let cycle: serde_json::Value = serde_json::from_str(&text(&second)).unwrap();
+    assert_eq!(cycle["power_cycled"], true, "{cycle}");
+    let s21 = cycle["verified"]["s21_db"].as_f64().unwrap();
+    assert!(s21.is_finite(), "{cycle}");
+    writeln!(
+        stdin,
+        "{}",
+        with_id(23, "bench_status", r#"{"instrument":"vna"}"#)
+    )
+    .unwrap();
+    let status: serde_json::Value = serde_json::from_str(&text(&next())).unwrap();
+    assert_eq!(status["usb"], "present", "{status}");
+    assert_eq!(status["power_cycles_by_this_server"], 1, "{status}");
+    drop(stdin);
+    let _ = child.wait();
+}

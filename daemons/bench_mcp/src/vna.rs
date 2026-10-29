@@ -5,6 +5,7 @@
 
 use serde_json::{json, Value};
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use vnwa_open::sweep::{check, Config, Point, Vna};
 
 /// The most points one call may take (each is about 0.2 s).
@@ -111,9 +112,15 @@ pub fn identify(cfg: &Config) -> Value {
 
 /// What is connected, and the settings a sweep starts from.
 pub fn status(cfg: &Config) -> Result<Value, String> {
-    let usb = vnwa_open::usb::Vnwa::open()
-        .map(|_| "present")
-        .unwrap_or("not found or no permission");
+    // The unit must answer a harmless read (request 0x3a, the generator's read-back, 2 bytes) and not only be on the bus: a
+    // unit that is listed but does not answer needs a power cycle.
+    let (usb, answers) = match vnwa_open::usb::Vnwa::open() {
+        Ok(u) => match u.read(0x3a, 0, 0, 2) {
+            Ok(b) => ("present", json!({"bytes": b, "resends": u.resends()})),
+            Err(e) => ("present but not answering", json!({"error": e})),
+        },
+        Err(e) => ("not found or no permission", json!({"error": e})),
+    };
     let found = vnwa_open::topology::codecs();
     let (s11, s21) = match (&cfg.codec_s11, &cfg.codec_s21, &found) {
         (Some(a), Some(b), _) => (Some(a.clone()), Some(b.clone())),
@@ -125,6 +132,9 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
     };
     Ok(json!({
         "usb": usb,
+        "usb_read": answers,
+        "hub": cfg.hub.as_ref().map(|h| format!("{} port {}", h.hub, h.port)),
+        "power_cycles_by_this_server": POWER_CYCLES.load(Ordering::Relaxed),
         "codec_s11": s11,
         "codec_s21": s21,
         "codecs_error": found.err(),
@@ -133,6 +143,39 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
         "rf_level": cfg.rf_level,
         "calibrated": false,
     }))
+}
+
+/// Cold resets done by this server process, for `status`.
+static POWER_CYCLES: AtomicU32 = AtomicU32::new(0);
+
+/// Cold-resets the unit through its hub port (`hub` and `hub_port` in the instrument's entry), waits for it and its codecs, and
+/// by default checks it with a one-point sweep at 10 MHz (`verify`, which puts RF at the unit's own level on the TX port).
+/// Everything the unit holds is lost: a generator that was on is off afterwards.
+pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
+    let hub = cfg.hub.clone().ok_or(
+        "no hub configured for this VNA: set \"hub\" and \"hub_port\" in its entry of the bench config (for example \"3-2\" and 2)",
+    )?;
+    let verify = match args.get("verify") {
+        None | Some(Value::Null) => true,
+        Some(v) => v.as_bool().ok_or("verify must be true or false")?,
+    };
+    let started = std::time::Instant::now();
+    vnwa_open::power::cold_reset(&hub)?;
+    POWER_CYCLES.fetch_add(1, Ordering::Relaxed);
+    let codecs = vnwa_open::topology::codecs()?;
+    let mut out = json!({
+        "power_cycled": true,
+        "back_after_s": started.elapsed().as_secs_f64(),
+        "codec_s11": codecs.s11,
+        "codec_s21": codecs.s21,
+        "note": "the unit lost all settings: a generator that was on is off",
+    });
+    if verify {
+        let mut vna = Vna::open(cfg.clone())?;
+        let p = vna.sweep(10e6, 10e6, 1)?;
+        out["verified"] = json!({"freq_hz": p[0].freq_hz, "s21_db": db(p[0].s21), "s21_deg": p[0].s21.phase_deg(), "s11_db": db(p[0].s11)});
+    }
+    Ok(out)
 }
 
 pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String> {
