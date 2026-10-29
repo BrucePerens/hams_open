@@ -615,21 +615,25 @@ error -71), after which only a power cycle brings it back. One run showed no sta
 the switch-off, then the reset, then (with a hub configured) the power-cycle ladder `power::modulation_ladder` (3, 12, 12, 30, 12 s off). After a modulation the control chip also often fails to enumerate at the first power-on of a
 power cycle: of 25 recoveries by power cycle, 14 needed one cycle, 6 two, 3 three and 2 four or more.
 
-## Spectrum analyzer mode: first observations (2026-10-29, not implemented)
+## Spectrum analyzer mode (2026-10-29)
 
-Source: usbmon captures of the vendor program (`saref` in VNA mode and `sa2` in spectrum-analyzer mode, same remote commands `timeperpoint 5`, `setgrid LIN 9000000 11000000 5`, `sweep s21`).
-The mode is selected by `ctrl+a` in the vendor window; the virtual display has no window manager, so `xdotool windowfocus <id>` then `xdotool key --clearmodifiers ctrl+a` (windowactivate fails) works.
-What changes on the wire in SA mode, compared with VNA mode at the same grid:
+Sources: usbmon captures of the vendor program in VNA mode (`saref`) and in SA mode (`sa2`; `ctrl+a` in its window, which on the virtual display needs `xdotool windowfocus <id>` then
+`xdotool key --clearmodifiers ctrl+a`, since there is no window manager), the Help file, and measurements with `examples/sa_probe.rs` and `examples/spectrum.rs` (TX cabled to RX, scope on the tee).
 
-* the IF of the set-up block is 12 kHz (0x42 = `dd 60 6d 02 00`, 0x41 scaled for 12 kHz) where the VNA run used 4 kHz;
-* the first block of a sweep is a different point: step counter 0xca (202), time-per-point bytes `01 00 1e 01 3f` (the fastest, 0.2 ms), and a sweep word that is a small negative number (0xffffc2e5d6, about -4.0 million
-  counts, which is about -12 kHz in the word's units): a point at 0 Hz minus the IF. The sweep points then carry step counter 0xc9 (201) and the word 0xb5cd3d6d = 8,988,000 Hz for the 9 MHz start: the RF word is
-  the displayed frequency **minus the IF** (12 kHz), where in VNA mode it equals the frequency;
-* the later blocks (step 6, time per point as set) are the same as in VNA mode.
-
-The Help file says the unfiltered LO DDS drives the RX mixer directly (a direct-conversion receiver), so ghost lines (birdies from the DDS's unfiltered clock images, worse above 100 MHz) and responses to
-subharmonics of the input appear, and the TX runs as a tracking generator. Neither the mapping of the words to the LO and TX chips nor the audio-to-power step is decoded or verified (no known tone was applied), so the
-driver has no spectrum-analyzer function; the next steps are captures with a known generator tone at the RX input (a second source, or this unit's own TX through the tee) and the scope's FFT of the same tone for comparison.
+* **What differs on the wire.** The IF is 12 kHz (0x41, 0x42), and the 0x49 sweep word is the displayed frequency **minus the IF** (8,988,000 Hz for a 9 MHz point), where in VNA mode it is the frequency.
+  The vendor runs a whole sweep from one block (step counter 201 or 202 = the number of point times it emits for: 201 point times; the meter's 31 is the same field), with the 6-byte tail as the
+  per-point step; this driver keeps one block per point.
+* **What it means** (measured): the block's word is the TX chip's frequency, and the LO is the word plus the IF. Replaying a block with the word `10 MHz - IF` for IF = 4, 8, 12, 16, 20 kHz put one line in the
+  S21 codec's left audio at exactly the IF (25 Hz grid), so LO - TX = IF; the scope's FFT put the TX at exactly 9,988,000 Hz for the word 9,988,000. With the RF level (the wIndex of the first requests and
+  request 0x58) 0 the TX is silent (the audio is 2 to 7 counts rms: the codec's noise); at 0x3fff the loopback gives the 12 kHz line, 8,771 counts rms in the left channel of codec 2 (12,407 peak; codec 1's right channel carries 12,353).
+  The LO at the word plus the IF is at the analysis frequency: a direct-conversion receiver, whose audio is the RX input within the codec's band of the LO. The audio is real, so signals at LO+d and LO-d coincide.
+* **`spectrum::Vna::spectrum`** sends one such block per LO frequency (TX level 0 unless a tracking level is given), waits the usual one point time after the read, and reports the rms of the
+  S21 left audio between 100 Hz and `band_hz` (a Hann-windowed DFT; `band_rms`, tested on synthetic tones to 2 %). Over 21 points across 100 kHz at 10 MHz the floor was 2.05 counts rms in a 5 kHz band (flat to 0.1 count); the
+  tracking line read 8771.0 to 8771.75 over five points in a 15 kHz band, and 1.9 counts in a 5 kHz band, so the amplitude scale is repeatable to 0.03 % and the dynamic range about 72 dB in 15 kHz.
+* **Ghost lines and subharmonics** (the Help file: the unfiltered LO makes birdies, worse above 100 MHz; the direct-conversion RX responds to subharmonics of the input, whose lines are narrower): **not
+  characterised**, because they need a calibrated external tone at the RX port and none was available (the unit's own TX in loopback is the only source on the bench, and it moves with the LO). What would
+  settle it: a stable generator at 10 MHz into RX with the LO stepped over 1 to 100 MHz, looking for lines at harmonics and subharmonics of the LO, and the scope's FFT of the same tone for comparison.
+* No calibration (dBm): the result is in counts. The vendor's level offset is a user entry, and its "crosstalk thru calibration" removes the codec's DC offset; neither is implemented.
 
 ## Seen but not decoded
 

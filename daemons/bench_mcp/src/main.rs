@@ -89,6 +89,9 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_vna_generator_fm", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA signal generator with frequency modulation: carrier freq_hz at level_db (default -20), modulated by a sine of mod_hz (1 to 3000, default 500) with a peak deviation of deviation_hz (100 to 300000). Verified on a scope. Like AM, it ends only with a USB reset of the control chip, which bench_vna_generator_off does.",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"level_db":{"type":"number"},"mod_hz":{"type":"number"},"deviation_hz":{"type":"number"}}"#, required: &["freq_hz","deviation_hz"] },
+    ToolSpec { name: "bench_vna_spectrum", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA as a rudimentary spectrum analyzer (RX port): the power in the audio band within band_hz (default 5000, at most 20000) of the unit's LO at each of `points` frequencies from start_hz to stop_hz, in UNCALIBRATED codec counts, with the noise floor and the peaks; point spacing must not exceed band_hz. Use below 100 MHz (unfiltered LO: ghost lines; direct conversion: subharmonic responses; both not characterised). tracking_db (0 to -50) turns the tracking generator on (TX 12 kHz below the LO: a loopback then shows a line at 12 kHz). Do not run it with a generator on.",
+        props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"band_hz":{"type":"number"},"point_ms":{"type":"number"},"tracking_db":{"type":"number"}}"#, required: &["start_hz","stop_hz","points"] },
     ToolSpec { name: "bench_vna_meter", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA frequency meter: the frequency of the signal on the RX input within +/-25 Hz of center_hz (param freq_hz), by the phase of RX against the unit's own reference over about 1.7 s (point_ms 60 default; the TX DDS runs at the centre, nothing else may use the unit). Returns the offset in Hz with its standard error and the reading. A TX-to-RX loopback reads 0. The sign and absolute accuracy are not yet verified against an external standard.",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number","description":"centre frequency in Hz"},"point_ms":{"type":"number"}}"#, required: &["freq_hz"] },
@@ -230,6 +233,7 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             "bench_vna_generator_level" => vna_tools::generator_level(args),
             "bench_vna_generator_am" => vna_tools::generator_am(args),
             "bench_vna_meter" => vna_tools::meter(&inst.vna, args),
+            "bench_vna_spectrum" => vna_tools::spectrum(&inst.vna, args, &out_dir()),
             "bench_vna_calibrate_measure" => {
                 vna_tools::calibrate_measure(&inst.vna, args, &out_dir())
             }
@@ -537,6 +541,7 @@ mod tests {
             "bench_vna_generator_level",
             "bench_vna_generator_am",
             "bench_vna_generator_fm",
+            "bench_vna_spectrum",
             "bench_vna_meter",
             "bench_vna_calibrate_measure",
             "bench_vna_calibrate_build",

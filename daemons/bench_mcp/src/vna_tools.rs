@@ -166,6 +166,72 @@ pub fn meter(cfg: &Config, args: &Value) -> Result<Value, String> {
     }))
 }
 
+/// The spectrum analyzer: power in the audio band around the LO at each frequency, in codec counts (uncalibrated). See `vnwa_open::spectrum`.
+pub fn spectrum(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_spectrum]
+    let start = num(args, "start_hz")?.ok_or("start_hz is required")?;
+    let stop = num(args, "stop_hz")?.ok_or("stop_hz is required")?;
+    let points = match num(args, "points")? {
+        Some(p) if p.fract() == 0.0 && (2.0..=2000.0).contains(&p) => p as usize,
+        Some(p) => return Err(format!("points {p} must be a whole number from 2 to 2000")),
+        None => return Err("points is required".into()),
+    };
+    let band = num(args, "band_hz")?.unwrap_or(5_000.0);
+    let ms = num(args, "point_ms")?.unwrap_or(20.0);
+    if !(5.0..=100.0).contains(&ms) {
+        return Err("point_ms must be 5 to 100".into());
+    }
+    let tracking = match num(args, "tracking_db")? {
+        None => 0,
+        Some(d) => vnwa_open::generator::level_for_attenuation(d)?,
+    };
+    vnwa_open::spectrum::spectrum_plan(start, stop, points, band, tracking)?;
+    let mut vna = Vna::open(Config {
+        if_hz: vnwa_open::spectrum::SA_IF_HZ,
+        point_ms: ms,
+        ..cfg.clone()
+    })?;
+    let sp = vna.spectrum(start, stop, points, band, tracking)?;
+    let mut sorted: Vec<f64> = sp.iter().map(|p| p.rms).collect();
+    sorted.sort_by(|a, b| a.total_cmp(b));
+    let floor = sorted[sorted.len() / 2];
+    let mut peaks: Vec<(f64, f64)> = (0..sp.len())
+        .filter(|&i| {
+            sp[i].rms > 3.0 * floor
+                && (i == 0 || sp[i].rms >= sp[i - 1].rms)
+                && (i + 1 == sp.len() || sp[i].rms > sp[i + 1].rms)
+        })
+        .map(|i| (sp[i].freq_hz, sp[i].rms))
+        .collect();
+    peaks.sort_by(|a, b| b.1.total_cmp(&a.1));
+    peaks.truncate(10);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let file = out_dir.join(format!("vna_spectrum_{stamp}.csv"));
+    let mut csv = String::from("freq_hz,rms_counts,db_rel_floor\n");
+    for p in &sp {
+        csv.push_str(&format!(
+            "{:.1},{:.3},{:.2}\n",
+            p.freq_hz,
+            p.rms,
+            20.0 * (p.rms / floor).log10()
+        ));
+    }
+    std::fs::write(&file, csv).map_err(|e| format!("{}: {e}", file.display()))?;
+    let r = vna.recovery();
+    Ok(json!({
+        "points": sp.len(), "start_hz": start, "stop_hz": stop, "band_hz": band, "point_ms": ms, "tracking_generator": tracking > 0,
+        "noise_floor_counts": floor,
+        "peaks": peaks.iter().map(|(f, a)| json!({"freq_hz": f, "rms_counts": a, "db_over_floor": 20.0 * (a / floor).log10()})).collect::<Vec<_>>(),
+        "rows": if sp.len() <= 51 { sp.iter().map(|p| json!({"freq_hz": p.freq_hz, "rms_counts": p.rms})).collect::<Vec<_>>() } else { Vec::new() },
+        "file": file.display().to_string(),
+        "note": "UNCALIBRATED: rms of the audio within band_hz of the unit's LO, in codec counts, tracking generator off unless tracking_db is given (then the TX runs 12 kHz below the LO and a loopback shows it as a line at 12 kHz: use band_hz above 12000 to see it). The audio is real, so a signal at LO+d and one at LO-d fall together: a point is two-sided. Ghost lines (the unfiltered LO) and subharmonic responses (direct conversion) are NOT characterised here; the vendor's Help file says to use it below 100 MHz. A known 15 kHz-band tone read 8771 counts rms to 0.03 % over points, the noise floor is about 2 counts.",
+        "recovery": {"remeasured": r.remeasured, "transfer_resends": r.transfer_resends, "power_cycles": r.power_cycles, "points_measured_again_for_audio_overruns": r.overrun_retries, "audio_overruns_reported": r.overruns_reported},
+    }))
+}
+
 fn name_ok(s: &str) -> Result<(), String> {
     if s.is_empty()
         || s.len() > 40
