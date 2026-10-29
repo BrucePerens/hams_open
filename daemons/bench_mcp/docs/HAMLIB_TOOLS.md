@@ -37,6 +37,11 @@ that can transmit (which also need the owner's dummy-load attestation in the ent
 | `bench_hamlib_set` | read_config |
 | `bench_hamlib_memory` | read_config |
 | `bench_hamlib_scan` | read_config |
+| `bench_hamlib_stations` | read_only |
+| `bench_hamlib_station_set` | read_config |
+| `bench_hamlib_rx_check` | read_config (needs the rig's `audio` setting for the audio part) |
+| `bench_hamlib_load_check` | read_config (only with a `transmit` attestation) |
+| `bench_hamlib_load_baseline` | full (only with a `transmit` attestation) |
 | `bench_hamlib_rigctld` | read_config |
 
 ## Safety

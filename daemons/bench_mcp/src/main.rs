@@ -301,7 +301,7 @@ pub(crate) fn all_tool_defs() -> Vec<Tool> {
         "lime":{"driver":"limesdr","tier":"full"},
         "usb":{"driver":"usb_hub","tier":"full"},
         "sound":{"driver":"audio","tier":"full"},
-        "rig":{"driver":"hamlib","tier":"full","model":1},
+        "rig":{"driver":"hamlib","tier":"full","model":1,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}},
         "example":{"driver":"example","tier":"full","host":"192.0.2.1"}}}"#,
     )
     .expect("the all-instruments bench configuration parses");

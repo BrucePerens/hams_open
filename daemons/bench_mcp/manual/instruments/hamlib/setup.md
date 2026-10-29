@@ -36,6 +36,25 @@ verified: dummy rig only, 2026-10-29
 | `reply_timeout_s` | how long one command may take, 1 to 30, default 3 |
 | `rx_ranges_hz` | list of `[low, high]`: the owner's limits on receive frequencies, in addition to what the rig reports |
 | `managed_dir` | absolute path for state files and logs; default: a `hamlib` directory under `BENCH_MCP_OUT` |
+| `audio` | `{"instrument": "<name of an audio instrument in the bench config>", "input": "<alias or name of its sound input>"}`: the input that carries the rig's receive audio, by the names the sound tools use (`bench_audio_devices`, `bench_audio_discover`). Reserved devices are refused by the sound module |
+| `transmit` | the owner's dummy-load attestation and limits; without it no tool transmits and the load tools do not exist. See below |
 | `tier` | `read_only` lists the information tools; `read_config` adds control; `full` adds the tools that can transmit (and only with the transmit attestation) |
 
 A bad value stops the server at start with a message naming the key.
+
+## The audio input
+
+The rig's receive audio reaches the computer through a sound card (the radio's USB audio, or a separate interface). Add an `audio` instrument to the bench config with an input alias for it (see [sound setup](instruments/sound/setup)), and name both in the rig's `audio` setting. `bench_audio_discover` finds a working input by listening; the 08bb:29c0 cards are reserved for the VNA and are never used.
+
+## The transmit attestation
+
+```json
+"transmit": {"dummy_load": true, "attested_by": "K6BP", "attested_on": "2026-10-29",
+             "cabling": "50 ohm dummy load on the rig's antenna port, no tuner",
+             "max_power_w": 5, "max_seconds": 10,
+             "frequency_ranges": [[7000000, 7100000]], "allowed_modes": ["CW", "USB"],
+             "max_swr": 2.0, "swr_probe": true, "allow_lowering_power": true,
+             "load_check": {"margin_db": 6, "max_spread_db": 6, "readings": 5, "references": 6}}
+```
+
+This block is the owner's statement that the rig's antenna port is on a dummy load, with their name, the date and what the cabling is, and the limits they accept. Every key but the optional ones is required, and there are no defaults that widen what may be done: `frequency_ranges` is the owner's list of the frequencies they may use for dummy-load tests and has no default. Compliance with the licence terms for any transmission, even into a dummy load, is the owner's responsibility. The server refuses to start with a malformed block. `max_seconds` is at most 60 and `max_power_w` at most 200 whatever the file says. See [limits](instruments/hamlib/limits).

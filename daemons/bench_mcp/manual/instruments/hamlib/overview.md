@@ -2,7 +2,7 @@
 title: Hamlib tools
 summary: What the bench_hamlib_* tools do, the tiers, how a rig is reached (rigctld on localhost) and what is left out.
 see_also: [instruments/hamlib/setup, instruments/hamlib/operation, instruments/hamlib/limits, instruments/hamlib/troubleshooting, instruments/hamlib/protocol]
-tools: [bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_diagnose, bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan, bench_hamlib_rigctld]
+tools: [bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_diagnose, bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan, bench_hamlib_rigctld, bench_hamlib_stations, bench_hamlib_station_set, bench_hamlib_rx_check, bench_hamlib_load_check, bench_hamlib_load_baseline]
 instrument: hamlib
 tier: read_only
 verified: dummy rig only, 2026-10-29
@@ -25,8 +25,13 @@ Hamlib is a library of drivers for amateur and shortwave radios. bench_mcp does 
 | [bench_hamlib_memory](tools/bench_hamlib_memory) | read_config | recall a memory channel |
 | [bench_hamlib_scan](tools/bench_hamlib_scan) | read_config | bounded scan or seek with signal strength per frequency; restores the rig |
 | [bench_hamlib_rigctld](tools/bench_hamlib_rigctld) | read_config | status, start, stop, restart of the managed rigctld |
+| [bench_hamlib_stations](tools/bench_hamlib_stations) | read_only | the reference station table (WWV, WWVH, AM band, weather radio, the owner's): notes, last heard, retired |
+| [bench_hamlib_station_set](tools/bench_hamlib_station_set) | read_config | add, retire, restore, remove, note |
+| [bench_hamlib_rx_check](tools/bench_hamlib_rx_check) | read_config | receiver test with the rig's audio: S-meter against audio level, noise floor, tone offset, station in the audio |
+| [bench_hamlib_load_check](tools/bench_hamlib_load_check) | read_config | dummy-load plausibility check, receive only; only for a rig with a transmit attestation |
+| [bench_hamlib_load_baseline](tools/bench_hamlib_load_baseline) | full | record the check's baseline; `confirm_dummy_load`, `dry_run`; only for a rig with a transmit attestation |
 
-Receiver tests and the transmit tools are added in later steps; `bench_manual_whats_new` lists what has been merged.
+The transmit tools are added in a later step; `bench_manual_whats_new` lists what has been merged.
 
 ## How a rig is reached
 
