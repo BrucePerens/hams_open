@@ -74,6 +74,7 @@ pub enum Switching {
 
 impl Switching {
     pub fn name(&self) -> String {
+        // [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_name]
         match self {
             Switching::PerPort => "per-port".into(),
             Switching::Ganged => "ganged".into(),
@@ -375,6 +376,7 @@ pub fn parse_hub_descriptor(text: &str) -> Option<HubDescriptor> {
 
 /// `sudo -n lsusb -v -s <bus>:<devnum>` and its hub descriptor.
 pub fn hub_descriptor(run: &dyn Runner, bus: u32, devnum: u32) -> Result<HubDescriptor, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor]
     let sel = format!("{bus}:{devnum}");
     let text = sudo(run, "lsusb", &["-v", "-s", &sel])?;
     parse_hub_descriptor(&text).ok_or_else(|| format!("lsusb printed no hub descriptor for {sel}"))
@@ -529,5 +531,36 @@ pub mod tests {
             .run("definitely-not-a-program-xyz", &[])
             .unwrap_err();
         assert!(missing.contains("not installed"), "{missing}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor]
+    #[test]
+    fn the_hub_descriptor_is_read_through_sudo_lsusb_for_one_bus_and_device() {
+        struct Lsusb(std::cell::RefCell<Vec<String>>);
+        impl Runner for Lsusb {
+            fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+                self.0
+                    .borrow_mut()
+                    .push(format!("{program} {}", args.join(" ")));
+                Ok((true, fx("lsusb_v_hub_3-2.txt")))
+            }
+        }
+        let run = Lsusb(Default::default());
+        let d = hub_descriptor(&run, 3, 7).unwrap();
+        assert_eq!((d.ports, d.switching()), (5, "per-port"));
+        assert_eq!(run.0.borrow()[0], "sudo -n lsusb -v -s 3:7");
+        let e = hub_descriptor(&Scripted(true, "no descriptor here"), 3, 7).unwrap_err();
+        assert!(e.contains("no hub descriptor for 3:7"), "{e}");
+        let e = hub_descriptor(&Scripted(false, "sudo: a password is required"), 3, 7).unwrap_err();
+        assert!(e.contains("NOPASSWD"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_name]
+    #[test]
+    fn switching_modes_have_their_report_names() {
+        assert_eq!(Switching::PerPort.name(), "per-port");
+        assert_eq!(Switching::Ganged.name(), "ganged");
+        assert_eq!(Switching::None.name(), "none");
+        assert_eq!(Switching::Unknown("zz".into()).name(), "unknown (zz)");
     }
 }

@@ -202,6 +202,7 @@ pub fn child_path(hub: &str, port: u32) -> String {
 }
 
 fn parse_interval_us(s: &str) -> u32 {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_parse_interval_us]
     let s = s.trim();
     if let Some(v) = s.strip_suffix("us") {
         return v.parse().unwrap_or(0);
@@ -213,6 +214,7 @@ fn parse_interval_us(s: &str) -> u32 {
 }
 
 fn endpoints_of(dir: &Path) -> Vec<Endpoint> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_endpoints_of]
     let mut out = Vec::new();
     let Ok(rd) = std::fs::read_dir(dir) else {
         return out;
@@ -253,6 +255,7 @@ const NODE_CLASSES: &[&str] = &[
 ];
 
 fn dev_path(class: &str, name: &str) -> Option<String> {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_dev_path]
     match class {
         "tty" | "block" | "hidraw" | "scsi_generic" | "usbmisc" | "video4linux" | "misc" => {
             Some(format!("/dev/{name}"))
@@ -263,6 +266,7 @@ fn dev_path(class: &str, name: &str) -> Option<String> {
 }
 
 fn collect_nodes(dir: &Path, depth: u32, out: &mut Vec<Node>) {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_collect_nodes]
     if depth > 7 {
         return;
     }
@@ -285,6 +289,7 @@ fn collect_nodes(dir: &Path, depth: u32, out: &mut Vec<Node>) {
 }
 
 fn class_nodes(class: &str, dir: &Path, out: &mut Vec<Node>) {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_class_nodes]
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
     };
@@ -478,6 +483,7 @@ pub struct Tree {
 }
 
 fn path_key(p: &str) -> (u32, Vec<u32>, bool) {
+    // [@ANCHOR: bench_mcp_usb_hub_sysfs_path_key]
     let digits = |s: &str| s.parse::<u32>().unwrap_or(0);
     match p.strip_prefix("usb") {
         Some(b) => (digits(b), vec![], false),
@@ -570,6 +576,7 @@ impl Tree {
 
     /// `path` itself and every device below it.
     pub fn subtree(&self, path: &str) -> Vec<&Device> {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_subtree]
         let mut out: Vec<&Device> = self.get(path).into_iter().collect();
         let mut i = 0;
         while i < out.len() {
@@ -581,6 +588,7 @@ impl Tree {
     }
 
     pub fn sorted(&self) -> Vec<&Device> {
+        // [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_sorted]
         let mut v: Vec<&Device> = self.devices.values().collect();
         v.sort_by_key(|d| path_key(&d.path));
         v
@@ -756,6 +764,9 @@ mod tests {
         assert_eq!(hub.ports[0].child, None);
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_collect_nodes]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_class_nodes]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_dev_path]
     #[test]
     fn a_codec_exposes_its_sound_card_hid_node_and_drivers() {
         let t = Tree::read(&fixture()).unwrap();
@@ -843,5 +854,96 @@ mod tests {
         assert_eq!(hub["hub"]["port_status"][1]["label"], "VNWA 3E");
         assert_eq!(hub["children"][0]["label"], "VNWA 3E");
         assert_eq!(hub["children"][0]["children"].as_array().unwrap().len(), 3);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_parse_interval_us]
+    #[test]
+    fn endpoint_intervals_are_read_in_microseconds() {
+        assert_eq!(parse_interval_us("125us"), 125);
+        assert_eq!(parse_interval_us("8ms\n"), 8000);
+        assert_eq!(parse_interval_us("0ms"), 0);
+        assert_eq!(parse_interval_us("fast"), 0);
+        assert_eq!(parse_interval_us("xms"), 0);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_endpoints_of]
+    #[test]
+    fn endpoints_are_read_from_their_directories_and_sorted_by_address() {
+        let ctl = endpoints_of(&fixture().join("devices/pci0000:00/0000:00:14.0/usb3"));
+        assert_eq!(ctl.len(), 1);
+        assert_eq!(
+            (
+                ctl[0].address,
+                ctl[0].kind.as_str(),
+                ctl[0].max_packet,
+                ctl[0].interval_us
+            ),
+            (0, "Control", 0x40, 0)
+        );
+        let d = crate::usb_hub::testkit::Dir::new();
+        for (n, addr, ty, mps, iv, dir) in [
+            ("ep_81", "81", "Interrupt", "0004", "8ms", "in"),
+            ("ep_02", "02", "Bulk", "0200", "0ms", "out"),
+        ] {
+            let e = d.path().join(n);
+            std::fs::create_dir_all(&e).unwrap();
+            for (f, v) in [
+                ("bEndpointAddress", addr),
+                ("type", ty),
+                ("wMaxPacketSize", mps),
+                ("interval", iv),
+                ("direction", dir),
+            ] {
+                std::fs::write(e.join(f), format!("{v}\n")).unwrap();
+            }
+        }
+        std::fs::create_dir_all(d.path().join("not_an_endpoint")).unwrap();
+        let eps = endpoints_of(d.path());
+        assert_eq!(eps.len(), 2);
+        assert_eq!(
+            (eps[0].address, eps[0].kind.as_str(), eps[0].max_packet),
+            (0x02, "Bulk", 0x200)
+        );
+        assert_eq!(
+            (
+                eps[1].address,
+                eps[1].interval_us,
+                eps[1].direction.as_str()
+            ),
+            (0x81, 8000, "in")
+        );
+        assert!(endpoints_of(&d.path().join("missing")).is_empty());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_path_key]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_sorted]
+    #[test]
+    fn devices_sort_by_bus_then_numerically_by_port_with_the_root_hub_first() {
+        assert!(path_key("usb3") < path_key("3-2"));
+        assert!(path_key("3-2.2") < path_key("3-2.10"));
+        assert!(path_key("2-3") < path_key("10-1"));
+        assert_eq!(path_key("3-2.2.1"), (3, vec![2, 2, 1], true));
+        assert_eq!(path_key("usb12"), (12, vec![], false));
+        let t = Tree::read(&fixture()).unwrap();
+        let order: Vec<&str> = t.sorted().iter().map(|d| d.path.as_str()).collect();
+        let pos = |p: &str| order.iter().position(|x| *x == p).unwrap();
+        assert_eq!(order.len(), t.devices.len());
+        assert!(
+            pos("usb3") < pos("3-2") && pos("3-2") < pos("3-2.2") && pos("3-2.2") < pos("3-2.2.1")
+        );
+        assert!(pos("3-2.2.3") < pos("3-9") && pos("usb2") < pos("usb3"));
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_subtree]
+    #[test]
+    fn a_subtree_is_the_device_and_everything_below_it() {
+        let t = Tree::read(&fixture()).unwrap();
+        let mut got: Vec<&str> = t.subtree("3-2.2").iter().map(|d| d.path.as_str()).collect();
+        assert_eq!(got[0], "3-2.2");
+        got.sort();
+        assert_eq!(got, ["3-2.2", "3-2.2.1", "3-2.2.2", "3-2.2.3"]);
+        assert_eq!(t.subtree("3-2.2.1").len(), 1);
+        assert!(t.subtree("9-9").is_empty());
+        assert!(t.subtree("usb3").len() > t.subtree("3-2").len());
     }
 }

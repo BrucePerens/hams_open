@@ -134,6 +134,7 @@ pub fn run_at(sysfs: &Path, args: &[String]) -> Result<String, String> {
 
 /// The entry point for `--usb-priv`: prints the outcome and returns the exit code.
 pub fn main(args: &[String]) -> i32 {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_main]
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
         eprintln!("{FLAG} must run as root (through sudo -n)");
@@ -225,5 +226,18 @@ mod tests {
         }
         let scratch = Dir::new();
         assert!(run_at(scratch.path(), &s(&["authorize", "3-2", "1"])).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_main]
+    #[test]
+    fn the_entry_point_refuses_a_non_root_caller_and_an_operation_outside_the_allowlist() {
+        // An operation outside the allowlist writes nothing in either case: a non-root caller is stopped first (exit 2), and root
+        // reaches the allowlist check, which refuses it (exit 1). The accepted operations are tested through `run_at` on a copy
+        // of the sysfs; `main` itself always acts on the real /sys, so its success path is not run here.
+        // SAFETY: geteuid has no preconditions.
+        let root = unsafe { libc::geteuid() } == 0;
+        let code = main(&s(&["rm", "-rf", "/"]));
+        assert_eq!(code, if root { 1 } else { 2 });
+        assert_eq!(main(&[]), if root { 1 } else { 2 });
     }
 }

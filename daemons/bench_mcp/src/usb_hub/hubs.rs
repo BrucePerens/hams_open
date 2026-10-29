@@ -432,6 +432,7 @@ pub fn protection(
     proc_root: &Path,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_protection]
     let crit = protect::critical_set(t, cfg, bench, sysfs_root, proc_root);
     let mut v = protect::report(t, cfg, &crit);
     if args.get("hub").is_some() || args.get("label").is_some() || args.get("device").is_some() {
@@ -475,23 +476,70 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_verification_levels]
     #[test]
     fn verification_levels_are_claimed_rechecked_and_manual() {
-        let c = cfg();
-        let a = verification(&c, "3-2/4", true);
+        // Ports on a hub nothing else in the test run cycles, so the evidence of this process (`power::proven`) cannot reach them.
+        let c = crate::usb_hub::parse_config(&json!({"ports": {"77-7/2": {"label": "VNWA 3E", "hub_uplink_ok": true, "confirmed_by_hand": "goes dark and keeps no settings"}, "77-7/4": {"label": "spare"}}})).unwrap();
+        let a = verification(&c, "77-7/4", true);
         assert_eq!(
             (a["level"].as_u64(), a["name"].as_str()),
             (Some(1), Some("claimed"))
         );
-        let none = verification(&c, "3-2/4", false);
+        let none = verification(&c, "77-7/4", false);
         assert_eq!(none["level"], 0);
-        let b = verification(&c, "3-2/2", true);
+        let b = verification(&c, "77-7/2", true);
         assert_eq!(b["level"], 2);
         assert!(b["evidence"][1]
             .as_str()
             .unwrap()
             .contains("manually confirmed"));
         assert!(b["note"].as_str().unwrap().contains("not that VBUS fell"));
-        let c4 = crate::usb_hub::parse_config(&json!({"ports": {"3-2/2": {"state_cleared": "VNA reverts to defaults", "vbus_measured": "0.02 V"}}})).unwrap();
-        assert_eq!(verification(&c4, "3-2/2", true)["level"], 4);
+        let c4 = crate::usb_hub::parse_config(&json!({"ports": {"77-7/2": {"state_cleared": "VNA reverts to defaults", "vbus_measured": "0.02 V"}}})).unwrap();
+        assert_eq!(verification(&c4, "77-7/2", true)["level"], 4);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_protection]
+    #[test]
+    fn the_protection_report_lists_critical_devices_and_judges_one_named_port() {
+        let t = Tree::read(&recorded_sys()).unwrap();
+        let proc = Dir::new();
+        let plain =
+            crate::usb_hub::parse_config(&json!({"critical_devices": ["08bb:29c0"]})).unwrap();
+        let v = protection(&t, &plain, &[], &recorded_sys(), proc.path(), &json!({})).unwrap();
+        assert!(v.get("port_verdict").is_none());
+        let crit = v["critical_devices"].as_array().unwrap();
+        assert!(crit.iter().any(|d| d["vidpid"] == "08bb:29c0"
+            && d["reasons"][0]["overridable"] == false
+            && d["hubs_on_the_path"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|h| h == "3-2.2")));
+        // The port that leads to the codec is refused; an empty port is not.
+        let v = protection(
+            &t,
+            &plain,
+            &[],
+            &recorded_sys(),
+            proc.path(),
+            &json!({"hub": "3-2.2", "port": 2}),
+        )
+        .unwrap();
+        assert_eq!(v["port_verdict"]["port"], "3-2.2/2");
+        assert_ne!(v["port_verdict"]["verdict"], json!(null));
+        assert!(
+            v["port_verdict"]["verdict"]
+                .to_string()
+                .contains("critical_devices"),
+            "{v}"
+        );
+        assert!(protection(
+            &t,
+            &plain,
+            &[],
+            &recorded_sys(),
+            proc.path(),
+            &json!({"label": "nothing"})
+        )
+        .is_err());
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_flag]
