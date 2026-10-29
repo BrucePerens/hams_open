@@ -134,7 +134,19 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
         ),
         _ => (None, None),
     };
+    // Are the unit's USB codecs hidden from the sound server? A warning only: a sweep never fails because of it.
+    let exposure = vnwa_open::sound_server::check(
+        std::path::Path::new("/sys"),
+        &vnwa_open::sound_server::run_program,
+    );
     Ok(json!({
+        "codecs_protected_from_sound_server": vnwa_open::sound_server::protected(&exposure),
+        "codecs_protection_detail": match &exposure {
+            vnwa_open::sound_server::Exposure::Protected => json!("the sound server lists none of the VNWA's codecs"),
+            vnwa_open::sound_server::Exposure::Exposed(c) => json!({"exposed_cards": c.iter().map(|x| json!({"description": x.description, "usb_port": x.port, "sound_server_id": x.id})).collect::<Vec<_>>()}),
+            vnwa_open::sound_server::Exposure::Unknown(why) => json!(format!("could not tell: {why}")),
+        },
+        "codecs_protection_warning": vnwa_open::sound_server::warning(&exposure),
         "usb": usb,
         "usb_read": answers,
         "instrument_monitoring": monitor,

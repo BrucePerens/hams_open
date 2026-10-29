@@ -1,0 +1,30 @@
+# ADDED BY: bench_mcp, the bench-instrument MCP server of hams_open (daemons/bench_mcp), and the VNA driver
+#           daemons/vnwa_open, installed by `vnwa_open install-system-config` on <date generated at install time>.
+#           Repository root: https://github.com/BrucePerens/hams_open
+#
+# WHAT: tell the sound servers (PulseAudio, and PipeWire's ALSA monitor) to ignore the two PCM2900C USB sound
+#       codecs inside the DG8SAQ VNWA 3E vector network analyzer, and no other sound card.
+#
+# WHY:  those codecs are the analyzer's measurement receiver, not sound cards. The VNA driver opens them directly
+#       through ALSA to read the analyzer's IF samples. A desktop sound server that manages them can make one the
+#       default output or input (system sounds and speech would play into the analyzer) and can hold them open
+#       during a sweep. They stay visible to ALSA (/proc/asound/cards).
+#
+# SCOPE: system-wide, all users. The match is NARROW: a sound card whose USB device is 08bb:29c0 AND has a sibling
+#        20a0:4118 (the VNWA control chip) under the same hub, decided by the helper
+#        /usr/local/libexec/vnwa-is-codec (installed with this file; exit status 0 = a VNWA codec). Other
+#        08bb:29c0 sound dongles are not touched. Companion file for WirePlumber 0.5:
+#        /etc/wireplumber/wireplumber.conf.d/51-vnwa-codecs.conf (broad, see its CAVEAT).
+#        PULSE_IGNORE is honoured by PulseAudio. ACP_IGNORE is the name PipeWire's ALSA card-profile code reads;
+#        whether a given PipeWire version honours it for the card was NOT verified on a running desktop (testing
+#        it needs the card to be re-announced, which would disturb a measurement), so the WirePlumber rule is
+#        shipped as well, and `vnwa_open install-system-config --check` and bench_vna_status report whether the
+#        codecs are really hidden from the sound server.
+#
+# CAVEAT: if the control chip is not yet enumerated when the codec's sound card appears, the helper says "no" and
+#         the card is not ignored until the next event for it (replug, or boot). On this hardware the control chip
+#         (port 1) enumerates before the codecs (ports 2 and 3).
+#
+# TO REMOVE: `vnwa_open install-system-config --uninstall --apply`, or delete this file and the helper, run
+#            `udevadm control --reload`, and replug the device.
+SUBSYSTEM=="sound", KERNEL=="card*", ATTRS{idVendor}=="08bb", ATTRS{idProduct}=="29c0", PROGRAM=="/usr/local/libexec/vnwa-is-codec %p", ENV{VNWA_CODEC}="1", ENV{ACP_IGNORE}="1", ENV{PULSE_IGNORE}="1"

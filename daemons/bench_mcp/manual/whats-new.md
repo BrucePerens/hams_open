@@ -23,3 +23,4 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - instruments/limesdr: overview, setup, operation, limits, troubleshooting
 - instruments/vna: overview, setup, operation, measurement recipes, limits, protocol
 - procedures: calibrate the VNA, verify a generator with the scope, measure a filter, power-cycle a stuck device, soak run, check a sound was made
+- instruments/vna/sound-server-protection: new page; bench_status reports codecs_protected_from_sound_server, the detail and the fix
