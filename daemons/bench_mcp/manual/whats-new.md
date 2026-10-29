@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/rotator: antenna rotators through rotctld (overview, setup, operation, limits, troubleshooting, protocol) and the tools bench_rotator_status, bench_rotator_point, bench_rotator_stop, bench_rotator_park
 - instruments/hamlib: bench_hamlib_watch (the dial by polling); stopping the daemon of a rig that may be keyed releases it first or is refused
 - instruments/hamlib: transmit into an attested dummy load (bench_hamlib_tx_key_test, bench_hamlib_tx_power_sweep, bench_hamlib_safe_state), the transmit watchdog process, the keyed-interval log, the safety model and its limits; procedures/test-a-transmitter-into-a-dummy-load
 - instruments/hamlib: reference stations (bench_hamlib_stations, bench_hamlib_station_set), receiver test with audio (bench_hamlib_rx_check), the dummy-load plausibility check and baseline (bench_hamlib_load_check, bench_hamlib_load_baseline), the transmit attestation in setup, measurement recipes

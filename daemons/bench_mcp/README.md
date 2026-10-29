@@ -20,7 +20,8 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
       "vna":   {"driver": "vnwa_open", "tier": "read_config", "if_hz": 12000, "point_ms": 60, "rf_level": 16383},
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
       "lime":  {"driver": "limesdr", "tier": "read_config"},
-      "rig":   {"driver": "hamlib", "tier": "read_only", "model": 1}}}
+      "rig":   {"driver": "hamlib", "tier": "read_only", "model": 1},
+      "rotor": {"driver": "rotator", "tier": "read_config", "rotctld_port": 4533, "min_az": 0, "max_az": 360}}}
 
 The VNA entry's settings are all optional: `codec_s11` and `codec_s21` (parts of the ALSA ids of the two codecs; by default
 they are found from their place on the USB tree, which stays right when a power cycle changes the kernel's card order),
@@ -243,6 +244,14 @@ Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs ar
 * Watching the dial by polling, and releasing a possibly keyed rig before its daemon is stopped. [@ANCHOR: hamlib_tx_release_rig] [@ANCHOR: hamlib_watch] [@ANCHOR: hamlib_watch_poll]
 * Internals of the client and the daemon manager: connection, exchange, error text, daemon directory, endpoint, start, stop, status, log tail, shutdown, the rig choice and file-safe names. [@ANCHOR: hamlib_connect] [@ANCHOR: hamlib_reopen] [@ANCHOR: hamlib_exchange] [@ANCHOR: hamlib_reply_number] [@ANCHOR: hamlib_error_display] [@ANCHOR: hamlib_code_next_step] [@ANCHOR: hamlib_managed_dir] [@ANCHOR: hamlib_endpoint] [@ANCHOR: hamlib_kill_slot] [@ANCHOR: hamlib_log_tail] [@ANCHOR: hamlib_shutdown] [@ANCHOR: hamlib_rigctld_explicit_start] [@ANCHOR: hamlib_rigctld_status] [@ANCHOR: hamlib_rigctld_stop] [@ANCHOR: hamlib_instrument] [@ANCHOR: hamlib_safe_name]
 * Helpers of the status and control tools: argument bounds, level text, tolerated rig refusals, applied-change reporting, the keyed-rig check, range combination, scan stepping, and the connection test's line settings and speed check. [@ANCHOR: hamlib_bounded] [@ANCHOR: hamlib_level_json] [@ANCHOR: hamlib_s_text] [@ANCHOR: hamlib_tolerate] [@ANCHOR: hamlib_apply] [@ANCHOR: hamlib_ptt_is_on] [@ANCHOR: hamlib_combine_ranges] [@ANCHOR: hamlib_scan_steps] [@ANCHOR: hamlib_lines_note] [@ANCHOR: hamlib_speed_in]
+
+## Rotators (`rotator` driver)
+
+`bench_rotator_*` tools drive an antenna rotator through Hamlib's `rotctld` (a separate program that the owner starts; Hamlib is LGPL and is not linked), with the same client as the hamlib module: position and limits, a move inside the limits (the rotator's own narrowed by the owner's `min_az`, `max_az`, `min_el`, `max_el`) with `dry_run`, and the safe-state pair stop and park. An entry is `{"driver": "rotator", "tier": "read_config", "rotctld_port": 4533, "min_az": 0, "max_az": 360, "min_el": 0, "max_el": 90}`. A managed `rotctld` is not done. Tests run against Hamlib's dummy rotator in its own `rotctld` and a scripted fake; no real rotator. Pages: `instruments/rotator/*`.
+
+* The config needs a port, keeps rotctld on this machine and refuses bad limits; the instrument is chosen by name; errors end with a rotator's next action. [@ANCHOR: rotator_config] [@ANCHOR: rotator_instrument] [@ANCHOR: rotator_error_text] [@ANCHOR: rotator_call] [@ANCHOR: rotator_degrees] [@ANCHOR: rotator_wait_arg]
+* Position, limits (narrowed by the owner's), the target check and the motion test. [@ANCHOR: rotator_position] [@ANCHOR: rotator_limits] [@ANCHOR: rotator_target_check] [@ANCHOR: rotator_moving] [@ANCHOR: rotator_status]
+* A move is checked before it is sent, honours `dry_run`, waits for arrival and says when it did not arrive; the stop confirms the motion ended and works while another call runs; the park. [@ANCHOR: rotator_point] [@ANCHOR: rotator_wait] [@ANCHOR: rotator_stop] [@ANCHOR: rotator_park]
 
 ## Template instrument (`example` driver)
 
