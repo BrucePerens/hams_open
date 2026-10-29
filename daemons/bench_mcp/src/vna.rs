@@ -189,6 +189,27 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         .unwrap_or(0);
     let file = out_dir.join(format!("vna_sweep_{stamp}.csv"));
     std::fs::write(&file, csv(&points)).map_err(|e| format!("{}: {e}", file.display()))?;
+    // With `calibration` (a file from bench_vna_calibrate_build) and the same `cable` text, the corrected values go to a second CSV; the
+    // calibration is refused if the IF, time per point, RF level or cable differ from the ones it was made at.
+    let calibrated = match args.get("calibration").and_then(|c| c.as_str()) {
+        None => None,
+        Some(f) => {
+            let cable = args.get("cable").and_then(|c| c.as_str()).ok_or("cable is required with calibration (the text given when the standards were measured)")?;
+            let (_, corrected) = crate::vna_tools::apply_calibration(f, &a.config, cable, &points)?;
+            let mut t =
+                String::from("freq_hz,s11_re,s11_im,s11_db,s11_deg,s21_re,s21_im,s21_db,s21_deg\n");
+            let cell = |z: Option<vnwa_open::audio::Complex>| match z {
+                Some(z) => format!("{:.6},{:.6},{:.3},{:.3}", z.re, z.im, db(z), z.phase_deg()),
+                None => ",,,".to_string(),
+            };
+            for (p, (s11, s21)) in points.iter().zip(&corrected) {
+                t += &format!("{},{},{}\n", p.freq_hz, cell(*s11), cell(*s21));
+            }
+            let cf = out_dir.join(format!("vna_sweep_{stamp}_calibrated.csv"));
+            std::fs::write(&cf, t).map_err(|e| format!("{}: {e}", cf.display()))?;
+            Some((cf, corrected))
+        }
+    };
     let (lo, hi) = points.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| {
         (lo.min(db(p.s21)), hi.max(db(p.s21)))
     });
@@ -205,7 +226,9 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         "start_hz": a.start_hz,
         "stop_hz": a.stop_hz,
         "if_hz": a.config.if_hz,
-        "calibrated": false,
+        "calibrated": calibrated.is_some(),
+        "calibrated_file": calibrated.as_ref().map(|c| c.0.display().to_string()),
+        "calibrated_rows": calibrated.as_ref().filter(|c| c.1.len() <= 51).map(|c| c.1.iter().zip(&points).map(|((s11, s21), p)| json!({"freq_hz": p.freq_hz, "s11_db": s11.map(db), "s11_deg": s11.map(|z| z.phase_deg()), "s21_db": s21.map(db), "s21_deg": s21.map(|z| z.phase_deg())})).collect::<Vec<_>>()),
         "note": "raw ratios of the unit's own channels (cable, bridge and front-end not removed); S21 from the RX channel, S11 from the reflection channel",
         "s21_db_min": lo,
         "s21_db_max": hi,
