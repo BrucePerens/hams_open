@@ -47,8 +47,7 @@ so an open driver can offer them once those are decoded:
 
 1. **Vector network analyzer**: S11, S21 (both at once on a 3E), with the open/short/load/through calibration.
 2. **Signal generator**: CW with variable level; on a VNWA3/3E also AM or FM with a sine up to about 3 kHz. Output is
-   about -17 dBm into 50 ohms at 1 MHz, falling with frequency, and it cannot run during a sweep. The AM/FM commands
-   are not captured yet.
+   about -17 dBm into 50 ohms at 1 MHz, falling with frequency, and it cannot run during a sweep. AM and FM are decoded and verified on a scope (`generator::modulate`); pulse is not.
 3. **Frequency meter**: the phase of the RX input against the unit's reference at equal time steps; accuracy is the
    12 MHz TCXO's (about 0.3 ppm in the vendor's own comparison). Needs no calibration kit.
 4. **Spectrum analyzer** (rudimentary, per the vendor): the LO is unfiltered so ghost lines appear, worst at higher
@@ -183,3 +182,5 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 * A stalled 0x0d read is tried again after growing pauses, up to 6 times. [@ANCHOR: vnwa_open_patient_read]
 * The IF tone starts 61 ms and the 18 kHz burst about 1 ms after the end of the send, in a recorded point. [@ANCHOR: vnwa_open_emission_onset]
 * A storm of overrun reports with no audio between them closes the stream and fails the window at once. [@ANCHOR: vnwa_open_capture_close]
+* AM and FM: the settings-dependent fields of the vendor's start sequence reproduce every captured start, and the output was checked on a scope. [@ANCHOR: vnwa_open_am_fields] [@ANCHOR: vnwa_open_fm_fields] [@ANCHOR: vnwa_open_modulation_sequence]
+* A modulating unit refuses every request; a USB reset of its control chip ends the modulation, and a power cycle ladder is the fallback. [@ANCHOR: vnwa_open_end_modulation] [@ANCHOR: vnwa_open_usb_reset] [@ANCHOR: vnwa_open_modulation_recovery]

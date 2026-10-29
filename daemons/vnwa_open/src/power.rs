@@ -158,10 +158,78 @@ pub fn cold_reset(port: &HubPort) -> Result<(), String> {
     Ok(())
 }
 
+/// The ladder after AM or FM: the unit's control chip failed to come back after one or more cycles in 11 of 25 recoveries from a modulation
+/// lock-up measured on 2026-10-29 (it needed 1 cycle 14 times, 2 cycles 6 times, 3 cycles 3 times, 4 or more twice), so this tries
+/// five cycles, 3, 12, 12, 30 and 12 s off, before it gives up. The cost is paid only when the unit does not come back.
+pub fn modulation_ladder() -> Vec<(Duration, Duration)> {
+    [3u64, 12, 12, 30, 12]
+        .iter()
+        .map(|s| {
+            (
+                Duration::from_secs(*s),
+                if *s == 3 {
+                    Duration::from_secs(25)
+                } else {
+                    BACK_TIMEOUT
+                },
+            )
+        })
+        .collect()
+}
+
+/// The cold reset to use when the unit is in a modulation lock-up (or may be): the longer ladder of `modulation_ladder`.
+pub fn cold_reset_after_modulation(port: &HubPort) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_modulation_recovery]
+    power_cycle_escalating(&ProcessRunner, port, &modulation_ladder(), unit_present)?;
+    std::thread::sleep(Duration::from_secs(8));
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    // Tests [@ANCHOR: vnwa_open_modulation_recovery]
+    #[test]
+    fn the_modulation_ladder_starts_short_and_ends_with_a_long_power_off() {
+        let l = modulation_ladder();
+        assert_eq!(l.len(), 5);
+        assert_eq!(l[0].0, OFF_TIME);
+        assert!(l
+            .windows(2)
+            .all(|w| w[1].0 >= LONG_OFF_TIME || w[1].0 >= w[0].0));
+        assert_eq!(l[3].0.as_secs(), 30);
+        // A unit that comes back at the fourth cycle is recovered by it, and the failures of the earlier ones are not an error.
+        let fake = Fake {
+            calls: RefCell::new(Vec::new()),
+            fail_on: None,
+        };
+        let mut n = 0;
+        // The same ladder in milliseconds, so the test does not wait out the real off times.
+        let fast: Vec<(Duration, Duration)> = l
+            .iter()
+            .map(|(o, b)| {
+                (
+                    Duration::from_millis(o.as_secs()),
+                    Duration::from_millis(b.as_secs() * 10),
+                )
+            })
+            .collect();
+        let r = power_cycle_escalating(
+            &fake,
+            &HubPort {
+                hub: "3-2".into(),
+                port: 2,
+            },
+            &fast,
+            || {
+                n += 1;
+                n >= 4
+            },
+        );
+        assert!(r.is_ok(), "{r:?}");
+    }
 
     struct Fake {
         calls: RefCell<Vec<String>>,

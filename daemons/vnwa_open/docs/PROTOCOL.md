@@ -453,11 +453,7 @@ control requests** (0x91 and others fail with a pipe error, the vendor program t
 the only way back is a power cycle through the hub. After one such cycle (3 s off) the control chip did not enumerate (kernel errors -32 and -71); a second cycle with
 12 s off brought it back, which is why `power::cold_reset` now escalates to a longer power-off. A unit that has just enumerated also stalls requests for a few
 seconds, so `cold_reset` waits 8 s.
-**Not decoded:** which of 0x92, 0x93, 0x94 (wValue and wIndex), 0x9c, 0x9d set the modulation frequency, depth and carrier amplitude, and FM and pulse. Scaling the
-fields with the level (0x92 = 1.067 x level, 0x93 = 0x58 = level, at -6 dB) gave a weak 2.5 kHz modulation, and guesses for 1 kHz and for depth gave noise: the scope
-check at a 1 mV carrier is too noisy to decode from one capture. What is needed: captures with other frequencies, depths and FM deviations from the vendor program (it
-cannot be driven now: since the unit was power-cycled after the AM lock-up the vendor program answers `hardware? offline` although the unit and this driver work; the
-start-up reads are byte-identical to the working captures and the vendor stops after the second 0x71, cause unknown), then a scope check with the FFT of stage 08.
+**Decoded since:** see "AM and FM decoded, the lock-up and its exit" below (the scaled copy of the 500 Hz sequence gave a weak modulation because 0x94 carries a 32-bit amplitude, not a frequency).
 
 ## Generator levels, with the host FFT (2026-10-28, stage 07 continued)
 
@@ -569,6 +565,55 @@ Dry runs (injected from outside by `tools/soak_inject.sh`; the soak has no test-
 
 Do not run on the dev box during the soak: any `cargo build` or test (CPU load made two overruns in the first minutes of a dry run), anything that uses the VNA or the scope (bench_mcp calls, `drift_probe`, vendor program),
 `uhubctl` on hub 3-2 or any other power or reset of the unit's USB tree, anything that restarts WirePlumber or PipeWire, heavy disk or network jobs. Pause the run with the `PAUSE` file to use the hardware.
+
+## AM and FM decoded, the lock-up and its exit (2026-10-29)
+
+Sources: usbmon captures of the vendor program (Wine, remote control `sg_mod am|fm`, `sg_mod_freq`, `sg_mod_am_depth`, `sg_mod_fm_dev`), 13 clean power cycles with one setting each; the output
+checked on the scope (CH1, 1 MOhm, through the pad and tee, 10 MHz carrier, 700,000 points over 14 ms, single-bin DFT of the sidebands, `examples/mod_probe.rs`).
+
+**The start sequence** is the 23 requests listed in `generator::modulation_reads` (the earlier notes had them for one setting). The fields that depend on the settings:
+
+* `0x92` wValue = round(f_mod x 65536 / 18750) for AM (1748, 3495, 6991 at 500, 1000, 2000 Hz) and round(f_mod x 65536 / 15625) for FM (4194 at 1000 Hz, 2097 at 500 Hz): the modulating
+  sine is a software oscillator that steps at 18.75 kHz (AM) and 15.625 kHz (FM) (12 MHz divided by 640 and by 768; the Help file says "about 16 kHz").
+* `0x94` (sent twice, then once) carries the AM depth as a 32-bit number, wIndex the high half and wValue the low half: `W = round(level / 16383 x m / (1 + m) x 2^23)` with `level` the amplitude word
+  of requests 0x93 and 0x58 and m the depth as a fraction. Reproduces 7 captures (depth 10, 25, 50, 75, 80, 100 % at -20 dB, 50 % at -30 dB) to the last count or one count: for a carrier
+  `A0 (1 + m sin)` that peaks at `level`, `m / (1 + m) x level` is the modulation's peak amplitude in the DDS's amplitude units. In FM, 0x94 is 0.
+* `0x95` wValue = 0 in AM; in FM round(deviation x 2^32 / 360 MHz / 127): 470, 939, 1879 for 5, 10, 20 kHz. (The 255 discrete frequencies of the Help file: 127 steps each side.)
+* `0x90` wValue is the last request and the start: 0x000a for AM, 0x000c for FM. The two `0x4c` writes carry wValue 0 and 0x0080 (the middle of the 256-step table). `0x9c` = 0x0100, `0x9d` = 0x0080,
+  `0x93` = `0x58` = the level word: constants. Pulse (`sg_mod pulse`, with and without `sg_mod_freq 651`) produced no USB traffic at all in the vendor's remote-control mode: not decoded (see
+  `night_shift_questions/open/vnwa_pulse_and_reference_clock.md`).
+
+**Verified on the scope** (carrier 10 MHz): AM depth commanded 10, 50, 80, 100 % read 10.3, 49 to 51, 77 to 80, 98 to 100 %; modulation frequency 500, 1000, 3000 Hz read 500, 1000, 3000 Hz (5 Hz
+search steps); the carrier's rms fell to 0.71 of its CW value at 50 % at -6, -10, -20 and -30 dB, as `(1/(1+m)) sqrt(1 + m^2/2)` predicts. FM, from the line pattern against Bessel functions: 5 kHz at
+500 Hz read 5.0, 5 kHz at 1 kHz 5.0, 10 kHz at 1 kHz 9.9, 10 kHz at 2 kHz 9.8, 20 kHz at 1 kHz 19.9 kHz (misfit 0.01 to 0.03). Not covered: carriers other than 10 MHz, modulation frequencies
+below 200 Hz (50 Hz and 200 Hz were seen modulating by the carrier's rms only), levels above -6 dB.
+
+**The lock-up.** After the start request the unit's microcontroller modulates in real time and answers every vendor request with a stall (17 different requests tried: 0x91, 0x58, 0x66, 0x0e, 0x04, 0x3a,
+0x0d, 0x71, 0x73, 0x60, 0x72, 0x9e, 0x95, 0x90, 0x00, 0xff, 0x85), for as long as it is powered; the vendor program then reports "Error stopping Signal Generator! Unplug VNWA!". Each of these was tried
+from a clean power cycle, one change at a time, and the modulation ran on at constant depth in every one, so none avoids the lock-up:
+
+| Configuration | Result |
+|---|---|
+| nothing sent to the unit for 4 s, then one 0x91 | modulating, 0x91 stalls |
+| nothing sent for 30 s, then one 0x91 | the same |
+| 0x91 polled every 10 ms for 5 s (190 polls) and 8 s (301 polls), as the vendor does | no poll answered; modulation unchanged |
+| the audio codecs closed (they were closed in every run) | lock-up anyway: not caused by the audio streams |
+| AM at 200, 500, 1000, 3000 Hz (80 or 50 %) | modulates, locks |
+| AM at depth 10, 50, 80, 100 % | modulates, locks |
+| AM and FM at -6, -10, -20, -30 dB | modulates, locks |
+| FM at 500, 1000, 2000, 3000 Hz, deviation 5, 10, 20 kHz | modulates, locks |
+| firmware v5.22 (AM and FM need 5.19, pulse 5.22) | version fine; not the cause |
+| the vendor program's own start-up reads before the start | the vendor's run locks the same way |
+| other root-hub devices, another hub port | not tried: silence for 30 s with no traffic from the host shows that traffic is not the trigger; another port needs Bruce to move the cable |
+| **a USB reset of the control chip** (`libusb_reset_device`, no power change) | **ends it**: every request answers again (0x91 gives 0x73), the switch-off works |
+
+The Help file's remark that other USB traffic interrupts the modulation concerns clicks in the modulated output; the lock-up is independent of traffic.
+
+**The exit: `generator::end_modulation`** resets the control chip and opens it again, then switches the generator off. Over 15 modulation starts of AM and FM at assorted settings, the reset ended the modulation 13
+times (the unit answered 1.1 to 4.9 s later and swept normally: a one-point sweep at 10 MHz read the same |S21| 2.486 every time) and 2 times the chip did not re-enumerate (kernel: "device not responding to setup address",
+error -71), after which only a power cycle brings it back. One run showed no stall at all one second after a 3 kHz, 100 % start (the probe answered) and the reset worked as well. `bench_vna_generator_off` therefore tries
+the switch-off, then the reset, then (with a hub configured) the power-cycle ladder `power::modulation_ladder` (3, 12, 12, 30, 12 s off). After a modulation the control chip also often fails to enumerate at the first power-on of a
+power cycle: of 25 recoveries by power cycle, 14 needed one cycle, 6 two, 3 three and 2 four or more.
 
 ## Seen but not decoded
 

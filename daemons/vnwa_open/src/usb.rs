@@ -71,6 +71,15 @@ impl Vnwa {
         r.push_back(format!("{ms} {what}: {outcome}"));
     }
 
+    /// A USB reset of the unit's control chip. The modulation lock-up ends with it (measured 2026-10-29: after AM or FM every request stalled until the
+    /// reset, and every request answered after it), without a power cycle.
+    pub fn reset_device(&self) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_usb_reset]
+        let r = self.link.reset();
+        self.remember("usb reset", &format!("{r:?}"));
+        r.map_err(|e| format!("usb reset: {e}"))
+    }
+
     /// Runs `op` until it succeeds, fails for good, or the retry bound is used up.
     fn attempt<T>(
         &self,
@@ -182,6 +191,9 @@ mod tests {
 
     struct Shared(Arc<Scripted>);
     impl Transport for Shared {
+        fn reset(&self) -> Result<(), TransferError> {
+            self.0.reset()
+        }
         fn write(&self, t: u8, r: u8, v: u16, i: u16, d: &[u8]) -> Result<usize, TransferError> {
             self.0.write(t, r, v, i, d)
         }

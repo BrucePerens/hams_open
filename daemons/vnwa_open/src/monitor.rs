@@ -88,6 +88,9 @@ mod tests {
 
     struct Shared(Arc<Scripted>);
     impl Transport for Shared {
+        fn reset(&self) -> Result<(), TransferError> {
+            self.0.reset()
+        }
         fn write(&self, t: u8, r: u8, v: u16, i: u16, d: &[u8]) -> Result<usize, TransferError> {
             self.0.write(t, r, v, i, d)
         }

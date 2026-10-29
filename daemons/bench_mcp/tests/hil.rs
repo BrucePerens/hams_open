@@ -333,3 +333,33 @@ fn each_vna_function_works_through_its_tool() {
     );
     assert_eq!(sw["points"], 5, "{sw}");
 }
+
+/// Needs a `vna` instrument at read_config and nothing else using the unit. AM through its tool, then the switch-off tool ends it (a USB reset, or a power cycle if the
+/// instrument has a hub) and a sweep works afterwards.
+// Tests [@ANCHOR: bench_vna_modulation_stop]
+#[test]
+#[ignore]
+fn am_is_started_and_ended_through_its_tools() {
+    let tool = |name: &str, args: &str| -> serde_json::Value {
+        let r = rpc(&[&call(name, args)]);
+        assert!(r[0]["result"]["isError"] != true, "{name}: {}", text(&r[0]));
+        serde_json::from_str(&text(&r[0])).unwrap()
+    };
+    let am = tool(
+        "bench_vna_generator_am",
+        r#"{"freq_hz":10000000,"level_db":-20,"mod_hz":1000,"depth_pct":50}"#,
+    );
+    assert_eq!(am["generator"], "AM on");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let off = tool("bench_vna_generator_off", "{}");
+    assert!(
+        off["ended_modulation_by_usb_reset"] == true || off["recovered_by_power_cycle"] == true,
+        "{off}"
+    );
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let sw = tool(
+        "bench_vna_sweep",
+        r#"{"start_hz":10000000,"stop_hz":10000000,"points":1,"if_hz":4000}"#,
+    );
+    assert_eq!(sw["points"], 1, "{sw}");
+}
