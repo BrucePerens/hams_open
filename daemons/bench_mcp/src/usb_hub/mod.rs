@@ -7,6 +7,7 @@
 //! listed and allowed: `read_only` (listing, status, history), `read_config` (device reset, authorize, driver unbind
 //! and bind, autosuspend, and switching a port back on), `full` (switching a port off, and power cycles).
 
+pub mod history;
 pub mod hubs;
 pub mod ladder;
 pub mod power;
@@ -204,6 +205,20 @@ pub const SPECS: &[Spec] = &[
         desc: "Runtime power management of one USB device: control on (never autosuspend) or auto (may suspend after delay_ms, -1 to 3600000). A device that misbehaves when suspended is fixed with on. Setting auto on a protected device is refused. dry_run shows the current setting.",
         props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"control":{"type":"string","enum":["on","auto"]},"delay_ms":{"type":"integer"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
         required: &["device", "control"],
+    },
+    Spec {
+        name: "bench_usb_history",
+        tier: Tier::ReadOnly,
+        desc: "USB event history from the kernel journal (`journalctl -k -o short-unix`): the connect, disconnect, reset and enumeration timeline, per-device counters (connects, disconnects, resets, enumeration failures, device descriptor read failures, address errors, kernel power-cycle attempts, over-current, -19 'no device' urb lines, xhci errors, errno counts such as -71 EPROTO) and flapping detection (flap_connects or more connects of one device within flap_window_s, defaults 3 and 120 s). `device` (path or label) limits to a device and everything below it; since_s limits to the last N seconds; max_events caps the timeline (default 100). The journal needs root or the group systemd-journal/adm; otherwise this fails naming the fix, and use_sudo: true runs `sudo -n journalctl -k` for the call.",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"since_s":{"type":"number"},"max_events":{"type":"integer"},"flap_window_s":{"type":"number"},"flap_connects":{"type":"integer"},"all_boots":{"type":"boolean"},"use_sudo":{"type":"boolean"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_usb_watch",
+        tier: Tier::ReadOnly,
+        desc: "Watch the USB tree for `seconds` (1 to 120) by polling sysfs and report every change with its time: devices appearing, disappearing or re-enumerating (new device number), speed or authorized changes, port state changes and over-current count rises, with the number of enumerations per device and which devices flapped. Polling can miss a change shorter than interval_ms (default 200); bench_usb_history from the journal is exact.",
+        props: props!(r#""instrument":{"type":"string"},"seconds":{"type":"number"},"interval_ms":{"type":"integer"}"#),
+        required: &[],
     },
 ];
 
@@ -455,6 +470,14 @@ pub fn call_with(
             &hubs::bench_refs(insts),
             args,
         ),
+        "bench_usb_history" => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs_f64())
+                .unwrap_or(0.0);
+            history::history(run, root, &inst.usb, now, args)
+        }
+        "bench_usb_watch" => history::watch(root, args),
         "bench_usb_port_power" => hubs::port_power(
             run,
             root,
