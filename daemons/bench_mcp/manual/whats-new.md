@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/hamlib: Hamlib rigs through rigctld (overview, setup, operation, limits, troubleshooting, protocol) and the tools bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_rigctld
 - concepts/extending: the contributor guide (what belongs, before you code, anatomy, standing safety rules, provenance, checks, documentation, submitting, worked examples)
 - procedures/add-an-instrument: step by step from the skeleton to the pull request
 - instruments/example: the template instrument (overview, setup, operation, limits, troubleshooting, protocol) and its four tools, the model for a new driver's pages
