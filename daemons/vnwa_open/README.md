@@ -108,6 +108,8 @@ Each is a test against bytes or samples recorded from the vendor program.
 * A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
 * This driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, a constant 0.8 % offset). [@ANCHOR: vnwa_open_vendor_agreement]
 * The one-port error terms are recovered from open, short and load, and a known load is corrected. [@ANCHOR: vnwa_open_cal_one_port]
+* A kit definition models real standards, round-trips its file, and the calibration with it removes their imperfections. [@ANCHOR: vnwa_open_cal_kit] [@ANCHOR: vnwa_open_kit_file]
+* A stored calibration is refused when the IF, time per point, RF level or cable set-up differ. [@ANCHOR: vnwa_open_cal_valid]
 * A calibration survives its text file and a damaged file is refused. [@ANCHOR: vnwa_open_cal_file]
 * The windows have their textbook shapes. [@ANCHOR: vnwa_open_window]
 * A delay line peaks at its delay in low-pass and band-pass mode, windows lower the sidelobes, a reflection's step settles at its coefficient. [@ANCHOR: vnwa_open_time_domain]
