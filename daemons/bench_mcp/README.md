@@ -171,3 +171,5 @@ Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`.
 * The verification levels 1 to 4 and their honest note. [@ANCHOR: usb_hub_verification_levels]
 * The root helper accepts only its four operations and refuses every other argument before a write. [@ANCHOR: usb_hub_privileged_ops]
 * The escalation ladder (reset, authorize, driver, autosuspend) goes through the helper, honours protection and dry run. [@ANCHOR: usb_hub_ladder]
+* Kernel journal lines are classified (connect, disconnect, reset, enumeration failure, errno) and counted per device, with flapping detection, against the recorded journal. [@ANCHOR: usb_hub_history_parse]
+* A watch reports a device leaving and returning with a new device number. [@ANCHOR: usb_hub_watch]

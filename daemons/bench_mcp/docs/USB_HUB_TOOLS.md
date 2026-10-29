@@ -43,6 +43,8 @@ full-speed devices report 2.0 in `bcdUSB`.
 | `bench_usb_authorize` | read_config | Deauthorize (software disconnect, power kept) or authorize a device. |
 | `bench_usb_driver` | read_config | Unbind or bind one interface. |
 | `bench_usb_autosuspend` | read_config | Runtime power management on or auto. |
+| `bench_usb_history` | read_only | Timeline and counters from `journalctl -k -o short-unix` (errno counts, resets, enumeration failures, over-current), flapping detection. The journal needs root or the group systemd-journal/adm; `use_sudo: true` opts in to `sudo -n journalctl`. |
+| `bench_usb_watch` | read_only | Watch the tree for up to 120 s by polling sysfs; every appear, disappear, re-enumeration and port change with its time. |
 
 The topology and find tools read `/sys/bus/usb/devices` and need no privilege. `bench_usb_hubs` and `bench_usb_port_power` use `sudo -n`; without a NOPASSWD rule, or
 without uhubctl, they fail with a message that says which.
