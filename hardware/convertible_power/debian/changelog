@@ -1,3 +1,11 @@
+convertible-power (1.0.2) unstable; urgency=medium
+
+  * Stop a still-running power-profiles-daemon when configuring: TLP will not set
+    the CPU boost or energy settings while it runs, and removing the package
+    did not always stop it (seen on a CF-19, where battery mode left turbo on).
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 12:00:00 -0700
+
 convertible-power (1.0.1) unstable; urgency=medium
 
   * Do not disable wake-on-LAN (WOL_DISABLE=N): TLP's default turned it off, which
