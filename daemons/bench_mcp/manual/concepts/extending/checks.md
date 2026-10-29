@@ -51,3 +51,7 @@ HAMS_COM_TREE=<hams_com checkout, if you have it> python3 hams_shared/tools/veri
 The first reports every function that lacks an anchor, across the repository (the existing bench_mcp code has many; yours must have none). The second needs the `hams_shared` submodule (`git submodule update --init`) and reports an anchor missing from the README. Contributors without the submodule rely on `cargo test`, which checks pairing, and the reviewer runs the rest.
 
 `cargo test` also checks: the manual (a page per tool, tier agreeing with the registered tool, argument tables, links, one `#` heading, 16000-character limit), the checklist (tool names, `instrument` argument, `dry_run` on new `full` tools, standard instrument pages, `whats-new` line, README config example, template wording gone, scrub of fixtures and pages).
+
+## What no test catches
+
+A `full` tool that has `dry_run` but no safe-state companion; a fixture directory per instrument; whether a `verified` date is true; a serial number in a fixture; template wording beyond a few phrases. The reviewer and the pull request template cover these.

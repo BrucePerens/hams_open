@@ -30,6 +30,8 @@ Branch name `bench-<instrument>`. Commit messages say what and why. A draft PR o
 
 The template (`.github/PULL_REQUEST_TEMPLATE/bench_instrument.md`) asks for: instrument model and firmware; what was run on real hardware, by whom, how, and what was not; the safety tier of each tool and why; the provenance statement; the list of new tools; the checks you ran with their results; what you scrubbed. Logs and screenshots are optional and scrubbed.
 
+Without `gh`: open `https://github.com/BrucePerens/hams_open/compare/main...<owner>:bench-<instrument>?template=bench_instrument.md` in a browser (a file under `PULL_REQUEST_TEMPLATE/` is not applied automatically).
+
 ## What happens next
 
 A maintainer reviews. Answer in the PR thread only; send no comments, issues or mail to third parties (vendors, upstream projects) about this work. Respond to review feedback by adding commits; do not force-push over feedback, rebase only to resolve conflicts, and say so when you do. The maintainer merges; you do not.

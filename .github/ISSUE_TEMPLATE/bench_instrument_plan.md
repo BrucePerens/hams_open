@@ -1,7 +1,6 @@
 ---
 name: bench_mcp instrument plan
 about: State the instrument you intend to add to bench_mcp before writing much code
-labels: bench_mcp
 ---
 
 Instrument model and firmware:

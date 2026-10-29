@@ -2,7 +2,7 @@
 title: Add an instrument to bench_mcp
 summary: Step by step with commands, from the skeleton copy to the pull request. Read concepts/extending first.
 see_also: [concepts/extending, concepts/extending/checks, concepts/extending/submit, instruments/example]
-verified: code only, 2026-10-29
+verified: followed as a dry run on the dev box by copying the skeleton as a new driver (acme) and breaking each check in turn, 2026-10-29
 ---
 
 # Add an instrument to bench_mcp

@@ -35,4 +35,4 @@ bench_mcp is one MCP server (stdio) that gives an agent a bench: a scope, a supp
 
 <!-- children -->
 
-Limits of the current structure: there is no instrument trait. A driver is a module plus about eleven one-line edits in `src/config.rs` and `src/main.rs` (the script prints them); two drivers added at once conflict in those lines, so rebase often. Some older tools predate the rules (`dry_run` on every actuating tool; the sound module still falls back to the system default device in two tools); the legacy tables in `src/checklist.rs` list them, and a new module is never added to one.
+Limits of the current structure: there is no instrument trait. A driver is a module plus about eleven one-line edits in `src/config.rs` and `src/main.rs` (the script prints them); two drivers added at once conflict in those lines, so rebase often. Some older tools predate the rules (`dry_run` on every actuating tool; some sound tools, when no alias is configured, choose the system default device as the target; their streams do set `node.dont-fallback`); the legacy tables in `src/checklist.rs` list them, and a new module is never added to one.
