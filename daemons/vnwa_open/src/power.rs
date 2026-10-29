@@ -140,6 +140,33 @@ pub fn power_cycle_escalating(
     Err(failures.join("; "))
 }
 
+/// A power-cycle implementation supplied by the program that embeds this crate: given the hub port and the ladder of (off time, wait for the unit), it cycles
+/// until the unit is back. `bench_mcp` installs its USB hub module's here, so that the recovery inside a measurement, the generator-off recovery and
+/// the `bench_vna_power_cycle` tool all run one implementation (verification of re-enumeration, the hub protection rules, the evidence record). This crate cannot depend
+/// on `bench_mcp`, so standalone programs (the examples, the soak) use the built-in `power_cycle_escalating` over `sudo -n uhubctl`.
+pub type CycleHook =
+    Box<dyn Fn(&HubPort, &[(Duration, Duration)]) -> Result<(), String> + Send + Sync>;
+
+static HOOK: std::sync::OnceLock<CycleHook> = std::sync::OnceLock::new();
+
+/// Installs the program's power-cycle implementation; the first call wins (a later one returns false).
+pub fn set_cycle_hook(hook: CycleHook) -> bool {
+    // [@ANCHOR: vnwa_open_cycle_hook]
+    HOOK.set(hook).is_ok()
+}
+
+/// Cycles with the installed hook if there is one, else with the built-in implementation.
+fn cycle_with(
+    hook: Option<&CycleHook>,
+    port: &HubPort,
+    schedule: &[(Duration, Duration)],
+) -> Result<(), String> {
+    match hook {
+        Some(h) => h(port, schedule),
+        None => power_cycle_escalating(&ProcessRunner, port, schedule, unit_present),
+    }
+}
+
 /// The production cold reset: `sudo -n uhubctl` through the hub, then wait for the unit and its codecs; if the unit does not come back,
 /// once more with a longer power-off.
 pub fn cold_reset(port: &HubPort) -> Result<(), String> {
@@ -180,7 +207,7 @@ pub fn modulation_ladder() -> Vec<(Duration, Duration)> {
 /// The cold reset to use when the unit is in a modulation lock-up (or may be): the longer ladder of `modulation_ladder`.
 pub fn cold_reset_after_modulation(port: &HubPort) -> Result<(), String> {
     // [@ANCHOR: vnwa_open_modulation_recovery]
-    power_cycle_escalating(&ProcessRunner, port, &modulation_ladder(), unit_present)?;
+    cycle_with(HOOK.get(), port, &modulation_ladder())?;
     std::thread::sleep(Duration::from_secs(8));
     Ok(())
 }
@@ -189,6 +216,35 @@ pub fn cold_reset_after_modulation(port: &HubPort) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    // Tests [@ANCHOR: vnwa_open_cycle_hook]
+    #[test]
+    fn an_installed_cycle_implementation_gets_the_port_and_the_ladder_and_its_error_is_returned() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let s2 = seen.clone();
+        let hook: CycleHook = Box::new(move |p, ladder| {
+            s2.lock()
+                .unwrap()
+                .push((p.hub.clone(), p.port, ladder.len()));
+            Err("hub tools say no".into())
+        });
+        let port = HubPort {
+            hub: "3-2".into(),
+            port: 2,
+        };
+        let ladder = modulation_ladder();
+        let e = cycle_with(Some(&hook), &port, &ladder).unwrap_err();
+        assert_eq!(e, "hub tools say no");
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![("3-2".to_string(), 2u8, 5usize)]
+        );
+        // Without a hook the built-in implementation runs `sudo -n uhubctl` (not run here: a hook that must not be reached would show as a call).
+        assert!(
+            HOOK.get().is_none(),
+            "no test installs the process-wide hook"
+        );
+    }
 
     // Tests [@ANCHOR: vnwa_open_modulation_recovery]
     #[test]

@@ -217,6 +217,8 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     let lock = instrument_lock(&inst.name);
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
     if inst.kind == Kind::Vna {
+        // The unit's recovery inside measurements power cycles through the hub module's implementation.
+        vna::install_power_hook();
         return match name {
             "bench_identify" => Ok(vna::identify(&inst.vna)),
             "bench_status" => vna::status(&inst.vna),
