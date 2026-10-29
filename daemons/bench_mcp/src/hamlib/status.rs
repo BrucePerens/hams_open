@@ -59,6 +59,7 @@ pub fn s_units(db_rel_s9: f64) -> f64 {
 
 /// "S7", or "S9+20 dB" above S9.
 pub fn s_text(db_rel_s9: f64) -> String {
+    // [@ANCHOR: hamlib_s_text]
     if db_rel_s9 >= 0.5 {
         format!("S9+{:.0} dB", db_rel_s9)
     } else {
@@ -70,6 +71,7 @@ pub fn s_text(db_rel_s9: f64) -> String {
 pub type Read<T> = Result<Result<T, RigError>, String>;
 
 pub fn tolerate<T>(r: Result<T, RigError>) -> Read<T> {
+    // [@ANCHOR: hamlib_tolerate]
     match r {
         Err(RigError::Link(m)) => Err(m),
         other => Ok(other),
@@ -101,6 +103,7 @@ fn mode_of(c: &mut Client) -> Read<(String, f64)> {
 }
 
 fn level_json(name: &str, v: f64) -> Value {
+    // [@ANCHOR: hamlib_level_json]
     match name {
         "STRENGTH" => json!({"db_relative_to_s9": v, "s_units": s_units(v), "text": s_text(v)}),
         "AGC" => {
@@ -339,6 +342,7 @@ fn signal(c: &mut Client, args: &Value) -> Result<Value, String> {
 }
 
 pub fn bounded(args: &Value, key: &str, default: f64, lo: f64, hi: f64) -> Result<f64, String> {
+    // [@ANCHOR: hamlib_bounded]
     let v = match args.get(key) {
         None | Some(Value::Null) => default,
         Some(x) => x
@@ -357,6 +361,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: hamlib_s_units]
+    // Tests [@ANCHOR: hamlib_s_text]
     #[test]
     fn s_units_follow_six_db_per_unit_below_s9() {
         assert_eq!(s_units(0.0), 9.0);
@@ -368,6 +373,7 @@ mod tests {
         assert_eq!(s_text(20.0), "S9+20 dB");
     }
 
+    // Tests [@ANCHOR: hamlib_bounded]
     #[test]
     fn bounded_refuses_what_is_out_of_range_or_not_a_number() {
         assert_eq!(bounded(&json!({}), "count", 3.0, 1.0, 5.0).unwrap(), 3.0);

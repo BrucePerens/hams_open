@@ -35,6 +35,7 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 /// The directory for the state files, logs, the keyed-interval log, baselines and the station table.
 pub fn dir(cfg: &Config) -> PathBuf {
+    // [@ANCHOR: hamlib_managed_dir]
     let d = cfg
         .managed_dir
         .clone()
@@ -124,6 +125,7 @@ pub fn reap_stale(name: &str, dir: &Path) -> Result<Option<u16>, String> {
 }
 
 fn log_tail(path: &Path) -> String {
+    // [@ANCHOR: hamlib_log_tail]
     let text = std::fs::read_to_string(path).unwrap_or_default();
     let lines: Vec<&str> = text.lines().rev().take(8).collect();
     lines.into_iter().rev().collect::<Vec<_>>().join(" | ")
@@ -195,6 +197,15 @@ fn spawn(name: &str, m: &Managed, dir: &Path) -> Result<(Child, u16), String> {
             )
             .is_ok()
             {
+                // Something accepted. It must be this daemon: if another program took the port in the meantime, ours fails to bind and exits.
+                std::thread::sleep(Duration::from_millis(250));
+                if let Ok(Some(status)) = child.try_wait() {
+                    last = format!(
+                        "rigctld exited just after start ({status}), probably because port {port} was taken; its log says: {}",
+                        log_tail(&log_path)
+                    );
+                    break;
+                }
                 std::fs::write(
                     state_file(dir, name),
                     json!({"owner_pid": std::process::id(), "rigctld_pid": child.id(), "port": port}).to_string(),
@@ -263,6 +274,7 @@ fn ensure(name: &str, m: &Managed, cfg: &Config) -> Result<u16, String> {
 
 /// Where the commands for this rig go: an existing rigctld as configured, or the managed one, started if needed.
 pub fn endpoint(name: &str, cfg: &Config) -> Result<(String, u16), String> {
+    // [@ANCHOR: hamlib_endpoint]
     match &cfg.source {
         Source::Existing { host, port } => Ok((host.clone(), *port)),
         Source::Managed(m) => ensure(name, m, cfg).map(|p| ("127.0.0.1".to_string(), p)),
@@ -271,6 +283,7 @@ pub fn endpoint(name: &str, cfg: &Config) -> Result<(String, u16), String> {
 
 /// Explicit start: forgets earlier failures so the restart limit starts again.
 pub fn start(name: &str, cfg: &Config) -> Result<Value, String> {
+    // [@ANCHOR: hamlib_rigctld_explicit_start]
     let Source::Managed(m) = &cfg.source else {
         return Err(format!(
             "{name:?} uses an existing rigctld; this server does not start or stop it"
@@ -295,6 +308,7 @@ impl TapPort for Value {
 
 /// Stops the daemon of a rig and removes its state file. Stopping is never refused.
 pub fn stop(name: &str, cfg: &Config) -> Result<Value, String> {
+    // [@ANCHOR: hamlib_rigctld_stop]
     let Source::Managed(_) = &cfg.source else {
         return Err(format!(
             "{name:?} uses an existing rigctld; this server does not start or stop it"
@@ -306,6 +320,7 @@ pub fn stop(name: &str, cfg: &Config) -> Result<Value, String> {
 }
 
 pub fn kill_slot(name: &str) -> bool {
+    // [@ANCHOR: hamlib_kill_slot]
     let mut st = lock(&STATE);
     let Some(slot) = st.get_mut(name) else {
         return false;
@@ -329,7 +344,17 @@ pub fn kill_slot(name: &str) -> bool {
 
 /// Stops every managed daemon: called when the server stops.
 pub fn shutdown() {
-    let names: Vec<String> = lock(&STATE).keys().cloned().collect();
+    shutdown_prefix("");
+}
+
+/// Stops the managed daemons of the rigs whose names start with `prefix` (all of them for an empty prefix).
+pub fn shutdown_prefix(prefix: &str) {
+    // [@ANCHOR: hamlib_shutdown]
+    let names: Vec<String> = lock(&STATE)
+        .keys()
+        .filter(|n| n.starts_with(prefix))
+        .cloned()
+        .collect();
     for n in names {
         kill_slot(&n);
     }
@@ -337,6 +362,7 @@ pub fn shutdown() {
 
 /// What this server knows about the daemon of a rig, without starting it.
 pub fn status(name: &str, cfg: &Config) -> Value {
+    // [@ANCHOR: hamlib_rigctld_status]
     match &cfg.source {
         Source::Existing { host, port } => {
             json!({"source": "existing rigctld", "host": host, "port": port, "managed": false})

@@ -28,6 +28,7 @@ impl RigError {
 
 impl std::fmt::Display for RigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // [@ANCHOR: hamlib_error_display]
         match self {
             RigError::Link(m) => write!(f, "{m}"),
             RigError::Rig { code, cmd } => write!(
@@ -72,6 +73,7 @@ pub fn code_name(code: i32) -> &'static str {
 }
 
 fn code_next_step(code: i32) -> &'static str {
+    // [@ANCHOR: hamlib_code_next_step]
     match code {
         -5 | -6 | -8 | -10 | -13 | -14 => "Next: check the cable and that the rig is powered and on the baud rate in the config, run bench_hamlib_diagnose, power-cycle the rig's USB port with the hub tools if it hangs off a switchable port, then bench_hamlib_rigctld restart.",
         -20 => "Next: the rig reports it is off; switch it on at the rig.",
@@ -103,6 +105,7 @@ impl Reply {
 
     /// A finite number from `key`, or from the bare line when `key` is `None`.
     pub fn number(&self, key: Option<&str>) -> Result<f64, RigError> {
+        // [@ANCHOR: hamlib_reply_number]
         let text = match key {
             Some(k) => self.kv(k),
             None => self.bare(),
@@ -146,6 +149,7 @@ pub struct Client {
 
 impl Client {
     pub fn connect(host: &str, port: u16, timeout: Duration) -> Result<Client, RigError> {
+        // [@ANCHOR: hamlib_connect]
         let mut c = Client {
             host: host.to_string(),
             port,
@@ -161,6 +165,7 @@ impl Client {
     }
 
     fn reopen(&mut self) -> Result<(), RigError> {
+        // [@ANCHOR: hamlib_reopen]
         self.conn = None;
         let addr = (self.host.as_str(), self.port)
             .to_socket_addrs()
@@ -197,6 +202,7 @@ impl Client {
     }
 
     fn exchange(&mut self, cmd: &str) -> Result<Reply, RigError> {
+        // [@ANCHOR: hamlib_exchange]
         let name = cmd.split_whitespace().next().unwrap_or(cmd).to_string();
         let who = self.describe();
         let timeout = self.timeout;
@@ -275,6 +281,8 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: hamlib_error_codes]
+    // Tests [@ANCHOR: hamlib_error_display]
+    // Tests [@ANCHOR: hamlib_code_next_step]
     #[test]
     fn return_codes_have_names_and_a_next_step() {
         assert_eq!(code_name(-5), "the rig did not answer (timeout)");
@@ -321,6 +329,7 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: hamlib_reply_number]
     #[test]
     fn reply_helpers_read_keys_and_bare_values_and_refuse_garbage() {
         let r = Reply {

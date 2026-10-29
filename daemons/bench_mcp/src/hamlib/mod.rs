@@ -11,6 +11,8 @@
 #[cfg(test)]
 pub mod testkit;
 
+pub mod control;
+pub mod diag;
 pub mod models;
 pub mod proto;
 pub mod rigd;
@@ -73,6 +75,7 @@ const BAUDS: &[u32] = &[
 
 /// A string safe to put in a file name.
 pub fn safe_name(s: &str) -> String {
+    // [@ANCHOR: hamlib_safe_name]
     s.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
@@ -246,9 +249,38 @@ pub const SPECS: &[Spec] = &[
         props: props!(r#""instrument":{"type":"string"},"action":{"type":"string","description":"status, start, stop or restart"}"#),
         required: &["action"],
     },
+    Spec {
+        name: "bench_hamlib_set",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB receiver control, each change read back: `frequency_hz` (inside the rig's receive range and the config's rx_ranges_hz), `mode` with `passband_hz`, `vfo`, `split` ({enabled, tx_vfo}), `rit_hz`, `xit_hz`, `levels` (AF, RF, SQL, IF, APF, NR, NB, PBT_IN, PBT_OUT, CWPITCH, NOTCHF, BAL, AGC, ATT, PREAMP) and `functions` (NB, NR, ANF, APF, AIP, MN, LOCK, MUTE, SQL...). Every argument is checked before anything is sent. Transmit-side settings (RF power, microphone gain, VOX, the tuner) are refused. Refuses while the rig reports PTT on. Never keys the transmitter.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"receive frequency in Hz"},"mode":{"type":"string","description":"Hamlib mode name such as USB, LSB, CW, AM, FM"},"passband_hz":{"type":"number","description":"passband width in Hz, 0 for the rig's default; needs mode"},"vfo":{"type":"string","description":"VFOA, VFOB, MEM, Main, Sub..."},"split":{"type":"object","description":"{enabled: bool, tx_vfo: VFOB}"},"rit_hz":{"type":"number","description":"-9999 to 9999"},"xit_hz":{"type":"number","description":"-9999 to 9999"},"levels":{"type":"object","description":"level name to value, for example {\"AF\":0.5,\"ATT\":20}; fractions are 0 to 1, ATT and PREAMP in dB"},"functions":{"type":"object","description":"function name to true or false, for example {\"NB\":true}"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_hamlib_memory",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB: recall memory channel `channel` (selects the memory VFO and the channel) and return the frequency and mode the rig then shows. Warns when the channel holds a frequency outside the receive limits. Refuses while the rig reports PTT on.",
+        props: props!(r#""instrument":{"type":"string"},"channel":{"type":"integer","description":"memory channel number, 0 to 99999"}"#),
+        required: &["channel"],
+    },
+    Spec {
+        name: "bench_hamlib_scan",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB: step the receiver from `start_hz` to `stop_hz` in `step_hz` steps, dwelling `dwell_ms` (20 to 5000, default 200) at each, and list signal strength and squelch state per frequency with the strongest `top` ranked. At most 400 steps and 120 s in all; the range must be inside the receive limits. `stop_when_above_db` ends the scan at the first frequency stronger than that many dB relative to S9. The rig's frequency and mode are restored afterwards.",
+        props: props!(r#""instrument":{"type":"string"},"start_hz":{"type":"number","description":"first frequency, Hz"},"stop_hz":{"type":"number","description":"last frequency, Hz"},"step_hz":{"type":"number","description":"step, Hz"},"dwell_ms":{"type":"number","description":"milliseconds at each frequency, 20 to 5000, default 200"},"mode":{"type":"string","description":"mode to scan in; default: the rig's current mode"},"top":{"type":"integer","description":"how many of the strongest to rank, 1 to 100, default 10"},"stop_when_above_db":{"type":"number","description":"stop at the first reading above this many dB relative to S9"}"#),
+        required: &["start_hz", "stop_hz", "step_hz"],
+    },
+    Spec {
+        name: "bench_hamlib_diagnose",
+        tier: Tier::ReadOnly,
+        desc: "HAMLIB connection test for a rig that does not answer: the rigctld program, the model, the serial speed against what the backend allows, the device (exists, permissions, other processes holding it open), the DTR/RTS settings, whether the daemon runs and the rig answers, and the daemon's log. Never opens the serial port and never starts the daemon.",
+        props: props!(r#""instrument":{"type":"string"}"#),
+        required: &[],
+    },
 ];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
+    // [@ANCHOR: hamlib_instrument]
     let ours: Vec<&Instrument> = insts.iter().filter(|i| i.kind == Kind::Hamlib).collect();
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
         return ours
@@ -329,6 +361,10 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
     match name {
         "bench_hamlib_status" => status::status(&mut open(inst)?, &inst.name),
         "bench_hamlib_get" => status::get(&mut open(inst)?, args),
+        "bench_hamlib_set" => control::set(&mut open(inst)?, &inst.hamlib, args),
+        "bench_hamlib_memory" => control::memory(&mut open(inst)?, &inst.hamlib, args),
+        "bench_hamlib_scan" => control::scan(&mut open(inst)?, &inst.hamlib, args),
+        "bench_hamlib_diagnose" => diag::diagnose(&Process, &inst.name, &inst.hamlib),
         "bench_hamlib_rigctld" => rigctld_action(inst, args),
         _ => Err(format!("{name} does not apply to {:?}", inst.name)),
     }

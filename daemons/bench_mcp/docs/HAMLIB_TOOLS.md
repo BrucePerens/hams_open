@@ -33,6 +33,10 @@ that can transmit (which also need the owner's dummy-load attestation in the ent
 | `bench_hamlib_rigs` | read_only |
 | `bench_hamlib_status` | read_only |
 | `bench_hamlib_get` | read_only |
+| `bench_hamlib_diagnose` | read_only |
+| `bench_hamlib_set` | read_config |
+| `bench_hamlib_memory` | read_config |
+| `bench_hamlib_scan` | read_config |
 | `bench_hamlib_rigctld` | read_config |
 
 ## Safety
