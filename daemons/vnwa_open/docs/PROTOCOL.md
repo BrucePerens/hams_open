@@ -615,6 +615,22 @@ error -71), after which only a power cycle brings it back. One run showed no sta
 the switch-off, then the reset, then (with a hub configured) the power-cycle ladder `power::modulation_ladder` (3, 12, 12, 30, 12 s off). After a modulation the control chip also often fails to enumerate at the first power-on of a
 power cycle: of 25 recoveries by power cycle, 14 needed one cycle, 6 two, 3 three and 2 four or more.
 
+## Spectrum analyzer mode: first observations (2026-10-29, not implemented)
+
+Source: usbmon captures of the vendor program (`saref` in VNA mode and `sa2` in spectrum-analyzer mode, same remote commands `timeperpoint 5`, `setgrid LIN 9000000 11000000 5`, `sweep s21`).
+The mode is selected by `ctrl+a` in the vendor window; the virtual display has no window manager, so `xdotool windowfocus <id>` then `xdotool key --clearmodifiers ctrl+a` (windowactivate fails) works.
+What changes on the wire in SA mode, compared with VNA mode at the same grid:
+
+* the IF of the set-up block is 12 kHz (0x42 = `dd 60 6d 02 00`, 0x41 scaled for 12 kHz) where the VNA run used 4 kHz;
+* the first block of a sweep is a different point: step counter 0xca (202), time-per-point bytes `01 00 1e 01 3f` (the fastest, 0.2 ms), and a sweep word that is a small negative number (0xffffc2e5d6, about -4.0 million
+  counts, which is about -12 kHz in the word's units): a point at 0 Hz minus the IF. The sweep points then carry step counter 0xc9 (201) and the word 0xb5cd3d6d = 8,988,000 Hz for the 9 MHz start: the RF word is
+  the displayed frequency **minus the IF** (12 kHz), where in VNA mode it equals the frequency;
+* the later blocks (step 6, time per point as set) are the same as in VNA mode.
+
+The Help file says the unfiltered LO DDS drives the RX mixer directly (a direct-conversion receiver), so ghost lines (birdies from the DDS's unfiltered clock images, worse above 100 MHz) and responses to
+subharmonics of the input appear, and the TX runs as a tracking generator. Neither the mapping of the words to the LO and TX chips nor the audio-to-power step is decoded or verified (no known tone was applied), so the
+driver has no spectrum-analyzer function; the next steps are captures with a known generator tone at the RX input (a second source, or this unit's own TX through the tee) and the scope's FFT of the same tone for comparison.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
