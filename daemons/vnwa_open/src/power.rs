@@ -114,11 +114,43 @@ pub fn unit_present() -> bool {
     usb && crate::topology::codecs().is_ok()
 }
 
-/// The production cold reset: `sudo -n uhubctl` through the hub, then wait for the unit and its codecs.
+/// The unit's control chip once failed to enumerate (kernel: "unable to enumerate USB device", errors -32 and -71) after a 3 s power-off
+/// that followed a modulation lock-up; a second cycle with a longer power-off brought it back. So a cycle that does not bring the unit back
+/// is repeated with a longer off time.
+pub const LONG_OFF_TIME: Duration = Duration::from_secs(12);
+
+/// Runs `power_cycle` for each (off time, wait for the unit) pair in turn until one succeeds; the error lists every failure.
+pub fn power_cycle_escalating(
+    run: &dyn Runner,
+    port: &HubPort,
+    schedule: &[(Duration, Duration)],
+    mut ready: impl FnMut() -> bool,
+) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_power_escalation]
+    let mut failures = Vec::new();
+    for (i, (off, back)) in schedule.iter().enumerate() {
+        match power_cycle(run, port, *off, *back, &mut ready) {
+            Ok(()) => return Ok(()),
+            Err(e) => failures.push(format!("cycle {} (off {} s): {e}", i + 1, off.as_secs())),
+        }
+    }
+    Err(failures.join("; "))
+}
+
+/// The production cold reset: `sudo -n uhubctl` through the hub, then wait for the unit and its codecs; if the unit does not come back,
+/// once more with a longer power-off.
 pub fn cold_reset(port: &HubPort) -> Result<(), String> {
-    power_cycle(&ProcessRunner, port, OFF_TIME, BACK_TIMEOUT, unit_present)?;
-    // The codecs are listed before their ALSA devices are usable; give the audio stack a moment.
-    std::thread::sleep(Duration::from_secs(2));
+    power_cycle_escalating(
+        &ProcessRunner,
+        port,
+        &[
+            (OFF_TIME, Duration::from_secs(25)),
+            (LONG_OFF_TIME, BACK_TIMEOUT),
+        ],
+        unit_present,
+    )?;
+    // The unit and its codecs are listed before they answer reliably (a request sent 3 s after enumeration stalled); give them time.
+    std::thread::sleep(Duration::from_secs(8));
     Ok(())
 }
 
@@ -176,6 +208,36 @@ mod tests {
             ]
         );
         assert_eq!(polls, 3);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_power_escalation]
+    #[test]
+    fn a_unit_that_does_not_come_back_gets_a_second_cycle_with_a_longer_off_time() {
+        let f = Fake {
+            calls: RefCell::new(vec![]),
+            fail_on: None,
+        };
+        let mut polls = 0;
+        let sched = [
+            (Duration::ZERO, Duration::from_millis(30)),
+            (Duration::ZERO, Duration::from_secs(5)),
+        ];
+        // Not ready during the first cycle's short wait, ready in the second.
+        power_cycle_escalating(&f, &port(), &sched, || {
+            polls += 1;
+            polls >= 3
+        })
+        .unwrap();
+        assert_eq!(f.calls.borrow().len(), 4, "off, on, off, on");
+        let f = Fake {
+            calls: RefCell::new(vec![]),
+            fail_on: None,
+        };
+        let e = power_cycle_escalating(&f, &port(), &sched[..1], || false).unwrap_err();
+        assert!(
+            e.contains("cycle 1") && e.contains("did not come back"),
+            "{e}"
+        );
     }
 
     #[test]

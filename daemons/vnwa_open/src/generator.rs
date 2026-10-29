@@ -116,6 +116,41 @@ pub fn set_attenuation(usb: &Vnwa, attenuation_db: f64) -> Result<(), String> {
     set_level(usb, attenuation_db)
 }
 
+/// Amplitude modulation as the vendor program switches it on at its defaults, replayed from the usbmon capture of 2026-10-28: 500 Hz, 100 %,
+/// at -20 dB (amplitude 1638). Only that setting is reproduced: the fields that set the modulation frequency and depth (requests 0x94, 0x9c,
+/// 0x9d) and the amplitude-related ones (0x92, 0x93) have not been decoded, and a scaled copy of the sequence at another level gave a
+/// different, weak modulation. The generator must already be on at `freq_hz` and -20 dB. The unit's microcontroller then modulates in
+/// real time and stalls most control requests (0x91 among them), so the only way to stop it is a power cycle. The last request usually
+/// stalls too, which is not an error.
+pub fn am_captured_500hz_100pct(usb: &Vnwa, freq_hz: f64) -> Result<(), String> {
+    let level: u16 = 1638;
+    usb.read(0x91, 0, 0, 64)?;
+    usb.read(0x0e, 0, 0, 64)?;
+    usb.send(&generator_frequency(freq_hz, 0))?;
+    usb.read(0x04, 0x090a, 0, 8)?;
+    usb.read(0x92, 0x06d4, 0, 64)?;
+    usb.read(0x93, level, 0, 64)?;
+    usb.read(0x58, level, 0, 64)?;
+    usb.read(0x94, 0x661a, 0x0006, 64)?;
+    usb.read(0x94, 0x661a, 0x0006, 64)?;
+    usb.read(0x95, 0, 0, 64)?;
+    usb.read(0x9f, 0, 0, 64)?;
+    usb.read(0x9c, 0x0100, 0, 64)?;
+    usb.read(0x9d, 0x0080, 0, 64)?;
+    usb.read(0x0e, 0, 0, 64)?;
+    usb.send(&generator_frequency(freq_hz, 0x0080))?;
+    usb.read(0x04, 0x090a, 0, 8)?;
+    usb.read(0x92, 0x06d4, 0, 64)?;
+    usb.read(0x94, 0x661a, 0x0006, 64)?;
+    usb.read(0x95, 0, 0, 64)?;
+    usb.read(0x58, level, 0, 64)?;
+    usb.read(0x66, 0, 0, 64)?;
+    usb.read(0x9e, 0, 0, 64)?;
+    // Starts the modulation; its status stage is often stalled by the busy unit.
+    let _ = usb.read(0x90, 0x000a, 0, 64);
+    Ok(())
+}
+
 /// Switches the generator off. Safe to call at any time and when it is already off.
 pub fn off(usb: &Vnwa) -> Result<(), String> {
     run(usb, &LEAVE)

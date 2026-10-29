@@ -433,6 +433,32 @@ clock input and output, but their frequencies and levels have not been checked i
 +3 dBm into 50 ohms by default. Do not connect them before checking; their use would be as a known-clock source for the RX input, which does not
 need the reference connector at all.
 
+## Generator levels and modulation (2026-10-28, stage 07)
+
+**Levels.** Scope (SDS1202X-E, CH1 1 MOhm, 64 averages, 10 MHz, through the 10 dB pad and the tee): 0, -5, -10, -15 dB read 10.29, 5.78, 3.25 and
+1.83 mV rms (predicted 10.29, 5.79, 3.25, 1.83); in 0.5 dB steps from -15 to -19 dB the readings follow the prediction to 3 to 5 % (they sit slightly
+above it, the scope's noise floor of 0.08 mV rms adds in quadrature). From -19.3 dB down the averaged reading collapses (0.95, 0.36, 0.22 mV) and
+reads differently on the way back up: this is the scope, not the unit: below about 1 mV the scope cannot trigger on the carrier, so 64 unsynchronised
+acquisitions average toward zero. The earlier "below -20 dB reads low" is explained by that. Levels below -19 dB need a trigger-independent
+measurement (the FFT of stage 08).
+
+**AM.** The vendor's remote control (`sg_mod am|fm|pulse|none`, `sg_mod_freq`, `sg_mod_am_depth`, `sg_mod_fm_dev`) was captured with usbmon at 10 MHz, -20 dB, with the
+vendor's saved defaults (500 Hz, depth 100 %). `sg_mod am` sends, after the generator is on: 0x91, 0x0e, 0x4c (freq), 0x04 (0x090a), 0x92 (wValue 0x06d4),
+0x93 (0x0666, the amplitude), 0x58 (0x0666), 0x94 (wValue 0x661a, wIndex 6), 0x94 again, 0x95, 0x9f (answers 0xff), 0x9c (0x0100), 0x9d (0x0080), 0x0e, 0x4c (wValue
+0x0080), 0x04, 0x92, 0x94, 0x95, 0x58, 0x66, 0x9e (answers 0x00), 0x90 (0x000a). Replayed from this driver (`generator::am_captured_500hz_100pct`,
+`examples/am_replay.rs`) the scope shows the carrier amplitude-modulated at about 480 Hz (36 Hz resolution) with the envelope swinging from the noise floor to
+about 4 times it (depth near 100 %, noise-limited at a 1 mV carrier). The Help file says the modulation is made in real time by the unit's microcontroller from a
+software DDS of about 16 kHz clock with 8 bit steps (Nyquist about 8 kHz) and that USB traffic interrupts it. Observed: **from that moment the unit stalls
+control requests** (0x91 and others fail with a pipe error, the vendor program then reports "Error stopping Signal Generator! Unplug VNWA!" and ends), so
+the only way back is a power cycle through the hub. After one such cycle (3 s off) the control chip did not enumerate (kernel errors -32 and -71); a second cycle with
+12 s off brought it back, which is why `power::cold_reset` now escalates to a longer power-off. A unit that has just enumerated also stalls requests for a few
+seconds, so `cold_reset` waits 8 s.
+**Not decoded:** which of 0x92, 0x93, 0x94 (wValue and wIndex), 0x9c, 0x9d set the modulation frequency, depth and carrier amplitude, and FM and pulse. Scaling the
+fields with the level (0x92 = 1.067 x level, 0x93 = 0x58 = level, at -6 dB) gave a weak 2.5 kHz modulation, and guesses for 1 kHz and for depth gave noise: the scope
+check at a 1 mV carrier is too noisy to decode from one capture. What is needed: captures with other frequencies, depths and FM deviations from the vendor program (it
+cannot be driven now: since the unit was power-cycled after the AM lock-up the vendor program answers `hardware? offline` although the unit and this driver work; the
+start-up reads are byte-identical to the working captures and the vendor stops after the second 0x71, cause unknown), then a scope check with the FFT of stage 08.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
