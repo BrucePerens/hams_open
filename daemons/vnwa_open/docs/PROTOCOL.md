@@ -348,6 +348,27 @@ only at the RF level it was made at, and sweeps must use the level of their cali
 and load standards and the demo kit's loads have not been measured (the kit is not cabled; question filed in
 night_shift_questions).
 
+## Low frequencies and time domain (2026-10-28, stage 05)
+
+**Low frequencies.** The Help file (36.8.1 and newer) says that below the codecs' cut-off the signal holds RF and LO feedthrough as
+well as the IF, and that the vendor program filters it digitally, giving clean data to 200 Hz and a limit of about 70 Hz at its
+longest point time. This driver's analysis (the exact tone sum over whole IF periods, with the steadiness check) needed nothing more:
+the vendor program and this driver on the same cables, 200 Hz to 3.8 kHz in 20 points (IF 4 kHz, 60 ms, two vendor sweeps and two
+of ours): S11 agrees to 0.0 to 0.1 % and S21 shows the same constant +0.8 % as at high frequencies (see the stage 03 section), the phase to
+0.1 degrees; the vendor's own repeats agree to 0.1 % except the first point (5 %, 200 Hz, S11). Below that: 100 Hz works if the minimum
+reference amplitude is lowered (the reference tone is about 97 counts there, the default minimum is 200; `examples/sweep.rs` takes it as
+its ninth argument); at 70 Hz and below the reference tone is not steady (IF error 1.5 to 6 Hz, level change 20 to 85 %) and the steadiness check
+refuses the point. The unit's own response falls with frequency (the Help file: -3 dB near 2 kHz, AC coupled), 2.2 at 200 Hz against 2.37 at 20 kHz here.
+
+**Time domain.** `timedomain.rs` reconstructs the impulse and step response from a frequency sweep with the vendor's window set
+(rectangular, Hamming, Hanning, Blackman, Blackman squared; the Help file shows only plots, so the textbook formulas are used) in low-pass
+and band-pass mode, with the low-frequency extrapolation to DC. Tested on synthetic data (a delay line peaks at its delay to 0.15 ns
+in every mode and window; Blackman cuts the far sidelobes 5 times against rectangular; a 0.5 reflection gives a 0.5 step).
+On the unit (`examples/tdr.rs`, S21, 2 to 200 MHz in 100 points, conjugated to the standard convention): the delay from the slope of the unwrapped
+phase is 9.243 ns, the low-pass impulse peak 9.44 ns (rectangular) and 9.46 ns (Hamming), the band-pass magnitude peak 9.69 ns: the methods agree within
+the 0.25 ns grid and the delay of the analogue path's own magnitude response. The vendor program's time-domain display is not reachable through its
+remote control, so no vendor comparison of the transform was made. Gating (windowing in time and back to frequency) is not implemented.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
