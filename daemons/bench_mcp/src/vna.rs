@@ -232,7 +232,7 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         "note": "raw ratios of the unit's own channels (cable, bridge and front-end not removed); S21 from the RX channel, S11 from the reflection channel",
         "s21_db_min": lo,
         "s21_db_max": hi,
-        "recovery": {"remeasured": vna.recovery().remeasured, "transfer_resends": vna.recovery().transfer_resends, "power_cycles": vna.recovery().power_cycles},
+        "recovery": {"remeasured": vna.recovery().remeasured, "transfer_resends": vna.recovery().transfer_resends, "power_cycles": vna.recovery().power_cycles, "points_measured_again_for_audio_overruns": vna.recovery().overrun_retries, "audio_overruns_reported": vna.recovery().overruns_reported},
         "max_if_error_hz": points.iter().map(|p| p.if_error_hz).fold(0.0, f64::max),
         "max_level_change": points.iter().map(|p| p.level_change).fold(0.0, f64::max),
         "file": file.display().to_string(),

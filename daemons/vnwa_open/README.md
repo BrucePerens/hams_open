@@ -117,3 +117,6 @@ Each is a test against bytes or samples recorded from the vendor program.
 * A unit that does not come back from a power cycle gets a second cycle with a longer power-off. [@ANCHOR: vnwa_open_power_escalation]
 * The soak run compares every sweep with the first, and counts errors, wrong results and hangs separately: `examples/soak.rs`.
 * A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
+* A window that contains a buffer overrun is an error and never frames; the point is measured again from a separate budget and never power cycles the unit. [@ANCHOR: vnwa_open_overrun_window]
+* The streams are closed before the unit's power is cut (an open stream on a vanishing codec reports about 5,000 overruns a second). [@ANCHOR: vnwa_open_capture_close]
+* The mark is the frame count at this instant, not at the last delivery, so any ALSA period works. [@ANCHOR: vnwa_open_capture_mark]

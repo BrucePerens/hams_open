@@ -84,7 +84,7 @@ pub fn meter(cfg: &Config, args: &Value) -> Result<Value, String> {
         "center_hz": r.center_hz, "tx_dds_hz": r.tx_actual_hz, "offset_hz": r.offset_hz, "offset_codec1_hz": r.offset_s11_hz, "offset_codec2_hz": r.offset_s21_hz,
         "stderr_hz": r.stderr_hz, "frequency_hz": r.frequency_hz(), "measurement_s": r.seconds * 31.0 / 28.0,
         "note": "the offset of the RX signal from the centre, valid within +/-25 Hz; a TX-to-RX loopback reads 0. The sign of the offset (higher RX frequency = positive) and the absolute accuracy against a standard are NOT verified; the reference is the unit's 12 MHz TCXO (about 0.3 ppm per the vendor)",
-        "recovery": {"remeasured": vna.recovery().remeasured, "power_cycles": vna.recovery().power_cycles},
+        "recovery": {"remeasured": vna.recovery().remeasured, "transfer_resends": vna.recovery().transfer_resends, "power_cycles": vna.recovery().power_cycles, "points_measured_again_for_audio_overruns": vna.recovery().overrun_retries, "audio_overruns_reported": vna.recovery().overruns_reported},
     }))
 }
 

@@ -42,6 +42,11 @@ pub struct Config {
     pub window_ms: Option<f64>,
     /// The smallest reference amplitude (sample counts) accepted as a signal.
     pub min_reference: f64,
+    /// How the two audio streams are opened (ALSA period).
+    pub capture: crate::capture::Options,
+    /// How many times a point is measured again because audio was lost to a buffer overrun inside its window. These retries are
+    /// separate from `retries` and never lead to a power cycle (the unit is not at fault); when they are used up the point fails.
+    pub overrun_retries: u32,
 }
 
 impl Default for Config {
@@ -57,6 +62,8 @@ impl Default for Config {
             settle_ms: None,
             window_ms: None,
             min_reference: 200.0,
+            capture: crate::capture::Options::default(),
+            overrun_retries: 10,
         }
     }
 }
@@ -172,6 +179,11 @@ pub struct Recovery {
     pub transfer_resends: u32,
     /// Cold resets through the hub.
     pub power_cycles: u32,
+    /// Points measured again because a buffer overrun fell inside their window (frames lost).
+    pub overrun_retries: u32,
+    /// Buffer overruns the audio layer reported on the two codecs since the handle was opened, wherever they fell; each one inside
+    /// a window cost a retry or failed the point, so none passes silently.
+    pub overruns_reported: u64,
 }
 
 /// The unit and its two codecs, opened together; all three are reopened after a power cycle.
@@ -182,6 +194,11 @@ pub(crate) struct Session {
 }
 
 impl Session {
+    /// Overruns reported on the two codecs since they were opened.
+    pub(crate) fn overruns(&self) -> u64 {
+        self.s11.overrun_count() + self.s21.overrun_count()
+    }
+
     fn open(cfg: &Config) -> Result<Session, String> {
         let found = match (&cfg.codec_s11, &cfg.codec_s21) {
             (Some(a), Some(b)) => crate::topology::Codecs {
@@ -192,8 +209,8 @@ impl Session {
         };
         Ok(Session {
             usb: Vnwa::open()?,
-            s11: Capture::open(cfg.codec_s11.as_deref().unwrap_or(&found.s11))?,
-            s21: Capture::open(cfg.codec_s21.as_deref().unwrap_or(&found.s21))?,
+            s11: Capture::open_with(cfg.codec_s11.as_deref().unwrap_or(&found.s11), cfg.capture)?,
+            s21: Capture::open_with(cfg.codec_s21.as_deref().unwrap_or(&found.s21), cfg.capture)?,
         })
     }
 }
@@ -201,6 +218,8 @@ impl Session {
 /// What `recover` needs from a measuring unit.
 pub trait Recoverable {
     fn retries(&self) -> u32;
+    /// The budget of re-measurements after lost audio (separate from `retries`, no power cycle).
+    fn overrun_retries(&self) -> u32;
     fn has_hub(&self) -> bool;
     fn tally(&mut self) -> &mut Recovery;
     /// Cold reset, then reopen everything that was open.
@@ -208,7 +227,9 @@ pub trait Recoverable {
 }
 
 /// Runs `attempt` up to `retries + 1` times; if all fail and a hub is configured, one cold reset and the same again; then a
-/// clear error listing every attempt. Nothing that failed is ever returned as a result.
+/// clear error listing every attempt. Nothing that failed is ever returned as a result. An attempt that failed because audio was
+/// lost to a buffer overrun (`capture::is_overrun_error`) is repeated from a separate budget (`overrun_retries`) and does not
+/// count against the unit: it never leads to a power cycle, and when the budget is used up the error says so.
 pub fn recover<R: Recoverable, T>(
     unit: &mut R,
     what: &str,
@@ -216,11 +237,27 @@ pub fn recover<R: Recoverable, T>(
 ) -> Result<T, String> {
     // [@ANCHOR: vnwa_open_recovery]
     let mut history: Vec<String> = Vec::new();
+    let mut overruns_left = unit.overrun_retries();
     for round in 0..2 {
         let tries = unit.retries();
-        for n in 0..=tries {
+        let mut n = 0;
+        while n <= tries {
             match attempt(unit) {
                 Ok(v) => return Ok(v),
+                Err(e) if crate::capture::is_overrun_error(&e) => {
+                    history.push(format!("attempt {} of round {}: {e}", n + 1, round + 1));
+                    if overruns_left == 0 {
+                        return Err(format!(
+                            "{what} failed: audio was lost to buffer overruns in every one of the last {} attempts (no power cycle: the unit is not at fault): {}",
+                            unit.overrun_retries() + 1,
+                            history.join("; ")
+                        ));
+                    }
+                    overruns_left -= 1;
+                    unit.tally().overrun_retries += 1;
+                    std::thread::sleep(Duration::from_millis(50));
+                    continue;
+                }
                 Err(e) => {
                     history.push(format!("attempt {} of round {}: {e}", n + 1, round + 1));
                     if n < tries {
@@ -229,6 +266,7 @@ pub fn recover<R: Recoverable, T>(
                     }
                 }
             }
+            n += 1;
         }
         if round == 1 || !unit.has_hub() {
             break;
@@ -250,6 +288,9 @@ impl Recoverable for Vna {
     fn retries(&self) -> u32 {
         self.cfg.retries
     }
+    fn overrun_retries(&self) -> u32 {
+        self.cfg.overrun_retries
+    }
     fn has_hub(&self) -> bool {
         self.cfg.hub.is_some()
     }
@@ -259,6 +300,10 @@ impl Recoverable for Vna {
     fn cold_reset(&mut self) -> Result<(), String> {
         let hub = self.cfg.hub.clone().ok_or("no hub configured")?;
         self.recovery.transfer_resends += self.session.usb.resends();
+        self.recovery.overruns_reported += self.session.overruns();
+        // The audio streams are closed before the power goes: an open stream on a vanishing codec storms with overrun reports.
+        self.session.s11.close();
+        self.session.s21.close();
         crate::power::cold_reset(&hub)?;
         self.session = Session::open(&self.cfg)?;
         Ok(())
@@ -289,6 +334,7 @@ impl Vna {
     pub fn recovery(&self) -> Recovery {
         Recovery {
             transfer_resends: self.recovery.transfer_resends + self.session.usb.resends(),
+            overruns_reported: self.recovery.overruns_reported + self.session.overruns(),
             ..self.recovery
         }
     }
@@ -464,6 +510,9 @@ mod tests {
         fn retries(&self) -> u32 {
             2
         }
+        fn overrun_retries(&self) -> u32 {
+            3
+        }
         fn has_hub(&self) -> bool {
             self.hub
         }
@@ -545,6 +594,54 @@ mod tests {
         };
         let e = recover::<_, ()>(&mut f, "p", |_| Err("no signal".into())).unwrap_err();
         assert!(e.contains("power cycle: hub gone"), "{e}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_recovery]
+    #[test]
+    fn lost_audio_is_measured_again_from_its_own_budget_and_never_power_cycles_the_unit() {
+        let mut f = fake(true);
+        let mut calls = 0;
+        let e = |n: u32| {
+            format!(
+                "{}: {n} buffer overrun(s) reported",
+                crate::capture::OVERRUN_ERROR
+            )
+        };
+        // Two overrun failures then a success: no normal retry is used, no power cycle.
+        let v = recover(&mut f, "p", |_| {
+            calls += 1;
+            if calls < 3 {
+                Err(e(calls))
+            } else {
+                Ok(9)
+            }
+        });
+        assert_eq!(v, Ok(9));
+        assert_eq!(
+            (f.tally.overrun_retries, f.tally.remeasured, f.resets),
+            (2, 0, 0)
+        );
+        // Overruns in every attempt: the budget (3) is used up and the error says so; still no power cycle.
+        let mut f = fake(true);
+        let err = recover::<_, ()>(&mut f, "point at 1 Hz", |_| Err(e(1))).unwrap_err();
+        assert_eq!((f.tally.overrun_retries, f.resets), (3, 0));
+        assert!(
+            err.contains("lost to buffer overruns") && err.contains("no power cycle"),
+            "{err}"
+        );
+        // A different failure between them still gets the normal path.
+        let mut f = fake(true);
+        let mut n = 0;
+        let v = recover(&mut f, "p", |_| {
+            n += 1;
+            match n {
+                1 => Err(e(1)),
+                2 => Err("silent".to_string()),
+                _ => Ok(1),
+            }
+        });
+        assert_eq!(v, Ok(1));
+        assert_eq!((f.tally.overrun_retries, f.tally.remeasured), (1, 1));
     }
 
     // Tests [@ANCHOR: vnwa_open_vendor_agreement]
