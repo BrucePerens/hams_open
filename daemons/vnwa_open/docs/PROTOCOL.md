@@ -402,6 +402,37 @@ convention, not checked against any real kit file.
 Checks that wait for the new kit: the load standard, the precision open, the full open/short/load/thru result, S11 of the filters, the
 calibrated comparison with the vendor program.
 
+## External clock (reference) connector (2026-10-28, from the vendor's Help file; not tried on the unit)
+
+Source: the Help file (`VNWA_HELP.pdf`, 36.8.2): the pages "Optional External Clock input/output" and "Specification of the VNWA Reference
+Clock output or External Clock input" (hardware section), the connector table (J34), "Calibrate Clock Frequency" and the clock multiplier text of the
+instrument settings, the frequency meter pages, and the troubleshooting answer A1. What it says, and nothing is guessed:
+
+* The connector is the optional SMA fitted to the VNWA3 expansion board (3E) in the rear panel, wired to J34 pin 2 (pin 1 ground). It is an input **or** an
+  output: "Internal clock output or external clock input (1 kOhm impedance, 400 mVpp out, or -6 dBm...+3 dBm / 50 Ohms in)". As an output it gives the
+  TCXO 12 MHz times x (x = 2..8), 2 ppm. Unused, the manual recommends a screening cap.
+* As an input the clock is "ideally **36 MHz**" at -6 to +3 dBm into 50 ohms; it replaces the whole premultiplied clock (12 MHz x 3), the common
+  premultiplier is bypassed and the external clock goes directly to both DDS chips. Other frequencies are allowed but "lower external clock rates will
+  lower the usable instrument bandwidth", the DDS multipliers (nRF, nLO, here 10 and 9) set the core clocks, which must stay under about 750 MHz, and the
+  program has to be told the clock frequency (its "Calibrate Clock" and clock settings; this driver assumes 36 MHz in `protocol::INPUT_CLOCK_HZ`).
+* Selection is a software setting in the vendor program (Options, Setup, the clock page: "an external clock source can be selected here"), not a jumper.
+  With the external clock selected and nothing connected the unit does not synchronise ("No Sync Found", troubleshooting A1).
+* The wire command that selects it has NOT been captured (the vendor program could not be driven at the time, see the to-do). Until it is captured and
+  checked, this driver never selects the external clock, and **nothing may be connected to that connector**: the input is specified for -6 to +3 dBm
+  only, and the unit has no stated protection.
+* For the frequency meter the Help file measures an unknown signal against the internal clock (about 1 ppm for a VNWA3, 0.3 ppm for the 3E sample in its
+  example), and for an absolute check it puts a 10 MHz rubidium standard **on the RX input** and measures it against the internal TCXO (the example reads
+  +3 Hz +-1 Hz at 10 MHz, 0.3 ppm). An external 36 MHz clock is the way to remove the TCXO from the measurement; a 10 MHz standard on the RX port is the
+  way to measure the TCXO.
+* The meter's "TX Offset" (Help file: the DDS's finite channel spacing, about 100 mHz at most; the displayed dF includes it) is the same quantity as this
+  driver's `meter::tx_actual_hz` minus the centre: the vendor program showed dF = -1.862 mHz at 15.5 MHz on the loopback, and the tuning word model gives
+  15 499 999.9981 Hz, -1.9 mHz.
+
+**SDR clock connectors (a possible interim source, nothing connected).** The bladeRF 1 has a clock input and output and the LimeSDR-USB a reference
+clock input and output, but their frequencies and levels have not been checked in this session against the vendors' documents, and neither is 36 MHz at -6 to
++3 dBm into 50 ohms by default. Do not connect them before checking; their use would be as a known-clock source for the RX input, which does not
+need the reference connector at all.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
