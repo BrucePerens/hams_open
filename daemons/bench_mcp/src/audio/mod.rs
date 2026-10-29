@@ -12,6 +12,7 @@
 pub mod alert;
 pub mod analysis;
 pub mod devices;
+pub mod discover;
 pub mod engine;
 pub mod events;
 pub mod heard;
@@ -461,15 +462,15 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_audio_verify",
         tier: Tier::ReadConfig,
-        desc: "VERIFIES THAT A DEVICE UNDER CONTROL MADE A SOUND by listening to the room through an input (it hears the room; the recording can contain speech, stays in the managed directory and is never uploaded). First it measures the noise floor for calibrate_s (default 1.5 s); then it starts the action, optionally after delay_s, and listens for window_s (default 5). The action is a command NAME from the config's verify_actions (arbitrary commands are not accepted) and/or whatever else the caller does in parallel, such as another tool call. Judgment: sound present (over the floor by min_over_noise_db, default 10), min_peak_dbfs, dominant frequency within expect_hz +/- tolerance_hz (default 5 %) or freq_min_hz..freq_max_hz, min/max_duration_s, expect_beeps (exact) or min_beeps, and spectral similarity (>= min_similarity, default 0.8) to a reference WAV named in `reference`; expect_silence: true verifies that nothing sounded. save_reference: NAME stores the window as a reference. Returns pass, the reason, every check with its detail, and the evidence (noise floor, events with times and levels, spectrum peaks, similarity), never a bare boolean. A dead input (exact zeros) never passes.",
+        desc: "VERIFIES THAT A DEVICE UNDER CONTROL MADE A SOUND by listening to the room through an input (it hears the room; the recording can contain speech, stays in the managed directory and is never uploaded). First it measures the noise floor for calibrate_s (default 1.5 s); then it starts the action, optionally after delay_s, and listens for window_s (default 5). The action is a command NAME from the config's verify_actions (arbitrary commands are not accepted) and/or whatever else the caller does in parallel, such as another tool call. Judgment: sound present (over the floor by min_over_noise_db, default 10), min_peak_dbfs, dominant frequency within expect_hz +/- tolerance_hz (default 5 %) or freq_min_hz..freq_max_hz (with expect_hz, events are tracked at that frequency, so a tone under the broadband noise is still found), min/max_duration_s, expect_beeps (exact) or min_beeps, and spectral similarity (>= min_similarity, default 0.8) to a reference WAV named in `reference`; expect_silence: true verifies that nothing sounded. save_reference: NAME stores the window as a reference. Returns pass, the reason, every check with its detail, and the evidence (noise floor, events with times and levels, spectrum peaks, similarity), never a bare boolean. A dead input (exact zeros) never passes.",
         props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"action":{"type":"string","description":"a name in the config's verify_actions"},"delay_s":{"type":"number"},"calibrate_s":{"type":"number"},"window_s":{"type":"number"},"min_over_noise_db":{"type":"number"},"min_peak_dbfs":{"type":"number"},"expect_hz":{"type":"number"},"tolerance_hz":{"type":"number"},"freq_min_hz":{"type":"number"},"freq_max_hz":{"type":"number"},"min_duration_s":{"type":"number"},"max_duration_s":{"type":"number"},"expect_beeps":{"type":"integer"},"min_beeps":{"type":"integer"},"expect_silence":{"type":"boolean"},"reference":{"type":"string","description":"a .wav file in the managed capture directory"},"min_similarity":{"type":"number"},"save_reference":{"type":"string"},"sample_rate_hz":{"type":"integer"},"label":{"type":"string"}"#),
         required: &[],
     },
     Spec {
         name: "bench_audio_events",
         tier: Tier::ReadConfig,
-        desc: "LISTENS TO THE ROOM for `seconds` and reports sound events: onset and offset times, duration, peak and RMS level, and dominant frequency (absent for clicks and noise), with the noise floor and the threshold used (noise floor + min_over_noise_db, or threshold_dbfs). For relays clicking, a rotor motor, an alarm, beeps. decode_morse: true also decodes keyed tones as Morse. Nothing is saved.",
-        props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"seconds":{"type":"number"},"min_over_noise_db":{"type":"number"},"threshold_dbfs":{"type":"number"},"merge_gap_ms":{"type":"number"},"min_event_ms":{"type":"number"},"decode_morse":{"type":"boolean"},"sample_rate_hz":{"type":"integer"}"#),
+        desc: "LISTENS TO THE ROOM for `seconds` and reports sound events: onset and offset times, duration, peak and RMS level, and dominant frequency (absent for clicks and noise), with the noise floor and the threshold used (noise floor + min_over_noise_db, or threshold_dbfs). For relays clicking, a rotor motor, an alarm, beeps. track_hz follows one frequency instead of the broadband level (a tone well under the room noise). decode_morse: true also decodes keyed tones as Morse. Nothing is saved.",
+        props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"seconds":{"type":"number"},"min_over_noise_db":{"type":"number"},"threshold_dbfs":{"type":"number"},"merge_gap_ms":{"type":"number"},"min_event_ms":{"type":"number"},"decode_morse":{"type":"boolean"},"track_hz":{"type":"number","description":"follow the level of this one frequency, which finds a tone far below the broadband noise"},"sample_rate_hz":{"type":"integer"}"#),
         required: &[],
     },
     Spec {
@@ -491,6 +492,20 @@ pub const SPECS: &[Spec] = &[
         tier: Tier::Full,
         desc: "ALERTS THE OPERATOR with sound: a tone pattern by severity (info: one beep; warning: two; urgent: a siren) and/or the spoken message, on the alert output, repeated `repeat` times (1 to 5, at most 30 s in all). Volume is a share of the limit by severity; in quiet hours (default 22:00 to 07:00) only the lowest volume is used unless severity is urgent; the volume cap is never exceeded; the volume and mute are restored afterwards. The result ALWAYS carries text_to_send, because the operator may be away: send it by another channel when the alert matters. If no sound can be made, audible is false with the error, and text_to_send is still returned.",
         props: props!(r#""instrument":{"type":"string"},"message":{"type":"string"},"severity":{"type":"string","enum":["info","warning","urgent"]},"tone":{"type":"boolean"},"speak":{"type":"boolean"},"repeat":{"type":"integer"},"output":{"type":"string"},"engine":{"type":"string"},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_discovery",
+        tier: Tier::ReadOnly,
+        desc: "The stored result of audio path discovery (which outputs make sound and which inputs hear, found by listening), whether it is stale because the device list or a port's state has changed since (hot-plug), and which output and input `auto` selects now. Makes no sound.",
+        props: props!(r#""instrument":{"type":"string"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_discover",
+        tier: Tier::Full,
+        desc: "FINDS BY LISTENING WHAT ACTUALLY WORKS, and makes short quiet test tones in the room to do it. Every output in turn plays a 0.4 s tone of its own frequency (volume raised in a few steps from the quiet volume to the volume cap only while nothing is heard) while every candidate input records at once (it hears the room; nothing is kept). Result: the output-by-input matrix of heard or not heard with levels and signal-to-noise ratios; which inputs are real microphones (they heard a tone, or have the noise floor of a live capture; exact zeros means muted or disconnected); which outputs produce sound (heard by a microphone; one heard by none is 'no evidence of sound: speaker absent, muted, or no microphone in range', not a failure); the working loopback pairs; port jack state as supporting evidence only; and the selection of alert output and verification input used by `auto`. With no working microphone it says sound cannot be verified automatically and only the operator can confirm by ear. Refused in quiet hours unless urgent: true (then only the quiet volume is used). Bluetooth and network outputs are skipped unless include_bluetooth. The VNWA codecs are never touched. Volumes and mutes are restored. The result is stored in the capture directory. dry_run: true shows the plan without sound.",
+        props: props!(r#""instrument":{"type":"string"},"urgent":{"type":"boolean"},"include_bluetooth":{"type":"boolean"},"dry_run":{"type":"boolean"},"output":{"type":"string","description":"limit the test to this output (a partial run is not stored)"},"input":{"type":"string","description":"limit the test to this input (a partial run is not stored)"}"#),
         required: &[],
     },
 ];
@@ -655,12 +670,35 @@ pub fn call_with(
         _ => {}
     }
     let devs = devices::list(run, asound, cfg)?;
+    let stored = discover::load(&cfg.capture_dir());
     let ctx = tools::Ctx {
         run,
         cfg,
         devs: &devs,
         minute,
+        discovery: stored.as_ref(),
     };
+    if name == "bench_audio_alert" && wants_rediscovery(&ctx, args) {
+        // The device list changed since the last discovery: listen again first, then alert on what works now.
+        let again = discover::run(&ctx, &json!({}));
+        let devs = devices::list(run, asound, cfg)?;
+        let stored = discover::load(&cfg.capture_dir());
+        let ctx = tools::Ctx {
+            run,
+            cfg,
+            devs: &devs,
+            minute,
+            discovery: stored.as_ref(),
+        };
+        let mut out = alert::alert(&ctx, args)?;
+        out["rediscovery"] = match again {
+            Ok(v) => {
+                json!({"ran": true, "audible_seconds": v["audible_seconds"], "alert_output": v["selection"]["alert_output"]})
+            }
+            Err(e) => json!({"ran": false, "error": e}),
+        };
+        return Ok(out);
+    }
     match name {
         "bench_audio_levels" => tools::levels_get(&ctx, args),
         "bench_audio_record" => tools::record(&ctx, args),
@@ -673,8 +711,26 @@ pub fn call_with(
         "bench_audio_synthesizers" => speak::synthesizers(&ctx, args),
         "bench_audio_speak" => speak::speak(&ctx, args),
         "bench_audio_alert" => alert::alert(&ctx, args),
+        "bench_audio_discover" => discover::run(&ctx, args),
+        "bench_audio_discovery" => discover::report(&ctx, args),
         _ => Err(format!("{name} is not implemented")),
     }
+}
+
+/// An alert listens again first when its output is chosen by `auto`, a discovery was run before, the devices have changed since,
+/// the alert is not urgent (it must not wait) and it is not quiet hours.
+fn wants_rediscovery(ctx: &tools::Ctx, args: &Value) -> bool {
+    // [@ANCHOR: audio_discover_auto_rerun]
+    let urgent = args.get("severity").and_then(|s| s.as_str()) == Some("urgent");
+    let quiet = ctx.cfg.quiet_hours.is_some_and(|q| q.contains(ctx.minute));
+    ctx.cfg.alert_output == "auto"
+        && args.get("output").is_none()
+        && args.get("rediscover").and_then(|v| v.as_bool()) != Some(false)
+        && !urgent
+        && !quiet
+        && ctx
+            .discovery
+            .is_some_and(|d| !d.changes(ctx.devs).is_empty())
 }
 
 #[cfg(test)]
@@ -743,6 +799,172 @@ mod tests {
             .audio
             .quiet_hours
             .is_none());
+    }
+
+    fn stored(
+        alert: Option<&str>,
+        input: Option<&str>,
+        fingerprint: Vec<String>,
+    ) -> discover::Stored {
+        discover::Stored {
+            at_epoch: 1,
+            fingerprint,
+            alert_output: alert.map(String::from),
+            verify_input: input.map(String::from),
+            raw: json!({}),
+        }
+    }
+
+    // Tests [@ANCHOR: audio_select_auto]
+    #[test]
+    fn auto_follows_the_discovery_and_falls_back_to_the_default_when_the_device_is_gone_or_reserved(
+    ) {
+        let devs = testkit::devbox_devices();
+        let cfg = Config::default();
+        let hdmi = devs
+            .iter()
+            .find(|d| d.node_name.contains("HDMI1"))
+            .unwrap()
+            .node_name
+            .clone();
+        let mic2 = devs
+            .iter()
+            .find(|d| d.node_name.contains("Mic2"))
+            .unwrap()
+            .node_name
+            .clone();
+        let st = stored(Some(&hdmi), Some(&mic2), vec![]);
+        let ctx = tools::Ctx {
+            run: &Scripted::new(&[]),
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: Some(&st),
+        };
+        assert_eq!(
+            tools::pick(&ctx, &json!({}), "output", devices::Dir::Output)
+                .unwrap()
+                .node_name,
+            hdmi
+        );
+        assert_eq!(
+            tools::pick(&ctx, &json!({}), "input", devices::Dir::Input)
+                .unwrap()
+                .node_name,
+            mic2
+        );
+        // An explicit name beats the discovery.
+        assert!(tools::pick(
+            &ctx,
+            &json!({"output": "Speaker"}),
+            "output",
+            devices::Dir::Output
+        )
+        .unwrap()
+        .description
+        .ends_with("Speaker"));
+        let reserved = devs
+            .iter()
+            .find(|d| d.reserved.is_some() && d.dir == devices::Dir::Output)
+            .unwrap()
+            .node_name
+            .clone();
+        let gone = stored(Some("no-such-node"), Some(&reserved), vec![]);
+        let ctx = tools::Ctx {
+            run: &Scripted::new(&[]),
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: Some(&gone),
+        };
+        assert!(
+            tools::pick(&ctx, &json!({}), "output", devices::Dir::Output)
+                .unwrap()
+                .is_default
+        );
+        assert!(tools::pick(&ctx, &json!({}), "input", devices::Dir::Input)
+            .unwrap()
+            .reserved
+            .is_none());
+        let none = tools::Ctx {
+            run: &Scripted::new(&[]),
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        assert!(
+            tools::pick(&none, &json!({}), "output", devices::Dir::Output)
+                .unwrap()
+                .is_default
+        );
+        // A configured alias beats the discovery too.
+        let mut pinned = Config {
+            alert_output: "desk".into(),
+            ..Config::default()
+        };
+        pinned.outputs.insert(
+            "desk".into(),
+            Port {
+                matcher: "Speaker".into(),
+                volume_cap: None,
+            },
+        );
+        let mut with_alias = devs.clone();
+        for d in with_alias.iter_mut() {
+            d.alias = pinned.alias_of(d);
+        }
+        let ctx = tools::Ctx {
+            run: &Scripted::new(&[]),
+            cfg: &pinned,
+            devs: &with_alias,
+            minute: 720,
+            discovery: Some(&st),
+        };
+        assert!(
+            tools::pick(&ctx, &json!({}), "output", devices::Dir::Output)
+                .unwrap()
+                .description
+                .ends_with("Speaker")
+        );
+    }
+
+    // Tests [@ANCHOR: audio_discover_auto_rerun]
+    #[test]
+    fn an_alert_listens_again_only_for_a_changed_device_list_and_never_urgently_or_in_quiet_hours()
+    {
+        let devs = testkit::devbox_devices();
+        let cfg = Config::default();
+        let fresh = stored(None, None, discover::fingerprint(&devs));
+        let old = stored(None, None, vec!["output|gone|-".into()]);
+        let mk =
+            |st: Option<&discover::Stored>, minute: u32| (Scripted::new(&[]), st.cloned(), minute);
+        let check = |st: Option<&discover::Stored>, minute: u32, cfg: &Config, args: Value| {
+            let (run, st, minute) = mk(st, minute);
+            let ctx = tools::Ctx {
+                run: &run,
+                cfg,
+                devs: &devs,
+                minute,
+                discovery: st.as_ref(),
+            };
+            wants_rediscovery(&ctx, &args)
+        };
+        assert!(check(Some(&old), 720, &cfg, json!({"severity": "warning"})));
+        assert!(!check(Some(&fresh), 720, &cfg, json!({})), "fresh");
+        assert!(!check(None, 720, &cfg, json!({})), "never run before");
+        assert!(
+            !check(Some(&old), 720, &cfg, json!({"severity": "urgent"})),
+            "urgent alerts do not wait"
+        );
+        assert!(!check(Some(&old), 23 * 60, &cfg, json!({})), "quiet hours");
+        assert!(!check(Some(&old), 720, &cfg, json!({"output": "Speaker"})));
+        assert!(!check(Some(&old), 720, &cfg, json!({"rediscover": false})));
+        let pinned = Config {
+            alert_output: "desk".into(),
+            ..Config::default()
+        };
+        assert!(!check(Some(&old), 720, &pinned, json!({})));
     }
 
     #[test]

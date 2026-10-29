@@ -7,7 +7,7 @@
 use super::analysis::{dominant, median_db, peaks, similarity, spectrum, stats};
 use super::devices::Dir;
 use super::engine::Recorder;
-use super::events::{decode_morse, detect, frame_levels, percentile, Event, Params};
+use super::events::{decode_morse, detect, levels_for, percentile, Event, Params};
 use super::heard::{round1, round3};
 use super::tools::{pick, Ctx, NOTE_HEARS_ROOM};
 use super::{store, wav};
@@ -353,13 +353,14 @@ pub fn verify(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     let cal = &all[skip..action_at.min(all.len())];
     let win = &all[action_at.min(all.len())..];
     let input_all_zero = all.iter().all(|x| *x == 0.0);
-    let cal_levels = frame_levels(cal, rate, 5.0);
-    let noise = percentile(&cal_levels, 0.9);
-    let params = Params {
+    // With an expected pitch the events are tracked at that frequency, which hears a tone well under the broadband noise.
+    let mut params = Params {
         margin_db: expect.min_over_noise_db,
-        noise_dbfs: Some(noise),
+        tone_hz: expect.hz,
         ..Params::default()
     };
+    let noise = percentile(&levels_for(cal, rate, &params), 0.9);
+    params.noise_dbfs = Some(noise);
     let det = detect(win, rate, &params);
     let active = active_samples(win, rate, &det.events);
     let sp = if active.len() >= 256 {
@@ -471,6 +472,7 @@ pub fn events(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         threshold_dbfs: num(args, "threshold_dbfs"),
         merge_gap_ms: bounded(args, "merge_gap_ms", 40.0, 0.0, 2000.0)?,
         min_event_ms: bounded(args, "min_event_ms", 5.0, 1.0, 5000.0)?,
+        tone_hz: num(args, "track_hz"),
         ..Params::default()
     };
     let mut rec = Recorder::start(&dev.node_name, rate, false)?;

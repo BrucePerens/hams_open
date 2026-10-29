@@ -51,6 +51,8 @@ what is listed and allowed:
 | `bench_audio_synthesizers` | read_only | Installed speech synthesizers (speech-dispatcher, espeak-ng, Piper), espeak voices, defaults, what is missing. Installs nothing. |
 | `bench_audio_speak` | full | Speaks text on an output, or writes it to a WAV file. |
 | `bench_audio_alert` | full | Tone pattern by severity and/or spoken message on the alert output, with quiet hours; always returns the text to send by another channel. |
+| `bench_audio_discovery` | read_only | The stored discovery result, whether it is stale (device list or port state changed since), and what `auto` selects now. |
+| `bench_audio_discover` | full | Finds by listening which outputs make sound and which inputs hear; stores the result and the selection. |
 | `bench_audio_play` | full | Plays a generated tone (sine, sweep, two_tone, noise, level in dBFS) or a WAV from the capture directory, inside the volume cap and quiet hours. |
 | `bench_audio_set_volume` | full | Volume and mute of one device, an output never above its cap. |
 | `bench_audio_loopback` | full | Plays a tone on one output while recording one input; heard or not, level, SNR, noise floor, indicative latency. |
@@ -58,6 +60,19 @@ what is listed and allowed:
 ## Verification
 
 `bench_audio_verify` records `calibrate_s` of ambient sound first (the noise floor is the 90th percentile of 5 ms frame levels), then runs the action and listens for `window_s`. A sound event is a stretch of frames `min_over_noise_db` (default 10) over that floor. Checks: sound present, `min_peak_dbfs`, dominant frequency (`expect_hz` with `tolerance_hz`, default 5 %, or `freq_min_hz` to `freq_max_hz`), `min_duration_s`, `max_duration_s`, `expect_beeps` or `min_beeps`, and `reference` (spectral correlation of the sound against a stored recording, `min_similarity` default 0.8; `save_reference: NAME` stores the window as `ref-NAME.wav`, which retention never deletes). `expect_silence: true` verifies that nothing sounded. An input that records exact zeros is reported dead and never passes, not even for silence. A spectrogram image is not produced; the spectrum peaks are in the evidence.
+
+## Audio path discovery
+
+Machines differ: some have only HDMI monitor speakers, some a headphone or line output, some USB audio, some no microphone. `bench_audio_discover` finds out by listening, not by trusting names.
+
+1. Candidates: every non-reserved output and input (Bluetooth and network devices only with `include_bluetooth`). The VNWA codecs are never touched.
+2. Each output in turn plays a 0.4 s sine of its own frequency (1000, 1300, 1700, 2200, 2900, 3700, 4700, 6000 Hz) while every candidate input records at the same time. The output volume starts at `quiet_volume` and rises in up to three steps to the cap, only while no input has heard the tone (at most 1.2 s of sound per output). Volume and mute are restored after each output.
+3. A tone is heard when its level at that exact frequency is 12 dB over the same frequency in the 0.4 s before it and 10 dB over neighbouring frequencies. The matrix of outputs by inputs (level, signal-to-noise ratio, volume) is in the result.
+4. Conclusions. A **speaker is present** only if a microphone heard it. An output heard by nothing is "no evidence of sound: speaker absent, muted, or no microphone in range", not a failure. A **microphone is present** if it heard a tone or its noise floor is that of a live capture; exact zeros mean muted or disconnected ("dead"). With no live microphone the result says sound cannot be verified automatically and that only the operator can confirm by ear, with the suggestion to play a tone and ask. Port availability from the driver (unplugged jack, HDMI without a monitor) is shown as supporting evidence only. Working loopback pairs are listed, with a `crosstalk_suspect` flag on a pair 15 dB under the best microphone for the same output.
+5. Safety: refused in quiet hours unless `urgent: true`, which uses only the quiet volume. Volume cap per output applies.
+6. Selection by environment (`alert_output: auto`, `verify_input: auto`): the alert output is the best output that was heard, the system default first, HDMI only if nothing else was heard; the verification input is a microphone that heard a tone (the default one first), else a live input. An alias in the config pins a choice. If the stored device is gone or reserved, or nothing was stored, the system default is used (never a reserved device).
+7. Staleness: the result stores a fingerprint of the candidate devices and their port availability (names, not PipeWire ids). `bench_audio_discovery` reports a changed list as stale. There is no background thread: `bench_audio_alert` listens again first when its output is `auto`, a result was stored, the devices changed, the alert is not urgent and it is not quiet hours (`rediscover: false` turns it off). `output` and `input` limit a run to one device each; such a run is not stored.
+8. The result is `audio_discovery.json` in the capture directory (owner only).
 
 ## Speech and alerts
 
@@ -97,3 +112,7 @@ Tests read a recording of this development machine's PipeWire graph in `tests/au
 * A stream aimed at a missing node fails; it does not fall back to the default device. [@ANCHOR: audio_engine_no_fallback]
 * Synthesizer choice, voices, safe codes, and command lines. [@ANCHOR: audio_speak_choose] [@ANCHOR: audio_speak_voices] [@ANCHOR: audio_speak_tool]
 * Alert volumes by severity and quiet hours; the alert always returns its text. [@ANCHOR: audio_alert_volume] [@ANCHOR: audio_alert_tool]
+* Discovery conclusions on synthetic observations: heard, not heard, muted and all-zero inputs, no microphone, HDMI last, default first, crosstalk, shared tone, jack state as evidence only. [@ANCHOR: audio_discover_conclude]
+* The volume ladder, the staleness fingerprint and the stored result. [@ANCHOR: audio_discover_ladder] [@ANCHOR: audio_discover_stale]
+* `auto` follows the stored discovery and falls back to the default; an alert listens again only for a changed device list. [@ANCHOR: audio_select_auto] [@ANCHOR: audio_discover_auto_rerun]
+* Discovery end to end on a virtual output and input. [@ANCHOR: audio_discover_tool]

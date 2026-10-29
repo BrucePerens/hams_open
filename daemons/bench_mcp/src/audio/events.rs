@@ -2,7 +2,7 @@
 //! Sound events in a recording: when a sound starts and stops, how loud it is and what its pitch is. For relays clicking, a
 //! rotor motor, an alarm tone, beeps, and keyed CW (with a simple Morse decoder). Pure functions.
 
-use super::analysis::{db, dominant, rms, spectrum, FLOOR_DB};
+use super::analysis::{db, dominant, rms, spectrum, tone_amp, FLOOR_DB};
 use serde_json::{json, Value};
 
 #[derive(Clone, Debug)]
@@ -16,6 +16,9 @@ pub struct Params {
     pub noise_dbfs: Option<f64>,
     pub merge_gap_ms: f64,
     pub min_event_ms: f64,
+    /// Track one frequency (the level of that tone in 20 ms windows) instead of the broadband level, which hears a tone far
+    /// below the broadband noise.
+    pub tone_hz: Option<f64>,
 }
 
 impl Default for Params {
@@ -27,6 +30,7 @@ impl Default for Params {
             noise_dbfs: None,
             merge_gap_ms: 40.0,
             min_event_ms: 5.0,
+            tone_hz: None,
         }
     }
 }
@@ -71,6 +75,25 @@ pub fn frame_levels(s: &[f32], rate: u32, frame_ms: f64) -> Vec<f64> {
         .collect()
 }
 
+/// The level of one tone in dBFS (peak amplitude) in 20 ms windows every `frame_ms`; a window starts at its frame.
+pub fn tone_levels(s: &[f32], rate: u32, hz: f64, frame_ms: f64) -> Vec<f64> {
+    let hop = ((frame_ms / 1000.0) * f64::from(rate)).max(1.0) as usize;
+    let win = (0.02 * f64::from(rate)) as usize;
+    (0..)
+        .map(|i| i * hop)
+        .take_while(|at| at + win <= s.len())
+        .map(|at| db(tone_amp(&s[at..at + win], rate, hz)))
+        .collect()
+}
+
+/// The frame levels `detect` works on, broadband or for the tracked tone.
+pub fn levels_for(s: &[f32], rate: u32, p: &Params) -> Vec<f64> {
+    match p.tone_hz {
+        Some(hz) => tone_levels(s, rate, hz, p.frame_ms),
+        None => frame_levels(s, rate, p.frame_ms),
+    }
+}
+
 pub fn percentile(v: &[f64], p: f64) -> f64 {
     if v.is_empty() {
         return FLOOR_DB;
@@ -88,8 +111,14 @@ pub struct Detection {
 
 pub fn detect(s: &[f32], rate: u32, p: &Params) -> Detection {
     // [@ANCHOR: audio_events_detect]
-    let levels = frame_levels(s, rate, p.frame_ms);
-    let noise = p.noise_dbfs.unwrap_or_else(|| percentile(&levels, 0.2));
+    let levels = levels_for(s, rate, p);
+    // A tone window is centred 10 ms after its start.
+    let shift = if p.tone_hz.is_some() { 0.01 } else { 0.0 };
+    // Narrowband levels fluctuate more than broadband ones, so the typical (median) level is the reference when tracking a tone.
+    let reference = if p.tone_hz.is_some() { 0.5 } else { 0.2 };
+    let noise = p
+        .noise_dbfs
+        .unwrap_or_else(|| percentile(&levels, reference));
     // The reference never goes below the 16-bit floor, so a digitally silent stretch does not make every sample an event.
     let threshold = p
         .threshold_dbfs
@@ -119,7 +148,13 @@ pub fn detect(s: &[f32], rate: u32, p: &Params) -> Detection {
             _ => merged.push(sp),
         }
     }
-    let min_frames = (p.min_event_ms / p.frame_ms).ceil().max(1.0) as usize;
+    // A tone window is 20 ms long, so a shorter event cannot be told from a fluctuation.
+    let min_ms = if p.tone_hz.is_some() {
+        p.min_event_ms.max(20.0)
+    } else {
+        p.min_event_ms
+    };
+    let min_frames = (min_ms / p.frame_ms).ceil().max(1.0) as usize;
     let events = merged
         .into_iter()
         .filter(|(a, b)| b - a >= min_frames)
@@ -132,8 +167,8 @@ pub fn detect(s: &[f32], rate: u32, p: &Params) -> Detection {
                 .and_then(|sp| dominant(&sp, 100.0, nyq * 0.9, 15.0))
                 .map(|pk| pk.hz);
             Event {
-                onset_s: a as f64 * frame_s,
-                offset_s: b as f64 * frame_s,
+                onset_s: a as f64 * frame_s + shift,
+                offset_s: b as f64 * frame_s + shift,
                 peak_dbfs: db(peak),
                 rms_dbfs: db(rms(seg)),
                 hz,
@@ -312,6 +347,30 @@ mod tests {
         assert!(detect(&noise(R, 2.0, 0.001, 9), R, &Params::default())
             .events
             .is_empty());
+    }
+
+    #[test]
+    fn a_tone_far_below_the_broadband_noise_is_found_by_tracking_its_frequency() {
+        // A -40 dBFS tone over noise of -34 dBFS RMS: the broadband level hardly moves, the tone's own level jumps 30 dB.
+        let s = beeps(&[(0.5, 0.3)], 1.5, 1500.0, 0.01, 0.02);
+        assert!(detect(&s, R, &Params::default()).events.is_empty());
+        let p = Params {
+            tone_hz: Some(1500.0),
+            ..Params::default()
+        };
+        let d = detect(&s, R, &p);
+        assert_eq!(d.events.len(), 1, "{:?}", d.events);
+        assert!(
+            (d.events[0].onset_s - 0.5).abs() < 0.03
+                && (d.events[0].duration_s() - 0.3).abs() < 0.04,
+            "{:?}",
+            d.events[0]
+        );
+        let other = Params {
+            tone_hz: Some(2500.0),
+            ..Params::default()
+        };
+        assert!(detect(&s, R, &other).events.is_empty());
     }
 
     #[test]

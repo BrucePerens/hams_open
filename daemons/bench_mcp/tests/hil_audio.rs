@@ -440,3 +440,49 @@ fn an_alert_makes_sound_and_always_returns_the_text_even_when_it_cannot() {
     assert!(!ok, "{r}");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+// Tests [@ANCHOR: audio_discover_tool]
+#[test]
+#[ignore]
+fn discovery_hears_the_virtual_output_on_the_virtual_input_and_refuses_in_quiet_hours() {
+    let _v = Virtual::start();
+    let d = scratch("discover");
+    let cfg = config(&d);
+    let (ok, plan) = call(
+        &cfg,
+        &d,
+        "bench_audio_discover",
+        r#"{"dry_run":true,"output":"virt","input":"virt"}"#,
+    );
+    assert!(ok, "{plan}");
+    assert_eq!(plan["plan"][0]["frequency_hz"], 1000.0);
+    let (ok, r) = call(
+        &cfg,
+        &d,
+        "bench_audio_discover",
+        r#"{"output":"virt","input":"virt"}"#,
+    );
+    assert!(ok, "{r}");
+    assert_eq!(r["outputs"][0]["status"], "sound_heard", "{r}");
+    assert_eq!(r["inputs"][0]["status"], "microphone_heard_tone", "{r}");
+    assert_eq!(r["loopback_pairs"][0]["crosstalk_suspect"], false, "{r}");
+    assert!(r["audible_seconds"].as_f64().unwrap() <= 1.3, "{r}");
+    assert!(r["partial"].is_string() && r.get("stored_in").is_none());
+    let (ok, s) = call(&cfg, &d, "bench_audio_discovery", "{}");
+    assert!(ok && s["stored"] == false, "{s}");
+    // Quiet hours (a window around now, written into a second config) refuse the audible run.
+    let always = d.join("quiet.json");
+    let text = std::fs::read_to_string(&cfg).unwrap().replace(
+        r#""quiet_hours":false"#,
+        r#""quiet_hours":{"start":"00:00","end":"23:59"}"#,
+    );
+    std::fs::write(&always, text).unwrap();
+    let (ok, e) = call(
+        &always,
+        &d,
+        "bench_audio_discover",
+        r#"{"output":"virt","input":"virt"}"#,
+    );
+    assert!(!ok && e.as_str().unwrap().contains("quiet hours"), "{e}");
+    let _ = std::fs::remove_dir_all(&d);
+}

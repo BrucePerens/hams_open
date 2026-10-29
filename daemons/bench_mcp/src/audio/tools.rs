@@ -16,6 +16,8 @@ pub struct Ctx<'a> {
     pub cfg: &'a Config,
     pub devs: &'a [Device],
     pub minute: u32,
+    /// The stored result of the last audio path discovery, which decides `auto` selections.
+    pub discovery: Option<&'a super::discover::Stored>,
 }
 
 pub const NOTE_HEARS_ROOM: &str = "The input hears the room and a recording can contain speech. It is kept only in the managed capture directory (retention applies) and no tool uploads it.";
@@ -51,6 +53,19 @@ pub fn pick<'a>(ctx: &Ctx<'a>, args: &Value, key: &str, dir: Dir) -> Result<&'a 
     };
     if setting != "auto" {
         return devices::resolve(ctx.devs, setting, dir);
+    }
+    // [@ANCHOR: audio_select_auto]
+    // `auto`: the device discovery found by listening, if it is still there; else the system default.
+    let found = ctx.discovery.and_then(|d| match dir {
+        Dir::Output => d.alert_output.as_deref(),
+        Dir::Input => d.verify_input.as_deref(),
+    });
+    if let Some(d) = found.and_then(|n| {
+        ctx.devs
+            .iter()
+            .find(|d| d.dir == dir && d.node_name == n && d.reserved.is_none())
+    }) {
+        return Ok(d);
     }
     ctx.devs
         .iter()
