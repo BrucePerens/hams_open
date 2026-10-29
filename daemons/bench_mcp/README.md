@@ -19,7 +19,8 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
                 "max_volts": 5.5, "max_amps": 1.0},
       "vna":   {"driver": "vnwa_open", "tier": "read_config", "if_hz": 12000, "point_ms": 60, "rf_level": 16383},
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
-      "lime":  {"driver": "limesdr", "tier": "read_config"}}}
+      "lime":  {"driver": "limesdr", "tier": "read_config"},
+      "rig":   {"driver": "hamlib", "tier": "read_only", "model": 1}}}
 
 The VNA entry's settings are all optional: `codec_s11` and `codec_s21` (parts of the ALSA ids of the two codecs; by default
 they are found from their place on the USB tree, which stays right when a power cycle changes the kernel's card order),
@@ -216,6 +217,19 @@ Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs ar
 * Speech: engine choice, voice list from a recording of `espeak-ng --voices`, command lines with the text on stdin; speaking to a WAV file and to a virtual output. [@ANCHOR: audio_speak_choose] [@ANCHOR: audio_speak_voices] [@ANCHOR: audio_speak_tool]
 * Alerts: volume by severity and quiet hours; the text is returned also when no sound can be made. [@ANCHOR: audio_alert_volume] [@ANCHOR: audio_alert_tool]
 * Audio path discovery: conclusions on synthetic observations (heard, not heard, dead input, no microphone, HDMI last, crosstalk), the volume ladder, staleness by device fingerprint, `auto` selection, and a run against a virtual output and input. [@ANCHOR: audio_discover_conclude] [@ANCHOR: audio_discover_ladder] [@ANCHOR: audio_discover_stale] [@ANCHOR: audio_select_auto] [@ANCHOR: audio_discover_auto_rerun] [@ANCHOR: audio_discover_tool]
+
+## Hamlib rigs (`hamlib` driver)
+
+`bench_hamlib_*` tools drive radios through Hamlib's `rigctld` daemon (a separate program, started by this server on 127.0.0.1 or already running; Hamlib is LGPL and is not linked): the model list, the rigs and their state, a receiver's status in one call, single values and signal readings, and the managed daemon. An entry is `{"driver": "hamlib", "tier": "read_only", "model": 1}` (the Hamlib dummy rig) or `{"driver": "hamlib", "tier": "read_only", "model": 1021, "device": "/dev/serial/by-id/usb-EXAMPLE_rig-if00-port0", "speed": 19200}`. Keys, tiers and the safety model are in `docs/HAMLIB_TOOLS.md` and the manual pages `instruments/hamlib/*`. Tests run against Hamlib's dummy rig through a managed rigctld on a free localhost port, and against a scripted fake of rigctld for faults; nothing here has run on a real rig.
+
+* The config takes a managed or an existing rigctld, refuses remote daemons and bad values. [@ANCHOR: hamlib_config]
+* Return codes have names and next steps; arguments cannot carry a second command. [@ANCHOR: hamlib_error_codes] [@ANCHOR: hamlib_arg_check]
+* A command gets its reply or a bounded error; a read is tried once more, a write never. [@ANCHOR: hamlib_command] [@ANCHOR: hamlib_read_retry]
+* The managed daemon binds localhost, starts on demand, is stopped on request, and a leftover of a dead server is stopped (a live owner is never touched). [@ANCHOR: hamlib_rigctld_args] [@ANCHOR: hamlib_rigctld_start] [@ANCHOR: hamlib_rigctld_ensure] [@ANCHOR: hamlib_rigctld_tool] [@ANCHOR: hamlib_reap_stale] [@ANCHOR: hamlib_release_after_crash]
+* A missing or unusable serial device is reported before a daemon starts. [@ANCHOR: hamlib_device_check]
+* The model table and capabilities are read from `rigctl` output, by the columns of its header. [@ANCHOR: hamlib_models_list] [@ANCHOR: hamlib_models_caps] [@ANCHOR: hamlib_models_tool]
+* Status, single values and signal readings; what the rig lacks is reported, not hidden. [@ANCHOR: hamlib_s_units] [@ANCHOR: hamlib_capability_query] [@ANCHOR: hamlib_status] [@ANCHOR: hamlib_get] [@ANCHOR: hamlib_signal_readings]
+* The tools open the rig, run under the tier check and list the rigs. [@ANCHOR: hamlib_open] [@ANCHOR: hamlib_call] [@ANCHOR: hamlib_rigs]
 
 ## Template instrument (`example` driver)
 
