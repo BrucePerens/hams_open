@@ -1,7 +1,7 @@
 ---
 title: Example instrument protocol notes
 summary: The command subset and where each fact came from. The model for a protocol and provenance page.
-see_also: [instruments/example/limits]
+see_also: [instruments/example/limits, concepts/extending/provenance]
 instrument: example
 verified: fixtures only
 ---
