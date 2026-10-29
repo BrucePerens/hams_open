@@ -271,10 +271,16 @@ have no data stage of interest (the transfer is the command).
 The amplitude is about 16383 x 10^(dB/20): -50, -40 and -30 dB sent 0x0034, 0x00a3 and 0x0206 (one count below the exact value
 at -40 dB). The remote control allows -50 to 0 dB. The tuning word is the same as the sweep's (100 MHz is `c7 71 1c 47`).
 
-Not yet confirmed: that this sequence puts a tone on the TX port. Driven from `vnwa_open::generator` and from the vendor
-program alike, a receiver on the TX cable saw no tone near the frequency, only a weak symmetric pair of lines at +/-1.5 MHz drifting
-inward that began about a second after "on" and ignored the frequency and level steps and "off". The next step is to look at the TX
-port with the scope.
+Confirmed 2026-10-29 on a Siglent SDS1202X-E (1 MOhm input) on the TX port through a tee, with 3 feet of lead to the scope and to the
+VNA's RX input: after a hub power cycle of the VNA (it keeps nothing across one, so the set-up is sent again), `generator on` puts a
+CW tone on the TX port at the commanded frequency (the scope's counter read 999.85 kHz, 3.5 MHz, 10 MHz, 14 MHz and 100 MHz) at about
+31 mV rms (88 to 96 mV peak to peak), which is -17 dBm into 50 ohms and matches the vendor's figure. `generator off` leaves only the
+scope's noise (about 4 mV peak to peak, no frequency). At 0 dB the level is flat to about 3 percent from 100 kHz to 10 MHz; above that
+the readings (41 mV at 30 MHz, 46 mV at 60 MHz, 24 mV at 100 MHz) follow the standing waves of the 3-foot leads, not the generator. The
+earlier "no tone" result was therefore a receiver or cabling problem, not the generator.
+
+Not yet confirmed: the level steps (0, 10, 20, 30 dB read 31, 30, 14 and 9.5 mV; the last is the scope's noise floor, and the 10 dB step
+showed no change), which need the scope averaged and a proper termination.
 
 ## Seen but not decoded
 
