@@ -6,6 +6,7 @@
 //! tool above an instrument's tier and does not list tools no instrument may use. `BENCH_MCP_OUT`
 //! is the directory for captures and screenshots.
 
+mod audio;
 mod config;
 mod dsp;
 mod link;
@@ -103,7 +104,7 @@ const TOOLS: &[ToolSpec] = &[
         props: r#"{"instrument":{"type":"string"},"confirm_inputs_disconnected":{"type":"boolean"}}"#, required: &["confirm_inputs_disconnected"] },
 ];
 
-fn out_dir() -> PathBuf {
+pub(crate) fn out_dir() -> PathBuf {
     let d = std::env::var("BENCH_MCP_OUT")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("bench_mcp"));
@@ -151,6 +152,7 @@ fn connect(i: &Instrument) -> Result<Link, String> {
         Kind::Vna => Err("the VNA has no SCPI link".into()),
         Kind::Sdr => Err("an SDR has no SCPI link".into()),
         Kind::UsbHub => Err("the USB hub tools have no SCPI link".into()),
+        Kind::Audio => Err("the audio tools have no SCPI link".into()),
     }
 }
 
@@ -165,6 +167,9 @@ fn instrument_lock(name: &str) -> Arc<Mutex<()>> {
 }
 
 fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
+    if name.starts_with("bench_audio_") {
+        return audio::call(insts, name, args);
+    }
     if name.starts_with("bench_usb_") {
         return usb_hub::call(insts, name, args);
     }
@@ -259,6 +264,7 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
 
 fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
     let usb = usb_hub::tool_defs(insts);
+    let audio = audio::tool_defs(insts);
     TOOLS
         .iter()
         .filter(|t| t.name == "bench_list" || insts.iter().any(|i| t.kinds.contains(&i.kind) && i.tier >= t.tier))
@@ -268,6 +274,7 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
             Tool::new(t.name, format!("[{:?}] {}", t.tier, t.desc), Arc::new(schema))
         })
         .chain(usb)
+        .chain(audio)
         .collect()
 }
 

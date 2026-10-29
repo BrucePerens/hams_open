@@ -1,0 +1,6 @@
+ 0 [sofhdadsp      ]: sof-hda-dsp - sof-hda-dsp
+                      HP-HPSpectrex3602_in_1Laptop16_f2xxx-Type1ProductConfigId-891F
+ 1 [CODEC          ]: USB-Audio - USB AUDIO  CODEC
+                      BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.2, fu
+ 2 [CODEC_1        ]: USB-Audio - USB AUDIO  CODEC
+                      BurrBrown from Texas Instruments USB AUDIO  CODEC at usb-0000:00:14.0-2.2.3, fu

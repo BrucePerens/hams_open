@@ -29,6 +29,8 @@ pub enum Kind {
     Sdr,
     /// The host's USB hubs and ports (`usb_hub` module): read from sysfs, switched with uhubctl.
     UsbHub,
+    /// The host's sound devices (`audio` module): PipeWire, wpctl and the speech synthesizers.
+    Audio,
 }
 
 #[derive(Clone, Debug)]
@@ -47,6 +49,7 @@ pub struct Instrument {
     pub vna: vnwa_open::sweep::Config,
     pub sdr: crate::sdr::Config,
     pub usb: crate::usb_hub::Config,
+    pub audio: crate::audio::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -137,9 +140,10 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             "vnwa_open" => Kind::Vna,
             "bladerf" | "limesdr" => Kind::Sdr,
             "usb_hub" => Kind::UsbHub,
+            "audio" => Kind::Audio,
             o => {
                 return Err(format!(
-                "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open, bladerf, limesdr, usb_hub)"
+                "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open, bladerf, limesdr, usb_hub, audio)"
             ))
             }
         };
@@ -159,6 +163,11 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
             usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
+            audio: if driver_name == "audio" {
+                crate::audio::parse_config(c).map_err(|e| format!("{name}: {e}"))?
+            } else {
+                crate::audio::Config::default()
+            },
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),

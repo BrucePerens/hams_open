@@ -1,0 +1,9 @@
+00-00: HDA Analog (*) :  : playback 1 : capture 1
+00-03: HDMI1 (*) : HDMI 1 : playback 1
+00-04: HDMI2 (*) : HDMI 2 : playback 1
+00-05: HDMI3 (*) : HDMI 3 : playback 1
+00-06: DMIC (*) :  : capture 1
+00-07: DMIC16kHz (*) :  : capture 1
+00-31: HDA Analog Deep Buffer (*) :  : playback 1
+01-00: USB Audio : USB Audio : playback 1 : capture 1
+02-00: USB Audio : USB Audio : playback 1 : capture 1
