@@ -15,6 +15,7 @@ pub struct ProcessRunner;
 
 impl Runner for ProcessRunner {
     fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+        // [@ANCHOR: bench_mcp_usb_hub_uhubctl_processrunner_run]
         let out = Command::new(program).args(args).output().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 format!("{program} is not installed (not found on PATH)")
@@ -30,6 +31,7 @@ impl Runner for ProcessRunner {
 
 /// Turns a failed `sudo -n <tool>` into a message that says what to fix.
 pub fn explain_failure(tool: &str, text: &str) -> String {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_explain_failure]
     let t = text.trim();
     if t.contains("a password is required") || t.contains("a terminal is required") {
         return format!("sudo -n {tool} needs a password: add a NOPASSWD sudoers rule for {tool} for this user ({t})");
@@ -44,6 +46,7 @@ pub fn explain_failure(tool: &str, text: &str) -> String {
 }
 
 pub fn sudo(run: &dyn Runner, tool: &str, args: &[&str]) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_sudo]
     let mut a: Vec<String> = vec!["-n".into(), tool.into()];
     a.extend(args.iter().map(|s| s.to_string()));
     let (ok, text) = run.run("sudo", &a).map_err(|e| {
@@ -71,6 +74,7 @@ pub enum Switching {
 
 impl Switching {
     pub fn name(&self) -> String {
+        // [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_name]
         match self {
             Switching::PerPort => "per-port".into(),
             Switching::Ganged => "ganged".into(),
@@ -82,6 +86,7 @@ impl Switching {
 
 /// The link state of a SuperSpeed port (bits 5 to 8 of its status word).
 pub fn link_state(n: u16) -> &'static str {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_link_state]
     match n {
         0 => "U0",
         1 => "U1",
@@ -114,6 +119,7 @@ pub struct PortBits {
 }
 
 pub fn decode_port(word: u16, usb3: bool) -> PortBits {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_decode_port]
     let bit = |n: u16| word & (1 << n) != 0;
     if usb3 {
         let speed = match (word >> 10) & 7 {
@@ -187,6 +193,7 @@ pub struct UHub {
 }
 
 fn switching_of(s: &str) -> Switching {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_of]
     match s {
         "ppps" => Switching::PerPort,
         "ganged" => Switching::Ganged,
@@ -197,6 +204,7 @@ fn switching_of(s: &str) -> Switching {
 
 /// The bracketed part of a hub line: `14b0:013a Generic 4-Port USB 2.0 Hub, USB 2.10, 5 ports, ppps`.
 fn bracket(s: &str) -> Option<(String, Option<String>, String, u32, Switching)> {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_bracket]
     let parts: Vec<&str> = s.split(", ").collect();
     if parts.len() < 4 {
         return None;
@@ -298,6 +306,7 @@ pub struct HubDescriptor {
 impl HubDescriptor {
     /// wHubCharacteristics bits 0 and 1.
     pub fn switching(&self) -> &'static str {
+        // [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_switching]
         match self.characteristics & 3 {
             0 => "ganged",
             1 => "per-port",
@@ -309,6 +318,7 @@ impl HubDescriptor {
     }
     /// Bits 3 and 4.
     pub fn over_current(&self) -> &'static str {
+        // [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_over_current]
         match (self.characteristics >> 3) & 3 {
             0 => "global",
             1 => "per-port",
@@ -325,6 +335,7 @@ impl HubDescriptor {
 }
 
 pub fn parse_hub_descriptor(text: &str) -> Option<HubDescriptor> {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_parse_hub_descriptor]
     let mut at = text
         .lines()
         .skip_while(|l| !l.starts_with("Hub Descriptor:"));
@@ -365,6 +376,7 @@ pub fn parse_hub_descriptor(text: &str) -> Option<HubDescriptor> {
 
 /// `sudo -n lsusb -v -s <bus>:<devnum>` and its hub descriptor.
 pub fn hub_descriptor(run: &dyn Runner, bus: u32, devnum: u32) -> Result<HubDescriptor, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor]
     let sel = format!("{bus}:{devnum}");
     let text = sudo(run, "lsusb", &["-v", "-s", &sel])?;
     parse_hub_descriptor(&text).ok_or_else(|| format!("lsusb printed no hub descriptor for {sel}"))
@@ -385,6 +397,8 @@ pub mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_uhubctl_parse]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_bracket]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_of]
     #[test]
     fn the_recorded_uhubctl_output_parses_with_and_without_descriptions() {
         for name in ["uhubctl.txt", "uhubctl_nodesc.txt"] {
@@ -423,6 +437,8 @@ pub mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_decode_port]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_link_state]
     #[test]
     fn port_words_decode_for_usb2_and_usb3() {
         let b = decode_port(0x0503, false);
@@ -451,6 +467,9 @@ pub mod tests {
         assert!(parse_status("  Port 1: 0100 power\n").is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_over_current]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_switching]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_parse_hub_descriptor]
     #[test]
     fn the_hub_descriptor_from_lsusb_gives_switching_overcurrent_and_think_time() {
         let d = parse_hub_descriptor(&fx("lsusb_v_hub_3-2.txt")).unwrap();
@@ -478,6 +497,9 @@ pub mod tests {
         }
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_processrunner_run]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_explain_failure]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_sudo]
     #[test]
     fn sudo_failures_say_what_to_fix() {
         let e = sudo(
@@ -509,5 +531,36 @@ pub mod tests {
             .run("definitely-not-a-program-xyz", &[])
             .unwrap_err();
         assert!(missing.contains("not installed"), "{missing}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor]
+    #[test]
+    fn the_hub_descriptor_is_read_through_sudo_lsusb_for_one_bus_and_device() {
+        struct Lsusb(std::cell::RefCell<Vec<String>>);
+        impl Runner for Lsusb {
+            fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+                self.0
+                    .borrow_mut()
+                    .push(format!("{program} {}", args.join(" ")));
+                Ok((true, fx("lsusb_v_hub_3-2.txt")))
+            }
+        }
+        let run = Lsusb(Default::default());
+        let d = hub_descriptor(&run, 3, 7).unwrap();
+        assert_eq!((d.ports, d.switching()), (5, "per-port"));
+        assert_eq!(run.0.borrow()[0], "sudo -n lsusb -v -s 3:7");
+        let e = hub_descriptor(&Scripted(true, "no descriptor here"), 3, 7).unwrap_err();
+        assert!(e.contains("no hub descriptor for 3:7"), "{e}");
+        let e = hub_descriptor(&Scripted(false, "sudo: a password is required"), 3, 7).unwrap_err();
+        assert!(e.contains("NOPASSWD"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_name]
+    #[test]
+    fn switching_modes_have_their_report_names() {
+        assert_eq!(Switching::PerPort.name(), "per-port");
+        assert_eq!(Switching::Ganged.name(), "ganged");
+        assert_eq!(Switching::None.name(), "none");
+        assert_eq!(Switching::Unknown("zz".into()).name(), "unknown (zz)");
     }
 }

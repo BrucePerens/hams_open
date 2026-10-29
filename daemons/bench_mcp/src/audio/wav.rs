@@ -18,6 +18,7 @@ impl Wav {
 
     /// The channels averaged into one.
     pub fn mono(&self) -> Vec<f32> {
+        // [@ANCHOR: bench_mcp_audio_wav_wav_mono]
         let c = usize::from(self.channels.max(1));
         if c == 1 {
             return self.samples.clone();
@@ -107,6 +108,7 @@ pub fn read(path: &Path) -> Result<Wav, String> {
 
 /// The bytes of a 16-bit PCM WAV; samples beyond full scale are clipped.
 pub fn encode(w: &Wav) -> Vec<u8> {
+    // [@ANCHOR: bench_mcp_audio_wav_encode]
     let data_len = (w.samples.len() * 2) as u32;
     let mut o = Vec::with_capacity(44 + data_len as usize);
     o.extend_from_slice(b"RIFF");
@@ -137,6 +139,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: audio_wav]
+    // Tests [@ANCHOR: bench_mcp_audio_wav_encode]
     #[test]
     fn a_wav_round_trips_within_one_sixteen_bit_step() {
         let w = Wav {
@@ -152,6 +155,7 @@ mod tests {
         assert!((w.seconds() - 3.0 / 44100.0).abs() < 1e-12);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_wav_wav_mono]
     #[test]
     fn mono_averages_the_channels() {
         let w = Wav {

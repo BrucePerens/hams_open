@@ -16,12 +16,14 @@ use std::time::Duration;
 
 /// The helper command: `sudo -n <this binary> --usb-priv <args>`.
 pub fn helper_command(exe: &str, args: &[&str]) -> Vec<String> {
+    // [@ANCHOR: bench_mcp_usb_hub_ladder_helper_command]
     let mut v: Vec<String> = vec!["-n".into(), exe.into(), FLAG.into()];
     v.extend(args.iter().map(|s| s.to_string()));
     v
 }
 
 fn run_helper(run: &dyn Runner, exe: &str, args: &[&str]) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_ladder_run_helper]
     let (ok, text) = run.run("sudo", &helper_command(exe, args)).map_err(|e| {
         if e.starts_with("sudo") {
             format!("sudo is not installed: {e}")
@@ -52,6 +54,7 @@ fn target(
     bench: &[BenchRef],
     args: &Value,
 ) -> Result<Target, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_ladder_target]
     let tree = Tree::read(sysfs)?;
     let name = args
         .get("device")
@@ -137,6 +140,7 @@ pub fn authorize(
     bench: &[BenchRef],
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_ladder_authorize]
     let t = target(sysfs, proc_root, cfg, bench, args)?;
     let on = args
         .get("authorized")
@@ -183,6 +187,7 @@ pub fn driver(
     bench: &[BenchRef],
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_ladder_driver]
     let tree = Tree::read(sysfs)?;
     let iface_name = args
         .get("interface")
@@ -247,6 +252,7 @@ pub fn autosuspend(
     bench: &[BenchRef],
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_ladder_autosuspend]
     let t = target(sysfs, proc_root, cfg, bench, args)?;
     let control = args
         .get("control")
@@ -321,6 +327,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_ladder]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_authorize]
     #[test]
     fn deauthorize_and_authorize_go_through_the_helper_and_report_the_state() {
         let (_d, sys) = writable_sys();
@@ -357,6 +364,9 @@ mod tests {
         assert_eq!(v["now"]["authorized"], true);
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_helper_command]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_run_helper]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_target]
     #[test]
     fn protected_devices_are_refused_before_the_helper_runs_and_dry_run_changes_nothing() {
         let (_d, sys) = writable_sys();
@@ -435,6 +445,8 @@ mod tests {
         assert!(e.contains("root hub"), "{e}");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_autosuspend]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_driver]
     #[test]
     fn driver_unbind_and_bind_name_the_interface_and_autosuspend_reads_back() {
         let (_d, sys) = writable_sys();

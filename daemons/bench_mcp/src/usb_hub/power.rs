@@ -57,6 +57,7 @@ pub struct Seen {
 }
 
 pub fn probe(sysfs: &Path, path: &str) -> Option<Seen> {
+    // [@ANCHOR: bench_mcp_usb_hub_power_probe]
     let d = sysfs.join("bus/usb/devices").join(path);
     let read = |f: &str| {
         std::fs::read_to_string(d.join(f))
@@ -90,6 +91,12 @@ pub fn proven(key: &str) -> Option<Evidence> {
         .and_then(|m| m.get(key).cloned())
 }
 
+/// Empties the evidence store, for a test that needs a port nothing has cycled yet (it holds `testkit::evidence_lock`).
+#[cfg(test)]
+pub fn forget_all() {
+    *PROVEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 fn remember(key: &str, e: Evidence) {
     PROVEN
         .lock()
@@ -99,6 +106,7 @@ fn remember(key: &str, e: Evidence) {
 }
 
 fn uhubctl(run: &dyn Runner, port: &PortRef, action: &str) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_usb_hub_power_uhubctl]
     let p = port.port.to_string();
     let loc = port.location();
     let mut args = vec!["-N", "-l", &loc, "-p", &p, "-a", action];
@@ -111,6 +119,7 @@ fn uhubctl(run: &dyn Runner, port: &PortRef, action: &str) -> Result<(), String>
 }
 
 pub fn wait_until(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
+    // [@ANCHOR: bench_mcp_usb_hub_power_wait_until]
     let end = Instant::now() + timeout;
     loop {
         if done() {
@@ -162,6 +171,7 @@ pub struct Report {
 
 impl Report {
     pub fn level(&self) -> u8 {
+        // [@ANCHOR: bench_mcp_usb_hub_power_report_level]
         if self.re_enumerated {
             2
         } else {
@@ -364,6 +374,7 @@ pub fn set(
     on: bool,
     back: Duration,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_power_set]
     let child = port.child();
     let before = probe(sysfs, &child);
     let t0 = Instant::now();
@@ -425,8 +436,12 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_power_cycle]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_report_level]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_uhubctl]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_wait_until]
     #[test]
     fn a_cycle_is_off_then_on_through_sudo_uhubctl_and_proves_re_enumeration() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let o = opts(300, 5000);
@@ -466,6 +481,7 @@ mod tests {
 
     #[test]
     fn a_hub_that_ignores_the_command_is_reported_and_the_cycle_fails_clearly() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Ignores);
         let e = cycle(&hub, &sys, &port(), &opts(0, 300), None).unwrap_err();
@@ -477,6 +493,7 @@ mod tests {
 
     #[test]
     fn a_failing_power_off_stops_before_power_on() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Fails);
         let e = cycle(&hub, &sys, &port(), &opts(0, 300), None).unwrap_err();
@@ -493,6 +510,7 @@ mod tests {
 
     #[test]
     fn a_ready_check_is_waited_for_after_the_device_is_back() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let mut polls = 0;
@@ -539,6 +557,8 @@ mod tests {
         assert!(e.contains("cycle 1"), "{e}");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_probe]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_set]
     #[test]
     fn set_off_reports_the_device_leaving_the_tree() {
         let (_d, sys) = writable_sys();

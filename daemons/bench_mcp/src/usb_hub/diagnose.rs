@@ -63,6 +63,7 @@ fn f(level: &'static str, what: &str, evidence: impl Into<String>, next: &str) -
 }
 
 fn rank(l: &str) -> u8 {
+    // [@ANCHOR: bench_mcp_usb_hub_diagnose_rank]
     match l {
         "problem" => 0,
         "warning" => 1,
@@ -76,6 +77,7 @@ fn driverless_class_matters(class: u8) -> bool {
 
 /// The port a missing device would be on, from the arguments.
 fn missing_target(t: &Tree, cfg: &Config, args: &Value) -> Result<(String, u32), String> {
+    // [@ANCHOR: bench_mcp_usb_hub_diagnose_missing_target]
     if let Some(l) = args.get("device").and_then(|v| v.as_str()) {
         if let Some((hub, port)) = parent_of(l) {
             return Ok((hub, port));
@@ -220,6 +222,7 @@ fn finish(
     unread: Vec<String>,
     hist: Option<Value>,
 ) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_diagnose_finish]
     findings.sort_by_key(|x| rank(x.level));
     let worst = findings.first().map(|x| x.level);
     let verdict = match (present, worst) {
@@ -245,6 +248,7 @@ fn missing(
     up: Option<&uhubctl::UPort>,
     hist: Option<&Value>,
 ) {
+    // [@ANCHOR: bench_mcp_usb_hub_diagnose_missing]
     if let Some(p) = up {
         let b = &p.bits;
         if !b.powered {
@@ -307,6 +311,7 @@ fn present_checks(
     up: Option<&uhubctl::UPort>,
     hist: Option<&Value>,
 ) {
+    // [@ANCHOR: bench_mcp_usb_hub_diagnose_present_checks]
     let parent = d.parent.as_deref().and_then(|p| t.get(p));
     if let Some(s) = speed_finding(d, parent) {
         let level = if s["level"] == "warn" {
@@ -480,6 +485,11 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_diagnose]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_finish]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_missing]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_missing_target]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_present_checks]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_rank]
     #[test]
     fn an_empty_powered_port_is_a_powered_port_with_nothing_connected() {
         let (_d, sys) = writable_sys();

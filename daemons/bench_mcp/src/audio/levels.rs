@@ -34,6 +34,7 @@ pub fn gain_db(volume: f64) -> f64 {
 }
 
 pub fn get(run: &dyn Run, node_id: u32) -> Result<Level, String> {
+    // [@ANCHOR: bench_mcp_audio_levels_get]
     let (ok, text) = run.run("wpctl", &["get-volume".into(), node_id.to_string()])?;
     if !ok {
         return Err(format!("wpctl get-volume {node_id}: {}", text.trim()));
@@ -42,6 +43,7 @@ pub fn get(run: &dyn Run, node_id: u32) -> Result<Level, String> {
 }
 
 pub fn set_volume(run: &dyn Run, node_id: u32, volume: f64) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_audio_levels_set_volume]
     let (ok, text) = run.run(
         "wpctl",
         &[
@@ -58,6 +60,7 @@ pub fn set_volume(run: &dyn Run, node_id: u32, volume: f64) -> Result<(), String
 }
 
 pub fn set_mute(run: &dyn Run, node_id: u32, mute: bool) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_audio_levels_set_mute]
     let (ok, text) = run.run(
         "wpctl",
         &[
@@ -108,5 +111,45 @@ mod tests {
     fn the_gain_is_sixty_log_volume() {
         assert!((gain_db(0.5) - 20.0 * 0.125f64.log10()).abs() < 1e-9);
         assert_eq!(gain_db(1.0), 0.0);
+    }
+
+    struct Failing;
+    impl Run for Failing {
+        fn run(&self, _p: &str, _a: &[String]) -> Result<(bool, String), String> {
+            Ok((false, "Failed to find node\n".into()))
+        }
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_levels_get]
+    // Tests [@ANCHOR: bench_mcp_audio_levels_set_volume]
+    // Tests [@ANCHOR: bench_mcp_audio_levels_set_mute]
+    #[test]
+    fn levels_round_trip_through_wpctl_and_failures_are_errors() {
+        let run = super::super::testkit::Scripted::new(&[(7, 0.5, false)]);
+        assert_eq!(get(&run, 7).unwrap().volume, 0.5);
+        set_volume(&run, 7, 0.25).unwrap();
+        set_mute(&run, 7, true).unwrap();
+        assert_eq!(
+            get(&run, 7).unwrap(),
+            Level {
+                volume: 0.25,
+                muted: true
+            }
+        );
+        assert!(run
+            .calls
+            .borrow()
+            .contains(&"wpctl set-volume 7 0.250".to_string()));
+        assert!(run
+            .calls
+            .borrow()
+            .contains(&"wpctl set-mute 7 1".to_string()));
+        assert!(get(&Failing, 7).unwrap_err().contains("get-volume 7"));
+        assert!(set_volume(&Failing, 7, 0.1)
+            .unwrap_err()
+            .contains("set-volume 7"));
+        assert!(set_mute(&Failing, 7, false)
+            .unwrap_err()
+            .contains("set-mute 7"));
     }
 }

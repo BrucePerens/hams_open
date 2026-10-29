@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 
 /// `YYYYMMDD-HHMMSS` in local time.
 pub fn timestamp() -> String {
+    // [@ANCHOR: bench_mcp_audio_store_timestamp]
     let mut t: libc::time_t = 0;
     // SAFETY: time and localtime_r write only to the locals given.
     let tm = unsafe {
@@ -28,6 +29,7 @@ pub fn timestamp() -> String {
 
 /// A file name part made of letters, digits and dashes only.
 pub fn slug(s: &str) -> String {
+    // [@ANCHOR: bench_mcp_audio_store_slug]
     let t: String = s
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
@@ -37,6 +39,7 @@ pub fn slug(s: &str) -> String {
 
 /// Creates the directory (owner only) and returns a fresh path `<prefix>-<timestamp>[-<label>].wav` in it.
 pub fn new_path(dir: &Path, prefix: &str, label: Option<&str>) -> Result<PathBuf, String> {
+    // [@ANCHOR: bench_mcp_audio_store_new_path]
     use std::os::unix::fs::DirBuilderExt;
     std::fs::DirBuilder::new()
         .recursive(true)
@@ -181,6 +184,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_store_new_path]
+    // Tests [@ANCHOR: bench_mcp_audio_store_slug]
+    // Tests [@ANCHOR: bench_mcp_audio_store_timestamp]
     #[test]
     fn new_paths_are_unique_private_and_labelled_safely() {
         let d = scratch("new").join("sub");
@@ -200,5 +206,14 @@ mod tests {
             0o700
         );
         let _ = std::fs::remove_dir_all(d.parent().unwrap());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_store_slug]
+    #[test]
+    fn a_slug_has_only_letters_digits_and_inner_dashes_and_is_short() {
+        assert_eq!(slug("relay ../click!"), "relay----click");
+        assert_eq!(slug("--Door beep--"), "Door-beep");
+        assert_eq!(slug("é"), "");
+        assert_eq!(slug(&"a".repeat(80)).len(), 40);
     }
 }

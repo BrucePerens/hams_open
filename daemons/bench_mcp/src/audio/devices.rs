@@ -15,6 +15,7 @@ pub enum Dir {
 
 impl Dir {
     pub fn word(self) -> &'static str {
+        // [@ANCHOR: bench_mcp_audio_devices_dir_word]
         match self {
             Dir::Output => "output",
             Dir::Input => "input",
@@ -53,6 +54,7 @@ pub struct Device {
 
 impl Device {
     pub fn transport(&self) -> &'static str {
+        // [@ANCHOR: bench_mcp_audio_devices_device_transport]
         if self.node_name.starts_with("bluez_") || self.bus == "bluetooth" {
             "bluetooth"
         } else if self.node_name.contains("raop") || self.node_name.starts_with("tunnel.") {
@@ -99,6 +101,7 @@ fn usb_path_of(sysfs: &str) -> Option<String> {
 }
 
 fn rates_of(v: &Value, out: &mut Vec<u64>) {
+    // [@ANCHOR: bench_mcp_audio_devices_rates_of]
     match v {
         Value::Number(n) => out.extend(n.as_u64()),
         Value::Object(o) => {
@@ -114,6 +117,7 @@ fn rates_of(v: &Value, out: &mut Vec<u64>) {
 }
 
 fn formats_of(v: &Value, out: &mut Vec<String>) {
+    // [@ANCHOR: bench_mcp_audio_devices_formats_of]
     match v {
         Value::String(s) => out.push(s.clone()),
         Value::Object(o) => o.values().for_each(|x| formats_of(x, out)),
@@ -308,6 +312,7 @@ pub fn parse(dump: &str, asound: &Path, cfg: &Config) -> Result<Vec<Device>, Str
 
 /// Reads the live device list: `pw-dump` and `/proc/asound`.
 pub fn list(run: &dyn Run, asound: &Path, cfg: &Config) -> Result<Vec<Device>, String> {
+    // [@ANCHOR: bench_mcp_audio_devices_list]
     let (ok, text) = run.run("pw-dump", &[])?;
     if !ok {
         return Err(format!(
@@ -321,6 +326,7 @@ pub fn list(run: &dyn Run, asound: &Path, cfg: &Config) -> Result<Vec<Device>, S
 /// Finds a device by alias, exact node name, or a unique fragment of the node name or description, in the given direction.
 /// A reserved device is never returned: the answer is an error that says so.
 pub fn resolve<'a>(devs: &'a [Device], want: &str, dir: Dir) -> Result<&'a Device, String> {
+    // [@ANCHOR: bench_mcp_audio_devices_resolve]
     let w = want.to_ascii_lowercase();
     let side: Vec<&Device> = devs.iter().filter(|d| d.dir == dir).collect();
     let exact: Vec<&&Device> = side
@@ -434,6 +440,8 @@ mod tests {
         assert!(hdmi.iter().any(|d| d.availability.as_deref() == Some("no")));
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_devices_dir_word]
+    // Tests [@ANCHOR: bench_mcp_audio_devices_resolve]
     #[test]
     fn the_two_vnwa_codecs_are_reserved_by_usb_id_and_never_resolve() {
         let devs = devbox_devices();
@@ -513,6 +521,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_devices_formats_of]
+    // Tests [@ANCHOR: bench_mcp_audio_devices_rates_of]
     #[test]
     fn the_kernel_usbid_file_overrides_what_pipewire_claims() {
         // Card numbers are looked up through /proc/asound/cardN/usbid, so a node whose PipeWire properties lack the ids is
@@ -555,6 +565,7 @@ mod tests {
             .contains("no input"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_devices_device_transport]
     #[test]
     fn a_bluetooth_node_is_recognised_by_its_name() {
         let dump = r#"[{"id":7,"type":"PipeWire:Interface:Node","info":{"state":"idle","props":{"node.name":"bluez_output.AA_BB.1","media.class":"Audio/Sink","node.description":"Headset"},"params":{}}}]"#;

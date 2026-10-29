@@ -29,6 +29,7 @@ pub enum Engine {
 
 impl Engine {
     pub fn name(self) -> &'static str {
+        // [@ANCHOR: bench_mcp_audio_speak_engine_name]
         match self {
             Engine::SpeechDispatcher => "speech-dispatcher",
             Engine::EspeakNg => "espeak-ng",
@@ -128,6 +129,7 @@ pub fn parse_voices(text: &str) -> Vec<Voice> {
 
 /// A voice or language code is passed as a command argument, so it is limited to the characters such codes use.
 pub fn safe_code(s: &str) -> Result<&str, String> {
+    // [@ANCHOR: bench_mcp_audio_speak_safe_code]
     let ok = !s.is_empty()
         && s.len() <= 40
         && !s.starts_with('-')
@@ -169,6 +171,7 @@ pub fn spd_rate(wpm: u32) -> i32 {
 }
 
 pub fn spd_args(lang: &str, voice: Option<&str>, rate_wpm: u32) -> Vec<String> {
+    // [@ANCHOR: bench_mcp_audio_speak_spd_args]
     let mut a: Vec<String> = vec![
         "--wait".into(),
         "-e".into(),
@@ -190,6 +193,7 @@ fn run_with_stdin(
     input: &str,
     limit: Duration,
 ) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_audio_speak_run_with_stdin]
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::piped())
@@ -237,6 +241,7 @@ pub struct Request {
 }
 
 pub fn request(ctx: &Ctx, args: &Value, target: &Device) -> Result<Request, String> {
+    // [@ANCHOR: bench_mcp_audio_speak_request]
     let text = args
         .get("text")
         .and_then(|t| t.as_str())
@@ -283,6 +288,7 @@ pub fn request(ctx: &Ctx, args: &Value, target: &Device) -> Result<Request, Stri
 
 /// Synthesizes the request into a WAV file with espeak-ng or Piper.
 pub fn synthesize(ctx: &Ctx, r: &Request, out: &Path) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_audio_speak_synthesize]
     let (program, args) = match r.engine {
         Engine::EspeakNg => ("espeak-ng", espeak_args(&r.voice, r.rate_wpm, out)),
         Engine::Piper => (
@@ -310,6 +316,7 @@ pub fn synthesize(ctx: &Ctx, r: &Request, out: &Path) -> Result<f64, String> {
 
 /// Makes the sound for the request on `dev`: the caller holds the volume guard. Returns the seconds of speech.
 pub fn say(ctx: &Ctx, dev: &Device, r: &Request) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_audio_speak_say]
     if r.engine == Engine::SpeechDispatcher {
         let started = Instant::now();
         let voice = (r.voice != r.language).then_some(r.voice.as_str());
@@ -331,6 +338,7 @@ pub fn say(ctx: &Ctx, dev: &Device, r: &Request) -> Result<f64, String> {
 }
 
 pub fn synthesizers(ctx: &Ctx, _args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_speak_synthesizers]
     let f = detect(ctx.cfg, super::runtime_dir().as_deref());
     let voices = if f.espeak_ng {
         let (ok, text) = ctx.run.run("espeak-ng", &["--voices".into()])?;
@@ -409,7 +417,8 @@ pub fn speak(ctx: &Ctx, args: &Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::testkit::{devbox_devices, recorded};
+    use crate::audio::testkit::{devbox_devices, fake_programs, recorded, scratch, Scripted};
+    use crate::audio::wav::Wav;
 
     fn dev(default: bool) -> Device {
         let mut d = devbox_devices()
@@ -532,6 +541,8 @@ mod tests {
         assert!(parse_voices("").is_empty());
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_speak_safe_code]
+    // Tests [@ANCHOR: bench_mcp_audio_speak_spd_args]
     #[test]
     fn commands_carry_the_text_on_stdin_and_codes_are_checked() {
         let a = espeak_args("en-us", 150, Path::new("/x/y.wav"));
@@ -553,5 +564,219 @@ mod tests {
         for bad in ["", "-v", "a b", "en;rm", "x\n", "é"] {
             assert!(safe_code(bad).is_err(), "{bad:?}");
         }
+    }
+
+    fn tone_wav(path: &Path, rate: u32, seconds: f64) {
+        wav::write(
+            path,
+            &Wav {
+                rate,
+                channels: 1,
+                samples: vec![0.1; (f64::from(rate) * seconds) as usize],
+            },
+        )
+        .unwrap();
+    }
+
+    fn request_for(engine: Engine, voice: &str) -> Request {
+        Request {
+            text: "net check".into(),
+            engine,
+            voice: voice.into(),
+            language: "en-us".into(),
+            rate_wpm: 160,
+        }
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_speak_engine_name]
+    #[test]
+    fn each_engine_has_the_name_the_tool_arguments_use() {
+        assert_eq!(Engine::SpeechDispatcher.name(), "speech-dispatcher");
+        assert_eq!(Engine::EspeakNg.name(), "espeak-ng");
+        assert_eq!(Engine::Piper.name(), "piper");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_speak_run_with_stdin]
+    #[test]
+    fn a_program_gets_the_text_on_stdin_and_failure_and_overrun_are_errors() {
+        let d = scratch("stdin");
+        let got = d.join("got.txt");
+        let script = format!("cat > '{}'", got.display());
+        run_with_stdin(
+            "sh",
+            &["-c".into(), script],
+            "hello relay",
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&got).unwrap(), "hello relay");
+        let e = run_with_stdin(
+            "sh",
+            &["-c".into(), "cat > /dev/null; echo boom >&2; exit 3".into()],
+            "x",
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+        assert!(e.contains("failed") && e.contains("boom"), "{e}");
+        let e =
+            run_with_stdin("sleep", &["5".into()], "x", Duration::from_millis(100)).unwrap_err();
+        assert!(e.contains("did not finish"), "{e}");
+        let e =
+            run_with_stdin("no-such-synth-program", &[], "x", Duration::from_secs(1)).unwrap_err();
+        assert!(e.contains("no-such-synth-program"), "{e}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_speak_request]
+    #[test]
+    fn a_request_is_validated_and_takes_its_defaults_from_the_config() {
+        let fakes = fake_programs();
+        tone_wav(&fakes.join("espeak-en-us.wav"), 22050, 1.0);
+        let devs = devbox_devices();
+        let target = dev(false);
+        let cfg = Config::default();
+        let run = Scripted::new(&[]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let r = request(&ctx, &json!({"text": "  net check  "}), &target).unwrap();
+        assert_eq!(
+            (
+                r.text.as_str(),
+                r.engine,
+                r.voice.as_str(),
+                r.language.as_str(),
+                r.rate_wpm
+            ),
+            ("net check", Engine::EspeakNg, "en-us", "en-us", 160)
+        );
+        let r = request(
+            &ctx,
+            &json!({"text": "x", "voice": "en+f3", "language": "en", "rate_wpm": 200, "engine": "espeak-ng"}),
+            &target,
+        )
+        .unwrap();
+        assert_eq!(
+            (r.voice.as_str(), r.language.as_str(), r.rate_wpm),
+            ("en+f3", "en", 200)
+        );
+        for bad in [
+            json!({}),
+            json!({"text": "   "}),
+            json!({"text": "x".repeat(MAX_TEXT + 1)}),
+            json!({"text": "x", "language": "en;rm"}),
+            json!({"text": "x", "voice": "-v"}),
+            json!({"text": "x", "rate_wpm": 79}),
+            json!({"text": "x", "rate_wpm": 451}),
+            json!({"text": "x", "engine": "festival"}),
+        ] {
+            assert!(request(&ctx, &bad, &target).is_err(), "{bad}");
+        }
+        assert_eq!(
+            request(&ctx, &json!({"text": "x".repeat(MAX_TEXT)}), &target)
+                .unwrap()
+                .text
+                .len(),
+            MAX_TEXT
+        );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_speak_synthesize]
+    #[test]
+    fn synthesis_writes_a_wav_and_refuses_long_speech_and_missing_setup() {
+        let fakes = fake_programs();
+        tone_wav(&fakes.join("espeak-short.wav"), 22050, 1.0);
+        tone_wav(&fakes.join("espeak-long.wav"), 8000, 31.0);
+        let d = scratch("synth");
+        let devs = devbox_devices();
+        let cfg = Config::default();
+        let run = Scripted::new(&[]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let out = d.join("o.wav");
+        let secs = synthesize(&ctx, &request_for(Engine::EspeakNg, "short"), &out).unwrap();
+        assert!((secs - 1.0).abs() < 0.01, "{secs}");
+        assert!(out.exists());
+        let e = synthesize(&ctx, &request_for(Engine::EspeakNg, "long"), &out).unwrap_err();
+        assert!(e.contains("over the 30 s limit"), "{e}");
+        let e = synthesize(&ctx, &request_for(Engine::Piper, "x"), &out).unwrap_err();
+        assert!(e.contains("piper_model is not set"), "{e}");
+        let e = synthesize(&ctx, &request_for(Engine::SpeechDispatcher, "x"), &out).unwrap_err();
+        assert!(e.contains("cannot write a WAV"), "{e}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_speak_say]
+    #[test]
+    fn saying_plays_the_synthesized_file_and_removes_it_afterwards() {
+        let fakes = fake_programs();
+        tone_wav(&fakes.join("espeak-say.wav"), 22050, 0.5);
+        let d = scratch("say");
+        let devs = devbox_devices();
+        let cfg = Config {
+            capture_dir: Some(d.clone()),
+            ..Config::default()
+        };
+        let run = Scripted::new(&[]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let target = dev(true);
+        let secs = say(&ctx, &target, &request_for(Engine::EspeakNg, "say")).unwrap();
+        assert!((secs - 0.5).abs() < 0.01, "{secs}");
+        let left: Vec<_> = std::fs::read_dir(&d).unwrap().collect();
+        assert!(left.is_empty(), "the temporary speech file is removed");
+        assert!(say(&ctx, &target, &request_for(Engine::Piper, "x")).is_err());
+        let spoken = say(
+            &ctx,
+            &target,
+            &request_for(Engine::SpeechDispatcher, "en-us"),
+        )
+        .unwrap();
+        assert!(spoken >= 0.0);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_speak_synthesizers]
+    #[test]
+    fn the_synthesizer_report_lists_installed_engines_and_the_espeak_voices() {
+        fake_programs();
+        let devs = devbox_devices();
+        let cfg = Config::default();
+        let ctx = Ctx {
+            run: &crate::audio::Process,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let v = synthesizers(&ctx, &json!({})).unwrap();
+        let engines = v["engines"].as_array().unwrap();
+        assert_eq!(engines[0]["installed"], true);
+        assert_eq!(engines[1]["engine"], "espeak-ng");
+        assert_eq!(engines[1]["installed"], true);
+        let voices = v["espeak_voices"].as_array().unwrap();
+        assert!(voices
+            .iter()
+            .any(|x| x["language"] == "en-us" && x["voice"] == "English_(America)"));
+        assert_eq!(v["configured_engine"], "auto");
+        assert!(v["not_installed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|m| !m.as_str().unwrap().starts_with("espeak-ng")));
     }
 }

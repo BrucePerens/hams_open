@@ -77,6 +77,7 @@ pub fn frame_levels(s: &[f32], rate: u32, frame_ms: f64) -> Vec<f64> {
 
 /// The level of one tone in dBFS (peak amplitude) in 20 ms windows every `frame_ms`; a window starts at its frame.
 pub fn tone_levels(s: &[f32], rate: u32, hz: f64, frame_ms: f64) -> Vec<f64> {
+    // [@ANCHOR: bench_mcp_audio_events_tone_levels]
     let hop = ((frame_ms / 1000.0) * f64::from(rate)).max(1.0) as usize;
     let win = (0.02 * f64::from(rate)) as usize;
     (0..)
@@ -88,6 +89,7 @@ pub fn tone_levels(s: &[f32], rate: u32, hz: f64, frame_ms: f64) -> Vec<f64> {
 
 /// The frame levels `detect` works on, broadband or for the tracked tone.
 pub fn levels_for(s: &[f32], rate: u32, p: &Params) -> Vec<f64> {
+    // [@ANCHOR: bench_mcp_audio_events_levels_for]
     match p.tone_hz {
         Some(hz) => tone_levels(s, rate, hz, p.frame_ms),
         None => frame_levels(s, rate, p.frame_ms),
@@ -95,6 +97,7 @@ pub fn levels_for(s: &[f32], rate: u32, p: &Params) -> Vec<f64> {
 }
 
 pub fn percentile(v: &[f64], p: f64) -> f64 {
+    // [@ANCHOR: bench_mcp_audio_events_percentile]
     if v.is_empty() {
         return FLOOR_DB;
     }
@@ -309,6 +312,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_events_detect]
+    // Tests [@ANCHOR: bench_mcp_audio_events_levels_for]
+    // Tests [@ANCHOR: bench_mcp_audio_events_percentile]
+    // Tests [@ANCHOR: bench_mcp_audio_events_tone_levels]
     #[test]
     fn three_beeps_are_found_with_their_times_levels_and_pitch() {
         let s = beeps(

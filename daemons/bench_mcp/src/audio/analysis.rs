@@ -9,6 +9,7 @@ use std::f64::consts::PI;
 pub const FLOOR_DB: f64 = -200.0;
 
 pub fn db(amplitude: f64) -> f64 {
+    // [@ANCHOR: bench_mcp_audio_analysis_db]
     if amplitude <= 1e-10 {
         FLOOR_DB
     } else {
@@ -31,6 +32,7 @@ pub struct Stats {
 }
 
 pub fn rms(s: &[f32]) -> f64 {
+    // [@ANCHOR: bench_mcp_audio_analysis_rms]
     if s.is_empty() {
         return 0.0;
     }
@@ -38,6 +40,7 @@ pub fn rms(s: &[f32]) -> f64 {
 }
 
 pub fn stats(s: &[f32], rate: u32, silence_dbfs: f64) -> Stats {
+    // [@ANCHOR: bench_mcp_audio_analysis_stats]
     let peak = s.iter().fold(0f64, |m, x| m.max(f64::from(x.abs())));
     let win = ((f64::from(rate) * 0.02) as usize).max(1);
     let windows: Vec<&[f32]> = s.chunks(win).collect();
@@ -67,6 +70,7 @@ pub fn stats(s: &[f32], rate: u32, silence_dbfs: f64) -> Stats {
 
 /// In-place radix-2 FFT; the length must be a power of two.
 fn fft(re: &mut [f64], im: &mut [f64]) {
+    // [@ANCHOR: bench_mcp_audio_analysis_fft]
     let n = re.len();
     let mut j = 0;
     for i in 1..n {
@@ -122,6 +126,7 @@ impl Spectrum {
     }
 
     fn range(&self, lo_hz: f64, hi_hz: f64) -> std::ops::Range<usize> {
+        // [@ANCHOR: bench_mcp_audio_analysis_spectrum_range]
         let lo = ((lo_hz / self.bin_hz).ceil() as usize).max(1);
         let hi = ((hi_hz / self.bin_hz).floor() as usize + 1).min(self.amp.len());
         lo..hi.max(lo)
@@ -131,6 +136,7 @@ impl Spectrum {
 /// Welch's averaged amplitude spectrum: Hann-windowed blocks of `fft_len` (a power of two) with 50 % overlap. A signal shorter
 /// than one block is zero-padded.
 pub fn spectrum(s: &[f32], rate: u32, fft_len: usize) -> Result<Spectrum, String> {
+    // [@ANCHOR: bench_mcp_audio_analysis_spectrum]
     if fft_len < 64 || !fft_len.is_power_of_two() {
         return Err(format!(
             "fft_len {fft_len} must be a power of two of at least 64"
@@ -176,6 +182,7 @@ pub struct Peak {
 /// Local maxima of the spectrum between `lo_hz` and `hi_hz` at least `min_db` above the median of that range, loudest first,
 /// frequencies refined by parabolic interpolation.
 pub fn peaks(sp: &Spectrum, lo_hz: f64, hi_hz: f64, count: usize, min_db: f64) -> Vec<Peak> {
+    // [@ANCHOR: bench_mcp_audio_analysis_peaks]
     let r = sp.range(lo_hz, hi_hz);
     if r.len() < 3 {
         return Vec::new();
@@ -220,6 +227,7 @@ pub fn dominant(sp: &Spectrum, lo_hz: f64, hi_hz: f64, min_db: f64) -> Option<Pe
 
 /// The median spectrum level in dBFS over a range: a noise floor estimate that a few tones do not move.
 pub fn median_db(sp: &Spectrum, lo_hz: f64, hi_hz: f64) -> f64 {
+    // [@ANCHOR: bench_mcp_audio_analysis_median_db]
     let r = sp.range(lo_hz, hi_hz);
     let mut v: Vec<f64> = r.map(|i| sp.db_at(i)).collect();
     if v.is_empty() {
@@ -231,6 +239,7 @@ pub fn median_db(sp: &Spectrum, lo_hz: f64, hi_hz: f64) -> f64 {
 
 /// The amplitude of one frequency in a block (Hann window, exact frequency, no binning): a sine of amplitude A reads A.
 pub fn tone_amp(s: &[f32], rate: u32, hz: f64) -> f64 {
+    // [@ANCHOR: bench_mcp_audio_analysis_tone_amp]
     let n = s.len();
     if n < 8 {
         return 0.0;
@@ -249,6 +258,7 @@ pub fn tone_amp(s: &[f32], rate: u32, hz: f64) -> f64 {
 
 /// Pearson correlation of two spectra in dB over a frequency range, 1.0 for the same shape and about 0 for unrelated ones.
 pub fn similarity(a: &Spectrum, b: &Spectrum, lo_hz: f64, hi_hz: f64) -> f64 {
+    // [@ANCHOR: bench_mcp_audio_analysis_similarity]
     let (ra, rb) = (a.range(lo_hz, hi_hz), b.range(lo_hz, hi_hz));
     let n = ra.len().min(rb.len());
     if n < 3 || (a.bin_hz - b.bin_hz).abs() > 1e-9 {
@@ -325,6 +335,11 @@ mod tests {
     const R: u32 = 48000;
 
     // Tests [@ANCHOR: audio_analysis]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_db]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_fft]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_stats]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_tone_amp]
     #[test]
     fn a_sine_reads_its_amplitude_frequency_and_levels() {
         let s = sine(R, 1.0, 1000.0, 0.25);
@@ -339,6 +354,8 @@ mod tests {
         assert!((db(tone_amp(&s, R, 1000.0)) - db(0.25)).abs() < 0.05);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum_range]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_peaks]
     #[test]
     fn a_tone_between_bins_is_still_found_and_two_tones_are_separate_peaks() {
         let s = add(&sine(R, 1.0, 1234.5, 0.1), &sine(R, 1.0, 3000.0, 0.05));
@@ -371,6 +388,8 @@ mod tests {
         assert_eq!(stats(&[], R, -60.0).silence_fraction, 1.0);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_median_db]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_rms]
     #[test]
     fn noise_has_the_requested_rms_and_no_peak() {
         let n = noise(R, 1.0, 0.01, 7);
@@ -381,6 +400,7 @@ mod tests {
         assert!(med < db(0.01) && med > -90.0, "{med}");
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_similarity]
     #[test]
     fn similar_spectra_correlate_and_different_ones_do_not() {
         let a = spectrum(

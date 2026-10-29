@@ -44,6 +44,7 @@ pub struct Process;
 
 impl Run for Process {
     fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+        // [@ANCHOR: bench_mcp_audio_process_run]
         let out = Command::new(program).args(args).output().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 format!("{program} is not installed (not found on PATH)")
@@ -74,6 +75,7 @@ pub struct QuietHours {
 
 impl QuietHours {
     pub fn contains(&self, minute: u32) -> bool {
+        // [@ANCHOR: bench_mcp_audio_quiethours_contains]
         if self.start <= self.end {
             (self.start..self.end).contains(&minute)
         } else {
@@ -148,6 +150,7 @@ impl Default for Config {
 impl Config {
     /// The alias, if any, that names this device.
     pub fn alias_of(&self, d: &devices::Device) -> Option<String> {
+        // [@ANCHOR: bench_mcp_audio_config_alias_of]
         let map = match d.dir {
             devices::Dir::Output => &self.outputs,
             devices::Dir::Input => &self.inputs,
@@ -164,6 +167,7 @@ impl Config {
 
     /// The volume cap that applies to a device: its own, never above the global cap.
     pub fn cap_for(&self, d: &devices::Device) -> f64 {
+        // [@ANCHOR: bench_mcp_audio_config_cap_for]
         let own = d
             .alias
             .as_ref()
@@ -183,6 +187,7 @@ impl Config {
 }
 
 fn hhmm(s: &str) -> Result<u32, String> {
+    // [@ANCHOR: bench_mcp_audio_hhmm]
     let (h, m) = s.split_once(':').ok_or("time must look like \"22:00\"")?;
     let (h, m): (u32, u32) = (
         h.parse().map_err(|_| "bad hour")?,
@@ -195,6 +200,7 @@ fn hhmm(s: &str) -> Result<u32, String> {
 }
 
 fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
+    // [@ANCHOR: bench_mcp_audio_ports]
     let mut out = BTreeMap::new();
     let Some(v) = c.get(key) else { return Ok(out) };
     for (alias, p) in v.as_object().ok_or(format!("{key} must be an object"))? {
@@ -379,6 +385,7 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
 
 /// Minutes since local midnight now.
 pub fn local_minute_of_day() -> u32 {
+    // [@ANCHOR: bench_mcp_audio_local_minute_of_day]
     let mut t: libc::time_t = 0;
     // SAFETY: time and localtime_r write only to the locals given; tm is fully initialised by localtime_r on success.
     let tm = unsafe {
@@ -511,6 +518,7 @@ pub const SPECS: &[Spec] = &[
 ];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
+    // [@ANCHOR: bench_mcp_audio_instrument]
     let audio: Vec<&Instrument> = insts.iter().filter(|i| i.kind == Kind::Audio).collect();
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
         return audio
@@ -589,6 +597,7 @@ pub fn status(cfg: &Config, now_minute: u32) -> Value {
 }
 
 fn list_devices(run: &dyn Run, asound: &Path, cfg: &Config, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_list_devices]
     let mut devs = devices::list(run, asound, cfg)?;
     if let Some(name) = args.get("device").and_then(|d| d.as_str()) {
         let dir = match args.get("direction").and_then(|d| d.as_str()) {
@@ -652,6 +661,7 @@ pub fn call_with(
     name: &str,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_call_with]
     let spec = SPECS
         .iter()
         .find(|s| s.name == name)
@@ -764,6 +774,8 @@ mod tests {
         assert_eq!(i[0].audio.reserved, vec![VNWA_CODEC, "1234:abcd", "radio"]);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_hhmm]
+    // Tests [@ANCHOR: bench_mcp_audio_ports]
     #[test]
     fn aliases_caps_and_quiet_hours_parse_and_bad_ones_are_refused() {
         let i = insts(
@@ -816,6 +828,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_select_auto]
+    // Tests [@ANCHOR: bench_mcp_audio_config_alias_of]
+    // Tests [@ANCHOR: bench_mcp_audio_quiethours_contains]
     #[test]
     fn auto_follows_the_discovery_and_falls_back_to_the_default_when_the_device_is_gone_or_reserved(
     ) {
@@ -1036,6 +1050,12 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_devices_list]
+    // Tests [@ANCHOR: bench_mcp_audio_config_cap_for]
+    // Tests [@ANCHOR: bench_mcp_audio_process_run]
+    // Tests [@ANCHOR: bench_mcp_audio_call_with]
+    // Tests [@ANCHOR: bench_mcp_audio_instrument]
+    // Tests [@ANCHOR: bench_mcp_audio_list_devices]
     #[test]
     fn the_device_list_reads_levels_for_free_devices_and_not_for_reserved_ones() {
         let i = insts(r#","outputs":{"desk":"Speaker"}"#);
@@ -1144,5 +1164,22 @@ mod tests {
             &json!({})
         )
         .is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_local_minute_of_day]
+    #[test]
+    fn the_minute_of_the_local_day_matches_the_local_clock() {
+        let hm = |t: String| -> u32 {
+            let time = t.split('-').nth(1).unwrap();
+            time[..2].parse::<u32>().unwrap() * 60 + time[2..4].parse::<u32>().unwrap()
+        };
+        let before = hm(store::timestamp());
+        let got = local_minute_of_day();
+        let after = hm(store::timestamp());
+        assert!(got < 24 * 60);
+        assert!(
+            got == before || got == after,
+            "{got} is not {before} or {after}"
+        );
     }
 }

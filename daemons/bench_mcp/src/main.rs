@@ -309,6 +309,7 @@ pub(crate) fn all_tool_defs() -> Vec<Tool> {
 }
 
 fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
+    // [@ANCHOR: bench_mcp_main_tool_defs]
     let usb = usb_hub::tool_defs(insts);
     let audio = audio::tool_defs(insts);
     let hamlib = hamlib::tool_defs(insts);
@@ -472,6 +473,10 @@ mod tests {
         assert!(!names.contains(&"bench_scope_self_cal".to_string()));
     }
 
+    // Tests [@ANCHOR: bench_mcp_manual_searchindex_score]
+    // Tests [@ANCHOR: bench_mcp_manual_call]
+    // Tests [@ANCHOR: bench_mcp_manual_excerpt]
+    // Tests [@ANCHOR: bench_mcp_manual_releases]
     #[test]
     fn the_vna_sweep_tool_is_listed_and_allowed_only_at_read_config() {
         let vna = |tier: &str| {
@@ -506,6 +511,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_vna_power_cycle]
     #[test]
     fn the_power_cycle_tool_needs_a_hub_and_read_config_and_does_not_block_other_instruments() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let vna = |tier: &str, hub: &str| {
             config::parse(&format!(
                 r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"{hub}}}}}}}"#
@@ -539,8 +545,10 @@ mod tests {
         assert!(instrument_lock("lock_test_vna").try_lock().is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_main_tool_defs]
     #[test]
     fn every_vna_function_has_its_own_tool_at_read_config_and_none_reaches_other_instruments() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let vna = |tier: &str| {
             config::parse(&format!(r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"}},"psu":{{"driver":"atm6301","tier":"full","serial":"/dev/null"}}}}}}"#)).unwrap()
         };

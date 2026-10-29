@@ -31,6 +31,7 @@ fn flag(args: &Value, k: &str) -> bool {
 }
 
 fn bounded(args: &Value, k: &str, default: f64, lo: f64, hi: f64) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_bounded]
     let v = num(args, k).unwrap_or(default);
     if !(lo..=hi).contains(&v) || !v.is_finite() {
         return Err(format!("{k} {v} is outside {lo} to {hi}"));
@@ -100,6 +101,7 @@ fn take(
     trigger_dbfs: Option<f64>,
     max_wait_s: f64,
 ) -> Result<Taken, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_take]
     let r = f64::from(rate);
     rec.wait_samples(1, Duration::from_secs(5))?;
     let need = (seconds * r) as usize;
@@ -208,6 +210,7 @@ pub fn record(ctx: &Ctx, args: &Value) -> Result<Value, String> {
 }
 
 pub fn meter(ctx: &Ctx, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_meter]
     let dev = pick(ctx, args, "input", Dir::Input)?;
     let seconds = bounded(args, "seconds", 3.0, 0.2, 30.0)?;
     let interval = bounded(args, "interval_ms", 250.0, 50.0, 2000.0)? / 1000.0;
@@ -241,6 +244,7 @@ struct Source {
 }
 
 fn source(ctx: &Ctx, args: &Value) -> Result<Source, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_source]
     let dir = ctx.cfg.capture_dir();
     let max = ctx.cfg.max_play_s;
     if let Some(name) = args.get("file").and_then(|f| f.as_str()) {
@@ -291,6 +295,7 @@ pub fn play_guarded(
     unmute: bool,
     sound: impl FnOnce() -> Result<Duration, String>,
 ) -> Result<(super::safety::Applied, Duration), String> {
+    // [@ANCHOR: bench_mcp_audio_tools_play_guarded]
     let (mut guard, applied) = VolumeGuard::apply(ctx.run, dev, lim, want, unmute)?;
     let played = sound();
     let restored = guard.restore();
@@ -399,6 +404,7 @@ pub fn loopback(ctx: &Ctx, args: &Value) -> Result<Value, String> {
 }
 
 pub fn levels_get(ctx: &Ctx, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_levels_get]
     let dir = match args.get("direction").and_then(|d| d.as_str()) {
         Some("input") => Some(Dir::Input),
         Some("output") => Some(Dir::Output),
@@ -467,4 +473,233 @@ pub fn set_volume(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         "before": {"volume": before.volume, "muted": before.muted},
         "after": {"volume": after.volume, "muted": after.muted},
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::testkit::{devbox_devices, fake_programs, scratch, Scripted};
+    use crate::audio::wav::Wav;
+
+    fn f32_file(node: &str, samples: &[f32]) {
+        let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
+        std::fs::write(fake_programs().join(format!("rec-{node}.f32")), bytes).unwrap();
+    }
+
+    fn sine(rate: u32, seconds: f64, amp: f32) -> Vec<f32> {
+        (0..(f64::from(rate) * seconds) as usize)
+            .map(|i| {
+                amp * (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / f64::from(rate)).sin()
+                    as f32
+            })
+            .collect()
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_bounded]
+    #[test]
+    fn arguments_are_taken_inside_their_bounds_or_refused() {
+        let a = json!({"seconds": 2.5, "nan": null});
+        assert_eq!(bounded(&a, "seconds", 1.0, 0.1, 5.0).unwrap(), 2.5);
+        assert_eq!(bounded(&a, "missing", 1.0, 0.1, 5.0).unwrap(), 1.0);
+        let e = bounded(&a, "seconds", 1.0, 0.1, 2.0).unwrap_err();
+        assert!(e.contains("seconds 2.5 is outside 0.1 to 2"), "{e}");
+        assert!(bounded(&json!({"s": 0.0}), "s", 1.0, 0.1, 2.0).is_err());
+        assert!(bounded(&json!({}), "s", f64::NAN, 0.1, 2.0).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_take]
+    #[test]
+    fn a_take_is_the_first_seconds_or_starts_when_the_level_passes_the_threshold() {
+        let rate = 48000;
+        let quiet = "bench-take-plain";
+        let mut s = sine(rate, 0.6, 0.1);
+        s[0] = 0.1;
+        f32_file(quiet, &s);
+        let mut rec = Recorder::start(quiet, rate, false).unwrap();
+        let t = take(&mut rec, rate, 0.5, None, 0.0).unwrap();
+        assert_eq!((t.samples.len(), t.triggered), (24000, None));
+        assert_eq!(&t.samples[..], &s[..24000]);
+        drop(rec);
+
+        // 0.3 s of silence, then a loud tone: the take starts there, with 0.1 s of pre-roll.
+        let late = "bench-take-trigger";
+        let mut v = vec![0.0f32; (0.3 * f64::from(rate)) as usize];
+        v.extend(sine(rate, 0.6, 0.5));
+        f32_file(late, &v);
+        let mut rec = Recorder::start(late, rate, false).unwrap();
+        let t = take(&mut rec, rate, 0.2, Some(-20.0), 3.0).unwrap();
+        assert_eq!(t.triggered, Some(true));
+        assert_eq!(t.samples.len(), 9600);
+        assert!((t.waited_s - 0.3).abs() < 0.03, "{}", t.waited_s);
+        assert!(t.samples.iter().any(|x| x.abs() > 0.4));
+        drop(rec);
+
+        // Nothing passes the threshold within the wait: no trigger, and what was heard is returned.
+        let hush = "bench-take-hush";
+        f32_file(hush, &vec![0.001f32; 48000]);
+        let mut rec = Recorder::start(hush, rate, false).unwrap();
+        let t = take(&mut rec, rate, 0.2, Some(-20.0), 0.2).unwrap();
+        assert_eq!(t.triggered, Some(false));
+        assert!(t.waited_s == 0.2 && !t.samples.is_empty());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_meter]
+    #[test]
+    fn the_meter_reports_peak_and_rms_per_interval() {
+        let devs = devbox_devices();
+        let mic = devs
+            .iter()
+            .find(|d| d.dir == Dir::Input && d.reserved.is_none())
+            .unwrap();
+        f32_file(&mic.node_name, &sine(48000, 1.0, 0.1));
+        let cfg = Config::default();
+        let run = Scripted::new(&[]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let v = meter(&ctx, &json!({"input": mic.node_name, "seconds": 0.5})).unwrap();
+        let readings = v["readings"].as_array().unwrap();
+        assert_eq!(readings.len(), 2);
+        assert_eq!(readings[1]["t_s"], 0.25);
+        assert!((readings[0]["peak_dbfs"].as_f64().unwrap() + 20.0).abs() < 0.6);
+        assert!((readings[0]["rms_dbfs"].as_f64().unwrap() + 23.0).abs() < 0.6);
+        assert_eq!(v["input"], json!(mic.node_name));
+        assert!(meter(&ctx, &json!({"input": mic.node_name, "seconds": 0.1})).is_err());
+        assert!(meter(&ctx, &json!({"input": mic.node_name, "interval_ms": 10})).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_source]
+    #[test]
+    fn a_source_is_a_managed_file_within_the_limit_or_a_generated_tone() {
+        let d = scratch("source");
+        let devs = devbox_devices();
+        let cfg = Config {
+            capture_dir: Some(d.clone()),
+            ..Config::default()
+        };
+        let run = Scripted::new(&[]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let w = |name: &str, seconds: usize| {
+            crate::audio::wav::write(
+                &d.join(name),
+                &Wav {
+                    rate: 8000,
+                    channels: 1,
+                    samples: vec![0.1; 8000 * seconds],
+                },
+            )
+            .unwrap();
+        };
+        w("short.wav", 2);
+        w("long.wav", 11);
+        let s = source(&ctx, &json!({"file": "short.wav"})).unwrap();
+        assert!((s.seconds - 2.0).abs() < 1e-9 && !s.temporary);
+        assert_eq!(s.description, "file short.wav");
+        assert!(s.path.exists());
+        let e = source(&ctx, &json!({"file": "long.wav"})).err().unwrap();
+        assert!(e.contains("limit is max_play_s"), "{e}");
+        assert!(source(&ctx, &json!({"file": "../etc/passwd"})).is_err());
+        let t = source(
+            &ctx,
+            &json!({"seconds": 0.5, "freq_hz": 800.0, "level_dbfs": -20.0}),
+        )
+        .unwrap();
+        assert!(t.temporary && (t.seconds - 0.5).abs() < 1e-9);
+        assert!(t.description.contains("-20"), "{}", t.description);
+        let back = crate::audio::wav::read(&t.path).unwrap();
+        assert_eq!(back.samples.len(), 48000 / 2);
+        assert!(source(&ctx, &json!({"seconds": 11.0})).is_err());
+        assert!(source(&ctx, &json!({"tone": "square"})).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_play_guarded]
+    #[test]
+    fn the_volume_is_set_for_the_sound_and_put_back_whether_it_works_or_not() {
+        let devs = devbox_devices();
+        let spk = devs
+            .iter()
+            .find(|d| d.description.ends_with("Speaker"))
+            .unwrap();
+        let cfg = Config::default();
+        let run = Scripted::new(&[(spk.id, 0.9, true)]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let lim = limits(&cfg, spk, false, 720);
+        let mut during = None;
+        let (applied, took) = play_guarded(&ctx, spk, &lim, Want::Keep, true, || {
+            during = Some(run.volumes.borrow()[0]);
+            Ok(Duration::from_millis(7))
+        })
+        .unwrap();
+        assert_eq!(during, Some((spk.id, 0.5, false)));
+        assert_eq!((applied.volume, took), (0.5, Duration::from_millis(7)));
+        assert_eq!(*run.volumes.borrow(), vec![(spk.id, 0.9, true)]);
+        let e = play_guarded(&ctx, spk, &lim, Want::Level(0.2), true, || {
+            Err("pw-play failed".into())
+        })
+        .unwrap_err();
+        assert_eq!(e, "pw-play failed");
+        assert_eq!(*run.volumes.borrow(), vec![(spk.id, 0.9, true)]);
+        let mut reserved = spk.clone();
+        reserved.reserved = Some("codec".into());
+        let mut ran = false;
+        assert!(play_guarded(&ctx, &reserved, &lim, Want::Keep, false, || {
+            ran = true;
+            Ok(Duration::ZERO)
+        })
+        .is_err());
+        assert!(!ran, "nothing sounds on a reserved device");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_levels_get]
+    #[test]
+    fn levels_are_listed_for_free_devices_and_filtered_by_direction() {
+        let devs = devbox_devices();
+        let table: Vec<(u32, f64, bool)> =
+            devs.iter().map(|d| (d.id, 0.4, d.id % 2 == 0)).collect();
+        let run = Scripted::new(&table);
+        let cfg = Config::default();
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let all = levels_get(&ctx, &json!({})).unwrap();
+        let free = devs.iter().filter(|d| d.reserved.is_none()).count();
+        assert_eq!(all["levels"].as_array().unwrap().len(), free);
+        let outs = levels_get(&ctx, &json!({"direction": "output"})).unwrap();
+        for l in outs["levels"].as_array().unwrap() {
+            assert_eq!(l["direction"], "output");
+            assert_eq!(l["volume"], 0.4);
+            assert_eq!(l["volume_cap"], 0.5);
+            assert_eq!(l["gain_db"], round1(60.0 * 0.4f64.log10()));
+        }
+        let ins = levels_get(&ctx, &json!({"direction": "input"})).unwrap();
+        assert!(ins["levels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|l| l["direction"] == "input" && l["volume_cap"].is_null()));
+        let one = levels_get(&ctx, &json!({"device": "Speaker"})).unwrap();
+        assert_eq!(one["levels"].as_array().unwrap().len(), 1);
+        assert!(levels_get(&ctx, &json!({"direction": "sideways"})).is_err());
+    }
 }

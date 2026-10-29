@@ -99,6 +99,7 @@ pub fn spectrum_plan(
 impl Vna {
     /// The power in the audio band of the S21 codec at an LO frequency, tracking generator off (`tracking_level` 0) or at that DDS level.
     fn sa_once(&self, f_hz: f64, band_hz: f64, tracking_level: u16) -> Result<f64, String> {
+        // [@ANCHOR: vnwa_open_spectrum_sa_once]
         let c = &self.cfg;
         let (usb, cap21) = (&self.session.usb, &self.session.s21);
         let block = setup_block(&SetupParams {
@@ -183,6 +184,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_sa_spectrum]
+    // Tests [@ANCHOR: vnwa_open_spectrum_sa_once]
     #[test]
     fn a_spectrum_refuses_settings_that_would_leave_holes_or_leave_the_unit_range() {
         assert_eq!(spectrum_plan(10e6, 10.01e6, 5, 5_000.0, 0), Ok(2_500.0));

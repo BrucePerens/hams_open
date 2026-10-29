@@ -32,7 +32,7 @@ Sweeps `start_hz` to `stop_hz` in `points` points with RF on the TX port and mea
 
 ## Failure modes
 
-Argument errors name the argument and range. `no signal on the reference channel(s)` is the silent state: call [bench_vna_power_cycle](tools/bench_vna_power_cycle). A point that fails repeatedly causes one automatic cold reset through the hub, then the call fails listing every attempt; see [errors](concepts/errors). A running generator or meter must be stopped first.
+Argument errors name the argument and range. `no signal on the reference channel(s)`: if the message says all four channels are dead, check the TX connector, the pad, the tee and the leads first (a loose TX SMA looks exactly like this); if the measured channels have signal it is the silent state: call [bench_vna_power_cycle](tools/bench_vna_power_cycle). A point that fails repeatedly causes one automatic cold reset through the hub, then the call fails listing every attempt; see [errors](concepts/errors). A running generator or meter must be stopped first.
 
 ## Example
 

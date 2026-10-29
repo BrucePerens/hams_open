@@ -34,3 +34,4 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - concepts/reserved-devices: the audio tools reserve a 08bb:29c0 card only beside the VNWA control chip; the VNA's power cycles run the hub module's implementation
 - instruments/vna/spectrum-analyzer: new page, the uncalibrated spectrum analyzer and what is not verified
 - tools/bench_vna_spectrum: new tool page
+- instruments/vna/troubleshooting: a dead TX path (all four channels dead) is a cabling problem first; tools/bench_vna_sweep: the same in its error text

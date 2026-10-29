@@ -64,6 +64,7 @@ fn hub_json(
     desc: Option<&Result<uhubctl::HubDescriptor, String>>,
     ur: &Result<Vec<UHub>, String>,
 ) -> Value {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_hub_json]
     let loc = d.path.strip_prefix("usb").unwrap_or(&d.path);
     let usb3 = d.speed_mbps() >= 5000.0;
     let switching = match (u, ur) {
@@ -117,6 +118,7 @@ pub fn hubs(
     cfg: &Config,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_hubs]
     let t = Tree::read(sysfs_root)?;
     let only = args.get("hub").and_then(|v| v.as_str());
     let privileged = args
@@ -172,6 +174,7 @@ pub fn bench_refs(insts: &[crate::config::Instrument]) -> Vec<BenchRef> {
 
 /// The port an argument set names: `hub` and `port`, a port `label`, or a `device` path (the port it is plugged into).
 pub fn resolve_port(t: &Tree, cfg: &Config, args: &Value) -> Result<PortRef, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port]
     if let Some(l) = args.get("label").and_then(|v| v.as_str()) {
         let (key, _) = cfg
             .ports
@@ -221,6 +224,7 @@ fn secs(
     min: Duration,
     max: Duration,
 ) -> Result<Duration, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
     let Some(v) = args.get(key).filter(|v| !v.is_null()) else {
         return Ok(default);
     };
@@ -240,6 +244,7 @@ fn secs(
 }
 
 pub fn flag(args: &Value, key: &str) -> Result<bool, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_flag]
     match args.get(key) {
         None | Some(Value::Null) => Ok(false),
         Some(v) => v
@@ -262,6 +267,7 @@ pub fn plan(
     run: &dyn Runner,
     port: &PortRef,
 ) -> Result<Plan, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_plan]
     let hub = t
         .get(&port.hub)
         .ok_or_else(|| format!("no hub {} in the USB tree", port.hub))?;
@@ -426,6 +432,7 @@ pub fn protection(
     proc_root: &Path,
     args: &Value,
 ) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_hubs_protection]
     let crit = protect::critical_set(t, cfg, bench, sysfs_root, proc_root);
     let mut v = protect::report(t, cfg, &crit);
     if args.get("hub").is_some() || args.get("label").is_some() || args.get("device").is_some() {
@@ -445,8 +452,11 @@ mod tests {
         crate::usb_hub::parse_config(&json!({"ports": {"3-2/2": {"label": "VNWA 3E", "hub_uplink_ok": true, "confirmed_by_hand": "goes dark and keeps no settings"}, "3-2/4": {"label": "spare"}}})).unwrap()
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_hub_json]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_hubs]
     #[test]
     fn hubs_merge_sysfs_uhubctl_and_descriptor_and_claim_only_what_uhubctl_says() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let hub = FakeHub::new(&recorded_sys(), Behaviour::Switches);
         let v = hubs(&hub, &recorded_sys(), &cfg(), &json!({"privileged": false})).unwrap();
         assert_eq!(v["uhubctl"]["available"], false);
@@ -467,6 +477,8 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_verification_levels]
     #[test]
     fn verification_levels_are_claimed_rechecked_and_manual() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
+        power::forget_all();
         let c = cfg();
         let a = verification(&c, "3-2/4", true);
         assert_eq!(
@@ -486,8 +498,58 @@ mod tests {
         assert_eq!(verification(&c4, "3-2/2", true)["level"], 4);
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_protection]
+    #[test]
+    fn the_protection_report_lists_critical_devices_and_judges_one_named_port() {
+        let t = Tree::read(&recorded_sys()).unwrap();
+        let proc = Dir::new();
+        let plain =
+            crate::usb_hub::parse_config(&json!({"critical_devices": ["08bb:29c0"]})).unwrap();
+        let v = protection(&t, &plain, &[], &recorded_sys(), proc.path(), &json!({})).unwrap();
+        assert!(v.get("port_verdict").is_none());
+        let crit = v["critical_devices"].as_array().unwrap();
+        assert!(crit.iter().any(|d| d["vidpid"] == "08bb:29c0"
+            && d["reasons"][0]["overridable"] == false
+            && d["hubs_on_the_path"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|h| h == "3-2.2")));
+        // The port that leads to the codec is refused; an empty port is not.
+        let v = protection(
+            &t,
+            &plain,
+            &[],
+            &recorded_sys(),
+            proc.path(),
+            &json!({"hub": "3-2.2", "port": 2}),
+        )
+        .unwrap();
+        assert_eq!(v["port_verdict"]["port"], "3-2.2/2");
+        assert_ne!(v["port_verdict"]["verdict"], json!(null));
+        assert!(
+            v["port_verdict"]["verdict"]
+                .to_string()
+                .contains("critical_devices"),
+            "{v}"
+        );
+        assert!(protection(
+            &t,
+            &plain,
+            &[],
+            &recorded_sys(),
+            proc.path(),
+            &json!({"label": "nothing"})
+        )
+        .is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_flag]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_plan]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
     #[test]
     fn dry_run_says_what_would_happen_and_changes_nothing() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -518,6 +580,7 @@ mod tests {
 
     #[test]
     fn power_off_and_cycle_need_tier_full_and_on_needs_read_config() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -547,6 +610,7 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_port_power]
     #[test]
     fn a_protected_hub_uplink_is_refused_and_the_override_works_only_where_allowed() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -590,6 +654,7 @@ mod tests {
 
     #[test]
     fn a_cycle_on_a_labelled_port_runs_through_uhubctl_and_reports_levels_and_actual_off_time() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -611,6 +676,7 @@ mod tests {
 
     #[test]
     fn ports_of_ganged_or_unlisted_hubs_are_refused() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();
@@ -643,6 +709,7 @@ mod tests {
 
     #[test]
     fn a_superspeed_hub_is_addressed_with_exact_location() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Ignores);
         let proc = Dir::new();
@@ -670,8 +737,10 @@ mod tests {
         assert_eq!(v["steps"][0], "sudo -n uhubctl -N -l 3-2 -p 4 -a off");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port]
     #[test]
     fn off_time_is_bounded_and_ports_resolve_by_device() {
+        let _evidence = crate::usb_hub::testkit::evidence_lock();
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
         let proc = Dir::new();

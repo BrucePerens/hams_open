@@ -10,6 +10,7 @@ use vnwa_open::sweep::{Config, Point, Vna};
 use vnwa_open::usb::Vnwa;
 
 fn num(args: &Value, key: &str) -> Result<Option<f64>, String> {
+    // [@ANCHOR: bench_vna_tools_num]
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
@@ -21,6 +22,7 @@ fn num(args: &Value, key: &str) -> Result<Option<f64>, String> {
 }
 
 fn level_db(args: &Value) -> Result<f64, String> {
+    // [@ANCHOR: bench_vna_tools_level_db]
     let l =
         num(args, "level_db")?.ok_or("level_db is required (0 to -50: a negative attenuation)")?;
     vnwa_open::generator::level_for_attenuation(l)?;
@@ -28,6 +30,7 @@ fn level_db(args: &Value) -> Result<f64, String> {
 }
 
 fn freq_hz(args: &Value) -> Result<f64, String> {
+    // [@ANCHOR: bench_vna_tools_freq_hz]
     let f = num(args, "freq_hz")?.ok_or("freq_hz is required")?;
     if !(f > 0.0 && f <= 1.3e9) {
         return Err(format!("freq_hz {f} is outside 0 to 1.3e9"));
@@ -36,6 +39,7 @@ fn freq_hz(args: &Value) -> Result<f64, String> {
 }
 
 pub fn generator_on(args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_generator_on]
     let (f, l) = (freq_hz(args)?, level_db(args)?);
     let usb = Vnwa::open()?;
     vnwa_open::generator::on(&usb, f, l)?;
@@ -78,6 +82,7 @@ pub fn generator_off(cfg: &Config) -> Result<Value, String> {
 }
 
 pub fn generator_level(args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_generator_level]
     let l = level_db(args)?;
     let usb = Vnwa::open()?;
     vnwa_open::generator::set_attenuation(&usb, l)?;
@@ -85,6 +90,7 @@ pub fn generator_level(args: &Value) -> Result<Value, String> {
 }
 
 fn mod_args(args: &Value) -> Result<(f64, f64, f64), String> {
+    // [@ANCHOR: bench_vna_tools_mod_args]
     let f = freq_hz(args)?;
     let level = match num(args, "level_db")? {
         Some(l) if (-50.0..=0.0).contains(&l) => l,
@@ -99,6 +105,7 @@ fn mod_args(args: &Value) -> Result<(f64, f64, f64), String> {
 }
 
 pub fn generator_am(args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_generator_am]
     let (f, level, hz) = mod_args(args)?;
     let depth = num(args, "depth_pct")?.unwrap_or(100.0);
     // Validated before the unit is touched.
@@ -126,6 +133,7 @@ pub fn generator_am(args: &Value) -> Result<Value, String> {
 }
 
 pub fn generator_fm(args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_generator_fm]
     let (f, level, hz) = mod_args(args)?;
     let dev = num(args, "deviation_hz")?.ok_or("deviation_hz is required")?;
     vnwa_open::generator::fm_fields(hz, dev)?;
@@ -148,6 +156,7 @@ pub fn generator_fm(args: &Value) -> Result<Value, String> {
 }
 
 pub fn meter(cfg: &Config, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_meter]
     let center = freq_hz(args)?;
     let ms = num(args, "point_ms")?.unwrap_or(60.0);
     if !(0.2..=100.0).contains(&ms) {
@@ -233,6 +242,7 @@ pub fn spectrum(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, Str
 }
 
 fn name_ok(s: &str) -> Result<(), String> {
+    // [@ANCHOR: bench_vna_tools_name_ok]
     if s.is_empty()
         || s.len() > 40
         || !s
@@ -260,6 +270,7 @@ fn meta_line(cfg: &Config, cable: &str) -> String {
 }
 
 fn parse_meta(line: &str) -> Result<Setup, String> {
+    // [@ANCHOR: bench_vna_tools_parse_meta]
     let body = line.strip_prefix("# ").ok_or("missing settings line")?;
     let mut s = Setup::default();
     for part in body.splitn(4, ';') {
@@ -276,6 +287,7 @@ fn parse_meta(line: &str) -> Result<Setup, String> {
 }
 
 pub fn calibrate_measure(cfg: &Config, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_calibrate_measure]
     let session = args
         .get("session")
         .and_then(|v| v.as_str())
@@ -316,6 +328,7 @@ type Standard = (Setup, Vec<f64>, Vec<Complex>, Vec<Complex>);
 type Corrected = Vec<(Option<Complex>, Option<Complex>)>;
 
 fn read_standard(file: &Path) -> Result<Standard, String> {
+    // [@ANCHOR: bench_vna_tools_read_standard]
     let t = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
     let mut lines = t.lines();
     let setup = parse_meta(lines.next().ok_or("empty file")?)?;
@@ -444,6 +457,19 @@ mod tests {
         d
     }
 
+    // Tests [@ANCHOR: bench_vna_tools_calibrate_measure]
+    // Tests [@ANCHOR: bench_vna_tools_freq_hz]
+    // Tests [@ANCHOR: bench_vna_tools_generator_am]
+    // Tests [@ANCHOR: bench_vna_tools_generator_fm]
+    // Tests [@ANCHOR: bench_vna_tools_generator_level]
+    // Tests [@ANCHOR: bench_vna_tools_generator_on]
+    // Tests [@ANCHOR: bench_vna_tools_level_db]
+    // Tests [@ANCHOR: bench_vna_tools_meter]
+    // Tests [@ANCHOR: bench_vna_tools_mod_args]
+    // Tests [@ANCHOR: bench_vna_tools_name_ok]
+    // Tests [@ANCHOR: bench_vna_tools_num]
+    // Tests [@ANCHOR: bench_vna_tools_parse_meta]
+    // Tests [@ANCHOR: bench_vna_tools_read_standard]
     #[test]
     fn generator_arguments_are_checked_before_any_hardware_is_touched() {
         for bad in [

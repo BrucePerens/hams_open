@@ -16,6 +16,7 @@ use std::path::Path;
 pub const FLAG: &str = "--usb-priv";
 
 fn device_dir(sysfs: &Path, dev: &str) -> Result<std::path::PathBuf, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_device_dir]
     if !is_device_name(dev) || dev.starts_with("usb") {
         return Err(format!(
             "{dev:?} is not the path of a USB device behind a hub port (root hubs are not allowed)"
@@ -30,6 +31,7 @@ fn device_dir(sysfs: &Path, dev: &str) -> Result<std::path::PathBuf, String> {
 }
 
 fn interface_name(i: &str) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_interface_name]
     let ok = i.split_once(':').is_some_and(|(d, rest)| {
         is_device_name(d)
             && !rest.is_empty()
@@ -45,6 +47,7 @@ fn interface_name(i: &str) -> Result<(), String> {
 }
 
 fn driver_dir(sysfs: &Path, driver: &str) -> Result<std::path::PathBuf, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_driver_dir]
     let ok = !driver.is_empty()
         && driver
             .bytes()
@@ -74,6 +77,7 @@ fn read_num(dir: &Path, f: &str) -> Result<u32, String> {
 const USBDEVFS_RESET: libc::c_ulong = 0x5514;
 
 fn reset(sysfs: &Path, dev: &str) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_reset]
     let dir = device_dir(sysfs, dev)?;
     let (bus, num) = (read_num(&dir, "busnum")?, read_num(&dir, "devnum")?);
     let node = format!("/dev/bus/usb/{bus:03}/{num:03}");
@@ -130,6 +134,7 @@ pub fn run_at(sysfs: &Path, args: &[String]) -> Result<String, String> {
 
 /// The entry point for `--usb-priv`: prints the outcome and returns the exit code.
 pub fn main(args: &[String]) -> i32 {
+    // [@ANCHOR: bench_mcp_usb_hub_privileged_main]
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
         eprintln!("{FLAG} must run as root (through sudo -n)");
@@ -157,6 +162,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: usb_hub_privileged_ops]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_device_dir]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_driver_dir]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_interface_name]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_reset]
     #[test]
     fn authorize_and_autosuspend_write_only_their_files_after_checking_the_device() {
         let (_d, sys) = writable_sys();
@@ -217,5 +226,18 @@ mod tests {
         }
         let scratch = Dir::new();
         assert!(run_at(scratch.path(), &s(&["authorize", "3-2", "1"])).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_privileged_main]
+    #[test]
+    fn the_entry_point_refuses_a_non_root_caller_and_an_operation_outside_the_allowlist() {
+        // An operation outside the allowlist writes nothing in either case: a non-root caller is stopped first (exit 2), and root
+        // reaches the allowlist check, which refuses it (exit 1). The accepted operations are tested through `run_at` on a copy
+        // of the sysfs; `main` itself always acts on the real /sys, so its success path is not run here.
+        // SAFETY: geteuid has no preconditions.
+        let root = unsafe { libc::geteuid() } == 0;
+        let code = main(&s(&["rm", "-rf", "/"]));
+        assert_eq!(code, if root { 1 } else { 2 });
+        assert_eq!(main(&[]), if root { 1 } else { 2 });
     }
 }

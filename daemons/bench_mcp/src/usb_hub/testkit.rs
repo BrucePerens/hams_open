@@ -173,3 +173,11 @@ impl Runner for FakeHub {
         }
     }
 }
+
+static EVIDENCE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Held for the whole of every test that reads or writes the evidence store of `power.rs` (`remember`, `proven`). The store is
+/// process-global, so tests that read or write it must not run in parallel. Take it first in the test.
+pub fn evidence_lock() -> std::sync::MutexGuard<'static, ()> {
+    EVIDENCE.lock().unwrap_or_else(|e| e.into_inner())
+}
