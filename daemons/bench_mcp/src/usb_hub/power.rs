@@ -110,7 +110,7 @@ fn uhubctl(run: &dyn Runner, port: &PortRef, action: &str) -> Result<(), String>
         .map_err(|e| format!("uhubctl {action} on hub {loc} port {p} failed: {e}"))
 }
 
-fn wait_until(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
+pub fn wait_until(timeout: Duration, mut done: impl FnMut() -> bool) -> bool {
     let end = Instant::now() + timeout;
     loop {
         if done() {

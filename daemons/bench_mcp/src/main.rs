@@ -317,6 +317,11 @@ impl ServerHandler for BenchServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // The root helper of the USB hub tools: `sudo -n bench_mcp --usb-priv <operation> ...`; it takes no config and serves no MCP.
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.first().map(|a| a.as_str()) == Some(usb_hub::privileged::FLAG) {
+        std::process::exit(usb_hub::privileged::main(&argv[1..]));
+    }
     let insts = config::load()?;
     let service = BenchServer {
         insts: Arc::new(insts),

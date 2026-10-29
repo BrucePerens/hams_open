@@ -26,3 +26,7 @@ Add an instrument with `"driver": "usb_hub"` to the bench config (`BENCH_MCP_CON
 * `critical_devices`: `vid:pid` values that are critical wherever they are plugged in.
 * Power tools need passwordless `sudo -n uhubctl` (and `sudo -n lsusb` for the hub descriptor). Without it the tools say so: `sudo -n uhubctl needs a password: add a NOPASSWD sudoers rule`, or `uhubctl is not installed`.
 * The bench instruments' serial adapters (the `serial` of a power supply entry) are protected automatically.
+
+**Root helper.** The middle-tier tools need root to write sysfs and to send USBDEVFS_RESET. They run `sudo -n <path of the bench_mcp binary> --usb-priv <operation> ...`. That mode accepts only
+`reset <device>`, `authorize <device> 0|1`, `unbind|bind <interface> <driver>` and `autosuspend <device> on|auto <ms|->`, validates every argument against the real sysfs, and does nothing else.
+A sudoers rule `user ALL=(root) NOPASSWD: /path/to/bench_mcp --usb-priv *` allows it; the binary must be owned by root and not writable by the user, or the rule lets the user run anything as root.

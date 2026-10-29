@@ -8,7 +8,9 @@
 //! and bind, autosuspend, and switching a port back on), `full` (switching a port off, and power cycles).
 
 pub mod hubs;
+pub mod ladder;
 pub mod power;
+pub mod privileged;
 pub mod protect;
 pub mod sysfs;
 #[cfg(test)]
@@ -174,6 +176,34 @@ pub const SPECS: &[Spec] = &[
         desc: "Switch one hub port off, on, or cycle it (off, wait, on) through `sudo -n uhubctl`, only on ports of hubs uhubctl reports as per-port switching. off and cycle need tier full; on needs read_config. A cycle waits for the device to leave the USB tree, keeps the port off for off_time_s (default 5, 1 to 60) and reports the ACTUAL off time, waits up to back_timeout_s (default 45) for the expected vid:pid to enumerate with a new device number, and reports how long that took and the verification level reached (2 when the leave-and-return was seen). The port is named by hub and port, label, or device. Refused by default for the protected devices and hub uplinks (see bench_usb_protection); override_protection: true overrides only the overridable reasons. dry_run: true says what would happen and changes nothing.",
         props: props!(r#""instrument":{"type":"string"},"action":{"type":"string","enum":["off","on","cycle"]},"hub":{"type":"string"},"port":{"type":"integer"},"label":{"type":"string"},"device":{"type":"string"},"off_time_s":{"type":"number"},"back_timeout_s":{"type":"number"},"expect_vidpid":{"type":"string"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
         required: &["action"],
+    },
+    Spec {
+        name: "bench_usb_reset",
+        tier: Tier::ReadConfig,
+        desc: "Soft reset of one USB device (USBDEVFS_RESET): the host re-initialises it, it keeps its power and device number, its drivers are rebound. First rung of the escalation ladder: reset, then deauthorize/authorize, then driver unbind/bind, then bench_usb_port_power. Needs root, which it gets by running this binary's --usb-priv helper through `sudo -n`. Refused for protected devices and hub uplinks (see bench_usb_protection); override_protection overrides only the overridable reasons. dry_run says what would happen.",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string","description":"device path such as 3-2.2.1, or a port label"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
+        required: &["device"],
+    },
+    Spec {
+        name: "bench_usb_authorize",
+        tier: Tier::ReadConfig,
+        desc: "Deauthorize (authorized: false) or authorize (true) a USB device: a software disconnect that keeps the device powered. Deauthorizing unbinds its drivers; the device stays in the tree but unused. Same privilege route and protection rules as bench_usb_reset; authorizing is never refused. dry_run says what would happen.",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"authorized":{"type":"boolean"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
+        required: &["device", "authorized"],
+    },
+    Spec {
+        name: "bench_usb_driver",
+        tier: Tier::ReadConfig,
+        desc: "Unbind a USB interface from its driver, or bind it to a named driver (the interface name is like 3-2.2.2:1.3, as bench_usb_topology lists it). Unbinding removes the nodes the driver made (tty, sound card, input). Same privilege route and protection rules as bench_usb_reset. dry_run lists the nodes that would go away.",
+        props: props!(r#""instrument":{"type":"string"},"interface":{"type":"string"},"action":{"type":"string","enum":["unbind","bind"]},"driver":{"type":"string","description":"required for bind; unbind defaults to the bound driver"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
+        required: &["interface", "action"],
+    },
+    Spec {
+        name: "bench_usb_autosuspend",
+        tier: Tier::ReadConfig,
+        desc: "Runtime power management of one USB device: control on (never autosuspend) or auto (may suspend after delay_ms, -1 to 3600000). A device that misbehaves when suspended is fixed with on. Setting auto on a protected device is refused. dry_run shows the current setting.",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"control":{"type":"string","enum":["on","auto"]},"delay_ms":{"type":"integer"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
+        required: &["device", "control"],
     },
 ];
 
@@ -387,18 +417,50 @@ pub fn call_with(
             hubs::protection(
                 &t,
                 &inst.usb,
-                &hubs::bench_serials(insts),
+                &hubs::bench_refs(insts),
                 root,
                 proc_root,
                 args,
             )
         }
+        "bench_usb_reset" => ladder::reset(
+            run,
+            root,
+            proc_root,
+            &inst.usb,
+            &hubs::bench_refs(insts),
+            args,
+        ),
+        "bench_usb_authorize" => ladder::authorize(
+            run,
+            root,
+            proc_root,
+            &inst.usb,
+            &hubs::bench_refs(insts),
+            args,
+        ),
+        "bench_usb_driver" => ladder::driver(
+            run,
+            root,
+            proc_root,
+            &inst.usb,
+            &hubs::bench_refs(insts),
+            args,
+        ),
+        "bench_usb_autosuspend" => ladder::autosuspend(
+            run,
+            root,
+            proc_root,
+            &inst.usb,
+            &hubs::bench_refs(insts),
+            args,
+        ),
         "bench_usb_port_power" => hubs::port_power(
             run,
             root,
             proc_root,
             &inst.usb,
-            &hubs::bench_serials(insts),
+            &hubs::bench_refs(insts),
             inst.tier,
             args,
         ),

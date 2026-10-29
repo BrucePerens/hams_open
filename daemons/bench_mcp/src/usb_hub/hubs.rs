@@ -2,7 +2,7 @@
 //! Hub capabilities and per-port status (`bench_usb_hubs`), the protection report, and port power control (`bench_usb_port_power`).
 
 use super::power::{self, Opts, PortRef};
-use super::protect::{self, BenchSerial};
+use super::protect::{self, BenchRef};
 use super::sysfs::{Device, Tree};
 use super::uhubctl::{self, Runner, Switching, UHub};
 use super::Config;
@@ -152,15 +152,21 @@ pub fn hubs(
     }))
 }
 
-pub fn bench_serials(insts: &[crate::config::Instrument]) -> Vec<BenchSerial> {
+pub fn bench_refs(insts: &[crate::config::Instrument]) -> Vec<BenchRef> {
     insts
         .iter()
-        .filter_map(|i| {
-            i.serial.as_ref().map(|s| BenchSerial {
-                instrument: i.name.clone(),
-                path: s.clone(),
-            })
+        .map(|i| BenchRef {
+            instrument: i.name.clone(),
+            path: i.serial.clone(),
+            hub_port: i
+                .vna
+                .hub
+                .as_ref()
+                .map(|h| (h.hub.clone(), u32::from(h.port))),
+            vidpid: (i.kind == crate::config::Kind::Vna)
+                .then(|| format!("{:04x}:{:04x}", vnwa_open::VID, vnwa_open::PID)),
         })
+        .filter(|b| b.path.is_some() || b.hub_port.is_some() || b.vidpid.is_some())
         .collect()
 }
 
@@ -233,7 +239,7 @@ fn secs(
     Ok(d)
 }
 
-fn flag(args: &Value, key: &str) -> Result<bool, String> {
+pub fn flag(args: &Value, key: &str) -> Result<bool, String> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(false),
         Some(v) => v
@@ -295,7 +301,7 @@ pub fn port_power(
     sysfs_root: &Path,
     proc_root: &Path,
     cfg: &Config,
-    bench: &[BenchSerial],
+    bench: &[BenchRef],
     tier: crate::config::Tier,
     args: &Value,
 ) -> Result<Value, String> {
@@ -415,7 +421,7 @@ pub fn port_power(
 pub fn protection(
     t: &Tree,
     cfg: &Config,
-    bench: &[BenchSerial],
+    bench: &[BenchRef],
     sysfs_root: &Path,
     proc_root: &Path,
     args: &Value,

@@ -161,7 +161,7 @@ fn link_name(p: &Path) -> Option<String> {
         .and_then(|t| t.file_name().map(|n| n.to_string_lossy().to_string()))
 }
 
-fn is_device_name(n: &str) -> bool {
+pub fn is_device_name(n: &str) -> bool {
     if let Some(rest) = n.strip_prefix("usb") {
         return !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit());
     }
