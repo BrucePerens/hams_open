@@ -4,7 +4,7 @@
 
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// One endpoint of the active alternate setting of an interface.
 #[derive(Clone, Debug, PartialEq)]
@@ -689,16 +689,10 @@ pub fn tree_json(t: &Tree, root: &str, labels: &dyn Fn(&str, u32) -> Option<Stri
     v
 }
 
-/// Where `/sys` is: `USB_HUB_SYSFS` (for inspecting a recording) or the real one.
-pub fn sysfs_root() -> PathBuf {
-    std::env::var("USB_HUB_SYSFS")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/sys"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     pub fn fixture() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/usb_fixtures/devbox/sys")

@@ -181,7 +181,31 @@ pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
         Some(v) => v.as_bool().ok_or("verify must be true or false")?,
     };
     let started = std::time::Instant::now();
-    vnwa_open::power::cold_reset(&hub)?;
+    // The power-off, power-on and wait for re-enumeration are the usb_hub module's (the same code as bench_usb_port_power);
+    // the VNA supplies its own off times and what "ready" means (the unit and both codecs present).
+    let port = crate::usb_hub::power::PortRef {
+        hub: hub.hub.clone(),
+        port: u32::from(hub.port),
+        exact: false,
+    };
+    let long = vnwa_open::power::LONG_OFF_TIME;
+    let schedule = [
+        crate::usb_hub::power::Opts::new(
+            vnwa_open::power::OFF_TIME,
+            std::time::Duration::from_secs(25),
+        ),
+        crate::usb_hub::power::Opts::new(long, vnwa_open::power::BACK_TIMEOUT),
+    ];
+    let mut ready = vnwa_open::power::unit_present;
+    let report = crate::usb_hub::power::cycle_escalating(
+        &crate::usb_hub::uhubctl::ProcessRunner,
+        std::path::Path::new("/sys"),
+        &port,
+        &schedule,
+        Some(&mut ready),
+    )?;
+    // The unit and its codecs are listed before they answer reliably (a request sent 3 s after enumeration stalled); give them time.
+    std::thread::sleep(std::time::Duration::from_secs(8));
     POWER_CYCLES.fetch_add(1, Ordering::Relaxed);
     let codecs = vnwa_open::topology::codecs()?;
     let mut out = json!({
@@ -189,6 +213,7 @@ pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
         "back_after_s": started.elapsed().as_secs_f64(),
         "codec_s11": codecs.s11,
         "codec_s21": codecs.s21,
+        "hub_power": report.json(),
         "note": "the unit lost all settings: a generator that was on is off",
     });
     if verify {

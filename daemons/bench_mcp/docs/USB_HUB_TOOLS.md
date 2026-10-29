@@ -36,4 +36,28 @@ MCP client registration is the same as for the rest of bench_mcp (a stdio server
 Speed findings: a USB 3 device running below SuperSpeed is a `warn`; a device that reports USB 2.x but runs at 12 Mb/s is a `note` only, because many
 full-speed devices report 2.0 in `bcdUSB`.
 
-Everything above reads `/sys/bus/usb/devices` and needs no privilege. The tools that need privilege are documented with their tiers as they are added.
+| `bench_usb_hubs` | read_only | Per hub: ports, TT mode, uplink, what uhubctl says about switching, the hub class descriptor (power-switching mode, over-current mode, TT think time, as the hub claims them), per-port status bits and the verification level. Runs `sudo -n uhubctl` and `sudo -n lsusb -v`. |
+| `bench_usb_protection` | read_only | The protection list with reasons, and the verdict for one target. |
+| `bench_usb_port_power` | read_config (on), full (off, cycle) | Switch one port off, on or cycle it; `dry_run`, `off_time_s` (default 5 s), re-enumeration check, verification level. |
+
+The topology and find tools read `/sys/bus/usb/devices` and need no privilege. `bench_usb_hubs` and `bench_usb_port_power` use `sudo -n`; without a NOPASSWD rule, or
+without uhubctl, they fail with a message that says which.
+
+## Verification levels of port power control
+
+A port cannot be verified from software alone, so the output gives a level, never a boolean: 1 claimed (uhubctl reports per-port switching); 2 re-enumerated (the device left the tree
+when the port went off and came back with a new device number and readable descriptors, with the measured times; checked on every cycle the tool performs); 3 state cleared (a
+device-specific check, recorded in the config); 4 VBUS measured (manual entry in the config). Level 2 shows the port dropped the device, not that VBUS fell: some hubs disable the
+data lines and leave VBUS on. The VNWA on hub 3-2 port 2 is confirmed by eye to go dark and keep nothing, which the config records as `confirmed_by_hand` (level 2 plus manually confirmed).
+
+## Safety rules
+
+* Only ports of hubs uhubctl lists as per-port switching can be switched (ganged and unlisted hubs are refused). A SuperSpeed hub is addressed with `-e`.
+* Refused by default: the device carrying the root filesystem or another mounted USB filesystem, boot-protocol keyboards and mice, config-critical ports and devices, the serial adapter of a bench instrument, any hub on the path to those, and the uplink of any hub (unless the port has `hub_uplink_ok`). Reasons from the config and from bench instruments cannot be overridden; the others can with `override_protection: true`.
+* `dry_run: true` on a mutating tool says what would happen (commands, devices affected, protection verdict) and changes nothing.
+* The off time is a parameter (1 to 60 s, default 5 s); the actual off time is reported.
+* A failed power-on after a power-off is retried once and, if it still fails, the error says the port is still off.
+
+The VNA's cold reset (`bench_vna_power_cycle` and the recovery inside it) calls the same `usb_hub::power` code, with the VNA's own off times and "unit and both codecs present" as its ready check; its result includes the re-enumeration report.
+
+The same text, organised for the MCP manual, is in `manual/instruments/usb-hubs/` and `manual/tools/`.

@@ -7,7 +7,13 @@
 //! listed and allowed: `read_only` (listing, status, history), `read_config` (device reset, authorize, driver unbind
 //! and bind, autosuspend, and switching a port back on), `full` (switching a port off, and power cycles).
 
+pub mod hubs;
+pub mod power;
+pub mod protect;
 pub mod sysfs;
+#[cfg(test)]
+pub mod testkit;
+pub mod uhubctl;
 
 use crate::config::{Instrument, Kind, Tier};
 use rmcp::model::Tool;
@@ -147,6 +153,27 @@ pub const SPECS: &[Spec] = &[
         desc: "Find the device behind a node or a name: give `node` (for example /dev/ttyUSB0, ttyACM1, hidraw3, eth1, a sound card id such as CODEC, or a sdX block name) or `vidpid`, `product` (substring) or `label`, and get the USB path, port label and the node, so that 'which device is /dev/ttyUSB0' has an answer.",
         props: props!(r#""instrument":{"type":"string"},"node":{"type":"string"},"vidpid":{"type":"string"},"product":{"type":"string"},"label":{"type":"string"}"#),
         required: &[],
+    },
+    Spec {
+        name: "bench_usb_hubs",
+        tier: Tier::ReadOnly,
+        desc: "Hub capabilities and per-port status: for each hub its port count, TT mode, uplink, what uhubctl says about power switching (per-port, ganged, or not listed), the hub class descriptor (power-switching mode, over-current protection mode, TT think time, as the hub CLAIMS them), and per port the sysfs state, over-current count, the decoded status word (powered, connected, enabled, suspended, over-current, reset, speed, USB 3 link state) and the power-control verification level: 1 claimed (uhubctl reports per-port switching), 2 re-enumerated (a power cycle by this server showed the device leave and return with a new device number, or it was confirmed by hand in the config), 3 state cleared, 4 VBUS measured (both from the config). Level 2 shows the port dropped the device, not that VBUS fell. Runs `sudo -n uhubctl` and `sudo -n lsusb -v` for what only root can read; `privileged: false` skips them and `hub` limits to one hub.",
+        props: props!(r#""instrument":{"type":"string"},"hub":{"type":"string","description":"one hub path, for example 3-2"},"privileged":{"type":"boolean","description":"false skips the sudo reads"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_usb_protection",
+        tier: Tier::ReadOnly,
+        desc: "The protection list: devices that power-off, reset and unbind tools refuse by default (the root filesystem and other mounted USB storage, boot-protocol keyboards and mice, config-critical ports and devices, the serial adapters of bench instruments, every hub on the path to them, and the uplink of any hub), with the reasons and which of them cannot be overridden. Give hub and port, label or device to see the verdict for one target.",
+        props: props!(r#""instrument":{"type":"string"},"hub":{"type":"string"},"port":{"type":"integer"},"label":{"type":"string"},"device":{"type":"string"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_usb_port_power",
+        tier: Tier::ReadConfig,
+        desc: "Switch one hub port off, on, or cycle it (off, wait, on) through `sudo -n uhubctl`, only on ports of hubs uhubctl reports as per-port switching. off and cycle need tier full; on needs read_config. A cycle waits for the device to leave the USB tree, keeps the port off for off_time_s (default 5, 1 to 60) and reports the ACTUAL off time, waits up to back_timeout_s (default 45) for the expected vid:pid to enumerate with a new device number, and reports how long that took and the verification level reached (2 when the leave-and-return was seen). The port is named by hub and port, label, or device. Refused by default for the protected devices and hub uplinks (see bench_usb_protection); override_protection: true overrides only the overridable reasons. dry_run: true says what would happen and changes nothing.",
+        props: props!(r#""instrument":{"type":"string"},"action":{"type":"string","enum":["off","on","cycle"]},"hub":{"type":"string"},"port":{"type":"integer"},"label":{"type":"string"},"device":{"type":"string"},"off_time_s":{"type":"number"},"back_timeout_s":{"type":"number"},"expect_vidpid":{"type":"string"},"dry_run":{"type":"boolean"},"override_protection":{"type":"boolean"}"#),
+        required: &["action"],
     },
 ];
 
@@ -321,6 +348,25 @@ fn find(root: &Path, cfg: &Config, args: &Value) -> Result<Value, String> {
 }
 
 pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
+    call_with(
+        &uhubctl::ProcessRunner,
+        Path::new("/sys"),
+        Path::new("/proc"),
+        insts,
+        name,
+        args,
+    )
+}
+
+/// `call` with the program runner and the sysfs and procfs roots given: production passes the process runner, `/sys` and `/proc`.
+pub fn call_with(
+    run: &dyn uhubctl::Runner,
+    root: &Path,
+    proc_root: &Path,
+    insts: &[Instrument],
+    name: &str,
+    args: &Value,
+) -> Result<Value, String> {
     let spec = SPECS
         .iter()
         .find(|s| s.name == name)
@@ -332,10 +378,30 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
             spec.tier, inst.name, inst.tier
         ));
     }
-    let root = sysfs::sysfs_root();
     match name {
-        "bench_usb_topology" => topology(&root, &inst.usb, args),
-        "bench_usb_find" => find(&root, &inst.usb, args),
+        "bench_usb_topology" => topology(root, &inst.usb, args),
+        "bench_usb_find" => find(root, &inst.usb, args),
+        "bench_usb_hubs" => hubs::hubs(run, root, &inst.usb, args),
+        "bench_usb_protection" => {
+            let t = sysfs::Tree::read(root)?;
+            hubs::protection(
+                &t,
+                &inst.usb,
+                &hubs::bench_serials(insts),
+                root,
+                proc_root,
+                args,
+            )
+        }
+        "bench_usb_port_power" => hubs::port_power(
+            run,
+            root,
+            proc_root,
+            &inst.usb,
+            &hubs::bench_serials(insts),
+            inst.tier,
+            args,
+        ),
         _ => Err(format!("{name} does not apply to {:?}", inst.name)),
     }
 }
