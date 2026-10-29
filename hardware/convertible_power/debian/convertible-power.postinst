@@ -6,6 +6,11 @@ case "$1" in
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true   # the drop-in for upower.service changed
             deb-systemd-invoke try-restart upower.service || true
+            # power-profiles-daemon is removed by the dependency on tlp, but a running copy is not always
+            # stopped; while it runs, TLP refuses to set the CPU boost and energy settings.
+            if systemctl is-active --quiet power-profiles-daemon.service; then
+                systemctl stop power-profiles-daemon.service || true
+            fi
             if command -v tlp >/dev/null 2>&1; then
                 tlp start >/dev/null 2>&1 || true
             fi
