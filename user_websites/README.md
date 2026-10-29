@@ -44,7 +44,7 @@ Go to **Settings > General Settings > User Websites** to configure the app.
 We used a few neat tricks to make this secure and fast:
 
 * **Just-In-Time Creation:** We don't waste database space creating empty blogs for users who never use them. The system only creates the website records when the owner first clicks "Create Your Site" (or "Create Your Blog") on their own not-yet-initialized page; until then, visitors see a placeholder.
-* **Your Own Blog:** Each user or group gets its own Odoo `blog.blog` record (named `<Name>'s Blog`), owned by that user or group, so only its owner (or the group's members) and administrators can change it. A user may have up to 5 blogs by default.
+* **Your Own Blog:** Each user or group gets its own Odoo `blog.blog` record (named `<Name> Blog`, public at `/<callsign>/blog`, its posts at `/<callsign>/blog/<post-slug>`), owned by that user or group, so only its owner (or the group's members) and administrators can change it. A user may have up to 5 blogs by default.
 * **Proxy Ownership:** Odoo normally only lets admins build web pages. We get around this securely. When a user creates a page, the system briefly logs in as a background Service Account to save the HTML to the database, but tags the user as the real "owner" so only they can edit it later.
 * **Security Shield:** The module includes an automated sanitization engine that intercepts and neutralizes XSS and SSTI attempts. If a user tries to inject malicious code, the system strips it, files a violation report against the page's owner, and issues a strike.
 

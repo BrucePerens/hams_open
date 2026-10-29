@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Odoo's blog templates build every address as /blog/<blog slug>/<post slug>. A member's or
+         group's blog lives at /<callsign>/blog and its posts at blog.post.website_url, which is the
+         stock address for any other blog, so these templates use website_url (and the blog's
+         site_path) instead. Stock addresses of member blogs still answer a 301
+         (controllers/blog_urls.py); these edits keep the page itself from pointing at them.
+         Rendering and the resulting links: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign]. -->
+
+    <template id="blog_post_read_next_user_links" inherit_id="website_blog.opt_blog_post_read_next" name="Member blog: read-next links">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="(//a[@t-att-title=&quot;'Read next' + next_post.name&quot;])[1]" position="attributes">
+            <attribute name="t-att-href">next_post.website_url</attribute>
+        </xpath>
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="(//a[@t-att-title=&quot;'Read next' + next_post.name&quot;])[2]" position="attributes">
+            <attribute name="t-att-href">next_post.website_url</attribute>
+        </xpath>
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[@id='o_wblog_next_post_info']" position="attributes">
+            <attribute name="t-att-data-url">next_post.website_url + '?anim'</attribute>
+        </xpath>
+    </template>
+
+    <template id="blog_post_comment_user_links" inherit_id="website_blog.opt_blog_post_comment" name="Member blog: sign-in link">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[contains(@t-attf-href, '/web/login?redirect=/blog/')]" position="attributes">
+            <attribute name="t-attf-href">/web/login?redirect={{blog_post.website_url}}#discussion</attribute>
+        </xpath>
+    </template>
+
+    <template id="posts_loop_user_links" inherit_id="website_blog.posts_loop" name="Member blog: Read more link">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[@t-attf-href='/blog/#{slug(blog_post.blog_id)}/#{slug(blog_post)}']" position="attributes">
+            <attribute name="t-attf-href">#{blog_post.website_url}</attribute>
+        </xpath>
+    </template>
+
+    <template id="post_heading_user_links" inherit_id="website_blog.post_heading" name="Member blog: heading link">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[@t-attf-href='/blog/#{slug(blog_post.blog_id)}/#{slug(blog_post)}']" position="attributes">
+            <attribute name="t-attf-href">#{blog_post.website_url}</attribute>
+        </xpath>
+    </template>
+
+    <template id="post_info_user_links" inherit_id="website_blog.post_info" name="Member blog: blog link">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[@t-attf-href='/blog/#{slug(blog_post.blog_id)}']" position="attributes">
+            <attribute name="t-attf-href">#{blog_post.blog_id.site_path or ('/blog/%s' % slug(blog_post.blog_id))}</attribute>
+        </xpath>
+    </template>
+
+    <template id="post_cover_image_user_links" inherit_id="website_blog.post_cover_image" name="Member blog: cover link">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[@t-attf-href='/blog/#{slug(blog_post.blog_id)}/#{slug(blog_post)}']" position="attributes">
+            <attribute name="t-attf-href">#{blog_post.website_url}</attribute>
+        </xpath>
+    </template>
+
+    <template id="post_teaser_user_links" inherit_id="website_blog.post_teaser" name="Member blog: teaser link">
+        <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <!-- audit-ignore-xpath: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->
+        <xpath expr="//a[@t-attf-href='/blog/#{slug(blog_post.blog_id)}/#{slug(blog_post)}']" position="attributes">
+            <attribute name="t-attf-href">#{blog_post.website_url}</attribute>
+        </xpath>
+    </template>
+</odoo>

@@ -55,6 +55,26 @@ class UserWebsitesOwnedMixin(models.AbstractModel):
         "this is a removal from view, never an erasure.",
     )
 
+    def _user_site_slugs(self):
+        """{record id: the owner's site slug} for the records that have an owner with a slug.
+
+        [@ANCHOR: user_websites:fn_mixin_user_site_slugs]
+        Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
+        Read as the user_websites service account: neither the public user nor a portal member may
+        read another member's res.users row (see _user_websites_navbar_profile_user), and a
+        public page's address is computed for visitors.
+        """
+        svc = self.env["zero_sudo.security.utils"]._get_service_env(
+            "user_websites.user_websites_service_account"
+        )
+        records = svc[self._name].with_context(active_test=False).browse(self.ids).exists()
+        slugs = {}
+        for record in records:
+            owner = record.owner_user_id or record.user_websites_group_id
+            if owner.website_slug:
+                slugs[record.id] = owner.website_slug
+        return slugs
+
     def _user_websites_navbar_profile_user(self):
         # [@ANCHOR: mixin_navbar_profile_user]
 
