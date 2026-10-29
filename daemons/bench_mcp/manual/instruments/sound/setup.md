@@ -1,14 +1,14 @@
 ---
 title: Registering and configuring the sound tools
 summary: The audio entry of the bench config: aliases, alert output, verify input, volume cap, quiet hours, capture directory.
-see_also: [overview, safety]
+see_also: [instruments/sound/overview, instruments/sound/safety]
 tools: [bench_audio_devices, bench_audio_status, bench_audio_levels, bench_audio_record, bench_audio_meter, bench_audio_play, bench_audio_set_volume, bench_audio_loopback]
 instrument: sound
-tier: read
+tier: read_only
 verified: config parser tested; status run on the dev box, 2026-10-29
 ---
 
-# Setup
+# Registering and configuring the sound tools
 
 Add an instrument with `"driver": "audio"` to the bench config. Every setting is optional.
 

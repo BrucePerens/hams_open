@@ -1,10 +1,10 @@
 ---
 title: bench_usb_history
 summary: Connect, disconnect and enumeration timeline from the kernel journal with USB error counters and flapping detection.
-see_also: [usb-hubs/operation, usb-hubs/troubleshooting]
+see_also: [instruments/usb-hubs/operation, instruments/usb-hubs/troubleshooting]
 tools: [bench_usb_history, bench_usb_watch]
 instrument: usb-hubs
-tier: read
+tier: read_only
 verified: run on the dev box journal with use_sudo (299 connects, 7 enumeration failures, -71 and -32 counts for 3-2.2.1), 2026-10-29
 ---
 
@@ -18,3 +18,7 @@ Arguments: `device` (path or label; includes everything below it), `since_s`, `m
 
 The kernel journal is readable only by root and the groups `adm` and `systemd-journal`. Without that the call fails naming the group; `use_sudo: true` runs `sudo -n journalctl -k` for that call only.
 Counted `-19` lines mean software kept submitting to a device that had already gone; they are not a link fault by themselves.
+
+## Arguments
+
+<!-- arguments -->

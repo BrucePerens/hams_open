@@ -1,7 +1,7 @@
 ---
 title: bench_audio_discover
 summary: Find by listening which outputs make sound and which inputs hear.
-see_also: [sound/discovery, sound/safety]
+see_also: [instruments/sound/discovery, instruments/sound/safety]
 tools: [bench_audio_discover]
 instrument: sound
 tier: full
@@ -13,3 +13,7 @@ verified: dev box 2026-10-29 (real hardware) and a virtual output and input
 Find by listening which outputs make sound and which inputs hear.
 
 Arguments: `urgent`, `include_bluetooth`, `dry_run`, `output`, `input`. Makes short quiet tones. See sound/discovery.
+
+## Arguments
+
+<!-- arguments -->

@@ -1,10 +1,10 @@
 ---
 title: USB hub tools
 summary: What the bench_usb_* tools describe and control, the tiers, and why they live in bench_mcp.
-see_also: [setup, operation, limits, troubleshooting]
+see_also: [instruments/usb-hubs/setup, instruments/usb-hubs/operation, instruments/usb-hubs/limits, instruments/usb-hubs/troubleshooting]
 tools: [bench_usb_topology, bench_usb_find, bench_usb_hubs, bench_usb_protection, bench_usb_port_power]
 instrument: usb-hubs
-tier: read
+tier: read_only
 verified: read-only tools run against the dev box tree (hub 3-2 and the VNWA chain), 2026-10-29
 ---
 
