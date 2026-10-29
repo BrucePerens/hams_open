@@ -124,6 +124,8 @@ class TestCreateSiteExistingHome(HamsHttpCase):
             deleted_by_owner="2026-10-29 02:26:43",
             deleted_original_url="/cshowner/former-home",
         )
+        self.env.flush_all()
+        self.authenticate("cshowner", "cshowner")
         self._create_site()
         self.assertEqual(len(self._pages()), 2)
         self.assertTrue(home.website_published)
