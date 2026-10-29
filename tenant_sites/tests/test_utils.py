@@ -73,6 +73,11 @@ class TestTenantSitesUtils(HamsTransactionCase):
         # Tests [@ANCHOR: tenant_sites:COMM_tenant_module_allowed]
         self.assertTrue(utils.tenant_module_allowed("/", "odoo.addons.website.controllers.main"))
         self.assertFalse(utils.tenant_module_allowed("/", "odoo.addons.web.controllers.home"))
+        # The stock blog routes as overridden by user_websites (perens.com /blog outage).
+        blog_urls = "odoo.addons.user_websites.controllers.blog_urls"
+        self.assertTrue(utils.tenant_module_allowed("/blog", blog_urls))
+        self.assertFalse(utils.tenant_path_allowed("/k6bp/blog/post-1"))
+        self.assertFalse(utils.tenant_module_allowed("/k6bp", "odoo.addons.user_websites.controllers.main"))
         self.assertFalse(utils.tenant_module_allowed("/robots.txt", "odoo.addons.web.controllers.home"))
         self.assertTrue(utils.tenant_module_allowed("/blog", "odoo.addons.website_blog.controllers.main"))
         self.assertTrue(utils.tenant_module_allowed("/web/image/1", "odoo.addons.web.controllers.binary"))
