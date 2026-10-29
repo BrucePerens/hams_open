@@ -10,6 +10,8 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- concepts/extending: the contributor guide (what belongs, before you code, anatomy, standing safety rules, provenance, checks, documentation, submitting, worked examples)
+- procedures/add-an-instrument: step by step from the skeleton to the pull request
 - instruments/example: the template instrument (overview, setup, operation, limits, troubleshooting, protocol) and its four tools, the model for a new driver's pages
 - index: the manual and its quickstart
 - concepts: safety tiers, configuration, units, errors, reserved devices, verification, several instruments, etiquette

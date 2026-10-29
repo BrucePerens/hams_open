@@ -382,3 +382,51 @@ fn the_leak_detector_sees_what_it_should() {
     assert!(leak("host 192.0.2.10 firmware 1.3.27.0 SN-0000").is_none());
     assert!(leak("sdr 192.168.10.51 and 10.99.0.1").is_none());
 }
+
+// Tests [@ANCHOR: bench_mcp_checklist]
+#[test]
+fn the_guide_the_pr_template_and_the_plan_issue_are_in_place() {
+    let m = manual().expect("the embedded manual parses");
+    let index = read("docs/EXTENDING.md");
+    for p in m
+        .pages
+        .iter()
+        .filter(|p| p.path.starts_with("concepts/extending/"))
+    {
+        let file = format!("manual/{}.md", p.path);
+        assert!(
+            index.contains(&file),
+            "docs/EXTENDING.md does not list {file}"
+        );
+    }
+    assert!(m.get("procedures/add-an-instrument").is_some());
+    assert!(index.contains("manual/procedures/add-an-instrument.md"));
+    let pr = read("../../.github/PULL_REQUEST_TEMPLATE/bench_instrument.md");
+    for h in [
+        "## Instrument and function",
+        "## New tools",
+        "## Hardware testing",
+        "## Safety",
+        "## Provenance",
+        "## Scrubbing",
+        "## Checks run",
+    ] {
+        assert!(pr.contains(h), "the PR template lost its {h:?} section");
+    }
+    let issue = read("../../.github/ISSUE_TEMPLATE/bench_instrument_plan.md");
+    assert!(issue.contains("Planned tools"));
+    // The five incident rules and the repository URL stay in the guide.
+    let rules = m.get("concepts/extending/standing-rules").unwrap();
+    for k in [
+        "node.dont-fallback",
+        "dry_run",
+        "added by bench_mcp",
+        "https://github.com/BrucePerens/hams_open",
+        "audible sound",
+    ] {
+        assert!(
+            rules.body.to_lowercase().contains(&k.to_lowercase()),
+            "standing-rules lost {k:?}"
+        );
+    }
+}
