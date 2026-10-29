@@ -13,6 +13,19 @@
 
 use serde_json::Value;
 
+/// The `driver` names an instrument entry may have. A new driver is added here and to the `match` in `parse`; the checklist
+/// tests (`src/checklist.rs`) require each one to appear in the README with an example entry.
+pub const DRIVERS: &[&str] = &[
+    "siglent_sds",
+    "atm6301",
+    "vnwa_open",
+    "bladerf",
+    "limesdr",
+    "usb_hub",
+    "audio",
+    "example",
+];
+
 #[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
 pub enum Tier {
     ReadOnly = 0,
@@ -31,6 +44,8 @@ pub enum Kind {
     UsbHub,
     /// The host's sound devices (`audio` module): PipeWire, wpctl and the speech synthesizers.
     Audio,
+    /// The skeleton instrument (`example` module): an imaginary SCPI signal source, the starting point for a new driver.
+    Example,
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +65,7 @@ pub struct Instrument {
     pub sdr: crate::sdr::Config,
     pub usb: crate::usb_hub::Config,
     pub audio: crate::audio::Config,
+    pub example: crate::example::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -141,10 +157,12 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             "bladerf" | "limesdr" => Kind::Sdr,
             "usb_hub" => Kind::UsbHub,
             "audio" => Kind::Audio,
+            "example" => Kind::Example,
             o => {
                 return Err(format!(
-                "{name}: unknown driver {o:?} (siglent_sds, atm6301, vnwa_open, bladerf, limesdr, usb_hub, audio)"
-            ))
+                    "{name}: unknown driver {o:?} ({})",
+                    DRIVERS.join(", ")
+                ))
             }
         };
         let driver_name = driver.clone();
@@ -168,9 +186,17 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             } else {
                 crate::audio::Config::default()
             },
+            example: if driver_name == "example" {
+                crate::example::parse_config(c).map_err(|e| format!("{name}: {e}"))?
+            } else {
+                crate::example::Config::default()
+            },
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),
+            (Kind::Example, None, _) => {
+                return Err(format!("{name}: an example instrument needs \"host\""))
+            }
             (Kind::Psu, _, None) => return Err(format!("{name}: a supply needs \"serial\"")),
             _ => {}
         }
@@ -250,6 +276,18 @@ mod tests {
             bad(r#","point_ms":10,"window_ms":0.05"#),
             "a window shorter than one IF period"
         );
+    }
+
+    #[test]
+    fn every_listed_driver_is_known_to_parse() {
+        for d in DRIVERS {
+            let text = format!(r#"{{"instruments":{{"x":{{"driver":"{d}"}}}}}}"#);
+            let e = parse(&text).err().unwrap_or_default();
+            assert!(!e.contains("unknown driver"), "{d}: {e}");
+        }
+        assert!(parse(r#"{"instruments":{"x":{"driver":"nope"}}}"#)
+            .unwrap_err()
+            .contains("example"));
     }
 
     #[test]

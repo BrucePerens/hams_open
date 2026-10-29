@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/example: the template instrument (overview, setup, operation, limits, troubleshooting, protocol) and its four tools, the model for a new driver's pages
 - index: the manual and its quickstart
 - concepts: safety tiers, configuration, units, errors, reserved devices, verification, several instruments, etiquette
 - tools/bench_manual_index: the manual tools and the pages of every other tool, with generated argument tables

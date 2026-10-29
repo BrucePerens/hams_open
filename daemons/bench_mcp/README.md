@@ -216,3 +216,18 @@ Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs ar
 * Speech: engine choice, voice list from a recording of `espeak-ng --voices`, command lines with the text on stdin; speaking to a WAV file and to a virtual output. [@ANCHOR: audio_speak_choose] [@ANCHOR: audio_speak_voices] [@ANCHOR: audio_speak_tool]
 * Alerts: volume by severity and quiet hours; the text is returned also when no sound can be made. [@ANCHOR: audio_alert_volume] [@ANCHOR: audio_alert_tool]
 * Audio path discovery: conclusions on synthetic observations (heard, not heard, dead input, no microphone, HDMI last, crosstalk), the volume ladder, staleness by device fingerprint, `auto` selection, and a run against a virtual output and input. [@ANCHOR: audio_discover_conclude] [@ANCHOR: audio_discover_ladder] [@ANCHOR: audio_discover_stale] [@ANCHOR: audio_select_auto] [@ANCHOR: audio_discover_auto_rerun] [@ANCHOR: audio_discover_tool]
+
+## Template instrument (`example` driver)
+
+`src/example/` is a working skeleton for adding an instrument: an imaginary SCPI signal source with four tools (`bench_example_status`, `bench_example_measure`, `bench_example_safe_state`, `bench_example_pulse`), its manual pages, a recorded-session fixture, a fake device for the tests and an ignored hardware check (`tests/hil_example.rs`). It is listed only when the config has an entry such as `{"driver": "example", "tier": "read_config", "host": "192.0.2.10", "port": 5025, "max_level_v": 1.0, "max_pulse_s": 2.0}`; no real instrument answers to it. `python3 tools/new_instrument.py <name>` copies it as the start of a new driver. The checks in `src/checklist.rs` (a page for every tool, the standard instrument pages, `dry_run` on every new `full` tool, anchors that pair up, no addresses or credentials in fixtures and pages) run with `cargo test`. [@ANCHOR: bench_mcp_checklist]
+
+Checks this crate makes for the template instrument (anchors):
+
+* The config takes limits with defaults and refuses bad ones. [@ANCHOR: example_config]
+* Arguments must be present, finite and in range, with the cause of the limit in the error. [@ANCHOR: example_args]
+* A reply that is not a finite number is an error, never a zero. [@ANCHOR: example_readings]
+* An address that does not answer as the expected model is sent nothing else. [@ANCHOR: example_identity]
+* A query is retried a bounded number of times and then reported with the next step. [@ANCHOR: example_retry]
+* Pulse arguments are checked against the rating and the owner's limits before anything is sent. [@ANCHOR: example_pulse_args]
+* A pulse needs `confirm`, honours `dry_run`, and ends with the output off and verified off. [@ANCHOR: example_pulse]
+* The safe state is verified by reading it back, and a failure says what to do by hand. [@ANCHOR: example_safe_state]
