@@ -498,6 +498,32 @@ Source: measurement on the dev box (`examples/overrun_probe.rs`, the soak log, t
 * Bus: the codecs and the unit sit behind the StarTech hub 3-2 and the unit's TUSB2036 hub (full speed, one transaction translator) on xHCI 0000:00:14.0 (bus 3, 480 M), shared
   with the Bluetooth adapter and one other device; no overruns were seen with them present.
 
+## Firmware version and internal temperature (2026-10-29)
+
+Source: usbmon captures of the vendor program (`v03_licensed`, `v04_points`, `v10_meter`, `temp1`) and reads from this driver; the Help file ("Instrument Monitoring", VNWA3 firmware
+v5.16 or later) names the feature.
+
+* **Request 0xff, wValue 3, wIndex 0x7dc0 (read, 2 bytes)**: `16 05`, read once at start-up by the vendor program. Taken as the firmware version, minor byte first: v5.22. This is
+  consistent with the features the unit has (AM/FM needs v5.19, pulse v5.22) and with the Help file's v5.16 threshold for the sensor; the vendor program's "Test USB" status line,
+  which should show the same version, has not been read to confirm it.
+* **Request 0x85, wValue 3, wIndex 0 (read, 2 bytes)**: little-endian 16-bit counts, `3e 59` (0x593e = 22846) in the first minutes after power-up in `v03`, rising to `47 5a` (0x5a47 = 23111)
+  after 18 minutes; the vendor program polls it about every 500 ms at first and then rarely. Taken as the unit's internal temperature sensor (the counts rise as the unit warms; uncalibrated,
+  only changes mean anything; the scale in degrees is not known: the vendor assumes 20 C at first start and lets the user apply an offset). Two reads a moment apart agree to a few counts.
+* **Warm-up from a cold start** (`~/.claude-tmp/x/drift/cold1.csv`, 33 sweeps of 60 points over 16 minutes, TX to RX loopback through pad and tee, unit power-cycled just before):
+  the sensor read 23103 counts at 14 s, 23167 at 103 s, 23191 at 284 s and then stayed within 23194 to 23204 (7 to 16 minutes). The mean change of |S11| and |S21| against the first sweep
+  (14 s after power-up) was -0.023 % at 103 s and -0.032 % at 16 minutes, the mean phase change +0.006 degrees. So the unit's own warm-up from cold moves the sweep by less than 0.04 % and 0.01 degrees
+  and has finished in about 5 minutes. It cannot explain the first soak's 0.3 to 0.9 % (worst point) drift over hours; see the drift section of `README.md`.
+
+## The analysis window and the block send time (2026-10-29)
+
+Source: measurement (`examples/attempt_timing.rs`, 12 sweeps of 60 points, 720 attempts).
+About 3 % of all attempts failed the steadiness check ("level change 5 to 14 %, IF error tiny") in the first soak and in every later run; they were cured by one retry and nobody counted
+them (the soak's "recovery remeasured 8 resends 48" lines). The cause is timing, not the unit: the analysis window was timed from the instant before the nine set-up requests and the 0x0d read
+were sent, but the unit starts emitting when they are done, and sending takes 7 to 27 ms (median 9 ms). Every failed attempt whose send had finished (15 of 19; the other 4 failed on a transfer error before it finished) had a send of 20.9 ms or more, no succeeded attempt had more than 20.9 ms,
+and 80 ms minus 20 ms is the 60 ms level step. The window is now timed from the end of the 0x0d read, 71 ms after it (`SETTLE_AFTER_STEP_MS`, the average of the old placement). Result: attempts with a send of
+up to 26.5 ms all passed, and 4 of 724 attempts failed (0.6 %), all before the send finished (a transfer error). The frequency meter's mark is still taken before the send; its window starts 120 ms in and
+tolerates the jitter.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).

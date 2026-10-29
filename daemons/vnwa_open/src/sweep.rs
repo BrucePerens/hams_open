@@ -36,8 +36,8 @@ pub struct Config {
     pub point_ms: f64,
     /// The RF level, 14 bits (0x3fff is the maximum).
     pub rf_level: u16,
-    /// How long after the block is sent the analysis window starts, and how long it is; `None` takes one point time plus
-    /// 20 ms (the audio latency) and two point times.
+    /// How long after the block and the 0x0d read are done the analysis window starts, and how long it is; `None` takes one point time plus
+    /// 11 ms and two point times.
     pub settle_ms: Option<f64>,
     pub window_ms: Option<f64>,
     /// The smallest reference amplitude (sample counts) accepted as a signal.
@@ -48,6 +48,10 @@ pub struct Config {
     /// separate from `retries` and never lead to a power cycle (the unit is not at fault); when they are used up the point fails.
     pub overrun_retries: u32,
 }
+
+/// Where the analysis window starts, after the first level step (one point time after the end of the block send): 11 ms, which is where it
+/// started on average when it was timed from before the send (60 + 20 ms minus the median send of 9 ms).
+pub const SETTLE_AFTER_STEP_MS: f64 = 11.0;
 
 impl Default for Config {
     fn default() -> Config {
@@ -71,7 +75,8 @@ impl Default for Config {
 impl Config {
     /// The start of the analysis window after the block is sent, in milliseconds.
     pub fn settle(&self) -> f64 {
-        self.settle_ms.unwrap_or(self.point_ms + 20.0)
+        self.settle_ms
+            .unwrap_or(self.point_ms + SETTLE_AFTER_STEP_MS)
     }
 
     /// The length of the analysis window in milliseconds.
@@ -222,6 +227,11 @@ pub trait Recoverable {
     fn overrun_retries(&self) -> u32;
     fn has_hub(&self) -> bool;
     fn tally(&mut self) -> &mut Recovery;
+    /// Called when `recover` succeeded after at least one failed attempt, with what was measured and every failure, so that a
+    /// recovery that worked still leaves its cause on record (the soak's three unexplained power cycles were lost this way).
+    fn note_recovered(&mut self, _what: &str, _history: &[String]) {}
+    /// Called by `recover` right after it cold reset the unit: why (the failures that led to it) and how long the reset took.
+    fn note_power_cycle(&mut self, _reason: &str, _seconds: f64) {}
     /// Cold reset, then reopen everything that was open.
     fn cold_reset(&mut self) -> Result<(), String>;
 }
@@ -243,7 +253,12 @@ pub fn recover<R: Recoverable, T>(
         let mut n = 0;
         while n <= tries {
             match attempt(unit) {
-                Ok(v) => return Ok(v),
+                Ok(v) => {
+                    if !history.is_empty() {
+                        unit.note_recovered(what, &history);
+                    }
+                    return Ok(v);
+                }
                 Err(e) if crate::capture::is_overrun_error(&e) => {
                     history.push(format!("attempt {} of round {}: {e}", n + 1, round + 1));
                     if overruns_left == 0 {
@@ -272,10 +287,17 @@ pub fn recover<R: Recoverable, T>(
             break;
         }
         unit.tally().power_cycles += 1;
+        let reason = history.join("; ");
+        let started = std::time::Instant::now();
         if let Err(e) = unit.cold_reset() {
             history.push(format!("power cycle: {e}"));
             break;
         }
+        let seconds = started.elapsed().as_secs_f64();
+        unit.note_power_cycle(&reason, seconds);
+        history.push(format!(
+            "power cycle by the recovery done ({seconds:.1} s from power-off to the unit and its codecs open)"
+        ));
     }
     Err(format!(
         "{what} failed and was not recovered ({} power cycle(s)): {}",
@@ -290,6 +312,24 @@ impl Recoverable for Vna {
     }
     fn overrun_retries(&self) -> u32 {
         self.cfg.overrun_retries
+    }
+    fn note_recovered(&mut self, what: &str, history: &[String]) {
+        // [@ANCHOR: vnwa_open_failure_log]
+        if self.failures.len() >= MAX_FAILURE_LOG {
+            self.failures.remove(0);
+        }
+        self.failures.push(FailureRecord {
+            epoch_s: epoch_s(),
+            what: what.to_string(),
+            attempts: history.to_vec(),
+        });
+    }
+    fn note_power_cycle(&mut self, reason: &str, seconds: f64) {
+        self.power_log.push(PowerRecord {
+            epoch_s: epoch_s(),
+            reason: reason.to_string(),
+            seconds,
+        });
     }
     fn has_hub(&self) -> bool {
         self.cfg.hub.is_some()
@@ -314,6 +354,45 @@ pub struct Vna {
     pub(crate) session: Session,
     pub(crate) cfg: Config,
     recovery: Recovery,
+    failures: Vec<FailureRecord>,
+    power_log: Vec<PowerRecord>,
+    /// The raw levels of the last attempt, for the evidence of a failure.
+    last_levels: std::sync::Mutex<String>,
+    /// How long the last attempt took to send its block and the 0x0d read (milliseconds); the analysis window is timed from before it.
+    last_send_ms: std::sync::Mutex<f64>,
+    /// (block send time in ms, attempt succeeded) of the attempts since the handle was opened, the newest `ATTEMPT_LOG`.
+    attempt_log: std::sync::Mutex<Vec<(f64, bool)>>,
+}
+
+const ATTEMPT_LOG: usize = 20_000;
+
+/// How many recovered failures `Vna::failure_log` keeps (the newest).
+const MAX_FAILURE_LOG: usize = 200;
+
+/// A point that needed more than one attempt (or a power cycle) and was measured in the end: every failed attempt with its evidence.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FailureRecord {
+    /// Seconds since the epoch when the point finally succeeded.
+    pub epoch_s: u64,
+    pub what: String,
+    /// One entry per failed attempt (and per power cycle) in order, each with the error text and the evidence appended by `Vna`.
+    pub attempts: Vec<String>,
+}
+
+/// A power cycle the recovery did by itself (a scheduled one is the caller's).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PowerRecord {
+    pub epoch_s: u64,
+    pub reason: String,
+    /// From power-off until the unit and both codecs were open again.
+    pub seconds: f64,
+}
+
+fn epoch_s() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 fn frames(ms: f64) -> usize {
@@ -327,7 +406,29 @@ impl Vna {
             session: Session::open(&cfg)?,
             cfg,
             recovery: Recovery::default(),
+            failures: Vec::new(),
+            power_log: Vec::new(),
+            last_levels: std::sync::Mutex::new(String::new()),
+            last_send_ms: std::sync::Mutex::new(0.0),
+            attempt_log: std::sync::Mutex::new(Vec::new()),
         })
+    }
+
+    /// Every failed attempt of the points that were recovered (re-measured or after a power cycle), with the error text of each
+    /// attempt, oldest first. A failure that was not recovered is the error `measure` returned.
+    pub fn failure_log(&self) -> &[FailureRecord] {
+        &self.failures
+    }
+
+    /// For every attempt since the handle was opened: how long its block and the 0x0d read took to send (ms; 0 if the attempt failed
+    /// before the send finished) and whether it succeeded.
+    pub fn attempt_timings(&self) -> Vec<(f64, bool)> {
+        self.attempt_log.lock().unwrap().clone()
+    }
+
+    /// The power cycles the recovery did, oldest first, with their reasons.
+    pub fn power_log(&self) -> &[PowerRecord] {
+        &self.power_log
     }
 
     /// What recovery this handle has needed so far.
@@ -344,7 +445,37 @@ impl Vna {
     /// the retries are used up. The result is never a number from a failed attempt: the error lists every attempt.
     pub fn measure(&mut self, freq_hz: f64, previous_hz: f64) -> Result<Point, String> {
         let what = format!("point at {freq_hz} Hz");
-        recover(self, &what, |v| v.measure_once(freq_hz, previous_hz))
+        recover(self, &what, |v| {
+            *v.last_levels.lock().unwrap() = String::new();
+            *v.last_send_ms.lock().unwrap() = 0.0;
+            let r = v.measure_once(freq_hz, previous_hz);
+            {
+                let mut log = v.attempt_log.lock().unwrap();
+                if log.len() >= ATTEMPT_LOG {
+                    log.remove(0);
+                }
+                log.push((*v.last_send_ms.lock().unwrap(), r.is_ok()));
+            }
+            r.map_err(|e| v.with_evidence(e))
+        })
+    }
+
+    /// Appends the evidence of a failed attempt to its error text: the raw channel levels, the overruns reported so far and the
+    /// last transfers with their outcomes (the 2026-10-29 soak lost all of this when a retry cured the failure).
+    pub(crate) fn with_evidence(&self, e: String) -> String {
+        // [@ANCHOR: vnwa_open_failure_evidence]
+        let levels = self.last_levels.lock().unwrap().clone();
+        let levels = if levels.is_empty() {
+            "none (the attempt failed before the audio was analysed)".to_string()
+        } else {
+            levels
+        };
+        format!(
+            "{e} [evidence: block send took {:.1} ms; levels {levels}; overruns reported so far {}; last transfers: {}]",
+            *self.last_send_ms.lock().unwrap(),
+            self.session.overruns(),
+            self.session.usb.recent_transfers().join(" | ")
+        )
     }
 
     /// One point. `previous_hz` is the frequency the offset in the block is taken from; every point of `sweep` passes its own
@@ -370,9 +501,16 @@ impl Vna {
         usb.read(0x58, c.rf_level, c.rf_level, 64)?;
         // The analysis window is placed relative to the instant the block is sent, so the mark is taken right before it.
         // Resent transfers wait only a few milliseconds (`usb::RETRY_PAUSE`) so they do not move the window.
-        let (m11, m21) = (cap11.mark(), cap21.mark());
+        // [@ANCHOR: vnwa_open_window_from_send_end]
+        let sent_at = std::time::Instant::now();
         usb.send_all(&block)?;
         usb.read(0x0d, 0x0303, 0, 64)?;
+        *self.last_send_ms.lock().unwrap() = sent_at.elapsed().as_secs_f64() * 1000.0;
+        // The unit starts emitting when the block and the 0x0d read are done, so the window is timed from this instant. (It was timed from
+        // before the send, and the send takes 7 to 27 ms: a send over about 20 ms put the window start on the 60 ms level step, which is
+        // why 3 to 4 % of all attempts failed the steadiness check; measured 2026-10-29: every failed attempt had a send of 20.9 ms or more,
+        // no succeeded attempt had more.)
+        let (m11, m21) = (cap11.mark(), cap21.mark());
         let (skip, n) = (frames(c.settle()), frames(c.window()));
         let timeout = Duration::from_secs(3);
         let f11 = cap11.frames_after(m11, skip, n, timeout)?;
@@ -391,6 +529,11 @@ impl Vna {
         // not the DDS lock and the steadiness check below would only report noise, so say what is missing.
         let level = |x: &[f64]| tone_at_if(x, fs, c.if_hz).abs();
         let (ref1, ref2) = (level(&l1), level(&r2));
+        *self.last_levels.lock().unwrap() = format!(
+            "(counts at the IF) codec1 reference {ref1:.1}, codec1 measured {:.1}, codec2 reference {ref2:.1}, codec2 measured {:.1}",
+            level(&r1),
+            level(&l2)
+        );
         if ref1 < c.min_reference || ref2 < c.min_reference {
             return Err(format!(
                 "point at {freq_hz} Hz: no signal on the reference channel(s) at the IF (codec 1 left {ref1:.1}, codec 2 right {ref2:.1} counts, minimum {}); the measured channels read codec 1 right {:.1}, codec 2 left {:.1}. The tone is reaching the receivers, so this is the unit's reference input or its cabling, not the DDS lock",
@@ -642,6 +785,58 @@ mod tests {
         });
         assert_eq!(v, Ok(1));
         assert_eq!((f.tally.overrun_retries, f.tally.remeasured), (1, 1));
+    }
+
+    // Tests [@ANCHOR: vnwa_open_failure_log]
+    #[test]
+    fn a_recovery_that_worked_still_reports_every_failure_it_had() {
+        struct Noting {
+            f: Fake,
+            noted: Vec<(String, Vec<String>)>,
+        }
+        impl Recoverable for Noting {
+            fn retries(&self) -> u32 {
+                self.f.retries()
+            }
+            fn overrun_retries(&self) -> u32 {
+                3
+            }
+            fn has_hub(&self) -> bool {
+                true
+            }
+            fn tally(&mut self) -> &mut Recovery {
+                &mut self.f.tally
+            }
+            fn note_recovered(&mut self, what: &str, history: &[String]) {
+                self.noted.push((what.to_string(), history.to_vec()));
+            }
+            fn cold_reset(&mut self) -> Result<(), String> {
+                self.f.resets += 1;
+                Ok(())
+            }
+        }
+        let mut u = Noting {
+            f: fake(true),
+            noted: Vec::new(),
+        };
+        let v = recover(&mut u, "point at 5 Hz", |u: &mut Noting| {
+            if u.f.resets == 0 {
+                Err("no signal on the reference channel(s)".to_string())
+            } else {
+                Ok(1)
+            }
+        });
+        assert_eq!(v, Ok(1));
+        assert_eq!(u.noted.len(), 1);
+        assert_eq!(u.noted[0].1.len(), 4);
+        assert!(u.noted[0].1[0].contains("no signal on the reference"));
+        // A first-try success notes nothing.
+        let mut u = Noting {
+            f: fake(true),
+            noted: Vec::new(),
+        };
+        assert_eq!(recover(&mut u, "p", |_| Ok(2)), Ok(2));
+        assert!(u.noted.is_empty());
     }
 
     // Tests [@ANCHOR: vnwa_open_vendor_agreement]

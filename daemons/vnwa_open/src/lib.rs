@@ -9,6 +9,7 @@ pub mod cal;
 pub mod capture;
 pub mod generator;
 pub mod meter;
+pub mod monitor;
 pub mod power;
 pub mod protocol;
 pub mod setup;

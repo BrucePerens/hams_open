@@ -120,3 +120,12 @@ Each is a test against bytes or samples recorded from the vendor program.
 * A window that contains a buffer overrun is an error and never frames; the point is measured again from a separate budget and never power cycles the unit. [@ANCHOR: vnwa_open_overrun_window]
 * The streams are closed before the unit's power is cut (an open stream on a vanishing codec reports about 5,000 overruns a second). [@ANCHOR: vnwa_open_capture_close]
 * The mark is the frame count at this instant, not at the last delivery, so any ALSA period works. [@ANCHOR: vnwa_open_capture_mark]
+* The firmware version (0xff) and the internal temperature counts (0x85) are read, the temperature refused on a firmware older than v5.16. [@ANCHOR: vnwa_open_firmware_version] [@ANCHOR: vnwa_open_temperature]
+* A failure that a retry or power cycle cured keeps its evidence (error text, raw channel levels, block send time, overruns, the last 16 transfers), and so does every power cycle of the recovery. [@ANCHOR: vnwa_open_failure_log] [@ANCHOR: vnwa_open_failure_evidence] [@ANCHOR: vnwa_open_transfer_log]
+* The analysis window is timed from the end of the block send, not from before it. [@ANCHOR: vnwa_open_window_from_send_end]
+
+## Drift (2026-10-29)
+
+The sensor of the unit shows a warm-up of about 100 counts in the first 5 minutes after a power-up, during which a loopback sweep changes by less than 0.04 % and 0.01 degrees on average
+(`docs/PROTOCOL.md`). `examples/soak.rs` therefore judges a sweep against two baselines (the first of the run and one taken right after each power cycle) with a tolerance of 0.3 % and 0.3 degrees
+plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that baseline, and records an event for every deviation (the constants are to be refined from the second soak's data).

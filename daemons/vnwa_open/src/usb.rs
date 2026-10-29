@@ -5,8 +5,10 @@
 //! A transfer that fails with a transient error (the intermittent EPROTO, a stall, a timeout) is sent again a bounded number
 //! of times; every resend is counted, so a caller can see that the link is unhealthy. A vanished unit is reported at once.
 
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Duration;
+use std::sync::Mutex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::protocol::Request;
 use crate::transport::{RusbTransport, TransferError, Transport};
@@ -18,9 +20,14 @@ pub const TRANSFER_RETRIES: u32 = 3;
 /// would shift the analysis window of a measurement (the pause was 50 ms and made a third of the points unsteady).
 pub const RETRY_PAUSE: Duration = Duration::from_millis(5);
 
+/// How many transfers `Vnwa::recent_transfers` remembers.
+pub const TRANSFER_LOG: usize = 16;
+
 pub struct Vnwa {
     link: Box<dyn Transport>,
     resends: AtomicU32,
+    /// The last `TRANSFER_LOG` transfer tries with their outcome, for the evidence record of a failure.
+    recent: Mutex<VecDeque<String>>,
 }
 
 impl Vnwa {
@@ -36,12 +43,31 @@ impl Vnwa {
         Vnwa {
             link,
             resends: AtomicU32::new(0),
+            recent: Mutex::new(VecDeque::new()),
         }
     }
 
     /// How many transfers were sent again after a transient error since this handle was opened.
     pub fn resends(&self) -> u32 {
         self.resends.load(Ordering::Relaxed)
+    }
+
+    /// The last transfer tries, oldest first: epoch milliseconds, what, and the outcome (the error text of a failed one).
+    pub fn recent_transfers(&self) -> Vec<String> {
+        // [@ANCHOR: vnwa_open_transfer_log]
+        self.recent.lock().unwrap().iter().cloned().collect()
+    }
+
+    fn remember(&self, what: &str, outcome: &str) {
+        let ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let mut r = self.recent.lock().unwrap();
+        if r.len() >= TRANSFER_LOG {
+            r.pop_front();
+        }
+        r.push_back(format!("{ms} {what}: {outcome}"));
     }
 
     /// Runs `op` until it succeeds, fails for good, or the retry bound is used up.
@@ -54,15 +80,22 @@ impl Vnwa {
         let mut last = String::new();
         for n in 0..=TRANSFER_RETRIES {
             match op() {
-                Ok(v) => return Ok(v),
+                Ok(v) => {
+                    self.remember(what, "ok");
+                    return Ok(v);
+                }
                 Err(TransferError::Transient(m)) => {
+                    self.remember(what, &format!("{m} (transient, try {})", n + 1));
                     last = m;
                     self.resends.fetch_add(1, Ordering::Relaxed);
                     if n < TRANSFER_RETRIES {
                         std::thread::sleep(RETRY_PAUSE);
                     }
                 }
-                Err(e) => return Err(format!("{what}: {e}")),
+                Err(e) => {
+                    self.remember(what, &format!("{e}"));
+                    return Err(format!("{what}: {e}"));
+                }
             }
         }
         Err(format!(
@@ -136,6 +169,33 @@ mod tests {
                 write: false,
                 request: 0x3a
             }));
+    }
+
+    // Tests [@ANCHOR: vnwa_open_transfer_log]
+    #[test]
+    fn the_last_transfer_tries_are_kept_with_their_outcome() {
+        let (u, _) = unit(vec![
+            eproto(),
+            Ok(vec![1]),
+            Err(TransferError::NoDevice("gone".into())),
+        ]);
+        u.read(0x3a, 0, 0, 2).unwrap();
+        u.read(0x58, 0, 0, 2).unwrap_err();
+        let log = u.recent_transfers();
+        assert_eq!(log.len(), 3);
+        assert!(
+            log[0].contains("0x3a") && log[0].contains("transient, try 1"),
+            "{log:?}"
+        );
+        assert!(log[1].ends_with(": ok"), "{log:?}");
+        assert!(
+            log[2].contains("0x58") && log[2].contains("gone"),
+            "{log:?}"
+        );
+        for _ in 0..40 {
+            let _ = u.read(0x3a, 0, 0, 2);
+        }
+        assert_eq!(u.recent_transfers().len(), TRANSFER_LOG);
     }
 
     #[test]
