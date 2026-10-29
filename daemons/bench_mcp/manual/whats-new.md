@@ -16,3 +16,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - instruments/usb-hubs: USB hub tools (overview, setup, operation, limits, troubleshooting)
 - instruments/sound: sound device tools (overview, setup, safety, discovery)
 - instruments/vna: monitoring and recovery
+- instruments/scope: overview, setup, operation, measurement recipes, limits, troubleshooting, protocol
+- instruments/psu: overview, setup, operation, limits, troubleshooting, protocol
+- instruments/bladerf: overview, setup, operation, limits, troubleshooting
+- instruments/limesdr: overview, setup, operation, limits, troubleshooting

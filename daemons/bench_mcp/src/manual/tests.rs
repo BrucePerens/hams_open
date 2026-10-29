@@ -636,11 +636,16 @@ fn search_ranks_pages_and_filters_by_instrument_and_tool() {
         &json!({"query": "channel", "tool": "bench_capture"}),
     )
     .unwrap();
-    assert!(v["results"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|x| x["path"] == "tools/bench_capture"));
+    let r = v["results"].as_array().unwrap();
+    assert!(!r.is_empty());
+    for x in r {
+        let page = m().get(x["path"].as_str().unwrap()).unwrap();
+        assert!(
+            page.tools.iter().any(|t| t == "bench_capture"),
+            "{}",
+            page.path
+        );
+    }
     // Nothing matches: an empty list, not an error. No words: an error.
     let v = call("bench_manual_search", &json!({"query": "zzzqqq"})).unwrap();
     assert_eq!(v["matches"], 0);
