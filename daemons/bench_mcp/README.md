@@ -157,9 +157,15 @@ overlap (the burst overwrites the generator's settings): one VNA call at a time 
 
 ## USB hub tools (`usb_hub` driver)
 
-`bench_usb_topology`, `bench_usb_find` and the tools that follow describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
+`bench_usb_topology`, `bench_usb_find`, `bench_usb_hubs`, `bench_usb_protection` and `bench_usb_port_power` describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
 Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`. Tests read a recording of this development machine's `/sys`, `uhubctl`, `lsusb` and kernel journal in
 `tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`).
 
 * The USB tree, its per-device JSON and the label lookup are checked against the recorded tree. [@ANCHOR: usb_hub_sysfs_tree]
 * The `usb_hub` config entry (labels, critical ports and devices) parses and refuses bad entries. [@ANCHOR: usb_hub_config]
+* `uhubctl` output (with and without descriptions) and the hub class descriptor parse from recordings. [@ANCHOR: usb_hub_uhubctl_parse]
+* The protection list: root filesystem, mounts, keyboards, config, bench serial adapters, hubs on the path, hub uplinks. [@ANCHOR: usb_hub_protection]
+* A power cycle removes and restores the port's device in a copy of sysfs, with the measured times and the new device number. [@ANCHOR: usb_hub_power_cycle]
+* A unit that does not come back gets a second cycle with a longer off time. [@ANCHOR: usb_hub_power_escalation]
+* Port power: tiers, dry run, protection refusals, ganged and unlisted hubs refused. [@ANCHOR: usb_hub_port_power]
+* The verification levels 1 to 4 and their honest note. [@ANCHOR: usb_hub_verification_levels]
