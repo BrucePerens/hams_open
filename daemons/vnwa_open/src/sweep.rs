@@ -242,6 +242,26 @@ impl Session {
     }
 }
 
+/// The error for a point whose reference channels carry no tone. When the measured channels are dead too, no signal is leaving the TX port at all, and the first
+/// thing to check is the cabling: a loose TX connector gave exactly this on 2026-10-29 (the unit answered every request and was otherwise healthy).
+pub fn no_reference_message(
+    freq_hz: f64,
+    refs: (f64, f64),
+    measured: (f64, f64),
+    min: f64,
+) -> String {
+    // [@ANCHOR: vnwa_open_no_reference_message]
+    let levels = format!(
+        "no signal on the reference channel(s) at the IF (codec 1 left {:.1}, codec 2 right {:.1} counts, minimum {min}); the measured channels read codec 1 right {:.1}, codec 2 left {:.1}",
+        refs.0, refs.1, measured.0, measured.1
+    );
+    if measured.0 < min && measured.1 < min {
+        format!("point at {freq_hz} Hz: {levels}. All four channels are dead: nothing is coming out of the TX port. CHECK FIRST the TX connector, the pad, the tee and the leads (a loose TX SMA looked exactly like this), then power cycle the unit")
+    } else {
+        format!("point at {freq_hz} Hz: {levels}. The tone is reaching the receivers, so this is the unit's reference input or its cabling, not the DDS lock")
+    }
+}
+
 /// What `recover` needs from a measuring unit.
 pub trait Recoverable {
     fn retries(&self) -> u32;
@@ -583,11 +603,11 @@ impl Vna {
             level(&l2)
         );
         if ref1 < c.min_reference || ref2 < c.min_reference {
-            return Err(format!(
-                "point at {freq_hz} Hz: no signal on the reference channel(s) at the IF (codec 1 left {ref1:.1}, codec 2 right {ref2:.1} counts, minimum {}); the measured channels read codec 1 right {:.1}, codec 2 left {:.1}. The tone is reaching the receivers, so this is the unit's reference input or its cabling, not the DDS lock",
+            return Err(no_reference_message(
+                freq_hz,
+                (ref1, ref2),
+                (level(&r1), level(&l2)),
                 c.min_reference,
-                level(&r1),
-                level(&l2)
             ));
         }
         // The reference channel of each codec (left on codec 1, right on codec 2) must hold a steady tone at the IF.
@@ -669,6 +689,25 @@ mod tests {
         (0..n)
             .map(|i| level(i) * (2.0 * std::f64::consts::PI * f * i as f64 / fs).sin())
             .collect()
+    }
+
+    // Tests [@ANCHOR: vnwa_open_no_reference_message]
+    #[test]
+    fn a_dead_tx_path_names_the_cabling_first_and_a_live_receiver_does_not() {
+        let dead = no_reference_message(1e6, (0.1, 0.2), (0.1, 0.1), 200.0);
+        assert!(
+            dead.starts_with("point at 1000000 Hz: no signal on the reference channel(s)"),
+            "{dead}"
+        );
+        assert!(
+            dead.contains("CHECK FIRST the TX connector, the pad, the tee and the leads"),
+            "{dead}"
+        );
+        let live = no_reference_message(1e6, (0.1, 0.2), (5000.0, 5000.0), 200.0);
+        assert!(
+            !live.contains("CHECK FIRST") && live.contains("reference input or its cabling"),
+            "{live}"
+        );
     }
 
     // Tests [@ANCHOR: vnwa_open_stability]

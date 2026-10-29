@@ -641,7 +641,7 @@ After about 30 minutes of continuous sweeps with no power event the unit stopped
 the scope on the tee (CH1, 1 MOhm, through the pad) saw no generator carrier: commanded 1, 2, 5, 15 MHz gave nothing but a 9.79 MHz broadcast station that the open scope input picks up (60 counts amplitude, the same at every setting),
 and 10 and 20 MHz gave a 1.2 count line (25 counts normally at -6 dB). The unit itself was healthy by every software measure: it answered every request, firmware v5.22, internal temperature 23210 counts (normal), 0x91 answers 0x73. It did not
 recover with power cycles of 4 s, 30 s and 9 minutes, nor with a USB reset of the control chip. The same condition (reference channels at 0.1 count, "silent state") had been seen three times before and cleared by a vendor-program run or
-a power cycle; this one did not. Either the TX cabling (TX connector, pad, tee, leads) was disturbed or the TX path is damaged. Entry to be completed when the cabling has been checked.
+a power cycle; this one did not. **Cause (Bruce, 2026-10-29): the TX SMA connector was loose** (he touched the unit around 16:09 and tightened it). The kernel log fits: the unit was off 15:52:24 to 16:01:25 (the 9-minute off, useless for this), power cycled for 4 s at 16:09:04, and the TX was back at 16:09:41. The 9.79 MHz line on the scope was a 31 m shortwave broadcast picked up by the open lead, i.e. the scope saw an open TX path. So when all four audio channels read 0.1 count and the scope sees no carrier, **check the TX connector, the pad, the tee and the leads first**; the sweep error now says so. A power cycle does not help, and neither does a USB reset.
 
 ## Seen but not decoded
 
