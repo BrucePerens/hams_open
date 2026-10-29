@@ -161,6 +161,7 @@ fn cycle_with(
     port: &HubPort,
     schedule: &[(Duration, Duration)],
 ) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_power_cycle_with]
     match hook {
         Some(h) => h(port, schedule),
         None => power_cycle_escalating(&ProcessRunner, port, schedule, unit_present),
@@ -189,6 +190,7 @@ pub fn cold_reset(port: &HubPort) -> Result<(), String> {
 /// lock-up measured on 2026-10-29 (it needed 1 cycle 14 times, 2 cycles 6 times, 3 cycles 3 times, 4 or more twice), so this tries
 /// five cycles, 3, 12, 12, 30 and 12 s off, before it gives up. The cost is paid only when the unit does not come back.
 pub fn modulation_ladder() -> Vec<(Duration, Duration)> {
+    // [@ANCHOR: vnwa_open_power_modulation_ladder]
     [3u64, 12, 12, 30, 12]
         .iter()
         .map(|s| {
@@ -218,6 +220,7 @@ mod tests {
     use std::cell::RefCell;
 
     // Tests [@ANCHOR: vnwa_open_cycle_hook]
+    // Tests [@ANCHOR: vnwa_open_power_cycle_with]
     #[test]
     fn an_installed_cycle_implementation_gets_the_port_and_the_ladder_and_its_error_is_returned() {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -247,6 +250,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_modulation_recovery]
+    // Tests [@ANCHOR: vnwa_open_power_modulation_ladder]
     #[test]
     fn the_modulation_ladder_starts_short_and_ends_with_a_long_power_off() {
         let l = modulation_ladder();

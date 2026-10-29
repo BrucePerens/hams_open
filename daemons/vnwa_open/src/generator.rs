@@ -255,6 +255,7 @@ pub fn modulate(
     attenuation_db: f64,
     m: Modulation,
 ) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_generator_modulate]
     let level = level_for_attenuation(attenuation_db)?;
     let seq = modulation_reads(level, m)?;
     let last = seq.len() - 1;
@@ -447,6 +448,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_modulation_sequence]
+    // Tests [@ANCHOR: vnwa_open_generator_modulate]
     #[test]
     fn the_start_sequence_at_the_vendor_defaults_is_the_captured_one() {
         // The 23 requests of the capture of `sg_mod am` at 500 Hz, 100 %, -20 dB (usbmon 2026-10-29, wValue then wIndex).

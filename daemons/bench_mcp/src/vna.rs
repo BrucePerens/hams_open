@@ -167,6 +167,7 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
 /// uncalibrated counts that rise as the unit warms (about 25 counts in the first minute after power-up, then slowly): only changes
 /// mean anything. A failed read is reported in the value, never as a number.
 pub fn instrument_monitoring(u: &vnwa_open::usb::Vnwa) -> Value {
+    // [@ANCHOR: bench_vna_instrument_monitoring]
     match u.firmware_version() {
         Err(e) => json!({"error": e}),
         Ok((major, minor)) => match u.temperature_counts() {
@@ -222,6 +223,7 @@ static POWER_CYCLES: AtomicU32 = AtomicU32::new(0);
 /// by default checks it with a one-point sweep at 10 MHz (`verify`, which puts RF at the unit's own level on the TX port).
 /// Everything the unit holds is lost: a generator that was on is off afterwards.
 pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_power_cycle]
     let hub = cfg.hub.clone().ok_or(
         "no hub configured for this VNA: set \"hub\" and \"hub_port\" in its entry of the bench config (for example \"3-2\" and 2)",
     )?;
@@ -345,6 +347,8 @@ mod tests {
     use vnwa_open::audio::Complex;
 
     // Tests [@ANCHOR: bench_vna_power_hook]
+    // Tests [@ANCHOR: bench_vna_instrument_monitoring]
+    // Tests [@ANCHOR: bench_vna_power_cycle]
     #[test]
     fn the_vna_power_hook_runs_the_hub_modules_ladder_and_lists_every_failed_rung() {
         struct Failing(std::sync::Mutex<Vec<String>>);

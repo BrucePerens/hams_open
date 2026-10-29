@@ -309,6 +309,7 @@ pub(crate) fn all_tool_defs() -> Vec<Tool> {
 }
 
 fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
+    // [@ANCHOR: bench_mcp_main_tool_defs]
     let usb = usb_hub::tool_defs(insts);
     let audio = audio::tool_defs(insts);
     let hamlib = hamlib::tool_defs(insts);
@@ -539,6 +540,7 @@ mod tests {
         assert!(instrument_lock("lock_test_vna").try_lock().is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_main_tool_defs]
     #[test]
     fn every_vna_function_has_its_own_tool_at_read_config_and_none_reaches_other_instruments() {
         let vna = |tier: &str| {
