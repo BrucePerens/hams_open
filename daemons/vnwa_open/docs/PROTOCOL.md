@@ -369,6 +369,25 @@ phase is 9.243 ns, the low-pass impulse peak 9.44 ns (rectangular) and 9.46 ns (
 the 0.25 ns grid and the delay of the analogue path's own magnitude response. The vendor program's time-domain display is not reachable through its
 remote control, so no vendor comparison of the transform was made. Gating (windowing in time and back to frequency) is not implemented.
 
+## Frequency meter (2026-10-28, stage 06)
+
+Mode as the vendor runs it (capture of 2026-10-26 and the Help file): the ordinary set-up block at one frequency with step counter 31, then
+reads 0x3a, 0x72, 0x35. With counter 31 at 60 ms per point the unit emits for about 1.95 s (reference tone steady from about 0.1 to 1.9 s,
+`examples/meter_probe.rs`; counter 3 gives the usual 6 point times), so the stage count is the counter. `meter.rs` takes the tone at the IF
+in the measured and the reference channel of each codec in 20 ms segments of whole IF periods, unwraps the phase of measured over reference, and
+fits a line over 1.7 s; the slope is the frequency of the measured tone minus the reference tone. Both channels see the codec's own 12 ppm clock error, which
+cancels. The reading is the unit's TX tuning word frequency plus that offset, on the nominal clock, so the accuracy is the 12 MHz reference's.
+
+Checked on the unit: tone-offset fit on synthetic tones (0, 0.123, 5, -2.5, -0.01 Hz, with the codec drift, exact to 0.0002 Hz; with noise
+within its standard error). TX looped to RX (the pad and tee cabling), 10 repeats at 10, 15.5 and 100 MHz: offset 0.00000 to 0.00002 Hz, standard
+error 0.00001 Hz, the two codecs agreeing; the noise floor is 0.0002 ppb at 100 MHz. That is the expected result (the TX and the reference share the clock) and
+shows the precision, not the accuracy.
+**Not verified:** (1) the sign: whether a measured tone above the reference means an RX signal above or below the centre depends on which side the
+LO is on, and a loopback gives zero either way; `Reading::frequency_hz` assumes above. (2) Absolute accuracy against an independent standard: the
+unit's own TX is the only source here. A try to make a known offset by retuning the generator word (0x4c) during a burst changed nothing (the unit
+ignores it mid-burst; `examples/meter_offset_probe.rs`). Both need a known external signal on the RX input (the bladeRF, which is unplugged,
+or any generator with a known offset); a question is filed in night_shift_questions. The vendor program's own reading was not compared.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
