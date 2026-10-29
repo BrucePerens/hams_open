@@ -75,6 +75,7 @@
                 <div t-if="saved and saved not in ('deleted', 'restored')" class="alert alert-success" role="status">Saved.</div>
                 <div t-if="saved == 'restored'" class="alert alert-success" role="status">Restored as an unpublished draft.</div>
                 <div t-if="error == 'home_delete'" class="alert alert-warning" role="alert">The home page cannot be deleted. You can edit it or unpublish it.</div>
+                <div t-if="error == 'home_blocked'" class="alert alert-warning" role="alert">Your home page was removed from the site by moderation or its address is held by another page, so it cannot be created again here. Appeal the removal or contact support.</div>
                 <div t-if="saved == 'deleted'" class="alert alert-success" role="status">Deleted. You can restore it from the Deleted list at the bottom of this page.</div>
                 <div t-if="error == 'image'" class="alert alert-danger" role="alert">That image could not be added. Use a JPEG, PNG, GIF or WebP file under <t t-out="max_image_mb"/> MB.</div>
 
