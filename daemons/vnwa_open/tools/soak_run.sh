@@ -14,6 +14,20 @@ mkdir -p "$dir"
 cp "$target/release/examples/soak" "$dir/soak_bin"
 end=$(python3 -c "import time; print(int(time.time() + $hours * 3600))")
 restarts=0
+cold_reset() {
+  # cold reset with growing off times until the unit is on the bus again
+  for off in 4 12 12 30; do
+    sudo -n uhubctl -l 3-2 -p 2 -a off >/dev/null 2>&1; sleep "$off"; sudo -n uhubctl -l 3-2 -p 2 -a on >/dev/null 2>&1
+    for i in $(seq 25); do sleep 1; lsusb | grep -q 20a0:4118 && break; done
+    lsusb | grep -q 20a0:4118 && { sleep 8; return 0; }
+  done
+  return 1
+}
+# the unit may be off or stuck at the start: bring it up first
+if ! lsusb | grep -q 20a0:4118 || [ "$(lsusb | grep -c 08bb:29c0)" -lt 2 ]; then
+  echo "$(date +%s) WRAPPER unit not complete on the bus at the start: cold reset" >> "$dir/soak.log"
+  cold_reset || { echo "$(date +%s) WRAPPER the unit does not come back: giving up" >> "$dir/soak.log"; exit 1; }
+fi
 while [ "$(date +%s)" -lt "$end" ] && [ ! -e "$dir/STOP" ]; do
   left=$(python3 -c "print(max(0.01, ($end - $(date +%s)) / 3600))")
   "$dir/soak_bin" "$left" "$cycle" 3-2:2 192.168.10.51:5025 "$dir" >> "$dir/soak.log" 2>&1
@@ -21,11 +35,7 @@ while [ "$(date +%s)" -lt "$end" ] && [ ! -e "$dir/STOP" ]; do
   echo "$(date +%s) WRAPPER soak exited with status $rc (restarts so far $restarts)" >> "$dir/soak.log"
   [ $rc -eq 0 ] && break
   restarts=$((restarts+1))
-  # a stuck unit: cold reset with growing off times before the next try
-  for off in 4 12 12 30; do
-    sudo -n uhubctl -l 3-2 -p 2 -a off >/dev/null 2>&1; sleep "$off"; sudo -n uhubctl -l 3-2 -p 2 -a on >/dev/null 2>&1
-    for i in $(seq 25); do sleep 1; lsusb | grep -q 20a0:4118 && break; done
-    lsusb | grep -q 20a0:4118 && { sleep 8; break; }
-  done
+  # a stuck unit: cold reset before the next try
+  cold_reset || { echo "$(date +%s) WRAPPER the unit does not come back: giving up" >> "$dir/soak.log"; exit 1; }
 done
 echo "$(date +%s) WRAPPER finished (restarts $restarts)" >> "$dir/soak.log"
