@@ -1,0 +1,9 @@
+PRODUCT=3/8bb/29c0/100
+NAME="BurrBrown from Texas Instruments USB AUDIO  CODEC"
+PHYS="usb-0000:00:14.0-2.2.3/input3"
+UNIQ=""
+PROP=0
+EV=13
+KEY=e000000000000 0
+MSC=10
+MODALIAS=input:b0003v08BBp29C0e0100-e0,1,4,k71,72,73,ram4,lsfw

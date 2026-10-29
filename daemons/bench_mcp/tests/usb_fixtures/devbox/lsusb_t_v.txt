@@ -1,0 +1,38 @@
+/:  Bus 001.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/1p, 480M
+    ID 1d6b:0002 Linux Foundation 2.0 root hub
+/:  Bus 002.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/3p, 20000M/x2
+    ID 1d6b:0003 Linux Foundation 3.0 root hub
+    |__ Port 003: Dev 005, If 0, Class=Hub, Driver=hub/4p, 10000M
+        ID 14b0:0131 StarTech.com Ltd. 
+/:  Bus 003.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/12p, 480M
+    ID 1d6b:0002 Linux Foundation 2.0 root hub
+    |__ Port 002: Dev 017, If 0, Class=Hub, Driver=hub/5p, 480M
+        ID 14b0:013a StarTech.com Ltd. 
+        |__ Port 002: Dev 036, If 0, Class=Hub, Driver=hub/3p, 12M
+            ID 0451:2036 Texas Instruments, Inc. TUSB2036 Hub
+            |__ Port 001: Dev 037, If 0, Class=[unknown], Driver=[none], 1.5M
+                ID 20a0:4118 Clay Logic 
+            |__ Port 002: Dev 038, If 0, Class=Audio, Driver=snd-usb-audio, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 002: Dev 038, If 1, Class=Audio, Driver=snd-usb-audio, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 002: Dev 038, If 2, Class=Audio, Driver=snd-usb-audio, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 002: Dev 038, If 3, Class=Human Interface Device, Driver=usbhid, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 003: Dev 039, If 0, Class=Audio, Driver=snd-usb-audio, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 003: Dev 039, If 1, Class=Audio, Driver=snd-usb-audio, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 003: Dev 039, If 2, Class=Audio, Driver=snd-usb-audio, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+            |__ Port 003: Dev 039, If 3, Class=Human Interface Device, Driver=usbhid, 12M
+                ID 08bb:29c0 Texas Instruments PCM2900C Audio CODEC
+    |__ Port 009: Dev 002, If 0, Class=Vendor Specific Class, Driver=[none], 12M
+        ID 06cb:00ff Synaptics, Inc. 
+    |__ Port 010: Dev 003, If 0, Class=Wireless, Driver=btusb, 12M
+        ID 8087:0033 Intel Corp. AX211 Bluetooth
+    |__ Port 010: Dev 003, If 1, Class=Wireless, Driver=btusb, 12M
+        ID 8087:0033 Intel Corp. AX211 Bluetooth
+/:  Bus 004.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/4p, 10000M
+    ID 1d6b:0003 Linux Foundation 3.0 root hub

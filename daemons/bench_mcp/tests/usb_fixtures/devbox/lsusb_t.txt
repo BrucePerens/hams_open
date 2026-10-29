@@ -1,0 +1,19 @@
+/:  Bus 001.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/1p, 480M
+/:  Bus 002.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/3p, 20000M/x2
+    |__ Port 003: Dev 005, If 0, Class=Hub, Driver=hub/4p, 10000M
+/:  Bus 003.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/12p, 480M
+    |__ Port 002: Dev 017, If 0, Class=Hub, Driver=hub/5p, 480M
+        |__ Port 002: Dev 036, If 0, Class=Hub, Driver=hub/3p, 12M
+            |__ Port 001: Dev 037, If 0, Class=[unknown], Driver=[none], 1.5M
+            |__ Port 002: Dev 038, If 0, Class=Audio, Driver=snd-usb-audio, 12M
+            |__ Port 002: Dev 038, If 1, Class=Audio, Driver=snd-usb-audio, 12M
+            |__ Port 002: Dev 038, If 2, Class=Audio, Driver=snd-usb-audio, 12M
+            |__ Port 002: Dev 038, If 3, Class=Human Interface Device, Driver=usbhid, 12M
+            |__ Port 003: Dev 039, If 0, Class=Audio, Driver=snd-usb-audio, 12M
+            |__ Port 003: Dev 039, If 1, Class=Audio, Driver=snd-usb-audio, 12M
+            |__ Port 003: Dev 039, If 2, Class=Audio, Driver=snd-usb-audio, 12M
+            |__ Port 003: Dev 039, If 3, Class=Human Interface Device, Driver=usbhid, 12M
+    |__ Port 009: Dev 002, If 0, Class=Vendor Specific Class, Driver=[none], 12M
+    |__ Port 010: Dev 003, If 0, Class=Wireless, Driver=btusb, 12M
+    |__ Port 010: Dev 003, If 1, Class=Wireless, Driver=btusb, 12M
+/:  Bus 004.Port 001: Dev 001, Class=root_hub, Driver=xhci_hcd/4p, 10000M
