@@ -12,6 +12,7 @@
 pub mod analysis;
 pub mod devices;
 pub mod engine;
+pub mod events;
 pub mod heard;
 pub mod levels;
 pub mod safety;
@@ -20,6 +21,7 @@ pub mod store;
 pub mod testkit;
 pub mod tones;
 pub mod tools;
+pub mod verify;
 pub mod wav;
 
 use crate::config::{Instrument, Kind, Tier};
@@ -97,6 +99,8 @@ pub struct Config {
     pub max_record_s: f64,
     /// The longest generated tone or sound file that is played.
     pub max_play_s: f64,
+    /// Named commands that `bench_audio_verify` may run as its action (argument lists, no shell).
+    pub verify_actions: BTreeMap<String, Vec<String>>,
     /// `vid:pid` values and lower-case node-name fragments that are never opened. Always includes `08bb:29c0`.
     pub reserved: Vec<String>,
 }
@@ -121,6 +125,7 @@ impl Default for Config {
             retention_days: 14,
             max_record_s: 30.0,
             max_play_s: 10.0,
+            verify_actions: BTreeMap::new(),
             reserved: vec![VNWA_CODEC.into()],
         }
     }
@@ -217,7 +222,8 @@ fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
 /// Reads the `audio` settings of an instrument entry: `outputs` and `inputs` (alias to a name fragment, or
 /// `{"match": ..., "volume_cap": ...}`), `alert_output` and `verify_input` (`auto` or an alias), `volume_cap` and
 /// `quiet_volume` (wpctl scale, 0 to 1), `quiet_hours` (`{"start":"22:00","end":"07:00"}` or `false`), `capture_dir`,
-/// `retention_files`, `retention_days`, `max_record_s`, `max_play_s`, and `reserved` (more `vid:pid` values or node-name fragments;
+/// `retention_files`, `retention_days`, `max_record_s`, `max_play_s`, `verify_actions` (name to program and arguments, the only
+/// commands `bench_audio_verify` runs), and `reserved` (more `vid:pid` values or node-name fragments;
 /// `08bb:29c0` is always reserved).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
     // [@ANCHOR: audio_config]
@@ -294,6 +300,27 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
             return Err("max_play_s must be 0.1 to 60".into());
         }
         cfg.max_play_s = m;
+    }
+    if let Some(actions) = c.get("verify_actions") {
+        for (name, argv) in actions
+            .as_object()
+            .ok_or("verify_actions must be an object")?
+        {
+            let list: Vec<String> = argv
+                .as_array()
+                .ok_or(format!(
+                    "verify_actions.{name} must be a list: the program and its arguments"
+                ))?
+                .iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect();
+            if list.is_empty() || list.len() != argv.as_array().map_or(0, |a| a.len()) {
+                return Err(format!(
+                    "verify_actions.{name} must be a non-empty list of strings"
+                ));
+            }
+            cfg.verify_actions.insert(name.clone(), list);
+        }
     }
     if let Some(list) = c.get("reserved") {
         for x in list
@@ -393,6 +420,20 @@ pub const SPECS: &[Spec] = &[
         tier: Tier::Full,
         desc: "MAKES A SHORT TONE AND LISTENS FOR IT. Plays a 1 kHz tone (freq_hz, seconds, level_dbfs) on one output while recording one input, to prove that the path works: whether the input heard the tone, its level, signal-to-noise ratio, how much it stands out from neighbouring frequencies, the noise floor before it, and an indicative latency. The output volume is set to the limit (the cap, or the quiet volume in quiet hours; urgent: true uses the cap) and restored afterwards. A dead input (exact zeros) is reported as such. Reserved devices are refused.",
         props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"input":{"type":"string"},"freq_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"volume":{"type":"number"},"urgent":{"type":"boolean"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_verify",
+        tier: Tier::ReadConfig,
+        desc: "VERIFIES THAT A DEVICE UNDER CONTROL MADE A SOUND by listening to the room through an input (it hears the room; the recording can contain speech, stays in the managed directory and is never uploaded). First it measures the noise floor for calibrate_s (default 1.5 s); then it starts the action, optionally after delay_s, and listens for window_s (default 5). The action is a command NAME from the config's verify_actions (arbitrary commands are not accepted) and/or whatever else the caller does in parallel, such as another tool call. Judgment: sound present (over the floor by min_over_noise_db, default 10), min_peak_dbfs, dominant frequency within expect_hz +/- tolerance_hz (default 5 %) or freq_min_hz..freq_max_hz, min/max_duration_s, expect_beeps (exact) or min_beeps, and spectral similarity (>= min_similarity, default 0.8) to a reference WAV named in `reference`; expect_silence: true verifies that nothing sounded. save_reference: NAME stores the window as a reference. Returns pass, the reason, every check with its detail, and the evidence (noise floor, events with times and levels, spectrum peaks, similarity), never a bare boolean. A dead input (exact zeros) never passes.",
+        props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"action":{"type":"string","description":"a name in the config's verify_actions"},"delay_s":{"type":"number"},"calibrate_s":{"type":"number"},"window_s":{"type":"number"},"min_over_noise_db":{"type":"number"},"min_peak_dbfs":{"type":"number"},"expect_hz":{"type":"number"},"tolerance_hz":{"type":"number"},"freq_min_hz":{"type":"number"},"freq_max_hz":{"type":"number"},"min_duration_s":{"type":"number"},"max_duration_s":{"type":"number"},"expect_beeps":{"type":"integer"},"min_beeps":{"type":"integer"},"expect_silence":{"type":"boolean"},"reference":{"type":"string","description":"a .wav file in the managed capture directory"},"min_similarity":{"type":"number"},"save_reference":{"type":"string"},"sample_rate_hz":{"type":"integer"},"label":{"type":"string"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_events",
+        tier: Tier::ReadConfig,
+        desc: "LISTENS TO THE ROOM for `seconds` and reports sound events: onset and offset times, duration, peak and RMS level, and dominant frequency (absent for clicks and noise), with the noise floor and the threshold used (noise floor + min_over_noise_db, or threshold_dbfs). For relays clicking, a rotor motor, an alarm, beeps. decode_morse: true also decodes keyed tones as Morse. Nothing is saved.",
+        props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"seconds":{"type":"number"},"min_over_noise_db":{"type":"number"},"threshold_dbfs":{"type":"number"},"merge_gap_ms":{"type":"number"},"min_event_ms":{"type":"number"},"decode_morse":{"type":"boolean"},"sample_rate_hz":{"type":"integer"}"#),
         required: &[],
     },
 ];
@@ -565,6 +606,8 @@ pub fn call_with(
         "bench_audio_play" => tools::play(&ctx, args),
         "bench_audio_set_volume" => tools::set_volume(&ctx, args),
         "bench_audio_loopback" => tools::loopback(&ctx, args),
+        "bench_audio_verify" => verify::verify(&ctx, args),
+        "bench_audio_events" => verify::events(&ctx, args),
         _ => Err(format!("{name} is not implemented")),
     }
 }
@@ -635,6 +678,24 @@ mod tests {
             .audio
             .quiet_hours
             .is_none());
+    }
+
+    #[test]
+    fn verify_actions_are_named_argument_lists_and_nothing_else() {
+        let i = insts(r#","verify_actions":{"relay":["/usr/local/bin/click","--once"]}"#);
+        assert_eq!(
+            i[0].audio.verify_actions["relay"],
+            vec!["/usr/local/bin/click", "--once"]
+        );
+        let bad = |extra: &str| {
+            crate::config::parse(&format!(
+                r#"{{"instruments":{{"s":{{"driver":"audio"{extra}}}}}}}"#
+            ))
+            .is_err()
+        };
+        assert!(bad(r#","verify_actions":{"x":"echo hi"}"#));
+        assert!(bad(r#","verify_actions":{"x":[]}"#));
+        assert!(bad(r#","verify_actions":{"x":["ok",3]}"#));
     }
 
     #[test]
