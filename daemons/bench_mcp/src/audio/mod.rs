@@ -434,7 +434,7 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_audio_record",
         tier: Tier::ReadConfig,
-        desc: "RECORDS FROM A MICROPHONE OR LINE INPUT: it hears the room, and a recording can contain speech. Records `seconds` (0.1 up to the config's max_record_s, default 3) from an input (default: the configured verify input, else the system default source) to a WAV file in the managed capture directory (private, retention-limited, never uploaded) and returns the file path, duration, sample rate, peak and RMS in dBFS, the number of clipped samples, the fraction of 20 ms windows under the silence threshold (default -60 dBFS), and an all_zero flag (a muted, disconnected or dead input records exact zeros). start_on_threshold_dbfs waits up to max_wait_s for the level to pass the threshold and keeps 0.1 s before it. monitor_of_output records what an output is playing (its monitor) instead of an input. Reserved devices are refused.",
+        desc: "RECORDS FROM A MICROPHONE OR LINE INPUT: it hears the room, and a recording can contain speech. Records `seconds` (0.1 up to the config's max_record_s, default 3) from an input (default: the configured verify input, else the one discovery found; the system default is never used, so name one or configure it) to a WAV file in the managed capture directory (private, retention-limited, never uploaded) and returns the file path, duration, sample rate, peak and RMS in dBFS, the number of clipped samples, the fraction of 20 ms windows under the silence threshold (default -60 dBFS), and an all_zero flag (a muted, disconnected or dead input records exact zeros). start_on_threshold_dbfs waits up to max_wait_s for the level to pass the threshold and keeps 0.1 s before it. monitor_of_output records what an output is playing (its monitor) instead of an input. Reserved devices are refused.",
         props: props!(r#""instrument":{"type":"string"},"input":{"type":"string","description":"alias, node name or fragment; with monitor_of_output, an output"},"seconds":{"type":"number"},"sample_rate_hz":{"type":"integer"},"start_on_threshold_dbfs":{"type":"number"},"max_wait_s":{"type":"number"},"silence_threshold_dbfs":{"type":"number"},"label":{"type":"string"},"monitor_of_output":{"type":"boolean"}"#),
         required: &[],
     },
@@ -448,22 +448,22 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_audio_play",
         tier: Tier::Full,
-        desc: "MAKES NOISE IN THE ROOM. Plays a generated tone (sine, sweep, two_tone or noise, freq_hz, freq2_hz, seconds up to max_play_s, level_dbfs up to -1, default -12) or a .wav file from the managed capture directory on an output (default: the configured alert output, else the system default sink). The output's volume is lowered to the volume cap (and in quiet hours to the quiet volume) for the playback and put back afterwards, mute included; `volume` asks for a level but never above the limit; `unmute` unmutes it for the playback. Reserved devices are refused. Returns the volume used and the limits.",
-        props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"tone":{"type":"string","enum":["sine","sweep","two_tone","noise"]},"freq_hz":{"type":"number"},"freq2_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"file":{"type":"string","description":"a .wav file name in the managed capture directory"},"volume":{"type":"number"},"unmute":{"type":"boolean"}"#),
+        desc: "MAKES NOISE IN THE ROOM. Plays a generated tone (sine, sweep, two_tone or noise, freq_hz, freq2_hz, seconds up to max_play_s, level_dbfs up to -1, default -12) or a .wav file from the managed capture directory on an output (default: the configured alert output, else the one discovery found; the system default is never used, so name one or configure it). The output's volume is lowered to the volume cap (and in quiet hours to the quiet volume) for the playback and put back afterwards, mute included; `volume` asks for a level but never above the limit; `unmute` unmutes it for the playback. Reserved devices are refused. Returns the volume used and the limits.",
+        props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"tone":{"type":"string","enum":["sine","sweep","two_tone","noise"]},"freq_hz":{"type":"number"},"freq2_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"file":{"type":"string","description":"a .wav file name in the managed capture directory"},"volume":{"type":"number"},"unmute":{"type":"boolean"},"dry_run":{"type":"boolean","description":"true: return the plan and the volume that would be used; no sound, no change"}"#),
         required: &[],
     },
     Spec {
         name: "bench_audio_set_volume",
         tier: Tier::Full,
         desc: "Set the volume and/or mute of one device through wpctl. An output's volume cannot exceed its volume cap; an input's cannot exceed 1.0. The change persists (unlike the temporary change playing makes). Reserved devices are refused.",
-        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"direction":{"type":"string","enum":["output","input"]},"volume":{"type":"number"},"mute":{"type":"boolean"}"#),
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"direction":{"type":"string","enum":["output","input"]},"volume":{"type":"number"},"mute":{"type":"boolean"},"dry_run":{"type":"boolean","description":"true: return what would change; change nothing"}"#),
         required: &["device"],
     },
     Spec {
         name: "bench_audio_loopback",
         tier: Tier::Full,
         desc: "MAKES A SHORT TONE AND LISTENS FOR IT. Plays a 1 kHz tone (freq_hz, seconds, level_dbfs) on one output while recording one input, to prove that the path works: whether the input heard the tone, its level, signal-to-noise ratio, how much it stands out from neighbouring frequencies, the noise floor before it, and an indicative latency. The output volume is set to the limit (the cap, or the quiet volume in quiet hours; urgent: true uses the cap) and restored afterwards. A dead input (exact zeros) is reported as such. Reserved devices are refused.",
-        props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"input":{"type":"string"},"freq_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"volume":{"type":"number"},"urgent":{"type":"boolean"}"#),
+        props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"input":{"type":"string"},"freq_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"volume":{"type":"number"},"urgent":{"type":"boolean"},"dry_run":{"type":"boolean","description":"true: return the plan; no sound, no change"}"#),
         required: &[],
     },
     Spec {
@@ -490,15 +490,22 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_audio_speak",
         tier: Tier::Full,
-        desc: "MAKES NOISE IN THE ROOM: speaks `text` (up to 600 characters) on an output (default: the configured alert output, else the system default sink), or writes it to a WAV file in the capture directory (`wav_file`: a label; nothing is played). Engine auto picks speech-dispatcher only when its server is running and the output is the system default (it cannot target another device), otherwise espeak-ng, then Piper; engine can be named. voice, language (default en-us), rate_wpm (80 to 450). The output's volume is limited to the cap (quiet volume in quiet hours) and restored afterwards, like bench_audio_play. Reserved devices are refused.",
-        props: props!(r#""instrument":{"type":"string"},"text":{"type":"string"},"output":{"type":"string"},"engine":{"type":"string","enum":["auto","speech-dispatcher","espeak-ng","piper"]},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"},"wav_file":{"type":"string"},"volume":{"type":"number"},"unmute":{"type":"boolean"}"#),
+        desc: "MAKES NOISE IN THE ROOM: speaks `text` (up to 600 characters) on an output (default: the configured alert output, else the one discovery found; the system default is never used, so name one or configure it), or writes it to a WAV file in the capture directory (`wav_file`: a label; nothing is played). Engine auto picks speech-dispatcher only when its server is running and the output is the system default (it cannot target another device), otherwise espeak-ng, then Piper; engine can be named. voice, language (default en-us), rate_wpm (80 to 450). The output's volume is limited to the cap (quiet volume in quiet hours) and restored afterwards, like bench_audio_play. Reserved devices are refused.",
+        props: props!(r#""instrument":{"type":"string"},"text":{"type":"string"},"output":{"type":"string"},"engine":{"type":"string","enum":["auto","speech-dispatcher","espeak-ng","piper"]},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"},"wav_file":{"type":"string"},"volume":{"type":"number"},"unmute":{"type":"boolean"},"dry_run":{"type":"boolean","description":"true: return the plan (engine, voice, volume); no sound, nothing written"}"#),
         required: &["text"],
     },
     Spec {
         name: "bench_audio_alert",
         tier: Tier::Full,
         desc: "ALERTS THE OPERATOR with sound: a tone pattern by severity (info: one beep; warning: two; urgent: a siren) and/or the spoken message, on the alert output, repeated `repeat` times (1 to 5, at most 30 s in all). Volume is a share of the limit by severity; in quiet hours (default 22:00 to 07:00) only the lowest volume is used unless severity is urgent; the volume cap is never exceeded; the volume and mute are restored afterwards. The result ALWAYS carries text_to_send, because the operator may be away: send it by another channel when the alert matters. If no sound can be made, audible is false with the error, and text_to_send is still returned.",
-        props: props!(r#""instrument":{"type":"string"},"message":{"type":"string"},"severity":{"type":"string","enum":["info","warning","urgent"]},"tone":{"type":"boolean"},"speak":{"type":"boolean"},"repeat":{"type":"integer"},"output":{"type":"string"},"engine":{"type":"string"},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"}"#),
+        props: props!(r#""instrument":{"type":"string"},"message":{"type":"string"},"severity":{"type":"string","enum":["info","warning","urgent"]},"tone":{"type":"boolean"},"speak":{"type":"boolean"},"repeat":{"type":"integer"},"output":{"type":"string"},"engine":{"type":"string"},"voice":{"type":"string"},"language":{"type":"string"},"rate_wpm":{"type":"integer"},"dry_run":{"type":"boolean","description":"true: return the plan; no sound, no change, no rediscovery"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_safe_state",
+        tier: Tier::ReadConfig,
+        desc: "Sound safe state, makes no sound: stops any playback this server started that is still running and lowers any output that is above its volume cap to the cap, then reads every output back. Safe at any time; use it first when anything went wrong with sound. If it cannot confirm, the error says what to do by hand.",
+        props: props!(r#""instrument":{"type":"string"}"#),
         required: &[],
     },
     Spec {
@@ -688,7 +695,10 @@ pub fn call_with(
         minute,
         discovery: stored.as_ref(),
     };
-    if name == "bench_audio_alert" && wants_rediscovery(&ctx, args) {
+    if name == "bench_audio_alert"
+        && args.get("dry_run").and_then(|v| v.as_bool()) != Some(true)
+        && wants_rediscovery(&ctx, args)
+    {
         // The device list changed since the last discovery: listen again first, then alert on what works now.
         let again = discover::run(&ctx, &json!({}));
         let devs = devices::list(run, asound, cfg)?;
@@ -715,6 +725,7 @@ pub fn call_with(
         "bench_audio_meter" => tools::meter(&ctx, args),
         "bench_audio_play" => tools::play(&ctx, args),
         "bench_audio_set_volume" => tools::set_volume(&ctx, args),
+        "bench_audio_safe_state" => tools::safe_state(&ctx, args),
         "bench_audio_loopback" => tools::loopback(&ctx, args),
         "bench_audio_verify" => verify::verify(&ctx, args),
         "bench_audio_events" => verify::events(&ctx, args),
@@ -891,15 +902,14 @@ mod tests {
             minute: 720,
             discovery: Some(&gone),
         };
+        // The device discovery chose is gone or reserved: the system default is not used in its place.
+        let e = tools::pick(&ctx, &json!({}), "output", devices::Dir::Output).unwrap_err();
         assert!(
-            tools::pick(&ctx, &json!({}), "output", devices::Dir::Output)
-                .unwrap()
-                .is_default
+            e.contains("never used") && e.contains("alert_output"),
+            "{e}"
         );
-        assert!(tools::pick(&ctx, &json!({}), "input", devices::Dir::Input)
-            .unwrap()
-            .reserved
-            .is_none());
+        let e = tools::pick(&ctx, &json!({}), "input", devices::Dir::Input).unwrap_err();
+        assert!(e.contains("verify_input"), "{e}");
         let none = tools::Ctx {
             run: &Scripted::new(&[]),
             cfg: &cfg,
@@ -907,11 +917,7 @@ mod tests {
             minute: 720,
             discovery: None,
         };
-        assert!(
-            tools::pick(&none, &json!({}), "output", devices::Dir::Output)
-                .unwrap()
-                .is_default
-        );
+        assert!(tools::pick(&none, &json!({}), "output", devices::Dir::Output).is_err());
         // A configured alias beats the discovery too.
         let mut pinned = Config {
             alert_output: "desk".into(),

@@ -374,6 +374,12 @@ pub fn speak(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: audio_speak_tool]
     let dev = super::tools::pick(ctx, args, "output", super::devices::Dir::Output)?;
     let r = request(ctx, args, dev)?;
+    if args.get("dry_run").and_then(|v| v.as_bool()) == Some(true) {
+        let lim = super::safety::limits(ctx.cfg, dev, false, ctx.minute);
+        let would = json!({"engine": r.engine.name(), "voice": r.voice, "language": r.language, "rate_wpm": r.rate_wpm,
+            "characters": r.text.chars().count(), "wav_file": args.get("wav_file")});
+        return super::tools::dry_plan(ctx, dev, &lim, super::safety::Want::Keep, would);
+    }
     if let Some(name) = args.get("wav_file").and_then(|n| n.as_str()) {
         if r.engine == Engine::SpeechDispatcher {
             return Err(
@@ -778,5 +784,48 @@ mod tests {
             .unwrap()
             .iter()
             .all(|m| !m.as_str().unwrap().starts_with("espeak-ng")));
+    }
+
+    // Tests [@ANCHOR: audio_speak_tool]
+    #[test]
+    fn a_dry_run_of_speak_names_the_engine_and_the_volume_and_makes_no_sound() {
+        let _fakes = fake_programs();
+        let devs = devbox_devices();
+        let spk = devs
+            .iter()
+            .find(|d| d.description.ends_with("Speaker"))
+            .unwrap();
+        let d = scratch("dry-speak");
+        let cfg = crate::audio::Config {
+            capture_dir: Some(d.clone()),
+            ..crate::audio::Config::default()
+        };
+        let run = Scripted::new(&[(spk.id, 0.9, false)]);
+        let ctx = Ctx {
+            run: &run,
+            cfg: &cfg,
+            devs: &devs,
+            minute: 720,
+            discovery: None,
+        };
+        let v = speak(&ctx, &json!({"text": "net check", "output": "Speaker", "engine": "espeak-ng", "dry_run": true})).unwrap();
+        assert_eq!(v["dry_run"], true);
+        assert_eq!(v["would"]["engine"], "espeak-ng");
+        assert_eq!(v["volume_would_be"], 0.5);
+        assert!(!run
+            .calls
+            .borrow()
+            .iter()
+            .any(|c| c.starts_with("wpctl set-")));
+        // A dry run with a WAV label writes nothing either.
+        let v = speak(&ctx, &json!({"text": "net check", "output": "Speaker", "engine": "espeak-ng", "wav_file": "x", "dry_run": true})).unwrap();
+        assert_eq!(v["dry_run"], true);
+        assert!(std::fs::read_dir(&d).unwrap().next().is_none());
+        assert!(speak(
+            &ctx,
+            &json!({"text": "", "output": "Speaker", "dry_run": true})
+        )
+        .is_err());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

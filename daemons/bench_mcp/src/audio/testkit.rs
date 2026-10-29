@@ -60,6 +60,7 @@ impl Run for Scripted {
                 }
                 Ok((true, String::new()))
             }
+            ("pkill", _) => Ok((false, String::new())),
             ("wpctl", Some("set-mute")) => {
                 let id: u32 = args[1].parse().unwrap();
                 let m = args[2] == "1";

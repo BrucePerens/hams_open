@@ -18,4 +18,4 @@ Arguments: `seconds`, `min_over_noise_db`, `threshold_dbfs`, `merge_gap_ms`, `mi
 
 <!-- arguments -->
 
-`input` is the microphone: an alias, node name or fragment of its name; when omitted the auto-selected input is used. `sample_rate_hz` is the capture rate, 8000 to 96000, default 48000. `track_hz` is described in the table.
+`input` is the microphone: an alias, node name or fragment of its name; when omitted the configured `verify_input` or the input the last discovery found is used; the system default source is never used, so with none of these the call is refused. `sample_rate_hz` is the capture rate, 8000 to 96000, default 48000. `track_hz` is described in the table.

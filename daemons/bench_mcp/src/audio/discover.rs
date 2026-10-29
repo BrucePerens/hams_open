@@ -985,14 +985,8 @@ mod tests {
             fresh["auto_selects_now"]["verify_input"],
             json!(mic.node_name)
         );
-        let default_out = devs
-            .iter()
-            .find(|d| d.dir == Dir::Output && d.is_default && d.reserved.is_none())
-            .unwrap();
-        assert_eq!(
-            fresh["auto_selects_now"]["alert_output"],
-            json!(default_out.node_name)
-        );
+        // No alert output was found by discovery, and the system default is never selected.
+        assert!(fresh["auto_selects_now"]["alert_output"].is_null());
         st.fingerprint.push("output|gone|-".into());
         let stale = report(&mk(&run, &cfg, &devs, Some(&st)), &json!({})).unwrap();
         assert_eq!(stale["stale"], true);

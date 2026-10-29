@@ -17,6 +17,7 @@ Runs the scope's `*CAL?` self-calibration. It rewrites the stored calibration, t
 <!-- arguments -->
 
 * `confirm_inputs_disconnected`: must be `true`, and it must be true because the person at the bench has unplugged every probe and cable. Without it the call is refused. Never set it on your own judgement.
+* `dry_run`: returns the plan and sends nothing; allowed without the confirmation.
 * `instrument`: the scope alias.
 
 ## Returns
@@ -25,4 +26,4 @@ Runs the scope's `*CAL?` self-calibration. It rewrites the stored calibration, t
 
 ## Failure modes
 
-`refused: confirm_inputs_disconnected must be true, ...`; the scope does not answer within 300 s. Needs tier `full`.
+`refused: confirm_inputs_disconnected must be true, ...`; the scope does not answer within 300 s. Needs tier `full`. There is no safe-state tool for it: the scope runs the calibration to its end and cannot abort it, and nothing is left driven afterwards.

@@ -18,4 +18,4 @@ Arguments: `action` (a name from the config's verify_actions), `delay_s`, `calib
 
 <!-- arguments -->
 
-`input` is the microphone (alias, node name or fragment; the auto-selected input when omitted). `sample_rate_hz` is the capture rate, 8000 to 96000, default 48000. `label` names the evidence in the result and in a saved reference; the default is the input's alias.
+`input` is the microphone (alias, node name or fragment; the configured `verify_input` or the input the last discovery found when omitted; the system default source is never used and with none of these the call is refused). `sample_rate_hz` is the capture rate, 8000 to 96000, default 48000. `label` names the evidence in the result and in a saved reference; the default is the input's alias.

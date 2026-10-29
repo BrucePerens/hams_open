@@ -286,6 +286,16 @@ pub fn set(s: &mut Link, args: &Value) -> Result<Value, String> {
 }
 
 pub fn self_cal(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_self_cal]
+    match args.get("dry_run") {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => {}
+        Some(Value::Bool(true)) => {
+            return Ok(json!({"dry_run": true, "sent": [],
+                "would": ["*CAL? (the scope calibrates itself for a minute or two and may reset its vertical settings)"],
+                "note": "nothing was sent. The real call needs confirm_inputs_disconnected: true from the person at the bench, after every probe is unplugged."}))
+        }
+        Some(_) => return Err("dry_run must be true or false".into()),
+    }
     if args
         .get("confirm_inputs_disconnected")
         .and_then(|v| v.as_bool())
@@ -304,6 +314,25 @@ pub fn self_cal(s: &mut Link, args: &Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: bench_mcp_scope_self_cal]
+    #[test]
+    fn self_cal_needs_the_bench_persons_confirmation_and_a_dry_run_sends_nothing() {
+        let dev =
+            crate::example::testkit::FakeDevice::start(|c| (c == "*CAL?").then(|| "0".to_string()));
+        let mut l = dev.link()().unwrap();
+        let d = self_cal(&mut l, &json!({"dry_run": true})).unwrap();
+        assert_eq!(d["dry_run"], true);
+        assert!(self_cal(&mut l, &json!({"dry_run": "yes"})).is_err());
+        let e = self_cal(&mut l, &json!({"dry_run": false})).unwrap_err();
+        assert!(e.contains("confirm_inputs_disconnected"), "{e}");
+        let e = self_cal(&mut l, &json!({"confirm_inputs_disconnected": "true"})).unwrap_err();
+        assert!(e.contains("refused"), "{e}");
+        assert!(dev.received().is_empty(), "{:?}", dev.received());
+        let v = self_cal(&mut l, &json!({"confirm_inputs_disconnected": true})).unwrap();
+        assert_eq!(v["cal_reply"], "0");
+        assert_eq!(dev.received(), vec!["*CAL?".to_string()]);
+    }
 
     // Tests [@ANCHOR: scope_mcp_analyse]
     #[test]

@@ -43,7 +43,8 @@ fn rate_arg(args: &Value) -> Result<u32, String> {
     Ok(bounded(args, "sample_rate_hz", 48000.0, 8000.0, 96000.0)? as u32)
 }
 
-/// The device for a tool: the named one, else the configured alert output or verify input, else the system default.
+/// The device for a tool: the named one, else the configured alert output or verify input, else the one discovery found by
+/// listening. The system default device is never used: it may be the user's headset or a reserved device.
 pub fn pick<'a>(ctx: &Ctx<'a>, args: &Value, key: &str, dir: Dir) -> Result<&'a Device, String> {
     if let Some(n) = args.get(key).and_then(|n| n.as_str()) {
         return devices::resolve(ctx.devs, n, dir);
@@ -56,7 +57,7 @@ pub fn pick<'a>(ctx: &Ctx<'a>, args: &Value, key: &str, dir: Dir) -> Result<&'a 
         return devices::resolve(ctx.devs, setting, dir);
     }
     // [@ANCHOR: audio_select_auto]
-    // `auto`: the device discovery found by listening, if it is still there; else the system default.
+    // `auto`: the device discovery found by listening, if it is still there; otherwise a refusal (never the system default).
     let found = ctx.discovery.and_then(|d| match dir {
         Dir::Output => d.alert_output.as_deref(),
         Dir::Input => d.verify_input.as_deref(),
@@ -68,15 +69,15 @@ pub fn pick<'a>(ctx: &Ctx<'a>, args: &Value, key: &str, dir: Dir) -> Result<&'a 
     }) {
         return Ok(d);
     }
-    ctx.devs
-        .iter()
-        .find(|d| d.dir == dir && d.is_default && d.reserved.is_none())
-        .ok_or_else(|| {
-            format!(
-                "there is no usable default {}: name one with \"{key}\" (bench_audio_devices lists them)",
-                dir.word()
-            )
-        })
+    Err(format!(
+        "no {} is named, configured or found by discovery, and the system default {} is never used: name one with \"{key}\" (bench_audio_devices lists them), set {} in the config, or run bench_audio_discover",
+        dir.word(),
+        dir.word(),
+        match dir {
+            Dir::Output => "alert_output",
+            Dir::Input => "verify_input",
+        }
+    ))
 }
 
 pub fn stats_json(s: &analysis::Stats) -> Value {
@@ -285,6 +286,31 @@ fn source(ctx: &Ctx, args: &Value) -> Result<Source, String> {
     })
 }
 
+/// The answer to `dry_run: true` for a tool that would make sound: the output it chose, the limits and the volume it would
+/// use. It reads the current level and changes nothing: no sound, no volume, no mute.
+pub fn dry_plan(
+    ctx: &Ctx,
+    dev: &Device,
+    lim: &super::safety::Limits,
+    want: Want,
+    would: Value,
+) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_dry_plan]
+    if let Some(why) = &dev.reserved {
+        return Err(format!("{} is reserved: {why}", dev.node_name));
+    }
+    let now = levels::get(ctx.run, dev.id)?;
+    let target = match want {
+        Want::Keep => now.volume.min(lim.volume),
+        Want::Level(v) => v.min(lim.volume),
+    };
+    Ok(json!({
+        "dry_run": true, "output": dev.node_name, "alias": dev.alias, "would": would,
+        "volume_now": now.volume, "muted_now": now.muted, "volume_would_be": target, "volume_limit": lim.volume,
+        "quiet_hours": lim.quiet, "note": "nothing was played and no volume or mute was changed",
+    }))
+}
+
 /// Sets the output's volume within the limits, runs `sound` (which makes the noise and returns how long it took), and puts the
 /// volume and mute back whether or not it succeeded.
 pub fn play_guarded(
@@ -314,6 +340,18 @@ pub fn play(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         None => Want::Keep,
     };
     let src = source(ctx, args)?;
+    if flag(args, "dry_run") {
+        if src.temporary {
+            let _ = std::fs::remove_file(&src.path);
+        }
+        return dry_plan(
+            ctx,
+            dev,
+            &lim,
+            want,
+            json!({"play": src.description, "seconds": round3(src.seconds)}),
+        );
+    }
     let result = (|| {
         let (applied, took) = play_guarded(ctx, dev, &lim, want, flag(args, "unmute"), || {
             Playing::start(&dev.node_name, &src.path, 1.0)
@@ -349,6 +387,15 @@ pub fn loopback(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         Some(v) => Want::Level(v),
         None => Want::Level(lim.volume),
     };
+    if flag(args, "dry_run") {
+        return dry_plan(
+            ctx,
+            out_dev,
+            &lim,
+            want,
+            json!({"loopback_tone_hz": hz, "seconds": seconds, "level_dbfs": level, "input": in_dev.node_name}),
+        );
+    }
     let samples = tones::generate(tones::Tone::Sine { hz }, rate, seconds, level);
     let path = store::new_path(&ctx.cfg.capture_dir(), "tone", None)?;
     wav::write(
@@ -433,6 +480,61 @@ pub fn levels_get(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     )
 }
 
+/// The answer to `dry_run: true` for `bench_audio_set_volume`.
+fn set_volume_plan(
+    dev: &Device,
+    before: &levels::Level,
+    vol: Option<f64>,
+    mute: Option<bool>,
+) -> Value {
+    // [@ANCHOR: bench_mcp_audio_tools_set_volume_plan]
+    json!({
+        "dry_run": true, "name": dev.node_name, "alias": dev.alias,
+        "now": {"volume": before.volume, "muted": before.muted},
+        "would": {"volume": vol, "mute": mute},
+        "note": "nothing was changed",
+    })
+}
+
+/// The safe state of the sound tools: no `pw-play` stream of this server is left running, and no output is above its volume
+/// cap. Lowers an output that is above its cap, and reads every output back. It never mutes, unmutes or touches a reserved
+/// device, and it makes no sound.
+pub fn safe_state(ctx: &Ctx, _args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_audio_tools_safe_state]
+    // The command line of every stream this server starts (`engine::NO_FALLBACK`); nothing else matches it.
+    let stopped = match ctx
+        .run
+        .run("pkill", &["-f".into(), "--".into(), super::engine::PLAY_SIGNATURE.into()])
+    {
+        Ok((true, _)) => "stopped a stream of this server that was still playing".to_string(),
+        Ok((false, _)) => "no stream of this server was playing".to_string(),
+        Err(e) => return Err(format!("SAFE STATE NOT CONFIRMED: could not look for running streams ({e}). Check with `pgrep -a pw-play` and stop any that is yours.")),
+    };
+    let mut rows = Vec::new();
+    let mut lowered = Vec::new();
+    for d in ctx
+        .devs
+        .iter()
+        .filter(|d| d.reserved.is_none() && d.dir == Dir::Output)
+    {
+        let cap = ctx.cfg.cap_for(d);
+        let now = levels::get(ctx.run, d.id)?;
+        if now.volume > cap + 0.004 {
+            levels::set_volume(ctx.run, d.id, cap)?;
+            let back = levels::get(ctx.run, d.id)?;
+            if back.volume > cap + 0.004 {
+                return Err(format!(
+                    "SAFE STATE NOT CONFIRMED: {} is at {:.2}, above its cap {cap}, and would not go down. Lower it with the volume control by hand and tell the owner.",
+                    d.node_name, back.volume
+                ));
+            }
+            lowered.push(d.node_name.clone());
+        }
+        rows.push(json!({"name": d.node_name, "alias": d.alias, "volume": now.volume.min(cap), "cap": cap}));
+    }
+    Ok(json!({"verified": true, "streams": stopped, "lowered_to_cap": lowered, "outputs": rows}))
+}
+
 pub fn set_volume(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: audio_set_volume_tool]
     let dir = match args.get("direction").and_then(|d| d.as_str()) {
@@ -462,7 +564,13 @@ pub fn set_volume(ctx: &Ctx, args: &Value) -> Result<Value, String> {
                 dev.node_name
             ));
         }
+        if flag(args, "dry_run") {
+            return Ok(set_volume_plan(dev, &before, vol, mute));
+        }
         levels::set_volume(ctx.run, dev.id, v)?;
+    }
+    if flag(args, "dry_run") {
+        return Ok(set_volume_plan(dev, &before, vol, mute));
     }
     if let Some(m) = mute {
         levels::set_mute(ctx.run, dev.id, m)?;
@@ -701,5 +809,147 @@ mod tests {
         let one = levels_get(&ctx, &json!({"device": "Speaker"})).unwrap();
         assert_eq!(one["levels"].as_array().unwrap().len(), 1);
         assert!(levels_get(&ctx, &json!({"direction": "sideways"})).is_err());
+    }
+
+    fn speaker_ctx<'a>(devs: &'a [Device], cfg: &'a Config, run: &'a Scripted) -> Ctx<'a> {
+        Ctx {
+            run,
+            cfg,
+            devs,
+            minute: 720,
+            discovery: None,
+        }
+    }
+
+    fn no_change(run: &Scripted) -> bool {
+        !run.calls
+            .borrow()
+            .iter()
+            .any(|c| c.starts_with("wpctl set-"))
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_dry_plan]
+    // Tests [@ANCHOR: audio_play_tool]
+    #[test]
+    fn a_dry_run_of_play_and_loopback_makes_no_sound_and_changes_no_volume() {
+        let d = scratch("dry-play");
+        let devs = devbox_devices();
+        let spk = devs
+            .iter()
+            .find(|x| x.description.ends_with("Speaker"))
+            .unwrap();
+        let mic = devs
+            .iter()
+            .find(|x| x.dir == Dir::Input && x.reserved.is_none())
+            .unwrap();
+        let cfg = Config {
+            capture_dir: Some(d.clone()),
+            ..Config::default()
+        };
+        let run = Scripted::new(&[(spk.id, 0.9, true)]);
+        let ctx = speaker_ctx(&devs, &cfg, &run);
+        let p = play(
+            &ctx,
+            &json!({"output": "Speaker", "dry_run": true, "seconds": 0.5}),
+        )
+        .unwrap();
+        assert_eq!(p["dry_run"], true);
+        assert_eq!(p["volume_now"], 0.9);
+        assert_eq!(p["volume_would_be"], 0.5);
+        assert_eq!(p["muted_now"], true);
+        let l = loopback(
+            &ctx,
+            &json!({"output": "Speaker", "input": mic.node_name, "dry_run": true}),
+        )
+        .unwrap();
+        assert_eq!(l["dry_run"], true);
+        assert!(no_change(&run), "{:?}", run.calls.borrow());
+        assert_eq!(*run.volumes.borrow(), vec![(spk.id, 0.9, true)]);
+        let left: Vec<_> = std::fs::read_dir(&d).unwrap().collect();
+        assert!(left.is_empty(), "the dry run left files: {left:?}");
+        // A reserved device is refused even in a dry run.
+        let mut reserved = spk.clone();
+        reserved.reserved = Some("codec".into());
+        let lim = limits(&cfg, &reserved, false, 720);
+        assert!(dry_plan(&ctx, &reserved, &lim, Want::Keep, json!({})).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_set_volume_plan]
+    // Tests [@ANCHOR: audio_set_volume_tool]
+    #[test]
+    fn a_dry_run_of_set_volume_reports_the_change_and_makes_none() {
+        let devs = devbox_devices();
+        let spk = devs
+            .iter()
+            .find(|x| x.description.ends_with("Speaker"))
+            .unwrap();
+        let cfg = Config::default();
+        let run = Scripted::new(&[(spk.id, 0.2, false)]);
+        let ctx = speaker_ctx(&devs, &cfg, &run);
+        let v = set_volume(
+            &ctx,
+            &json!({"device": "Speaker", "volume": 0.4, "mute": true, "dry_run": true}),
+        )
+        .unwrap();
+        assert_eq!(
+            (v["dry_run"].clone(), v["would"]["volume"].clone()),
+            (json!(true), json!(0.4))
+        );
+        assert!(no_change(&run));
+        // The cap applies to a dry run too.
+        assert!(set_volume(
+            &ctx,
+            &json!({"device": "Speaker", "volume": 0.9, "dry_run": true})
+        )
+        .is_err());
+        let v = set_volume(&ctx, &json!({"device": "Speaker", "volume": 0.4})).unwrap();
+        assert_eq!(v["after"]["volume"], 0.4);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_tools_safe_state]
+    #[test]
+    fn the_safe_state_lowers_an_output_above_its_cap_and_leaves_the_rest() {
+        let devs = devbox_devices();
+        let outs: Vec<&Device> = devs
+            .iter()
+            .filter(|x| x.dir == Dir::Output && x.reserved.is_none())
+            .collect();
+        let cfg = Config::default();
+        let table: Vec<(u32, f64, bool)> = outs
+            .iter()
+            .enumerate()
+            .map(|(i, o)| (o.id, if i == 0 { 0.9 } else { 0.2 }, false))
+            .collect();
+        let run = Scripted::new(&table);
+        let ctx = speaker_ctx(&devs, &cfg, &run);
+        let v = safe_state(&ctx, &json!({})).unwrap();
+        assert_eq!(v["verified"], true);
+        assert_eq!(v["lowered_to_cap"].as_array().unwrap().len(), 1);
+        let after = run.volumes.borrow();
+        assert_eq!(after[0].1, 0.5);
+        assert!(after[1..].iter().all(|e| e.1 == 0.2));
+        assert!(run
+            .calls
+            .borrow()
+            .iter()
+            .any(|c| c.starts_with("pkill -f -- pw-play -P node.dont-fallback")));
+    }
+
+    // Tests [@ANCHOR: audio_select_auto]
+    #[test]
+    fn with_no_name_no_config_and_no_discovery_the_system_default_is_refused() {
+        let devs = devbox_devices();
+        let cfg = Config::default();
+        let run = Scripted::new(&[]);
+        let ctx = speaker_ctx(&devs, &cfg, &run);
+        assert!(devs
+            .iter()
+            .any(|d| d.dir == Dir::Output && d.is_default && d.reserved.is_none()));
+        for (key, dir) in [("output", Dir::Output), ("input", Dir::Input)] {
+            let e = pick(&ctx, &json!({}), key, dir).unwrap_err();
+            assert!(e.contains("never used"), "{e}");
+        }
+        assert!(pick(&ctx, &json!({"output": "Speaker"}), "output", Dir::Output).is_ok());
     }
 }
