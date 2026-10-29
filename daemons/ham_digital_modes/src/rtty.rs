@@ -1940,8 +1940,9 @@ mod tests {
 
         // Degenerate inputs: fewer than two whole hops, and a sample rate too low for one whole
         // sample per bit period.
-        assert!(characterize_rtty_signature(&idle[..hop + hop / 2], RTTY_DEFAULT_MARK_HZ, sr)
-            .is_none());
+        assert!(
+            characterize_rtty_signature(&idle[..hop + hop / 2], RTTY_DEFAULT_MARK_HZ, sr).is_none()
+        );
         assert!(characterize_rtty_signature(&[1000i16; 64], RTTY_DEFAULT_MARK_HZ, 20).is_none());
     }
 
