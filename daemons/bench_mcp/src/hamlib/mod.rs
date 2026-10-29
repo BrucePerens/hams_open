@@ -27,6 +27,7 @@ pub mod stations;
 pub mod status;
 pub mod tx;
 pub mod txtools;
+pub mod watch;
 
 use crate::audio::Process;
 use crate::config::{Instrument, Kind, Tier};
@@ -353,6 +354,13 @@ pub const SPECS: &[Spec] = &[
         required: &["frequency_hz"],
     },
     Spec {
+        name: "bench_hamlib_watch",
+        tier: Tier::ReadOnly,
+        desc: "HAMLIB: watches the rig for `seconds` (1 to 120, default 10) by polling every `interval_ms` (100 to 5000, default 500) and returns the changes of frequency, mode, passband, VFO and PTT with their times, after the starting values. For someone turning the dial or software retuning the rig. A change that reverts between two polls is not seen. At most 200 events. Changes nothing.",
+        props: props!(r#""instrument":{"type":"string"},"seconds":{"type":"number","description":"how long to watch, 1 to 120, default 10"},"interval_ms":{"type":"number","description":"polling interval, 100 to 5000, default 500"}"#),
+        required: &[],
+    },
+    Spec {
         name: "bench_hamlib_safe_state",
         tier: Tier::ReadConfig,
         desc: "HAMLIB: puts the rig in its safe state: PTT off, read back, and (unless `lower_power` is false) the power setting set to the rig's minimum; says what the power setting was. Safe at any time and does not wait for any other call, so it also ends a keyed interval that is running. Use it first when anything went wrong. If the rig will not confirm PTT off, the answer says what to do by hand.",
@@ -493,6 +501,7 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
     let result = match name {
         "bench_hamlib_status" => status::status(&mut open(inst)?, &inst.name),
+        "bench_hamlib_watch" => watch::watch(&mut open(inst)?, args),
         "bench_hamlib_get" => status::get(&mut open(inst)?, args),
         "bench_hamlib_set" => control::set(&mut open(inst)?, &inst.hamlib, args),
         "bench_hamlib_memory" => control::memory(&mut open(inst)?, &inst.hamlib, args),
@@ -573,10 +582,16 @@ fn rigctld_action(inst: &Instrument, args: &Value) -> Result<Value, String> {
     match action {
         "status" => Ok(rigd::status(name, cfg)),
         "start" => rigd::start(name, cfg),
-        "stop" => rigd::stop(name, cfg),
-        "restart" => {
-            rigd::stop(name, cfg)?;
-            rigd::start(name, cfg)
+        "stop" | "restart" => {
+            // Stopping the daemon of a rig that may be keyed would leave it keyed, with no way left to release it.
+            tx::release_rig(name, &rigd::dir(cfg))
+                .map_err(|e| format!("not stopping the daemon: {e}"))?;
+            let stopped = rigd::stop(name, cfg)?;
+            if action == "restart" {
+                rigd::start(name, cfg)
+            } else {
+                Ok(stopped)
+            }
         }
         other => Err(format!(
             "action {other:?} is not status, start, stop or restart"

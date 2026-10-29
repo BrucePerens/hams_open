@@ -10,7 +10,7 @@ verified: dummy rig only, 2026-10-29
 
 # bench_hamlib_rigctld
 
-For a rig configured with `model`, this server runs the rigctld. `status` says whether it runs, its port, how many times it has started in the last ten minutes and why it last exited. `start` and `restart` clear the restart limit, so use them after fixing the cause of a failure. `stop` stops it; the next call that needs the rig starts it again. A rig configured with `rigctld_port` is not started or stopped by this server.
+For a rig configured with `model`, this server runs the rigctld. `status` says whether it runs, its port, how many times it has started in the last ten minutes and why it last exited. `start` and `restart` clear the restart limit, so use them after fixing the cause of a failure. `stop` stops it; the next call that needs the rig starts it again. A rig with a transmit attestation is released first (PTT off, read back) before its daemon is stopped, and the stop is refused if that cannot be confirmed: stopping the daemon of a keyed rig would leave it keyed. A rig configured with `rigctld_port` is not started or stopped by this server.
 
 ## Arguments
 

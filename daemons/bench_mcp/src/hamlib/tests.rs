@@ -2377,3 +2377,120 @@ fn a_watchdog_that_does_not_report_armed_stops_the_keying_before_it_starts() {
         "{e}"
     );
 }
+
+// Tests [@ANCHOR: hamlib_watch]
+// Tests [@ANCHOR: hamlib_watch_poll]
+#[test]
+fn the_watch_reports_the_changes_of_the_dial_with_their_times() {
+    let mut sim = Sim::new();
+    sim.freq = 7_000_000.0;
+    let (fake, shared) = serve_sim(sim);
+    let b = fake_bench("t_watch", fake.port, "read_only", "");
+    let s = shared.clone();
+    let turner = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(350));
+        s.lock().unwrap().freq = 7_001_000.0;
+        std::thread::sleep(Duration::from_millis(400));
+        let mut g = s.lock().unwrap();
+        g.mode = "CW".into();
+        g.ptt = true;
+    });
+    let v = call(
+        &b,
+        "bench_hamlib_watch",
+        &json!({"seconds": 2, "interval_ms": 100}),
+    )
+    .unwrap();
+    turner.join().unwrap();
+    assert_eq!(v["initial"]["frequency_hz"], "7000000");
+    let ev = v["events"].as_array().unwrap();
+    assert!(
+        ev.iter().any(|e| e["what"] == "frequency_hz"
+            && e["from"] == "7000000"
+            && e["to"] == "7001000"
+            && e["t_s"].as_f64().unwrap() > 0.3),
+        "{v}"
+    );
+    assert!(ev.iter().any(|e| e["what"] == "mode" && e["to"] == "CW"));
+    assert!(ev
+        .iter()
+        .any(|e| e["what"] == "ptt" && e["to"] == "TRANSMIT"));
+    assert!(v["polls"].as_u64().unwrap() >= 10 && v["events_truncated"] == false);
+    // Bounds, and a rig that stops answering is an error with a next step.
+    assert!(call(&b, "bench_hamlib_watch", &json!({"seconds": 500})).is_err());
+    assert!(call(&b, "bench_hamlib_watch", &json!({"interval_ms": 10})).is_err());
+    let silent = FakeRigctld::serve(|_| Reply::Silent);
+    let b = fake_bench(
+        "t_watch2",
+        silent.port,
+        "read_only",
+        r#","reply_timeout_s":1"#,
+    );
+    assert!(call(&b, "bench_hamlib_watch", &json!({}))
+        .unwrap_err()
+        .contains("Next:"));
+}
+
+// Tests [@ANCHOR: hamlib_tx_release_rig]
+#[test]
+fn stopping_the_daemon_of_a_rig_that_may_be_keyed_releases_it_first_or_refuses() {
+    let b = TxBench::new("tx_stopd", true);
+    // A record of a keyed rig (a crash left it) with the rig still keyed: the stop releases it first.
+    std::fs::write(
+        tx::state_file(&b.dir.0, "tx_stopd"),
+        json!({"pid": 4_000_000, "host": "127.0.0.1", "port": b._fake.port, "min_power": 0.05})
+            .to_string(),
+    )
+    .unwrap();
+    {
+        let mut s = b.sim.lock().unwrap();
+        s.ptt = true;
+        s.rfpower = 0.5;
+    }
+    // The fake is an existing rigctld, which this server never stops; the release is the same code path for a managed one.
+    let r = tx::release_rig("tx_stopd", &b.dir.0);
+    assert_eq!(r, Ok(true));
+    assert_eq!(snap(&b.sim), (false, 0.05));
+    assert!(!tx::state_file(&b.dir.0, "tx_stopd").exists());
+    assert_eq!(
+        tx::release_rig("tx_stopd", &b.dir.0),
+        Ok(false),
+        "nothing to release now"
+    );
+    // A rig that will not un-key: the stop is refused.
+    std::fs::write(
+        tx::state_file(&b.dir.0, "tx_stopd"),
+        json!({"host": "127.0.0.1", "port": b._fake.port}).to_string(),
+    )
+    .unwrap();
+    {
+        let mut s = b.sim.lock().unwrap();
+        s.ptt = true;
+        s.ptt_sticks = true;
+    }
+    let e = tx::release_rig("tx_stopd", &b.dir.0).unwrap_err();
+    assert!(
+        e.contains("could not be released first") && e.contains("bench_hamlib_safe_state"),
+        "{e}"
+    );
+    b.sim.lock().unwrap().ptt_sticks = false;
+    // Through the tool, on a managed dummy rig that has an attestation: stop and restart work when nothing is keyed.
+    let dir = Dir::new("stopd2");
+    let m = crate::config::parse(&format!(
+        r#"{{"instruments":{{"t_stopd2":{{"driver":"hamlib","tier":"full","model":1,"managed_dir":"{}"{TX_CFG}}}}}}}"#,
+        dir.0.display()
+    ))
+    .unwrap();
+    assert_eq!(
+        call(&m, "bench_hamlib_rigctld", &json!({"action": "start"})).unwrap()["running"],
+        true
+    );
+    assert_eq!(
+        call(&m, "bench_hamlib_rigctld", &json!({"action": "restart"})).unwrap()["running"],
+        true
+    );
+    assert_eq!(
+        call(&m, "bench_hamlib_rigctld", &json!({"action": "stop"})).unwrap()["was_running"],
+        true
+    );
+}
