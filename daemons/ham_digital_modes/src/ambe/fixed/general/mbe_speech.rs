@@ -219,10 +219,15 @@ pub fn dequantize_speech(
         let block_len = ji[block] as usize;
         for j in 1..=block_len {
             let mut sum: i64 = 0;
-            for k in 1..=block_len {
+            for (k, &cik_k) in cik[block + 1]
+                .iter()
+                .enumerate()
+                .take(block_len + 1)
+                .skip(1)
+            {
                 let cos_val = cos_pi_frac((k as i64) - 1, 2 * (j as i64) - 1, block_len as i64);
                 let ak: i64 = if k == 1 { 1 } else { 2 };
-                sum += ak * (cik[block + 1][k] as i64) * (cos_val as i64);
+                sum += ak * (cik_k as i64) * (cos_val as i64);
             }
             if harmonic <= l_usize {
                 tl[harmonic] = (sum >> 16) as i32;

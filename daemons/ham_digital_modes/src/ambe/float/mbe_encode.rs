@@ -185,7 +185,12 @@ pub fn quantize_speech(
     let mut start = 1usize;
     for block in 0..4 {
         let j_len = ji[block] as usize;
-        for k in 1..=j_len.min(17) {
+        for (k, cik_k) in cik[block + 1]
+            .iter_mut()
+            .enumerate()
+            .take(j_len.min(17) + 1)
+            .skip(1)
+        {
             let mut sum = 0.0;
             for j in 1..=j_len {
                 if start + j - 1 <= l {
@@ -193,7 +198,7 @@ pub fn quantize_speech(
                         * (PI * (k as f64 - 1.0) * (j as f64 - 0.5) / j_len as f64).cos();
                 }
             }
-            cik[block + 1][k] = sum / j_len as f64;
+            *cik_k = sum / j_len as f64;
         }
         start += j_len;
     }
