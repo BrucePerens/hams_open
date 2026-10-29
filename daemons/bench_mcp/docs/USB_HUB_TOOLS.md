@@ -45,6 +45,8 @@ full-speed devices report 2.0 in `bcdUSB`.
 | `bench_usb_autosuspend` | read_config | Runtime power management on or auto. |
 | `bench_usb_history` | read_only | Timeline and counters from `journalctl -k -o short-unix` (errno counts, resets, enumeration failures, over-current), flapping detection. The journal needs root or the group systemd-journal/adm; `use_sudo: true` opts in to `sudo -n journalctl`. |
 | `bench_usb_watch` | read_only | Watch the tree for up to 120 s by polling sysfs; every appear, disappear, re-enumeration and port change with its time. |
+| `bench_usb_bandwidth` | read_only | Translator, bus and controller sharing with periodic bandwidth now and worst case, USB 2 and USB 3 companion root hubs. |
+| `bench_usb_diagnose` | read_only | Why a device is slow, misbehaving or missing: ranked findings with evidence and a next step. |
 
 The topology and find tools read `/sys/bus/usb/devices` and need no privilege. `bench_usb_hubs` and `bench_usb_port_power` use `sudo -n`; without a NOPASSWD rule, or
 without uhubctl, they fail with a message that says which.
@@ -74,3 +76,9 @@ data lines and leave VBUS on. The VNWA on hub 3-2 port 2 is confirmed by eye to 
 The VNA's cold reset (`bench_vna_power_cycle` and the recovery inside it) calls the same `usb_hub::power` code, with the VNA's own off times and "unit and both codecs present" as its ready check; its result includes the re-enumeration report.
 
 The same text, organised for the MCP manual, is in `manual/instruments/usb-hubs/` and `manual/tools/`.
+
+## Worked example: the VNWA chain
+
+The VNWA unit is a full-speed hub (3-2.2) with its control chip and two USB audio codecs, on port 2 of the high-speed hub 3-2. `bench_usb_bandwidth` shows the four devices behind one translator
+(the one of 3-2 port 2), with a worst-case periodic load near 60 % of its 1350 bytes/ms; `bench_usb_topology` shows each negotiated at 12 Mb/s with a note that the codecs report USB 2.00; and `bench_usb_history`
+shows the unit's re-enumerations after each power cycle and the enumeration failures (-71, -32) the control chip once had after a short power-off.

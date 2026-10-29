@@ -14,6 +14,8 @@ verified: read tools on the dev box; off and on through the tool on an empty por
 
 **What can a hub do?** `bench_usb_hubs` gives, per hub, what uhubctl says about switching (per-port, ganged, or not listed), the hub's own descriptor (as it claims), the TT arrangement, and for each port its status bits (powered, connected, enabled, suspended, over-current, reset, speed, USB 3 link state) and its power-control verification level.
 
+**Who shares what?** `bench_usb_bandwidth`: the devices behind one transaction translator and the periodic bandwidth they could reserve. **Why is it slow or missing?** `bench_usb_diagnose`.
+
 **What happened to it?** `bench_usb_history` (journal: timeline, error counters, flapping) and `bench_usb_watch` (live). A device whose connects repeat within a short window is flapping; `-71` errors on enumeration point at the link (cable, hub, power).
 
 **Verification levels** (a port cannot be verified from software alone):
