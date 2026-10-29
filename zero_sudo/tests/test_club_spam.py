@@ -6,7 +6,7 @@
 """
 Tests of `zero_sudo/daemon/club_spam.py`, the pure rules that decide a club website is spam-compromised
 (docs/stories/club_spam_detection.md). Table-driven, over fixtures built to the real markup of a hacked WordPress club site
-(the fixtures are at the top of this file). Plain `unittest`: the module is loaded by path, with no database and no network.
+(the fixtures are at the top of this file). Odoo `BaseCase` (no database): the module is loaded by path, with no database and no network.
 """
 import datetime
 import importlib.util
@@ -14,7 +14,7 @@ import os
 import sys
 import unittest
 
-from odoo.tests.common import tagged
+from odoo.tests.common import BaseCase, tagged
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -208,7 +208,7 @@ def _sitemap(name, xml):
 
 
 @tagged("post_install", "-at_install")
-class TestScoring(unittest.TestCase):
+class TestScoring(BaseCase):
     """The lexicon: what is flagged, and what an amateur radio club legitimately writes is not."""
 
     def test_01_the_spam_a_hacked_club_site_publishes_is_flagged(self):
@@ -273,7 +273,7 @@ class TestScoring(unittest.TestCase):
 
 
 @tagged("post_install", "-at_install")
-class TestSitemaps(unittest.TestCase):
+class TestSitemaps(BaseCase):
     def test_10_a_core_index_and_a_urlset_are_read_without_an_xml_parser(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_parse_sitemap]
         kind, entries, total = spam.parse_sitemap(sitemap_index(["wp-sitemap-posts-post-1.xml", "wp-sitemap-users-1.xml"]))
@@ -338,7 +338,7 @@ class TestSitemaps(unittest.TestCase):
 
 
 @tagged("post_install", "-at_install")
-class TestHomePage(unittest.TestCase):
+class TestHomePage(BaseCase):
     def test_20_the_recent_posts_widget_and_links_of_a_hacked_page_are_read(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
         # Tests [@ANCHOR: zero_sudo:club_spam_parser_init]
@@ -398,7 +398,7 @@ class TestHomePage(unittest.TestCase):
 
 
 @tagged("post_install", "-at_install")
-class TestEvidenceAndDecision(unittest.TestCase):
+class TestEvidenceAndDecision(BaseCase):
     def _hacked(self, **kw):
         """The hacked site as the daemon sees it: spam widget, a core sitemap with dated spam posts, two injected sitemaps."""
         return _evidence(
@@ -561,7 +561,7 @@ class TestEvidenceAndDecision(unittest.TestCase):
 
 
 @tagged("post_install", "-at_install")
-class TestHeadVerification(unittest.TestCase):
+class TestHeadVerification(BaseCase):
     """Bruce's refinement: a handful of flagged addresses are re-checked with HEAD to see whether the spam is still there."""
 
     def _flagged_evidence(self, n=40):
