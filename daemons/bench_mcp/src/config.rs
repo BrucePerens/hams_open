@@ -24,6 +24,7 @@ pub const DRIVERS: &[&str] = &[
     "usb_hub",
     "audio",
     "hamlib",
+    "rotator",
     "example",
 ];
 
@@ -47,6 +48,8 @@ pub enum Kind {
     Audio,
     /// A radio driven through Hamlib's `rigctld` (`hamlib` module): receivers, and transmitters into an attested dummy load.
     Hamlib,
+    /// An antenna rotator driven through Hamlib's `rotctld` (`rotator` module).
+    Rotator,
     /// The skeleton instrument (`example` module): an imaginary SCPI signal source, the starting point for a new driver.
     Example,
 }
@@ -71,6 +74,7 @@ pub struct Instrument {
     pub usb: crate::usb_hub::Config,
     pub audio: crate::audio::Config,
     pub hamlib: crate::hamlib::Config,
+    pub rotator: crate::rotator::Config,
     pub example: crate::example::Config,
 }
 
@@ -164,6 +168,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             "usb_hub" => Kind::UsbHub,
             "audio" => Kind::Audio,
             "hamlib" => Kind::Hamlib,
+            "rotator" => Kind::Rotator,
             "example" => Kind::Example,
             o => {
                 return Err(format!(
@@ -198,6 +203,11 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
                 crate::hamlib::parse_config(c).map_err(|e| format!("{name}: {e}"))?
             } else {
                 crate::hamlib::Config::default()
+            },
+            rotator: if driver_name == "rotator" {
+                crate::rotator::parse_config(c).map_err(|e| format!("{name}: {e}"))?
+            } else {
+                crate::rotator::Config::default()
             },
             example: if driver_name == "example" {
                 crate::example::parse_config(c).map_err(|e| format!("{name}: {e}"))?

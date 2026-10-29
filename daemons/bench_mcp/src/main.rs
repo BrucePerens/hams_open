@@ -16,6 +16,7 @@ mod hamlib;
 mod link;
 mod manual;
 mod psu;
+mod rotator;
 mod scope;
 mod sdr;
 mod spectrum;
@@ -169,6 +170,7 @@ fn connect(i: &Instrument) -> Result<Link, String> {
         Kind::UsbHub => Err("the USB hub tools have no SCPI link".into()),
         Kind::Audio => Err("the audio tools have no SCPI link".into()),
         Kind::Hamlib => Err("the hamlib tools open their own link".into()),
+        Kind::Rotator => Err("the rotator tools open their own link".into()),
         Kind::Example => Err("the example tools open their own link".into()),
     }
 }
@@ -189,6 +191,9 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     }
     if name.starts_with("bench_audio_") {
         return audio::call(insts, name, args);
+    }
+    if name.starts_with("bench_rotator_") {
+        return rotator::call(insts, name, args);
     }
     if name.starts_with("bench_hamlib_") {
         return hamlib::call(insts, name, args);
@@ -347,6 +352,7 @@ pub(crate) fn all_tool_defs() -> Vec<Tool> {
         "lime":{"driver":"limesdr","tier":"full"},
         "usb":{"driver":"usb_hub","tier":"full"},
         "sound":{"driver":"audio","tier":"full"},
+        "rotor":{"driver":"rotator","tier":"full","rotctld_port":4533},
         "rig":{"driver":"hamlib","tier":"full","model":1,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}},
         "example":{"driver":"example","tier":"full","host":"192.0.2.1"}}}"#,
     )
@@ -359,6 +365,7 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
     let usb = usb_hub::tool_defs(insts);
     let audio = audio::tool_defs(insts);
     let hamlib = hamlib::tool_defs(insts);
+    let rotator = rotator::tool_defs(insts);
     let example = example::tool_defs(insts);
     let tools: Vec<Tool> = TOOLS
         .iter()
@@ -371,6 +378,7 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
         .chain(usb)
         .chain(audio)
         .chain(hamlib)
+        .chain(rotator)
         .chain(example)
         .chain(manual::tool_defs())
         .collect();
