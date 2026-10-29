@@ -48,7 +48,14 @@ As a **Community Member**, I want to create and manage my own personal website a
   ([@ANCHOR: user_websites:website_enumerate_user_blogs])) uses those addresses, read through the service account
   ([@ANCHOR: user_websites:fn_mixin_user_site_slugs]).
 - **And** the old Odoo addresses (`/blog/<name>-<id>`, its pages, tags, feed and posts) answer a permanent redirect to the new
-  ones ([@ANCHOR: user_websites:COMM_stock_blog_redirects]). Verified by `[@ANCHOR: test_user_blog_urls_use_the_callsign]`.
+  ones ([@ANCHOR: user_websites:COMM_stock_blog_redirects] for the blog and its pages,
+  [@ANCHOR: user_websites:COMM_stock_blog_feed_redirect] for the feed,
+  [@ANCHOR: user_websites:COMM_stock_old_blog_post_redirect] for the old post-edit-style address and
+  [@ANCHOR: user_websites:COMM_stock_blog_post_redirect] for a post; a blog that belongs to nobody keeps its stock
+  addresses, decided by [@ANCHOR: user_websites:COMM_owned_blog_path]). The site finds the owner of a blog address
+  ([@ANCHOR: user_websites:COMM_user_blog_owner]; an unknown, hidden or suspended site is a 404) and builds the post
+  page's blog links with [@ANCHOR: user_websites:COMM_site_blog_url_init] and
+  [@ANCHOR: user_websites:COMM_site_blog_url_call]. Verified by `[@ANCHOR: test_user_blog_urls_use_the_callsign]`.
 
 ### Editing and Publishing a Blog Post
 - **Given** I just created a new blog post, or want to revise an existing one of my own (or one
