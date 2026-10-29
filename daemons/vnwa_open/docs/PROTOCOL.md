@@ -388,6 +388,20 @@ unit's own TX is the only source here. A try to make a known offset by retuning 
 ignores it mid-burst; `examples/meter_offset_probe.rs`). Both need a known external signal on the RX input (the bladeRF, which is unplugged,
 or any generator with a known offset); a question is filed in night_shift_questions. The vendor program's own reading was not compared.
 
+## Calibration kits and stored calibrations (2026-10-28, stage 04 continued)
+
+`cal::KitDefinition` models a kit from its published numbers: open capacitance C0 to C3, short inductance L0 to L3, load resistance and
+inductance, an offset line (delay, loss in gigaohms per second at 1 GHz) for each standard, and the through's delay; the default is the
+ideal kit, and a small `key = numbers` file loads one. A calibration made with a kit definition removes the kit's imperfections (tested on a
+made-up unit with a 60 fF open, 5 pH short and 50.4 ohm load: the corrected load is exact to 1e-7, while using the ideal kit leaves an error).
+A stored calibration (text, version 2) carries its date, the kit, the cable set-up text, and the IF, time per point and RF level; applying it at other
+settings is refused with the reasons (`check_setup`). Bruce has SMA male shorts now (the VNA ports are SMA female, so they plug on directly) and a
+fuller kit with a load on order; `examples/short_check.rs` is the one-command check for the shorts. The offset-line loss formula is the usual kit
+convention, not checked against any real kit file.
+
+Checks that wait for the new kit: the load standard, the precision open, the full open/short/load/thru result, S11 of the filters, the
+calibrated comparison with the vendor program.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
