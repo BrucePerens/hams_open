@@ -162,7 +162,8 @@ fn loopback_through_a_virtual_sink_and_source_is_heard() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
-// Tests [@ANCHOR: audio_record_tool] [@ANCHOR: audio_play_tool]
+// Tests [@ANCHOR: audio_record_tool]
+// Tests [@ANCHOR: audio_play_tool]
 #[test]
 #[ignore]
 fn record_hears_a_tone_played_by_another_call_and_play_restores_the_volume() {

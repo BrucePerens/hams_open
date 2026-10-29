@@ -77,6 +77,7 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertNotIn("-s-blog", self.post.website_url)
 
     def test_02_post_is_served_at_the_callsign_address(self):
+        # Tests [@ANCHOR: user_websites:COMM_user_blog_owner]
         # Tests [@ANCHOR: user_websites:COMM_user_blog_post]
         response = self.url_open(self.post.website_url, allow_redirects=False)
         self.assertEqual(response.status_code, 200)
@@ -93,6 +94,7 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertEqual(self._location(upper), self.post.website_url)
 
     def test_04_a_post_is_only_found_under_its_own_site(self):
+        # Tests [@ANCHOR: user_websites:COMM_user_blog_owner]
         # Tests [@ANCHOR: user_websites:COMM_user_blog_post]
         self.assertEqual(self.url_open(f"/burlother/blog/{self.post_slug}").status_code, 404)
         self.assertEqual(self.url_open("/burlowner/blog/no-such-post").status_code, 404)
@@ -107,6 +109,9 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertEqual(self.url_open(self.draft.website_url).status_code, 200)
 
     def test_06_stock_addresses_of_a_member_blog_are_permanent_redirects(self):
+        # Tests [@ANCHOR: user_websites:COMM_owned_blog_path]
+        # Tests [@ANCHOR: user_websites:COMM_stock_blog_feed_redirect]
+        # Tests [@ANCHOR: user_websites:COMM_stock_blog_post_redirect]
         # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
         expected = {
             f"/blog/{self.blog_slug}": "/burlowner/blog",
@@ -120,6 +125,7 @@ class TestUserBlogUrls(HamsHttpCase):
             self.assertEqual(self._location(response), new, old)
 
     def test_06b_the_old_post_edit_style_address_ends_at_the_callsign_address(self):
+        # Tests [@ANCHOR: user_websites:COMM_stock_old_blog_post_redirect]
         # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
         # Odoo first corrects the slugs in /blog/<id>/post/<id> (a 301 of its own), then ours follows.
         response = self.url_open(f"/blog/{self.blog.id}/post/{self.post.id}")
@@ -147,6 +153,8 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertEqual(self.url_open("/burlother/blog/feed").status_code, 404)
 
     def test_09_post_page_links_stay_on_the_callsign_address(self):
+        # Tests [@ANCHOR: user_websites:COMM_site_blog_url_init]
+        # Tests [@ANCHOR: user_websites:COMM_site_blog_url_call]
         # [@ANCHOR: COMM_test_user_blog_urls_use_the_callsign]
         # Tests [@ANCHOR: user_websites:COMM_user_blog_post]
         second = self.env["blog.post"].create(
@@ -193,6 +201,7 @@ class TestUserBlogUrls(HamsHttpCase):
         self.env.flush_all()
 
     def test_12_platform_blog_index_with_one_blog_redirects_to_it(self):
+        # Tests [@ANCHOR: user_websites:COMM_owned_blog_path]
         # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
         # A blog owned by a user with no site slug (perens.com's blog, 2026-10-29 outage).
         admin_blog = self.env["blog.blog"].create({"name": "Admin Blog", "owner_user_id": self.env.ref("base.user_admin").id})

@@ -24,6 +24,8 @@ SVC = "user_websites.user_websites_service_account"
 FEED_POSTS_MAX = 50
 
 
+# [@ANCHOR: user_websites:COMM_owned_blog_path]
+# Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
 def _owned_blog_path(blog):
     """/<callsign>/blog for a blog owned by a member or group, else ''."""
     if not blog:
@@ -40,9 +42,13 @@ class SiteBlogUrl:
     that is not a member's keeps the stock one).
     """
 
+    # [@ANCHOR: user_websites:COMM_site_blog_url_init]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
     def __init__(self, default_path):
         self.default_path = default_path
 
+    # [@ANCHOR: user_websites:COMM_site_blog_url_call]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
     def __call__(self, path=None, path_args=None, **kwargs):
         blog = kwargs.get("blog")
         if blog:
@@ -52,6 +58,8 @@ class SiteBlogUrl:
 
 class UserBlogPages(http.Controller):
 
+    # [@ANCHOR: user_websites:COMM_user_blog_owner]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
     def _blog_owner(self, website_slug, rest):
         """(profile_user, profile_group, redirect): the site that owns `website_slug`'s blog.
 
@@ -180,7 +188,6 @@ class UserBlogRedirects(WebsiteBlog):
 
     # [@ANCHOR: user_websites:COMM_stock_blog_redirects]
     # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
-
     @http.route()
     def blog(self, blog=None, tag=None, page=1, search=None, **opt):
         path = _owned_blog_path(blog)
@@ -190,6 +197,8 @@ class UserBlogRedirects(WebsiteBlog):
             return request.redirect(target, code=301, local=True)
         return super().blog(blog=blog, tag=tag, page=page, search=search, **opt)
 
+    # [@ANCHOR: user_websites:COMM_stock_blog_feed_redirect]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
     @http.route()
     def blog_feed(self, blog, limit="15", **kwargs):
         path = _owned_blog_path(blog)
@@ -197,12 +206,16 @@ class UserBlogRedirects(WebsiteBlog):
             return request.redirect(f"{path}/feed", code=301, local=True)
         return super().blog_feed(blog, limit=limit, **kwargs)
 
+    # [@ANCHOR: user_websites:COMM_stock_old_blog_post_redirect]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
     @http.route()
     def old_blog_post(self, blog, blog_post, **post):
         if _owned_blog_path(blog):
             return request.redirect(blog_post.website_url, code=301, local=True)
         return super().old_blog_post(blog, blog_post, **post)
 
+    # [@ANCHOR: user_websites:COMM_stock_blog_post_redirect]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
     @http.route()
     def blog_post(self, blog, blog_post, tag_id=None, page=1, enable_editor=None, **post):
         if _owned_blog_path(blog) or _owned_blog_path(blog_post.blog_id):

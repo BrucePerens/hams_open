@@ -408,6 +408,15 @@ pub struct PowerRecord {
     pub seconds: f64,
 }
 
+/// Measures `count` points at the start frequency and throws the results away, to bring the unit to a steady state before the sweep.
+/// A failure of a discarded point is still counted in the recovery tallies and the failure log by `measure` itself.
+fn discard_points<T>(count: u32, mut measure: impl FnMut() -> Result<T, String>) {
+    // [@ANCHOR: vnwa_open_discard_points]
+    for _ in 0..count {
+        let _ = measure();
+    }
+}
+
 fn epoch_s() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -632,11 +641,7 @@ impl Vna {
         if self.cfg.first_wait_ms > 0.0 {
             std::thread::sleep(Duration::from_secs_f64(self.cfg.first_wait_ms / 1000.0));
         }
-        // [@ANCHOR: vnwa_open_discard_points]
-        for _ in 0..self.cfg.discard_points {
-            // The result is thrown away; a failure of a discarded point is still counted in the recovery tallies and the failure log.
-            let _ = self.measure(start_hz, start_hz);
-        }
+        discard_points(self.cfg.discard_points, || self.measure(start_hz, start_hz));
         (0..points)
             .map(|i| {
                 let f = if points == 1 {
@@ -721,6 +726,27 @@ mod tests {
             resets: 0,
             reset_fails: false,
         }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_discard_points]
+    #[test]
+    fn the_discarded_points_are_measured_all_of_them_and_a_failure_does_not_stop_the_rest() {
+        let mut calls = 0;
+        discard_points(3, || {
+            calls += 1;
+            if calls == 2 {
+                Err::<u8, String>("silent".into())
+            } else {
+                Ok(1)
+            }
+        });
+        assert_eq!(calls, 3);
+        let mut none = 0;
+        discard_points(0, || {
+            none += 1;
+            Ok::<u8, String>(1)
+        });
+        assert_eq!(none, 0);
     }
 
     // Tests [@ANCHOR: vnwa_open_recovery]

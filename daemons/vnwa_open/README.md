@@ -123,6 +123,11 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The firmware version (0xff) and the internal temperature counts (0x85) are read, the temperature refused on a firmware older than v5.16. [@ANCHOR: vnwa_open_firmware_version] [@ANCHOR: vnwa_open_temperature]
 * A failure that a retry or power cycle cured keeps its evidence (error text, raw channel levels, block send time, overruns, the last 16 transfers), and so does every power cycle of the recovery. [@ANCHOR: vnwa_open_failure_log] [@ANCHOR: vnwa_open_failure_evidence] [@ANCHOR: vnwa_open_transfer_log]
 * The analysis window is timed from the end of the block send, not from before it. [@ANCHOR: vnwa_open_window_from_send_end]
+* The installer runs only the commands on its allow-list (with or without `sudo`), and refuses every other command before it is run. [@ANCHOR: vnwa_open_install_commands]
+* A USB device is the VNWA's codec only when it is a PCM2900C that has a VNWA control chip as a sibling on the same parent hub; no other sound card is reserved. [@ANCHOR: vnwa_open_reserved_codec]
+* The codec cards are found in the `pw-dump` document of a PipeWire sound server. [@ANCHOR: vnwa_open_sound_server_pipewire]
+* The codec cards are found in the text of `pactl list cards` of a PulseAudio sound server. [@ANCHOR: vnwa_open_sound_server_pulse]
+* A sweep can measure a configured number of points at its start frequency first and throw the results away, to bring the unit to a steady state. [@ANCHOR: vnwa_open_discard_points]
 
 ## Drift (2026-10-29)
 
