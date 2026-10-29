@@ -105,6 +105,7 @@ pub fn identify(cfg: &Config) -> Value {
         "idn": format!("DG8SAQ VNWA ({:04x}:{:04x}) driven by vnwa_open", vnwa_open::VID, vnwa_open::PID),
         "codec_s11": cfg.codec_s11,
         "codec_s21": cfg.codec_s21,
+        "hub": cfg.hub.as_ref().map(|h| format!("{} port {}", h.hub, h.port)),
     })
 }
 
@@ -113,16 +114,20 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
     let usb = vnwa_open::usb::Vnwa::open()
         .map(|_| "present")
         .unwrap_or("not found or no permission");
-    let inputs = vnwa_open::capture::input_names()?;
-    let has = |needle: &str| {
-        inputs
-            .iter()
-            .any(|n| n.to_lowercase().contains(&needle.to_lowercase()))
+    let found = vnwa_open::topology::codecs();
+    let (s11, s21) = match (&cfg.codec_s11, &cfg.codec_s21, &found) {
+        (Some(a), Some(b), _) => (Some(a.clone()), Some(b.clone())),
+        (_, _, Ok(c)) => (
+            cfg.codec_s11.clone().or(Some(c.s11.clone())),
+            cfg.codec_s21.clone().or(Some(c.s21.clone())),
+        ),
+        _ => (None, None),
     };
     Ok(json!({
         "usb": usb,
-        "codec_s11_found": has(&cfg.codec_s11),
-        "codec_s21_found": has(&cfg.codec_s21),
+        "codec_s11": s11,
+        "codec_s21": s21,
+        "codecs_error": found.err(),
         "if_hz": cfg.if_hz,
         "point_ms": cfg.point_ms,
         "rf_level": cfg.rf_level,
@@ -132,7 +137,7 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
 
 pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String> {
     let a = sweep_args(args, cfg)?;
-    let vna = Vna::open(a.config.clone())?;
+    let mut vna = Vna::open(a.config.clone())?;
     let points = vna.sweep(a.start_hz, a.stop_hz, a.points)?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -160,6 +165,7 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         "note": "raw ratios of the unit's own channels (cable, bridge and front-end not removed); S21 from the RX channel, S11 from the reflection channel",
         "s21_db_min": lo,
         "s21_db_max": hi,
+        "recovery": {"remeasured": vna.recovery().remeasured, "transfer_resends": vna.recovery().transfer_resends, "power_cycles": vna.recovery().power_cycles},
         "max_if_error_hz": points.iter().map(|p| p.if_error_hz).fold(0.0, f64::max),
         "max_level_change": points.iter().map(|p| p.level_change).fold(0.0, f64::max),
         "file": file.display().to_string(),

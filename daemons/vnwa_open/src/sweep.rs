@@ -14,15 +14,22 @@ use std::time::Duration;
 
 use crate::audio::{measure_point, tone_at_if, vendor_convention, Complex, Reference};
 use crate::capture::{Capture, SAMPLE_RATE};
+use crate::power::HubPort;
 use crate::setup::{setup_block, SetupParams};
 use crate::usb::Vnwa;
 
 /// Everything that is fixed for a session.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Part of the ALSA id of each codec (`hw:CARD=CODEC,` is the first, `hw:CARD=CODEC_1,` the second on the observed unit).
-    pub codec_s11: String,
-    pub codec_s21: String,
+    /// Part of the ALSA id of each codec. `None` (the default) finds them by their place on the USB tree (`topology`), which stays
+    /// right when a power cycle changes the order the kernel names the cards in.
+    pub codec_s11: Option<String>,
+    pub codec_s21: Option<String>,
+    /// The power-switching hub port the unit is on. With it, a point that still fails after its retries gets one cold reset
+    /// of the unit; without it the failure is reported.
+    pub hub: Option<HubPort>,
+    /// How many times a failed point is measured again (the set-up block sent again) before a power cycle or the error.
+    pub retries: u32,
     /// The measurement IF; 48 kHz divided by it should be a whole number (12, 6, 4 kHz are).
     pub if_hz: f64,
     /// The time per point sent to the unit (0.2 to 100 ms).
@@ -40,8 +47,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Config {
         Config {
-            codec_s11: "hw:CARD=CODEC,".into(),
-            codec_s21: "hw:CARD=CODEC_1,".into(),
+            codec_s11: None,
+            codec_s21: None,
+            hub: None,
+            retries: 2,
             if_hz: 12_000.0,
             point_ms: 60.0,
             rf_level: 0x3fff,
@@ -141,11 +150,112 @@ pub struct Point {
     pub level_change: f64,
 }
 
-pub struct Vna {
+/// What the unit needed to get a result, for the caller to report.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Recovery {
+    /// Points measured again after a failed attempt.
+    pub remeasured: u32,
+    /// Control transfers sent again after a transient error (EPROTO and the like).
+    pub transfer_resends: u32,
+    /// Cold resets through the hub.
+    pub power_cycles: u32,
+}
+
+/// The unit and its two codecs, opened together; all three are reopened after a power cycle.
+struct Session {
     usb: Vnwa,
     s11: Capture,
     s21: Capture,
+}
+
+impl Session {
+    fn open(cfg: &Config) -> Result<Session, String> {
+        let found = match (&cfg.codec_s11, &cfg.codec_s21) {
+            (Some(a), Some(b)) => crate::topology::Codecs {
+                s11: a.clone(),
+                s21: b.clone(),
+            },
+            _ => crate::topology::codecs()?,
+        };
+        Ok(Session {
+            usb: Vnwa::open()?,
+            s11: Capture::open(cfg.codec_s11.as_deref().unwrap_or(&found.s11))?,
+            s21: Capture::open(cfg.codec_s21.as_deref().unwrap_or(&found.s21))?,
+        })
+    }
+}
+
+/// What `recover` needs from a measuring unit.
+pub trait Recoverable {
+    fn retries(&self) -> u32;
+    fn has_hub(&self) -> bool;
+    fn tally(&mut self) -> &mut Recovery;
+    /// Cold reset, then reopen everything that was open.
+    fn cold_reset(&mut self) -> Result<(), String>;
+}
+
+/// Runs `attempt` up to `retries + 1` times; if all fail and a hub is configured, one cold reset and the same again; then a
+/// clear error listing every attempt. Nothing that failed is ever returned as a result.
+pub fn recover<R: Recoverable, T>(
+    unit: &mut R,
+    what: &str,
+    mut attempt: impl FnMut(&mut R) -> Result<T, String>,
+) -> Result<T, String> {
+    // [@ANCHOR: vnwa_open_recovery]
+    let mut history: Vec<String> = Vec::new();
+    for round in 0..2 {
+        let tries = unit.retries();
+        for n in 0..=tries {
+            match attempt(unit) {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    history.push(format!("attempt {} of round {}: {e}", n + 1, round + 1));
+                    if n < tries {
+                        unit.tally().remeasured += 1;
+                        std::thread::sleep(Duration::from_millis(200));
+                    }
+                }
+            }
+        }
+        if round == 1 || !unit.has_hub() {
+            break;
+        }
+        unit.tally().power_cycles += 1;
+        if let Err(e) = unit.cold_reset() {
+            history.push(format!("power cycle: {e}"));
+            break;
+        }
+    }
+    Err(format!(
+        "{what} failed and was not recovered ({} power cycle(s)): {}",
+        unit.tally().power_cycles,
+        history.join("; ")
+    ))
+}
+
+impl Recoverable for Vna {
+    fn retries(&self) -> u32 {
+        self.cfg.retries
+    }
+    fn has_hub(&self) -> bool {
+        self.cfg.hub.is_some()
+    }
+    fn tally(&mut self) -> &mut Recovery {
+        &mut self.recovery
+    }
+    fn cold_reset(&mut self) -> Result<(), String> {
+        let hub = self.cfg.hub.clone().ok_or("no hub configured")?;
+        self.recovery.transfer_resends += self.session.usb.resends();
+        crate::power::cold_reset(&hub)?;
+        self.session = Session::open(&self.cfg)?;
+        Ok(())
+    }
+}
+
+pub struct Vna {
+    session: Session,
     cfg: Config,
+    recovery: Recovery,
 }
 
 fn frames(ms: f64) -> usize {
@@ -156,18 +266,34 @@ impl Vna {
     pub fn open(cfg: Config) -> Result<Vna, String> {
         check(&cfg)?;
         Ok(Vna {
-            usb: Vnwa::open()?,
-            s11: Capture::open(&cfg.codec_s11)?,
-            s21: Capture::open(&cfg.codec_s21)?,
+            session: Session::open(&cfg)?,
             cfg,
+            recovery: Recovery::default(),
         })
+    }
+
+    /// What recovery this handle has needed so far.
+    pub fn recovery(&self) -> Recovery {
+        Recovery {
+            transfer_resends: self.recovery.transfer_resends + self.session.usb.resends(),
+            ..self.recovery
+        }
+    }
+
+    /// One point, measured again when an attempt fails (a transfer error that outlasted its resends, no signal on the
+    /// reference, an unsteady tone, missing audio), and, if the config names a hub port, after one cold reset of the unit when
+    /// the retries are used up. The result is never a number from a failed attempt: the error lists every attempt.
+    pub fn measure(&mut self, freq_hz: f64, previous_hz: f64) -> Result<Point, String> {
+        let what = format!("point at {freq_hz} Hz");
+        recover(self, &what, |v| v.measure_once(freq_hz, previous_hz))
     }
 
     /// One point. `previous_hz` is the frequency the offset in the block is taken from; every point of `sweep` passes its own
     /// frequency (no offset), because the later points of a block-per-point sweep with the sweep start as `previous_hz` were
     /// not repeatable (100 MHz measured 0.93, 1.20, 1.56 and 0.94 in four runs, against 0.998 every time as a single point).
-    pub fn measure(&self, freq_hz: f64, previous_hz: f64) -> Result<Point, String> {
+    fn measure_once(&self, freq_hz: f64, previous_hz: f64) -> Result<Point, String> {
         let c = &self.cfg;
+        let (usb, cap11, cap21) = (&self.session.usb, &self.session.s11, &self.session.s21);
         let block = setup_block(&SetupParams {
             freq_hz,
             previous_hz,
@@ -179,16 +305,19 @@ impl Vna {
             mode: 0,
             rf_level: c.rf_level,
         })?;
-        let (m11, m21) = (self.s11.mark(), self.s21.mark());
         // The vendor program asks for the level (0x58) before each block and reads 0x0d (wValue 0x0303) after it; the unit
-        // sends nothing without them. The replies are empty and are not used.
-        let _ = self.usb.read(0x58, c.rf_level, c.rf_level, 64);
-        self.usb.send_all(&block)?;
-        let _ = self.usb.read(0x0d, 0x0303, 0, 64);
+        // sends nothing without them. The replies are empty and are not used, but a failed transfer is not ignored: the 0x0d
+        // read is stalled by the unit in about 7 % of tries (a resend clears it), and the other transfers must not fail silently.
+        usb.read(0x58, c.rf_level, c.rf_level, 64)?;
+        // The analysis window is placed relative to the instant the block is sent, so the mark is taken right before it.
+        // Resent transfers wait only a few milliseconds (`usb::RETRY_PAUSE`) so they do not move the window.
+        let (m11, m21) = (cap11.mark(), cap21.mark());
+        usb.send_all(&block)?;
+        usb.read(0x0d, 0x0303, 0, 64)?;
         let (skip, n) = (frames(c.settle()), frames(c.window()));
         let timeout = Duration::from_secs(3);
-        let f11 = self.s11.frames_after(m11, skip, n, timeout)?;
-        let f21 = self.s21.frames_after(m21, skip, n, timeout)?;
+        let f11 = cap11.frames_after(m11, skip, n, timeout)?;
+        let f21 = cap21.frames_after(m21, skip, n, timeout)?;
         let fs = SAMPLE_RATE as f64;
         let split = |f: &[[i16; 2]]| -> (Vec<f64>, Vec<f64>) {
             (
@@ -254,7 +383,12 @@ impl Vna {
     }
 
     /// A linear sweep from `start_hz` to `stop_hz` in `points` points (at least 1).
-    pub fn sweep(&self, start_hz: f64, stop_hz: f64, points: usize) -> Result<Vec<Point>, String> {
+    pub fn sweep(
+        &mut self,
+        start_hz: f64,
+        stop_hz: f64,
+        points: usize,
+    ) -> Result<Vec<Point>, String> {
         if points == 0 {
             return Err("a sweep needs at least one point".into());
         }
@@ -303,5 +437,98 @@ mod tests {
         // No signal at all is not "stable".
         let (_, change) = stability(&vec![0.0; n], fs, 12_000.0);
         assert!(change.is_infinite());
+    }
+
+    struct Fake {
+        tally: Recovery,
+        hub: bool,
+        resets: u32,
+        reset_fails: bool,
+    }
+    impl Recoverable for Fake {
+        fn retries(&self) -> u32 {
+            2
+        }
+        fn has_hub(&self) -> bool {
+            self.hub
+        }
+        fn tally(&mut self) -> &mut Recovery {
+            &mut self.tally
+        }
+        fn cold_reset(&mut self) -> Result<(), String> {
+            self.resets += 1;
+            if self.reset_fails {
+                Err("hub gone".into())
+            } else {
+                Ok(())
+            }
+        }
+    }
+    fn fake(hub: bool) -> Fake {
+        Fake {
+            tally: Recovery::default(),
+            hub,
+            resets: 0,
+            reset_fails: false,
+        }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_recovery]
+    #[test]
+    fn a_failed_attempt_is_repeated_and_only_a_success_is_returned() {
+        let mut f = fake(true);
+        let mut calls = 0;
+        let v = recover(&mut f, "p", |_| {
+            calls += 1;
+            if calls < 3 {
+                Err("silent".to_string())
+            } else {
+                Ok(7)
+            }
+        });
+        assert_eq!(v, Ok(7));
+        assert_eq!(
+            (f.tally.remeasured, f.resets, f.tally.power_cycles),
+            (2, 0, 0)
+        );
+    }
+
+    #[test]
+    fn when_the_retries_are_used_up_the_unit_is_power_cycled_once_and_then_tried_again() {
+        let mut f = fake(true);
+        let mut calls = 0;
+        let v = recover(&mut f, "p", |f: &mut Fake| {
+            calls += 1;
+            if f.resets == 0 {
+                Err(format!("silent {calls}"))
+            } else {
+                Ok(calls)
+            }
+        });
+        assert_eq!(v, Ok(4));
+        assert_eq!((f.resets, f.tally.power_cycles), (1, 1));
+    }
+
+    #[test]
+    fn without_a_hub_or_when_it_keeps_failing_the_error_lists_every_attempt() {
+        let mut f = fake(false);
+        let e = recover::<_, ()>(&mut f, "point at 1 Hz", |_| Err("no signal".into())).unwrap_err();
+        assert_eq!(f.resets, 0);
+        assert!(
+            e.contains("attempt 3 of round 1")
+                && e.contains("no signal")
+                && e.contains("0 power cycle"),
+            "{e}"
+        );
+        let mut f = fake(true);
+        let e = recover::<_, ()>(&mut f, "p", |_| Err("no signal".into())).unwrap_err();
+        assert_eq!(f.resets, 1);
+        assert!(e.contains("attempt 3 of round 2"), "{e}");
+        let mut f = Fake {
+            reset_fails: true,
+            ..fake(true)
+        };
+        let e = recover::<_, ()>(&mut f, "p", |_| Err("no signal".into())).unwrap_err();
+        assert!(e.contains("power cycle: hub gone"), "{e}");
     }
 }

@@ -55,23 +55,35 @@ fn tier_of(s: Option<&str>) -> Result<Tier, String> {
     }
 }
 
-/// The VNA settings of an instrument entry: `codec_s11`, `codec_s21` (parts of the ALSA ids), `if_hz`, `point_ms`, `rf_level`,
+/// The VNA settings of an instrument entry: `codec_s11`, `codec_s21` (parts of the ALSA ids; found from the USB tree when omitted), `hub` and `hub_port` (the power-switching hub port, for cold resets), `retries`, `if_hz`, `point_ms`, `rf_level`,
 /// `settle_ms`, `window_ms`; anything omitted keeps the default of `vnwa_open::sweep::Config`.
 fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
     let mut v = vnwa_open::sweep::Config::default();
     let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
     let num = |k: &str| c.get(k).and_then(|x| x.as_f64());
     if let Some(t) = text("codec_s11") {
-        v.codec_s11 = t;
+        v.codec_s11 = Some(t);
     }
     if let Some(t) = text("codec_s21") {
-        v.codec_s21 = t;
+        v.codec_s21 = Some(t);
     }
     if let Some(x) = num("if_hz") {
         v.if_hz = x;
     }
     if let Some(x) = num("point_ms") {
         v.point_ms = x;
+    }
+    // The power-switching hub port the unit is on (`uhubctl -l <hub> -p <port>`): both keys or neither.
+    match (text("hub"), c.get("hub_port").and_then(|x| x.as_u64())) {
+        (Some(hub), Some(port)) => {
+            let port = u8::try_from(port).map_err(|_| "hub_port must be 1 to 255".to_string())?;
+            v.hub = Some(vnwa_open::power::HubPort { hub, port });
+        }
+        (None, None) => {}
+        _ => return Err("hub and hub_port must be given together".into()),
+    }
+    if let Some(x) = c.get("retries").and_then(|x| x.as_u64()) {
+        v.retries = u32::try_from(x).map_err(|_| "retries is too large".to_string())?;
     }
     v.settle_ms = num("settle_ms");
     v.window_ms = num("window_ms");
@@ -239,5 +251,23 @@ mod tests {
             r#"{"instruments":{"x":{"driver":"atm6301","serial":"/dev/x","tier":"root"}}}"#
         )
         .is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_config]
+    #[test]
+    fn the_vna_hub_port_and_retries_are_read_and_must_come_as_a_pair() {
+        let vna = |extra: &str| {
+            parse(&format!(
+                r#"{{"instruments":{{"v":{{"driver":"vnwa_open"{extra}}}}}}}"#
+            ))
+        };
+        let ok = vna(r#","hub":"3-2","hub_port":2,"retries":4"#).unwrap();
+        let cfg = &ok[0].vna;
+        let hub = cfg.hub.as_ref().unwrap();
+        assert_eq!((hub.hub.as_str(), hub.port, cfg.retries), ("3-2", 2, 4));
+        assert!(vna("").unwrap()[0].vna.hub.is_none());
+        assert!(vna(r#","hub":"3-2""#).unwrap_err().contains("together"));
+        assert!(vna(r#","hub_port":2"#).unwrap_err().contains("together"));
+        assert!(vna(r#","hub":"3-2","hub_port":300"#).is_err());
     }
 }

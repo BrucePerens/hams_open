@@ -56,6 +56,23 @@ so an open driver can offer them once those are decoded:
    frequencies; use below about 100 MHz. The unit is a direct-conversion receiver in this mode, so it also responds to
    subharmonics.
 
+## Reliability (2026-10-28)
+
+The unit is bus powered on a power-switching hub port (`sudo -n uhubctl -l 3-2 -p 2 -a off`, then `-a on`: a verified cold reset,
+the unit goes dark, keeps no settings, and is back about 9 s after power-on). The driver handles the failures seen on it:
+
+* **Transient transfer errors** (`transport::classify`: libusb reports the kernel's EPROTO as an I/O error; a stall is a pipe error;
+  also timeouts) are sent again up to 3 times (`usb::Vnwa`), 5 ms apart, and counted (`Vnwa::resends`). A vanished unit is
+  reported at once, other errors are not repeated. The read of request 0x0d after a block is stalled by the unit in about 7 % of
+  tries and succeeds on a resend; since the transfers are no longer ignored, a transfer that fails for good fails the point.
+* **A point that fails** (no signal on the reference, an unsteady tone, missing audio, a transfer error that outlasted its
+  resends) is measured again `Config::retries` times; if the config names a hub (`Config::hub`), the unit is then cold reset once,
+  reopened, and the retries repeated; then a clear error lists every attempt (`sweep::recover`). A failed attempt never
+  yields a number. `Vna::recovery()` reports the re-measurements, transfer resends and power cycles.
+* **Which codec is which** is read from the USB tree (`topology`): the PCM2900C on the lower port of the unit's internal hub is S11,
+  the other S21; the card names (`CODEC`, `CODEC_1`) are kernel order. Checked over 5 power cycles: the order did not change here.
+* `examples/power_cycle.rs <hub> <port>` does the cold reset; `VNWA_HUB=3-2:2 examples/sweep` sweeps with recovery.
+
 ## Safety
 
 The first-run overclock offer of the vendor program was declined; this crate assumes the stock clocks (360 / 324 MHz,
@@ -85,4 +102,9 @@ Each is a test against bytes or samples recorded from the vendor program.
 * Amplitude and phase of a tone at the IF are exact on a synthetic tone. [@ANCHOR: vnwa_open_tone_at_if]
 * The ratio of two tones is their amplitude ratio and phase difference, in the vendor program's convention. [@ANCHOR: vnwa_open_vendor_convention]
 * A measurement of a recorded sweep agrees with the vendor program's own S21, and the reference channel can be swapped. [@ANCHOR: vnwa_open_measure_point]
+* A transient transfer error is sent again a bounded number of times, a vanished unit is reported, others are not repeated. [@ANCHOR: vnwa_open_transfer_retry]
+* libusb errors are classified as transient, no device or other. [@ANCHOR: vnwa_open_transfer_classes]
+* The S11 and S21 codecs are told apart by their USB port, whatever order the kernel named the cards in. [@ANCHOR: vnwa_open_codec_topology]
+* The power cycle is off, wait, on through `sudo -n uhubctl`, then waits for the unit; failures are clear errors. [@ANCHOR: vnwa_open_power_cycle]
+* A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
 * A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
