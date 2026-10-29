@@ -12,12 +12,12 @@ Every instrument in the configuration has a tier: `read_only` (the default when 
 | Tier | Meaning | Examples |
 |---|---|---|
 | `read_only` | looks, changes nothing the equipment keeps | `bench_list`, `bench_identify`, `bench_status`, `bench_measure`, `bench_capture`, `bench_screenshot`, the manual tools, topology and diagnosis of USB, listing sound devices |
-| `read_config` | changes settings or runs a measurement that stimulates something, but cannot hurt the equipment or the bench | `bench_set` (scope settings, supply setpoints within the caps), `bench_scope_spectrum` (may set timebase and memory depth), every `bench_vna_*` tool, `bench_sdr_*` (tunes a receiver), `bench_psu_output` with `on: false`, recording sound |
-| `full` | can cause damage, make noise or stop a running device | `bench_psu_output` with `on: true`, `bench_scope_self_cal`, USB port power off and cycle, playing sound |
+| `read_config` | changes settings or runs a measurement that stimulates something, but cannot hurt the equipment or the bench | `bench_set` (scope settings, supply setpoints within the caps), `bench_scope_spectrum` (may set timebase and memory depth), every `bench_vna_*` tool, `bench_sdr_*` (tunes a receiver), `bench_psu_safe_state`, recording sound |
+| `full` | can cause damage, make noise or stop a running device | `bench_psu_output`, `bench_scope_self_cal`, USB port power off and cycle, playing sound |
 
 Rules that go beyond the tier:
 
-* Switching the supply output on needs `full`; the check is repeated inside the tool, and it still refuses when the setpoints stored in the supply exceed the configured `max_volts` and `max_amps`.
+* Switching the supply output needs `full`, `confirm_load_connected: true` from the person at the bench (or `dry_run`), and the server switches it off again after `for_s` seconds (at most `max_on_s`, default 600). `bench_psu_safe_state` (`read_config`) switches it off and reads it back. The tool still refuses when the setpoints stored in the supply exceed the configured `max_volts` and `max_amps`.
 * `bench_scope_self_cal` needs `confirm_inputs_disconnected: true`, and that must come from the person at the bench who unplugged every probe. Do not pass it on your own judgement.
 * Supply setpoints are capped by the instrument's `max_volts` and `max_amps` in the configuration (defaults 5.5 V and 1.0 A) whatever the tier.
 * Nothing in bench_mcp is meant to transmit on the air. The SDRs only receive; the Hamlib transmit tools key a rig only if the owner has attested in the config that its antenna port is on a dummy load, and the software cannot know what is connected ([limits](instruments/hamlib/limits)); the VNA and its generator drive a cable port at about -17 dBm at the highest setting. See [etiquette](concepts/etiquette).

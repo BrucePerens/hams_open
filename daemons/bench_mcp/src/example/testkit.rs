@@ -103,6 +103,12 @@ impl FakeDevice {
         self.log.lock().unwrap().clone()
     }
 
+    /// A new link to this device, for code that opens its own (the supply's timed switch-off).
+    pub fn link(&self) -> impl Fn() -> Result<Link, String> + Send + 'static {
+        let port = self.port;
+        move || Link::tcp("127.0.0.1", port)
+    }
+
     /// The way for `call_with` to reach this device.
     pub fn connector(&self) -> impl Fn(&Instrument) -> Result<Link, String> {
         let port = self.port;

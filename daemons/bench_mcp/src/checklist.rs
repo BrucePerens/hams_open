@@ -55,7 +55,7 @@ const LEGACY_FULL_WITHOUT_DRY_RUN: &[&str] = &[
 ];
 
 /// Anchors cited by a test whose declaration is missing from the source (found when the checklist was written). Do not add to it.
-const LEGACY_ORPHAN_TEST_ANCHORS: &[&str] = &["audio_analysis", "bench_mcp_vna_power_cycle"];
+const LEGACY_ORPHAN_TEST_ANCHORS: &[&str] = &[];
 
 /// Pages an instrument directory under `manual/instruments/` must have, and who is excused from which (written before the rule).
 const REQUIRED_INSTRUMENT_PAGES: &[&str] = &[

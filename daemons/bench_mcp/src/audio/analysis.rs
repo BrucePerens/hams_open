@@ -334,7 +334,6 @@ mod tests {
 
     const R: u32 = 48000;
 
-    // Tests [@ANCHOR: audio_analysis]
     // Tests [@ANCHOR: bench_mcp_audio_analysis_db]
     // Tests [@ANCHOR: bench_mcp_audio_analysis_fft]
     // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum]
