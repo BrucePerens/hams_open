@@ -7,8 +7,11 @@
 //! is the directory for captures and screenshots.
 
 mod audio;
+#[cfg(test)]
+mod checklist;
 mod config;
 mod dsp;
+mod example;
 mod link;
 mod manual;
 mod psu;
@@ -155,6 +158,7 @@ fn connect(i: &Instrument) -> Result<Link, String> {
         Kind::Sdr => Err("an SDR has no SCPI link".into()),
         Kind::UsbHub => Err("the USB hub tools have no SCPI link".into()),
         Kind::Audio => Err("the audio tools have no SCPI link".into()),
+        Kind::Example => Err("the example tools open their own link".into()),
     }
 }
 
@@ -174,6 +178,9 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     }
     if name.starts_with("bench_audio_") {
         return audio::call(insts, name, args);
+    }
+    if name.starts_with("bench_example_") {
+        return example::call(insts, name, args);
     }
     if name.starts_with("bench_usb_") {
         return usb_hub::call(insts, name, args);
@@ -278,7 +285,8 @@ pub(crate) fn all_tool_defs() -> Vec<Tool> {
         "blade":{"driver":"bladerf","tier":"full"},
         "lime":{"driver":"limesdr","tier":"full"},
         "usb":{"driver":"usb_hub","tier":"full"},
-        "sound":{"driver":"audio","tier":"full"}}}"#,
+        "sound":{"driver":"audio","tier":"full"},
+        "example":{"driver":"example","tier":"full","host":"192.0.2.1"}}}"#,
     )
     .expect("the all-instruments bench configuration parses");
     tool_defs(&bench)
@@ -287,6 +295,7 @@ pub(crate) fn all_tool_defs() -> Vec<Tool> {
 fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
     let usb = usb_hub::tool_defs(insts);
     let audio = audio::tool_defs(insts);
+    let example = example::tool_defs(insts);
     let tools: Vec<Tool> = TOOLS
         .iter()
         .filter(|t| t.name == "bench_list" || insts.iter().any(|i| t.kinds.contains(&i.kind) && i.tier >= t.tier))
@@ -297,6 +306,7 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
         })
         .chain(usb)
         .chain(audio)
+        .chain(example)
         .chain(manual::tool_defs())
         .collect();
     manual::with_pointers(tools)

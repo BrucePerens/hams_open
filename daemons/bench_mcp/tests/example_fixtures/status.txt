@@ -1,0 +1,8 @@
+# A recorded session with the imaginary EXAMPLE-1000: "> " is what the host sent, "< " the instrument's reply.
+# Serial number and address are scrubbed (SN-0000, no address at all). Replace this with a scrubbed capture of YOUR instrument.
+> *IDN?
+< ACME,EXAMPLE-1000,SN-0000,1.0.0
+> OUTP?
+< OFF
+> LEV?
+< 0.250
