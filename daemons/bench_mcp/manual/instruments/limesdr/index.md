@@ -10,6 +10,4 @@ verified: n/a (navigation)
 
 A LimeSDR-USB as a receive-only SDR with two phase-coherent receivers (30 MHz to 3.8 GHz), through SoapySDR.
 
-Pages: overview (two coherent receivers, connectors), setup (software, firmware, connectors), operation (capture, survey, coherence), limits (ranges, antenna choice) and troubleshooting (symptom, cause, action). The tool pages document each function.
-
 <!-- children -->
