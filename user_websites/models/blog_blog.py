@@ -10,6 +10,20 @@ class BlogBlog(models.Model):
     name = fields.Char(string="Name", default=lambda self: self._description)
     _inherit = ["blog.blog", "user_websites.owned.mixin"]
 
+    site_path = fields.Char(
+        string="Public Address",
+        compute="_compute_site_path",
+        help="/<callsign>/blog for a member's or group's blog; empty for any other blog.",
+    )
+
+    # [@ANCHOR: user_websites:blog_blog_site_path]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
+    def _compute_site_path(self):
+        slugs = self._user_site_slugs()
+        for blog in self:
+            slug = slugs.get(blog.id)
+            blog.site_path = f"/{slug}/blog" if slug else ""
+
     _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog with this exact title!")
 
     def _check_blog_quota(self, vals_list):

@@ -272,6 +272,18 @@ def _owner_home(env_svc, profile_user, profile_group, slug, website_id):
     return pages.browse(), HOME_NONE
 
 
+def _new_blog_name(entity_name):
+    """The name of a member's or group's first blog: the owner's name and "Blog", no possessive.
+
+    [@ANCHOR: user_websites:fn_main_new_blog_name]
+    Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
+    An apostrophe in a name ended up in Odoo's address of the blog ("...-k6bp-s-blog-1"). The
+    public address is now /<callsign>/blog and does not use the name at all; this keeps the name
+    itself free of the character for every slug made from it (SEO names, exports).
+    """
+    return f"{entity_name} Blog"
+
+
 def _serve_core_fallback():
     # [@ANCHOR: user_websites:fn_main_serve_core_fallback]
     """Odoo's own page / redirect / attachment lookup for the request's path.
@@ -865,7 +877,7 @@ class UserWebsitesController(http.Controller):
         req_website_id = request.website.id
 
         create_vals = {
-            "name": f"{entity_name}'s Blog",
+            "name": _new_blog_name(entity_name),
             "website_id": req_website_id,
         }
         if profile_user:
@@ -938,7 +950,7 @@ class UserWebsitesController(http.Controller):
             # of the site, so make the container here with create_blog()'s own values.
             entity_name = profile_user.name if profile_user else profile_group.name
             blog_vals = {
-                "name": f"{entity_name}'s Blog",
+                "name": _new_blog_name(entity_name),
                 "website_id": request.website.id,
             }
             if profile_user:
@@ -1131,7 +1143,7 @@ class UserWebsitesController(http.Controller):
                 "is_published": bool(is_published),
             }
         )
-        return request.redirect(f"/blog/{post.blog_id.id}/post/{post.id}")
+        return request.redirect(post.website_url)
 
     @http.route("/user-websites/documentation", type="http", auth="user", website=True)
     # [@ANCHOR: user_websites:COMM_documentation]

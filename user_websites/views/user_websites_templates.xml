@@ -282,6 +282,23 @@
         </t>
     </template>
 
+    <!-- Atom feed of a member's or group's blog, at /<callsign>/blog/feed (UserBlogPages.user_blog_feed). -->
+    <template id="user_blog_feed" name="User Blog Atom Feed"><!-- audit-ignore-view: Tested by [@ANCHOR: test_user_blog_urls_use_the_callsign] -->&lt;?xml version="1.0" encoding="utf-8"?&gt;
+<feed t-att-xmlns="'http://www.w3.org/2005/Atom'">
+    <title t-out="site_name"/>
+    <link t-att-href="'%s%s' % (base_url, site_blog_url)"/>
+    <id t-out="'%s%s' % (base_url, site_blog_url)"/>
+    <updated t-out="str(posts[0].post_date).replace(' ', 'T') + 'Z' if posts else ''"/>
+    <entry t-foreach="posts" t-as="post">
+        <title t-out="post.name"/>
+        <link t-att-href="'%s%s' % (base_url, post.website_url)"/>
+        <id t-out="'%s%s' % (base_url, post.website_url)"/>
+        <summary t-out="html2plaintext(post.teaser)"/>
+        <updated t-out="str(post.post_date).replace(' ', 'T') + 'Z'"/>
+    </entry>
+</feed>
+    </template>
+
     <template id="blog_index" name="User Blog Index">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
@@ -320,7 +337,7 @@
                                 <h3 class="card-title fw-bold" t-out="post.name"/>
                                 <p class="text-muted" t-if="post.subtitle" t-out="post.subtitle"/>
                                 <span t-if="is_owner and not post.is_published" class="badge bg-warning text-dark ms-1">Draft</span>
-                                <a t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}" class="btn btn-outline-primary mt-2">Read Post</a>
+                                <a t-att-href="post.website_url" class="btn btn-outline-primary mt-2">Read Post</a>
                                 <!-- Real gap found live 2026-10-01 (night_shift_todo/high/
                                      personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md):
                                      the generic website-builder "Edit" toolbar never renders for this

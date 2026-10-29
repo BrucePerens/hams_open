@@ -53,6 +53,7 @@ This module enables:
         # Templates
         "views/user_websites_templates.xml",
         "views/owner_site_templates.xml",
+        "views/user_blog_links.xml",
         "views/website_layout.xml",
         "views/snippets.xml",
     ],

@@ -132,7 +132,7 @@
                                     <td><span t-attf-class="badge #{'bg-success' if post.is_published else 'bg-warning text-dark'}" t-out="'Published' if post.is_published else 'Draft'"/></td>
                                     <td class="text-nowrap">
                                         <a class="btn btn-sm btn-outline-secondary" t-attf-href="/blog_post/edit/#{post.id}">Edit<span class="visually-hidden"> <t t-out="post.name"/></span></a>
-                                        <a class="btn btn-sm btn-outline-secondary" t-attf-href="/blog/#{post.blog_id.id}/post/#{post.id}">View<span class="visually-hidden"> <t t-out="post.name"/></span></a>
+                                        <a class="btn btn-sm btn-outline-secondary" t-att-href="post.website_url">View<span class="visually-hidden"> <t t-out="post.name"/></span></a>
                                         <form t-attf-action="/my/site/#{site_slug}/post/#{post.id}/publish" method="post" class="d-inline">
                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <input type="hidden" name="publish" t-att-value="'0' if post.is_published else '1'"/>

@@ -36,6 +36,20 @@ As a **Community Member**, I want to create and manage my own personal website a
 
 - **And** my followers will receive a weekly digest of my new content ([@ANCHOR: send_weekly_digest]). Verified by `[@ANCHOR: test_weekly_digest_mail_template]`.
 
+### Where My Blog Lives
+- **Given** my site is `/<callsign>`
+- **Then** my blog is at `/<callsign>/blog` ([@ANCHOR: user_websites:blog_blog_site_path]) and each post at
+  `/<callsign>/blog/<post-slug>` ([@ANCHOR: user_websites:blog_post_website_url], served by
+  [@ANCHOR: user_websites:COMM_user_blog_post]); the blog's name is never part of an address, and a new blog is named
+  "<Name> Blog" without a possessive ([@ANCHOR: user_websites:fn_main_new_blog_name]).
+- **And** every link the site makes to my blog and posts (the index, the owner dashboard, the post page's Read Next and
+  sign-in links, the weekly digest, the Atom feed at `/<callsign>/blog/feed`
+  ([@ANCHOR: user_websites:COMM_user_blog_feed]) and the sitemap
+  ([@ANCHOR: user_websites:website_enumerate_user_blogs])) uses those addresses, read through the service account
+  ([@ANCHOR: user_websites:fn_mixin_user_site_slugs]).
+- **And** the old Odoo addresses (`/blog/<name>-<id>`, its pages, tags, feed and posts) answer a permanent redirect to the new
+  ones ([@ANCHOR: user_websites:COMM_stock_blog_redirects]). Verified by `[@ANCHOR: test_user_blog_urls_use_the_callsign]`.
+
 ### Editing and Publishing a Blog Post
 - **Given** I just created a new blog post, or want to revise an existing one of my own (or one
   owned by a group website I belong to)

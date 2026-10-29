@@ -24,6 +24,24 @@ class BlogPost(models.Model):
 
     _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog post with this exact title!")
 
+    # [@ANCHOR: user_websites:blog_post_website_url]
+    # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
+    def _compute_website_url(self):
+        """A member's or group's post lives at /<callsign>/blog/<post-slug>, not at /blog/<blog>/<post>.
+
+        Every consumer of website_url (the "View" links, the weekly digest, the Atom feed, the
+        sitemap, search results, the website builder's own buttons) therefore gets the one public
+        address. The post slug keeps Odoo's "-<id>" tail, so it names exactly one post even when
+        two titles slugify alike.
+        """
+        super()._compute_website_url()
+        slugs = self._user_site_slugs()
+        for post in self:
+            site_slug = slugs.get(post.id)
+            if site_slug:
+                post_slug = self.env["ir.http"]._slug(post)
+                post.website_url = f"/{site_slug}/blog/{post_slug}"
+
     # [@ANCHOR: user_websites:COMM_blog_post_invalidate_cloudflare_cache]
     def _invalidate_cloudflare_cache(self):
         """Purge the global Cache-Tag at the edge."""
