@@ -138,6 +138,83 @@ pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> 
     )
 }
 
+/// The spectrum of the channel's waveform, computed here: the scope is put on `timebase_s` if given (more time per division means finer
+/// frequency resolution, fewer samples per carrier cycle), the first `points` samples (a power of two, default 131072, at most 1048576) are
+/// windowed and transformed, and the strongest peaks are listed. Levels are dBV rms at the scope input, and dBm into 50 ohms (the level
+/// the 50 ohm source side would read; the scope input is 1 MOhm).
+pub fn spectrum(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
+    let c = ch(args)?;
+    let window = crate::spectrum::Window::parse(
+        args.get("window")
+            .and_then(|v| v.as_str())
+            .unwrap_or("hanning"),
+    )?;
+    let points = match args.get("points") {
+        None | Some(Value::Null) => 131_072,
+        Some(v) => v
+            .as_u64()
+            .filter(|p| p.is_power_of_two() && (16..=1_048_576).contains(p))
+            .ok_or("points must be a power of two from 16 to 1048576")? as usize,
+    };
+    let count = args
+        .get("peaks")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(10)
+        .clamp(1, 50) as usize;
+    let range_db = args
+        .get("range_db")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(60.0);
+    if let Some(m) = args.get("memory_depth").and_then(|v| v.as_str()) {
+        // e.g. 7K, 70K, 700K, 7M, 14M: the scope's own memory depth names (a bad one is refused by the scope, not sent blindly)
+        if m.is_empty()
+            || m.len() > 6
+            || !m
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '.' || c == 'K' || c == 'M')
+        {
+            return Err("memory_depth must look like 14K, 140K, 1.4M or 14M".into());
+        }
+        s.send(&format!("MSIZ {m}"))?;
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
+    if let Some(t) = args.get("timebase_s").and_then(|v| v.as_f64()) {
+        if !(t.is_finite() && t > 0.0) {
+            return Err("timebase_s must be positive".into());
+        }
+        s.send(&format!("TDIV {t:E}S"))?;
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+    }
+    let wf = capture(
+        s,
+        &json!({"channel": c, "allow_stopped": args.get("allow_stopped")}),
+        out,
+    )?;
+    let file = wf["file"].as_str().ok_or("no capture file")?.to_string();
+    let bytes = std::fs::read(&file).map_err(|e| format!("{file}: {e}"))?;
+    let volts: Vec<f32> = bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
+        .collect();
+    let dt = wf["sample_interval_s"]
+        .as_f64()
+        .ok_or("no sample interval")?;
+    if volts.len() < points {
+        return Err(format!("the scope returned {} samples, fewer than points = {points}; lower points or raise the memory depth", volts.len()));
+    }
+    let sp = crate::spectrum::spectrum(&volts[..points], 1.0 / dt, window)?;
+    let peaks = crate::spectrum::peaks(&sp, count, range_db);
+    let _ = std::fs::remove_file(&file);
+    Ok(json!({
+        "channel": c, "window": format!("{window:?}"), "points": points, "sample_rate_hz": 1.0 / dt,
+        "bin_hz": sp.bin_hz, "span_hz": 0.5 / dt, "enbw_bins": sp.enbw_bins,
+        "note": "levels are rms at the scope input; dbm_50 is dBV + 13.01 (a 50 ohm source into 50 ohms); 8-bit samples: lines more than about 45 dB below the strongest are not reliable",
+        "peaks": peaks.iter().map(|p| json!({"freq_hz": p.freq_hz, "vrms": p.vrms, "dbv": p.dbv, "dbm_50": p.dbm_50})).collect::<Vec<_>>(),
+    }))
+}
+
 pub fn screenshot(s: &mut Link, out: &Path) -> Result<Value, String> {
     let raw = s.raw_until_idle("SCDP", 1500, 30)?;
     if raw.len() < 100 {
@@ -192,6 +269,15 @@ pub fn set(s: &mut Link, args: &Value) -> Result<Value, String> {
         }
         cmd(s, format!("TRIG_MODE {v}"))?;
     }
+    if let Some(t) = args.get("trigger_type").and_then(|v| v.as_str()) {
+        // The types this unit (firmware 1.3.27) accepted when probed: edge, slope (SLEW), pulse (GLIT), interval (INTV), runt (RUNT), TV. The
+        // pattern, window, drop-out and serial-bus triggers were not accepted with the tokens tried (licensed options or other names).
+        if !["EDGE", "SLEW", "GLIT", "INTV", "RUNT", "TV"].contains(&t) {
+            return Err("trigger_type must be EDGE, SLEW (slope), GLIT (pulse), INTV (interval), RUNT or TV".into());
+        }
+        let c = ch(args)?;
+        cmd(s, format!("TRSE {t},SR,C{c}"))?;
+    }
     std::thread::sleep(std::time::Duration::from_millis(500));
     Ok(json!({"sent": done, "status": status(s)?}))
 }
@@ -240,5 +326,93 @@ mod tests {
     fn flat_line_has_no_edges_or_frequency() {
         let a = analyse(&[-3.0f32; 1000], 1.0e9);
         assert_eq!((a.edges, a.freq), (0, None));
+    }
+}
+
+#[cfg(test)]
+mod spectrum_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+
+    /// A scope on a local socket that answers the queries `spectrum` makes and serves a 10 MHz, 20 mV peak sine (8-bit samples at
+    /// 5 mV per division, 500 MS/s) with a 30 MHz line 26 dB down.
+    fn fake_scope() -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (sock, _) = listener.accept().unwrap();
+            let mut out = sock.try_clone().unwrap();
+            for line in BufReader::new(sock).lines() {
+                let l = line.unwrap();
+                let reply: Vec<u8> = match l.as_str() {
+                    "TRIG_MODE?" => b"TRIG_MODE AUTO\n".to_vec(),
+                    "C1:VDIV?" => b"C1:VDIV 5.00E-03V\n".to_vec(),
+                    "C1:OFST?" => b"C1:OFST 0.00E+00V\n".to_vec(),
+                    "SARA?" => b"SARA 5.00E+08Sa/s\n".to_vec(),
+                    "C1:WF? DAT2" => {
+                        let n = 200_000usize;
+                        let data: Vec<u8> = (0..n)
+                            .map(|i| {
+                                let t = i as f64 / 500e6;
+                                let v = 100.0 * (2.0 * std::f64::consts::PI * 10e6 * t).sin()
+                                    + 5.0 * (2.0 * std::f64::consts::PI * 30e6 * t).sin();
+                                (v.round() as i8) as u8
+                            })
+                            .collect();
+                        let mut r = format!("C1:WF DAT2,#9{n:09}").into_bytes();
+                        r.extend(data);
+                        r.extend(b"\n\n");
+                        r
+                    }
+                    _ => continue,
+                };
+                out.write_all(&reply).unwrap();
+            }
+        });
+        port
+    }
+
+    // Tests [@ANCHOR: bench_mcp_spectrum]
+    #[test]
+    fn the_spectrum_tool_finds_the_tone_and_its_harmonic_through_a_scope_link() {
+        let port = fake_scope();
+        let mut link = Link::tcp("127.0.0.1", port).unwrap();
+        let dir = std::env::temp_dir().join(format!("bench_spec_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let r = spectrum(
+            &mut link,
+            &json!({"channel": 1, "window": "hanning", "points": 131072, "peaks": 4}),
+            &dir,
+        )
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        let p = r["peaks"].as_array().unwrap();
+        let f0 = p[0]["freq_hz"].as_f64().unwrap();
+        assert!((f0 - 10e6).abs() < 1e4, "{f0}");
+        assert!(
+            (p[0]["dbv"].as_f64().unwrap() - 20.0 * (0.020f64 / 2f64.sqrt()).log10()).abs() < 1.0,
+            "{}",
+            p[0]["dbv"]
+        );
+        let h = p
+            .iter()
+            .find(|x| (x["freq_hz"].as_f64().unwrap() - 30e6).abs() < 2e4)
+            .expect("30 MHz line");
+        assert!((h["dbv"].as_f64().unwrap() - p[0]["dbv"].as_f64().unwrap() + 26.0).abs() < 2.0);
+        // Refusals before any waveform is read.
+        let mut l2 = Link::tcp("127.0.0.1", fake_scope()).unwrap();
+        assert!(spectrum(
+            &mut l2,
+            &json!({"channel": 1, "points": 1000}),
+            Path::new("/tmp")
+        )
+        .is_err());
+        assert!(spectrum(
+            &mut l2,
+            &json!({"channel": 1, "window": "flattop"}),
+            Path::new("/tmp")
+        )
+        .is_err());
+        assert!(spectrum(&mut l2, &json!({"channel": 3}), Path::new("/tmp")).is_err());
     }
 }

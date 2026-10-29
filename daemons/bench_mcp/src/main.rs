@@ -12,6 +12,7 @@ mod link;
 mod psu;
 mod scope;
 mod sdr;
+mod spectrum;
 mod vna;
 
 use config::{Instrument, Kind, Tier};
@@ -49,14 +50,17 @@ const TOOLS: &[ToolSpec] = &[
         props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
     ToolSpec { name: "bench_measure", tier: Tier::ReadOnly, kinds: ANY,
         desc: "Scope: the scope's own parameter measurements on a channel (values **** mean it could not measure them). Supply: measured voltage, current and power.",
-        props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"items":{"type":"array","items":{"type":"string","enum":["PKPK","MAX","MIN","MEAN","RMS","FREQ","PER","DUTY","RISE","FALL"]},"description":"scope only; default PKPK,MEAN,FREQ,DUTY"}}"#, required: &[] },
+        props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"items":{"type":"array","items":{"type":"string","enum":["PKPK","MAX","MIN","AMPL","TOP","BASE","CMEAN","MEAN","RMS","CRMS","OVSN","FPRE","OVSP","RPRE","PER","FREQ","PWID","NWID","RISE","FALL","WID","DUTY","NDUTY"]},"description":"scope only; default PKPK,MEAN,FREQ,DUTY"}}"#, required: &[] },
     ToolSpec { name: "bench_capture", tier: Tier::ReadOnly, kinds: &[Kind::Scope],
         desc: "Read the scope channel's waveform memory, scale to volts, save it as little-endian f32 and return a summary (min, max, mean, peak-to-peak, rising edges, estimated frequency, sample interval, file). Refuses a stopped scope unless allow_stopped is true, because a stopped scope returns a frozen old frame.",
         props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"allow_stopped":{"type":"boolean"}}"#, required: &["channel"] },
+    ToolSpec { name: "bench_scope_spectrum", tier: Tier::ReadConfig, kinds: &[Kind::Scope],
+        desc: "Scope: the spectrum of a channel, computed on the host from the waveform memory (so it does not depend on the scope's own FFT or its trigger): window (rect, hanning, hamming, blackman), points (power of two, default 131072; resolution = sample rate / points), optional timebase_s (sets the scope's time per division first), and the strongest peaks with frequency and level (dBV rms at the scope input and dBm into 50 ohms). Use it to check a generator's fundamental and harmonics; lines more than about 45 dB below the strongest are not reliable (8-bit samples).",
+        props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"window":{"type":"string","enum":["rect","hanning","hamming","blackman"]},"points":{"type":"integer"},"memory_depth":{"type":"string","description":"scope memory depth, e.g. 14K, 140K, 1.4M, 14M"},"timebase_s":{"type":"number"},"peaks":{"type":"integer"},"range_db":{"type":"number"},"allow_stopped":{"type":"boolean"}}"#, required: &["channel"] },
     ToolSpec { name: "bench_screenshot", tier: Tier::ReadOnly, kinds: &[Kind::Scope], desc: "Save the scope screen as an image file and return its path.", props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
     ToolSpec { name: "bench_set", tier: Tier::ReadConfig, kinds: ANY,
         desc: "Scope: timebase_s (seconds per division), vdiv_v, offset_v, coupling (A1M/D1M/GND), attenuation (probe ratio), trigger_mode (AUTO/NORM/SINGLE/STOP); channel selects which channel. Supply: voltage_v and current_a setpoints, each capped by the max_volts and max_amps in the server's config; does not change the output state.",
-        props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"timebase_s":{"type":"number"},"vdiv_v":{"type":"number"},"offset_v":{"type":"number"},"coupling":{"type":"string","enum":["A1M","D1M","GND"]},"attenuation":{"type":"number"},"trigger_mode":{"type":"string","enum":["AUTO","NORM","SINGLE","STOP"]},"voltage_v":{"type":"number"},"current_a":{"type":"number"}}"#, required: &[] },
+        props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"timebase_s":{"type":"number"},"vdiv_v":{"type":"number"},"offset_v":{"type":"number"},"coupling":{"type":"string","enum":["A1M","D1M","GND"]},"attenuation":{"type":"number"},"trigger_type":{"type":"string","enum":["EDGE","SLEW","GLIT","INTV","RUNT","TV"],"description":"trigger type on `channel`; the type's other parameters keep the scope's own values"},"trigger_mode":{"type":"string","enum":["AUTO","NORM","SINGLE","STOP"]},"voltage_v":{"type":"number"},"current_a":{"type":"number"}}"#, required: &[] },
     ToolSpec { name: "bench_psu_output", tier: Tier::ReadConfig, kinds: &[Kind::Psu],
         desc: "Switch the supply output. Off is allowed at read_config. On needs the instrument's tier to be full, and is refused unless the setpoints stored in the supply are within the configured caps.",
         props: r#"{"instrument":{"type":"string"},"on":{"type":"boolean"}}"#, required: &["on"] },
@@ -199,6 +203,7 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
         ("bench_measure", Kind::Scope) => scope::measure(&mut l, args),
         ("bench_measure", Kind::Psu) => psu::measure(&mut l),
         ("bench_capture", _) => scope::capture(&mut l, args, &out_dir()),
+        ("bench_scope_spectrum", Kind::Scope) => scope::spectrum(&mut l, args, &out_dir()),
         ("bench_screenshot", _) => scope::screenshot(&mut l, &out_dir()),
         ("bench_set", Kind::Scope) => scope::set(&mut l, args),
         ("bench_set", Kind::Psu) => psu::set(&mut l, args, &lim),

@@ -203,7 +203,8 @@ impl Link {
     pub fn number(&mut self, cmd: &str) -> Result<f64, String> {
         let r = self.query(cmd)?;
         let v = Link::value(&r);
-        let v = v.trim_end_matches(|c: char| c.is_ascii_alphabetic() && c != 'e' && c != 'E');
+        // Units follow the number (V, Hz, Sa/s, MHz): drop everything after the last digit or decimal point.
+        let v = v.trim_end_matches(|c: char| !(c.is_ascii_digit() || c == '.'));
         v.parse::<f64>()
             .map_err(|_| format!("{cmd}: not a number: {r:?}"))
     }
