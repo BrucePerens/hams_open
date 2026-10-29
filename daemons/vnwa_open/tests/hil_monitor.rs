@@ -3,6 +3,8 @@
 use vnwa_open::usb::Vnwa;
 
 // Tests [@ANCHOR: vnwa_open_temperature]
+// Tests [@ANCHOR: vnwa_open_temperature_counts]
+// Tests [@ANCHOR: vnwa_open_rusb_transport_open]
 #[test]
 #[ignore = "hil: needs the VNWA"]
 fn the_unit_reports_its_firmware_and_a_steady_temperature_reading() {

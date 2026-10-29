@@ -224,6 +224,7 @@ impl Session {
     }
 
     fn open(cfg: &Config) -> Result<Session, String> {
+        // [@ANCHOR: vnwa_open_session_open]
         let found = match (&cfg.codec_s11, &cfg.codec_s21) {
             (Some(a), Some(b)) => crate::topology::Codecs {
                 s11: a.clone(),
@@ -357,6 +358,7 @@ impl Recoverable for Vna {
         &mut self.recovery
     }
     fn cold_reset(&mut self) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_vna_cold_reset]
         let hub = self.cfg.hub.clone().ok_or("no hub configured")?;
         self.recovery.transfer_resends += self.session.usb.resends();
         self.recovery.overruns_reported += self.session.overruns();

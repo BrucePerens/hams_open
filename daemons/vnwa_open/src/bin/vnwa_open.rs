@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use vnwa_open::install::{Installer, Mode, Options, ProcessExec};
 
 fn main() {
+    // [@ANCHOR: vnwa_open_cli_main]
     let a: Vec<String> = std::env::args().collect();
     match a.get(1).map(String::as_str) {
         Some("is-vnwa-codec") => {

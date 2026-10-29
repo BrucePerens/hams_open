@@ -30,6 +30,7 @@ pub enum Exposure {
 }
 
 fn port_of(bus_path: &str) -> Option<String> {
+    // [@ANCHOR: vnwa_open_sound_server_port_of]
     let rest = bus_path.split("-usb-").nth(1)?;
     let after_bus = rest.split_once(':')?.1;
     Some(after_bus.split(':').next()?.to_string())
@@ -96,6 +97,7 @@ pub fn parse_pactl_cards(text: &str) -> Vec<Card> {
 
 /// Which of the listed cards are VNWA codecs: those on the USB port of a codec that has the control chip beside it.
 pub fn judge(cards: Vec<Card>, vnwa_usb_paths: &[String]) -> Exposure {
+    // [@ANCHOR: vnwa_open_sound_server_judge]
     let ports: Vec<&str> = vnwa_usb_paths
         .iter()
         .filter_map(|p| p.split_once('-').map(|x| x.1))
@@ -116,6 +118,7 @@ pub fn judge(cards: Vec<Card>, vnwa_usb_paths: &[String]) -> Exposure {
 
 /// Runs the sound server's listing and judges it. `run` executes a program and returns its output, or `None` if it is not installed or failed.
 pub fn check(sys: &Path, run: &dyn Fn(&str, &[&str]) -> Option<String>) -> Exposure {
+    // [@ANCHOR: vnwa_open_sound_server_check]
     let paths = vnwa_codec_paths(sys);
     if let Some(out) = run("pw-dump", &[]) {
         return match parse_pw_dump(&out) {
@@ -145,6 +148,7 @@ pub fn run_program(program: &str, args: &[&str]) -> Option<String> {
 
 /// The plain statement for a report: `Some(true)` protected, `Some(false)` exposed, `None` unknown.
 pub fn protected(e: &Exposure) -> Option<bool> {
+    // [@ANCHOR: vnwa_open_sound_server_protected]
     match e {
         Exposure::Protected => Some(true),
         Exposure::Exposed(_) => Some(false),
@@ -154,6 +158,7 @@ pub fn protected(e: &Exposure) -> Option<bool> {
 
 /// What to tell the user when the codecs are exposed.
 pub fn warning(e: &Exposure) -> Option<String> {
+    // [@ANCHOR: vnwa_open_sound_server_warning]
     match e {
         Exposure::Exposed(cards) => Some(format!(
             "the sound server lists the VNWA's codec(s) ({}): system sounds can be played into the analyzer and a sweep can find the card busy. Fix: run `vnwa_open install-system-config --apply` (a rule that takes effect at the next login or after replugging the unit), or now, without touching other clients: `wpctl set-profile <id> 0` for each card id ({}) to switch the card off in PipeWire.",
@@ -207,6 +212,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_sound_server_pipewire]
+    // Tests [@ANCHOR: vnwa_open_sound_server_port_of]
+    // Tests [@ANCHOR: vnwa_open_sound_server_judge]
     #[test]
     fn a_pw_dump_with_the_unit_codec_is_exposed_but_a_dongle_elsewhere_is_not_the_units() {
         let cards = parse_pw_dump(PW_DUMP).unwrap();
@@ -235,6 +242,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_sound_server_pulse]
+    // Tests [@ANCHOR: vnwa_open_sound_server_check]
+    // Tests [@ANCHOR: vnwa_open_sound_server_protected]
+    // Tests [@ANCHOR: vnwa_open_sound_server_warning]
     #[test]
     fn pactl_cards_are_parsed_per_block_and_the_check_reports_what_it_could_not_inspect() {
         let cards = parse_pactl_cards(PACTL);

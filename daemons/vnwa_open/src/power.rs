@@ -21,6 +21,7 @@ pub struct ProcessRunner;
 
 impl Runner for ProcessRunner {
     fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+        // [@ANCHOR: vnwa_open_power_process_runner]
         let out = std::process::Command::new(program)
             .args(args)
             .output()
@@ -37,6 +38,7 @@ pub const OFF_TIME: Duration = Duration::from_secs(3);
 pub const BACK_TIMEOUT: Duration = Duration::from_secs(45);
 
 fn uhubctl(run: &dyn Runner, port: &HubPort, action: &str) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_power_uhubctl]
     let args: Vec<String> = [
         "-n",
         "uhubctl",
@@ -64,6 +66,7 @@ fn uhubctl(run: &dyn Runner, port: &HubPort, action: &str) -> Result<(), String>
 
 /// Polls `ready` every `every` until it is true or `timeout` passes.
 pub fn wait_until(timeout: Duration, every: Duration, mut ready: impl FnMut() -> bool) -> bool {
+    // [@ANCHOR: vnwa_open_power_wait_until]
     let end = Instant::now() + timeout;
     loop {
         if ready() {
@@ -140,6 +143,7 @@ pub fn power_cycle_escalating(
 /// The production cold reset: `sudo -n uhubctl` through the hub, then wait for the unit and its codecs; if the unit does not come back,
 /// once more with a longer power-off.
 pub fn cold_reset(port: &HubPort) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_power_cold_reset]
     power_cycle_escalating(
         &ProcessRunner,
         port,
@@ -188,6 +192,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_power_cycle]
+    // Tests [@ANCHOR: vnwa_open_power_uhubctl]
+    // Tests [@ANCHOR: vnwa_open_power_wait_until]
     #[test]
     fn the_cycle_is_off_then_on_through_sudo_uhubctl_and_waits_for_the_unit() {
         let f = Fake {
@@ -240,6 +246,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: vnwa_open_power_uhubctl]
     #[test]
     fn a_unit_that_does_not_return_and_a_failing_hub_are_clear_errors() {
         let f = Fake {
@@ -276,5 +283,44 @@ mod tests {
             1,
             "no power-on after a failed power-off"
         );
+    }
+
+    // Tests [@ANCHOR: vnwa_open_power_process_runner]
+    #[test]
+    fn the_process_runner_gives_the_exit_status_and_both_output_streams_of_a_real_program() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let (ok, text) = ProcessRunner
+            .run("sh", &args(&["-c", "echo out; echo err >&2"]))
+            .unwrap();
+        assert!(ok);
+        assert!(text.contains("out") && text.contains("err"), "{text}");
+        let (ok, _) = ProcessRunner.run("sh", &args(&["-c", "exit 1"])).unwrap();
+        assert!(!ok);
+        let e = ProcessRunner
+            .run("/nonexistent/vnwa_open_test_program", &[])
+            .unwrap_err();
+        assert!(e.contains("vnwa_open_test_program"), "{e}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_power_wait_until]
+    #[test]
+    fn waiting_ends_at_the_first_true_answer_and_gives_up_after_the_timeout() {
+        let mut polls = 0;
+        assert!(wait_until(
+            Duration::from_secs(5),
+            Duration::from_millis(1),
+            || {
+                polls += 1;
+                polls == 4
+            }
+        ));
+        assert_eq!(polls, 4);
+        let started = Instant::now();
+        assert!(!wait_until(
+            Duration::from_millis(30),
+            Duration::from_millis(5),
+            || false
+        ));
+        assert!(started.elapsed() >= Duration::from_millis(30));
     }
 }

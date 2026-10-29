@@ -86,6 +86,7 @@ fn gamma_of(z: Complex) -> Complex {
 
 /// Moves a reflection coefficient back through an offset line (there and back).
 fn through_offset(g: Complex, o: &Offset, f: f64) -> Complex {
+    // [@ANCHOR: vnwa_open_cal_through_offset]
     // loss factor per way: exp(-(loss * delay / (2 Z0)) sqrt(f / 1 GHz)), phase -2 pi f delay per way
     let a = o.loss_gohm_s * 1e9 * o.delay_s / (2.0 * Z0) * (f / 1e9).sqrt();
     let p = -2.0 * std::f64::consts::PI * f * o.delay_s;
@@ -142,6 +143,7 @@ impl KitDefinition {
     }
 
     pub fn to_text(&self) -> String {
+        // [@ANCHOR: vnwa_open_kit_to_text]
         let l = |k: &str, v: &[f64]| {
             format!(
                 "{k} = {}\n",
@@ -287,6 +289,7 @@ pub struct Calibration {
 
 /// Solves the 3x3 complex system by Cramer's rule; `None` when it is singular (two standards the same).
 fn solve3(a: [[Complex; 3]; 3], b: [Complex; 3]) -> Option<[Complex; 3]> {
+    // [@ANCHOR: vnwa_open_cal_solve3]
     let det = |m: [[Complex; 3]; 3]| {
         m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
             - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
@@ -358,6 +361,7 @@ impl Calibration {
         setup: Setup,
         created: String,
     ) -> Result<Calibration, String> {
+        // [@ANCHOR: vnwa_open_cal_build]
         if freqs.len() < 2 || freqs.windows(2).any(|w| w[1] <= w[0]) {
             return Err("a calibration needs at least two rising frequencies".into());
         }
@@ -465,6 +469,7 @@ impl Calibration {
 
     /// Index and weight of the calibrated frequencies around `f` (linear interpolation).
     fn locate(&self, f: f64) -> Result<(usize, f64), String> {
+        // [@ANCHOR: vnwa_open_cal_locate]
         let (lo, hi) = (self.freqs[0], *self.freqs.last().unwrap());
         // A hair of tolerance for the endpoints, so a sweep over exactly the calibrated range is accepted.
         if f < lo * (1.0 - 1e-9) || f > hi * (1.0 + 1e-9) {
@@ -491,6 +496,7 @@ impl Calibration {
 
     /// The corrected S11 of a raw reading at `f`; an error if there is no one-port calibration or `f` is outside its range.
     pub fn s11(&self, f: f64, raw: Complex) -> Result<Complex, String> {
+        // [@ANCHOR: vnwa_open_cal_s11]
         let t = self
             .one_port
             .as_ref()
@@ -507,6 +513,7 @@ impl Calibration {
 
     /// The corrected S21 of a raw reading at `f`.
     pub fn s21(&self, f: f64, raw: Complex) -> Result<Complex, String> {
+        // [@ANCHOR: vnwa_open_cal_s21]
         let t = self
             .thru
             .as_ref()
@@ -517,6 +524,7 @@ impl Calibration {
 
     /// Both parameters of a measured point, each corrected if the calibration has its part (`None` otherwise).
     pub fn correct(&self, p: &crate::sweep::Point) -> Result<CalibratedPoint, String> {
+        // [@ANCHOR: vnwa_open_cal_correct]
         Ok(CalibratedPoint {
             freq_hz: p.freq_hz,
             s11: if self.one_port.is_some() {
@@ -535,6 +543,7 @@ impl Calibration {
     /// The calibration as text: a header line, the frequency count, then one line per frequency with the one-port terms and the
     /// through, each as re im (a part that is absent is written as the word `none` on its own line).
     pub fn to_text(&self) -> String {
+        // [@ANCHOR: vnwa_open_cal_to_text]
         let one_line = |t: &str| t.replace(['\n', '\r'], " ");
         let mut s = String::from("vnwa_open calibration 2\n");
         s += &format!("created = {}\n", one_line(&self.created));
@@ -711,6 +720,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_cal_one_port]
+    // Tests [@ANCHOR: vnwa_open_cal_solve3]
+    // Tests [@ANCHOR: vnwa_open_cal_build]
+    // Tests [@ANCHOR: vnwa_open_cal_s11]
+    // Tests [@ANCHOR: vnwa_open_cal_locate]
     #[test]
     fn the_one_port_terms_are_recovered_and_a_known_load_is_corrected() {
         let f = freqs();
@@ -741,6 +754,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: vnwa_open_cal_solve3]
+    // Tests [@ANCHOR: vnwa_open_cal_build]
     #[test]
     fn identical_standards_and_a_wrong_pairing_are_refused() {
         let f = freqs();
@@ -753,6 +768,8 @@ mod tests {
         assert!(Calibration::new(f, None, None, None, Some(&s[..3])).is_err());
     }
 
+    // Tests [@ANCHOR: vnwa_open_cal_locate]
+    // Tests [@ANCHOR: vnwa_open_cal_s21]
     #[test]
     fn the_through_divides_out_the_path_and_the_range_is_enforced() {
         let f = freqs();
@@ -779,6 +796,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_cal_file]
+    // Tests [@ANCHOR: vnwa_open_cal_to_text]
     #[test]
     fn a_calibration_survives_the_file_and_a_damaged_file_is_refused() {
         let f = freqs();
@@ -822,6 +840,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_cal_kit]
+    // Tests [@ANCHOR: vnwa_open_cal_through_offset]
     #[test]
     fn a_real_kit_is_modelled_and_the_calibration_removes_its_imperfections() {
         let kit = KitDefinition {
@@ -901,6 +920,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_kit_file]
+    // Tests [@ANCHOR: vnwa_open_kit_to_text]
     #[test]
     fn a_kit_file_round_trips_and_bad_ones_are_refused() {
         let kit = KitDefinition {
@@ -985,5 +1005,55 @@ mod tests {
             let e = back.check_setup(&changed).unwrap_err();
             assert!(e.contains("not valid") && e.contains("2026-10-28"), "{e}");
         }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_cal_correct]
+    #[test]
+    fn a_point_is_corrected_in_each_parameter_the_calibration_covers() {
+        let f = freqs();
+        let sweep = |g: Complex| f.iter().map(|x| raw(*x, g)).collect::<Vec<_>>();
+        let path = |x: f64| c(0.4 + 0.1 * (x / 2e7).sin(), -0.3 * x / 1.5e8);
+        let thru: Vec<Complex> = f.iter().map(|x| path(*x)).collect();
+        let both = Calibration::new(
+            f.clone(),
+            Some(&sweep(IDEAL_OPEN)),
+            Some(&sweep(IDEAL_SHORT)),
+            Some(&sweep(IDEAL_LOAD)),
+            Some(&thru),
+        )
+        .unwrap();
+        let (g, dut) = (c(0.3, -0.4), c(0.5, -0.5));
+        let x = f[4];
+        let point = crate::sweep::Point {
+            freq_hz: x,
+            s11: raw(x, g),
+            s21: path(x) * dut,
+            if_error_hz: 0.0,
+            level_change: 0.0,
+        };
+        let got = both.correct(&point).unwrap();
+        assert_eq!(got.freq_hz, x);
+        assert!((got.s11.unwrap() - g).abs() < 1e-12);
+        assert!((got.s21.unwrap() - dut).abs() < 1e-12);
+        // A calibration with only the through leaves S11 uncorrected (None), and one with only the one-port terms leaves S21.
+        let only_thru = Calibration::new(f.clone(), None, None, None, Some(&thru)).unwrap();
+        let got = only_thru.correct(&point).unwrap();
+        assert!(got.s11.is_none() && got.s21.is_some());
+        let only_one_port = Calibration::new(
+            f.clone(),
+            Some(&sweep(IDEAL_OPEN)),
+            Some(&sweep(IDEAL_SHORT)),
+            Some(&sweep(IDEAL_LOAD)),
+            None,
+        )
+        .unwrap();
+        let got = only_one_port.correct(&point).unwrap();
+        assert!(got.s11.is_some() && got.s21.is_none());
+        // A frequency outside the calibrated range is an error, not a guess.
+        let outside = crate::sweep::Point {
+            freq_hz: 5e8,
+            ..point
+        };
+        assert!(both.correct(&outside).is_err());
     }
 }

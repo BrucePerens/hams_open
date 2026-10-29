@@ -69,6 +69,7 @@ pub fn assign(cards: &[CodecCard]) -> Result<Codecs, String> {
 
 /// Reads the codec cards from sysfs (`/sys/class/sound/card*`), keeping those whose USB device is the PCM2900C.
 pub fn find_cards(sys: &Path) -> Vec<CodecCard> {
+    // [@ANCHOR: vnwa_open_codec_find_cards]
     let mut found = Vec::new();
     let Ok(dir) = std::fs::read_dir(sys.join("class/sound")) else {
         return found;
@@ -155,6 +156,7 @@ mod tests {
             .contains("same USB port"));
     }
 
+    // Tests [@ANCHOR: vnwa_open_codec_find_cards]
     #[test]
     fn sysfs_is_read_for_the_codec_vendor_only() {
         let root = std::env::temp_dir().join(format!("vnwa_topo_{}", std::process::id()));

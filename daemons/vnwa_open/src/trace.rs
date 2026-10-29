@@ -28,6 +28,7 @@ impl Vna {
         before_ms: f64,
         after_ms: f64,
     ) -> Result<RawPoint, String> {
+        // [@ANCHOR: vnwa_open_trace_point]
         let c = &self.cfg;
         let (usb, cap11, cap21) = (&self.session.usb, &self.session.s11, &self.session.s21);
         let block = setup_block(&SetupParams {

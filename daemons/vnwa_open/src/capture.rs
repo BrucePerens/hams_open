@@ -90,6 +90,7 @@ impl Capture {
     }
 
     pub fn open_with(needle: &str, options: Options) -> Result<Capture, String> {
+        // [@ANCHOR: vnwa_open_capture_open_with]
         let host = cpal::default_host();
         let wanted = needle.to_lowercase();
         let device = host
@@ -296,6 +297,7 @@ impl Capture {
 
 /// The frames that have passed since the last delivery of a period (the clock times the rate), at most one period.
 fn frames_since(last_delivery: Option<Instant>, period: u64) -> u64 {
+    // [@ANCHOR: vnwa_open_capture_frames_since]
     match last_delivery {
         Some(t) => ((t.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as u64).min(period),
         None => 0,
@@ -324,6 +326,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_capture_mark]
+    // Tests [@ANCHOR: vnwa_open_capture_frames_since]
     #[test]
     fn the_mark_adds_the_frames_since_the_last_delivery_up_to_one_period() {
         assert_eq!(frames_since(None, 4096), 0);
