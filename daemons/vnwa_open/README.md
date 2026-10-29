@@ -184,3 +184,4 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 * A storm of overrun reports with no audio between them closes the stream and fails the window at once. [@ANCHOR: vnwa_open_capture_close]
 * AM and FM: the settings-dependent fields of the vendor's start sequence reproduce every captured start, and the output was checked on a scope. [@ANCHOR: vnwa_open_am_fields] [@ANCHOR: vnwa_open_fm_fields] [@ANCHOR: vnwa_open_modulation_sequence]
 * A modulating unit refuses every request; a USB reset of its control chip ends the modulation, and a power cycle ladder is the fallback. [@ANCHOR: vnwa_open_end_modulation] [@ANCHOR: vnwa_open_usb_reset] [@ANCHOR: vnwa_open_modulation_recovery]
+* A program that embeds this crate can install its own power-cycle implementation (bench_mcp installs its USB hub module's), used by the recovery and the generator-off recovery. [@ANCHOR: vnwa_open_cycle_hook]

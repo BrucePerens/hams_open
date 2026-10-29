@@ -178,6 +178,43 @@ pub fn instrument_monitoring(u: &vnwa_open::usb::Vnwa) -> Value {
     }
 }
 
+/// Makes `vnwa_open`'s own power cycles (the recovery inside a measurement, the generator-off recovery after a modulation) run the USB hub module's
+/// implementation, the same code as `bench_vna_power_cycle` and `bench_usb_port_power`. Idempotent.
+pub fn install_power_hook() {
+    // [@ANCHOR: bench_vna_power_hook]
+    let _ = vnwa_open::power::set_cycle_hook(power_hook(
+        std::sync::Arc::new(crate::usb_hub::uhubctl::ProcessRunner),
+        std::path::PathBuf::from("/sys"),
+    ));
+}
+
+/// The hook over a given runner and sysfs root (tests give fakes).
+pub fn power_hook(
+    run: std::sync::Arc<dyn crate::usb_hub::uhubctl::Runner + Send + Sync>,
+    sysfs: std::path::PathBuf,
+) -> vnwa_open::power::CycleHook {
+    Box::new(move |hub, ladder| {
+        let port = crate::usb_hub::power::PortRef {
+            hub: hub.hub.clone(),
+            port: u32::from(hub.port),
+            exact: false,
+        };
+        let schedule: Vec<crate::usb_hub::power::Opts> = ladder
+            .iter()
+            .map(|(off, back)| crate::usb_hub::power::Opts::new(*off, *back))
+            .collect();
+        let mut ready = vnwa_open::power::unit_present;
+        crate::usb_hub::power::cycle_escalating(
+            run.as_ref(),
+            &sysfs,
+            &port,
+            &schedule,
+            Some(&mut ready),
+        )
+        .map(|_| ())
+    })
+}
+
 /// Cold resets done by this server process, for `status`.
 static POWER_CYCLES: AtomicU32 = AtomicU32::new(0);
 
@@ -306,6 +343,49 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
 mod tests {
     use super::*;
     use vnwa_open::audio::Complex;
+
+    // Tests [@ANCHOR: bench_vna_power_hook]
+    #[test]
+    fn the_vna_power_hook_runs_the_hub_modules_ladder_and_lists_every_failed_rung() {
+        struct Failing(std::sync::Mutex<Vec<String>>);
+        impl crate::usb_hub::uhubctl::Runner for Failing {
+            fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(format!("{program} {}", args.join(" ")));
+                Ok((false, "No compatible devices detected".into()))
+            }
+        }
+        let run = std::sync::Arc::new(Failing(std::sync::Mutex::new(Vec::new())));
+        let hook = power_hook(run.clone(), std::path::PathBuf::from("/nonexistent"));
+        let ladder = [
+            (
+                std::time::Duration::from_millis(1),
+                std::time::Duration::from_millis(5),
+            ),
+            (
+                std::time::Duration::from_millis(2),
+                std::time::Duration::from_millis(5),
+            ),
+        ];
+        let e = hook(
+            &vnwa_open::power::HubPort {
+                hub: "3-2".into(),
+                port: 2,
+            },
+            &ladder,
+        )
+        .unwrap_err();
+        assert!(e.contains("cycle 1") && e.contains("cycle 2"), "{e}");
+        let calls = run.0.lock().unwrap();
+        assert!(
+            calls
+                .iter()
+                .all(|c| c.contains("uhubctl") && c.contains("3-2")),
+            "{calls:?}"
+        );
+    }
 
     // Tests [@ANCHOR: bench_mcp_vna_sweep_args]
     #[test]

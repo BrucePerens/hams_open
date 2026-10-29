@@ -124,7 +124,23 @@ fn formats_of(v: &Value, out: &mut Vec<String>) {
 
 /// The reserved reason for a device: a `vid:pid` or a node-name fragment of the config's reserved list.
 fn reserved_reason(cfg: &Config, d: &Device) -> Option<String> {
+    reserved_reason_in(cfg, d, Path::new("/sys"))
+}
+
+/// As `reserved_reason` with the sysfs root given. The id `08bb:29c0` is the generic PCM2900C of many USB sound dongles, so a card with that id is
+/// the VNWA's only if the VNWA control chip (20a0:4118) sits beside it under the same hub (`vnwa_open::reserved::is_vnwa_codec`). A card that is
+/// in sysfs and has no control chip beside it is an ordinary sound card; a card that cannot be found in sysfs stays reserved (fail closed).
+fn reserved_reason_in(cfg: &Config, d: &Device, sys: &Path) -> Option<String> {
+    // [@ANCHOR: audio_reserved_by_topology]
     for r in &cfg.reserved {
+        if r.as_str() == super::VNWA_CODEC {
+            if let Some(p) = d.usb_path.as_deref() {
+                let known = sys.join("bus/usb/devices").join(p).exists();
+                if known && !vnwa_open::reserved::is_vnwa_codec(sys, p) {
+                    continue;
+                }
+            }
+        }
         let hit = if r.contains(':') && r.len() == 9 {
             d.usb_id.as_deref() == Some(r.as_str())
         } else {
@@ -442,6 +458,59 @@ mod tests {
             by_desc.contains("reserved") || by_desc.contains("matches"),
             "{by_desc}"
         );
+    }
+
+    // Tests [@ANCHOR: audio_reserved_by_topology]
+    #[test]
+    fn a_dongle_with_the_codec_id_is_reserved_only_beside_the_vnwa_control_chip() {
+        let root =
+            std::env::temp_dir().join(format!("bench_audio_topology_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for (name, v, p) in [
+            ("3-2.2.1", "20a0", "4118"),
+            ("3-2.2.2", "08bb", "29c0"),
+            ("3-5", "08bb", "29c0"),
+        ] {
+            let d = root.join("bus/usb/devices").join(name);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("idVendor"), format!("{v}\n")).unwrap();
+            std::fs::write(d.join("idProduct"), format!("{p}\n")).unwrap();
+        }
+        let dev = |path: &str| Device {
+            id: 1,
+            node_name: "alsa_input.usb-X".into(),
+            description: "USB AUDIO CODEC".into(),
+            dir: Dir::Input,
+            card: Some(1),
+            alsa_device: Some(0),
+            alsa_path: None,
+            bus: "usb".into(),
+            usb_path: Some(path.into()),
+            usb_id: Some("08bb:29c0".into()),
+            port_type: None,
+            availability: None,
+            is_default: false,
+            state: "idle".into(),
+            channels: None,
+            rates: vec![],
+            formats: vec![],
+            reserved: None,
+            alias: None,
+        };
+        let cfg = Config::default();
+        assert!(
+            reserved_reason_in(&cfg, &dev("3-2.2.2"), &root).is_some(),
+            "the unit's codec"
+        );
+        assert!(
+            reserved_reason_in(&cfg, &dev("3-5"), &root).is_none(),
+            "a dongle with no control chip beside it is an ordinary sound card"
+        );
+        assert!(
+            reserved_reason_in(&cfg, &dev("3-9.9"), &root).is_some(),
+            "a card sysfs does not know stays reserved"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
