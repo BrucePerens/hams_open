@@ -1,0 +1,23 @@
+Source: hp-notebook-81ff
+Section: kernel
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/hp_notebook_81ff
+
+Package: hp-notebook-81ff-support
+Architecture: all
+Depends: convertible-power (>= 1.0.0), udev, ${misc:Depends}
+Recommends: thermald, smartmontools
+Description: HP Notebook (board 81FF, Core i7-7500U) hardware support for Debian
+ Settings for the HP Notebook with system board 81FF (product number
+ 1BQ18UA#ABA, Core i7-7500U, Realtek RTL8188EE wireless) on a stock Debian
+ GNOME desktop: it pulls in convertible-power (maximum performance on AC,
+ maximum battery life on battery) and adds this laptop's settings.  The main
+ one stops the Realtek wireless adapter from flooding the kernel log with
+ PCI Express errors, which loaded journald and the disk, by turning off PCI
+ Express ASPM on the kernel command line (takes effect at the next boot).
+ .
+ The settings are applied only when the DMI board name is "81FF".

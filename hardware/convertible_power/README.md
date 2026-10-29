@@ -1,7 +1,7 @@
 # convertible_power
 
 The package `convertible-power` holds the power settings shared by the device packages in this family
-(`panasonic-cf19-support`, `panasonic-fz-g1-support`, `hp-spectre-x360-16-support`): **maximum performance on AC
+(`panasonic-cf19-support`, `panasonic-fz-g1-support`, `hp-spectre-x360-16-support`, `hp-notebook-81ff-support`): **maximum performance on AC
 power, maximum battery life on battery**, applied automatically when the charger is plugged or unplugged.
 
 It uses **TLP**, which is `powertop --auto-tune` done properly: the same runtime power management, SATA link power,

@@ -1,0 +1,15 @@
+hp-notebook-81ff (1.0.0) unstable; urgency=medium
+
+  * Initial release for the HP Notebook with board 81FF (Core i7-7500U, Realtek
+    RTL8188EE wireless, RTL810xE Ethernet, 5400 rpm SATA disk).
+  * Turn PCI Express ASPM off on the kernel command line: the wireless adapter
+    behind root port 00:1c.5 otherwise produced hundreds of correctable AER
+    errors a minute, which loaded journald (about 23% of a CPU) and the disk.
+    The rtl8188ee module options alone did not stop it (measured).
+  * Screen off after 5 minutes without input; lid switch ignored on AC power and
+    no inactivity suspend on AC (suspends on battery: lid close, or 20 minutes
+    idle).  Written as a logind drop-in and GNOME dconf defaults.
+  * TLP settings on top of convertible-power: wireless power saving off, disk
+    sda, governors.
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 29 Oct 2026 15:00:00 -0700
