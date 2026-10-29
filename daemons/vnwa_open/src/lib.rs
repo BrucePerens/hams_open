@@ -5,6 +5,7 @@
 //! the wire; it makes no USB transfers yet.
 
 pub mod audio;
+pub mod cal;
 pub mod capture;
 pub mod generator;
 pub mod power;

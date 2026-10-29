@@ -332,6 +332,22 @@ of one point for this kind of check. A 12-point subset of both sweeps is in `src
 The vendor bridge's debug window lists every control transfer it forwards (`ctrlmsg ...`), which is a second way, besides usbmon, to
 capture what the vendor program sends.
 
+## Calibration (2026-10-28, stage 04)
+
+`cal.rs` implements the two calibrations the vendor's Help file describes, from first principles (no vendor code): the one-port
+open/short/load calibration of S11 (three error terms per frequency, solved exactly from three standards; checked on synthetic
+error terms to 1e-12) and the through calibration of S21 (division by the S21 measured with the ports joined). Terms are
+interpolated linearly in frequency, a frequency outside the calibrated range is refused, and the calibration is saved as text.
+
+Checked on the unit with the current cabling (TX through the pad and tee to RX, standing as the through; `examples/cal_check.rs`,
+40 points from 100 kHz to 150 MHz): a through calibration saved, loaded and applied to a second sweep gives S21 = 1 to 0.013 % and
+0.014 degrees at the same RF level. **Observation:** at half the RF level (`rf_level` 0x2000 instead of 0x3fff) the same cabling reads
+11 % (100 kHz) to 16.5 % (150 MHz) low with the full-level calibration, phase unchanged to 0.3 degrees: the ratio depends on the
+drive level (compression somewhere in the unit, or a reference channel that does not follow the level), so a calibration is valid
+only at the RF level it was made at, and sweeps must use the level of their calibration. The cause is not found. The open, short
+and load standards and the demo kit's loads have not been measured (the kit is not cabled; question filed in
+night_shift_questions).
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).

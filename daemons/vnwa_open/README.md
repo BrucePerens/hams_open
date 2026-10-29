@@ -4,7 +4,7 @@ An open Rust driver for the DG8SAQ **VNWA 3E** vector network analyzer (USB 20a0
 audio codecs), written from observed USB and audio traffic of the owner's own unit. Status (2026-10-26): it measures.
 `usb` sends the confirmed requests (control transfers only, no reset, no interface claim), `capture` records the two
 codecs (48 kHz, 16 bit, stereo: all they offer) and `sweep` turns a frequency list into uncalibrated S11 and S21 on the
-loopback. No calibration yet. `bench_mcp` uses it (`bench_vna_sweep`). Examples: `probe`, `sweep`.
+loopback. Calibration (`cal`): one-port open/short/load and through, tested on synthetic error terms; the open/short/load standards are not yet measured on the unit. `bench_mcp` uses it (`bench_vna_sweep`). Examples: `probe`, `sweep`.
 
 Licence: AGPL-3.0-or-later. Not published to crates.io (`publish = false`). No vendor code and no vendor firmware
 is used, loaded or flashed.
@@ -108,4 +108,6 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The power cycle is off, wait, on through `sudo -n uhubctl`, then waits for the unit; failures are clear errors. [@ANCHOR: vnwa_open_power_cycle]
 * A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
 * This driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, a constant 0.8 % offset). [@ANCHOR: vnwa_open_vendor_agreement]
+* The one-port error terms are recovered from open, short and load, and a known load is corrected. [@ANCHOR: vnwa_open_cal_one_port]
+* A calibration survives its text file and a damaged file is refused. [@ANCHOR: vnwa_open_cal_file]
 * A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
