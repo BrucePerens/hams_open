@@ -4,6 +4,11 @@
 .uw-owner-toolbar { position: relative; z-index: 1030; }
 .uw-owner-toolbar .btn-outline-light { border-color: #ced4da; }
 .user-websites-navbar .navbar-brand .uw-callsign { letter-spacing: .04em; }
+/* The member site's header is an olive bar with white text (theme_hams paints it the same). It was marked bg-light, which the dark-mode
+   token mapping repaints pale, leaving the white links on a pale bar (1.09:1, found by the signed-in contrast scan, 2026-10-29); the bar now
+   carries its own fill here too, so it reads the same without the theme. */
+.user-websites-navbar { background-color: #4a5d23; }
+.user-websites-navbar .navbar-brand, .user-websites-navbar .nav-link { color: #fff; }
 .uw-member-footer a { color: var(--hams-accent, #0b3d91); }
 .uw-editor-area { min-height: 18rem; max-height: 70vh; overflow-y: auto; }
 .uw-editor-area:focus { outline: 3px solid #0b3d91; outline-offset: 1px; }

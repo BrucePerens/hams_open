@@ -9,7 +9,7 @@
             <t t-if="is_owner and not request.params.get('visitor')">
                 <t t-call="user_websites.owner_toolbar"/>
             </t>
-            <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom user-websites-navbar" aria-label="Site menu">
+            <nav class="navbar navbar-expand-lg navbar-dark border-bottom user-websites-navbar" aria-label="Site menu">
                 <div class="container">
                     <a class="navbar-brand fw-bold" t-attf-href="/#{resolved_slug}">
                         <t t-if="profile_user">
