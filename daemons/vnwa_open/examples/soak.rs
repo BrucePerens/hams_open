@@ -3,8 +3,8 @@
 //! investigation record for every anomaly (docs/proposals/VNWA_SOAK_WITH_ANOMALY_INVESTIGATION.md in hams_com).
 //!
 //! Each round it (1) sweeps S11 and S21 over 100 kHz to 150 MHz in 60 points and judges the sweep against TWO baselines, the first of the run and
-//! the one measured right after the last power cycle, each with a tolerance that grows with the change of the unit's own temperature since that
-//! baseline (request 0x85); a sweep outside tolerance is run again at once and both are recorded, (2) measures the frequency meter on the TX-to-RX
+//! the one measured right after the last power cycle, each within 1 % and 1 degree (the goal's agreement target; the unit's own temperature, request 0x85,
+//! is logged with every sweep); a sweep outside tolerance is run again at once and both are recorded, (2) measures the frequency meter on the TX-to-RX
 //! loopback at 10 MHz (offset under 0.01 Hz), (3) switches the generator on at 10 MHz, -6 dB and -12 dB and off and reads the level on the
 //! scope (CH1, 1 MOhm, through the pad and tee) within 8 %, (4) every so many minutes cold-resets the unit through the hub and takes a new
 //! baseline. A step that returns a clear error is an ERROR event; a step over its deadline is a HANG (stack waits and journal saved, exit 3).
@@ -30,13 +30,11 @@ use vnwa_open::power::{cold_reset, HubPort};
 use vnwa_open::sweep::{agreement, Config, Point, Vna};
 use vnwa_open::usb::Vnwa;
 
-/// The sweep tolerance against a baseline at the same unit temperature: the worst point may differ by this much (the first soak's
-/// sweeps stayed within 0.07 % and 0.05 deg for the first hour; the meter and generator tolerances are in the steps).
-const BASE_TOL_MAG: f64 = 0.3;
-const BASE_TOL_PH: f64 = 0.3;
-/// What each 100 counts of change of the unit's temperature sensor since the baseline add to the tolerance (percent, degrees).
-const K_MAG_PER_100: f64 = 0.1;
-const K_PH_PER_100: f64 = 0.1;
+/// The sweep tolerance against a baseline: the worst point of a sweep may differ by this much. It is the goal's agreement target with the vendor
+/// program (1 % and 1 degree): a slow change inside it, such as the 0.2 to 0.9 % the first soak showed over hours, is not a failure; outside it is a
+/// WRONG number and an event. The unit's temperature, the worst IF error and level change are logged with every sweep for whoever looks at the drift.
+const TOL_MAG: f64 = 1.0;
+const TOL_PH: f64 = 1.0;
 /// A round with more re-measures than this is an event (the first soak averaged about 3.7 per round).
 const RETRIES_HIGH: u32 = 12;
 
@@ -349,13 +347,9 @@ fn worst(base: &[Point], now: &[Point]) -> (f64, f64) {
     (m, p)
 }
 
-/// The tolerance of a sweep against a baseline taken at `t_base` (sensor counts) when the unit is at `t`.
-fn tolerance(t_base: u16, t: u16) -> (f64, f64) {
-    let d = (t as f64 - t_base as f64).abs() / 100.0;
-    (
-        BASE_TOL_MAG + K_MAG_PER_100 * d,
-        BASE_TOL_PH + K_PH_PER_100 * d,
-    )
+/// The tolerance of a sweep against a baseline (percent, degrees).
+fn tolerance() -> (f64, f64) {
+    (TOL_MAG, TOL_PH)
 }
 
 /// The class of a recovered failure, from the error texts of its attempts.
@@ -631,13 +625,16 @@ fn main() -> Result<(), String> {
             let tb = temp(&vna).unwrap_or(ta);
             let (m2, ph2) = worst(&base2, p);
             let (m1, ph1) = worst(&base1, p);
-            let (tol2m, tol2p) = tolerance(t2, tb);
-            let (tol1m, tol1p) = tolerance(t1, tb);
+            let (tol2m, tol2p) = tolerance();
+            let (tol1m, tol1p) = tolerance();
             let r = vna.recovery();
+            let worst_if = p.iter().map(|x| x.if_error_hz).fold(0.0, f64::max);
+            let worst_step = p.iter().map(|x| x.level_change).fold(0.0, f64::max);
             log(
                 "SWEEP",
                 &format!(
-                    "round {round}: temperature {ta}->{tb} counts; vs last-cycle baseline (at {t2}) {m2:.3} % {ph2:.3} deg (tolerance {tol2m:.2} % {tol2p:.2} deg); vs first baseline (at {t1}) {m1:.3} % {ph1:.3} deg (tolerance {tol1m:.2} % {tol1p:.2} deg); recovery remeasured {} resends {} cycles {} overruns reported {} points retried for them {}",
+                    "round {round}: worst IF error {worst_if:.3} Hz, worst level change {:.2} %; temperature {ta}->{tb} counts; vs last-cycle baseline (at {t2}) {m2:.3} % {ph2:.3} deg (tolerance {tol2m:.2} % {tol2p:.2} deg); vs first baseline (at {t1}) {m1:.3} % {ph1:.3} deg (tolerance {tol1m:.2} % {tol1p:.2} deg); recovery remeasured {} resends {} cycles {} overruns reported {} points retried for them {}",
+                    worst_step * 100.0,
                     r.remeasured, r.transfer_resends, r.power_cycles, r.overruns_reported, r.overrun_retries
                 ),
             );
@@ -657,14 +654,14 @@ fn main() -> Result<(), String> {
                 let verdict = match &again {
                     Ok(q) => {
                         let (m, ph) = worst(&base2, q);
-                        let (tm, tp) = tolerance(t2, tc);
+                        let (tm, tp) = tolerance();
                         format!("repeated at once: {m:.3} % {ph:.3} deg (tolerance {tm:.2} % {tp:.2} deg), temperature {tc} counts: {}", if m > tm || ph > tp { "STILL OUT of tolerance (a fault or a real change)" } else { "back in tolerance (noise)" })
                     }
                     Err(e) => format!("the repeat failed: {e}"),
                 };
                 event(
                     "wrong_number",
-                    &format!("round {round}: sweep {m2:.3} % {ph2:.3} deg from the last-cycle baseline (tolerance {tol2m:.2} % {tol2p:.2} deg at {tb} counts, baseline at {t2})"),
+                    &format!("round {round}: sweep {m2:.3} % {ph2:.3} deg from the last-cycle baseline (tolerance {tol2m:.2} % {tol2p:.2} deg, unit at {tb} counts, baseline at {t2})"),
                     &format!("vs first baseline {m1:.3} % {ph1:.3} deg; {verdict}"),
                     now_f(),
                 );
@@ -673,7 +670,7 @@ fn main() -> Result<(), String> {
                 }
             }
             if m1 > tol1m || ph1 > tol1p {
-                // Informational: the long-term comparison with the first baseline leaves tolerance (drift beyond the temperature rule).
+                // The long-term comparison with the first baseline leaves the tolerance.
                 event(
                     "long_term_drift",
                     &format!("round {round}: {m1:.3} % {ph1:.3} deg from the first baseline (tolerance {tol1m:.2} % {tol1p:.2} deg at {tb} counts, baseline at {t1})"),
@@ -936,12 +933,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_temperature_rule_widens_the_tolerance_with_the_change_in_either_direction() {
-        assert_eq!(tolerance(23_000, 23_000), (BASE_TOL_MAG, BASE_TOL_PH));
-        let (m, p) = tolerance(23_000, 23_500);
-        assert!((m - (BASE_TOL_MAG + 5.0 * K_MAG_PER_100)).abs() < 1e-9);
-        assert!((p - (BASE_TOL_PH + 5.0 * K_PH_PER_100)).abs() < 1e-9);
-        assert_eq!(tolerance(23_500, 23_000), (m, p));
+    fn the_sweep_tolerance_is_the_agreement_target_with_the_vendor_program() {
+        assert_eq!(tolerance(), (1.0, 1.0));
     }
 
     #[test]
