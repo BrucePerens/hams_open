@@ -231,3 +231,6 @@ Checks this crate makes for the template instrument (anchors):
 * Pulse arguments are checked against the rating and the owner's limits before anything is sent. [@ANCHOR: example_pulse_args]
 * A pulse needs `confirm`, honours `dry_run`, and ends with the output off and verified off. [@ANCHOR: example_pulse]
 * The safe state is verified by reading it back, and a failure says what to do by hand. [@ANCHOR: example_safe_state]
+* The VNWA power-cycle hook is the hub module's one implementation, installed on the VNA. [@ANCHOR: bench_vna_power_hook]
+* `bench_vna_spectrum` captures a spectrum and `bench_vna_modulation_stop` stops a running modulation; both are exercised on real hardware by `tests/hil.rs` (ignored by default). [@ANCHOR: bench_vna_spectrum] [@ANCHOR: bench_vna_modulation_stop]
+* A sound node reserved by its USB topology (the VNWA codecs, found by bus path as well as by id) is refused as a target. [@ANCHOR: audio_reserved_by_topology]
