@@ -186,3 +186,24 @@ class TestUserBlogUrls(HamsHttpCase):
         blog = self.env["blog.blog"].search([("owner_user_id", "=", self.other.id)])
         self.assertEqual(blog.name, "Burlother Blog")
         self.assertEqual(blog.site_path, "/burlother/blog")
+
+    def _only_blogs(self, *keep):
+        others = self.env["blog.blog"].search([("id", "not in", [b.id for b in keep])])
+        others.write({"active": False})
+        self.env.flush_all()
+
+    def test_12_platform_blog_index_with_one_blog_redirects_to_it(self):
+        # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
+        # A blog owned by a user with no site slug (perens.com's blog, 2026-10-29 outage).
+        admin_blog = self.env["blog.blog"].create({"name": "Admin Blog", "owner_user_id": self.env.ref("base.user_admin").id})
+        self._only_blogs(admin_blog)
+        response = self.url_open("/blog", allow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self._location(response), f"/blog/{self.env['ir.http']._slug(admin_blog)}")
+
+    def test_13_platform_blog_index_with_two_blogs_lists_them(self):
+        # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
+        first = self.env["blog.blog"].create({"name": "Admin Blog", "owner_user_id": self.env.ref("base.user_admin").id})
+        second = self.env["blog.blog"].create({"name": "Admin Blog Two", "owner_user_id": self.env.ref("base.user_admin").id})
+        self._only_blogs(first, second)
+        self.assertEqual(self.url_open("/blog", allow_redirects=False).status_code, 200)

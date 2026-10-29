@@ -26,6 +26,11 @@ TENANT_PATH_ALLOW = re.compile(
 TENANT_MODULE_ALLOW = (
     "odoo.addons.website.",
     "odoo.addons.website_blog.",
+    # user_websites' overrides of the stock blog routes (same paths, 301 for member blogs only);
+    # without this a tenant's /blog answered 404 once the override replaced the stock endpoint
+    # (perens.com, 2026-10-29). The module's other routes live under /<slug>/..., which
+    # TENANT_PATH_ALLOW refuses on a tenant host.
+    "odoo.addons.user_websites.controllers.blog_urls",
     "odoo.addons.web.",
     "odoo.addons.http_routing.",
     "odoo.addons.edge_cache.",
