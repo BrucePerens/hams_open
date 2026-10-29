@@ -10,6 +10,8 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/hamlib: reference stations (bench_hamlib_stations, bench_hamlib_station_set), receiver test with audio (bench_hamlib_rx_check), the dummy-load plausibility check and baseline (bench_hamlib_load_check, bench_hamlib_load_baseline), the transmit attestation in setup, measurement recipes
+- procedures/check-a-receiver: read a rig, listen on a time station, judge the audio chain
 - instruments/hamlib: receiver control tools bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan and the connection test bench_hamlib_diagnose
 - instruments/hamlib: Hamlib rigs through rigctld (overview, setup, operation, limits, troubleshooting, protocol) and the tools bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_rigctld
 - concepts/extending: the contributor guide (what belongs, before you code, anatomy, standing safety rules, provenance, checks, documentation, submitting, worked examples)

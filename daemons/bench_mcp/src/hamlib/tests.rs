@@ -5,6 +5,7 @@
 use super::proto::{Client, RigError};
 use super::testkit::*;
 use super::*;
+use std::sync::{Arc, Mutex};
 
 /// A fresh directory for a test's state files and logs; removed by `Dir::drop`.
 pub struct Dir(pub std::path::PathBuf);
@@ -827,4 +828,456 @@ fn a_change_that_fails_says_what_was_already_applied() {
         e.contains("set mode failed") && e.contains("already applied before it: frequency_hz"),
         "{e}"
     );
+}
+
+// ---- the station table, the load check and the baseline ----
+
+const TRANSMIT: &str = r#","transmit":{"dummy_load":true,"attested_by":"K6BP","attested_on":"2026-10-29","cabling":"50 ohm load on the antenna port","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW","USB"],"load_check":{"readings":3,"dwell_ms":50,"references":4}}"#;
+
+#[cfg(test)]
+fn sim_rig(
+    name: &str,
+    dir: &Dir,
+    signals: Vec<Signal>,
+) -> (FakeRigctld, Arc<Mutex<Sim>>, Vec<Instrument>) {
+    let mut sim = Sim::new();
+    sim.signals = signals;
+    let (fake, shared) = serve_sim(sim);
+    let b = crate::config::parse(&format!(
+        r#"{{"instruments":{{"{name}":{{"driver":"hamlib","tier":"full","rigctld_port":{},"managed_dir":"{}"{TRANSMIT}}}}}}}"#,
+        fake.port,
+        dir.0.display()
+    ))
+    .unwrap();
+    (fake, shared, b)
+}
+
+#[cfg(test)]
+fn client_of(inst: &Instrument) -> Client {
+    open(inst).unwrap()
+}
+
+// Tests [@ANCHOR: hamlib_stations_tool]
+// Tests [@ANCHOR: hamlib_station_set_tool]
+#[test]
+fn the_station_tools_list_the_table_and_the_owner_edits_it() {
+    let dir = Dir::new("stations");
+    let b = dummy_bench("t_stations", &dir, "read_config", "");
+    let v = call(&b, "bench_hamlib_stations", &json!({})).unwrap();
+    assert_eq!(
+        v["saved"], false,
+        "defaults until the owner changes something"
+    );
+    let n = v["stations"].as_array().unwrap().len();
+    assert!(n > 20 && v["note"].as_str().unwrap().contains("Never assume"));
+    let v = call(&b, "bench_hamlib_stations", &json!({"frequency_hz": 7.1e6})).unwrap();
+    assert!(v["references_now"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["id"].as_str().unwrap().starts_with("wwv")));
+    call(
+        &b,
+        "bench_hamlib_station_set",
+        &json!({"action": "retire", "id": "wwv-2_5", "note": "off the air, checked 2026-10-29"}),
+    )
+    .unwrap();
+    call(&b, "bench_hamlib_station_set", &json!({"action": "add", "id": "rpt-1", "frequency_hz": 146.94e6, "mode": "FM", "audio": "carrier", "note": "local repeater, heard 2026-10-29"})).unwrap();
+    let v = call(&b, "bench_hamlib_stations", &json!({})).unwrap();
+    assert_eq!(v["saved"], true);
+    assert_eq!(
+        v["stations"].as_array().unwrap().len(),
+        n,
+        "one retired (hidden), one added"
+    );
+    assert!(!v["stations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["id"] == "wwv-2_5"));
+    let v = call(
+        &b,
+        "bench_hamlib_stations",
+        &json!({"include_retired": true}),
+    )
+    .unwrap();
+    assert!(v["stations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["id"] == "wwv-2_5" && s["retired"] == true));
+    assert!(call(
+        &b,
+        "bench_hamlib_station_set",
+        &json!({"action": "remove", "id": "wwv-5"})
+    )
+    .is_err());
+    assert!(call(&b, "bench_hamlib_station_set", &json!({"id": "x"})).is_err());
+    let ro = dummy_bench("t_stations_ro", &dir, "read_only", "");
+    assert!(call(
+        &ro,
+        "bench_hamlib_station_set",
+        &json!({"action": "note", "id": "wwv-5", "note": "n"})
+    )
+    .unwrap_err()
+    .contains("needs tier"));
+}
+
+// Tests [@ANCHOR: hamlib_load_baseline_tool]
+// Tests [@ANCHOR: hamlib_baseline_problems]
+#[test]
+fn the_baseline_needs_the_confirmation_the_attested_range_and_a_quiet_path() {
+    let dir = Dir::new("baseline");
+    let (fake, sim, b) = sim_rig("t_bl", &dir, vec![]);
+    let audio = SimAudio(sim.clone());
+    let cfg = &b[0].hamlib;
+    let mut c = client_of(&b[0]);
+    let go =
+        |c: &mut Client, args: Value| loadtools::load_baseline(c, cfg, Some(&audio), "t_bl", &args);
+    // The plan changes and sends nothing.
+    let n = fake.received().len();
+    let v = go(&mut c, json!({"frequency_hz": 7.05e6, "dry_run": true})).unwrap();
+    assert_eq!(v["dry_run"], true);
+    assert!(
+        v["would"].as_array().unwrap().len() >= 3
+            && v["cabling"].as_str().unwrap().contains("50 ohm")
+    );
+    assert_eq!(fake.received().len(), n);
+    // Without the person's confirmation nothing is measured or stored.
+    let e = go(&mut c, json!({"frequency_hz": 7.05e6})).unwrap_err();
+    assert!(
+        e.contains("confirm_dummy_load: true") && e.contains("50 ohm"),
+        "{e}"
+    );
+    // A frequency outside the owner's ranges has no baseline.
+    let e = go(
+        &mut c,
+        json!({"frequency_hz": 14.1e6, "confirm_dummy_load": true}),
+    )
+    .unwrap_err();
+    assert!(e.contains("transmit.frequency_ranges"), "{e}");
+    assert!(go(&mut c, json!({"confirm_dummy_load": true})).is_err());
+    assert!(!load::baseline_file(&dir.0, "t_bl").exists());
+    // A quiet path records it, and the rig is put back as it was.
+    let v = go(
+        &mut c,
+        json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+    )
+    .unwrap();
+    assert_eq!(
+        (v["recorded"].clone(), v["attested_by"].clone()),
+        (json!(true), json!("K6BP"))
+    );
+    assert!(v["readings"].as_array().unwrap().len() >= 3);
+    {
+        let s = sim.lock().unwrap();
+        assert_eq!(
+            (s.freq, s.mode.as_str(), s.af, s.att, s.preamp),
+            (7_100_000.0, "USB", 0.3, 10.0, 0.0),
+            "restored"
+        );
+    }
+    assert!(load::baseline_file(&dir.0, "t_bl").exists());
+    // A time station in the audio, even with the S-meter at its floor, means no baseline: ticks 40 dB under what the meter shows.
+    let dir2 = Dir::new("baseline2");
+    let (_f2, sim2, b2) = sim_rig(
+        "t_bl2",
+        &dir2,
+        vec![Signal {
+            hz: 10e6,
+            db: 0.0,
+            audio: "wwv",
+        }],
+    );
+    let audio2 = SimAudio(sim2.clone());
+    let mut c2 = client_of(&b2[0]);
+    let e = loadtools::load_baseline(
+        &mut c2,
+        &b2[0].hamlib,
+        Some(&audio2),
+        "t_bl2",
+        &json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+    )
+    .unwrap_err();
+    assert!(
+        e.contains("no baseline was recorded")
+            && e.contains("time station")
+            && e.contains("not proof"),
+        "{e}"
+    );
+    assert!(!load::baseline_file(&dir2.0, "t_bl2").exists());
+    // A dead audio input and an unreadable S-meter also stop it.
+    sim2.lock().unwrap().signals.clear();
+    sim2.lock().unwrap().audio_dead = true;
+    let e = loadtools::load_baseline(
+        &mut c2,
+        &b2[0].hamlib,
+        Some(&audio2),
+        "t_bl2",
+        &json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+    )
+    .unwrap_err();
+    assert!(e.contains("only zeros"), "{e}");
+    sim2.lock().unwrap().audio_dead = false;
+    sim2.lock().unwrap().meter_broken = true;
+    let e = loadtools::load_baseline(
+        &mut c2,
+        &b2[0].hamlib,
+        Some(&audio2),
+        "t_bl2",
+        &json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+    )
+    .unwrap_err();
+    assert!(e.contains("S-meter cannot be read"), "{e}");
+    assert_eq!(
+        sim2.lock().unwrap().freq,
+        7_100_000.0,
+        "restored after the failure too"
+    );
+}
+
+// Tests [@ANCHOR: hamlib_load_check_tool]
+// Tests [@ANCHOR: hamlib_load_measure]
+// Tests [@ANCHOR: hamlib_load_read_point]
+// Tests [@ANCHOR: hamlib_load_note_heard]
+// Tests [@ANCHOR: hamlib_load_audio_seconds]
+// Tests [@ANCHOR: hamlib_load_mode_for]
+// Tests [@ANCHOR: hamlib_load_read_original]
+// Tests [@ANCHOR: hamlib_load_restore]
+// Tests [@ANCHOR: hamlib_loadtools_measure]
+// Tests [@ANCHOR: hamlib_loadtools_prepare]
+#[test]
+fn the_load_check_passes_at_the_baseline_and_refuses_a_signal_a_station_a_dead_input_and_a_broken_meter(
+) {
+    let dir = Dir::new("check");
+    let (_fake, sim, b) = sim_rig("t_chk", &dir, vec![]);
+    let audio = SimAudio(sim.clone());
+    let cfg = &b[0].hamlib;
+    let mut c = client_of(&b[0]);
+    let check = |c: &mut Client| {
+        loadtools::load_check(
+            c,
+            cfg,
+            Some(&audio),
+            "t_chk",
+            &json!({"frequency_hz": 7.05e6}),
+        )
+    };
+    // Before a baseline exists the check only reports.
+    let v = check(&mut c).unwrap();
+    assert_eq!(v["verdict"], "no_baseline");
+    assert!(v["note"].as_str().unwrap().contains("not proof"));
+    loadtools::load_baseline(
+        &mut c,
+        cfg,
+        Some(&audio),
+        "t_chk",
+        &json!({"frequency_hz": 7.05e6, "confirm_dummy_load": true}),
+    )
+    .unwrap();
+    let v = check(&mut c).unwrap();
+    assert_eq!(v["verdict"], "consistent_with_a_load", "{v}");
+    assert_eq!(v["baseline"]["attested_by"], "K6BP");
+    assert!(v["compared_with_baseline"].as_u64().unwrap() >= 4);
+    // WWV 10 MHz appears (S-meter 30 dB up, ticks in the audio): refuse, say which, and remember it was heard.
+    sim.lock().unwrap().signals = vec![
+        Signal {
+            hz: 10e6,
+            db: 30.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 5e6,
+            db: 30.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 15e6,
+            db: 30.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 2.5e6,
+            db: 30.0,
+            audio: "wwv",
+        },
+        Signal {
+            hz: 20e6,
+            db: 30.0,
+            audio: "wwv",
+        },
+    ];
+    let v = check(&mut c).unwrap();
+    assert_eq!(v["verdict"], "refuse", "{v}");
+    let why = v["reasons"].to_string();
+    assert!(
+        why.contains("time station") && why.contains("over the baseline"),
+        "{why}"
+    );
+    assert!(
+        !v["stations_heard_now"].as_array().unwrap().is_empty(),
+        "{v}"
+    );
+    let table = call(&b, "bench_hamlib_stations", &json!({})).unwrap();
+    assert!(
+        table["stations"].as_array().unwrap().iter().any(|s| s["id"]
+            .as_str()
+            .unwrap()
+            .starts_with("wwv")
+            && s["heard_recently"] == true),
+        "last_heard is filled from the detection"
+    );
+    // Ticks 30 dB under what the S-meter would show: the audio alone refuses.
+    sim.lock().unwrap().signals = (0..5)
+        .map(|i| Signal {
+            hz: [2.5e6, 5e6, 10e6, 15e6, 20e6][i],
+            db: 0.0,
+            audio: "wwv",
+        })
+        .collect();
+    let v = check(&mut c).unwrap();
+    assert_eq!(v["verdict"], "refuse");
+    sim.lock().unwrap().signals.clear();
+    assert_eq!(check(&mut c).unwrap()["verdict"], "consistent_with_a_load");
+    // A dead audio input, an unreadable meter and a keyed rig are refusals or errors, never a pass.
+    sim.lock().unwrap().audio_dead = true;
+    let v = check(&mut c).unwrap();
+    assert_eq!(v["verdict"], "refuse");
+    assert!(v["reasons"].to_string().contains("only zeros"), "{v}");
+    sim.lock().unwrap().audio_dead = false;
+    sim.lock().unwrap().meter_broken = true;
+    assert!(check(&mut c)
+        .unwrap_err()
+        .contains("S-meter cannot be read"));
+    sim.lock().unwrap().meter_broken = false;
+    sim.lock().unwrap().ptt = true;
+    assert!(check(&mut c).unwrap_err().contains("PTT on"));
+    sim.lock().unwrap().ptt = false;
+    // A baseline taken without audio does not stand for a check with audio: settings differ.
+    let v = loadtools::load_check(&mut c, cfg, None, "t_chk", &json!({"frequency_hz": 7.05e6}))
+        .unwrap();
+    assert_eq!(v["verdict"], "refuse");
+    assert!(v["reasons"]
+        .to_string()
+        .contains("other rig or check settings"));
+}
+
+#[test]
+fn the_load_tools_exist_only_for_a_rig_with_a_transmit_attestation_and_refuse_without_one() {
+    let dir = Dir::new("noattest");
+    let plain = dummy_bench("t_plain", &dir, "full", "");
+    let names = |b: &[Instrument]| {
+        tool_defs(b)
+            .iter()
+            .map(|t| t.name.to_string())
+            .collect::<Vec<_>>()
+    };
+    assert!(!names(&plain).contains(&"bench_hamlib_load_check".to_string()));
+    assert!(names(&plain).contains(&"bench_hamlib_stations".to_string()));
+    let e = call(
+        &plain,
+        "bench_hamlib_load_check",
+        &json!({"frequency_hz": 7.05e6}),
+    )
+    .unwrap_err();
+    assert!(e.contains("no transmit attestation"), "{e}");
+    let (_f, _s, attested) = sim_rig("t_att", &dir, vec![]);
+    assert!(names(&attested).contains(&"bench_hamlib_load_check".to_string()));
+    assert!(names(&attested).contains(&"bench_hamlib_load_baseline".to_string()));
+    let ro = crate::config::parse(&format!(r#"{{"instruments":{{"t_att2":{{"driver":"hamlib","tier":"read_config","rigctld_port":1{TRANSMIT}}}}}}}"#)).unwrap();
+    assert!(names(&ro).contains(&"bench_hamlib_load_check".to_string()));
+    assert!(
+        !names(&ro).contains(&"bench_hamlib_load_baseline".to_string()),
+        "recording a baseline is a full-tier tool"
+    );
+}
+
+// Tests [@ANCHOR: hamlib_rx_check]
+// Tests [@ANCHOR: hamlib_rx_listen]
+#[test]
+fn the_receiver_check_reports_signal_against_audio_and_the_tone_offset_and_restores_the_rig() {
+    let dir = Dir::new("rxcheck");
+    let (_f, sim, b) = sim_rig(
+        "t_rx",
+        &dir,
+        vec![Signal {
+            hz: 7.074e6,
+            db: 25.0,
+            audio: "carrier",
+        }],
+    );
+    let audio = SimAudio(sim.clone());
+    let cfg = &b[0].hamlib;
+    let mut c = client_of(&b[0]);
+    let v = rxcheck::rx_check(
+        &mut c,
+        cfg,
+        Some(&audio),
+        &json!({"frequency_hz": 7.074e6, "mode": "usb", "seconds": 4, "expect_tone_hz": 1450}),
+    )
+    .unwrap();
+    assert!(
+        v["signal"]["mean_db_relative_to_s9"].as_f64().unwrap() > -35.0,
+        "{v}"
+    );
+    assert_eq!(v["squelch_open"], true);
+    let tone = v["audio"]["dominant_tone"]["hz"].as_f64().unwrap();
+    assert!((tone - 1500.0).abs() < 4.0, "{v}");
+    assert!(
+        (v["audio"]["tone_offset_hz"].as_f64().unwrap() - 50.0).abs() < 4.0,
+        "{v}"
+    );
+    assert!(v["audio"]["noise_floor_dbfs"].as_f64().unwrap() < -50.0);
+    assert_eq!(v["audio"]["findings"]["time_station_heard"], false);
+    assert_eq!(v["rig_settings_not_restored"], json!([]));
+    {
+        let s = sim.lock().unwrap();
+        assert_eq!((s.freq, s.mode.as_str(), s.af), (7_100_000.0, "USB", 0.3));
+    }
+    // Without audio it still reports the meter and says why there is no audio.
+    let v = rxcheck::rx_check(&mut c, cfg, None, &json!({"frequency_hz": 7.2e6})).unwrap();
+    assert!(v["audio"].as_str().unwrap().contains("none configured"));
+    // Out of the receive range, keyed, bad arguments.
+    assert!(
+        rxcheck::rx_check(&mut c, cfg, None, &json!({"frequency_hz": 145e6}))
+            .unwrap_err()
+            .contains("outside the receive range")
+    );
+    assert!(rxcheck::rx_check(
+        &mut c,
+        cfg,
+        None,
+        &json!({"frequency_hz": 7.2e6, "seconds": 99})
+    )
+    .is_err());
+    assert!(rxcheck::rx_check(&mut c, cfg, None, &json!({})).is_err());
+    sim.lock().unwrap().ptt = true;
+    assert!(
+        rxcheck::rx_check(&mut c, cfg, None, &json!({"frequency_hz": 7.2e6}))
+            .unwrap_err()
+            .contains("PTT on")
+    );
+}
+
+// Tests [@ANCHOR: hamlib_audio_resolve]
+#[test]
+fn a_rig_names_its_audio_input_by_the_names_of_the_audio_instrument() {
+    let dir = Dir::new("audioref");
+    let none = dummy_bench("t_ar", &dir, "read_config", "");
+    assert!(audio_in::resolve(&none, &none[0]).unwrap().is_none());
+    let b = crate::config::parse(
+        r#"{"instruments":{"rig":{"driver":"hamlib","tier":"read_config","rigctld_port":1,"audio":{"instrument":"nosuch","input":"rig_rx"}},"sound":{"driver":"audio","tier":"read_only"}}}"#,
+    )
+    .unwrap();
+    let rig = b.iter().find(|i| i.name == "rig").unwrap();
+    let e = audio_in::resolve(&b, rig).err().unwrap();
+    assert!(e.contains("not in the bench config"), "{e}");
+    assert!(crate::config::parse(r#"{"instruments":{"rig":{"driver":"hamlib","rigctld_port":1,"audio":{"instrument":"sound"}}}}"#).unwrap_err().contains("audio needs input"));
+}
+
+#[test]
+fn every_tool_schema_is_valid_json() {
+    for spec in SPECS {
+        serde_json::from_str::<Value>(spec.props).unwrap_or_else(|e| panic!("{}: {e}", spec.name));
+    }
 }

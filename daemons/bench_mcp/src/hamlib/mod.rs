@@ -11,11 +11,18 @@
 #[cfg(test)]
 pub mod testkit;
 
+pub mod attest;
+pub mod audio_in;
 pub mod control;
+pub mod detect;
 pub mod diag;
+pub mod load;
+pub mod loadtools;
 pub mod models;
 pub mod proto;
 pub mod rigd;
+pub mod rxcheck;
+pub mod stations;
 pub mod status;
 pub mod tx;
 
@@ -53,6 +60,17 @@ pub struct Config {
     /// The owner's receive range limits in Hz, applied in addition to the ranges the rig reports. Empty: the rig's own.
     pub rx_ranges_hz: Vec<(f64, f64)>,
     pub managed_dir: Option<PathBuf>,
+    /// The rig's audio: the name of an `audio` instrument in the bench config and the alias (or node name fragment) of its input.
+    pub audio: Option<AudioRef>,
+    /// The owner's transmit attestation; without it no tool transmits.
+    pub transmit: Option<attest::Transmit>,
+}
+
+/// Where the rig's receive audio comes from, by the names the sound tools use.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AudioRef {
+    pub instrument: String,
+    pub input: String,
 }
 
 impl Default for Config {
@@ -65,6 +83,8 @@ impl Default for Config {
             reply_timeout_s: 3,
             rx_ranges_hz: vec![],
             managed_dir: None,
+            audio: None,
+            transmit: None,
         }
     }
 }
@@ -101,7 +121,7 @@ fn token_ok(s: &str) -> bool {
 /// Reads the hamlib settings of an instrument entry: `model` (Hamlib model number; the module starts a rigctld for it) with `device`
 /// (a /dev path, or host:port for model 2), `speed` (serial baud rate), `set_conf` (an object of Hamlib config keys and values) and
 /// `listen_port`; OR `rigctld_port` (with `rigctld_host`, loopback unless `allow_remote_rigctld` is true) for a rigctld that already
-/// runs. Also `reply_timeout_s` (1 to 30, default 3), `rx_ranges_hz` (a list of [low, high]) and `managed_dir`.
+/// runs. Also `reply_timeout_s` (1 to 30, default 3), `rx_ranges_hz` (a list of [low, high]), `managed_dir`, `audio` ({instrument, input}: the sound input that carries the rig's receive audio, by the names of the audio instrument) and `transmit` (the owner's dummy-load attestation and limits, see `attest.rs`).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
     // [@ANCHOR: hamlib_config]
     let mut cfg = Config::default();
@@ -197,6 +217,21 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
                 .ok_or("managed_dir must be an absolute path without ..")?,
         ));
     }
+    if let Some(a) = c.get("audio") {
+        let part = |k: &str| {
+            a.get(k)
+                .and_then(|v| v.as_str())
+                .filter(|v| !v.trim().is_empty())
+                .map(String::from)
+        };
+        cfg.audio = Some(AudioRef {
+            instrument: part("instrument").ok_or("audio needs instrument: the name of an audio instrument in the bench config")?,
+            input: part("input").ok_or("audio needs input: the alias or name of the sound input that carries the rig's receive audio")?,
+        });
+    }
+    if let Some(t) = c.get("transmit") {
+        cfg.transmit = Some(attest::parse_transmit(t).map_err(|e| format!("transmit: {e}"))?);
+    }
     Ok(cfg)
 }
 
@@ -277,7 +312,45 @@ pub const SPECS: &[Spec] = &[
         props: props!(r#""instrument":{"type":"string"}"#),
         required: &[],
     },
+    Spec {
+        name: "bench_hamlib_stations",
+        tier: Tier::ReadOnly,
+        desc: "HAMLIB: the table of reference stations the load check listens for (WWV and WWVH on 2.5, 5, 10, 15 and 20 MHz, AM broadcast channel samples, NOAA weather radio, and the owner's own entries), with notes on where each status was checked, the date this bench last heard it, and whether that was recent. Never assume a station is on the air: silence is not a failure. With `frequency_hz`, the references that would be used now for that transmit frequency. Review the table.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"show the references chosen for this transmit frequency now"},"include_retired":{"type":"boolean","description":"also list retired stations, default false"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_hamlib_station_set",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB: edit the reference station table. `action` add (id, frequency_hz, mode, audio wwv|wwvh|carrier|voice|none, name, and a note saying where its status was checked and when), retire or restore (id, optional note), remove (an entry the owner added), or note (id, note). The shipped entries are retired, not removed. Stations go off the air; expect to retire entries.",
+        props: props!(r#""instrument":{"type":"string"},"action":{"type":"string","description":"add, retire, restore, remove or note"},"id":{"type":"string","description":"station id: a-z, 0-9, - and _"},"name":{"type":"string","description":"a short display name, up to 80 characters"},"frequency_hz":{"type":"number","description":"carrier frequency in Hz, 10 kHz to 6 GHz"},"mode":{"type":"string","description":"Hamlib mode name, default AM"},"audio":{"type":"string","description":"wwv, wwvh, carrier, voice or none"},"kind":{"type":"string","description":"local (default), time_station, am_band or weather"},"note":{"type":"string","description":"where the status was checked and when; at most 600 characters"}"#),
+        required: &["action", "id"],
+    },
+    Spec {
+        name: "bench_hamlib_rx_check",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB receiver test with the rig's audio (the sound input named in the rig's `audio` setting): tunes to `frequency_hz` (default mode AM below 30 MHz, else FM), reads the S-meter five times and the squelch, records `seconds` of audio and reports the signal strength against the audio level, the audio noise floor, the strongest steady tone (with its offset from `expect_tone_hz`) and whether a time station's ticks or tones are in the audio. Without audio configured it reports the S-meter and squelch only. Restores the rig's frequency, mode and AF level. Never transmits.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"receive frequency, Hz"},"mode":{"type":"string","description":"Hamlib mode name"},"seconds":{"type":"number","description":"audio to record, 3 to 20, default 5"},"expect_tone_hz":{"type":"number","description":"the tone frequency expected in the audio, to report the offset, 100 to 5000"}"#),
+        required: &["frequency_hz"],
+    },
+    Spec {
+        name: "bench_hamlib_load_check",
+        tier: Tier::ReadConfig,
+        desc: "HAMLIB dummy-load plausibility check, receive only, never keys: with the rig listening on its supposed dummy-load path, reads the S-meter, squelch and audio at the transmit frequency `frequency_hz` and at reference frequencies (time stations, AM band, weather radio from the station table) and compares them with the baseline recorded when the owner attested the load. Signals or noise above the baseline, a time station heard, an unsteady reading, an unreadable S-meter or a dead audio input REFUSE. EVIDENCE, NOT PROOF: an open or unplugged connection and an antenna on a dead band also hear nothing; the baseline is valid only for the same cabling and rig settings; the owner's attestation still gates transmitting. Only for rigs with a transmit attestation in the config.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"the transmit frequency to check, inside one of the owner's transmit.frequency_ranges"}"#),
+        required: &["frequency_hz"],
+    },
+    Spec {
+        name: "bench_hamlib_load_baseline",
+        tier: Tier::Full,
+        desc: "HAMLIB: record the load-check BASELINE for the owner's frequency range holding `frequency_hz`: the readings through the dummy load, stored with the attestation's name, date and cabling. `confirm_dummy_load` must be true and must come from the person at the bench: it states that the rig's antenna port is on the dummy load. Receive only; never keys. Refuses to record if a time station is heard or readings are unsteady. Record again after any change of cabling, load or rig settings. `dry_run` returns the plan and does nothing. Only for rigs with a transmit attestation in the config.",
+        props: props!(r#""instrument":{"type":"string"},"frequency_hz":{"type":"number","description":"a frequency inside one of the owner's transmit.frequency_ranges"},"confirm_dummy_load":{"type":"boolean","description":"true: the person at the bench says the rig's antenna port is on the dummy load"},"dry_run":{"type":"boolean","description":"return the plan and do nothing"}"#),
+        required: &["frequency_hz"],
+    },
 ];
+
+/// Tools that exist only for a rig whose config carries a transmit attestation.
+const NEEDS_ATTESTATION: &[&str] = &["bench_hamlib_load_check", "bench_hamlib_load_baseline"];
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
     // [@ANCHOR: hamlib_instrument]
@@ -306,7 +379,13 @@ fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrumen
 pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
     SPECS
         .iter()
-        .filter(|s| insts.iter().any(|i| i.kind == Kind::Hamlib && i.tier >= s.tier))
+        .filter(|s| {
+            insts.iter().any(|i| {
+                i.kind == Kind::Hamlib
+                    && i.tier >= s.tier
+                    && (i.hamlib.transmit.is_some() || !NEEDS_ATTESTATION.contains(&s.name))
+            })
+        })
         .map(|s| {
             let schema = json!({"type": "object", "properties": serde_json::from_str::<Value>(s.props).unwrap(), "required": s.required});
             let Value::Object(schema) = schema else { unreachable!() };
@@ -349,6 +428,20 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
     if name == "bench_hamlib_rigs" {
         return rigs(insts, args);
     }
+    if name == "bench_hamlib_stations" || name == "bench_hamlib_station_set" {
+        let inst = instrument(insts, args)?;
+        if inst.tier < spec.tier {
+            return Err(format!(
+                "{name} needs tier {:?}; {:?} is configured at {:?}",
+                spec.tier, inst.name, inst.tier
+            ));
+        }
+        return if name == "bench_hamlib_stations" {
+            loadtools::stations(&inst.hamlib, args)
+        } else {
+            loadtools::station_set(&inst.hamlib, args)
+        };
+    }
     let inst = instrument(insts, args)?;
     if inst.tier < spec.tier {
         return Err(format!(
@@ -364,6 +457,35 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
         "bench_hamlib_set" => control::set(&mut open(inst)?, &inst.hamlib, args),
         "bench_hamlib_memory" => control::memory(&mut open(inst)?, &inst.hamlib, args),
         "bench_hamlib_scan" => control::scan(&mut open(inst)?, &inst.hamlib, args),
+        "bench_hamlib_rx_check" => {
+            let audio = audio_in::resolve(insts, inst)?;
+            rxcheck::rx_check(
+                &mut open(inst)?,
+                &inst.hamlib,
+                audio.as_ref().map(|a| a as &dyn audio_in::AudioSource),
+                args,
+            )
+        }
+        "bench_hamlib_load_check" => {
+            let audio = audio_in::resolve(insts, inst)?;
+            loadtools::load_check(
+                &mut open(inst)?,
+                &inst.hamlib,
+                audio.as_ref().map(|a| a as &dyn audio_in::AudioSource),
+                &inst.name,
+                args,
+            )
+        }
+        "bench_hamlib_load_baseline" => {
+            let audio = audio_in::resolve(insts, inst)?;
+            loadtools::load_baseline(
+                &mut open(inst)?,
+                &inst.hamlib,
+                audio.as_ref().map(|a| a as &dyn audio_in::AudioSource),
+                &inst.name,
+                args,
+            )
+        }
         "bench_hamlib_diagnose" => diag::diagnose(&Process, &inst.name, &inst.hamlib),
         "bench_hamlib_rigctld" => rigctld_action(inst, args),
         _ => Err(format!("{name} does not apply to {:?}", inst.name)),
