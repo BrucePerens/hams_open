@@ -175,10 +175,10 @@ pub struct Recovery {
 }
 
 /// The unit and its two codecs, opened together; all three are reopened after a power cycle.
-struct Session {
-    usb: Vnwa,
-    s11: Capture,
-    s21: Capture,
+pub(crate) struct Session {
+    pub(crate) usb: Vnwa,
+    pub(crate) s11: Capture,
+    pub(crate) s21: Capture,
 }
 
 impl Session {
@@ -266,8 +266,8 @@ impl Recoverable for Vna {
 }
 
 pub struct Vna {
-    session: Session,
-    cfg: Config,
+    pub(crate) session: Session,
+    pub(crate) cfg: Config,
     recovery: Recovery,
 }
 

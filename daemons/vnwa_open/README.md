@@ -111,4 +111,5 @@ Each is a test against bytes or samples recorded from the vendor program.
 * A calibration survives its text file and a damaged file is refused. [@ANCHOR: vnwa_open_cal_file]
 * The windows have their textbook shapes. [@ANCHOR: vnwa_open_window]
 * A delay line peaks at its delay in low-pass and band-pass mode, windows lower the sidelobes, a reflection's step settles at its coefficient. [@ANCHOR: vnwa_open_time_domain]
+* The tone offset between the measured and reference channels is recovered with its sign, the codec drift cancels. [@ANCHOR: vnwa_open_meter_offset]
 * A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]

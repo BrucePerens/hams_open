@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 pub const SAMPLE_RATE: u32 = 48_000;
-/// How many frames the ring keeps (two seconds).
-const KEEP_FRAMES: usize = 2 * SAMPLE_RATE as usize;
+/// How many frames the ring keeps (eight seconds: a frequency-meter measurement runs for several seconds).
+const KEEP_FRAMES: usize = 8 * SAMPLE_RATE as usize;
 
 struct Ring {
     frames: std::collections::VecDeque<[i16; 2]>,
