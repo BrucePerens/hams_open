@@ -44,10 +44,37 @@ pub fn generator_on(args: &Value) -> Result<Value, String> {
     )
 }
 
-pub fn generator_off() -> Result<Value, String> {
+/// Switches the generator off. A unit that is modulating (AM or FM) refuses the request; a USB reset of its control chip (no power change) ends the
+/// modulation (measured on the unit, 2026-10-29), and only if that fails is the unit cold reset through its hub, with the longer ladder for modulation
+/// lock-ups, when the instrument has a hub; otherwise the error says what to do.
+pub fn generator_off(cfg: &Config) -> Result<Value, String> {
     let usb = Vnwa::open()?;
-    vnwa_open::generator::off(&usb)?;
-    Ok(json!({"generator": "off"}))
+    // [@ANCHOR: bench_vna_modulation_stop]
+    match vnwa_open::generator::off(&usb) {
+        Ok(()) => Ok(json!({"generator": "off"})),
+        Err(e) if !vnwa_open::generator::answers(&usb) => {
+            drop(usb);
+            if vnwa_open::generator::end_modulation().is_ok() {
+                return Ok(
+                    json!({"generator": "off", "ended_modulation_by_usb_reset": true, "note": "the unit was modulating and refused the switch-off; a USB reset of its control chip ended it (no power cycle)"}),
+                );
+            }
+            let Some(hub) = cfg.hub.clone() else {
+                return Err(format!(
+                    "the unit refuses the switch-off request ({e}) and a USB reset did not help: power its USB port off and on. No hub is configured for this VNA (\"hub\" and \"hub_port\" in its entry of the bench config)"
+                ));
+            };
+            vnwa_open::power::cold_reset_after_modulation(&hub)?;
+            let usb = Vnwa::open()?;
+            if !vnwa_open::generator::answers(&usb) {
+                return Err("the unit was power cycled but still does not answer".into());
+            }
+            Ok(
+                json!({"generator": "off", "recovered_by_power_cycle": true, "note": "a USB reset did not end the stall, so the unit was cold reset through its hub; it lost all settings"}),
+            )
+        }
+        Err(e) => Err(e),
+    }
 }
 
 pub fn generator_level(args: &Value) -> Result<Value, String> {
@@ -57,15 +84,66 @@ pub fn generator_level(args: &Value) -> Result<Value, String> {
     Ok(json!({"generator": "level set", "level_db": l}))
 }
 
-pub fn generator_am(args: &Value) -> Result<Value, String> {
-    // The only modulation setting captured from the vendor program: 500 Hz, 100 %, at -20 dB.
+fn mod_args(args: &Value) -> Result<(f64, f64, f64), String> {
     let f = freq_hz(args)?;
+    let level = match num(args, "level_db")? {
+        Some(l) if (-50.0..=0.0).contains(&l) => l,
+        Some(l) => return Err(format!("level_db {l} is outside -50 to 0")),
+        None => -20.0,
+    };
+    let hz = num(args, "mod_hz")?.unwrap_or(500.0);
+    if !(vnwa_open::generator::MIN_MOD_HZ..=vnwa_open::generator::MAX_MOD_HZ).contains(&hz) {
+        return Err(format!("mod_hz {hz} is outside 1 to 3000"));
+    }
+    Ok((f, level, hz))
+}
+
+pub fn generator_am(args: &Value) -> Result<Value, String> {
+    let (f, level, hz) = mod_args(args)?;
+    let depth = num(args, "depth_pct")?.unwrap_or(100.0);
+    // Validated before the unit is touched.
+    vnwa_open::generator::am_fields(
+        vnwa_open::generator::level_for_attenuation(level)?,
+        hz,
+        depth,
+    )?;
     let usb = Vnwa::open()?;
-    vnwa_open::generator::on(&usb, f, -20.0)?;
-    vnwa_open::generator::am_captured_500hz_100pct(&usb, f)?;
+    vnwa_open::generator::on(&usb, f, level)?;
+    vnwa_open::generator::modulate(
+        &usb,
+        f,
+        level,
+        vnwa_open::generator::Modulation::Am {
+            mod_hz: hz,
+            depth_pct: depth,
+        },
+    )?;
     Ok(json!({
-        "generator": "AM on", "freq_hz": f, "level_db": -20, "modulation": "500 Hz sine, 100 %",
-        "warning": "the unit's microcontroller now modulates in real time and refuses most control requests: only bench_vna_power_cycle stops it. Other modulation frequencies, depths and FM are not decoded yet."
+        "generator": "AM on", "freq_hz": f, "level_db": level, "mod_hz": hz, "depth_pct": depth,
+        "verified": "depth within 3 percentage points and frequency within 5 Hz on a scope at 10 MHz, 500 to 3000 Hz and 10 to 100 %",
+        "warning": "the unit's microcontroller now modulates in real time and refuses the switch-off request until it is USB reset: bench_vna_generator_off does that (about 3 s, no power cycle) and falls back to a power cycle through the hub only if that fails. Nothing else may use the unit meanwhile."
+    }))
+}
+
+pub fn generator_fm(args: &Value) -> Result<Value, String> {
+    let (f, level, hz) = mod_args(args)?;
+    let dev = num(args, "deviation_hz")?.ok_or("deviation_hz is required")?;
+    vnwa_open::generator::fm_fields(hz, dev)?;
+    let usb = Vnwa::open()?;
+    vnwa_open::generator::on(&usb, f, level)?;
+    vnwa_open::generator::modulate(
+        &usb,
+        f,
+        level,
+        vnwa_open::generator::Modulation::Fm {
+            mod_hz: hz,
+            deviation_hz: dev,
+        },
+    )?;
+    Ok(json!({
+        "generator": "FM on", "freq_hz": f, "level_db": level, "mod_hz": hz, "deviation_hz": dev,
+        "verified": "deviation within 3 % on a scope (line pattern against Bessel functions) at 1 and 2 kHz, 10 and 20 kHz deviation",
+        "warning": "the unit modulates in real time and refuses the switch-off request until it is USB reset: bench_vna_generator_off does that."
     }))
 }
 

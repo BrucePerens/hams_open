@@ -1,24 +1,27 @@
 ---
 title: bench_vna_generator_am
-summary: VNA generator with the one decoded amplitude modulation setting; only a power cycle stops it.
-see_also: [tools/bench_vna_power_cycle, tools/bench_vna_generator_off, concepts/errors]
+summary: VNA generator with amplitude modulation at a chosen frequency and depth; only a power cycle stops it.
+see_also: [tools/bench_vna_generator_fm, tools/bench_vna_generator_off, tools/bench_vna_power_cycle, instruments/vna/modulation, concepts/errors]
 tools: [bench_vna_generator_am]
 instrument: vna
 tier: read_config
-verified: code only, 2026-10-29
+verified: 2026-10-29 on a scope at 10 MHz (depth within 3 points, frequency within 5 Hz, 500 to 3000 Hz, 10 to 100 %, -6 to -30 dB)
 ---
 
 # bench_vna_generator_am
 
-Carrier at `freq_hz` and -20 dB, amplitude modulated with a 500 Hz sine at 100 %. This is the only modulation setting decoded so far: other frequencies, depths and FM are not available. The unit then modulates in real time and refuses most control requests, so only [bench_vna_power_cycle](tools/bench_vna_power_cycle) stops it. Plan for that before starting it.
+A carrier at `freq_hz` and `level_db`, amplitude modulated by a sine of `mod_hz` at `depth_pct`. The unit's microcontroller makes the modulation in real time. Afterwards the unit refuses the switch-off request, so [bench_vna_generator_off](tools/bench_vna_generator_off) ends it by power cycling the unit through its hub; plan for the 15 to 90 seconds and the loss of the unit's settings. Nothing else can use the VNA while it modulates.
 
 ## Arguments
 
 <!-- arguments -->
 
 * `freq_hz`: carrier in hertz, above 0 and at most 1.3e9. Required.
+* `level_db`: the carrier's peak level, 0 to -50 dB (a negative attenuation); default -20. With depth m the unpeaked carrier is lower: the envelope peaks at this level.
+* `mod_hz`: modulation frequency, 1 to 3000 Hz; default 500. Above about 3 kHz the unit's 18.75 kHz modulation clock gives too few steps per cycle.
+* `depth_pct`: modulation depth, 1 to 100 percent; default 100.
 * `instrument`: the VNA alias.
 
 ## Returns
 
-`generator: "AM on"`, `freq_hz`, `level_db` (-20), `modulation` and a warning.
+`generator: "AM on"`, the settings, what was verified and a warning.

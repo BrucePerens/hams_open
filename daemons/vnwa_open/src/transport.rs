@@ -32,6 +32,8 @@ impl std::fmt::Display for TransferError {
 
 /// One control transfer, in either direction.
 pub trait Transport: Send + Sync {
+    /// A USB reset of the device (the port reset: no power change, the device number stays). Ends the unit's modulation lock-up.
+    fn reset(&self) -> Result<(), TransferError>;
     fn write(
         &self,
         request_type: u8,
@@ -81,6 +83,10 @@ impl RusbTransport {
 }
 
 impl Transport for RusbTransport {
+    fn reset(&self) -> Result<(), TransferError> {
+        self.handle.reset().map_err(classify)
+    }
+
     fn write(
         &self,
         request_type: u8,
@@ -143,6 +149,14 @@ impl Scripted {
 }
 
 impl Transport for Scripted {
+    fn reset(&self) -> Result<(), TransferError> {
+        self.seen.lock().unwrap().push(Seen {
+            write: true,
+            request: 0xff,
+        });
+        Ok(())
+    }
+
     fn write(
         &self,
         _request_type: u8,
