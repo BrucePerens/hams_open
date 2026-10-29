@@ -363,3 +363,32 @@ fn am_is_started_and_ended_through_its_tools() {
     );
     assert_eq!(sw["points"], 1, "{sw}");
 }
+
+/// Needs a `vna` instrument at read_config with its TX cabled to its RX and nothing else using the unit: the tracking generator shows as a line at 12 kHz
+/// in a band that includes it, and not in a band that stops below it.
+// Tests [@ANCHOR: bench_vna_spectrum]
+#[test]
+#[ignore]
+fn the_spectrum_tool_sees_the_tracking_generator_only_in_a_band_that_includes_its_line() {
+    let tool = |args: &str| -> serde_json::Value {
+        let r = rpc(&[&call("bench_vna_spectrum", args)]);
+        assert!(r[0]["result"]["isError"] != true, "{}", text(&r[0]));
+        serde_json::from_str(&text(&r[0])).unwrap()
+    };
+    let with = tool(
+        r#"{"start_hz":9990000,"stop_hz":10010000,"points":5,"band_hz":15000,"tracking_db":0}"#,
+    );
+    let outside = tool(
+        r#"{"start_hz":9990000,"stop_hz":10010000,"points":5,"band_hz":5000,"tracking_db":0}"#,
+    );
+    let off = tool(r#"{"start_hz":9990000,"stop_hz":10010000,"points":5,"band_hz":15000}"#);
+    assert!(
+        with["noise_floor_counts"].as_f64().unwrap() > 1000.0,
+        "{with}"
+    );
+    assert!(
+        outside["noise_floor_counts"].as_f64().unwrap() < 20.0,
+        "{outside}"
+    );
+    assert!(off["noise_floor_counts"].as_f64().unwrap() < 20.0, "{off}");
+}

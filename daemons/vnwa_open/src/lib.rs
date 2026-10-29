@@ -16,6 +16,7 @@ pub mod protocol;
 pub mod reserved;
 pub mod setup;
 pub mod sound_server;
+pub mod spectrum;
 pub mod sweep;
 pub mod timedomain;
 pub mod topology;
