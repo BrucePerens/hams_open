@@ -41,6 +41,38 @@ pub fn get(run: &dyn Run, node_id: u32) -> Result<Level, String> {
     parse_get_volume(&text)
 }
 
+pub fn set_volume(run: &dyn Run, node_id: u32, volume: f64) -> Result<(), String> {
+    let (ok, text) = run.run(
+        "wpctl",
+        &[
+            "set-volume".into(),
+            node_id.to_string(),
+            format!("{volume:.3}"),
+        ],
+    )?;
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("wpctl set-volume {node_id}: {}", text.trim()))
+    }
+}
+
+pub fn set_mute(run: &dyn Run, node_id: u32, mute: bool) -> Result<(), String> {
+    let (ok, text) = run.run(
+        "wpctl",
+        &[
+            "set-mute".into(),
+            node_id.to_string(),
+            (mute as u8).to_string(),
+        ],
+    )?;
+    if ok {
+        Ok(())
+    } else {
+        Err(format!("wpctl set-mute {node_id}: {}", text.trim()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

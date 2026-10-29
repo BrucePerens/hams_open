@@ -9,10 +9,18 @@
 //! The sound cards inside the VNWA are reserved (`08bb:29c0` by default): the VNA driver opens them exclusively, so these
 //! tools list them, mark them reserved and never open them.
 
+pub mod analysis;
 pub mod devices;
+pub mod engine;
+pub mod heard;
 pub mod levels;
+pub mod safety;
+pub mod store;
 #[cfg(test)]
 pub mod testkit;
+pub mod tones;
+pub mod tools;
+pub mod wav;
 
 use crate::config::{Instrument, Kind, Tier};
 use rmcp::model::Tool;
@@ -87,6 +95,8 @@ pub struct Config {
     pub retention_files: usize,
     pub retention_days: u64,
     pub max_record_s: f64,
+    /// The longest generated tone or sound file that is played.
+    pub max_play_s: f64,
     /// `vid:pid` values and lower-case node-name fragments that are never opened. Always includes `08bb:29c0`.
     pub reserved: Vec<String>,
 }
@@ -110,6 +120,7 @@ impl Default for Config {
             retention_files: 50,
             retention_days: 14,
             max_record_s: 30.0,
+            max_play_s: 10.0,
             reserved: vec![VNWA_CODEC.into()],
         }
     }
@@ -206,7 +217,7 @@ fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
 /// Reads the `audio` settings of an instrument entry: `outputs` and `inputs` (alias to a name fragment, or
 /// `{"match": ..., "volume_cap": ...}`), `alert_output` and `verify_input` (`auto` or an alias), `volume_cap` and
 /// `quiet_volume` (wpctl scale, 0 to 1), `quiet_hours` (`{"start":"22:00","end":"07:00"}` or `false`), `capture_dir`,
-/// `retention_files`, `retention_days`, `max_record_s`, and `reserved` (more `vid:pid` values or node-name fragments;
+/// `retention_files`, `retention_days`, `max_record_s`, `max_play_s`, and `reserved` (more `vid:pid` values or node-name fragments;
 /// `08bb:29c0` is always reserved).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
     // [@ANCHOR: audio_config]
@@ -278,6 +289,12 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
         }
         cfg.max_record_s = m;
     }
+    if let Some(m) = num("max_play_s") {
+        if !(0.1..=60.0).contains(&m) {
+            return Err("max_play_s must be 0.1 to 60".into());
+        }
+        cfg.max_play_s = m;
+    }
     if let Some(list) = c.get("reserved") {
         for x in list
             .as_array()
@@ -334,6 +351,48 @@ pub const SPECS: &[Spec] = &[
         tier: Tier::ReadOnly,
         desc: "The audio setup: which helper programs are installed (pw-dump, pw-play, pw-record, wpctl, espeak-ng, spd-say, piper, ...), the effective safety limits (volume cap, quiet volume, quiet hours and whether it is quiet now), the capture directory with its retention, the reserved list, and the aliases from the config. Opens no audio stream.",
         props: props!(r#""instrument":{"type":"string"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_levels",
+        tier: Tier::ReadOnly,
+        desc: "Volume (wpctl scale and gain in dB), mute and the volume cap of one device or of all non-reserved devices. Opens no audio stream.",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"direction":{"type":"string","enum":["output","input"]}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_record",
+        tier: Tier::ReadConfig,
+        desc: "RECORDS FROM A MICROPHONE OR LINE INPUT: it hears the room, and a recording can contain speech. Records `seconds` (0.1 up to the config's max_record_s, default 3) from an input (default: the configured verify input, else the system default source) to a WAV file in the managed capture directory (private, retention-limited, never uploaded) and returns the file path, duration, sample rate, peak and RMS in dBFS, the number of clipped samples, the fraction of 20 ms windows under the silence threshold (default -60 dBFS), and an all_zero flag (a muted, disconnected or dead input records exact zeros). start_on_threshold_dbfs waits up to max_wait_s for the level to pass the threshold and keeps 0.1 s before it. monitor_of_output records what an output is playing (its monitor) instead of an input. Reserved devices are refused.",
+        props: props!(r#""instrument":{"type":"string"},"input":{"type":"string","description":"alias, node name or fragment; with monitor_of_output, an output"},"seconds":{"type":"number"},"sample_rate_hz":{"type":"integer"},"start_on_threshold_dbfs":{"type":"number"},"max_wait_s":{"type":"number"},"silence_threshold_dbfs":{"type":"number"},"label":{"type":"string"},"monitor_of_output":{"type":"boolean"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_meter",
+        tier: Tier::ReadConfig,
+        desc: "LISTENS TO THE ROOM through an input for `seconds` (up to 30) and returns a level reading (peak and RMS dBFS) every interval_ms. Nothing is saved. A live level meter for aiming a microphone or checking that a device is making noise.",
+        props: props!(r#""instrument":{"type":"string"},"input":{"type":"string"},"seconds":{"type":"number"},"interval_ms":{"type":"integer"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_play",
+        tier: Tier::Full,
+        desc: "MAKES NOISE IN THE ROOM. Plays a generated tone (sine, sweep, two_tone or noise, freq_hz, freq2_hz, seconds up to max_play_s, level_dbfs up to -1, default -12) or a .wav file from the managed capture directory on an output (default: the configured alert output, else the system default sink). The output's volume is lowered to the volume cap (and in quiet hours to the quiet volume) for the playback and put back afterwards, mute included; `volume` asks for a level but never above the limit; `unmute` unmutes it for the playback. Reserved devices are refused. Returns the volume used and the limits.",
+        props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"tone":{"type":"string","enum":["sine","sweep","two_tone","noise"]},"freq_hz":{"type":"number"},"freq2_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"file":{"type":"string","description":"a .wav file name in the managed capture directory"},"volume":{"type":"number"},"unmute":{"type":"boolean"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_audio_set_volume",
+        tier: Tier::Full,
+        desc: "Set the volume and/or mute of one device through wpctl. An output's volume cannot exceed its volume cap; an input's cannot exceed 1.0. The change persists (unlike the temporary change playing makes). Reserved devices are refused.",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"direction":{"type":"string","enum":["output","input"]},"volume":{"type":"number"},"mute":{"type":"boolean"}"#),
+        required: &["device"],
+    },
+    Spec {
+        name: "bench_audio_loopback",
+        tier: Tier::Full,
+        desc: "MAKES A SHORT TONE AND LISTENS FOR IT. Plays a 1 kHz tone (freq_hz, seconds, level_dbfs) on one output while recording one input, to prove that the path works: whether the input heard the tone, its level, signal-to-noise ratio, how much it stands out from neighbouring frequencies, the noise floor before it, and an indicative latency. The output volume is set to the limit (the cap, or the quiet volume in quiet hours; urgent: true uses the cap) and restored afterwards. A dead input (exact zeros) is reported as such. Reserved devices are refused.",
+        props: props!(r#""instrument":{"type":"string"},"output":{"type":"string"},"input":{"type":"string"},"freq_hz":{"type":"number"},"seconds":{"type":"number"},"level_dbfs":{"type":"number"},"volume":{"type":"number"},"urgent":{"type":"boolean"}"#),
         required: &[],
     },
 ];
@@ -455,13 +514,22 @@ fn list_devices(run: &dyn Run, asound: &Path, cfg: &Config, args: &Value) -> Res
 }
 
 pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
-    call_with(&Process, Path::new("/proc/asound"), insts, name, args)
+    call_with(
+        &Process,
+        Path::new("/proc/asound"),
+        local_minute_of_day(),
+        insts,
+        name,
+        args,
+    )
 }
 
-/// `call` with the program runner and the `/proc/asound` directory given: production passes the process runner and the real directory.
+/// `call` with the program runner, the `/proc/asound` directory and the minute of the local day given: production passes the
+/// process runner, the real directory and the clock.
 pub fn call_with(
     run: &dyn Run,
     asound: &Path,
+    minute: u32,
     insts: &[Instrument],
     name: &str,
     args: &Value,
@@ -479,8 +547,24 @@ pub fn call_with(
     }
     let cfg = &inst.audio;
     match name {
-        "bench_audio_devices" => list_devices(run, asound, cfg, args),
-        "bench_audio_status" => Ok(status(cfg, local_minute_of_day())),
+        "bench_audio_devices" => return list_devices(run, asound, cfg, args),
+        "bench_audio_status" => return Ok(status(cfg, minute)),
+        _ => {}
+    }
+    let devs = devices::list(run, asound, cfg)?;
+    let ctx = tools::Ctx {
+        run,
+        cfg,
+        devs: &devs,
+        minute,
+    };
+    match name {
+        "bench_audio_levels" => tools::levels_get(&ctx, args),
+        "bench_audio_record" => tools::record(&ctx, args),
+        "bench_audio_meter" => tools::meter(&ctx, args),
+        "bench_audio_play" => tools::play(&ctx, args),
+        "bench_audio_set_volume" => tools::set_volume(&ctx, args),
+        "bench_audio_loopback" => tools::loopback(&ctx, args),
         _ => Err(format!("{name} is not implemented")),
     }
 }
@@ -587,7 +671,15 @@ mod tests {
             .find(|d| d.alias.as_deref() == Some("desk"))
             .unwrap();
         let run = Scripted::new(&[(speaker.id, 0.52, false)]);
-        let v = call_with(&run, &recorded(), &i, "bench_audio_devices", &json!({})).unwrap();
+        let v = call_with(
+            &run,
+            &recorded(),
+            720,
+            &i,
+            "bench_audio_devices",
+            &json!({}),
+        )
+        .unwrap();
         let list = v["devices"].as_array().unwrap();
         let sp = list.iter().find(|d| d["alias"] == "desk").unwrap();
         assert_eq!(
@@ -610,6 +702,7 @@ mod tests {
         let no_res = call_with(
             &run,
             &recorded(),
+            720,
             &i,
             "bench_audio_devices",
             &json!({"include_reserved": false, "direction": "output", "levels": false}),
@@ -629,6 +722,7 @@ mod tests {
         let one = call_with(
             &run,
             &recorded(),
+            720,
             &i,
             "bench_audio_devices",
             &json!({"device": "desk", "levels": false}),
@@ -638,6 +732,7 @@ mod tests {
         let e = call_with(
             &run,
             &recorded(),
+            720,
             &i,
             "bench_audio_devices",
             &json!({"device": "USB_AUDIO_CODEC", "direction": "input"}),
@@ -652,6 +747,7 @@ mod tests {
         let v = call_with(
             &Scripted::new(&[]),
             &recorded(),
+            720,
             &i,
             "bench_audio_status",
             &json!({}),
@@ -668,6 +764,7 @@ mod tests {
         assert!(call_with(
             &Scripted::new(&[]),
             &recorded(),
+            720,
             &i,
             "bench_audio_nope",
             &json!({})

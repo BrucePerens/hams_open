@@ -1,8 +1,8 @@
 ---
 title: Sound device tools
 summary: What the bench_audio_* tools do, the tiers, the reserved VNA codecs, and why they live in bench_mcp.
-see_also: [setup]
-tools: [bench_audio_devices, bench_audio_status]
+see_also: [setup, safety]
+tools: [bench_audio_devices, bench_audio_status, bench_audio_levels, bench_audio_record, bench_audio_meter, bench_audio_play, bench_audio_set_volume, bench_audio_loopback]
 instrument: sound
 tier: read
 verified: device list and status run against the dev box PipeWire graph, 2026-10-29

@@ -1,8 +1,8 @@
 ---
 title: Registering and configuring the sound tools
 summary: The audio entry of the bench config: aliases, alert output, verify input, volume cap, quiet hours, capture directory.
-see_also: [overview]
-tools: [bench_audio_devices, bench_audio_status]
+see_also: [overview, safety]
+tools: [bench_audio_devices, bench_audio_status, bench_audio_levels, bench_audio_record, bench_audio_meter, bench_audio_play, bench_audio_set_volume, bench_audio_loopback]
 instrument: sound
 tier: read
 verified: config parser tested; status run on the dev box, 2026-10-29
