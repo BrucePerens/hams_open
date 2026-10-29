@@ -459,6 +459,23 @@ check at a 1 mV carrier is too noisy to decode from one capture. What is needed:
 cannot be driven now: since the unit was power-cycled after the AM lock-up the vendor program answers `hardware? offline` although the unit and this driver work; the
 start-up reads are byte-identical to the working captures and the vendor stops after the second 0x71, cause unknown), then a scope check with the FFT of stage 08.
 
+## Generator levels, with the host FFT (2026-10-28, stage 07 continued)
+
+With `bench_scope_spectrum` (host FFT, Blackman window, 1 M points, the carrier line only, so it does not depend on the scope's trigger): generator at
+10 MHz through the pad and tee, scope CH1 1 MOhm: 0 dB 10.332 mV rms, -10 dB 3.269 (3.254 predicted), -20 dB 1.038 (1.029), -30 dB 0.321 (0.325), -40 dB 0.100
+(0.103): every step within 0.3 dB of `round(16383 x 10^(dB/20))` from 0 to -40 dB. At -50 dB (0.033 mV) the carrier is below the strongest line in the
+spectrum (the 360 MHz DDS clock at 0.08 mV) and was not measured; -50 dB is not verified. The generator's level also reads the same after a sweep, after a power
+cycle and after off and on again (8.45 to 8.47 mV, with the scope's vertical scale clipping the 0 dB sine at 2 mV/div).
+Traps found: (1) a generator command sent while the frequency meter's burst (about 2 s) or a sweep burst is still running is overwritten by the burst, so wait about
+3 s after a measurement before using the generator; (2) the scope's `C1:WF? DAT2` returns a few samples unless `WFSU SP,1,NP,0,FP,0` was sent in the session; (3) the scope's
+`PAVA? RMS` reading at 100 ns/div was off by a factor two on this unit, the waveform's own rms is right.
+
+## The soak run (stage 11)
+
+`examples/soak.rs` (run by a wrapper that restarts it after a hang): every round a 60-point sweep (100 kHz to 150 MHz) compared with the run's first sweep (0.3 % and 0.3 degrees
+allowed), a frequency-meter loopback reading (under 0.01 Hz), the generator at -6 and -12 dB and off read on the scope (8 % allowed), a cold reset through the hub every 30 minutes; a clear
+error is counted as ERROR, a wrong number as WRONG, a step over its deadline as HANG (exit 3, restart). Started 2026-10-28 23:46 (PDT) for 8.6 hours.
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).

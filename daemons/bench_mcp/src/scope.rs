@@ -113,6 +113,8 @@ pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> 
     if stopped && args.get("allow_stopped").and_then(|v| v.as_bool()) != Some(true) {
         return Err("the scope is stopped, so its waveform memory is an old frozen frame. Set trigger_mode AUTO (bench_set) or pass allow_stopped=true.".into());
     }
+    // Every point, no decimation: without this the scope returned a few samples on this unit (found 2026-10-28).
+    s.send("WFSU SP,1,NP,0,FP,0")?;
     let vdiv = s.number(&format!("C{c}:VDIV?"))?;
     let ofst = s.number(&format!("C{c}:OFST?"))?;
     let sara = s.number("SARA?")?;
