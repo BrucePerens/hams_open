@@ -662,7 +662,7 @@ pub fn device_json(t: &Tree, d: &Device, labels: &dyn Fn(&str, u32) -> Option<St
         "parent": d.parent, "port": d.port,
         "usb_version": d.bcd_usb, "speed_mbps": d.speed, "speed": d.speed_name(), "speed_finding": speed_finding(d, parent),
         "class": format!("{:02x}", d.class), "is_hub": d.is_hub(),
-        "max_power_ma": d.max_power_ma, "self_powered": d.self_powered,
+        "max_power_ma": d.max_power_ma, "self_powered": d.self_powered, "power_budget": super::diagnose::power_budget(t, d),
         "authorized": d.authorized, "removable": d.removable,
         "power": {"control": d.power_control, "autosuspend_delay_ms": d.autosuspend_delay_ms, "runtime_status": d.runtime_status},
         "controller": ctrl,

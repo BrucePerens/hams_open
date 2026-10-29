@@ -7,6 +7,8 @@
 //! listed and allowed: `read_only` (listing, status, history), `read_config` (device reset, authorize, driver unbind
 //! and bind, autosuspend, and switching a port back on), `full` (switching a port off, and power cycles).
 
+pub mod bandwidth;
+pub mod diagnose;
 pub mod history;
 pub mod hubs;
 pub mod ladder;
@@ -218,6 +220,20 @@ pub const SPECS: &[Spec] = &[
         tier: Tier::ReadOnly,
         desc: "Watch the USB tree for `seconds` (1 to 120) by polling sysfs and report every change with its time: devices appearing, disappearing or re-enumerating (new device number), speed or authorized changes, port state changes and over-current count rises, with the number of enumerations per device and which devices flapped. Polling can miss a change shorter than interval_ms (default 200); bench_usb_history from the journal is exact.",
         props: props!(r#""instrument":{"type":"string"},"seconds":{"type":"number"},"interval_ms":{"type":"integer"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_usb_bandwidth",
+        tier: Tier::ReadOnly,
+        desc: "Which devices share a controller, a root hub or a transaction translator, and how much periodic (isochronous and interrupt) bandwidth they use now and could reserve in their busiest alternate settings: per domain (a TT of a high-speed hub, one per port on a multi-TT hub; a high-speed bus; a SuperSpeed bus) the budget in bytes per ms, active and worst-case load and the devices in it, plus findings such as several full-speed isochronous codecs behind one translator. Also lists the root hubs of each controller (USB 2 and USB 3 companions). The figures are the host's reservation arithmetic, an estimate and not a measurement. `bus` limits to one bus.",
+        props: props!(r#""instrument":{"type":"string"},"bus":{"type":"integer"}"#),
+        required: &[],
+    },
+    Spec {
+        name: "bench_usb_diagnose",
+        tier: Tier::ReadOnly,
+        desc: "Explain why a USB device is slow, misbehaving or missing. Give `device` (a path such as 3-2.2.1, or a port label) or `hub` and `port`. It checks the port (powered off, over-current, powered with nothing connected, connected but not enabled, disabled), the device (deauthorized, running below its capability, interfaces without a driver, runtime suspended), the power budget (bMaxPower against the hub's supply), translator bandwidth sharing, and the last 24 h of the kernel journal (enumeration failures, -71 errors, resets, flapping). Findings are ranked problem, warning, note, each with evidence and a next step; `could_not_read` lists what needed a privilege it did not have (the status word uses `sudo -n uhubctl`; `privileged: false` skips it).",
+        props: props!(r#""instrument":{"type":"string"},"device":{"type":"string"},"hub":{"type":"string"},"port":{"type":"integer"},"privileged":{"type":"boolean"}"#),
         required: &[],
     },
 ];
@@ -476,6 +492,16 @@ pub fn call_with(
                 .map(|d| d.as_secs_f64())
                 .unwrap_or(0.0);
             history::history(run, root, &inst.usb, now, args)
+        }
+        "bench_usb_bandwidth" => {
+            bandwidth::bandwidth(&sysfs::Tree::read(root)?, &inst.usb, root, args)
+        }
+        "bench_usb_diagnose" => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs_f64())
+                .unwrap_or(0.0);
+            diagnose::diagnose(run, root, &inst.usb, now, args)
         }
         "bench_usb_watch" => history::watch(root, args),
         "bench_usb_port_power" => hubs::port_power(

@@ -157,7 +157,7 @@ overlap (the burst overwrites the generator's settings): one VNA call at a time 
 
 ## USB hub tools (`usb_hub` driver)
 
-`bench_usb_topology`, `bench_usb_find`, `bench_usb_hubs`, `bench_usb_protection` and `bench_usb_port_power` (and the ladder tools `bench_usb_reset`, `_authorize`, `_driver`, `_autosuspend`) describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
+`bench_usb_topology`, `bench_usb_find`, `bench_usb_hubs`, `bench_usb_protection`, `bench_usb_history`, `bench_usb_watch`, `bench_usb_bandwidth`, `bench_usb_diagnose` and `bench_usb_port_power` (and the ladder tools `bench_usb_reset`, `_authorize`, `_driver`, `_autosuspend`) describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
 Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`. Tests read a recording of this development machine's `/sys`, `uhubctl`, `lsusb` and kernel journal in
 `tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`).
 
@@ -173,3 +173,6 @@ Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`.
 * The escalation ladder (reset, authorize, driver, autosuspend) goes through the helper, honours protection and dry run. [@ANCHOR: usb_hub_ladder]
 * Kernel journal lines are classified (connect, disconnect, reset, enumeration failure, errno) and counted per device, with flapping detection, against the recorded journal. [@ANCHOR: usb_hub_history_parse]
 * A watch reports a device leaving and returning with a new device number. [@ANCHOR: usb_hub_watch]
+* Bandwidth: the VNWA's four full-speed devices share one translator and the endpoint arithmetic follows the USB reservation rules. [@ANCHOR: usb_hub_bandwidth]
+* Diagnose: missing, powered-off, deauthorized and journal-backed findings. [@ANCHOR: usb_hub_diagnose]
+* The power budget flags a bus-powered hub asked for more current than it has. [@ANCHOR: usb_hub_power_budget]
