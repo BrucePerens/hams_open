@@ -287,3 +287,49 @@ fn vna_power_cycle_leaves_the_scope_usable() {
     drop(stdin);
     let _ = child.wait();
 }
+
+/// Needs `vna` (read_config) and `scope` instruments, the TX port through the pad and tee to the scope and the RX input, and nothing else using the unit.
+/// Each VNA function through its own tool: the generator's level steps read on the scope with the host FFT, the meter on the loopback, a sweep.
+#[test]
+#[ignore]
+fn each_vna_function_works_through_its_tool() {
+    let tool = |name: &str, args: &str| -> serde_json::Value {
+        let r = rpc(&[&call(name, args)]);
+        assert!(r[0]["result"]["isError"] != true, "{name}: {}", text(&r[0]));
+        serde_json::from_str(&text(&r[0])).unwrap()
+    };
+    tool(
+        "bench_vna_generator_on",
+        r#"{"freq_hz":10000000,"level_db":0}"#,
+    );
+    let mut reads = Vec::new();
+    for db in [0.0f64, -10.0, -20.0] {
+        tool(
+            "bench_vna_generator_level",
+            &format!(r#"{{"level_db":{db}}}"#),
+        );
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let s = tool(
+            "bench_scope_spectrum",
+            r#"{"instrument":"scope","channel":1,"timebase_s":0.0002,"memory_depth":"14M","points":262144,"window":"blackman","peaks":1}"#,
+        );
+        let p = &s["peaks"][0];
+        assert!((p["freq_hz"].as_f64().unwrap() - 1e7).abs() < 5e4, "{p}");
+        reads.push(p["vrms"].as_f64().unwrap());
+    }
+    tool("bench_vna_generator_off", "{}");
+    // Steps of 10 dB are a factor 3.162 in voltage, to 5 % (the scope's vertical scale must not clip the 0 dB line: 10 mV per division).
+    assert!(
+        (reads[0] / reads[1] / 3.162 - 1.0).abs() < 0.05
+            && (reads[1] / reads[2] / 3.162 - 1.0).abs() < 0.05,
+        "{reads:?}"
+    );
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    let m = tool("bench_vna_meter", r#"{"freq_hz":10000000}"#);
+    assert!(m["offset_hz"].as_f64().unwrap().abs() < 0.01, "{m}");
+    let sw = tool(
+        "bench_vna_sweep",
+        r#"{"start_hz":1000000,"stop_hz":100000000,"points":5,"if_hz":4000}"#,
+    );
+    assert_eq!(sw["points"], 5, "{sw}");
+}

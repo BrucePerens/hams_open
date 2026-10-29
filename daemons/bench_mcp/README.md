@@ -53,6 +53,9 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_psu_output` | read_config to switch off, **full** to switch on | supply |
 | `bench_scope_self_cal` | full (needs `confirm_inputs_disconnected: true`) | scope |
 | `bench_vna_sweep` | read_config (it puts RF on the TX port) | VNA |
+| `bench_vna_generator_on`, `_off`, `_level`, `_am` | read_config (RF on the TX port at the unit's own level, about -17 dBm at 0 dB) | VNA |
+| `bench_vna_meter` | read_config (the TX DDS runs at the centre during the measurement) | VNA |
+| `bench_vna_calibrate_measure`, `bench_vna_calibrate_build` | read_config | VNA |
 | `bench_vna_power_cycle` | read_config (switches the unit's hub port; the verification puts RF on the TX port) | VNA |
 | `bench_sdr_capture`, `bench_sdr_survey`, `bench_sdr_coherence` | read_config (they tune the radio; receive only) | SDR |
 
@@ -103,6 +106,7 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 * The hub port and retries of the VNA entry are read, and only as a pair. [@ANCHOR: bench_mcp_config]
 * The power-cycle tool needs a hub in the config and read_config, and the VNA's lock does not hold up the scope or the supply. [@ANCHOR: bench_mcp_vna_power_cycle]
 * The host FFT finds a tone's frequency and level in every window, and the spectrum tool does so through a scope link. [@ANCHOR: bench_mcp_spectrum]
+* A calibration is built from stored standards and refused at other settings, cable or range; measuring a standard needs a valid session, standard and cable. [@ANCHOR: bench_mcp_vna_cal_build] [@ANCHOR: bench_mcp_vna_cal_apply]
 * A sweep is written as a CSV with a header and one row per point. [@ANCHOR: bench_mcp_vna_csv]
 
 ## Checks this crate makes for the SDRs (anchors)
@@ -142,3 +146,11 @@ the supply output on.
   (I2C, SPI, UART, CAN, LIN) triggers were not accepted with the tokens tried, so they are either licensed options or named differently. Serial decode was not found.
 * **Cursors** exist (`CRMS?` answers) but are not wrapped. Channel math (add, subtract, multiply, divide) is not wrapped: only channel 1 is connected here.
 * The display sleeps after 30 minutes (`SCSV 30MIN`); SCPI measurements and `SCDP` screenshots still work while it sleeps. `SCSV OFF` was not changed.
+
+## The VNA's functions as tools (2026-10-28)
+
+`bench_vna_sweep` (optionally corrected with `calibration=<file>` and the same `cable` text), `bench_vna_calibrate_measure` and `_build` (open, short, load, thru; a kit file with
+the real kit's published numbers, see vnwa_open `cal::KitDefinition`), `bench_vna_generator_on`/`_off`/`_level`/`_am`, `bench_vna_meter`, `bench_vna_status`,
+`bench_vna_power_cycle`. There is no spectrum-analyzer tool: the vendor's rudimentary VNA spectrum mode has not been decoded (the scope's `bench_scope_spectrum` is the
+spectrum tool). The AM tool reproduces the one captured setting (500 Hz, 100 %, -20 dB) and only a power cycle stops it. A running generator and a sweep or the meter must not
+overlap (the burst overwrites the generator's settings): one VNA call at a time is enforced by the server's per-instrument lock, but switch the generator off before a sweep.

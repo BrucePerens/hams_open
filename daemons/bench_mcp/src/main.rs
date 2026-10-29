@@ -14,6 +14,7 @@ mod scope;
 mod sdr;
 mod spectrum;
 mod vna;
+mod vna_tools;
 
 use config::{Instrument, Kind, Tier};
 use link::Link;
@@ -66,10 +67,27 @@ const TOOLS: &[ToolSpec] = &[
         props: r#"{"instrument":{"type":"string"},"on":{"type":"boolean"}}"#, required: &["on"] },
     ToolSpec { name: "bench_vna_sweep", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA: a linear sweep of start_hz to stop_hz in `points` points (1 to 401, about 0.2 s each at 60 ms per point; the unit emits for six point times) with RF on the TX port, measuring S21 (RX channel) and S11 (reflection channel). The results are raw ratios, not calibrated: the cable, bridge and front-end are not removed. Saves a CSV (frequency, S21 and S11 as re/im, dB and degrees) and returns a summary, and the rows themselves when there are at most 51 points. if_hz (a divisor of 48 kHz such as 12000, 6000 or 4000), point_ms (0.2 to 100) and rf_level (0 to 16383) override the instrument's settings for this sweep.",
-        props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"}}"#, required: &["start_hz"] },
+        props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"},"calibration":{"type":"string","description":"a .cal file from bench_vna_calibrate_build"},"cable":{"type":"string","description":"required with calibration: the cable text given when the standards were measured"}}"#, required: &["start_hz"] },
     ToolSpec { name: "bench_vna_power_cycle", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA: cold-reset the unit by switching its power-switching hub port off, waiting, and on again (about 12 s in all), then wait for the unit and both codecs and, unless verify is false, check it with a one-point sweep at 10 MHz (RF at the unit's own level, about -17 dBm, on the TX port). The unit keeps no settings across it, so use it to clear the silent state (reference channels read about zero) or a unit that does not answer. Needs hub and hub_port in the instrument's config. bench_vna_sweep already does this by itself once when a point fails after its retries.",
         props: r#"{"instrument":{"type":"string"},"verify":{"type":"boolean","description":"default true"}}"#, required: &[] },
+    ToolSpec { name: "bench_vna_generator_on", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA signal generator: CW on the TX port at freq_hz (up to 1.3e9) and level_db (0 to -50, a negative attenuation; 0 dB is about -17 dBm; steps verified on a scope from 0 to -40 dB within 0.3 dB). Stays on until bench_vna_generator_off. Do not run a sweep or the meter while it is on.",
+        props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"level_db":{"type":"number"}}"#, required: &["freq_hz","level_db"] },
+    ToolSpec { name: "bench_vna_generator_off", tier: Tier::ReadConfig, kinds: &[Kind::Vna], desc: "VNA signal generator: switch the TX output off (safe at any time).", props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
+    ToolSpec { name: "bench_vna_generator_level", tier: Tier::ReadConfig, kinds: &[Kind::Vna], desc: "VNA signal generator: change the level (0 to -50 dB) of a running generator.", props: r#"{"instrument":{"type":"string"},"level_db":{"type":"number"}}"#, required: &["level_db"] },
+    ToolSpec { name: "bench_vna_generator_am", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA signal generator with amplitude modulation: freq_hz carrier at -20 dB, modulated 500 Hz sine, 100 % (the only modulation setting decoded so far; other frequencies, depths and FM are not). The unit then modulates in real time and refuses most control requests, so ONLY bench_vna_power_cycle stops it.",
+        props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"}}"#, required: &["freq_hz"] },
+    ToolSpec { name: "bench_vna_meter", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA frequency meter: the frequency of the signal on the RX input within +/-25 Hz of center_hz (param freq_hz), by the phase of RX against the unit's own reference over about 1.7 s (point_ms 60 default; the TX DDS runs at the centre, nothing else may use the unit). Returns the offset in Hz with its standard error and the reading. A TX-to-RX loopback reads 0. The sign and absolute accuracy are not yet verified against an external standard.",
+        props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number","description":"centre frequency in Hz"},"point_ms":{"type":"number"}}"#, required: &["freq_hz"] },
+    ToolSpec { name: "bench_vna_calibrate_measure", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA calibration, step 1: sweep one standard (open, short, load or thru) and store it under `session`, with the settings and the `cable` text (what is between the ports and the reference plane). Repeat for each standard with the same start_hz, stop_hz, points and cable.",
+        props: r#"{"instrument":{"type":"string"},"session":{"type":"string"},"standard":{"type":"string","enum":["open","short","load","thru"]},"cable":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"}}"#, required: &["session","standard","cable","start_hz","stop_hz","points"] },
+    ToolSpec { name: "bench_vna_calibrate_build", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA calibration, step 2: build the calibration file of `session` from its stored standards (open+short+load give S11, thru gives S21), optionally with the real kit's published numbers from kit_file (see vnwa_open cal::KitDefinition text format). Apply it with bench_vna_sweep calibration=<file> cable=<same text>; it is refused at other IF, time per point, RF level or cable.",
+        props: r#"{"instrument":{"type":"string"},"session":{"type":"string"},"kit_file":{"type":"string"},"created":{"type":"string"}}"#, required: &["session"] },
     ToolSpec { name: "bench_sdr_capture", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
         desc: "SDR (bladeRF, LimeSDR): tune to freq_hz, capture `samples` complex baseband samples (default 262144, up to 16777216) at sample_rate_hz (default 2 MHz) and gain_db (default 30), receive only. Saves the raw I/Q as little-endian f32 pairs and returns RMS level, peak, DC offset, clipped sample count, the noise floor and the strongest peaks (dBFS at the set gain, not calibrated power). A bladeRF below 237.5 MHz needs its XB-200 configured (\"xb200\" in the config). channel 1 is the LimeSDR's second receiver. antenna picks the LimeSDR receive input (LNAH, LNAL or LNAW, the H, L and W connectors of each channel); the default is LNAL, which is what the driver selects at every frequency. The bladeRF has one input.",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"samples":{"type":"integer"},"channel":{"type":"integer","enum":[0,1]}}"#, required: &["freq_hz"] },
@@ -179,6 +197,15 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             "bench_status" => vna::status(&inst.vna),
             "bench_vna_sweep" => vna::sweep(&inst.vna, args, &out_dir()),
             "bench_vna_power_cycle" => vna::power_cycle(&inst.vna, args),
+            "bench_vna_generator_on" => vna_tools::generator_on(args),
+            "bench_vna_generator_off" => vna_tools::generator_off(),
+            "bench_vna_generator_level" => vna_tools::generator_level(args),
+            "bench_vna_generator_am" => vna_tools::generator_am(args),
+            "bench_vna_meter" => vna_tools::meter(&inst.vna, args),
+            "bench_vna_calibrate_measure" => {
+                vna_tools::calibrate_measure(&inst.vna, args, &out_dir())
+            }
+            "bench_vna_calibrate_build" => vna_tools::calibrate_build(args, &out_dir()),
             _ => Err(format!("{name} does not apply to {:?}", inst.name)),
         };
     }
@@ -415,6 +442,42 @@ mod tests {
         assert!(instrument_lock("lock_test_scope").try_lock().is_ok());
         assert!(instrument_lock("lock_test_psu").try_lock().is_ok());
         assert!(instrument_lock("lock_test_vna").try_lock().is_err());
+    }
+
+    #[test]
+    fn every_vna_function_has_its_own_tool_at_read_config_and_none_reaches_other_instruments() {
+        let vna = |tier: &str| {
+            config::parse(&format!(r#"{{"instruments":{{"vna":{{"driver":"vnwa_open","tier":"{tier}"}},"psu":{{"driver":"atm6301","tier":"full","serial":"/dev/null"}}}}}}"#)).unwrap()
+        };
+        let names = [
+            "bench_vna_sweep",
+            "bench_vna_power_cycle",
+            "bench_vna_generator_on",
+            "bench_vna_generator_off",
+            "bench_vna_generator_level",
+            "bench_vna_generator_am",
+            "bench_vna_meter",
+            "bench_vna_calibrate_measure",
+            "bench_vna_calibrate_build",
+        ];
+        let listed = |v: &[Instrument]| {
+            tool_defs(v)
+                .iter()
+                .map(|t| t.name.to_string())
+                .collect::<Vec<_>>()
+        };
+        for n in names {
+            assert!(listed(&vna("read_config")).contains(&n.to_string()), "{n}");
+            assert!(
+                !listed(&vna("read_only")).contains(&n.to_string()),
+                "{n} listed at read_only"
+            );
+            let spec = TOOLS.iter().find(|t| t.name == n).unwrap();
+            assert_eq!(spec.tier, Tier::ReadConfig, "{n}");
+            assert_eq!(spec.kinds, &[Kind::Vna], "{n}");
+            let e = call(&vna("read_only"), n, &json!({})).unwrap_err();
+            assert!(e.contains("needs tier"), "{n}: {e}");
+        }
     }
 
     #[test]
