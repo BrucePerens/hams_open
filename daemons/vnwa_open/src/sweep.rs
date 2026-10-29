@@ -150,6 +150,19 @@ pub struct Point {
     pub level_change: f64,
 }
 
+/// How far a measurement is from a reference value of the same quantity (here: the vendor program's): the magnitude difference in
+/// percent of the reference and the phase difference in degrees (wrapped to -180 to 180).
+pub fn agreement(reference: Complex, measured: Complex) -> (f64, f64) {
+    // [@ANCHOR: vnwa_open_vendor_agreement]
+    let ratio = Complex {
+        re: (measured.re * reference.re + measured.im * reference.im)
+            / (reference.re * reference.re + reference.im * reference.im),
+        im: (measured.im * reference.re - measured.re * reference.im)
+            / (reference.re * reference.re + reference.im * reference.im),
+    };
+    ((ratio.abs() - 1.0) * 100.0, ratio.phase_deg())
+}
+
 /// What the unit needed to get a result, for the caller to report.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Recovery {
@@ -409,6 +422,8 @@ impl Vna {
 mod tests {
     use super::*;
 
+    include!("vendor_comparison_vectors.rs");
+
     fn tone(f: f64, fs: f64, n: usize, level: impl Fn(usize) -> f64) -> Vec<f64> {
         (0..n)
             .map(|i| level(i) * (2.0 * std::f64::consts::PI * f * i as f64 / fs).sin())
@@ -530,5 +545,39 @@ mod tests {
         };
         let e = recover::<_, ()>(&mut f, "p", |_| Err("no signal".into())).unwrap_err();
         assert!(e.contains("power cycle: hub gone"), "{e}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_vendor_agreement]
+    #[test]
+    fn this_driver_agrees_with_the_vendor_program_on_the_same_cables() {
+        // 60 points, 100 kHz to 150 MHz including the lead stub's resonance near 52 MHz; see the vectors file.
+        let c = |re: f64, im: f64| Complex { re, im };
+        let (mut worst11, mut worst21, mut ph11, mut ph21) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let mut offsets21 = Vec::new();
+        for r in VENDOR_COMPARISON {
+            let (m11, p11) = agreement(c(r[1], r[2]), c(r[5], r[6]));
+            let (m21, p21) = agreement(c(r[3], r[4]), c(r[7], r[8]));
+            worst11 = worst11.max(m11.abs());
+            worst21 = worst21.max(m21.abs());
+            ph11 = ph11.max(p11.abs());
+            ph21 = ph21.max(p21.abs());
+            offsets21.push(m21);
+        }
+        // S11 (codec 1) agrees to 0.15 % and 0.5 degrees; S21 (codec 2) is a constant 0.8 % high, a gain difference between the two codecs that the vendor
+        // program does not show (its S11 and S21 are equal on this loopback); a through calibration removes it.
+        assert!(worst11 < 0.25 && ph11 < 0.6, "{worst11} {ph11}");
+        assert!(worst21 < 1.0 && ph21 < 0.6, "{worst21} {ph21}");
+        let spread = offsets21.iter().cloned().fold(f64::MIN, f64::max)
+            - offsets21.iter().cloned().fold(f64::MAX, f64::min);
+        assert!(spread < 0.3, "the S21 offset is not constant: {spread}");
+        // The agreement function itself: 1 % high and 2 degrees round.
+        let (m, p) = agreement(
+            c(1.0, 0.0),
+            Complex {
+                re: 1.01 * 2f64.to_radians().cos(),
+                im: 1.01 * 2f64.to_radians().sin(),
+            },
+        );
+        assert!((m - 1.0).abs() < 1e-9 && (p - 2.0).abs() < 1e-9, "{m} {p}");
     }
 }
