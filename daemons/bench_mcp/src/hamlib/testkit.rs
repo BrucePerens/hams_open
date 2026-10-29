@@ -15,10 +15,12 @@ pub enum Reply {
     Hangup,
 }
 
+#[cfg(test)]
 pub fn ok(lines: &[&str]) -> Reply {
     Reply::Rprt(lines.iter().map(|s| s.to_string()).collect(), 0)
 }
 
+#[cfg(test)]
 pub fn err(code: i32) -> Reply {
     Reply::Rprt(vec![], code)
 }
@@ -28,7 +30,9 @@ pub struct FakeRigctld {
     log: Arc<Mutex<Vec<String>>>,
 }
 
+#[cfg(test)]
 impl FakeRigctld {
+    #[cfg(test)]
     pub fn serve(handler: impl FnMut(&str) -> Reply + Send + 'static) -> FakeRigctld {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -90,7 +94,9 @@ pub struct Radio {
     pub swr: f64,
 }
 
+#[cfg(test)]
 impl Radio {
+    #[cfg(test)]
     pub fn new(strength: &[f64]) -> Radio {
         Radio {
             freq: 7_100_000.0,
@@ -103,6 +109,7 @@ impl Radio {
         }
     }
 
+    #[cfg(test)]
     pub fn handle(&mut self, cmd: &str) -> Reply {
         let mut w = cmd.split_whitespace();
         match (w.next(), w.next()) {

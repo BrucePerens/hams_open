@@ -67,6 +67,8 @@ pub struct Caps {
     pub ptt_type: String,
     pub dcd_type: String,
     pub port_type: String,
+    /// The `Serial speed:` line of a serial rig, as printed.
+    pub serial: String,
     pub get_functions: Vec<String>,
     pub set_functions: Vec<String>,
     pub get_levels: Vec<String>,
@@ -125,6 +127,7 @@ pub fn parse_caps(text: &str) -> Result<Caps, String> {
                 "PTT type" => c.ptt_type = v.into(),
                 "DCD type" => c.dcd_type = v.into(),
                 "Port type" => c.port_type = v.into(),
+                "Serial speed" => c.serial = v.into(),
                 "Get functions" => c.get_functions = words(v),
                 "Set functions" => c.set_functions = words(v),
                 "Get level" => c.get_levels = names(v),
@@ -189,7 +192,7 @@ pub fn tool(run: &dyn Run, args: &Value) -> Result<Value, String> {
         let c = parse_caps(&text)?;
         return Ok(json!({
             "model": n, "name": c.model_name, "manufacturer": c.manufacturer, "backend_status": c.status, "rig_type": c.rig_type,
-            "ptt_type": c.ptt_type, "dcd_type": c.dcd_type, "port_type": c.port_type,
+            "ptt_type": c.ptt_type, "dcd_type": c.dcd_type, "port_type": c.port_type, "serial": c.serial,
             "can_read_levels": c.get_levels, "can_set_levels": c.set_levels,
             "can_read_functions": c.get_functions, "can_set_functions": c.set_functions,
             "modes": c.modes, "vfos": c.vfos, "preamp_db": c.preamp_db, "attenuator_db": c.attenuator_db, "agc_levels": c.agc_levels,

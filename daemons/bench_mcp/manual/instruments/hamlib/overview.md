@@ -2,7 +2,7 @@
 title: Hamlib tools
 summary: What the bench_hamlib_* tools do, the tiers, how a rig is reached (rigctld on localhost) and what is left out.
 see_also: [instruments/hamlib/setup, instruments/hamlib/operation, instruments/hamlib/limits, instruments/hamlib/troubleshooting, instruments/hamlib/protocol]
-tools: [bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_rigctld]
+tools: [bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_diagnose, bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan, bench_hamlib_rigctld]
 instrument: hamlib
 tier: read_only
 verified: dummy rig only, 2026-10-29
@@ -20,9 +20,13 @@ Hamlib is a library of drivers for amateur and shortwave radios. bench_mcp does 
 | [bench_hamlib_rigs](tools/bench_hamlib_rigs) | read_only | the configured rigs, whether rigctld runs, whether the rig answers |
 | [bench_hamlib_status](tools/bench_hamlib_status) | read_only | frequency, mode, VFO, split, RIT/XIT, signal strength, gains, AGC, attenuator, preamp, NB/NR, PTT, power state, in one call |
 | [bench_hamlib_get](tools/bench_hamlib_get) | read_only | one value; repeated signal-strength readings with their spread |
+| [bench_hamlib_diagnose](tools/bench_hamlib_diagnose) | read_only | connection test: program, model, speed, device, who holds it, DTR/RTS settings; opens no port |
+| [bench_hamlib_set](tools/bench_hamlib_set) | read_config | frequency, mode and passband, VFO, split, RIT/XIT, levels and functions, each read back; never transmit-side |
+| [bench_hamlib_memory](tools/bench_hamlib_memory) | read_config | recall a memory channel |
+| [bench_hamlib_scan](tools/bench_hamlib_scan) | read_config | bounded scan or seek with signal strength per frequency; restores the rig |
 | [bench_hamlib_rigctld](tools/bench_hamlib_rigctld) | read_config | status, start, stop, restart of the managed rigctld |
 
-Later pages of this manual add receiver control, receiver tests and the transmit tools as they are merged; `bench_manual_whats_new` lists them.
+Receiver tests and the transmit tools are added in later steps; `bench_manual_whats_new` lists what has been merged.
 
 ## How a rig is reached
 
