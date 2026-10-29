@@ -114,9 +114,13 @@ pub fn identify(cfg: &Config) -> Value {
 pub fn status(cfg: &Config) -> Result<Value, String> {
     // The unit must answer a harmless read (request 0x3a, the generator's read-back, 2 bytes) and not only be on the bus: a
     // unit that is listed but does not answer needs a power cycle.
+    let mut monitor = Value::Null;
     let (usb, answers) = match vnwa_open::usb::Vnwa::open() {
         Ok(u) => match u.read(0x3a, 0, 0, 2) {
-            Ok(b) => ("present", json!({"bytes": b, "resends": u.resends()})),
+            Ok(b) => {
+                monitor = instrument_monitoring(&u);
+                ("present", json!({"bytes": b, "resends": u.resends()}))
+            }
             Err(e) => ("present but not answering", json!({"error": e})),
         },
         Err(e) => ("not found or no permission", json!({"error": e})),
@@ -133,6 +137,7 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
     Ok(json!({
         "usb": usb,
         "usb_read": answers,
+        "instrument_monitoring": monitor,
         "reference_clock": "internal 12 MHz TCXO (this driver never selects the external clock input; nothing may be connected to it, see docs/PROTOCOL.md)",
         "hub": cfg.hub.as_ref().map(|h| format!("{} port {}", h.hub, h.port)),
         "power_cycles_by_this_server": POWER_CYCLES.load(Ordering::Relaxed),
@@ -144,6 +149,21 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
         "rf_level": cfg.rf_level,
         "calibrated": false,
     }))
+}
+
+/// The unit's firmware version and internal temperature sensor (the vendor's "Instrument Monitoring"). The temperature is in raw,
+/// uncalibrated counts that rise as the unit warms (about 25 counts in the first minute after power-up, then slowly): only changes
+/// mean anything. A failed read is reported in the value, never as a number.
+pub fn instrument_monitoring(u: &vnwa_open::usb::Vnwa) -> Value {
+    match u.firmware_version() {
+        Err(e) => json!({"error": e}),
+        Ok((major, minor)) => match u.temperature_counts() {
+            Ok(c) => {
+                json!({"firmware": format!("v{major}.{minor}"), "temperature_counts": c, "temperature_note": "uncalibrated sensor counts, relative use only; they rise as the unit warms after power-up"})
+            }
+            Err(e) => json!({"firmware": format!("v{major}.{minor}"), "temperature_error": e}),
+        },
+    }
 }
 
 /// Cold resets done by this server process, for `status`.
@@ -235,6 +255,11 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         "recovery": {"remeasured": vna.recovery().remeasured, "transfer_resends": vna.recovery().transfer_resends, "power_cycles": vna.recovery().power_cycles, "points_measured_again_for_audio_overruns": vna.recovery().overrun_retries, "audio_overruns_reported": vna.recovery().overruns_reported},
         "max_if_error_hz": points.iter().map(|p| p.if_error_hz).fold(0.0, f64::max),
         "max_level_change": points.iter().map(|p| p.level_change).fold(0.0, f64::max),
+        "recovered_failures": vna.failure_log().iter().rev().take(5).map(|f| json!({"point": f.what, "attempts": f.attempts})).collect::<Vec<_>>(),
+        "temperature_counts_after": match vna.temperature_counts() {
+            Ok(c) => json!(c),
+            Err(e) => json!({"error": e}),
+        },
         "file": file.display().to_string(),
         "rows": rows,
     }))
