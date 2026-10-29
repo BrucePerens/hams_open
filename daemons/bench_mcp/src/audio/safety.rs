@@ -98,6 +98,13 @@ impl<'a> VolumeGuard<'a> {
         ))
     }
 
+    /// Sets the volume for the next step of an operation that raises it in stages; the caller keeps within the limit. The first
+    /// `apply` recorded the original state, which `restore` still puts back.
+    pub fn set(&mut self, volume: f64) -> Result<(), String> {
+        self.done = false;
+        levels::set_volume(self.run, self.id, volume)
+    }
+
     /// Puts the volume and mute back. Idempotent.
     pub fn restore(&mut self) -> Result<(), String> {
         if self.done {
