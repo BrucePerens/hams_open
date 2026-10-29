@@ -7,9 +7,12 @@
 pub mod audio;
 pub mod capture;
 pub mod generator;
+pub mod power;
 pub mod protocol;
 pub mod setup;
 pub mod sweep;
+pub mod topology;
+pub mod transport;
 pub mod usb;
 
 /// USB vendor ID and product ID of the VNWA control chip.

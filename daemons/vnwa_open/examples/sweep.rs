@@ -10,9 +10,17 @@ fn main() -> Result<(), String> {
         point_ms: num(5, 60.0),
         settle_ms: a.get(6).and_then(|s| s.parse().ok()),
         window_ms: a.get(7).and_then(|s| s.parse().ok()),
+        // VNWA_HUB=3-2:2 names the power-switching hub port, so a point that cannot be recovered gets a cold reset.
+        hub: std::env::var("VNWA_HUB").ok().and_then(|h| {
+            let (hub, port) = h.split_once(':')?;
+            Some(vnwa_open::power::HubPort {
+                hub: hub.to_string(),
+                port: port.parse().ok()?,
+            })
+        }),
         ..Config::default()
     };
-    let vna = Vna::open(cfg)?;
+    let mut vna = Vna::open(cfg)?;
     for p in vna.sweep(num(1, 10e6), num(2, 10e6), num(3, 1.0) as usize)? {
         println!(
             "{:>12.0} Hz  S21 {:.4} @ {:8.2} deg   S11 {:.4} @ {:8.2} deg",
@@ -23,5 +31,10 @@ fn main() -> Result<(), String> {
             p.s11.phase_deg()
         );
     }
+    let r = vna.recovery();
+    eprintln!(
+        "recovery: {} remeasured, {} transfer resends, {} power cycles",
+        r.remeasured, r.transfer_resends, r.power_cycles
+    );
     Ok(())
 }

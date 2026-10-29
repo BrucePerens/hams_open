@@ -21,8 +21,11 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
       "lime":  {"driver": "limesdr", "tier": "read_config"}}}
 
-The VNA entry's settings are all optional: `codec_s11` and `codec_s21` (parts of the ALSA ids of the two codecs, default
-`hw:CARD=CODEC,` and `hw:CARD=CODEC_1,`), `if_hz` (a divisor of 48 kHz: 12000, 6000 or 4000), `point_ms` (0.2 to 100),
+The VNA entry's settings are all optional: `codec_s11` and `codec_s21` (parts of the ALSA ids of the two codecs; by default
+they are found from their place on the USB tree, which stays right when a power cycle changes the kernel's card order),
+`hub` and `hub_port` (the power-switching hub port the unit is on, for example `"3-2"` and `2`: with them a point that still
+fails after `retries` (default 2) re-measurements gets one cold reset through `sudo -n uhubctl` and is measured again),
+`if_hz` (a divisor of 48 kHz: 12000, 6000 or 4000), `point_ms` (0.2 to 100),
 `rf_level` (0 to 16383), `settle_ms` and `window_ms`. A bad value is refused when the file is read.
 
 The SDR entries need SoapySDR with the radio's module (`libsoapysdr0.8`, `soapysdr-module-bladerf`, `soapysdr-module-lms7`); the
@@ -95,6 +98,7 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 ## Checks this crate makes for the VNA (anchors)
 
 * The arguments of a sweep are checked and override the instrument's settings for that sweep. [@ANCHOR: bench_mcp_vna_sweep_args]
+* The hub port and retries of the VNA entry are read, and only as a pair. [@ANCHOR: bench_mcp_config]
 * A sweep is written as a CSV with a header and one row per point. [@ANCHOR: bench_mcp_vna_csv]
 
 ## Checks this crate makes for the SDRs (anchors)

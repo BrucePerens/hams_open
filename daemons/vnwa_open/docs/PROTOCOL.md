@@ -288,6 +288,18 @@ range or the output dropping faster than the amplitude word says is not yet know
 With the pad in, the output is flat to about 1.5 percent from 100 kHz to 10 MHz; the rise above it (17 mV at 50 MHz, 7 mV at 100 MHz) is the
 open-ended 3-foot scope lead (a quarter wave near 54 MHz), not the generator.
 
+## Reliability observations (2026-10-28, dev box)
+
+* Request 0x0d (read, `wValue` 0x0303) after a set-up block is stalled (libusb pipe error) in about 7 % of tries when sent alone, and
+  more often straight after a block; resent 5 ms later it succeeds. The unit emits only after the block and this read, so a
+  resend that waits long moves the analysis window: with a 50 ms pause a third of the points failed the steadiness check, with 5 ms
+  about one in ten, and the check rejects those (they are measured again).
+* Reads of 0x58 never failed in 100 tries. Control transfers returned no other error in about 1000 sweep points.
+* Hub port power cycle (`uhubctl -l 3-2 -p 2`): the unit and both codecs are back 9.0 to 9.2 s after power-on, five cycles; the
+  codecs stayed on hub ports 2 (S11, reference left) and 3 (S21, reference right), and sweeps after each cycle agree with the
+  sweeps before to 0.09 % and 0.05 degrees (60 points, 100 kHz to 150 MHz). Power removed in the middle of a sweep: the audio
+  streams report the lost device, the retries fail, one cold reset follows and all 60 points complete (0.02 % from the others).
+
 ## Seen but not decoded
 
 * The first byte of request 0x49's payload (the "step" counter, 3, 4 or 5 in the single-point sweeps).
