@@ -79,7 +79,7 @@ pub fn managed_file(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(real)
 }
 
-/// Deletes managed `.wav` files older than `days`, then the oldest ones beyond `max_files`. Returns the number removed.
+/// Deletes managed `.wav` files (except `ref-` reference recordings) older than `days`, then the oldest ones beyond `max_files`. Returns the number removed.
 pub fn prune(dir: &Path, max_files: usize, days: u64) -> usize {
     // [@ANCHOR: audio_store_retention]
     let mut files: Vec<(SystemTime, PathBuf)> = std::fs::read_dir(dir)
@@ -87,6 +87,8 @@ pub fn prune(dir: &Path, max_files: usize, days: u64) -> usize {
         .flatten()
         .flatten()
         .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("wav"))
+        // Reference recordings are kept until someone deletes them.
+        .filter(|e| !e.file_name().to_string_lossy().starts_with("ref-"))
         .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
         .collect();
     files.sort();
@@ -152,7 +154,16 @@ mod tests {
             f.set_modified(SystemTime::now() - age).unwrap();
         }
         std::fs::write(d.join("keep.json"), b"{}").unwrap();
+        let reference = d.join("ref-door-beep.wav");
+        std::fs::write(&reference, b"x").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&reference)
+            .unwrap()
+            .set_modified(SystemTime::now() - Duration::from_secs(90 * 86400))
+            .unwrap();
         assert_eq!(prune(&d, 4, 30), 2);
+        assert!(reference.exists(), "reference recordings are not pruned");
         assert!(
             !d.join("rec-0.wav").exists()
                 && !d.join("rec-1.wav").exists()

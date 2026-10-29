@@ -9,6 +9,11 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+/// Without these, a target that has disappeared makes PipeWire connect the stream to the default device instead, which could be
+/// a reserved one. With them the stream fails with "defined target not found".
+// [@ANCHOR: audio_engine_no_fallback]
+const NO_FALLBACK: &str = "node.dont-fallback=true node.dont-reconnect=true";
+
 pub struct Recorder {
     child: Child,
     buf: Arc<Mutex<Vec<f32>>>,
@@ -21,11 +26,14 @@ impl Recorder {
     /// recorded is what it plays.
     pub fn start(node: &str, rate: u32, monitor: bool) -> Result<Recorder, String> {
         let mut child = Command::new("pw-record")
-            .args(if monitor {
-                ["-P", "stream.capture.sink=true"]
-            } else {
-                ["-P", "media.role=Production"]
-            })
+            .args([
+                "-P",
+                if monitor {
+                    "stream.capture.sink=true node.dont-fallback=true node.dont-reconnect=true"
+                } else {
+                    "node.dont-fallback=true node.dont-reconnect=true"
+                },
+            ])
             .args([
                 "--raw",
                 "--target",
@@ -156,6 +164,8 @@ impl Playing {
     /// Starts playing `path` on `node` with the stream volume `stream_volume` (1.0 leaves the file's own level).
     pub fn start(node: &str, path: &Path, stream_volume: f64) -> Result<Playing, String> {
         let child = Command::new("pw-play")
+            .arg("-P")
+            .arg(NO_FALLBACK)
             .arg("--target")
             .arg(node)
             .arg("--volume")
@@ -215,5 +225,24 @@ impl Drop for Playing {
             let _ = self.child.kill();
             let _ = self.child.wait();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: audio_engine_no_fallback]
+    /// Needs PipeWire: `cargo test engine -- --ignored`. A target that does not exist must fail, not record the default source.
+    #[test]
+    #[ignore]
+    fn a_missing_target_fails_and_never_falls_back_to_the_default_device() {
+        let mut rec = Recorder::start("no-such-node-for-the-test", 48000, false).unwrap();
+        let e = rec.wait_samples(4800, Duration::from_secs(3)).unwrap_err();
+        assert!(
+            e.contains("target not found") || e.contains("ended early"),
+            "{e}"
+        );
+        assert_eq!(rec.len(), 0);
     }
 }

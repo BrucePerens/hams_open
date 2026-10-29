@@ -15,6 +15,18 @@ impl Wav {
     pub fn seconds(&self) -> f64 {
         self.samples.len() as f64 / f64::from(self.channels.max(1)) / f64::from(self.rate.max(1))
     }
+
+    /// The channels averaged into one.
+    pub fn mono(&self) -> Vec<f32> {
+        let c = usize::from(self.channels.max(1));
+        if c == 1 {
+            return self.samples.clone();
+        }
+        self.samples
+            .chunks_exact(c)
+            .map(|f| f.iter().sum::<f32>() / c as f32)
+            .collect()
+    }
 }
 
 fn u16le(b: &[u8], at: usize) -> u16 {
@@ -138,6 +150,16 @@ mod tests {
             assert!((a - b).abs() <= 1.0 / 32767.0, "{a} {b}");
         }
         assert!((w.seconds() - 3.0 / 44100.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mono_averages_the_channels() {
+        let w = Wav {
+            rate: 8000,
+            channels: 2,
+            samples: vec![1.0, 0.0, 0.5, 0.5],
+        };
+        assert_eq!(w.mono(), vec![0.5, 0.5]);
     }
 
     #[test]

@@ -38,15 +38,60 @@ impl Drop for Virtual {
     }
 }
 
+/// A 48 kHz mono 16-bit WAV: `bursts` beeps of `len_s` at `hz`, `gap_s` apart, after `lead_s` of silence.
+fn beep_wav(path: &Path, hz: f64, bursts: usize, len_s: f64, gap_s: f64, lead_s: f64) {
+    let rate = 48000.0;
+    let total = lead_s + bursts as f64 * (len_s + gap_s) + 0.2;
+    let samples: Vec<i16> = (0..(total * rate) as usize)
+        .map(|i| {
+            let t = i as f64 / rate;
+            let k = ((t - lead_s) / (len_s + gap_s)).floor();
+            let in_burst =
+                t >= lead_s && k < bursts as f64 && (t - lead_s - k * (len_s + gap_s)) < len_s;
+            if in_burst {
+                ((2.0 * std::f64::consts::PI * hz * t).sin() * 0.1 * 32767.0) as i16
+            } else {
+                0
+            }
+        })
+        .collect();
+    let mut f = Vec::new();
+    f.extend_from_slice(b"RIFF");
+    f.extend_from_slice(&(36 + samples.len() as u32 * 2).to_le_bytes());
+    f.extend_from_slice(b"WAVEfmt \x10\0\0\0\x01\0\x01\0");
+    f.extend_from_slice(&48000u32.to_le_bytes());
+    f.extend_from_slice(&96000u32.to_le_bytes());
+    f.extend_from_slice(&[2, 0, 16, 0]);
+    f.extend_from_slice(b"data");
+    f.extend_from_slice(&(samples.len() as u32 * 2).to_le_bytes());
+    for s in samples {
+        f.extend_from_slice(&s.to_le_bytes());
+    }
+    std::fs::write(path, f).unwrap();
+}
+
 fn config(dir: &Path) -> PathBuf {
     let p = dir.join("bench.json");
+    let beep = dir.join("beep.wav");
+    beep_wav(&beep, 1800.0, 1, 0.3, 0.0, 0.3);
+    let triple = dir.join("triple.wav");
+    beep_wav(&triple, 1800.0, 3, 0.15, 0.25, 0.2);
+    let wrong = dir.join("wrong.wav");
+    beep_wav(&wrong, 600.0, 1, 0.3, 0.0, 0.3);
     std::fs::write(
         &p,
         format!(
             r#"{{"instruments":{{"snd":{{"driver":"audio","tier":"full","quiet_hours":false,
             "outputs":{{"virt":"bench-lb-sink"}},"inputs":{{"virt":"bench-lb-src"}},
-            "alert_output":"virt","verify_input":"virt","capture_dir":"{}/audio"}}}}}}"#,
-            dir.display()
+            "alert_output":"virt","verify_input":"virt","capture_dir":"{d}/audio",
+            "verify_actions":{{"beep":["pw-play","--target","bench-lb-sink","{b}"],
+                               "triple":["pw-play","--target","bench-lb-sink","{t}"],
+                               "wrong":["pw-play","--target","bench-lb-sink","{w}"],
+                               "nothing":["true"]}}}}}}}}"#,
+            d = dir.display(),
+            b = beep.display(),
+            t = triple.display(),
+            w = wrong.display()
         ),
     )
     .unwrap();
@@ -201,5 +246,113 @@ fn the_volume_cap_and_reserved_names_and_file_names_are_enforced_end_to_end() {
         r#"{"file":"../../etc/passwd"}"#,
     );
     assert!(!ok, "{e}");
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+// Tests [@ANCHOR: audio_verify_tool]
+#[test]
+#[ignore]
+fn verify_passes_a_beep_and_fails_a_wrong_pitch_or_a_missing_sound_with_reasons() {
+    let _v = Virtual::start();
+    let d = scratch("verify");
+    let cfg = config(&d);
+    let (ok, r) = call(
+        &cfg,
+        &d,
+        "bench_audio_verify",
+        r#"{"action":"beep","window_s":3,"expect_hz":1800,"expect_beeps":1,"min_duration_s":0.2,"save_reference":"beep"}"#,
+    );
+    assert!(ok, "{r}");
+    assert_eq!(r["pass"], true, "{r}");
+    let hz = r["evidence"]["dominant_hz"].as_f64().unwrap();
+    assert!((hz - 1800.0).abs() < 40.0, "{r}");
+    assert_eq!(r["action"]["exit"], 0, "{r}");
+    assert!(Path::new(r["saved_reference"].as_str().unwrap()).exists());
+    // The same sound against its own reference.
+    let (_, same) = call(
+        &cfg,
+        &d,
+        "bench_audio_verify",
+        r#"{"action":"beep","window_s":3,"reference":"ref-beep.wav","min_similarity":0.8}"#,
+    );
+    assert_eq!(same["pass"], true, "{same}");
+    assert!(
+        same["evidence"]["reference_similarity"].as_f64().unwrap() > 0.8,
+        "{same}"
+    );
+    // A 600 Hz beep is not 1800 Hz, and is not like the reference.
+    let (_, wrong) = call(
+        &cfg,
+        &d,
+        "bench_audio_verify",
+        r#"{"action":"wrong","window_s":3,"expect_hz":1800,"reference":"ref-beep.wav"}"#,
+    );
+    assert_eq!(wrong["pass"], false, "{wrong}");
+    assert!(
+        wrong["reason"].as_str().unwrap().contains("frequency"),
+        "{wrong}"
+    );
+    // No sound at all.
+    let (_, none) = call(
+        &cfg,
+        &d,
+        "bench_audio_verify",
+        r#"{"action":"nothing","window_s":2}"#,
+    );
+    assert_eq!(none["pass"], false, "{none}");
+    // A virtual source that carries no sound records exact zeros, which is how a dead input looks: it cannot confirm silence.
+    let (_, quiet) = call(
+        &cfg,
+        &d,
+        "bench_audio_verify",
+        r#"{"action":"nothing","window_s":2,"expect_silence":true}"#,
+    );
+    assert_eq!(quiet["pass"], false, "{quiet}");
+    assert!(
+        quiet["reason"].as_str().unwrap().contains("dead"),
+        "{quiet}"
+    );
+    // Only configured actions run.
+    let (ok, e) = call(&cfg, &d, "bench_audio_verify", r#"{"action":"rm -rf /"}"#);
+    assert!(
+        !ok && e.as_str().unwrap().contains("no verify action"),
+        "{e}"
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+// Tests [@ANCHOR: audio_events_tool]
+#[test]
+#[ignore]
+fn events_lists_three_beeps_played_by_another_process() {
+    let _v = Virtual::start();
+    let d = scratch("events");
+    let cfg = config(&d);
+    let (cfg2, d2) = (cfg.clone(), d.clone());
+    let listener =
+        std::thread::spawn(move || call(&cfg2, &d2, "bench_audio_events", r#"{"seconds":4}"#));
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let status = Command::new("pw-play")
+        .args(["--target", "bench-lb-sink"])
+        .arg(d.join("triple.wav"))
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let (ok, r) = listener.join().unwrap();
+    assert!(ok, "{r}");
+    assert_eq!(r["event_count"], 3, "{r}");
+    let first = &r["events"][0];
+    assert!(
+        (first["dominant_hz"].as_f64().unwrap() - 1800.0).abs() < 60.0,
+        "{r}"
+    );
+    assert!(
+        (first["duration_s"].as_f64().unwrap() - 0.15).abs() < 0.05,
+        "{r}"
+    );
+    assert!(
+        (r["mean_interval_s"].as_f64().unwrap() - 0.4).abs() < 0.05,
+        "{r}"
+    );
     let _ = std::fs::remove_dir_all(&d);
 }

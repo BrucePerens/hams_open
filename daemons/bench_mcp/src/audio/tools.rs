@@ -63,7 +63,7 @@ pub fn pick<'a>(ctx: &Ctx<'a>, args: &Value, key: &str, dir: Dir) -> Result<&'a 
         })
 }
 
-fn stats_json(s: &analysis::Stats) -> Value {
+pub fn stats_json(s: &analysis::Stats) -> Value {
     json!({
         "peak_dbfs": round1(s.peak_dbfs), "rms_dbfs": round1(s.rms_dbfs), "clipped_samples": s.clipped,
         "silence_fraction": (s.silence_fraction * 1000.0).round() / 1000.0, "all_zero": s.all_zero,
