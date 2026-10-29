@@ -279,8 +279,14 @@ scope's noise (about 4 mV peak to peak, no frequency). At 0 dB the level is flat
 the readings (41 mV at 30 MHz, 46 mV at 60 MHz, 24 mV at 100 MHz) follow the standing waves of the 3-foot leads, not the generator. The
 earlier "no tone" result was therefore a receiver or cabling problem, not the generator.
 
-Not yet confirmed: the level steps (0, 10, 20, 30 dB read 31, 30, 14 and 9.5 mV; the last is the scope's noise floor, and the 10 dB step
-showed no change), which need the scope averaged and a proper termination.
+Level steps, same scope with the scope averaging 64 sweeps and a 10 dB pad at the TX connector: `generator level` takes a NEGATIVE attenuation
+(0 to -50 dB; a positive value is refused, which an earlier run of this check missed because it did not look at the exit status). At
+10 MHz the scope read 10.27, 7.26, 5.14, 3.25 and 1.84 mV rms for 0, -3, -6, -10 and -15 dB, which is 0.0, -3.0, -6.0, -10.0 and -14.9 dB: the
+steps are exact to 0.1 dB down to -15 dB. The pad itself measured -9.7 dB (31.5 mV before it, 10.27 mV after). Below that (-20, -30, -40 dB)
+the scope read about 0.2 mV, which is less than the 1.0 mV the setting predicts at -20 dB; whether that is the scope's most sensitive
+range or the output dropping faster than the amplitude word says is not yet known (repeat at a larger signal without the pad).
+With the pad in, the output is flat to about 1.5 percent from 100 kHz to 10 MHz; the rise above it (17 mV at 50 MHz, 7 mV at 100 MHz) is the
+open-ended 3-foot scope lead (a quarter wave near 54 MHz), not the generator.
 
 ## Seen but not decoded
 
