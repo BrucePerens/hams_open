@@ -146,6 +146,7 @@ pub enum TlvError {
 }
 
 impl fmt::Display for TlvError {
+    // [@ANCHOR: radiod_client_tlv_error_fmt]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TooShort => write!(f, "datagram too short"),
@@ -178,6 +179,7 @@ pub struct Entry<'a> {
 }
 
 impl Entry<'_> {
+    // [@ANCHOR: radiod_client_tlv_entry_uint]
     /// Unsigned integer (up to 8 bytes, big-endian, zero length is 0).
     pub fn uint(&self) -> Result<u64, TlvError> {
         if self.value.len() > 8 {
@@ -188,10 +190,12 @@ impl Entry<'_> {
             .iter()
             .fold(0u64, |a, b| (a << 8) | u64::from(*b)))
     }
+    // [@ANCHOR: radiod_client_tlv_entry_bool]
     /// Boolean (any non-zero integer).
     pub fn bool(&self) -> Result<bool, TlvError> {
         Ok(self.uint()? != 0)
     }
+    // [@ANCHOR: radiod_client_tlv_entry_f32]
     /// 32-bit float; a value longer than four bytes is read as a double, as `radiod` does.
     pub fn f32(&self) -> Result<f32, TlvError> {
         match self.value.len() {
@@ -200,6 +204,7 @@ impl Entry<'_> {
             _ => Err(TlvError::BadValue(self.ty)),
         }
     }
+    // [@ANCHOR: radiod_client_tlv_entry_f64]
     /// 64-bit float; a value of four bytes or fewer is read as a float.
     pub fn f64(&self) -> Result<f64, TlvError> {
         match self.value.len() {
@@ -208,10 +213,12 @@ impl Entry<'_> {
             _ => Err(TlvError::BadValue(self.ty)),
         }
     }
+    // [@ANCHOR: radiod_client_tlv_entry_text]
     /// UTF-8 text (lossy, so a hostile description cannot fail the parse).
     pub fn text(&self) -> String {
         String::from_utf8_lossy(self.value).into_owned()
     }
+    // [@ANCHOR: radiod_client_tlv_entry_socket]
     /// Socket: 6 bytes IPv4 plus port, 18 bytes IPv6 plus port, or empty (null socket).
     pub fn socket(&self) -> Result<Option<SocketAddr>, TlvError> {
         match self.value.len() {
@@ -233,6 +240,7 @@ impl Entry<'_> {
             _ => Err(TlvError::BadValue(self.ty)),
         }
     }
+    // [@ANCHOR: radiod_client_tlv_entry_f32_vec]
     /// A vector of big-endian `f32` (`BIN_DATA`).
     pub fn f32_vec(&self) -> Result<Vec<f32>, TlvError> {
         if !self.value.len().is_multiple_of(4) {
@@ -248,6 +256,7 @@ impl Entry<'_> {
     }
 }
 
+// [@ANCHOR: radiod_client_tlv_parse]
 /// Parse a datagram into its kind and entries. Never panics; every length is checked against the
 /// remaining bytes. Parsing stops at `EOL` or at the end of the datagram.
 pub fn parse(pkt: &[u8]) -> Result<(Kind, Vec<Entry<'_>>), TlvError> {
@@ -298,31 +307,38 @@ pub(crate) struct Writer {
 }
 
 impl Writer {
+    // [@ANCHOR: radiod_client_tlv_writer_command]
     pub(crate) fn command() -> Self {
         Self { buf: vec![1] }
     }
+    // [@ANCHOR: radiod_client_tlv_writer_header]
     fn header(&mut self, t: u8, len: usize) {
         self.buf.push(t);
         // Command values here are at most a few bytes; the long form is never needed.
         self.buf.push(len as u8);
     }
+    // [@ANCHOR: radiod_client_tlv_writer_uint]
     pub(crate) fn uint(&mut self, t: u8, v: u64) {
         let bytes = v.to_be_bytes();
         let skip = bytes.iter().take_while(|b| **b == 0).count();
         self.header(t, 8 - skip);
         self.buf.extend_from_slice(&bytes[skip..]);
     }
+    // [@ANCHOR: radiod_client_tlv_writer_bool]
     pub(crate) fn bool(&mut self, t: u8, v: bool) {
         self.uint(t, u64::from(v));
     }
+    // [@ANCHOR: radiod_client_tlv_writer_f32]
     pub(crate) fn f32(&mut self, t: u8, v: f32) {
         self.header(t, 4);
         self.buf.extend_from_slice(&v.to_be_bytes());
     }
+    // [@ANCHOR: radiod_client_tlv_writer_f64]
     pub(crate) fn f64(&mut self, t: u8, v: f64) {
         self.header(t, 8);
         self.buf.extend_from_slice(&v.to_be_bytes());
     }
+    // [@ANCHOR: radiod_client_tlv_writer_finish]
     pub(crate) fn finish(mut self) -> Vec<u8> {
         self.buf.push(ty::EOL);
         self.buf
@@ -333,6 +349,14 @@ impl Writer {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: radiod_client_tlv_writer_command]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_header]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_uint]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_f64]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_finish]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_uint]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_f64]
+    // Tests [@ANCHOR: radiod_client_tlv_parse]
     #[test]
     fn integer_round_trip_strips_leading_zeroes() {
         let mut w = Writer::command();
@@ -348,6 +372,7 @@ mod tests {
         assert_eq!(e[2].f64(), Ok(7_074_000.0));
     }
 
+    // Tests [@ANCHOR: radiod_client_tlv_parse]
     #[test]
     fn long_form_length() {
         let mut pkt = vec![0u8, ty::BIN_DATA, 0x82, 0x01, 0x00];
@@ -357,6 +382,8 @@ mod tests {
         assert_eq!(e[0].value.len(), 256);
     }
 
+    // Tests [@ANCHOR: radiod_client_tlv_parse]
+    // Tests [@ANCHOR: radiod_client_tlv_error_fmt]
     #[test]
     fn hostile_inputs_are_errors_not_panics() {
         assert_eq!(parse(&[]).err(), Some(TlvError::TooShort));
@@ -374,6 +401,7 @@ mod tests {
         assert_eq!(parse(&[0, 5, 0x80]).err(), Some(TlvError::BadLength));
     }
 
+    // Tests [@ANCHOR: radiod_client_tlv_entry_socket]
     #[test]
     fn socket_forms() {
         let e = Entry {
@@ -396,12 +424,82 @@ mod tests {
         };
         assert!(bad.socket().is_err());
     }
+
+    // Tests [@ANCHOR: radiod_client_tlv_entry_bool]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_f32]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_bool]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_f32]
+    // Tests [@ANCHOR: radiod_client_tlv_writer_uint]
+    #[test]
+    fn bool_and_float_values() {
+        let mut w = Writer::command();
+        w.bool(ty::ENVELOPE, true);
+        w.bool(ty::AGC_ENABLE, false);
+        w.f32(ty::LOW_EDGE, -3000.0);
+        w.uint(ty::LIFETIME, u64::MAX);
+        let pkt = w.finish();
+        let (_, e) = parse(&pkt).unwrap_or_else(|_| (Kind::Status, vec![]));
+        assert_eq!(e[0].bool(), Ok(true));
+        assert_eq!(e[1].bool(), Ok(false));
+        assert_eq!(e[2].f32(), Ok(-3000.0));
+        assert_eq!(e[3].uint(), Ok(u64::MAX));
+        // A double in a float field is narrowed, a float in a double field is widened.
+        let wide = Entry {
+            ty: 1,
+            value: &1.5f64.to_be_bytes(),
+        };
+        assert_eq!(wide.f32(), Ok(1.5));
+        let narrow = Entry {
+            ty: 1,
+            value: &2.5f32.to_be_bytes(),
+        };
+        assert_eq!(narrow.f64(), Ok(2.5));
+        let long = Entry {
+            ty: 1,
+            value: &[0; 9],
+        };
+        assert!(long.uint().is_err() && long.f32().is_err() && long.f64().is_err());
+    }
+
+    // Tests [@ANCHOR: radiod_client_tlv_entry_f32_vec]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_text]
+    #[test]
+    fn vectors_and_text() {
+        let mut raw = Vec::new();
+        for v in [1.0f32, -2.0, 0.25] {
+            raw.extend_from_slice(&v.to_be_bytes());
+        }
+        let e = Entry {
+            ty: ty::BIN_DATA,
+            value: &raw,
+        };
+        assert_eq!(e.f32_vec(), Ok(vec![1.0, -2.0, 0.25]));
+        let odd = Entry {
+            ty: ty::BIN_DATA,
+            value: &raw[..5],
+        };
+        assert_eq!(odd.f32_vec(), Err(TlvError::BadValue(ty::BIN_DATA)));
+        let text = Entry {
+            ty: ty::DESCRIPTION,
+            value: &[b'o', b'k', 0xff],
+        };
+        assert_eq!(text.text(), "ok\u{fffd}");
+    }
 }
 
 #[cfg(test)]
 mod fuzz_like {
     use super::*;
 
+    // Tests [@ANCHOR: radiod_client_tlv_parse]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_uint]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_f32]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_f64]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_socket]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_f32_vec]
+    // Tests [@ANCHOR: radiod_client_tlv_entry_text]
+    // Tests [@ANCHOR: radiod_client_status_decode]
+    // Tests [@ANCHOR: radiod_client_rtp_packet_parse]
     /// Cheap deterministic stand-in for fuzzing: the parser and every accessor must return, never panic.
     #[test]
     fn random_datagrams_never_panic() {

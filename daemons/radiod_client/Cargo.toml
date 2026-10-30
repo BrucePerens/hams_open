@@ -5,6 +5,7 @@ edition = "2021"
 description = "Receive-only client for ka9q-radio's radiod multicast control/status protocol, with a closed command schema"
 license = "AGPL-3.0-or-later"
 publish = false
+rust-version = "1.98"
 
 [features]
 default = ["opus"]
@@ -13,6 +14,9 @@ opus = ["dep:opus"]
 
 [dependencies]
 socket2 = { version = "0.5", features = ["all"] }
+# Async only: no runtime of our own. The caller passes a runtime Handle to the socket
+# constructors; "rt" is needed for Handle::enter, "net" and "time" for the sockets and timeouts.
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time"] }
 opus = { version = "0.3", optional = true }
 
 [lints.rust]
@@ -23,3 +27,6 @@ missing_docs = "warn"
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "macros", "test-util"] }

@@ -19,6 +19,7 @@ pub enum RtpError {
 }
 
 impl fmt::Display for RtpError {
+    // [@ANCHOR: radiod_client_rtp_error_fmt]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
     }
@@ -44,6 +45,7 @@ pub struct RtpPacket<'a> {
 }
 
 impl<'a> RtpPacket<'a> {
+    // [@ANCHOR: radiod_client_rtp_packet_parse]
     /// Parse a datagram.
     pub fn parse(d: &'a [u8]) -> Result<Self, RtpError> {
         if d.len() < 12 {
@@ -93,6 +95,7 @@ pub enum Encoding {
 }
 
 impl Encoding {
+    // [@ANCHOR: radiod_client_rtp_encoding_from_radiod]
     /// Map `radiod`'s encoding number.
     pub fn from_radiod(n: u64) -> Option<Self> {
         match n {
@@ -113,6 +116,7 @@ pub struct AudioDecoder {
 }
 
 impl fmt::Debug for AudioDecoder {
+    // [@ANCHOR: radiod_client_rtp_decoder_debug_fmt]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AudioDecoder")
             .field("encoding", &self.encoding)
@@ -122,6 +126,7 @@ impl fmt::Debug for AudioDecoder {
 }
 
 impl AudioDecoder {
+    // [@ANCHOR: radiod_client_rtp_decoder_new]
     /// Build a decoder from the channel status (`channels` for PCM; Opus is always 2).
     pub fn new(encoding: Encoding, channels: usize) -> Result<Self, RtpError> {
         match encoding {
@@ -148,6 +153,7 @@ impl AudioDecoder {
         }
     }
 
+    // [@ANCHOR: radiod_client_rtp_decoder_decode]
     /// Decode a payload to mono samples in -1.0..=1.0.
     pub fn decode(&mut self, payload: &[u8]) -> Result<Vec<f32>, RtpError> {
         match self.encoding {
@@ -214,6 +220,7 @@ pub struct SeqTracker {
 }
 
 impl SeqTracker {
+    // [@ANCHOR: radiod_client_rtp_seq_push]
     /// Account for one packet.
     pub fn push(&mut self, seq: u16) {
         self.received += 1;
@@ -256,6 +263,7 @@ mod tests {
         v
     }
 
+    // Tests [@ANCHOR: radiod_client_rtp_packet_parse]
     #[test]
     fn parses_header() {
         let d = pkt(111, 5, &[1, 2, 3, 4]);
@@ -273,6 +281,8 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: radiod_client_rtp_packet_parse]
+    // Tests [@ANCHOR: radiod_client_rtp_error_fmt]
     #[test]
     fn rejects_bad_packets() {
         assert_eq!(
@@ -293,6 +303,9 @@ mod tests {
         assert_eq!(RtpPacket::parse(&d).err(), Some(RtpError::Truncated));
     }
 
+    // Tests [@ANCHOR: radiod_client_rtp_decoder_new]
+    // Tests [@ANCHOR: radiod_client_rtp_decoder_decode]
+    // Tests [@ANCHOR: radiod_client_rtp_decoder_debug_fmt]
     #[test]
     fn pcm_big_endian() {
         let mut dec =
@@ -302,6 +315,7 @@ mod tests {
         assert!(dec.decode(&[1]).is_err());
     }
 
+    // Tests [@ANCHOR: radiod_client_rtp_seq_push]
     #[test]
     fn loss_accounting() {
         let mut t = SeqTracker::default();
@@ -309,6 +323,43 @@ mod tests {
             t.push(s);
         }
         assert_eq!((t.received, t.lost, t.out_of_order), (7, 2, 1));
+    }
+
+    // Tests [@ANCHOR: radiod_client_rtp_encoding_from_radiod]
+    // Tests [@ANCHOR: radiod_client_rtp_decoder_decode]
+    #[test]
+    fn encoding_numbers_and_little_endian_stereo() {
+        assert_eq!(Encoding::from_radiod(1), Some(Encoding::S16Le));
+        assert_eq!(Encoding::from_radiod(2), Some(Encoding::S16Be));
+        assert_eq!(Encoding::from_radiod(3), Some(Encoding::Opus));
+        assert_eq!(Encoding::from_radiod(0), None);
+        assert_eq!(Encoding::from_radiod(255), None);
+        let mut dec =
+            AudioDecoder::new(Encoding::S16Le, 2).unwrap_or_else(|_| unreachable_decoder());
+        // left +0.5, right -0.5 downmixes to 0.
+        let out = dec.decode(&[0x00, 0x40, 0x00, 0xc0]).unwrap_or_default();
+        assert_eq!(out, vec![0.0]);
+        assert!(dec.decode(&[0, 0, 0]).is_err());
+    }
+
+    // Tests [@ANCHOR: radiod_client_rtp_decoder_new]
+    // Tests [@ANCHOR: radiod_client_rtp_decoder_decode]
+    #[cfg(feature = "opus")]
+    #[test]
+    fn opus_round_trip_downmixes_stereo() {
+        let enc = opus::Encoder::new(48_000, opus::Channels::Stereo, opus::Application::Audio);
+        assert!(enc.is_ok());
+        let Ok(mut enc) = enc else { return };
+        let pcm = vec![0.25f32; 960 * 2];
+        let mut packet = vec![0u8; 4000];
+        let n = enc.encode_float(&pcm, &mut packet).unwrap_or(0);
+        assert!(n > 0);
+        let dec = AudioDecoder::new(Encoding::Opus, 1);
+        assert!(dec.is_ok());
+        let Ok(mut dec) = dec else { return };
+        let out = dec.decode(&packet[..n]).unwrap_or_default();
+        assert_eq!(out.len(), 960);
+        assert!(out.iter().any(|v| *v != 0.0));
     }
 
     fn unreachable_decoder() -> AudioDecoder {

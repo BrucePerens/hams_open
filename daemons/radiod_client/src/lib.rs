@@ -12,6 +12,12 @@
 //!   channel carries a non-zero lifetime so an orphan expires on its own.
 //! * **Every incoming packet is untrusted.** [`tlv`] bounds-checks every length and never indexes
 //!   past the datagram.
+//! * **Tokio only, no runtime of our own.** Sockets are `tokio::net` sockets registered with a
+//!   [`tokio::runtime::Handle`] the caller passes in; every wait is an `async fn`. The parsers
+//!   ([`tlv`], [`status`], [`rtp`]) and the acknowledgement rules in [`net`] are sans-IO.
+//! * **Bounded spectrum requests.** `radiod` crashes on a spectrum reply over its 65,536-byte
+//!   buffer, so a request never exceeds [`command::MAX_FLOAT_BINS`] float or
+//!   [`command::MAX_BYTE_BINS`] byte bins, whatever the site policy says.
 //! * **Receive only.** Nothing here can key a transmitter; `radiod` has no transmit path.
 #![doc = "Modules: [`tlv`] wire format, [`command`] closed schema, [`status`] parsed state, [`rtp`] audio decoding, [`net`] sockets."]
 
