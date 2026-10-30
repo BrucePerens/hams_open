@@ -307,7 +307,7 @@ fn anchors(text: &str) -> (BTreeSet<String>, BTreeSet<String>) {
 fn every_test_anchor_has_a_source_anchor_in_the_crate() {
     let mut base = BTreeSet::new();
     let mut tests = BTreeSet::new();
-    for f in files("src", &["rs"])
+    for f in files("src", &["rs", "py"])
         .iter()
         .chain(files("tests", &["rs"]).iter())
     {

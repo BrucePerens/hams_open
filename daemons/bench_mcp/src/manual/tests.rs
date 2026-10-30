@@ -160,7 +160,9 @@ fn every_registered_tool_has_a_page_and_every_tools_entry_names_a_registered_too
             p.path
         );
         assert!(
-            !p.instruments.is_empty() || name.starts_with("bench_manual_"),
+            !p.instruments.is_empty()
+                || name.starts_with("bench_manual_")
+                || name.starts_with("bench_proc_"),
             "{}: instrument",
             p.path
         );

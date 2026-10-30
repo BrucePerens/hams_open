@@ -98,6 +98,11 @@ impl FakeDevice {
         })
     }
 
+    /// The local port the device listens on, for a bench config that names it.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
     /// The commands received so far, in order, across all connections.
     pub fn received(&self) -> Vec<String> {
         self.log.lock().unwrap().clone()

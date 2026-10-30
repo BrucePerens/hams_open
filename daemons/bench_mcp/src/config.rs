@@ -23,6 +23,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("example", Kind::Example),
     ("hamlib", Kind::Hamlib),
     ("limesdr", Kind::Sdr),
+    ("procedure", Kind::Procedure),
     ("rotator", Kind::Rotator),
     ("siglent_sds", Kind::Scope),
     ("usb_hub", Kind::UsbHub),
@@ -71,6 +72,8 @@ pub enum Kind {
     Rotator,
     /// The skeleton instrument (`example` module): an imaginary SCPI signal source, the starting point for a new driver.
     Example,
+    /// The procedure runner (`procedure` module): programs that call bench tools in loops, next to the server.
+    Procedure,
 }
 
 #[derive(Clone, Debug)]
@@ -95,6 +98,7 @@ pub struct Instrument {
     pub hamlib: crate::hamlib::Config,
     pub rotator: crate::rotator::Config,
     pub example: crate::example::Config,
+    pub procedure: crate::procedure::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -210,6 +214,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             hamlib: module_config!(hamlib, driver_name, c, name),
             rotator: module_config!(rotator, driver_name, c, name),
             example: module_config!(example, driver_name, c, name),
+            procedure: module_config!(procedure, driver_name, c, name),
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),

@@ -15,6 +15,7 @@ mod example;
 mod hamlib;
 mod link;
 mod manual;
+mod procedure;
 mod psu;
 mod rotator;
 mod scope;
@@ -149,6 +150,12 @@ const MODULES: &[Module] = &[
         call: hamlib::call,
         tool_defs: hamlib::tool_defs,
         sample: r#""rig":{"driver":"hamlib","tier":"full","model":1,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}}"#,
+    },
+    Module {
+        prefix: "bench_proc_",
+        call: procedure::call,
+        tool_defs: procedure::tool_defs,
+        sample: r#""procs":{"driver":"procedure","tier":"full"}"#,
     },
     Module {
         prefix: "bench_rotator_",
