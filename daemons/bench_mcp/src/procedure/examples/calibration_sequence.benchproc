@@ -1,0 +1,39 @@
+# example-calibration-sequence: the VNA calibration with the steps only a person can do. For each standard the
+# run asks the operator to connect it and waits for the answer (bench_proc_input), measures it, and at the end builds
+# the calibration file. The operator can answer "abort" to stop; the standards connected are then not measured.
+#
+# Arguments (bench.args), all optional; the defaults are for the VNA calibration tools:
+#   session       the name the standards are stored under (default "cal")
+#   cable         what is between the ports and the reference plane, as text (default "none")
+#   start_hz, stop_hz, points   the sweep of every standard (default 1 MHz to 30 MHz, 21 points)
+#   standards     the order (default open, short, load, thru)
+#   measure_tool  default bench_vna_calibrate_measure, measure_args extra arguments for it (for example the instrument)
+#   build_tool    default bench_vna_calibrate_build, build_args extra arguments for it
+args = bench.args
+session = args.get("session", "cal")
+settings = {
+    "start_hz": args.get("start_hz", 1e6),
+    "stop_hz": args.get("stop_hz", 30e6),
+    "points": args.get("points", 21),
+    "cable": args.get("cable", "none"),
+}
+measured = []
+for standard in args.get("standards", ["open", "short", "load", "thru"]):
+    bench.step(f"connect {standard}")
+    answer = bench.ask_operator(
+        f"Connect the {standard} standard at the reference plane (cable: {settings['cable']}), then answer 'done'. Answer 'abort' to stop."
+    )
+    bench.expect(answer.strip().lower() != "abort", "the operator stopped the calibration", measured=measured)
+    bench.step(f"measure {standard}")
+    bench.call(
+        args.get("measure_tool", "bench_vna_calibrate_measure"),
+        session=session,
+        standard=standard,
+        **settings,
+        **args.get("measure_args", {}),
+    )
+    measured.append(standard)
+    bench.emit("measured", list(measured))
+bench.step("build")
+built = bench.call(args.get("build_tool", "bench_vna_calibrate_build"), session=session, **args.get("build_args", {}))
+bench.result({"measured": measured, "built": built})

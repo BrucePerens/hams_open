@@ -114,8 +114,10 @@ pub fn lookup(id: &str) -> Option<Arc<RunCtx>> {
 pub fn active_in(root: &std::path::Path) -> usize {
     // [@ANCHOR: proc_run_active_in]
     let reg = registry().lock().unwrap_or_else(|e| e.into_inner());
+    // A run whose final state is written but which the supervisor has not yet taken out of the table is not active.
     reg.values()
         .filter(|c| super::store::root(&c.cfg) == root)
+        .filter(|c| is_active(&c.rec.lock().unwrap_or_else(|e| e.into_inner()).state))
         .count()
 }
 

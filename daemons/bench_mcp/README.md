@@ -294,6 +294,7 @@ A program, written by the agent or saved earlier, that calls bench tools in loop
 * The program's handle on its pipe. [@ANCHOR: proc_py_wire]
 * Saved procedures: a name that cannot make a path, versions (the last 20 kept), the declared tier checked against the tools the source names, load, delete and list. [@ANCHOR: proc_saved_delete] [@ANCHOR: proc_saved_dir_of] [@ANCHOR: proc_saved_list] [@ANCHOR: proc_saved_load] [@ANCHOR: proc_saved_save] [@ANCHOR: proc_saved_valid_name]
 * The operator prompt: a run waits for an answer through `bench_proc_input` in the state `waiting_operator`, the wait is left out of the wall-clock budget, has its own limit, and ends with a cancel. [@ANCHOR: proc_py_ask_operator] [@ANCHOR: proc_run_answer] [@ANCHOR: proc_run_clear_ask] [@ANCHOR: proc_run_paused] [@ANCHOR: proc_run_poll_ask]
+* The shipped example procedures (sweep series with retries and a power cycle, soak round against a baseline, calibration with operator steps) are program text with reserved `example-` names, parameterised by their arguments, identical to their manual pages, and run in the tests against a mock bench whose fake devices share a simulated world. [@ANCHOR: proc_examples_find]
 
 ## Checks the functions of every driver make (anchors)
 

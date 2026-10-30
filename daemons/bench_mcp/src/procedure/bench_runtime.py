@@ -379,7 +379,8 @@ def bench_series(
     """Take ``count`` measurements with ``measure(i)`` (a number).
     A failed measurement (BenchError) is retried ``retries`` times;
     after ``cycle_after`` failures in a row ``cycle()`` is called
-    (a power cycle). Points that still fail are listed, and the
+    (a power cycle, once per point, which earns one more try).
+    Points that still fail are listed, and the
     series stops with an error past ``max_failed``. Progress is
     emitted as ``<name>.progress``."""
     # [@ANCHOR: proc_py_series]
@@ -387,7 +388,9 @@ def bench_series(
     limit = count if max_failed is None else max_failed
     for index in range(count):
         error = None
-        for _ in range(retries + 1):
+        tries, cycled = retries + 1, False
+        while tries > 0:
+            tries -= 1
             try:
                 values.append(float(measure(index)))
                 error, streak = None, 0
@@ -395,13 +398,18 @@ def bench_series(
             except BenchError as caught:
                 error = caught
                 streak += 1
-                if cycle is not None and streak >= cycle_after:
+                if (
+                    cycle is not None
+                    and streak >= cycle_after
+                    and not cycled
+                ):
                     bench_log(
                         f"{name}: cycling after {streak} failures"
                     )
                     cycle()
                     cycles += 1
-                    streak = 0
+                    streak, cycled = 0, True
+                    tries += 1
         if error is not None:
             failed.append({"index": index, "error": str(error)})
         progress = {"done": index + 1, "of": count}
