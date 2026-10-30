@@ -1,0 +1,94 @@
+# Rig description: Xiegu X6100 over CI-V (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# UNVERIFIED and deliberately small: no usable Xiegu CI-V document exists, so only the basics that Hamlib
+# 4.6.2 drives (read for facts only; file and function in each fact) are claimed. Gaps are not guessed.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal"]
+
+[rig]
+id = "xiegu-x6100"
+name = "Xiegu X6100"
+family = "icom-civ"
+
+[civ]
+address = 0xA4
+controller = 0xE0
+model_id = 0xA4
+echo = false
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "am"
+code = 0x02
+
+[[modes]]
+mode = "cw"
+code = 0x03
+
+[[modes]]
+mode = "fm"
+code = 0x05
+
+[[modes]]
+mode = "cw-r"
+code = 0x07
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's CI-V engine and Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; Xiegu radios speak a subset of Icom CI-V." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.address"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/xiegu.c: x6100_priv_caps (default address 0xa4)", note = "No Xiegu CI-V document that may be used was found: the only public one (Radioddity's 'CI-V implementation of Xiegu X6200', firmware V1.0.6, 13 pages) says it may not be 'reproduced or used in any way' without written permission, and radioctl skips sources whose terms forbid reuse. Facts only were read from Hamlib; no code or table was copied. Hamlib's probe table in rigs/icom/icom.c lists 0x70 for the X6100, which disagrees with its own default address 0xa4; the radio's own setting decides." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.controller"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/src/civ_bridge.rs: DEFAULT_CONTROLLER_ADDRESS 0xE0", note = "The conventional controller address." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/xiegu.c: x6100_priv_caps (default address 0xa4)", note = "Set equal to the CI-V address by our convention; Hamlib's xiegu_rig_open reads the 19 00 reply as a byte (rigs/icom/xiegu.c) but no source read gives this model's value, so this is an assumption." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.echo"
+provenance = { kind = "repo-code", reference = "this repository's simulator: no echo", note = "A design choice for the virtual rig; not measured." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 3087 --dump-caps (Hamlib 4.6.2): timeout 1000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/xiegu.c rig_caps for the model (set_freq, get_freq, set_mode, get_mode and get_ptt are the generic Icom functions; set_ptt is x108g_set_ptt, whose comment says the radio answers a PTT set with an echo of 1c instead of FB, which radioctl's CI-V engine accepts as the acknowledgement)", note = "No Xiegu CI-V document that may be used was found: the only public one (Radioddity's 'CI-V implementation of Xiegu X6200', firmware V1.0.6, 13 pages) says it may not be 'reproduced or used in any way' without written permission, and radioctl skips sources whose terms forbid reuse. Facts only were read from Hamlib; no code or table was copied. The PTT-echo quirk is Hamlib's observation on the X108G; it is applied to every Xiegu file here as Hamlib does and is unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_CWR (00 LSB, 01 USB, 02 AM, 03 CW, 05 FM, 07 CW-R)", note = "No Xiegu CI-V document that may be used was found: the only public one (Radioddity's 'CI-V implementation of Xiegu X6200', firmware V1.0.6, 13 pages) says it may not be 'reproduced or used in any way' without written permission, and radioctl skips sources whose terms forbid reuse. Facts only were read from Hamlib; no code or table was copied. The model's real mode list is in `rigctl -m 3087 --dump-caps`; data modes are not in radioctl's mode set for CI-V." }
+verified = { state = "unverified" }
