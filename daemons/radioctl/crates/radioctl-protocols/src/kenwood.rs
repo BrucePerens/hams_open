@@ -116,6 +116,7 @@ impl KenwoodEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_kenwood_engine_decode]
     fn decode(&self, text: &str) -> Inbound {
         if text == "?" {
             return Inbound::Nak;
@@ -292,6 +293,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_engine_feed]
+    // Tests [@ANCHOR: radioctl_kenwood_engine_decode]
     #[test]
     fn feed_decodes_replies_and_refusals() {
         let mut engine = engine();

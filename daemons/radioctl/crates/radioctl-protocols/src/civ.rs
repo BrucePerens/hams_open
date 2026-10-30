@@ -164,6 +164,7 @@ impl FrameParser {
         out
     }
 
+    // [@ANCHOR: radioctl_civ_parser_drop_leading_junk]
     /// With no preamble pending, everything but a trailing lone `FE` is junk.
     fn drop_leading_junk(&mut self, out: &mut Vec<Parsed>) {
         let keep = usize::from(self.pending.last() == Some(&PREAMBLE));
@@ -178,6 +179,7 @@ fn find_preamble(bytes: &[u8]) -> Option<usize> {
     bytes.windows(2).position(|w| w == [PREAMBLE, PREAMBLE])
 }
 
+// [@ANCHOR: radioctl_civ_frame_or_junk]
 /// Turns the bytes `FE FE ... FD` into a frame, or junk. A later preamble restarts the frame.
 fn frame_or_junk(raw: Vec<u8>) -> Parsed {
     let restart = raw
@@ -319,6 +321,7 @@ impl ProtocolEngine for CivEngine {
 }
 
 impl CivEngine {
+    // [@ANCHOR: radioctl_civ_engine_decode]
     /// Decodes one frame; `None` for our own echoed frames and frames for other stations.
     fn decode(&self, frame: &Frame) -> Option<Inbound> {
         if frame.from == self.params.controller {
@@ -387,6 +390,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_civ_frame_to_bytes]
     // Tests [@ANCHOR: radioctl_civ_parser_feed]
+    // Tests [@ANCHOR: radioctl_civ_parser_drop_leading_junk]
     #[test]
     fn parser_splits_frames_across_feeds_and_reports_junk() {
         let mut parser = FrameParser::default();
@@ -406,6 +410,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_civ_parser_feed]
+    // Tests [@ANCHOR: radioctl_civ_frame_or_junk]
     #[test]
     fn parser_restarts_on_a_second_preamble_and_drops_stale_partials() {
         let mut parser = FrameParser::default();
@@ -451,6 +456,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_civ_engine_feed]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
     #[test]
     fn feed_decodes_replies_skips_echo_and_ignores_other_stations() {
         let mut engine = engine();

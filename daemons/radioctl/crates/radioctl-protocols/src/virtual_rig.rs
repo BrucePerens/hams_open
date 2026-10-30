@@ -45,6 +45,7 @@ pub struct RigState {
 }
 
 impl RigState {
+    // [@ANCHOR: radioctl_virtual_state_power]
     /// The power meter: nonzero only while keyed.
     pub fn power(&self) -> u16 {
         if self.ptt {
@@ -204,6 +205,7 @@ fn unsolicited_civ(params: &CivParams, cmd: u8, data: &[u8]) -> Vec<u8> {
 }
 
 impl VirtualRig {
+    // [@ANCHOR: radioctl_virtual_civ_frame]
     fn civ_frame(&mut self, frame: &Frame) -> Vec<u8> {
         let Wire::Civ { params, .. } = &self.wire else {
             return Vec::new();
@@ -236,6 +238,7 @@ impl VirtualRig {
         out
     }
 
+    // [@ANCHOR: radioctl_virtual_civ_dispatch]
     fn civ_dispatch(&mut self, frame: &Frame, params: &CivParams) -> CivReply {
         let data = frame.data.as_slice();
         match (frame.cmd, data) {
@@ -282,6 +285,7 @@ impl VirtualRig {
         }
     }
 
+    // [@ANCHOR: radioctl_virtual_civ_mode_reply]
     fn civ_mode_reply(&self, cmd: u8, prefix: &[u8]) -> CivReply {
         let Some(code) = self.desc.mode_code(self.state.mode) else {
             return CivReply::Ng;
@@ -291,6 +295,7 @@ impl VirtualRig {
         CivReply::Data(cmd, data)
     }
 
+    // [@ANCHOR: radioctl_virtual_kenwood_command]
     fn kenwood_command(&mut self, text: &str) -> Vec<u8> {
         let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
         let reply = match (name, arg) {
@@ -323,6 +328,7 @@ impl VirtualRig {
         reply.map(String::into_bytes).unwrap_or_default()
     }
 
+    // [@ANCHOR: radioctl_virtual_kenwood_id]
     fn kenwood_id(&self) -> u16 {
         match &self.wire {
             Wire::Kenwood { params, .. } => params.model_id,
@@ -330,6 +336,7 @@ impl VirtualRig {
         }
     }
 
+    // [@ANCHOR: radioctl_virtual_set_frequency]
     fn set_frequency(&mut self, digits: &str, vfo_a: bool) -> Option<String> {
         let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == 11) else {
             return Some("?;".to_string());
@@ -348,6 +355,7 @@ impl VirtualRig {
             .map(|code| format!("MD{};", char::from(code)))
     }
 
+    // [@ANCHOR: radioctl_virtual_set_kenwood_mode]
     fn set_kenwood_mode(&mut self, code: &str) -> Option<String> {
         let mode = match code.as_bytes() {
             [byte] => self.desc.code_mode(*byte),
@@ -369,6 +377,7 @@ enum CivReply {
     Data(u8, Vec<u8>),
 }
 
+// [@ANCHOR: radioctl_virtual_data_reply]
 fn data_reply(cmd: u8, bcd: Option<[u8; 5]>, prefix: &[u8]) -> CivReply {
     match bcd {
         Some(bytes) => {
@@ -380,6 +389,7 @@ fn data_reply(cmd: u8, bcd: Option<[u8; 5]>, prefix: &[u8]) -> CivReply {
     }
 }
 
+// [@ANCHOR: radioctl_virtual_meter_reply]
 fn meter_reply(sub: u8, value: u16) -> CivReply {
     let mut data = vec![sub];
     data.extend(civ::encode_bcd_meter(value));
@@ -402,6 +412,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_virtual_from_description]
     // Tests [@ANCHOR: radioctl_virtual_state]
+    // Tests [@ANCHOR: radioctl_virtual_state_power]
     #[test]
     fn defaults_come_from_the_description() {
         let rig = civ_rig();
@@ -415,6 +426,11 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_virtual_feed]
+    // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+    // Tests [@ANCHOR: radioctl_virtual_civ_frame]
+    // Tests [@ANCHOR: radioctl_virtual_civ_mode_reply]
+    // Tests [@ANCHOR: radioctl_virtual_data_reply]
+    // Tests [@ANCHOR: radioctl_virtual_meter_reply]
     #[test]
     fn civ_transcript_read_set_read() {
         let mut rig = civ_rig();
@@ -437,6 +453,11 @@ mod tests {
         assert_eq!(
             rig.feed(&power, T0),
             vec![0xFE, 0xFE, 0xE0, 0x94, 0x15, 0x11, 0x01, 0x28, 0xFD]
+        );
+        let mode = [0xFE, 0xFE, 0x94, 0xE0, 0x04, 0xFD];
+        assert_eq!(
+            rig.feed(&mode, T0),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x04, 0x01, 0x01, 0xFD]
         );
         let unknown = [0xFE, 0xFE, 0x94, 0xE0, 0x7F, 0xFD];
         assert_eq!(
@@ -467,6 +488,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_virtual_feed]
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_command]
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_id]
+    // Tests [@ANCHOR: radioctl_virtual_set_frequency]
+    // Tests [@ANCHOR: radioctl_virtual_set_kenwood_mode]
     #[test]
     fn kenwood_transcript_matches_the_simulator_semantics() {
         let mut rig = kenwood_rig();
