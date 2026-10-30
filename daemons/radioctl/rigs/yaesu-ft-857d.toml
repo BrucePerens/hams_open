@@ -1,0 +1,85 @@
+# Rig description: Yaesu FT-857D (legacy five-byte CAT, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's published operating manual (document, page and sha256 in each fact). No radio has been
+# connected, so every `verified` is unverified. Gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "split", "rit-xit"]
+
+[rig]
+id = "yaesu-ft-857d"
+name = "Yaesu FT-857D"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[timing]
+timeout_ms = 200
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "cw-r"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x08
+
+[[modes]]
+mode = "data"
+code = 0x0a
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-857D Operating Manual, CAT OPERATION opcode chart (file ft857d_manual.pdf, sha256 64b49ba7cd49f3d72eea9cece3288a5eeb833c2c5f46efafda361c20d3bf4e18): CAT Data Protocol, PDF pages 119-120 (printed 117); the Note 3-5 figures were read from the FT-817ND and FT-897D, which have the same layout: one start bit, 8 data bits, no parity, two stop bits" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 1022 --dump-caps (Hamlib 4.6.2): Write delay and timeout 200ms, 0 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-857D Operating Manual, CAT OPERATION opcode chart (file ft857d_manual.pdf, sha256 64b49ba7cd49f3d72eea9cece3288a5eeb833c2c5f46efafda361c20d3bf4e18): opcode chart and Notes 3 to 5, PDF pages 119-120 (printed 117); the Note 3-5 figures were read from the FT-817ND and FT-897D, which have the same layout: 01 set frequency, 03 read frequency and mode (4 BCD bytes of 10 Hz, then the mode), 07 mode, 08/88 PTT, 02/82 split, 05/85 clarifier, F5 clarifier frequency, E7 RX status (bits 0-3 S-meter), F7 TX status (bits 0-3 power meter, bit 5 split 0=ON)", note = "The clarifier has no read command, so rit-xit is set-only here (Op::GetRit and the like are refused by the engine). The VFO toggle (81) is not modelled, so there is no second VFO." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-ptt"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft817.c, comment on struct field tx_status: 'Highest bit 0 = PTT'", note = "The manual's figure for Note 4 labels bit 7 'PTT' without saying which level is transmit; Hamlib's comment resolves it (bit 7 clear means transmitting). Facts only, no code copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-857D Operating Manual, CAT OPERATION opcode chart (file ft857d_manual.pdf, sha256 64b49ba7cd49f3d72eea9cece3288a5eeb833c2c5f46efafda361c20d3bf4e18): Operating Mode opcode 07, PDF pages 119-120 (printed 117); the Note 3-5 figures were read from the FT-817ND and FT-897D, which have the same layout: 00 LSB, 01 USB, 02 CW, 03 CWR, 04 AM, 08 FM, 0A DIG", note = "DIG is mapped to radioctl's data mode. PKT (0C), WFM (06, read only) and the FT-857D/FT-897D narrow FM (88) are not mapped." }
+verified = { state = "unverified" }

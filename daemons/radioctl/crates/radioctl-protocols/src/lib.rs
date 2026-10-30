@@ -16,6 +16,7 @@ pub mod elecraft;
 pub mod kenwood;
 pub mod virtual_rig;
 pub mod yaesu;
+pub mod yaesu_legacy;
 
 #[cfg(feature = "tokio-io")]
 pub mod io;

@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use radioctl_core::description::{
     CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, YaesuParams,
 };
+use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::units::{Hz, Level, Mode};
 
@@ -29,6 +30,7 @@ use crate::civ::{self, Frame, FrameParser, Parsed};
 use crate::civ_scope::{ScopeAnswer, ScopeSim, SCOPE_CMD, SUB_WAVEFORM};
 use crate::elecraft;
 use crate::kenwood::{self, Token, Tokenizer};
+use crate::yaesu_legacy as legacy;
 
 /// Signal level a fresh virtual rig reports (the simulator's raw 30).
 const DEFAULT_SIGNAL: u16 = 30;
@@ -110,6 +112,11 @@ enum Wire {
         params: YaesuParams,
         tokenizer: Tokenizer,
     },
+    /// Five-byte blocks; `pending` holds the bytes of a block still arriving.
+    YaesuLegacy {
+        pending: Vec<u8>,
+        last_byte_at: Duration,
+    },
 }
 
 /// One virtual radio.
@@ -147,6 +154,10 @@ impl VirtualRig {
                     .clone()
                     .unwrap_or(ElecraftParams { model_id: 0 }),
                 tokenizer: Tokenizer::default(),
+            },
+            (Family::YaesuLegacy, _, _) if desc.yaesu_legacy.is_some() => Wire::YaesuLegacy {
+                pending: Vec::new(),
+                last_byte_at: Duration::ZERO,
             },
             (Family::YaesuNewcat, _, _) if desc.yaesu.is_some() => Wire::Yaesu {
                 params: desc.yaesu.clone().unwrap_or(YaesuParams { model_id: 0 }),
@@ -242,6 +253,25 @@ impl VirtualRig {
                         Token::Command(text) => self.elecraft_command(&text),
                         Token::Junk(_) => b"?;".to_vec(),
                     });
+                }
+                out
+            }
+            Wire::YaesuLegacy {
+                pending,
+                last_byte_at,
+            } => {
+                if now.saturating_sub(*last_byte_at) > PARTIAL_FRAME_TIMEOUT {
+                    pending.clear();
+                }
+                *last_byte_at = now;
+                pending.extend_from_slice(bytes);
+                let mut blocks = Vec::new();
+                while pending.len() >= 5 {
+                    blocks.push(pending.drain(..5).collect::<Vec<u8>>());
+                }
+                let mut out = Vec::new();
+                for block in blocks {
+                    out.extend(self.legacy_block(&block));
                 }
                 out
             }
@@ -625,6 +655,79 @@ impl VirtualRig {
         reply.map(String::into_bytes).unwrap_or_default()
     }
 
+    // [@ANCHOR: radioctl_virtual_legacy_block]
+    /// One five-byte block: reads answer, settings change state, anything else is ignored (the
+    /// radio is silent).
+    fn legacy_block(&mut self, block: &[u8]) -> Vec<u8> {
+        let [a, b, c, d, opcode] = block else {
+            return Vec::new();
+        };
+        match *opcode {
+            legacy::OP_READ_FREQUENCY => {
+                let Some(mode) = self.desc.mode_code(self.state.mode) else {
+                    return Vec::new();
+                };
+                let mut out = legacy::encode_bcd_frequency(self.state.freq_a)
+                    .map(|bcd| bcd.to_vec())
+                    .unwrap_or_default();
+                out.push(mode);
+                out
+            }
+            legacy::OP_READ_RX => vec![(self.state.signal.min(15)) as u8],
+            legacy::OP_READ_TX => {
+                // Power meter nibble, split (bit 5 is 0 for ON), PTT (bit 7 clear transmits).
+                let power = (self.state.power() / 16).min(15) as u8;
+                let split_bit = if self.state.split { 0 } else { 0x20 };
+                let ptt_bit = if self.state.ptt { 0 } else { 0x80 };
+                vec![power | split_bit | ptt_bit]
+            }
+            legacy::OP_SET_FREQUENCY => {
+                if let Some(hz) = legacy::decode_bcd_frequency(&[*a, *b, *c, *d]) {
+                    self.state.freq_a = hz;
+                }
+                Vec::new()
+            }
+            legacy::OP_SET_MODE => {
+                if let Some(mode) = self.desc.code_mode(*a) {
+                    self.state.mode = mode;
+                }
+                Vec::new()
+            }
+            legacy::OP_PTT_ON => {
+                self.state.ptt = true;
+                Vec::new()
+            }
+            legacy::OP_PTT_OFF => {
+                self.state.ptt = false;
+                Vec::new()
+            }
+            legacy::OP_SPLIT_ON => {
+                self.state.split = true;
+                Vec::new()
+            }
+            legacy::OP_SPLIT_OFF => {
+                self.state.split = false;
+                Vec::new()
+            }
+            legacy::OP_CLAR_ON => {
+                self.state.rit = true;
+                Vec::new()
+            }
+            legacy::OP_CLAR_OFF => {
+                self.state.rit = false;
+                Vec::new()
+            }
+            legacy::OP_CLAR_FREQUENCY => {
+                let digit = |byte: u8| i16::from(byte >> 4) * 10 + i16::from(byte & 15);
+                let tens = digit(*c) * 100 + digit(*d);
+                let hz = tens * 10;
+                self.state.rit_offset = if *a == 0 { hz } else { -hz };
+                Vec::new()
+            }
+            _ => Vec::new(),
+        }
+    }
+
     // [@ANCHOR: radioctl_virtual_yaesu_command]
     fn yaesu_command(&mut self, text: &str) -> Vec<u8> {
         let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
@@ -907,7 +1010,10 @@ impl VirtualRig {
     fn kenwood_id(&self) -> u16 {
         match &self.wire {
             Wire::Kenwood { params, .. } => params.model_id,
-            Wire::Civ { .. } | Wire::Elecraft { .. } | Wire::Yaesu { .. } => 0,
+            Wire::Civ { .. }
+            | Wire::Elecraft { .. }
+            | Wire::Yaesu { .. }
+            | Wire::YaesuLegacy { .. } => 0,
         }
     }
 
@@ -1731,5 +1837,60 @@ mod tests {
         assert_eq!(ft991.feed(b"AI;", T0), b"AI1;");
         let mut dx10 = shipped_rig("yaesu-ftdx10");
         assert_eq!(dx10.feed(b"ID;RM5;", T0), b"ID0761;RM5000000;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_legacy_block]
+    #[test]
+    fn legacy_blocks_set_and_read_as_the_opcode_chart_says() {
+        let mut rig = shipped_rig("yaesu-ft-897d");
+        assert_eq!(
+            rig.feed(&[0, 0, 0, 0, 0x03], T0),
+            vec![0x01, 0x40, 0x74, 0x00, 0x01]
+        );
+        assert!(rig
+            .feed(&[0x43, 0x97, 0x00, 0x00, 0x01, 0x08, 0, 0, 0, 0x07], T0)
+            .is_empty());
+        assert_eq!(rig.state().freq_a, Hz(439_700_000));
+        assert_eq!(rig.state().mode, Mode::Fm);
+        assert_eq!(
+            rig.feed(&[0, 0, 0, 0, 0x03], T0),
+            vec![0x43, 0x97, 0x00, 0x00, 0x08]
+        );
+        assert_eq!(
+            rig.feed(&[0, 0, 0, 0, 0xF7], T0),
+            vec![0xA0],
+            "RX, split off, no power"
+        );
+        assert!(rig
+            .feed(&[0, 0, 0, 0, 0x08, 0, 0, 0, 0, 0x02], T0)
+            .is_empty());
+        assert_eq!(
+            rig.feed(&[0, 0, 0, 0, 0xF7], T0),
+            vec![0x08],
+            "TX, split on, power 8"
+        );
+        assert!(rig.feed(&[0, 0, 0, 0, 0x88], T0).is_empty());
+        assert!(rig.feed(&[0, 0, 0, 0, 0x05], T0).is_empty());
+        assert!(rig.feed(&[1, 0, 0x01, 0x23, 0xF5], T0).is_empty());
+        assert!(rig.state().rit && rig.state().split);
+        assert_eq!(rig.state().rit_offset, -1230);
+        assert_eq!(rig.feed(&[0, 0, 0, 0, 0xE7], T0), vec![15]);
+        assert!(
+            rig.feed(&[0, 0, 0, 0, 0x77], T0).is_empty(),
+            "unknown opcodes are silent"
+        );
+        assert!(rig.feed(&[0x0A, 0, 0, 0, 0x07], T0).is_empty());
+        assert!(
+            rig.feed(&[0x7F, 0, 0, 0, 0x07], T0).is_empty(),
+            "unknown mode ignored"
+        );
+        assert_eq!(rig.state().mode, Mode::Data);
+        assert!(rig.feed(&[0, 0, 0], T0).is_empty());
+        let later = T0 + Duration::from_secs(2);
+        assert_eq!(
+            rig.feed(&[0, 0, 0, 0, 0xE7], later),
+            vec![15],
+            "a stale partial block is dropped"
+        );
     }
 }

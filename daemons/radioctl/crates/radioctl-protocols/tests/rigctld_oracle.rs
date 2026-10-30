@@ -224,7 +224,7 @@ impl Rigctld {
         let stream = loop {
             match TcpStream::connect(("127.0.0.1", port)) {
                 Ok(stream) => break stream,
-                Err(_) if started.elapsed() < Duration::from_secs(10) => {
+                Err(_) if started.elapsed() < Duration::from_secs(45) => {
                     thread::sleep(Duration::from_millis(50));
                 }
                 Err(e) => panic!("rigctld did not listen on {port}: {e}"),
@@ -729,4 +729,40 @@ fn the_yaesu_files_against_hamlib_record_every_disagreement() {
 /// The steps on which Hamlib and radioctl disagree for a Yaesu file.
 fn known_yaesu_divergences(_file: &str) -> Vec<&'static str> {
     Vec::new()
+}
+
+// Tests [@ANCHOR: radioctl_ylegacy_engine_encode]
+// Tests [@ANCHOR: radioctl_ylegacy_engine_feed]
+// Tests [@ANCHOR: radioctl_virtual_legacy_block]
+#[test]
+fn the_yaesu_legacy_files_against_hamlib_record_every_disagreement() {
+    // Frequency, mode and the PTT read: what the legacy descriptions can read back. The FT-817
+    // is not run: Hamlib's FT-817 backend sends an EEPROM read (opcode BB, in no manual) at open
+    // and its retries (3 s, 5 times) make every step answer nothing (seen: all steps NoAnswer,
+    // 20 s per file).
+    for (file, model) in [("yaesu-ft-857d", 1022), ("yaesu-ft-897d", 1043)] {
+        let desc = shipped(file);
+        let mut steps = scenario();
+        steps.push(Op::GetPtt);
+        let (divergences, refused, wire) = compare(model, &desc, 4800, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(
+            got,
+            known_yaesu_legacy_divergences(file),
+            "{file}: {divergences:#?}"
+        );
+    }
+}
+
+/// The steps on which Hamlib and radioctl disagree for a legacy Yaesu file.
+///
+/// Hamlib's writes land (the final frequency, mode and PTT states agree) but its reads of
+/// frequency and mode fail against the virtual rig, which answers `03` as the manual says (four
+/// BCD bytes and the mode). Hamlib also sends EEPROM reads (opcode BB) at open that no manual
+/// documents and the virtual rig, built from the manuals only, does not answer. The cause of the
+/// failed reads was not isolated; it may be that unanswered probing, or a difference in the answer
+/// that only a real radio can settle.
+fn known_yaesu_legacy_divergences(_file: &str) -> Vec<&'static str> {
+    vec!["GetFrequency(A)", "GetMode"]
 }
