@@ -384,6 +384,7 @@ async fn tcp_connects_moves_bytes_and_fails_in_bounded_time() {
 }
 
 // Tests [@ANCHOR: radioctl_core_usb_list_sysfs]
+// Tests [@ANCHOR: radioctl_core_usb_read_trimmed]
 // Tests [@ANCHOR: radioctl_core_usb_list_ports]
 #[test]
 fn sysfs_lists_usb_ports_and_skips_the_rest() {

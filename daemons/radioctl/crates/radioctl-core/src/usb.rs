@@ -127,6 +127,8 @@ pub fn select_port<'a>(
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_read_trimmed]
+/// The trimmed text of a sysfs attribute, or `None` if it is missing or empty.
 fn read_trimmed(path: &Path) -> Option<String> {
     let text = fs::read_to_string(path).ok()?;
     let text = text.trim();
