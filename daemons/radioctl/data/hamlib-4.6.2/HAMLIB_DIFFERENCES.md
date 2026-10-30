@@ -34,7 +34,7 @@ Fields marked derived (family, VFO model, scope, quirk hints) come from radioctl
 
 | Family | Models | Baud span | Timeout ms min/median/max | Async data | Scope |
 |---|---|---|---|---|---|
-| other_serial | 93 | 50..3000000 | 100 / 500 / 3000 | 0 | 0 |
+| other_serial | 94 | 50..3000000 | 100 / 500 / 3000 | 0 | 0 |
 | icom_civ | 79 | 300..230400 | 700 / 1000 / 1000 | 12 | 7 |
 | yaesu_legacy | 31 | 4800..57600 | 100 / 1000 / 3000 | 0 | 0 |
 | kenwood_ascii | 25 | 1200..115200 | 200 / 500 / 1000 | 0 | 0 |
@@ -49,7 +49,6 @@ Fields marked derived (family, VFO model, scope, quirk hints) come from radioctl
 | icom_pcr_ascii | 4 | 9600..38400 | 400 / 400 / 400 | 0 | 0 |
 | other_parallel | 2 | -..- | 0 / 200 / 200 | 0 | 0 |
 | virtual | 2 | -..- | 0 / 0 / 0 | 0 | 2 |
-| hpsdr_network | 1 | 4800..38400 | 500 / 500 / 500 | 0 | 0 |
 | other_none | 1 | -..- | 0 / 0 / 0 | 0 | 0 |
 | yaesu_other | 1 | 4800..4800 | 600 / 600 / 600 | 0 | 0 |
 
@@ -413,7 +412,7 @@ Rules in `quirk_hints()`; each reads dump fields only.
 | 2037 | Kenwood | TS-590SG | kenwood_ascii | Stable | RS-232 | 4800..115200 | 500/3/0 | a_b | N | 12 | 27 |
 | 2038 | Elecraft | XG3 | elecraft_ascii | Stable | RS-232 | 9600..9600 | 25/3/0 | single | N | 0 | 1 |
 | 2039 | Kenwood | TS-990S | kenwood_ascii | Stable | RS-232 | 4800..115200 | 500/10/0 | main_sub | N | 7 | 19 |
-| 2040 | OpenHPSDR | PiHPSDR | hpsdr_network | Stable | RS-232 | 4800..38400 | 500/1/0 | a_b | N | 7 | 18 |
+| 2040 | OpenHPSDR | PiHPSDR | other_serial | Stable | RS-232 | 4800..38400 | 500/1/0 | a_b | N | 7 | 18 |
 | 2041 | Kenwood | TS-890S | kenwood_ascii | Stable | RS-232 | 4800..115200 | 200/1/0 | a_b | N | 13 | 19 |
 | 2042 | Kenwood | TH-D74 | kenwood_hh_ascii | Stable | RS-232 | 9600..9600 | 500/3/0 | a_b | N | 2 | 5 |
 | 2043 | Elecraft | K3S | elecraft_ascii | Stable | RS-232 | 4800..38400 | 1000/5/0 | a_b | N | 9 | 17 |

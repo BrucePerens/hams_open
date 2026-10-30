@@ -314,8 +314,8 @@ def classify_family(mfg: str, model: str, port_type: str) -> dict:
         "Network" in port_type
     ):
         return _family("flexradio_network", "Flex with network port")
-    if mfg == "OpenHPSDR":
-        return _family("hpsdr_network", "manufacturer OpenHPSDR")
+    if mfg == "OpenHPSDR" and "Network" in port_type:
+        return _family("hpsdr_network", "OpenHPSDR with network port")
     return _family(_port_family(port_type), "port type only")
 
 

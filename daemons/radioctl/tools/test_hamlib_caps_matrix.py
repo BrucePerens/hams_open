@@ -102,6 +102,10 @@ class DerivedTests(unittest.TestCase):
         net = fam("FlexRadio", "6xxx", "Network link")
         self.assertEqual(net, "flexradio_network")
         self.assertEqual(fam("Acme", "X", "USB"), "other_usb")
+        hpsdr = caps.classify_family("OpenHPSDR", "PiHPSDR", "RS-232")
+        self.assertEqual(hpsdr["family"], "other_serial")
+        net = caps.classify_family("OpenHPSDR", "X", "Network link")
+        self.assertEqual(net["family"], "hpsdr_network")
 
     # Tests [@ANCHOR: radioctl_caps_vfo_model]
     def test_vfo_model(self):
