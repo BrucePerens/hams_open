@@ -14,5 +14,7 @@ pub mod event;
 pub mod op;
 pub mod poll;
 pub mod rig;
+pub mod rigfile;
+pub mod transcript;
 pub mod transport;
 pub mod units;

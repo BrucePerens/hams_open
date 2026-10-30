@@ -11,6 +11,8 @@ rust-version = "1.98"
 
 [workspace.dependencies]
 tokio = { version = "1", default-features = false }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

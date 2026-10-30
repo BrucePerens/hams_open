@@ -32,6 +32,14 @@ proptest! {
         let _ = engine.feed(&bytes, NOW);
     }
 
+    // Tests [@ANCHOR: radioctl_core_rigfile_parse]
+    // Tests [@ANCHOR: radioctl_core_transcript_parse]
+    #[test]
+    fn description_and_transcript_parsers_survive_any_text(text in ".{0,400}") {
+        let _ = radioctl_core::rigfile::parse(&text);
+        let _ = radioctl_core::transcript::parse(&text);
+    }
+
     // Tests [@ANCHOR: radioctl_virtual_feed]
     #[test]
     fn virtual_rigs_survive_any_bytes(bytes in proptest::collection::vec(any::<u8>(), 0..600)) {
