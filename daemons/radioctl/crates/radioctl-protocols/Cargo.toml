@@ -18,7 +18,12 @@ radioctl-core = { path = "../radioctl-core" }
 # tokio glue that exposes a VirtualRig as an in-memory duplex stream (module `io`).
 default = ["tokio-io"]
 tokio-io = ["dep:tokio"]
+# Differential tests against Hamlib's rigctld (tests/rigctld_oracle.rs). Needs the `rigctld`
+# binary (or RIGCTLD=/path) and fails loudly without it; off by default so a machine without
+# Hamlib can still run the rest. Run: cargo test -p radioctl-protocols --features hamlib-oracle
+hamlib-oracle = []
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "macros", "time", "io-util", "sync", "test-util"] }
 proptest = "1"
+serialport = { version = "4.10", default-features = false }

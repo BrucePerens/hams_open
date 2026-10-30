@@ -72,6 +72,11 @@ pub struct RigState {
     pub swr: u16,
     /// Auto-info mode 0-3 (Elecraft `AI`); 0 sends nothing on its own.
     pub auto_info: u8,
+    /// K2 command mode 0-3 as set by the controller (Elecraft `K2`); stored, the extended
+    /// formats are not emulated.
+    pub k2_mode: u8,
+    /// K3 command mode 0-1 as set by the controller (Elecraft `K3`); stored, not emulated.
+    pub k3_mode: u8,
 }
 
 impl RigState {
@@ -160,6 +165,8 @@ impl VirtualRig {
             ]),
             swr: DEFAULT_SWR,
             auto_info: 0,
+            k2_mode: 0,
+            k3_mode: 0,
         };
         Ok(VirtualRig {
             desc: desc.clone(),
@@ -367,7 +374,14 @@ impl VirtualRig {
             return CivReply::Ng;
         };
         let mut data = prefix.to_vec();
-        data.extend([code, 0x01]);
+        data.push(code);
+        if cmd == 0x26 {
+            // `26 00` also reports the DATA flag (off) between the mode and the filter; Hamlib
+            // reads the filter byte as the DATA flag if it is missing (found by the rigctld
+            // oracle test).
+            data.push(0x00);
+        }
+        data.push(0x01);
         CivReply::Data(cmd, data)
     }
 
@@ -528,10 +542,18 @@ impl VirtualRig {
             },
             ("SW", "") => Some(format!("SW{:03};", self.state.swr)),
             ("ID", "") => Some(format!("ID{:03};", self.elecraft_id())),
-            ("RV", "M") => Some(format!(
-                "RVM{:02}.{:02};",
+            ("IF", "") => Some(self.elecraft_if()),
+            // Firmware revisions ("RV", p. 23): the MCU and the main DSP report ours; a module
+            // that is not present or unknown reports 99.99.
+            ("RV", module @ ("M" | "D")) => Some(format!(
+                "RV{module}{:02}.{:02};",
                 ELECRAFT_FIRMWARE.0, ELECRAFT_FIRMWARE.1
             )),
+            ("RV", module)
+                if module.len() == 1 && module.bytes().all(|b| b.is_ascii_uppercase()) =>
+            {
+                Some(format!("RV{module}99.99;"))
+            }
             ("AI", "") => Some(format!("AI{};", self.state.auto_info)),
             ("AI", level) => {
                 match kenwood::parse_digits(level).filter(|v| *v <= 3 && level.len() == 1) {
@@ -543,6 +565,14 @@ impl VirtualRig {
                     None => refuse(),
                 }
             }
+            ("PS", "") => Some("PS1;".to_string()),
+            ("PS", "1") => None,
+            // Option modules (Programmer's Reference, "OM", p. 21): none installed, product id 02.
+            ("OM", "") => Some("OM ----------02;".to_string()),
+            ("K2", "") => Some(format!("K2{};", self.state.k2_mode)),
+            ("K2", mode) => self.set_meta(mode, 3, true),
+            ("K3", "") => Some(format!("K3{};", self.state.k3_mode)),
+            ("K3", mode) => self.set_meta(mode, 1, false),
             ("KY", "") => Some("KY0;".to_string()),
             ("KY", _) => {
                 let sent = text.get(3..).unwrap_or("").to_string();
@@ -565,6 +595,27 @@ impl VirtualRig {
             },
         };
         reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_elecraft_set_meta]
+    /// Stores a `K2n` (0-3) or `K3n` (0-1) meta-command value; anything else is refused. The
+    /// virtual rig keeps answering in the Basic formats whatever is stored.
+    fn set_meta(&mut self, digit: &str, max: u8, k2: bool) -> Option<String> {
+        match kenwood::parse_digits(digit)
+            .filter(|_| digit.len() == 1)
+            .and_then(|v| u8::try_from(v).ok())
+            .filter(|v| *v <= max)
+        {
+            Some(value) => {
+                if k2 {
+                    self.state.k2_mode = value;
+                } else {
+                    self.state.k3_mode = value;
+                }
+                None
+            }
+            None => Some("?;".to_string()),
+        }
     }
 
     // [@ANCHOR: radioctl_virtual_elecraft_level]
@@ -728,6 +779,11 @@ mod tests {
             rig.feed(&mode, T0),
             vec![0xFE, 0xFE, 0xE0, 0x94, 0x04, 0x01, 0x01, 0xFD]
         );
+        let mode_26 = [0xFE, 0xFE, 0x94, 0xE0, 0x26, 0x00, 0xFD];
+        assert_eq!(
+            rig.feed(&mode_26, T0),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x26, 0x00, 0x01, 0x00, 0x01, 0xFD]
+        );
         let unknown = [0xFE, 0xFE, 0x94, 0xE0, 0x7F, 0xFD];
         assert_eq!(
             rig.feed(&unknown, T0),
@@ -833,6 +889,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_virtual_elecraft_command]
     // Tests [@ANCHOR: radioctl_virtual_elecraft_level]
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_set_meta]
     // Tests [@ANCHOR: radioctl_virtual_elecraft_id]
     // Tests [@ANCHOR: radioctl_virtual_elecraft_power]
     // Tests [@ANCHOR: radioctl_virtual_from_description]
@@ -877,12 +934,21 @@ mod tests {
             b"RO*0050;",
             b"BW12;",
             b"AI9;",
-            b"RVD;",
+            b"RV1;",
             b"MD8;",
         ] {
             assert_eq!(rig.feed(refused, T0), b"?;", "{refused:?}");
         }
         assert_eq!(rig.feed(&[0x01, b';'], T0), b"?;");
+        assert_eq!(rig.feed(b"RVD;RVA;", T0), b"RVD02.37;RVA99.99;");
+        assert_eq!(rig.feed(b"IF;", T0).get(..2), Some(&b"IF"[..]));
+        assert_eq!(rig.feed(b"PS;", T0), b"PS1;");
+        assert_eq!(rig.feed(b"OM;", T0), b"OM ----------02;");
+        assert!(rig.feed(b"PS1;", T0).is_empty());
+        assert_eq!(rig.feed(b"K2;K3;", T0), b"K20;K30;");
+        assert!(rig.feed(b"K22;K31;", T0).is_empty());
+        assert_eq!(rig.feed(b"K2;K3;", T0), b"K22;K31;");
+        assert_eq!(rig.feed(b"K24;K32;", T0), b"?;?;");
     }
 
     // Tests [@ANCHOR: radioctl_virtual_elecraft_if]
