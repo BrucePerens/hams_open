@@ -17,7 +17,7 @@ socket2 = { version = "0.5", features = ["all"] }
 # Async only: no runtime of our own. The caller passes a runtime Handle to the socket
 # constructors; "rt" is needed for Handle::enter, "net" and "time" for the sockets and timeouts.
 tokio = { version = "1", default-features = false, features = ["rt", "net", "time"] }
-opus = { version = "0.3", optional = true }
+opus = { version = "0.4", optional = true }
 
 [lints.rust]
 unsafe_code = "forbid"
