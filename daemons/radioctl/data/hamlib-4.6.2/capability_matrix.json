@@ -30224,8 +30224,8 @@
   },
   {
    "derived": {
-    "family": "hpsdr_network",
-    "family_basis": "manufacturer OpenHPSDR",
+    "family": "other_serial",
+    "family_basis": "port type only",
     "has_scope": false,
     "quirk_hints": [
      "post_write_delay"
