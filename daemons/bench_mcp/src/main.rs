@@ -120,6 +120,50 @@ const TOOLS: &[ToolSpec] = &[
         props: r#"{"instrument":{"type":"string"},"confirm_inputs_disconnected":{"type":"boolean"},"dry_run":{"type":"boolean","description":"true: return the plan, send nothing"}}"#, required: &[] },
 ];
 
+/// A module that owns the `bench_<prefix>_*` tools of one kind of instrument. A new driver of this kind is one row here (and
+/// `mod <name>;` above): `call` is reached for every tool whose name starts with `prefix`, `tool_defs` lists its tools, and
+/// `sample` is an instrument entry that has it configured at the top tier, so that the manual tests see every module's tools.
+/// Alphabetical by prefix, so two rows added at once do not touch the same line.
+struct Module {
+    prefix: &'static str,
+    call: fn(&[Instrument], &str, &Value) -> Result<Value, String>,
+    tool_defs: fn(&[Instrument]) -> Vec<Tool>,
+    sample: &'static str,
+}
+
+const MODULES: &[Module] = &[
+    Module {
+        prefix: "bench_audio_",
+        call: audio::call,
+        tool_defs: audio::tool_defs,
+        sample: r#""sound":{"driver":"audio","tier":"full"}"#,
+    },
+    Module {
+        prefix: "bench_example_",
+        call: example::call,
+        tool_defs: example::tool_defs,
+        sample: r#""example":{"driver":"example","tier":"full","host":"192.0.2.1"}"#,
+    },
+    Module {
+        prefix: "bench_hamlib_",
+        call: hamlib::call,
+        tool_defs: hamlib::tool_defs,
+        sample: r#""rig":{"driver":"hamlib","tier":"full","model":1,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}}"#,
+    },
+    Module {
+        prefix: "bench_rotator_",
+        call: rotator::call,
+        tool_defs: rotator::tool_defs,
+        sample: r#""rotor":{"driver":"rotator","tier":"full","rotctld_port":4533}"#,
+    },
+    Module {
+        prefix: "bench_usb_",
+        call: usb_hub::call,
+        tool_defs: usb_hub::tool_defs,
+        sample: r#""usb":{"driver":"usb_hub","tier":"full"}"#,
+    },
+];
+
 pub(crate) fn out_dir() -> PathBuf {
     let d = std::env::var("BENCH_MCP_OUT")
         .map(PathBuf::from)
@@ -165,13 +209,8 @@ fn connect(i: &Instrument) -> Result<Link, String> {
     match i.kind {
         Kind::Scope => Link::tcp(i.host.as_deref().unwrap_or_default(), i.port),
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
-        Kind::Vna => Err("the VNA has no SCPI link".into()),
-        Kind::Sdr => Err("an SDR has no SCPI link".into()),
-        Kind::UsbHub => Err("the USB hub tools have no SCPI link".into()),
-        Kind::Audio => Err("the audio tools have no SCPI link".into()),
-        Kind::Hamlib => Err("the hamlib tools open their own link".into()),
-        Kind::Rotator => Err("the rotator tools open their own link".into()),
-        Kind::Example => Err("the example tools open their own link".into()),
+        // Every other kind has its own tool module (`MODULES`) or driver and opens its own link.
+        _ => Err(format!("{:?} instruments have no SCPI link", i.kind)),
     }
 }
 
@@ -186,23 +225,12 @@ fn instrument_lock(name: &str) -> Arc<Mutex<()>> {
 }
 
 fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_main_call]
     if manual::is_manual_tool(name) {
         return manual::call(name, args);
     }
-    if name.starts_with("bench_audio_") {
-        return audio::call(insts, name, args);
-    }
-    if name.starts_with("bench_rotator_") {
-        return rotator::call(insts, name, args);
-    }
-    if name.starts_with("bench_hamlib_") {
-        return hamlib::call(insts, name, args);
-    }
-    if name.starts_with("bench_example_") {
-        return example::call(insts, name, args);
-    }
-    if name.starts_with("bench_usb_") {
-        return usb_hub::call(insts, name, args);
+    if let Some(module) = MODULES.iter().find(|m| name.starts_with(m.prefix)) {
+        return (module.call)(insts, name, args);
     }
     let tool = TOOLS
         .iter()
@@ -343,30 +371,24 @@ fn psu_output(
 /// Every tool this server can offer, as listed for a bench with each driver configured at the top
 /// tier. No hardware is touched. The manual's argument tables and its tests read the schemas here.
 pub(crate) fn all_tool_defs() -> Vec<Tool> {
-    let bench = config::parse(
-        r#"{"instruments":{
-        "scope":{"driver":"siglent_sds","tier":"full","host":"127.0.0.1"},
+    // [@ANCHOR: bench_mcp_main_all_tool_defs]
+    // The instruments this file owns, then one sample entry per module.
+    let own = r#""scope":{"driver":"siglent_sds","tier":"full","host":"127.0.0.1"},
         "psu":{"driver":"atm6301","tier":"full","serial":"/dev/null"},
         "vna":{"driver":"vnwa_open","tier":"full"},
         "blade":{"driver":"bladerf","tier":"full"},
-        "lime":{"driver":"limesdr","tier":"full"},
-        "usb":{"driver":"usb_hub","tier":"full"},
-        "sound":{"driver":"audio","tier":"full"},
-        "rotor":{"driver":"rotator","tier":"full","rotctld_port":4533},
-        "rig":{"driver":"hamlib","tier":"full","model":1,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}},
-        "example":{"driver":"example","tier":"full","host":"192.0.2.1"}}}"#,
-    )
+        "lime":{"driver":"limesdr","tier":"full"}"#;
+    let samples: Vec<&str> = MODULES.iter().map(|m| m.sample).collect();
+    let bench = config::parse(&format!(
+        r#"{{"instruments":{{{own},{}}}}}"#,
+        samples.join(",")
+    ))
     .expect("the all-instruments bench configuration parses");
     tool_defs(&bench)
 }
 
 fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
     // [@ANCHOR: bench_mcp_main_tool_defs]
-    let usb = usb_hub::tool_defs(insts);
-    let audio = audio::tool_defs(insts);
-    let hamlib = hamlib::tool_defs(insts);
-    let rotator = rotator::tool_defs(insts);
-    let example = example::tool_defs(insts);
     let tools: Vec<Tool> = TOOLS
         .iter()
         .filter(|t| t.name == "bench_list" || insts.iter().any(|i| t.kinds.contains(&i.kind) && i.tier >= t.tier))
@@ -375,11 +397,7 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
             let Value::Object(schema) = schema else { unreachable!() };
             Tool::new(t.name, format!("[{:?}] {}", t.tier, t.desc), Arc::new(schema))
         })
-        .chain(usb)
-        .chain(audio)
-        .chain(hamlib)
-        .chain(rotator)
-        .chain(example)
+        .chain(MODULES.iter().flat_map(|m| (m.tool_defs)(insts)))
         .chain(manual::tool_defs())
         .collect();
     manual::with_pointers(tools)
@@ -729,6 +747,46 @@ mod tests {
         );
         let off = psu_output(psu_inst, &mut l, &json!({"on": false}), &lim, &timer).unwrap();
         assert_eq!(off["verified"], true);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_call]
+    // Tests [@ANCHOR: bench_mcp_main_all_tool_defs]
+    #[test]
+    fn every_module_row_routes_its_own_tools_and_the_tables_are_sorted() {
+        let all = all_tool_defs();
+        let names: Vec<&str> = all.iter().map(|t| t.name.as_ref()).collect();
+        for m in MODULES {
+            assert!(
+                m.prefix.starts_with("bench_") && m.prefix.ends_with('_'),
+                "{}",
+                m.prefix
+            );
+            let own: Vec<&&str> = names.iter().filter(|n| n.starts_with(m.prefix)).collect();
+            assert!(
+                !own.is_empty(),
+                "{}: the sample entry lists none of its tools",
+                m.prefix
+            );
+            // The rows are the only routes: no other module claims the same tools.
+            for n in own {
+                let claimants = MODULES.iter().filter(|o| n.starts_with(o.prefix)).count();
+                assert_eq!(claimants, 1, "{n}");
+            }
+        }
+        assert!(
+            MODULES.windows(2).all(|w| w[0].prefix < w[1].prefix),
+            "MODULES is alphabetical"
+        );
+        let drivers = config::driver_names();
+        assert!(
+            drivers.windows(2).all(|w| w[0] < w[1]),
+            "DRIVER_KINDS is alphabetical"
+        );
+        // A routed tool reaches its module: with no instrument configured the module says so, not "unknown tool".
+        let e = call(&insts(), "bench_hamlib_status", &json!({})).unwrap_err();
+        assert!(!e.contains("unknown tool"), "{e}");
+        let e = call(&insts(), "bench_no_such_thing", &json!({})).unwrap_err();
+        assert!(e.contains("unknown tool"), "{e}");
     }
 
     #[test]

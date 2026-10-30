@@ -284,10 +284,10 @@ fn every_driver_has_a_config_example_in_the_readme() {
     let readme = read("README.md");
     // Drivers whose example entry is not in the README yet. Do not add to it.
     let legacy: &[&str] = &["usb_hub", "audio"];
-    for d in crate::config::DRIVERS {
+    for d in crate::config::driver_names() {
         let shown = readme.contains(&format!("\"driver\": \"{d}\""));
         assert!(
-            shown || legacy.contains(d),
+            shown || legacy.contains(&d),
             "README.md has no example config entry with \"driver\": \"{d}\""
         );
     }
