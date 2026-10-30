@@ -168,14 +168,15 @@ function previousVersionCacheExists() {
 }
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        previousVersionCacheExists().then((wasUpdate) => cleanupStaleCaches().then(() => self.clients.claim()).then(() => self.clients.matchAll()).then((clients) => {
-            if (wasUpdate) {
-                clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
-            }
-            return;
-        }))
-    );
+    event.waitUntil((async () => {
+        const wasUpdate = await previousVersionCacheExists();
+        await cleanupStaleCaches();
+        await self.clients.claim();
+        const clients = await self.clients.matchAll();
+        if (wasUpdate) {
+            clients.forEach(client => client.postMessage({ type: 'NEW_VERSION_INSTALLED' }));
+        }
+    })());
 });
 
 self.addEventListener('fetch', (event) => {

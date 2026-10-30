@@ -115,7 +115,7 @@ export class AdminViolationToast extends Interaction {
     static selector = '#wrapwrap';
 
     start() {
-        this._checkPendingReports();
+        void this._checkPendingReports();
     }
 
     // [@ANCHOR: admin_toast_logic]
@@ -131,7 +131,7 @@ export class AdminViolationToast extends Interaction {
             })
             .then(data => {
                 const now = Date.now();
-                if (!shouldShowToast(readSeen(), data, now)) return;
+                if (!shouldShowToast(readSeen(), data, now)) return null;
                 const url = data.url;
                 const notify = this.env.services.notification;
                 const buttons = [];
@@ -150,6 +150,7 @@ export class AdminViolationToast extends Interaction {
                     buttons: buttons,
                 });
                 writeSeen(data, now);
+                return null;
             }).catch(() => {
                 // Silently ignore network errors to prevent UI disruption
             });

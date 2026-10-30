@@ -92,7 +92,7 @@ export default class Cf19OskExtension extends Extension {
         try {
             const [ok, bytes] = GLib.file_get_contents(TABLET_MODE_PATH);
             return ok && bytes.length > 0 && bytes[0] === 0x31;   // '1'
-        } catch (e) {
+        } catch (_e) {
             return false;
         }
     }

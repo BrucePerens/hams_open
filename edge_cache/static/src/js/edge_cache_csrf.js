@@ -102,16 +102,19 @@ function onSubmit(ev) {
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const submitter = ev.submitter && ev.submitter.form === form ? ev.submitter : null;
-    fetchToken().then(() => {
-        // requestSubmit() fires the submit event before it returns, so the mark is seen by this
-        // handler and then removed, even when the form's own validation stops the submit.
-        replaying.add(form);
-        try {
+    fetchToken()
+        .then(() => {
+            // requestSubmit() fires the submit event before it returns, so the mark is seen by this
+            // handler; it is removed in the same turn (microtasks run before any other event), even
+            // when the form's own validation stops the submit or requestSubmit throws.
+            replaying.add(form);
             form.requestSubmit(submitter);
-        } finally {
-            replaying.delete(form);
-        }
-    });
+            return null;
+        })
+        .finally(() => replaying.delete(form))
+        .catch((error) => {
+            console.warn("edge_cache: could not resubmit the form", error);
+        });
 }
 
 function onWebsiteFormSend(ev) {
@@ -121,7 +124,11 @@ function onWebsiteFormSend(ev) {
     }
     ev.preventDefault();
     ev.stopImmediatePropagation();
-    refreshCsrfToken().then(() => button.click());
+    refreshCsrfToken()
+        .then(() => button.click())
+        .catch((error) => {
+            console.warn("edge_cache: could not resend the website form", error);
+        });
 }
 
 /** Installs the listeners on an anonymous visitor's page; returns a function that removes them, or null. */
