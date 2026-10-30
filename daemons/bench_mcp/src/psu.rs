@@ -3,7 +3,7 @@
 //! The configured `max_volts` and `max_amps` cap every setpoint, and the output is switched on only
 //! if the setpoints already stored in the supply are within those caps. Switching the output on is a `full`
 //! tool that needs `dry_run` or `confirm_load_connected`, and this process switches it off again after `for_s`
-//! seconds (at most the configured `max_on_s`): the supply has no output timer of its own. The safe state
+//! seconds (at most the configured `max_on_s`): the driver knows of no output timer in the supply (none is used). The safe state
 //! (output off, read back) is `bench_psu_safe_state`.
 
 use crate::link::Link;
