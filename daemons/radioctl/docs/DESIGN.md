@@ -51,6 +51,17 @@ records the decisions that shape the code.
 14. **Transmit gate.** Closed by default, per rig; opened only by `open_transmit_gate(TransmitPermit)`.
     Checked in the handle (no queue slot used) and again in the actor when the command runs.
 
+15. **Serial runs on dedicated threads, USB ports are found by id, and lines are gated.** The
+    `serialport` crate (no libudev: Linux ports are listed from sysfs) is driven by a supervisor
+    thread and a reader thread per connection, bridged to the actor by an in-memory stream on the
+    caller's runtime. Control lines are an immediate call on a second handle of the port, never
+    behind a queued read. A vanished device moves the link to reconnecting with exponential backoff
+    and the port is looked up again by USB id; bytes written meanwhile are dropped and counted, and
+    the command ends in its own typed timeout. Keying through RTS or DTR (`LineKeyer`) is refused
+    unless the rig's transmit gate is open; releasing is always allowed. Opening asserts DTR/RTS in
+    the kernel for an instant before the library makes them inactive; ports without modem lines say
+    so (`LineControl::Unmanaged`) instead of the library pretending.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

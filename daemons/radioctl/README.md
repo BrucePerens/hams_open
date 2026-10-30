@@ -5,7 +5,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
 2026-10-30; every Rust file carries an SPDX header and the manifests inherit the licence from the
 workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`.
 
-Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). No real transports. There is no real serial, USB or Ethernet transport and no transmit
+Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect) and TCP transports exist; there is no transmit
 path to real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -174,6 +174,30 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_virtual_set_kenwood_mode] (radioctl-protocols) Sets the mode from one Kenwood digit, else `?;`.
 - [@ANCHOR: radioctl:radioctl_virtual_data_reply] (radioctl-protocols) Builds a CI-V frequency reply.
 - [@ANCHOR: radioctl:radioctl_virtual_meter_reply] (radioctl-protocols) Builds a CI-V meter reply (BCD).
+- [@ANCHOR: radioctl:radioctl_core_backoff_delay] (radioctl-core) The wait after N failed attempts: exponential, at least 1 ms, capped.
+- [@ANCHOR: radioctl:radioctl_core_usb_classify] (radioctl-core) The USB-to-serial chip family (FTDI, CP210x, CH340, CDC ACM) for a vendor and product id.
+- [@ANCHOR: radioctl:radioctl_core_usb_port_chip] (radioctl-core) The chip family of a listed port.
+- [@ANCHOR: radioctl:radioctl_core_usb_select_port] (radioctl-core) The one port matching vid/pid/serial; none or several are distinct typed errors.
+- [@ANCHOR: radioctl:radioctl_core_usb_read_trimmed] (radioctl-core) The trimmed text of a sysfs attribute, or nothing if missing or empty.
+- [@ANCHOR: radioctl:radioctl_core_usb_list_sysfs] (radioctl-core) Lists `ttyUSB*`/`ttyACM*` ports with USB ids from a sysfs tree.
+- [@ANCHOR: radioctl:radioctl_core_usb_list_ports] (radioctl-core) Lists this machine's serial ports that carry USB ids (sysfs on Linux).
+- [@ANCHOR: radioctl:radioctl_core_keyer_new] (radioctl-core) A control-line keyer; makes its line inactive when built.
+- [@ANCHOR: radioctl:radioctl_core_keyer_key] (radioctl-core) Keys through the line; refused unless the rig's transmit gate is open.
+- [@ANCHOR: radioctl:radioctl_core_keyer_release] (radioctl-core) Unkeys the line; always allowed.
+- [@ANCHOR: radioctl:radioctl_core_tcp_connect] (radioctl-core) Connects over TCP with a per-attempt timeout and backed-off retries.
+- [@ANCHOR: radioctl:radioctl_core_serial_config_new] (radioctl-core) A serial configuration: 8N1, lines managed and inactive, default backoff, one open attempt.
+- [@ANCHOR: radioctl:radioctl_core_serial_control_set_line] (radioctl-core) Sets RTS or DTR immediately on the open port.
+- [@ANCHOR: radioctl:radioctl_core_serial_link_status] (radioctl-core) The link status: connected (with generation), reconnecting, closed.
+- [@ANCHOR: radioctl:radioctl_core_serial_link_watch] (radioctl-core) A receiver that wakes on link status changes.
+- [@ANCHOR: radioctl:radioctl_core_serial_link_stats] (radioctl-core) Bytes in, out, dropped while down, and reconnects.
+- [@ANCHOR: radioctl:radioctl_core_serial_resolve] (radioctl-core) The device path for a target: the path, or the one port matching the USB ids.
+- [@ANCHOR: radioctl:radioctl_core_serial_open_port] (radioctl-core) Opens and configures the port and makes DTR/RTS inactive (or fails).
+- [@ANCHOR: radioctl:radioctl_core_serial_write_fully] (radioctl-core) Writes all bytes, riding out short timeouts for about two seconds.
+- [@ANCHOR: radioctl:radioctl_core_serial_supervisor_run] (radioctl-core) The supervisor thread: first open, sessions, reconnects with backoff.
+- [@ANCHOR: radioctl:radioctl_core_serial_sleep_dropping] (radioctl-core) Waits out a backoff delay, dropping and counting bytes written meanwhile.
+- [@ANCHOR: radioctl:radioctl_core_serial_session] (radioctl-core) One connection: the writer loop plus a reader thread.
+- [@ANCHOR: radioctl:radioctl_core_serial_read_loop] (radioctl-core) The reader thread: port to async side until stop or failure.
+- [@ANCHOR: radioctl:radioctl_core_serial_open] (radioctl-core) Opens a serial port on a caller-supplied runtime handle and returns the byte stream, control lines and status.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_start] (radioctl-core) Starts the dispatcher thread for `callback` with a queue of `capacity` events.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_submit] (radioctl-core) Queues an event without ever waiting for the callback.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_counters] (radioctl-core) A snapshot of the counters.
