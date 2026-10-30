@@ -421,6 +421,7 @@ def _css_number(text):
     """A CSS number as a finite float, or None. float() accepts "nan", "inf" and a 400-digit integer (which is
     inf) without an exception, and rejects "1.2.3" and "." that the colour regexes let through; all of those
     are None here, so a caller never meets OverflowError or ValueError from attacker-written CSS."""
+    # [@ANCHOR: helpdesk_untrusted_css_number]
     try:
         number = float(text)
     except ValueError:

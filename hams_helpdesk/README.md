@@ -43,6 +43,7 @@ This module operates within strict DevSecOps parameters, ensuring all actions ar
 
     - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]
 
+* **Hidden-text colour checks (`[@ANCHOR: helpdesk_untrusted_css_number]`)**: a CSS number in attacker-written style or colour text is read as a finite float or as nothing, so the hidden-text detector never raises on `nan`, `inf` or a 400-digit value.
 * **Ticket Creation (`[@ANCHOR: helpdesk_ticket_creation]`)**: Intercepts the ORM `create` method to automatically execute pre-shift CC logic and route to the currently on-duty personnel based on calendar availability. "Pre-shift CC" subscribes the users returned by `calendar.event.get_upcoming_duty_shifts()` (people whose shift starts soon) and sends them an internal "Shift CC" note. This module's own version of that method returns no shifts and no module in this repository overrides it, so the step currently does nothing.
 
     - Verified by [@ANCHOR: test_01_ticket_creation_and_routing]

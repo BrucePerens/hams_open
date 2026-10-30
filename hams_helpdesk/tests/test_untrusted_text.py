@@ -390,6 +390,7 @@ class TestUntrustedTextCorpus(BaseCase):
         result = ut.sanitize_html("<div>" * 5000 + "x" + "</div>" * 5000, 100)
         self.assertIsNotNone(result)
 
+    # Tests [@ANCHOR: helpdesk_untrusted_css_number]
     def test_css_numbers_that_are_not_finite_or_not_numbers_never_raise(self):
         huge = "9" * 400  # float() of this is inf, with no exception
         for value in (f"rgb({huge},0,0)", f"rgb(0,0,{huge}%)", "rgb(1.2.3,0,0)", "rgb(.,0,0)", f"rgba(0,0,0,{huge})", "rgba(0,0,0,1..2)"):
