@@ -202,7 +202,7 @@ fn run_arguments_are_checked_against_the_runner_before_anything_starts() {
         (Tier::ReadConfig, 600.0, 1000, 2048)
     );
     let bad = |a: Value| run_params(inst, &a).err().unwrap();
-    assert!(bad(json!({})).contains("source is required"));
+    assert!(bad(json!({})).contains("source (or the name"));
     assert!(bad(json!({"source": "  "})).contains("1 byte"));
     assert!(bad(json!({"source": "pass", "language": "lisp"})).contains("not available"));
     assert!(bad(json!({"source": "pass", "args": [1]})).contains("JSON object"));
@@ -1391,4 +1391,293 @@ while True:
         "{r}"
     );
     assert_eq!(r["emitted"]["cleanup"], "ran");
+}
+
+// Tests [@ANCHOR: proc_saved_save]
+// Tests [@ANCHOR: proc_saved_load]
+// Tests [@ANCHOR: proc_saved_delete]
+// Tests [@ANCHOR: proc_saved_list]
+// Tests [@ANCHOR: proc_saved_valid_name]
+// Tests [@ANCHOR: proc_saved_dir_of]
+#[test]
+fn saved_procedures_have_versions_a_declared_tier_and_run_by_name() {
+    let b = bench();
+    let save = |a: Value| tool(&b, "bench_proc_save", a);
+    let src = "bench.result(bench.call('bench_example_status', instrument='gen')['model'])\n";
+    let s = save(json!({"name": "model-of-gen", "source": src, "tier": "read_only", "description": "reads the model", "note": "first"})).unwrap();
+    assert_eq!(
+        (s["version"].clone(), s["tool_calls"][0]["tool"].clone()),
+        (json!(1), json!("bench_example_status")),
+        "{s}"
+    );
+    let e = save(json!({"name": "Bad Name", "source": src, "tier": "read_only"})).unwrap_err();
+    assert!(e.contains("not a procedure name"), "{e}");
+    let e = save(json!({"name": "../x", "source": src, "tier": "read_only"})).unwrap_err();
+    assert!(e.contains("not a procedure name"), "{e}");
+    let e = save(json!({"name": "pulser", "source": "bench.call('bench_example_pulse')\n", "tier": "read_config"})).unwrap_err();
+    assert!(
+        e.contains("needs tier full") && e.contains("declared tier is read_config"),
+        "{e}"
+    );
+    let e = save(json!({"name": "broken", "source": "def (:\n", "tier": "read_only"})).unwrap_err();
+    assert!(e.contains("does not compile"), "{e}");
+    assert!(save(json!({"name": "x", "source": src, "tier": "root"})).is_err());
+    let v2 = save(json!({"name": "model-of-gen", "source": format!("{src}# v2\n"), "tier": "read_config", "note": "second"})).unwrap();
+    assert_eq!(v2["version"], json!(2));
+    let l = tool(&b, "bench_proc_load", json!({"name": "model-of-gen"})).unwrap();
+    assert_eq!(
+        (
+            l["version"].clone(),
+            l["tier"].clone(),
+            l["description"].clone()
+        ),
+        (json!(2), json!("read_config"), json!("reads the model"))
+    );
+    assert!(l["source"].as_str().unwrap().contains("# v2"));
+    let l1 = tool(
+        &b,
+        "bench_proc_load",
+        json!({"name": "model-of-gen", "version": 1}),
+    )
+    .unwrap();
+    assert_eq!(
+        (l1["tier"].clone(), l1["versions"].as_array().unwrap().len()),
+        (json!("read_only"), 2)
+    );
+    assert!(tool(
+        &b,
+        "bench_proc_load",
+        json!({"name": "model-of-gen", "version": 9})
+    )
+    .unwrap_err()
+    .contains("no version 9"));
+    assert!(tool(&b, "bench_proc_load", json!({"name": "nobody"}))
+        .unwrap_err()
+        .contains("no saved procedure"));
+    let list = tool(&b, "bench_proc_list", json!({})).unwrap();
+    assert_eq!(
+        (
+            list["saved"][0]["name"].clone(),
+            list["saved"][0]["latest"].clone(),
+            list["saved"][0]["versions"].clone()
+        ),
+        (json!("model-of-gen"), json!(2), json!(2))
+    );
+}
+
+// Tests [@ANCHOR: proc_saved_save]
+#[test]
+fn a_saved_procedure_is_run_by_name_with_its_declared_tier_and_old_versions_are_pruned() {
+    let b = bench();
+    let src = "bench.result(bench.call('bench_example_status', instrument='gen')['model'])\n";
+    tool(
+        &b,
+        "bench_proc_save",
+        json!({"name": "model", "source": src, "tier": "read_only"}),
+    )
+    .unwrap();
+    let r = tool(&b, "bench_proc_run", json!({"name": "model"})).unwrap();
+    let r = finish(&b, r["run"].as_str().unwrap());
+    assert_eq!(
+        (r["state"].clone(), r["value"].clone()),
+        (json!("succeeded"), json!("EXAMPLE-1000")),
+        "{r}"
+    );
+    let st = tool(&b, "bench_proc_status", json!({"run": r["run"]})).unwrap();
+    assert_eq!(
+        (st["label"].clone(), st["tier_cap"].clone()),
+        (json!("model@1"), json!("read_only"))
+    );
+    let e = tool(
+        &b,
+        "bench_proc_run",
+        json!({"name": "model", "source": "pass"}),
+    )
+    .unwrap_err();
+    assert!(e.contains("not both"), "{e}");
+    assert!(tool(&b, "bench_proc_run", json!({"name": "nobody"}))
+        .unwrap_err()
+        .contains("no saved procedure"));
+    assert!(tool(&b, "bench_proc_run", json!({}))
+        .unwrap_err()
+        .contains("source (or the name"));
+    // A cap above the declared tier can be chosen; the saved tier is only the default.
+    let r = tool(
+        &b,
+        "bench_proc_run",
+        json!({"name": "model", "tier": "read_config"}),
+    )
+    .unwrap();
+    assert_eq!(r["tier_cap"], "read_config");
+    finish(&b, r["run"].as_str().unwrap());
+    for i in 0..25 {
+        tool(
+            &b,
+            "bench_proc_save",
+            json!({"name": "model", "source": format!("{src}# {i}\n"), "tier": "read_only"}),
+        )
+        .unwrap();
+    }
+    let l = tool(&b, "bench_proc_load", json!({"name": "model"})).unwrap();
+    assert_eq!(l["version"], json!(26));
+    assert_eq!(
+        l["versions"].as_array().unwrap().len(),
+        saved::KEEP_VERSIONS
+    );
+    assert!(
+        tool(
+            &b,
+            "bench_proc_load",
+            json!({"name": "model", "version": 1})
+        )
+        .is_err(),
+        "the oldest versions were pruned"
+    );
+    // Deleting needs a confirm; one version goes, then all.
+    let e = tool(
+        &b,
+        "bench_proc_delete",
+        json!({"name": "model", "confirm": false}),
+    )
+    .unwrap_err();
+    assert!(e.contains("confirm true"), "{e}");
+    let d = tool(
+        &b,
+        "bench_proc_delete",
+        json!({"name": "model", "version": 26, "confirm": true}),
+    )
+    .unwrap();
+    assert_eq!(d["deleted"], "version 26");
+    assert_eq!(
+        tool(&b, "bench_proc_load", json!({"name": "model"})).unwrap()["version"],
+        json!(25)
+    );
+    assert!(tool(
+        &b,
+        "bench_proc_delete",
+        json!({"name": "model", "version": 99, "confirm": true})
+    )
+    .is_err());
+    tool(
+        &b,
+        "bench_proc_delete",
+        json!({"name": "model", "confirm": true}),
+    )
+    .unwrap();
+    assert!(tool(&b, "bench_proc_load", json!({"name": "model"})).is_err());
+    assert_eq!(
+        tool(&b, "bench_proc_list", json!({})).unwrap()["saved"],
+        json!([])
+    );
+}
+
+// Tests [@ANCHOR: proc_py_ask_operator]
+// Tests [@ANCHOR: proc_run_answer]
+// Tests [@ANCHOR: proc_run_poll_ask]
+// Tests [@ANCHOR: proc_run_clear_ask]
+// Tests [@ANCHOR: proc_run_paused]
+#[test]
+fn the_operator_prompt_pauses_the_run_without_using_its_wall_clock_budget() {
+    let b = bench();
+    let source = r#"
+answer = bench.ask_operator("Connect the dummy load, then answer 'done'.")
+left = bench.deadline()
+bench.result({"answer": answer, "deadline_left": left})
+"#;
+    let id = start(&b, source, json!({"wall_s": 3}));
+    let t = Instant::now();
+    let mut st;
+    loop {
+        st = tool(&b, "bench_proc_status", json!({"run": id})).unwrap();
+        if st["state"] == "waiting_operator" {
+            break;
+        }
+        assert!(t.elapsed() < Duration::from_secs(20), "{st}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        st["awaiting"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("dummy load"),
+        "{st}"
+    );
+    assert_eq!(st["finished"], json!(false));
+    assert!(tool(
+        &b,
+        "bench_proc_input",
+        json!({"run": "r00000000000000", "answer": "x"})
+    )
+    .is_err());
+    // Longer than the wall-clock budget: the wait does not count.
+    std::thread::sleep(Duration::from_millis(4200));
+    let st = tool(&b, "bench_proc_status", json!({"run": id})).unwrap();
+    assert_eq!(
+        st["state"], "waiting_operator",
+        "waiting longer than wall_s is not a time-out: {st}"
+    );
+    let a = tool(&b, "bench_proc_input", json!({"run": id, "answer": "done"})).unwrap();
+    assert_eq!(a["answered"], json!(true));
+    let r = finish(&b, &id);
+    assert_eq!(r["state"], "succeeded", "{r}");
+    assert_eq!(r["value"]["answer"], "done");
+    assert!(r["value"]["deadline_left"].as_f64().unwrap() > 2.0, "{r}");
+    let st = tool(&b, "bench_proc_status", json!({"run": id})).unwrap();
+    assert!(
+        st["paused_s"].as_f64().unwrap() > 4.0 && st["awaiting"].is_null(),
+        "{st}"
+    );
+    let out = tool(
+        &b,
+        "bench_proc_output",
+        json!({"run": id, "max_bytes": 100000}),
+    )
+    .unwrap();
+    let kinds: Vec<&str> = out["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["kind"].as_str().unwrap())
+        .collect();
+    assert!(
+        kinds.contains(&"ask") && kinds.contains(&"answer"),
+        "{kinds:?}"
+    );
+    let e = tool(
+        &b,
+        "bench_proc_input",
+        json!({"run": id, "answer": "again"}),
+    )
+    .unwrap_err();
+    assert!(e.contains("not running in this server"), "{e}");
+}
+
+#[test]
+fn a_prompt_nobody_answers_stops_the_run_at_the_operator_limit_and_a_cancel_ends_the_wait() {
+    let b = bench_with("full", r#""operator_timeout_s":1"#);
+    let r = run(&b, "bench.ask_operator('hello?')\n", json!({"wall_s": 60}));
+    assert_eq!(
+        (r["state"].clone(), r["failure"]["reason"].clone()),
+        (json!("timed_out"), json!("operator_timeout")),
+        "{r}"
+    );
+    let id = start(&b, "bench.ask_operator('wait', timeout=60)\n", json!({}));
+    let t = Instant::now();
+    while tool(&b, "bench_proc_status", json!({"run": id})).unwrap()["state"] != "waiting_operator"
+    {
+        assert!(t.elapsed() < Duration::from_secs(20));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let st = tool(&b, "bench_proc_cancel", json!({"run": id, "wait_s": 20})).unwrap();
+    assert_eq!(st["state"], "cancelled", "{st}");
+    let e = tool(&b, "bench_proc_input", json!({"run": id, "answer": "late"})).unwrap_err();
+    assert!(
+        e.contains("not running in this server") || e.contains("not waiting"),
+        "{e}"
+    );
+    // A second prompt while one is pending is refused.
+    let source = "import threading\ndef second():\n    bench.sleep(0.3)\n    try:\n        bench.ask_operator('two')\n    except bench.BenchError as error:\n        bench.emit('second', error.kind)\nthreading.Thread(target=second).start()\nbench.ask_operator('one', timeout=1)\n";
+    let r = run(&b, source, json!({}));
+    assert_eq!(r["state"], "timed_out", "{r}");
+    assert_eq!(r["emitted"]["second"], "policy", "{r}");
 }

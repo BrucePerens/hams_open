@@ -17,6 +17,7 @@ mod cpython;
 mod locks;
 mod run;
 mod safe;
+mod saved;
 mod store;
 mod tiers;
 mod view;
@@ -57,6 +58,8 @@ pub struct Config {
     pub safe_state_psu_off: bool,
     /// Seconds a tool call waits for an instrument another run holds before it is refused.
     pub lock_wait_s: f64,
+    /// Seconds a run may wait for the operator (`bench.ask_operator`) before it is stopped; this wait is not part of the wall-clock budget.
+    pub operator_timeout_s: f64,
 }
 
 impl Default for Config {
@@ -73,6 +76,7 @@ impl Default for Config {
             wrapper: "none".into(),
             safe_state_psu_off: true,
             lock_wait_s: 2.0,
+            operator_timeout_s: 3600.0,
         }
     }
 }
@@ -118,6 +122,9 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     if let Some(x) = num("max_memory_mb", 256.0, 1_048_576.0)? {
         cfg.max_memory_mb = x as u64;
     }
+    if let Some(x) = num("operator_timeout_s", 1.0, 604_800.0)? {
+        cfg.operator_timeout_s = x;
+    }
     if let Some(x) = num("lock_wait_s", 0.0, 3600.0)? {
         cfg.lock_wait_s = x;
     }
@@ -156,8 +163,8 @@ pub const SPECS: &[Spec] = &[
         name: "bench_proc_run",
         tier: Tier::ReadConfig,
         desc: "PROCEDURE RUNNER: start a program that calls bench tools in loops and returns a run id at once; poll bench_proc_status, bench_proc_output and bench_proc_result. `source` is Python (numpy and scipy are importable) using the injected `bench` module: bench.call(tool, **args) goes through this server's normal dispatcher, so tiers, confirmations and attestations apply as for your own calls, and never above the `tier` cap of the run (default read_config; full needs confirm_full_tier true from the person at the bench). The run has a wall-clock budget, a tool-call budget and a memory limit; it is killed at the end of them or on bench_proc_cancel, after its cleanup handlers had a grace time. THE AUDIT HOOK THAT BLOCKS SUBPROCESS, SOCKET, DEVICE FILES AND WRITES OUTSIDE ITS SCRATCH DIRECTORY IS NOT A SANDBOX. dry_run compiles the source and lists the tools it calls, and starts nothing.",
-        props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"source":{"type":"string","description":"the Python source of the procedure (at most 256 KiB)"},"args":{"type":"object","description":"JSON arguments, available to the program as bench.args"},"language":{"type":"string","enum":["python"],"description":"default python; the only language so far"},"label":{"type":"string","description":"a short name for the run, shown in lists"},"tier":{"type":"string","enum":["read_only","read_config","full"],"description":"the highest tier of tool the run may call; default read_config, never above the runner entry's own tier"},"confirm_full_tier":{"type":"boolean","description":"true: the person at the bench agrees that this run may call full-tier tools"},"wall_s":{"type":"number","description":"wall-clock budget in seconds, default 600"},"max_calls":{"type":"integer","description":"tool-call budget, default 1000"},"memory_mb":{"type":"integer","description":"address-space limit in MiB, default 2048"},"cpu_s":{"type":"integer","description":"CPU-time limit in seconds, default the wall budget plus 10"},"trace":{"type":"boolean","description":"record the line numbers the program reaches (slower)"},"dry_run":{"type":"boolean","description":"check the source and list the tools it calls; start nothing"}"#,
-        required: &["source"],
+        props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"source":{"type":"string","description":"the Python source of the procedure (at most 256 KiB); give this or name"},"name":{"type":"string","description":"the name of a saved procedure to run instead of source; the tier cap defaults to the tier it declares"},"version":{"type":"integer","description":"with name: the version to run, default the latest"},"args":{"type":"object","description":"JSON arguments, available to the program as bench.args"},"language":{"type":"string","enum":["python"],"description":"default python; the only language so far"},"label":{"type":"string","description":"a short name for the run, shown in lists"},"tier":{"type":"string","enum":["read_only","read_config","full"],"description":"the highest tier of tool the run may call; default read_config, never above the runner entry's own tier"},"confirm_full_tier":{"type":"boolean","description":"true: the person at the bench agrees that this run may call full-tier tools"},"wall_s":{"type":"number","description":"wall-clock budget in seconds, default 600"},"max_calls":{"type":"integer","description":"tool-call budget, default 1000"},"memory_mb":{"type":"integer","description":"address-space limit in MiB, default 2048"},"cpu_s":{"type":"integer","description":"CPU-time limit in seconds, default the wall budget plus 10"},"trace":{"type":"boolean","description":"record the line numbers the program reaches (slower)"},"dry_run":{"type":"boolean","description":"check the source and list the tools it calls; start nothing"}"#,
+        required: &[],
     },
     Spec {
         name: "bench_proc_status",
@@ -193,6 +200,34 @@ pub const SPECS: &[Spec] = &[
         desc: "PROCEDURE RUNNER: the runs in the managed directory, newest first, with their states, and how many are active. Changes nothing.",
         props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"limit":{"type":"integer","description":"at most this many runs, default 20"}"#,
         required: &[],
+    },
+    Spec {
+        name: "bench_proc_input",
+        tier: Tier::ReadConfig,
+        desc: "PROCEDURE RUNNER: answer the operator prompt a run is waiting on (state waiting_operator; bench_proc_status shows the message in `awaiting`). The program receives `answer` as the value of bench.ask_operator. The time spent waiting does not count against the run's wall-clock budget but has its own limit (operator_timeout_s). Relay what the person at the bench actually did or said; do not invent an answer.",
+        props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"run":{"type":"string","description":"the run id"},"answer":{"type":"string","description":"the operator's answer, at most 4096 characters"}"#,
+        required: &["run", "answer"],
+    },
+    Spec {
+        name: "bench_proc_save",
+        tier: Tier::ReadConfig,
+        desc: "PROCEDURE RUNNER: save a program under a name for later runs (bench_proc_run with `name`), as a new version of that name (the last 20 are kept). The source must compile, and the declared `tier` must be at least the tier of every tool the source names as a string literal in bench.call. Nothing is run.",
+        props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"name":{"type":"string","description":"1 to 60 characters of a-z, 0-9, _ and -, starting with a letter or digit"},"source":{"type":"string","description":"the Python source (at most 256 KiB)"},"description":{"type":"string","description":"what it does and which arguments (bench.args) it takes"},"tier":{"type":"string","enum":["read_only","read_config","full"],"description":"the highest tier of tool the procedure calls"},"note":{"type":"string","description":"what changed in this version"}"#,
+        required: &["name", "source", "tier"],
+    },
+    Spec {
+        name: "bench_proc_load",
+        tier: Tier::ReadOnly,
+        desc: "PROCEDURE RUNNER: a saved procedure: its description, declared tier, versions and the source of one version. Changes nothing.",
+        props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"name":{"type":"string","description":"the saved procedure"},"version":{"type":"integer","description":"default the latest"}"#,
+        required: &["name"],
+    },
+    Spec {
+        name: "bench_proc_delete",
+        tier: Tier::ReadConfig,
+        desc: "PROCEDURE RUNNER: delete one version of a saved procedure, or all of it. confirm must be true. Runs that already started are not affected.",
+        props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"name":{"type":"string","description":"the saved procedure"},"version":{"type":"integer","description":"one version to delete; without it every version is deleted"},"confirm":{"type":"boolean","description":"true: delete it"}"#,
+        required: &["name", "confirm"],
     },
 ];
 
@@ -260,10 +295,21 @@ fn flag(args: &Value, key: &str) -> Result<bool, String> {
 fn run_params(inst: &Instrument, args: &Value) -> Result<run::Params, String> {
     // [@ANCHOR: proc_run_params]
     let cfg = &inst.procedure;
-    let source = args
-        .get("source")
-        .and_then(|s| s.as_str())
-        .ok_or("source is required and must be text")?;
+    let named = match args.get("name").and_then(|n| n.as_str()) {
+        Some(n) => Some(saved::load(
+            cfg,
+            n,
+            args.get("version").and_then(|v| v.as_u64()),
+        )?),
+        None => None,
+    };
+    let source = match (&named, args.get("source")) {
+        (Some(_), Some(s)) if !s.is_null() => return Err("give source or name, not both".into()),
+        (Some(n), _) => n["source"].as_str().unwrap_or_default(),
+        (None, s) => s
+            .and_then(|s| s.as_str())
+            .ok_or("source (or the name of a saved procedure) is required")?,
+    };
     if source.trim().is_empty() || source.len() > 262_144 {
         return Err("source must be 1 byte to 256 KiB of Python".into());
     }
@@ -276,10 +322,14 @@ fn run_params(inst: &Instrument, args: &Value) -> Result<run::Params, String> {
         Some(v @ Value::Object(_)) if v.to_string().len() <= 65536 => v.clone(),
         Some(_) => return Err("args must be a JSON object of at most 64 KiB".into()),
     };
-    let cap = match args.get("tier").and_then(|t| t.as_str()) {
+    let default_cap = match named.as_ref().and_then(|n| n["tier"].as_str()) {
         Some(t) => tiers::parse_tier(t)?,
         None if inst.tier < Tier::ReadConfig => inst.tier,
         None => Tier::ReadConfig,
+    };
+    let cap = match args.get("tier").and_then(|t| t.as_str()) {
+        Some(t) => tiers::parse_tier(t)?,
+        None => default_cap,
     };
     if cap > inst.tier {
         return Err(format!(
@@ -306,10 +356,15 @@ fn run_params(inst: &Instrument, args: &Value) -> Result<run::Params, String> {
         256.0,
         cfg.max_memory_mb as f64,
     )? as u64;
+    let from_saved = named
+        .as_ref()
+        .map(|n| format!("{}@{}", n["name"].as_str().unwrap_or(""), n["version"]));
     let label = args
         .get("label")
         .and_then(|l| l.as_str())
-        .unwrap_or("")
+        .map(String::from)
+        .or(from_saved)
+        .unwrap_or_default()
         .chars()
         .take(100)
         .collect();
@@ -427,10 +482,49 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
         "bench_proc_cancel" => {
             view::cancel(cfg, run_id()?, number(args, "wait_s", 0.0, 0.0, 60.0)?)
         }
-        "bench_proc_list" => Ok(view::list(
-            cfg,
-            number(args, "limit", 20.0, 1.0, 1000.0)? as usize,
-        )),
+        "bench_proc_list" => {
+            let mut v = view::list(cfg, number(args, "limit", 20.0, 1.0, 1000.0)? as usize);
+            v["saved"] = Value::Array(saved::list(cfg));
+            Ok(v)
+        }
+        "bench_proc_input" => {
+            let text = args
+                .get("answer")
+                .and_then(|a| a.as_str())
+                .ok_or("answer is required and must be text")?;
+            run::answer(run_id()?, text)
+        }
+        "bench_proc_save" => {
+            let text = |k: &str| args.get(k).and_then(|v| v.as_str());
+            let name = text("name").ok_or("name is required")?;
+            let source = text("source").ok_or("source is required")?;
+            let tier = text("tier").ok_or("tier is required (read_only, read_config or full)")?;
+            let backend = backend_for(cfg);
+            saved::save(
+                cfg,
+                insts,
+                backend.as_ref(),
+                (name, source, text("description").unwrap_or(""), tier),
+                text("note").unwrap_or(""),
+            )
+        }
+        "bench_proc_load" => {
+            let name = args
+                .get("name")
+                .and_then(|n| n.as_str())
+                .ok_or("name is required")?;
+            saved::load(cfg, name, args.get("version").and_then(|v| v.as_u64()))
+        }
+        "bench_proc_delete" => {
+            if !flag(args, "confirm")? {
+                return Err("delete needs confirm true".into());
+            }
+            let name = args
+                .get("name")
+                .and_then(|n| n.as_str())
+                .ok_or("name is required")?;
+            saved::delete(cfg, name, args.get("version").and_then(|v| v.as_u64()))
+        }
         _ => Err(format!("{name} is not implemented")),
     }
 }

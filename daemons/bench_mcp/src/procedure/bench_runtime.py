@@ -458,6 +458,29 @@ def bench_reserved(*names, timeout=30):
         bench_release(*names)
 
 
+def bench_ask_operator(message, timeout=None):
+    """Pause the run until the person at the bench has done what
+    ``message`` asks. The agent answers with ``bench_proc_input``;
+    the answer text is returned. The wait does not count against
+    the wall-clock budget but has its own limit (``timeout``, at
+    most the runner's operator_timeout_s)."""
+    # [@ANCHOR: proc_py_ask_operator]
+    check_cancel()
+    message = {"op": "ask", "message": str(message)}
+    if timeout is not None:
+        message["timeout"] = float(timeout)
+    begun = time.monotonic()
+    try:
+        reply = wire().request(message)
+    finally:
+        STATE["paused"] += time.monotonic() - begun
+    if not reply.get("ok"):
+        raise BenchError(
+            "ask_operator", reply.get("error", "failed"), "policy"
+        )
+    return reply.get("value")
+
+
 def bench_result(value):
     """Set the procedure's final value (the last call wins)."""
     # [@ANCHOR: proc_py_result]
@@ -660,6 +683,7 @@ def make_bench(arguments):
         "expect": bench_expect,
         "stats": bench_stats,
         "series": bench_series,
+        "ask_operator": bench_ask_operator,
         "reserve": bench_reserve,
         "release": bench_release,
         "reserved": bench_reserved,

@@ -59,6 +59,8 @@ struct Rec {
     note: String,
     server_pid: u32,
     server_start: u64,
+    paused_s: f64,
+    awaiting: Option<Value>,
 }
 
 pub struct RunCtx {
@@ -75,6 +77,15 @@ pub struct RunCtx {
     cancel: Mutex<Option<String>>,
     touched: Mutex<Vec<Value>>,
     held: Mutex<Vec<(String, File)>>,
+    ask: Mutex<Option<Ask>>,
+    answer: Mutex<Option<String>>,
+}
+
+/// An operator prompt a run is waiting on.
+struct Ask {
+    id: Value,
+    since: Instant,
+    limit: Duration,
 }
 
 /// What a worker thread tells the supervisor.
@@ -155,7 +166,7 @@ impl RunCtx {
                     "started_unix": r.started_unix, "ended_unix": r.ended_unix, "step": r.step, "line": r.line,
                     "last_call": r.last_call, "calls": r.calls, "call_errors": r.call_errors,
                     "hook_violations": r.violations, "wall_s": r.wall_s, "max_calls": r.max_calls,
-                    "pid": r.pid, "note": r.note, "server_pid": r.server_pid, "server_start": r.server_start, "cancel_reason": self.cancel_reason(), "events": events, "events_dropped": dropped,
+                    "pid": r.pid, "note": r.note, "server_pid": r.server_pid, "server_start": r.server_start, "paused_s": r.paused_s, "awaiting": r.awaiting, "cancel_reason": self.cancel_reason(), "events": events, "events_dropped": dropped,
                     "language": "python",
                 }),
                 self.dir.clone(),
@@ -213,6 +224,56 @@ impl RunCtx {
         let got = locks::reserve(&root, &self.id, &label, &need, wait, &cancelled)?;
         held.extend(got);
         Ok(())
+    }
+
+    /// Seconds spent waiting for the operator so far, finished waits and the one in progress.
+    fn paused(&self) -> f64 {
+        // [@ANCHOR: proc_run_paused]
+        let done = self.rec.lock().unwrap_or_else(|e| e.into_inner()).paused_s;
+        let now = self
+            .ask
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map_or(0.0, |a| a.since.elapsed().as_secs_f64());
+        done + now
+    }
+
+    /// The reply to a pending operator prompt once it was answered; asks the run to stop when the answer takes too long.
+    fn poll_ask(&self) -> Option<Value> {
+        // [@ANCHOR: proc_run_poll_ask]
+        let mut ask = self.ask.lock().unwrap_or_else(|e| e.into_inner());
+        let a = ask.as_ref()?;
+        let answer = self.answer.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let Some(text) = answer else {
+            if a.since.elapsed() > a.limit {
+                self.request_cancel("operator_timeout");
+            }
+            return None;
+        };
+        let reply = json!({"op": "reply", "id": a.id, "ok": true, "value": text});
+        let waited = a.since.elapsed().as_secs_f64();
+        *ask = None;
+        drop(ask);
+        {
+            let mut r = self.rec.lock().unwrap_or_else(|e| e.into_inner());
+            r.paused_s += waited;
+            r.awaiting = None;
+        }
+        self.event("answer", json!({"answer": text, "waited_s": waited}));
+        self.set_state("running", "");
+        Some(reply)
+    }
+
+    /// Drops a pending prompt (the run is being stopped); the wait still counts as paused time.
+    fn clear_ask(&self) {
+        // [@ANCHOR: proc_run_clear_ask]
+        let mut ask = self.ask.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(a) = ask.take() {
+            let mut r = self.rec.lock().unwrap_or_else(|e| e.into_inner());
+            r.paused_s += a.since.elapsed().as_secs_f64();
+            r.awaiting = None;
+        }
     }
 
     fn cancel_reason(&self) -> Option<String> {
@@ -414,6 +475,34 @@ fn handle(ctx: &Arc<RunCtx>, msg: Value, tx: &Sender<Internal>) -> Option<(Strin
                 let _ = tx.send(Internal::Reply(reply));
             });
         }
+        "ask" => {
+            let id = msg.get("id").cloned().unwrap_or(Value::Null);
+            let message: String = text("message").chars().take(1000).collect();
+            let limit = msg
+                .get("timeout")
+                .and_then(|t| t.as_f64())
+                .unwrap_or(f64::MAX)
+                .clamp(1.0, ctx.cfg.operator_timeout_s);
+            let mut ask = ctx.ask.lock().unwrap_or_else(|e| e.into_inner());
+            if ask.is_some() || ctx.cancel_reason().is_some() {
+                let why = "another operator prompt is pending, or the run is being stopped";
+                let _ = tx.send(Internal::Reply(
+                    json!({"op": "reply", "id": id, "ok": false, "kind": "policy", "error": why}),
+                ));
+            } else {
+                *ask = Some(Ask {
+                    id,
+                    since: Instant::now(),
+                    limit: Duration::from_secs_f64(limit),
+                });
+                drop(ask);
+                ctx.rec.lock().unwrap_or_else(|e| e.into_inner()).awaiting = Some(
+                    json!({"message": message, "since_unix": store::now_unix(), "answer_with": "bench_proc_input"}),
+                );
+                ctx.event("ask", json!({"message": message}));
+                ctx.set_state("waiting_operator", "waiting for the operator");
+            }
+        }
         "log" => ctx.event("log", json!({"msg": text("msg")})),
         "step" => {
             ctx.rec.lock().unwrap_or_else(|e| e.into_inner()).step = text("name");
@@ -518,12 +607,18 @@ fn supervise(
         while let Ok(Internal::Reply(r)) = rx.try_recv() {
             let _ = session.send(&r);
         }
-        if ended.is_none() && cancel_sent.is_none() && t0.elapsed() > wall {
-            ctx.request_cancel("timeout");
+        if ended.is_none() && cancel_sent.is_none() {
+            if let Some(reply) = ctx.poll_ask() {
+                let _ = session.send(&reply);
+            }
+            if t0.elapsed().as_secs_f64() - ctx.paused() > wall.as_secs_f64() {
+                ctx.request_cancel("timeout");
+            }
         }
         if let (Some(reason), None, None) = (ctx.cancel_reason(), &cancel_sent, &ended) {
             let _ = session.send(&json!({"op": "cancel", "reason": reason}));
             cancel_sent = Some(Instant::now());
+            ctx.clear_ask();
             ctx.set_state("cancelling", &reason);
         }
         if let Some(at) = cancel_sent {
@@ -711,6 +806,8 @@ pub fn start(
             note: String::new(),
             server_pid: std::process::id(),
             server_start: start_ticks(std::process::id()).unwrap_or(0),
+            paused_s: 0.0,
+            awaiting: None,
         }),
         log: Mutex::new(log),
         emitted: Mutex::new(Map::new()),
@@ -719,6 +816,8 @@ pub fn start(
         cancel: Mutex::new(None),
         touched: Mutex::new(Vec::new()),
         held: Mutex::new(Vec::new()),
+        ask: Mutex::new(None),
+        answer: Mutex::new(None),
     });
     ctx.persist();
     registry()
@@ -853,4 +952,33 @@ pub fn recover(insts: &[Instrument]) {
     std::thread::spawn(move || {
         recover_now(&insts);
     });
+}
+
+/// Answers the operator prompt a live run is waiting on; returns the run's record.
+pub fn answer(id: &str, text: &str) -> Result<Value, String> {
+    // [@ANCHOR: proc_run_answer]
+    if text.chars().count() > 4096 {
+        return Err("answer is longer than 4096 characters".into());
+    }
+    let ctx = lookup(id)
+        .ok_or_else(|| format!("run {id} is not running in this server (see bench_proc_status)"))?;
+    if ctx.ask.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
+        let state = ctx
+            .rec
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .state
+            .clone();
+        return Err(format!(
+            "run {id} is not waiting for the operator (state {state})"
+        ));
+    }
+    *ctx.answer.lock().unwrap_or_else(|e| e.into_inner()) = Some(text.to_string());
+    let t = Instant::now();
+    while t.elapsed() < Duration::from_secs(5)
+        && ctx.ask.lock().unwrap_or_else(|e| e.into_inner()).is_some()
+    {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    Ok(json!({"run": id, "answered": true}))
 }

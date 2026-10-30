@@ -1,8 +1,8 @@
 ---
 title: The procedure runner
 summary: Programs that call bench tools in loops run next to the server; how to write, start, poll and stop one, what the safety model is and what it is not.
-see_also: [concepts/safety-tiers, concepts/errors, tools/bench_proc_run, tools/bench_proc_status, tools/bench_proc_output, tools/bench_proc_result, tools/bench_proc_cancel, tools/bench_proc_list]
-tools: [bench_proc_run, bench_proc_status, bench_proc_output, bench_proc_result, bench_proc_cancel, bench_proc_list]
+see_also: [concepts/safety-tiers, concepts/errors, tools/bench_proc_run, tools/bench_proc_status, tools/bench_proc_output, tools/bench_proc_result, tools/bench_proc_cancel, tools/bench_proc_list, tools/bench_proc_save, tools/bench_proc_load, tools/bench_proc_delete, tools/bench_proc_input]
+tools: [bench_proc_run, bench_proc_status, bench_proc_output, bench_proc_result, bench_proc_cancel, bench_proc_list, bench_proc_save, bench_proc_load, bench_proc_delete, bench_proc_input]
 verified: fixtures only, 2026-10-29
 ---
 
@@ -40,6 +40,7 @@ The program is a script. A module named `bench` is already imported:
 | `bench.stats(values)` | n, mean, standard deviation, min, max, spread |
 | `bench.series(name, count, measure, retries=2, cycle=None, cycle_after=2, max_failed=None)` | take `count` measurements with retries, call `cycle()` (a power cycle) after `cycle_after` failures in a row, list the points that still failed, emit `<name>.progress` |
 | `bench.reserve(*instruments, timeout=30)`, `bench.release(...)`, `with bench.reserved(...)` | reserve instruments for this run, waiting up to the timeout for another run |
+| `bench.ask_operator(message, timeout=None)` | pause the run until the person at the bench answers through `bench_proc_input`; returns the answer text |
 | `bench.result(value)` | the final value of the run (or leave a global named `result`) |
 
 `print()` goes to the run's stdout. numpy and scipy are importable (FFTs, filters, curve fits, complex arithmetic); the standard library is there. The program starts in an empty scratch directory, which is the only place it may write.
@@ -68,6 +69,10 @@ A tool that changes an instrument (any tier above `read_only`) reserves the inst
 
 The program is killed when its server dies. The next server to start finds the runs that were active when a server process ended (it checks that process by its id and start time, so a live server's runs are left alone), marks them `lost`, and puts the instruments they touched in their safe state; `bench_proc_result` of such a run holds what had been emitted and the safe-state outcome. A SIGTERM or an interrupt makes the server cancel its runs with the reason `shutdown` and wait for their cleanup and safe state before it exits. A SIGKILL leaves the safe state to the next server, which may be later.
 
-## Not done yet in this version
+## Saved procedures
 
-Saved procedures (`bench_proc_save`, `bench_proc_load`, `bench_proc_delete`) and operator prompts (`bench.ask_operator`, `bench_proc_input`).
+[bench_proc_save](tools/bench_proc_save) keeps a program under a name with a description and the tier it needs (checked against the tools it names), as versions. [bench_proc_load](tools/bench_proc_load) reads one, [bench_proc_delete](tools/bench_proc_delete) removes one (with `confirm`), [bench_proc_list](tools/bench_proc_list) lists them with the runs. `bench_proc_run` with `name` (and optionally `version`) runs one: the tier cap defaults to the declared tier, the label to `name@version`, and `args` are the caller's.
+
+## Operator steps
+
+A step only a person can do (connect a load, move a cable, press a button on an instrument) is `answer = bench.ask_operator("message")`. The run pauses in the state `waiting_operator`; [bench_proc_status](tools/bench_proc_status) shows the message in `awaiting`. Tell the person at the bench, then [bench_proc_input](tools/bench_proc_input) with their answer. The wait is not part of the wall-clock budget (`bench.deadline()` leaves it out), and has its own limit, `operator_timeout_s`.
