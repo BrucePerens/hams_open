@@ -14,6 +14,7 @@
 
 mod backend;
 mod cpython;
+mod examples;
 mod locks;
 mod run;
 mod safe;

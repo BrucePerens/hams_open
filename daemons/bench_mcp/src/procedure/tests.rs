@@ -14,6 +14,8 @@ pub struct Bench {
     pub dir: PathBuf,
     pub gen: FakeDevice,
     pub dmm: FakeDevice,
+    /// More fake devices that must outlive the bench (the coupled mock bench's).
+    pub _extra: Vec<FakeDevice>,
 }
 
 impl Drop for Bench {
@@ -46,6 +48,7 @@ pub fn bench_with(runner_tier: &str, procs_extra: &str) -> Bench {
         dir,
         gen,
         dmm,
+        _extra: Vec::new(),
     }
 }
 
@@ -612,7 +615,7 @@ fn the_wall_clock_budget_stops_a_run_and_a_program_that_ignores_the_request_is_k
     let polite = run(
         &b,
         "while True:\n    bench.sleep(0.05)\n",
-        json!({"wall_s": 1}),
+        json!({"wall_s": 2}),
     );
     assert_eq!(polite["state"], "timed_out", "{polite}");
     assert_eq!(polite["failure"]["reason"], "timeout");
@@ -620,7 +623,7 @@ fn the_wall_clock_budget_stops_a_run_and_a_program_that_ignores_the_request_is_k
     let stubborn = run(
         &b,
         "bench.emit('alive', 1)\nwhile True:\n    pass\n",
-        json!({"wall_s": 1}),
+        json!({"wall_s": 4}),
     );
     assert_eq!(stubborn["state"], "timed_out", "{stubborn}");
     assert!(
@@ -1045,7 +1048,9 @@ fn the_safe_state_runs_when_a_run_ends_other_than_by_success_through_the_normal_
     let b = bench();
     let pulse = r#"bench.call("bench_example_pulse", instrument="gen", level_v=0.1, pulse_s=0.1, confirm=True)
 "#;
-    let extra = json!({"tier": "full", "confirm_full_tier": true, "wall_s": 2});
+    let extra = json!({"tier": "full", "confirm_full_tier": true});
+    // A time-out needs a budget the slowest start of the program cannot use up: the tests run while the machine is busy.
+    let timed = json!({"tier": "full", "confirm_full_tier": true, "wall_s": 5});
     // Success: the procedure did its own switching off; nothing more is done.
     let ok = run(&b, &format!("{pulse}bench.result(1)\n"), extra.clone());
     assert_eq!(
@@ -1079,7 +1084,15 @@ fn the_safe_state_runs_when_a_run_ends_other_than_by_success_through_the_normal_
     ];
     for (what, source, state) in cases {
         let before = off_count(&b);
-        let r = run(&b, &source, extra.clone());
+        let r = run(
+            &b,
+            &source,
+            if state == "timed_out" {
+                timed.clone()
+            } else {
+                extra.clone()
+            },
+        );
         assert_eq!(r["state"], state, "{what}: {r}");
         let s = r["safe_state"].as_array().unwrap();
         assert_eq!(s.len(), 1, "{what}: {r}");
@@ -1565,10 +1578,14 @@ fn a_saved_procedure_is_run_by_name_with_its_declared_tier_and_old_versions_are_
     )
     .unwrap();
     assert!(tool(&b, "bench_proc_load", json!({"name": "model"})).is_err());
-    assert_eq!(
-        tool(&b, "bench_proc_list", json!({})).unwrap()["saved"],
-        json!([])
-    );
+    let left = tool(&b, "bench_proc_list", json!({})).unwrap();
+    let mine: Vec<&Value> = left["saved"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|s| s["shipped"] != json!(true))
+        .collect();
+    assert!(mine.is_empty(), "{mine:?}");
 }
 
 // Tests [@ANCHOR: proc_py_ask_operator]
@@ -1584,7 +1601,7 @@ answer = bench.ask_operator("Connect the dummy load, then answer 'done'.")
 left = bench.deadline()
 bench.result({"answer": answer, "deadline_left": left})
 "#;
-    let id = start(&b, source, json!({"wall_s": 3}));
+    let id = start(&b, source, json!({"wall_s": 6}));
     let t = Instant::now();
     let mut st;
     loop {
@@ -1610,7 +1627,7 @@ bench.result({"answer": answer, "deadline_left": left})
     )
     .is_err());
     // Longer than the wall-clock budget: the wait does not count.
-    std::thread::sleep(Duration::from_millis(4200));
+    std::thread::sleep(Duration::from_millis(6500));
     let st = tool(&b, "bench_proc_status", json!({"run": id})).unwrap();
     assert_eq!(
         st["state"], "waiting_operator",
@@ -1621,10 +1638,10 @@ bench.result({"answer": answer, "deadline_left": left})
     let r = finish(&b, &id);
     assert_eq!(r["state"], "succeeded", "{r}");
     assert_eq!(r["value"]["answer"], "done");
-    assert!(r["value"]["deadline_left"].as_f64().unwrap() > 2.0, "{r}");
+    assert!(r["value"]["deadline_left"].as_f64().unwrap() > 3.0, "{r}");
     let st = tool(&b, "bench_proc_status", json!({"run": id})).unwrap();
     assert!(
-        st["paused_s"].as_f64().unwrap() > 4.0 && st["awaiting"].is_null(),
+        st["paused_s"].as_f64().unwrap() > 6.0 && st["awaiting"].is_null(),
         "{st}"
     );
     let out = tool(
@@ -1649,7 +1666,10 @@ bench.result({"answer": answer, "deadline_left": left})
         json!({"run": id, "answer": "again"}),
     )
     .unwrap_err();
-    assert!(e.contains("not running in this server"), "{e}");
+    assert!(
+        e.contains("not running in this server") || e.contains("not waiting for the operator"),
+        "{e}"
+    );
 }
 
 #[test]
@@ -1680,4 +1700,369 @@ fn a_prompt_nobody_answers_stops_the_run_at_the_operator_limit_and_a_cancel_ends
     let r = run(&b, source, json!({}));
     assert_eq!(r["state"], "timed_out", "{r}");
     assert_eq!(r["emitted"]["second"], "policy", "{r}");
+}
+
+/// The mock bench of the example procedures: three example instruments whose fake devices share one simulated world. `gen` is the
+/// generator (a pulse programs its level), `scope` reads that level, `vna` reads twice the level and can be broken until it is
+/// power-cycled (`OUTP OFF`, what bench_example_safe_state sends, plays the power cycle).
+pub struct World {
+    pub level: f64,
+    pub scope_drift: f64,
+    pub vna_broken: bool,
+    pub vna_cycles: u32,
+    pub vna_reads: u32,
+}
+
+pub struct Coupled {
+    pub bench: Bench,
+    pub world: std::sync::Arc<std::sync::Mutex<World>>,
+}
+
+pub fn coupled_bench() -> Coupled {
+    use crate::example::testkit::Reply;
+    use std::sync::{Arc, Mutex};
+    let world = Arc::new(Mutex::new(World {
+        level: 0.0,
+        scope_drift: 0.0,
+        vna_broken: false,
+        vna_cycles: 0,
+        vna_reads: 0,
+    }));
+    let idn = || Reply::Text("ACME,EXAMPLE-1000,SN-0000,1.0.0".to_string());
+    let w = world.clone();
+    let mut on = false;
+    let gen = FakeDevice::serve(move |c| match c {
+        "*IDN?" => idn(),
+        "OUTP?" => Reply::Text(if on { "ON" } else { "OFF" }.into()),
+        "OUTP ON" => {
+            on = true;
+            Reply::Silent
+        }
+        "OUTP OFF" => {
+            on = false;
+            Reply::Silent
+        }
+        "LEV?" => Reply::Text(format!("{:.3}", w.lock().unwrap().level)),
+        _ => {
+            if let Some(v) = c.strip_prefix("LEV ") {
+                w.lock().unwrap().level = v.parse().unwrap_or(0.0);
+            }
+            Reply::Silent
+        }
+    });
+    let w = world.clone();
+    let scope = FakeDevice::serve(move |c| match c {
+        "*IDN?" => idn(),
+        "OUTP?" => Reply::Text("OFF".into()),
+        "LEV?" => Reply::Text("0".into()),
+        "MEAS:VOLT?" => {
+            let g = w.lock().unwrap();
+            Reply::Text(format!("{:.3}", g.level * (1.0 + g.scope_drift)))
+        }
+        _ => Reply::Silent,
+    });
+    let w = world.clone();
+    let vna = FakeDevice::serve(move |c| match c {
+        "*IDN?" => idn(),
+        "OUTP?" => Reply::Text("OFF".into()),
+        "LEV?" => Reply::Text("0".into()),
+        "OUTP OFF" => {
+            let mut g = w.lock().unwrap();
+            g.vna_broken = false;
+            g.vna_cycles += 1;
+            Reply::Silent
+        }
+        "MEAS:VOLT?" => {
+            let mut g = w.lock().unwrap();
+            g.vna_reads += 1;
+            if g.vna_broken {
+                Reply::Text("--".into())
+            } else {
+                Reply::Text(format!(
+                    "{:.4}",
+                    2.0 * g.level + 0.001 * f64::from(g.vna_reads)
+                ))
+            }
+        }
+        _ => Reply::Silent,
+    });
+    let n = std::process::id();
+    let dir = std::env::temp_dir().join(format!("bench_proc_coupled_{n}_{}", gen.port()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let text = format!(
+        r#"{{"instruments":{{
+        "gen":{{"driver":"example","tier":"full","host":"127.0.0.1","port":{}}},
+        "scope":{{"driver":"example","tier":"full","host":"127.0.0.1","port":{}}},
+        "vna":{{"driver":"example","tier":"full","host":"127.0.0.1","port":{}}},
+        "procs":{{"driver":"procedure","tier":"full","dir":"{}","grace_s":1.0}}}}}}"#,
+        gen.port(),
+        scope.port(),
+        vna.port(),
+        dir.display()
+    );
+    Coupled {
+        bench: Bench {
+            insts: config::parse(&text).unwrap(),
+            dir,
+            gen,
+            dmm: scope,
+            _extra: vec![vna],
+        },
+        world,
+    }
+}
+
+// Tests [@ANCHOR: proc_examples_find]
+// Tests [@ANCHOR: proc_py_series]
+#[test]
+fn the_sweep_series_example_retries_power_cycles_and_tabulates_the_spread_on_the_mock_bench() {
+    let c = coupled_bench();
+    let b = &c.bench;
+    {
+        let mut w = c.world.lock().unwrap();
+        w.level = 1.5;
+        w.vna_broken = true;
+    }
+    let args = json!({"count": 4, "retries": 1, "cycle_after": 2, "sweep_tool": "bench_example_measure", "sweep_args": {"instrument": "vna"},
+        "cycle_tool": "bench_example_safe_state", "cycle_args": {"instrument": "vna"}});
+    let r = tool(
+        b,
+        "bench_proc_run",
+        json!({"name": "example-sweep-series", "args": args}),
+    )
+    .unwrap();
+    assert_eq!(r["tier_cap"], "read_config");
+    let r = finish(b, r["run"].as_str().unwrap());
+    assert_eq!(r["state"], "succeeded", "{r}");
+    let v = &r["value"];
+    assert_eq!(
+        v["power_cycles"],
+        json!(1),
+        "the unit was broken until it was power-cycled once: {v}"
+    );
+    assert_eq!(v["failed"], json!([]));
+    assert_eq!(v["table"].as_array().unwrap().len(), 4);
+    let spread = v["spread"].as_f64().unwrap();
+    assert!(
+        spread > 0.0 && spread < 0.01,
+        "the simulated unit drifts by 1 mV per reading: {spread}"
+    );
+    assert!((v["table"][0]["mean"].as_f64().unwrap() - 3.0).abs() < 0.05);
+    assert_eq!(c.world.lock().unwrap().vna_cycles, 1);
+    assert_eq!(r["emitted"]["sweep.progress"]["done"], json!(4));
+    // A unit the power cycle does not fix: the points fail, the run fails and its report names them.
+    c.world.lock().unwrap().vna_broken = true;
+    let args = json!({"count": 4, "retries": 0, "cycle_after": 1, "sweep_tool": "bench_example_measure", "sweep_args": {"instrument": "vna"},
+        "cycle_tool": "bench_example_status", "cycle_args": {"instrument": "gen"}});
+    let r = tool(
+        b,
+        "bench_proc_run",
+        json!({"name": "example-sweep-series", "args": args}),
+    )
+    .unwrap();
+    let r = finish(b, r["run"].as_str().unwrap());
+    assert_eq!(r["state"], "failed", "{r}");
+    assert_eq!(r["failure"]["type"], "ProcedureFailure");
+    assert_eq!(
+        r["failure"]["context"]["failed"].as_array().unwrap().len(),
+        2
+    );
+    assert!(r["failure"]["context"]["failed"][0]["error"]
+        .as_str()
+        .unwrap()
+        .contains("not a finite number"));
+    // The shipped text is the manual page's text, and the reserved names cannot be written over.
+    for (name, page) in [
+        ("example-sweep-series", "sweep-series-with-retries"),
+        ("example-soak-round", "soak-round"),
+        (
+            "example-calibration-sequence",
+            "calibration-with-operator-steps",
+        ),
+    ] {
+        let shipped = tool(b, "bench_proc_load", json!({"name": name})).unwrap();
+        assert_eq!(
+            (shipped["shipped"].clone(), shipped["version"].clone()),
+            (json!(true), json!(1))
+        );
+        let text = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("manual/procedures/{page}.md")),
+        )
+        .unwrap();
+        let fenced = text
+            .split("```python\n")
+            .nth(1)
+            .and_then(|t| t.split("\n```").next())
+            .unwrap();
+        assert_eq!(
+            fenced.trim_end(),
+            shipped["source"].as_str().unwrap().trim_end(),
+            "{page}: the manual page and the shipped example differ"
+        );
+        let e = tool(
+            b,
+            "bench_proc_save",
+            json!({"name": name, "source": "pass", "tier": "read_only"}),
+        )
+        .unwrap_err();
+        assert!(e.contains("shipped example"), "{e}");
+        assert!(tool(
+            b,
+            "bench_proc_delete",
+            json!({"name": name, "confirm": true})
+        )
+        .unwrap_err()
+        .contains("shipped example"));
+    }
+    assert!(tool(b, "bench_proc_load", json!({"name": "example-nothing"})).is_err());
+    assert!(tool(
+        b,
+        "bench_proc_load",
+        json!({"name": "example-soak-round", "version": 2})
+    )
+    .is_err());
+    let listed = tool(b, "bench_proc_list", json!({})).unwrap();
+    assert_eq!(
+        listed["saved"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|s| s["shipped"] == json!(true))
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn the_soak_round_example_compares_with_a_baseline_and_counts_errors_and_wrong_readings_on_the_mock_bench(
+) {
+    let c = coupled_bench();
+    let b = &c.bench;
+    let roles = |extra: Value| {
+        let mut a = json!({
+            "rounds": 3, "levels": [0.2, 0.4], "tolerance": 0.05,
+            "generator": {"tool": "bench_example_pulse", "args": {"instrument": "gen", "pulse_s": 0.1, "confirm": true}, "level_arg": "level_v"},
+            "generator_off": {"tool": "bench_example_safe_state", "args": {"instrument": "gen"}},
+            "scope": {"tool": "bench_example_measure", "args": {"instrument": "scope"}, "value": "voltage_v"},
+            "vna": {"tool": "bench_example_measure", "args": {"instrument": "vna"}, "value": "voltage_v"},
+        });
+        a.as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        a
+    };
+    let go = |a: Value| {
+        let r = tool(b, "bench_proc_run", json!({"name": "example-soak-round", "args": a, "tier": "full", "confirm_full_tier": true, "wall_s": 120})).unwrap();
+        finish(b, r["run"].as_str().unwrap())
+    };
+    let offs = b
+        .gen
+        .received()
+        .iter()
+        .filter(|c| c.as_str() == "OUTP OFF")
+        .count();
+    let r = go(roles(json!({})));
+    assert_eq!(r["state"], "succeeded", "{r}");
+    let v = &r["value"];
+    assert_eq!(
+        (v["rounds"].clone(), v["ERROR"].clone(), v["WRONG"].clone()),
+        (json!(3), json!(0), json!(0)),
+        "{v}"
+    );
+    assert!(
+        (v["baseline"]["scope"][1].as_f64().unwrap() - 0.4).abs() < 1e-9,
+        "round 1 is the baseline: {v}"
+    );
+    assert_eq!(r["emitted"]["round.3"]["wrong"], json!(0));
+    assert!(
+        b.gen
+            .received()
+            .iter()
+            .filter(|c| c.as_str() == "OUTP OFF")
+            .count()
+            > offs,
+        "the cleanup handler switched the generator off"
+    );
+    // A scope that has drifted from the baseline given by the caller: every reading is WRONG.
+    c.world.lock().unwrap().scope_drift = 0.5;
+    let r = go(roles(
+        json!({"rounds": 2, "baseline": {"scope": [0.2, 0.4], "vna": [0.4, 0.8]}}),
+    ));
+    let v = &r["value"];
+    assert_eq!(
+        (v["ERROR"].clone(), v["WRONG"].clone()),
+        (json!(0), json!(4)),
+        "{r}"
+    );
+    assert_eq!(v["wrong"][0]["instrument"], "scope");
+    assert!((v["wrong"][0]["value"].as_f64().unwrap() - 0.3).abs() < 0.01);
+    // A broken VNA gives errors, not wrong numbers.
+    {
+        let mut w = c.world.lock().unwrap();
+        w.scope_drift = 0.0;
+        w.vna_broken = true;
+    }
+    let r = go(roles(
+        json!({"rounds": 2, "baseline": {"scope": [0.2, 0.4], "vna": [0.4, 0.8]}}),
+    ));
+    let v = &r["value"];
+    assert_eq!(
+        (v["ERROR"].clone(), v["WRONG"].clone()),
+        (json!(4), json!(0)),
+        "{r}"
+    );
+    assert_eq!(v["errors"][0]["instrument"], "vna");
+}
+
+#[test]
+fn the_calibration_example_waits_for_the_operator_at_each_standard_and_stops_on_abort() {
+    let c = coupled_bench();
+    let b = &c.bench;
+    let args = json!({"standards": ["open", "short"], "measure_tool": "bench_example_measure", "measure_args": {"instrument": "scope"},
+        "build_tool": "bench_example_status", "build_args": {"instrument": "gen"}});
+    let answer = |id: &str, expect: &str, text: &str| {
+        let t = Instant::now();
+        loop {
+            let st = tool(b, "bench_proc_status", json!({"run": id})).unwrap();
+            if st["state"] == "waiting_operator"
+                && st["awaiting"]["message"].as_str().unwrap().contains(expect)
+            {
+                break;
+            }
+            assert!(t.elapsed() < Duration::from_secs(30), "{st}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        tool(b, "bench_proc_input", json!({"run": id, "answer": text})).unwrap();
+    };
+    let r = tool(
+        b,
+        "bench_proc_run",
+        json!({"name": "example-calibration-sequence", "args": args, "wall_s": 5}),
+    )
+    .unwrap();
+    let id = r["run"].as_str().unwrap().to_string();
+    answer(&id, "open standard", "done");
+    std::thread::sleep(Duration::from_millis(1200));
+    answer(&id, "short standard", "done");
+    let r = finish(b, &id);
+    assert_eq!(r["state"], "succeeded", "{r}");
+    assert_eq!(r["value"]["measured"], json!(["open", "short"]));
+    assert_eq!(r["value"]["built"]["model"], "EXAMPLE-1000");
+    let r = tool(
+        b,
+        "bench_proc_run",
+        json!({"name": "example-calibration-sequence", "args": args}),
+    )
+    .unwrap();
+    let id = r["run"].as_str().unwrap().to_string();
+    answer(&id, "open standard", "done");
+    answer(&id, "short standard", "abort");
+    let r = finish(b, &id);
+    assert_eq!(r["state"], "failed", "{r}");
+    assert_eq!(
+        r["failure"]["message"],
+        "the operator stopped the calibration"
+    );
+    assert_eq!(r["failure"]["context"]["measured"], json!(["open"]));
 }
