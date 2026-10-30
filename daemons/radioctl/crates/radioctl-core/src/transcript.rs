@@ -143,6 +143,7 @@ fn mode(name: &str) -> Result<Mode, RigError> {
     Mode::from_name(name).ok_or_else(|| bad(format!("unknown mode {name:?}")))
 }
 
+// [@ANCHOR: radioctl_core_transcript_build_op]
 fn build_op(spec: OpSpec) -> Result<Op, RigError> {
     Ok(match spec {
         OpSpec::GetFrequency { vfo: v } => Op::GetFrequency(vfo(&v)?),
@@ -158,6 +159,7 @@ fn build_op(spec: OpSpec) -> Result<Op, RigError> {
     })
 }
 
+// [@ANCHOR: radioctl_core_transcript_build_expect]
 fn build_expect(spec: ExpectSpec) -> Result<Expect, RigError> {
     Ok(match spec {
         ExpectSpec::Frequency { vfo: v, hz } => {
@@ -172,6 +174,7 @@ fn build_expect(spec: ExpectSpec) -> Result<Expect, RigError> {
     })
 }
 
+// [@ANCHOR: radioctl_core_transcript_build_panel]
 fn build_panel(spec: PanelSpec) -> Result<Panel, RigError> {
     Ok(match spec {
         PanelSpec::Frequency { hz } => Panel::Frequency(Hz(hz)),
@@ -260,6 +263,9 @@ expect = { kind = "frequency", vfo = "a", hz = 7000000 }
     }
 
     // Tests [@ANCHOR: radioctl_core_transcript_parse]
+    // Tests [@ANCHOR: radioctl_core_transcript_build_expect]
+    // Tests [@ANCHOR: radioctl_core_transcript_build_op]
+    // Tests [@ANCHOR: radioctl_core_transcript_build_panel]
     #[test]
     fn a_transcript_parses_into_typed_steps() {
         let transcript = parse(GOOD).expect("parses");
