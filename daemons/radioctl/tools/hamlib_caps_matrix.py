@@ -31,6 +31,7 @@ import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 SCHEMA_VERSION = 1
 RIGCTL = "rigctl"
@@ -159,7 +160,11 @@ def parse_ranges(lines: list[str]) -> dict:
 
 def _parse_blocks(lines: list[str]) -> dict:
     """Counts of tuning steps, filters and memory groups."""
-    out = {"tuning_steps": 0, "filters": 0, "memory_groups": []}
+    out: dict[str, Any] = {
+        "tuning_steps": 0,
+        "filters": 0,
+        "memory_groups": [],
+    }
     section = None
     for line in lines:
         if not line.startswith("\t"):
@@ -487,7 +492,7 @@ def _ok(matrix: dict) -> list[dict]:
     return [e for e in matrix["models"] if e["dump"]]
 
 
-def _table(header: list[str], rows: list[list[str]]) -> list[str]:
+def _table(header: list[str], rows: list[list[Any]]) -> list[str]:
     out = ["| " + " | ".join(header) + " |"]
     out.append("|" + "|".join("---" for _ in header) + "|")
     for row in rows:

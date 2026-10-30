@@ -8,7 +8,7 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `capability.<name>`,
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `elecraft.model_id`, `capability.<name>`,
 //! `mode.<name>`.
 //!
 //! Verified states: `unverified`; `manual-checked` (needs `reference`); `transcript-checked`
@@ -21,7 +21,9 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
-use crate::description::{CivParams, Family, KenwoodParams, RigDescription, Timing};
+use crate::description::{
+    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, Timing,
+};
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
 
@@ -112,6 +114,7 @@ struct FileDoc {
     rig: RigSection,
     civ: Option<CivSection>,
     kenwood: Option<KenwoodSection>,
+    elecraft: Option<ElecraftSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
     capabilities: Vec<String>,
@@ -139,6 +142,12 @@ struct CivSection {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KenwoodSection {
+    model_id: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ElecraftSection {
     model_id: u16,
 }
 
@@ -216,10 +225,13 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let family = match doc.rig.family.as_str() {
         "icom-civ" => Family::IcomCiv,
         "kenwood-ascii" => Family::KenwoodAscii,
+        "elecraft-ascii" => Family::ElecraftAscii,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
-    match (family, &doc.civ, &doc.kenwood) {
-        (Family::IcomCiv, Some(_), None) | (Family::KenwoodAscii, None, Some(_)) => {}
+    match (family, &doc.civ, &doc.kenwood, &doc.elecraft) {
+        (Family::IcomCiv, Some(_), None, None)
+        | (Family::KenwoodAscii, None, Some(_), None)
+        | (Family::ElecraftAscii, None, None, Some(_)) => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
     let civ = doc.civ.as_ref().map(|c| CivParams {
@@ -230,6 +242,9 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     });
     let kenwood = doc.kenwood.as_ref().map(|k| KenwoodParams {
         model_id: k.model_id,
+    });
+    let elecraft = doc.elecraft.as_ref().map(|e| ElecraftParams {
+        model_id: e.model_id,
     });
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
@@ -251,6 +266,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         family,
         civ,
         kenwood,
+        elecraft,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
         timing: Timing {
@@ -382,6 +398,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.kenwood.is_some() {
         keys.push("kenwood.model_id".to_string());
+    }
+    if description.elecraft.is_some() {
+        keys.push("elecraft.model_id".to_string());
     }
     keys.extend(
         description
@@ -610,6 +629,27 @@ verified = { state = "unverified" }
         );
     }
 
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
+    // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    #[test]
+    fn the_elecraft_family_needs_its_own_block_and_fact() {
+        let elecraft = GOOD
+            .replace("family = \"kenwood-ascii\"", "family = \"elecraft-ascii\"")
+            .replace("[kenwood]", "[elecraft]")
+            .replace("key = \"kenwood.model_id\"", "key = \"elecraft.model_id\"");
+        let loaded = parse(&elecraft).expect("loads");
+        assert_eq!(loaded.description.family, Family::ElecraftAscii);
+        assert_eq!(
+            loaded.description.elecraft,
+            Some(ElecraftParams { model_id: 19 })
+        );
+        assert!(expected_keys(&loaded.description).contains(&"elecraft.model_id".to_string()));
+        expect_rejected(
+            &elecraft.replace("[elecraft]", "[kenwood]"),
+            "does not match",
+        );
+    }
+
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]
     #[test]
@@ -624,6 +664,7 @@ verified = { state = "unverified" }
         assert!(keys.contains(&"kenwood.model_id".to_string()));
         assert!(keys.contains(&"capability.set-ptt".to_string()));
         assert!(!keys.iter().any(|k| k.starts_with("civ.")));
+        assert!(!keys.iter().any(|k| k.starts_with("elecraft.")));
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_fact_for]

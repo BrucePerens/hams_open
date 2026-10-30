@@ -19,6 +19,8 @@ pub enum Family {
     IcomCiv,
     /// Kenwood-style ASCII commands ended by `;`.
     KenwoodAscii,
+    /// Elecraft K3/KX3/KX2 ASCII commands ended by `;` (Kenwood-like, with its own replies).
+    ElecraftAscii,
 }
 
 /// CI-V parameters.
@@ -38,6 +40,13 @@ pub struct CivParams {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KenwoodParams {
     /// The number the rig returns for `ID;`.
+    pub model_id: u16,
+}
+
+/// Elecraft-style parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElecraftParams {
+    /// The number the rig returns for `ID;` (017 on the K3, KX3 and KX2).
     pub model_id: u16,
 }
 
@@ -65,6 +74,8 @@ pub struct RigDescription {
     pub civ: Option<CivParams>,
     /// Kenwood parameters, present for [`Family::KenwoodAscii`].
     pub kenwood: Option<KenwoodParams>,
+    /// Elecraft parameters, present for [`Family::ElecraftAscii`].
+    pub elecraft: Option<ElecraftParams>,
     /// What the rig can do.
     pub capabilities: CapabilitySet,
     /// Mode to wire code: a CI-V mode byte, or the ASCII byte of a Kenwood `MD` digit.
@@ -110,6 +121,7 @@ impl RigDescription {
                 echo: false,
             }),
             kenwood: None,
+            elecraft: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,
@@ -152,6 +164,7 @@ impl RigDescription {
             family: Family::KenwoodAscii,
             civ: None,
             kenwood: Some(KenwoodParams { model_id: 19 }),
+            elecraft: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,

@@ -11,6 +11,7 @@ use radioctl_core::error::RigError;
 use radioctl_core::transcript::{Expect, Panel, Transcript};
 
 use crate::civ::CivEngine;
+use crate::elecraft::ElecraftEngine;
 use crate::kenwood::KenwoodEngine;
 use crate::virtual_rig::{PanelChange, VirtualRig};
 
@@ -22,6 +23,7 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
     Ok(match description.family {
         Family::IcomCiv => Box::new(CivEngine::new(description.clone())?),
         Family::KenwoodAscii => Box::new(KenwoodEngine::new(description.clone())?),
+        Family::ElecraftAscii => Box::new(ElecraftEngine::new(description.clone())?),
     })
 }
 
@@ -49,6 +51,8 @@ fn panel_change(panel: Panel) -> PanelChange {
         Panel::Mode(mode) => PanelChange::Mode(mode),
         Panel::Ptt(on) => PanelChange::Ptt(on),
         Panel::Signal(level) => PanelChange::Signal(level),
+        Panel::Split(on) => PanelChange::Split(on),
+        Panel::RitOffset(hz) => PanelChange::RitOffset(hz),
     }
 }
 
@@ -151,7 +155,12 @@ fn check_decoding(
     problems: &mut Vec<String>,
 ) {
     let decoded = engine.feed(&step.rx, NOW);
-    let wanted: Vec<Inbound> = step.expect.map(expected_inbound).into_iter().collect();
+    let wanted: Vec<Inbound> = step
+        .expect
+        .into_iter()
+        .chain(step.expect_more.iter().copied())
+        .map(expected_inbound)
+        .collect();
     if decoded != wanted {
         problems.push(format!(
             "step {index}: engine decoded {decoded:?} but transcript expects {wanted:?}"

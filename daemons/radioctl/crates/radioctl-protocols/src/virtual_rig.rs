@@ -7,23 +7,37 @@
 //! pseudo-terminals and sockets are the caller's business, so a virtual rig is also replayable
 //! from a transcript.
 //!
+//! The Elecraft wire (KX3) is generated from a description of family `elecraft-ascii` and follows
+//! the Programmer's Reference cited in `elecraft.rs`; the starting values for levels, firmware
+//! (the manual's `02.37` example) and SWR are our own choices, not a KX3's.
+//!
 //! Differences from the Python simulator, on purpose: meter values are BCD as on real Icom
 //! radios, not big-endian binary; an unknown CI-V mode code is refused with NG instead of being
 //! accepted silently; the composite `IF;` answer is not implemented (`?;`), see `kenwood.rs`.
 
 use std::time::Duration;
 
-use radioctl_core::description::{CivParams, Family, KenwoodParams, RigDescription};
+use std::collections::BTreeMap;
+
+use radioctl_core::description::{
+    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription,
+};
 use radioctl_core::error::{ErrorKind, RigError};
-use radioctl_core::units::{Hz, Mode};
+use radioctl_core::units::{Hz, Level, Mode};
 
 use crate::civ::{self, Frame, FrameParser, Parsed};
+use crate::elecraft;
 use crate::kenwood::{self, Token, Tokenizer};
 
 /// Signal level a fresh virtual rig reports (the simulator's raw 30).
 const DEFAULT_SIGNAL: u16 = 30;
 /// Power meter reading while keyed (the simulator's raw 128).
 const KEYED_POWER: u16 = 128;
+
+/// The firmware revision a virtual Elecraft rig reports (the manual's example, not a real KX3's).
+const ELECRAFT_FIRMWARE: (u8, u8) = (2, 37);
+/// SWR (tenths) a virtual rig reports: 1.0:1.
+const DEFAULT_SWR: u16 = 10;
 
 /// The mutable state of a virtual rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +56,22 @@ pub struct RigState {
     pub cw_sent: Vec<String>,
     /// True when the rig reports front-panel changes on its own (CI-V transceive, Kenwood AI).
     pub transceive: bool,
+    /// Split operation (Elecraft).
+    pub split: bool,
+    /// RIT on (Elecraft).
+    pub rit: bool,
+    /// XIT on (Elecraft).
+    pub xit: bool,
+    /// RIT/XIT offset in hertz (Elecraft).
+    pub rit_offset: i16,
+    /// Receive filter bandwidth (Elecraft).
+    pub filter_width: Hz,
+    /// Numeric levels (Elecraft).
+    pub levels: BTreeMap<Level, u16>,
+    /// SWR in tenths (Elecraft).
+    pub swr: u16,
+    /// Auto-info mode 0-3 (Elecraft `AI`); 0 sends nothing on its own.
+    pub auto_info: u8,
 }
 
 impl RigState {
@@ -64,6 +94,10 @@ enum Wire {
     },
     Kenwood {
         params: KenwoodParams,
+        tokenizer: Tokenizer,
+    },
+    Elecraft {
+        params: ElecraftParams,
         tokenizer: Tokenizer,
     },
 }
@@ -89,6 +123,13 @@ impl VirtualRig {
                 params: params.clone(),
                 tokenizer: Tokenizer::default(),
             },
+            (Family::ElecraftAscii, _, _) if desc.elecraft.is_some() => Wire::Elecraft {
+                params: desc
+                    .elecraft
+                    .clone()
+                    .unwrap_or(ElecraftParams { model_id: 0 }),
+                tokenizer: Tokenizer::default(),
+            },
             _ => {
                 return Err(RigError::new(
                     ErrorKind::Unsupported,
@@ -104,6 +145,21 @@ impl VirtualRig {
             signal: DEFAULT_SIGNAL,
             cw_sent: Vec::new(),
             transceive: desc.civ.is_some(),
+            split: false,
+            rit: false,
+            xit: false,
+            rit_offset: 0,
+            filter_width: Hz(500),
+            levels: BTreeMap::from([
+                (Level::AfGain, 30),
+                (Level::RfGain, 250),
+                (Level::MicGain, 25),
+                (Level::MonitorLevel, 20),
+                (Level::KeyerSpeed, 18),
+                (Level::RfPower, 5),
+            ]),
+            swr: DEFAULT_SWR,
+            auto_info: 0,
         };
         Ok(VirtualRig {
             desc: desc.clone(),
@@ -143,6 +199,17 @@ impl VirtualRig {
                 }
                 out
             }
+            Wire::Elecraft { tokenizer, .. } => {
+                let tokens = tokenizer.feed(bytes, now);
+                let mut out = Vec::new();
+                for token in tokens {
+                    out.extend(match token {
+                        Token::Command(text) => self.elecraft_command(&text),
+                        Token::Junk(_) => b"?;".to_vec(),
+                    });
+                }
+                out
+            }
         }
     }
 
@@ -155,6 +222,11 @@ impl VirtualRig {
             PanelChange::Mode(mode) => self.state.mode = mode,
             PanelChange::Ptt(on) => self.state.ptt = on,
             PanelChange::Signal(level) => self.state.signal = level,
+            PanelChange::Split(on) => self.state.split = on,
+            PanelChange::RitOffset(hz) => self.state.rit_offset = hz,
+        }
+        if matches!(self.wire, Wire::Elecraft { .. }) {
+            return self.elecraft_panel(change);
         }
         if !self.state.transceive {
             return Vec::new();
@@ -192,6 +264,10 @@ pub enum PanelChange {
     Ptt(bool),
     /// The received signal strength changed.
     Signal(u16),
+    /// Split was switched on or off.
+    Split(bool),
+    /// The RIT/XIT offset was changed.
+    RitOffset(i16),
 }
 
 fn unsolicited_civ(params: &CivParams, cmd: u8, data: &[u8]) -> Vec<u8> {
@@ -332,7 +408,7 @@ impl VirtualRig {
     fn kenwood_id(&self) -> u16 {
         match &self.wire {
             Wire::Kenwood { params, .. } => params.model_id,
-            Wire::Civ { .. } => 0,
+            Wire::Civ { .. } | Wire::Elecraft { .. } => 0,
         }
     }
 
@@ -367,6 +443,199 @@ impl VirtualRig {
                 None
             }
             None => Some("?;".to_string()),
+        }
+    }
+}
+
+impl VirtualRig {
+    // [@ANCHOR: radioctl_virtual_elecraft_command]
+    /// The virtual Elecraft command table (Programmer's Reference, see `elecraft.rs`).
+    fn elecraft_command(&mut self, text: &str) -> Vec<u8> {
+        let upper = text.to_ascii_uppercase();
+        let (name, arg) = (upper.get(..2).unwrap_or(""), upper.get(2..).unwrap_or(""));
+        let flag = |arg: &str| match arg {
+            "0" => Some(false),
+            "1" => Some(true),
+            _ => None,
+        };
+        let refuse = || Some("?;".to_string());
+        let reply: Option<String> = match (name, arg) {
+            ("FA", "") => Some(format!("FA{:011};", self.state.freq_a.0)),
+            ("FA", digits) => self.set_frequency(digits, true),
+            ("FB", "") => Some(format!("FB{:011};", self.state.freq_b.0)),
+            ("FB", digits) => self.set_frequency(digits, false),
+            ("MD", "") => self.kenwood_mode_reply(),
+            ("MD", code) => self.set_kenwood_mode(code),
+            ("TQ", "") => Some(format!("TQ{};", u8::from(self.state.ptt))),
+            ("TX", "") => {
+                self.state.ptt = true;
+                None
+            }
+            ("RX", "") => {
+                self.state.ptt = false;
+                None
+            }
+            ("SM", "") => {
+                let level = if self.state.ptt {
+                    0
+                } else {
+                    self.state.signal.min(15)
+                };
+                Some(format!("SM{level:04};"))
+            }
+            ("PO", "") => Some(format!("PO{:03};", self.elecraft_power())),
+            ("FT", "") => Some(format!("FT{};", u8::from(self.state.split))),
+            ("FT", on) => flag(on).map_or_else(refuse, |on| {
+                self.state.split = on;
+                None
+            }),
+            ("FR", _) => {
+                self.state.split = false;
+                None
+            }
+            ("RT", "") => Some(format!("RT{};", u8::from(self.state.rit))),
+            ("RT", on) => flag(on).map_or_else(refuse, |on| {
+                self.state.rit = on;
+                None
+            }),
+            ("XT", "") => Some(format!("XT{};", u8::from(self.state.xit))),
+            ("XT", on) => flag(on).map_or_else(refuse, |on| {
+                self.state.xit = on;
+                None
+            }),
+            ("RO", "") => Some(format!(
+                "RO{};",
+                elecraft::signed_offset(self.state.rit_offset)
+            )),
+            ("RO", data) => match elecraft::parse_offset(data) {
+                Some(hz) => {
+                    self.state.rit_offset = hz;
+                    None
+                }
+                None => refuse(),
+            },
+            ("RC", "") => {
+                self.state.rit_offset = 0;
+                None
+            }
+            ("BW", "") => Some(format!("BW{:04};", self.state.filter_width.0 / 10)),
+            ("BW", digits) => match kenwood::parse_digits(digits).filter(|_| digits.len() == 4) {
+                Some(tens) => {
+                    self.state.filter_width = Hz(tens * 10);
+                    None
+                }
+                None => refuse(),
+            },
+            ("SW", "") => Some(format!("SW{:03};", self.state.swr)),
+            ("ID", "") => Some(format!("ID{:03};", self.elecraft_id())),
+            ("RV", "M") => Some(format!(
+                "RVM{:02}.{:02};",
+                ELECRAFT_FIRMWARE.0, ELECRAFT_FIRMWARE.1
+            )),
+            ("AI", "") => Some(format!("AI{};", self.state.auto_info)),
+            ("AI", level) => {
+                match kenwood::parse_digits(level).filter(|v| *v <= 3 && level.len() == 1) {
+                    Some(value) => {
+                        self.state.auto_info = u8::try_from(value).unwrap_or(0);
+                        self.state.transceive = value > 0;
+                        (value == 1).then(|| self.elecraft_if())
+                    }
+                    None => refuse(),
+                }
+            }
+            ("KY", "") => Some("KY0;".to_string()),
+            ("KY", _) => {
+                let sent = text.get(3..).unwrap_or("").to_string();
+                self.state.cw_sent.push(sent);
+                None
+            }
+            (prefix, data) => match [
+                Level::AfGain,
+                Level::RfGain,
+                Level::MicGain,
+                Level::MonitorLevel,
+                Level::KeyerSpeed,
+                Level::RfPower,
+            ]
+            .into_iter()
+            .find(|l| elecraft::level_wire(*l).prefix == prefix)
+            {
+                Some(level) => self.elecraft_level(level, data),
+                None => refuse(),
+            },
+        };
+        reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_elecraft_level]
+    /// Reads or sets a level of the virtual Elecraft rig; a set outside the manual's range is
+    /// clamped to it, a malformed one is refused.
+    fn elecraft_level(&mut self, level: Level, data: &str) -> Option<String> {
+        let wire = elecraft::level_wire(level);
+        if data.is_empty() {
+            let value = self.state.levels.get(&level).copied().unwrap_or(wire.min);
+            return Some(format!("{}{value:03};", wire.prefix));
+        }
+        let parsed = kenwood::parse_digits(data).filter(|_| data.len() == 3);
+        match parsed.and_then(|v| u16::try_from(v).ok()) {
+            Some(value) => {
+                self.state
+                    .levels
+                    .insert(level, value.clamp(wire.min, wire.max));
+                None
+            }
+            None => Some("?;".to_string()),
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_elecraft_if]
+    /// The `IF` answer for the current state (Programmer's Reference, "IF", p. 14).
+    fn elecraft_if(&self) -> String {
+        let mode = self.desc.mode_code(self.state.mode).map_or('0', char::from);
+        format!(
+            "IF{:011}     {}{}{} 00{}{}00{}001 ;",
+            self.state.freq_a.0,
+            elecraft::signed_offset(self.state.rit_offset),
+            u8::from(self.state.rit),
+            u8::from(self.state.xit),
+            u8::from(self.state.ptt),
+            mode,
+            u8::from(self.state.split),
+        )
+    }
+
+    // [@ANCHOR: radioctl_virtual_elecraft_panel]
+    /// What a virtual Elecraft rig sends on its own after a front-panel change: nothing in `AI0`,
+    /// an `IF` answer for frequency, mode, split and offset events in `AI1`, and in `AI2` and
+    /// `AI3` the specific `FA` or `MD` answer (or `IF` for split and offset changes).
+    fn elecraft_panel(&self, change: PanelChange) -> Vec<u8> {
+        let text = match (self.state.auto_info, change) {
+            (0, _) | (_, PanelChange::Ptt(_) | PanelChange::Signal(_)) => return Vec::new(),
+            (1, _) | (_, PanelChange::Split(_) | PanelChange::RitOffset(_)) => self.elecraft_if(),
+            (_, PanelChange::Frequency(hz)) => format!("FA{:011};", hz.0),
+            (_, PanelChange::Mode(mode)) => match self.desc.mode_code(mode) {
+                Some(code) => format!("MD{};", char::from(code)),
+                None => return Vec::new(),
+            },
+        };
+        text.into_bytes()
+    }
+
+    // [@ANCHOR: radioctl_virtual_elecraft_power]
+    /// The `PO` reading: the requested power in tenths of a watt while keyed, else zero.
+    fn elecraft_power(&self) -> u16 {
+        if !self.state.ptt {
+            return 0;
+        }
+        let watts = self.state.levels.get(&Level::RfPower).copied().unwrap_or(0);
+        watts.saturating_mul(10).min(999)
+    }
+
+    // [@ANCHOR: radioctl_virtual_elecraft_id]
+    fn elecraft_id(&self) -> u16 {
+        match &self.wire {
+            Wire::Elecraft { params, .. } => params.model_id,
+            _ => 0,
         }
     }
 }
@@ -553,5 +822,101 @@ mod tests {
         first.feed(&set, T0);
         assert_eq!(first.state().freq_a, Hz(7_030_000));
         assert_eq!(second.state().freq_a, Hz(14_074_000));
+    }
+
+    fn kx3_rig() -> VirtualRig {
+        let desc = radioctl_core::rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))
+            .expect("kx3 file")
+            .description;
+        VirtualRig::from_description(&desc).expect("rig")
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_command]
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_level]
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_id]
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_power]
+    // Tests [@ANCHOR: radioctl_virtual_from_description]
+    #[test]
+    fn elecraft_commands_follow_the_programmers_reference() {
+        let mut rig = kx3_rig();
+        assert_eq!(rig.feed(b"fa;", T0), b"FA00014060000;");
+        assert!(rig.feed(b"FB00007040000;", T0).is_empty());
+        assert_eq!(rig.feed(b"FB;", T0), b"FB00007040000;");
+        assert_eq!(rig.feed(b"MD;", T0), b"MD3;");
+        assert_eq!(rig.feed(b"ID;", T0), b"ID017;");
+        assert_eq!(rig.feed(b"RVM;", T0), b"RVM02.37;");
+        assert_eq!(rig.feed(b"TQ;", T0), b"TQ0;");
+        assert!(rig.feed(b"TX;", T0).is_empty());
+        assert_eq!(rig.feed(b"TQ;", T0), b"TQ1;");
+        assert_eq!(rig.feed(b"PO;", T0), b"PO050;");
+        assert_eq!(rig.feed(b"SM;", T0), b"SM0000;");
+        assert!(rig.feed(b"RX;", T0).is_empty());
+        assert_eq!(rig.feed(b"PO;", T0), b"PO000;");
+        assert_eq!(rig.feed(b"SM;", T0), b"SM0015;");
+        assert_eq!(rig.feed(b"AG;", T0), b"AG030;");
+        assert!(rig.feed(b"KS999;", T0).is_empty());
+        assert_eq!(rig.feed(b"KS;", T0), b"KS050;");
+        assert!(rig.feed(b"KS001;", T0).is_empty());
+        assert_eq!(rig.feed(b"KS;", T0), b"KS008;");
+        assert_eq!(rig.feed(b"KS5;", T0), b"?;");
+        assert!(rig.feed(b"RO-0120;RT1;XT1;FT1;BW0025;", T0).is_empty());
+        assert_eq!(rig.state().rit_offset, -120);
+        assert!(rig.state().rit && rig.state().xit && rig.state().split);
+        assert_eq!(rig.feed(b"BW;", T0), b"BW0025;");
+        assert!(rig.feed(b"RC;", T0).is_empty());
+        assert_eq!(rig.feed(b"RO;", T0), b"RO+0000;");
+        assert!(rig.feed(b"FR0;", T0).is_empty());
+        assert_eq!(rig.feed(b"FT;", T0), b"FT0;");
+        assert!(rig.feed(b"KY CQ DE K6BP;", T0).is_empty());
+        assert_eq!(rig.state().cw_sent, vec!["CQ DE K6BP".to_string()]);
+        assert_eq!(rig.feed(b"KY;", T0), b"KY0;");
+        assert_eq!(rig.feed(b"SW;", T0), b"SW010;");
+        for refused in [
+            &b"ZZ;"[..],
+            b"RT7;",
+            b"RO*0050;",
+            b"BW12;",
+            b"AI9;",
+            b"RVD;",
+            b"MD8;",
+        ] {
+            assert_eq!(rig.feed(refused, T0), b"?;", "{refused:?}");
+        }
+        assert_eq!(rig.feed(&[0x01, b';'], T0), b"?;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_if]
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_panel]
+    // Tests [@ANCHOR: radioctl_virtual_front_panel]
+    #[test]
+    fn elecraft_auto_info_modes_decide_what_the_panel_sends() {
+        let mut rig = kx3_rig();
+        assert!(rig
+            .front_panel(PanelChange::Frequency(Hz(7_100_000)))
+            .is_empty());
+        assert_eq!(rig.state().auto_info, 0);
+        assert!(!rig.state().transceive);
+        assert_eq!(
+            rig.feed(b"AI1;", T0),
+            b"IF00007100000     +000000 0003000001 ;"
+        );
+        assert_eq!(rig.state().auto_info, 1);
+        let if_after_mode = rig.front_panel(PanelChange::Mode(Mode::Usb));
+        assert_eq!(if_after_mode.get(..2), Some(&b"IF"[..]));
+        assert_eq!(if_after_mode.get(27 + 2..28 + 2), Some(&b"2"[..]));
+        assert!(rig.front_panel(PanelChange::Ptt(true)).is_empty());
+        assert!(rig.front_panel(PanelChange::Signal(3)).is_empty());
+        assert!(rig.feed(b"AI2;", T0).is_empty());
+        assert_eq!(
+            rig.front_panel(PanelChange::Frequency(Hz(7_101_000))),
+            b"FA00007101000;"
+        );
+        assert_eq!(rig.front_panel(PanelChange::Mode(Mode::Cw)), b"MD3;");
+        let split = rig.front_panel(PanelChange::Split(true));
+        assert_eq!(split.get(..2), Some(&b"IF"[..]));
+        assert_eq!(split.get(30 + 2..31 + 2), Some(&b"1"[..]));
+        let offset = rig.front_panel(PanelChange::RitOffset(-5));
+        assert_eq!(offset.get(16 + 2..21 + 2), Some(&b"-0005"[..]));
+        assert_eq!(rig.feed(b"AI;", T0), b"AI2;");
     }
 }

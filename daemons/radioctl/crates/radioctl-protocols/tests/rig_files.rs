@@ -97,7 +97,10 @@ fn every_shipped_transcript_replays_against_its_description() {
 // Tests [@ANCHOR: radioctl_conformance_replay]
 #[test]
 fn a_corrupted_byte_in_the_shipped_transcript_is_caught() {
-    let (path, _) = transcripts().into_iter().next().expect("a transcript");
+    let (path, _) = transcripts()
+        .into_iter()
+        .find(|(_, t)| t.rig == "icom-ic-7300")
+        .expect("the IC-7300 transcript");
     let text = fs::read_to_string(path).expect("read");
     let corrupted = text.replacen("fe fe e0 94 04 01 01 fd", "fe fe e0 94 04 02 01 fd", 1);
     assert_ne!(text, corrupted);
@@ -108,4 +111,28 @@ fn a_corrupted_byte_in_the_shipped_transcript_is_caught() {
         problems.iter().any(|p| p.contains("virtual rig answered")),
         "{problems:?}"
     );
+}
+
+// Tests [@ANCHOR: radioctl_conformance_replay]
+// Tests [@ANCHOR: radioctl_elecraft_engine_feed]
+#[test]
+fn a_corrupted_byte_in_the_kx3_transcript_is_caught_and_the_kx3_file_is_unverified() {
+    let (path, _) = transcripts()
+        .into_iter()
+        .find(|(_, t)| t.rig == "elecraft-kx3")
+        .expect("the KX3 transcript");
+    let text = fs::read_to_string(path).expect("read");
+    let corrupted = text.replacen("FA00014060000;", "FA00014060001;", 1);
+    assert_ne!(text, corrupted);
+    let transcript = transcript::parse(&corrupted).expect("still parses");
+    let loaded = load_all()
+        .into_iter()
+        .find(|l| l.description.id == "elecraft-kx3")
+        .expect("kx3 description");
+    let problems = conformance::replay(&loaded.description, &transcript).expect_err("caught");
+    assert!(
+        problems.iter().any(|p| p.contains("virtual rig answered")),
+        "{problems:?}"
+    );
+    assert!(loaded.verification_summary().contains_key("unverified"));
 }

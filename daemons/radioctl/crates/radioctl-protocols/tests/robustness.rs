@@ -10,6 +10,7 @@ use radioctl_core::description::RigDescription;
 use radioctl_core::engine::ProtocolEngine;
 use radioctl_core::units::Hz;
 use radioctl_protocols::civ::{self, CivEngine, FrameParser};
+use radioctl_protocols::elecraft::ElecraftEngine;
 use radioctl_protocols::kenwood::{KenwoodEngine, Tokenizer};
 use radioctl_protocols::virtual_rig::VirtualRig;
 
@@ -30,6 +31,24 @@ proptest! {
     fn kenwood_engine_survives_any_bytes(bytes in proptest::collection::vec(any::<u8>(), 0..600)) {
         let mut engine = KenwoodEngine::new(RigDescription::ts2000()).expect("engine");
         let _ = engine.feed(&bytes, NOW);
+    }
+
+    // Tests [@ANCHOR: radioctl_elecraft_engine_feed]
+    // Tests [@ANCHOR: radioctl_elecraft_decode_if]
+    #[test]
+    fn elecraft_engine_survives_any_bytes(
+        bytes in proptest::collection::vec(any::<u8>(), 0..600),
+        text in "(IF|FA|RO|RV|SM|PC)[ -~]{0,40};",
+    ) {
+        let desc = radioctl_core::rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))
+            .expect("kx3 file")
+            .description;
+        let mut engine = ElecraftEngine::new(desc.clone()).expect("engine");
+        let _ = engine.feed(&bytes, NOW);
+        let _ = engine.feed(text.as_bytes(), NOW);
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        let _ = rig.feed(&bytes, NOW);
+        let _ = rig.feed(text.as_bytes(), NOW);
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]

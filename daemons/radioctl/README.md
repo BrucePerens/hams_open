@@ -5,7 +5,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
 2026-10-30; every Rust file carries an SPDX header and the manifests inherit the licence from the
 workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`.
 
-Status: Phase 0/1 foundation (vocabulary, CI-V and Kenwood engines, virtual rigs, rig actor with queue, cache, polling, events). No real transports. There is no real serial, USB or Ethernet transport and no transmit
+Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). No real transports. There is no real serial, USB or Ethernet transport and no transmit
 path to real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -59,7 +59,7 @@ tested); a file with an unexplained or unknown datum does not load. `rigs/transc
 transcripts replayed by `radioctl_protocols::conformance::replay` against the engine and the virtual rig
 generated from the same description (tests in `crates/radioctl-protocols/tests/rig_files.rs`).
 
-The worked description is `rigs/icom-ic-7300.toml`. **Everything in it is unverified**, and its
+The worked descriptions are `rigs/icom-ic-7300.toml` and `rigs/elecraft-kx3.toml` (the KX3 one is written from Elecraft's published Programmer's Reference Rev. G5, cited by command heading and page since the manual has no numbered sections, with the PDF's sha256; its transcript is hand-written from the same manual). **Everything in it is unverified**, and its
 transcript is hand-written from our own simulator and bridge code (its `origin` says so): it proves that
 the description, the engine and the virtual rig agree with each other, not that they agree with an
 IC-7300. A real capture or an owner's bench run is what upgrades a `verified` field.
@@ -138,6 +138,24 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_new] (radioctl-protocols) Builds an engine from a Kenwood-style description.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_encode] (radioctl-protocols) Encodes an Op as a Kenwood ASCII request; refuses PTT readback, power meter and CW.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_feed] (radioctl-protocols) Decodes Kenwood replies, auto-information and `?;` refusals.
+- [@ANCHOR: radioctl:radioctl_elecraft_level_wire] (radioctl-protocols) The Elecraft command prefix and manual range of a level.
+- [@ANCHOR: radioctl:radioctl_elecraft_signed_offset] (radioctl-protocols) Formats a RIT/XIT offset as `+0050` / `-0050`.
+- [@ANCHOR: radioctl:radioctl_elecraft_parse_offset] (radioctl-protocols) Parses `ROsnnnn` data (sign or blank, four digits).
+- [@ANCHOR: radioctl:radioctl_elecraft_parse_firmware] (radioctl-protocols) Parses the `NN.NN` revision of an `RVx` answer.
+- [@ANCHOR: radioctl:radioctl_elecraft_decode_if] (radioctl-protocols) Decodes an Elecraft `IF` answer into frequency, offset, RIT, XIT, transmit state, mode and split.
+- [@ANCHOR: radioctl:radioctl_elecraft_engine_new] (radioctl-protocols) Builds an engine from an Elecraft description.
+- [@ANCHOR: radioctl:radioctl_elecraft_engine_encode] (radioctl-protocols) Encodes an Op as an Elecraft command; ranges are checked against the manual, `KY` text and values the engine cannot express are refused.
+- [@ANCHOR: radioctl:radioctl_elecraft_encode_set] (radioctl-protocols) The setting commands of the Elecraft engine (frequency, mode, PTT, AI, split, RIT/XIT, filter, levels, CW text).
+- [@ANCHOR: radioctl:radioctl_elecraft_check_ky_text] (radioctl-protocols) Accepts `KY` text of 1 to 24 printable characters without `;`, `<` or `>`.
+- [@ANCHOR: radioctl:radioctl_elecraft_engine_feed] (radioctl-protocols) Decodes Elecraft replies, `IF` answers, auto-information and `?;`.
+- [@ANCHOR: radioctl:radioctl_elecraft_decode] (radioctl-protocols) Decodes one Elecraft reply token into observations.
+- [@ANCHOR: radioctl:radioctl_elecraft_decode_one] (radioctl-protocols) Decodes the single-value Elecraft replies (`FA`, `MD`, `TQ`, `SM`, levels, ...).
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_if] (radioctl-protocols) The `IF` answer of the virtual Elecraft rig.
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_panel] (radioctl-protocols) What the virtual Elecraft rig sends on its own after a panel change, by `AI` mode.
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_power] (radioctl-protocols) The virtual Elecraft `PO` reading: nonzero only while keyed.
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_id] (radioctl-protocols) The ID the virtual Elecraft rig reports.
 - [@ANCHOR: radioctl:radioctl_virtual_from_description] (radioctl-protocols) Builds a virtual rig of the described model, in its default state.
 - [@ANCHOR: radioctl:radioctl_virtual_state] (radioctl-protocols) The rig's current state, for assertions.
 - [@ANCHOR: radioctl:radioctl_virtual_feed] (radioctl-protocols) Consumes bytes the controller wrote at `now`; returns the bytes the radio sends back.
