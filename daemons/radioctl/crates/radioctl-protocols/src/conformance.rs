@@ -33,6 +33,7 @@ fn hex(bytes: &[u8]) -> String {
         .join(" ")
 }
 
+// [@ANCHOR: radioctl_conformance_expected_inbound]
 fn expected_inbound(expect: Expect) -> Inbound {
     match expect {
         Expect::Observation(value) => Inbound::Observation(value),
@@ -41,6 +42,7 @@ fn expected_inbound(expect: Expect) -> Inbound {
     }
 }
 
+// [@ANCHOR: radioctl_conformance_panel_change]
 fn panel_change(panel: Panel) -> PanelChange {
     match panel {
         Panel::Frequency(hz) => PanelChange::Frequency(hz),
@@ -141,6 +143,7 @@ fn replay_solicited(
     true
 }
 
+// [@ANCHOR: radioctl_conformance_check_decoding]
 fn check_decoding(
     engine: &mut dyn ProtocolEngine,
     step: &radioctl_core::transcript::Step,
@@ -175,6 +178,9 @@ expect = { kind = "frequency", vfo = "a", hz = 14074000 }
     // Tests [@ANCHOR: radioctl_conformance_replay]
     // Tests [@ANCHOR: radioctl_conformance_replay_solicited]
     // Tests [@ANCHOR: radioctl_conformance_engine_for]
+    // Tests [@ANCHOR: radioctl_conformance_check_decoding]
+    // Tests [@ANCHOR: radioctl_conformance_expected_inbound]
+    // Tests [@ANCHOR: radioctl_conformance_panel_change]
     #[test]
     fn a_consistent_transcript_replays_and_each_kind_of_disagreement_is_named() {
         let desc = RigDescription::ic7300();

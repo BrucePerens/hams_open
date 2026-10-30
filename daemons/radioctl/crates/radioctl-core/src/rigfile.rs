@@ -211,6 +211,7 @@ pub fn parse(text: &str) -> Result<LoadedDescription, RigError> {
     Ok(LoadedDescription { description, facts })
 }
 
+// [@ANCHOR: radioctl_core_rigfile_build_description]
 fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let family = match doc.rig.family.as_str() {
         "icom-civ" => Family::IcomCiv,
@@ -262,6 +263,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     })
 }
 
+// [@ANCHOR: radioctl_core_rigfile_build_mode_codes]
 fn build_mode_codes(entries: &[ModeEntry]) -> Result<Vec<(Mode, u8)>, RigError> {
     let mut out: Vec<(Mode, u8)> = Vec::new();
     for entry in entries {
@@ -288,6 +290,7 @@ fn build_mode_codes(entries: &[ModeEntry]) -> Result<Vec<(Mode, u8)>, RigError> 
     Ok(out)
 }
 
+// [@ANCHOR: radioctl_core_rigfile_build_facts]
 fn build_facts(doc: &FileDoc) -> Result<Vec<Fact>, RigError> {
     let mut seen = BTreeSet::new();
     let mut facts = Vec::new();
@@ -310,6 +313,7 @@ fn build_facts(doc: &FileDoc) -> Result<Vec<Fact>, RigError> {
     Ok(facts)
 }
 
+// [@ANCHOR: radioctl_core_rigfile_build_verified]
 fn build_verified(key: &str, entry: &VerifiedEntry) -> Result<Verified, RigError> {
     let need = |value: &Option<String>, field: &str| -> Result<String, RigError> {
         match value.as_deref().map(str::trim) {
@@ -394,6 +398,7 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     keys
 }
 
+// [@ANCHOR: radioctl_core_rigfile_matches_key]
 fn matches_key(fact_key: &str, key: &str) -> bool {
     match fact_key.strip_suffix(".*") {
         Some(prefix) => key
@@ -403,6 +408,7 @@ fn matches_key(fact_key: &str, key: &str) -> bool {
     }
 }
 
+// [@ANCHOR: radioctl_core_rigfile_check_coverage]
 fn check_coverage(description: &RigDescription, facts: &[Fact]) -> Result<(), RigError> {
     let expected = expected_keys(description);
     for key in &expected {
@@ -533,6 +539,12 @@ verified = { state = "unverified" }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_facts]
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_mode_codes]
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_verified]
+    // Tests [@ANCHOR: radioctl_core_rigfile_check_coverage]
+    // Tests [@ANCHOR: radioctl_core_rigfile_matches_key]
     #[test]
     fn a_complete_description_loads_with_its_facts() {
         let loaded = parse(GOOD).expect("loads");
