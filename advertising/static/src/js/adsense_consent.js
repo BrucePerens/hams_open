@@ -10,7 +10,6 @@
  * <script type="application/json" id="advertising_adsense_consent">, which is never executed.
  * Not wrapped in a function: `gtag` and `adsenseConsentsGranted` were globals and stay globals.
  */
-/* eslint-disable no-unused-vars */
 var advertisingAdsenseConsent = JSON.parse(
     document.getElementById("advertising_adsense_consent").textContent
 );

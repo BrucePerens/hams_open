@@ -188,7 +188,7 @@ export class RichEditor extends Interaction {
         for (const button of this.el.querySelectorAll("button[data-uw-cmd]")) {
             const state = TOGGLE_STATE[button.dataset.uwCmd];
             if (state) {
-                let on = false;
+                let on;
                 try {
                     on = document.queryCommandState(state);
                 } catch {
