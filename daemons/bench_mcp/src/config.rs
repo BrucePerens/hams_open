@@ -13,20 +13,39 @@
 
 use serde_json::Value;
 
-/// The `driver` names an instrument entry may have. A new driver is added here and to the `match` in `parse`; the checklist
-/// tests (`src/checklist.rs`) require each one to appear in the README with an example entry.
-pub const DRIVERS: &[&str] = &[
-    "siglent_sds",
-    "atm6301",
-    "vnwa_open",
-    "bladerf",
-    "limesdr",
-    "usb_hub",
-    "audio",
-    "hamlib",
-    "rotator",
-    "example",
+/// Every `driver` name an instrument entry may have and the kind of instrument it makes: one row per driver, in alphabetical
+/// order so that two drivers added at once touch different lines. The checklist tests (`src/checklist.rs`) require each one to
+/// appear in the README with an example entry.
+pub const DRIVER_KINDS: &[(&str, Kind)] = &[
+    ("atm6301", Kind::Psu),
+    ("audio", Kind::Audio),
+    ("bladerf", Kind::Sdr),
+    ("example", Kind::Example),
+    ("hamlib", Kind::Hamlib),
+    ("limesdr", Kind::Sdr),
+    ("rotator", Kind::Rotator),
+    ("siglent_sds", Kind::Scope),
+    ("usb_hub", Kind::UsbHub),
+    ("vnwa_open", Kind::Vna),
 ];
+
+/// The driver names, for messages and tests.
+pub fn driver_names() -> Vec<&'static str> {
+    // [@ANCHOR: bench_mcp_config_driver_names]
+    DRIVER_KINDS.iter().map(|(d, _)| *d).collect()
+}
+
+/// A module's own `Config`, parsed from the entry when the entry's driver is that module, else its default. A bad entry for
+/// one driver therefore never stops another from loading. The module is named like its driver.
+macro_rules! module_config {
+    ($module:ident, $driver:expr, $c:expr, $name:expr) => {
+        if $driver == stringify!($module) {
+            crate::$module::parse_config($c).map_err(|e| format!("{}: {e}", $name))?
+        } else {
+            crate::$module::Config::default()
+        }
+    };
+}
 
 #[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
 pub enum Tier {
@@ -160,23 +179,16 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             .and_then(|d| d.as_str())
             .ok_or(format!("{name}: no driver"))?
             .to_string();
-        let kind = match driver.as_str() {
-            "siglent_sds" => Kind::Scope,
-            "atm6301" => Kind::Psu,
-            "vnwa_open" => Kind::Vna,
-            "bladerf" | "limesdr" => Kind::Sdr,
-            "usb_hub" => Kind::UsbHub,
-            "audio" => Kind::Audio,
-            "hamlib" => Kind::Hamlib,
-            "rotator" => Kind::Rotator,
-            "example" => Kind::Example,
-            o => {
-                return Err(format!(
-                    "{name}: unknown driver {o:?} ({})",
-                    DRIVERS.join(", ")
-                ))
-            }
-        };
+        let kind = DRIVER_KINDS
+            .iter()
+            .find(|(d, _)| *d == driver)
+            .map(|(_, k)| *k)
+            .ok_or_else(|| {
+                format!(
+                    "{name}: unknown driver {driver:?} ({})",
+                    driver_names().join(", ")
+                )
+            })?;
         let driver_name = driver.clone();
         let inst = Instrument {
             name: name.clone(),
@@ -194,26 +206,10 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
             usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
-            audio: if driver_name == "audio" {
-                crate::audio::parse_config(c).map_err(|e| format!("{name}: {e}"))?
-            } else {
-                crate::audio::Config::default()
-            },
-            hamlib: if driver_name == "hamlib" {
-                crate::hamlib::parse_config(c).map_err(|e| format!("{name}: {e}"))?
-            } else {
-                crate::hamlib::Config::default()
-            },
-            rotator: if driver_name == "rotator" {
-                crate::rotator::parse_config(c).map_err(|e| format!("{name}: {e}"))?
-            } else {
-                crate::rotator::Config::default()
-            },
-            example: if driver_name == "example" {
-                crate::example::parse_config(c).map_err(|e| format!("{name}: {e}"))?
-            } else {
-                crate::example::Config::default()
-            },
+            audio: module_config!(audio, driver_name, c, name),
+            hamlib: module_config!(hamlib, driver_name, c, name),
+            rotator: module_config!(rotator, driver_name, c, name),
+            example: module_config!(example, driver_name, c, name),
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),
@@ -303,9 +299,11 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_config_driver_names]
     #[test]
     fn every_listed_driver_is_known_to_parse() {
-        for d in DRIVERS {
+        assert_eq!(driver_names().len(), DRIVER_KINDS.len());
+        for d in driver_names() {
             let text = format!(r#"{{"instruments":{{"x":{{"driver":"{d}"}}}}}}"#);
             let e = parse(&text).err().unwrap_or_default();
             assert!(!e.contains("unknown driver"), "{d}: {e}");
