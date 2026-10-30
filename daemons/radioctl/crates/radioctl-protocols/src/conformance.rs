@@ -103,6 +103,7 @@ pub fn replay(description: &RigDescription, transcript: &Transcript) -> Result<u
     }
 }
 
+// [@ANCHOR: radioctl_conformance_replay_solicited]
 fn replay_solicited(
     engine: &mut dyn ProtocolEngine,
     rig: &mut VirtualRig,
@@ -172,6 +173,7 @@ expect = { kind = "frequency", vfo = "a", hz = 14074000 }
 "#;
 
     // Tests [@ANCHOR: radioctl_conformance_replay]
+    // Tests [@ANCHOR: radioctl_conformance_replay_solicited]
     // Tests [@ANCHOR: radioctl_conformance_engine_for]
     #[test]
     fn a_consistent_transcript_replays_and_each_kind_of_disagreement_is_named() {
