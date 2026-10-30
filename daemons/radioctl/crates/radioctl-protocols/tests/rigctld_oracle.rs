@@ -694,3 +694,39 @@ fn known_xiegu_divergences(file: &str) -> Vec<&'static str> {
         _ => Vec::new(),
     }
 }
+
+// Tests [@ANCHOR: radioctl_yaesu_engine_encode]
+// Tests [@ANCHOR: radioctl_yaesu_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_yaesu_command]
+#[test]
+fn the_yaesu_files_against_hamlib_record_every_disagreement() {
+    // Frequency, mode, PTT read, AF gain and (FT-991A) split; no RIT offset (Hamlib answers from
+    // its cache part of the time, as for the Kenwoods).
+    for (file, model) in [
+        ("yaesu-ft-991a", 1035),
+        ("yaesu-ftdx10", 1042),
+        ("yaesu-ftdx101d", 1040),
+    ] {
+        let desc = shipped(file);
+        let steps: Vec<Op> = icom_scenario(7_074_000, 14_060_000, 14_025_000)
+            .into_iter()
+            .filter(|op| {
+                !matches!(op, Op::SetRitOffset(_) | Op::GetRitOffset)
+                    && (desc.capabilities.has(op.required_capability()))
+            })
+            .collect();
+        let (divergences, refused, wire) = compare(model, &desc, 38400, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(
+            got,
+            known_yaesu_divergences(file),
+            "{file}: {divergences:#?}"
+        );
+    }
+}
+
+/// The steps on which Hamlib and radioctl disagree for a Yaesu file.
+fn known_yaesu_divergences(_file: &str) -> Vec<&'static str> {
+    Vec::new()
+}

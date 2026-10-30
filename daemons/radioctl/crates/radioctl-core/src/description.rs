@@ -21,6 +21,8 @@ pub enum Family {
     KenwoodAscii,
     /// Elecraft K3/KX3/KX2 ASCII commands ended by `;` (Kenwood-like, with its own replies).
     ElecraftAscii,
+    /// Yaesu "newcat" ASCII commands ended by `;` (FT-991A, FTDX10, FTDX101).
+    YaesuNewcat,
 }
 
 /// CI-V parameters.
@@ -66,6 +68,13 @@ pub struct ScopeParams {
     pub spans_hz: Vec<u64>,
 }
 
+/// Yaesu newcat parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YaesuParams {
+    /// The number the rig returns for `ID;` (`ID0670;` is 670).
+    pub model_id: u16,
+}
+
 /// Command timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -92,6 +101,8 @@ pub struct RigDescription {
     pub kenwood: Option<KenwoodParams>,
     /// Elecraft parameters, present for [`Family::ElecraftAscii`].
     pub elecraft: Option<ElecraftParams>,
+    /// Yaesu newcat parameters, present for [`Family::YaesuNewcat`].
+    pub yaesu: Option<YaesuParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// What the rig can do.
@@ -140,6 +151,7 @@ impl RigDescription {
             }),
             kenwood: None,
             elecraft: None,
+            yaesu: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
@@ -184,6 +196,7 @@ impl RigDescription {
             civ: None,
             kenwood: Some(KenwoodParams { model_id: 19 }),
             elecraft: None,
+            yaesu: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,

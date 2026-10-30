@@ -20,7 +20,7 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use radioctl_core::description::{
-    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription,
+    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, YaesuParams,
 };
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::units::{Hz, Level, Mode};
@@ -106,6 +106,10 @@ enum Wire {
         params: ElecraftParams,
         tokenizer: Tokenizer,
     },
+    Yaesu {
+        params: YaesuParams,
+        tokenizer: Tokenizer,
+    },
 }
 
 /// One virtual radio.
@@ -142,6 +146,10 @@ impl VirtualRig {
                     .elecraft
                     .clone()
                     .unwrap_or(ElecraftParams { model_id: 0 }),
+                tokenizer: Tokenizer::default(),
+            },
+            (Family::YaesuNewcat, _, _) if desc.yaesu.is_some() => Wire::Yaesu {
+                params: desc.yaesu.clone().unwrap_or(YaesuParams { model_id: 0 }),
                 tokenizer: Tokenizer::default(),
             },
             _ => {
@@ -237,6 +245,17 @@ impl VirtualRig {
                 }
                 out
             }
+            Wire::Yaesu { tokenizer, .. } => {
+                let tokens = tokenizer.feed(bytes, now);
+                let mut out = Vec::new();
+                for token in tokens {
+                    out.extend(match token {
+                        Token::Command(text) => self.yaesu_command(&text),
+                        Token::Junk(_) => b"?;".to_vec(),
+                    });
+                }
+                out
+            }
         }
     }
 
@@ -270,6 +289,14 @@ impl VirtualRig {
             (Wire::Kenwood { .. }, PanelChange::Frequency(hz)) => {
                 format!("FA{:011};", hz.0).into_bytes()
             }
+            (Wire::Yaesu { .. }, PanelChange::Frequency(hz)) => {
+                format!("FA{:09};", hz.0).into_bytes()
+            }
+            (Wire::Yaesu { .. }, PanelChange::Mode(mode)) => self
+                .desc
+                .mode_code(mode)
+                .map(|code| format!("MD0{};", char::from(code)).into_bytes())
+                .unwrap_or_default(),
             (Wire::Kenwood { .. }, PanelChange::Mode(mode)) => self
                 .desc
                 .mode_code(mode)
@@ -598,6 +625,182 @@ impl VirtualRig {
         reply.map(String::into_bytes).unwrap_or_default()
     }
 
+    // [@ANCHOR: radioctl_virtual_yaesu_command]
+    fn yaesu_command(&mut self, text: &str) -> Vec<u8> {
+        let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
+        let id = match &self.wire {
+            Wire::Yaesu { params, .. } => params.model_id,
+            _ => 0,
+        };
+        let reply = match (name, arg) {
+            ("FA", "") => Some(format!("FA{:09};", self.state.freq_a.0)),
+            ("FB", "") => Some(format!("FB{:09};", self.state.freq_b.0)),
+            ("FA" | "FB", digits) => self.yaesu_set_frequency(name == "FA", digits),
+            ("MD", "0") => self
+                .desc
+                .mode_code(self.state.mode)
+                .map(|code| format!("MD0{};", char::from(code))),
+            ("MD", rest) if rest.len() == 2 && rest.starts_with('0') => {
+                let mode = rest.as_bytes().get(1).and_then(|c| self.desc.code_mode(*c));
+                match mode {
+                    Some(mode) => {
+                        self.state.mode = mode;
+                        None
+                    }
+                    None => Some("?;".to_string()),
+                }
+            }
+            ("TX", "") => Some(format!("TX{};", u8::from(self.state.ptt))),
+            ("TX", flag @ ("0" | "1")) => {
+                self.state.ptt = flag == "1";
+                None
+            }
+            ("FT", "") => Some(format!("FT{};", u8::from(self.state.split))),
+            ("FT", flag @ ("2" | "3")) => {
+                self.state.split = flag == "3";
+                None
+            }
+            ("RT", "") => Some(format!("RT{};", u8::from(self.state.rit))),
+            ("RT", flag @ ("0" | "1")) => {
+                self.state.rit = flag == "1";
+                None
+            }
+            ("XT", "") => Some(format!("XT{};", u8::from(self.state.xit))),
+            ("XT", flag @ ("0" | "1")) => {
+                self.state.xit = flag == "1";
+                None
+            }
+            ("RC", "") => {
+                self.state.rit_offset = 0;
+                None
+            }
+            ("RU" | "RD", digits) => self.yaesu_move_offset(name == "RU", digits),
+            ("SM", "0") => Some(format!("SM0{:03};", self.state.signal.min(255))),
+            ("RM", "5") => {
+                let power = self.state.power().min(255);
+                let tail = if id == 670 { "" } else { "000" };
+                Some(format!("RM5{power:03}{tail};"))
+            }
+            ("IF", "") => Some(self.yaesu_if()),
+            ("ID", "") => Some(format!("ID{id:04};")),
+            ("AI", "") => Some(format!("AI{};", u8::from(self.state.transceive))),
+            ("AI", flag @ ("0" | "1")) => {
+                self.state.transceive = flag == "1";
+                None
+            }
+            // Read by Hamlib with every mode read; fixed answers (guide: PS, SH width code 00 =
+            // default, NA narrow off), settings accepted and not modelled.
+            ("PS", "") => Some("PS1;".to_string()),
+            ("SH", "0") if id == 670 => Some("SH000;".to_string()),
+            ("SH", "0") => Some("SH0000;".to_string()),
+            ("SH", rest)
+                if rest.starts_with('0') && rest.len() == if id == 670 { 3 } else { 4 } =>
+            {
+                None
+            }
+            ("NA", "0") => Some("NA00;".to_string()),
+            ("NA", "00" | "01") => None,
+            // FTDX10 and FTDX101 (guide: VS, ST, RF): VFO select, split and roofing filter are
+            // answered and the settings accepted; VFO selection is not modelled.
+            ("VS", "") if id != 670 => Some("VS0;".to_string()),
+            ("VS", "0" | "1") if id != 670 => None,
+            ("ST", "") if id != 670 => Some(format!("ST{};", u8::from(self.state.split))),
+            ("ST", flag @ ("0" | "1" | "2")) if id != 670 => {
+                self.state.split = flag != "0";
+                None
+            }
+            ("RF", "0") if id != 670 => Some("RF01;".to_string()),
+            ("RF", rest) if id != 670 && rest.len() == 2 && rest.starts_with('0') => None,
+            ("AG" | "RG" | "MG" | "PC" | "KS", _) => self.yaesu_level(name, arg),
+            _ => Some("?;".to_string()),
+        };
+        reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_yaesu_set_frequency]
+    fn yaesu_set_frequency(&mut self, vfo_a: bool, digits: &str) -> Option<String> {
+        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == 9) else {
+            return Some("?;".to_string());
+        };
+        if vfo_a {
+            self.state.freq_a = Hz(hz);
+        } else {
+            self.state.freq_b = Hz(hz);
+        }
+        None
+    }
+
+    // [@ANCHOR: radioctl_virtual_yaesu_if]
+    /// The `IF` answer: channel, VFO-A frequency, clarifier, flags, mode and fixed fields.
+    fn yaesu_if(&self) -> String {
+        let offset = self.state.rit_offset;
+        let sign = if offset < 0 { '-' } else { '+' };
+        let mode = self.desc.mode_code(self.state.mode).map_or('0', char::from);
+        format!(
+            "IF001{:09}{sign}{:04}{}{}{mode}00000;",
+            self.state.freq_a.0,
+            offset.unsigned_abs(),
+            u8::from(self.state.rit),
+            u8::from(self.state.xit),
+        )
+    }
+
+    // [@ANCHOR: radioctl_virtual_yaesu_move_offset]
+    fn yaesu_move_offset(&mut self, up: bool, digits: &str) -> Option<String> {
+        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == 4) else {
+            return Some("?;".to_string());
+        };
+        let hz = i32::try_from(hz).unwrap_or(i32::MAX);
+        let current = i32::from(self.state.rit_offset);
+        let moved = if up { current + hz } else { current - hz };
+        match i16::try_from(moved) {
+            Ok(value) if value.unsigned_abs() <= 9_999 => {
+                self.state.rit_offset = value;
+                None
+            }
+            _ => Some("?;".to_string()),
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_yaesu_level]
+    /// A newcat level command: `AG`/`RG` carry a leading `0`; the others are three digits.
+    fn yaesu_level(&mut self, name: &str, arg: &str) -> Option<String> {
+        let (level, leading_zero, min, max) = match name {
+            "AG" => (Level::AfGain, true, 0, 255),
+            "RG" => (Level::RfGain, true, 0, 255),
+            "MG" => (Level::MicGain, false, 0, 100),
+            "KS" => (Level::KeyerSpeed, false, 4, 60),
+            _ => (Level::RfPower, false, 5, 100),
+        };
+        let reading = if leading_zero {
+            arg == "0"
+        } else {
+            arg.is_empty()
+        };
+        let prefix = if leading_zero { "0" } else { "" };
+        if reading {
+            let value = self.state.levels.get(&level).copied().unwrap_or(0);
+            return Some(format!("{name}{prefix}{value:03};"));
+        }
+        let number = if leading_zero {
+            arg.strip_prefix('0')
+        } else {
+            Some(arg)
+        };
+        let value = number
+            .filter(|n| n.len() == 3)
+            .and_then(kenwood::parse_digits)
+            .and_then(|v| u16::try_from(v).ok())
+            .filter(|v| (min..=max).contains(v));
+        match value {
+            Some(value) => {
+                self.state.levels.insert(level, value);
+                None
+            }
+            None => Some("?;".to_string()),
+        }
+    }
+
     // [@ANCHOR: radioctl_virtual_kenwood_if]
     /// The `IF` answer. The TS-590S (ID 021) and TS-590SG (023) put five spaces and a signed
     /// 4-digit offset where the TS-2000 has a 4-digit step and a signed 5-digit offset.
@@ -704,7 +907,7 @@ impl VirtualRig {
     fn kenwood_id(&self) -> u16 {
         match &self.wire {
             Wire::Kenwood { params, .. } => params.model_id,
-            Wire::Civ { .. } | Wire::Elecraft { .. } => 0,
+            Wire::Civ { .. } | Wire::Elecraft { .. } | Wire::Yaesu { .. } => 0,
         }
     }
 
@@ -1475,5 +1678,58 @@ mod tests {
             assert_eq!(s590.feed(bad, T0), b"?;", "{bad:?}");
         }
         assert_eq!(s590.feed(b"ID;", T0), b"ID023;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_command]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_set_frequency]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_if]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_move_offset]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_level]
+    #[test]
+    fn yaesu_newcat_commands_follow_the_cat_manuals() {
+        let mut ft991 = shipped_rig("yaesu-ft-991a");
+        assert_eq!(
+            ft991.feed(b"ID;FA;FB;MD0;", T0),
+            b"ID0670;FA014074000;FB014074000;MD02;"
+        );
+        assert!(ft991.feed(b"FA007074000;MD03;TX1;", T0).is_empty());
+        assert_eq!(ft991.feed(b"TX;FA;MD0;", T0), b"TX1;FA007074000;MD03;");
+        assert_eq!(
+            ft991.feed(b"FA7074000;", T0),
+            b"?;",
+            "nine digits are required"
+        );
+        assert_eq!(ft991.feed(b"MD0Z;", T0), b"?;");
+        assert_eq!(ft991.feed(b"FT2;FT;", T0), b"FT0;");
+        assert!(ft991.feed(b"FT3;RT1;XT1;RC;RD0120;", T0).is_empty());
+        assert_eq!(ft991.feed(b"FT;RT;XT;", T0), b"FT1;RT1;XT1;");
+        let answer = String::from_utf8(ft991.feed(b"IF;", T0)).expect("ascii");
+        assert_eq!(answer, "IF001007074000-012011300000;");
+        assert_eq!(answer.len(), 28);
+        assert_eq!(ft991.feed(b"RU10000;", T0), b"?;");
+        assert_eq!(ft991.feed(b"RU120;", T0), b"?;");
+        assert!(ft991.feed(b"RU0020;", T0).is_empty());
+        assert_eq!(ft991.state().rit_offset, -100);
+        assert_eq!(ft991.feed(b"SM0;RM5;", T0), b"SM0030;RM5128;");
+        assert_eq!(
+            ft991.feed(b"AG0;RG0;MG;PC;KS;", T0),
+            b"AG0030;RG0250;MG025;PC005;KS018;"
+        );
+        assert!(ft991.feed(b"AG0200;MG100;PC100;KS060;", T0).is_empty());
+        assert_eq!(ft991.feed(b"AG0;", T0), b"AG0200;");
+        for bad in [
+            &b"AG;"[..],
+            b"AG200;",
+            b"MG101;",
+            b"PC004;",
+            b"KS003;",
+            b"RG0256;",
+        ] {
+            assert_eq!(ft991.feed(bad, T0), b"?;", "{bad:?}");
+        }
+        assert!(ft991.feed(b"AI1;", T0).is_empty());
+        assert_eq!(ft991.feed(b"AI;", T0), b"AI1;");
+        let mut dx10 = shipped_rig("yaesu-ftdx10");
+        assert_eq!(dx10.feed(b"ID;RM5;", T0), b"ID0761;RM5000000;");
     }
 }
