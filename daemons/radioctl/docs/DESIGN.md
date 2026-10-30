@@ -35,6 +35,22 @@ records the decisions that shape the code.
    provenance note per entry and no copied code or tables.
 9. **Licence.** AGPL-3.0-or-later (decision 1 of proposal section 11).
 
+10. **Callback dispatcher is a dedicated OS thread, not a runtime task.** The proposal said "dispatcher
+    task"; application callbacks are synchronous and may block, and the runtime-worker rule forbids
+    blocking a worker. The actor pushes into a bounded queue (one short mutex hold) and never waits;
+    a full queue merges the new event into the newest queued one (latest value per field wins) and
+    counts the intermediate values lost. Panics are caught and counted. The async view is a tokio
+    broadcast channel (`EventStream::next`); a lagging subscriber skips events and the loss is counted.
+11. **Deadlines live in the actor.** `RigHandle` methods only await a oneshot, so they work from any
+    thread or runtime and from a thread with none. The actor answers every command by its deadline.
+12. **Preemption.** Unkeying uses a separate channel and a wake-up; it abandons a command that waits
+    for a reply (`Cancelled`) but never interrupts a write. The abandoned command's late answer
+    reaches the cache as an unsolicited observation. Transmit commands are never retried.
+13. **Cache semantics.** A successful set updates the cache at once (including Kenwood sets, which
+    have no reply); polling reconciles with the rig.
+14. **Transmit gate.** Closed by default, per rig; opened only by `open_transmit_gate(TransmitPermit)`.
+    Checked in the handle (no queue slot used) and again in the actor when the command runs.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

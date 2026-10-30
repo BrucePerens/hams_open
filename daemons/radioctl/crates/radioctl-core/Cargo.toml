@@ -9,3 +9,16 @@ rust-version.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+# Convenience constructor that builds and owns a small tokio runtime. For radioctld and the C ABI
+# only; never on by default, the library otherwise runs on a runtime the caller supplies.
+owned-runtime = ["tokio/rt-multi-thread"]
+
+[dependencies]
+tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "macros"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "macros", "test-util"] }
+radioctl-protocols = { path = "../radioctl-protocols" }
+futures = { version = "0.3", default-features = false, features = ["executor"] }

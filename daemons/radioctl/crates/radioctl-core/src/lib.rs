@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! `radioctl-core`: the typed vocabulary and (from the actor PR on) the rig actor of radioctl.
+//! `radioctl-core`: the typed vocabulary and the rig actor of radioctl.
 //!
 //! Design rules (see `docs/DESIGN.md`): no global state, no library-wide lock, no runtime of
-//! its own by default, units in type names, protocol engines sans-IO.
+//! its own by default (the caller supplies a tokio runtime `Handle`), units in type names,
+//! protocol engines sans-IO.
 
 pub mod capability;
 pub mod description;
+pub mod dispatcher;
 pub mod engine;
 pub mod error;
+pub mod event;
 pub mod op;
+pub mod poll;
+pub mod rig;
+pub mod transport;
 pub mod units;
