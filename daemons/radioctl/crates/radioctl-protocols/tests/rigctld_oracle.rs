@@ -33,6 +33,8 @@ use radioctl_protocols::virtual_rig::{RigState, VirtualRig};
 use serialport::{SerialPort, TTYPort};
 
 const HAMLIB_TS2000: u32 = 2014;
+const HAMLIB_TS590S: u32 = 2031;
+const HAMLIB_TS590SG: u32 = 2037;
 const HAMLIB_KX3: u32 = 2045;
 const HAMLIB_IC7300: u32 = 3073;
 const HAMLIB_IC7610: u32 = 3078;
@@ -349,16 +351,24 @@ fn through_radioctl(engine: &mut dyn ProtocolEngine, rig: &mut VirtualRig, op: &
         return Reading::Failed;
     };
     let answer = rig.feed(&request.bytes, now);
+    let wanted = match request.reply {
+        radioctl_core::engine::ReplyKind::Observation(field) => Some(field),
+        _ => None,
+    };
     let mut reading = Reading::Done;
     for item in engine.feed(&answer, now) {
         match item {
+            // A composite answer (Kenwood IF) carries several fields; the step reads only the one
+            // it asked for.
+            Inbound::Observation(observation)
+                if wanted.is_some_and(|field| observation.field() != field) => {}
             Inbound::Observation(Observation::Frequency(_, hz)) => {
                 reading = Reading::Frequency(hz.0);
             }
             Inbound::Observation(Observation::Mode(mode)) => reading = Reading::Mode(mode),
             Inbound::Observation(Observation::Ptt(on)) => reading = Reading::Ptt(on),
             Inbound::Observation(Observation::Split(on)) => {
-                reading = Reading::Number(i64::from(on))
+                reading = Reading::Number(i64::from(on));
             }
             Inbound::Observation(Observation::RitOffset(hz)) => {
                 reading = Reading::Number(i64::from(hz));
@@ -504,31 +514,51 @@ fn kx3_agrees_with_hamlib_on_frequency_mode_ptt_rit_and_keyer_speed() {
 }
 
 // Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+// Tests [@ANCHOR: radioctl_kenwood_engine_decode_if]
 // Tests [@ANCHOR: radioctl_virtual_kenwood_command]
+// Tests [@ANCHOR: radioctl_virtual_kenwood_if]
 #[test]
-fn ts2000_known_gap_hamlib_needs_the_composite_if_answer() {
-    // Hamlib's TS-2000 backend reads the frequency from `IF;`. The virtual TS-2000 refuses `IF;`
-    // because its field layout is not verified (see kenwood.rs), so every Hamlib frequency
-    // read and write fails while radioctl's own engine, which uses FA, succeeds. This test
-    // records exactly that gap: it fails if the gap changes in either direction.
-    let desc = RigDescription::ts2000();
-    let (divergences, refused, wire) = compare(HAMLIB_TS2000, &desc, 57600, &scenario());
-    report("TS-2000", &divergences, &refused, &wire);
-    let steps: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
-    assert_eq!(
-        steps,
-        vec![
-            "GetFrequency(A)",
-            "SetFrequency(A, Hz(7074000))",
-            "GetFrequency(A)",
-            "SetFrequency(A, Hz(14060000))",
-            "GetFrequency(A)",
-            "final freq_a",
-        ],
-        "{divergences:#?}"
-    );
-    assert!(divergences.iter().all(|d| d.hamlib != d.radioctl));
-    assert!(refused.iter().any(|c| c == "IF;"), "{refused:?}");
+fn the_kenwood_files_against_hamlib_record_every_disagreement() {
+    // The IF layout this resolves was the cause of the TS-2000 gap the previous version of this
+    // test pinned (Hamlib reads the frequency from `IF;`, which the virtual rig refused).
+    for (file, model) in [
+        ("kenwood-ts-2000", HAMLIB_TS2000),
+        ("kenwood-ts-590s", HAMLIB_TS590S),
+        ("kenwood-ts-590sg", HAMLIB_TS590SG),
+    ] {
+        let desc = shipped(file);
+        // No RIT offset steps: Hamlib answers `j` from its cache about half the time, and when it
+        // reads `IF` its TS-2000 backend takes five digits at index 18 and drops the sign, so a
+        // negative offset reads back positive (seen: -120 read as 120). Not pinned here.
+        let steps: Vec<Op> = icom_scenario(7_074_000, 14_060_000, 14_025_000)
+            .into_iter()
+            .filter(|op| !matches!(op, Op::SetRitOffset(_) | Op::GetRitOffset))
+            .collect();
+        let (divergences, refused, wire) = compare(model, &desc, 57600, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(
+            got,
+            known_kenwood_divergences(file),
+            "{file}: {divergences:#?}"
+        );
+    }
+}
+
+/// The steps on which Hamlib and radioctl disagree for a Kenwood file.
+///
+/// The TS-2000 agrees on everything the harness expresses, which closes the `IF;` gap an earlier
+/// version of this test pinned. On the TS-590S and TS-590SG two steps differ, both because Hamlib's
+/// TS-590 backend does not follow the guide on the wire: it reads and writes AF gain with `AG;`
+/// and `AG1;` where the guide requires `AG0;` and `AG0nnn;` (the strict virtual rig refuses both,
+/// so Hamlib's set silently fails and it reads back the old 30), and after enabling split it
+/// reads the "other" frequency with `FA;` where radioctl reads `FB;`. Hamlib also sends `SF0;`,
+/// which the 590 guide does not list. Whether a real TS-590 accepts Hamlib's forms is unknown.
+fn known_kenwood_divergences(file: &str) -> Vec<&'static str> {
+    match file {
+        "kenwood-ts-590s" | "kenwood-ts-590sg" => vec!["GetLevel(AfGain)", "GetFrequency(B)"],
+        _ => Vec::new(),
+    }
 }
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]

@@ -118,6 +118,10 @@ pub struct VirtualRig {
     /// CI-V: true while VFO B is the selected VFO (command 07 01); `03`, `05` and `25 00` act on
     /// the selected VFO and `25 01` on the other.
     civ_b_selected: bool,
+    /// Kenwood: the VFO `FR` selected for receive (0 A, 1 B) and `FT` for transmit; split is
+    /// when they differ.
+    kenwood_rx_vfo: u8,
+    kenwood_tx_vfo: u8,
 }
 
 impl VirtualRig {
@@ -173,12 +177,21 @@ impl VirtualRig {
             k2_mode: 0,
             k3_mode: 0,
         };
+        let mut state = state;
+        if desc.kenwood.is_some() {
+            // Starting values inside the Kenwood ranges (our own choice, not a radio's).
+            state.levels.insert(Level::MonitorLevel, 5);
+            state.levels.insert(Level::KeyerSpeed, 18);
+            state.levels.insert(Level::RfPower, 50);
+        }
         Ok(VirtualRig {
             desc: desc.clone(),
             state,
             wire,
             scope: desc.scope.as_ref().map(ScopeSim::new),
             civ_b_selected: false,
+            kenwood_rx_vfo: 0,
+            kenwood_tx_vfo: 0,
         })
     }
 
@@ -553,12 +566,138 @@ impl VirtualRig {
                 None
             }
             ("SM", "" | "0") => Some(format!("SM0{:04};", self.state.signal)),
-            ("KS", "") => Some("KS020;".to_string()),
             ("PS", "") => Some("PS1;".to_string()),
-            ("KS" | "PS" | "VX", _) => None,
+            ("PS" | "VX", _) => None,
+            // TS-590 firmware string and DATA mode (guide pages 12 and 6); our own values.
+            ("FV", "") => Some("FV1.08;".to_string()),
+            ("DA", "") => Some("DA0;".to_string()),
+            ("DA", "0") => None,
+            ("IF", "") => Some(self.kenwood_if()),
+            ("FR", "") => Some(format!("FR{};", self.kenwood_rx_vfo)),
+            ("FR", "0" | "1") => self.kenwood_select_vfo(arg, true),
+            ("FT", "") => Some(format!("FT{};", self.kenwood_tx_vfo)),
+            ("FT", "0" | "1") => self.kenwood_select_vfo(arg, false),
+            ("RT", "") => Some(format!("RT{};", u8::from(self.state.rit))),
+            ("RT", flag @ ("0" | "1")) => {
+                self.state.rit = flag == "1";
+                None
+            }
+            ("XT", "") => Some(format!("XT{};", u8::from(self.state.xit))),
+            ("XT", flag @ ("0" | "1")) => {
+                self.state.xit = flag == "1";
+                None
+            }
+            ("RC", "") => {
+                self.state.rit_offset = 0;
+                None
+            }
+            ("RU" | "RD", digits) => self.kenwood_move_offset(name == "RU", digits),
+            ("AG" | "RG" | "MG" | "ML" | "PC" | "KS", _) => self.kenwood_level(name, arg),
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_kenwood_if]
+    /// The `IF` answer. The TS-590S (ID 021) and TS-590SG (023) put five spaces and a signed
+    /// 4-digit offset where the TS-2000 has a 4-digit step and a signed 5-digit offset.
+    fn kenwood_if(&self) -> String {
+        let id = self.kenwood_id();
+        let offset = self.state.rit_offset;
+        let sign = if offset < 0 { '-' } else { '+' };
+        let region = if id == 21 || id == 23 {
+            format!("     {sign}{:04}", offset.unsigned_abs())
+        } else {
+            format!("0000{sign}{:05}", offset.unsigned_abs())
+        };
+        let frequency = if self.kenwood_rx_vfo == 0 {
+            self.state.freq_a
+        } else {
+            self.state.freq_b
+        };
+        let mode = self.desc.mode_code(self.state.mode).map_or('0', char::from);
+        format!(
+            "IF{:011}{region}{}{}000{}{}{}0{}0000;",
+            frequency.0,
+            u8::from(self.state.rit),
+            u8::from(self.state.xit),
+            u8::from(self.state.ptt),
+            mode,
+            self.kenwood_rx_vfo,
+            u8::from(self.state.split),
+        )
+    }
+
+    // [@ANCHOR: radioctl_virtual_kenwood_select_vfo]
+    fn kenwood_select_vfo(&mut self, arg: &str, receive: bool) -> Option<String> {
+        let vfo = u8::from(arg == "1");
+        if receive {
+            self.kenwood_rx_vfo = vfo;
+        } else {
+            self.kenwood_tx_vfo = vfo;
+        }
+        self.state.split = self.kenwood_rx_vfo != self.kenwood_tx_vfo;
+        None
+    }
+
+    // [@ANCHOR: radioctl_virtual_kenwood_move_offset]
+    fn kenwood_move_offset(&mut self, up: bool, digits: &str) -> Option<String> {
+        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == 5) else {
+            return Some("?;".to_string());
+        };
+        let hz = i32::try_from(hz).unwrap_or(i32::MAX);
+        let current = i32::from(self.state.rit_offset);
+        let moved = if up { current + hz } else { current - hz };
+        match i16::try_from(moved) {
+            Ok(value) if value.unsigned_abs() <= 9_999 => {
+                self.state.rit_offset = value;
+                None
+            }
+            _ => Some("?;".to_string()),
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_kenwood_level]
+    /// A Kenwood level command: read when `arg` is empty (the lone `0` for `AG`), else set.
+    fn kenwood_level(&mut self, name: &str, arg: &str) -> Option<String> {
+        let (level, main_digit, min, max) = match name {
+            "AG" => (Level::AfGain, true, 0, 255),
+            "RG" => (Level::RfGain, false, 0, 255),
+            "MG" => (Level::MicGain, false, 0, 100),
+            "ML" => (Level::MonitorLevel, false, 0, 9),
+            "KS" => (Level::KeyerSpeed, false, 10, 60),
+            _ => (Level::RfPower, false, 5, 100),
+        };
+        // `AG` needs its P1 (the lone `0` reads it, `0nnn` sets it); the others read when bare.
+        let reading = if main_digit {
+            arg == "0"
+        } else {
+            arg.is_empty()
+        };
+        let prefix = if main_digit { "0" } else { "" };
+        if reading {
+            let value = self.state.levels.get(&level).copied().unwrap_or(0);
+            return Some(format!("{name}{prefix}{value:03};"));
+        }
+        let number = if main_digit {
+            arg.strip_prefix('0')
+        } else {
+            Some(arg)
+        };
+        let Some(number) = number else {
+            return Some("?;".to_string());
+        };
+        let value = kenwood::parse_digits(number)
+            .filter(|_| number.len() == 3)
+            .and_then(|v| u16::try_from(v).ok())
+            .filter(|v| (min..=max).contains(v));
+        match value {
+            Some(value) => {
+                self.state.levels.insert(level, value);
+                None
+            }
+            None => Some("?;".to_string()),
+        }
     }
 
     // [@ANCHOR: radioctl_virtual_kenwood_id]
@@ -1288,5 +1427,53 @@ mod tests {
         assert!(plain.scope_sweep().is_empty());
         let mut kenwood = VirtualRig::from_description(&RigDescription::ts2000()).expect("rig");
         assert!(kenwood.scope_sweep().is_empty());
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_if]
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_select_vfo]
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_move_offset]
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_level]
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_command]
+    #[test]
+    fn kenwood_if_split_rit_and_levels_follow_the_guides() {
+        let mut ts2000 = shipped_rig("kenwood-ts-2000");
+        let answer = ts2000.feed(b"IF;", T0);
+        assert_eq!(answer, b"IF000140740000000+0000000000020000000;".to_vec());
+        assert_eq!(answer.len(), 38);
+        let mut s590 = shipped_rig("kenwood-ts-590sg");
+        let answer = s590.feed(b"IF;", T0);
+        assert_eq!(answer, b"IF00014074000     +000000000020000000;".to_vec());
+        assert_eq!(answer.len(), 38);
+        assert!(s590.feed(b"RT1;FR0;FT1;RC;RD00120;", T0).is_empty());
+        let answer = String::from_utf8(s590.feed(b"IF;", T0)).expect("ascii");
+        assert_eq!(answer, "IF00014074000     -012010000020010000;");
+        assert_eq!(s590.feed(b"FR;FT;", T0), b"FR0;FT1;");
+        assert!(s590.state().split && s590.state().rit);
+        assert_eq!(s590.feed(b"FR2;", T0), b"?;", "memory is not modelled");
+        assert_eq!(s590.feed(b"RU20000;", T0), b"?;");
+        assert_eq!(s590.feed(b"RU1;", T0), b"?;");
+        assert!(s590.feed(b"RU00020;", T0).is_empty());
+        assert_eq!(s590.state().rit_offset, -100);
+        assert_eq!(
+            s590.feed(b"AG0;MG;ML;PC;KS;RG;", T0),
+            b"AG0030;MG025;ML005;PC050;KS018;RG250;"
+        );
+        assert!(s590
+            .feed(b"AG0200;MG100;ML009;PC100;KS060;RG255;", T0)
+            .is_empty());
+        assert_eq!(s590.feed(b"AG0;", T0), b"AG0200;");
+        for bad in [
+            &b"AG200;"[..],
+            b"AG0256;",
+            b"MG101;",
+            b"ML010;",
+            b"PC004;",
+            b"KS009;",
+            b"RG25;",
+            b"MG5;",
+        ] {
+            assert_eq!(s590.feed(bad, T0), b"?;", "{bad:?}");
+        }
+        assert_eq!(s590.feed(b"ID;", T0), b"ID023;");
     }
 }

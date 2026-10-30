@@ -1,0 +1,89 @@
+# Rig description: Kenwood TS-590S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Written from Kenwood's published PC command reference (document and page in each fact). No radio has
+# been connected, so every `verified` is unverified. Known gaps: crates/radioctl-protocols/src/kenwood.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify"]
+
+[rig]
+id = "kenwood-ts-590s"
+name = "Kenwood TS-590S"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 21
+
+[timing]
+timeout_ms = 500
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and this repository's TS-2000 bridge", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999, p. 13 (ID: 021 TS-590S, 023 TS-590SG)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 2031 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 500ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999: FA/FB p. 11 (FA, FB); FR/FT p. 12 (FR, FT); IF p. 14 (IF) (P2 five spaces, P3 signed 4-digit offset (+-9990 Hz); P4 RIT, P5 XIT, P8 TX/RX, P9 mode, P10 function, P12 split); AG p. 3 (AG); RG p. 22 (RG); MG p. 17 (MG, ML); PC p. 21 (PC); KS p. 15 (KS); RT/XT/RC/RU/RD p. 23 (RT), p. 22 (RC, RD/RU), p. 31 (XT); SM p. 25 (SM); ID p. 13 (ID: 021 TS-590S, 023 TS-590SG)", note = "Read from the published guide; the offset of IF P3 is located as the sign nearest the end of the 10 characters P2+P3, which fits both layouts." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999: AI command; AI2 (extended format) is the common on-value of the TS-2000 and TS-590 guides, AI1 and AI3 (old format) are not supported by the TS-2000" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999: MD command p. 16 (MD): 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R (0 and 8 reserved)" }
+verified = { state = "unverified" }
