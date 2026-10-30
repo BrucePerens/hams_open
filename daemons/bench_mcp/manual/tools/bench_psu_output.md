@@ -10,7 +10,7 @@ verified: code only, 2026-10-29
 
 # bench_psu_output
 
-Switches the output of the bench supply and drives whatever is connected to it. The tool is `full` tier. The supply has no output timer of its own, so this server switches the output off again after `for_s` seconds and the config caps that time with `max_on_s` (default 600).
+Switches the output of the bench supply and drives whatever is connected to it. The tool is `full` tier. The driver knows of no output timer in the supply (none is used), so this server switches the output off again after `for_s` seconds and the config caps that time with `max_on_s` (default 600).
 
 ## Arguments
 
