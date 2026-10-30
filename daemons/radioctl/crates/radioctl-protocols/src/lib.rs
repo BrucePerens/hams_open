@@ -4,10 +4,14 @@
 //!
 //! Every engine is sans-IO: a pure state machine that takes bytes and a caller-supplied
 //! clock and returns bytes and events. No engine touches a socket, a serial port or a runtime,
-//! so each can be replayed from a transcript and fuzzed. This crate has no tokio dependency.
+//! so each can be replayed from a transcript and fuzzed. Only the optional `io` module (feature
+//! `tokio-io`, on by default) uses tokio, to run a virtual rig behind an in-memory stream.
 //! Bytes are always handled with checked access (`get`, never indexing): reply parsing is the
 //! attack surface.
 
 pub mod civ;
 pub mod kenwood;
 pub mod virtual_rig;
+
+#[cfg(feature = "tokio-io")]
+pub mod io;

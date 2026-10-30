@@ -11,5 +11,5 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-radioctl-core = { path = "../radioctl-core" }
+radioctl-core = { path = "../radioctl-core", features = ["owned-runtime"] }
 radioctl-protocols = { path = "../radioctl-protocols" }

@@ -5,7 +5,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
 2026-10-30; every Rust file carries an SPDX header and the manifests inherit the licence from the
 workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`.
 
-Status: Phase 0/1 foundation (vocabulary, CI-V and Kenwood engines, virtual rigs; actor not yet). There is no real serial, USB or Ethernet transport and no transmit
+Status: Phase 0/1 foundation (vocabulary, CI-V and Kenwood engines, virtual rigs, rig actor with queue, cache, polling, events). No real transports. There is no real serial, USB or Ethernet transport and no transmit
 path to real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -31,8 +31,11 @@ Layout changes from the proposal (record every change here):
 - `RigDescription` is a Rust struct for now; the two built-in descriptions (IC-7300 style CI-V, TS-2000
   style Kenwood) are written in code from our own simulator and bridges and are unverified. The TOML
   format with provenance and `verified` fields deserialises into the same struct (a later PR).
-- Virtual rigs live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines; the tokio
-  glue that exposes one as a duplex stream arrives with the actor.
+- Virtual rigs live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines; the optional
+  `io` module (cargo feature `tokio-io`, default on) runs one behind an in-memory duplex stream with a
+  reply delay and a control handle. `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
+- `radioctl-core` has the cargo feature `owned-runtime` (off by default, on for `radioctld`): the one place
+  the library builds a tokio runtime of its own.
 - No `deny.toml`: no other Rust crate in hams_open has one, so this workspace follows suit. Add one
   when the repository gets a shared policy.
 
@@ -135,3 +138,58 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_virtual_set_kenwood_mode] (radioctl-protocols) Sets the mode from one Kenwood digit, else `?;`.
 - [@ANCHOR: radioctl:radioctl_virtual_data_reply] (radioctl-protocols) Builds a CI-V frequency reply.
 - [@ANCHOR: radioctl:radioctl_virtual_meter_reply] (radioctl-protocols) Builds a CI-V meter reply (BCD).
+- [@ANCHOR: radioctl:radioctl_core_dispatcher_start] (radioctl-core) Starts the dispatcher thread for `callback` with a queue of `capacity` events.
+- [@ANCHOR: radioctl:radioctl_core_dispatcher_submit] (radioctl-core) Queues an event without ever waiting for the callback.
+- [@ANCHOR: radioctl:radioctl_core_dispatcher_counters] (radioctl-core) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctl_core_event_merge] (radioctl-core) Folds a later event of the same rig into this one. Per field the earliest `old` and the
+- [@ANCHOR: radioctl:radioctl_core_poll_for_capabilities] (radioctl-core) Builds the schedule for the fields the capabilities allow, first due at `now`.
+- [@ANCHOR: radioctl:radioctl_core_poll_next_due] (radioctl-core) The earliest due time, if any field is polled.
+- [@ANCHOR: radioctl:radioctl_core_poll_take_due] (radioctl-core) The entry to poll now, if one is due. While the rig transmits only transmit state and
+- [@ANCHOR: radioctl:radioctl_core_poll_report] (radioctl-core) Records the outcome of polling `field`: a change resets the interval to its minimum, no
+- [@ANCHOR: radioctl:radioctl_core_poll_note_transceive] (radioctl-core) Notes that the rig reports on its own; polling slows to the maximum interval.
+- [@ANCHOR: radioctl:radioctl_core_poll_interval] (radioctl-core) The current interval of `field`, for tests and diagnostics.
+- [@ANCHOR: radioctl:radioctl_core_rig_options_with_callback] (radioctl-core) Sets the status-change callback. It runs on a dedicated thread, never on the actor.
+- [@ANCHOR: radioctl:radioctl_core_transmit_permit_new] (radioctl-core) A permit recording who granted it (an operator, an attestation, a test name).
+- [@ANCHOR: radioctl:radioctl_core_transmit_permit_granted_by] (radioctl-core) Who granted the permit.
+- [@ANCHOR: radioctl:radioctl_core_rig_spawn] (radioctl-core) Spawns a rig actor on a caller-supplied tokio runtime Handle and returns its clonable handle.
+- [@ANCHOR: radioctl:radioctl_core_rig_spawn_current] (radioctl-core) Spawns on the runtime of the calling task; fails if there is none.
+- [@ANCHOR: radioctl:radioctl_core_rig_owned_shutdown] (radioctl-core) Stops an owned runtime without waiting.
+- [@ANCHOR: radioctl:radioctl_core_rig_spawn_with_owned_runtime] (radioctl-core) Feature `owned-runtime` only: builds a one-worker runtime of its own for radioctld and the C ABI.
+- [@ANCHOR: radioctl:radioctl_core_handle_id] (radioctl-core) The rig's identifier.
+- [@ANCHOR: radioctl:radioctl_core_handle_capabilities] (radioctl-core) What the rig can do.
+- [@ANCHOR: radioctl:radioctl_core_handle_open_gate] (radioctl-core) Opens the transmit gate for this rig only. It starts closed.
+- [@ANCHOR: radioctl:radioctl_core_handle_close_gate] (radioctl-core) Closes the transmit gate. Transmit commands still queued are refused when they run.
+- [@ANCHOR: radioctl:radioctl_core_handle_gate_state] (radioctl-core) Who opened the gate, or `None` while it is closed.
+- [@ANCHOR: radioctl:radioctl_core_handle_stats] (radioctl-core) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctl_core_handle_link_up] (radioctl-core) False once the transport has failed.
+- [@ANCHOR: radioctl:radioctl_core_handle_events] (radioctl-core) An async stream of status changes, starting now.
+- [@ANCHOR: radioctl:radioctl_core_handle_cached] (radioctl-core) The cached value of a field with its age, without touching the rig.
+- [@ANCHOR: radioctl:radioctl_core_handle_execute] (radioctl-core) Runs a command with the default deadline.
+- [@ANCHOR: radioctl:radioctl_core_handle_execute_within] (radioctl-core) Runs a command that must finish within `timeout`. Unkeying the transmitter takes the
+- [@ANCHOR: radioctl:radioctl_core_handle_frequency] (radioctl-core) A VFO's frequency.
+- [@ANCHOR: radioctl:radioctl_core_handle_set_frequency] (radioctl-core) Sets a VFO's frequency.
+- [@ANCHOR: radioctl:radioctl_core_handle_mode] (radioctl-core) The mode.
+- [@ANCHOR: radioctl:radioctl_core_handle_set_mode] (radioctl-core) Sets the mode.
+- [@ANCHOR: radioctl:radioctl_core_handle_ptt] (radioctl-core) The transmit state.
+- [@ANCHOR: radioctl:radioctl_core_handle_set_ptt] (radioctl-core) Keys (needs the transmit gate open) or unkeys (always allowed, jumps the queue).
+- [@ANCHOR: radioctl:radioctl_core_handle_signal] (radioctl-core) The S-meter in raw units.
+- [@ANCHOR: radioctl:radioctl_core_event_stream_next] (radioctl-core) The next event, or `None` once the rig has stopped. A subscriber that falls behind skips
+- [@ANCHOR: radioctl:radioctl_core_actor_run] (radioctl-core) The actor loop: emergency channel first, then ordinary commands, unsolicited bytes from the rig, and polling last.
+- [@ANCHOR: radioctl:radioctl_core_actor_serve] (radioctl-core) Runs one command and answers its caller; counts successes, failures and preemptions.
+- [@ANCHOR: radioctl:radioctl_core_actor_run_command] (radioctl-core) Executes one command: deadline and gate checks, write, wait for the reply with retries, preemption by an emergency command, typed errors with the transcript tail.
+- [@ANCHOR: radioctl:radioctl_core_actor_observe] (radioctl-core) Updates the cache and, if the value changed, emits an event to the stream and the callback dispatcher.
+- [@ANCHOR: radioctl:radioctl_core_actor_poll_once] (radioctl-core) Polls the next due field at lowest priority and adapts its interval from whether it changed.
+- [@ANCHOR: radioctl:radioctl_virtual_io_spawn] (radioctl-protocols) Starts `rig` on `runtime`; returns the stream to hand to an actor and a control handle.
+- [@ANCHOR: radioctl:radioctl_virtual_io_state] (radioctl-protocols) A copy of the rig's current state.
+- [@ANCHOR: radioctl:radioctl_virtual_io_front_panel] (radioctl-protocols) Turns a knob on the rig; any unsolicited bytes go out without delay.
+- [@ANCHOR: radioctl:radioctl_virtual_io_set_reply_delay] (radioctl-protocols) Changes how long answers take from now on.
+- [@ANCHOR: radioctl:radioctl_virtual_io_bytes_received] (radioctl-protocols) How many bytes the controller has written to the rig.
+- [@ANCHOR: radioctl:radioctl_core_actor_absorb] (radioctl-core) Feeds received bytes to the engine; decides the waiting command, updates the cache, counts unrecognised bytes.
+- [@ANCHOR: radioctl:radioctl_core_actor_apply_set] (radioctl-core) Records a successful set in the cache.
+- [@ANCHOR: radioctl:radioctl_core_actor_await_reply] (radioctl-core) Waits for the reply until the attempt deadline; an emergency command abandons the wait.
+- [@ANCHOR: radioctl:radioctl_core_actor_log] (radioctl-core) Appends to the 16-line transcript kept for error reports.
+- [@ANCHOR: radioctl:radioctl_core_actor_spacing] (radioctl-core) Enforces the description's minimum gap between commands.
+- [@ANCHOR: radioctl:radioctl_core_handle_read] (radioctl-core) Cached or fresh read of a field, by freshness.
+- [@ANCHOR: radioctl:radioctl_core_handle_submit] (radioctl-core) Checks capability and transmit gate, then queues the command without waiting (full queue is a typed error).
+- [@ANCHOR: radioctl:radioctl_core_wait_until] (radioctl-core) Sleeps until the next poll is due, or forever when nothing is polled.
+- [@ANCHOR: radioctl:radioctl_core_dispatcher_run] (radioctl-core) The callback thread loop: pop, call under catch_unwind, count.

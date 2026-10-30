@@ -11,7 +11,14 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+tokio = { workspace = true, optional = true, features = ["rt", "sync", "time", "io-util"] }
 radioctl-core = { path = "../radioctl-core" }
 
+[features]
+# tokio glue that exposes a VirtualRig as an in-memory duplex stream (module `io`).
+default = ["tokio-io"]
+tokio-io = ["dep:tokio"]
+
 [dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "time", "io-util", "sync", "test-util"] }
 proptest = "1"
