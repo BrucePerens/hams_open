@@ -8,8 +8,9 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `elecraft.model_id`, `capability.<name>`,
-//! `mode.<name>`.
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `elecraft.model_id`,
+//! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
+//! `scope.spans_hz` (an optional `[scope]` block, icom-civ only), `capability.<name>`, `mode.<name>`.
 //!
 //! Verified states: `unverified`; `manual-checked` (needs `reference`); `transcript-checked`
 //! (needs `reference`, the transcript); `hardware-verified` (needs `radio`, `firmware`, `date`
@@ -22,7 +23,7 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, Timing,
+    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, ScopeParams, Timing,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
@@ -44,6 +45,10 @@ pub enum ProvenanceKind {
     RepoCode,
     /// The output of a program run; `reference` names the command.
     ProgramOutput,
+    /// A fact read from Hamlib's source (LGPL; facts only, no code or table copied): used only
+    /// where no vendor manual could be used. `reference` names the Hamlib release, file and
+    /// function; `note` says why a manual was not the source.
+    HamlibSource,
 }
 
 /// A provenance record.
@@ -115,6 +120,7 @@ struct FileDoc {
     civ: Option<CivSection>,
     kenwood: Option<KenwoodSection>,
     elecraft: Option<ElecraftSection>,
+    scope: Option<ScopeSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
     capabilities: Vec<String>,
@@ -149,6 +155,16 @@ struct KenwoodSection {
 #[serde(deny_unknown_fields)]
 struct ElecraftSection {
     model_id: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScopeSection {
+    receivers: u8,
+    line_length: u16,
+    samples_per_frame: u16,
+    amplitude_max: u16,
+    spans_hz: Vec<u64>,
 }
 
 #[derive(Deserialize)]
@@ -246,6 +262,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let elecraft = doc.elecraft.as_ref().map(|e| ElecraftParams {
         model_id: e.model_id,
     });
+    let scope = build_scope(doc.scope.as_ref(), family)?;
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
         let capability = Capability::from_name(name)
@@ -267,6 +284,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         civ,
         kenwood,
         elecraft,
+        scope,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
         timing: Timing {
@@ -277,6 +295,34 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         default_frequency: Hz(doc.defaults.frequency_hz),
         default_mode,
     })
+}
+
+// [@ANCHOR: radioctl_core_rigfile_build_scope]
+fn build_scope(
+    section: Option<&ScopeSection>,
+    family: Family,
+) -> Result<Option<ScopeParams>, RigError> {
+    let Some(scope) = section else {
+        return Ok(None);
+    };
+    if family != Family::IcomCiv {
+        return Err(bad("a [scope] block is only defined for icom-civ"));
+    }
+    let sane = (1..=2).contains(&scope.receivers)
+        && scope.line_length > 0
+        && scope.samples_per_frame > 0
+        && scope.amplitude_max > 0
+        && !scope.spans_hz.is_empty();
+    if !sane {
+        return Err(bad("scope values must be positive and receivers 1 or 2"));
+    }
+    Ok(Some(ScopeParams {
+        receivers: scope.receivers,
+        line_length: scope.line_length,
+        samples_per_frame: scope.samples_per_frame,
+        amplitude_max: scope.amplitude_max,
+        spans_hz: scope.spans_hz.clone(),
+    }))
 }
 
 // [@ANCHOR: radioctl_core_rigfile_build_mode_codes]
@@ -394,6 +440,18 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     if description.civ.is_some() {
         keys.extend(
             ["civ.address", "civ.controller", "civ.model_id", "civ.echo"].map(String::from),
+        );
+    }
+    if description.scope.is_some() {
+        keys.extend(
+            [
+                "scope.receivers",
+                "scope.line_length",
+                "scope.samples_per_frame",
+                "scope.amplitude_max",
+                "scope.spans_hz",
+            ]
+            .map(String::from),
         );
     }
     if description.kenwood.is_some() {
@@ -683,5 +741,29 @@ verified = { state = "unverified" }
         assert_eq!(summary.get("manual-checked"), Some(&2));
         assert_eq!(summary.get("unverified"), Some(&(8 + 1 + 2)));
         assert!(!loaded.is_hardware_verified());
+    }
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_scope]
+    #[test]
+    fn a_scope_block_is_icom_only_sane_and_needs_its_facts() {
+        let scope = "\n[scope]\nreceivers = 1\nline_length = 475\nsamples_per_frame = 50\namplitude_max = 160\nspans_hz = [5000, 10000]\n";
+        expect_rejected(&format!("{GOOD}{scope}"), "only defined for icom-civ");
+        let civ = GOOD
+            .replace("kenwood-ascii", "icom-civ")
+            .replace(
+                "[kenwood]\nmodel_id = 19",
+                "[civ]\naddress = 0x94\ncontroller = 0xE0\nmodel_id = 0x94\necho = false",
+            )
+            .replace("key = \"kenwood.model_id\"", "key = \"civ.*\"")
+            .replace("code = \"2\"", "code = 1")
+            .replace("code = 0x31", "code = 0");
+        let with_scope = format!("{civ}{scope}");
+        expect_rejected(&with_scope, "no provenance fact covers \"scope.receivers\"");
+        let fact = "\n[[facts]]\nkey = \"scope.*\"\nprovenance = { kind = \"hamlib-source\", reference = \"Hamlib 4.6.2 rigs/icom/ic7300.c\", note = \"facts only\" }\nverified = { state = \"unverified\" }\n";
+        let loaded = parse(&format!("{with_scope}{fact}")).expect("loads");
+        let params = loaded.description.scope.expect("scope");
+        assert_eq!((params.receivers, params.line_length), (1, 475));
+        assert_eq!(params.spans_hz, vec![5000, 10000]);
+        let bad = with_scope.replace("receivers = 1", "receivers = 3");
+        expect_rejected(&format!("{bad}{fact}"), "receivers 1 or 2");
     }
 }

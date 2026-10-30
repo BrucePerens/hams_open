@@ -47,14 +47,24 @@ fn transcripts() -> Vec<(PathBuf, Transcript)> {
 
 // Tests [@ANCHOR: radioctl_core_rigfile_parse]
 #[test]
-fn the_worked_ic7300_file_loads_and_equals_the_builtin_description() {
+fn the_ic7300_file_loads_and_extends_the_builtin_description() {
     let loaded = load_all();
     assert!(!loaded.is_empty());
     let ic7300 = loaded
         .iter()
         .find(|l| l.description.id == "icom-ic-7300")
         .expect("worked description");
-    assert_eq!(ic7300.description, RigDescription::ic7300());
+    let builtin = RigDescription::ic7300();
+    assert_eq!(ic7300.description.civ, builtin.civ);
+    assert_eq!(ic7300.description.timing, builtin.timing);
+    for capability in builtin.capabilities.iter() {
+        assert!(ic7300.description.capabilities.has(capability));
+    }
+    for (mode, code) in &builtin.mode_codes {
+        let in_file = ic7300.description.mode_code(*mode);
+        assert!(in_file == Some(*code) || *mode == radioctl_core::units::Mode::Wfm);
+    }
+    assert!(ic7300.description.scope.is_some());
 }
 
 // Tests [@ANCHOR: radioctl_core_rigfile_verification_summary]

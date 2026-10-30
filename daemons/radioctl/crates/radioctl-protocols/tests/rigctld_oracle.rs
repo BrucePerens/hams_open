@@ -35,6 +35,16 @@ use serialport::{SerialPort, TTYPort};
 const HAMLIB_TS2000: u32 = 2014;
 const HAMLIB_KX3: u32 = 2045;
 const HAMLIB_IC7300: u32 = 3073;
+const HAMLIB_IC7610: u32 = 3078;
+const HAMLIB_IC9700: u32 = 3081;
+const HAMLIB_IC705: u32 = 3085;
+
+/// A shipped rig description by file name (without `.toml`).
+fn shipped(name: &str) -> RigDescription {
+    let path = format!("{}/../../rigs/{name}.toml", env!("CARGO_MANIFEST_DIR"));
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    rigfile::parse(&text).expect("rig file").description
+}
 
 fn kx3() -> RigDescription {
     rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))
@@ -130,11 +140,17 @@ impl RadioOnPty {
                 let bytes = buffer.get(..n).unwrap_or(&[]);
                 wire_t.lock().expect("lock").extend_from_slice(bytes);
                 let reply = rig_t.lock().expect("lock").feed(bytes, started.elapsed());
-                if reply == b"?;" || reply.windows(2).any(|w| w == [0xFE, 0xFA]) {
-                    refused_t
-                        .lock()
-                        .expect("lock")
-                        .push(String::from_utf8_lossy(bytes).into_owned());
+                if reply == b"?;" || reply.ends_with(&[0xFA, 0xFD]) {
+                    let shown = if bytes.contains(&0xFE) {
+                        bytes
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    } else {
+                        String::from_utf8_lossy(bytes).into_owned()
+                    };
+                    refused_t.lock().expect("lock").push(shown);
                 }
                 if !reply.is_empty() {
                     let _ = master.write_all(&reply);
@@ -279,6 +295,14 @@ fn through_hamlib(oracle: &mut Rigctld, op: &Op) -> Reading {
         Op::GetRitOffset => oracle.call("j"),
         Op::SetLevel(Level::KeyerSpeed, wpm) => oracle.call(&format!("L KEYSPD {wpm}")),
         Op::GetLevel(Level::KeyerSpeed) => oracle.call("l KEYSPD"),
+        Op::SetLevel(Level::AfGain, raw) => {
+            oracle.call(&format!("L AF {:.6}", f64::from(*raw) / 255.0))
+        }
+        Op::GetLevel(Level::AfGain) => oracle.call("l AF"),
+        Op::SetSplit(on) => oracle.call(if *on { "S 1 VFOB" } else { "S 0 VFOA" }),
+        Op::GetSplit => oracle.call("s"),
+        Op::SetFrequency(Vfo::B, hz) => oracle.call(&format!("I {}", hz.0)),
+        Op::GetFrequency(Vfo::B) => oracle.call("i"),
         other => panic!("the harness has no Hamlib command for {other:?}"),
     };
     let Ok((fields, code)) = answered else {
@@ -288,6 +312,12 @@ fn through_hamlib(oracle: &mut Rigctld, op: &Op) -> Reading {
         return Reading::Failed;
     }
     match op {
+        Op::GetSplit => field(&fields, "Split")
+            .and_then(|v| v.parse().ok())
+            .map_or(Reading::Failed, Reading::Number),
+        Op::GetFrequency(Vfo::B) => field(&fields, "TX Frequency")
+            .and_then(|v| v.parse().ok())
+            .map_or(Reading::Failed, Reading::Frequency),
         Op::GetFrequency(_) => field(&fields, "Frequency")
             .and_then(|v| v.parse().ok())
             .map_or(Reading::Failed, Reading::Frequency),
@@ -300,6 +330,11 @@ fn through_hamlib(oracle: &mut Rigctld, op: &Op) -> Reading {
         Op::GetRitOffset => field(&fields, "RIT")
             .and_then(|v| v.parse().ok())
             .map_or(Reading::Failed, Reading::Number),
+        Op::GetLevel(Level::AfGain) => field(&fields, "")
+            .and_then(|v| v.parse::<f64>().ok())
+            .map_or(Reading::Failed, |fraction| {
+                Reading::Number((fraction * 255.0).round() as i64)
+            }),
         Op::GetLevel(_) => field(&fields, "")
             .and_then(|v| v.parse().ok())
             .map_or(Reading::Failed, Reading::Number),
@@ -322,6 +357,9 @@ fn through_radioctl(engine: &mut dyn ProtocolEngine, rig: &mut VirtualRig, op: &
             }
             Inbound::Observation(Observation::Mode(mode)) => reading = Reading::Mode(mode),
             Inbound::Observation(Observation::Ptt(on)) => reading = Reading::Ptt(on),
+            Inbound::Observation(Observation::Split(on)) => {
+                reading = Reading::Number(i64::from(on))
+            }
             Inbound::Observation(Observation::RitOffset(hz)) => {
                 reading = Reading::Number(i64::from(hz));
             }
@@ -400,7 +438,22 @@ fn compare(
         }
     }
     let refused = radio.refused.lock().expect("lock").clone();
-    let wire = String::from_utf8_lossy(&radio.wire.lock().expect("lock")).into_owned();
+    let sent = radio.wire.lock().expect("lock").clone();
+    let wire = if sent.contains(&0xFE) {
+        // CI-V: hex, one frame per FD.
+        sent.split_inclusive(|b| *b == 0xFD)
+            .map(|frame| {
+                frame
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .collect::<Vec<_>>()
+            .join(" | ")
+    } else {
+        String::from_utf8_lossy(&sent).into_owned()
+    };
     (divergences, refused, wire)
 }
 
@@ -486,4 +539,90 @@ fn ic7300_agrees_with_hamlib_on_frequency_and_mode() {
     let (divergences, refused, wire) = compare(HAMLIB_IC7300, &desc, 19200, &scenario());
     report("IC-7300", &divergences, &refused, &wire);
     assert!(divergences.is_empty(), "{divergences:#?}");
+}
+
+/// The scenario for the Icom rigs: the common one plus PTT read, RIT offset and AF gain, the
+/// operations the harness can express through `rigctld` for CI-V.
+fn icom_scenario(first: u64, second: u64, other: u64) -> Vec<Op> {
+    vec![
+        Op::GetFrequency(Vfo::A),
+        Op::GetMode,
+        Op::SetFrequency(Vfo::A, Hz(first)),
+        Op::GetFrequency(Vfo::A),
+        Op::SetMode(Mode::Lsb),
+        Op::GetMode,
+        Op::SetFrequency(Vfo::A, Hz(second)),
+        Op::SetMode(Mode::Cw),
+        Op::GetFrequency(Vfo::A),
+        Op::GetMode,
+        Op::GetPtt,
+        Op::SetRitOffset(-120),
+        Op::GetRitOffset,
+        Op::SetLevel(Level::AfGain, 128),
+        Op::GetLevel(Level::AfGain),
+        Op::GetSplit,
+        Op::SetSplit(true),
+        Op::GetSplit,
+        Op::SetFrequency(Vfo::B, Hz(other)),
+        Op::GetFrequency(Vfo::B),
+        Op::SetSplit(false),
+        Op::GetSplit,
+    ]
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode]
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+// Tests [@ANCHOR: radioctl_virtual_civ_level]
+#[test]
+fn the_four_icom_files_against_hamlib_record_every_disagreement() {
+    // Recorded, not hidden: whatever differs between Hamlib and radioctl on the shipped
+    // descriptions is printed with `--nocapture` and pinned here so a change either way is seen.
+    for (file, model) in [
+        ("icom-ic-7300", HAMLIB_IC7300),
+        ("icom-ic-705", HAMLIB_IC705),
+        ("icom-ic-7610", HAMLIB_IC7610),
+        ("icom-ic-9700", HAMLIB_IC9700),
+    ] {
+        let desc = shipped(file);
+        // The IC-9700 covers 144, 430 and 1240 MHz only; the others are HF/50 MHz rigs.
+        let steps = if file == "icom-ic-9700" {
+            icom_scenario(144_300_000, 432_100_000, 145_500_000)
+        } else {
+            icom_scenario(7_074_000, 14_060_000, 14_025_000)
+        };
+        let (divergences, refused, wire) = compare(model, &desc, 19200, &steps);
+        report(file, &divergences, &refused, &wire);
+        let steps: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(
+            steps,
+            known_icom_divergences(file),
+            "{file}: {divergences:#?}"
+        );
+    }
+}
+
+/// The steps on which Hamlib and radioctl disagree for an Icom file.
+///
+/// The IC-7300 and IC-705 agree on everything the harness can express (frequency, mode, PTT read,
+/// RIT offset, AF gain, split, the other VFO's frequency). On the IC-7610 Hamlib's flow starts
+/// with `07 C2` (dual watch), `07 D2` (band selection) and `07 D0` (select Main), which the
+/// virtual rig refuses (the Main/Sub family of command 07 is not implemented), so Hamlib's split
+/// and second-frequency steps fail there while radioctl's engine treats VFO B as "the other VFO"
+/// (`25 01`). Which of the two matches a real IC-7610 is unknown: an open question, not a result.
+/// On the IC-9700 split agrees, but setting the other VFO's frequency fails in Hamlib, which
+/// sends `07 D0` (select Main) first, again refused by the virtual rig. (A first run used HF
+/// frequencies on the 144 MHz rig, which Hamlib refused outright; the scenario now stays in band.)
+fn known_icom_divergences(file: &str) -> Vec<&'static str> {
+    match file {
+        "icom-ic-7610" => vec![
+            "SetSplit(true)",
+            "GetSplit",
+            "SetFrequency(B, Hz(14025000))",
+            "GetFrequency(B)",
+            "SetSplit(false)",
+        ],
+        "icom-ic-9700" => vec!["SetFrequency(B, Hz(145500000))", "GetFrequency(B)"],
+        _ => Vec::new(),
+    }
 }

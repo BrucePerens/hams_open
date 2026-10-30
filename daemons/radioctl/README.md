@@ -77,7 +77,7 @@ tested); a file with an unexplained or unknown datum does not load. `rigs/transc
 transcripts replayed by `radioctl_protocols::conformance::replay` against the engine and the virtual rig
 generated from the same description (tests in `crates/radioctl-protocols/tests/rig_files.rs`).
 
-The worked descriptions are `rigs/icom-ic-7300.toml` and `rigs/elecraft-kx3.toml` (the KX3 one is written from Elecraft's published Programmer's Reference Rev. G5, cited by command heading and page since the manual has no numbered sections, with the PDF's sha256; its transcript is hand-written from the same manual). **Everything in it is unverified**, and its
+The descriptions are `rigs/elecraft-kx3.toml` and four Icom CI-V files (`icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700`). **The Icom files are not written from Icom's CI-V guides**: the download terms of icomjapan.com forbid reuse of the manuals' data and radioctl skips sources whose terms forbid reuse, so their facts were read from Hamlib 4.6.2 source (facts only, provenance kind `hamlib-source`, file and function named per fact) and from `rigctl --dump-caps` output. Their scope support (command 0x27) is in `crates/radioctl-protocols/src/civ_scope.rs`; it is not yet reachable through `Op` (radioctl-core has no scope operation), `CivEngine` collects complete sweeps for `take_scope_lines`. Disagreements with Hamlib's `rigctld` are pinned in `tests/rigctld_oracle.rs` (`known_icom_divergences`). The KX3 file (written from Elecraft's published Programmer's Reference Rev. G5, cited by command heading and page since the manual has no numbered sections, with the PDF's sha256; its transcript is hand-written from the same manual). **Everything in these files is unverified**, and its
 transcript is hand-written from our own simulator and bridge code (its `origin` says so): it proves that
 the description, the engine and the virtual rig agree with each other, not that they agree with an
 IC-7300. A real capture or an owner's bench run is what upgrades a `verified` field.
@@ -342,3 +342,45 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_conformance_check_decoding] (radioctl-protocols) Checks that the engine decodes a step's rx exactly as the transcript expects.
 - [@ANCHOR: radioctl:radioctl_conformance_expected_inbound] (radioctl-protocols) Maps a transcript expectation to the engine's Inbound value.
 - [@ANCHOR: radioctl:radioctl_conformance_panel_change] (radioctl-protocols) Maps a transcript knob change to the virtual rig's PanelChange.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_scope] (radioctl-core) Validates the optional `[scope]` block (icom-civ only; receivers 1 or 2, positive sizes, a span list).
+- [@ANCHOR: radioctl:radioctl_civ_engine_scope_request] (radioctl-protocols) The request for a scope command (command 27). Fails when the model has no scope or a value does not fit its field.
+- [@ANCHOR: radioctl:radioctl_civ_engine_take_scope_lines] (radioctl-protocols) The complete scope sweeps received since the last call.
+- [@ANCHOR: radioctl:radioctl_civ_engine_scope_dropped] (radioctl-protocols) Scope frames or sweeps discarded as out of order or malformed.
+- [@ANCHOR: radioctl:radioctl_civ_encode_rit_offset] (radioctl-protocols) The 3 data bytes of the RIT/XIT offset after `21 00`: tens and ones, thousands and hundreds, then a sign byte (1 is negative).
+- [@ANCHOR: radioctl:radioctl_civ_decode_rit_offset] (radioctl-protocols) The offset in hertz from the 3 data bytes after `21 00`.
+- [@ANCHOR: radioctl:radioctl_civ_filter_index_to_hz] (radioctl-protocols) The width in hertz of filter index `index` (command `1A 03`): 0 to 9 are 50 to 500 Hz in steps of 50, 10 to 40 are 600 to 3600 Hz in steps of 100 (SSB, CW, RTTY); for AM the index 0 to 49 is 200 to 10000 Hz in steps of 200. `None` outside the table.
+- [@ANCHOR: radioctl:radioctl_civ_filter_hz_to_index] (radioctl-protocols) The filter index whose width is exactly `hz`, or `None` when the table has no such width.
+- [@ANCHOR: radioctl:radioctl_civ_engine_decode_filter] (radioctl-protocols) The filter width for index byte `index`, by the mode last reported.
+- [@ANCHOR: radioctl:radioctl_civ_engine_decode_scope] (radioctl-protocols) Feeds a waveform frame to the assembler; settings replies are not kept.
+- [@ANCHOR: radioctl:radioctl_scope_mode_code] (radioctl-protocols) The wire code of the mode.
+- [@ANCHOR: radioctl:radioctl_scope_mode_from_code] (radioctl-protocols) The mode for a wire code.
+- [@ANCHOR: radioctl:radioctl_scope_speed_code] (radioctl-protocols) The wire code of the speed.
+- [@ANCHOR: radioctl:radioctl_scope_speed_from_code] (radioctl-protocols) The speed for a wire code.
+- [@ANCHOR: radioctl:radioctl_scope_command_is_query] (radioctl-protocols) True for the commands that read a setting (the rig answers with data, not OK).
+- [@ANCHOR: radioctl:radioctl_scope_command_data] (radioctl-protocols) The sub-command and data bytes (after the `27`) for a scope command, or `None` when a value does not fit its field.
+- [@ANCHOR: radioctl:radioctl_scope_decode_reference] (radioctl-protocols) The reference level, in hundredths of a dB, from the 3 data bytes after `27 19 <rx>`.
+- [@ANCHOR: radioctl:radioctl_scope_parse_segment] (radioctl-protocols) Decodes the data after `27 00` (receiver, frame number, frame count, then the rest). `None` for a malformed frame.
+- [@ANCHOR: radioctl:radioctl_scope_assembler_new] (radioctl-protocols) An assembler for a model's scope.
+- [@ANCHOR: radioctl:radioctl_scope_assembler_dropped] (radioctl-protocols) How many frames or sweeps were thrown away as out of order, oversized or short.
+- [@ANCHOR: radioctl:radioctl_scope_assembler_note_malformed] (radioctl-protocols) Counts a waveform frame that could not be decoded.
+- [@ANCHOR: radioctl:radioctl_scope_assembler_push] (radioctl-protocols) Adds a frame; returns the sweep it completes, if any.
+- [@ANCHOR: radioctl:radioctl_scope_sim_new] (radioctl-protocols) A scope in its power-on state: display on, output off, centred, narrowest span.
+- [@ANCHOR: radioctl:radioctl_scope_sim_output_on] (radioctl-protocols) True when waveform output is switched on.
+- [@ANCHOR: radioctl:radioctl_scope_sim_handle] (radioctl-protocols) Answers a scope command (the bytes after `27`).
+- [@ANCHOR: radioctl:radioctl_scope_sim_sweep] (radioctl-protocols) The frames (each `27 00 ...` data, without the CI-V envelope) of one sweep of a receiver whose tuned frequency is `tuned`, or none when output is off, the receiver does not exist or hold is on. Samples are a deterministic ramp that moves each sweep, so a reassembled line can be checked sample by sample.
+- [@ANCHOR: radioctl:radioctl_scope_sample_value] (radioctl-protocols) The deterministic synthetic amplitude of pixel `index` in sweep `sweep`.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_slot] (radioctl-protocols) The frequency of the selected VFO, or of the other one when `other` is true.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_set_freq] (radioctl-protocols) Sets the selected (or the other) VFO from 5 BCD bytes; NG on a malformed field.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_level] (radioctl-protocols) Answers `14 <sub>` with the level as 4-digit BCD; NG for a level the rig does not have.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_level_set] (radioctl-protocols) Sets a level from `14 <sub> <BCD>`; NG above 255 or on a non-BCD value.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_filter] (radioctl-protocols) Answers `1A 03` with the filter index for the current width and mode; NG when the width is not in the mode's table.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_filter_set] (radioctl-protocols) Sets the filter width from a `1A 03` index byte, by the mode's table.
+- [@ANCHOR: radioctl:radioctl_virtual_scope_sweep] (radioctl-protocols) The bytes the rig sends on its own for one scope sweep of the Main receiver at the VFO A frequency, as broadcast frames; empty when the model has no scope, output is off or the scope is held.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_level_of] (radioctl-protocols) The level behind a `14` sub-command (AF 01, RF 02, power 0A, mic 0B, monitor 15).
+- [@ANCHOR: radioctl:radioctl_civ_level_sub] (radioctl-protocols) Wire sub-command of a level under `14`, for the levels this engine supports.
+- [@ANCHOR: radioctl:radioctl_civ_engine_filter_table_is_am] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
+- [@ANCHOR: radioctl:radioctl_civ_engine_encode_vfo_b_split] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
+- [@ANCHOR: radioctl:radioctl_civ_engine_encode_rit_xit] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
+- [@ANCHOR: radioctl:radioctl_civ_engine_encode_levels_and_filter] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
+- [@ANCHOR: radioctl:radioctl_scope_line_from] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
+- [@ANCHOR: radioctl:radioctl_scope_sim_try_handle] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
