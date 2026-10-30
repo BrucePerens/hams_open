@@ -10,6 +10,7 @@
 //! attack surface.
 
 pub mod civ;
+pub mod civ_scope;
 pub mod conformance;
 pub mod elecraft;
 pub mod kenwood;

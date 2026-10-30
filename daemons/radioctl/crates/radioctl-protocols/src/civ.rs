@@ -4,8 +4,29 @@
 //! Frame: `FE FE <to> <from> <cmd> [data] FD`. A reply either echoes the command byte with data
 //! or is `FB` (OK) / `FA` (NG). Frequencies are 5 bytes of BCD, least-significant pair first
 //! (14,074,000 Hz is `00 40 07 14 00`, the capture recorded in `tools/rig_simulator.py`).
-//! Meter values are 2 bytes of BCD (0000 to 9999; radios use 0000 to 0255). Sources: our own
-//! `tools/rig_simulator.py` and the relay's `civ_bridge.rs`; no radio has verified this engine.
+//! Meter values are 2 bytes of BCD (0000 to 9999; radios use 0000 to 0255).
+//!
+//! **Sources.** The basic commands (03, 04, 05, 06, 1C 00, 15 02, 15 11, 17, 19 00) come from our
+//! own `tools/rig_simulator.py` and the relay's `civ_bridge.rs`. The rest was read from Hamlib
+//! 4.6.2 for facts only (LGPL, no code or table copied): command and sub-command numbers from
+//! `rigs/icom/icom_defs.h` (`C_CTL_SPLT` 0F, `C_CTL_LVL` 14 with `S_LVL_*`, `C_CTL_RIT` 21,
+//! `C_SEND_SEL_FREQ` 25, `S_MEM_FILT_WDTH` 1A 03); payload layouts from `rigs/icom/icom.c`
+//! (`icom_get_rit_new` and `icom_set_it_new` for the 21 00 offset: two BCD bytes least
+//! significant pair first, then a sign byte; `icom_get_dsp_flt` for the 1A 03 filter index
+//! tables). Icom's own CI-V reference guides (IC-7300, IC-705, IC-7610, IC-9700) were not used:
+//! their download terms forbid reuse of their data and radioctl skips such sources. No radio has
+//! verified this engine. Scope data (command 27) is in [`crate::civ_scope`].
+//!
+//! Known gaps, deliberately not guessed: the keyer-speed level (Hamlib maps 0 to 255 to words per
+//! minute through a table), SWR and the calibrated power and S-meter (calibration tables are
+//! per-model measurements), transceive on and off over CAT (a menu item reached through
+//! `1A 05` with model-specific numbers), data-mode and filter-number selection (`26`), and the
+//! XIT of the IC-9700 (Hamlib lists RIT only). Transceive: Hamlib's per-model menu items were
+//! found (`1A 05`: IC-7300 `00 71`, IC-9700 `01 27`, IC-705 `01 31`) but the description format has
+//! no field for them yet. `Vfo::A` is the *selected* VFO (`03`, `05`, `25 00`) and `Vfo::B` the
+//! *unselected* one (`25 01`); the engine does not track `07 00`/`07 01`, so after a selection
+//! change the labels swap. On the Main/Sub rigs (IC-7610, IC-9700) the Main/Sub family of `07`
+//! (`C2`, `D0`, `D1`, `D2`) is not modelled and Hamlib's split flow differs (see the oracle test).
 
 use std::time::Duration;
 
@@ -13,7 +34,9 @@ use radioctl_core::description::{CivParams, Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Vfo};
+use radioctl_core::units::{Hz, Level, Mode, Vfo};
+
+use crate::civ_scope::{self, ScopeAssembler, ScopeCommand, ScopeLine};
 
 /// Start-of-frame byte (sent twice).
 pub const PREAMBLE: u8 = 0xFE;
@@ -210,6 +233,10 @@ pub struct CivEngine {
     desc: RigDescription,
     params: CivParams,
     parser: FrameParser,
+    /// The last mode the rig reported; the filter index tables depend on it.
+    mode: Option<Mode>,
+    scope: Option<ScopeAssembler>,
+    scope_lines: Vec<ScopeLine>,
 }
 
 impl CivEngine {
@@ -225,11 +252,142 @@ impl CivEngine {
                 ))
             }
         };
+        let scope = desc.scope.clone().map(ScopeAssembler::new);
         Ok(CivEngine {
             desc,
             params,
             parser: FrameParser::default(),
+            mode: None,
+            scope,
+            scope_lines: Vec::new(),
         })
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_scope_request]
+    /// The request for a scope command (command 27). Fails when the model has no scope or a value
+    /// does not fit its field.
+    pub fn scope_request(&self, command: ScopeCommand) -> Result<Request, RigError> {
+        if self.desc.scope.is_none() {
+            return Err(Self::unsupported("this model has no scope description"));
+        }
+        let data = civ_scope::command_data(command)
+            .ok_or_else(|| Self::unsupported("scope value out of range"))?;
+        let (sub, rest) = data
+            .split_first()
+            .ok_or_else(|| Self::unsupported("empty scope command"))?;
+        let mut payload = vec![*sub];
+        payload.extend_from_slice(rest);
+        let reply = if command.is_query() {
+            ReplyKind::None
+        } else {
+            ReplyKind::Ack
+        };
+        Ok(self.command(civ_scope::SCOPE_CMD, &payload, reply))
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_take_scope_lines]
+    /// The complete scope sweeps received since the last call.
+    pub fn take_scope_lines(&mut self) -> Vec<ScopeLine> {
+        std::mem::take(&mut self.scope_lines)
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_scope_dropped]
+    /// Scope frames or sweeps discarded as out of order or malformed.
+    pub fn scope_dropped(&self) -> u64 {
+        self.scope.as_ref().map_or(0, ScopeAssembler::dropped)
+    }
+}
+
+// [@ANCHOR: radioctl_civ_level_sub]
+/// Wire sub-command of a level under `14`, for the levels this engine supports.
+fn level_sub(level: Level) -> Option<u8> {
+    match level {
+        Level::AfGain => Some(0x01),
+        Level::RfGain => Some(0x02),
+        Level::RfPower => Some(0x0A),
+        Level::MicGain => Some(0x0B),
+        Level::MonitorLevel => Some(0x15),
+        Level::KeyerSpeed => None,
+    }
+}
+
+/// The level behind a `14` sub-command.
+fn sub_level(sub: u8) -> Option<Level> {
+    [
+        Level::AfGain,
+        Level::RfGain,
+        Level::RfPower,
+        Level::MicGain,
+        Level::MonitorLevel,
+    ]
+    .into_iter()
+    .find(|level| level_sub(*level) == Some(sub))
+}
+
+/// Largest level value a rig takes (levels are 0000 to 0255 in BCD).
+const MAX_LEVEL: u16 = 255;
+/// Largest RIT/XIT offset, in hertz (4 BCD digits).
+const MAX_OFFSET_HZ: u16 = 9_999;
+
+// [@ANCHOR: radioctl_civ_encode_rit_offset]
+/// The 3 data bytes of the RIT/XIT offset after `21 00`: tens and ones, thousands and hundreds,
+/// then a sign byte (1 is negative).
+pub fn encode_rit_offset(hz: i16) -> Option<[u8; 3]> {
+    let magnitude = hz.unsigned_abs();
+    if magnitude > MAX_OFFSET_HZ {
+        return None;
+    }
+    let pair = |n: u16| (((n / 10) as u8) << 4) | ((n % 10) as u8);
+    Some([
+        pair(magnitude % 100),
+        pair(magnitude / 100),
+        u8::from(hz < 0),
+    ])
+}
+
+// [@ANCHOR: radioctl_civ_decode_rit_offset]
+/// The offset in hertz from the 3 data bytes after `21 00`.
+pub fn decode_rit_offset(bytes: &[u8]) -> Option<i16> {
+    let [low, high, sign] = bytes else {
+        return None;
+    };
+    let digits = |b: u8| -> Option<i16> {
+        let (h, l) = (b >> 4, b & 15);
+        (h <= 9 && l <= 9).then(|| i16::from(h) * 10 + i16::from(l))
+    };
+    let magnitude = digits(*high)? * 100 + digits(*low)?;
+    Some(if *sign == 0 { magnitude } else { -magnitude })
+}
+
+// [@ANCHOR: radioctl_civ_filter_index_to_hz]
+/// The width in hertz of filter index `index` (command `1A 03`): 0 to 9 are 50 to 500 Hz in
+/// steps of 50, 10 to 40 are 600 to 3600 Hz in steps of 100 (SSB, CW, RTTY); for AM the index
+/// 0 to 49 is 200 to 10000 Hz in steps of 200. `None` outside the table.
+pub fn filter_index_to_hz(am: bool, index: u8) -> Option<u32> {
+    let index = u32::from(index);
+    if am {
+        return (index <= 49).then(|| (index + 1) * 200);
+    }
+    match index {
+        0..=9 => Some((index + 1) * 50),
+        10..=40 => Some(600 + (index - 10) * 100),
+        _ => None,
+    }
+}
+
+// [@ANCHOR: radioctl_civ_filter_hz_to_index]
+/// The filter index whose width is exactly `hz`, or `None` when the table has no such width.
+pub fn filter_hz_to_index(am: bool, hz: u32) -> Option<u8> {
+    (0..=49u8).find(|index| filter_index_to_hz(am, *index) == Some(hz))
+}
+
+fn bcd_pair(value: u16) -> u8 {
+    (((value / 10) as u8) << 4) | ((value % 10) as u8)
+}
+
+impl CivEngine {
+    fn unsupported(what: &str) -> RigError {
+        RigError::new(ErrorKind::Unsupported, what.to_string())
     }
 
     fn command(&self, cmd: u8, data: &[u8], reply: ReplyKind) -> Request {
@@ -245,8 +403,94 @@ impl CivEngine {
         }
     }
 
-    fn unsupported(what: &str) -> RigError {
-        RigError::new(ErrorKind::Unsupported, what.to_string())
+    fn get(&self, cmd: u8, data: &[u8], field: Field) -> Request {
+        self.command(cmd, data, ReplyKind::Observation(field))
+    }
+
+    fn set(&self, cmd: u8, data: &[u8]) -> Request {
+        self.command(cmd, data, ReplyKind::Ack)
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_filter_table_is_am]
+    fn filter_table_is_am(&self) -> Result<bool, RigError> {
+        match self.mode {
+            Some(Mode::Am) => Ok(true),
+            Some(Mode::Fm | Mode::Wfm) => Err(Self::unsupported("no filter width in FM")),
+            Some(_) => Ok(false),
+            None => Err(Self::unsupported(
+                "read the mode before the filter width: the index tables differ",
+            )),
+        }
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
+    fn encode_vfo_b_or_split(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        Some(match op {
+            Op::GetFrequency(Vfo::B) => Ok(self.get(0x25, &[0x01], Field::Frequency(Vfo::B))),
+            Op::SetFrequency(Vfo::B, hz) => match encode_bcd_freq(*hz) {
+                Some(bcd) => {
+                    let mut data = vec![0x01];
+                    data.extend(bcd);
+                    Ok(self.set(0x25, &data))
+                }
+                None => Err(Self::unsupported("frequency above 10 BCD digits")),
+            },
+            Op::GetSplit => Ok(self.get(0x0F, &[], Field::Split)),
+            Op::SetSplit(on) => Ok(self.set(0x0F, &[u8::from(*on)])),
+            _ => return None,
+        })
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_encode_rit_xit]
+    fn encode_rit_xit(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        Some(match op {
+            Op::GetRit => Ok(self.get(0x21, &[0x01], Field::Rit)),
+            Op::SetRit(on) => Ok(self.set(0x21, &[0x01, u8::from(*on)])),
+            Op::GetXit => Ok(self.get(0x21, &[0x02], Field::Xit)),
+            Op::SetXit(on) => Ok(self.set(0x21, &[0x02, u8::from(*on)])),
+            Op::GetRitOffset => Ok(self.get(0x21, &[0x00], Field::RitOffset)),
+            Op::SetRitOffset(hz) => match encode_rit_offset(*hz) {
+                Some(bytes) => {
+                    let mut data = vec![0x00];
+                    data.extend(bytes);
+                    Ok(self.set(0x21, &data))
+                }
+                None => Err(Self::unsupported("RIT offset beyond 9999 Hz")),
+            },
+            _ => return None,
+        })
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_encode_levels_and_filter]
+    fn encode_levels_and_filter(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        Some(match op {
+            Op::GetLevel(level) => match level_sub(*level) {
+                Some(sub) => Ok(self.get(0x14, &[sub], Field::Level(*level))),
+                None => Err(Self::unsupported("level not implemented for CI-V")),
+            },
+            Op::SetLevel(level, value) => match (level_sub(*level), *value <= MAX_LEVEL) {
+                (Some(sub), true) => {
+                    let mut data = vec![sub];
+                    data.extend(encode_bcd_meter(*value));
+                    Ok(self.set(0x14, &data))
+                }
+                (None, _) => Err(Self::unsupported("level not implemented for CI-V")),
+                (_, false) => Err(Self::unsupported("level above 255")),
+            },
+            Op::GetFilterWidth => match self.filter_table_is_am() {
+                Ok(_) => Ok(self.get(0x1A, &[0x03], Field::FilterWidth)),
+                Err(e) => Err(e),
+            },
+            Op::SetFilterWidth(hz) => self.filter_table_is_am().and_then(|am| {
+                let index = u32::try_from(hz.0)
+                    .ok()
+                    .and_then(|width| filter_hz_to_index(am, width))
+                    .ok_or_else(|| Self::unsupported("no filter of exactly that width"))?;
+                Ok(self.set(0x1A, &[0x03, bcd_pair(u16::from(index))]))
+            }),
+            Op::GetModelId => Ok(self.get(0x19, &[0x00], Field::ModelId)),
+            _ => return None,
+        })
     }
 }
 
@@ -261,14 +505,18 @@ impl ProtocolEngine for CivEngine {
             return Err(Self::unsupported("capability not in the rig description"));
         }
         let ack = ReplyKind::Ack;
+        if let Some(done) = self
+            .encode_vfo_b_or_split(op)
+            .or_else(|| self.encode_rit_xit(op))
+            .or_else(|| self.encode_levels_and_filter(op))
+        {
+            return done;
+        }
         let request = match op {
-            Op::GetFrequency(Vfo::A) => {
+            Op::GetFrequency(_) => {
                 self.command(0x03, &[], ReplyKind::Observation(Field::Frequency(Vfo::A)))
             }
-            Op::GetFrequency(Vfo::B) | Op::SetFrequency(Vfo::B, _) => {
-                return Err(Self::unsupported("CI-V engine: VFO B is not implemented"));
-            }
-            Op::SetFrequency(Vfo::A, hz) => {
+            Op::SetFrequency(_, hz) => {
                 let bcd = encode_bcd_freq(*hz)
                     .ok_or_else(|| Self::unsupported("frequency above 10 BCD digits"))?;
                 self.command(0x05, &bcd, ack)
@@ -314,6 +562,9 @@ impl ProtocolEngine for CivEngine {
                 Parsed::Junk(junk) => out.push(Inbound::Unrecognised(junk)),
                 Parsed::Frame(frame) => {
                     if let Some(event) = self.decode(&frame) {
+                        if let Inbound::Observation(Observation::Mode(mode)) = &event {
+                            self.mode = Some(*mode);
+                        }
                         out.push(event);
                     }
                 }
@@ -325,8 +576,9 @@ impl ProtocolEngine for CivEngine {
 
 impl CivEngine {
     // [@ANCHOR: radioctl_civ_engine_decode]
-    /// Decodes one frame; `None` for our own echoed frames and frames for other stations.
-    fn decode(&self, frame: &Frame) -> Option<Inbound> {
+    /// Decodes one frame; `None` for our own echoed frames, frames for other stations and scope
+    /// frames (those go to the scope assembler).
+    fn decode(&mut self, frame: &Frame) -> Option<Inbound> {
         if frame.from == self.params.controller {
             return None;
         }
@@ -334,12 +586,32 @@ impl CivEngine {
         if !for_us || frame.from != self.params.address {
             return None;
         }
+        if frame.cmd == civ_scope::SCOPE_CMD {
+            self.decode_scope(&frame.data);
+            return None;
+        }
         let data = frame.data.as_slice();
         let observation = match (frame.cmd, data) {
             (OK, []) => return Some(Inbound::Ack),
             (NG, []) => return Some(Inbound::Nak),
             (0x00 | 0x03, bcd) => decode_bcd_freq(bcd).map(|hz| Observation::Frequency(Vfo::A, hz)),
+            (0x25, [selector, bcd @ ..]) => decode_bcd_freq(bcd).and_then(|hz| match selector {
+                0x00 => Some(Observation::Frequency(Vfo::A, hz)),
+                0x01 => Some(Observation::Frequency(Vfo::B, hz)),
+                _ => None,
+            }),
             (0x01 | 0x04, [code, ..]) => self.desc.code_mode(*code).map(Observation::Mode),
+            (0x0F, [state]) => Some(Observation::Split(*state != 0)),
+            (0x21, [0x00, rest @ ..]) => decode_rit_offset(rest).map(Observation::RitOffset),
+            (0x21, [0x01, state]) => Some(Observation::Rit(*state != 0)),
+            (0x21, [0x02, state]) => Some(Observation::Xit(*state != 0)),
+            (0x14, [sub, rest @ ..]) => sub_level(*sub).and_then(|level| {
+                decode_bcd_meter(rest)
+                    .filter(|value| *value <= MAX_LEVEL)
+                    .map(|value| Observation::Level(level, value))
+            }),
+            (0x1A, [0x03, index]) => self.decode_filter(*index),
+            (0x19, [0x00, id]) => Some(Observation::ModelId(u16::from(*id))),
             (0x1C, [0x00, state]) => Some(Observation::Ptt(*state != 0)),
             (0x15, [0x02, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Signal),
             (0x15, [0x11, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Power),
@@ -349,6 +621,37 @@ impl CivEngine {
             Some(value) => Inbound::Observation(value),
             None => Inbound::Unrecognised(frame.to_bytes()),
         })
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_decode_filter]
+    /// The filter width for index byte `index`, by the mode last reported.
+    fn decode_filter(&self, index: u8) -> Option<Observation> {
+        let (high, low) = (index >> 4, index & 15);
+        if high > 9 || low > 9 {
+            return None;
+        }
+        let am = self.filter_table_is_am().ok()?;
+        filter_index_to_hz(am, high * 10 + low)
+            .map(|hz| Observation::FilterWidth(Hz(u64::from(hz))))
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_decode_scope]
+    /// Feeds a waveform frame to the assembler; settings replies are not kept.
+    fn decode_scope(&mut self, data: &[u8]) {
+        let [civ_scope::SUB_WAVEFORM, rest @ ..] = data else {
+            return;
+        };
+        let Some(assembler) = self.scope.as_mut() else {
+            return;
+        };
+        match civ_scope::parse_segment(rest) {
+            Some(segment) => {
+                if let Some(line) = assembler.push(segment) {
+                    self.scope_lines.push(line);
+                }
+            }
+            None => assembler.note_malformed(),
+        }
     }
 }
 
@@ -495,5 +798,230 @@ mod tests {
             engine.feed(&strange, T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    fn shipped(id: &str) -> RigDescription {
+        let path = format!("{}/../../rigs/{id}.toml", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(path).expect("rig file");
+        radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description
+    }
+
+    fn reply(address: u8, cmd: u8, data: &[u8]) -> Vec<u8> {
+        Frame {
+            to: 0xE0,
+            from: address,
+            cmd,
+            data: data.to_vec(),
+        }
+        .to_bytes()
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_encode_rit_offset]
+    // Tests [@ANCHOR: radioctl_civ_decode_rit_offset]
+    #[test]
+    fn rit_offset_is_two_bcd_bytes_and_a_sign() {
+        assert_eq!(encode_rit_offset(150), Some([0x50, 0x01, 0x00]));
+        assert_eq!(encode_rit_offset(-1200), Some([0x00, 0x12, 0x01]));
+        assert_eq!(encode_rit_offset(9999), Some([0x99, 0x99, 0x00]));
+        assert_eq!(encode_rit_offset(10_000), None);
+        assert_eq!(decode_rit_offset(&[0x50, 0x01, 0x00]), Some(150));
+        assert_eq!(decode_rit_offset(&[0x00, 0x12, 0x01]), Some(-1200));
+        assert_eq!(decode_rit_offset(&[0x5A, 0x01, 0x00]), None);
+        assert_eq!(decode_rit_offset(&[0x50, 0x01]), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_filter_index_to_hz]
+    // Tests [@ANCHOR: radioctl_civ_filter_hz_to_index]
+    #[test]
+    fn filter_tables_match_the_two_ranges() {
+        assert_eq!(filter_index_to_hz(false, 0), Some(50));
+        assert_eq!(filter_index_to_hz(false, 9), Some(500));
+        assert_eq!(filter_index_to_hz(false, 10), Some(600));
+        assert_eq!(filter_index_to_hz(false, 40), Some(3600));
+        assert_eq!(filter_index_to_hz(false, 41), None);
+        assert_eq!(filter_index_to_hz(true, 0), Some(200));
+        assert_eq!(filter_index_to_hz(true, 49), Some(10_000));
+        assert_eq!(filter_index_to_hz(true, 50), None);
+        assert_eq!(filter_hz_to_index(false, 2400), Some(28));
+        assert_eq!(filter_hz_to_index(false, 575), None);
+        assert_eq!(filter_hz_to_index(true, 6000), Some(29));
+        for index in 0..=40u8 {
+            let hz = filter_index_to_hz(false, index).expect("in table");
+            assert_eq!(filter_hz_to_index(false, hz), Some(index));
+        }
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_encode]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode_levels_and_filter]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode_rit_xit]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
+    // Tests [@ANCHOR: radioctl_civ_engine_filter_table_is_am]
+    // Tests [@ANCHOR: radioctl_civ_level_sub]
+    #[test]
+    fn the_extended_commands_encode_as_read_from_the_facts() {
+        let mut e = CivEngine::new(shipped("icom-ic-7610")).expect("engine");
+        let b = |e: &mut CivEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        let head = [0xFE, 0xFE, 0x98, 0xE0];
+        let with = |body: &[u8]| [&head[..], body, &[0xFD]].concat();
+        assert_eq!(b(&mut e, Op::GetFrequency(Vfo::B)), with(&[0x25, 0x01]));
+        assert_eq!(
+            b(&mut e, Op::SetFrequency(Vfo::B, Hz(7_000_000))),
+            with(&[0x25, 0x01, 0x00, 0x00, 0x00, 0x07, 0x00])
+        );
+        assert_eq!(b(&mut e, Op::GetSplit), with(&[0x0F]));
+        assert_eq!(b(&mut e, Op::SetSplit(true)), with(&[0x0F, 0x01]));
+        assert_eq!(b(&mut e, Op::SetXit(true)), with(&[0x21, 0x02, 0x01]));
+        assert_eq!(b(&mut e, Op::GetRitOffset), with(&[0x21, 0x00]));
+        assert_eq!(
+            b(&mut e, Op::SetLevel(Level::MicGain, 255)),
+            with(&[0x14, 0x0B, 0x02, 0x55])
+        );
+        assert_eq!(
+            b(&mut e, Op::GetLevel(Level::MonitorLevel)),
+            with(&[0x14, 0x15])
+        );
+        assert_eq!(b(&mut e, Op::GetModelId), with(&[0x19, 0x00]));
+        assert!(e.encode(&Op::SetLevel(Level::AfGain, 256)).is_err());
+        assert!(e.encode(&Op::GetLevel(Level::KeyerSpeed)).is_err());
+        assert!(e.encode(&Op::SetRitOffset(10_000)).is_err());
+        assert!(e.encode(&Op::GetFilterWidth).is_err(), "mode unknown yet");
+        assert!(e.encode(&Op::GetSwr).is_err(), "SWR is a gap");
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode_filter]
+    // Tests [@ANCHOR: radioctl_civ_engine_feed]
+    #[test]
+    fn the_filter_index_is_read_by_the_mode_last_reported() {
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
+        let usb = reply(0x94, 0x04, &[0x01, 0x01]);
+        e.feed(&usb, T0);
+        let ssb = reply(0x94, 0x1A, &[0x03, 0x28]);
+        assert_eq!(
+            e.feed(&ssb, T0),
+            vec![Inbound::Observation(Observation::FilterWidth(Hz(2400)))]
+        );
+        let set = e.encode(&Op::SetFilterWidth(Hz(2400))).expect("set");
+        assert_eq!(
+            set.bytes,
+            vec![0xFE, 0xFE, 0x94, 0xE0, 0x1A, 0x03, 0x28, 0xFD]
+        );
+        assert!(e.encode(&Op::SetFilterWidth(Hz(2450))).is_err());
+        e.feed(&reply(0x94, 0x04, &[0x02, 0x01]), T0);
+        assert_eq!(
+            e.feed(&reply(0x94, 0x1A, &[0x03, 0x29]), T0),
+            vec![Inbound::Observation(Observation::FilterWidth(Hz(6000)))]
+        );
+        e.feed(&reply(0x94, 0x04, &[0x05, 0x01]), T0);
+        assert!(e.encode(&Op::GetFilterWidth).is_err(), "FM has none");
+        assert!(matches!(
+            e.feed(&reply(0x94, 0x1A, &[0x03, 0x29]), T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+        assert!(matches!(
+            e.feed(&reply(0x94, 0x1A, &[0x03, 0x7F]), T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    #[test]
+    fn the_extended_replies_decode() {
+        let mut e = CivEngine::new(shipped("icom-ic-9700")).expect("engine");
+        let seen = |e: &mut CivEngine, cmd: u8, data: &[u8]| e.feed(&reply(0xA2, cmd, data), T0);
+        assert_eq!(
+            seen(&mut e, 0x25, &[0x01, 0x00, 0x40, 0x17, 0x44, 0x01]),
+            vec![Inbound::Observation(Observation::Frequency(
+                Vfo::B,
+                Hz(144_174_000)
+            ))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x25, &[0x00, 0x00, 0x40, 0x17, 0x44, 0x01]),
+            vec![Inbound::Observation(Observation::Frequency(
+                Vfo::A,
+                Hz(144_174_000)
+            ))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x0F, &[0x01]),
+            vec![Inbound::Observation(Observation::Split(true))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x21, &[0x00, 0x00, 0x12, 0x01]),
+            vec![Inbound::Observation(Observation::RitOffset(-1200))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x21, &[0x01, 0x01]),
+            vec![Inbound::Observation(Observation::Rit(true))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x21, &[0x02, 0x00]),
+            vec![Inbound::Observation(Observation::Xit(false))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x14, &[0x0A, 0x01, 0x28]),
+            vec![Inbound::Observation(Observation::Level(
+                Level::RfPower,
+                128
+            ))]
+        );
+        assert_eq!(
+            seen(&mut e, 0x19, &[0x00, 0xA2]),
+            vec![Inbound::Observation(Observation::ModelId(0xA2))]
+        );
+        for bad in [
+            (0x14u8, vec![0x01, 0x03, 0x00]),
+            (0x14, vec![0x77, 0x00, 0x10]),
+            (0x25, vec![0x07, 0x00]),
+        ] {
+            assert!(matches!(
+                seen(&mut e, bad.0, &bad.1).as_slice(),
+                [Inbound::Unrecognised(_)]
+            ));
+        }
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_scope_request]
+    // Tests [@ANCHOR: radioctl_civ_engine_take_scope_lines]
+    // Tests [@ANCHOR: radioctl_civ_engine_scope_dropped]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode_scope]
+    #[test]
+    fn scope_frames_become_lines_and_never_surface_as_unrecognised() {
+        use crate::civ_scope::{ScopeCommand, ScopeMode};
+        use crate::virtual_rig::VirtualRig;
+        let desc = shipped("icom-ic-7610");
+        let mut e = CivEngine::new(desc.clone()).expect("engine");
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        let on = e
+            .scope_request(ScopeCommand::SetOutput(true))
+            .expect("request");
+        assert_eq!(on.reply, ReplyKind::Ack);
+        assert_eq!(
+            on.bytes,
+            vec![0xFE, 0xFE, 0x98, 0xE0, 0x27, 0x11, 0x01, 0xFD]
+        );
+        assert_eq!(rig.feed(&on.bytes, T0), reply(0x98, OK, &[]));
+        let query = e.scope_request(ScopeCommand::GetMode(1)).expect("query");
+        assert_eq!(query.reply, ReplyKind::None);
+        let sweep = rig.scope_sweep();
+        assert!(e.feed(&sweep, T0).is_empty(), "scope frames are consumed");
+        let lines = e.take_scope_lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0].samples.len(), 689);
+        assert_eq!(lines[0].mode, ScopeMode::Center);
+        assert!(e.take_scope_lines().is_empty());
+        let mut broken = sweep.clone();
+        let cut = broken.len() / 2;
+        broken.drain(..cut);
+        e.feed(&broken, T0);
+        assert!(e.take_scope_lines().is_empty());
+        e.feed(&reply(0x98, 0x27, &[0x00, 0x05]), T0);
+        assert!(e.scope_dropped() >= 1);
+        assert!(e.scope_request(ScopeCommand::GetSpan(2)).is_err());
+        let plain = CivEngine::new(RigDescription::ic7300()).expect("engine");
+        assert!(plain.scope_request(ScopeCommand::GetDisplay).is_err());
     }
 }

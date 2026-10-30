@@ -26,6 +26,7 @@ use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::units::{Hz, Level, Mode};
 
 use crate::civ::{self, Frame, FrameParser, Parsed};
+use crate::civ_scope::{ScopeAnswer, ScopeSim, SCOPE_CMD, SUB_WAVEFORM};
 use crate::elecraft;
 use crate::kenwood::{self, Token, Tokenizer};
 
@@ -113,6 +114,10 @@ pub struct VirtualRig {
     desc: RigDescription,
     state: RigState,
     wire: Wire,
+    scope: Option<ScopeSim>,
+    /// CI-V: true while VFO B is the selected VFO (command 07 01); `03`, `05` and `25 00` act on
+    /// the selected VFO and `25 01` on the other.
+    civ_b_selected: bool,
 }
 
 impl VirtualRig {
@@ -172,6 +177,8 @@ impl VirtualRig {
             desc: desc.clone(),
             state,
             wire,
+            scope: desc.scope.as_ref().map(ScopeSim::new),
+            civ_b_selected: false,
         })
     }
 
@@ -325,21 +332,67 @@ impl VirtualRig {
     fn civ_dispatch(&mut self, frame: &Frame, params: &CivParams) -> CivReply {
         let data = frame.data.as_slice();
         match (frame.cmd, data) {
-            (0x03, []) => data_reply(0x03, civ::encode_bcd_freq(self.state.freq_a), &[]),
-            (0x05, bcd) => match civ::decode_bcd_freq(bcd) {
-                Some(hz) if bcd.len() == 5 => {
-                    self.state.freq_a = hz;
-                    CivReply::Ok
-                }
-                _ => CivReply::Ng,
+            (0x03, []) => data_reply(0x03, civ::encode_bcd_freq(*self.civ_slot(false)), &[]),
+            (0x05, bcd) => self.civ_set_freq(false, bcd),
+            (0x25, [0x00]) => {
+                data_reply(0x25, civ::encode_bcd_freq(*self.civ_slot(false)), &[0x00])
+            }
+            (0x25, [0x00, bcd @ ..]) => self.civ_set_freq(false, bcd),
+            (0x25, [0x01]) => data_reply(0x25, civ::encode_bcd_freq(*self.civ_slot(true)), &[0x01]),
+            (0x25, [0x01, bcd @ ..]) => self.civ_set_freq(true, bcd),
+            (0x07, [0x00]) => {
+                self.civ_b_selected = false;
+                CivReply::Ok
+            }
+            (0x07, [0x01]) => {
+                self.civ_b_selected = true;
+                CivReply::Ok
+            }
+            (0x07, [0xA0]) => {
+                *self.civ_slot(true) = *self.civ_slot(false);
+                CivReply::Ok
+            }
+            (0x07, [0xB0]) => {
+                std::mem::swap(&mut self.state.freq_a, &mut self.state.freq_b);
+                CivReply::Ok
+            }
+            (0x0F, []) => CivReply::Data(0x0F, vec![u8::from(self.state.split)]),
+            (0x0F, [state @ (0x00 | 0x01)]) => {
+                self.state.split = *state == 1;
+                CivReply::Ok
+            }
+            (0x21, [0x00]) => match civ::encode_rit_offset(self.state.rit_offset) {
+                Some(bytes) => CivReply::Data(0x21, [&[0x00][..], &bytes[..]].concat()),
+                None => CivReply::Ng,
             },
-            (0x25, [0x00]) => data_reply(0x25, civ::encode_bcd_freq(self.state.freq_a), &[0x00]),
-            (0x25, [0x00, bcd @ ..]) => match civ::decode_bcd_freq(bcd) {
-                Some(hz) if bcd.len() == 5 => {
-                    self.state.freq_a = hz;
+            (0x21, [0x00, bytes @ ..]) => match civ::decode_rit_offset(bytes) {
+                Some(hz) => {
+                    self.state.rit_offset = hz;
                     CivReply::Ok
                 }
-                _ => CivReply::Ng,
+                None => CivReply::Ng,
+            },
+            (0x21, [0x01]) => CivReply::Data(0x21, vec![0x01, u8::from(self.state.rit)]),
+            (0x21, [0x01, state @ (0x00 | 0x01)]) => {
+                self.state.rit = *state == 1;
+                CivReply::Ok
+            }
+            (0x21, [0x02]) => CivReply::Data(0x21, vec![0x02, u8::from(self.state.xit)]),
+            (0x21, [0x02, state @ (0x00 | 0x01)]) => {
+                self.state.xit = *state == 1;
+                CivReply::Ok
+            }
+            (0x14, [sub]) => self.civ_level_get(*sub),
+            (0x14, [sub, value @ ..]) => self.civ_level_set(*sub, value),
+            (0x1A, [0x03]) => self.civ_filter_get(),
+            (0x1A, [0x03, index]) => self.civ_filter_set(*index),
+            (SCOPE_CMD, rest) => match self.scope.as_mut() {
+                Some(scope) => match scope.handle(rest) {
+                    ScopeAnswer::Ok => CivReply::Ok,
+                    ScopeAnswer::Data(data) => CivReply::Data(SCOPE_CMD, data),
+                    ScopeAnswer::Refused => CivReply::Ng,
+                },
+                None => CivReply::Ng,
             },
             (0x04, []) => self.civ_mode_reply(0x04, &[]),
             (0x26, [0x00]) => self.civ_mode_reply(0x26, &[0x00]),
@@ -366,6 +419,96 @@ impl VirtualRig {
             (0x15, [0x11]) => meter_reply(0x11, self.state.power()),
             _ => CivReply::Ng,
         }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_slot]
+    /// The frequency of the selected VFO, or of the other one when `other` is true.
+    fn civ_slot(&mut self, other: bool) -> &mut Hz {
+        if self.civ_b_selected != other {
+            &mut self.state.freq_b
+        } else {
+            &mut self.state.freq_a
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_set_freq]
+    fn civ_set_freq(&mut self, other: bool, bcd: &[u8]) -> CivReply {
+        match civ::decode_bcd_freq(bcd) {
+            Some(hz) if bcd.len() == 5 => {
+                *self.civ_slot(other) = hz;
+                CivReply::Ok
+            }
+            _ => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_level]
+    fn civ_level_get(&self, sub: u8) -> CivReply {
+        let value = civ_level_of(sub).and_then(|level| self.state.levels.get(&level));
+        match value {
+            Some(value) => {
+                let mut data = vec![sub];
+                data.extend(civ::encode_bcd_meter(*value));
+                CivReply::Data(0x14, data)
+            }
+            None => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_level_set]
+    fn civ_level_set(&mut self, sub: u8, value: &[u8]) -> CivReply {
+        match (civ_level_of(sub), civ::decode_bcd_meter(value)) {
+            (Some(level), Some(raw)) if raw <= 255 => {
+                self.state.levels.insert(level, raw);
+                CivReply::Ok
+            }
+            _ => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_filter]
+    fn civ_filter_get(&self) -> CivReply {
+        let am = self.state.mode == Mode::Am;
+        let index = u32::try_from(self.state.filter_width.0)
+            .ok()
+            .and_then(|hz| civ::filter_hz_to_index(am, hz));
+        match index {
+            Some(index) => CivReply::Data(0x1A, vec![0x03, bcd_byte(index)]),
+            None => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_filter_set]
+    fn civ_filter_set(&mut self, byte: u8) -> CivReply {
+        let (high, low) = (byte >> 4, byte & 15);
+        let am = self.state.mode == Mode::Am;
+        let width = (high <= 9 && low <= 9)
+            .then(|| civ::filter_index_to_hz(am, high * 10 + low))
+            .flatten();
+        match width {
+            Some(hz) => {
+                self.state.filter_width = Hz(u64::from(hz));
+                CivReply::Ok
+            }
+            None => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_scope_sweep]
+    /// The bytes the rig sends on its own for one scope sweep of the Main receiver at the VFO A
+    /// frequency, as broadcast frames; empty when the model has no scope, output is off or the
+    /// scope is held.
+    pub fn scope_sweep(&mut self) -> Vec<u8> {
+        let (Wire::Civ { params, .. }, Some(scope)) = (&self.wire, self.scope.as_mut()) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for segment in scope.sweep(0, self.state.freq_a) {
+            let mut data = vec![SUB_WAVEFORM];
+            data.extend(segment);
+            out.extend(unsolicited_civ(params, SCOPE_CMD, &data));
+        }
+        out
     }
 
     // [@ANCHOR: radioctl_virtual_civ_mode_reply]
@@ -697,6 +840,23 @@ enum CivReply {
     Data(u8, Vec<u8>),
 }
 
+// [@ANCHOR: radioctl_virtual_civ_level_of]
+/// The level behind a `14` sub-command (AF 01, RF 02, power 0A, mic 0B, monitor 15).
+fn civ_level_of(sub: u8) -> Option<Level> {
+    match sub {
+        0x01 => Some(Level::AfGain),
+        0x02 => Some(Level::RfGain),
+        0x0A => Some(Level::RfPower),
+        0x0B => Some(Level::MicGain),
+        0x15 => Some(Level::MonitorLevel),
+        _ => None,
+    }
+}
+
+fn bcd_byte(value: u8) -> u8 {
+    ((value / 10) << 4) | (value % 10)
+}
+
 // [@ANCHOR: radioctl_virtual_data_reply]
 fn data_reply(cmd: u8, bcd: Option<[u8; 5]>, prefix: &[u8]) -> CivReply {
     match bcd {
@@ -984,5 +1144,149 @@ mod tests {
         let offset = rig.front_panel(PanelChange::RitOffset(-5));
         assert_eq!(offset.get(16 + 2..21 + 2), Some(&b"-0005"[..]));
         assert_eq!(rig.feed(b"AI;", T0), b"AI2;");
+    }
+
+    fn shipped_rig(id: &str) -> VirtualRig {
+        let path = format!("{}/../../rigs/{id}.toml", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(path).expect("rig file");
+        let loaded = radioctl_core::rigfile::parse(&text).expect("loads");
+        VirtualRig::from_description(&loaded.description).expect("rig")
+    }
+
+    fn civ_ask(rig: &mut VirtualRig, address: u8, body: &[u8]) -> Vec<u8> {
+        let mut wire = vec![0xFE, 0xFE, address, 0xE0];
+        wire.extend_from_slice(body);
+        wire.push(0xFD);
+        rig.feed(&wire, Duration::from_secs(1))
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_civ_level]
+    // Tests [@ANCHOR: radioctl_virtual_civ_level_set]
+    // Tests [@ANCHOR: radioctl_virtual_civ_level_of]
+    // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+    #[test]
+    fn civ_levels_split_rit_and_vfo_b_follow_the_description() {
+        let mut rig = shipped_rig("icom-ic-705");
+        let ok = vec![0xFE, 0xFE, 0xE0, 0xA4, 0xFB, 0xFD];
+        let ng = vec![0xFE, 0xFE, 0xE0, 0xA4, 0xFA, 0xFD];
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x14, 0x0B, 0x01, 0x99]), ok);
+        assert_eq!(rig.state().levels.get(&Level::MicGain), Some(&199));
+        assert_eq!(
+            civ_ask(&mut rig, 0xA4, &[0x14, 0x0B, 0x03, 0x00]),
+            ng,
+            "over 255"
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0xA4, &[0x14, 0x0C]),
+            ng,
+            "keyer speed is a gap"
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0xA4, &[0x14, 0x0B, 0x01, 0x9A]),
+            ng,
+            "not BCD"
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0xA4, &[0x14, 0x0B]),
+            vec![0xFE, 0xFE, 0xE0, 0xA4, 0x14, 0x0B, 0x01, 0x99, 0xFD]
+        );
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x0F, 0x01]), ok);
+        assert!(rig.state().split);
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x0F, 0x02]), ng);
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x21, 0x00, 0x50, 0x01, 0x01]), ok);
+        assert_eq!(rig.state().rit_offset, -150);
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x21, 0x01, 0x01]), ok);
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x21, 0x02, 0x01]), ok);
+        assert!(rig.state().rit && rig.state().xit);
+        assert_eq!(
+            civ_ask(&mut rig, 0xA4, &[0x25, 0x01, 0x00, 0x00, 0x03, 0x07, 0x00]),
+            ok
+        );
+        assert_eq!(rig.state().freq_b, Hz(7_030_000));
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x25, 0x01, 0x00]), ng);
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_civ_slot]
+    // Tests [@ANCHOR: radioctl_virtual_civ_set_freq]
+    #[test]
+    fn civ_vfo_selection_swaps_what_the_plain_commands_act_on() {
+        let mut rig = shipped_rig("icom-ic-7300");
+        let ok = vec![0xFE, 0xFE, 0xE0, 0x94, 0xFB, 0xFD];
+        civ_ask(&mut rig, 0x94, &[0x25, 0x01, 0x00, 0x00, 0x03, 0x07, 0x00]);
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x07, 0x01]), ok);
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x03]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x03, 0x00, 0x00, 0x03, 0x07, 0x00, 0xFD],
+            "plain read now sees VFO B"
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x05, 0x00, 0x00, 0x05, 0x07, 0x00]),
+            ok
+        );
+        assert_eq!(
+            (rig.state().freq_a, rig.state().freq_b),
+            (Hz(14_074_000), Hz(7_050_000))
+        );
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x07, 0xB0]), ok);
+        assert_eq!(
+            (rig.state().freq_a, rig.state().freq_b),
+            (Hz(7_050_000), Hz(14_074_000))
+        );
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x07, 0xA0]), ok);
+        assert_eq!(rig.state().freq_a, rig.state().freq_b);
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x07, 0x00]), ok);
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x07, 0x55]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD]
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_civ_filter]
+    // Tests [@ANCHOR: radioctl_virtual_civ_filter_set]
+    #[test]
+    fn civ_filter_index_follows_the_mode() {
+        let mut rig = shipped_rig("icom-ic-7300");
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x1A, 0x03]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x1A, 0x03, 0x09, 0xFD]
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x1A, 0x03, 0x41]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD]
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x1A, 0x03, 0x4A]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD]
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x1A, 0x03, 0x00]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0xFB, 0xFD]
+        );
+        assert_eq!(rig.state().filter_width, Hz(50));
+        civ_ask(&mut rig, 0x94, &[0x06, 0x02]);
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x1A, 0x03]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD],
+            "50 Hz is not an AM width"
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_scope_sweep]
+    #[test]
+    fn only_a_model_with_a_scope_sends_sweeps_and_only_when_asked() {
+        let mut rig = shipped_rig("icom-ic-9700");
+        assert!(rig.scope_sweep().is_empty(), "output starts off");
+        civ_ask(&mut rig, 0xA2, &[0x27, 0x11, 0x01]);
+        let wire = rig.scope_sweep();
+        assert!(wire.starts_with(&[0xFE, 0xFE, 0x00, 0xA2, 0x27, 0x00, 0x00, 0x01, 0x11]));
+        assert_eq!(wire.iter().filter(|b| **b == 0xFD).count(), 11);
+        let mut plain = VirtualRig::from_description(&RigDescription::ic7300()).expect("rig");
+        assert_eq!(
+            civ_ask(&mut plain, 0x94, &[0x27, 0x11, 0x01]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD]
+        );
+        assert!(plain.scope_sweep().is_empty());
+        let mut kenwood = VirtualRig::from_description(&RigDescription::ts2000()).expect("rig");
+        assert!(kenwood.scope_sweep().is_empty());
     }
 }

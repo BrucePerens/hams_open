@@ -1,0 +1,240 @@
+# Conformance transcript for rigs/icom-ic-9700.toml.
+# ORIGIN: hand-written from the command layouts read in Hamlib 4.6.2 (facts only; see the description's
+# provenance) and from the basic frames in tools/rig_simulator.py. This is NOT a capture of a radio and NOT
+# written from Icom's CI-V guide. It proves the engine, the virtual rig and the description agree with each
+# other, not that they agree with a IC-9700.
+schema = 1
+rig = "icom-ic-9700"
+origin = "hand-written from Hamlib 4.6.2 command layouts (facts only) and tools/rig_simulator.py; not a capture of a radio"
+
+[[step]]
+op = { kind = "get-model-id" }
+tx = "fe fe a2 e0 19 00 fd"
+rx = "fe fe e0 a2 19 00 a2 fd"
+expect = { kind = "model-id", value = 162 }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx = "fe fe a2 e0 03 fd"
+rx = "fe fe e0 a2 03 00 40 17 44 01 fd"
+expect = { kind = "frequency", vfo = "a", hz = 144174000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
+tx = "fe fe a2 e0 05 00 00 03 07 00 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx = "fe fe a2 e0 03 fd"
+rx = "fe fe e0 a2 03 00 00 03 07 00 fd"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "b" }
+tx = "fe fe a2 e0 25 01 fd"
+rx = "fe fe e0 a2 25 01 00 40 17 44 01 fd"
+expect = { kind = "frequency", vfo = "b", hz = 144174000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "b", hz = 14025000 }
+tx = "fe fe a2 e0 25 01 00 50 02 14 00 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "b" }
+tx = "fe fe a2 e0 25 01 fd"
+rx = "fe fe e0 a2 25 01 00 50 02 14 00 fd"
+expect = { kind = "frequency", vfo = "b", hz = 14025000 }
+
+[[step]]
+op = { kind = "get-split" }
+tx = "fe fe a2 e0 0f fd"
+rx = "fe fe e0 a2 0f 00 fd"
+expect = { kind = "split", on = false }
+
+[[step]]
+op = { kind = "set-split", on = true }
+tx = "fe fe a2 e0 0f 01 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-split" }
+tx = "fe fe a2 e0 0f fd"
+rx = "fe fe e0 a2 0f 01 fd"
+expect = { kind = "split", on = true }
+
+[[step]]
+op = { kind = "get-mode" }
+tx = "fe fe a2 e0 04 fd"
+rx = "fe fe e0 a2 04 01 01 fd"
+expect = { kind = "mode", mode = "usb" }
+
+[[step]]
+op = { kind = "set-mode", mode = "cw" }
+tx = "fe fe a2 e0 06 03 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-mode" }
+tx = "fe fe a2 e0 04 fd"
+rx = "fe fe e0 a2 04 03 01 fd"
+expect = { kind = "mode", mode = "cw" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx = "fe fe a2 e0 1a 03 fd"
+rx = "fe fe e0 a2 1a 03 09 fd"
+expect = { kind = "filter-width", hz = 500 }
+
+[[step]]
+op = { kind = "set-filter-width", hz = 2400 }
+tx = "fe fe a2 e0 1a 03 28 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx = "fe fe a2 e0 1a 03 fd"
+rx = "fe fe e0 a2 1a 03 28 fd"
+expect = { kind = "filter-width", hz = 2400 }
+
+[[step]]
+op = { kind = "get-rit" }
+tx = "fe fe a2 e0 21 01 fd"
+rx = "fe fe e0 a2 21 01 00 fd"
+expect = { kind = "rit", on = false }
+
+[[step]]
+op = { kind = "set-rit", on = true }
+tx = "fe fe a2 e0 21 01 01 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-rit" }
+tx = "fe fe a2 e0 21 01 fd"
+rx = "fe fe e0 a2 21 01 01 fd"
+expect = { kind = "rit", on = true }
+
+[[step]]
+op = { kind = "get-xit" }
+tx = "fe fe a2 e0 21 02 fd"
+rx = "fe fe e0 a2 21 02 00 fd"
+expect = { kind = "xit", on = false }
+
+[[step]]
+op = { kind = "set-rit-offset", hz = 150 }
+tx = "fe fe a2 e0 21 00 50 01 00 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-rit-offset" }
+tx = "fe fe a2 e0 21 00 fd"
+rx = "fe fe e0 a2 21 00 50 01 00 fd"
+expect = { kind = "rit-offset", hz = 150 }
+
+[[step]]
+op = { kind = "set-rit-offset", hz = -1200 }
+tx = "fe fe a2 e0 21 00 00 12 01 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-rit-offset" }
+tx = "fe fe a2 e0 21 00 fd"
+rx = "fe fe e0 a2 21 00 00 12 01 fd"
+expect = { kind = "rit-offset", hz = -1200 }
+
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx = "fe fe a2 e0 14 01 fd"
+rx = "fe fe e0 a2 14 01 00 30 fd"
+expect = { kind = "level", level = "af-gain", value = 30 }
+
+[[step]]
+op = { kind = "set-level", level = "af-gain", value = 128 }
+tx = "fe fe a2 e0 14 01 01 28 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx = "fe fe a2 e0 14 01 fd"
+rx = "fe fe e0 a2 14 01 01 28 fd"
+expect = { kind = "level", level = "af-gain", value = 128 }
+
+[[step]]
+op = { kind = "get-level", level = "rf-gain" }
+tx = "fe fe a2 e0 14 02 fd"
+rx = "fe fe e0 a2 14 02 02 50 fd"
+expect = { kind = "level", level = "rf-gain", value = 250 }
+
+[[step]]
+op = { kind = "set-level", level = "rf-power", value = 255 }
+tx = "fe fe a2 e0 14 0a 02 55 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-level", level = "mic-gain" }
+tx = "fe fe a2 e0 14 0b fd"
+rx = "fe fe e0 a2 14 0b 00 25 fd"
+expect = { kind = "level", level = "mic-gain", value = 25 }
+
+[[step]]
+op = { kind = "get-level", level = "monitor-level" }
+tx = "fe fe a2 e0 14 15 fd"
+rx = "fe fe e0 a2 14 15 00 20 fd"
+expect = { kind = "level", level = "monitor-level", value = 20 }
+
+[[step]]
+op = { kind = "set-ptt", on = true }
+tx = "fe fe a2 e0 1c 00 01 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-ptt" }
+tx = "fe fe a2 e0 1c 00 fd"
+rx = "fe fe e0 a2 1c 00 01 fd"
+expect = { kind = "ptt", on = true }
+
+[[step]]
+op = { kind = "get-power" }
+tx = "fe fe a2 e0 15 11 fd"
+rx = "fe fe e0 a2 15 11 01 28 fd"
+expect = { kind = "power", value = 128 }
+
+[[step]]
+op = { kind = "set-ptt", on = false }
+tx = "fe fe a2 e0 1c 00 00 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-signal" }
+tx = "fe fe a2 e0 15 02 fd"
+rx = "fe fe e0 a2 15 02 00 30 fd"
+expect = { kind = "signal", value = 30 }
+
+[[step]]
+op = { kind = "send-cw", text = "CQ" }
+tx = "fe fe a2 e0 17 43 51 fd"
+rx = "fe fe e0 a2 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+panel = { kind = "frequency", hz = 21074000 }
+rx = "fe fe 00 a2 00 00 40 07 21 00 fd"
+expect = { kind = "frequency", vfo = "a", hz = 21074000 }
+
+[[step]]
+panel = { kind = "mode", mode = "lsb" }
+rx = "fe fe 00 a2 01 00 01 fd"
+expect = { kind = "mode", mode = "lsb" }

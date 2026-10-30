@@ -50,6 +50,22 @@ pub struct ElecraftParams {
     pub model_id: u16,
 }
 
+/// Spectrum scope (band scope) parameters of a model, for waveform data the rig sends on its own
+/// (Icom CI-V command 0x27).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScopeParams {
+    /// Independent scopes (receivers): 1, or 2 on a Main/Sub rig.
+    pub receivers: u8,
+    /// Amplitude samples in one complete sweep ("line").
+    pub line_length: u16,
+    /// Amplitude samples carried by one waveform frame.
+    pub samples_per_frame: u16,
+    /// Largest amplitude sample the rig sends (0 is the bottom of the display).
+    pub amplitude_max: u16,
+    /// The span choices in hertz (full width, as the rig's menu shows them).
+    pub spans_hz: Vec<u64>,
+}
+
 /// Command timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -76,6 +92,8 @@ pub struct RigDescription {
     pub kenwood: Option<KenwoodParams>,
     /// Elecraft parameters, present for [`Family::ElecraftAscii`].
     pub elecraft: Option<ElecraftParams>,
+    /// Spectrum scope parameters, for the models that have a scope over CAT.
+    pub scope: Option<ScopeParams>,
     /// What the rig can do.
     pub capabilities: CapabilitySet,
     /// Mode to wire code: a CI-V mode byte, or the ASCII byte of a Kenwood `MD` digit.
@@ -122,6 +140,7 @@ impl RigDescription {
             }),
             kenwood: None,
             elecraft: None,
+            scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,
@@ -165,6 +184,7 @@ impl RigDescription {
             civ: None,
             kenwood: Some(KenwoodParams { model_id: 19 }),
             elecraft: None,
+            scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,
