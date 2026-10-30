@@ -169,6 +169,11 @@ impl Personality for CivPersonality {
                 None => self.status_frame(to, false),
             },
             Outcome::Value(Observation::Mode(mode)) => match self.mode_code(*mode) {
+                // `26 00` carries the DATA flag between mode and filter; `04` does not.
+                Some(code) if cmd == 0x26 => {
+                    let data = u8::from(matches!(mode, Mode::Data | Mode::DataR));
+                    with_prefix(&[code, data, 0x01])
+                }
                 Some(code) => with_prefix(&[code, 0x01]),
                 None => self.status_frame(to, false),
             },
@@ -307,7 +312,15 @@ mod tests {
                 &request,
                 &Outcome::Value(Observation::Mode(Mode::Cw))
             ),
-            vec![0xFE, 0xFE, 0xE0, 0x94, 0x26, 0x00, 0x03, 0x01, 0xFD]
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x26, 0x00, 0x03, 0x00, 0x01, 0xFD]
+        );
+        assert_eq!(
+            p.reply(
+                &context,
+                &request,
+                &Outcome::Value(Observation::Mode(Mode::Data))
+            ),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x26, 0x00, 0x01, 0x01, 0x01, 0xFD]
         );
         let ptt_read = [0xFE, 0xFE, 0x94, 0xE0, 0x1C, 0x00, 0xFD];
         let (request, context) = context_of(&ask(&mut p, &ptt_read));

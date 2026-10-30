@@ -49,6 +49,22 @@ CARGO_TARGET_DIR=... nice -n 10 cargo clippy --all-targets -- -D warnings
 CARGO_TARGET_DIR=... nice -n 10 cargo test
 ```
 
+Differential tests against Hamlib's `rigctld` (needs the binary, or `RIGCTLD=/path`; they fail
+loudly without it, so they sit behind a feature):
+
+```
+CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctl-protocols --features hamlib-oracle --test rigctld_oracle -- --nocapture
+```
+
+Each rig's virtual twin is driven twice, once through `rigctld` (started on a pty whose master is the
+virtual rig) and once through radioctl's engine, and the readings and final states are compared;
+the bytes Hamlib sent are printed. First results (Hamlib 4.6.2): KX3 and IC-7300 agree on frequency,
+mode, PTT read, RIT offset and keyer speed; the TS-2000 differs because Hamlib's backend reads
+the frequency from `IF;`, which the virtual TS-2000 refuses (layout unverified), and that known gap
+is pinned by its own test. The oracle also found and fixed two virtual-rig errors (IC-7300 `26 00`
+lacked the DATA flag byte; the virtual KX3 lacked `PS`, `K2`/`K3`, `OM`, `IF`, `RV` for other
+modules, which Hamlib's KX3 backend sends at start-up).
+
 Never a per-worktree `target/`; delete the target directory when the job is done (AGENTS.md).
 
 ## Rig descriptions and conformance
@@ -153,6 +169,7 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_elecraft_decode] (radioctl-protocols) Decodes one Elecraft reply token into observations.
 - [@ANCHOR: radioctl:radioctl_elecraft_decode_one] (radioctl-protocols) Decodes the single-value Elecraft replies (`FA`, `MD`, `TQ`, `SM`, levels, ...).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
+- [@ANCHOR: radioctl:radioctl_virtual_elecraft_set_meta] (radioctl-protocols) Stores a `K2n`/`K3n` meta-command value of the virtual Elecraft rig (Basic formats are still used).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_if] (radioctl-protocols) The `IF` answer of the virtual Elecraft rig.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_panel] (radioctl-protocols) What the virtual Elecraft rig sends on its own after a panel change, by `AI` mode.
