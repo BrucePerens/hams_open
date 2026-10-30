@@ -26,6 +26,8 @@ const MESSAGES = {
 };
 const DEFAULT_MESSAGE = _t("We could not send the form. Please try again.");
 
+// [@ANCHOR: form_shield:notice_text]
+// Verified by [@ANCHOR: form_shield:test_error_notice_messages]
 export function noticeText(reason) {
     return MESSAGES[reason] || DEFAULT_MESSAGE;
 }
