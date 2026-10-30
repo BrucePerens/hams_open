@@ -40,9 +40,13 @@ pub enum Mode {
     Fm,
     /// Wide FM.
     Wfm,
+    /// Data mode (a sideband mode for digital signals, e.g. Elecraft DATA).
+    Data,
+    /// Data mode, reverse sideband.
+    DataR,
 }
 
-const MODE_NAMES: [(Mode, &str); 9] = [
+const MODE_NAMES: [(Mode, &str); 11] = [
     (Mode::Lsb, "lsb"),
     (Mode::Usb, "usb"),
     (Mode::Am, "am"),
@@ -52,6 +56,8 @@ const MODE_NAMES: [(Mode, &str); 9] = [
     (Mode::RttyR, "rtty-r"),
     (Mode::Fm, "fm"),
     (Mode::Wfm, "wfm"),
+    (Mode::Data, "data"),
+    (Mode::DataR, "data-r"),
 ];
 
 impl Mode {
@@ -102,6 +108,53 @@ impl Vfo {
     }
 }
 
+/// A level the rig exposes as a number in its own units (see the rig description for ranges).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Level {
+    /// Audio (AF) gain.
+    AfGain,
+    /// RF gain.
+    RfGain,
+    /// Microphone gain.
+    MicGain,
+    /// Monitor (sidetone) level.
+    MonitorLevel,
+    /// Keyer speed in words per minute.
+    KeyerSpeed,
+    /// Requested transmit power setting, in the rig's units (watts on an Elecraft KX3).
+    RfPower,
+}
+
+const LEVEL_NAMES: [(Level, &str); 6] = [
+    (Level::AfGain, "af-gain"),
+    (Level::RfGain, "rf-gain"),
+    (Level::MicGain, "mic-gain"),
+    (Level::MonitorLevel, "monitor-level"),
+    (Level::KeyerSpeed, "keyer-speed"),
+    (Level::RfPower, "rf-power"),
+];
+
+impl Level {
+    // [@ANCHOR: radioctl_core_level_name]
+    /// The name used in rig description and transcript files.
+    pub fn name(self) -> &'static str {
+        LEVEL_NAMES
+            .iter()
+            .find(|(l, _)| *l == self)
+            .map(|(_, n)| *n)
+            .unwrap_or("unknown")
+    }
+
+    // [@ANCHOR: radioctl_core_level_from_name]
+    /// The level with a file-format name.
+    pub fn from_name(name: &str) -> Option<Level> {
+        LEVEL_NAMES
+            .iter()
+            .find(|(_, n)| *n == name)
+            .map(|(l, _)| *l)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +168,17 @@ mod tests {
             assert_eq!(Mode::from_name(name), Some(mode));
         }
         assert_eq!(Mode::from_name("ssb"), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_level_name]
+    // Tests [@ANCHOR: radioctl_core_level_from_name]
+    #[test]
+    fn level_names_round_trip() {
+        for (level, name) in LEVEL_NAMES {
+            assert_eq!(level.name(), name);
+            assert_eq!(Level::from_name(name), Some(level));
+        }
+        assert_eq!(Level::from_name("volume"), None);
     }
 
     // Tests [@ANCHOR: radioctl_core_vfo_name]

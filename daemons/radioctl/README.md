@@ -94,6 +94,9 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 ## Function reference
 
 - [@ANCHOR: radioctl:radioctl_core_hz_from_khz] Builds a frequency in hertz from whole kilohertz, refusing overflow.
+- [@ANCHOR: radioctl:radioctl_core_level_name] (radioctl-core) The name of a level (AF gain, RF gain, mic gain, monitor level, keyer speed, RF power) in description and transcript files.
+- [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_transcript_step_bytes] (radioctl-core) One direction of a transcript step, as hex or as ASCII text (not both).
 - [@ANCHOR: radioctl:radioctl_core_hz_as_mhz] A frequency in megahertz for display.
 - [@ANCHOR: radioctl:radioctld_banner] The line the daemon skeleton prints.
 - [@ANCHOR: radioctl:radioctl_caps_parse_rig_list] Parses `rigctl -l` into model id, manufacturer, model, backend version, status and macro.

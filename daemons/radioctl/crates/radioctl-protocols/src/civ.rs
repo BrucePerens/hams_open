@@ -299,6 +299,9 @@ impl ProtocolEngine for CivEngine {
                     "CI-V transceive is set in the rig's menu",
                 ));
             }
+            _ => {
+                return Err(Self::unsupported("not implemented for the CI-V engine"));
+            }
         };
         Ok(request)
     }
