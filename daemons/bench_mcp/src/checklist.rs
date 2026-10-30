@@ -408,6 +408,163 @@ fn leak(line: &str) -> Option<String> {
     None
 }
 
+/// The scrubbed forms a serial number may take in a fixture, page or README.
+const SERIAL_PLACEHOLDERS: &[&str] = &["SN-0000", "SERIAL-REDACTED"];
+
+/// A token that could be a serial number: six or more characters of letters, digits and `._-`, with a digit in it, that is not
+/// a path and not one of the scrubbed placeholders.
+fn serialish(tok: &str) -> bool {
+    let up = tok.to_ascii_uppercase();
+    tok.len() >= 6
+        && tok.bytes().any(|b| b.is_ascii_digit())
+        && !tok.starts_with('/')
+        && !SERIAL_PLACEHOLDERS.iter().any(|p| up.starts_with(p))
+        && tok
+            .bytes()
+            .any(|b| b != b'0' && b != b'-' && b != b'.' && b != b'_')
+        && !tok
+            .bytes()
+            .all(|b| b == b'0' || b == b'-' || b == b'.' || b == b'_')
+}
+
+/// A line that looks like it holds a real serial number: a `serial` key (JSON, sysfs, lsusb's `iSerial`, udev's `ID_SERIAL`)
+/// followed by a value that is not a placeholder, or an instrument identification reply (`maker,model,serial,firmware`).
+fn serial_leak(line: &str) -> Option<String> {
+    let low = line.to_ascii_lowercase();
+    let mut from = 0;
+    while let Some(i) = low[from..].find("serial") {
+        let at = from + i + 6;
+        from = at;
+        let seps = |c: char| " \t:=\"',".contains(c);
+        let mut rest = &line[at..];
+        // `serial_short`, `serial_number`, `serialnumber`, `serial number`.
+        let tail = rest.trim_start_matches(['_', ' ']);
+        for word in ["short", "number"] {
+            if tail.len() >= word.len() && tail[..word.len()].eq_ignore_ascii_case(word) {
+                rest = &tail[word.len()..];
+                break;
+            }
+        }
+        let rest = rest.trim_start_matches(seps);
+        // lsusb: `iSerial 3 VALUE`: the string index comes first.
+        let rest = if low[..from].ends_with("iserial") {
+            rest.trim_start_matches(|c: char| c.is_ascii_digit())
+                .trim_start()
+        } else {
+            rest
+        };
+        let tok: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || "._-".contains(*c))
+            .collect();
+        if serialish(&tok) {
+            return Some(format!("serial number {tok}"));
+        }
+    }
+    let f: Vec<&str> = line.split(',').map(str::trim).collect();
+    if f.len() == 4
+        && f[0].chars().any(|c| c.is_ascii_alphabetic())
+        && f[2].len() >= 8
+        && f[2].bytes().all(|b| b.is_ascii_alphanumeric())
+        && f[2].bytes().any(|b| b.is_ascii_digit())
+        && f[2].bytes().any(|b| b.is_ascii_alphabetic())
+        && f[3].bytes().any(|b| b.is_ascii_digit())
+    {
+        return Some(format!("identification reply with serial {}", f[2]));
+    }
+    None
+}
+
+// Tests [@ANCHOR: bench_mcp_checklist]
+#[test]
+fn the_serial_number_detector_sees_what_it_should() {
+    for bad in [
+        r#"{"serial": "A12B34C56"}"#,
+        "ID_SERIAL_SHORT=0123ABCD99",
+        "  iSerial                 3 1234ABCD",
+        "Siglent Technologies,SDS1202X-E,SDSMMEBQ1R1234,1.3.27.0",
+        "Serial Number: X9Z-77421",
+    ] {
+        assert!(serial_leak(bad).is_some(), "{bad}");
+    }
+    for good in [
+        r#"{"serial": "/dev/ttyUSB0"}"#,
+        "  iSerial                 0 ",
+        "Acme,Model 1,SN-0000,1.2.3",
+        "SERIAL-REDACTED",
+        "serial: SN-0000",
+        "`serial` is required; serial port, serial decode, serial adapter",
+        "\"device.serial\": \"BurrBrown_from_Texas_Instruments_USB_AUDIO_CODEC\"",
+        "iSerial 0",
+        "serial 000000",
+    ] {
+        assert!(
+            serial_leak(good).is_none(),
+            "{good}: {:?}",
+            serial_leak(good)
+        );
+    }
+}
+
+/// Every file under `dir` (relative to the crate) that is text, sorted.
+fn text_files(dir: &str) -> Vec<(PathBuf, String)> {
+    let mut out = Vec::new();
+    let mut todo = vec![root().join(dir)];
+    while let Some(d) = todo.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_symlink() {
+                continue;
+            }
+            if p.is_dir() {
+                todo.push(p);
+            } else if let Ok(t) = std::fs::read_to_string(&p) {
+                out.push((p, t));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+// Tests [@ANCHOR: bench_mcp_checklist]
+#[test]
+fn no_fixture_page_or_doc_holds_a_serial_number() {
+    let mut found = Vec::new();
+    let rel = |p: &Path| p.strip_prefix(root()).unwrap().display().to_string();
+    for dir in ["manual", "docs", "tests", "src"] {
+        for (path, text) in text_files(dir) {
+            // This file's own examples of what is detected.
+            if rel(&path) == "src/checklist.rs" {
+                continue;
+            }
+            if path.file_name().is_some_and(|n| n == "serial") {
+                let v = text.trim();
+                if !(v.is_empty() || SERIAL_PLACEHOLDERS.contains(&v)) {
+                    found.push(format!("{}: sysfs serial file holds {v:?}", rel(&path)));
+                }
+            }
+            for (n, l) in text.lines().enumerate() {
+                if let Some(why) = serial_leak(l) {
+                    found.push(format!("{}:{}: {why}", rel(&path), n + 1));
+                }
+            }
+        }
+    }
+    for (n, l) in read("README.md").lines().enumerate() {
+        if let Some(why) = serial_leak(l) {
+            found.push(format!("README.md:{}: {why}", n + 1));
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "scrub these before committing (SN-0000 for serials; manual: concepts/extending/provenance): {found:#?}"
+    );
+}
+
 // Tests [@ANCHOR: bench_mcp_checklist]
 #[test]
 fn fixtures_docs_and_manual_hold_no_addresses_or_credentials() {
@@ -499,4 +656,123 @@ fn the_guide_the_pr_template_and_the_plan_issue_are_in_place() {
             "standing-rules lost {k:?}"
         );
     }
+}
+
+/// Days since 1970-01-01 for a civil date (proleptic Gregorian), or None for a date that does not exist.
+fn days_from_civil(y: i64, m: i64, d: i64) -> Option<i64> {
+    // [@ANCHOR: bench_mcp_checklist_days_from_civil]
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let len = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => 28 + i64::from(leap),
+        _ => return None,
+    };
+    if !(1..=len).contains(&d) {
+        return None;
+    }
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+/// The ISO dates (YYYY-MM-DD) in a text, as (text, days since 1970).
+fn iso_dates(text: &str) -> Vec<(String, Option<i64>)> {
+    // [@ANCHOR: bench_mcp_checklist_iso_dates]
+    let b = text.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i + 10 <= b.len() {
+        let w = &b[i..i + 10];
+        let shape = w.iter().enumerate().all(|(k, c)| {
+            if k == 4 || k == 7 {
+                *c == b'-'
+            } else {
+                c.is_ascii_digit()
+            }
+        });
+        if shape {
+            let n = |a: usize, z: usize| text[i + a..i + z].parse::<i64>().unwrap();
+            out.push((
+                text[i..i + 10].to_string(),
+                days_from_civil(n(0, 4), n(5, 7), n(8, 10)),
+            ));
+            i += 10;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Words by which a `verified` line claims that something was run, measured or seen on real equipment.
+const HARDWARE_CLAIMS: &[&str] = &[
+    "dev box",
+    "on the unit",
+    "measured",
+    "probed",
+    "observed",
+    "confirmed",
+    "run on",
+    "on a scope",
+    "on the scope",
+    "loopback",
+    "real ",
+];
+
+// Tests [@ANCHOR: bench_mcp_checklist]
+// Tests [@ANCHOR: bench_mcp_checklist_days_from_civil]
+// Tests [@ANCHOR: bench_mcp_checklist_iso_dates]
+#[test]
+fn verified_lines_carry_a_real_date_that_is_not_in_the_future() {
+    let today = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+        / 86_400;
+    let first = days_from_civil(2026, 1, 1).unwrap();
+    assert_eq!(days_from_civil(1970, 1, 1), Some(0));
+    assert_eq!(days_from_civil(2026, 2, 29), None);
+    assert_eq!(days_from_civil(2024, 2, 29), Some(19_782));
+    assert_eq!(iso_dates("a 2026-10-29 b 2026-13-01").len(), 2);
+    let m = manual().expect("the embedded manual parses");
+    let mut bad = Vec::new();
+    for p in &m.pages {
+        let v = p.verified.trim();
+        let dates = iso_dates(v);
+        let exempt = v.starts_with("n/a")
+            || v.starts_with("see ")
+            || v == "fixtures only"
+            || v == "in progress";
+        let low = v.to_ascii_lowercase();
+        if !exempt && dates.is_empty() {
+            bad.push(format!(
+                "{}: verified {v:?} has no date (YYYY-MM-DD); say what was checked and when",
+                p.path
+            ));
+        }
+        if low.starts_with("code only") && HARDWARE_CLAIMS.iter().any(|w| low.contains(w)) {
+            bad.push(format!(
+                "{}: verified {v:?} says code only and also claims a hardware run",
+                p.path
+            ));
+        }
+        for (text, days) in dates {
+            match days {
+                None => bad.push(format!("{}: verified date {text} does not exist", p.path)),
+                Some(d) if d > today => {
+                    bad.push(format!("{}: verified date {text} is in the future", p.path))
+                }
+                Some(d) if d < first => bad.push(format!(
+                    "{}: verified date {text} is before the project began",
+                    p.path
+                )),
+                _ => {}
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
 }
