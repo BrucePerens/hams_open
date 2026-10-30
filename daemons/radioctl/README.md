@@ -49,6 +49,21 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test
 
 Never a per-worktree `target/`; delete the target directory when the job is done (AGENTS.md).
 
+## Rig descriptions and conformance
+
+`rigs/*.toml` are rig description files (schema 1; format documented at the top of
+`crates/radioctl-core/src/rigfile.rs`). Every datum must be explained by a `[[facts]]` entry with a
+`provenance` (manual, capture, owner, repo-code, program-output) and a `verified` state (`unverified`,
+`manual-checked`, `transcript-checked`, `hardware-verified` with radio, firmware, date and what was
+tested); a file with an unexplained or unknown datum does not load. `rigs/transcripts/*.toml` are wire
+transcripts replayed by `radioctl_protocols::conformance::replay` against the engine and the virtual rig
+generated from the same description (tests in `crates/radioctl-protocols/tests/rig_files.rs`).
+
+The worked description is `rigs/icom-ic-7300.toml`. **Everything in it is unverified**, and its
+transcript is hand-written from our own simulator and bridge code (its `origin` says so): it proves that
+the description, the engine and the virtual rig agree with each other, not that they agree with an
+IC-7300. A real capture or an owner's bench run is what upgrades a `verified` field.
+
 ## Tier 1 capability matrix
 
 `tools/hamlib_caps_matrix.py` runs `rigctl -l` and `rigctl -m N --dump-caps` for every model and writes
@@ -193,3 +208,19 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_core_handle_submit] (radioctl-core) Checks capability and transmit gate, then queues the command without waiting (full queue is a typed error).
 - [@ANCHOR: radioctl:radioctl_core_wait_until] (radioctl-core) Sleeps until the next poll is due, or forever when nothing is polled.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_run] (radioctl-core) The callback thread loop: pop, call under catch_unwind, count.
+- [@ANCHOR: radioctl:radioctl_core_capability_name] (radioctl-core) The name used in rig description files.
+- [@ANCHOR: radioctl:radioctl_core_capability_from_name] (radioctl-core) The capability with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_parse] (radioctl-core) Parses and validates a description file. Any unknown field, unknown name, duplicate,
+- [@ANCHOR: radioctl:radioctl_core_rigfile_expected_keys] (radioctl-core) Every key a description must explain.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_fact_for] (radioctl-core) The fact that explains `key`: an exact one if present, else a wildcard.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_verification_summary] (radioctl-core) How many keys are in each verified state, keyed by state name.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_is_hardware_verified] (radioctl-core) True only when every key of the description is hardware-verified.
+- [@ANCHOR: radioctl:radioctl_core_transcript_hex] (radioctl-core) Parses hex bytes written with optional spaces (`fe fe 94` or `fefe94`).
+- [@ANCHOR: radioctl:radioctl_core_transcript_parse] (radioctl-core) Parses and validates a transcript file. A step needs either an `op` with its `tx`, or a
+- [@ANCHOR: radioctl:radioctl_core_mode_name] (radioctl-core) The name used in rig description files.
+- [@ANCHOR: radioctl:radioctl_core_mode_from_name] (radioctl-core) The mode with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_vfo_name] (radioctl-core) The name used in rig description files.
+- [@ANCHOR: radioctl:radioctl_core_vfo_from_name] (radioctl-core) The VFO with a file-format name.
+- [@ANCHOR: radioctl:radioctl_conformance_engine_for] (radioctl-protocols) The engine for a description's protocol family.
+- [@ANCHOR: radioctl:radioctl_conformance_replay] (radioctl-protocols) Replays a transcript against the engine and the virtual rig built from one description; reports every byte-level disagreement.
+- [@ANCHOR: radioctl:radioctl_conformance_replay_solicited] (radioctl-protocols) Replays one command step: engine encoding, reply expectation and virtual rig answer against the transcript bytes.

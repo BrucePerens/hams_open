@@ -30,7 +30,38 @@ pub enum Capability {
     Transceive,
 }
 
+/// Every capability with its file-format name.
+const NAMES: [(Capability, &str); 11] = [
+    (Capability::ReadFrequency, "read-frequency"),
+    (Capability::SetFrequency, "set-frequency"),
+    (Capability::ReadMode, "read-mode"),
+    (Capability::SetMode, "set-mode"),
+    (Capability::SecondVfo, "second-vfo"),
+    (Capability::ReadPtt, "read-ptt"),
+    (Capability::SetPtt, "set-ptt"),
+    (Capability::ReadSignal, "read-signal"),
+    (Capability::ReadPower, "read-power"),
+    (Capability::SendCw, "send-cw"),
+    (Capability::Transceive, "transceive"),
+];
+
 impl Capability {
+    // [@ANCHOR: radioctl_core_capability_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        NAMES
+            .iter()
+            .find(|(c, _)| *c == self)
+            .map(|(_, n)| *n)
+            .unwrap_or("unknown")
+    }
+
+    // [@ANCHOR: radioctl_core_capability_from_name]
+    /// The capability with a file-format name.
+    pub fn from_name(name: &str) -> Option<Capability> {
+        NAMES.iter().find(|(_, n)| *n == name).map(|(c, _)| *c)
+    }
+
     // [@ANCHOR: radioctl_core_capability_transmits]
     /// True when using the capability can put RF on the air.
     pub fn transmits(self) -> bool {
@@ -73,6 +104,17 @@ mod tests {
         assert!(Capability::SendCw.transmits());
         assert!(!Capability::ReadPtt.transmits());
         assert!(!Capability::SetFrequency.transmits());
+    }
+
+    // Tests [@ANCHOR: radioctl_core_capability_name]
+    // Tests [@ANCHOR: radioctl_core_capability_from_name]
+    #[test]
+    fn names_round_trip_for_every_capability() {
+        for (capability, name) in NAMES {
+            assert_eq!(capability.name(), name);
+            assert_eq!(Capability::from_name(name), Some(capability));
+        }
+        assert_eq!(Capability::from_name("fly"), None);
     }
 
     // Tests [@ANCHOR: radioctl_core_capability_set_of]

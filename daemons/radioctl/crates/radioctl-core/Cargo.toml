@@ -16,6 +16,8 @@ workspace = true
 owned-runtime = ["tokio/rt-multi-thread"]
 
 [dependencies]
+serde = { workspace = true }
+toml = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "macros"] }
 
 [dev-dependencies]

@@ -1,0 +1,106 @@
+# Rig description: Icom IC-7300 style CI-V (schema 1). See crates/radioctl-core/src/rigfile.rs
+# for the format. Everything here is UNVERIFIED: it was written from our own repo code and from
+# Hamlib's printed settings, and no radio has been connected. The `verified` fields say so.
+schema = 1
+capabilities = [
+  "read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt",
+  "read-signal", "read-power", "send-cw", "transceive",
+]
+
+[rig]
+id = "icom-ic-7300"
+name = "Icom IC-7300"
+family = "icom-civ"
+
+[civ]
+address = 0x94
+controller = 0xE0
+model_id = 0x94
+echo = false
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+[[modes]]
+mode = "usb"
+code = 0x01
+[[modes]]
+mode = "am"
+code = 0x02
+[[modes]]
+mode = "cw"
+code = 0x03
+[[modes]]
+mode = "rtty"
+code = 0x04
+[[modes]]
+mode = "fm"
+code = 0x05
+[[modes]]
+mode = "wfm"
+code = 0x06
+[[modes]]
+mode = "cw-r"
+code = 0x07
+[[modes]]
+mode = "rtty-r"
+code = 0x08
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: CI-V interpreter, default --civ-address 0x94 described as IC-7300", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 3073 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 1000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.address"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/src/cat_wire_parse.rs: DEFAULT_CIV_ADDRESS 0x94 (civ_bridge.rs header: chosen to match the popular IC-7300)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.controller"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/src/civ_bridge.rs: DEFAULT_CONTROLLER_ADDRESS 0xE0" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.model_id"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --model-id default 0x94, reply to command 19 00" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.echo"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: the simulator does not echo", note = "A design choice for the virtual rig; a radio on a single-wire interface echoes, a USB one does not (not measured here)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "program-output", reference = "rigctl -m 3073 --dump-caps (Hamlib 4.6.2): Has async data support: Y", note = "Hamlib's claim; our engine cannot switch it on, it is set in the radio's menu." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py CivInterpreter._dispatch: commands 03, 05, 04, 06, 1C 00, 15 02, 15 11, 17" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: CIV_MODE_NAMES" }
+verified = { state = "unverified" }

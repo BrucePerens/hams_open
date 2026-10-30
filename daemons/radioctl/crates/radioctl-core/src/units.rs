@@ -42,6 +42,36 @@ pub enum Mode {
     Wfm,
 }
 
+const MODE_NAMES: [(Mode, &str); 9] = [
+    (Mode::Lsb, "lsb"),
+    (Mode::Usb, "usb"),
+    (Mode::Am, "am"),
+    (Mode::Cw, "cw"),
+    (Mode::CwR, "cw-r"),
+    (Mode::Rtty, "rtty"),
+    (Mode::RttyR, "rtty-r"),
+    (Mode::Fm, "fm"),
+    (Mode::Wfm, "wfm"),
+];
+
+impl Mode {
+    // [@ANCHOR: radioctl_core_mode_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        MODE_NAMES
+            .iter()
+            .find(|(m, _)| *m == self)
+            .map(|(_, n)| *n)
+            .unwrap_or("unknown")
+    }
+
+    // [@ANCHOR: radioctl_core_mode_from_name]
+    /// The mode with a file-format name.
+    pub fn from_name(name: &str) -> Option<Mode> {
+        MODE_NAMES.iter().find(|(_, n)| *n == name).map(|(m, _)| *m)
+    }
+}
+
 /// A VFO. Only the VFOs a description lists are usable on a given rig.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Vfo {
@@ -51,9 +81,51 @@ pub enum Vfo {
     B,
 }
 
+impl Vfo {
+    // [@ANCHOR: radioctl_core_vfo_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        match self {
+            Vfo::A => "a",
+            Vfo::B => "b",
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_vfo_from_name]
+    /// The VFO with a file-format name.
+    pub fn from_name(name: &str) -> Option<Vfo> {
+        match name {
+            "a" => Some(Vfo::A),
+            "b" => Some(Vfo::B),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: radioctl_core_mode_name]
+    // Tests [@ANCHOR: radioctl_core_mode_from_name]
+    #[test]
+    fn mode_names_round_trip() {
+        for (mode, name) in MODE_NAMES {
+            assert_eq!(mode.name(), name);
+            assert_eq!(Mode::from_name(name), Some(mode));
+        }
+        assert_eq!(Mode::from_name("ssb"), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_vfo_name]
+    // Tests [@ANCHOR: radioctl_core_vfo_from_name]
+    #[test]
+    fn vfo_names_round_trip() {
+        for vfo in [Vfo::A, Vfo::B] {
+            assert_eq!(Vfo::from_name(vfo.name()), Some(vfo));
+        }
+        assert_eq!(Vfo::from_name("c"), None);
+    }
 
     // Tests [@ANCHOR: radioctl_core_hz_from_khz]
     #[test]
