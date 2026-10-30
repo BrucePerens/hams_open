@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::error::{ErrorKind, RigError};
 use crate::op::{Observation, Op};
-use crate::units::{Hz, Mode, Vfo};
+use crate::units::{Hz, Level, Mode, Vfo};
 
 /// What the engine must report for the rig's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +76,10 @@ struct StepSpec {
     tx: String,
     #[serde(default)]
     rx: String,
+    /// The bytes written, as ASCII text (for text protocols); an alternative to `tx`.
+    tx_text: Option<String>,
+    /// The bytes received, as ASCII text; an alternative to `rx`.
+    rx_text: Option<String>,
     expect: Option<ExpectSpec>,
     panel: Option<PanelSpec>,
 }
@@ -93,6 +97,21 @@ enum OpSpec {
     GetPower,
     SendCw { text: String },
     SetTransceive { on: bool },
+    GetSplit,
+    SetSplit { on: bool },
+    GetRit,
+    SetRit { on: bool },
+    GetXit,
+    SetXit { on: bool },
+    GetRitOffset,
+    SetRitOffset { hz: i16 },
+    GetFilterWidth,
+    SetFilterWidth { hz: u64 },
+    GetLevel { level: String },
+    SetLevel { level: String, value: u16 },
+    GetSwr,
+    GetModelId,
+    GetFirmware,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +122,15 @@ enum ExpectSpec {
     Ptt { on: bool },
     Signal { value: u16 },
     Power { value: u16 },
+    Split { on: bool },
+    Rit { on: bool },
+    Xit { on: bool },
+    RitOffset { hz: i16 },
+    FilterWidth { hz: u64 },
+    Level { level: String, value: u16 },
+    Swr { value: u16 },
+    ModelId { value: u16 },
+    Firmware { major: u8, minor: u8 },
     Ack,
     Nak,
 }
@@ -139,8 +167,24 @@ fn vfo(name: &str) -> Result<Vfo, RigError> {
     Vfo::from_name(name).ok_or_else(|| bad(format!("unknown vfo {name:?}")))
 }
 
+fn level(name: &str) -> Result<Level, RigError> {
+    Level::from_name(name).ok_or_else(|| bad(format!("unknown level {name:?}")))
+}
+
 fn mode(name: &str) -> Result<Mode, RigError> {
     Mode::from_name(name).ok_or_else(|| bad(format!("unknown mode {name:?}")))
+}
+
+// [@ANCHOR: radioctl_core_transcript_step_bytes]
+/// The bytes of one direction of a step: hex in `hex`, or ASCII in `text`, not both.
+fn step_bytes(hex: &str, text: &Option<String>, index: usize) -> Result<Vec<u8>, RigError> {
+    match text {
+        Some(_) if !hex.trim().is_empty() => Err(bad(format!(
+            "step {index}: give hex or text for a direction, not both"
+        ))),
+        Some(text) => Ok(text.as_bytes().to_vec()),
+        None => parse_hex(hex),
+    }
 }
 
 // [@ANCHOR: radioctl_core_transcript_build_op]
@@ -156,6 +200,21 @@ fn build_op(spec: OpSpec) -> Result<Op, RigError> {
         OpSpec::GetPower => Op::GetPower,
         OpSpec::SendCw { text } => Op::SendCw(text),
         OpSpec::SetTransceive { on } => Op::SetTransceive(on),
+        OpSpec::GetSplit => Op::GetSplit,
+        OpSpec::SetSplit { on } => Op::SetSplit(on),
+        OpSpec::GetRit => Op::GetRit,
+        OpSpec::SetRit { on } => Op::SetRit(on),
+        OpSpec::GetXit => Op::GetXit,
+        OpSpec::SetXit { on } => Op::SetXit(on),
+        OpSpec::GetRitOffset => Op::GetRitOffset,
+        OpSpec::SetRitOffset { hz } => Op::SetRitOffset(hz),
+        OpSpec::GetFilterWidth => Op::GetFilterWidth,
+        OpSpec::SetFilterWidth { hz } => Op::SetFilterWidth(Hz(hz)),
+        OpSpec::GetLevel { level: l } => Op::GetLevel(level(&l)?),
+        OpSpec::SetLevel { level: l, value } => Op::SetLevel(level(&l)?, value),
+        OpSpec::GetSwr => Op::GetSwr,
+        OpSpec::GetModelId => Op::GetModelId,
+        OpSpec::GetFirmware => Op::GetFirmware,
     })
 }
 
@@ -169,6 +228,19 @@ fn build_expect(spec: ExpectSpec) -> Result<Expect, RigError> {
         ExpectSpec::Ptt { on } => Expect::Observation(Observation::Ptt(on)),
         ExpectSpec::Signal { value } => Expect::Observation(Observation::Signal(value)),
         ExpectSpec::Power { value } => Expect::Observation(Observation::Power(value)),
+        ExpectSpec::Split { on } => Expect::Observation(Observation::Split(on)),
+        ExpectSpec::Rit { on } => Expect::Observation(Observation::Rit(on)),
+        ExpectSpec::Xit { on } => Expect::Observation(Observation::Xit(on)),
+        ExpectSpec::RitOffset { hz } => Expect::Observation(Observation::RitOffset(hz)),
+        ExpectSpec::FilterWidth { hz } => Expect::Observation(Observation::FilterWidth(Hz(hz))),
+        ExpectSpec::Level { level: l, value } => {
+            Expect::Observation(Observation::Level(level(&l)?, value))
+        }
+        ExpectSpec::Swr { value } => Expect::Observation(Observation::Swr(value)),
+        ExpectSpec::ModelId { value } => Expect::Observation(Observation::ModelId(value)),
+        ExpectSpec::Firmware { major, minor } => {
+            Expect::Observation(Observation::Firmware(major, minor))
+        }
         ExpectSpec::Ack => Expect::Ack,
         ExpectSpec::Nak => Expect::Nak,
     })
@@ -202,8 +274,8 @@ pub fn parse(text: &str) -> Result<Transcript, RigError> {
     for (index, spec) in doc.step.into_iter().enumerate() {
         let step = Step {
             op: spec.op.map(build_op).transpose()?,
-            tx: parse_hex(&spec.tx)?,
-            rx: parse_hex(&spec.rx)?,
+            tx: step_bytes(&spec.tx, &spec.tx_text, index)?,
+            rx: step_bytes(&spec.rx, &spec.rx_text, index)?,
             expect: spec.expect.map(build_expect).transpose()?,
             panel: spec.panel.map(build_panel).transpose()?,
         };
@@ -287,6 +359,51 @@ expect = { kind = "frequency", vfo = "a", hz = 7000000 }
             transcript.steps.get(2).and_then(|s| s.panel),
             Some(Panel::Frequency(Hz(7_000_000)))
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_transcript_step_bytes]
+    // Tests [@ANCHOR: radioctl_core_transcript_build_op]
+    // Tests [@ANCHOR: radioctl_core_transcript_build_expect]
+    #[test]
+    fn text_steps_and_the_extended_vocabulary_parse() {
+        let text = r#"
+schema = 1
+rig = "x"
+origin = "unit test"
+[[step]]
+op = { kind = "set-split", on = true }
+tx_text = "FT1;"
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx_text = "AG;"
+rx_text = "AG100;"
+expect = { kind = "level", level = "af-gain", value = 100 }
+[[step]]
+op = { kind = "get-firmware" }
+tx_text = "RVM;"
+rx_text = "RVM02.37;"
+expect = { kind = "firmware", major = 2, minor = 37 }
+[[step]]
+op = { kind = "set-rit-offset", hz = -50 }
+tx_text = "RO-0050;"
+"#;
+        let transcript = parse(text).expect("parses");
+        assert_eq!(transcript.steps.len(), 4);
+        let first = transcript.steps.first().expect("step");
+        assert_eq!(first.op, Some(Op::SetSplit(true)));
+        assert_eq!(first.tx, b"FT1;");
+        assert_eq!(
+            transcript.steps.get(1).and_then(|s| s.expect),
+            Some(Expect::Observation(Observation::Level(Level::AfGain, 100)))
+        );
+        assert_eq!(
+            transcript.steps.get(3).and_then(|s| s.op.clone()),
+            Some(Op::SetRitOffset(-50))
+        );
+        let both = text.replace("tx_text = \"FT1;\"", "tx_text = \"FT1;\"\ntx = \"46\"");
+        assert!(parse(&both).is_err());
+        let bad_level = text.replace("af-gain\", value", "volume\", value");
+        assert!(parse(&bad_level).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_core_transcript_parse]

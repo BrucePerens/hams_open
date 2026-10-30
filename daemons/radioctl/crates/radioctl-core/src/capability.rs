@@ -28,10 +28,22 @@ pub enum Capability {
     SendCw,
     /// Report changes without being polled (CI-V transceive, Kenwood auto-information).
     Transceive,
+    /// Read and set split operation.
+    Split,
+    /// Read and set RIT, XIT and their offset.
+    RitXit,
+    /// Read and set the receive filter bandwidth.
+    Filter,
+    /// Read and set numeric levels (gains, keyer speed, power setting).
+    Levels,
+    /// Read the SWR meter.
+    ReadSwr,
+    /// Ask the rig for its identifier and firmware revision.
+    Identify,
 }
 
 /// Every capability with its file-format name.
-const NAMES: [(Capability, &str); 11] = [
+const NAMES: [(Capability, &str); 17] = [
     (Capability::ReadFrequency, "read-frequency"),
     (Capability::SetFrequency, "set-frequency"),
     (Capability::ReadMode, "read-mode"),
@@ -43,6 +55,12 @@ const NAMES: [(Capability, &str); 11] = [
     (Capability::ReadPower, "read-power"),
     (Capability::SendCw, "send-cw"),
     (Capability::Transceive, "transceive"),
+    (Capability::Split, "split"),
+    (Capability::RitXit, "rit-xit"),
+    (Capability::Filter, "filter"),
+    (Capability::Levels, "levels"),
+    (Capability::ReadSwr, "read-swr"),
+    (Capability::Identify, "identify"),
 ];
 
 impl Capability {

@@ -882,6 +882,12 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Op::SetFrequency(vfo, hz) => self.observe(Observation::Frequency(*vfo, *hz), source),
             Op::SetMode(mode) => self.observe(Observation::Mode(*mode), source),
             Op::SetPtt(on) => self.observe(Observation::Ptt(*on), source),
+            Op::SetSplit(on) => self.observe(Observation::Split(*on), source),
+            Op::SetRit(on) => self.observe(Observation::Rit(*on), source),
+            Op::SetXit(on) => self.observe(Observation::Xit(*on), source),
+            Op::SetRitOffset(hz) => self.observe(Observation::RitOffset(*hz), source),
+            Op::SetFilterWidth(hz) => self.observe(Observation::FilterWidth(*hz), source),
+            Op::SetLevel(level, value) => self.observe(Observation::Level(*level, *value), source),
             _ => {}
         }
     }

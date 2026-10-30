@@ -3,7 +3,7 @@
 //! reports back.
 
 use crate::capability::Capability;
-use crate::units::{Hz, Mode, Vfo};
+use crate::units::{Hz, Level, Mode, Vfo};
 
 /// A command to a rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +28,36 @@ pub enum Op {
     SendCw(String),
     /// Turn the rig's unsolicited reporting on or off.
     SetTransceive(bool),
+    /// Read split operation.
+    GetSplit,
+    /// Enter (`true`) or leave (`false`) split operation.
+    SetSplit(bool),
+    /// Read whether RIT is on.
+    GetRit,
+    /// Turn RIT on or off.
+    SetRit(bool),
+    /// Read whether XIT is on.
+    GetXit,
+    /// Turn XIT on or off.
+    SetXit(bool),
+    /// Read the RIT/XIT offset in hertz.
+    GetRitOffset,
+    /// Set the RIT/XIT offset in hertz (the rig limits the range).
+    SetRitOffset(i16),
+    /// Read the receive filter bandwidth.
+    GetFilterWidth,
+    /// Set the receive filter bandwidth.
+    SetFilterWidth(Hz),
+    /// Read a level.
+    GetLevel(Level),
+    /// Set a level, in the rig's units.
+    SetLevel(Level, u16),
+    /// Read the SWR meter (tenths of a unit).
+    GetSwr,
+    /// Read the rig's model identifier.
+    GetModelId,
+    /// Read the rig's main firmware revision.
+    GetFirmware,
 }
 
 /// A kind of value the actor caches.
@@ -43,6 +73,24 @@ pub enum Field {
     Signal,
     /// The power meter.
     Power,
+    /// Split operation.
+    Split,
+    /// RIT on or off.
+    Rit,
+    /// XIT on or off.
+    Xit,
+    /// The RIT/XIT offset.
+    RitOffset,
+    /// The receive filter bandwidth.
+    FilterWidth,
+    /// A numeric level.
+    Level(Level),
+    /// The SWR meter.
+    Swr,
+    /// The model identifier.
+    ModelId,
+    /// The firmware revision.
+    Firmware,
 }
 
 /// A value reported by a rig, solicited or not.
@@ -58,6 +106,24 @@ pub enum Observation {
     Signal(u16),
     /// The power meter, raw units.
     Power(u16),
+    /// Split operation on or off.
+    Split(bool),
+    /// RIT on or off.
+    Rit(bool),
+    /// XIT on or off.
+    Xit(bool),
+    /// The RIT/XIT offset in hertz.
+    RitOffset(i16),
+    /// The receive filter bandwidth.
+    FilterWidth(Hz),
+    /// A numeric level in the rig's units.
+    Level(Level, u16),
+    /// The SWR in tenths of a unit (10 is 1.0:1).
+    Swr(u16),
+    /// The model identifier the rig reports.
+    ModelId(u16),
+    /// The firmware revision, major and minor (`02.37` is `(2, 37)`).
+    Firmware(u8, u8),
 }
 
 impl Observation {
@@ -70,6 +136,15 @@ impl Observation {
             Observation::Ptt(_) => Field::Ptt,
             Observation::Signal(_) => Field::Signal,
             Observation::Power(_) => Field::Power,
+            Observation::Split(_) => Field::Split,
+            Observation::Rit(_) => Field::Rit,
+            Observation::Xit(_) => Field::Xit,
+            Observation::RitOffset(_) => Field::RitOffset,
+            Observation::FilterWidth(_) => Field::FilterWidth,
+            Observation::Level(level, _) => Field::Level(*level),
+            Observation::Swr(_) => Field::Swr,
+            Observation::ModelId(_) => Field::ModelId,
+            Observation::Firmware(..) => Field::Firmware,
         }
     }
 }
@@ -91,6 +166,17 @@ impl Op {
             Op::GetPower => Capability::ReadPower,
             Op::SendCw(_) => Capability::SendCw,
             Op::SetTransceive(_) => Capability::Transceive,
+            Op::GetSplit | Op::SetSplit(_) => Capability::Split,
+            Op::GetRit
+            | Op::SetRit(_)
+            | Op::GetXit
+            | Op::SetXit(_)
+            | Op::GetRitOffset
+            | Op::SetRitOffset(_) => Capability::RitXit,
+            Op::GetFilterWidth | Op::SetFilterWidth(_) => Capability::Filter,
+            Op::GetLevel(_) | Op::SetLevel(..) => Capability::Levels,
+            Op::GetSwr => Capability::ReadSwr,
+            Op::GetModelId | Op::GetFirmware => Capability::Identify,
         }
     }
 
@@ -126,6 +212,21 @@ mod tests {
         assert_eq!(Observation::Mode(Mode::Usb).field(), Field::Mode);
         assert_eq!(Observation::Signal(1).field(), Field::Signal);
         assert_eq!(Observation::Power(1).field(), Field::Power);
+        assert_eq!(Observation::Split(true).field(), Field::Split);
+        assert_eq!(Observation::Rit(true).field(), Field::Rit);
+        assert_eq!(Observation::Xit(true).field(), Field::Xit);
+        assert_eq!(Observation::RitOffset(-5).field(), Field::RitOffset);
+        assert_eq!(
+            Observation::FilterWidth(Hz(500)).field(),
+            Field::FilterWidth
+        );
+        assert_eq!(
+            Observation::Level(Level::AfGain, 9).field(),
+            Field::Level(Level::AfGain)
+        );
+        assert_eq!(Observation::Swr(15).field(), Field::Swr);
+        assert_eq!(Observation::ModelId(17).field(), Field::ModelId);
+        assert_eq!(Observation::Firmware(2, 37).field(), Field::Firmware);
     }
 
     // Tests [@ANCHOR: radioctl_core_op_capability]
@@ -140,6 +241,18 @@ mod tests {
             Capability::SecondVfo
         );
         assert_eq!(Op::SetPtt(false).required_capability(), Capability::SetPtt);
+        assert_eq!(Op::SetSplit(true).required_capability(), Capability::Split);
+        assert_eq!(Op::GetRitOffset.required_capability(), Capability::RitXit);
+        assert_eq!(
+            Op::SetFilterWidth(Hz(500)).required_capability(),
+            Capability::Filter
+        );
+        assert_eq!(
+            Op::GetLevel(Level::MicGain).required_capability(),
+            Capability::Levels
+        );
+        assert_eq!(Op::GetSwr.required_capability(), Capability::ReadSwr);
+        assert_eq!(Op::GetFirmware.required_capability(), Capability::Identify);
         assert_eq!(
             Op::SendCw("x".into()).required_capability(),
             Capability::SendCw

@@ -185,7 +185,7 @@ impl ProtocolEngine for KenwoodEngine {
             Op::SetPtt(false) => Self::command("RX;".into(), none),
             Op::GetSignal => Self::command("SM0;".into(), ReplyKind::Observation(Field::Signal)),
             Op::SetTransceive(on) => Self::command(format!("AI{};", u8::from(*on)), none),
-            Op::GetPtt | Op::GetPower | Op::SendCw(_) => {
+            _ => {
                 return Err(Self::unsupported("not implemented for the Kenwood engine"));
             }
         };
