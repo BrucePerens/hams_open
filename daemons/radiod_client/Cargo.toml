@@ -1,0 +1,25 @@
+[package]
+name = "radiod_client"
+version = "0.1.0"
+edition = "2021"
+description = "Receive-only client for ka9q-radio's radiod multicast control/status protocol, with a closed command schema"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[features]
+default = ["opus"]
+# Opus RTP payload decoding through the system libopus.
+opus = ["dep:opus"]
+
+[dependencies]
+socket2 = { version = "0.5", features = ["all"] }
+opus = { version = "0.3", optional = true }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
