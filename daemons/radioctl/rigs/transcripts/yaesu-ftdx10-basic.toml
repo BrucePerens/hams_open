@@ -1,0 +1,185 @@
+# Conformance transcript for rigs/yaesu-ftdx10.toml (all steps are ASCII on the wire).
+# ORIGIN: written by hand from the command formats in Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022) (see the description's provenance).
+# This is NOT a recording of a radio. It proves the manual's formats, the engine, the virtual rig and the
+# description agree with each other, not that they agree with a FTDX10. The virtual rig's starting
+# levels are our own values.
+schema = 1
+rig = "yaesu-ftdx10"
+origin = "hand-written from Yaesu's published CAT Operation Reference Manual; not a capture of a radio"
+
+[[step]]
+op = { kind = "get-model-id" }
+tx_text = "ID;"
+rx_text = "ID0761;"
+expect = { kind = "model-id", value = 761 }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "FA;"
+rx_text = "FA014074000;"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
+tx_text = "FA007030000;"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "FA;"
+rx_text = "FA007030000;"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "b", hz = 7035000 }
+tx_text = "FB007035000;"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "b" }
+tx_text = "FB;"
+rx_text = "FB007035000;"
+expect = { kind = "frequency", vfo = "b", hz = 7035000 }
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "MD0;"
+rx_text = "MD02;"
+expect = { kind = "mode", mode = "usb" }
+
+[[step]]
+op = { kind = "set-mode", mode = "cw" }
+tx_text = "MD03;"
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "MD0;"
+rx_text = "MD03;"
+expect = { kind = "mode", mode = "cw" }
+
+[[step]]
+op = { kind = "set-mode", mode = "data" }
+tx_text = "MD0C;"
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "MD0;"
+rx_text = "MD0C;"
+expect = { kind = "mode", mode = "data" }
+
+[[step]]
+op = { kind = "set-ptt", on = true }
+tx_text = "TX1;"
+
+[[step]]
+op = { kind = "get-ptt" }
+tx_text = "TX;"
+rx_text = "TX1;"
+expect = { kind = "ptt", on = true }
+
+[[step]]
+op = { kind = "set-ptt", on = false }
+tx_text = "TX0;"
+
+[[step]]
+op = { kind = "get-ptt" }
+tx_text = "TX;"
+rx_text = "TX0;"
+expect = { kind = "ptt", on = false }
+
+[[step]]
+op = { kind = "get-signal" }
+tx_text = "SM0;"
+rx_text = "SM0030;"
+expect = { kind = "signal", value = 30 }
+
+[[step]]
+op = { kind = "get-power" }
+tx_text = "RM5;"
+rx_text = "RM5000000;"
+expect = { kind = "power", value = 0 }
+
+[[step]]
+op = { kind = "set-rit", on = true }
+tx_text = "RT1;"
+
+[[step]]
+op = { kind = "get-rit" }
+tx_text = "RT;"
+rx_text = "RT1;"
+expect = { kind = "rit", on = true }
+
+[[step]]
+op = { kind = "set-xit", on = true }
+tx_text = "XT1;"
+
+[[step]]
+op = { kind = "get-xit" }
+tx_text = "XT;"
+rx_text = "XT1;"
+expect = { kind = "xit", on = true }
+
+[[step]]
+op = { kind = "set-rit-offset", hz = -120 }
+tx_text = "RC;RD0120;"
+
+[[step]]
+op = { kind = "get-rit-offset" }
+tx_text = "IF;"
+rx_text = "IF001007030000-012011C00000;"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+expect_more = [{ kind = "mode", mode = "data" }, { kind = "rit", on = true }, { kind = "xit", on = true }, { kind = "rit-offset", hz = -120 }]
+
+[[step]]
+op = { kind = "set-level", level = "af-gain", value = 128 }
+tx_text = "AG0128;"
+
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx_text = "AG0;"
+rx_text = "AG0128;"
+expect = { kind = "level", level = "af-gain", value = 128 }
+
+[[step]]
+op = { kind = "get-level", level = "rf-gain" }
+tx_text = "RG0;"
+rx_text = "RG0250;"
+expect = { kind = "level", level = "rf-gain", value = 250 }
+
+[[step]]
+op = { kind = "get-level", level = "mic-gain" }
+tx_text = "MG;"
+rx_text = "MG025;"
+expect = { kind = "level", level = "mic-gain", value = 25 }
+
+[[step]]
+op = { kind = "set-level", level = "rf-power", value = 100 }
+tx_text = "PC100;"
+
+[[step]]
+op = { kind = "get-level", level = "rf-power" }
+tx_text = "PC;"
+rx_text = "PC100;"
+expect = { kind = "level", level = "rf-power", value = 100 }
+
+[[step]]
+op = { kind = "set-level", level = "keyer-speed", value = 25 }
+tx_text = "KS025;"
+
+[[step]]
+op = { kind = "get-level", level = "keyer-speed" }
+tx_text = "KS;"
+rx_text = "KS025;"
+expect = { kind = "level", level = "keyer-speed", value = 25 }
+
+[[step]]
+op = { kind = "set-transceive", on = true }
+tx_text = "AI1;"
+
+[[step]]
+panel = { kind = "frequency", hz = 21074000 }
+rx_text = "FA021074000;"
+expect = { kind = "frequency", vfo = "a", hz = 21074000 }
+
+[[step]]
+panel = { kind = "mode", mode = "lsb" }
+rx_text = "MD01;"
+expect = { kind = "mode", mode = "lsb" }

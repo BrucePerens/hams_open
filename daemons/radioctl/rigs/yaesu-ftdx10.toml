@@ -1,0 +1,92 @@
+# Rig description: Yaesu FTDX10 (newcat ASCII, schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Written from Yaesu's published CAT Operation Reference Manual (document, PDF page and sha256 in each fact).
+# No radio has been connected, so every `verified` is unverified. Gaps: crates/radioctl-protocols/src/yaesu.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "rit-xit", "levels", "identify"]
+
+[rig]
+id = "yaesu-ftdx10"
+name = "Yaesu FTDX10"
+family = "yaesu-newcat"
+
+[yaesu]
+model_id = 761
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "data-r"
+code = "8"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[modes]]
+mode = "data"
+code = "C"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the guide", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.model_id"
+provenance = { kind = "manual", reference = "Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022), file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: ID, PDF p. 14: P1 0761" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 1042 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 2000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022), file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 23, SM p. 22, RM p. 21, AG p. 7, RG p. 21, MG p. 16, PC p. 19, KS p. 15, RT p. 21, XT p. 24, RC p. 20, RD p. 20, AI p. 7, FT p. 14", note = "The FTDX10 guide describes FT as MAIN/SUB band transmitter and has a separate ST command for split (0 off, 1 on, 2 on + 5 kHz up) that the engine does not use yet, so split is not claimed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022), file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: MD, PDF p. 16: 1 LSB, 2 USB, 3 CW-U, 4 FM, 5 AM, 6 RTTY-LSB, 7 CW-L, 8 DATA-LSB, 9 RTTY-USB, C DATA-USB", note = "Mapping to radioctl modes is ours: CW-U is cw, CW-L is cw-r, RTTY-L is rtty, RTTY-U is rtty-r, DATA-L is data-r, DATA-U is data. Modes A, B, D, E, F (data FM, narrow FM, narrow AM, C4FM/PSK, narrow data FM) are not mapped." }
+verified = { state = "unverified" }
