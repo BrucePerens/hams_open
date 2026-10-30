@@ -19,6 +19,38 @@ impl Hz {
     }
 }
 
+/// An operating mode. Per-family code tables live in the rig description, not here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Mode {
+    /// Lower sideband.
+    Lsb,
+    /// Upper sideband.
+    Usb,
+    /// Amplitude modulation.
+    Am,
+    /// CW (Morse).
+    Cw,
+    /// CW, reverse sideband.
+    CwR,
+    /// RTTY / FSK.
+    Rtty,
+    /// RTTY / FSK, reverse.
+    RttyR,
+    /// Narrow FM.
+    Fm,
+    /// Wide FM.
+    Wfm,
+}
+
+/// A VFO. Only the VFOs a description lists are usable on a given rig.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Vfo {
+    /// VFO A (the receive/operating VFO unless split).
+    A,
+    /// VFO B.
+    B,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

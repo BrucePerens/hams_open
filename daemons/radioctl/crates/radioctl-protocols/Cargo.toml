@@ -9,3 +9,9 @@ rust-version.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+radioctl-core = { path = "../radioctl-core" }
+
+[dev-dependencies]
+proptest = "1"
