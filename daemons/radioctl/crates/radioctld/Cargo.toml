@@ -1,0 +1,15 @@
+[package]
+name = "radioctld"
+description = "radioctld: rigctld-protocol server on top of radioctl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+radioctl-core = { path = "../radioctl-core" }
+radioctl-protocols = { path = "../radioctl-protocols" }
