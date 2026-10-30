@@ -63,6 +63,8 @@ impl CivPersonality {
         self.modes.iter().find(|(_, c)| *c == code).map(|(m, _)| *m)
     }
 
+    // [@ANCHOR: radioctl_splitter_civ_status_frame]
+    /// An OK or NG frame to `to`.
     fn status_frame(&self, to: u8, ok: bool) -> Vec<u8> {
         self.frame(to, if ok { OK } else { NG }, &[])
     }
@@ -279,6 +281,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_splitter_civ_reply]
+    // Tests [@ANCHOR: radioctl_splitter_civ_status_frame]
     #[test]
     fn replies_carry_the_addresses_prefix_and_value() {
         let mut p = CivPersonality::new(0x94, false);

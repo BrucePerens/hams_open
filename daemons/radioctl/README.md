@@ -200,6 +200,10 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_core_serial_session] (radioctl-core) One connection: the writer loop plus a reader thread.
 - [@ANCHOR: radioctl:radioctl_core_serial_read_loop] (radioctl-core) The reader thread: port to async side until stop or failure.
 - [@ANCHOR: radioctl:radioctl_core_serial_open] (radioctl-core) Opens a serial port on a caller-supplied runtime handle and returns the byte stream, control lines and status.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_status_frame] (radioctl-splitter) An OK or NG frame to the sender.
+- [@ANCHOR: radioctl:radioctl_splitter_personality] (radioctl-splitter) A new personality for the configured protocol.
+- [@ANCHOR: radioctl:radioctl_splitter_set] (radioctl-splitter) A set: asks the rig and reports done or refused.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_code] (radioctl-splitter) The TS-2000 mode digit for a mode.
 - [@ANCHOR: radioctl:radioctl_splitter_arbiter_try_key] (radioctl-splitter) Claims the transmitter for `client`. `Ok` when it was free or already theirs; `Err` with the
 - [@ANCHOR: radioctl:radioctl_splitter_arbiter_release] (radioctl-splitter) Gives the transmitter up if `client` holds it. Returns whether it did.
 - [@ANCHOR: radioctl:radioctl_splitter_arbiter_clear] (radioctl-splitter) Clears ownership because the transmitter was unkeyed by anyone (unkeying is always allowed).

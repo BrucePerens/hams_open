@@ -182,6 +182,8 @@ impl Splitter {
         locked(&self.inner.owner).owner()
     }
 
+    // [@ANCHOR: radioctl_splitter_personality]
+    /// A new personality for the configured protocol.
     fn personality(&self) -> Box<dyn Personality> {
         match self.inner.config.protocol {
             Protocol::Civ { address, echo } => Box::new(CivPersonality::new(address, echo)),
@@ -302,6 +304,8 @@ impl Splitter {
         }
     }
 
+    // [@ANCHOR: radioctl_splitter_set]
+    /// A set: asks the rig and reports done or refused.
     async fn set(&self, op: Op) -> Outcome {
         match self
             .inner

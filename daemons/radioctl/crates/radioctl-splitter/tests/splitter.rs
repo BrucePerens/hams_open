@@ -102,6 +102,8 @@ async fn wait_for(mut condition: impl FnMut() -> bool) {
 // Tests [@ANCHOR: radioctl_splitter_run_client]
 // Tests [@ANCHOR: radioctl_splitter_execute]
 // Tests [@ANCHOR: radioctl_splitter_read]
+// Tests [@ANCHOR: radioctl_splitter_set]
+// Tests [@ANCHOR: radioctl_splitter_personality]
 // Tests [@ANCHOR: radioctl_splitter_stats]
 // Tests [@ANCHOR: radioctl_core_handle_execute_from]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

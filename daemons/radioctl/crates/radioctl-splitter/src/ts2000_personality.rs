@@ -41,6 +41,8 @@ impl Ts2000Personality {
         }
     }
 
+    // [@ANCHOR: radioctl_splitter_ts2000_code]
+    /// The TS-2000 mode digit for a mode; data modes use the sideband they sit on.
     fn code(&self, mode: Mode) -> Option<u8> {
         let mode = match mode {
             Mode::Data => Mode::Usb,
@@ -241,6 +243,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_splitter_ts2000_reply]
+    // Tests [@ANCHOR: radioctl_splitter_ts2000_code]
     #[test]
     fn replies_use_the_ts2000_formats() {
         let mut p = Ts2000Personality::new();
