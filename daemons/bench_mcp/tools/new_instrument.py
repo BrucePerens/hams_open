@@ -96,17 +96,14 @@ manual/tools/bench_{w}_*.md, tests/{w}_fixtures/, tests/hil_{w}.rs.
 
 Now make these edits by hand (one line each, all marked by the
 existing 'example' entries):
-  src/config.rs  DRIVERS: add "{w}"
+  src/config.rs  DRIVER_KINDS: add the row ("{w}", Kind::{W}), alphabetically
   src/config.rs  enum Kind: add {W}
   src/config.rs  struct Instrument: add  pub {w}: crate::{w}::Config,
-  src/config.rs  parse(): driver match arm  "{w}" => Kind::{W},
-  src/config.rs  parse(): the field, next to the example field
+  src/config.rs  parse(): the field  {w}: module_config!({w}, driver_name, c, name),
   src/config.rs  parse(): host/serial check, if your link needs one
   src/main.rs    mod {w};
-  src/main.rs    connect(): arm for Kind::{W}
-  src/main.rs    call(): if name.starts_with("bench_{w}_") {{ ... }}
-  src/main.rs    tool_defs(): let {w} = {w}::tool_defs(insts); .chain
-  src/main.rs    all_tool_defs(): one entry for driver "{w}"
+  src/main.rs    MODULES: one row (prefix "bench_{w}_", {w}::call, {w}::tool_defs,
+                 and a sample instrument entry), alphabetically
 Then: rewrite src/{w}/mod.rs for the real instrument, replace the
 fixture with a scrubbed capture, rewrite every page (delete the
 'model for' sentences), add a README row and a whats-new line, and
