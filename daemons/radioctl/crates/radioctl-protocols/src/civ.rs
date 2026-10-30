@@ -237,6 +237,9 @@ pub struct CivEngine {
     mode: Option<Mode>,
     scope: Option<ScopeAssembler>,
     scope_lines: Vec<ScopeLine>,
+    /// True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>`
+    /// instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement.
+    awaiting_ptt_ack: bool,
 }
 
 impl CivEngine {
@@ -260,6 +263,7 @@ impl CivEngine {
             mode: None,
             scope,
             scope_lines: Vec::new(),
+            awaiting_ptt_ack: false,
         })
     }
 
@@ -504,6 +508,7 @@ impl ProtocolEngine for CivEngine {
         if !self.desc.capabilities.has(op.required_capability()) {
             return Err(Self::unsupported("capability not in the rig description"));
         }
+        self.awaiting_ptt_ack = matches!(op, Op::SetPtt(_));
         let ack = ReplyKind::Ack;
         if let Some(done) = self
             .encode_vfo_b_or_split(op)
@@ -591,6 +596,10 @@ impl CivEngine {
             return None;
         }
         let data = frame.data.as_slice();
+        let ptt_echo = frame.cmd == 0x1C && matches!(data, [0x00, _]);
+        if std::mem::take(&mut self.awaiting_ptt_ack) && ptt_echo {
+            return Some(Inbound::Ack);
+        }
         let observation = match (frame.cmd, data) {
             (OK, []) => return Some(Inbound::Ack),
             (NG, []) => return Some(Inbound::Nak),
@@ -1023,5 +1032,30 @@ mod tests {
         assert!(e.scope_request(ScopeCommand::GetSpan(2)).is_err());
         let plain = CivEngine::new(RigDescription::ic7300()).expect("engine");
         assert!(plain.scope_request(ScopeCommand::GetDisplay).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode]
+    #[test]
+    fn a_ptt_echo_acknowledges_a_ptt_set_but_not_a_ptt_read() {
+        let mut e = CivEngine::new(shipped("xiegu-g90")).expect("engine");
+        e.encode(&Op::SetPtt(false)).expect("set");
+        assert_eq!(
+            e.feed(&reply(0xA4, 0x1C, &[0x00, 0x00]), T0),
+            vec![Inbound::Ack],
+            "the Xiegu echo of the set"
+        );
+        assert_eq!(
+            e.feed(&reply(0xA4, 0x1C, &[0x00, 0x00]), T0),
+            vec![Inbound::Observation(Observation::Ptt(false))],
+            "the quirk is for one reply only"
+        );
+        e.encode(&Op::SetPtt(true)).expect("set");
+        assert_eq!(e.feed(&reply(0xA4, OK, &[]), T0), vec![Inbound::Ack]);
+        e.encode(&Op::GetPtt).expect("get");
+        assert_eq!(
+            e.feed(&reply(0xA4, 0x1C, &[0x00, 0x01]), T0),
+            vec![Inbound::Observation(Observation::Ptt(true))]
+        );
     }
 }

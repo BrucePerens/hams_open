@@ -656,3 +656,41 @@ fn known_icom_divergences(file: &str) -> Vec<&'static str> {
         _ => Vec::new(),
     }
 }
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode]
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+#[test]
+fn the_xiegu_files_against_hamlib_record_every_disagreement() {
+    // Only what the small Xiegu descriptions claim: frequency, mode and the PTT read.
+    for (file, model) in [
+        ("xiegu-g90", 3088),
+        ("xiegu-x6100", 3087),
+        ("xiegu-x108g", 3076),
+    ] {
+        let desc = shipped(file);
+        let mut steps = scenario();
+        steps.push(Op::GetPtt);
+        let (divergences, refused, wire) = compare(model, &desc, 19200, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(
+            got,
+            known_xiegu_divergences(file),
+            "{file}: {divergences:#?}"
+        );
+    }
+}
+
+/// The steps on which Hamlib and radioctl disagree for a Xiegu file.
+///
+/// The G90 and X6100 agree. On the X108G Hamlib selects VFO B (`07 01`) before it works, so its
+/// frequency writes land in the virtual rig's VFO B while radioctl's engine, which assumes VFO A
+/// is selected and never sends `07`, writes VFO A: the virtual rig's VFO A ends at a different
+/// frequency. Which VFO a real X108G treats as "the" VFO is unknown.
+fn known_xiegu_divergences(file: &str) -> Vec<&'static str> {
+    match file {
+        "xiegu-x108g" => vec!["final freq_a"],
+        _ => Vec::new(),
+    }
+}
