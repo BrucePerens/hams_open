@@ -143,7 +143,9 @@ async fn two_civ_clients_share_one_rig_one_queue_and_cached_reads() {
         read_n(&mut b, 11).await,
         freq_frame(0x00, 0x00, BCD_7030000)
     );
-    assert_eq!(control.state().freq_a, Hz(7_030_000));
+    // A Kenwood-family set has no reply, so the rig may see its bytes a moment after the client
+    // is answered: wait for the state instead of reading it at once.
+    wait_for(|| control.state().freq_a == Hz(7_030_000)).await;
     b.write_all(&READ_FREQ).await.expect("write");
     assert_eq!(
         read_n(&mut b, 11).await,
@@ -154,7 +156,7 @@ async fn two_civ_clients_share_one_rig_one_queue_and_cached_reads() {
         .await
         .expect("write");
     assert_eq!(read_n(&mut b, 6).await, OK);
-    assert_eq!(control.state().mode, Mode::Usb);
+    wait_for(|| control.state().mode == Mode::Usb).await;
     a.write_all(&[0xFE, 0xFE, 0x94, 0xE0, 0x04, 0xFD])
         .await
         .expect("write");
@@ -236,7 +238,7 @@ async fn one_client_owns_the_transmitter_and_its_departure_unkeys_the_rig() {
     rig.open_transmit_gate(TransmitPermit::new("test: virtual rig only"));
     a.write_all(&PTT_ON).await.expect("write");
     assert_eq!(read_n(&mut a, 6).await, OK);
-    assert!(control.state().ptt);
+    wait_for(|| control.state().ptt).await;
     let owner = splitter.ptt_owner().expect("a owns it");
     // B cannot key while A holds it, and the rig stays as A left it.
     b.write_all(&PTT_ON).await.expect("write");
@@ -252,12 +254,12 @@ async fn one_client_owns_the_transmitter_and_its_departure_unkeys_the_rig() {
     // Anyone may unkey.
     b.write_all(&PTT_OFF).await.expect("write");
     assert_eq!(read_n(&mut b, 6).await, OK);
-    assert!(!control.state().ptt);
+    wait_for(|| !control.state().ptt).await;
     assert_eq!(splitter.ptt_owner(), None);
     // B keys; B vanishing unkeys the rig.
     b.write_all(&PTT_ON).await.expect("write");
     assert_eq!(read_n(&mut b, 6).await, OK);
-    assert!(control.state().ptt);
+    wait_for(|| control.state().ptt).await;
     drop(b);
     wait_for(|| !control.state().ptt && splitter.ptt_owner().is_none()).await;
     // A third client reads the transmit state through the cache.
@@ -282,9 +284,7 @@ async fn a_ts2000_client_reads_sets_and_is_refused_what_it_cannot_have() {
         b"FA00014060000;MD3;ID019;"
     );
     a.write_all(b"FA00007074000;MD2;").await.expect("write");
-    sleep(Duration::from_millis(100)).await;
-    assert_eq!(control.state().freq_a, Hz(7_074_000));
-    assert_eq!(control.state().mode, Mode::Usb);
+    wait_for(|| control.state().freq_a == Hz(7_074_000) && control.state().mode == Mode::Usb).await;
     a.write_all(b"IF;ZZ;SM0;").await.expect("write");
     assert_eq!(read_n(&mut a, 2 + 2 + 8).await, b"?;?;SM00015;");
     a.write_all(b"TX;").await.expect("write");
