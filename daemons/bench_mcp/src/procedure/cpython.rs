@@ -19,6 +19,11 @@ use std::time::{Duration, Instant};
 
 /// The runtime written next to each run's source.
 pub const RUNTIME: &str = include_str!("bench_runtime.py");
+/// Processes and threads the program may add to the ones the user has when it starts. `RLIMIT_NPROC` counts every task of the
+/// user, other programs' included, and a busy machine (parallel builds) can add hundreds in the moment between the count and the
+/// program's first thread; a small margin made runs die with `can't start new thread` (found by repeating the tests under load).
+/// The margin still stops a runaway fork loop at about this many tasks.
+const TASK_MARGIN: u64 = 2048;
 /// The longest protocol line accepted from the program, bytes.
 const MAX_LINE: u64 = 16 << 20;
 
@@ -52,7 +57,7 @@ fn stripped_env(scratch: &Path) -> Vec<(String, String)> {
 }
 
 /// Threads and processes of the current user, now. `RLIMIT_NPROC` counts all of them, so the program's limit is this plus
-/// a margin: it can start a few threads (numpy) and no more.
+/// `TASK_MARGIN`: it can start the threads it needs (numpy) and a runaway fork loop is stopped.
 fn user_tasks() -> u64 {
     // [@ANCHOR: proc_cpython_user_tasks]
     // SAFETY: getuid has no preconditions.
@@ -235,7 +240,7 @@ impl Backend for CPython {
             .stderr(Stdio::piped())
             .process_group(0);
         let l = spec.limits.clone();
-        let tasks = user_tasks() + 64;
+        let tasks = user_tasks() + TASK_MARGIN;
         // SAFETY: the closure only calls async-signal-safe libc functions (setrlimit, prctl) between fork and exec.
         unsafe {
             cmd.pre_exec(move || {

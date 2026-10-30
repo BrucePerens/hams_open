@@ -1,0 +1,83 @@
+---
+title: Soak round with a baseline
+summary: The shipped procedure example-soak-round: step the generator, read the scope and the VNA, compare with a baseline, count ERROR and WRONG.
+see_also: [concepts/procedures, tools/bench_proc_run, tools/bench_proc_load, procedures/run-a-soak, tools/bench_vna_generator_on, tools/bench_measure, tools/bench_vna_sweep]
+verified: fixtures only, 2026-10-29
+---
+
+# Soak round with a baseline
+
+The saved example `example-soak-round` (tier `read_config`) does the middle of what a long soak harness does each round, as a program you can start and stop through the MCP: for each generator level it sets the generator (`bench_vna_generator_on`), reads the level on the scope (`bench_measure`) and on the VNA (`bench_vna_sweep`), and compares both with a baseline: given in `args.baseline`, or the first round without errors. A tool that fails is counted as `ERROR`; a reading outside `tolerance` of the baseline is `WRONG`. Both are listed with the round, the level and the instrument, and `round.N` events report the running counts. The generator is switched off by a cleanup handler, and the runner's safe state backs it up. It does not replace `daemons/vnwa_open/examples/soak.rs`, which also checks temperature and power-cycles every 30 minutes, and it does not use the VNA and the scope at once with the vendor program: a soak holds the VNA, so nothing else may.
+
+```python
+# example-soak-round: for a number of rounds, step the generator through its levels, read the level on the scope
+# and on the VNA, compare each reading with a baseline and count what goes wrong. Errors (a tool refused or
+# failed) and wrong readings (a number outside the tolerance) are counted separately and listed.
+#
+# Arguments (bench.args), all optional; the defaults are for the VNA generator, the scope and the VNA sweep:
+#   rounds         rounds to run (default 3); pause_s waits between rounds (default 0)
+#   levels         generator levels (default [-6, -12]); level_arg is the argument that carries the level
+#   generator      {"tool": "bench_vna_generator_on", "args": {"freq_hz": 10e6}, "level_arg": "level_db"}
+#   generator_off  {"tool": "bench_vna_generator_off", "args": {}}
+#   scope          {"tool": "bench_measure", "args": {"channel": 1, "items": ["RMS"]}, "value": "RMS"}
+#   vna            {"tool": "bench_vna_sweep", "args": {"start_hz": 10e6, "points": 1}, "value": "rows.0.s21_db"}
+#   tolerance      allowed difference from the baseline, in the unit of the reading (default 0.5)
+#   baseline       {"scope": [..per level..], "vna": [..per level..]}; when absent the first round is the baseline
+# "value" is a dotted path into the reply (a number selects a list item). Emits one "round.N" event per round.
+args = bench.args
+levels = args.get("levels", [-6, -12])
+generator = args.get(
+    "generator",
+    {"tool": "bench_vna_generator_on", "args": {"freq_hz": 10e6}, "level_arg": "level_db"},
+)
+generator_off = args.get("generator_off", {"tool": "bench_vna_generator_off", "args": {}})
+scope = args.get(
+    "scope", {"tool": "bench_measure", "args": {"channel": 1, "items": ["RMS"]}, "value": "RMS"}
+)
+vna = args.get(
+    "vna",
+    {"tool": "bench_vna_sweep", "args": {"start_hz": 10e6, "points": 1}, "value": "rows.0.s21_db"},
+)
+tolerance = float(args.get("tolerance", 0.5))
+baseline = args.get("baseline")
+errors, wrong, readings = [], [], []
+
+
+def pick(reply, path):
+    for part in path.split("."):
+        reply = reply[int(part)] if isinstance(reply, list) else reply[part]
+    return float(reply)
+
+
+def generator_off_now():
+    bench.call(generator_off["tool"], **generator_off.get("args", {}))
+
+
+bench.cleanup(generator_off_now)
+for number in range(1, int(args.get("rounds", 3)) + 1):
+    bench.step(f"round {number}")
+    this_round = {"scope": [], "vna": []}
+    for index, level in enumerate(levels):
+        for name, role in (("generator", generator), ("scope", scope), ("vna", vna)):
+            try:
+                extra = {role["level_arg"]: level} if name == "generator" and "level_arg" in role else {}
+                reply = bench.call(role["tool"], **{**role.get("args", {}), **extra})
+                if name == "generator":
+                    continue
+                value = pick(reply, role["value"])
+                this_round[name].append(value)
+                if baseline is not None and abs(value - baseline[name][index]) > tolerance:
+                    wrong.append({"round": number, "level": level, "instrument": name, "value": value, "baseline": baseline[name][index]})
+            except bench.BenchError as error:
+                errors.append({"round": number, "level": level, "instrument": name, "error": str(error)})
+    if baseline is None and not errors:
+        baseline = this_round
+        bench.log("round 1 is the baseline")
+    readings.append(this_round)
+    bench.emit(f"round.{number}", {"readings": this_round, "errors": len(errors), "wrong": len(wrong)})
+    if number < int(args.get("rounds", 3)):
+        bench.sleep(float(args.get("pause_s", 0)))
+bench.result({"rounds": len(readings), "ERROR": len(errors), "WRONG": len(wrong), "errors": errors, "wrong": wrong, "baseline": baseline, "readings": readings})
+```
+
+Count `ERROR` and `WRONG` from the result, not an impression. Run it with `wall_s` long enough for the rounds and `pause_s` between them. Not run on hardware: the tests use example instruments that share a simulated level.

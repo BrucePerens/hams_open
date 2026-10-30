@@ -3,6 +3,7 @@
 //! tier they need. Saving under an existing name adds a version; the last `KEEP_VERSIONS` are kept. The declared tier is checked
 //! against the tools the source names as string literals, so a procedure cannot claim a lower tier than it uses.
 
+use super::examples;
 use super::tiers::{parse_tier, tier_name, ToolIndex};
 use super::{store, Config};
 use crate::config::{Instrument, Tier};
@@ -27,6 +28,9 @@ pub fn valid_name(name: &str) -> bool {
 
 fn dir_of(cfg: &Config, name: &str) -> Result<PathBuf, String> {
     // [@ANCHOR: proc_saved_dir_of]
+    if name.starts_with(examples::PREFIX) {
+        return Err(format!("{name:?} is a shipped example: it cannot be saved over or deleted (save a copy under another name)"));
+    }
     if !valid_name(name) {
         return Err(format!("{name:?} is not a procedure name (1 to 60 characters of a-z, 0-9, _ and -, starting with a letter or digit)"));
     }
@@ -112,6 +116,15 @@ pub fn save(
 /// A saved procedure: its description, tier, versions and the source of `version` (the latest when `None`).
 pub fn load(cfg: &Config, name: &str, version: Option<u64>) -> Result<Value, String> {
     // [@ANCHOR: proc_saved_load]
+    if let Some(e) = examples::find(name) {
+        if version.is_some_and(|v| v != 1) {
+            return Err(format!("{name} is a shipped example with one version"));
+        }
+        return Ok(
+            json!({"name": name, "version": 1, "tier": e.tier, "description": e.description, "shipped": true,
+            "versions": [{"version": 1, "tier": e.tier, "note": "shipped with the server"}], "source": e.source}),
+        );
+    }
     let dir = dir_of(cfg, name)?;
     let meta = store::read_json(&dir.join("meta.json"))
         .map_err(|_| format!("no saved procedure {name:?} (see bench_proc_list)"))?;
@@ -172,8 +185,9 @@ pub fn delete(cfg: &Config, name: &str, version: Option<u64>) -> Result<Value, S
 /// The saved procedures: name, description, tier, latest version and how many versions.
 pub fn list(cfg: &Config) -> Vec<Value> {
     // [@ANCHOR: proc_saved_list]
+    let shipped = examples::SHIPPED.iter().map(|e| json!({"name": e.name, "description": e.description, "tier": e.tier, "latest": 1, "versions": 1, "shipped": true}));
     let Ok(rd) = std::fs::read_dir(store::root(cfg).join("saved")) else {
-        return Vec::new();
+        return shipped.collect();
     };
     let mut out: Vec<Value> = rd
         .flatten()
@@ -184,5 +198,6 @@ pub fn list(cfg: &Config) -> Vec<Value> {
         })
         .collect();
     out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    out.extend(shipped);
     out
 }

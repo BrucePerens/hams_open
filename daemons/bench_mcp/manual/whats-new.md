@@ -10,6 +10,9 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- procedures/sweep-series-with-retries: the shipped procedure example-sweep-series (repeat a sweep, retry, power-cycle after failures, tabulate the spread)
+- procedures/soak-round: the shipped procedure example-soak-round (generator steps read on the scope and the VNA against a baseline)
+- procedures/calibration-with-operator-steps: the shipped procedure example-calibration-sequence (the VNA calibration with operator prompts)
 - concepts/procedures: the procedure runner (programs that call bench tools in loops, next to the server) and the tools bench_proc_run, bench_proc_status, bench_proc_output, bench_proc_result, bench_proc_cancel, bench_proc_list, bench_proc_save, bench_proc_load, bench_proc_delete, bench_proc_input (safe state, instrument reservations, saved procedures, operator steps, restart recovery)
 - instruments/sound: operation, limits, troubleshooting, protocol and measurement recipes pages
 - instruments/usb-hubs: protocol page
