@@ -17,7 +17,7 @@ daemons/radioctl/
   crates/radioctl-core/       typed values, capability model, errors, rig actor (PR 3 on)
   crates/radioctl-protocols/  sans-IO protocol engines, one per family (PR 3 on)
   crates/radioctl-splitter/   virtual IC-7300 CI-V / TS-2000 CAT endpoints (pty, TCP) in front of one rig actor
-  crates/radioctld/           rigctld-protocol server (skeleton)
+  crates/radioctld/           rigctld text-protocol server (library + binary `radioctld`)
   docs/DESIGN.md          design note (ADR style)
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
   data/hamlib-<version>/  generated capability_matrix.json and HAMLIB_DIFFERENCES.md
@@ -35,9 +35,11 @@ Layout changes from the proposal (record every change here):
 - Virtual rigs live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines; the optional
   `io` module (cargo feature `tokio-io`, default on) runs one behind an in-memory duplex stream with a
   reply delay and a control handle. `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
-- `radioctl-splitter` (new crate, so the library crates stay free of pty code) depends on core and protocols; `radioctld` will use it.
-- `radioctl-core` has the cargo feature `owned-runtime` (off by default, on for `radioctld`): the one place
-  the library builds a tokio runtime of its own.
+- `radioctl-splitter` (new crate, so the library crates stay free of pty code) depends on core and protocols; `radioctld` uses its PTT arbiter (`PttOwner`), so the two share one set of ownership semantics.
+- `radioctl-core` has the cargo feature `owned-runtime` (off by default): the one place the library builds a
+  tokio runtime of its own, for programs that are not tokio programs (the planned C ABI). `radioctld` does not
+  use it: the `radioctld` binary builds the one multi-thread runtime of its process and passes its `Handle`
+  to the library, which creates none.
 - No `deny.toml`: no other Rust crate in hams_open has one, so this workspace follows suit. Add one
   when the repository gets a shared policy.
 
@@ -100,6 +102,51 @@ For a new Hamlib release, run it into a new `data/hamlib-<version>/` directory a
 Hamlib 4.6.2 lists 313 models (the proposal said 314; that count included the header line); 312 dump,
 model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as not dumpable.
 
+## radioctld
+
+`radioctld --config FILE [--check]` serves the Hamlib `rigctld` text protocol (as documented in the
+`rigctl`/`rigctld` man pages and as observed from Hamlib 4.6.2's `rigctld`) for any radioctl rig, real
+or virtual, so WSJT-X, fldigi, loggers and `rigctl -m 2` work against it unchanged. One `[[rig]]` per
+radio, each with its own listen address (as with one `rigctld` per radio); see `radioctld.example.toml`.
+
+- Commands: `f F m M v V t T s S i I x X j J z Z l L u U b` (Morse), `1`/`\dump_caps`, `\dump_state`,
+  `\chk_vfo`, `\get_powerstat`, `\get_info`, `\get_lock_mode`, `\get_vfo_info`, `\get_vfo_list`,
+  `\get_split_freq_mode`, `\set_split_freq_mode`, `q`; the extended `+` response format; every
+  VFO-taking command accepts the VFO argument or not, in either VFO mode (`vfo_mode`). Other Hamlib
+  commands answer `RPRT -4`; unknown words `RPRT -1`; what the rig cannot do `RPRT -11`.
+  The raw `send_cmd` (`w`), power control and Morse stop are never served (`RPRT -11`).
+  Arguments are checked strictly: a missing, surplus or malformed argument is `RPRT -1`, never a wait
+  for another line (Hamlib's `rigctld` waits).
+- Several clients share a rig through its single actor queue; reads come from the actor's cache when
+  newer than `cache_max_age_ms`. No locks around the rig.
+- PTT: one owner at a time, with the splitter's `PttOwner`. The first client to key owns the
+  transmitter; another client's `T 1` or `b` is `RPRT -9` (rejected) until the owner unkeys or
+  disconnects (which unkeys the rig); anyone may unkey. Transmit commands are refused with `RPRT -9`
+  before anything is queued while the rig's transmit gate is closed or its link is down. The gate is
+  closed unless the configuration says `transmit = true`; `\dump_state` advertises a transmit range only
+  when it is open. Stopping the daemon unkeys a rig a client was keying.
+- Network exposure: every listener binds loopback by default and the allow list defaults to loopback.
+  Serving beyond it needs `allow_non_loopback_bind = true` together with an explicit `allow` list
+  (checked at load; the allow list is applied on accept, before a byte is read).
+- Bounds: line length (`max_line_bytes`), clients per rig, idle time, time to finish a started line,
+  write time; an over-long line gets `RPRT -1` and the connection is closed.
+- Runtime: the `radioctld` binary owns the one multi-thread tokio runtime; the library takes a `Handle`.
+- Deviations from `rigctld`, all on purpose: PTT is released when its owner disconnects; the VFO
+  selected by `V` is radioctld's own state (radioctl addresses VFOs explicitly); split is VFO A to
+  receive and VFO B to transmit, and `X`/`\set_split_freq_mode` accept only the mode the rig is already
+  in; passbands the rig has no filter control for are the mode's typical width; levels are scaled
+  (0 to 1, or the rig's own integer for keyer speed) by the ranges the engines enforce, repeated in
+  `names::level_range` and pinned to the engines by `tests/levels.rs`; the CI-V keyer speed is not
+  served because that engine does not carry it.
+- Tests: protocol transcripts (`tests/transcripts/`), two or more clients, arbitration and the closed
+  gate (a refused transmit command leaves no byte on the rig's transport), the bounds, property tests
+  of the parser and a whole-pipeline fuzz, and the Hamlib `rigctl` client as an oracle against a virtual
+  KX3, IC-7300 and TS-590SG (`--features hamlib-oracle`, needs `rigctl` or `RIGCTL=/path`):
+
+```
+CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
+```
+
 ## Conventions
 
 - Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test carries
@@ -116,7 +163,6 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_transcript_step_bytes] (radioctl-core) One direction of a transcript step, as hex or as ASCII text (not both).
 - [@ANCHOR: radioctl:radioctl_core_hz_as_mhz] A frequency in megahertz for display.
-- [@ANCHOR: radioctl:radioctld_banner] The line the daemon skeleton prints.
 - [@ANCHOR: radioctl:radioctl_caps_parse_rig_list] Parses `rigctl -l` into model id, manufacturer, model, backend version, status and macro.
 - [@ANCHOR: radioctl:radioctl_caps_parse_dump] Parses one `--dump-caps` report: identity, serial settings, timing, VFO, functions, levels, parameters, modes, memories, scope data and the Y/N/E capability flags.
 - [@ANCHOR: radioctl:radioctl_caps_parse_ranges] Summarises TX and RX frequency range blocks (count, lowest and highest hertz, highest TX power).
@@ -127,7 +173,6 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_caps_build_matrix] Runs rigctl for every listed model and assembles the matrix with provenance.
 - [@ANCHOR: radioctl:radioctl_caps_render_markdown] Renders the generated differences document from the matrix.
 - [@ANCHOR: radioctl:radioctl_caps_main] Command line: write the files, or `--check` for drift.
-- [@ANCHOR: radioctl:radioctld_main] The skeleton daemon entry point; exits with status 2 because it serves nothing yet.
 - [@ANCHOR: radioctl:radioctl_core_capability_transmits] (radioctl-core) True when using the capability can put RF on the air.
 - [@ANCHOR: radioctl:radioctl_core_capability_set_of] (radioctl-core) Builds a set from a list.
 - [@ANCHOR: radioctl:radioctl_core_capability_set_has] (radioctl-core) True when the capability is present.
@@ -392,3 +437,111 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_select_vfo] (radioctl-protocols) Sets the receive (FR) or transmit (FT) VFO; split is when they differ.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_move_offset] (radioctl-protocols) RU/RD: moves the RIT/XIT offset by five digits of hertz; refuses beyond 9999 Hz.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_level] (radioctl-protocols) A Kenwood level read or set (AG, RG, MG, ML, PC, KS), refusing values outside the guides' ranges.
+- [@ANCHOR: radioctl:radioctld_access_normalise] (radioctld) An IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) as the IPv4 address it stands for.
+- [@ANCHOR: radioctl:radioctld_access_prefix_matches] (radioctld) True when the first `prefix` bits of `a` and `b` agree.
+- [@ANCHOR: radioctl:radioctld_access_octets] (radioctld) The address bytes of an IP address.
+- [@ANCHOR: radioctl:radioctld_access_loopback_only] (radioctld) The default: this machine only (`127.0.0.0/8` and `::1`).
+- [@ANCHOR: radioctl:radioctld_access_parse] (radioctld) Builds a list from entries such as `192.168.1.0/24`, `10.0.0.5` or `fd00::/8`.
+- [@ANCHOR: radioctl:radioctld_access_allows] (radioctld) True when `peer` is inside an allowed network.
+- [@ANCHOR: radioctl:radioctld_caps_modes] (radioctld) The modes of the description, in a stable order.
+- [@ANCHOR: radioctl:radioctld_caps_range_line] (radioctld) One frequency range line of `\dump_state`.
+- [@ANCHOR: radioctl:radioctld_caps_gran] (radioctld) The `level_gran` text: min, max and step of every level, zeros for the ones not served.
+- [@ANCHOR: radioctl:radioctld_caps_wire_float] (radioctld) A value as the `level_gran` text of Hamlib's `rigctld` writes it for the first levels (AF, RF):
+- [@ANCHOR: radioctl:radioctld_caps_wire_int] (radioctld) An integer level value as the text Hamlib's client expects for an integer level: the integer's
+- [@ANCHOR: radioctl:radioctld_caps_granularity] (radioctld) Min, max and step of one served level in the form the client parses for that level.
+- [@ANCHOR: radioctl:radioctld_caps_dump_state] (radioctld) The `\dump_state` text.
+- [@ANCHOR: radioctl:radioctld_caps_dump_caps] (radioctld) The `\dump_caps` text: a readable summary, ended by a blank line.
+- [@ANCHOR: radioctl:radioctld_command_linebuffer_new] (radioctld) A buffer that accepts lines of at most `max` bytes.
+- [@ANCHOR: radioctl:radioctld_command_linebuffer_has_partial] (radioctld) True while the start of a line has arrived but its newline has not.
+- [@ANCHOR: radioctl:radioctld_command_linebuffer_push] (radioctld) Adds received bytes and returns the lines they completed. A line longer than the limit is
+- [@ANCHOR: radioctl:radioctld_command_into_line] (radioctld) Text if the bytes are UTF-8 without control characters (a tab is fine), else invalid.
+- [@ANCHOR: radioctl:radioctld_command_resolve] (radioctld) The canonical long name of a command word, and whether radioctld implements it. `None` when
+- [@ANCHOR: radioctl:radioctld_command_takes_vfo] (radioctld) True for commands that accept an optional leading VFO token.
+- [@ANCHOR: radioctl:radioctld_command_parse_hz] (radioctld) A frequency in hertz from decimal text such as `14074000` or `14074000.000000`; a fraction of
+- [@ANCHOR: radioctl:radioctld_command_parse_int] (radioctld) A signed integer of at most 12 characters.
+- [@ANCHOR: radioctl:radioctld_command_parse_float] (radioctld) A finite floating-point number of at most 32 characters.
+- [@ANCHOR: radioctl:radioctld_command_sanitise] (radioctld) Text safe to echo in a response header: control characters become `?`.
+- [@ANCHOR: radioctl:radioctld_command_morse_text] (radioctld) Morse text for `send_morse`: 1 to [`MAX_MORSE_CHARS`] printable ASCII characters.
+- [@ANCHOR: radioctl:radioctld_command_mode_and_passband] (radioctld) `mode passband` arguments.
+- [@ANCHOR: radioctl:radioctld_command_flag] (radioctld) A 0/1 flag; any nonzero integer is on.
+- [@ANCHOR: radioctl:radioctld_command_build] (radioctld) Builds the command `name` from its arguments (the VFO token already taken off). `rest` is the
+- [@ANCHOR: radioctl:radioctld_command_take_vfo] (radioctld) Splits an optional leading VFO token off `rest`. For `send_morse` only the unambiguous
+- [@ANCHOR: radioctl:radioctld_command_parse_line] (radioctld) Parses one request line. `None` for a blank line (nothing to answer).
+- [@ANCHOR: radioctl:radioctld_config_in_range] (radioctld) A value checked against an inclusive range, naming the key in the error.
+- [@ANCHOR: radioctl:radioctld_config_server] (radioctld) Validates the `[server]` section.
+- [@ANCHOR: radioctl:radioctld_config_transport] (radioctld) Validates a rig's `[rig.transport]`.
+- [@ANCHOR: radioctl:radioctld_config_rig] (radioctld) Validates one `[[rig]]`. `index` picks the default port; `non_loopback_ok` is the server's
+- [@ANCHOR: radioctl:radioctld_config_parse] (radioctld) Parses and validates a configuration file's text. Relative description paths are taken
+- [@ANCHOR: radioctl:radioctld_daemon_start] (radioctld) Brings up every rig of `config` (descriptions given in the same order) and starts listening.
+- [@ANCHOR: radioctl:radioctld_daemon_start_one] (radioctld) Brings up one rig and its listener.
+- [@ANCHOR: radioctl:radioctld_daemon_stop] (radioctld) Stops every listener and client, and unkeys any rig whose transmitter a client held.
+- [@ANCHOR: radioctl:radioctld_main_parse_args] (radioctld) Parses the command line (without the program name).
+- [@ANCHOR: radioctl:radioctld_main_load] (radioctld) Reads the configuration file and every rig description it names.
+- [@ANCHOR: radioctl:radioctld_main_run] (radioctld) Runs the daemon until the process is interrupted.
+- [@ANCHOR: radioctl:radioctld_main] (radioctld) The daemon entry point: reads the command line, loads the configuration, runs the daemon on the one runtime it owns.
+- [@ANCHOR: radioctl:radioctld_names_mode_from_hamlib] (radioctld) The mode a Hamlib mode name stands for (case-insensitive).
+- [@ANCHOR: radioctl:radioctld_names_mode_to_hamlib] (radioctld) Hamlib's name for a mode.
+- [@ANCHOR: radioctl:radioctld_names_mode_mask] (radioctld) The bit mask of a set of modes, as `\dump_state` writes it.
+- [@ANCHOR: radioctl:radioctld_names_mode_bit] (radioctld) The single mask bit of one mode.
+- [@ANCHOR: radioctl:radioctld_names_nominal_width] (radioctld) A typical receive bandwidth for the mode, reported when the rig cannot tell its own.
+- [@ANCHOR: radioctl:radioctld_names_parse_vfo] (radioctld) The VFO a token names, if it is a VFO name at all (case-insensitive).
+- [@ANCHOR: radioctl:radioctld_names_vfo_name] (radioctld) Hamlib's name for a VFO.
+- [@ANCHOR: radioctl:radioctld_names_level_lookup] (radioctld) Finds a level by its Hamlib name (case-insensitive).
+- [@ANCHOR: radioctl:radioctld_names_level_range] (radioctld) The rig's own range for a level, when radioctld knows it for the rig's family. Levels of
+- [@ANCHOR: radioctl:radioctld_names_served_levels] (radioctld) The levels this rig can serve: its capabilities, and a known range for numeric levels.
+- [@ANCHOR: radioctl:radioctld_names_func_lookup] (radioctld) Finds a function by its Hamlib name (case-insensitive).
+- [@ANCHOR: radioctl:radioctld_names_func_mask] (radioctld) The `has_get_func` / `has_set_func` mask for a rig that has RIT and XIT or neither.
+- [@ANCHOR: radioctl:radioctld_names_level_mask] (radioctld) The `has_get_level` / `has_set_level` mask of a list of levels; `settable_only` leaves out
+- [@ANCHOR: radioctl:radioctld_reply_error_code] (radioctld) The `RPRT` code for a failure of the rig actor.
+- [@ANCHOR: radioctl:radioctld_reply_vfo_echo] (radioctld) The VFO text a response header echoes: what the client sent, else `currVFO` in VFO mode.
+- [@ANCHOR: radioctl:radioctld_reply_header_line] (radioctld) The extended-format header line: `name:` then the VFO and arguments.
+- [@ANCHOR: radioctl:radioctld_reply_render] (radioctld) Renders the answer to one request.
+- [@ANCHOR: radioctl:radioctld_rigs_boxed_encode] (radioctld) See the source.
+- [@ANCHOR: radioctl:radioctld_rigs_boxed_feed] (radioctld) See the source.
+- [@ANCHOR: radioctl:radioctld_rigs_load_description] (radioctld) Reads and validates a rig description file.
+- [@ANCHOR: radioctl:radioctld_rigs_service_config] (radioctld) The per-rig service settings from the configuration.
+- [@ANCHOR: radioctl:radioctld_rigs_build_rig] (radioctld) Brings up one rig on `runtime`: engine, transport, actor, service. The transmit gate is
+- [@ANCHOR: radioctl:radioctld_server_limits_from_config] (radioctld) The limits of a configuration.
+- [@ANCHOR: radioctl:radioctld_server_serve] (radioctld) Starts serving `service` on `listener`. The caller binds the listener (loopback unless the
+- [@ANCHOR: radioctl:radioctld_server_local_addr] (radioctld) The address clients connect to.
+- [@ANCHOR: radioctl:radioctld_server_stats] (radioctld) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctld_server_shutdown] (radioctld) Stops accepting, disconnects every client (a client that owned the transmitter unkeys the
+- [@ANCHOR: radioctl:radioctld_server_accept_loop] (radioctld) Accepts connections until aborted. Peers outside the allow-list are dropped before a byte is
+- [@ANCHOR: radioctl:radioctld_server_answer] (radioctld) The text to send for one request line, and whether the connection closes after it.
+- [@ANCHOR: radioctl:radioctld_server_render_invalid] (radioctld) The answer to a line that is not text.
+- [@ANCHOR: radioctl:radioctld_server_write] (radioctld) Writes a reply within the write timeout; false when the client is gone or stalled.
+- [@ANCHOR: radioctl:radioctld_server_run_client] (radioctld) The task of one client, until it leaves, misbehaves, or the server stops.
+- [@ANCHOR: radioctl:radioctld_service_fmt_float] (radioctld) A level value as text: six decimals with trailing zeros dropped (`0.5`, `1`, `0.117647`).
+- [@ANCHOR: radioctl:radioctld_service_new] (radioctld) A service for `rig`, described by `description`.
+- [@ANCHOR: radioctl:radioctld_service_rig] (radioctld) The rig's handle.
+- [@ANCHOR: radioctl:radioctld_service_config] (radioctld) The service settings.
+- [@ANCHOR: radioctl:radioctld_service_stats] (radioctld) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctld_service_ptt_owner] (radioctld) The client that owns the transmitter, if any.
+- [@ANCHOR: radioctl:radioctld_service_caps_view] (radioctld) What `\dump_state` and `\dump_caps` are generated from.
+- [@ANCHOR: radioctl:radioctld_service_disconnect] (radioctld) A client went away: if it owned the transmitter, give it up and unkey the rig.
+- [@ANCHOR: radioctl:radioctld_service_shutdown] (radioctld) The server is stopping: if a client holds the transmitter, unkey the rig.
+- [@ANCHOR: radioctl:radioctld_service_exec] (radioctld) Runs one operation on the rig's queue.
+- [@ANCHOR: radioctl:radioctld_service_read] (radioctld) A read: the cached value if fresh enough, else asks the rig.
+- [@ANCHOR: radioctl:radioctld_service_set] (radioctld) A set: asks the rig and reports done.
+- [@ANCHOR: radioctl:radioctld_service_resolve_vfo] (radioctld) The VFO a selection means right now.
+- [@ANCHOR: radioctl:radioctld_service_frequency] (radioctld) A VFO's frequency in hertz.
+- [@ANCHOR: radioctl:radioctld_service_mode_and_width] (radioctld) The mode and the receive bandwidth in hertz (the mode's typical width when the rig has no
+- [@ANCHOR: radioctl:radioctld_service_mode_fields] (radioctld) The `Mode` and `Passband` answer fields, with the given labels.
+- [@ANCHOR: radioctl:radioctld_service_set_mode] (radioctld) Sets the mode, and the receive bandwidth when one is asked for and the rig has the
+- [@ANCHOR: radioctl:radioctld_service_require_mode] (radioctld) A split transmit mode other than the current one cannot be set: radioctl rigs have one
+- [@ANCHOR: radioctl:radioctld_service_refuse] (radioctld) Counts a refused transmit command and answers with the refusal code.
+- [@ANCHOR: radioctl:radioctld_service_check_transmit] (radioctld) The fail-closed check in front of every command that can put RF on the air: the gate must
+- [@ANCHOR: radioctl:radioctld_service_key] (radioctld) Keys the transmitter for `client` if the gate is open and no other client owns it. The
+- [@ANCHOR: radioctl:radioctld_service_unkey] (radioctld) Unkeys the transmitter. Open to every client, gate open or not.
+- [@ANCHOR: radioctl:radioctld_service_send_morse] (radioctld) Sends Morse text unless the gate is closed or another client owns the transmitter.
+- [@ANCHOR: radioctl:radioctld_service_split_vfo] (radioctld) `s`: whether split is on and which VFO transmits.
+- [@ANCHOR: radioctl:radioctld_service_set_split_vfo] (radioctld) `S`: split on means receive on VFO A and transmit on VFO B.
+- [@ANCHOR: radioctl:radioctld_service_rit_offset] (radioctld) `j` and `z`: the offset in hertz while the function is on, else 0.
+- [@ANCHOR: radioctl:radioctld_service_set_rit_offset] (radioctld) `J` and `Z`: 0 switches the function off; any other offset sets it and switches on.
+- [@ANCHOR: radioctl:radioctld_service_served_level] (radioctld) The level info if this rig serves the named level.
+- [@ANCHOR: radioctl:radioctld_service_get_level] (radioctld) `l`: a level as the client sees it (a 0 to 1 fraction, or the rig's own integer).
+- [@ANCHOR: radioctl:radioctld_service_set_level] (radioctld) `L`: sets a numeric level; meters are read-only.
+- [@ANCHOR: radioctl:radioctld_service_get_func] (radioctld) `u`: RIT or XIT on or off.
+- [@ANCHOR: radioctl:radioctld_service_set_func] (radioctld) `U`: RIT or XIT on or off.
+- [@ANCHOR: radioctl:radioctld_service_vfo_info] (radioctld) `\get_vfo_info`: frequency, mode, width and split of the selected VFO.
+- [@ANCHOR: radioctl:radioctld_service_execute] (radioctld) Executes one command for `client`. The answer is the body of a success, or the `RPRT`

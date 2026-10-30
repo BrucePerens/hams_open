@@ -193,6 +193,12 @@ mod tests {
             second.changes.first().map(|c| c.new),
             Some(Observation::Signal(2))
         );
+        // The callback sends the event before the dispatcher counts it as delivered, so the
+        // counters catch up a moment after the channel does: wait for them, bounded.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while dispatcher.counters().delivered < 2 && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let counters = dispatcher.counters();
         assert_eq!(counters.callback_panics, 1);
         assert_eq!(counters.delivered, 2);
