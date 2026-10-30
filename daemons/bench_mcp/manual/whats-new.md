@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- concepts/procedures: the procedure runner (programs that call bench tools in loops, next to the server) and the tools bench_proc_run, bench_proc_status, bench_proc_output, bench_proc_result, bench_proc_cancel, bench_proc_list
 - instruments/sound: operation, limits, troubleshooting, protocol and measurement recipes pages
 - instruments/usb-hubs: protocol page
 - instruments/bladerf: protocol page
