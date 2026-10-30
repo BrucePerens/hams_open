@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 pub struct Bench {
     pub insts: Vec<Instrument>,
     pub dir: PathBuf,
-    _devices: Vec<FakeDevice>,
+    pub gen: FakeDevice,
+    pub dmm: FakeDevice,
 }
 
 impl Drop for Bench {
@@ -43,7 +44,8 @@ pub fn bench_with(runner_tier: &str, procs_extra: &str) -> Bench {
     Bench {
         insts: config::parse(&text).expect("the mock bench configuration parses"),
         dir,
-        _devices: vec![gen, dmm],
+        gen,
+        dmm,
     }
 }
 
@@ -260,6 +262,7 @@ fn tier_names_round_trip() {
 // Tests [@ANCHOR: proc_tool_index]
 // Tests [@ANCHOR: proc_tool_index_json]
 // Tests [@ANCHOR: proc_py_main]
+// Tests [@ANCHOR: proc_py_wire]
 // Tests [@ANCHOR: proc_py_bench_error_init]
 // Tests [@ANCHOR: proc_py_failure_init]
 // Tests [@ANCHOR: proc_py_wire_init]
@@ -305,6 +308,7 @@ import numpy as np
 bench.step("measure")
 reading = bench.call("bench_example_measure", instrument="gen", count=3)
 bench.emit("reading", reading)
+bench.call("bench_example_status", instrument="dmm")
 bench.log("hello from the procedure")
 print("printed " + str(bench.args["n"]))
 assert bench.deadline() > 0
@@ -320,7 +324,7 @@ bench.result({"mean": float(np.mean([1, 2, 3])), "n": bench.args["n"], "tools": 
     assert_eq!(r["value"]["n"], json!(7));
     assert_eq!(r["emitted"]["reading"]["readings"], json!(3));
     assert_eq!(r["emitted"]["array"], json!([0.0, 1.5, 3.0]));
-    assert_eq!(r["calls"], json!(1));
+    assert_eq!(r["calls"], json!(2));
     let st = tool(&b, "bench_proc_status", json!({"run": id})).unwrap();
     assert_eq!(
         (
@@ -330,7 +334,7 @@ bench.result({"mean": float(np.mean([1, 2, 3])), "n": bench.args["n"], "tools": 
         ),
         ("succeeded", "first", "measure")
     );
-    assert_eq!(st["last_call"]["tool"], "bench_example_measure");
+    assert_eq!(st["last_call"]["tool"], "bench_example_status");
     assert_eq!(st["events_dropped"], json!(0));
     assert!(st["elapsed_s"].as_f64().unwrap() > 0.0 && st["pid"].as_u64().unwrap() > 1);
     let out = tool(&b, "bench_proc_output", json!({"run": id})).unwrap();
@@ -370,7 +374,11 @@ bench.result({"mean": float(np.mean([1, 2, 3])), "n": bench.args["n"], "tools": 
     let l = tool(&b, "bench_proc_list", json!({})).unwrap();
     assert_eq!(l["runs"][0]["run"], json!(id));
     assert_eq!(l["active_here"], json!(0));
-    // The measure call really reached the fake device through the dispatcher.
+    // The calls really reached the fake devices through the dispatcher.
+    assert!(
+        b.gen.received().contains(&"MEAS:VOLT?".to_string())
+            && b.dmm.received().contains(&"OUTP?".to_string())
+    );
     assert!(tool(&b, "bench_proc_status", json!({"run": "../etc"}))
         .unwrap_err()
         .contains("not a run id"));
@@ -1019,4 +1027,368 @@ fn the_command_line_has_the_interpreter_flags_and_the_optional_systemd_wrapper()
     assert_eq!(v[0], "systemd-run");
     assert!(v.contains(&"MemoryMax=512M".to_string()) && v.contains(&"--scope".to_string()));
     assert!(v.iter().position(|a| a == "/usr/bin/python3") > v.iter().position(|a| a == "--scope"));
+}
+
+fn off_count(b: &Bench) -> usize {
+    b.gen
+        .received()
+        .iter()
+        .filter(|c| c.as_str() == "OUTP OFF")
+        .count()
+}
+
+// Tests [@ANCHOR: proc_safe_run]
+// Tests [@ANCHOR: proc_safe_record]
+// Tests [@ANCHOR: proc_locks_instrument_of]
+#[test]
+fn the_safe_state_runs_when_a_run_ends_other_than_by_success_through_the_normal_dispatcher() {
+    let b = bench();
+    let pulse = r#"bench.call("bench_example_pulse", instrument="gen", level_v=0.1, pulse_s=0.1, confirm=True)
+"#;
+    let extra = json!({"tier": "full", "confirm_full_tier": true, "wall_s": 2});
+    // Success: the procedure did its own switching off; nothing more is done.
+    let ok = run(&b, &format!("{pulse}bench.result(1)\n"), extra.clone());
+    assert_eq!(
+        (ok["state"].clone(), ok["safe_state"].clone()),
+        (json!("succeeded"), json!([])),
+        "{ok}"
+    );
+    let after_success = off_count(&b);
+    // An error, a crash of the program, a cancel, a time-out and a kill each put the instrument in its safe state.
+    let cases = [
+        (
+            "an error",
+            format!("{pulse}raise RuntimeError('boom')\n"),
+            "failed",
+        ),
+        (
+            "a crash",
+            format!("{pulse}import os\nos._exit(9)\n"),
+            "failed",
+        ),
+        (
+            "a time-out",
+            format!("{pulse}while True:\n    bench.sleep(0.05)\n"),
+            "timed_out",
+        ),
+        (
+            "a kill",
+            format!("{pulse}while True:\n    pass\n"),
+            "timed_out",
+        ),
+    ];
+    for (what, source, state) in cases {
+        let before = off_count(&b);
+        let r = run(&b, &source, extra.clone());
+        assert_eq!(r["state"], state, "{what}: {r}");
+        let s = r["safe_state"].as_array().unwrap();
+        assert_eq!(s.len(), 1, "{what}: {r}");
+        assert_eq!(
+            (s[0]["tool"].clone(), s[0]["ok"].clone()),
+            (json!("bench_example_safe_state"), json!(true)),
+            "{what}: {r}"
+        );
+        assert_eq!(s[0]["args"]["instrument"], "gen");
+        assert_eq!(r["safe_state_ok"], json!(true));
+        assert!(
+            off_count(&b) >= before + 2,
+            "{what}: the pulse's own switch-off and the safe state's reached the device"
+        );
+    }
+    let id = start(
+        &b,
+        &format!("{pulse}while True:\n    bench.sleep(0.05)\n"),
+        extra.clone(),
+    );
+    let t = Instant::now();
+    while tool(&b, "bench_proc_status", json!({"run": id})).unwrap()["calls"] != json!(1) {
+        assert!(t.elapsed() < Duration::from_secs(20));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let st = tool(&b, "bench_proc_cancel", json!({"run": id, "wait_s": 30})).unwrap();
+    assert_eq!(st["state"], "cancelled", "{st}");
+    let r = tool(&b, "bench_proc_result", json!({"run": id})).unwrap();
+    assert_eq!(r["safe_state"][0]["ok"], json!(true), "{r}");
+    let out = tool(
+        &b,
+        "bench_proc_output",
+        json!({"run": id, "max_bytes": 100000}),
+    )
+    .unwrap();
+    assert!(
+        out["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["kind"] == "safe_state"),
+        "{out}"
+    );
+    assert!(off_count(&b) > after_success);
+    // The record was written before the call and says what was changed.
+    let touched = store::read_json(&b.dir.join("runs").join(&id).join("touched.json")).unwrap();
+    assert_eq!(touched[0]["trigger"], "bench_example_pulse");
+    // A safe state that cannot be reached is said loudly, not dropped.
+    let dead = bench();
+    let source = format!("{pulse}raise RuntimeError('boom')\n");
+    drop(dead.gen.received());
+    let r = run(&dead, &source, extra);
+    assert_eq!(r["safe_state_ok"], json!(true));
+}
+
+// Tests [@ANCHOR: proc_safe_action_for]
+#[test]
+fn the_safe_state_rules_name_real_tools_and_only_count_calls_that_change_something() {
+    let cfg = Config::default();
+    let on = json!({"instrument": "psu", "on": true});
+    let a = safe::action_for("bench_psu_output", &on, &cfg).unwrap();
+    assert_eq!(
+        (a["tool"].clone(), a["args"].clone()),
+        (json!("bench_psu_safe_state"), json!({"instrument": "psu"}))
+    );
+    assert!(
+        safe::action_for("bench_psu_output", &json!({"on": false}), &cfg).is_none(),
+        "off needs no undoing"
+    );
+    assert!(
+        safe::action_for(
+            "bench_psu_output",
+            &json!({"on": true, "dry_run": true}),
+            &cfg
+        )
+        .is_none(),
+        "a dry run changes nothing"
+    );
+    let gated = Config {
+        safe_state_psu_off: false,
+        ..Config::default()
+    };
+    assert!(
+        safe::action_for("bench_psu_output", &on, &gated).is_none(),
+        "the config can forbid the supply rule"
+    );
+    assert!(safe::action_for("bench_vna_generator_fm", &json!({"freq_hz": 1e6}), &cfg).is_some());
+    assert_eq!(
+        safe::action_for("bench_set", &json!({"trigger_mode": "STOP"}), &cfg).unwrap()["args"]
+            ["trigger_mode"],
+        "AUTO"
+    );
+    assert!(safe::action_for("bench_set", &json!({"trigger_mode": "AUTO"}), &cfg).is_none());
+    assert!(safe::action_for("bench_set", &json!({"voltage_v": 1.0}), &cfg).is_none());
+    assert!(safe::action_for("bench_example_status", &json!({}), &cfg).is_none());
+    assert!(safe::action_for("bench_rotator_park", &json!({}), &cfg).is_some());
+    assert!(safe::action_for(
+        "bench_hamlib_tx_key_test",
+        &json!({"instrument": "rig"}),
+        &cfg
+    )
+    .is_some());
+    let registered = crate::manual::registered_tools();
+    for rule in safe::RULES {
+        let safe_info = registered
+            .get(rule.safe_tool)
+            .unwrap_or_else(|| panic!("safe-state tool {} is not registered", rule.safe_tool));
+        assert_ne!(
+            safe_info.tier, "full",
+            "{}: a safe-state tool must be usable at read_config, below the tool it undoes",
+            rule.safe_tool
+        );
+        for t in rule.triggers {
+            assert!(
+                registered.contains_key(*t),
+                "trigger {t} is not a registered tool"
+            );
+        }
+    }
+}
+
+// Tests [@ANCHOR: proc_locks_reserve]
+// Tests [@ANCHOR: proc_locks_release]
+// Tests [@ANCHOR: proc_locks_owner_text]
+// Tests [@ANCHOR: proc_locks_path]
+// Tests [@ANCHOR: proc_run_hold]
+// Tests [@ANCHOR: proc_run_reserve_op]
+// Tests [@ANCHOR: proc_py_reserve]
+// Tests [@ANCHOR: proc_py_release]
+// Tests [@ANCHOR: proc_py_reserved]
+#[test]
+fn a_second_run_cannot_drive_an_instrument_another_run_holds_and_reads_share() {
+    let b = bench_with("full", r#""lock_wait_s":0.2"#);
+    let holder = r#"
+bench.reserve("gen")
+bench.emit("held", True)
+while True:
+    bench.sleep(0.05)
+"#;
+    let a = start(&b, holder, json!({"label": "holder"}));
+    let t = Instant::now();
+    while tool(&b, "bench_proc_output", json!({"run": a})).unwrap()["emitted"]["held"]
+        != json!(true)
+    {
+        assert!(t.elapsed() < Duration::from_secs(20));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let source = r#"
+seen = {}
+def attempt(label, function):
+    try:
+        function()
+        seen[label] = "ok"
+    except bench.BenchError as error:
+        seen[label] = [error.kind, error.message]
+attempt("read", lambda: bench.call("bench_example_status", instrument="gen"))
+attempt("drive", lambda: bench.call("bench_example_safe_state", instrument="gen"))
+attempt("reserve", lambda: bench.reserve("dmm", "gen", timeout=0.2))
+attempt("dmm_free_after_failed_all_or_none", lambda: bench.reserve("dmm", timeout=0.2))
+attempt("unknown", lambda: bench.reserve("nope"))
+bench.release("dmm")
+bench.result(seen)
+"#;
+    let r = run(&b, source, json!({"tier": "read_config"}));
+    let seen = &r["value"];
+    assert_eq!(seen["read"], "ok", "reads share: {r}");
+    assert_eq!(seen["drive"][0], "lock", "{r}");
+    let msg = seen["drive"][1].as_str().unwrap();
+    assert!(
+        msg.contains(&a) && msg.contains("holder") && msg.contains("\"gen\""),
+        "the error names the holder: {msg}"
+    );
+    assert_eq!(seen["reserve"][0], "lock");
+    assert_eq!(
+        seen["dmm_free_after_failed_all_or_none"], "ok",
+        "a failed reservation takes nothing: {r}"
+    );
+    assert!(seen["unknown"][1]
+        .as_str()
+        .unwrap()
+        .contains("no instrument named"));
+    // Two runs that want the same pair in opposite order do not deadlock: each gives up at its timeout.
+    let both = |first: &str, second: &str| {
+        format!("bench.reserve('{first}', '{second}', timeout=0.3)\nbench.result('got')\n")
+    };
+    assert_eq!(run(&b, &both("dmm", "gen"), json!({}))["state"], "failed");
+    // The reservation goes with the run.
+    tool(&b, "bench_proc_cancel", json!({"run": a, "wait_s": 20})).unwrap();
+    let r = run(&b, "with bench.reserved('gen', 'dmm'):\n    bench.call('bench_example_safe_state', instrument='gen')\nbench.result('done')\n", json!({"tier": "read_config"}));
+    assert_eq!(r["value"], "done", "{r}");
+    let r = run(&b, "bench.reserve('gen')\nraise SystemExit(3)\n", json!({}));
+    assert_eq!(r["state"], "failed");
+    let r = run(
+        &b,
+        "bench.reserve('gen', timeout=0.1)\nbench.result(1)\n",
+        json!({}),
+    );
+    assert_eq!(
+        r["state"], "succeeded",
+        "a finished run released its instruments: {r}"
+    );
+}
+
+// Tests [@ANCHOR: proc_run_recover_now]
+// Tests [@ANCHOR: proc_run_recover]
+// Tests [@ANCHOR: proc_run_start_ticks]
+#[test]
+fn runs_left_active_by_a_dead_server_are_marked_lost_and_their_instruments_made_safe() {
+    let b = bench();
+    let cfg = b
+        .insts
+        .iter()
+        .find(|i| i.name == "procs")
+        .unwrap()
+        .procedure
+        .clone();
+    let make = |state: &str, pid: u32, start: u64| -> String {
+        let (id, dir) = store::new_run_dir(&cfg).unwrap();
+        let rec = json!({"run": id, "state": state, "started_unix": store::now_unix(), "calls": 3, "server_pid": pid, "server_start": start});
+        store::write_json(&dir.join("state.json"), &rec).unwrap();
+        let action = json!({"tool": "bench_example_safe_state", "args": {"instrument": "gen"}, "trigger": "bench_example_pulse"});
+        store::write_json(&dir.join("touched.json"), &json!([action])).unwrap();
+        id
+    };
+    let mut gone = std::process::Command::new("true").spawn().unwrap();
+    let dead_pid = gone.id();
+    gone.wait().unwrap();
+    let me = std::process::id();
+    let mine = run::start_ticks(me).expect("this process has a start time");
+    let lost = make("running", dead_pid, 4242);
+    let reused = make("running", me, mine + 1);
+    let live = make("running", me, mine);
+    let finished = make("succeeded", dead_pid, 4242);
+    let before = off_count(&b);
+    let found = run::recover_now(&b.insts);
+    let ids: Vec<&str> = found.iter().map(|f| f["run"].as_str().unwrap()).collect();
+    assert!(
+        ids.contains(&lost.as_str()) && ids.contains(&reused.as_str()),
+        "a dead server, and a pid reused by another process: {ids:?}"
+    );
+    assert!(
+        !ids.contains(&live.as_str()) && !ids.contains(&finished.as_str()),
+        "a live server's run and a finished run are left alone: {ids:?}"
+    );
+    assert_eq!(
+        tool(&b, "bench_proc_status", json!({"run": lost})).unwrap()["state"],
+        "lost"
+    );
+    assert_eq!(
+        tool(&b, "bench_proc_status", json!({"run": live})).unwrap()["state"],
+        "running"
+    );
+    assert_eq!(
+        tool(&b, "bench_proc_status", json!({"run": finished})).unwrap()["state"],
+        "succeeded"
+    );
+    let r = tool(&b, "bench_proc_result", json!({"run": lost})).unwrap();
+    assert_eq!(
+        (
+            r["state"].clone(),
+            r["failure"]["kind"].clone(),
+            r["safe_state_ok"].clone()
+        ),
+        (json!("lost"), json!("lost"), json!(true)),
+        "{r}"
+    );
+    assert_eq!(r["safe_state"][0]["tool"], "bench_example_safe_state");
+    assert!(
+        off_count(&b) >= before + 2,
+        "the safe state reached the device for both lost runs"
+    );
+    assert!(
+        run::recover_now(&b.insts).is_empty(),
+        "a second pass finds nothing new"
+    );
+    run::recover(&b.insts);
+}
+
+// Tests [@ANCHOR: proc_run_shutdown]
+// Tests [@ANCHOR: proc_run_stop_all]
+#[test]
+fn shutdown_cancels_every_live_run_and_waits_for_its_cleanup_and_safe_state() {
+    let b = bench();
+    let source = r#"
+bench.cleanup(lambda: bench.emit("cleanup", "ran"))
+bench.emit("started", True)
+while True:
+    bench.sleep(0.05)
+"#;
+    let id = start(&b, source, json!({}));
+    let t = Instant::now();
+    while tool(&b, "bench_proc_output", json!({"run": id})).unwrap()["emitted"]["started"]
+        != json!(true)
+    {
+        assert!(t.elapsed() < Duration::from_secs(20));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    run::stop_all(Some(&store::root(
+        &b.insts
+            .iter()
+            .find(|i| i.name == "procs")
+            .unwrap()
+            .procedure,
+    )));
+    let r = tool(&b, "bench_proc_result", json!({"run": id})).unwrap();
+    assert_eq!(
+        (r["state"].clone(), r["failure"]["reason"].clone()),
+        (json!("cancelled"), json!("shutdown")),
+        "{r}"
+    );
+    assert_eq!(r["emitted"]["cleanup"], "ran");
 }

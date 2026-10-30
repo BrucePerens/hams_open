@@ -19,6 +19,7 @@ compiles a source and lists the tool names it calls literally.
 
 import ast
 import builtins
+import contextlib
 import json
 import math
 import os
@@ -27,6 +28,7 @@ import sys
 import threading
 import time
 import types
+from typing import IO, Any
 
 USER_FILE = "procedure.py"
 REPR_LIMIT = 200
@@ -129,15 +131,15 @@ class PolicyError(RuntimeError):
 class Wire:
     """The newline-delimited JSON pipe to the host."""
 
-    def __init__(self, out_fd, in_file):
+    def __init__(self, out_fd: int, in_file: IO[str]):
         # [@ANCHOR: proc_py_wire_init]
         self.out_fd = out_fd
         self.in_file = in_file
         self.lock = threading.Lock()
-        self.pending = {}
+        self.pending: dict[int, dict[str, Any]] = {}
         self.next_id = 0
         self.cancel = threading.Event()
-        self.cancel_reason = None
+        self.cancel_reason: str | None = None
         self.closed = False
 
     def send(self, message):
@@ -156,14 +158,15 @@ class Wire:
     def request(self, message):
         """Send a request and wait for its reply (or a cancel)."""
         # [@ANCHOR: proc_py_wire_request]
-        slot = {"event": threading.Event(), "reply": None}
+        arrived = threading.Event()
+        slot: dict[str, Any] = {"event": arrived, "reply": None}
         with self.lock:
             self.next_id += 1
             ident = self.next_id
             self.pending[ident] = slot
         message["id"] = ident
         self.send(message)
-        while not slot["event"].wait(0.2):
+        while not arrived.wait(0.2):
             if self.cancel.is_set() and not STATE["cleanup"]:
                 break
         with self.lock:
@@ -196,7 +199,7 @@ class Wire:
         os._exit(3)
 
 
-STATE = {
+STATE: dict[str, Any] = {
     "cleanup": False,
     "args": {},
     "started": 0.0,
@@ -210,14 +213,20 @@ STATE = {
     "trace_lines": [],
     "trace_flushed": 0.0,
 }
-WIRE = None
+WIRES: list[Wire] = []
+
+
+def wire() -> Wire:
+    """The one Wire of this process (set by main)."""
+    # [@ANCHOR: proc_py_wire]
+    return WIRES[0]
 
 
 def check_cancel():
     """Raise BenchCancelled once the host has asked for it."""
     # [@ANCHOR: proc_py_check_cancel]
-    if WIRE.cancel.is_set() and not STATE["cleanup"]:
-        raise BenchCancelled(WIRE.cancel_reason or "cancelled")
+    if wire().cancel.is_set() and not STATE["cleanup"]:
+        raise BenchCancelled(wire().cancel_reason or "cancelled")
 
 
 def bench_call(tool, **arguments):
@@ -225,7 +234,7 @@ def bench_call(tool, **arguments):
     # [@ANCHOR: proc_py_call]
     check_cancel()
     message = {"op": "call", "tool": tool, "args": arguments}
-    reply = WIRE.request(message)
+    reply = wire().request(message)
     if reply.get("ok"):
         return reply.get("value")
     raise BenchError(
@@ -238,20 +247,20 @@ def bench_emit(key, value):
     by the host and survives a kill."""
     # [@ANCHOR: proc_py_emit]
     check_cancel()
-    WIRE.send({"op": "emit", "key": str(key), "value": value})
+    wire().send({"op": "emit", "key": str(key), "value": value})
 
 
 def bench_log(message):
     """Append a line to the run's event list."""
     # [@ANCHOR: proc_py_log]
-    WIRE.send({"op": "log", "msg": str(message)})
+    wire().send({"op": "log", "msg": str(message)})
 
 
 def bench_step(name):
     """Name the step the procedure is in (shown by status)."""
     # [@ANCHOR: proc_py_step]
     check_cancel()
-    WIRE.send({"op": "step", "name": str(name)})
+    wire().send({"op": "step", "name": str(name)})
 
 
 def bench_sleep(seconds):
@@ -264,7 +273,7 @@ def bench_sleep(seconds):
         time.sleep(seconds)
         return
     check_cancel()
-    if WIRE.cancel.wait(seconds):
+    if wire().cancel.wait(seconds):
         check_cancel()
 
 
@@ -272,7 +281,7 @@ def bench_checkpoint(name, data):
     """Save ``data`` (JSON) under ``name`` in the run's directory."""
     # [@ANCHOR: proc_py_checkpoint]
     check_cancel()
-    WIRE.send({"op": "checkpoint", "name": str(name), "data": data})
+    wire().send({"op": "checkpoint", "name": str(name), "data": data})
 
 
 def bench_cleanup(function):
@@ -413,6 +422,42 @@ def bench_series(
     }
 
 
+def bench_reserve(*names, timeout=30):
+    """Reserve instruments for this run, waiting up to ``timeout``
+    seconds for another run that holds them (all or none)."""
+    # [@ANCHOR: proc_py_reserve]
+    check_cancel()
+    message = {"op": "reserve", "names": list(names)}
+    message["timeout"] = timeout
+    reply = wire().request(message)
+    if not reply.get("ok"):
+        raise BenchError(
+            "reserve", reply.get("error", "failed"), "lock"
+        )
+
+
+def bench_release(*names):
+    """Release instruments reserved with ``bench.reserve``."""
+    # [@ANCHOR: proc_py_release]
+    reply = wire().request({"op": "release", "names": list(names)})
+    if not reply.get("ok"):
+        raise BenchError(
+            "release", reply.get("error", "failed"), "lock"
+        )
+
+
+@contextlib.contextmanager
+def bench_reserved(*names, timeout=30):
+    """``with bench.reserved("gen", "scope"):`` reserves for the
+    block and releases at its end."""
+    # [@ANCHOR: proc_py_reserved]
+    bench_reserve(*names, timeout=timeout)
+    try:
+        yield
+    finally:
+        bench_release(*names)
+
+
 def bench_result(value):
     """Set the procedure's final value (the last call wins)."""
     # [@ANCHOR: proc_py_result]
@@ -435,7 +480,7 @@ def short(value):
 def frame_report(frame, line):
     """One frame of the procedure's own code with its locals."""
     # [@ANCHOR: proc_py_frame_report]
-    names = {}
+    names: dict[str, str] = {}
     used = 0
     for key, value in list(frame.f_locals.items()):
         skip = key.startswith("__") or key == "bench"
@@ -563,7 +608,7 @@ def make_hook(scratch):
             )
             STATE["violations"] += 1
             if STATE["violations"] <= VIOLATION_LIMIT:
-                WIRE.send(
+                wire().send(
                     {"op": "violation", "event": event, "msg": text}
                 )
             raise PolicyError(text)
@@ -584,7 +629,7 @@ class Output:
     def write(self, text):
         # [@ANCHOR: proc_py_output_write]
         if text:
-            WIRE.send({"op": self.name, "text": str(text)})
+            wire().send({"op": self.name, "text": str(text)})
         return len(text)
 
     def flush(self):
@@ -615,6 +660,9 @@ def make_bench(arguments):
         "expect": bench_expect,
         "stats": bench_stats,
         "series": bench_series,
+        "reserve": bench_reserve,
+        "release": bench_release,
+        "reserved": bench_reserved,
         "result": bench_result,
         "args": arguments,
         "BenchError": BenchError,
@@ -649,7 +697,7 @@ def flush_trace():
     lines = STATE["trace_lines"]
     if lines:
         STATE["trace_lines"] = []
-        WIRE.send({"op": "trace", "lines": lines})
+        wire().send({"op": "trace", "lines": lines})
 
 
 def run_cleanups():
@@ -730,7 +778,6 @@ def check_source(path):
 def main(argv):
     """Entry point: ``--check <source>`` or ``<run_dir>``."""
     # [@ANCHOR: proc_py_main]
-    global WIRE
     if len(argv) == 3 and argv[1] == "--check":
         print(json.dumps(check_source(argv[2])))
         return 0
@@ -744,7 +791,9 @@ def main(argv):
     os.dup2(devnull, 1)
     os.close(devnull)
     scratch = os.path.realpath(config["scratch"])
-    WIRE = Wire(out_fd, open(0, encoding="utf-8", closefd=False))
+    WIRES.append(
+        Wire(out_fd, open(0, encoding="utf-8", closefd=False))
+    )
     sys.stdin = open(os.devnull, encoding="utf-8")
     sys.stdout = Output("stdout")
     sys.stderr = Output("stderr")
@@ -755,18 +804,18 @@ def main(argv):
         os.path.join(run_dir, "source.py"), encoding="utf-8"
     ) as fh:
         source = fh.read()
-    threading.Thread(target=WIRE.reader, daemon=True).start()
+    threading.Thread(target=wire().reader, daemon=True).start()
     bench = make_bench(config["args"])
     sys.modules["bench"] = bench
     namespace = {"__name__": "__main__", "bench": bench}
     namespace["__builtins__"] = builtins
     STATE["started"] = time.monotonic()
-    WIRE.send({"op": "ready", "python": sys.version.split()[0]})
+    wire().send({"op": "ready", "python": sys.version.split()[0]})
     try:
         code = compile(source, USER_FILE, "exec")
     except SyntaxError as error:
         report = failure_report(error)
-        WIRE.send({"op": "failed", "report": report})
+        wire().send({"op": "failed", "report": report})
         return 0
     import ctypes  # noqa: F401 (numpy imports it; loaded before the hook)
     import linecache
@@ -781,7 +830,7 @@ def main(argv):
     flush_trace()
     problems = run_cleanups()
     payload["cleanup_problems"] = problems
-    WIRE.send({"op": outcome, "report": payload})
+    wire().send({"op": outcome, "report": payload})
     return 0
 
 

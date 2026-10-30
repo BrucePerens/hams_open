@@ -9,9 +9,11 @@ use super::backend::{Backend, Incoming, Limits, Session, SpawnSpec};
 use super::store::{self, EventLog};
 use super::tiers::{tier_name, ToolIndex};
 use super::Config;
+use super::{locks, safe};
 use crate::config::{Instrument, Tier};
 use serde_json::{json, Map, Value};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
@@ -55,6 +57,8 @@ struct Rec {
     max_calls: u64,
     pid: u32,
     note: String,
+    server_pid: u32,
+    server_start: u64,
 }
 
 pub struct RunCtx {
@@ -69,6 +73,8 @@ pub struct RunCtx {
     last_calls: Mutex<VecDeque<Value>>,
     hook_violations: Mutex<Vec<Value>>,
     cancel: Mutex<Option<String>>,
+    touched: Mutex<Vec<Value>>,
+    held: Mutex<Vec<(String, File)>>,
 }
 
 /// What a worker thread tells the supervisor.
@@ -149,7 +155,7 @@ impl RunCtx {
                     "started_unix": r.started_unix, "ended_unix": r.ended_unix, "step": r.step, "line": r.line,
                     "last_call": r.last_call, "calls": r.calls, "call_errors": r.call_errors,
                     "hook_violations": r.violations, "wall_s": r.wall_s, "max_calls": r.max_calls,
-                    "pid": r.pid, "note": r.note, "cancel_reason": self.cancel_reason(), "events": events, "events_dropped": dropped,
+                    "pid": r.pid, "note": r.note, "server_pid": r.server_pid, "server_start": r.server_start, "cancel_reason": self.cancel_reason(), "events": events, "events_dropped": dropped,
                     "language": "python",
                 }),
                 self.dir.clone(),
@@ -182,6 +188,31 @@ impl RunCtx {
         if c.is_none() {
             *c = Some(reason.to_string());
         }
+    }
+
+    /// Takes the reservations of `names` that this run does not hold yet, waiting up to `wait`.
+    fn hold(&self, names: &[String], wait: Duration) -> Result<(), String> {
+        // [@ANCHOR: proc_run_hold]
+        let mut held = self.held.lock().unwrap_or_else(|e| e.into_inner());
+        let need: Vec<String> = names
+            .iter()
+            .filter(|n| !held.iter().any(|(h, _)| h == *n))
+            .cloned()
+            .collect();
+        if need.is_empty() {
+            return Ok(());
+        }
+        let label = self
+            .rec
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .label
+            .clone();
+        let root = store::root(&self.cfg);
+        let cancelled = || self.cancel_reason().is_some();
+        let got = locks::reserve(&root, &self.id, &label, &need, wait, &cancelled)?;
+        held.extend(got);
+        Ok(())
     }
 
     fn cancel_reason(&self) -> Option<String> {
@@ -217,9 +248,25 @@ fn exec_call(ctx: &RunCtx, tool: &str, args: &Value) -> Value {
         }
         r.calls += 1;
     }
-    if let Err((kind, msg)) = ctx.index.allow(tool, cap, &ctx.insts) {
-        count_error(ctx);
-        return fail(kind, msg);
+    let tier = match ctx.index.allow(tool, cap, &ctx.insts) {
+        Ok(t) => t,
+        Err((kind, msg)) => {
+            count_error(ctx);
+            return fail(kind, msg);
+        }
+    };
+    if let Some(action) = safe::action_for(tool, args, &ctx.cfg) {
+        let mut t = ctx.touched.lock().unwrap_or_else(|e| e.into_inner());
+        safe::record(&ctx.dir, &mut t, action);
+    }
+    if tier > Tier::ReadOnly {
+        if let Some(name) = locks::instrument_of(&ctx.insts, tool, args) {
+            let wait = Duration::from_secs_f64(ctx.cfg.lock_wait_s);
+            if let Err(e) = ctx.hold(&[name], wait) {
+                count_error(ctx);
+                return fail("lock", e);
+            }
+        }
     }
     let started = Instant::now();
     let out = crate::call(&ctx.insts, tool, args);
@@ -269,6 +316,37 @@ fn count_error(ctx: &RunCtx) {
         .call_errors += 1;
 }
 
+/// `reserve` and `release` for the program: the names must be configured instruments.
+fn reserve_op(ctx: &RunCtx, op: &str, names: &[String], wait: f64) -> Value {
+    // [@ANCHOR: proc_run_reserve_op]
+    let fail = |msg: String| json!({"op": "reply", "ok": false, "kind": "lock", "error": msg});
+    if names.is_empty() {
+        return fail("name at least one instrument".into());
+    }
+    if let Some(bad) = names
+        .iter()
+        .find(|n| !ctx.insts.iter().any(|i| &i.name == *n))
+    {
+        return fail(format!("no instrument named {bad:?} (see bench_list)"));
+    }
+    if op == "release" {
+        let mut held = ctx.held.lock().unwrap_or_else(|e| e.into_inner());
+        for n in names {
+            locks::release(&store::root(&ctx.cfg), &mut held, n);
+        }
+        drop(held);
+        ctx.event("release", json!({"instruments": names}));
+        return json!({"op": "reply", "ok": true, "value": null});
+    }
+    match ctx.hold(names, Duration::from_secs_f64(wait)) {
+        Ok(()) => {
+            ctx.event("reserve", json!({"instruments": names}));
+            json!({"op": "reply", "ok": true, "value": null})
+        }
+        Err(e) => fail(e),
+    }
+}
+
 /// Handles one message from the program. Returns its final message (`done`, `failed`, `cancelled`) when it is one.
 fn handle(ctx: &Arc<RunCtx>, msg: Value, tx: &Sender<Internal>) -> Option<(String, Value)> {
     // [@ANCHOR: proc_run_handle]
@@ -312,6 +390,29 @@ fn handle(ctx: &Arc<RunCtx>, msg: Value, tx: &Sender<Internal>) -> Option<(Strin
                 drop(em);
                 ctx.event("emit", json!({"key": key, "value": value}));
             }
+        }
+        "reserve" | "release" => {
+            let id = msg.get("id").cloned().unwrap_or(Value::Null);
+            let names: Vec<String> = msg
+                .get("names")
+                .and_then(|n| n.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|n| n.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let wait = msg
+                .get("timeout")
+                .and_then(|t| t.as_f64())
+                .unwrap_or(30.0)
+                .clamp(0.0, 3600.0);
+            let (ctx, tx) = (ctx.clone(), tx.clone());
+            std::thread::spawn(move || {
+                let mut reply = reserve_op(&ctx, &op, &names, wait);
+                reply["id"] = id;
+                let _ = tx.send(Internal::Reply(reply));
+            });
         }
         "log" => ctx.event("log", json!({"msg": text("msg")})),
         "step" => {
@@ -501,6 +602,23 @@ fn finish(ctx: &RunCtx, ended: Option<(String, Value)>, killed: bool, exit: &str
             )
         }
     };
+    let mut safe_results = Vec::new();
+    if state != "succeeded" {
+        let touched = ctx
+            .touched
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        safe_results = safe::run(&ctx.insts, &touched);
+        for r in &safe_results {
+            ctx.event("safe_state", r.clone());
+        }
+    }
+    let safe_failed = safe_results.iter().any(|r| r["ok"] != json!(true));
+    if safe_failed {
+        failure["safe_state_failed"] =
+            json!("SAFE STATE NOT CONFIRMED: see safe_state; check the instruments by hand");
+    }
     if !failure.is_null() {
         failure["last_calls"] = Value::Array(
             ctx.last_calls
@@ -521,7 +639,7 @@ fn finish(ctx: &RunCtx, ended: Option<(String, Value)>, killed: bool, exit: &str
         "run": ctx.id, "state": state, "ok": state == "succeeded", "value": value, "failure": failure,
         "emitted": Value::Object(ctx.emitted.lock().unwrap_or_else(|e| e.into_inner()).clone()),
         "hook_violations": ctx.hook_violations.lock().unwrap_or_else(|e| e.into_inner()).clone(),
-        "exit": exit,
+        "exit": exit, "safe_state": safe_results, "safe_state_ok": !safe_failed,
     });
     {
         let rec = ctx.rec.lock().unwrap_or_else(|e| e.into_inner());
@@ -530,7 +648,21 @@ fn finish(ctx: &RunCtx, ended: Option<(String, Value)>, killed: bool, exit: &str
         r["elapsed_s"] = json!(store::now_unix() - rec.started_unix);
     }
     let _ = store::write_json(&ctx.dir.join("result.json"), &r);
-    ctx.set_state(state, "");
+    {
+        let mut held = ctx.held.lock().unwrap_or_else(|e| e.into_inner());
+        let names: Vec<String> = held.iter().map(|(n, _)| n.clone()).collect();
+        for n in names {
+            locks::release(&store::root(&ctx.cfg), &mut held, &n);
+        }
+    }
+    ctx.set_state(
+        state,
+        if safe_failed {
+            "SAFE STATE NOT CONFIRMED"
+        } else {
+            ""
+        },
+    );
 }
 
 /// Validates nothing (the caller did) and starts the run: directory, files, supervisor. Returns the run id.
@@ -577,12 +709,16 @@ pub fn start(
             max_calls: p.max_calls,
             pid: 0,
             note: String::new(),
+            server_pid: std::process::id(),
+            server_start: start_ticks(std::process::id()).unwrap_or(0),
         }),
         log: Mutex::new(log),
         emitted: Mutex::new(Map::new()),
         last_calls: Mutex::new(VecDeque::new()),
         hook_violations: Mutex::new(Vec::new()),
         cancel: Mutex::new(None),
+        touched: Mutex::new(Vec::new()),
+        held: Mutex::new(Vec::new()),
     });
     ctx.persist();
     registry()
@@ -609,4 +745,112 @@ pub fn start(
         }
         Err(_) => Err(format!("run {id} did not start within 20 s")),
     }
+}
+
+/// The start time of a process in clock ticks since boot (field 22 of its stat), which with the pid names one process for good.
+pub fn start_ticks(pid: u32) -> Option<u64> {
+    // [@ANCHOR: proc_run_start_ticks]
+    let text = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let after = text.rsplit_once(')')?.1;
+    after.split_whitespace().nth(19)?.parse().ok()
+}
+
+/// Stops every live run of this server process, asking each to cancel with the reason `shutdown` and waiting for its cleanup and
+/// safe state, so the instruments are left safe when the server ends.
+pub fn shutdown() {
+    // [@ANCHOR: proc_run_shutdown]
+    stop_all(None);
+}
+
+/// `shutdown`, for the runs that use the managed directory `only` (all runs when `None`).
+pub fn stop_all(only: Option<&std::path::Path>) {
+    // [@ANCHOR: proc_run_stop_all]
+    let mine = |c: &Arc<RunCtx>| only.is_none_or(|o| store::root(&c.cfg) == o);
+    let runs: Vec<Arc<RunCtx>> = registry()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .values()
+        .filter(|c| mine(c))
+        .cloned()
+        .collect();
+    for c in &runs {
+        c.request_cancel("shutdown");
+    }
+    let limit = runs.iter().map(|c| c.cfg.grace_s).fold(0.0, f64::max) + 60.0;
+    let t = Instant::now();
+    while t.elapsed().as_secs_f64() < limit
+        && registry()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .any(&mine)
+    {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Finds runs of a server process that no longer exists (they were active when it died), marks them lost and puts the
+/// instruments they touched in a safe state. Returns one entry per run found.
+pub fn recover_now(insts: &[Instrument]) -> Vec<Value> {
+    // [@ANCHOR: proc_run_recover_now]
+    let mut found = Vec::new();
+    let mut roots: BTreeMap<PathBuf, Config> = BTreeMap::new();
+    for i in insts
+        .iter()
+        .filter(|i| i.kind == crate::config::Kind::Procedure)
+    {
+        roots.insert(store::root(&i.procedure), i.procedure.clone());
+    }
+    for (root, cfg) in roots {
+        let Ok(rd) = std::fs::read_dir(root.join("runs")) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let dir = e.path();
+            let Ok(mut st) = store::read_json(&dir.join("state.json")) else {
+                continue;
+            };
+            let id = e.file_name().to_string_lossy().to_string();
+            let active = is_active(st["state"].as_str().unwrap_or(""));
+            let pid = st["server_pid"].as_u64().unwrap_or(0) as u32;
+            let same = start_ticks(pid)
+                .is_some_and(|t| t == st["server_start"].as_u64().unwrap_or(u64::MAX));
+            if !active || same || lookup(&id).is_some() {
+                continue;
+            }
+            let touched: Vec<Value> = store::read_json(&dir.join("touched.json"))
+                .ok()
+                .and_then(|v| v.as_array().cloned())
+                .unwrap_or_default();
+            let results = safe::run(insts, &touched);
+            let ok = results.iter().all(|r| r["ok"] == json!(true));
+            let note = if ok {
+                "the server that ran it ended"
+            } else {
+                "SAFE STATE NOT CONFIRMED"
+            };
+            st["state"] = json!("lost");
+            st["ended_unix"] = json!(store::now_unix());
+            st["note"] = json!(note);
+            let _ = store::write_json(&dir.join("state.json"), &st);
+            let emitted = store::read_json(&dir.join("emitted.json")).unwrap_or_else(|_| json!({}));
+            let failure = json!({"kind": "lost", "message": "the server process that ran this run ended while it was active; its instruments were put in their safe state", "pid": pid});
+            let result = json!({"run": id, "state": "lost", "ok": false, "value": null, "failure": failure, "emitted": emitted,
+                "safe_state": results, "safe_state_ok": ok, "calls": st["calls"], "hook_violations": []});
+            let _ = store::write_json(&dir.join("result.json"), &result);
+            found.push(
+                json!({"run": id, "safe_state": results, "retention_days": cfg.retention_days}),
+            );
+        }
+    }
+    found
+}
+
+/// Runs `recover_now` on a thread of its own, so a safe-state call that waits on hardware does not hold up the server's start.
+pub fn recover(insts: &[Instrument]) {
+    // [@ANCHOR: proc_run_recover]
+    let insts = insts.to_vec();
+    std::thread::spawn(move || {
+        recover_now(&insts);
+    });
 }
