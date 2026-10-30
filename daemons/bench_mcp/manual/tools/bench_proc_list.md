@@ -15,4 +15,4 @@ verified: fixtures only, 2026-10-29
 
 ## Returns
 
-`runs`: for each run `run`, `state`, `label`, `started_unix`, `ended_unix`, `calls`; and `active_here`, the number of runs this server process has going. Finished runs are deleted after the entry's `retention_days`, and beyond `keep_runs`.
+`saved`: the saved procedures (`name`, `description`, `tier`, `latest`, `versions`); `runs`: for each run `run`, `state`, `label`, `started_unix`, `ended_unix`, `calls`; and `active_here`, the number of runs this server process has going. Finished runs are deleted after the entry's `retention_days`, and beyond `keep_runs`.
