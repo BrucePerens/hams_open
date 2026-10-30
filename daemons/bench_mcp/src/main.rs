@@ -487,6 +487,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(hamlib::guard::main(&argv[1..]));
     }
     let insts = config::load()?;
+    // Runs of a server that died while they were active are marked lost and their instruments put in a safe state.
+    procedure::recover(&insts);
     // A termination signal releases a keyed rig and stops the daemons this server started, then exits.
     tokio::spawn(async {
         use tokio::signal::unix::{signal, SignalKind};
@@ -497,7 +499,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
         tokio::select! { _ = term.recv() => {}, _ = int.recv() => {} }
-        let _ = tokio::task::spawn_blocking(hamlib::shutdown).await;
+        let _ = tokio::task::spawn_blocking(|| {
+            procedure::shutdown();
+            hamlib::shutdown();
+        })
+        .await;
         std::process::exit(143);
     });
     let service = BenchServer {
@@ -507,6 +513,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
     let ended = service.waiting().await;
     // Whatever way the connection ended, stop what this server started.
+    procedure::shutdown();
     hamlib::shutdown();
     ended?;
     Ok(())

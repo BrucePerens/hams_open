@@ -14,7 +14,9 @@
 
 mod backend;
 mod cpython;
+mod locks;
 mod run;
+mod safe;
 mod store;
 mod tiers;
 mod view;
@@ -27,6 +29,8 @@ use rmcp::model::Tool;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
+
+pub use run::{recover, shutdown};
 
 /// The `procedure` settings of an instrument entry.
 #[derive(Clone, Debug, PartialEq)]
@@ -49,6 +53,10 @@ pub struct Config {
     pub max_memory_mb: u64,
     /// `none` or `systemd-run` (each program in a transient user scope with memory and task limits).
     pub wrapper: String,
+    /// Whether a run that switched the supply output on has it switched off again when it ends other than by success.
+    pub safe_state_psu_off: bool,
+    /// Seconds a tool call waits for an instrument another run holds before it is refused.
+    pub lock_wait_s: f64,
 }
 
 impl Default for Config {
@@ -63,6 +71,8 @@ impl Default for Config {
             max_wall_s: 86400.0,
             max_memory_mb: 16384,
             wrapper: "none".into(),
+            safe_state_psu_off: true,
+            lock_wait_s: 2.0,
         }
     }
 }
@@ -107,6 +117,14 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     }
     if let Some(x) = num("max_memory_mb", 256.0, 1_048_576.0)? {
         cfg.max_memory_mb = x as u64;
+    }
+    if let Some(x) = num("lock_wait_s", 0.0, 3600.0)? {
+        cfg.lock_wait_s = x;
+    }
+    match c.get("safe_state_psu_off") {
+        None => {}
+        Some(Value::Bool(b)) => cfg.safe_state_psu_off = *b,
+        Some(_) => return Err("safe_state_psu_off must be true or false".into()),
     }
     if let Some(p) = c.get("python") {
         cfg.python = p
