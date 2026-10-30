@@ -1,0 +1,96 @@
+# Conformance transcript for rigs/yaesu-ft-817.toml (binary: tx and rx are hex bytes).
+# ORIGIN: hand-written from the opcode chart and Notes 3 to 5 of Yaesu FT-817ND Operating Manual, CAT SYSTEM PROGRAMMING (see the
+# description's provenance). NOT a capture of a radio: it proves the manual's formats, the engine, the
+# virtual rig and the description agree with each other, not that they agree with a FT-817ND.
+# The legacy protocol answers only reads, so setting steps have no rx.
+schema = 1
+rig = "yaesu-ft-817"
+origin = "hand-written from Yaesu's published operating manual; not a capture of a radio"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx = "00 00 00 00 03"
+rx = "01 40 74 00 01"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
+expect_more = [{ kind = "mode", mode = "usb" }]
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 14234560 }
+tx = "01 42 34 56 01"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx = "00 00 00 00 03"
+rx = "01 42 34 56 01"
+expect = { kind = "frequency", vfo = "a", hz = 14234560 }
+expect_more = [{ kind = "mode", mode = "usb" }]
+
+[[step]]
+op = { kind = "set-mode", mode = "cw" }
+tx = "02 00 00 00 07"
+
+[[step]]
+op = { kind = "get-mode" }
+tx = "00 00 00 00 03"
+rx = "01 42 34 56 02"
+expect = { kind = "frequency", vfo = "a", hz = 14234560 }
+expect_more = [{ kind = "mode", mode = "cw" }]
+
+[[step]]
+op = { kind = "set-mode", mode = "data" }
+tx = "0a 00 00 00 07"
+
+[[step]]
+op = { kind = "get-signal" }
+tx = "00 00 00 00 e7"
+rx = "0f"
+expect = { kind = "signal", value = 15 }
+
+[[step]]
+op = { kind = "get-ptt" }
+tx = "00 00 00 00 f7"
+rx = "a0"
+expect = { kind = "ptt", on = false }
+expect_more = [{ kind = "split", on = false }, { kind = "power", value = 0 }]
+
+[[step]]
+op = { kind = "set-split", on = true }
+tx = "00 00 00 00 02"
+
+[[step]]
+op = { kind = "set-ptt", on = true }
+tx = "00 00 00 00 08"
+
+[[step]]
+op = { kind = "get-ptt" }
+tx = "00 00 00 00 f7"
+rx = "08"
+expect = { kind = "ptt", on = true }
+expect_more = [{ kind = "split", on = true }, { kind = "power", value = 8 }]
+
+[[step]]
+op = { kind = "get-power" }
+tx = "00 00 00 00 f7"
+rx = "08"
+expect = { kind = "ptt", on = true }
+expect_more = [{ kind = "split", on = true }, { kind = "power", value = 8 }]
+
+[[step]]
+op = { kind = "set-ptt", on = false }
+tx = "00 00 00 00 88"
+
+[[step]]
+op = { kind = "set-split", on = false }
+tx = "00 00 00 00 82"
+
+[[step]]
+op = { kind = "set-rit", on = true }
+tx = "00 00 00 00 05"
+
+[[step]]
+op = { kind = "set-rit-offset", hz = -1230 }
+tx = "01 00 01 23 f5"
+
+[[step]]
+op = { kind = "set-rit", on = false }
+tx = "00 00 00 00 85"
