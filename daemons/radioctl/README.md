@@ -16,6 +16,7 @@ daemons/radioctl/
   rust-toolchain.toml     pinned toolchain
   crates/radioctl-core/       typed values, capability model, errors, rig actor (PR 3 on)
   crates/radioctl-protocols/  sans-IO protocol engines, one per family (PR 3 on)
+  crates/radioctl-splitter/   virtual IC-7300 CI-V / TS-2000 CAT endpoints (pty, TCP) in front of one rig actor
   crates/radioctld/           rigctld-protocol server (skeleton)
   docs/DESIGN.md          design note (ADR style)
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
@@ -34,6 +35,7 @@ Layout changes from the proposal (record every change here):
 - Virtual rigs live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines; the optional
   `io` module (cargo feature `tokio-io`, default on) runs one behind an in-memory duplex stream with a
   reply delay and a control handle. `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
+- `radioctl-splitter` (new crate, so the library crates stay free of pty code) depends on core and protocols; `radioctld` will use it.
 - `radioctl-core` has the cargo feature `owned-runtime` (off by default, on for `radioctld`): the one place
   the library builds a tokio runtime of its own.
 - No `deny.toml`: no other Rust crate in hams_open has one, so this workspace follows suit. Add one
@@ -198,6 +200,44 @@ model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as 
 - [@ANCHOR: radioctl:radioctl_core_serial_session] (radioctl-core) One connection: the writer loop plus a reader thread.
 - [@ANCHOR: radioctl:radioctl_core_serial_read_loop] (radioctl-core) The reader thread: port to async side until stop or failure.
 - [@ANCHOR: radioctl:radioctl_core_serial_open] (radioctl-core) Opens a serial port on a caller-supplied runtime handle and returns the byte stream, control lines and status.
+- [@ANCHOR: radioctl:radioctl_splitter_arbiter_try_key] (radioctl-splitter) Claims the transmitter for `client`. `Ok` when it was free or already theirs; `Err` with the
+- [@ANCHOR: radioctl:radioctl_splitter_arbiter_release] (radioctl-splitter) Gives the transmitter up if `client` holds it. Returns whether it did.
+- [@ANCHOR: radioctl:radioctl_splitter_arbiter_clear] (radioctl-splitter) Clears ownership because the transmitter was unkeyed by anyone (unkeying is always allowed).
+- [@ANCHOR: radioctl:radioctl_splitter_arbiter_owner] (radioctl-splitter) The current owner, if any.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_new] (radioctl-splitter) A personality answering at CI-V `address` (0x94 for the IC-7300), with the bus echo on or
+- [@ANCHOR: radioctl:radioctl_splitter_civ_mode_code] (radioctl-splitter) The CI-V mode byte for a mode; data modes use the sideband they sit on.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_classify] (radioctl-splitter) Turns one frame addressed to us into an action.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_parse] (radioctl-splitter) Parses CI-V frames from a client: echoes them if asked, ignores other stations, classifies the rest.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_reply] (radioctl-splitter) Renders a CI-V reply (value, OK or NG) addressed to the sender.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_unsolicited] (radioctl-splitter) The transceive frames for a VFO A or mode change.
+- [@ANCHOR: radioctl:radioctl_splitter_civ_reset] (radioctl-splitter) Forgets a partial frame when the client disconnects.
+- [@ANCHOR: radioctl:radioctl_splitter_pty_path] (radioctl-splitter) The path programs should open: the symlink if one was asked for, else the slave device.
+- [@ANCHOR: radioctl:radioctl_splitter_pty_slave_path] (radioctl-splitter) The slave device itself (`/dev/pts/N`).
+- [@ANCHOR: radioctl:radioctl_splitter_pty_drop] (radioctl-splitter) Stops the endpoint threads and removes the symlink.
+- [@ANCHOR: radioctl:radioctl_splitter_pty_attach] (radioctl-splitter) Creates a pty, attaches it to `splitter` as a persistent client, and optionally links
+- [@ANCHOR: radioctl:radioctl_splitter_pty_read_master] (radioctl-splitter) Master to async side. A read error is the program closing the slave: report one disconnect and
+- [@ANCHOR: radioctl:radioctl_splitter_pty_write_master] (radioctl-splitter) Async side to master. Bytes written while no program has the slave open are dropped.
+- [@ANCHOR: radioctl:radioctl_splitter_config_new] (radioctl-splitter) Defaults: cached reads up to 5 seconds old, 2 second deadline for the rig.
+- [@ANCHOR: radioctl:radioctl_splitter_client_wait] (radioctl-splitter) Waits until the client's task has ended.
+- [@ANCHOR: radioctl:radioctl_splitter_client_abort] (radioctl-splitter) Stops the client's task. Its PTT ownership is not released by this; drop the stream to
+- [@ANCHOR: radioctl:radioctl_splitter_new] (radioctl-splitter) A splitter for `rig`.
+- [@ANCHOR: radioctl:radioctl_splitter_stats] (radioctl-splitter) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctl_splitter_ptt_owner] (radioctl-splitter) The client that owns the transmitter, if any.
+- [@ANCHOR: radioctl:radioctl_splitter_attach_channels] (radioctl-splitter) Attaches a client given as channels. With `persistent` a `ClientInput::Disconnected`
+- [@ANCHOR: radioctl:radioctl_splitter_attach_stream] (radioctl-splitter) Attaches a client that is any byte stream (a TCP connection, an in-memory duplex). The end
+- [@ANCHOR: radioctl:radioctl_splitter_serve_tcp] (radioctl-splitter) Accepts connections on `listener` until the returned task is aborted; each connection is a
+- [@ANCHOR: radioctl:radioctl_splitter_cleanup] (radioctl-splitter) Gives up the client's PTT ownership, unkeying the rig if the client held it.
+- [@ANCHOR: radioctl:radioctl_splitter_read] (radioctl-splitter) A read: the cached value if fresh enough, else asks the rig.
+- [@ANCHOR: radioctl:radioctl_splitter_execute] (radioctl-splitter) Carries out one request for `client`, with PTT arbitration.
+- [@ANCHOR: radioctl:radioctl_splitter_key] (radioctl-splitter) Keys for `client` if no other client owns the transmitter; the claim is given back if the
+- [@ANCHOR: radioctl:radioctl_splitter_run_client] (radioctl-splitter) The task of one client: input, rig changes, until the client ends.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_new] (radioctl-splitter) A TS-2000 personality with auto-information off.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_classify] (radioctl-splitter) Turns one command (without its `;`) into an action.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_parse] (radioctl-splitter) Splits a client's bytes into TS-2000 commands and classifies each.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_reply] (radioctl-splitter) Renders a TS-2000 reply (`FA`, `MD`, `SM0`, nothing for a set, `?;` for a refusal).
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_unsolicited] (radioctl-splitter) `FA`/`FB`/`MD` pushes, only for a client that switched `AI1` on.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_reset] (radioctl-splitter) Clears partial input and the auto-information flag on disconnect.
+- [@ANCHOR: radioctl:radioctl_core_handle_execute_from] (radioctl-core) Runs a command like `execute_within`, recording the given source on the events it causes (the splitter passes `Splitter`).
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_start] (radioctl-core) Starts the dispatcher thread for `callback` with a queue of `capacity` events.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_submit] (radioctl-core) Queues an event without ever waiting for the callback.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_counters] (radioctl-core) A snapshot of the counters.

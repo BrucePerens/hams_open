@@ -62,6 +62,17 @@ records the decisions that shape the code.
     the kernel for an instant before the library makes them inactive; ports without modem lines say
     so (`LineControl::Unmanaged`) instead of the library pretending.
 
+16. **The protocol splitter is its own crate and goes through the one actor.** `radioctl-splitter`
+    presents IC-7300 CI-V or TS-2000 CAT on virtual serial ports (a pty per outside program; TCP
+    for others), translating every request into an operation on the rig actor's single queue and
+    answering reads from the actor's cache when fresh enough. Personalities are sans-IO. Each client
+    has its own echo and auto-information state and is sent unsolicited frames when the rig changes
+    (a first reading by a request is not a change). One transmitter, one owner: the first client to
+    key owns it, others are refused until it unkeys or goes away (a pty closed by its program counts
+    as going away and unkeys the rig); unkeying is open to all; the rig's closed transmit gate still
+    applies to every keying request. The TS-2000 personality refuses `IF` (layout unverified) and
+    both personalities map data modes to the sideband they sit on.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.
