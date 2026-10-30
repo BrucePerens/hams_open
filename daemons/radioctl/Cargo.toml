@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/radioctl-core", "crates/radioctl-protocols", "crates/radioctld"]
+members = [
+  "crates/radioctl-core",
+  "crates/radioctl-protocols",
+  "crates/radioctl-splitter",
+  "crates/radioctld",
+]
 
 [workspace.package]
 version = "0.1.0"

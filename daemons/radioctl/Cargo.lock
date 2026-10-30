@@ -416,6 +416,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "radioctl-splitter"
+version = "0.1.0"
+dependencies = [
+ "radioctl-core",
+ "radioctl-protocols",
+ "serialport",
+ "tokio",
+]
+
+[[package]]
 name = "radioctld"
 version = "0.1.0"
 dependencies = [

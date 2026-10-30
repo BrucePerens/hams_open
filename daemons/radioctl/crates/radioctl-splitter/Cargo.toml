@@ -1,0 +1,22 @@
+[package]
+name = "radioctl-splitter"
+description = "radioctl protocol splitter: virtual IC-7300 CI-V and TS-2000 CAT endpoints in front of one rig actor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+radioctl-core = { path = "../radioctl-core" }
+radioctl-protocols = { path = "../radioctl-protocols", default-features = false }
+tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "net", "macros"] }
+# Pseudo-terminals for the virtual serial endpoints (Unix); no libudev.
+serialport = { version = "4.10", default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros", "test-util"] }
+radioctl-protocols = { path = "../radioctl-protocols" }

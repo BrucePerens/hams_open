@@ -418,6 +418,16 @@ impl RigHandle {
             .unwrap_or_else(|_| Err(RigError::new(ErrorKind::LinkDown, "rig actor stopped")))
     }
 
+    // [@ANCHOR: radioctl_core_handle_execute_from]
+    /// Like [`RigHandle::execute_within`], recording `source` on the events the command causes
+    /// (the protocol splitter passes [`Source::Splitter`]). Same queue, same gates, same priority.
+    pub async fn execute_from(&self, op: Op, timeout: Duration, source: Source) -> Reply {
+        let receiver = self.submit(op, timeout, source)?;
+        receiver
+            .await
+            .unwrap_or_else(|_| Err(RigError::new(ErrorKind::LinkDown, "rig actor stopped")))
+    }
+
     // [@ANCHOR: radioctl_core_handle_submit]
     fn submit(
         &self,
