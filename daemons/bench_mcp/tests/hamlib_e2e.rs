@@ -29,7 +29,7 @@ impl Bench {
             // this test see the PTT from outside.
             "set_conf": {"cache_timeout": 5000},
             "transmit": {"dummy_load": true, "attested_by": "K6BP", "attested_on": "2026-10-29", "cabling": "the dummy rig has no antenna port",
-                "max_power_w": 100, "max_seconds": 4, "frequency_ranges": [[7000000, 7100000]], "allowed_modes": ["USB"],
+                "max_power_w": 100, "max_seconds": 30, "frequency_ranges": [[7000000, 7100000]], "allowed_modes": ["USB"],
                 "swr_probe": false, "load_check": {"readings": 3, "dwell_ms": 50, "references": 3, "max_spread_db": 30, "margin_db": 30}}
         }}});
         std::fs::write(&config, cfg.to_string()).unwrap();
@@ -237,8 +237,9 @@ fn a_server_killed_while_the_rig_is_keyed_is_covered_by_the_watchdog_and_the_nex
     )
     .unwrap();
     let port = daemon_port(&b.managed());
-    // A long interval; the server is killed in the middle of it.
-    let id = s.send("bench_hamlib_tx_key_test", key_args(4.0));
+    // An interval far longer than anything a loaded machine could take between keying and the kill (this test failed once under
+    // load with 4 s, when the interval could run out on its own); the server is killed in the middle of it.
+    let id = s.send("bench_hamlib_tx_key_test", key_args(20.0));
     wait_until(20, "the rig to be keyed", || {
         ptt_of(port).as_deref() == Some("1")
     });
@@ -249,12 +250,13 @@ fn a_server_killed_while_the_rig_is_keyed_is_covered_by_the_watchdog_and_the_nex
     s.child.kill().unwrap();
     let _ = s.child.wait();
     let _ = id;
-    // The watchdog process had the other end of the server's pipe: it un-keys the rig within moments, long before the 4 s are up.
+    // The watchdog process had the other end of the server's pipe: it un-keys the rig within moments, long before the 20 s are up.
+    // The wait is an event (the PTT reads 0); the bound only has to be well under the interval, so a slow machine cannot fail it.
     let killed = Instant::now();
-    wait_until(3, "the watchdog to un-key the rig", || {
+    wait_until(12, "the watchdog to un-key the rig", || {
         ptt_of(port).as_deref() == Some("0")
     });
-    assert!(killed.elapsed() < Duration::from_secs(3));
+    assert!(killed.elapsed() < Duration::from_secs(12));
     assert!(
         b.managed().join("dr.keyed.json").exists(),
         "the dead server could not remove its record"
