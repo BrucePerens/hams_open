@@ -12,6 +12,8 @@ The Report Violation button opens a modal on a page that may come from Cloudflar
 [@ANCHOR: form_shield:fields_template]. Typing is never blocked; pressing Send early waits for the answer and sends [@ANCHOR: form_shield:form_interaction]
 [@ANCHOR: form_shield:client_session].
 
+The functions behind those steps each carry their own anchor. The proof-of-work solver: [@ANCHOR: form_shield:pow_rotr] [@ANCHOR: form_shield:pow_compress] [@ANCHOR: form_shield:pow_ascii_bytes] [@ANCHOR: form_shield:pow_sha256_words] [@ANCHOR: form_shield:pow_hex] [@ANCHOR: form_shield:pow_leading_zero_bits] [@ANCHOR: form_shield:pow_create_solver] [@ANCHOR: form_shield:pow_solve]. The browser session: [@ANCHOR: form_shield:fetch_challenge] [@ANCHOR: form_shield:solve_on_main_thread] [@ANCHOR: form_shield:solve_in_worker] [@ANCHOR: form_shield:shield_solve] [@ANCHOR: form_shield:default_wait] [@ANCHOR: form_shield:session_constructor] [@ANCHOR: form_shield:session_start] [@ANCHOR: form_shield:session_solve_for] [@ANCHOR: form_shield:session_token]. The form wiring: [@ANCHOR: form_shield:form_setup] [@ANCHOR: form_shield:form_start] [@ANCHOR: form_shield:form_status_el] [@ANCHOR: form_shield:form_say] [@ANCHOR: form_shield:form_begin] [@ANCHOR: form_shield:form_on_submit]. The refusal wording shown after a redirect: [@ANCHOR: form_shield:notice_text].
+
 ## Scenario: The server decides
 
 The challenge must be signed, unexpired, issued to the same /24 or /48 network, at least three seconds old, solved for this very form and

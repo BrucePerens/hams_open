@@ -23,12 +23,16 @@ export class FormShieldForm extends Interaction {
         _root: { "t-on-submit": this.onSubmit },
     };
 
+    // [@ANCHOR: form_shield:form_setup]
+    // Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
     setup() {
         this.formId = this.el.dataset.formShield;
         this.session = null;
         this.released = false;
     }
 
+    // [@ANCHOR: form_shield:form_start]
+    // Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
     start() {
         const modal = this.el.closest(".modal");
         if (modal) {
@@ -38,16 +42,22 @@ export class FormShieldForm extends Interaction {
         }
     }
 
+    // [@ANCHOR: form_shield:form_status_el]
+    // Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
     get statusEl() {
         return this.el.querySelector("[data-form-shield-status]");
     }
 
+    // [@ANCHOR: form_shield:form_say]
+    // Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
     say(text) {
         if (this.statusEl) {
             this.statusEl.textContent = text;
         }
     }
 
+    // [@ANCHOR: form_shield:form_begin]
+    // Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
     begin() {
         if (!session.is_website_user) {
             // A signed-in member is not asked for the calculation (the server checks them by the
@@ -104,6 +114,8 @@ export class FormShieldForm extends Interaction {
         }
     }
 
+    // [@ANCHOR: form_shield:form_on_submit]
+    // Verified by [@ANCHOR: form_shield:test_report_form_happy_path_tour]
     async onSubmit(ev) {
         if (this.released || !this.pending) {
             return;

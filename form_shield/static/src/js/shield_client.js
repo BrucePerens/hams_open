@@ -20,6 +20,8 @@ const AGE_MARGIN_MS = 400;
 
 export class ShieldUnavailable extends Error {}
 
+// [@ANCHOR: form_shield:fetch_challenge]
+// Verified by [@ANCHOR: form_shield:test_client_session_solves_and_waits]
 export async function fetchChallenge(kind = "pow", fetchImpl = globalThis.fetch.bind(globalThis)) {
     const body = new URLSearchParams({ kind });
     const response = await fetchImpl(CHALLENGE_URL, {
@@ -34,6 +36,8 @@ export async function fetchChallenge(kind = "pow", fetchImpl = globalThis.fetch.
     return response.json();
 }
 
+// [@ANCHOR: form_shield:solve_on_main_thread]
+// Verified by [@ANCHOR: form_shield:test_client_session_solves_and_waits]
 export function solveOnMainThread(challenge, formId, difficulty) {
     const core = globalThis.FormShieldPow;
     if (!core) {
@@ -53,6 +57,8 @@ export function solveOnMainThread(challenge, formId, difficulty) {
     });
 }
 
+// [@ANCHOR: form_shield:solve_in_worker]
+// Verified by [@ANCHOR: form_shield:test_pow_worker_runs_in_a_real_browser]
 function solveInWorker(challenge, formId, difficulty) {
     return new Promise((resolve, reject) => {
         let worker;
@@ -78,6 +84,8 @@ function solveInWorker(challenge, formId, difficulty) {
     });
 }
 
+// [@ANCHOR: form_shield:shield_solve]
+// Verified by [@ANCHOR: form_shield:test_difficulty_zero_needs_no_work]
 export function solve(challenge, formId, difficulty) {
     if (!challenge || difficulty === 0) {
         return Promise.resolve(0);
@@ -90,7 +98,9 @@ export function solve(challenge, formId, difficulty) {
     );
 }
 
-const defaultWait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+// [@ANCHOR: form_shield:default_wait]
+// Verified by [@ANCHOR: form_shield:test_default_wait_waits_then_resolves]
+export const defaultWait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 export class ShieldSession {
     /**
@@ -99,6 +109,8 @@ export class ShieldSession {
      * @param {Object} [options] fetchImpl, waitImpl and solveImpl replace fetch(), the time-to-submit
      *   delay and the Web Worker solve; for tests of this class only, production passes nothing.
      */
+    // [@ANCHOR: form_shield:session_constructor]
+    // Verified by [@ANCHOR: form_shield:test_client_session_solves_and_waits]
     constructor(formId = null, { fetchImpl, waitImpl, solveImpl } = {}) {
         this.solveImpl = solveImpl || solve;
         this.formId = formId;
@@ -107,6 +119,8 @@ export class ShieldSession {
         this.start();
     }
 
+    // [@ANCHOR: form_shield:session_start]
+    // Verified by [@ANCHOR: form_shield:test_client_session_solves_and_waits]
     start() {
         this.fetchedAt = null;
         this.challenge = fetchChallenge("pow", this.fetchImpl).then((issued) => {
@@ -122,12 +136,16 @@ export class ShieldSession {
         }
     }
 
+    // [@ANCHOR: form_shield:session_solve_for]
+    // Verified by [@ANCHOR: form_shield:test_client_session_solves_and_waits]
     async _solveFor(formId) {
         const issued = await this.challenge;
         return this.solveImpl(issued.challenge, formId, issued.difficulty);
     }
 
     /** The `<challenge>~<counter>` answer for `formId`; throws ShieldUnavailable on failure. */
+    // [@ANCHOR: form_shield:session_token]
+    // Verified by [@ANCHOR: form_shield:test_client_session_solves_and_waits]
     async token(formId = this.formId) {
         const issued = await this.challenge;
         const solution =

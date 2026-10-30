@@ -124,6 +124,13 @@ const reportViolationSteps = (beforeSubmit = [], description = "Unsolicited adve
         { trigger: '.modal-body', content: 'Blur form to commit state', run: 'click' },
         {
             // Tests [@ANCHOR: form_shield:form_interaction]
+            // Tests [@ANCHOR: form_shield:form_setup]
+            // Tests [@ANCHOR: form_shield:form_start]
+            // Tests [@ANCHOR: form_shield:form_status_el]
+            // Tests [@ANCHOR: form_shield:form_say]
+            // Tests [@ANCHOR: form_shield:form_begin]
+            // Tests [@ANCHOR: form_shield:form_on_submit]
+            // Tests [@ANCHOR: form_shield:solve_in_worker]
             // Tests [@ANCHOR: form_shield:fields_template]
             // Tests [@ANCHOR: user_websites:report_violation_shield_fields]
             // The shield tells a screen reader what it is doing: a polite live region that says

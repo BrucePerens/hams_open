@@ -35,11 +35,15 @@
     ]);
     const W = new Uint32Array(64);
 
+    // [@ANCHOR: form_shield:pow_rotr]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function rotr(value, bits) {
         return (value >>> bits) | (value << (32 - bits));
     }
 
     /* Folds the 64-byte block at bytes[offset..] into `state` (an Uint32Array(8)). */
+    // [@ANCHOR: form_shield:pow_compress]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function compress(state, bytes, offset) {
         for (let i = 0; i < 16; i++) {
             const j = offset + i * 4;
@@ -70,6 +74,8 @@
         state[6] = (state[6] + g) | 0; state[7] = (state[7] + h) | 0;
     }
 
+    // [@ANCHOR: form_shield:pow_ascii_bytes]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function asciiBytes(text) {
         const bytes = new Uint8Array(text.length);
         for (let i = 0; i < text.length; i++) {
@@ -79,6 +85,8 @@
     }
 
     /* SHA-256 of an ASCII string, as 8 big-endian words (Uint32Array). For tests and small uses. */
+    // [@ANCHOR: form_shield:pow_sha256_words]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function sha256Words(text) {
         const message = asciiBytes(text);
         const blocks = Math.ceil((message.length + 9) / 64);
@@ -97,6 +105,8 @@
         return state;
     }
 
+    // [@ANCHOR: form_shield:pow_hex]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function hex(words) {
         let out = "";
         for (const word of words) {
@@ -105,6 +115,8 @@
         return out;
     }
 
+    // [@ANCHOR: form_shield:pow_leading_zero_bits]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function leadingZeroBits(words) {
         let bits = 0;
         for (let i = 0; i < 8; i++) {
@@ -123,6 +135,8 @@
      * counter, or null when none of them wins; call it again to continue. The part of the message
      * before the counter is hashed once; each trial only redoes the last one or two blocks.
      */
+    // [@ANCHOR: form_shield:pow_create_solver]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function createSolver(challenge, formId, difficulty) {
         const prefix = asciiBytes(challenge + ":" + formId + ":");
         const midstate = new Uint32Array(INITIAL);
@@ -176,6 +190,8 @@
     }
 
     /* Blocking solve; the worker and the tests use this. */
+    // [@ANCHOR: form_shield:pow_solve]
+    // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function solve(challenge, formId, difficulty) {
         const solver = createSolver(challenge, formId, difficulty);
         for (;;) {
