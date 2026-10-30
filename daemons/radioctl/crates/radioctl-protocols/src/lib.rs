@@ -11,6 +11,7 @@
 
 pub mod civ;
 pub mod conformance;
+pub mod elecraft;
 pub mod kenwood;
 pub mod virtual_rig;
 

@@ -31,6 +31,10 @@ pub enum Panel {
     Ptt(bool),
     /// The signal strength changed.
     Signal(u16),
+    /// Split was switched on or off.
+    Split(bool),
+    /// The RIT/XIT offset was turned to this many hertz.
+    RitOffset(i16),
 }
 
 /// One exchange.
@@ -42,8 +46,11 @@ pub struct Step {
     pub tx: Vec<u8>,
     /// Bytes the rig answers; empty when it does not answer.
     pub rx: Vec<u8>,
-    /// What the engine must decode from `rx`.
+    /// What the engine must decode from `rx` (the first item, if `rx` decodes to several).
     pub expect: Option<Expect>,
+    /// Further items `rx` must decode to, after `expect`, in order (an Elecraft `IF` answer
+    /// carries frequency, mode, RIT, split and more at once).
+    pub expect_more: Vec<Expect>,
     /// For an unsolicited step, the knob that makes the virtual rig send `rx`.
     pub panel: Option<Panel>,
 }
@@ -81,6 +88,8 @@ struct StepSpec {
     /// The bytes received, as ASCII text; an alternative to `rx`.
     rx_text: Option<String>,
     expect: Option<ExpectSpec>,
+    #[serde(default)]
+    expect_more: Vec<ExpectSpec>,
     panel: Option<PanelSpec>,
 }
 
@@ -142,6 +151,8 @@ enum PanelSpec {
     Mode { mode: String },
     Ptt { on: bool },
     Signal { value: u16 },
+    Split { on: bool },
+    RitOffset { hz: i16 },
 }
 
 fn bad(detail: impl Into<String>) -> RigError {
@@ -253,6 +264,8 @@ fn build_panel(spec: PanelSpec) -> Result<Panel, RigError> {
         PanelSpec::Mode { mode: m } => Panel::Mode(mode(&m)?),
         PanelSpec::Ptt { on } => Panel::Ptt(on),
         PanelSpec::Signal { value } => Panel::Signal(value),
+        PanelSpec::Split { on } => Panel::Split(on),
+        PanelSpec::RitOffset { hz } => Panel::RitOffset(hz),
     })
 }
 
@@ -277,6 +290,11 @@ pub fn parse(text: &str) -> Result<Transcript, RigError> {
             tx: step_bytes(&spec.tx, &spec.tx_text, index)?,
             rx: step_bytes(&spec.rx, &spec.rx_text, index)?,
             expect: spec.expect.map(build_expect).transpose()?,
+            expect_more: spec
+                .expect_more
+                .into_iter()
+                .map(build_expect)
+                .collect::<Result<Vec<_>, _>>()?,
             panel: spec.panel.map(build_panel).transpose()?,
         };
         let solicited = step.op.is_some() && !step.tx.is_empty() && step.panel.is_none();
@@ -285,6 +303,9 @@ pub fn parse(text: &str) -> Result<Transcript, RigError> {
             return Err(bad(format!(
                 "step {index}: needs either op and tx, or only a panel"
             )));
+        }
+        if step.expect.is_none() && !step.expect_more.is_empty() {
+            return Err(bad(format!("step {index}: expect_more without expect")));
         }
         if step.expect.is_some() && step.rx.is_empty() {
             return Err(bad(format!("step {index}: expect without rx")));
@@ -400,6 +421,21 @@ tx_text = "RO-0050;"
             transcript.steps.get(3).and_then(|s| s.op.clone()),
             Some(Op::SetRitOffset(-50))
         );
+        let more = text.replace(
+            "expect = { kind = \"firmware\", major = 2, minor = 37 }",
+            "expect = { kind = \"firmware\", major = 2, minor = 37 }\nexpect_more = [{ kind = \"swr\", value = 12 }]",
+        );
+        let parsed = parse(&more).expect("parses");
+        assert_eq!(
+            parsed.steps.get(2).map(|s| s.expect_more.clone()),
+            Some(vec![Expect::Observation(Observation::Swr(12))])
+        );
+        let orphan = text.replacen(
+            "tx_text = \"FT1;\"",
+            "tx_text = \"FT1;\"\nexpect_more = [{ kind = \"ack\" }]",
+            1,
+        );
+        assert!(parse(&orphan).is_err());
         let both = text.replace("tx_text = \"FT1;\"", "tx_text = \"FT1;\"\ntx = \"46\"");
         assert!(parse(&both).is_err());
         let bad_level = text.replace("af-gain\", value", "volume\", value");
