@@ -119,7 +119,7 @@ pub fn command_line(cfg: &CPython, runtime: &Path, tail: &[&str], limits: &Limit
         );
     }
     v.push(cfg.python.clone());
-    v.extend(["-I", "-B", "-u", "-W", "ignore::UserWarning"].map(String::from));
+    v.extend(["-I", "-B", "-u", "-W", "ignore:A NumPy version:UserWarning"].map(String::from));
     v.push(runtime.to_string_lossy().to_string());
     v.extend(tail.iter().map(|s| s.to_string()));
     v
