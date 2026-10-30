@@ -16,7 +16,7 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
     {"instruments": {
       "scope": {"driver": "siglent_sds", "tier": "read_config", "host": "192.168.10.51", "port": 5025},
       "psu":   {"driver": "atm6301", "tier": "read_config", "serial": "/dev/ttyUSB0", "baud": 115200,
-                "max_volts": 5.5, "max_amps": 1.0},
+                "max_volts": 5.5, "max_amps": 1.0, "max_on_s": 600},
       "vna":   {"driver": "vnwa_open", "tier": "read_config", "if_hz": 12000, "point_ms": 60, "rf_level": 16383},
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
       "lime":  {"driver": "limesdr", "tier": "read_config"},
