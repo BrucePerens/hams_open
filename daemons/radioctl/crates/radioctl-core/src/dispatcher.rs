@@ -119,6 +119,7 @@ impl Drop for Dispatcher {
 }
 
 impl Inner {
+    // [@ANCHOR: radioctl_core_dispatcher_run]
     fn run(&self, callback: &Callback) {
         loop {
             let event = {
@@ -165,6 +166,7 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: radioctl_core_dispatcher_run]
     // Tests [@ANCHOR: radioctl_core_dispatcher_start]
     // Tests [@ANCHOR: radioctl_core_dispatcher_submit]
     // Tests [@ANCHOR: radioctl_core_dispatcher_counters]

@@ -66,6 +66,11 @@ fn permit() -> TransmitPermit {
 // Tests [@ANCHOR: radioctl_core_actor_run]
 // Tests [@ANCHOR: radioctl_core_actor_serve]
 // Tests [@ANCHOR: radioctl_core_actor_run_command]
+// Tests [@ANCHOR: radioctl_core_actor_absorb]
+// Tests [@ANCHOR: radioctl_core_actor_apply_set]
+// Tests [@ANCHOR: radioctl_core_actor_await_reply]
+// Tests [@ANCHOR: radioctl_core_actor_log]
+// Tests [@ANCHOR: radioctl_core_handle_read]
 #[tokio::test(start_paused = true)]
 async fn commands_round_trip_and_the_cache_reports_age() {
     let (rig, control) = civ(quiet(), Duration::ZERO);
@@ -413,6 +418,7 @@ async fn polling_finds_a_front_panel_change_and_reports_old_and_new() {
 }
 
 // Tests [@ANCHOR: radioctl_core_actor_poll_once]
+// Tests [@ANCHOR: radioctl_core_wait_until]
 #[tokio::test(start_paused = true)]
 async fn polling_backs_off_when_nothing_changes() {
     let (rig, _control) = kenwood(RigOptions::default(), Duration::ZERO);
@@ -488,6 +494,7 @@ async fn typed_errors_carry_kind_retry_hint_and_transcript() {
 }
 
 // Tests [@ANCHOR: radioctl_core_handle_execute]
+// Tests [@ANCHOR: radioctl_core_handle_submit]
 #[tokio::test(start_paused = true)]
 async fn a_full_queue_is_a_typed_error_not_a_wait() {
     let options = RigOptions {
@@ -639,4 +646,23 @@ fn the_owned_runtime_constructor_works_without_any_caller_runtime() {
     assert_eq!(value.value, Hz(14_074_000));
     assert!(control_slot.is_some());
     owned.shutdown();
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_spacing]
+#[tokio::test(start_paused = true)]
+async fn the_description_s_inter_command_gap_is_kept() {
+    let mut desc = RigDescription::ts2000();
+    desc.timing.inter_command = Duration::from_millis(100);
+    let rig_model = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, _control) = spawn_virtual_rig(&Handle::current(), rig_model, Duration::ZERO);
+    let rig =
+        spawn_current(KenwoodEngine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
+    rig.set_frequency(Vfo::A, Hz(7_000_000))
+        .await
+        .expect("first");
+    let started = Instant::now();
+    rig.set_frequency(Vfo::A, Hz(7_001_000))
+        .await
+        .expect("second");
+    assert!(Instant::now() - started >= Duration::from_millis(90));
 }

@@ -418,6 +418,7 @@ impl RigHandle {
             .unwrap_or_else(|_| Err(RigError::new(ErrorKind::LinkDown, "rig actor stopped")))
     }
 
+    // [@ANCHOR: radioctl_core_handle_submit]
     fn submit(
         &self,
         op: Op,
@@ -466,6 +467,7 @@ impl RigHandle {
         }
     }
 
+    // [@ANCHOR: radioctl_core_handle_read]
     async fn read(
         &self,
         field: Field,
@@ -667,6 +669,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         self.transcript.push_back(format!("LINK DOWN {why}"));
     }
 
+    // [@ANCHOR: radioctl_core_actor_log]
     fn log(&mut self, direction: &str, bytes: &[u8]) {
         let hex: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
         self.transcript
@@ -783,6 +786,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         Err(self.error(ErrorKind::Timeout, "no reply from the rig"))
     }
 
+    // [@ANCHOR: radioctl_core_actor_spacing]
     /// When the next command may be written, if that is in the future.
     fn spacing(&self, gap: Duration, deadline: Instant) -> Option<Instant> {
         let last = self.last_write?;
@@ -790,6 +794,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         (ready > Instant::now()).then_some(ready)
     }
 
+    // [@ANCHOR: radioctl_core_actor_await_reply]
     async fn await_reply(
         &mut self,
         expect: ReplyKind,
@@ -823,6 +828,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         }
     }
 
+    // [@ANCHOR: radioctl_core_actor_absorb]
     /// Feeds received bytes to the engine; returns the command's result once it is decided.
     fn absorb(&mut self, data: &[u8], expect: ReplyKind, source: Source) -> Option<Reply> {
         let mut done: Option<Reply> = None;
@@ -869,6 +875,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         self.absorb(data, ReplyKind::None, Source::Transceive);
     }
 
+    // [@ANCHOR: radioctl_core_actor_apply_set]
     /// Records a successful set in the cache; polling reconciles it with the rig later.
     fn apply_set(&mut self, op: &Op, source: Source) {
         match op {
@@ -941,6 +948,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     }
 }
 
+// [@ANCHOR: radioctl_core_wait_until]
 async fn wait_until(due: Option<Instant>) {
     match due {
         Some(at) => sleep_until(at).await,
