@@ -1,0 +1,22 @@
+---
+title: LimeSDR-USB protocol notes
+summary: The SoapySDR calls the receive tools make and where each fact came from.
+see_also: [instruments/limesdr/limits, instruments/limesdr/operation, concepts/extending/provenance]
+instrument: limesdr
+verified: code only, 2026-10-29
+---
+
+# LimeSDR-USB protocol notes
+
+There is no radio protocol in the server. The radio is driven through SoapySDR, whose shared library is loaded at run time (`dlopen`), so the server runs without it and the SDR tools then say that SoapySDR is not installed. Only receive is implemented; nothing here transmits.
+
+Calls used, in order, for one capture: `SoapySDRDevice_makeStrArgs` (the driver name and, if configured, the hexadecimal `serial`), `getDriverKey`, `getHardwareKey` and `getHardwareInfo` for the identification, `setSampleRate`, `setFrequency`, `setGain`, `setAntenna` (when one is asked for), `setupStream` and `activateStream` for complex float samples, repeated `readStream`, then `deactivateStream`, `closeStream` and `unmake`. Errors are read with `SoapySDRDevice_lastError`. The LimeSDR has two receive channels (`channel` 0 or 1) and three antenna inputs per channel (`LNAH`, `LNAL`, `LNAW`); the antenna is set with `SoapySDRDevice_setAntenna` and defaults to `LNAL`.
+
+The analysis (spectrum, peaks, DC removal, noise floor) is done on the host in `src/dsp.rs`; levels are dBFS of the samples at the set gain.
+
+| Fact | Source kind | Source |
+|---|---|---|
+| the function names and argument types | other public documentation | the SoapySDR C API header (`Device.h`) |
+| the radio's own behaviour (overruns, firmware, FPGA loading) | observation of the device's replies | runs on the dev box, recorded in [limits](instruments/limesdr/limits) |
+
+Nothing was copied from vendor source, firmware, drivers or help text.

@@ -10,6 +10,10 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/sound: operation, limits, troubleshooting, protocol and measurement recipes pages
+- instruments/usb-hubs: protocol page
+- instruments/bladerf: protocol page
+- instruments/limesdr: protocol page
 - concepts/extending: a new driver is a table row in config.rs and one in main.rs (DRIVER_KINDS, MODULES), not eleven edits
 - instruments/rotator: antenna rotators through rotctld (overview, setup, operation, limits, troubleshooting, protocol) and the tools bench_rotator_status, bench_rotator_point, bench_rotator_stop, bench_rotator_park
 - tools/bench_audio_safe_state: new, stops this server's playback and lowers outputs above their cap
