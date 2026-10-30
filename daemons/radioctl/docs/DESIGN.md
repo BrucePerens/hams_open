@@ -73,6 +73,17 @@ records the decisions that shape the code.
     applies to every keying request. The TS-2000 personality refuses `IF` (layout unverified) and
     both personalities map data modes to the sideband they sit on.
 
+17. **radioctld is a library plus a thin binary, and the binary owns the one runtime.** The `rigctld`
+    text protocol is sans-IO (`command` parses, `reply` renders); `server`, `rigs` and `daemon` take the
+    caller's `Handle`. It does not use `owned-runtime`: one multi-thread runtime for all rigs, not one per
+    rig. Each rig has its own listener. A client's PTT ownership is the splitter's `PttOwner` and ends
+    with its connection (the rig is unkeyed); transmit commands are refused up front while the transmit
+    gate is closed or the link is down, and the gate is opened only by `transmit = true` in the
+    configuration. `\dump_state` is generated from the rig description and its layout and encodings were
+    checked by reading it back through Hamlib's own `rigctl -m 2` (`hamlib-oracle` feature). A bare
+    loopback bind and a loopback allow list are the defaults; any wider bind needs an explicit option and
+    an explicit allow list.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

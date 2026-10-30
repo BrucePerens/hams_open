@@ -1,0 +1,56 @@
+# Virtual Elecraft KX3 served in VFO mode: \chk_vfo answers 1 and extended headers echo the VFO.
+> \chk_vfo
+< 1
+> +\chk_vfo
+< ChkVFO: 1
+> f VFOA
+< 14060000
+> +f VFOA
+< get_freq: VFOA
+< Frequency: 14060000
+< RPRT 0
+> +f
+< get_freq: currVFO
+< Frequency: 14060000
+< RPRT 0
+> +F VFOA 14074000
+< set_freq: VFOA:14074000
+< RPRT 0
+> F VFOB 14076000
+< RPRT 0
+> f VFOB
+< 14076000
+> f currVFO
+< 14074000
+> V VFOB
+< RPRT 0
+> f currVFO
+< 14076000
+> +v
+< get_vfo: currVFO
+< VFO: VFOB
+< RPRT 0
+> V VFOA
+< RPRT 0
+> +M VFOA USB 2400
+< set_mode: VFOA:USB 2400
+< RPRT 0
+> +m VFOA
+< get_mode: VFOA
+< Mode: USB
+< Passband: 2400
+< RPRT 0
+> +l VFOA KEYSPD
+< get_level: VFOA:KEYSPD
+< 18
+< RPRT 0
+> f VFOC
+< RPRT -11
+> +\get_powerstat
+< get_powerstat: currVFO
+< Power Status: 1
+< RPRT 0
+> t VFOA
+< 0
+> q
+< RPRT 0

@@ -1,0 +1,39 @@
+# radioctld example configuration. Validate with: radioctld --config radioctld.example.toml --check
+# Every key shown is optional unless marked required; the values are the defaults.
+
+[server]
+# Who may connect, as networks or single addresses. Default: this machine only.
+allow = ["127.0.0.0/8", "::1"]
+# Serving beyond loopback needs this flag AND an explicit allow list above; otherwise any
+# `listen` address that is not loopback is a configuration error.
+allow_non_loopback_bind = false
+max_clients = 16           # per rig
+idle_timeout_secs = 600    # a silent connection is closed after this
+line_timeout_secs = 10     # a request line that has begun must end within this
+max_line_bytes = 1024      # longest request line
+request_timeout_ms = 2000  # deadline for a request that has to go to the rig
+cache_max_age_ms = 1000    # reads newer than this are answered from the rig's cache
+
+# One [[rig]] per radio. Each rig has its own listen address, as with one rigctld per radio.
+[[rig]]
+name = "kx3"                                  # required; 1-32 of A-Z a-z 0-9 _ . -
+description = "rigs/elecraft-kx3.toml"        # required; relative to this file
+listen = "127.0.0.1:4532"                     # default: loopback, port 4532 + the rig's index
+vfo_mode = false                              # rigctld's -o: \chk_vfo answers 1, headers echo the VFO
+transmit = false                              # true opens the rig's transmit gate when the daemon starts
+# rx_low_hz = 30000                           # the coverage reported in \dump_state
+# rx_high_hz = 60000000
+# tx_power_mw = 100000
+# hamlib_model = 1                            # the model number reported in \dump_state
+
+[rig.transport]
+kind = "virtual"                              # an in-memory rig generated from the description
+
+# [rig.transport]
+# kind = "serial"                             # a serial or USB-serial port
+# path = "/dev/ttyUSB0"                       # or: usb = { vid = 0x0403, pid = 0x6001, serial = "A12345" }
+# baud = 38400
+
+# [rig.transport]
+# kind = "tcp"                                # a network serial server or a radio's own CAT port
+# address = "192.168.1.50:4001"

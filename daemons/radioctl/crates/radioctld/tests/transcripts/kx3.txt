@@ -1,0 +1,134 @@
+# Virtual Elecraft KX3, default state: VFO A 14.060 MHz CW, transmit gate closed.
+> \chk_vfo
+< 0
+> +\chk_vfo
+< ChkVFO: 0
+> \get_powerstat
+< 1
+> f
+< 14060000
+> +f
+< get_freq:
+< Frequency: 14060000
+< RPRT 0
+> F 14074000
+< RPRT 0
+> F 7074000.000000
+< RPRT 0
+> +F 14074000
+< set_freq: 14074000
+< RPRT 0
+> f
+< 14074000
+> F VFOA 14075000
+< RPRT 0
+> f VFOA
+< 14075000
+> M USB 2400
+< RPRT 0
+> +m
+< get_mode:
+< Mode: USB
+< Passband: 2400
+< RPRT 0
+> M PKTUSB 0
+< RPRT 0
+> m
+< PKTUSB
+< 2400
+> M FOO 1
+< RPRT -1
+> +M FOO 1
+< set_mode: FOO 1
+< RPRT -1
+> M USB
+< RPRT -1
+> F abc
+< RPRT -1
+> F
+< RPRT -1
+> S 1 VFOB
+< RPRT 0
+> s
+< 1
+< VFOB
+> +s
+< get_split_vfo:
+< Split: 1
+< TX VFO: VFOB
+< RPRT 0
+> I 14077000
+< RPRT 0
+> i
+< 14077000
+> S 0 VFOA
+< RPRT 0
+> s
+< 0
+< VFOA
+> V VFOB
+< RPRT 0
+> v
+< VFOB
+> V VFOA
+< RPRT 0
+> J 120
+< RPRT 0
+> j
+< 120
+> u RIT
+< 1
+> J 0
+< RPRT 0
+> j
+< 0
+> L KEYSPD 22
+< RPRT 0
+> l KEYSPD
+< 22
+> +l KEYSPD
+< get_level: KEYSPD
+< 22
+< RPRT 0
+> L AF 2
+< RPRT -1
+> l NOSUCH
+< RPRT -1
+> l STRENGTH
+< RPRT -11
+> u NB
+< RPRT -11
+> u NOSUCH
+< RPRT -1
+> l SWR
+< 1
+> t
+< 0
+> +t
+< get_ptt:
+< PTT: 0
+< RPRT 0
+> T 0
+< RPRT 0
+> \get_info
+< Elecraft KX3
+> w FA;
+< RPRT -11
+> \send_cmd FA;
+< RPRT -11
+> \set_powerstat 0
+< RPRT -11
+> \get_dcd
+< RPRT -4
+> \no_such_command
+< RPRT -1
+> zzz
+< RPRT -1
+> bogus
+< RPRT -9
+> +\get_vfo_list
+< get_vfo_list:
+< VFOs: VFOA VFOB
+< RPRT 0
+> q
+< RPRT 0

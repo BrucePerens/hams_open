@@ -1,0 +1,62 @@
+# Virtual Icom IC-7300 from the built-in description (no second VFO, split, filter, RIT or levels), gate closed.
+> \chk_vfo
+< 0
+> f
+< 14074000
+> F 7074000
+< RPRT 0
+> f
+< 7074000
+> F VFOB 7075000
+< RPRT -11
+> m
+< USB
+< 2400
+> +m
+< get_mode:
+< Mode: USB
+< Passband: 2400
+< RPRT 0
+> M CW 500
+< RPRT 0
+> m
+< CW
+< 500
+> M PKTUSB 0
+< RPRT -11
+> M FM 0
+< RPRT 0
+> m
+< FM
+< 15000
+> s
+< 0
+< VFOA
+> S 0 VFOA
+< RPRT 0
+> S 1 VFOB
+< RPRT -11
+> i
+< RPRT -11
+> j
+< RPRT -11
+> J 10
+< RPRT -11
+> l KEYSPD
+< RPRT -11
+> L AF 0.5
+< RPRT -11
+> l RAWSTR
+< 30
+> t
+< 0
+> \get_vfo_list
+< VFOA
+> \get_vfo_info
+< 7074000
+< FM
+< 15000
+< 0
+< 0
+> q
+< RPRT 0

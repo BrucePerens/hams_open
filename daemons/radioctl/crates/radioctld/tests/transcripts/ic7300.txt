@@ -1,0 +1,70 @@
+# Virtual Icom IC-7300 from rigs/icom-ic-7300.toml (second VFO, split, filter, RIT, levels), gate closed.
+> \chk_vfo
+< 0
+> f
+< 14074000
+> F 7074000
+< RPRT 0
+> f
+< 7074000
+> F VFOB 7075000
+< RPRT 0
+> f VFOB
+< 7075000
+> m
+< USB
+< 500
+> M CW 500
+< RPRT 0
+> m
+< CW
+< 500
+> M PKTUSB 0
+< RPRT -11
+> M FM 0
+< RPRT 0
+> m
+< FM
+< 500
+> s
+< 0
+< VFOA
+> S 1 VFOB
+< RPRT 0
+> +s
+< get_split_vfo:
+< Split: 1
+< TX VFO: VFOB
+< RPRT 0
+> S 1 VFOA
+< RPRT -11
+> I 7076000
+< RPRT 0
+> i
+< 7076000
+> S 0 VFOA
+< RPRT 0
+> J 100
+< RPRT 0
+> j
+< 100
+> L AF 0.5
+< RPRT 0
+> l AF
+< 0.501961
+> L RFPOWER 1
+< RPRT 0
+> l RFPOWER
+< 1
+> L KEYSPD 20
+< RPRT -11
+> l SWR
+< RPRT -11
+> l RAWSTR
+< 30
+> \get_vfo_list
+< VFOA VFOB
+> t
+< 0
+> q
+< RPRT 0
