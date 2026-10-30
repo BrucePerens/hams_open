@@ -81,19 +81,7 @@ const REQUIRED_INSTRUMENT_PAGES: &[&str] = &[
     "troubleshooting",
     "protocol",
 ];
-const LEGACY_MISSING_PAGES: &[(&str, &[&str])] = &[
-    ("bladerf", &["protocol"]),
-    ("limesdr", &["protocol"]),
-    ("psu", &[]),
-    ("scope", &[]),
-    (
-        "sound",
-        &["operation", "limits", "troubleshooting", "protocol"],
-    ),
-    ("usb-hubs", &["protocol"]),
-    ("vna", &[]),
-    ("example", &[]),
-];
+const LEGACY_MISSING_PAGES: &[(&str, &[&str])] = &[];
 
 // Tests [@ANCHOR: bench_mcp_checklist]
 // Tests [@ANCHOR: bench_mcp_manual_tool_registry]
