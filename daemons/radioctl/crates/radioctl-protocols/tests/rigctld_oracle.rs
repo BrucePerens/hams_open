@@ -232,6 +232,33 @@ struct Rigctld {
     writer: TcpStream,
 }
 
+/// Whether process `pid` holds a socket listening on 127.0.0.1:`port` (read from the kernel's
+/// own tables: `/proc/net/tcp` for the listeners, `/proc/<pid>/fd` for who holds them).
+fn listener_owned_by(pid: u32, port: u16) -> bool {
+    let Ok(table) = std::fs::read_to_string("/proc/net/tcp") else {
+        return false;
+    };
+    let local = format!("0100007F:{port:04X}");
+    let inodes: Vec<String> = table
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let columns: Vec<&str> = line.split_whitespace().collect();
+            // Column 1 is the local address, column 3 the state (0A is LISTEN), column 9 the inode.
+            let listening =
+                columns.get(1) == Some(&local.as_str()) && columns.get(3) == Some(&"0A");
+            listening.then(|| columns.get(9).map(|inode| format!("socket:[{inode}]")))?
+        })
+        .collect();
+    let Ok(entries) = std::fs::read_dir(format!("/proc/{pid}/fd")) else {
+        return false;
+    };
+    entries.flatten().any(|entry| {
+        std::fs::read_link(entry.path())
+            .is_ok_and(|target| inodes.iter().any(|inode| target.to_str() == Some(inode)))
+    })
+}
+
 fn rigctld_binary() -> String {
     std::env::var("RIGCTLD").unwrap_or_else(|_| "rigctld".to_string())
 }
@@ -273,6 +300,13 @@ impl Rigctld {
                     &baud.to_string(),
                 ])
                 .args(["-T", "127.0.0.1", "-t", &port.to_string()])
+                // Hamlib's cache expires after 500 ms by default, and what Hamlib then puts on the
+                // wire (which VFO it believes is selected, whether it re-reads the other VFO) depends
+                // on whether a step came before or after the expiry: on a busy machine the same
+                // scenario produced a different wire (seen: the TS-2000 split step read `FA;` where
+                // it normally reads `FB;`). With the cache off every answer is read from the radio,
+                // so the wire does not depend on the clock.
+                .args(["-C", "cache_timeout=0"])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -284,24 +318,33 @@ impl Rigctld {
                     )
                 }),
         );
+        // Readiness is a fact about the kernel, not about a connect: wait until THIS child owns
+        // the listening socket on `port`, and only then connect. A connect used as the probe
+        // can succeed against a listening socket that is not rigctld's. `TcpListener::bind`
+        // also listens, so the probe above is a listener, and `Command::spawn` returns as soon
+        // as the new process has left the parent's memory, a little BEFORE its exec has closed
+        // the inherited descriptors: a child forked by a concurrent harness while the probe is
+        // open holds a copy of the listening socket for that moment. The connect then completes
+        // (seen: 20 ms after the spawn, long before rigctld can have opened the radio), and when
+        // the stray child's exec closes its copy the listener dies and the connection is reset:
+        // every step "NoAnswer", an empty wire, in about one run in ten under load (reproduced:
+        // 1169 of 3200 `sleep` children, spawned from 8 threads, still held another thread's
+        // listening socket when `spawn` returned).
         let started = Instant::now();
-        let stream = loop {
+        loop {
             if child.0.try_wait().ok().flatten().is_some() {
                 return None;
             }
-            match TcpStream::connect(("127.0.0.1", port)) {
-                Ok(stream) => break stream,
-                Err(_) if started.elapsed() < Duration::from_secs(45) => {
-                    thread::sleep(Duration::from_millis(50));
-                }
-                Err(e) => panic!("rigctld did not listen on {port}: {e}"),
+            if listener_owned_by(child.pid(), port) {
+                break;
             }
-        };
-        // A connect that succeeded while our child is dead reached somebody else's rigctld.
-        thread::sleep(Duration::from_millis(20));
-        if child.0.try_wait().ok().flatten().is_some() {
-            return None;
+            assert!(
+                started.elapsed() < Duration::from_secs(45),
+                "rigctld did not listen on {port} within 45 s"
+            );
+            thread::sleep(Duration::from_millis(10));
         }
+        let stream = TcpStream::connect(("127.0.0.1", port)).expect("connect to the rigctld");
         stream
             // Hamlib's FT-817-family and TS-890S backends probe at open with commands the virtual
             // rig refuses or does not know, each with its own retries, so the first answer can take
@@ -387,6 +430,29 @@ fn no_rigctld_outlives_its_harness() {
         "rigctld {pid} outlived a panicking test"
     );
     assert!(rigctld_pids_on(&slave).is_empty());
+}
+
+// Tests the harness itself: the readiness check names the process that holds a listening
+// socket, so a listener that belongs to somebody else (a forked copy of another harness's probe)
+// is never mistaken for rigctld's.
+#[test]
+fn a_listener_is_attributed_only_to_the_process_that_holds_it() {
+    // The other process exists BEFORE the listener does, so it cannot hold a copy of it: a child
+    // forked while a listener is open keeps a copy of it until its exec has closed the
+    // descriptors, a little after `spawn` has returned (that window is what the check exists
+    // to see through).
+    let other = Reaped(
+        Command::new("sleep")
+            .arg("60")
+            .stdin(Stdio::null())
+            .spawn()
+            .expect("sleep"),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    assert!(listener_owned_by(std::process::id(), port));
+    assert!(!listener_owned_by(other.pid(), port));
+    drop(listener);
 }
 
 fn field<'a>(fields: &'a [(String, String)], key: &str) -> Option<&'a str> {
@@ -836,16 +902,13 @@ fn the_xiegu_files_against_hamlib_record_every_disagreement() {
 
 /// The steps on which Hamlib and radioctl disagree for a Xiegu file.
 ///
-/// The G90, X6100 and X6200 agree. The X5105 behaves as the X108G, whose settings Hamlib shares
-/// with it. On the X108G Hamlib selects VFO B (`07 01`) before it works, so its
-/// frequency writes land in the virtual rig's VFO B while radioctl's engine, which assumes VFO A
-/// is selected and never sends `07`, writes VFO A: the virtual rig's VFO A ends at a different
-/// frequency. Which VFO a real X108G treats as "the" VFO is unknown.
-fn known_xiegu_divergences(file: &str) -> Vec<&'static str> {
-    match file {
-        "xiegu-x108g" | "xiegu-x5105" => vec!["final freq_a"],
-        _ => Vec::new(),
-    }
+/// None: the five rigs agree. (Hamlib runs here with its cache off, see `try_start`. With the
+/// cache on, Hamlib's X108G flow selected VFO B (`07 01`) before it worked, so its frequency
+/// writes landed in the virtual rig's VFO B and the final VFO A frequency differed; that was
+/// Hamlib's cached idea of which VFO is selected, which depends on how long ago it last asked,
+/// not a property of the radio or of radioctl.)
+fn known_xiegu_divergences(_file: &str) -> Vec<&'static str> {
+    Vec::new()
 }
 
 // Tests [@ANCHOR: radioctl_yaesu_engine_encode]
