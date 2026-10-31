@@ -232,7 +232,12 @@ impl Rigctld {
             }
         };
         stream
-            .set_read_timeout(Some(Duration::from_secs(6)))
+            // Hamlib's FT-817-family and TS-890S backends probe at open with commands the virtual
+            // rig refuses or does not know, each with its own retries, so the first answer can take
+            // longer than 6 s when the machine is busy (seen: the FT-818 and TS-890S steps all
+            // reading NoAnswer in a whole-workspace run, passing alone). A generous bound costs
+            // time only when an answer really is missing.
+            .set_read_timeout(Some(Duration::from_secs(30)))
             .expect("timeout");
         let writer = stream.try_clone().expect("clone");
         Rigctld {
