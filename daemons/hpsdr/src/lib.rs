@@ -18,5 +18,6 @@ pub mod error;
 pub mod gate;
 pub mod iq;
 pub mod p1;
+pub mod p2;
 pub mod session;
 pub mod types;

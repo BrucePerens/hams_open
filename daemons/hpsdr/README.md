@@ -16,7 +16,9 @@ and the transmit safety baseline (`RELAY_SDR_RADIOCTL_ROADMAP.md` section 2a). P
 | `discovery`: UDP broadcast or unicast discovery (Protocol 1) | written, tested against the emulator |
 | `session`: configure, start, stream several DDC receivers, status, stop; gated PTT and transmit I/Q queue | written, tested against the emulator |
 | `emulator`: loopback-only Protocol 1 server with synthetic tones, status, loss injection and transmit counters | written |
-| Protocol 2 | not yet (next PR: sans-IO packets only) |
+| `p2`: Protocol 2 discovery, General, DDC-specific, High Priority (receive and gated transmit), gated DUC I/Q, HP status and DDC packet parsers | written, unit-tested by round trip only |
+| Protocol 2 session and emulator | **not written**: Protocol 2 has no network-level test yet |
+| Hardware status for the ANAN-100: temperature | not defined by the published specs |
 
 ## Using it
 
@@ -60,7 +62,7 @@ Facts (byte layouts, field meanings, calibration constants) were read from, and 
 No terms in these documents forbid reuse of the facts they describe. No source code of pihpsdr, Thetis, PowerSDR or
 any other OpenHPSDR program was read or copied. Nothing is copied from the documents' text beyond field names and numbers.
 
-Known open points (all `verified=unverified`): whether a radio streams EP6 while receiving EP2 only at the pacing used
+Known open points (all `verified=unverified`): Protocol 2 sends each DDC stream from its own source port to the host port of the discovery; whether a real radio delivers them all to one host socket (this crate's planned demultiplexing by source port) or to per-stream destination ports is not settled by the text; whether a radio streams EP6 while receiving EP2 only at the pacing used
 here; whether Rx8 is addressable in Protocol 1 (v1.60 lists NCO addresses for Rx1..Rx7 only); the I/Q swap on transmit
 (USB v1.60 says the PC must swap them); the Protocol 2 text says "little Endian" for hardware to host in one place but
 revision 1.3 fixed the order to big-endian, which is what is implemented.
@@ -121,6 +123,23 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_p1_encode_ep6] (p1) Build an EP6 datagram (used by the emulator). `rx[r]` holds the 24-bit (I, Q) integers of receiver
 - [@ANCHOR: hpsdr:hpsdr_p1_apply_status_cc] (p1) Fold one radio-to-PC C&C quintuple into `st`. C0 bits 7..3 are the address; bits 2..0 are the
 - [@ANCHOR: hpsdr:hpsdr_p1_encode_status_cc] (p1) Build the radio-to-PC C&C quintuple for status address `addr` (0..=4) from `st` (emulator side).
+- [@ANCHOR: hpsdr:hpsdr_p2_ports_default] (p2) The default port map from the specification.
+- [@ANCHOR: hpsdr:hpsdr_p2_put16] (p2) Store a big-endian 16-bit value.
+- [@ANCHOR: hpsdr:hpsdr_p2_put32] (p2) Store a big-endian 32-bit value.
+- [@ANCHOR: hpsdr:hpsdr_p2_discovery_packet] (p2) Discovery request: sequence 0, command 0x02, zeros (P2, "Discovery Packet"). Send to port 1024.
+- [@ANCHOR: hpsdr:hpsdr_p2_parse_reply] (p2) Parse a discovery reply. Replies with board type 254/255 (XML or full description) are reported
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_reply] (p2) Build a discovery reply (emulator side). The board type byte is the P2 number of `board_type`.
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_general] (p2) The General packet (command 0): the port map, the hardware reset timer enabled (byte 38 bit 0, so
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc_specific] (p2) The DDC Specific packet (to the DDC-specific port): number of ADCs, dither, random, per-DDC enable
+- [@ANCHOR: hpsdr:hpsdr_p2_phase_word] (p2) `2^32 * f / clock`, rounded (P2, "General Packet" byte 37 text).
+- [@ANCHOR: hpsdr:hpsdr_p2_hp_base] (p2) The receive part of a High Priority packet, shared by both encoders.
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_rx] (p2) A receive-only High Priority packet: run bit and DDC frequencies and attenuators. PTT (byte 4 bit
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_tx] (p2) A High Priority packet that may key the transmitter. Returns [`HpsdrError::GateClosed`] and builds
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_duc_iq] (p2) A DUC I/Q packet (to the DUC0 I/Q port): 240 samples of 24-bit I then Q, big-endian (P2, "DUC I&Q
+- [@ANCHOR: hpsdr:hpsdr_p2_parse_hp_status] (p2) Parse a High Priority Status packet (60 bytes, from the radio's status port): PTT/dot/dash and PLL
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_status] (p2) Build a High Priority Status packet (emulator side).
+- [@ANCHOR: hpsdr:hpsdr_p2_parse_ddc] (p2) Parse a DDC packet: seq, 64-bit timestamp, bits per sample (must be 24), sample count, then I/Q.
+- [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc] (p2) Build a DDC packet from 24-bit integers (emulator side).
 - [@ANCHOR: hpsdr:hpsdr_session_options_default] (session) 10 ms tick, 64 blocks per stream.
 - [@ANCHOR: hpsdr:hpsdr_session_lock] (session) Lock a mutex, taking the data even if a panic poisoned it (the gate still decides on transmit).
 - [@ANCHOR: hpsdr:hpsdr_session_next_datagram] (session) The next EP2 datagram. It is a transmit datagram only while the caller has asked to key AND the
