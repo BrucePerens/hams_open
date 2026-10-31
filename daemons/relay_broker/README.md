@@ -4,7 +4,7 @@ The relay's privileged broker from `hams_com/docs/proposals/RELAY_ZERO_PRIVILEGE
 (sections 3.1, 3.5, 3.6, 5, 6), phase 3 of that plan, built as a standalone crate. **Nothing here
 is wired into the relay or installed by any package**; the integration path is at the end.
 
-A small separate process (about 1,600 lines of source without tests; no web, no async runtime,
+A small separate process (about 2,000 lines of source without tests; no web, no async runtime,
 no FFI, no shell, two commented `unsafe` blocks that adopt kernel-provided descriptors) that
 answers a fixed set of typed requests from authenticated local peers over a Unix domain socket:
 
