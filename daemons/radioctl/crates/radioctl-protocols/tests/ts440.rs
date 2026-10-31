@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 
+use radioctl_core::capability::Capability;
 use radioctl_core::description::{KenwoodDialect, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine};
 use radioctl_core::error::ErrorKind;
@@ -120,6 +121,7 @@ fn the_wire_forms_are_those_of_the_ic10_manual() {
 // Tests [@ANCHOR: radioctl_kenwood_engine_encode_ts440]
 // Tests [@ANCHOR: radioctl_kenwood_engine_decode_if]
 // Tests [@ANCHOR: radioctl_virtual_ts440_command]
+// Tests [@ANCHOR: radioctl_virtual_ts440_is_fn_sp]
 // Tests [@ANCHOR: radioctl_virtual_kenwood_if]
 #[test]
 fn the_engine_and_the_virtual_ts440_agree() {
@@ -192,4 +194,116 @@ fn the_engine_and_the_virtual_ts440_agree() {
         Observation::RitOffset(20),
     );
     assert!(rig.feed(b"RC;", NOW).is_empty());
+}
+
+fn shipped(id: &str) -> RigDescription {
+    let text = std::fs::read_to_string(format!(
+        "{}/../../rigs/{id}.toml",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("rig file");
+    rigfile::parse(&text).expect("loads").description
+}
+
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode_ts440]
+// Tests [@ANCHOR: radioctl_kenwood_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_ts440_command]
+// Tests [@ANCHOR: radioctl_virtual_ts440_is_fn_sp]
+// Tests [@ANCHOR: radioctl_virtual_kenwood_select_vfo]
+#[test]
+fn the_ts450_dialect_splits_with_fr_and_ft_and_reads_the_mode_from_if() {
+    for (id, model) in [("kenwood-ts-450s", 10), ("kenwood-ts-690s", 11)] {
+        let desc = shipped(id);
+        assert_eq!(
+            desc.kenwood.as_ref().map(|k| k.dialect),
+            Some(KenwoodDialect::Ts450),
+            "{id}"
+        );
+        let mut engine = KenwoodEngine::new(desc.clone()).expect("engine");
+        let wire = |e: &mut KenwoodEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        // MD and FT have no read form in the manual (pages 13 and 10): both come from IF.
+        assert_eq!(wire(&mut engine, Op::GetMode), b"IF;");
+        assert_eq!(wire(&mut engine, Op::GetTxVfo), b"IF;");
+        assert_eq!(wire(&mut engine, Op::SetMode(Mode::Usb)), b"MD2;");
+        assert_eq!(wire(&mut engine, Op::SetSplit(true)), b"FR0;FT1;");
+        assert_eq!(wire(&mut engine, Op::SetSplit(false)), b"FR0;FT0;");
+        // AI has one digit (page 8); RU and RD take no parameter (page 16); SM has no receiver digit.
+        assert_eq!(wire(&mut engine, Op::SetTransceive(true)), b"AI1;");
+        for op in [
+            Op::SetRitOffset(100),
+            Op::GetSignal,
+            Op::GetLevel(Level::RfGain),
+        ] {
+            assert_eq!(
+                engine.encode(&op).expect_err("not in this dialect").kind,
+                ErrorKind::Unsupported,
+                "{id} {op:?}"
+            );
+        }
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_seen(
+            exchange(&mut engine, &mut rig, Op::GetModelId),
+            Observation::ModelId(model),
+        );
+        exchange(&mut engine, &mut rig, Op::SetMode(Mode::Lsb));
+        assert_seen(
+            exchange(&mut engine, &mut rig, Op::GetMode),
+            Observation::Mode(Mode::Lsb),
+        );
+        exchange(&mut engine, &mut rig, Op::SetSplit(true));
+        assert_seen(
+            exchange(&mut engine, &mut rig, Op::GetSplit),
+            Observation::Split(true),
+        );
+        assert_seen(
+            exchange(&mut engine, &mut rig, Op::GetTxVfo),
+            Observation::TxVfo(Vfo::B),
+        );
+        // FN and SP are the TS-440S's, not this dialect's; FR and FT cannot be read.
+        for bad in [&b"FN0;"[..], b"SP1;", b"FR;", b"FT;", b"MD;"] {
+            assert_eq!(rig.feed(bad, NOW), b"?;", "{id} {bad:?}");
+        }
+    }
+}
+
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+// Tests [@ANCHOR: radioctl_kenwood_level_wire]
+#[test]
+fn the_ts570_files_follow_their_manual_and_pin_what_the_engine_cannot_do() {
+    for (id, model) in [("kenwood-ts-570d", 17), ("kenwood-ts-570s", 18)] {
+        let desc = shipped(id);
+        let mut engine = KenwoodEngine::new(desc.clone()).expect("engine");
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_seen(
+            exchange(&mut engine, &mut rig, Op::GetModelId),
+            Observation::ModelId(model),
+        );
+        // The manual's modes 7 (CW-R) and 9 (FSK-R) are in the file.
+        assert_eq!(desc.mode_code(Mode::CwR), Some(b'7'), "{id}");
+        assert_eq!(desc.mode_code(Mode::RttyR), Some(b'9'), "{id}");
+        // RU and RD take no parameter (printed page 79): the engine's RUnnnnn; cannot be sent, so no
+        // RIT offset. AG is AGnnn with no leading 0 (the engine writes AG0nnn;), SM is SMnnnn: so no
+        // levels and no signal. These pins fail if a later edit claims what the manual contradicts.
+        for cap in [
+            Capability::RitXit,
+            Capability::Levels,
+            Capability::ReadSignal,
+        ] {
+            assert!(!desc.capabilities.has(cap), "{id} claims {cap:?}");
+        }
+        assert_eq!(
+            engine
+                .encode(&Op::SetRitOffset(100))
+                .expect_err("no rit")
+                .kind,
+            ErrorKind::Unsupported
+        );
+        assert_eq!(
+            engine
+                .encode(&Op::GetLevel(Level::AfGain))
+                .expect_err("no levels")
+                .kind,
+            ErrorKind::Unsupported
+        );
+    }
 }

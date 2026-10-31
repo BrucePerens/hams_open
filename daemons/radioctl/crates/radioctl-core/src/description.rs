@@ -57,6 +57,9 @@ pub enum KenwoodDialect {
     /// set, but `MD` only sets (the mode is read from `IF`), `FN` and `SP` replace `FR` and `FT`,
     /// `RU` and `RD` take no parameter, and there is no `SM`, `AG`, `RG`, `PC` or `KS`.
     Ts440,
+    /// The TS-450S and TS-690S set (their external-control manual): as `Ts440` but split is set by
+    /// `FR` and `FT` (set only) and `AI` has one digit.
+    Ts450,
 }
 
 impl KenwoodDialect {
@@ -67,6 +70,7 @@ impl KenwoodDialect {
             KenwoodDialect::Classic => "classic",
             KenwoodDialect::Ts890 => "ts890",
             KenwoodDialect::Ts440 => "ts440",
+            KenwoodDialect::Ts450 => "ts450",
         }
     }
 
@@ -77,6 +81,7 @@ impl KenwoodDialect {
             "classic" => Some(KenwoodDialect::Classic),
             "ts890" => Some(KenwoodDialect::Ts890),
             "ts440" => Some(KenwoodDialect::Ts440),
+            "ts450" => Some(KenwoodDialect::Ts450),
             _ => None,
         }
     }
@@ -413,6 +418,7 @@ mod tests {
             KenwoodDialect::Classic,
             KenwoodDialect::Ts890,
             KenwoodDialect::Ts440,
+            KenwoodDialect::Ts450,
         ] {
             assert_eq!(KenwoodDialect::from_name(d.name()), Some(d));
         }

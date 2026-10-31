@@ -26,7 +26,7 @@ const NOW: Duration = Duration::from_secs(10);
 /// Description id, the number the model answers to `ID;` and the digits of its frequency fields
 /// (Yaesu only; 0 elsewhere). A second, independent copy of the numbers in each file: a typo in
 /// either shows up here. The sources are named in each file's facts.
-const BATCH: [(&str, u16, u8); 31] = [
+const BATCH: [(&str, u16, u8); 29] = [
     ("yaesu-ft-450", 241, 8),
     ("yaesu-ft-450d", 244, 8),
     ("yaesu-ft-950", 310, 8),
@@ -44,12 +44,10 @@ const BATCH: [(&str, u16, u8); 31] = [
     ("elecraft-k4", 17, 0),
     ("kenwood-ts-50s", 13, 0),
     ("kenwood-ts-140s", 6, 0),
-    ("kenwood-ts-450s", 10, 0),
     ("kenwood-ts-480", 20, 0),
     ("kenwood-ts-570d", 17, 0),
     ("kenwood-ts-570s", 18, 0),
     ("kenwood-ts-680s", 6, 0),
-    ("kenwood-ts-690s", 11, 0),
     ("kenwood-ts-711", 3, 0),
     ("kenwood-ts-790", 7, 0),
     ("kenwood-ts-811", 2, 0),
@@ -152,7 +150,7 @@ fn model_id(desc: &RigDescription) -> u16 {
 #[test]
 fn every_ascii_file_round_trips_what_it_claims_and_refuses_the_rest() {
     let files = ascii_files();
-    assert!(files.len() >= 31 + 7, "{} ASCII files", files.len());
+    assert!(files.len() >= 29 + 7, "{} ASCII files", files.len());
     for desc in files {
         let id = desc.id.clone();
         let mut engine = engine_for(&desc).expect("engine");
