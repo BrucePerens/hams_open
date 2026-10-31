@@ -1,9 +1,12 @@
 # bench_mcp
 
-One MCP server (official `rmcp` SDK, stdio) for the bench test equipment, with about 100 tools (each with a manual page served
-through the MCP itself) and drivers for the instruments below. Adding an instrument means one driver module and one row in
-`DRIVER_KINDS` and `MODULES` (see `docs/EXTENDING.md`). Instrument status is in each driver's manual pages (`verified` front
-matter says what was checked on the real hardware and when).
+One MCP server (official `rmcp` SDK, stdio) for the bench: about 100 tools, each with a manual page served through the MCP itself.
+It drives a Siglent **oscilloscope** (SDS1000X-E, over the LAN), a bench **power supply** (Abestop ATM6301), a **vector network
+analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs** (bladeRF, LimeSDR), **USB hubs** (topology, diagnosis, and port power
+cycling to reset a device), **sound devices** (play, record, meter, loopback, speech, with discovery by signature), **radios**
+through Hamlib's `rigctld`, **antenna rotators**, and a **procedure runner** for long multi-step programs, plus a template
+instrument for contributors. Adding an instrument means one driver module and one row in `DRIVER_KINDS` and `MODULES` (see
+`docs/EXTENDING.md`). Each driver's manual pages carry a `verified` line saying what was checked on the real hardware and when.
 
 | Driver (`driver` in the config) | What it is | Highlights | Section / doc |
 |---|---|---|---|
