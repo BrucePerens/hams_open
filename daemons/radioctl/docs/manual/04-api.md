@@ -122,7 +122,7 @@ Everything else is an `Op`:
 | Group | Ops |
 |---|---|
 | Frequency, mode | `GetFrequency(Vfo)`, `SetFrequency(Vfo, Hz)`, `GetMode`, `SetMode(Mode)` |
-| Transmit | `GetPtt`, `SetPtt(bool)`, `SendCw(String)` (both can transmit), `GetPower`, `GetSwr` |
+| Transmit | `GetPtt`, `SetPtt(bool)`, `SendCw(String)` (both can transmit), `StopCw` (stops Morse in progress; an emergency command like `SetPtt(false)`, chapter [10](10-safety.md)), `GetPower`, `GetSwr` |
 | Receive | `GetSignal`, `GetFilterWidth`, `SetFilterWidth(Hz)` |
 | Split, RIT, XIT | `GetSplit`, `SetSplit(bool)`, `GetTxVfo`, `GetRit`, `SetRit(bool)`, `GetXit`, `SetXit(bool)`, `GetRitOffset`, `SetRitOffset(i16)` |
 | Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed and RF power setting |

@@ -79,6 +79,8 @@ pub struct FlexRigState {
     pub keyed: bool,
     /// Texts of `cwx send` commands, spaces restored.
     pub cw_sent: Vec<String>,
+    /// How many `cwx clear` commands arrived (each empties `cw_sent`).
+    pub cw_stops: u32,
     /// Panadapter center.
     pub pan_center: Hz,
     /// Panadapter bandwidth.
@@ -132,6 +134,7 @@ impl VirtualFlex {
                 rf_power: 10,
                 keyed: false,
                 cw_sent: Vec::new(),
+                cw_stops: 0,
                 pan_center: desc.default_frequency,
                 pan_bandwidth: Hz(200_000),
             },
@@ -348,6 +351,11 @@ impl VirtualFlex {
                 };
                 self.with_status(Self::reply(seq, 0, ""), status)
             }
+            ("cwx", ["clear"]) => {
+                self.state.cw_sent.clear();
+                self.state.cw_stops = self.state.cw_stops.saturating_add(1);
+                Self::reply(seq, 0, "")
+            }
             ("cwx", ["send", ..]) => {
                 let body = text.trim_start().strip_prefix("cwx send").unwrap_or("").trim();
                 let sent = body.trim_matches('"').replace('\u{7f}', " ");
@@ -506,6 +514,9 @@ mod tests {
         assert!(talk(&mut r, "C3|xmit 0\n").contains("state=READY"));
         assert_eq!(talk(&mut r, "C4|cwx send \"CQ\u{7f}DX\"\n"), "R4|0|0,0\n");
         assert_eq!(r.state().cw_sent, vec!["CQ DX".to_string()]);
+        assert_eq!(talk(&mut r, "C5|cwx clear\n"), "R5|0|\n");
+        assert!(r.state().cw_sent.is_empty());
+        assert_eq!(r.state().cw_stops, 1);
         assert!(talk(&mut r, "C5|transmit set rfpower=7\n").contains("rfpower=7"));
         assert_eq!(
             talk(&mut r, "C6|transmit set rfpower=900\n"),

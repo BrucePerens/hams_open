@@ -9,6 +9,7 @@ mod common;
 use std::time::Duration;
 
 use common::{config_text, eventually, start, Client};
+use radioctl_core::rig::TransmitPermit;
 use radioctld::daemon::Daemon;
 use tokio::time::sleep;
 
@@ -256,6 +257,7 @@ async fn morse_text_cannot_smuggle_a_cat_command_through_an_open_gate() {
 }
 
 // Tests [@ANCHOR: radioctld_service_send_morse]
+// Tests [@ANCHOR: radioctld_service_stop_morse]
 // Tests [@ANCHOR: radioctld_service_disconnect]
 // Tests [@ANCHOR: radioctld_service_ptt_owner]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -275,6 +277,22 @@ async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys() {
         "nobody else may key meanwhile"
     );
     assert_eq!(b.ask("b DE").await, "RPRT -9\n");
+    // B may stop the Morse although A owns the transmitter and even with the gate closed: a
+    // stop path has no owner check and needs no permit. A keeps the transmitter.
+    let control = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+    assert_eq!(control.state().cw_sent, vec!["CQ".to_string()]);
+    daemon.rigs[0].service.rig().close_transmit_gate();
+    assert_eq!(b.ask("\\stop_morse").await, "RPRT 0\n");
+    eventually("the stop to reach the rig", || {
+        control.state().cw_stops == 1
+    })
+    .await;
+    assert!(control.state().cw_sent.is_empty());
+    assert_eq!(daemon.rigs[0].service.ptt_owner(), Some(1));
+    daemon.rigs[0]
+        .service
+        .rig()
+        .open_transmit_gate(TransmitPermit::new("test: virtual rig only"));
     let before = bytes(&daemon);
     drop(a);
     eventually("the departing sender to give up and unkey the rig", || {

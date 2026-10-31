@@ -253,6 +253,11 @@ impl ElecraftEngine {
                 Self::check_ky_text(text)?;
                 Self::set(format!("KY {text};"))
             }
+            // "KY" (p. 15): `^D (EOT, ASCII 04) Quickly terminates transmission`. The other
+            // terminator the page lists, `@`, is a prosign instead when CONFIG:CW WGHT has been
+            // changed, so EOT is the one that cannot be remapped. Sent as `KY <space><EOT>;`
+            // (the blank is the KY mode character, `KY*[text]`).
+            Op::StopCw => Self::set("KY \u{4};".to_string()),
             _ => return Err(Self::unsupported("not a setting command")),
         })
     }
@@ -500,6 +505,7 @@ mod tests {
         let get = e.encode(&Op::GetMode).expect("get");
         assert_eq!(get.reply, ReplyKind::Observation(Field::Mode));
         assert_eq!(bytes(&mut e, Op::SendCw("CQ TEST".into())), b"KY CQ TEST;");
+        assert_eq!(bytes(&mut e, Op::StopCw), b"KY \x04;");
     }
 
     // Tests [@ANCHOR: radioctl_elecraft_engine_encode]

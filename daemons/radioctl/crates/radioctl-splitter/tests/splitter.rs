@@ -414,6 +414,7 @@ async fn a_client_ends_when_its_stream_ends_or_when_aborted() {
 
 // Tests [@ANCHOR: radioctl_splitter_send_cw]
 // Tests [@ANCHOR: radioctl_splitter_cleanup]
+// Tests [@ANCHOR: radioctl_splitter_execute]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys_the_rig() {
     let (rig, control) = virtual_kx3().await;
@@ -432,6 +433,17 @@ async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys_the_rig() 
     b.write_all(&PTT_ON).await.expect("write");
     assert_eq!(read_n(&mut b, 6).await, NG, "nobody else may key meanwhile");
     assert_eq!(splitter.ptt_owner(), Some(owner));
+    // B, who owns nothing, may stop the Morse: a stop path has no owner check. The owner keeps
+    // the transmitter (it may still be keyed) and the gate is not consulted.
+    rig.close_transmit_gate();
+    b.write_all(&[0xFE, 0xFE, 0x94, 0xE0, 0x17, 0xFF, 0xFD])
+        .await
+        .expect("write");
+    assert_eq!(read_n(&mut b, 6).await, OK, "anybody may stop Morse");
+    wait_for(|| control.state().cw_stops == 1).await;
+    assert!(control.state().cw_sent.is_empty());
+    assert_eq!(splitter.ptt_owner(), Some(owner));
+    rig.open_transmit_gate(TransmitPermit::new("test: virtual rig only"));
     let before = control.bytes_received();
     drop(a);
     wait_for(|| splitter.ptt_owner().is_none() && control.bytes_received() > before).await;

@@ -695,6 +695,8 @@ impl FlexEngine {
             )]),
             Op::SetPtt(on) => Ok(vec![(format!("xmit {}", u8::from(*on)), Kind::Set)]),
             Op::SendCw(text) => Ok(vec![(format!("cwx send {}", cwx_text(text)?), Kind::Set)]),
+            // "TCPIP cwx": `cwx clear` empties the CWX buffer (classed non-transmitting above).
+            Op::StopCw => Ok(vec![("cwx clear".to_string(), Kind::Set)]),
             Op::SetTransceive(on) => {
                 let mut lines: Vec<(String, Kind)> = Self::subscription_lines(*on)
                     .into_iter()
@@ -1292,6 +1294,10 @@ mod tests {
         assert!(e.encode(&Op::SetFrequency(Vfo::B, Hz(1))).is_err());
         assert!(e.encode(&Op::SetFilterWidth(Hz(2400))).is_err());
         assert_eq!(e.seq, 0, "nothing refused used a sequence number");
+        // The stop is a plain set (after the engine's first-command prologue).
+        let stop = e.encode(&Op::StopCw).expect("stop");
+        assert!(stop.bytes.ends_with(b"|cwx clear\n"), "{:?}", stop.bytes);
+        assert_eq!(stop.reply, ReplyKind::Ack);
     }
 
     // Tests [@ANCHOR: radioctl_flex_engine_feed]

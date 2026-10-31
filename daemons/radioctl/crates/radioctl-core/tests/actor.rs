@@ -280,6 +280,67 @@ async fn ptt_off_abandons_a_slow_read_on_the_same_rig() {
     assert_eq!(next.value, Hz(7_030_000));
 }
 
+// Tests [@ANCHOR: radioctl_core_op_is_emergency]
+// Tests [@ANCHOR: radioctl_core_op_is_unkey]
+// Tests [@ANCHOR: radioctl_core_actor_serve]
+// Tests [@ANCHOR: radioctl_core_actor_apply_set]
+#[tokio::test(start_paused = true)]
+async fn stop_morse_jumps_the_queue_needs_no_gate_and_leaves_the_key_alone() {
+    let (rig, control) = civ(quiet(), Duration::ZERO);
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    rig.execute(Op::SendCw("CQ".into()))
+        .await
+        .expect("morse sent");
+    assert_eq!(control.state().cw_sent, vec!["CQ".to_string()]);
+    // The gate closes and the rig becomes slow: a stop must still get through at once.
+    rig.close_transmit_gate();
+    control.set_reply_delay(Duration::from_secs(3));
+    let read = {
+        let rig = rig.clone();
+        tokio::spawn(async move {
+            rig.execute_within(Op::GetFrequency(Vfo::A), Duration::from_secs(30))
+                .await
+        })
+    };
+    sleep(Duration::from_millis(10)).await;
+    let stop = {
+        let rig = rig.clone();
+        tokio::spawn(async move {
+            rig.execute_within(Op::StopCw, Duration::from_secs(30))
+                .await
+        })
+    };
+    sleep(Duration::from_millis(10)).await;
+    assert_eq!(
+        control.state().cw_stops,
+        1,
+        "the stop reached the rig at once"
+    );
+    assert!(control.state().cw_sent.is_empty());
+    assert!(
+        read.is_finished(),
+        "the slow read was abandoned for the stop"
+    );
+    assert_eq!(
+        read.await.expect("join").expect_err("abandoned").kind,
+        ErrorKind::Cancelled
+    );
+    stop.await.expect("join").expect("stop acknowledged");
+    assert_eq!(rig.stats().preempted, 1);
+    // A stop is not an unkey: the rig stays keyed, the cache still says so, and nothing was
+    // counted as an unkey failure.
+    assert!(control.state().ptt);
+    assert_eq!(
+        rig.cached(Field::Ptt).map(|c| c.value),
+        Some(Observation::Ptt(true))
+    );
+    assert_eq!(rig.stats().unkey_failures, 0);
+    control.set_reply_delay(Duration::ZERO);
+    rig.set_ptt(false).await.expect("unkeyed");
+    assert!(!control.state().ptt);
+}
+
 fn alarms(events: &[RigEvent]) -> Vec<(Source, Alarm)> {
     events
         .iter()

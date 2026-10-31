@@ -27,6 +27,10 @@ pub enum Op {
     GetPower,
     /// Send Morse text.
     SendCw(String),
+    /// Stop Morse in progress: clear the rig's CW text buffer and end the element being sent.
+    /// It is a stop path, so it jumps the queue like an unkey and needs no transmit gate. It
+    /// does not unkey a rig held keyed by PTT; polling reconciles the transmit state after it.
+    StopCw,
     /// Turn the rig's unsolicited reporting on or off.
     SetTransceive(bool),
     /// Read split operation.
@@ -245,7 +249,7 @@ impl Op {
             Op::SetPtt(_) => Capability::SetPtt,
             Op::GetSignal => Capability::ReadSignal,
             Op::GetPower => Capability::ReadPower,
-            Op::SendCw(_) => Capability::SendCw,
+            Op::SendCw(_) | Op::StopCw => Capability::SendCw,
             Op::SetTransceive(_) => Capability::Transceive,
             Op::GetSplit | Op::SetSplit(_) | Op::GetTxVfo => Capability::Split,
             Op::GetRit
@@ -281,8 +285,17 @@ impl Op {
     }
 
     // [@ANCHOR: radioctl_core_op_is_emergency]
-    /// True for the commands that jump the queue: unkeying the transmitter.
+    /// True for the commands that jump the queue: unkeying the transmitter and stopping Morse.
+    /// Both preempt a command waiting for a reply, skip inter-command spacing and need no gate.
     pub fn is_emergency(&self) -> bool {
+        matches!(self, Op::SetPtt(false) | Op::StopCw)
+    }
+
+    // [@ANCHOR: radioctl_core_op_is_unkey]
+    /// True for the one command whose failure means the rig may still be on the air: the unkey.
+    /// Only it is coalesced when the emergency queue is full and only its failure is
+    /// [`crate::op::Alarm::UnkeyFailed`]; a stop-Morse that fails is reported to its caller alone.
+    pub fn is_unkey(&self) -> bool {
         matches!(self, Op::SetPtt(false))
     }
 }
@@ -376,6 +389,7 @@ mod tests {
             Op::SendCw("x".into()).required_capability(),
             Capability::SendCw
         );
+        assert_eq!(Op::StopCw.required_capability(), Capability::SendCw);
     }
 
     // Tests [@ANCHOR: radioctl_core_op_transmits]
@@ -384,14 +398,25 @@ mod tests {
         assert!(Op::SetPtt(true).transmits());
         assert!(Op::SendCw("cq".into()).transmits());
         assert!(!Op::SetPtt(false).transmits());
+        assert!(!Op::StopCw.transmits());
         assert!(!Op::SetFrequency(Vfo::A, Hz(7_000_000)).transmits());
     }
 
     // Tests [@ANCHOR: radioctl_core_op_is_emergency]
     #[test]
-    fn only_unkeying_is_an_emergency() {
+    fn unkeying_and_stopping_morse_are_emergencies() {
         assert!(Op::SetPtt(false).is_emergency());
+        assert!(Op::StopCw.is_emergency());
         assert!(!Op::SetPtt(true).is_emergency());
+        assert!(!Op::SendCw("cq".into()).is_emergency());
         assert!(!Op::GetMode.is_emergency());
+    }
+
+    // Tests [@ANCHOR: radioctl_core_op_is_unkey]
+    #[test]
+    fn only_unkeying_is_the_unkey() {
+        assert!(Op::SetPtt(false).is_unkey());
+        assert!(!Op::StopCw.is_unkey());
+        assert!(!Op::SetPtt(true).is_unkey());
     }
 }

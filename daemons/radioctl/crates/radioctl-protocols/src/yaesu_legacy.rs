@@ -397,6 +397,8 @@ mod tests {
             "no second VFO"
         );
         assert!(e.encode(&Op::SendCw("cq".into())).is_err());
+        // The five-byte protocol has no Morse command and so nothing to stop.
+        assert!(e.encode(&Op::StopCw).is_err());
         assert!(e.encode(&Op::SetMode(Mode::Wfm)).is_err());
     }
 

@@ -240,7 +240,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_observation_field] (radioctl-core) The cache field this observation updates.
 - [@ANCHOR: radioctl:radioctl_core_op_capability] (radioctl-core) The capability a rig needs for this command.
 - [@ANCHOR: radioctl:radioctl_core_op_transmits] (radioctl-core) True when the command can put RF on the air. Unkeying never transmits.
-- [@ANCHOR: radioctl:radioctl_core_op_is_emergency] (radioctl-core) True for the commands that jump the queue: unkeying the transmitter.
+- [@ANCHOR: radioctl:radioctl_core_op_is_emergency] (radioctl-core) True for the commands that jump the queue: unkeying the transmitter and stopping Morse.
+- [@ANCHOR: radioctl:radioctl_core_op_is_unkey] (radioctl-core) True for the unkey alone: the one emergency command that is coalesced when the queue is full and whose failure is `Alarm::UnkeyFailed`.
 - [@ANCHOR: radioctl:radioctl_civ_frame_to_bytes] (radioctl-protocols) The wire form of the frame.
 - [@ANCHOR: radioctl:radioctl_civ_encode_bcd_freq] (radioctl-protocols) Encodes a frequency as 5 BCD bytes, or `None` above 9,999,999,999 Hz.
 - [@ANCHOR: radioctl:radioctl_civ_decode_bcd_freq] (radioctl-protocols) Decodes up to 5 BCD bytes (least-significant pair first); `None` on a non-BCD nibble.
@@ -339,6 +340,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_civ_frame] (radioctl-protocols) Answers one CI-V frame: address filter, bus echo, OK/NG.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_dispatch] (radioctl-protocols) The virtual CI-V command table (frequency, mode, PTT, CW, ID, meters).
 - [@ANCHOR: radioctl:radioctl_virtual_civ_mode_reply] (radioctl-protocols) Mode read reply of the virtual CI-V rig.
+- [@ANCHOR: radioctl:radioctl_virtual_stop_cw] (radioctl-protocols) A stop-Morse command (CI-V `17 FF`, Elecraft `KY <EOT>;`, Kenwood `KY0;`) empties the virtual rig's CW buffer and counts the stop.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_command] (radioctl-protocols) The virtual Kenwood command table.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_id] (radioctl-protocols) The ID the virtual Kenwood rig reports.
 - [@ANCHOR: radioctl:radioctl_virtual_set_frequency] (radioctl-protocols) Sets VFO A or B from 11 Kenwood digits, else `?;`.
@@ -660,6 +662,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctld_service_key] (radioctld) Keys the transmitter for `client` if the gate is open and no other client owns it. The
 - [@ANCHOR: radioctl:radioctld_service_unkey] (radioctld) Unkeys the transmitter. Open to every client, gate open or not.
 - [@ANCHOR: radioctl:radioctld_service_send_morse] (radioctld) Sends Morse text unless the gate is closed or another client owns the transmitter.
+- [@ANCHOR: radioctl:radioctld_service_stop_morse] (radioctld) `\stop_morse`: stops Morse in progress through the rig's emergency path, for any client, owner or not, gate open or closed.
 - [@ANCHOR: radioctl:radioctld_service_split_vfo] (radioctld) `s`: whether split is on and which VFO transmits.
 - [@ANCHOR: radioctl:radioctld_service_set_split_vfo] (radioctld) `S`: split on means receive on VFO A and transmit on VFO B.
 - [@ANCHOR: radioctl:radioctld_service_rit_offset] (radioctld) `j` and `z`: the offset in hertz while the function is on, else 0.

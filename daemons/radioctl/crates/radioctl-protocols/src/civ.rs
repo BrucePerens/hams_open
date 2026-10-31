@@ -597,6 +597,11 @@ impl ProtocolEngine for CivEngine {
                 }
                 self.command(0x17, text.as_bytes(), ack)
             }
+            // Command 17 with the single byte FF stops the CW text being sent and clears the
+            // buffer. Fact from Hamlib 4.6.2 `rigs/icom/icom.c` (`icom_stop_morse`: `C_SND_CW`
+            // with one data byte 0xff); Icom's CI-V reference guides were not read (see the
+            // module note). Unverified on a radio, like the rest of this engine.
+            Op::StopCw => self.command(0x17, &[0xFF], ack),
             Op::SetTransceive(_) => {
                 return Err(Self::unsupported(
                     "CI-V transceive is set in the rig's menu",
@@ -841,6 +846,10 @@ mod tests {
         );
         assert!(engine.encode(&Op::GetFrequency(Vfo::B)).is_err());
         assert!(engine.encode(&Op::SendCw(String::new())).is_err());
+        assert_eq!(
+            engine.encode(&Op::StopCw).expect("stop").bytes,
+            vec![0xFE, 0xFE, 0x94, 0xE0, 0x17, 0xFF, 0xFD]
+        );
         assert!(engine.encode(&Op::SetTransceive(true)).is_err());
     }
 

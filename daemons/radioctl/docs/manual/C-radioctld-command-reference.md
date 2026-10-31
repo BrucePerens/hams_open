@@ -37,7 +37,7 @@ explains the design and the differences from Hamlib's `rigctld`.
 | -6 | I/O error | the link is down, or the command was cancelled |
 | -8 | protocol error | the rig said something the engine could not use |
 | -9 | command rejected | the rig refused; **or** a transmit command while the gate is closed, or another client owns the transmitter |
-| -11 | feature not available | the rig or its description lacks it; raw `send_cmd`, power control, stop-Morse; a VFO the rig has not |
+| -11 | feature not available | the rig or its description lacks it; raw `send_cmd`, power control; a VFO the rig has not |
 | -14 | bus busy | the rig's command queue is full |
 
 An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported` to -11, `LinkDown` and
@@ -73,6 +73,7 @@ An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported`
 | `u` | `get_func` | [vfo] name | value only | 0 or 1. Functions served: `RIT`, `XIT`. |
 | `U` | `set_func` | [vfo] name 0\|1 | | |
 | `b` | `send_morse` | text | | At most 64 characters. Transmits: gate, link and ownership rules as `T 1`, and it claims the transmitter the same way. |
+| | `stop_morse` | | | Stops Morse in progress (clears the rig's CW buffer). A stop path: open to every client, owner or not, gate open or closed, and it jumps the rig's queue like `T 0`. It does not unkey and does not change the owner. `RPRT -11` on a rig without a stop command (Kenwood, Yaesu: their descriptions have no `send-cw`). |
 | `1` | `dump_caps` | | free text, then `RPRT 0` | |
 | | `dump_state` | | free text | Generated from the description. A transmit range is advertised only while the gate is open. |
 | | `chk_vfo` | | `ChkVFO` | 1 in `vfo_mode`, else 0. |
@@ -90,7 +91,6 @@ An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported`
 |---|---|---|
 | `w`, `send_cmd` | `RPRT -11` | A raw escape hatch to the radio must be an explicit, separately named capability. |
 | `set_powerstat` | `RPRT -11` | Power control is not implemented. |
-| `stop_morse` | `RPRT -11` | Not implemented; Morse text ends by itself. |
 | `get_dcd`, memories (`get_mem`, `set_mem`, `get_channel`, `set_channel`), `scan`, `vfo_op`, CTCSS, DCS, repeater shift and offset, antenna, tuning step, parameters, DTMF, transceive, `reset` and the other one-letter Hamlib forms | `RPRT -4` | Known to Hamlib, not implemented. |
 | any other word | `RPRT -1` | |
 

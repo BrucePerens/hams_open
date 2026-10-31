@@ -117,8 +117,8 @@ Appendix [C](C-radioctld-command-reference.md) lists every command. In short:
 - **Known to Hamlib, not implemented** (`RPRT -4`): memories, channels, scan, CTCSS and DCS, repeater
   shift and offset, antenna, tuning step, parameters, DTMF, `vfo_op`, `reset` and the like. Unknown words
   are `RPRT -1`. What the rig cannot do is `RPRT -11`.
-- **Never served** (`RPRT -11`): the raw `send_cmd` (`w`), power control (`\set_powerstat`), and
-  stopping Morse. There is no way to send a client's bytes to the radio.
+- **Never served** (`RPRT -11`): the raw `send_cmd` (`w`) and power control (`\set_powerstat`). There
+  is no way to send a client's bytes to the radio.
 - **Strict arguments.** A missing, surplus or malformed argument is `RPRT -1`; the parser never waits for
   another line. Hamlib's `rigctld` waits.
 
@@ -139,7 +139,7 @@ transmits"; `S 1 VFOB` turns it on, and `S` with any other transmit VFO is `RPRT
 
 | Difference | Why |
 |---|---|
-| PTT has one owner: another client's `T 1` or `b` is `RPRT -9` until the owner unkeys or disconnects, which unkeys the rig. `b` (Morse) claims the transmitter as `T 1` does. Anyone may unkey. | One transmitter, one owner; a vanished client must not leave a carrier on the air. |
+| PTT has one owner: another client's `T 1` or `b` is `RPRT -9` until the owner unkeys or disconnects, which unkeys the rig. `b` (Morse) claims the transmitter as `T 1` does. Anyone may unkey, and anyone may `\stop_morse`. | One transmitter, one owner; a vanished client must not leave a carrier on the air; a stop path has no owner check. |
 | Transmit commands are refused up front with `RPRT -9` while the rig's transmit gate is closed or its link is down; nothing is queued. `\dump_state` advertises a transmit range only when the gate is open. | Fail closed. |
 | `rig.transmit = false` is the default. | The gate is opened by the operator, never implied. |
 | The raw `send_cmd` is not served. | An escape hatch is a separate, explicit capability, never on by default. |

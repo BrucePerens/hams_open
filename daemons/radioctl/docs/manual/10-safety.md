@@ -104,14 +104,28 @@ gate closed again: unkeyed, virtual radio transmitting: false
 **Closing the gate does not unkey a radio that is already keyed.** It blocks later transmit commands.
 Whoever closes the gate for safety must also send `set_ptt(false)`.
 
-## Unkeying and preemption
+## Unkeying, stopping Morse, and preemption
 
-`Op::SetPtt(false)` is the only emergency command. It goes through a separate channel that the actor
-reads first, wakes the actor, and abandons a command that is waiting for a reply (that command ends in
-`Cancelled`). It never interrupts a write already in progress. It needs no gate. The tests
-`ptt_off_abandons_a_slow_read_on_the_same_rig` and `a_slow_rig_does_not_delay_another_rigs_ptt_off`
-cover the same-rig and cross-rig cases; a blocked or panicking application callback cannot delay it
-because callbacks run on their own thread.
+`Op::SetPtt(false)` and `Op::StopCw` are the emergency commands (`Op::is_emergency()`). They go through a
+separate channel that the actor reads first, wake the actor, and abandon a command that is waiting for a
+reply (that command ends in `Cancelled`). They never interrupt a write already in progress. They need no
+gate and skip inter-command spacing. The tests `ptt_off_abandons_a_slow_read_on_the_same_rig`,
+`a_slow_rig_does_not_delay_another_rigs_ptt_off` and
+`stop_morse_jumps_the_queue_needs_no_gate_and_leaves_the_key_alone` cover the same-rig, cross-rig and
+Morse cases; a blocked or panicking application callback cannot delay them because callbacks run on
+their own thread.
+
+`StopCw` clears the radio's CW text buffer and ends the element being sent; it is the stop path for Morse
+that `SendCw` started (or that another program or the front panel started). It is not an unkey: a radio
+held keyed by PTT stays keyed, the cache is not touched, and the watchdog stays armed until a poll or a
+transceive report shows the radio receiving. Only the unkey is coalesced when the emergency queue is
+full and only an unkey's failure is `Alarm::UnkeyFailed` (`Op::is_unkey()`). The command per engine, all
+unverified on hardware: CI-V `17 FF` (Hamlib's `icom_stop_morse`), Elecraft `KY <EOT>;` (Programmer's
+Reference, "KY": EOT "quickly terminates transmission"), FlexRadio `cwx clear`, Kenwood `KY0;` (TS-590
+guide, "KY" Set 2; no Kenwood description carries `send-cw`, so it is refused today). The Yaesu CAT guides
+have no Morse text command and no stop for one: `Unsupported` there, and unkeying is the stop path. In
+`radioctld` it is `\stop_morse`; the splitter's CI-V personality maps `17 FF` to it. Both serve it to any
+client, owner or not, gate open or closed.
 
 Unkeying is repeated on a timeout like any non-transmit command (up to the description's `retries`
 more times, within the deadline). An unkey is never refused for want of a queue slot: if the emergency
@@ -184,7 +198,7 @@ relay on top of radioctl; the point of the table is to avoid claiming otherwise.
 | 6 | Drive and signal limits, telemetry-based derating, SWR inhibit | **Not in radioctl.** SWR and power are readable on some radios; nothing acts on them. |
 | 7 | Attestation and audit log | **Not in radioctl.** The permit's `granted_by` string is the only record. |
 | 8 | No passwords, codes or approval steps in the emergency path | **Consistent**: unkeying has none. |
-| 9 | Stop paths for operator and owner; independent hardware stops recommended | **Partly**: any client can unkey. Hardware stops are outside software. |
+| 9 | Stop paths for operator and owner; independent hardware stops recommended | **Partly**: any client can unkey and any client can stop Morse (`StopCw`), on every engine that has a command for it. Hardware stops are outside software. |
 | 10 | Operating procedure and legal review | Not a code matter. |
 
 An explicit, observable mismatch event between intended and actual transmit state is also in the
