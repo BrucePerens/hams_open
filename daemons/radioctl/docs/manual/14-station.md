@@ -27,6 +27,12 @@ connection. Only reads follow (frequency, mode), reported and never restored.
 `ActorLinks::key_source` gives the station's interlock a keyed-state source that follows the radio's
 current actor across respawns.
 
+`DescriptionSpawner` is the ready-made `RigSpawner`: for each radio a rig description, an endpoint (a
+TCP address with an optional framing, such as the TS-890S LAN login, or a serial port) and the actor
+options. It builds the engine, opens a reconnecting transport (`open_link` or `open_serial`) and spawns
+the actor with the transport's status. The transmit gate stays closed; credentials never pass through
+it.
+
 The minimum off time of a power channel counts from a commanded or observed turn-off only, so a radio
 found off at start-up can be switched on at once.
 

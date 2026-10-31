@@ -21,6 +21,7 @@
 //! - [`rotator`]: rotator descriptions, the rotctld and GS-232 engines, the command handle.
 //! - [`virtual_rotator`]: a virtual rotator (both protocols) for tests, served on a socket.
 //! - [`record`]: the durable radio record (JSON, owner-only, atomic).
+//! - [`spawner`]: the ready-made `RigSpawner` from rig descriptions and endpoints.
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
 pub mod actor_link;
@@ -35,6 +36,7 @@ pub mod modbus;
 pub mod model;
 pub mod record;
 pub mod rotator;
+pub mod spawner;
 pub mod station;
 pub mod virtual_rotator;
 pub mod ws;

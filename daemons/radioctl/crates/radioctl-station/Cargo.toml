@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 radioctl-core = { path = "../radioctl-core" }
+radioctl-protocols = { path = "../radioctl-protocols" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
@@ -19,5 +20,4 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "net", 
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros", "test-util"] }
-radioctl-protocols = { path = "../radioctl-protocols" }
 serialport = { version = "4.10", default-features = false }
