@@ -123,7 +123,8 @@ radio, each with its own listen address (as with one `rigctld` per radio); see `
   newer than `cache_max_age_ms`. No locks around the rig.
 - PTT: one owner at a time, with the splitter's `PttOwner`. The first client to key owns the
   transmitter; another client's `T 1` or `b` is `RPRT -9` (rejected) until the owner unkeys or
-  disconnects (which unkeys the rig); anyone may unkey. Transmit commands are refused with `RPRT -9`
+  disconnects (which unkeys the rig); anyone may unkey. Morse (`b`) claims the transmitter the same
+  way, so a Morse sender that disconnects unkeys the rig too; stopping the daemon always unkeys. Transmit commands are refused with `RPRT -9`
   before anything is queued while the rig's transmit gate is closed or its link is down. The gate is
   closed unless the configuration says `transmit = true`; `\dump_state` advertises a transmit range only
   when it is open. Stopping the daemon unkeys a rig a client was keying.
@@ -329,6 +330,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_splitter_cleanup] (radioctl-splitter) Gives up the client's PTT ownership, unkeying the rig if the client held it.
 - [@ANCHOR: radioctl:radioctl_splitter_read] (radioctl-splitter) A read: the cached value if fresh enough, else asks the rig.
 - [@ANCHOR: radioctl:radioctl_splitter_execute] (radioctl-splitter) Carries out one request for `client`, with PTT arbitration.
+- [@ANCHOR: radioctl:radioctl_splitter_send_cw] (radioctl-splitter) Sends Morse for a client, claiming the transmitter like a key does (given back if the rig refuses), so a departing sender unkeys the rig.
 - [@ANCHOR: radioctl:radioctl_splitter_key] (radioctl-splitter) Keys for `client` if no other client owns the transmitter; the claim is given back if the
 - [@ANCHOR: radioctl:radioctl_splitter_run_client] (radioctl-splitter) The task of one client: input, rig changes, until the client ends.
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_new] (radioctl-splitter) A TS-2000 personality with auto-information off.

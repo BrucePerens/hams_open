@@ -162,12 +162,12 @@ impl RigService {
     }
 
     // [@ANCHOR: radioctld_service_shutdown]
-    /// The server is stopping: if a client holds the transmitter, unkey the rig.
+    /// The server is stopping: unkey the rig, whoever (if anyone) is recorded as holding it.
     pub async fn shutdown(&self) {
-        let held = locked(&self.owner).owner().is_some();
-        if held {
-            let _ = self.unkey().await;
-        }
+        // Unconditional: a rig keyed by Morse, or keyed while its owner record was lost, has no
+        // owner, and unkeying a rig that is not keyed costs one command. A rig that cannot be
+        // unkeyed by command answers Unsupported, which is all there is to do.
+        let _ = self.unkey().await;
     }
 
     // [@ANCHOR: radioctld_service_exec]
@@ -342,17 +342,21 @@ impl RigService {
     }
 
     // [@ANCHOR: radioctld_service_send_morse]
-    /// Sends Morse text unless the gate is closed or another client owns the transmitter.
+    /// Sends Morse text unless the gate is closed or another client owns the transmitter. Morse
+    /// puts RF on the air, so the sender claims the transmitter like a key does: the claim is
+    /// given back if the rig refuses, and a sender that disconnects unkeys the rig.
     async fn send_morse(&self, client: ClientId, text: &str) -> Result<Body, i32> {
         self.check_transmit()?;
-        let other = locked(&self.owner)
-            .owner()
-            .is_some_and(|owner| owner != client);
-        if other {
+        let claim = locked(&self.owner).try_key(client);
+        if claim.is_err() {
             self.counters.ptt_conflicts.fetch_add(1, Ordering::Relaxed);
             return self.refuse(ERJCTED);
         }
-        self.set(Op::SendCw(text.to_string())).await
+        let outcome = self.set(Op::SendCw(text.to_string())).await;
+        if outcome.is_err() {
+            locked(&self.owner).release(client);
+        }
+        outcome
     }
 
     // [@ANCHOR: radioctld_service_split_vfo]

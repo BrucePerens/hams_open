@@ -341,20 +341,27 @@ impl Splitter {
                 }
                 outcome
             }
-            Request::SendCw(text) => {
-                let other = locked(&self.inner.owner)
-                    .owner()
-                    .is_some_and(|owner| owner != client);
-                if other {
-                    self.count(&self.inner.counters.ptt_conflicts);
-                    Outcome::Refused
-                } else {
-                    self.set(Op::SendCw(text.clone())).await
-                }
-            }
+            Request::SendCw(text) => self.send_cw(client, text).await,
         };
         if outcome == Outcome::Refused {
             self.count(&self.inner.counters.refused);
+        }
+        outcome
+    }
+
+    // [@ANCHOR: radioctl_splitter_send_cw]
+    /// Sends Morse for `client`. Morse puts RF on the air, so the sender claims the transmitter
+    /// like a key does: the claim is given back if the rig refuses, and a sender that goes away
+    /// unkeys the rig.
+    async fn send_cw(&self, client: ClientId, text: &str) -> Outcome {
+        let claim = locked(&self.inner.owner).try_key(client);
+        if claim.is_err() {
+            self.count(&self.inner.counters.ptt_conflicts);
+            return Outcome::Refused;
+        }
+        let outcome = self.set(Op::SendCw(text.to_string())).await;
+        if outcome != Outcome::Done {
+            locked(&self.inner.owner).release(client);
         }
         outcome
     }

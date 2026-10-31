@@ -411,3 +411,29 @@ async fn a_client_ends_when_its_stream_ends_or_when_aborted() {
         .await
         .expect("the aborted client ended");
 }
+
+// Tests [@ANCHOR: radioctl_splitter_send_cw]
+// Tests [@ANCHOR: radioctl_splitter_cleanup]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys_the_rig() {
+    let (rig, control) = virtual_kx3().await;
+    let splitter = splitter(&rig, civ(false));
+    let mut a = client(&splitter);
+    let mut b = client(&splitter);
+    rig.open_transmit_gate(TransmitPermit::new("test: virtual rig only"));
+    a.write_all(&[0xFE, 0xFE, 0x94, 0xE0, 0x17, b'C', b'Q', 0xFD])
+        .await
+        .expect("write");
+    assert_eq!(read_n(&mut a, 6).await, OK);
+    wait_for(|| !control.state().cw_sent.is_empty()).await;
+    let owner = splitter
+        .ptt_owner()
+        .expect("Morse puts RF on the air, so the sender holds the transmitter");
+    b.write_all(&PTT_ON).await.expect("write");
+    assert_eq!(read_n(&mut b, 6).await, NG, "nobody else may key meanwhile");
+    assert_eq!(splitter.ptt_owner(), Some(owner));
+    let before = control.bytes_received();
+    drop(a);
+    wait_for(|| splitter.ptt_owner().is_none() && control.bytes_received() > before).await;
+    assert!(!control.state().ptt);
+}

@@ -254,3 +254,49 @@ async fn morse_text_cannot_smuggle_a_cat_command_through_an_open_gate() {
     .await;
     daemon.stop().await;
 }
+
+// Tests [@ANCHOR: radioctld_service_send_morse]
+// Tests [@ANCHOR: radioctld_service_disconnect]
+// Tests [@ANCHOR: radioctld_service_ptt_owner]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys() {
+    let daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", true, false)).await;
+    let mut a = Client::connect(&daemon).await;
+    let mut b = Client::connect(&daemon).await;
+    assert_eq!(a.ask("b CQ").await, "RPRT 0\n");
+    assert_eq!(
+        daemon.rigs[0].service.ptt_owner(),
+        Some(1),
+        "Morse puts RF on the air, so the sender holds the transmitter"
+    );
+    assert_eq!(
+        b.ask("T 1").await,
+        "RPRT -9\n",
+        "nobody else may key meanwhile"
+    );
+    assert_eq!(b.ask("b DE").await, "RPRT -9\n");
+    let before = bytes(&daemon);
+    drop(a);
+    eventually("the departing sender to give up and unkey the rig", || {
+        daemon.rigs[0].service.ptt_owner().is_none() && bytes(&daemon) > before
+    })
+    .await;
+    assert_eq!(b.ask("T 1").await, "RPRT 0\n");
+    daemon.stop().await;
+}
+
+// Tests [@ANCHOR: radioctld_service_shutdown]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_unkeys_even_when_no_owner_is_recorded() {
+    let mut daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", true, false)).await;
+    let control = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+    let before = control.bytes_received();
+    assert_eq!(daemon.rigs[0].service.ptt_owner(), None);
+    let served = daemon.rigs.remove(0);
+    served.server.shutdown().await;
+    served.service.shutdown().await;
+    eventually("an unkey to reach the rig on shutdown", || {
+        control.bytes_received() > before && !control.state().ptt
+    })
+    .await;
+}
