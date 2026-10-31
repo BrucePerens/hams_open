@@ -13,7 +13,7 @@
 //! amplifier power-on, band switching, any other output) stays blocked. A known keyed state
 //! still blocks everything but the emergency all-off.
 
-use crate::channel::{BoxFuture, StationEvent, Switchboard};
+use crate::channel::{Assurance, BoxFuture, StationEvent, Switchboard};
 use crate::error::{StationError, StationErrorKind};
 use crate::lifecycle::RadioState;
 use crate::model::{
@@ -134,6 +134,21 @@ impl Station {
         for c in &def.channels {
             board.def(&c.id)?;
         }
+        for d in &def.devices {
+            if let (DeviceKind::Amplifier, PowerSource::Channel { channel }) = (d.kind, &d.power) {
+                if board.assurance(channel)? == Assurance::Mediated && !d.external_deadman {
+                    return Err(StationError::new(
+                        StationErrorKind::Config,
+                        format!(
+                            "amplifier {} is powered through a channel that goes through another \
+                             system (Home Assistant); declare external_deadman = true to say it \
+                             also has a hardware dead-man or plug-level auto-off",
+                            d.id.0
+                        ),
+                    ));
+                }
+            }
+        }
         Ok(Station {
             hints: Mutex::new(BTreeMap::new()),
             def,
@@ -141,6 +156,16 @@ impl Station {
             keyed,
             ready,
         })
+    }
+
+    // [@ANCHOR: radioctl_station_station_power_assurance]
+    /// The assurance level of the channel that powers a device (`None`: always on, or a
+    /// momentary power button, or an unknown device).
+    pub fn power_assurance(&self, device: &DeviceId) -> Option<Assurance> {
+        match &self.def.device(device)?.power {
+            PowerSource::Channel { channel } => self.board.assurance(channel).ok(),
+            _ => None,
+        }
     }
 
     // [@ANCHOR: radioctl_station_station_board]

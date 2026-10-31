@@ -56,6 +56,33 @@ is dead (a transport that ended, such as a plain TCP stream at end of file), the
 The off time of a power channel (`min_off_ms`) is counted from a commanded or observed turn-off,
 never from the first sight of the channel: a radio found off at start-up can be switched on at once.
 
+## Home Assistant
+
+`homeassistant::HomeAssistant` is a channel driver whose lines are Home Assistant entities
+(`switch`, `input_boolean`, `light`, `fan` to switch; `binary_sensor` to read). It follows the design
+in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
+
+- State and confirmation come from the WebSocket API (`subscribe_events` for `state_changed`, plus
+  a `get_states` snapshot); commands are REST service calls. While the session is down, or an
+  entity is `unavailable`, `unknown` or missing, its state is **unknown**: `read_line` fails, the
+  switchboard keeps no confirmed value, and the dependency checks that need it confirmed refuse.
+  A command is still sent while unknown, because an off must always be tried.
+- **Assurance level.** Drivers report an `Assurance`; this one is `Mediated`, the lowest. The
+  switchboard refuses a `ptt` channel on it, and `Station::new` refuses an amplifier powered through
+  it unless the device declares `external_deadman = true` (a hardware dead-man or plug-level
+  auto-off the owner has set up). `Station::power_assurance` tells a front end what to show.
+- **The token** comes from a `SecretStore` by name (`FileSecrets` reads mode-0600 files;
+  `MemorySecrets` is for tests), lives in a `Secret` whose `Debug` is redacted, and is sent only as
+  the bearer header and the WebSocket auth message. Not in config, errors, the audit log or logs.
+- **Private IP literals only** (default port 8123). No TLS is implemented, so the link is plain
+  HTTP and WebSocket on the owner's own network; if Home Assistant is only reachable over HTTPS,
+  put a local TLS-terminating proxy on loopback, or do not use this driver (known limitation).
+- **Audit.** Every service call, session start, authentication result, loss and discovery goes to
+  an `AuditLog`. Wiring it to the relay's audit log is the integrator's step.
+- `discover()` lists what Home Assistant offers, to choose from; only configured entities are ever
+  written. The `ws` module is a small RFC 6455 codec (no dependency); tested against the RFC's
+  accept-key example and a fake Home Assistant.
+
 ## Anchors
 
 - [@ANCHOR: radioctl:radioctl_station_vbank_new] (radioctl-station) A bank whose lines all start off, with read-back.
@@ -232,3 +259,55 @@ never from the first sight of the channel: a radio found off at start-up can be 
 - [@ANCHOR: radioctl:radioctl_station_actorlink_link_up] (radioctl-station) Up when the actor's link is up and its transport, if it has a status, is connected.
 - [@ANCHOR: radioctl:radioctl_station_actorlink_present] (radioctl-station) No hotplug or ping evidence from a bare actor.
 - [@ANCHOR: radioctl:radioctl_station_actorlink_connect] (radioctl-station) One connection attempt: nothing to do if the link is up; an error (and so the manager's backoff) while the transport is retrying on its own; otherwise a new actor, the unkey pass, and the state the radio reports.
+- [@ANCHOR: radioctl:radioctl_station_ws_sha1] (radioctl-station) SHA-1 of `data`.
+- [@ANCHOR: radioctl:radioctl_station_ws_base64] (radioctl-station) Standard base64 with padding.
+- [@ANCHOR: radioctl:radioctl_station_ws_accept_key] (radioctl-station) The `Sec-WebSocket-Accept` value for a client key.
+- [@ANCHOR: radioctl:radioctl_station_ws_random] (radioctl-station) Bytes that differ from run to run, from the standard library's hasher seeds.
+- [@ANCHOR: radioctl:radioctl_station_ws_client_key] (radioctl-station) A fresh `Sec-WebSocket-Key`.
+- [@ANCHOR: radioctl:radioctl_station_ws_handshake_request] (radioctl-station) The HTTP upgrade request of a client.
+- [@ANCHOR: radioctl:radioctl_station_ws_check_response] (radioctl-station) Checks the server's answer to the upgrade: status 101 and the right accept key.
+- [@ANCHOR: radioctl:radioctl_station_ws_opcode_code] (radioctl-station) The wire value.
+- [@ANCHOR: radioctl:radioctl_station_ws_opcode_from_code] (radioctl-station) The type for a wire value, if it is one this codec knows.
+- [@ANCHOR: radioctl:radioctl_station_ws_encode] (radioctl-station) One final frame.
+- [@ANCHOR: radioctl:radioctl_station_ws_decoder_new] (radioctl-station) A decoder that refuses any message over `max_message` bytes.
+- [@ANCHOR: radioctl:radioctl_station_ws_decoder_push] (radioctl-station) Adds bytes and returns every message completed.
+- [@ANCHOR: radioctl:radioctl_station_ws_decoder_frame] (radioctl-station) The first complete frame in the buffer and how many bytes it used, if there is one.
+- [@ANCHOR: radioctl:radioctl_station_ha_secret_new] (radioctl-station) Wraps a value.
+- [@ANCHOR: radioctl:radioctl_station_ha_secret_expose] (radioctl-station) The text, for the wire only.
+- [@ANCHOR: radioctl:radioctl_station_ha_secret_debug] (radioctl-station) `Secret(<redacted>)`.
+- [@ANCHOR: radioctl:radioctl_station_ha_memsecrets_new] (radioctl-station) An empty store.
+- [@ANCHOR: radioctl:radioctl_station_ha_memsecrets_set] (radioctl-station) Stores a secret under a name.
+- [@ANCHOR: radioctl:radioctl_station_ha_memsecrets_secret] (radioctl-station) The named secret, if stored.
+- [@ANCHOR: radioctl:radioctl_station_ha_filesecrets_new] (radioctl-station) A store over `dir`.
+- [@ANCHOR: radioctl:radioctl_station_ha_filesecrets_secret] (radioctl-station) Reads `<dir>/<name>`.
+- [@ANCHOR: radioctl:radioctl_station_ha_missing_secret] (radioctl-station) `missing_secret` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_ha_memaudit_new] (radioctl-station) An empty log.
+- [@ANCHOR: radioctl:radioctl_station_ha_memaudit_entries] (radioctl-station) Everything recorded, oldest first.
+- [@ANCHOR: radioctl:radioctl_station_ha_memaudit_record] (radioctl-station) Keeps the entry (the most recent 10000).
+- [@ANCHOR: radioctl:radioctl_station_ha_config_new] (radioctl-station) A configuration with five-second request limit, three-second confirmation wait, fifteen second ping and the default backoff.
+- [@ANCHOR: radioctl:radioctl_station_ha_lock] (radioctl-station) `lock` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_ha_unix_now] (radioctl-station) `unix_now` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_ha_driver_err] (radioctl-station) `driver_err` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_ha_parse_address] (radioctl-station) The owner's address: an IP literal with an optional port (default 8123), private only.
+- [@ANCHOR: radioctl:radioctl_station_ha_check_entity] (radioctl-station) Checks one entity id: `domain.object_id` in lower-case letters, digits and underscores, in a domain this driver handles.
+- [@ANCHOR: radioctl:radioctl_station_ha_start] (radioctl-station) Validates the configuration, reads the token from `secrets` and starts the session task on `runtime`.
+- [@ANCHOR: radioctl:radioctl_station_ha_is_synced] (radioctl-station) Whether the session is up and has the full state: the condition for any state to be known.
+- [@ANCHOR: radioctl:radioctl_station_ha_discover] (radioctl-station) The switchable and readable entities Home Assistant has, sorted by id, for the owner to choose from.
+- [@ANCHOR: radioctl:radioctl_station_ha_entity] (radioctl-station) The entity of a line, bounds-checked.
+- [@ANCHOR: radioctl:radioctl_station_ha_drop] (radioctl-station) Ends the session task.
+- [@ANCHOR: radioctl:radioctl_station_ha_assurance] (radioctl-station) The lowest level: another system sits between the station and the device.
+- [@ANCHOR: radioctl:radioctl_station_ha_write_line] (radioctl-station) Calls `turn_on` or `turn_off` for the line's entity.
+- [@ANCHOR: radioctl:radioctl_station_ha_read_line] (radioctl-station) The entity's state from the event cache: `on` or `off`.
+- [@ANCHOR: radioctl:radioctl_station_ha_can_read_back] (radioctl-station) Home Assistant reports entity state.
+- [@ANCHOR: radioctl:radioctl_station_ha_record] (radioctl-station) Writes one audit entry.
+- [@ANCHOR: radioctl:radioctl_station_ha_state_of] (radioctl-station) The state of an entity as `on` (true) or `off` (false), or why it is unknown.
+- [@ANCHOR: radioctl:radioctl_station_ha_post] (radioctl-station) One HTTP/1.0 POST with the bearer token; success is a 200 or 201.
+- [@ANCHOR: radioctl:radioctl_station_ha_apply_state] (radioctl-station) Records one entity's state (a `state_changed` event or a snapshot entry).
+- [@ANCHOR: radioctl:radioctl_station_ha_set_synced] (radioctl-station) Marks the cache usable, or throws it away when the session is lost.
+- [@ANCHOR: radioctl:radioctl_station_ha_run_sessions] (radioctl-station) The session task: connect, authenticate, follow events, and again after a backoff.
+- [@ANCHOR: radioctl:radioctl_station_ha_read_head] (radioctl-station) Reads an HTTP response head (to the blank line), returning it and any bytes after it.
+- [@ANCHOR: radioctl:radioctl_station_ha_send_json] (radioctl-station) Sends one JSON text frame.
+- [@ANCHOR: radioctl:radioctl_station_ha_session] (radioctl-station) One WebSocket session until it fails.
+- [@ANCHOR: radioctl:radioctl_station_driver_assurance] (radioctl-station) The assurance level of channels on a driver; host-supervised unless the driver says otherwise.
+- [@ANCHOR: radioctl:radioctl_station_board_assurance] (radioctl-station) The assurance level of a channel's driver.
+- [@ANCHOR: radioctl:radioctl_station_station_power_assurance] (radioctl-station) The assurance level of the channel that powers a device.

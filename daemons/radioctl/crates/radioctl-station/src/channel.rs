@@ -22,8 +22,29 @@ use tokio::time::{sleep, Instant};
 /// A boxed future, so drivers can be used as trait objects.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+/// How far the station can rely on a driver to take a device to its safe state, and how directly.
+/// Ordered from least to most.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Assurance {
+    /// The command reaches the device through another system that can be down, slow or stale
+    /// (Home Assistant). Never a PTT path, and an amplifier behind it needs an independent stop.
+    Mediated,
+    /// The host talks to the device directly and supervises it, but nothing in the device stops
+    /// it if the host dies (a relay board, a Shelly without its auto-off timer).
+    HostSupervised,
+    /// The device itself has a dead-man that acts when the host goes silent (the FX2 firmware).
+    HardwareDeadMan,
+}
+
 /// A bank of numbered binary lines.
 pub trait ChannelDriver: Send + Sync {
+    // [@ANCHOR: radioctl_station_driver_assurance]
+    /// The assurance level of channels on this driver; host-supervised unless the driver says
+    /// otherwise.
+    fn assurance(&self) -> Assurance {
+        Assurance::HostSupervised
+    }
+
     /// Drives one line. Success means the device accepted the command, not that the contact moved.
     fn write_line(&self, line: u32, on: bool) -> BoxFuture<'_, Result<(), StationError>>;
     /// Reads one line (the device's own report). Fails for a driver that cannot read back.
@@ -368,6 +389,14 @@ impl Switchboard {
         if self.channels.contains_key(&def.id) {
             return Err(config(format!("channel {} added twice", def.id.0)));
         }
+        if matches!(def.kind, ChannelKind::Ptt { .. }) && driver.assurance() == Assurance::Mediated
+        {
+            return Err(config(format!(
+                "channel {} is a ptt channel on a driver that goes through another system; \
+                 nothing time-critical may",
+                def.id.0
+            )));
+        }
         self.channels.insert(
             def.id.clone(),
             Chan {
@@ -378,6 +407,12 @@ impl Switchboard {
             },
         );
         Ok(())
+    }
+
+    // [@ANCHOR: radioctl_station_board_assurance]
+    /// The assurance level of a channel's driver.
+    pub fn assurance(&self, id: &ChannelId) -> Result<Assurance, StationError> {
+        Ok(self.chan(id)?.driver.assurance())
     }
 
     // [@ANCHOR: radioctl_station_board_subscribe]
