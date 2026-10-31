@@ -39,6 +39,7 @@ daemons/radioctl/
   docs/DESIGN.md          design note (ADR style)
   docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md)
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
+  tools/rig_support_matrix.py   writes docs/RIG_SUPPORT.md (Hamlib models vs. descriptions vs. verification)
   data/hamlib-<version>/  generated capability_matrix.json and HAMLIB_DIFFERENCES.md
 ```
 
@@ -206,6 +207,13 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - No mode (placeholder code only) and no preamplifier.
 - PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate, for a bounded lease at drive zero by default.
 - All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.
+
+## Rig coverage and volunteer testing
+
+- radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today none is hardware-verified.
+- The plan, in four tiers with counts and source rules, is [docs/RIG_COVERAGE_PLAN.md](docs/RIG_COVERAGE_PLAN.md).
+- To test your own radio, run the read-only `cargo run --example rig_selftest -- --list` and then `rig_selftest RIG_ID TARGET`; it never transmits, uploads nothing and writes a report you file by hand. See [docs/VOLUNTEER_TESTING.md](docs/VOLUNTEER_TESTING.md).
+- Hardware reports are recorded in `rigs/reports/verified.toml`; the verification state itself stays in each rig file's facts.
 
 ## Tier 1 capability matrix
 
@@ -910,6 +918,31 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_rigs_boxed_encode] (radioctld) See the source.
 - [@ANCHOR: radioctl:radioctld_rigs_boxed_feed] (radioctld) See the source.
 - [@ANCHOR: radioctl:radioctld_rigs_load_description] (radioctld) Reads and validates a rig description file.
+- [@ANCHOR: radioctl:radioctld_selftest_is_read_only] (radioctld) True only for operations that read; the self-test refuses anything else.
+- [@ANCHOR: radioctl:radioctld_selftest_plan_checks] (radioctld) The read-only checks for what a description claims, in a fixed order.
+- [@ANCHOR: radioctl:radioctld_selftest_redact_target] (radioctld) The self-test target with a USB serial number removed.
+- [@ANCHOR: radioctl:radioctld_selftest_utc_stamp] (radioctld) `YYYY-MM-DD HH:MM:SS UTC` for a Unix time.
+- [@ANCHOR: radioctl:radioctld_selftest_render_report] (radioctld) The plain-text self-test report: header, checks, summary, raw wire log.
+- [@ANCHOR: radioctl:radioctld_selftest_wire_tap] (radioctld) A tap that writes every byte in both directions as hexadecimal lines.
+- [@ANCHOR: radioctl:radioctld_selftest_any_engine_encode] (radioctld) The self-test's boxed engine: encode.
+- [@ANCHOR: radioctl:radioctld_selftest_any_engine_feed] (radioctld) The self-test's boxed engine: feed.
+- [@ANCHOR: radioctl:radioctld_selftest_parse_target] (radioctld) `virtual`, a serial path, or `usb:VID:PID[:SERIAL]` as a port target.
+- [@ANCHOR: radioctl:radioctld_selftest_open] (radioctld) Opens the rig for the self-test with the transmit gate closed.
+- [@ANCHOR: radioctl:radioctld_selftest_run_checks] (radioctld) Runs the planned checks; refuses any operation that is not read-only.
+- [@ANCHOR: radioctl:radioctld_candidates_highest_state] (radioctld) The highest verified state among a description's facts.
+- [@ANCHOR: radioctl:radioctld_candidates_load_summaries] (radioctld) Reads every description in a directory for listings.
+- [@ANCHOR: radioctl:radioctld_candidates_squash] (radioctld) Letters and digits only, lower case, for comparing model names.
+- [@ANCHOR: radioctl:radioctld_candidates_for_product] (radioctld) The descriptions whose model name a USB product string contains.
+- [@ANCHOR: radioctl:radioctld_candidates_render] (radioctld) The `rig_selftest --list` text: ports, evidence, descriptions; never a silent pick.
+- [@ANCHOR: radioctl:radioctl_support_load_descriptions] (tools) Reads rigs/*.toml: name, family, highest verified state, hardware facts.
+- [@ANCHOR: radioctl:radioctl_support_load_reports] (tools) The [[report]] entries of rigs/reports/verified.toml.
+- [@ANCHOR: radioctl:radioctl_support_check_consistency] (tools) Problems that would make RIG_SUPPORT.md lie: map, facts and reports must agree.
+- [@ANCHOR: radioctl:radioctl_support_classify] (tools) Family, tier and engine for a Hamlib model.
+- [@ANCHOR: radioctl:radioctl_support_status] (tools) described / engine only / needs variant / needs engine / odd device.
+- [@ANCHOR: radioctl:radioctl_support_build_rows] (tools) One row per Hamlib model.
+- [@ANCHOR: radioctl:radioctl_support_render] (tools) The RIG_SUPPORT.md text.
+- [@ANCHOR: radioctl:radioctl_support_generate] (tools) The Markdown for the repository as it is now.
+- [@ANCHOR: radioctl:radioctl_support_main] (tools) Writes docs/RIG_SUPPORT.md or checks it with --check.
 - [@ANCHOR: radioctl:radioctld_rigs_service_config] (radioctld) The per-rig service settings from the configuration.
 - [@ANCHOR: radioctl:radioctld_rigs_build_rig] (radioctld) Brings up one rig on `runtime`: engine, transport, actor, service. The transmit gate is
 - [@ANCHOR: radioctl:radioctld_rigs_serial_config] (radioctld) The serial configuration of a rig at a rate: 8N1, the configured line handling, one open attempt; the baud probe and the real link open the port the same way.

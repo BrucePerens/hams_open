@@ -43,13 +43,14 @@ A feature is called implemented only if this manual's author found it in the cod
 | [14. The station: power, switches, rotators, amplifiers](14-station.md) | use `radioctl-station`: the radio manager over real actors, Home Assistant, amplifier channels, rotators |
 | [Appendix A. Capability matrix](A-capability-matrix.md) | summary of the generated Hamlib 4.6.2 matrix and the radioctl rigs |
 | [Appendix B. Glossary](B-glossary.md) | terms and abbreviations |
+| [Rig support list](../RIG_SUPPORT.md), [coverage plan](../RIG_COVERAGE_PLAN.md), [volunteer testing](../VOLUNTEER_TESTING.md) | see which of Hamlib's 313 models have a description and which are verified, what is planned, and how to test your radio with the read-only `rig_selftest` |
 | [Appendix C. radioctld command reference](C-radioctld-command-reference.md) | every command, response format and error code |
 
 ## Which chapters for which goal
 
 - Use radioctl as a library in an application: 1, 2, 3, 4, 5, 10.
 - Run `radioctld` and the splitter for existing ham software (WSJT-X, fldigi, loggers): 2, 8, 9, 10, appendix C.
-- Add a radio and contribute it: 6, 7, 11, 12.
+- Add a radio and contribute it: 6, 7, 11, 12, and the volunteer testing guide.
 - Understand the design and the safety model: 1, 3, 10, 12, 13.
 
 ## Code in this manual is checked

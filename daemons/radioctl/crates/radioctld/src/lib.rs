@@ -16,6 +16,7 @@
 //!   the description's travel is refused before anything is written.
 
 pub mod access;
+pub mod candidates;
 pub mod caps;
 pub mod command;
 pub mod config;
@@ -25,5 +26,6 @@ pub mod reply;
 pub mod rigs;
 pub mod rotators;
 pub mod rotctl;
+pub mod selftest;
 pub mod server;
 pub mod service;

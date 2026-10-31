@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+# Copyright © Bruce Perens K6BP. All Rights Reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Writes docs/RIG_SUPPORT.md: every Hamlib model and where radioctl stands on it.
+
+Inputs, all in this repository:
+
+* data/hamlib-<version>/capability_matrix.json (program output of `rigctl`, see
+  hamlib_caps_matrix.py): manufacturer, model, Hamlib id and the protocol family hint;
+* rigs/*.toml: the rig descriptions. The highest `verified` state among a description's facts is
+  its verification level; the state itself is never stored anywhere else;
+* rigs/reports/verified.toml: human-edited reports of hardware tests (who reported). Its entries are
+  checked against the facts so the two cannot disagree.
+
+Mapping from a description to its Hamlib model ids is the explicit table HAMLIB_IDS below: no fuzzy
+name matching, so a new description fails the test until its row is added.
+
+Usage:
+    rig_support_matrix.py            write docs/RIG_SUPPORT.md
+    rig_support_matrix.py --check    exit 1 if the committed file differs from a fresh render
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tomllib
+from collections import Counter
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+HAMLIB_DIR = ROOT / "data" / "hamlib-4.6.2"
+RIGS_DIR = ROOT / "rigs"
+OUT_PATH = ROOT / "docs" / "RIG_SUPPORT.md"
+
+LEVELS = ["unverified", "manual-checked", "transcript-checked", "hardware-verified"]
+
+# Description id -> Hamlib model ids it covers. Descriptions with no Hamlib model use [].
+HAMLIB_IDS: dict[str, list[int]] = {
+    "anan-10": [],
+    "anan-100": [],
+    "elecraft-kx3": [2045],
+    "flex-6300": [2036],
+    "flex-6400": [2036],
+    "flex-6600": [2036],
+    "flex-6700": [2036],
+    "icom-ic-705": [3085],
+    "icom-ic-7300": [3073],
+    "icom-ic-7610": [3078],
+    "icom-ic-9700": [3081],
+    "kenwood-ts-2000": [2014],
+    "kenwood-ts-590s": [2031],
+    "kenwood-ts-590sg": [2037],
+    "kenwood-ts-890s": [2041],
+    "xiegu-g90": [3088],
+    "xiegu-x108g": [3076],
+    "xiegu-x5105": [3089],
+    "xiegu-x6100": [3087],
+    "xiegu-x6200": [3091],
+    "yaesu-ft-817": [1020],
+    "yaesu-ft-818": [1041],
+    "yaesu-ft-857d": [1022],
+    "yaesu-ft-897d": [1043],
+    "yaesu-ft-991a": [1035],
+    "yaesu-ftdx10": [1042],
+    "yaesu-ftdx101d": [1040],
+}
+
+# Hamlib family hint (derived.family) -> (tier, radioctl engine name or None).
+FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
+    "icom_civ": ("A", "civ"),
+    "kenwood_ascii": ("A", "kenwood"),
+    "yaesu_newcat_ascii": ("A", "yaesu"),
+    "elecraft_ascii": ("A", "elecraft"),
+    "flexradio_network": ("A", "flex"),
+    "yaesu_legacy": ("B", "yaesu_legacy"),
+    "kenwood_hh_ascii": ("B", None),
+    "icom_pcr_ascii": ("C", None),
+    "icom_marine": ("C", None),
+    "yaesu_other": ("C", None),
+}
+
+# Manufacturers whose models (outside the families above) need a new engine: Tier C. Every other
+# model in the remaining families is an odd device (SDR board, network driver, parallel, dummy): Tier D.
+TIER_C_MAKERS = {
+    "AOR", "Alinco", "Barrett", "CODAN", "Drake", "Guohe", "Hilberling", "JRC", "Kachina",
+    "Lab599", "Lowe", "Micom", "Optoelectronics", "Racal", "Radio Shack", "Rhode&Schwarz",
+    "Rohde&Schwarz", "Skanti", "Ten-Tec", "Uniden", "Watkins-Johnson", "Winradio",
+}
+
+TIER_TITLES = {
+    "A": "data only on an existing engine",
+    "B": "variants of an existing engine",
+    "C": "new engine",
+    "D": "odd device",
+}
+STATUS_ORDER = ["described", "engine only", "needs variant", "needs engine", "odd device"]
+
+
+# [@ANCHOR: radioctl_support_load_descriptions]
+def load_descriptions(rigs_dir: Path = RIGS_DIR) -> dict[str, dict]:
+    """Reads rigs/*.toml: id, name, family, highest verified state and hardware facts."""
+    found = {}
+    for path in sorted(rigs_dir.glob("*.toml")):
+        data = tomllib.loads(path.read_text())
+        states = [f["verified"]["state"] for f in data.get("facts", [])]
+        top = max(states, key=LEVELS.index, default="unverified")
+        hardware = [f["verified"] for f in data.get("facts", [])
+                    if f["verified"]["state"] == "hardware-verified"]
+        found[data["rig"]["id"]] = {
+            "name": data["rig"]["name"],
+            "family": data["rig"]["family"],
+            "highest": top,
+            "hardware": hardware,
+        }
+    return found
+
+
+# [@ANCHOR: radioctl_support_load_reports]
+def load_reports(path: Path = RIGS_DIR / "reports" / "verified.toml") -> list[dict]:
+    """The [[report]] entries of rigs/reports/verified.toml."""
+    return tomllib.loads(path.read_text()).get("report", [])
+
+
+# [@ANCHOR: radioctl_support_check_consistency]
+def check_consistency(descriptions: dict[str, dict], reports: list[dict], models: list[dict]) -> list[str]:
+    """Problems that would make the table lie (empty when verified.toml, facts and map agree)."""
+    problems = []
+    ids = {m["rig_list"]["model_id"] for m in models}
+    for rig_id in descriptions:
+        if rig_id not in HAMLIB_IDS:
+            problems.append(f"{rig_id}: add it to HAMLIB_IDS (use [] if Hamlib has no such model)")
+    for rig_id, hamlib in HAMLIB_IDS.items():
+        if rig_id not in descriptions:
+            problems.append(f"HAMLIB_IDS names {rig_id}, which has no rigs/{rig_id}.toml")
+        problems += [f"{rig_id}: Hamlib id {i} does not exist" for i in hamlib if i not in ids]
+    reported = {r.get("rig") for r in reports}
+    for r in reports:
+        for key in ("rig", "radio", "firmware", "date", "reporter", "issue"):
+            if not r.get(key):
+                problems.append(f"verified.toml: report for {r.get('rig')!r} lacks {key}")
+        if r.get("rig") not in descriptions:
+            problems.append(f"verified.toml: {r.get('rig')!r} has no description")
+        elif not descriptions[r["rig"]]["hardware"]:
+            problems.append(f"verified.toml: {r['rig']} has no hardware-verified fact")
+    for rig_id, d in descriptions.items():
+        if d["hardware"] and rig_id not in reported:
+            problems.append(f"{rig_id}: hardware-verified facts but no [[report]] in verified.toml")
+    return problems
+
+
+# [@ANCHOR: radioctl_support_classify]
+def classify(model: dict) -> tuple[str, str, str | None]:
+    """(family, tier, engine) for a Hamlib model, by this tool's own rules (see FAMILY_TIERS)."""
+    family = (model.get("derived") or {}).get("family") or "unclassified"
+    if family in FAMILY_TIERS:
+        tier, engine = FAMILY_TIERS[family]
+        return family, tier, engine
+    if model["rig_list"]["mfg"] in TIER_C_MAKERS:
+        return family, "C", None
+    return family, "D", None
+
+
+# [@ANCHOR: radioctl_support_status]
+def status_of(tier: str, engine: str | None, described: bool) -> str:
+    """described / engine only / needs variant / needs engine / odd device."""
+    if described:
+        return "described"
+    return {"A": "engine only", "B": "needs variant", "C": "needs engine", "D": "odd device"}[tier]
+
+
+# [@ANCHOR: radioctl_support_build_rows]
+def build_rows(models: list[dict], descriptions: dict[str, dict], reports: list[dict]) -> list[dict]:
+    """One row per Hamlib model, sorted by manufacturer then model."""
+    by_model: dict[int, list[str]] = {}
+    for rig_id, hamlib in HAMLIB_IDS.items():
+        for i in hamlib:
+            by_model.setdefault(i, []).append(rig_id)
+    by_rig = {r["rig"]: r for r in reports}
+    rows = []
+    for m in models:
+        info = m["rig_list"]
+        family, tier, engine = classify(m)
+        rig_ids = sorted(by_model.get(info["model_id"], []))
+        top = max((descriptions[r]["highest"] for r in rig_ids), key=LEVELS.index, default="unverified")
+        who = []
+        for r in rig_ids:
+            if r in by_rig:
+                who.append(f"{by_rig[r]['reporter']}, {by_rig[r]['date']}")
+        rows.append({
+            "id": info["model_id"], "mfg": info["mfg"], "model": info["model"], "family": family,
+            "tier": tier, "engine": engine, "descriptions": rig_ids, "level": top,
+            "who": "; ".join(who) or "-", "status": status_of(tier, engine, bool(rig_ids)),
+        })
+    rows.sort(key=lambda r: (r["mfg"].lower(), r["model"].lower(), r["id"]))
+    return rows
+
+
+def cell(text: object) -> str:
+    return str(text).replace("|", "\\|") or "-"
+
+
+# [@ANCHOR: radioctl_support_render]
+def render(rows: list[dict], descriptions: dict[str, dict]) -> str:
+    """The Markdown file."""
+    out = [
+        "# Rig support matrix",
+        "",
+        "Generated by `tools/rig_support_matrix.py` from `data/hamlib-4.6.2/capability_matrix.json`, `rigs/*.toml` and "
+        "`rigs/reports/verified.toml`. Do not edit by hand: `python3 tools/rig_support_matrix.py` rewrites it and "
+        "`python3 tools/rig_support_matrix.py --check` (and the unit test) fail when it is stale.",
+        "",
+        "Policy (2026-10-31): radioctl implements every model Hamlib lists, keeps this list of which ones a volunteer has "
+        "actually verified, and makes its best effort to work out of the box. Every level below `hardware-verified` "
+        "means no one has confirmed the description on a radio. The plan is [RIG_COVERAGE_PLAN.md](RIG_COVERAGE_PLAN.md); "
+        "to help test, see [VOLUNTEER_TESTING.md](VOLUNTEER_TESTING.md).",
+        "",
+        "Columns: **Tier** and **Family** are this tool's planning hints (not a statement of a radio's wire protocol); "
+        "**Engine** is the radioctl protocol engine for the family, `-` when none exists; **Verification** is the highest "
+        "`verified` state among the description's facts; **Verified by** comes from `rigs/reports/verified.toml`. "
+        "Status: `described` = a `rigs/*.toml` exists; `engine only` = the engine exists, data missing; "
+        "`needs variant` = an existing engine needs model variants; `needs engine` = a new engine; "
+        "`odd device` = SDR board, network driver, parallel or dummy.",
+        "",
+    ]
+    total = len(rows)
+    described = sum(1 for r in rows if r["descriptions"])
+    hw = sum(1 for r in rows if r["level"] == "hardware-verified")
+    out += [
+        "## Counts",
+        "",
+        f"- Hamlib 4.6.2 models: **{total}**",
+        f"- With a radioctl description: **{described}** ({len(descriptions)} description files)",
+        f"- Hardware-verified: **{hw}**",
+        "",
+        "| Status | Models |",
+        "|---|---:|",
+    ]
+    status_counts = Counter(r["status"] for r in rows)
+    out += [f"| {s} | {status_counts.get(s, 0)} |" for s in STATUS_ORDER]
+    out += ["", "| Verification level | Models |", "|---|---:|"]
+    level_counts = Counter(r["level"] for r in rows)
+    out += [f"| {lv} | {level_counts.get(lv, 0)} |" for lv in LEVELS]
+    out += ["", "### By tier", "", "| Tier | Meaning | Models | Described |", "|---|---|---:|---:|"]
+    for tier in "ABCD":
+        sel = [r for r in rows if r["tier"] == tier]
+        out.append(f"| {tier} | {TIER_TITLES[tier]} | {len(sel)} | {sum(1 for r in sel if r['descriptions'])} |")
+    out += ["", "### By family", "", "| Family | Tier | Engine | Models | Described | Hardware-verified |",
+            "|---|---|---|---:|---:|---:|"]
+    families = sorted({r["family"] for r in rows}, key=lambda f: (-sum(1 for r in rows if r["family"] == f), f))
+    for fam in families:
+        sel = [r for r in rows if r["family"] == fam]
+        tiers = "/".join(sorted({r["tier"] for r in sel}))
+        engine = next((r["engine"] for r in sel if r["engine"]), None)
+        out.append(
+            f"| {fam} | {tiers} | {engine or '-'} | {len(sel)} | {sum(1 for r in sel if r['descriptions'])} | "
+            f"{sum(1 for r in sel if r['level'] == 'hardware-verified')} |"
+        )
+    out += ["", "## Descriptions without a Hamlib model", ""]
+    mapped = {rid for r in rows for rid in r["descriptions"]}
+    orphans = sorted(set(descriptions) - mapped)
+    out += [f"- `{rid}` ({descriptions[rid]['name']}): highest level {descriptions[rid]['highest']}" for rid in orphans] or ["- none"]
+    out += ["", "## Every model", "",
+            "| Hamlib id | Manufacturer | Model | Tier | Family | Engine | Description | Verification | Verified by | Status |",
+            "|---:|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        desc = ", ".join(f"`{d}`" for d in r["descriptions"])
+        out.append("| " + " | ".join(cell(x) for x in [
+            r["id"], r["mfg"], r["model"], r["tier"], r["family"], r["engine"] or "-", desc or "-",
+            r["level"], r["who"], r["status"]]) + " |")
+    return "\n".join(out) + "\n"
+
+
+# [@ANCHOR: radioctl_support_generate]
+def generate() -> str:
+    """The Markdown for the repository as it is now; raises ValueError listing any inconsistency."""
+    models = json.loads((HAMLIB_DIR / "capability_matrix.json").read_text())["models"]
+    descriptions = load_descriptions()
+    reports = load_reports()
+    problems = check_consistency(descriptions, reports, models)
+    if problems:
+        raise ValueError("\n".join(problems))
+    return render(build_rows(models, descriptions, reports), descriptions)
+
+
+# [@ANCHOR: radioctl_support_main]
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--check", action="store_true", help="exit 1 if docs/RIG_SUPPORT.md is stale")
+    args = parser.parse_args(argv)
+    try:
+        text = generate()
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    if args.check:
+        if not OUT_PATH.exists() or OUT_PATH.read_text() != text:
+            print("docs/RIG_SUPPORT.md is stale: run python3 tools/rig_support_matrix.py", file=sys.stderr)
+            return 1
+        return 0
+    OUT_PATH.write_text(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
