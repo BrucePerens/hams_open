@@ -117,6 +117,8 @@ fn module(
 }
 
 // Tests [@ANCHOR: radioctl_station_modbus_relay_new]
+// Tests [@ANCHOR: radioctl_station_modbus_relay_coil]
+// Tests [@ANCHOR: radioctl_station_modbus_relay_read_frame]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_transact]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_write_all]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_write_line]

@@ -53,6 +53,7 @@ blocked and needs no confirmation.
 - [@ANCHOR: radioctl:radioctl_station_http_parse_address] (radioctl-station) The address the owner typed: an IP literal, optionally `:port` (default 80), private only.
 - [@ANCHOR: radioctl:radioctl_station_http_new] (radioctl-station) A driver for `relays` relays (1 to 32) at `address`. Nothing is sent.
 - [@ANCHOR: radioctl:radioctl_station_http_get] (radioctl-station) One HTTP/1.0 GET; the body of a 200 reply.
+- [@ANCHOR: radioctl:radioctl_station_http_check] (radioctl-station) Refuses a relay number past the bank.
 - [@ANCHOR: radioctl:radioctl_station_http_write_line] (radioctl-station) Switches one relay.
 - [@ANCHOR: radioctl:radioctl_station_http_read_line] (radioctl-station) Reads one relay's state from the device.
 - [@ANCHOR: radioctl:radioctl_station_http_can_read_back] (radioctl-station) Both families report their relay state.
@@ -60,6 +61,7 @@ blocked and needs no confirmation.
 - [@ANCHOR: radioctl:radioctl_station_modbus_from_toml] (radioctl-station) Parses a board description.
 - [@ANCHOR: radioctl:radioctl_station_modbus_lrc] (radioctl-station) The Modbus ASCII checksum: the two's complement of the byte sum, low byte.
 - [@ANCHOR: radioctl:radioctl_station_modbus_crc16] (radioctl-station) The Modbus RTU CRC-16 (polynomial 0xA001 reflected, start 0xFFFF).
+- [@ANCHOR: radioctl:radioctl_station_modbus_hex_val] (radioctl-station) One hex digit's value.
 - [@ANCHOR: radioctl:radioctl_station_modbus_encode_ascii] (radioctl-station) An ASCII frame: `:`, slave and PDU as upper-case hex, the LRC, CR LF.
 - [@ANCHOR: radioctl:radioctl_station_modbus_decode_ascii] (radioctl-station) Checks an ASCII frame (colon, even hex digits, CR LF, LRC) and returns slave and PDU.
 - [@ANCHOR: radioctl:radioctl_station_modbus_encode_rtu] (radioctl-station) An RTU frame: slave, PDU, CRC-16 low byte first.
@@ -69,6 +71,8 @@ blocked and needs no confirmation.
 - [@ANCHOR: radioctl:radioctl_station_modbus_pdu_read_coils] (radioctl-station) Function 1: read `count` coils from `start`.
 - [@ANCHOR: radioctl:radioctl_station_modbus_parse_reply] (radioctl-station) Checks a reply PDU against the request PDU it answers. Fails closed: an exception code, a
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_new] (radioctl-station) A driver for `board` over `io`. Nothing is sent.
+- [@ANCHOR: radioctl:radioctl_station_modbus_relay_coil] (radioctl-station) The coil address of a line, bounds-checked.
+- [@ANCHOR: radioctl:radioctl_station_modbus_relay_read_frame] (radioctl-station) Reads one reply frame: to CR LF (ASCII) or to an idle gap (RTU), bounded in size and time.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_transact] (radioctl-station) Sends one request PDU and returns the validated reply.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_write_all] (radioctl-station) Function 15 over every coil: all on or all off in one frame.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_write_line] (radioctl-station) Function 5 on the line's coil.

@@ -128,6 +128,8 @@ fn driver_err(m: impl Into<String>) -> StationError {
     StationError::new(StationErrorKind::Driver, m)
 }
 
+// [@ANCHOR: radioctl_station_modbus_hex_val]
+/// One hex digit's value.
 fn hex_val(c: u8) -> Option<u8> {
     match c {
         b'0'..=b'9' => Some(c - b'0'),
@@ -298,6 +300,8 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ModbusRelay<T> {
         }
     }
 
+    // [@ANCHOR: radioctl_station_modbus_relay_coil]
+    /// The coil address of a line, bounds-checked.
     fn coil(&self, line: u32) -> Result<u16, StationError> {
         if line >= u32::from(self.board.coils) {
             return Err(StationError::new(
@@ -308,6 +312,8 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ModbusRelay<T> {
         Ok(self.board.coil_base + line as u16)
     }
 
+    // [@ANCHOR: radioctl_station_modbus_relay_read_frame]
+    /// Reads one reply frame: to CR LF (ASCII) or to an idle gap (RTU), bounded in size and time.
     async fn read_frame(&self, io: &mut T) -> Result<Vec<u8>, StationError> {
         let reply_wait = Duration::from_millis(self.board.reply_timeout_ms);
         let gap = Duration::from_millis(self.board.inter_frame_ms.max(1));
@@ -361,14 +367,14 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ModbusRelay<T> {
             Framing::Rtu => encode_rtu(self.board.slave, request),
         };
         let mut io = self.io.lock().await;
-        sleep(Duration::from_millis(self.board.inter_frame_ms)).await;
+        sleep(Duration::from_millis(self.board.inter_frame_ms)).await; // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
         io.write_all(&frame)
-            .await
+            .await // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
             .map_err(|e| driver_err(format!("modbus: write failed: {e}")))?;
         io.flush()
-            .await
+            .await // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
             .map_err(|e| driver_err(format!("modbus: flush failed: {e}")))?;
-        let raw = self.read_frame(&mut io).await?;
+        let raw = self.read_frame(&mut io).await?; // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
         let (slave, pdu) = match self.board.framing {
             Framing::Ascii => decode_ascii(&raw)?,
             Framing::Rtu => decode_rtu(&raw)?,
@@ -468,6 +474,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_modbus_decode_ascii]
+    // Tests [@ANCHOR: radioctl_station_modbus_hex_val]
     #[test]
     fn ascii_frames_are_checked() {
         assert_eq!(

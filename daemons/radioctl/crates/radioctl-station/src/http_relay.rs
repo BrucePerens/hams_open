@@ -135,6 +135,8 @@ impl HttpRelay {
         Ok(body.to_string())
     }
 
+    // [@ANCHOR: radioctl_station_http_check]
+    /// Refuses a relay number past the bank.
     fn check(&self, line: u32) -> Result<(), StationError> {
         if line >= self.relays {
             return Err(StationError::new(
@@ -308,6 +310,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_http_read_line]
     // Tests [@ANCHOR: radioctl_station_http_can_read_back]
     // Tests [@ANCHOR: radioctl_station_http_get]
+    // Tests [@ANCHOR: radioctl_station_http_check]
     #[tokio::test]
     async fn shelly_and_tasmota_write_and_read_back() {
         for tasmota in [false, true] {
