@@ -4,6 +4,7 @@
 //! costs nothing and the assertions about delay are exact.
 #![allow(clippy::expect_used, clippy::panic)]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc as std_mpsc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -435,6 +436,74 @@ async fn a_reply_that_never_comes_stops_being_expected_and_does_not_eat_the_next
     let started = Instant::now();
     rig.set_ptt(false).await.expect("unkeyed");
     assert!(started.elapsed() < Duration::from_millis(100));
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_poll_reserved]
+// Tests [@ANCHOR: radioctl_core_actor_poll_entry]
+// Tests [@ANCHOR: radioctl_core_poll_take_starved]
+#[tokio::test(start_paused = true)]
+async fn the_transmit_state_is_still_polled_under_a_flood_of_client_commands() {
+    let options = RigOptions {
+        poll: PollConfig {
+            ptt_reserve: Duration::from_secs(2),
+            ..PollConfig::default()
+        },
+        ..RigOptions::default()
+    };
+    // The radio answers in a millisecond (so that paused time advances); four clients reading as
+    // fast as the actor answers keep the queue from ever being empty, so ordinary polling, which
+    // runs only when nothing is queued, never gets a turn.
+    let (rig, control) = civ(options, Duration::from_millis(1));
+    let mut events = rig.events();
+    let stop = Arc::new(AtomicBool::new(false));
+    let flooders: Vec<_> = (0..4)
+        .map(|_| {
+            let rig = rig.clone();
+            let stop = Arc::clone(&stop);
+            tokio::spawn(async move {
+                while !stop.load(Ordering::Relaxed) {
+                    let _ = rig.frequency(Vfo::A, Freshness::Fresh).await;
+                }
+            })
+        })
+        .collect();
+    sleep(Duration::from_millis(500)).await;
+    let polls_before = rig.stats().polls;
+    // The operator presses the microphone PTT. Nobody asks the actor about PTT; it must find out.
+    control.front_panel(PanelChange::Ptt(true));
+    let seen = timeout(Duration::from_secs(3), async {
+        loop {
+            if let Some(event) = events.next().await {
+                if event.source == Source::Poll
+                    && event
+                        .changes
+                        .iter()
+                        .any(|c| c.new == Observation::Ptt(true))
+                {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        }
+    })
+    .await;
+    stop.store(true, Ordering::Relaxed);
+    for flooder in flooders {
+        let _ = flooder.await;
+    }
+    assert_eq!(
+        seen,
+        Ok(true),
+        "the keyed radio was never noticed under load"
+    );
+    let stats = rig.stats();
+    assert!(stats.reserved_polls >= 1, "{stats:?}");
+    assert!(stats.polls > polls_before);
+    assert_eq!(
+        rig.cached(Field::Ptt).map(|c| c.value),
+        Some(Observation::Ptt(true))
+    );
 }
 
 fn alarms(events: &[RigEvent]) -> Vec<(Source, Alarm)> {

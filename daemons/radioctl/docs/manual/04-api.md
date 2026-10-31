@@ -51,10 +51,12 @@ pub struct PollConfig {
     pub fast_max: Duration,
     pub slow_min: Duration,
     pub slow_max: Duration,
+    pub ptt_reserve: Duration,
 }
 ```
 
-Defaults: queue of 64, 2 second deadline, polling on (fast fields 250 ms to 2 s, meters 1 s to 5 s),
+Defaults: queue of 64, 2 second deadline, polling on (fast fields 250 ms to 2 s, meters 1 s to 5 s, the
+PTT state at least every 2 s whatever the traffic),
 a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, a 180 second transmit limit (`DEFAULT_MAX_TRANSMIT`), no heartbeat, no callback, no link watch (`link_watch`: a serial link's `watch()`, chapter [5](05-transports.md), so the actor follows the port across a reconnect and unkeys when it is back).
 
 ## Rig handles
@@ -324,7 +326,7 @@ emergency of its own.
 ## Polling
 
 The actor polls so that a knob turned at the radio shows up as an event. Polling is the lowest
-priority work: it runs only when no command is waiting.
+priority work: it runs only when no command is waiting, with one reserved share (below).
 
 - **What is polled:** VFO A's frequency, VFO B's frequency (rigs with `second-vfo`), the split state
   (rigs with `split`), the mode and the PTT state (the fast group) and the S-meter and power meter (the
@@ -335,6 +337,12 @@ priority work: it runs only when no command is waiting.
 - **Adaptive intervals:** a change resets a field to its fastest interval; no change doubles it up to
   the maximum; a failed poll jumps to the maximum.
 - **While the rig transmits** only the PTT state and the power meter are polled.
+- **The PTT state has a reserved share.** A client issuing back-to-back commands would otherwise keep
+  polling from ever running, and a radio that unkeyed or keyed on its own (the microphone PTT, a CW
+  key, its own time-out) would go unnoticed for as long as the traffic lasts, with the watchdog and the
+  cache wrong meanwhile. So if the PTT state has not been read for `PollConfig::ptt_reserve` (2 s by
+  default) the actor reads it before the next queued command (`RigStats::reserved_polls`). Test:
+  `the_transmit_state_is_still_polled_under_a_flood_of_client_commands`.
 - **Transceive:** once the radio has reported something unsolicited, every field polls at its
   maximum interval. Turning transceive on is the caller's job (`Op::SetTransceive(true)`), and for
   CI-V radios it must be switched on in the radio's menu.

@@ -40,7 +40,7 @@ use crate::engine::{Inbound, ProtocolEngine, ReplyKind};
 use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
 use crate::op::{Alarm, Field, Observation, Op};
-use crate::poll::{PollConfig, PollSchedule};
+use crate::poll::{PollConfig, PollEntry, PollSchedule};
 use crate::scope::ScopeFrame;
 use crate::serial::LinkStatus;
 use crate::transport::Transport;
@@ -173,6 +173,9 @@ pub struct RigStats {
     pub preempted: u64,
     /// Polls issued.
     pub polls: u64,
+    /// Polls of the transmit state run ahead of a queued command because none had been done for
+    /// `PollConfig::ptt_reserve` (counted in `polls` too).
+    pub reserved_polls: u64,
     /// Observations the rig sent on its own.
     pub unsolicited: u64,
     /// Replies that arrived after their command had been given up: matched to that command by
@@ -210,6 +213,7 @@ struct Counters {
     commands_failed: AtomicU64,
     preempted: AtomicU64,
     polls: AtomicU64,
+    reserved_polls: AtomicU64,
     unsolicited: AtomicU64,
     late_replies: AtomicU64,
     stale_replies: AtomicU64,
@@ -340,6 +344,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         keyed_since: None,
         max_transmit: options.max_transmit,
         heartbeat: options.heartbeat,
+        ptt_reserve: options.poll.ptt_reserve,
         link_watch: options.link_watch,
         link_generation: 0,
     };
@@ -451,6 +456,7 @@ impl RigHandle {
             commands_failed: c.commands_failed.load(Ordering::Relaxed),
             preempted: c.preempted.load(Ordering::Relaxed),
             polls: c.polls.load(Ordering::Relaxed),
+            reserved_polls: c.reserved_polls.load(Ordering::Relaxed),
             unsolicited: c.unsolicited.load(Ordering::Relaxed),
             late_replies: c.late_replies.load(Ordering::Relaxed),
             stale_replies: c.stale_replies.load(Ordering::Relaxed),
@@ -868,6 +874,8 @@ struct Actor<E, T> {
     keyed_since: Option<Instant>,
     max_transmit: Duration,
     heartbeat: Option<Duration>,
+    /// [`PollConfig::ptt_reserve`].
+    ptt_reserve: Duration,
     /// The transport's link status, when it has one ([`RigOptions::link_watch`]).
     link_watch: Option<watch::Receiver<LinkStatus>>,
     /// The `generation` of the last `Connected` status seen; 0 before the first.
@@ -926,7 +934,10 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 _ = wait_until(watchdog) => self.watchdog_fire().await,
                 _ = shared.heartbeat_wake.notified(), if watchdog.is_some() => {}
                 command = self.normal.recv() => match command {
-                    Some(command) => self.serve(command, true).await,
+                    Some(command) => {
+                        self.poll_reserved().await;
+                        self.serve(command, true).await;
+                    }
                     None => break,
                 },
                 read = self.transport.read(&mut self.buffer), if link => match read {
@@ -1638,6 +1649,29 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         }
     }
 
+    // [@ANCHOR: radioctl_core_actor_poll_reserved]
+    /// The transmit state's reserved share: before a queued command is served, read the PTT
+    /// state if that has not been done for `PollConfig::ptt_reserve`. Without it a client issuing
+    /// back-to-back commands keeps polling from ever running, and a radio that unkeyed (or keyed)
+    /// on its own is never noticed, so the watchdog and the cache stay wrong for as long as the
+    /// traffic lasts.
+    async fn poll_reserved(&mut self) {
+        if !self.shared.link_up.load(Ordering::Acquire) {
+            return;
+        }
+        let Some(entry) = self
+            .poll
+            .take_starved(Field::Ptt, Instant::now(), self.ptt_reserve)
+        else {
+            return;
+        };
+        self.shared
+            .counters
+            .reserved_polls
+            .fetch_add(1, Ordering::Relaxed);
+        self.poll_entry(entry).await;
+    }
+
     // [@ANCHOR: radioctl_core_actor_poll_once]
     async fn poll_once(&mut self) {
         let now = Instant::now();
@@ -1655,6 +1689,13 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         let Some(entry) = entry else {
             return;
         };
+        self.poll_entry(entry).await;
+    }
+
+    // [@ANCHOR: radioctl_core_actor_poll_entry]
+    /// Reads one polled field and adapts its interval from whether it changed.
+    async fn poll_entry(&mut self, entry: PollEntry) {
+        let now = Instant::now();
         let before = guard(&self.shared.cache).get(&entry.field).map(|e| e.value);
         let timeout = self.engine.description().timing.timeout;
         self.shared.counters.polls.fetch_add(1, Ordering::Relaxed);
