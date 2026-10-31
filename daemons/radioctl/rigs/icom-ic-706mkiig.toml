@@ -23,6 +23,7 @@ echo = false
 attenuator_db = [20]
 attenuator_any_up_to_db = 0
 preamp_steps = 1
+absent = ["af-gain", "rf-gain", "mic-gain", "monitor-level", "keyer-speed", "rf-power"]
 
 [timing]
 timeout_ms = 1000

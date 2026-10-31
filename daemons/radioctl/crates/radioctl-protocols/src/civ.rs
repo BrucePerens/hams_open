@@ -120,10 +120,24 @@ pub fn encode_bcd_freq(hz: Hz) -> Option<[u8; 5]> {
     Some(out)
 }
 
+// [@ANCHOR: radioctl_civ_encode_bcd_freq_len]
+/// Encodes a frequency as `len` BCD bytes (least-significant pair first): 4 for the eight-digit
+/// models, 5 for ten digits, 6 for twelve. `None` when the frequency has more digits than fit.
+pub fn encode_bcd_freq_len(hz: Hz, len: usize) -> Option<Vec<u8>> {
+    let mut rest = hz.0;
+    let mut out = Vec::with_capacity(len);
+    for _ in 0..len {
+        let pair = (rest % 100) as u8;
+        out.push(((pair / 10) << 4) | (pair % 10));
+        rest /= 100;
+    }
+    (rest == 0).then_some(out)
+}
+
 // [@ANCHOR: radioctl_civ_decode_bcd_freq]
-/// Decodes up to 5 BCD bytes (least-significant pair first); `None` on a non-BCD nibble.
+/// Decodes up to 6 BCD bytes (least-significant pair first); `None` on a non-BCD nibble.
 pub fn decode_bcd_freq(bytes: &[u8]) -> Option<Hz> {
-    if bytes.is_empty() || bytes.len() > 5 {
+    if bytes.is_empty() || bytes.len() > 6 {
         return None;
     }
     let mut total: u64 = 0;
@@ -570,18 +584,23 @@ impl CivEngine {
         Some(Observation::Mode(mode))
     }
 
+    // [@ANCHOR: radioctl_civ_engine_freq_bytes]
+    /// The frequency as the BCD field of this model: 4, 5 or 6 bytes.
+    fn freq_bytes(&self, hz: Hz) -> Result<Vec<u8>, RigError> {
+        let len = self.desc.civ.as_ref().map_or(5, |c| c.field_len(hz));
+        encode_bcd_freq_len(hz, len)
+            .ok_or_else(|| Self::unsupported("frequency has more digits than the model's field"))
+    }
+
     // [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
     fn encode_vfo_b_or_split(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
             Op::GetFrequency(Vfo::B) => Ok(self.get(0x25, &[0x01], Field::Frequency(Vfo::B))),
-            Op::SetFrequency(Vfo::B, hz) => match encode_bcd_freq(*hz) {
-                Some(bcd) => {
-                    let mut data = vec![0x01];
-                    data.extend(bcd);
-                    Ok(self.set(0x25, &data))
-                }
-                None => Err(Self::unsupported("frequency above 10 BCD digits")),
-            },
+            Op::SetFrequency(Vfo::B, hz) => self.freq_bytes(*hz).map(|bcd| {
+                let mut data = vec![0x01];
+                data.extend(bcd);
+                self.set(0x25, &data)
+            }),
             Op::GetSplit => Ok(self.get(0x0F, &[], Field::Split)),
             Op::SetSplit(on) => Ok(self.set(0x0F, &[u8::from(*on)])),
             _ => return None,
@@ -626,14 +645,15 @@ impl CivEngine {
     // [@ANCHOR: radioctl_civ_engine_encode_levels_and_filter]
     fn encode_levels_and_filter(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
-            Op::GetLevel(level @ Level::Attenuator) => {
-                Ok(self.get(0x11, &[], Field::Level(*level)))
-            }
-            Op::GetLevel(level @ Level::Preamp) => {
-                Ok(self.get(0x16, &[0x02], Field::Level(*level)))
-            }
+            Op::GetLevel(level @ Level::Attenuator) => attenuation::step_of(&self.desc, *level, 0)
+                .map(|_| self.get(0x11, &[], Field::Level(*level))),
+            Op::GetLevel(level @ Level::Preamp) => attenuation::step_of(&self.desc, *level, 0)
+                .map(|_| self.get(0x16, &[0x02], Field::Level(*level))),
             Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
                 self.encode_front_end(*level, *value)
+            }
+            Op::GetLevel(level) | Op::SetLevel(level, _) if self.desc.levels.lacks(*level) => {
+                Err(Self::unsupported("the model has no such level"))
             }
             Op::GetLevel(level) => match level_sub(*level) {
                 Some(sub) => Ok(self.get(0x14, &[sub], Field::Level(*level))),
@@ -690,8 +710,7 @@ impl ProtocolEngine for CivEngine {
                 self.command(0x03, &[], ReplyKind::Observation(Field::Frequency(Vfo::A)))
             }
             Op::SetFrequency(_, hz) => {
-                let bcd = encode_bcd_freq(*hz)
-                    .ok_or_else(|| Self::unsupported("frequency above 10 BCD digits"))?;
+                let bcd = self.freq_bytes(*hz)?;
                 self.command(0x05, &bcd, ack)
             }
             Op::GetMode if self.has_data_modes() => {
@@ -925,7 +944,27 @@ mod tests {
         assert_eq!(encode_bcd_freq(Hz(10_000_000_000)), None);
         assert_eq!(decode_bcd_freq(&[0x0A]), None);
         assert_eq!(decode_bcd_freq(&[]), None);
-        assert_eq!(decode_bcd_freq(&[0; 6]), None);
+        assert_eq!(decode_bcd_freq(&[0; 7]), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_encode_bcd_freq_len]
+    // Tests [@ANCHOR: radioctl_civ_decode_bcd_freq]
+    #[test]
+    fn frequency_fields_of_four_five_and_six_bytes() {
+        assert_eq!(
+            encode_bcd_freq_len(Hz(7_074_000), 4),
+            Some(vec![0x00, 0x40, 0x07, 0x07])
+        );
+        assert_eq!(encode_bcd_freq_len(Hz(100_000_000), 4), None);
+        assert_eq!(
+            encode_bcd_freq_len(Hz(10_368_100_000), 6),
+            Some(vec![0x00, 0x00, 0x10, 0x68, 0x03, 0x01])
+        );
+        assert_eq!(
+            decode_bcd_freq(&[0x00, 0x00, 0x10, 0x68, 0x03, 0x01]),
+            Some(Hz(10_368_100_000))
+        );
+        assert_eq!(encode_bcd_freq_len(Hz(10_000_000_000), 5), None);
     }
 
     // Tests [@ANCHOR: radioctl_civ_decode_bcd_meter]

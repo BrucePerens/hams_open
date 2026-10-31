@@ -26,7 +26,7 @@ const NOW: Duration = Duration::from_secs(10);
 /// `default address` field of the model's private caps) and read in Icom's instruction manual
 /// where a copy could be had (every one but the IC-7000, IC-7760, IC-706 and IC-706MkII). A
 /// second, independent copy of the number in each file: a typo in either shows up here.
-const ADDRESSES: [(&str, u8); 19] = [
+const ADDRESSES: &[(&str, u8)] = &[
     ("icom-ic-7000", 0x70),
     ("icom-ic-7100", 0x88),
     ("icom-ic-7200", 0x76),
@@ -46,6 +46,24 @@ const ADDRESSES: [(&str, u8); 19] = [
     ("icom-ic-718", 0x5E),
     ("icom-ic-746", 0x56),
     ("icom-ic-746pro", 0x66),
+    ("icom-ic-703", 0x68),
+    ("icom-ic-756", 0x50),
+    ("icom-ic-756pro", 0x5C),
+    ("icom-ic-756proii", 0x64),
+    ("icom-ic-756proiii", 0x6E),
+    ("icom-ic-910", 0x60),
+    ("icom-ic-2730", 0x90),
+    ("icom-ic-78", 0x62),
+    ("icom-ic-707", 0x3E),
+    ("icom-ic-729", 0x3A),
+    ("icom-ic-736", 0x40),
+    ("icom-ic-737", 0x3C),
+    ("icom-ic-738", 0x44),
+    ("icom-ic-775", 0x46),
+    ("icom-ic-781", 0x26),
+    ("icom-ic-970", 0x2E),
+    ("icom-ic-735", 0x04),
+    ("icom-ic-905", 0xAC),
 ];
 
 fn icom_files() -> Vec<RigDescription> {
@@ -165,7 +183,13 @@ fn every_icom_file_round_trips_what_it_claims_and_refuses_the_rest() {
                 "{id}"
             );
         }
-        if has(Capability::Levels) {
+        if has(Capability::Levels) && desc.levels.lacks(Level::AfGain) {
+            // A model whose command table has no `14` levels (the IC-706MkIIG) refuses them.
+            let err = engine
+                .encode(&Op::SetLevel(Level::AfGain, 128))
+                .expect_err("refused");
+            assert_eq!(err.kind, ErrorKind::Unsupported, "{id}");
+        } else if has(Capability::Levels) {
             write(engine.as_mut(), &mut rig, &Op::SetLevel(Level::AfGain, 128));
             assert_eq!(
                 read(engine.as_mut(), &mut rig, &Op::GetLevel(Level::AfGain)),
@@ -204,7 +228,7 @@ fn the_batch_addresses_match_hamlib_and_no_two_files_share_an_id() {
     let files = icom_files();
     let ids: BTreeSet<&str> = files.iter().map(|d| d.id.as_str()).collect();
     assert_eq!(ids.len(), files.len(), "duplicate ids");
-    for (id, address) in ADDRESSES {
+    for &(id, address) in ADDRESSES {
         let desc = files
             .iter()
             .find(|d| d.id == id)
@@ -214,4 +238,54 @@ fn the_batch_addresses_match_hamlib_and_no_two_files_share_an_id() {
         assert_eq!(civ.controller, 0xE0, "{id}");
         assert!(!civ.echo, "{id}");
     }
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_freq_bytes]
+// Tests [@ANCHOR: radioctl_virtual_civ_freq_field]
+// Tests [@ANCHOR: radioctl_virtual_civ_set_freq]
+// Tests [@ANCHOR: radioctl_core_civparams_field_len]
+#[test]
+fn four_and_six_byte_frequency_fields_go_on_the_wire_as_the_description_says() {
+    let files = icom_files();
+    let mut seen = BTreeSet::new();
+    for desc in &files {
+        let civ = desc.civ.as_ref().expect("civ block");
+        let mut engine = engine_for(desc).expect("engine");
+        let mut rig = VirtualRig::from_description(desc).expect("virtual rig");
+        let request = engine
+            .encode(&Op::SetFrequency(Vfo::A, Hz(7_074_000)))
+            .expect("encode");
+        // FE FE to from 05 <field> FD
+        let field = request.bytes.len() - 6;
+        assert_eq!(field, civ.field_len(Hz(7_074_000)), "{}", desc.id);
+        if civ.frequency_bytes == 4 {
+            // Eight digits (Hamlib civ_731_mode): 7.074 MHz is 00 40 07 07, and 100 MHz does not fit.
+            assert_eq!(
+                &request.bytes[4..9],
+                &[0x05, 0x00, 0x40, 0x07, 0x07][..],
+                "{}",
+                desc.id
+            );
+            let err = engine
+                .encode(&Op::SetFrequency(Vfo::A, Hz(100_000_000)))
+                .expect_err("nine digits");
+            assert_eq!(err.kind, ErrorKind::Unsupported, "{}", desc.id);
+            seen.insert(4);
+        }
+        if civ.frequency_bytes == 6 {
+            write(
+                engine.as_mut(),
+                &mut rig,
+                &Op::SetFrequency(Vfo::A, Hz(10_368_100_000)),
+            );
+            assert_eq!(
+                read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
+                Observation::Frequency(Vfo::A, Hz(10_368_100_000)),
+                "{}",
+                desc.id
+            );
+            seen.insert(6);
+        }
+    }
+    assert_eq!(seen, BTreeSet::from([4, 6]), "a 4-byte and a 6-byte model");
 }
