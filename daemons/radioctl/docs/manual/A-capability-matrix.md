@@ -48,13 +48,13 @@ models against three, and 9 FlexRadio network models against four.
 
 ## radioctl's rig descriptions
 
-Twenty-one files in `rigs/`, at the time of writing (commit `5a636ff9`). A `yes` means the description
+Twenty-three files in `rigs/`, at the time of writing (commit `f54256f4`). A `yes` means the description
 lists the capability (and therefore the handle accepts the operation); the engine must also implement it
 (chapter [7](07-protocol-engines.md)). Everything is unverified. `transceive` for the Icom and Xiegu
 radios means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot
 switch transceive on. For the FlexRadio files it means the engine subscribes to the radio's status.
 The FlexRadio files claim no S-meter, power or SWR because those arrive on streams the engine does not
-read. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.toml` for the source of truth.
+read. The ANAN files claim no mode: an SDR's demodulation happens in the host. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.toml` for the source of truth.
 
 **Icom and Xiegu (CI-V)**
 
@@ -149,3 +149,17 @@ read. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.tom
 | `identify` | yes | yes | yes | yes |
 | `[scope]` block | - | - | - | - |
 
+**OpenHPSDR (ANAN)**
+
+| Capability | ANAN-10 | ANAN-100 |
+|---|---|---|
+| `read-frequency` | yes | yes |
+| `set-frequency` | yes | yes |
+| `read-ptt` | yes | yes |
+| `set-ptt` | yes | yes |
+| `read-power` | yes | yes |
+| `read-swr` | yes | yes |
+
+All other capabilities are absent for both.
+
+Columns of the first group: Icom IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X108G.

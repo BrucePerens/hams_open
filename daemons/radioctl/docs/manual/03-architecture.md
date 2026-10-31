@@ -47,7 +47,8 @@ single-threaded internally while any number of tasks and threads hold clones of 
 
 Its loop (`Actor::run`) waits on four sources in a fixed priority order:
 
-1. the **emergency channel**: unkeying the transmitter (`Op::SetPtt(false)`), capacity 16;
+1. the **emergency channel**: unkeying the transmitter (`Op::SetPtt(false)`), capacity 16 (a full channel
+   coalesces unkeys instead of refusing them);
 2. the **command queue**: ordinary commands in arrival order, capacity `queue_capacity` (default 64);
 3. the **transport**: bytes the radio sent on its own (transceive frames, late replies);
 4. the **poll timer**: the next due read, only when nothing above is ready.
@@ -66,8 +67,18 @@ answer: a value, or a typed `RigError`. The actor never hangs a caller. Behaviou
   it reports the timeout, because the radio may be keyed. That unkey is not preemptible, waits at most
   the engine's reply timeout, and leaves `FAIL CLOSED unkey: <why>` in the transcript. When the last
   `RigHandle` is dropped and the actor stops, it does the same for a radio whose cache says keyed or whose
-  transmit gate was open. It is best effort and does nothing if the link is down or the radio cannot be
-  unkeyed by command.
+  transmit gate was open. An unkey is tried up to three times with a short backoff; one that cannot be done
+  (every attempt unanswered or refused, the link down, no command for it) is counted
+  (`RigStats::unkey_failures`) and reported as an `Alarm::UnkeyFailed` event, never dropped silently.
+- **Transmit watchdog.** From the moment the radio is keyed (by command, or seen keyed by polling or
+  transceive) or Morse is sent, the actor runs a dead-man timer of its own, independent of the caller.
+  Past `RigOptions::max_transmit` (default 180 s; `Duration::MAX` disables it, which the owner must decide)
+  or past a lapse of the caller's heartbeat (`RigOptions::heartbeat`, off by default, kept alive with
+  `RigHandle::heartbeat()`, enforced only while transmitting) it unkeys through the fail-closed path,
+  preempting a command that is waiting for a reply, and emits an alarm event (`TransmitTimeout` or
+  `HeartbeatLapsed`, `Source::Watchdog`). A radio still seen keyed afterwards re-arms it.
+- **An unkey is never refused for want of a queue slot.** When the emergency queue is full the request rides
+  on the unkey already queued and receives its result (`RigStats::unkeys_coalesced`).
 - **Saturating deadlines.** A timeout too large for the clock (`Duration::MAX`) becomes the farthest
   representable instant instead of a panic.
 - **Derived transmit frequency.** After every observation the actor recomputes `active_tx_frequency` from

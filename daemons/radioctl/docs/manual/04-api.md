@@ -40,6 +40,8 @@ pub struct RigOptions {
     pub stream_capacity: usize,
     pub scope_capacity: usize,
     pub callback: Option<Callback>,
+    pub max_transmit: Duration,
+    pub heartbeat: Option<Duration>,
 }
 
 pub struct PollConfig {
@@ -52,7 +54,7 @@ pub struct PollConfig {
 ```
 
 Defaults: queue of 64, 2 second deadline, polling on (fast fields 250 ms to 2 s, meters 1 s to 5 s),
-a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, no callback.
+a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, a 180 second transmit limit (`DEFAULT_MAX_TRANSMIT`), no heartbeat, no callback.
 
 ## Rig handles
 
@@ -72,11 +74,14 @@ pub fn link_up(&self) -> bool
 pub fn events(&self) -> EventStream
 
 pub fn cached(&self, field: Field) -> Option<Cached<Observation>>
+
+pub fn heartbeat(&self)
 ```
 
 `stats()` returns counters (commands ok and failed, preempted, polls, unsolicited observations,
-unrecognised byte runs, events, stream lag, and the dispatcher's delivered, queue-full, coalesced and
-panic counts). `link_up()` is false once the transport has failed for good.
+unrecognised byte runs, events, stream lag, watchdog unkeys, failed unkeys, coalesced unkeys, scope frames
+and scope lag, and the dispatcher's delivered, queue-full, coalesced and panic counts). `heartbeat()` is the
+caller's "I am alive" for the transmit watchdog (chapter [10](10-safety.md)). `link_up()` is false once the transport has failed for good.
 
 ## Operations
 
@@ -227,8 +232,8 @@ pub struct Change {
 ```
 
 `source` says where it came from: `Api` (a command through the handle), `Poll` (found by polling),
-`Transceive` (an unsolicited frame, or a late reply to an abandoned command) or `Splitter` (through
-the splitter). `old` is `None` the first time a field is seen. The event of a front-panel change may
+`Transceive` (an unsolicited frame, or a late reply to an abandoned command), `Splitter` (through
+the splitter) or `Watchdog` (the actor's own transmit watchdog). `old` is `None` the first time a field is seen. The event of a front-panel change may
 arrive as `Poll` or `Transceive` depending on which saw it first.
 
 Two views of the same events, shown together by `crates/radioctld/examples/events.rs`:
@@ -304,6 +309,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 ```
+
+### Alarms
+
+The actor reports safety conditions of its own as events whose change is `Field::Alarm` with an
+`Observation::Alarm(Alarm)`: `TransmitTimeout` (the radio was keyed longer than `max_transmit`; the actor
+unkeyed it), `HeartbeatLapsed` (the caller's heartbeat stopped while the radio transmitted; the actor
+unkeyed it) and `UnkeyFailed` (an unkey failed after every attempt: **the radio may still be transmitting**).
+An alarm is not a value read from the radio, is never cached and is never deduplicated: every occurrence is
+an event. The transcript also records `ALARM <kind>`. An application should treat `UnkeyFailed` as an
+emergency of its own.
 
 ## Polling
 

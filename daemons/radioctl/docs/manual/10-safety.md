@@ -114,8 +114,29 @@ cover the same-rig and cross-rig cases; a blocked or panicking application callb
 because callbacks run on their own thread.
 
 Unkeying is repeated on a timeout like any non-transmit command (up to the description's `retries`
-more times, within the deadline). It is not a guarantee that the radio stopped: it is a command, and a
-radio can ignore a command.
+more times, within the deadline). An unkey is never refused for want of a queue slot: if the emergency
+queue is full, the request rides on the unkey already queued and gets its result. It is not a guarantee
+that the radio stopped: it is a command, and a radio can ignore a command.
+
+## The transmit watchdog
+
+Independent of the caller, each rig's actor runs a dead-man timer while the radio transmits. It starts when
+the radio is keyed by command, or seen keyed by polling or transceive, or when Morse is sent.
+
+- **Maximum transmit time.** `RigOptions::max_transmit`, 180 seconds by default (`DEFAULT_MAX_TRANSMIT`).
+  Past it the actor unkeys the radio and emits `Alarm::TransmitTimeout`. The owner may raise it, and may
+  disable it with `Duration::MAX`; that is a decision for the owner, not a default. `radioctld` takes it
+  from `max_transmit_s` (1 to 3600 seconds).
+- **Caller heartbeat.** With `RigOptions::heartbeat` set to a period, the caller must call
+  `RigHandle::heartbeat()` at least that often while the radio transmits, or the actor unkeys it and emits
+  `Alarm::HeartbeatLapsed`. Off by default; enforced only while transmitting. A caller that keys and then
+  beats is not tripped by the time before it keyed.
+- **How it unkeys.** Through the fail-closed path below, preempting a command that is waiting for a
+  reply. A radio still seen keyed afterwards re-arms the timer.
+
+This is the library layer. The relay's own time-out and the FX2 board's hardware time-out are outer
+layers. `radioctld` and the splitter do not set a heartbeat: for them the maximum transmit time is the
+protection.
 
 ## When the outcome is unknown: fail closed
 
@@ -130,9 +151,10 @@ below every client:
    before it ends. A holder that returns, panics or is cancelled does not leave RF on the air.
 3. **A dropped `LineKeyer`** makes its RTS or DTR line inactive.
 
-Each is written to the transcript as `FAIL CLOSED unkey: <why>`. All are best effort: they do nothing if
-the link is down or the radio cannot be unkeyed by command, and nobody is told if the unkey itself fails.
-They do not cover a process that is killed or hangs (below).
+Each is written to the transcript as `FAIL CLOSED unkey: <why>`. An unkey is tried three times with a short
+backoff. If it still cannot be done (every attempt unanswered or refused, the link down, or no command for
+it) the failure is counted (`RigStats::unkey_failures`) and reported as an `Alarm::UnkeyFailed` event: the
+radio may still be transmitting. The paths do not cover a process that is killed (below).
 
 ## PTT ownership
 
@@ -155,9 +177,9 @@ relay on top of radioctl; the point of the table is to avoid claiming otherwise.
 | # | Requirement | In radioctl today |
 |---|---|---|
 | 1 | Fail closed; a new radio is receive-only | **Implemented**: the gate (handle, actor, `radioctld`). |
-| 2 | Per-rig dead-man timer independent of the caller; dead actor, dropped link or crashed process forces unkey where supported | **Partly.** No timer. The actor unkeys after an unanswered key and when its last handle is dropped; `radioctld` and the splitter unkey for a disconnecting owner and at shutdown. A killed or hung process is not covered. |
+| 2 | Per-rig dead-man timer independent of the caller; dead actor, dropped link or crashed process forces unkey where supported | **Implemented in the actor**: the watchdog (maximum transmit time, optional caller heartbeat), the unkey after an unanswered key and when the last handle is dropped, with alarms for failures. `radioctld` and the splitter also unkey for a disconnecting owner and at shutdown. A process that is killed takes its actors with it: nothing unkeys the radio then. |
 | 3 | Documented, tested carrier drop after link loss | **Not implemented.** On a failed transport the actor reports `LinkDown` and sends nothing; an unkey cannot be written to a link that is down. |
-| 4 | One transmitter per radio, maximum transmit duration, ownership modes | **Partly**: one owner per radio in the splitter and `radioctld`. No maximum duration; no ownership modes (shared receive, exclusive, transmit-locked). |
+| 4 | One transmitter per radio, maximum transmit duration, ownership modes | **Partly**: one owner per radio in the splitter and `radioctld`; the maximum transmit duration is the watchdog's. No ownership modes (shared receive, exclusive, transmit-locked). |
 | 5 | Frequency, mode, power and privilege limits per operator; identification timers | **Not in radioctl.** It is the relay's job; the gate is the hook it uses. |
 | 6 | Drive and signal limits, telemetry-based derating, SWR inhibit | **Not in radioctl.** SWR and power are readable on some radios; nothing acts on them. |
 | 7 | Attestation and audit log | **Not in radioctl.** The permit's `granted_by` string is the only record. |
@@ -167,8 +189,8 @@ relay on top of radioctl; the point of the table is to avoid claiming otherwise.
 
 An explicit, observable mismatch event between intended and actual transmit state is also in the
 proposal. Today the poller reads the PTT state and updates the cache, so a radio that unkeys or keys
-itself shows up as a change event with `Source::Poll` or `Transceive`, but nothing compares it with what
-a caller intended.
+itself shows up as a change event with `Source::Poll` or `Transceive` (and keying that the actor did not
+ask for arms the watchdog), but nothing compares it with what a caller intended.
 
 ## What radioctl does and does not guarantee
 
@@ -177,7 +199,9 @@ It does:
 - refuse transmit-capable commands while a rig's gate is closed, at two points, and in `radioctld`
   before anything is queued;
 - put unkeying ahead of everything and keep a slow callback or a slow other rig from delaying it;
-- unkey a radio that may be keyed when a transmit command goes unanswered or the last handle is dropped;
+- unkey a radio that may be keyed when a transmit command goes unanswered, when the last handle is
+  dropped, and when it has transmitted past its limit or its caller's heartbeat has lapsed;
+- report an unkey that failed, as an alarm, instead of dropping it;
 - bound every command by a deadline and answer it with a typed error;
 - never repeat a transmit command;
 - let only one client at a time key a rig behind the splitter or `radioctld`, and unkey for an owner that
@@ -185,11 +209,11 @@ It does:
 
 It does **not**:
 
-- stop a transmission when the program that keyed it is killed or hangs. `kill -9` of a process using the
-  library leaves the radio keyed; a CAT radio stays keyed until its own time-out, if it has one. A program that
-  merely returns or panics is covered (the last handle drops, above); a hung one holding a handle is not.
-  There is no dead-man timer.
-- limit how long a transmission lasts.
+- stop a transmission when the process that keyed it is killed. `kill -9` takes the actor with it and leaves
+  the radio keyed; a CAT radio stays keyed until its own time-out, if it has one. A program that merely
+  returns or panics is covered (the last handle drops, above), and one that hangs is covered by the
+  watchdog (the maximum transmit time, and the heartbeat if the owner set one).
+- limit how long a transmission lasts below the default, or at all if the owner disabled the limit.
 - unkey on link loss, or tell the application that a serial link is reconnecting (chapter
   [5](05-transports.md)). During a reconnect, unkey commands are dropped with the rest of the bytes and
   end in a timeout.

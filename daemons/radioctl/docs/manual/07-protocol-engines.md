@@ -15,11 +15,11 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 | `yaesu-newcat` | `yaesu::YaesuEngine` | FT-991A, FTDX10, FTDX101D | ASCII, Kenwood-like with different widths |
 | `yaesu-legacy` | `yaesu_legacy::YaesuLegacyEngine` | FT-817ND, FT-857D, FT-897D | five-byte binary blocks, unframed answers |
 | `flex-smartsdr` | `flex::FlexEngine` | FLEX-6300, 6400, 6600, 6700 | SmartSDR line text over TCP (control plane only) |
+| `hpsdr-network` | `hpsdr_net::HpsdrEngine` | ANAN-10, ANAN-100 | a small line protocol to a bridge over the `hpsdr` crate (control plane only) |
 
 **Planned, not on `main` when this was written:** the Kenwood TS-890S dialect, K3/K4 descriptions, the
-FT-818 (no manual found), FlexRadio streams and the 8000 series, HPSDR/ANAN as a radioctl rig (a
-separate `daemons/hpsdr` crate exists, see chapter [13](13-roadmap.md)), and the Kenwood and Icom LAN
-protocols.
+FT-818 (no manual found), FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
+Kenwood and Icom LAN protocols.
 
 ## Icom CI-V (`civ.rs`, `civ_scope.rs`)
 
@@ -163,6 +163,26 @@ ranges) are used, no text. The wiki's embedded `messages.h` forbids copying and 
   time). The actor tests run the engine over the TCP transport against it and check on the wire that no
   keying command is sent while the gate is closed. It is our reading of the wiki, not a model of the radio.
 - **Never run against a radio** (the crate README notes the radio was off). Not covered by the Hamlib oracle.
+
+## OpenHPSDR / ANAN (`hpsdr_net.rs`, `hpsdr_io.rs`)
+
+An OpenHPSDR radio has no command stream of the kind the actor drives: control is UDP datagrams, and
+receive I/Q is a separate data plane. So the engine speaks a small line protocol (`GF`, `F <hz>`, `GP`,
+`P 0|1`, `GW`, `GR`; replies `OK`, `ERR <text>`, `F <hz>`, `P <0|1>`, `W <raw>`, `R <tenths>`) to a bridge
+(`hpsdr_io`) that owns an `hpsdr` crate session (Protocol 1 or 2) behind an in-memory duplex stream.
+
+- **Covers:** frequency, PTT, forward power and SWR (the descriptions claim `read-frequency`,
+  `set-frequency`, `read-ptt`, `set-ptt`, `read-power`, `read-swr`).
+- **Does not cover:** a mode (an SDR's demodulation happens in the host), an attenuator (no `Op` for it
+  yet), receive I/Q (the `hpsdr` crate's `IqStream` is not wired into the actor), and discovery inside
+  radioctl.
+- **Transmit:** `Op::SetPtt(true)` is the only command that can key, and the actor refuses it unless the
+  rig's transmit gate is open. The bridge then opens the `hpsdr` crate's own, separate gate for a bounded
+  lease (`HpsdrOptions::ptt_lease`), closes it on `P 0`, and unkeys by itself when the lease runs out. The
+  drive level is `HpsdrOptions::drive`, zero by default.
+- **Tests:** a virtual ANAN (a session against the `hpsdr` crate's loopback Protocol 1 or 2 emulator)
+  and `radioctl-protocols/tests/hpsdr_actor.rs`. The `hpsdr` crate, its emulator and these files are all
+  `unverified`; no HPSDR radio was used.
 
 ## What "agree" means here
 

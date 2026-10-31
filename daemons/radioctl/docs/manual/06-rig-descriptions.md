@@ -22,11 +22,12 @@ Schema version 1 is the only one the reader accepts. Unknown fields and unknown 
 |---|---|
 | `schema` | Must be `1`. |
 | `capabilities` | A non-empty list of capability names (appendix [A](A-capability-matrix.md)), without duplicates. |
-| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii`, `yaesu-newcat`, `yaesu-legacy` or `flex-smartsdr`. The id and name are our own labels. |
+| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii`, `yaesu-newcat`, `yaesu-legacy`, `flex-smartsdr` or `hpsdr-network`. The id and name are our own labels. |
 | `[civ]` | Required for `icom-civ`, forbidden for others: `address` (the rig's CI-V address), `controller` (the software's, conventionally `0xE0`), `model_id` (what the read-ID command returns), `echo` (true if the bus echoes every frame back, as a single-wire interface does). |
 | `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. |
 | `[yaesu_legacy]` | `yaesu-legacy` only: `stop_bits` (2 on the FT-817, FT-857 and FT-897). |
 | `[flex]` | `flex-smartsdr` only: `model` (the name the radio reports) and `scus` (spectrum capture units, 1 or 2). |
+| `[hpsdr]` | `hpsdr-network` only: `model` (`ANAN-100`), `protocol` (1 or 2) and `anan10` (true for the ANAN-10 power calibration constant). |
 | `[scope]` | Optional, `icom-civ` only: `receivers` (1 or 2), `line_length`, `samples_per_frame`, `amplitude_max`, `spans_hz`. The capability `scope` is listed separately (the IC-7300 and IC-7610 do). |
 | `[timing]` | `timeout_ms` (wait for a reply), `retries` (extra attempts after a timeout; a transmit command is never repeated), `inter_command_ms` (minimum gap between writes). |
 | `[defaults]` | `frequency_hz` and `mode` of a virtual rig of this model at start. They say nothing about the radio. |
@@ -74,7 +75,7 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Twenty-one files, at the time of writing (commit `5a636ff9`). All are unverified and all carry hand-written transcripts.
+Twenty-three files, at the time of writing (commit `f54256f4`). All are unverified. Seventeen carry a hand-written transcript; the FlexRadio and ANAN files do not (their protocols are not a plain request and reply stream, so they are tested through the actor against virtual radios instead: `flex_actor.rs`, `hpsdr_actor.rs`).
 
 | Family | Files | Written from |
 |---|---|---|
@@ -85,6 +86,7 @@ Twenty-one files, at the time of writing (commit `5a636ff9`). All are unverified
 | `yaesu-newcat` | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals, with page and SHA-256 per fact. |
 | `yaesu-legacy` | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d` | Yaesu's operating manuals (CAT chapters), with page and SHA-256; the one fact the manuals leave out, the level of the PTT bit, is from Hamlib 4.6.2 and labelled `hamlib-source`. No FT-818 description (no manual found). Binary transcripts. |
 | `flex-smartsdr` | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's published SmartSDR API wiki (commit and pages named in `flex.rs`); control plane only. |
+| `hpsdr-network` | `anan-10`, `anan-100` | The OpenHPSDR protocol work in the `hpsdr` crate (`daemons/hpsdr`, see its README for sources); control plane only. |
 
 The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
 have no description (address and a usable document are missing). Chapter [7](07-protocol-engines.md)
@@ -216,7 +218,7 @@ verified = { state = "unverified" }
 4. **Write the transcript** `rigs/transcripts/<id>-basic.toml` by hand from the manual's examples.
    State in `origin` that it is hand-written.
 5. **Run the checks.** `cargo run -p radioctld --example rig_file -- <id>` loads the file, prints
-   the verified states, and replays the transcript:
+   the verified states, and replays the transcript (it needs `rigs/transcripts/<id>-basic.toml`):
 
    ```text
    Elecraft KX3: family ElecraftAscii

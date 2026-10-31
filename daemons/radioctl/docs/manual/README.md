@@ -5,7 +5,7 @@ server (`radioctld`) that speaks Hamlib's `rigctld` text protocol and a protocol
 several programs share one radio. This manual is for a Rust programmer who wants to use the library,
 run the daemon, add a radio, or understand how the design keeps a transmitter safe.
 
-Manual status: written 2026-10-30 against `main` of `daemons/radioctl` at commit `5a636ff9` (Phase 0/1 foundation). The
+Manual status: written 2026-10-30 against `main` of `daemons/radioctl` at commit `f54256f4` (Phase 0/1 foundation). The
 crate's own overview is [`../../README.md`](../../README.md) and the design decisions are in
 [`../DESIGN.md`](../DESIGN.md); this manual explains them and does not replace them.
 
@@ -17,7 +17,7 @@ where it is not obvious.
 | Label | Meaning |
 |---|---|
 | **Implemented** | The code is on `main` and has tests. |
-| **Unverified** | The code exists, but no real radio has ever been used to check it. At the time of writing this applies to every radio description: all 217 facts in the 21 files in `rigs/` are in the `unverified` state, and none is `hardware-verified`. |
+| **Unverified** | The code exists, but no real radio has ever been used to check it. At the time of writing this applies to every radio description: all 233 facts in the 23 files in `rigs/` are in the `unverified` state, and none is `hardware-verified`. |
 | **Planned** | Described in a proposal (`hams_com/docs/proposals/`, not a public document), not in the code. Never rely on it. |
 
 A feature is called implemented only if this manual's author found it in the code. Chapter

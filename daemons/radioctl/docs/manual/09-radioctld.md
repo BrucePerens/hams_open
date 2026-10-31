@@ -50,6 +50,7 @@ description = "rigs/elecraft-kx3.toml"
 listen = "127.0.0.1:4532"
 vfo_mode = false
 transmit = false
+max_transmit_s = 180
 rx_low_hz = 30000
 rx_high_hz = 60000000
 tx_power_mw = 100000
@@ -75,6 +76,7 @@ reply_delay_ms = 0
 | `rig.listen` | `127.0.0.1:` 4532 plus the rig's index | `ip:port` | A non-loopback address needs `allow_non_loopback_bind`. |
 | `rig.vfo_mode` | `false` | | Hamlib's `rigctld -o`: `\chk_vfo` answers 1 and response headers echo the VFO. |
 | `rig.transmit` | `false` | | `true` opens the rig's transmit gate when the daemon starts. See [chapter 10](10-safety.md). |
+| `rig.max_transmit_s` | library default, 180 | 1 to 3600 | The rig actor unkeys a rig that transmits longer than this (the transmit watchdog). Optional. |
 | `rig.rx_low_hz`, `rx_high_hz` | 30000, 60000000 | | The coverage `\dump_state` reports. |
 | `rig.tx_power_mw` | 100000 | 1 to 10000000 | The maximum power `\dump_state` reports. |
 | `rig.hamlib_model` | 1 | | The model number `\dump_state` reports. |

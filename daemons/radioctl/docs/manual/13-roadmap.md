@@ -10,7 +10,7 @@ Do not build on a planned item as if it existed.
 
 | Item | Source | Status in code |
 |---|---|---|
-| **Safety:** per-rig dead-man timer; forced unkey for a crashed or hung process; carrier drop after link loss; maximum transmit duration; ownership modes (shared receive, exclusive transceive, transmit-locked); a mismatch event between intended and actual transmit state | RC section 8; roadmap 2a items 2 to 4 | the actor unkeys after an unanswered key and when its last handle is dropped; the rest none |
+| **Safety, remaining:** carrier drop after link loss (a documented, tested time); ownership modes (shared receive, exclusive transceive, transmit-locked); a mismatch event between intended and actual transmit state; an unkey for a killed process (the FX2 hardware time-out and switched power are the outer layers) | RC section 8; roadmap 2a items 2 to 4 | the dead-man watchdog, heartbeat, alarms and fail-closed unkeys are implemented (chapter [10](10-safety.md)); the items here are not |
 | **Transmit frequency for the remaining radios:** a transmit-VFO report for Yaesu legacy, a model for band-wise split (FTDX10, FTDX101D), the follower test on a real radio | RC section 14 (Hamlib issue 138) | implemented for Kenwood, Elecraft, Yaesu newcat and CI-V on virtual radios (chapter [4](04-api.md)); Yaesu legacy has a `TODO` |
 | **Scope beyond the Icom CI-V operations:** non-Icom scopes, hold and speed through `Op`, the IC-705 and IC-9700 descriptions listing the capability, the relay's scope source | RC, roadmap track E | core scope operations and a sweep stream exist for the CI-V engine (chapter [4](04-api.md#scope-and-spectrum)) |
 | **Capability traits** per capability, typed methods for every operation, memories, functions (NB, NR, preamp, attenuator), tuner and amplifier, power on and off | RC section 4 | one `Op` enum and `Capability` set |
@@ -18,7 +18,7 @@ Do not build on a planned item as if it existed.
 | **Rig description additions:** command table, meter scaling and calibration to dB and watts, firmware differences, a per-model override trait, capability discovery by probing (ask the radio what it is) | RC section 5 | the format has none of these |
 | **Rig lifecycle** `Off`, `PoweringOn`, `Booting`, `Ready`, `Degraded`, `Unreachable`, with cached state served with its age while off; reconnect that waits for hot-plug, a ping or the boot time | switches section 5 | only serial reconnect below the actor |
 | **Kenwood TS-890S** dialect (no `IF`, `OM` for mode, bandscope); Elecraft K3 and K4 descriptions; the FT-818 (no manual found) | RC section 9 | none |
-| **Network and SDR radios, beyond what exists:** FlexRadio meters, spectrum and audio (VITA-49 streams), discovery on the wire, the 8000 series; HPSDR/ANAN as a radioctl rig (Macdoel's ANAN-100, end of November 2026); Kenwood LAN, Icom LAN; shared receivers as virtual rigs (`radiod`) | RC sections 3.5, 9; roadmap tracks C, D | the Flex control-plane engine exists (chapter [7](07-protocol-engines.md)); a separate `daemons/hpsdr` crate holds an unverified Protocol 1 client and emulator, with no radioctl engine, description or integration |
+| **Network and SDR radios, beyond what exists:** FlexRadio meters, spectrum and audio (VITA-49 streams), discovery on the wire, the 8000 series; the OpenHPSDR I/Q data plane and attenuator in radioctl (Macdoel's ANAN-100, end of November 2026); Kenwood LAN, Icom LAN; shared receivers as virtual rigs (`radiod`) | RC sections 3.5, 9; roadmap tracks C, D | the Flex and OpenHPSDR control-plane engines exist, unverified (chapter [7](07-protocol-engines.md)); the `hpsdr` crate in `daemons/hpsdr` holds the Protocol 1 and 2 clients and emulators |
 | **Native non-serial USB** radios (`nusb`) and the **Hams USB device protocol** (`GET_INFO`, sub-ID registry; vendor 0x1209, product 0x7373 chosen, nothing registered) | RC section 3.5; USB proposal | no radioctl code; the FX2LP firmware bring-up is in `hardware/fx2_station_io/` (test PID, host loader), and its README says the radioctl host driver is future |
 | **Station module:** external switches, power control, durable radio records, a power button, profiles, interlocks, virtual switches with fault injection (decided: a radioctl module, no sibling crate) | switches sections 3 to 9 | none in radioctl (the FX2LP firmware above is the first hardware piece) |
 | **C ABI** for non-Rust callers; Python bindings; an isolated mode (the API over IPC, one rig per process) | RC section 7 | `owned-runtime` feature only; no ABI |
@@ -61,7 +61,7 @@ manual.
    owners; the manual follows the code.
 8. **`radioctld` serial transport is fixed** at 8N1 with one open attempt and default idle lines; there is
    no configuration for data bits, parity, flow control or reopen attempts.
-9. **Nothing has run on hardware.** All 217 facts in the 21 descriptions are `unverified`; no client other
+9. **Nothing has run on hardware.** All 233 facts in the 23 descriptions are `unverified`; no client other
    than Hamlib's `rigctl` has been tried against `radioctld`; the splitter has not served a real program;
    no Windows build exists.
 
