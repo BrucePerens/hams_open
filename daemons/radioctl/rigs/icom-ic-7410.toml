@@ -74,7 +74,7 @@ verified = { state = "unverified" }
 [[facts]]
 key = "civ.address"
 provenance = { kind = "manual", reference = "Icom IC-7410 Instruction Manual, no document number read on the cover, PDF page 108 (data-format example showing the radio's default address in the preamble; printed page numbers differ), https://archive.org/download/icom_IC7410_instructionmanual/IC7410_instructionmanual.pdf, sha256 58864d170c195d3e44bae3768c88286c533b4f81177e155f0bfd4591091f58d2", note = "The manual's default CI-V address is 0x80, equal to this file's. Cross-check: Hamlib 4.6.2 rigs/icom (default address). WHY: Icom's own download endpoint is excluded by robots.txt (icomjapan.com and icomamerica.com disallow /api/) and the direct file path answers 403, so the copy read is the public archive.org mirror. Read for facts under Bruce Perens' decision of 2026-10-31; nothing was copied or redistributed; the PDF is kept outside every git repository in ~/manuals/icom/ with its sha256 in SHA256SUMS." }
-verified = { state = "manual-checked", reference = "Icom IC-7410 Instruction Manual, no document number read on the cover, PDF page 108 (data-format example showing the radio's default address in the preamble; printed page numbers differ), https://arch" }
+verified = { state = "manual-checked", reference = "Icom IC-7410 Instruction Manual, PDF page 108, CI-V default address" }
 
 [[facts]]
 key = "civ.controller"

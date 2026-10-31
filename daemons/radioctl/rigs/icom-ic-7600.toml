@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB FM-D AM-D PSK PSKR.
 # Manual check (archive.org item icom-d10e73, see ~/manuals/icom/SHA256SUMS): the CI-V command table of the Icom IC-7600 Instruction Manual, PDF pages 159 to 163, has no command 25 (second VFO) and no command 21 (RIT/XIT),
-# so `second-vfo` and `rit-xit` are not claimed here although Hamlib 4.6.2 claims 25/26 as always present (`x25x26_always`). The Main/Sub radios swap bands with 07 B0 and select the sub band with 07 D1.
+# so `second-vfo` and `rit-xit` are not claimed here although Hamlib 4.6.2 claims a second VFO for it (`x25x26_always`). The Main/Sub radios swap bands with 07 B0 and select the sub band with 07 D1.
 # A radio with newer firmware than the manual may differ. Icom's download endpoint is excluded by robots.txt; read for facts under Bruce Perens' decision of 2026-10-31.
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "filter", "levels", "identify", "read-meters"]
@@ -77,7 +77,7 @@ verified = { state = "unverified" }
 [[facts]]
 key = "civ.address"
 provenance = { kind = "manual", reference = "Icom IC-7600 Instruction Manual, no document number read on the cover, PDF page 158 (data-format example showing the radio's default address in the preamble; printed page numbers differ), https://archive.org/download/icom-d10e73/icom-ic7600-manual-e.pdf, sha256 f08a2e4755791f3635bc72631065bf7fe726e9a587bea3186f95e353de0a91b9", note = "The manual's default CI-V address is 0x7A, equal to this file's. Cross-check: Hamlib 4.6.2 rigs/icom (default address). WHY: Icom's own download endpoint is excluded by robots.txt (icomjapan.com and icomamerica.com disallow /api/) and the direct file path answers 403, so the copy read is the public archive.org mirror. Read for facts under Bruce Perens' decision of 2026-10-31; nothing was copied or redistributed; the PDF is kept outside every git repository in ~/manuals/icom/ with its sha256 in SHA256SUMS." }
-verified = { state = "manual-checked", reference = "Icom IC-7600 Instruction Manual, no document number read on the cover, PDF page 158 (data-format example showing the radio's default address in the preamble; printed page numbers differ), https://arch" }
+verified = { state = "manual-checked", reference = "Icom IC-7600 Instruction Manual, PDF page 158, CI-V default address" }
 
 [[facts]]
 key = "civ.controller"

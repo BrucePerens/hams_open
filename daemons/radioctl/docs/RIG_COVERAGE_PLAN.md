@@ -70,6 +70,7 @@ Left (51), with the reason each is not yet done:
 | Four-byte frequency (Hamlib `civ_731_mode`) | IC-735 (3019), IC-820H (3032), IC-821H (3034) | engine change: 8-digit BCD frequency (`[civ]` field), virtual rig and transcript |
 | Receivers | IC-R10 (3036), R20 (3058), R6 (3077), R30 (3080), R71 (3037), R72 (3038), R7000 (3040), R7100 (3041), R8500 (3042), R9000 (3043), RX7 (3069) | a description each; the handhelds (R6, R10, R20, R30) are to be checked for mode codes |
 | D-STAR and handhelds | IC-92D (3065), ID-1 (3054), ID-31 (3083), ID-4100 (3082), ID-51 (3084), IC-F8101 (3086) | mode vocabulary (D-STAR modes are not in `Mode`), a description each |
+| Per-level capability | IC-706MkIIG (3011) and any other model whose manual lacks command `14` (AF level) | the description's `levels` capability is one switch for every level, so radioctl would send `14 01` to the IC-706MkIIG, whose command table has none (Icom IC-706MKIIG instruction manual, PDF page 49; Hamlib refuses it too); needs a per-level list in the description format and engine. Pinned in `known_icom_batch_divergences`. |
 | Microwave | IC-905 (3090) | engine change: frequencies above 9,999,999,999 Hz do not fit the 5-byte field |
 
 The Main/Sub radios (IC-7600, 7800, 7850/7851, 7760; the IC-7610 and IC-9700 before them) have no model of command `07 C2`/`D0`/`D1`/`D2`

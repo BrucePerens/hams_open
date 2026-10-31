@@ -78,7 +78,7 @@ verified = { state = "unverified" }
 [[facts]]
 key = "civ.address"
 provenance = { kind = "manual", reference = "Icom IC-R9500 Instruction Manual, document A-6553H-1EX-q, PDF page 142 (CI-V address menu text (default 72h); data format on PDF pages 165-166 shows FE FE 72; printed page numbers differ), https://archive.org/download/icom-69ed63/icr9500-manual-e.pdf, sha256 e701692a2022e15354651c42dbb50fa98491e2466d18b05d900319a2e16a347e", note = "The manual's default CI-V address is 0x72, equal to this file's. Cross-check: Hamlib 4.6.2 rigs/icom (default address). WHY: Icom's own download endpoint is excluded by robots.txt (icomjapan.com and icomamerica.com disallow /api/) and the direct file path answers 403, so the copy read is the public archive.org mirror. Read for facts under Bruce Perens' decision of 2026-10-31; nothing was copied or redistributed; the PDF is kept outside every git repository in ~/manuals/icom/ with its sha256 in SHA256SUMS." }
-verified = { state = "manual-checked", reference = "Icom IC-R9500 Instruction Manual, document A-6553H-1EX-q, PDF page 142 (CI-V address menu text (default 72h); data format on PDF pages 165-166 shows FE FE 72; printed page numbers differ), https://arc" }
+verified = { state = "manual-checked", reference = "Icom IC-R9500 Instruction Manual, PDF page 142, CI-V default address" }
 
 [[facts]]
 key = "civ.controller"

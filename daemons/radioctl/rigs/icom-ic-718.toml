@@ -69,7 +69,7 @@ verified = { state = "unverified" }
 [[facts]]
 key = "civ.address"
 provenance = { kind = "manual", reference = "Icom IC-718 Manual de Instrucoes (Portuguese), no document number read on the cover, PDF page 60 (CI-V address text, default 5E (Portuguese manual); printed page numbers differ), https://archive.org/download/icom-87ff2d/IC-718.pdf, sha256 7d10b06a0a5622a3b7bb3d7162d7db69e722a93c6032a84775b4697b3a5b5ae0", note = "The manual's default CI-V address is 0x5E, equal to this file's. Cross-check: Hamlib 4.6.2 rigs/icom (default address). WHY: Icom's own download endpoint is excluded by robots.txt (icomjapan.com and icomamerica.com disallow /api/) and the direct file path answers 403, so the copy read is the public archive.org mirror. Read for facts under Bruce Perens' decision of 2026-10-31; nothing was copied or redistributed; the PDF is kept outside every git repository in ~/manuals/icom/ with its sha256 in SHA256SUMS." }
-verified = { state = "manual-checked", reference = "Icom IC-718 Manual de Instrucoes (Portuguese), no document number read on the cover, PDF page 60 (CI-V address text, default 5E (Portuguese manual); printed page numbers differ), https://archive.org/d" }
+verified = { state = "manual-checked", reference = "Icom IC-718 Manual de Instrucoes (Portuguese), PDF page 60, CI-V default address" }
 
 [[facts]]
 key = "civ.controller"
