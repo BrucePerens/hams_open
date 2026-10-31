@@ -13,12 +13,16 @@
 //!   state, break-before-make selectors, momentary pulses, debounced inputs).
 //! - [`modbus`]: sans-IO Modbus framing and the coil relay driver (ASCII and RTU).
 //! - [`http_relay`]: Shelly Gen2 and Tasmota channel drivers.
+//! - [`lifecycle`]: the radio lifecycle state machine (sans-IO).
+//! - [`record`]: the durable radio record (JSON, owner-only, atomic).
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
 pub mod channel;
 pub mod error;
 pub mod gpio_map;
 pub mod http_relay;
+pub mod lifecycle;
 pub mod modbus;
 pub mod model;
+pub mod record;
 pub mod station;

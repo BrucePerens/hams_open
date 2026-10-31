@@ -6,16 +6,25 @@
 //! closed). The one exception is [`Station::all_off`], which is never blocked, needs no
 //! confirmation and no password, and does not look at the keyed state: cutting power is always
 //! allowed.
+//!
+//! Unknown keyed state (decision 2026-10-30, for Bruce to confirm): powering OFF any device is
+//! always allowed because it can only stop a transmission, and powering ON a radio that is Off or
+//! Unreachable is allowed; everything that could hot-switch an RF path (antenna selection,
+//! amplifier power-on, band switching, any other output) stays blocked. A known keyed state
+//! still blocks everything but the emergency all-off.
 
 use crate::channel::{BoxFuture, StationEvent, Switchboard};
 use crate::error::{StationError, StationErrorKind};
+use crate::lifecycle::RadioState;
 use crate::model::{
-    ChannelId, ChannelKind, DeviceDef, DeviceId, PowerSource, ProfileStep, StationDef, Value,
+    ChannelId, ChannelKind, DeviceDef, DeviceId, DeviceKind, PowerSource, ProfileStep, StationDef,
+    Value,
 };
 use radioctl_core::capability::Capability;
 use radioctl_core::op::{Field, Observation};
 use radioctl_core::rig::{Freshness, RigHandle};
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::time::{sleep, timeout, Instant};
 
@@ -85,8 +94,20 @@ pub struct AllOffReport {
     pub failed: Vec<(ChannelId, String)>,
 }
 
+/// What a command does to the RF path, which decides how an unknown keyed state treats it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Powers a device off: it can only stop a transmission, so it passes an unknown keyed state.
+    PowerOff,
+    /// Powers on a radio that is Off or Unreachable: passes an unknown keyed state.
+    PowerOnRadio,
+    /// Anything that could hot-switch an RF path (antenna, amplifier power-on, band, outputs).
+    RfPath,
+}
+
 /// A station: the definition, its switchboard and its interlock sources.
 pub struct Station {
+    hints: Mutex<BTreeMap<DeviceId, RadioState>>,
     def: StationDef,
     board: Arc<Switchboard>,
     keyed: Vec<Arc<dyn KeyedSource>>,
@@ -114,6 +135,7 @@ impl Station {
             board.def(&c.id)?;
         }
         Ok(Station {
+            hints: Mutex::new(BTreeMap::new()),
             def,
             board,
             keyed,
@@ -134,12 +156,21 @@ impl Station {
     }
 
     // [@ANCHOR: radioctl_station_station_guard]
-    /// The interlock: errors unless every keyed source reports unkeyed. A refusal is an event.
+    /// The interlock for an RF-path command: errors unless every keyed source reports unkeyed.
+    /// A refusal is an event.
     pub async fn guard(&self, what: &str) -> Result<(), StationError> {
+        self.guard_action(Action::RfPath, what).await
+    }
+
+    // [@ANCHOR: radioctl_station_station_guard_action]
+    /// The interlock with the action's class: a keyed source always refuses; an unknown keyed
+    /// state refuses only an [`Action::RfPath`] command. A refusal is an event.
+    pub async fn guard_action(&self, action: Action, what: &str) -> Result<(), StationError> {
         for s in &self.keyed {
             let (kind, why) = match s.key_state().await {
                 KeyState::Unkeyed => continue,
                 KeyState::Keyed => (StationErrorKind::Refused, format!("{} is keyed", s.name())),
+                KeyState::Unknown if action != Action::RfPath => continue,
                 KeyState::Unknown => (
                     StationErrorKind::KeyedUnknown,
                     format!("cannot tell whether {} is keyed", s.name()),
@@ -152,6 +183,78 @@ impl Station {
             return Err(StationError::new(kind, format!("{what}: {why}")));
         }
         Ok(())
+    }
+
+    // [@ANCHOR: radioctl_station_station_set_hint]
+    /// The lifecycle state of a radio, as the lifecycle manager sees it, so powering it on can
+    /// pass an unknown keyed state while it is Off or Unreachable.
+    pub fn set_radio_state(&self, id: &DeviceId, state: RadioState) {
+        self.hints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id.clone(), state);
+    }
+
+    // [@ANCHOR: radioctl_station_station_classify_on]
+    /// The class of powering `d` on: a radio that is Off or Unreachable (by the lifecycle hint, or
+    /// by a confirmed-off switch when there is no hint) is [`Action::PowerOnRadio`]; any other
+    /// device, or a radio that is up, is [`Action::RfPath`].
+    fn classify_on(&self, d: &DeviceDef) -> Action {
+        if d.kind != DeviceKind::Radio {
+            return Action::RfPath;
+        }
+        let hint = self
+            .hints
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&d.id)
+            .copied();
+        let down = match hint {
+            Some(state) => matches!(state, RadioState::Off | RadioState::Unreachable),
+            None => matches!(self.device_power(&d.id), Ok(Some(Value::Off))),
+        };
+        if down {
+            Action::PowerOnRadio
+        } else {
+            Action::RfPath
+        }
+    }
+
+    // [@ANCHOR: radioctl_station_station_classify_channel]
+    /// The class of setting a channel by hand: off on a power channel is [`Action::PowerOff`]; on
+    /// for the power channel of a down radio is [`Action::PowerOnRadio`]; the rest is RF path.
+    fn classify_channel(&self, id: &ChannelId, value: Value) -> Action {
+        let is_power = self
+            .def
+            .channel(id)
+            .is_some_and(|c| matches!(c.kind, ChannelKind::Power { .. }));
+        match value {
+            Value::Off if is_power => Action::PowerOff,
+            Value::On => self
+                .def
+                .devices
+                .iter()
+                .find(|d| matches!(&d.power, PowerSource::Channel { channel } if channel == id))
+                .map_or(Action::RfPath, |d| self.classify_on(d)),
+            _ => Action::RfPath,
+        }
+    }
+
+    // [@ANCHOR: radioctl_station_station_classify_pulse]
+    /// The class of pulsing a momentary line: a device's off line is [`Action::PowerOff`], its on
+    /// line follows [`Station::classify_on`], any other line is RF path.
+    fn classify_pulse(&self, id: &ChannelId) -> Action {
+        for d in &self.def.devices {
+            if let PowerSource::Momentary { on, off } = &d.power {
+                if off.as_ref() == Some(id) {
+                    return Action::PowerOff;
+                }
+                if on == id {
+                    return self.classify_on(d);
+                }
+            }
+        }
+        Action::RfPath
     }
 
     fn device(&self, id: &DeviceId) -> Result<&DeviceDef, StationError> {
@@ -175,7 +278,8 @@ impl Station {
     /// Sets a power, output or selector channel by hand, behind the interlock. A power channel
     /// that powers an amplifier-like device still gets the same refusals as `power_on`.
     pub async fn set_channel(&self, id: &ChannelId, value: Value) -> Result<(), StationError> {
-        self.guard(&format!("set {}", id.0)).await?;
+        self.guard_action(self.classify_channel(id, value), &format!("set {}", id.0))
+            .await?;
         if value == Value::On {
             if let Some(d) = self
                 .def
@@ -199,7 +303,8 @@ impl Station {
     // [@ANCHOR: radioctl_station_station_pulse]
     /// Pulses a momentary channel, behind the interlock.
     pub async fn pulse(&self, id: &ChannelId) -> Result<(), StationError> {
-        self.guard(&format!("pulse {}", id.0)).await?;
+        self.guard_action(self.classify_pulse(id), &format!("pulse {}", id.0))
+            .await?;
         self.board.pulse(id).await
     }
 
@@ -229,7 +334,8 @@ impl Station {
     /// answer.
     pub async fn power_on(&self, id: &DeviceId) -> Result<(), StationError> {
         let d = self.device(id)?.clone();
-        self.guard(&format!("power on {}", id.0)).await?;
+        self.guard_action(self.classify_on(&d), &format!("power on {}", id.0))
+            .await?;
         self.check_power_on(&d)?;
         match &d.power {
             PowerSource::AlwaysOn => return Ok(()),
@@ -283,7 +389,8 @@ impl Station {
     /// powered off, in order.
     pub async fn power_off(&self, id: &DeviceId) -> Result<Vec<DeviceId>, StationError> {
         let target = self.device(id)?.clone();
-        self.guard(&format!("power off {}", id.0)).await?;
+        self.guard_action(Action::PowerOff, &format!("power off {}", id.0))
+            .await?;
         let mut order = self.def.dependents(id);
         order.push(id.clone());
         let mut done = Vec::new();
@@ -292,7 +399,8 @@ impl Station {
             if matches!(self.device_power(&dev)?, Some(Value::Off)) {
                 continue;
             }
-            self.guard(&format!("power off {}", dev.0)).await?;
+            self.guard_action(Action::PowerOff, &format!("power off {}", dev.0))
+                .await?;
             sleep(Duration::from_millis(d.off_delay_ms)).await;
             match &d.power {
                 PowerSource::AlwaysOn => {
@@ -556,6 +664,79 @@ mod tests {
         let e = st.set_channel(&ch("amp_pwr"), Value::On).await.unwrap_err();
         assert_eq!(e.kind, StationErrorKind::Refused);
         st.pulse(&ch("btn")).await.unwrap();
+    }
+
+    // Tests [@ANCHOR: radioctl_station_station_guard_action]
+    // Tests [@ANCHOR: radioctl_station_station_set_hint]
+    // Tests [@ANCHOR: radioctl_station_station_classify_on]
+    // Tests [@ANCHOR: radioctl_station_station_classify_channel]
+    // Tests [@ANCHOR: radioctl_station_station_classify_pulse]
+    #[tokio::test(start_paused = true)]
+    async fn an_unknown_keyed_state_lets_power_off_and_radio_power_on_through_only() {
+        let (st, bank, key) = rig(None);
+        // bring the station up while the keyed state is known
+        st.power_on(&dev("ic7300")).await.unwrap();
+        st.select(&ch("ant"), 2).await.unwrap();
+        st.power_on(&dev("amp")).await.unwrap();
+        key.0.store(2, Ordering::SeqCst);
+        // RF path: blocked while unknown
+        assert_eq!(
+            st.select(&ch("ant"), 1).await.unwrap_err().kind,
+            StationErrorKind::KeyedUnknown
+        );
+        assert_eq!(
+            st.set_channel(&ch("ant"), Value::Off)
+                .await
+                .unwrap_err()
+                .kind,
+            StationErrorKind::KeyedUnknown
+        );
+        assert_eq!(
+            st.pulse(&ch("btn")).await.unwrap_err().kind,
+            StationErrorKind::KeyedUnknown
+        );
+        // a radio that is up cannot be switched on again by the unknown-state exemption
+        assert_eq!(
+            st.set_channel(&ch("radio_pwr"), Value::On)
+                .await
+                .unwrap_err()
+                .kind,
+            StationErrorKind::KeyedUnknown
+        );
+        // power off is always allowed, dependents first
+        let off = st.power_off(&dev("ic7300")).await.unwrap();
+        assert_eq!(off, vec![dev("amp"), dev("ic7300")]);
+        assert!(!bank.line(0) && !bank.line(1));
+        // the radio is Off: powering it on is allowed; the amplifier is not
+        st.power_on(&dev("ic7300")).await.unwrap();
+        assert!(bank.line(0));
+        st.set_channel(&ch("radio_pwr"), Value::Off).await.unwrap();
+        st.set_channel(&ch("radio_pwr"), Value::On).await.unwrap();
+        st.set_channel(&ch("amp_pwr"), Value::Off).await.unwrap();
+        assert_eq!(
+            st.power_on(&dev("amp")).await.unwrap_err().kind,
+            StationErrorKind::KeyedUnknown
+        );
+        // an Unreachable radio that is still powered may be power-cycled
+        st.set_radio_state(&dev("ic7300"), RadioState::Ready);
+        assert!(st.set_channel(&ch("radio_pwr"), Value::On).await.is_err());
+        st.set_radio_state(&dev("ic7300"), RadioState::Unreachable);
+        st.set_channel(&ch("radio_pwr"), Value::On).await.unwrap();
+        // a known keyed state still blocks power off
+        key.0.store(1, Ordering::SeqCst);
+        assert_eq!(
+            st.power_off(&dev("ic7300")).await.unwrap_err().kind,
+            StationErrorKind::Refused
+        );
+        assert_eq!(
+            st.set_channel(&ch("radio_pwr"), Value::Off)
+                .await
+                .unwrap_err()
+                .kind,
+            StationErrorKind::Refused
+        );
+        // the emergency all-off ignores all of it
+        assert!(st.all_off().await.failed.is_empty());
     }
 
     // Tests [@ANCHOR: radioctl_station_station_power_off]
