@@ -707,6 +707,8 @@ fn the_xiegu_files_against_hamlib_record_every_disagreement() {
         ("xiegu-g90", 3088),
         ("xiegu-x6100", 3087),
         ("xiegu-x108g", 3076),
+        ("xiegu-x5105", 3089),
+        ("xiegu-x6200", 3091),
     ] {
         let desc = shipped(file);
         let mut steps = scenario();
@@ -724,13 +726,14 @@ fn the_xiegu_files_against_hamlib_record_every_disagreement() {
 
 /// The steps on which Hamlib and radioctl disagree for a Xiegu file.
 ///
-/// The G90 and X6100 agree. On the X108G Hamlib selects VFO B (`07 01`) before it works, so its
+/// The G90, X6100 and X6200 agree. The X5105 behaves as the X108G, whose settings Hamlib shares
+/// with it. On the X108G Hamlib selects VFO B (`07 01`) before it works, so its
 /// frequency writes land in the virtual rig's VFO B while radioctl's engine, which assumes VFO A
 /// is selected and never sends `07`, writes VFO A: the virtual rig's VFO A ends at a different
 /// frequency. Which VFO a real X108G treats as "the" VFO is unknown.
 fn known_xiegu_divergences(file: &str) -> Vec<&'static str> {
     match file {
-        "xiegu-x108g" => vec!["final freq_a"],
+        "xiegu-x108g" | "xiegu-x5105" => vec!["final freq_a"],
         _ => Vec::new(),
     }
 }

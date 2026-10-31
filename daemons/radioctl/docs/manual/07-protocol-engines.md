@@ -9,7 +9,7 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 
 | Family | Engine | Radios with a description | Protocol |
 |---|---|---|---|
-| `icom-civ` | `civ::CivEngine` | IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X108G | binary frames, BCD numbers |
+| `icom-civ` | `civ::CivEngine` | IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X6200, X108G, X5105 | binary frames, BCD numbers |
 | `kenwood-ascii` | `kenwood::KenwoodEngine` | TS-2000, TS-590S, TS-590SG | ASCII commands ending in `;` |
 | `kenwood-ascii`, `dialect = "ts890"` | `kenwood_ts890::Ts890Engine` | TS-890S | the same framing, its own command set |
 | `elecraft-ascii` | `elecraft::ElecraftEngine` | KX3 (K3 and KX2 share the protocol; no description yet) | ASCII, Kenwood-like with its own replies |
@@ -75,7 +75,7 @@ frame is skipped.
 - **Sources:** the basic commands come from this repository's own simulator and relay bridge; the rest
   from Hamlib 4.6.2 source for facts only. Icom's guides were not used (chapter
   [12](12-provenance-and-licensing.md)). Never verified on a radio.
-- **Xiegu:** G90, X6100 and X108G use this engine with only frequency, mode, PTT and signal claimed. The
+- **Xiegu:** G90, X6100, X6200, X108G and X5105 use this engine with only frequency, mode, PTT and signal claimed. The
   oracle shows the X108G disagreeing with Hamlib on the final VFO A frequency; the cause is
   uninvestigated.
 
