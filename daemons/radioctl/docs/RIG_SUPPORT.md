@@ -22,8 +22,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 313 |
-| manual-checked | 0 |
+| unverified | 310 |
+| manual-checked | 3 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -240,7 +240,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
 | 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
 | 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | `kenwood-ts-450s` | unverified | - | described |
-| 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | `kenwood-ts-480` | unverified | - | described |
+| 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | `kenwood-ts-480` | manual-checked | - | described |
 | 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | `kenwood-ts-50s` | unverified | - | described |
 | 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | `kenwood-ts-570d` | unverified | - | described |
 | 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | `kenwood-ts-570s` | unverified | - | described |
@@ -252,7 +252,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2007 | Kenwood | TS-790 | A | kenwood_ascii | kenwood | `kenwood-ts-790` | unverified | - | described |
 | 2008 | Kenwood | TS-811 | A | kenwood_ascii | kenwood | `kenwood-ts-811` | unverified | - | described |
 | 2009 | Kenwood | TS-850 | A | kenwood_ascii | kenwood | `kenwood-ts-850` | unverified | - | described |
-| 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | `kenwood-ts-870s` | unverified | - | described |
+| 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | `kenwood-ts-870s` | manual-checked | - | described |
 | 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | unverified | - | described |
 | 2022 | Kenwood | TS-930 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
 | 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | `kenwood-ts-940s` | unverified | - | described |
@@ -343,7 +343,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1003 | Yaesu | FT-1000D | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1024 | Yaesu | FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-2000` | unverified | - | described |
-| 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450` | unverified | - | described |
+| 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450` | manual-checked | - | described |
 | 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450d` | unverified | - | described |
 | 1039 | Yaesu | FT-600 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1047 | Yaesu | FT-650 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |

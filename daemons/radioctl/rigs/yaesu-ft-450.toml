@@ -1,11 +1,10 @@
 # Rig description: Yaesu FT-450 (newcat ASCII, schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
-# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
-# Written from Hamlib 4.6.2 only (rigs/yaesu/ft450.c, newcat.c, `rigctl -m 1027 --dump-caps`), read for facts only: no vendor guide for this model was used.
+# Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The command facts marked manual-checked were compared with Yaesu's 'FT-450 CAT Operation Reference Book' (sha256 in each fact); timing and the model name are Hamlib 4.6.2 (rigs/yaesu/ft450.c, newcat.c, `rigctl -m 1027 --dump-caps`, facts only).
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
-# Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
-# Gaps and open questions: Hamlib's FT-450 driver is the FT-450D driver with the ID 0241; the FT-450D guide was not used for this older radio, so every fact here is Hamlib's. No split, XIT, read-power or levels (same reasons as the FT-450D). Details: crates/radioctl-protocols/src/yaesu.rs.
+# Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon (both checked against the book).
+# Gaps and pinned open questions (details: crates/radioctl-protocols/src/yaesu.rs): no levels (MG is three sub-ranges of 000-255, PC is 000-255, the engine's ranges are 0-100 and 5-100; AG and RG match); no split (FT selects the displayed or the opposite band); no RIT/XIT capability (the book has RT, RU, RD, RC for the receive clarifier but no XT, and the capability covers both).
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "identify", "read-power"]
 
 [rig]
 id = "yaesu-ft-450"
@@ -72,13 +71,13 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "yaesu.model_id"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c, the NC_RIGID table (241 for this model)" }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK' (18 pages, no document number printed), file ft450_cat_reference.pdf, https://archive.org/download/FT-450_CAT_Operation_Reference_Book/FT-450_CAT_Operation_Reference_Book.pdf (a public archive.org copy of Vertex Standard's book), sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2, read by us in this session: ID, PDF p. 10 (printed page 9; answer ID0241, fixed)", note = "Hamlib 4.6.2 newcat.c NC_RIGID has 241 as well." }
+verified = { state = "manual-checked", reference = "FT-450 CAT Operation Reference Book, ID (PDF p. 10)" }
 
 [[facts]]
 key = "yaesu.frequency_digits"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_get_info (IF answer of 27 characters, width_frequency 8) and rigs/yaesu/ft450.c", note = "The FT-450 shares the FT-450D's 8-digit frequency field per Hamlib." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK' (18 pages, no document number printed), file ft450_cat_reference.pdf, https://archive.org/download/FT-450_CAT_Operation_Reference_Book/FT-450_CAT_Operation_Reference_Book.pdf (a public archive.org copy of Vertex Standard's book), sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2, read by us in this session: FA example 'FA14250000;' on PDF p. 3 (8 digits) and IF, PDF p. 10: P1 3 digits memory channel, P2 8 digits VFO-A frequency, P3 5 characters clarifier, P4 to P8 and P10 one character each, P9 two characters: 2+3+8+5+1+1+1+1+1+2+1 plus the semicolon is 27 characters", note = "Agrees with Hamlib 4.6.2 newcat_get_info." }
+verified = { state = "manual-checked", reference = "FT-450 CAT Operation Reference Book, FA (PDF p. 3) and IF (PDF p. 10)" }
 
 [[facts]]
 key = "timing.*"
@@ -92,15 +91,15 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft450.c (rig_caps), rigs/yaesu/newcat.c (FA, FB, IF, MD, TX, SM, AI)", note = "Declared from the FT-450D's capabilities as Hamlib implements them in the shared newcat driver." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK' (18 pages, no document number printed), file ft450_cat_reference.pdf, https://archive.org/download/FT-450_CAT_Operation_Reference_Book/FT-450_CAT_Operation_Reference_Book.pdf (a public archive.org copy of Vertex Standard's book), sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2, read by us in this session: FA, FB, IF, ID and FT, PDF p. 10; MD p. 12; TX p. 16; SM p. 15; RM p. 15 (P1 5 is the PO meter, 000-255); AI p. 5", note = "Every command the declared capabilities send exists with the form the engine uses. read-power is new: RM5 with an answer RM5nnn is the PO meter of this book (the FT-450D and FT-950 books differ, see their files)." }
+verified = { state = "manual-checked", reference = "FT-450 CAT Operation Reference Book, FA FB IF ID MD TX SM RM AI (PDF pp. 3-16)" }
 
 [[facts]]
 key = "capability.set-ptt"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_set_ptt (TX1; and TX0;)", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Unverified." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK' (18 pages, no document number printed), file ft450_cat_reference.pdf, https://archive.org/download/FT-450_CAT_Operation_Reference_Book/FT-450_CAT_Operation_Reference_Book.pdf (a public archive.org copy of Vertex Standard's book), sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2, read by us in this session: TX, PDF p. 16 (0 radio and CAT transmit off, 1 CAT transmit on, 2 radio transmit on, answer only)", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Whether the radio keys is hardware-unverified." }
+verified = { state = "manual-checked", reference = "FT-450 CAT Operation Reference Book, TX (PDF p. 16)" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_set_mode / newcat_get_mode (MD0 and the mode letters) and `rigctl -m 1027 --dump-caps`", note = "Mapping to radioctl modes is ours; the letters are those of the FT-991A convention." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK' (18 pages, no document number printed), file ft450_cat_reference.pdf, https://archive.org/download/FT-450_CAT_Operation_Reference_Book/FT-450_CAT_Operation_Reference_Book.pdf (a public archive.org copy of Vertex Standard's book), sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2, read by us in this session: MD, PDF p. 12 (1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA (RTTY-LSB), 7 CW-R, 8 USER-L, 9 DATA (RTTY-USB), B FM-N, C USER-U)", note = "Mapping to radioctl modes is ours: 6 rtty, 9 rtty-r, 8 data-r, C data. FM-N (B) is not mapped." }
+verified = { state = "manual-checked", reference = "FT-450 CAT Operation Reference Book, MD (PDF p. 12)" }

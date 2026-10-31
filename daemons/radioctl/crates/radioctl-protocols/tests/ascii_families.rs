@@ -281,3 +281,78 @@ fn the_batch_ids_and_frequency_widths_match_the_sources_and_no_two_files_share_a
         );
     }
 }
+
+/// A description by id.
+fn described(id: &str) -> RigDescription {
+    ascii_files()
+        .into_iter()
+        .find(|d| d.id == id)
+        .unwrap_or_else(|| panic!("{id} has no file"))
+}
+
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+// Tests [@ANCHOR: radioctl_kenwood_level_wire]
+// Tests [@ANCHOR: radioctl_kenwood_decode_level]
+#[test]
+fn the_kenwood_manual_checks_are_pinned_where_the_guides_and_the_engine_differ() {
+    // TS-480 (PC control command reference, 2003/11/28): AG0nnn 000-255 and MG 000-100 and
+    // KS 010-060 agree with the engine; RG is 000-100 in the guide.
+    let desc = described("kenwood-ts-480");
+    let mut engine = engine_for(&desc).expect("engine");
+    let wire = |engine: &mut dyn ProtocolEngine, op: Op| engine.encode(&op).expect("encodes").bytes;
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::AfGain, 255)),
+        b"AG0255;"
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::MicGain, 100)),
+        b"MG100;"
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::KeyerSpeed, 60)),
+        b"KS060;"
+    );
+    assert!(engine.encode(&Op::SetLevel(Level::MicGain, 101)).is_err());
+    // Open question, pinned: the engine still writes RG up to 255 to a radio whose guide stops
+    // at 100. When the engine takes a per-description range this expectation flips to an error.
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::RfGain, 255)),
+        b"RG255;"
+    );
+
+    // TS-870S (instruction manual appendix D): RU and RD take no parameter, AG and RG have no
+    // leading zero, SM has no leading zero: the engine's forms would be refused, so the
+    // description claims neither RIT/XIT offsets, levels nor the signal.
+    let desc = described("kenwood-ts-870s");
+    let mut engine = engine_for(&desc).expect("engine");
+    for op in [
+        Op::SetRitOffset(150),
+        Op::SetLevel(Level::AfGain, 100),
+        Op::GetSignal,
+    ] {
+        let err = engine.encode(&op).expect_err("refused");
+        assert_eq!(err.kind, ErrorKind::Unsupported, "{op:?}");
+    }
+}
+
+// Tests [@ANCHOR: radioctl_yaesu_engine_encode]
+// Tests [@ANCHOR: radioctl_yaesu_engine_feed]
+// Tests [@ANCHOR: radioctl_virtual_from_description]
+#[test]
+fn the_ft_450_reads_its_po_meter_with_rm5_as_its_cat_book_says() {
+    let desc = described("yaesu-ft-450");
+    assert!(desc.capabilities.has(Capability::ReadPower));
+    let mut engine = engine_for(&desc).expect("engine");
+    let request = engine.encode(&Op::GetPower).expect("encodes");
+    assert_eq!(request.bytes, b"RM5;");
+    let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
+    let answer = rig.feed(&request.bytes, NOW);
+    assert!(!answer.is_empty());
+    assert!(engine
+        .feed(&answer, NOW)
+        .iter()
+        .any(|i| matches!(i, Inbound::Observation(Observation::Power(_)))));
+    // The book has no XT command and no MG/PC of the engine's ranges: not claimed.
+    assert!(!desc.capabilities.has(Capability::RitXit));
+    assert!(!desc.capabilities.has(Capability::Levels));
+}
