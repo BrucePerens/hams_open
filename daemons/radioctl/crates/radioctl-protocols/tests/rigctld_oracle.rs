@@ -241,11 +241,28 @@ const ANSWER_TIMEOUT: Duration = Duration::from_secs(40);
 
 impl Rigctld {
     fn start(model: u32, slave: &str, baud: u32) -> Rigctld {
+        // The port is found by binding to 0 and letting go, so two harnesses (the nine tests of
+        // this file run in parallel, and so does radioctld's suite) can be handed the same number;
+        // the second rigctld then fails to bind and exits, and a connect to that port reaches the
+        // FIRST harness's rigctld, on another radio's pty: every step "NoAnswer", an empty wire
+        // (seen once in a whole-workspace run). So: if the child is gone before or right after
+        // the connect, the connection was not to it; try again on another port.
+        for _attempt in 0..8 {
+            if let Some(started) = Self::try_start(model, slave, baud) {
+                return started;
+            }
+        }
+        panic!("rigctld could not be started on a port of its own after eight tries");
+    }
+
+    /// One attempt: `None` when the spawned rigctld exited (its port was taken) before it
+    /// could be reached.
+    fn try_start(model: u32, slave: &str, baud: u32) -> Option<Rigctld> {
         let port = {
             let probe = TcpListener::bind("127.0.0.1:0").expect("free port");
             probe.local_addr().expect("addr").port()
         };
-        let child = Reaped(
+        let mut child = Reaped(
             Command::new(rigctld_binary())
                 .args([
                     "-m",
@@ -269,6 +286,9 @@ impl Rigctld {
         );
         let started = Instant::now();
         let stream = loop {
+            if child.0.try_wait().ok().flatten().is_some() {
+                return None;
+            }
             match TcpStream::connect(("127.0.0.1", port)) {
                 Ok(stream) => break stream,
                 Err(_) if started.elapsed() < Duration::from_secs(45) => {
@@ -277,6 +297,11 @@ impl Rigctld {
                 Err(e) => panic!("rigctld did not listen on {port}: {e}"),
             }
         };
+        // A connect that succeeded while our child is dead reached somebody else's rigctld.
+        thread::sleep(Duration::from_millis(20));
+        if child.0.try_wait().ok().flatten().is_some() {
+            return None;
+        }
         stream
             // Hamlib's FT-817-family and TS-890S backends probe at open with commands the virtual
             // rig refuses or does not know, each with its own retries, so the first answer can take
@@ -286,11 +311,11 @@ impl Rigctld {
             .set_read_timeout(Some(ANSWER_TIMEOUT))
             .expect("timeout");
         let writer = stream.try_clone().expect("clone");
-        Rigctld {
+        Some(Rigctld {
             child,
             reader: BufReader::new(stream),
             writer,
-        }
+        })
     }
 
     /// Sends one command in rigctld's extended form and returns its `key: value` lines and the
