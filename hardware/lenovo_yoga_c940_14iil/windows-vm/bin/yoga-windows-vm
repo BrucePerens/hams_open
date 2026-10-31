@@ -1,0 +1,142 @@
+#!/bin/bash
+# Helper for the Windows VM on the Yoga C940.
+set -u
+. /usr/lib/yoga-windows-vm/common.sh || exit 1
+SHARE=/usr/share/yoga-windows-vm
+VIRSH="virsh -c qemu:///system"
+as_root() { [ "$(id -u)" = 0 ] || exec sudo -- "$0" "$@"; }
+state() { local s; s=$($VIRSH domstate "$DOMAIN" 2>/dev/null) || s=undefined; echo "$s"; }
+off_p() { case "$(state)" in "shut off"|undefined) return 0 ;; *) return 1 ;; esac; }
+
+usage() { cat <<U
+usage: yoga-windows-vm <command>
+  init                 build the virtual GPT/ESP disk, MSDM copy, overlay; define the VM (root)
+  start [--viewer]     start the VM (headless unless --viewer)
+  view                 open virt-viewer on the running VM
+  launch               start if needed and open the viewer (GNOME launcher)
+  stop                 ACPI shutdown, wait SHUTDOWN_WAIT s, destroy only as last resort
+  status               mode, VM state, host mount state, autostart
+  mode overlay|raw     switch disk mode (raw needs --enable-raw-writes; VM must be off)
+  autostart on|off     start the VM at host boot / clean stop at host shutdown (default off)
+  remount              remount the Windows partition on the host if the VM is off (root)
+  reset-overlay        discard the overlay, i.e. Windows changes made in overlay mode (root)
+U
+}
+
+render_xml() { # $1=overlay|raw
+    local disk
+    if [ "$1" = raw ]; then
+        disk="<disk type='block' device='disk'><driver name='qemu' type='raw' cache='none' io='native' discard='unmap'/><source dev='$DM_DEV'/><target dev='sda' bus='sata'/><serial>YOGAWIN0001</serial><boot order='1'/></disk>"
+    else
+        disk="<disk type='file' device='disk'><driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/><source file='$DATA_DIR/overlay.qcow2'/><backingStore type='block'><format type='raw'/><source dev='$DM_DEV'/></backingStore><target dev='sda' bus='sata'/><serial>YOGAWIN0001</serial><boot order='1'/></disk>"
+    fi
+    sed -e "s|@DISK@|$disk|" -e "s|@DATA_DIR@|$DATA_DIR|g" "$SHARE/yoga-windows.xml.in"
+}
+
+define_vm() { render_xml "$1" | $VIRSH define /dev/stdin; }
+
+sgval() { sgdisk -i "$1" "$DISK" | awk -F': ' -v k="$2" '$1==k {print $2}' | awk '{print $1}'; }
+
+new_overlay() {
+    MODE=overlay disk_up || exit 1
+    qemu-img create -q -f qcow2 -b "$DM_DEV" -F raw "$DATA_DIR/overlay.qcow2"
+    chown libvirt-qemu:libvirt-qemu "$DATA_DIR/overlay.qcow2"
+    MODE=overlay disk_down
+}
+
+cmd_init() {
+    as_root init
+    local part n total tmp dguid i off m
+    local g1 g2 g3 s1 e1 s2 e2 s3 e3
+    part=$(readlink -f "$WIN_DEV"); DISK=/dev/$(lsblk -no pkname "$part")
+    n=$(cat "/sys/class/block/${part##*/}/partition")
+    if [ "$n" != 3 ]; then log "expected Windows to be partition 3, found $n; init must be adapted"; exit 1; fi
+    exec 9>"$LOCK"; flock 9
+    host_unmount || exit 1
+    mkdir -p "$DATA_DIR/share"; chmod 755 "$DATA_DIR"
+    if [ ! -f "$DATA_DIR/head.img" ]; then
+        dguid=$(sgdisk -p "$DISK" | awk '/Disk identifier/ {print $NF}')
+        for i in 1 2 3; do
+            eval "g$i=$(sgval $i 'Partition unique GUID')"
+            eval "s$i=$(sgval $i 'First sector')"
+            eval "e$i=$(sgval $i 'Last sector')"
+        done
+        total=$((e3 + 1 + 33)); tmp=$(mktemp -p "$DATA_DIR" disk.XXXXXX)
+        truncate -s $((total*512)) "$tmp"
+        sgdisk -o -U "$dguid" \
+          -n "1:$s1:$e1" -t 1:EF00 -c 1:"EFI system partition" -u "1:$g1" \
+          -n "2:$s2:$e2" -t 2:0C01 -c 2:"Microsoft reserved partition" -u "2:$g2" \
+          -n "3:$s3:$e3" -t 3:0700 -c 3:"Basic data partition" -u "3:$g3" "$tmp" >/dev/null
+        dd if="$tmp" of="$DATA_DIR/head.img" bs=512 count="$s3" status=none
+        dd if="$tmp" of="$DATA_DIR/tail.img" bs=512 skip=$((total-33)) count=33 status=none
+        rm -f "${tmp:?}"
+        off=$((s1*512))
+        mkfs.vfat -F 32 -S 512 --offset "$s1" -n ESP "$DATA_DIR/head.img" $(( (e1-s1+1)/2 )) >/dev/null
+        m="-i $DATA_DIR/head.img@@$off"
+        # shellcheck disable=SC2086
+        { mmd $m ::/EFI ::/EFI/Boot
+          mcopy $m -s -p /boot/efi/EFI/Microsoft ::/EFI/
+          mcopy $m /boot/efi/EFI/Microsoft/Boot/bootmgfw.efi ::/EFI/Boot/bootx64.efi; }
+        log "built virtual disk head ($s3 sectors) and tail"
+    fi
+    install -m 0640 -o root -g libvirt-qemu /sys/firmware/acpi/tables/MSDM "$DATA_DIR/MSDM.aml"
+    chown libvirt-qemu:libvirt-qemu "$DATA_DIR/share"
+    [ -f "$DATA_DIR/overlay.qcow2" ] || new_overlay
+    host_remount || true
+    define_vm "$MODE"
+}
+
+cmd_view() { exec virt-viewer -c qemu:///system --attach "$DOMAIN"; }
+cmd_start() { $VIRSH start "$DOMAIN" || exit 1; if [ "${1:-}" = --viewer ]; then cmd_view; fi; }
+cmd_launch() { if [ "$(state)" != running ]; then $VIRSH start "$DOMAIN" || exit 1; fi; cmd_view; }
+cmd_stop() {
+    if [ "$(state)" != running ]; then echo "not running"; return 0; fi
+    $VIRSH shutdown "$DOMAIN" >/dev/null
+    local i
+    for ((i=0; i<SHUTDOWN_WAIT; i++)); do
+        if [ "$(state)" != running ]; then echo "shut down cleanly"; return 0; fi
+        sleep 1
+    done
+    log "no clean shutdown after ${SHUTDOWN_WAIT}s: destroying (LAST RESORT)"
+    $VIRSH destroy "$DOMAIN"
+}
+cmd_status() {
+    echo "mode: $MODE"; echo "vm: $(state)"
+    if win_mounted; then echo "host mount: $WIN_MOUNT mounted"; else echo "host mount: $WIN_MOUNT NOT mounted"; fi
+    echo "autostart: $(systemctl is-enabled yoga-windows-vm.service 2>/dev/null || echo disabled)"
+}
+cmd_mode() {
+    as_root mode "$@"
+    case "${1:-}" in
+    overlay) ;;
+    raw) if [ "${2:-}" != --enable-raw-writes ]; then echo "raw mode writes the real Windows partition. Read the README, make a backup, then: yoga-windows-vm mode raw --enable-raw-writes"; exit 1; fi ;;
+    *) usage; exit 1 ;;
+    esac
+    off_p || { log "VM must be shut off"; exit 1; }
+    sed -i "s/^MODE=.*/MODE=$1/" "$CONF"
+    define_vm "$1" && echo "mode is now $1"
+}
+cmd_autostart() {
+    as_root autostart "$@"
+    case "${1:-}" in
+    on) systemctl enable yoga-windows-vm.service ;;
+    off) systemctl disable yoga-windows-vm.service ;;
+    *) usage; exit 1 ;;
+    esac
+}
+cmd_reset_overlay() {
+    as_root reset-overlay
+    off_p || { log "VM must be shut off"; exit 1; }
+    exec 9>"$LOCK"; flock 9
+    host_unmount || exit 1
+    rm -f "${DATA_DIR:?}/overlay.qcow2"; new_overlay; host_remount
+}
+cmd_remount() { as_root remount; exec 9>"$LOCK"; flock 9; host_remount; }
+
+c=${1:-}; if [ $# -gt 0 ]; then shift; fi
+case "$c" in
+init) cmd_init ;; start) cmd_start "$@" ;; view) cmd_view ;; launch) cmd_launch ;;
+stop) cmd_stop ;; status) cmd_status ;; mode) cmd_mode "$@" ;; autostart) cmd_autostart "$@" ;;
+remount) cmd_remount ;; reset-overlay) cmd_reset_overlay ;;
+*) usage; exit 1 ;;
+esac

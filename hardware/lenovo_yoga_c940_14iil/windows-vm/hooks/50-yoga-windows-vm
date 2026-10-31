@@ -1,0 +1,20 @@
+#!/bin/bash
+# libvirt qemu hook (qemu.d): $1=domain $2=operation $3=sub-operation
+[ "$1" = yoga-windows ] || exit 0
+. /usr/lib/yoga-windows-vm/common.sh || exit 1
+exec 9>"$LOCK"; flock 9
+exec 2> >(logger -t yoga-windows-vm-hook)
+logger -t yoga-windows-vm-hook "$1 $2 $3"
+case "$2/$3" in
+prepare/begin)
+    # Failure here makes libvirt refuse to start the domain.
+    if vm_running; then log "another QEMU for $DOMAIN is running"; exit 1; fi
+    host_unmount || exit 1
+    disk_up || exit 1
+    ;;
+release/end)
+    disk_down
+    host_remount || true
+    ;;
+esac
+exit 0
