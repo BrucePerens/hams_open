@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use radioctl_core::baud_probe::{probe, rates_text, ProbeResult, SerialProbePort};
 use radioctl_core::capability::Capability;
 use radioctl_core::description::RigDescription;
 use radioctl_core::engine::{ProtocolEngine, Request};
@@ -19,7 +20,7 @@ use radioctl_core::net::{open_link, Framing, NetConfig, NetMonitor, RawFraming};
 use radioctl_core::op::Op;
 use radioctl_core::rig::{spawn, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
-use radioctl_core::serial::{open_serial, SerialConfig, SerialMonitor};
+use radioctl_core::serial::{open_serial, LineControl, PortTarget, SerialConfig, SerialMonitor};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::kenwood_ts890_lan::{LanCredentials, Ts890LanFraming, KEEPALIVE_EVERY};
@@ -27,8 +28,11 @@ use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_station::homeassistant::{FileSecrets, SecretStore};
 use tokio::runtime::Handle;
 
-use crate::config::{RigConfig, ServerConfig, TcpFraming, TransportConfig};
+use crate::config::{BaudSetting, RigConfig, ServerConfig, TcpFraming, TransportConfig};
 use crate::service::{RigService, ServiceConfig};
+
+/// The rate in the serial configuration the baud probe is handed; it replaces it at every open.
+const PROBE_TEMPLATE_BAUD: u32 = 9600;
 
 /// A protocol engine behind a box, so one `spawn` serves every family.
 struct BoxedEngine(Box<dyn ProtocolEngine>);
@@ -60,6 +64,9 @@ pub struct BuiltRig {
     pub serial_link: Option<SerialMonitor>,
     /// The network link's status and counters, for TCP rigs.
     pub net_link: Option<NetMonitor>,
+    /// What the baud probe found, when the configuration asked for one (`baud = "auto"` or
+    /// `baud_probe`); `None` for a fixed rate, which is the default.
+    pub baud_probe: Option<ProbeResult>,
 }
 
 // [@ANCHOR: radioctld_rigs_tcp_framing]
@@ -149,6 +156,7 @@ pub async fn build_rig(
     let mut virtual_control = None;
     let mut serial_link = None;
     let mut net_link = None;
+    let mut baud_probe = None;
     let handle: RigHandle = match &rig.transport {
         TransportConfig::Virtual { reply_delay } => {
             let virtual_rig = VirtualRig::from_description(&description).map_err(fail)?;
@@ -161,8 +169,34 @@ pub async fn build_rig(
             baud,
             lines,
         } => {
-            let mut serial = SerialConfig::new(target.clone(), *baud);
-            serial.lines = *lines;
+            let rate = match baud {
+                BaudSetting::Fixed(rate) => *rate,
+                BaudSetting::Probe(rates) => {
+                    // The probe opens the port at each rate with the same line handling as the
+                    // real link, sends the engine's own frequency read (a throwaway engine, so
+                    // the one the actor gets starts clean), and stops at the first answer. It
+                    // runs before the actor exists: the start-up unkey pass below still runs,
+                    // at the rate found.
+                    let mut probe_engine =
+                        engine_for(&description).map_err(|e| format!("{}: {e}", rig.name))?;
+                    // The template's rate is replaced at every open.
+                    let template = serial_config(target, PROBE_TEMPLATE_BAUD, *lines);
+                    let mut port = SerialProbePort::new(runtime.clone(), template);
+                    let found = probe(&mut port, &mut probe_engine, rates)
+                        .await
+                        .map_err(|e| format!("rig {}: baud probe: {e}", rig.name))?;
+                    eprintln!(
+                        "radioctld: rig {}: baud probe chose {} (tried {})",
+                        rig.name,
+                        found.baud,
+                        rates_text(&found.tried)
+                    );
+                    let rate = found.baud;
+                    baud_probe = Some(found);
+                    rate
+                }
+            };
+            let serial = serial_config(target, rate, *lines);
             let link = open_serial(runtime, serial).await.map_err(fail)?;
             // The actor watches the port: a port loss takes the link down, a reopen unkeys the
             // rig before any other command (RigOptions::link_watch). The control lines and
@@ -221,7 +255,17 @@ pub async fn build_rig(
         virtual_control,
         serial_link,
         net_link,
+        baud_probe,
     })
+}
+
+// [@ANCHOR: radioctld_rigs_serial_config]
+/// The serial configuration of a rig at `baud`: 8N1, the configured line handling, one open
+/// attempt. The probe and the real link use the same one, so the port is opened the same way.
+fn serial_config(target: &PortTarget, baud: u32, lines: LineControl) -> SerialConfig {
+    let mut serial = SerialConfig::new(target.clone(), baud);
+    serial.lines = lines;
+    serial
 }
 
 #[cfg(test)]

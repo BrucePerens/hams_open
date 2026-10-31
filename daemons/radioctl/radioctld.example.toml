@@ -34,7 +34,10 @@ kind = "virtual"                              # an in-memory rig generated from 
 # [rig.transport]
 # kind = "serial"                             # a serial or USB-serial port
 # path = "/dev/ttyUSB0"                       # or: usb = { vid = 0x0403, pid = 0x6001, serial = "A12345" }
-# baud = 38400
+# baud = 38400                                # a fixed rate; nothing probes unless you ask (below)
+# # baud = "auto"                             # optional: find the rate with a read-only frequency read at
+# #                                           # 4800, 9600, 19200, 38400, 57600, 115200 in turn, first answer wins;
+# # baud_probe = [19200, 115200]              # or your own list in your own order (with baud absent or "auto")
 # lines = "managed"                           # "unmanaged" for a pty or other port without DTR/RTS
 
 # [rig.transport]

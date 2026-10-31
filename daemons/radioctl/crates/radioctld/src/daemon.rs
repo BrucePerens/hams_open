@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use radioctl_core::baud_probe::ProbeResult;
 use radioctl_core::description::RigDescription;
 use radioctl_core::net::NetMonitor;
 use radioctl_core::rig::RigOptions;
@@ -47,6 +48,9 @@ pub struct Served {
     pub serial_link: Option<SerialMonitor>,
     /// The network link's status and counters, for TCP rigs.
     pub net_link: Option<NetMonitor>,
+    /// What the baud probe found, for a serial rig configured with `baud = "auto"` or
+    /// `baud_probe`; `None` otherwise.
+    pub baud_probe: Option<ProbeResult>,
 }
 
 /// The running daemon.
@@ -157,6 +161,7 @@ async fn start_one(
         virtual_control: built.virtual_control,
         serial_link: built.serial_link,
         net_link: built.net_link,
+        baud_probe: built.baud_probe,
     })
 }
 
