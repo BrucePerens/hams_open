@@ -36,10 +36,8 @@ pub struct RigOptions {
     pub queue_capacity: usize,
     pub default_timeout: Duration,
     pub poll: PollConfig,
-    pub dispatcher_capacity: usize,
     pub stream_capacity: usize,
     pub scope_capacity: usize,
-    pub callback: Option<Callback>,
     pub link_watch: Option<watch::Receiver<LinkStatus>>,
     pub max_transmit: Duration,
     pub heartbeat: Option<Duration>,
@@ -57,7 +55,7 @@ pub struct PollConfig {
 
 Defaults: queue of 64, 2 second deadline, polling on (fast fields 250 ms to 2 s, meters 1 s to 5 s, the
 PTT state at least every 2 s whatever the traffic),
-a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, a 180 second transmit limit (`DEFAULT_MAX_TRANSMIT`), no heartbeat, no callback, no link watch (`link_watch`: a serial link's `watch()`, chapter [5](05-transports.md), so the actor follows the port across a reconnect and unkeys when it is back).
+an event-stream buffer of 64 per subscriber, a scope-frame buffer of 16 per subscriber, a 180 second transmit limit (`DEFAULT_MAX_TRANSMIT`), no heartbeat, no link watch (`link_watch`: a serial link's `watch()`, chapter [5](05-transports.md), so the actor follows the port across a reconnect and unkeys when it is back).
 
 ## Rig handles
 
@@ -83,7 +81,7 @@ pub fn heartbeat(&self)
 
 `stats()` returns counters (commands ok and failed, preempted, polls, unsolicited observations,
 unrecognised byte runs, events, stream lag, watchdog unkeys, failed unkeys, coalesced unkeys, scope frames
-and scope lag, and the dispatcher's delivered, queue-full, coalesced and panic counts). `heartbeat()` is the
+and scope lag). `heartbeat()` is the
 caller's "I am alive" for the transmit watchdog (chapter [10](10-safety.md)). `link_up()` is false once the transport has failed for good.
 
 ## Operations
@@ -214,7 +212,7 @@ hex: `TX 46 41 3b`, `RX ...`, `?? ...` for bytes that formed no frame, `LINK DOW
 raised before a command reaches the actor (unsupported, gate closed in the handle, queue full) have an
 empty tail. `RigError` implements `std::error::Error`, so `?` works in any `Box<dyn Error>` context.
 
-## Status changes: callback and stream
+## Status changes: the event stream
 
 Every change of a cached value produces a `RigEvent` (a read that returns the same value as before is
 not a change). The event also carries the change of the derived `Field::ActiveTxFrequency` when the
@@ -239,19 +237,23 @@ pub struct Change {
 the splitter) or `Watchdog` (the actor's own transmit watchdog). `old` is `None` the first time a field is seen. The event of a front-panel change may
 arrive as `Poll` or `Transceive` depending on which saw it first.
 
-Two views of the same events, shown together by `crates/radioctld/examples/events.rs`:
+`rig.events()` returns an `EventStream`, which implements `futures_core::Stream<Item = RigEvent>` and
+also has an inherent `next().await` that yields `Option<RigEvent>` (no extension trait needed). It is
+backed by a `tokio::sync::broadcast` channel: every call is a new subscriber that starts with the next
+event, and each subscriber is consumed by a task the application spawns on its own runtime (`tokio::spawn`
+a loop over the stream). Nothing runs for the application on a thread of the library, and the actor
+never waits for a subscriber. A subscriber that falls more than `RigOptions::stream_capacity` events
+behind skips the oldest events and carries on; the number skipped is added to `stats().stream_lagged` and
+is available per subscriber as `EventStream::lagged()`. The stream returns `None` when the rig stops. A
+slow or panicking subscriber task cannot delay an unkey, the watchdog or another subscriber. (Before
+decision 20 of the design notes there was a `with_callback` option on a dedicated thread; it is gone.)
 
-- **Callback.** `RigOptions::default().with_callback(|event| ...)`. Synchronous, on a dedicated thread,
-  bounded and coalescing, panic-isolated (chapter [3](03-architecture.md)).
-- **Stream.** `rig.events()` returns an `EventStream`; `stream.next().await` yields `Option<RigEvent>`
-  and returns `None` when the rig stops. A subscriber that falls behind skips events, counted in
-  `stream_lagged`.
+Shown by `crates/radioctld/examples/events.rs`, with two subscribers:
 
 ```rust example=events
-//! Status changes: the callback (its own thread) and the async event stream, fed by a knob
+//! Status changes: the async event stream, with a second subscriber on its own task, fed by a knob
 //! turned on a virtual radio.
 use std::error::Error;
-use std::sync::mpsc;
 use std::time::Duration;
 
 use radioctl_core::op::{Field, Observation, Op};
@@ -270,13 +272,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let radio = VirtualRig::from_description(&description)?;
     let (transport, front_panel) = spawn_virtual_rig(&Handle::current(), radio, Duration::ZERO);
 
-    // The callback is plain synchronous code. It runs on a dedicated thread, never on the
-    // actor, so a slow callback cannot delay an unkey.
-    let (seen, callback_events) = mpsc::channel();
-    let options = RigOptions::default().with_callback(move |event| {
-        let _ = seen.send(event);
+    let rig = spawn_current(
+        ElecraftEngine::new(description)?,
+        transport,
+        RigOptions::default(),
+    )?;
+    // Every `events()` call is its own subscriber. This one runs on a task of its own, so a slow
+    // subscriber never delays the actor or another subscriber; it only skips events.
+    let mut other = rig.events();
+    let (seen, subscriber_events) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        while let Some(event) = other.next().await {
+            if seen.send(event).is_err() {
+                break;
+            }
+        }
     });
-    let rig = spawn_current(ElecraftEngine::new(description)?, transport, options)?;
     let mut stream = rig.events();
 
     // Ask the radio to report changes by itself, then turn a knob on it.
@@ -298,12 +309,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    // The callback hears the same changes, in order, on its own thread.
+    // The other subscriber saw the same changes, in order, on its own task.
+    let mut subscriber_events = subscriber_events;
     loop {
-        let delivered = callback_events.recv_timeout(Duration::from_secs(5))?;
+        let delivered = timeout(Duration::from_secs(5), subscriber_events.recv())
+            .await?
+            .ok_or("the subscriber task ended")?;
         if delivered.changes.iter().any(|c| c.field == wanted) {
             println!(
-                "callback: rig {} reported the change of VFO A",
+                "subscriber: rig {} reported the change of VFO A",
                 delivered.rig
             );
             break;
@@ -356,7 +370,7 @@ amplifier controller needed the frequency the radio would transmit on; Hamlib an
 frequency of whichever VFO was asked for, as its maintainers intended, and other programs assumed the
 transmit VFO. The proposal (section 14) therefore asks radioctl for a first-class transmit frequency:
 one value that is correct in split mode and while keyed, that amplifier and antenna followers use, and
-whose changes fire the callback, including a change made on the front panel.
+whose changes appear on the event stream, including a change made on the front panel.
 
 **Implemented** (unverified on real radios):
 
@@ -382,7 +396,7 @@ pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigE
   deliberately **not** folded in (a few kilohertz at most; a band decoder wants the VFO frequency).
 - **The actor publishes it.** After every observation the actor recomputes the value from the cache and,
   if it changed, adds a `Change` for `Field::ActiveTxFrequency` (an `Observation::ActiveTxFrequency`) to
-  the event, so the callback and the stream report it whichever field moved it. It is derived: no engine
+  the event, so the stream reports it whichever field moved it. It is derived: no engine
   reports it and no command reads it. `Observation::RxVfo` and `TxVfo` carry the rig's own statement
   where the protocol gives one.
 - **Each engine says how it knows.** Kenwood reads the receive VFO (`FR`/`IF` field) and the transmit
@@ -392,7 +406,7 @@ pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigE
 - **The follower test exists on virtual rigs.** `radioctl-protocols/tests/tx_frequency.rs` drives the
   Kenwood, Elecraft, Yaesu newcat and CI-V virtual radios into split, keys them on the virtual front panel
   (the gate stays closed; nothing reaches hardware), and checks that `active_tx_frequency` equals the
-  transmit VFO's frequency and that the callback reports it. It has not been run on a real radio.
+  transmit VFO's frequency and that the event stream reports it. It has not been run on a real radio.
 - **The splitter** answers a plain read of the current frequency (CI-V `03`, TS-2000 `FA;`) with the
   transmit frequency while the rig is keyed in split, as OmniRig-style clients assume. Reads that name
   the other VFO (`25 01`, `FB;`) are unchanged. `SplitterConfig::report_tx_frequency_while_keyed`

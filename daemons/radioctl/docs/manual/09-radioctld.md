@@ -293,5 +293,5 @@ radioctld: kx3 listening on loopback
 ```
 
 A program embedding the daemon can reach each rig's `RigHandle` through
-`daemon.rigs[i].service.rig()`, for example to register a status callback of its own (build the rig
+`daemon.rigs[i].service.rig()`, for example to subscribe to the event stream of its own (build the rig
 with your own `RigOptions` through the `options` closure of `daemon::start`).

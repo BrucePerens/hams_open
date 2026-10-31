@@ -32,7 +32,7 @@ that must use `expect` say so with an `allow` at the top.
 | Virtual rigs | `radioctl-protocols/src/virtual_rig.rs`, `io.rs` | an engine and a simulated radio generated from the same description agree on every operation |
 | Transcript replay | `rigs/transcripts/`, `tests/rig_files.rs`, `conformance::replay` | a description, its engine and its virtual rig agree on the bytes of a recorded or hand-written session |
 | FlexRadio over TCP | `radioctl-protocols/tests/flex_actor.rs` | the Flex engine, the actor and the TCP transport against a virtual radio on a loopback listener; no keying line reaches the wire while the gate is closed |
-| The actor | `radioctl-core/tests/actor.rs` | priorities, deadlines, preemption, the cache, polling, callbacks, the fail-closed unkeys and the transmit watchdog, two runtimes; time is paused with `start_paused` so the tests are fast and deterministic |
+| The actor | `radioctl-core/tests/actor.rs` | priorities, deadlines, preemption, the cache, polling, the event stream, the fail-closed unkeys and the transmit watchdog, two runtimes; time is paused with `start_paused` so the tests are fast and deterministic |
 | Transports | `radioctl-core/tests/transports.rs` | real pseudo-terminals, a vanished and reopened port, control lines, TCP, a fake sysfs tree |
 | OpenHPSDR over a loopback emulator | `radioctl-protocols/tests/hpsdr_actor.rs` | the HPSDR engine, the bridge and the actor against the `hpsdr` crate's Protocol 1 and 2 emulators |
 | Transmit frequency | `radioctl-protocols/tests/tx_frequency.rs` | on virtual Kenwood, Elecraft, Yaesu newcat and CI-V radios in split, `active_tx_frequency` equals the transmit VFO's frequency and the callback reports it |

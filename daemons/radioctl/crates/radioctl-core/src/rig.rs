@@ -25,17 +25,20 @@
 //! full the request rides on the unkey already queued and gets its result.
 
 use std::collections::{HashMap, VecDeque};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
+use futures_core::Stream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::runtime::Handle;
 use tokio::sync::{broadcast, mpsc, oneshot, watch, Notify};
 use tokio::time::{sleep_until, timeout_at, Instant};
 
 use crate::capability::{Capability, CapabilitySet};
-use crate::dispatcher::{Callback, Dispatcher, DispatcherCounters};
 use crate::engine::{Inbound, ProtocolEngine, ReplyKind};
 use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
@@ -65,14 +68,10 @@ pub struct RigOptions {
     pub default_timeout: Duration,
     /// Polling.
     pub poll: PollConfig,
-    /// Events held for the callback before they are coalesced.
-    pub dispatcher_capacity: usize,
     /// Events held per async-stream subscriber before it lags.
     pub stream_capacity: usize,
     /// Scope frames held per scope-stream subscriber before it lags.
     pub scope_capacity: usize,
-    /// The status-change callback, if any.
-    pub callback: Option<Callback>,
     /// The transport's link status, when the transport can report it
     /// ([`crate::serial::SerialLink::watch`]). The serial supervisor keeps the byte stream alive
     /// across a port loss (writes are dropped and counted, not failed), so without this the actor
@@ -97,26 +96,12 @@ impl Default for RigOptions {
             queue_capacity: 64,
             default_timeout: Duration::from_secs(2),
             poll: PollConfig::default(),
-            dispatcher_capacity: 64,
             stream_capacity: 64,
             scope_capacity: 16,
-            callback: None,
             link_watch: None,
             max_transmit: DEFAULT_MAX_TRANSMIT,
             heartbeat: None,
         }
-    }
-}
-
-impl RigOptions {
-    // [@ANCHOR: radioctl_core_rig_options_with_callback]
-    /// Sets the status-change callback. It runs on a dedicated thread, never on the actor.
-    pub fn with_callback<F: Fn(RigEvent) + Send + Sync + 'static>(
-        mut self,
-        callback: F,
-    ) -> RigOptions {
-        self.callback = Some(Arc::new(callback));
-        self
     }
 }
 
@@ -203,8 +188,6 @@ pub struct RigStats {
     pub unkey_failures: u64,
     /// Unkeys that found the emergency queue full and rode on the one already queued.
     pub unkeys_coalesced: u64,
-    /// The callback dispatcher's counters.
-    pub dispatcher: DispatcherCounters,
 }
 
 #[derive(Default)]
@@ -251,7 +234,6 @@ struct Shared {
     epoch: Instant,
     events: broadcast::Sender<RigEvent>,
     scope: broadcast::Sender<ScopeFrame>,
-    dispatcher: Option<Dispatcher>,
     counters: Counters,
     default_timeout: Duration,
 }
@@ -296,14 +278,6 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
     let description = engine.description();
     let id = description.id.clone();
     let capabilities = description.capabilities.clone();
-    let dispatcher = match &options.callback {
-        Some(callback) => Some(Dispatcher::start(
-            &id,
-            options.dispatcher_capacity,
-            Arc::clone(callback),
-        )?),
-        None => None,
-    };
     let (events, _) = broadcast::channel(options.stream_capacity.max(1));
     let (scope, _) = broadcast::channel(options.scope_capacity.max(1));
     let shared = Arc::new(Shared {
@@ -321,7 +295,6 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         epoch: Instant::now(),
         events,
         scope,
-        dispatcher,
         counters: Counters::default(),
         default_timeout: options.default_timeout,
     });
@@ -469,12 +442,6 @@ impl RigHandle {
             watchdog_unkeys: c.watchdog_unkeys.load(Ordering::Relaxed),
             unkey_failures: c.unkey_failures.load(Ordering::Relaxed),
             unkeys_coalesced: c.unkeys_coalesced.load(Ordering::Relaxed),
-            dispatcher: self
-                .shared
-                .dispatcher
-                .as_ref()
-                .map(Dispatcher::counters)
-                .unwrap_or_default(),
         }
     }
 
@@ -498,11 +465,15 @@ impl RigHandle {
     }
 
     // [@ANCHOR: radioctl_core_handle_events]
-    /// An async stream of status changes, starting now.
+    /// The status-change stream, starting now: a `futures_core::Stream<Item = RigEvent>`. Spawn
+    /// a task on your own runtime to consume it; see [`EventStream`] for lag behaviour.
     pub fn events(&self) -> EventStream {
         EventStream {
-            rx: self.shared.events.subscribe(),
-            shared: Arc::clone(&self.shared),
+            rx: Some(self.shared.events.subscribe()),
+            pending: None,
+            shared: Arc::downgrade(&self.shared),
+            lagged: 0,
+            done: false,
         }
     }
 
@@ -513,7 +484,7 @@ impl RigHandle {
     pub fn scope_frames(&self) -> ScopeStream {
         ScopeStream {
             rx: self.shared.scope.subscribe(),
-            shared: Arc::clone(&self.shared),
+            shared: Arc::downgrade(&self.shared),
         }
     }
 
@@ -725,7 +696,7 @@ impl RigHandle {
     // [@ANCHOR: radioctl_core_handle_active_tx_frequency]
     /// The frequency the rig transmits on now, or will when keyed, correct in split operation
     /// and while keyed. Amplifiers, tuners, antenna selectors and band decoders follow this; the
-    /// status-change callback reports `Field::ActiveTxFrequency` when it changes.
+    /// status-change stream reports `Field::ActiveTxFrequency` when it changes.
     pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError> {
         self.tx_state(freshness)
             .await?
@@ -803,7 +774,7 @@ impl RigHandle {
 /// An async stream of scope sweeps.
 pub struct ScopeStream {
     rx: broadcast::Receiver<ScopeFrame>,
-    shared: Arc<Shared>,
+    shared: Weak<Shared>,
 }
 
 impl ScopeStream {
@@ -815,10 +786,12 @@ impl ScopeStream {
             match self.rx.recv().await {
                 Ok(frame) => return Some(frame),
                 Err(broadcast::error::RecvError::Lagged(missed)) => {
-                    self.shared
-                        .counters
-                        .scope_lagged
-                        .fetch_add(missed, Ordering::Relaxed);
+                    if let Some(shared) = self.shared.upgrade() {
+                        shared
+                            .counters
+                            .scope_lagged
+                            .fetch_add(missed, Ordering::Relaxed);
+                    }
                 }
                 Err(broadcast::error::RecvError::Closed) => return None,
             }
@@ -826,29 +799,101 @@ impl ScopeStream {
     }
 }
 
-/// An async stream of status changes.
+type EventRecv = Pin<
+    Box<
+        dyn Future<
+                Output = (
+                    Result<RigEvent, broadcast::error::RecvError>,
+                    broadcast::Receiver<RigEvent>,
+                ),
+            > + Send,
+    >,
+>;
+
+/// The status changes of one rig: a `futures_core::Stream<Item = RigEvent>` backed by a tokio
+/// broadcast channel. Each subscriber owns its stream and drives it from its own task, so a slow
+/// or panicking subscriber never touches the actor, the unkey path or other subscribers. A
+/// subscriber that falls more than `RigOptions::stream_capacity` events behind skips the oldest
+/// events; the skipped count is added to `RigStats::stream_lagged` and to this stream's
+/// [`EventStream::lagged`], and the stream goes on with the next event it still has. The stream
+/// ends (`None`) when the rig stops.
 pub struct EventStream {
-    rx: broadcast::Receiver<RigEvent>,
-    shared: Arc<Shared>,
+    rx: Option<broadcast::Receiver<RigEvent>>,
+    pending: Option<EventRecv>,
+    shared: Weak<Shared>,
+    lagged: u64,
+    done: bool,
 }
 
 impl EventStream {
-    // [@ANCHOR: radioctl_core_event_stream_next]
-    /// The next event, or `None` once the rig has stopped. A subscriber that falls behind skips
-    /// the events it missed and the miss is counted in the rig's `stream_lagged`.
-    pub async fn next(&mut self) -> Option<RigEvent> {
+    // [@ANCHOR: radioctl_core_event_stream_poll]
+    /// Polls for the next event, skipping and counting any the subscriber missed.
+    fn poll_event(&mut self, cx: &mut Context<'_>) -> Poll<Option<RigEvent>> {
         loop {
-            match self.rx.recv().await {
-                Ok(event) => return Some(event),
+            if self.done {
+                return Poll::Ready(None);
+            }
+            if self.pending.is_none() {
+                let Some(mut rx) = self.rx.take() else {
+                    self.done = true;
+                    return Poll::Ready(None);
+                };
+                self.pending = Some(Box::pin(async move {
+                    let result = rx.recv().await;
+                    (result, rx)
+                }));
+            }
+            let Some(pending) = self.pending.as_mut() else {
+                continue;
+            };
+            let (result, rx) = match pending.as_mut().poll(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(output) => output,
+            };
+            self.pending = None;
+            self.rx = Some(rx);
+            match result {
+                Ok(event) => return Poll::Ready(Some(event)),
                 Err(broadcast::error::RecvError::Lagged(missed)) => {
-                    self.shared
-                        .counters
-                        .stream_lagged
-                        .fetch_add(missed, Ordering::Relaxed);
+                    self.lagged = self.lagged.saturating_add(missed);
+                    // A weak reference: a stream must not keep the broadcast sender alive, or it
+                    // would never see the rig stop.
+                    if let Some(shared) = self.shared.upgrade() {
+                        shared
+                            .counters
+                            .stream_lagged
+                            .fetch_add(missed, Ordering::Relaxed);
+                    }
                 }
-                Err(broadcast::error::RecvError::Closed) => return None,
+                Err(broadcast::error::RecvError::Closed) => {
+                    self.done = true;
+                    return Poll::Ready(None);
+                }
             }
         }
+    }
+
+    // [@ANCHOR: radioctl_core_event_stream_next]
+    /// The next event, or `None` once the rig has stopped. Cancel-safe: dropping the future
+    /// loses no event. Events missed while lagging are skipped and counted.
+    pub async fn next(&mut self) -> Option<RigEvent> {
+        std::future::poll_fn(|cx| self.poll_event(cx)).await
+    }
+
+    // [@ANCHOR: radioctl_core_event_stream_lagged]
+    /// Events this subscriber has missed because it fell behind, in total.
+    pub fn lagged(&self) -> u64 {
+        self.lagged
+    }
+}
+
+impl Stream for EventStream {
+    type Item = RigEvent;
+
+    // [@ANCHOR: radioctl_core_event_stream_poll_next]
+    /// `Stream::poll_next`: the next event, skipping and counting any the subscriber missed.
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<RigEvent>> {
+        self.get_mut().poll_event(cx)
     }
 }
 
@@ -1640,13 +1685,10 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     }
 
     // [@ANCHOR: radioctl_core_actor_emit]
-    /// Sends an event to the stream subscribers and the callback dispatcher.
+    /// Sends an event to the stream subscribers. A broadcast send never waits for a subscriber.
     fn emit(&self, event: RigEvent) {
         self.shared.counters.events.fetch_add(1, Ordering::Relaxed);
         let _ = self.shared.events.send(event.clone());
-        if let Some(dispatcher) = &self.shared.dispatcher {
-            dispatcher.submit(event);
-        }
     }
 
     // [@ANCHOR: radioctl_core_actor_poll_reserved]

@@ -12,8 +12,7 @@ records the decisions that shape the code.
 ## Decisions
 
 1. **Async only, on tokio, and the library never creates its own runtime by default.**
-   Constructors take a `tokio::runtime::Handle` (or use `Handle::current()`) and spawn the rig actor
-   and the callback dispatcher on it. A convenience constructor that builds and owns a small runtime
+   Constructors take a `tokio::runtime::Handle` (or use `Handle::current()`) and spawn the rig actor on it. A convenience constructor that builds and owns a small runtime
    exists only behind a cargo feature (for `radioctld` and the C ABI), never by default.
    There is no `block_on` inside the library. Blocking work (serial on platforms that need it, DSP)
    runs on dedicated threads or `spawn_blocking`, never on runtime workers.
@@ -37,12 +36,8 @@ records the decisions that shape the code.
    provenance note per entry and no copied code or tables.
 9. **Licence.** AGPL-3.0-or-later (decision 1 of proposal section 11).
 
-10. **Callback dispatcher is a dedicated OS thread, not a runtime task.** The proposal said "dispatcher
-    task"; application callbacks are synchronous and may block, and the runtime-worker rule forbids
-    blocking a worker. The actor pushes into a bounded queue (one short mutex hold) and never waits;
-    a full queue merges the new event into the newest queued one (latest value per field wins) and
-    counts the intermediate values lost. Panics are caught and counted. The async view is a tokio
-    broadcast channel (`EventStream::next`); a lagging subscriber skips events and the loss is counted.
+10. **Superseded by 20.** The callback dispatcher thread (a bounded, coalescing queue with
+    panic isolation) was removed on 2026-10-31.
 11. **Deadlines live in the actor.** `RigHandle` methods only await a oneshot, so they work from any
     thread or runtime and from a thread with none. The actor answers every command by its deadline.
 12. **Preemption.** Unkeying uses a separate channel and a wake-up; it abandons a command that waits
@@ -120,6 +115,22 @@ records the decisions that shape the code.
     until 2026-10-30 an unknown keyed state counted as keyed and blocked everything but the
     all-off; 2026-10-30 let power-off and the power-on of a down radio pass an unknown state
     (confirmed 2026-10-31); 2026-10-31 settled the rest as above. Nothing else relaxes.
+
+20. **The event stream is the only status-change API; no callbacks** (Bruce, 2026-10-31).
+    `RigOptions::with_callback`, the `Callback` type, `RigOptions::dispatcher_capacity`, the
+    `radioctl-callbacks-<rig>` dispatcher thread and `RigStats::dispatcher` are removed, with no
+    deprecation period. Why: a dedicated OS thread per rig cost a thread, a mutex-guarded queue and
+    a coalescing scheme, and delivered events asynchronously with respect to the application's own
+    tasks, so the application had to bridge a thread back into its runtime anyway. A tokio
+    application wants to `tokio::spawn` its own consumer. `RigHandle::events()` returns an
+    `EventStream` that implements `futures_core::Stream<Item = RigEvent>`, backed by
+    `tokio::sync::broadcast` (a hand-written `Stream` over a boxed `recv` future, so no `tokio-stream`
+    dependency; `futures-core` was already in the dependency tree). The actor does one non-blocking
+    send per event and never waits, so a slow or panicking subscriber cannot delay an unkey or the
+    watchdog. A subscriber that falls behind skips events; the count goes to `stream_lagged` and to
+    `EventStream::lagged()`. A stream holds the rig only weakly, so it ends (`None`) when the rig
+    stops. Per-event semantics (old and new, `Source`, `ActiveTxFrequency`) are unchanged. The
+    transmit gate and watchdog are untouched. No per-field filter or `watch` view was added.
 
 ## Consequences
 

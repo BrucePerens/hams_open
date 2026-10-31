@@ -8,7 +8,7 @@ knob on the front panel, and tells your program. It is a Rust workspace of four 
 
 | Crate | What it holds |
 |---|---|
-| `radioctl-core` | Typed values (`Hz`, `Mode`, `Vfo`), the capability model, errors, the rig actor and its `RigHandle`, the event callback and stream, polling, the rig description file format, and the transports (serial, USB-serial, TCP). |
+| `radioctl-core` | Typed values (`Hz`, `Mode`, `Vfo`), the capability model, errors, the rig actor and its `RigHandle`, the event stream, polling, the rig description file format, and the transports (serial, USB-serial, TCP). |
 | `radioctl-protocols` | One sans-IO protocol engine per radio family (Icom CI-V, Kenwood, Elecraft, Yaesu newcat, Yaesu legacy, FlexRadio SmartSDR, and the control plane of OpenHPSDR/ANAN radios), the virtual rigs that stand in for radios in tests, and the transcript replay. |
 | `radioctl-splitter` | Virtual IC-7300 CI-V and TS-2000 CAT endpoints (pseudo-terminals or TCP) so several outside programs can share one radio. |
 | `radioctld` | A server for the Hamlib `rigctld` text protocol, as a library plus the `radioctld` binary. |
@@ -63,7 +63,7 @@ A [glossary](B-glossary.md) covers the ham-radio terms (VFO, split, RIT, CI-V an
 Phase 0/1 foundation, as the crate README says. What is implemented:
 
 - **Implemented:** the rig actor with a priority queue, deadlines, cache with age, adaptive polling,
-  status callback and event stream, a derived `active_tx_frequency` (Hamlib issue 138), Icom scope operations with a sweep stream, a transmit watchdog
+  status event stream, a derived `active_tx_frequency` (Hamlib issue 138), Icom scope operations with a sweep stream, a transmit watchdog
   in the actor (maximum transmit time, optional caller heartbeat, alarm events), and a fail-closed unkey
   when a transmit command goes unanswered or the last handle is dropped; engines for Icom CI-V (also used for Xiegu), Kenwood ASCII, Elecraft ASCII,
   Yaesu newcat ASCII, Yaesu legacy five-byte CAT, the FlexRadio SmartSDR control plane and the OpenHPSDR (ANAN) control plane; virtual rigs; serial, USB-serial-by-id and TCP transports

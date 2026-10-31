@@ -373,7 +373,7 @@ fn the_quick_start_example_prints_what_chapter_two_shows() {
 fn the_other_examples_run_and_print_what_their_chapters_show() {
     let events = run_example("events", &[]);
     assert!(events.contains("VFO A changed to 7100000 Hz"));
-    assert!(events.contains("callback: rig elecraft-kx3 reported the change of VFO A"));
+    assert!(events.contains("subscriber: rig elecraft-kx3 reported the change of VFO A"));
     let gate = run_example("transmit_gate", &[]);
     assert_output_in_manual("10-safety.md", "transmit_gate", &gate);
     let embedded = run_example("embed_daemon", &[]);

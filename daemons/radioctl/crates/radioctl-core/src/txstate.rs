@@ -4,7 +4,7 @@
 //!
 //! The pure derivation: which VFO receives, which transmits, and what frequency each is on, from
 //! the values a rig has reported. The actor applies it after every observation and publishes the
-//! result as [`crate::op::Observation::ActiveTxFrequency`], so the status-change callback fires
+//! result as [`crate::op::Observation::ActiveTxFrequency`], so the status-change stream reports
 //! when the transmit frequency changes, including a change made on the front panel.
 //!
 //! Rules. The receive VFO is the reported `RxVfo`, else VFO A (the selected VFO on CI-V, where

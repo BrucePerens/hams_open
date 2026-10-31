@@ -394,8 +394,7 @@ impl RadioManager {
     }
 
     // [@ANCHOR: radioctl_station_manager_spawn_callback]
-    /// Calls `callback` for every event, from a task on `runtime`, in the style of radioctl's
-    /// status-change callback. The task ends when the manager is dropped.
+    /// Calls `callback` for every event, from a task on `runtime`, as a plain function. The task ends when the manager is dropped.
     pub fn spawn_callback<F: Fn(RadioEvent) + Send + 'static>(
         &self,
         runtime: &Handle,
