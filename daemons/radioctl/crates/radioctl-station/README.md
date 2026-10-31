@@ -33,6 +33,29 @@ writes nothing, reports where the record and the hardware disagree). `VirtualRad
 virtual rig for tests (boot delay, never boots, dropped link). Record saves use blocking `std::fs`
 for a small file; a caller on a busy runtime may wrap `persist` in `spawn_blocking`.
 
+## Real rigs behind the manager
+
+`actor_link::ActorLinks` is the `RadioLink` of real rig actors. The application supplies a
+`RigSpawner` (open the transport, build the engine, spawn the actor, keep the transmit gate closed).
+`connect` then does what `RigLinks` left to the caller: it spawns the actor, and respawns it when it
+is dead (a transport that ended, such as a plain TCP stream at end of file), the manager's backoff
+(250 ms doubling to 8 s) spacing the attempts. Three rules:
+
+- **The unkey pass.** A freshly spawned actor does not unkey on its first connection, but the radio
+  may have been keyed when the link died. So the new actor is sent an unkey (the emergency path:
+  no gate, never refused) before the link is reported up, and an unkey that fails is a failed
+  connection: the actor is dropped, nothing is adopted, the manager backs off and tries again.
+  Only reads follow (frequency and mode, reported, never restored).
+- **No second actor.** A transport that reconnects by itself (`radioctl_core::net::open_link`, the
+  serial link) keeps its actor and reports `Reconnecting`; `ActorLinks` then refuses to respawn
+  and the actor unkeys on its own when the link returns (`Alarm::LinkRestored`).
+- **The interlock follows the actor.** `ActorLinks::key_source` is the keyed-state source to give
+  the `Station`: it looks at the radio's current actor on every call (unknown with none), so a
+  respawn does not leave the interlock watching a dead handle.
+
+The off time of a power channel (`min_off_ms`) is counted from a commanded or observed turn-off,
+never from the first sight of the channel: a radio found off at start-up can be switched on at once.
+
 ## Anchors
 
 - [@ANCHOR: radioctl:radioctl_station_vbank_new] (radioctl-station) A bank whose lines all start off, with read-back.
@@ -193,3 +216,19 @@ for a small file; a caller on a busy runtime may wrap `persist` in `spawn_blocki
 - [@ANCHOR: radioctl:radioctl_station_manager_life_times] (radioctl-station) The timing for one radio: the station's, with the record's boot time if it has one.
 - [@ANCHOR: radioctl:radioctl_station_manager_unknown] (radioctl-station) The error for a radio the station does not have.
 
+- [@ANCHOR: radioctl:radioctl_station_actorlink_lock] (radioctl-station) `lock` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_actorlink_transport_up] (radioctl-station) Whether the transport status, when there is one, says the link is usable.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_new] (radioctl-station) Links that spawn rigs through `spawner`; the unkey pass waits at most three seconds.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_with_unkey_timeout] (radioctl-station) Changes how long the unkey pass may take before the connection counts as failed.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_handle] (radioctl-station) The current actor of a radio, for the application's own use (queries, the transmit gate).
+- [@ANCHOR: radioctl:radioctl_station_actorlink_key_source] (radioctl-station) A keyed-state source for the station's interlock that always follows the radio's current actor, so a respawn does not leave the interlock looking at a dead handle.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_spawns] (radioctl-station) How many actors were spawned for a radio.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_journal] (radioctl-station) What the links did, oldest first: spawns, unkey passes, refusals to double-spawn.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_note] (radioctl-station) `note` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_actorlink_state] (radioctl-station) What the current slot of a radio says: up, retrying on its own, dead, or absent.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_unkey_pass] (radioctl-station) The unkey pass on a new actor, then a read of what the radio is set to.
+- [@ANCHOR: radioctl:radioctl_station_livekey_name] (radioctl-station) The radio's id.
+- [@ANCHOR: radioctl:radioctl_station_livekey_key_state] (radioctl-station) The current actor's keyed state (see the `RigHandle` implementation); unknown with no actor, or while the transport is retrying.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_link_up] (radioctl-station) Up when the actor's link is up and its transport, if it has a status, is connected.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_present] (radioctl-station) No hotplug or ping evidence from a bare actor.
+- [@ANCHOR: radioctl:radioctl_station_actorlink_connect] (radioctl-station) One connection attempt: nothing to do if the link is up; an error (and so the manager's backoff) while the transport is retrying on its own; otherwise a new actor, the unkey pass, and the state the radio reports.
