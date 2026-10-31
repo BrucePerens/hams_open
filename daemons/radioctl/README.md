@@ -19,7 +19,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect), Elecraft KX3, Yaesu newcat and legacy five-byte, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V).
-- Rig descriptions: 27 files in `rigs/` (list below). All facts are `unverified`; no description is `hardware-verified`.
+- Rig descriptions: 46 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
 - Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -140,7 +140,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 | Family | Files in `rigs/` | Source of the facts |
 |---|---|---|
 | Elecraft | `elecraft-kx3` | Elecraft Programmer's Reference Rev. G5, cited by command heading and page, with the PDF's sha256; transcript hand-written from the same manual |
-| Icom CI-V | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700` | Hamlib 4.6.2 source and `rigctl --dump-caps` output (see below) |
+| Icom CI-V | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700`, `icom-ic-7000`, `icom-ic-7100`, `icom-ic-7200`, `icom-ic-7410`, `icom-ic-7600`, `icom-ic-7700`, `icom-ic-7760`, `icom-ic-7800`, `icom-ic-7851`, `icom-ic-9100`, `icom-ic-r8600`, `icom-ic-r75`, `icom-ic-r9500`, `icom-ic-706`, `icom-ic-706mkii`, `icom-ic-706mkiig`, `icom-ic-718`, `icom-ic-746`, `icom-ic-746pro` | Hamlib 4.6.2 source (facts only) and `rigctl --dump-caps` output (see below); Icom's CI-V guides are not used |
 | Kenwood | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s` | Kenwood's published PC command references (document, page and, for the TS-590 guide, the PDF's sha256 per fact) |
 | Xiegu (CI-V) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only, with Hamlib's shared addresses |
 | Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact) |
@@ -158,6 +158,14 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   - reachable through `Op` (`SetScopeOutput`, `SetScopeAxis`, `SetScopeSpan`, `SetScopeEdges`, `SetScopeReference` and their reads), capability `scope`, on the IC-7300 and IC-7610;
   - `CivEngine` returns each complete sweep as `Inbound::ScopeFrame`, a typed `radioctl_core::scope::ScopeFrame`;
   - the actor publishes sweeps on `RigHandle::scope_frames()`, a stream apart from the status-change events.
+- Batch of October 31, 2026 (19 more models, same Hamlib facts, none verified):
+  - IC-7000, 7100, 7200, 7410, 7600, 7700, 7760, 7800, 7850/7851, 9100, R8600, R75, R9500, 706, 706MkII, 706MkIIG, 718, 746 and 746PRO.
+  - Each file has the CI-V address, the modes Hamlib lists, the attenuator and preamplifier steps and the capabilities Hamlib's list for the model has. The description format has no field for frequency ranges, filter tables or function lists, so they are not repeated in the files.
+  - A command the model lacks in Hamlib is left out, not guessed: the receivers (R8600, R75, R9500) have no PTT or split; the IC-706, 718 and 756 (first versions) have no PTT command; the second VFO is claimed only where Hamlib says command 25 is possible (IC-7100 and the Main/Sub radios).
+  - Data modes (command 26) only where Hamlib treats 26 as always present (IC-7760 and IC-7850/7851); the others use forms (`1A 06`) the engine does not send.
+  - Hamlib's Main/Sub flow (`07 C2`, `07 D0`) differs from radioctl's on the IC-7600, 7800, 7850/7851 and 7760, and the IC-7700 ends in a different mode: pinned as open questions in `known_icom_batch_divergences`.
+  - Skipped, with the same reason as above: Icom's CI-V guides for every one of these models.
+  - Still to do: the list in `docs/RIG_COVERAGE_PLAN.md`.
 - `baud = "auto"` (or `baud_probe = [...]`) in `radioctld` runs a read-only frequency read at several baud rates (off unless configured; manual chapter 5).
 
 ### Kenwood

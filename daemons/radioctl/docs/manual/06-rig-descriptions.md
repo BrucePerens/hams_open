@@ -76,7 +76,7 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Twenty-seven files. All are unverified. Every family has a hand-written transcript for at least one file
+Forty-six files. All are unverified until a volunteer confirms them (`docs/VOLUNTEER_TESTING.md`); the Icom batch of October 31, 2026 is best-effort coverage of Hamlib's models, not a claim that the radios were tried. Every family has a hand-written transcript for at least one file
 (twenty-three transcripts). The FlexRadio and ANAN ones are of a different kind and say so in their
 `origin`: `flex-6400-basic.toml` is the SmartSDR text protocol as radioctl's virtual FLEX-6400 speaks it
 (it opens with the radio's prologue step, `V` and `H` lines, and the first command carries the engine's
@@ -88,7 +88,7 @@ radio; both families are also tested through the actor against virtual radios (`
 
 | Family | Files | Written from |
 |---|---|---|
-| `icom-civ` | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700` | Hamlib 4.6.2 source (facts only, file and function per fact) and `rigctl --dump-caps` output. Not Icom's CI-V guides. Each has a `[scope]` block. |
+| `icom-civ` | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700`, `icom-ic-7000`, `icom-ic-7100`, `icom-ic-7200`, `icom-ic-7410`, `icom-ic-7600`, `icom-ic-7700`, `icom-ic-7760`, `icom-ic-7800`, `icom-ic-7851`, `icom-ic-9100`, `icom-ic-r8600`, `icom-ic-r75`, `icom-ic-r9500`, `icom-ic-706`, `icom-ic-706mkii`, `icom-ic-706mkiig`, `icom-ic-718`, `icom-ic-746`, `icom-ic-746pro` | Hamlib 4.6.2 source (facts only, file and function per fact) and `rigctl --dump-caps` output. Not Icom's CI-V guides. The first four have a `[scope]` block, as do the IC-7850/7851 and IC-R8600; the others have none. |
 | `icom-civ` (Xiegu) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only; deliberately small (frequency, mode, PTT, signal). |
 | `kenwood-ascii` | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s` | Kenwood's published PC command references; the TS-2000 text was read from a third-party transcription of its manual, which its facts say. The TS-890S file is from its own guide (January 30, 2019), dialect `ts890`. |
 | `elecraft-ascii` | `elecraft-kx3` | Elecraft's Programmer's Reference, Rev. G5, cited by command heading and printed page. |

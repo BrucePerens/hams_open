@@ -898,6 +898,101 @@ fn known_icom_divergences(file: &str) -> Vec<&'static str> {
     }
 }
 
+/// The Icom CI-V descriptions added after the first four, with Hamlib's model number for each.
+const ICOM_BATCH_ONE: [(&str, u32); 19] = [
+    ("icom-ic-7000", 3060),
+    ("icom-ic-7100", 3070),
+    ("icom-ic-7200", 3061),
+    ("icom-ic-7410", 3067),
+    ("icom-ic-7600", 3063),
+    ("icom-ic-7700", 3062),
+    ("icom-ic-7760", 3092),
+    ("icom-ic-7800", 3056),
+    ("icom-ic-7851", 3075),
+    ("icom-ic-9100", 3068),
+    ("icom-ic-r8600", 3079),
+    ("icom-ic-r75", 3039),
+    ("icom-ic-r9500", 3066),
+    ("icom-ic-706", 3009),
+    ("icom-ic-706mkii", 3010),
+    ("icom-ic-706mkiig", 3011),
+    ("icom-ic-718", 3013),
+    ("icom-ic-746", 3023),
+    ("icom-ic-746pro", 3046),
+];
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode]
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+// Tests [@ANCHOR: radioctl_virtual_civ_level]
+#[test]
+fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
+    // The same scenario as for the first four Icom files, cut down to what each description
+    // claims (a receiver has no PTT or split, an IC-7000 no RIT), plus data mode and the raw
+    // meters where the file lists them.
+    let mut wrong = Vec::new();
+    for (file, model) in ICOM_BATCH_ONE {
+        let desc = shipped(file);
+        let mut steps: Vec<Op> = icom_scenario(7_074_000, 14_060_000, 14_025_000)
+            .into_iter()
+            .filter(|op| desc.capabilities.has(op.required_capability()))
+            .collect();
+        if desc.mode_code(Mode::Data).is_some() {
+            steps.extend([
+                Op::SetMode(Mode::Data),
+                Op::GetMode,
+                Op::SetMode(Mode::Usb),
+                Op::GetMode,
+            ]);
+        }
+        if desc
+            .capabilities
+            .has(radioctl_core::capability::Capability::ReadMeters)
+        {
+            steps.extend(Meter::ALL.map(Op::GetMeter));
+        }
+        let (divergences, refused, wire) = compare(model, &desc, 19200, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        if got != known_icom_batch_divergences(file) {
+            wrong.push(format!("{file}: {divergences:#?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The steps on which Hamlib and radioctl disagree for a file of the first Icom batch.
+///
+/// Eleven of the nineteen agree on everything the harness can express. The IC-7600, IC-7800 and
+/// IC-7850/7851 are Main/Sub rigs like the IC-7610: Hamlib's split flow starts with `07 C2` (dual
+/// watch), `07 D2` and `07 D0`, which the virtual rig refuses (the Main/Sub family of command 07
+/// is not implemented), so Hamlib's split and second-frequency steps fail there while radioctl
+/// treats VFO B as "the other VFO" (`25 01`). Which of the two matches a real radio is unknown:
+/// an open question, not a result. The IC-7760 does the same without `07 C2`. On the IC-7700
+/// every step agrees but the final mode of the virtual rig differs (Hamlib ends in USB where
+/// radioctl ends in CW). The recorded Hamlib frames show no mode write at all (no `06` and no
+/// `26 00`) between its two frequency writes, only `1A 06 00 00` (data mode off) and `07 00` /
+/// `07 B0` (VFO and memory selection), so on this model's path Hamlib's mode set produced no mode
+/// frame; why is an open question, kept visible here. The IC-706MkIIG has the capability `levels`
+/// only for its attenuator and preamplifier (the capability is one switch for every level): Hamlib
+/// has no AF gain for the model and refuses it, radioctl would send `14 01`.
+fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
+    let main_sub = vec![
+        "SetSplit(true)",
+        "GetSplit",
+        "SetFrequency(B, Hz(14025000))",
+        "GetFrequency(B)",
+        "SetSplit(false)",
+    ];
+    match file {
+        "icom-ic-7600" | "icom-ic-7800" | "icom-ic-7851" => main_sub,
+        "icom-ic-7760" => main_sub[..4].to_vec(),
+        "icom-ic-7700" => vec!["final mode"],
+        "icom-ic-706mkiig" => vec!["SetLevel(AfGain, 128)", "GetLevel(AfGain)"],
+        _ => Vec::new(),
+    }
+}
+
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
 // Tests [@ANCHOR: radioctl_civ_engine_decode]
 // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]

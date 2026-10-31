@@ -43,12 +43,12 @@ Derived protocol families (models, of the 312 dumped):
 (The remainder: Icom marine 4, Icom PCR 4, parallel 2, virtual 2, other 2.)
 
 What the Hamlib 4.6.2 matrix says about the families radioctl has not covered yet is a measure of the
-work ahead: 79 Icom CI-V models against the four Icom and three Xiegu radios described, 31 legacy Yaesu
+work ahead: 79 Icom CI-V models against the twenty-three Icom and five Xiegu radios described, 31 legacy Yaesu
 models against three, and 9 FlexRadio network models against four.
 
 ## radioctl's rig descriptions
 
-Twenty-three files in `rigs/`, at the time of writing (commit `f54256f4`). A `yes` means the description
+Twenty-three files in `rigs/`, at the time of writing (commit `f54256f4`; the Icom CI-V files added since, listed in chapter [6](06-rig-descriptions.md), are not in the table). A `yes` means the description
 lists the capability (and therefore the handle accepts the operation); the engine must also implement it
 (chapter [7](07-protocol-engines.md)). Everything is unverified. `transceive` for the Icom and Xiegu
 radios means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot
