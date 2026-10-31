@@ -666,3 +666,87 @@ async fn the_description_s_inter_command_gap_is_kept() {
         .expect("second");
     assert!(Instant::now() - started >= Duration::from_millis(90));
 }
+
+fn civ_with_timing(timeout: Duration, retries: u8) -> (RigHandle, VirtualRigControl) {
+    let mut desc = RigDescription::ic7300();
+    desc.timing.timeout = timeout;
+    desc.timing.retries = retries;
+    let rig = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, control) = spawn_virtual_rig(&Handle::current(), rig, Duration::ZERO);
+    let handle =
+        spawn_current(CivEngine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
+    (handle, control)
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_unkey_fail_closed]
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+#[tokio::test(start_paused = true)]
+async fn a_key_the_rig_never_answers_is_unkeyed_fail_closed() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    rig.open_transmit_gate(permit());
+    // The radio keys on the command but its answer is lost for three seconds.
+    control.set_reply_delay(Duration::from_secs(3));
+    let failed = rig
+        .execute_within(Op::SetPtt(true), Duration::from_secs(2))
+        .await
+        .expect_err("no answer within the deadline");
+    assert_eq!(failed.kind, ErrorKind::Timeout);
+    assert!(
+        !control.state().ptt,
+        "a key whose outcome is unknown is followed by an unkey, never left on the air"
+    );
+    assert!(failed
+        .transcript_tail
+        .iter()
+        .any(|line| line.starts_with("FAIL CLOSED unkey")));
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_unkey_on_stop]
+// Tests [@ANCHOR: radioctl_core_actor_run]
+#[tokio::test(start_paused = true)]
+async fn dropping_the_last_handle_unkeys_a_keyed_rig() {
+    let (rig, control) = civ(quiet(), Duration::ZERO);
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    assert!(control.state().ptt);
+    drop(rig);
+    sleep(Duration::from_millis(50)).await;
+    assert!(
+        !control.state().ptt,
+        "the actor unkeys the rig before it ends"
+    );
+}
+
+// Tests [@ANCHOR: radioctl_core_deadline_after]
+// Tests [@ANCHOR: radioctl_core_actor_spacing]
+// Tests [@ANCHOR: radioctl_core_actor_poll_once]
+#[tokio::test(start_paused = true)]
+async fn absurd_timeouts_saturate_instead_of_panicking() {
+    let (rig, _control) = civ(quiet(), Duration::ZERO);
+    let read = rig
+        .execute_within(Op::GetMode, Duration::MAX)
+        .await
+        .expect("a read with no practical deadline still works");
+    assert_eq!(read, Some(Observation::Mode(Mode::Usb)));
+
+    // A rig file with an absurd per-command timeout and command spacing, polled.
+    let mut desc = RigDescription::ic7300();
+    desc.timing.timeout = Duration::MAX;
+    desc.timing.inter_command = Duration::MAX;
+    let virtual_rig = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, control) = spawn_virtual_rig(&Handle::current(), virtual_rig, Duration::ZERO);
+    let polled = spawn_current(
+        CivEngine::new(desc).expect("engine"),
+        stream,
+        RigOptions::default(),
+    )
+    .expect("spawn");
+    sleep(Duration::from_millis(500)).await;
+    assert!(polled.stats().polls > 0, "polling ran");
+    assert!(control.bytes_received() > 0);
+    let first = polled
+        .frequency(Vfo::A, Freshness::Cached)
+        .await
+        .expect("cached frequency");
+    assert_eq!(first.value, Hz(14_074_000));
+}
