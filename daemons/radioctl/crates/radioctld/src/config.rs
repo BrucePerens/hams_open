@@ -73,6 +73,7 @@ struct RigSection {
     rx_low_hz: Option<u64>,
     rx_high_hz: Option<u64>,
     tx_power_mw: Option<u32>,
+    max_transmit_s: Option<u64>,
     transport: TransportSection,
 }
 
@@ -162,6 +163,8 @@ pub struct RigConfig {
     pub rx_high_hz: u64,
     /// Maximum transmit power reported, in milliwatts.
     pub tx_power_mw: u32,
+    /// The actor's transmit time limit, when the file sets one (1 to 3600 seconds).
+    pub max_transmit: Option<Duration>,
     /// How to reach the rig.
     pub transport: TransportConfig,
 }
@@ -326,6 +329,11 @@ fn rig_config(
         rx_low_hz,
         rx_high_hz,
         tx_power_mw: in_range("tx_power_mw", section.tx_power_mw, 100_000, 1, 10_000_000)?,
+        max_transmit: section
+            .max_transmit_s
+            .map(|s| in_range("max_transmit_s", Some(s), 1, 1, 3600))
+            .transpose()?
+            .map(Duration::from_secs),
         transport: transport_config(section.transport)?,
         description: if description.is_absolute() {
             description.to_path_buf()
@@ -404,6 +412,27 @@ kind = "virtual"
         assert_eq!(config.server.allow, AllowList::loopback_only());
         assert_eq!(config.server.max_line_bytes, 1024);
         assert_eq!(config.server.max_clients, 16);
+    }
+
+    // Tests [@ANCHOR: radioctld_config_rig]
+    // Tests [@ANCHOR: radioctld_config_in_range]
+    #[test]
+    fn the_transmit_time_limit_is_optional_and_bounded() {
+        let config = parse(MINIMAL).expect("config");
+        assert_eq!(
+            config.rigs[0].max_transmit, None,
+            "the library default applies"
+        );
+        let with_limit = MINIMAL.replace("name = \"kx3\"", "name = \"kx3\"\nmax_transmit_s = 60");
+        let config = parse(&with_limit).expect("config");
+        assert_eq!(config.rigs[0].max_transmit, Some(Duration::from_secs(60)));
+        for bad in ["0", "3601"] {
+            let text = MINIMAL.replace(
+                "name = \"kx3\"",
+                &format!("name = \"kx3\"\nmax_transmit_s = {bad}"),
+            );
+            assert!(parse(&text).is_err(), "max_transmit_s = {bad} is refused");
+        }
     }
 
     // Tests [@ANCHOR: radioctld_config_rig]

@@ -127,6 +127,21 @@ pub enum Field {
     ScopeSpan(u8),
     /// A receiver's scope reference level.
     ScopeReference(u8),
+    /// A safety condition the actor reports on its own (see [`Alarm`]).
+    Alarm,
+}
+
+/// A safety condition the actor reports on its own. It is not a value read from the rig and it
+/// is never deduplicated: every occurrence is an event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Alarm {
+    /// The transmitter was keyed for longer than the rig's maximum transmit duration; the actor
+    /// unkeyed it.
+    TransmitTimeout,
+    /// The caller's heartbeat lapsed while the rig was transmitting; the actor unkeyed it.
+    HeartbeatLapsed,
+    /// An unkey failed after every attempt: the rig may still be transmitting.
+    UnkeyFailed,
 }
 
 /// A value reported by a rig, solicited or not.
@@ -174,6 +189,8 @@ pub enum Observation {
     ScopeSpan(u8, Hz),
     /// A receiver's scope reference level in hundredths of a dB.
     ScopeReference(u8, i16),
+    /// A safety condition reported by the actor, never by the rig.
+    Alarm(Alarm),
 }
 
 impl Observation {
@@ -202,6 +219,7 @@ impl Observation {
             Observation::ScopeAxis(rx, _) => Field::ScopeAxis(*rx),
             Observation::ScopeSpan(rx, _) => Field::ScopeSpan(*rx),
             Observation::ScopeReference(rx, _) => Field::ScopeReference(*rx),
+            Observation::Alarm(_) => Field::Alarm,
         }
     }
 }
@@ -312,6 +330,7 @@ mod tests {
             Observation::ScopeReference(0, -200).field(),
             Field::ScopeReference(0)
         );
+        assert_eq!(Observation::Alarm(Alarm::UnkeyFailed).field(), Field::Alarm);
     }
 
     // Tests [@ANCHOR: radioctl_core_op_capability]

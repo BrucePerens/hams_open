@@ -24,6 +24,7 @@ transmit = false                              # true opens the rig's transmit ga
 # rx_low_hz = 30000                           # the coverage reported in \dump_state
 # rx_high_hz = 60000000
 # tx_power_mw = 100000
+# max_transmit_s = 180                        # the actor unkeys a rig that transmits longer (1 to 3600)
 # hamlib_model = 1                            # the model number reported in \dump_state
 
 [rig.transport]

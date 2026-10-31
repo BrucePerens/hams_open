@@ -11,7 +11,7 @@ use std::time::Duration;
 use radioctl_core::description::RigDescription;
 use radioctl_core::error::ErrorKind;
 use radioctl_core::event::{RigEvent, Source};
-use radioctl_core::op::{Field, Observation, Op};
+use radioctl_core::op::{Alarm, Field, Observation, Op};
 use radioctl_core::poll::PollConfig;
 use radioctl_core::rig::{spawn, spawn_current, Freshness, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::units::{Hz, Mode, Vfo};
@@ -749,4 +749,161 @@ async fn absurd_timeouts_saturate_instead_of_panicking() {
         .await
         .expect("cached frequency");
     assert_eq!(first.value, Hz(14_074_000));
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_watchdog_due]
+// Tests [@ANCHOR: radioctl_core_actor_watchdog_fire]
+// Tests [@ANCHOR: radioctl_core_actor_arm_watchdog]
+// Tests [@ANCHOR: radioctl_core_actor_alarm]
+// Tests [@ANCHOR: radioctl_core_actor_emit]
+#[tokio::test(start_paused = true)]
+async fn transmitting_past_the_limit_is_unkeyed_by_the_actor_and_reported() {
+    let options = RigOptions {
+        max_transmit: Duration::from_secs(5),
+        ..quiet()
+    };
+    let (rig, control) = civ(options, Duration::ZERO);
+    let mut events = rig.events();
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    sleep(Duration::from_secs(4)).await;
+    assert!(control.state().ptt, "within the limit the rig stays keyed");
+    sleep(Duration::from_millis(1100)).await;
+    assert!(
+        !control.state().ptt,
+        "past the limit the actor unkeys the rig on its own"
+    );
+    assert_eq!(rig.stats().watchdog_unkeys, 1);
+    assert_eq!(rig.stats().unkey_failures, 0);
+    let mut seen = Vec::new();
+    while let Ok(Some(event)) = timeout(Duration::from_millis(10), events.next()).await {
+        seen.push(event);
+    }
+    assert!(seen.iter().any(|e| e.source == Source::Watchdog
+        && e.changes
+            .iter()
+            .any(|c| c.new == Observation::Alarm(Alarm::TransmitTimeout))));
+    assert!(seen.iter().any(|e| e.source == Source::Watchdog
+        && e.changes.iter().any(|c| c.new == Observation::Ptt(false))));
+    // Keying again starts a fresh limit.
+    rig.set_ptt(true).await.expect("keyed again");
+    sleep(Duration::from_secs(4)).await;
+    assert!(control.state().ptt);
+    rig.set_ptt(false).await.expect("unkeyed by the caller");
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_watchdog_due]
+// Tests [@ANCHOR: radioctl_core_actor_await_reply]
+#[tokio::test(start_paused = true)]
+async fn the_watchdog_preempts_a_slow_read_to_unkey_in_time() {
+    let options = RigOptions {
+        max_transmit: Duration::from_secs(5),
+        ..quiet()
+    };
+    let (rig, control) = civ(options, Duration::ZERO);
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    // The radio now takes a minute to answer a read that was started while keyed.
+    control.set_reply_delay(Duration::from_secs(60));
+    let read = {
+        let rig = rig.clone();
+        tokio::spawn(async move {
+            rig.execute_within(Op::GetFrequency(Vfo::A), Duration::from_secs(120))
+                .await
+        })
+    };
+    sleep(Duration::from_millis(10)).await;
+    control.set_reply_delay(Duration::ZERO);
+    sleep(Duration::from_secs(6)).await;
+    assert!(
+        !control.state().ptt,
+        "the slow read did not hold the actor past the transmit limit"
+    );
+    let cancelled = read.await.expect("join").expect_err("abandoned");
+    assert_eq!(cancelled.kind, ErrorKind::Cancelled);
+}
+
+// Tests [@ANCHOR: radioctl_core_handle_heartbeat]
+// Tests [@ANCHOR: radioctl_core_actor_watchdog_due]
+#[tokio::test(start_paused = true)]
+async fn a_lapsed_heartbeat_unkeys_only_while_transmitting() {
+    let options = RigOptions {
+        heartbeat: Some(Duration::from_secs(1)),
+        ..quiet()
+    };
+    let (rig, control) = civ(options, Duration::ZERO);
+    rig.open_transmit_gate(permit());
+    // Receiving without a heartbeat is fine.
+    sleep(Duration::from_secs(10)).await;
+    assert_eq!(rig.stats().watchdog_unkeys, 0);
+    rig.set_ptt(true).await.expect("keyed");
+    for _ in 0..5 {
+        sleep(Duration::from_millis(600)).await;
+        rig.heartbeat();
+    }
+    assert!(control.state().ptt, "a beating caller keeps the rig keyed");
+    sleep(Duration::from_millis(1100)).await;
+    assert!(!control.state().ptt, "a lapsed heartbeat unkeys the rig");
+    assert_eq!(rig.stats().watchdog_unkeys, 1);
+    let alarm = rig.cached(Field::Alarm);
+    assert!(alarm.is_none(), "alarms are not cached");
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_unkey_fail_closed]
+// Tests [@ANCHOR: radioctl_core_actor_alarm]
+#[tokio::test(start_paused = true)]
+async fn an_unkey_the_rig_never_answers_is_retried_then_reported() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    let mut events = rig.events();
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    let before = control.bytes_received();
+    // The radio goes deaf: nothing it is sent is answered.
+    control.set_reply_delay(Duration::from_secs(3600));
+    sleep(Duration::from_secs(181)).await;
+    sleep(Duration::from_secs(5)).await;
+    let stats = rig.stats();
+    assert_eq!(stats.watchdog_unkeys, 1);
+    assert_eq!(
+        stats.unkey_failures, 1,
+        "the failure is counted, not swallowed"
+    );
+    assert!(
+        control.bytes_received() >= before + 3 * 8,
+        "the unkey was written three times"
+    );
+    let mut alarms = Vec::new();
+    while let Ok(Some(event)) = timeout(Duration::from_millis(10), events.next()).await {
+        alarms.extend(event.changes.into_iter().map(|c| c.new));
+    }
+    assert!(alarms.contains(&Observation::Alarm(Alarm::TransmitTimeout)));
+    assert!(alarms.contains(&Observation::Alarm(Alarm::UnkeyFailed)));
+}
+
+// Tests [@ANCHOR: radioctl_core_handle_submit]
+#[tokio::test(start_paused = true)]
+async fn an_unkey_is_never_refused_when_the_emergency_queue_is_full() {
+    let (rig, control) = civ(quiet(), Duration::ZERO);
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    control.set_reply_delay(Duration::from_secs(2));
+    let mut unkeys = Vec::new();
+    for _ in 0..40 {
+        let rig = rig.clone();
+        unkeys.push(tokio::spawn(async move {
+            rig.execute_within(Op::SetPtt(false), Duration::from_secs(60))
+                .await
+        }));
+    }
+    for unkey in unkeys {
+        unkey
+            .await
+            .expect("join")
+            .expect("every unkey is accepted and answered");
+    }
+    assert!(!control.state().ptt);
+    assert!(
+        rig.stats().unkeys_coalesced > 0,
+        "the overflow rode on a queued unkey"
+    );
 }

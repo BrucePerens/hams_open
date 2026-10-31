@@ -84,6 +84,19 @@ records the decisions that shape the code.
     loopback bind and a loopback allow list are the defaults; any wider bind needs an explicit option and
     an explicit allow list.
 
+18. **Transmit watchdog in the actor, independent of the caller** (roadmap baseline 2a.2 to 2a.4).
+    From the moment a rig is keyed (by command, or seen keyed by polling or transceive) or sent
+    Morse, its actor runs a dead-man timer: past `RigOptions::max_transmit` (default three minutes;
+    an owner may raise it or disable it with `Duration::MAX`) or past a lapse of the caller's
+    heartbeat (`RigOptions::heartbeat`, off by default, kept alive with `RigHandle::heartbeat()`,
+    enforced only while transmitting) the actor unkeys through the fail-closed path, preempting a
+    command that is waiting for a reply, and emits an `Alarm` event. Fail-closed unkeys are retried
+    three times with a short backoff; a failure is counted and reported as `Alarm::UnkeyFailed`,
+    never swallowed. An unkey never gets `QueueFull`: when the emergency queue is full it rides on
+    the unkey already queued and receives that unkey's result. This is the library's layer; the
+    relay's own time-out and the FX2 hardware time-out (`RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md`
+    4.2) remain the outer layers.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

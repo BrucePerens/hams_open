@@ -14,6 +14,15 @@
 //! anything else, and abandons a command that is waiting for a reply (that command ends with
 //! [`ErrorKind::Cancelled`]); ordinary commands are served in order; polling runs only when no
 //! command is waiting. Every command has a deadline and ends in a typed error, never a hang.
+//!
+//! Transmit watchdog: from the moment the rig is keyed (by command, or seen keyed by polling or
+//! transceive) or Morse is sent, the actor runs a dead-man timer of its own, independent of the
+//! caller. Transmitting past [`RigOptions::max_transmit`], or past a lapse of the caller's
+//! [`RigHandle::heartbeat`] when [`RigOptions::heartbeat`] is set, forces an unkey through the
+//! emergency path and reports it as an [`Alarm`] event. An unkey is retried with a short backoff;
+//! one that fails after every attempt is reported as [`Alarm::UnkeyFailed`] and counted, never
+//! swallowed. An unkey is never refused for want of a queue slot: when the emergency queue is
+//! full the request rides on the unkey already queued and gets its result.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -30,7 +39,7 @@ use crate::dispatcher::{Callback, Dispatcher, DispatcherCounters};
 use crate::engine::{Inbound, ProtocolEngine, ReplyKind};
 use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
-use crate::op::{Field, Observation, Op};
+use crate::op::{Alarm, Field, Observation, Op};
 use crate::poll::{PollConfig, PollSchedule};
 use crate::scope::ScopeFrame;
 use crate::transport::Transport;
@@ -40,6 +49,11 @@ use crate::units::{Hz, Mode, Vfo};
 const TRANSCRIPT_LINES: usize = 16;
 const READ_BUFFER: usize = 256;
 const EMERGENCY_QUEUE: usize = 16;
+const UNKEY_ATTEMPTS: u32 = 3;
+const UNKEY_BACKOFF: Duration = Duration::from_millis(100);
+
+/// The transmit time limit a rig gets when the owner sets none: three minutes.
+pub const DEFAULT_MAX_TRANSMIT: Duration = Duration::from_secs(180);
 
 /// Options for a rig.
 #[derive(Clone)]
@@ -58,6 +72,14 @@ pub struct RigOptions {
     pub scope_capacity: usize,
     /// The status-change callback, if any.
     pub callback: Option<Callback>,
+    /// The longest the rig may transmit in one go before the actor unkeys it on its own
+    /// ([`DEFAULT_MAX_TRANSMIT`] when the owner sets none). Measured from the moment the rig is
+    /// keyed or Morse is sent; `Duration::MAX` disables the limit, which the owner must decide.
+    pub max_transmit: Duration,
+    /// A dead-man period: while the rig transmits, the caller must call
+    /// [`RigHandle::heartbeat`] at least this often or the actor unkeys the rig. `None` (the
+    /// default) relies on `max_transmit` alone. Not enforced while receiving.
+    pub heartbeat: Option<Duration>,
 }
 
 impl Default for RigOptions {
@@ -70,6 +92,8 @@ impl Default for RigOptions {
             stream_capacity: 64,
             scope_capacity: 16,
             callback: None,
+            max_transmit: DEFAULT_MAX_TRANSMIT,
+            heartbeat: None,
         }
     }
 }
@@ -151,6 +175,12 @@ pub struct RigStats {
     pub scope_frames: u64,
     /// Scope frames a stream subscriber missed because it lagged.
     pub scope_lagged: u64,
+    /// Unkeys the transmit watchdog forced (time limit or heartbeat lapse).
+    pub watchdog_unkeys: u64,
+    /// Unkeys the actor tried on its own and could not complete: the rig may be on the air.
+    pub unkey_failures: u64,
+    /// Unkeys that found the emergency queue full and rode on the one already queued.
+    pub unkeys_coalesced: u64,
     /// The callback dispatcher's counters.
     pub dispatcher: DispatcherCounters,
 }
@@ -167,6 +197,9 @@ struct Counters {
     stream_lagged: AtomicU64,
     scope_frames: AtomicU64,
     scope_lagged: AtomicU64,
+    watchdog_unkeys: AtomicU64,
+    unkey_failures: AtomicU64,
+    unkeys_coalesced: AtomicU64,
 }
 
 struct CacheEntry {
@@ -183,6 +216,13 @@ struct Shared {
     link_up: AtomicBool,
     emergency_pending: AtomicUsize,
     emergency_wake: Notify,
+    /// Unkeys that found the emergency queue full; answered with the next unkey's result.
+    unkey_waiters: Mutex<Vec<oneshot::Sender<Reply>>>,
+    /// Milliseconds since `epoch` of the last heartbeat.
+    last_heartbeat: AtomicU64,
+    /// Woken by every heartbeat so the actor recomputes its watchdog deadline.
+    heartbeat_wake: Notify,
+    epoch: Instant,
     events: broadcast::Sender<RigEvent>,
     scope: broadcast::Sender<ScopeFrame>,
     dispatcher: Option<Dispatcher>,
@@ -249,6 +289,10 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         link_up: AtomicBool::new(true),
         emergency_pending: AtomicUsize::new(0),
         emergency_wake: Notify::new(),
+        unkey_waiters: Mutex::new(Vec::new()),
+        last_heartbeat: AtomicU64::new(0),
+        heartbeat_wake: Notify::new(),
+        epoch: Instant::now(),
         events,
         scope,
         dispatcher,
@@ -266,9 +310,12 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         emergency: emergency_rx,
         poll,
         transcript: VecDeque::new(),
-        epoch: Instant::now(),
+        epoch: shared.epoch,
         buffer: [0u8; READ_BUFFER],
         last_write: None,
+        keyed_since: None,
+        max_transmit: options.max_transmit,
+        heartbeat: options.heartbeat,
     };
     runtime.spawn(actor.run());
     Ok(RigHandle {
@@ -384,6 +431,9 @@ impl RigHandle {
             stream_lagged: c.stream_lagged.load(Ordering::Relaxed),
             scope_frames: c.scope_frames.load(Ordering::Relaxed),
             scope_lagged: c.scope_lagged.load(Ordering::Relaxed),
+            watchdog_unkeys: c.watchdog_unkeys.load(Ordering::Relaxed),
+            unkey_failures: c.unkey_failures.load(Ordering::Relaxed),
+            unkeys_coalesced: c.unkeys_coalesced.load(Ordering::Relaxed),
             dispatcher: self
                 .shared
                 .dispatcher
@@ -391,6 +441,19 @@ impl RigHandle {
                 .map(Dispatcher::counters)
                 .unwrap_or_default(),
         }
+    }
+
+    // [@ANCHOR: radioctl_core_handle_heartbeat]
+    /// Proves the caller is alive. With [`RigOptions::heartbeat`] set, a keyed rig whose caller
+    /// stops calling this is unkeyed by the actor once the period lapses. Cheap: one atomic store.
+    pub fn heartbeat(&self) {
+        let millis = Instant::now()
+            .saturating_duration_since(self.shared.epoch)
+            .as_millis();
+        self.shared
+            .last_heartbeat
+            .store(u64::try_from(millis).unwrap_or(u64::MAX), Ordering::Release);
+        self.shared.heartbeat_wake.notify_one();
     }
 
     // [@ANCHOR: radioctl_core_handle_link_up]
@@ -483,13 +546,27 @@ impl RigHandle {
         };
         let sent = if command.op.is_emergency() {
             self.shared.emergency_pending.fetch_add(1, Ordering::AcqRel);
-            let sent = self.senders.emergency.try_send(command);
-            if sent.is_err() {
-                self.shared.emergency_pending.fetch_sub(1, Ordering::AcqRel);
-            } else {
-                self.shared.emergency_wake.notify_one();
+            match self.senders.emergency.try_send(command) {
+                Ok(()) => {
+                    self.shared.emergency_wake.notify_one();
+                    Ok(())
+                }
+                Err(mpsc::error::TrySendError::Full(command)) => {
+                    // An unkey is never refused: one pending unkey is enough for everybody, so
+                    // this request rides on it and is answered with its result.
+                    self.shared.emergency_pending.fetch_sub(1, Ordering::AcqRel);
+                    guard(&self.shared.unkey_waiters).push(command.reply);
+                    self.shared
+                        .counters
+                        .unkeys_coalesced
+                        .fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                }
+                Err(closed) => {
+                    self.shared.emergency_pending.fetch_sub(1, Ordering::AcqRel);
+                    Err(closed)
+                }
             }
-            sent
         } else {
             self.senders.normal.try_send(command)
         };
@@ -756,6 +833,10 @@ struct Actor<E, T> {
     epoch: Instant,
     buffer: [u8; READ_BUFFER],
     last_write: Option<Instant>,
+    /// When the rig was last seen going from receive to transmit; `None` while receiving.
+    keyed_since: Option<Instant>,
+    max_transmit: Duration,
+    heartbeat: Option<Duration>,
 }
 
 impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
@@ -764,6 +845,8 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         loop {
             let due = self.poll.next_due();
             let link = self.shared.link_up.load(Ordering::Acquire);
+            let watchdog = self.watchdog_due();
+            let shared = Arc::clone(&self.shared);
             tokio::select! {
                 biased;
                 command = self.emergency.recv() => match command {
@@ -773,6 +856,8 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     }
                     None => break,
                 },
+                _ = wait_until(watchdog) => self.watchdog_fire().await,
+                _ = shared.heartbeat_wake.notified(), if watchdog.is_some() => {}
                 command = self.normal.recv() => match command {
                     Some(command) => self.serve(command, true).await,
                     None => break,
@@ -802,44 +887,121 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Some(Observation::Ptt(true))
         );
         if keyed || self.shared.gate.load(Ordering::Acquire) {
-            self.unkey_fail_closed("actor stopping").await;
+            self.unkey_fail_closed("actor stopping", Source::Api).await;
         }
+    }
+
+    // [@ANCHOR: radioctl_core_actor_watchdog_due]
+    /// When the transmit watchdog fires, while the rig transmits: the earlier of the transmit
+    /// time limit and the lapse of the caller's heartbeat (counted from the later of the last
+    /// heartbeat and the moment of keying, so a caller that keys and then beats is not tripped
+    /// by the time before it keyed).
+    fn watchdog_due(&self) -> Option<Instant> {
+        let keyed = self.keyed_since?;
+        let limit = deadline_after(keyed, self.max_transmit);
+        let Some(period) = self.heartbeat else {
+            return Some(limit);
+        };
+        let beat = deadline_after(
+            self.epoch,
+            Duration::from_millis(self.shared.last_heartbeat.load(Ordering::Acquire)),
+        );
+        Some(limit.min(deadline_after(beat.max(keyed), period)))
+    }
+
+    // [@ANCHOR: radioctl_core_actor_watchdog_fire]
+    /// The watchdog lapsed: report why, unkey through the fail-closed path, and disarm. A rig
+    /// still seen keyed afterwards (the unkey failed, or the operator keyed again) re-arms it.
+    async fn watchdog_fire(&mut self) {
+        let Some(keyed) = self.keyed_since.take() else {
+            return;
+        };
+        let alarm = if Instant::now() >= deadline_after(keyed, self.max_transmit) {
+            Alarm::TransmitTimeout
+        } else {
+            Alarm::HeartbeatLapsed
+        };
+        self.shared
+            .counters
+            .watchdog_unkeys
+            .fetch_add(1, Ordering::Relaxed);
+        self.alarm(alarm);
+        let why = match alarm {
+            Alarm::TransmitTimeout => "transmit time limit reached",
+            Alarm::HeartbeatLapsed => "caller heartbeat lapsed",
+            Alarm::UnkeyFailed => "unkey failed",
+        };
+        self.unkey_fail_closed(why, Source::Watchdog).await;
+    }
+
+    // [@ANCHOR: radioctl_core_actor_alarm]
+    /// Emits an alarm event. Alarms are never deduplicated and never cached.
+    fn alarm(&mut self, alarm: Alarm) {
+        self.transcript.push_back(format!("ALARM {alarm:?}"));
+        self.emit(RigEvent {
+            rig: self.shared.id.clone(),
+            source: Source::Watchdog,
+            changes: vec![Change {
+                field: Field::Alarm,
+                old: None,
+                new: Observation::Alarm(alarm),
+            }],
+        });
     }
 
     // [@ANCHOR: radioctl_core_actor_unkey_fail_closed]
     /// Writes an unkey to the rig and waits for its answer within the engine's timeout, not
-    /// preemptible. Used when the outcome of a transmit command is unknown and when the actor
-    /// stops. Does nothing when the rig cannot be unkeyed by command or the link is down.
-    async fn unkey_fail_closed(&mut self, why: &str) {
-        if !self.shared.link_up.load(Ordering::Acquire)
-            || !self.shared.capabilities.has(Capability::SetPtt)
-        {
-            return;
-        }
-        let Ok(request) = self.engine.encode(&Op::SetPtt(false)) else {
-            return;
-        };
+    /// preemptible, up to `UNKEY_ATTEMPTS` times with a short backoff. Used when the outcome of
+    /// a transmit command is unknown, when the watchdog fires and when the actor stops. An
+    /// unkey that cannot be done (every attempt unanswered or refused, link down, no command
+    /// for it) is counted and reported as [`Alarm::UnkeyFailed`], never dropped silently.
+    async fn unkey_fail_closed(&mut self, why: &str, source: Source) {
         self.transcript
             .push_back(format!("FAIL CLOSED unkey: {why}"));
-        let until = deadline_after(Instant::now(), self.engine.description().timing.timeout);
-        match timeout_at(until, self.transport.write_all(&request.bytes)).await {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                self.link_down(&error.to_string());
-                return;
+        let request = if self.shared.capabilities.has(Capability::SetPtt) {
+            self.engine.encode(&Op::SetPtt(false)).ok()
+        } else {
+            None
+        };
+        let timeout = self.engine.description().timing.timeout;
+        let mut done = false;
+        if let Some(request) = request {
+            for attempt in 0..UNKEY_ATTEMPTS {
+                if !self.shared.link_up.load(Ordering::Acquire) {
+                    break;
+                }
+                if attempt > 0 {
+                    sleep_until(deadline_after(Instant::now(), UNKEY_BACKOFF * attempt)).await;
+                }
+                let until = deadline_after(Instant::now(), timeout);
+                match timeout_at(until, self.transport.write_all(&request.bytes)).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => {
+                        self.link_down(&error.to_string());
+                        break;
+                    }
+                    Err(_) => continue,
+                }
+                self.last_write = Some(Instant::now());
+                self.log("TX", &request.bytes);
+                done = request.reply == ReplyKind::None
+                    || matches!(
+                        self.await_reply(request.reply, until, source, false).await,
+                        Wait::Done(Ok(_))
+                    );
+                if done {
+                    break;
+                }
             }
-            Err(_) => return,
         }
-        self.last_write = Some(Instant::now());
-        self.log("TX", &request.bytes);
-        let done = request.reply == ReplyKind::None
-            || matches!(
-                self.await_reply(request.reply, until, Source::Api, false)
-                    .await,
-                Wait::Done(Ok(_))
-            );
         if done {
-            self.apply_set(&Op::SetPtt(false), Source::Api);
+            self.apply_set(&Op::SetPtt(false), source);
+        } else {
+            self.shared
+                .counters
+                .unkey_failures
+                .fetch_add(1, Ordering::Relaxed);
+            self.alarm(Alarm::UnkeyFailed);
         }
     }
 
@@ -889,6 +1051,12 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     .fetch_add(1, Ordering::Relaxed);
             }
         }
+        if command.op.is_emergency() {
+            let waiters: Vec<_> = guard(&self.shared.unkey_waiters).drain(..).collect();
+            for waiter in waiters {
+                let _ = waiter.send(result.clone());
+            }
+        }
         let _ = command.reply.send(result);
     }
 
@@ -927,7 +1095,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 Err(_) => {
                     // Part of a transmit command may already be on the wire.
                     if op.transmits() {
-                        self.unkey_fail_closed("transmit command write timed out")
+                        self.unkey_fail_closed("transmit command write timed out", source)
                             .await;
                     }
                     return Err(self.error(
@@ -974,7 +1142,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         // A transmit command was written and never answered: the rig may be keyed. Fail closed
         // and unkey it rather than report a timeout and leave RF on the air.
         if op.transmits() {
-            self.unkey_fail_closed("transmit command not answered")
+            self.unkey_fail_closed("transmit command not answered", source)
                 .await;
         }
         Err(self.error(ErrorKind::Timeout, "no reply from the rig"))
@@ -997,8 +1165,12 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         may_preempt: bool,
     ) -> Wait {
         let shared = Arc::clone(&self.shared);
+        // The watchdog also preempts a command that waits for a reply, so a slow radio cannot
+        // hold the actor past the transmit limit.
         loop {
+            let watchdog = self.watchdog_due();
             let woken = shared.emergency_wake.notified();
+            let beat = shared.heartbeat_wake.notified();
             tokio::select! {
                 biased;
                 _ = woken, if may_preempt => {
@@ -1006,6 +1178,8 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                         return Wait::Preempted;
                     }
                 }
+                _ = wait_until(watchdog), if may_preempt => return Wait::Preempted,
+                _ = beat, if may_preempt && watchdog.is_some() => {}
                 read = timeout_at(until, self.transport.read(&mut self.buffer)) => match read {
                     Err(_) => return Wait::TimedOut,
                     Ok(Err(error)) => return Wait::LinkDown(error.to_string()),
@@ -1098,7 +1272,17 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Op::SetScopeReference(rx, centi_db) => {
                 self.observe(Observation::ScopeReference(*rx, *centi_db), source)
             }
+            Op::SendCw(_) => self.arm_watchdog(Instant::now()),
             _ => {}
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_actor_arm_watchdog]
+    /// Starts the transmit watchdog if it is not running.
+    fn arm_watchdog(&mut self, now: Instant) {
+        if self.keyed_since.is_none() {
+            self.keyed_since = Some(now);
+            self.transcript.push_back("WATCHDOG armed".to_string());
         }
     }
 
@@ -1106,6 +1290,11 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     fn observe(&mut self, value: Observation, source: Source) {
         let field = value.field();
         let now = Instant::now();
+        match value {
+            Observation::Ptt(true) => self.arm_watchdog(now),
+            Observation::Ptt(false) => self.keyed_since = None,
+            _ => {}
+        }
         let mut changes = Vec::new();
         {
             let mut cache = guard(&self.shared.cache);
@@ -1143,11 +1332,16 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         if changes.is_empty() {
             return;
         }
-        let event = RigEvent {
+        self.emit(RigEvent {
             rig: self.shared.id.clone(),
             source,
             changes,
-        };
+        });
+    }
+
+    // [@ANCHOR: radioctl_core_actor_emit]
+    /// Sends an event to the stream subscribers and the callback dispatcher.
+    fn emit(&self, event: RigEvent) {
         self.shared.counters.events.fetch_add(1, Ordering::Relaxed);
         let _ = self.shared.events.send(event.clone());
         if let Some(dispatcher) = &self.shared.dispatcher {
