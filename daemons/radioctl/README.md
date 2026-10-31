@@ -3,7 +3,7 @@
 A thread-safe, async-only Rust rig-control library intended to replace Hamlib in the relay, plus a
 `rigctld`-protocol server (`radioctld`). Licence: AGPL-3.0-or-later (Bruce's decision of
 2026-10-30; every Rust file carries an SPDX header and the manifests inherit the licence from the
-workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`.
+workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`. The programmer's manual is [`docs/manual/README.md`](docs/manual/README.md).
 
 Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect) and TCP transports exist; there is no transmit
 path to real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
@@ -19,6 +19,7 @@ daemons/radioctl/
   crates/radioctl-splitter/   virtual IC-7300 CI-V / TS-2000 CAT endpoints (pty, TCP) in front of one rig actor
   crates/radioctld/           rigctld text-protocol server (library + binary `radioctld`)
   docs/DESIGN.md          design note (ADR style)
+  docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md); its code is checked by crates/radioctld/tests/manual.rs, and its examples are crates/radioctld/examples/
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
   data/hamlib-<version>/  generated capability_matrix.json and HAMLIB_DIFFERENCES.md
 ```
@@ -29,9 +30,9 @@ Layout changes from the proposal (record every change here):
   (which holds the vocabulary: `Hz`, `Mode`, `Vfo`, `Op`, `Observation`, `Capability`, `RigDescription`,
   `RigError`, and the `ProtocolEngine` trait); `radioctld` depends on both. The actor in `radioctl-core`
   is generic over `ProtocolEngine`, so core never depends on the protocols crate.
-- `RigDescription` is a Rust struct for now; the two built-in descriptions (IC-7300 style CI-V, TS-2000
+- `RigDescription` is a Rust struct; the two built-in descriptions (IC-7300 style CI-V, TS-2000
   style Kenwood) are written in code from our own simulator and bridges and are unverified. The TOML
-  format with provenance and `verified` fields deserialises into the same struct (a later PR).
+  format with provenance and `verified` fields (`rigs/*.toml`, below) deserialises into the same struct.
 - Virtual rigs live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines; the optional
   `io` module (cargo feature `tokio-io`, default on) runs one behind an in-memory duplex stream with a
   reply delay and a control handle. `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
