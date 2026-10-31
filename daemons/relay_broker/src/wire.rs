@@ -108,6 +108,8 @@ pub struct DeviceDescriptor {
     pub pid: u16,
     /// Product string from sysfs, possibly empty.
     pub product: String,
+    /// Manufacturer string from sysfs, possibly empty (the relay's port list shows it next to the product).
+    pub manufacturer: String,
 }
 
 /// Result code of a response.
@@ -336,6 +338,7 @@ impl Response {
                     out.extend_from_slice(&d.vid.to_be_bytes());
                     out.extend_from_slice(&d.pid.to_be_bytes());
                     put_string(&mut out, &d.product);
+                    put_string(&mut out, &d.manufacturer);
                 }
             }
             Response::Opened => {
@@ -401,12 +404,14 @@ impl Response {
                         let vid = r.u16()?;
                         let pid = r.u16()?;
                         let product = r.string()?;
+                        let manufacturer = r.string()?;
                         devs.push(DeviceDescriptor {
                             class,
                             path,
                             vid,
                             pid,
                             product,
+                            manufacturer,
                         });
                     }
                     Response::Devices(devs)
@@ -518,6 +523,7 @@ mod tests {
                 vid: 0x0403,
                 pid: 0x6001,
                 product: "FT232R".into(),
+                manufacturer: "FTDI".into(),
             }]),
             Response::Opened,
             Response::GroupReport {

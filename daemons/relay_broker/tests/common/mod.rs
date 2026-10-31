@@ -71,6 +71,7 @@ impl FakeOs {
             vid,
             pid,
             product: String::new(),
+            manufacturer: String::new(),
         };
         FakeOs {
             peer: Peer {

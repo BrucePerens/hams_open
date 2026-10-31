@@ -10,7 +10,7 @@ answers a fixed set of typed requests from authenticated local peers over a Unix
 
 | Action | What it does | Privilege it needs |
 |---|---|---|
-| `list_devices` | serial ttys and ALSA nodes from sysfs (read only), USB ids and product strings; protected devices are left out | none |
+| `list_devices` | serial ttys and ALSA nodes from sysfs (read only), USB ids, product and manufacturer strings; protected devices are left out | none |
 | `open_device` | validates one path against the policy, opens it `O_NOFOLLOW|O_CLOEXEC|O_NOCTTY`, re-checks the open descriptor, passes it with SCM_RIGHTS; the worker never needs `/dev` access and never learns another device's path | group membership (`dialout`, `audio`) or, failing that, one capability (see the unit) |
 | `grant_group` / `provision_groups` | reports which of `dialout`/`audio` the **caller's own** account lacks; changes nothing unless `apply_groups = true`, then runs `/usr/sbin/gpasswd -a USER GROUP` with a fixed argv | root or a gpasswd setuid, only with apply |
 

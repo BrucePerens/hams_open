@@ -59,7 +59,8 @@ pub trait Os {
     fn open_device(&self, path: &Path, read_only: bool) -> io::Result<OwnedFd>;
     /// The kind of an already-open descriptor (the post-open TOCTOU check).
     fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind;
-    /// USB vendor and product ids and the product string of the device behind a node, if USB.
+    /// USB vendor and product ids and the product string of the device behind a node, if USB
+    /// (the manufacturer string is in the device list only).
     fn usb_identity(&self, path: &Path) -> Option<(u16, u16, String)>;
     /// Read-only enumeration of serial and audio nodes.
     fn list_devices(&self) -> Vec<DeviceDescriptor>;
@@ -113,18 +114,20 @@ fn read_hex_u16(path: &Path) -> Option<u16> {
 
 // [@ANCHOR: relay_broker_usb_identity_from_sysfs]
 /// Walks up from a sysfs device directory (at most eight levels) to the USB device that holds
-/// `idVendor`/`idProduct`, and returns them with the product string.
-fn usb_identity_from_sysfs(device_dir: &Path) -> Option<(u16, u16, String)> {
+/// `idVendor`/`idProduct`, and returns them with the product and manufacturer strings.
+fn usb_identity_from_sysfs(device_dir: &Path) -> Option<(u16, u16, String, String)> {
     let mut dir = fs::canonicalize(device_dir).ok()?;
     for _ in 0..8 {
         if let (Some(vid), Some(pid)) = (
             read_hex_u16(&dir.join("idVendor")),
             read_hex_u16(&dir.join("idProduct")),
         ) {
-            let product = fs::read_to_string(dir.join("product"))
-                .map(|s| s.trim().to_string())
-                .unwrap_or_default();
-            return Some((vid, pid, product));
+            let attribute = |name: &str| {
+                fs::read_to_string(dir.join(name))
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default()
+            };
+            return Some((vid, pid, attribute("product"), attribute("manufacturer")));
         }
         dir = dir.parent()?.to_path_buf();
     }
@@ -172,14 +175,17 @@ impl LinuxOs {
             if !sys_dir.join("device").exists() {
                 continue;
             }
-            let (vid, pid, product) =
-                usb_identity_from_sysfs(&sys_dir.join("device")).unwrap_or((0, 0, String::new()));
+            let (vid, pid, product, manufacturer) = usb_identity_from_sysfs(
+                &sys_dir.join("device"),
+            )
+            .unwrap_or((0, 0, String::new(), String::new()));
             out.push(DeviceDescriptor {
                 class,
                 path: format!("{dev_dir}/{name}"),
                 vid,
                 pid,
                 product,
+                manufacturer,
             });
         }
         out
@@ -233,6 +239,7 @@ impl Os for LinuxOs {
     fn usb_identity(&self, path: &Path) -> Option<(u16, u16, String)> {
         let dir = self.sysfs_dir_for(path)?;
         usb_identity_from_sysfs(&dir.join("device"))
+            .map(|(vid, pid, product, _manufacturer)| (vid, pid, product))
     }
 
     // [@ANCHOR: relay_broker_linux_list_devices]
@@ -318,6 +325,7 @@ mod tests {
         fs::write(usb.join("idVendor"), "08bb\n").unwrap();
         fs::write(usb.join("idProduct"), "29c0\n").unwrap();
         fs::write(usb.join("product"), "VNWA\n").unwrap();
+        fs::write(usb.join("manufacturer"), "DG8SAQ\n").unwrap();
         fs::create_dir_all(root.join("class/tty/ttyUSB0")).unwrap();
         std::os::unix::fs::symlink(usb.join("1-1:1.0"), root.join("class/tty/ttyUSB0/device"))
             .unwrap();
@@ -346,6 +354,7 @@ mod tests {
         assert_eq!(devs[0].path, "/dev/ttyUSB0");
         assert_eq!((devs[0].vid, devs[0].pid), (0x08bb, 0x29c0));
         assert_eq!(devs[0].product, "VNWA");
+        assert_eq!(devs[0].manufacturer, "DG8SAQ");
         assert_eq!(devs[1].path, "/dev/snd/pcmC1D0c");
         assert_eq!(devs[1].class, DeviceClass::Audio);
         assert_eq!(
