@@ -4,8 +4,9 @@ One MCP server (official `rmcp` SDK, stdio) for the bench: about 100 tools, each
 It drives a Siglent **oscilloscope** (SDS1000X-E, over the LAN), a bench **power supply** (Abestop ATM6301), a **vector network
 analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs** (bladeRF, LimeSDR), **USB hubs** (topology, diagnosis, and port power
 cycling to reset a device), **sound devices** (play, record, meter, loopback, speech, with discovery by signature), **radios**
-through Hamlib's `rigctld`, **antenna rotators**, and a **procedure runner** for long multi-step programs, plus a template
-instrument for contributors. Adding an instrument means one driver module and one row in `DRIVER_KINDS` and `MODULES` (see
+through Hamlib's `rigctld`, **antenna rotators**, and a **procedure runner**: long multi-step **Python programs** (CPython 3 with numpy and scipy) that run next to the server and call any
+bench tool through the normal tier and safety checks, with structured failure reports and safe-state cleanup, so a soak or a
+calibration does not pass through the agent's context step by step. There is also a template instrument for contributors. Adding an instrument means one driver module and one row in `DRIVER_KINDS` and `MODULES` (see
 `docs/EXTENDING.md`). Each driver's manual pages carry a `verified` line saying what was checked on the real hardware and when.
 
 | Driver (`driver` in the config) | What it is | Highlights | Section / doc |
@@ -18,7 +19,7 @@ instrument for contributors. Adding an instrument means one driver module and on
 | `audio` | Sound devices, with discovery by signature | play, record, meter, loopback, speak, alert, verify, synthesizers; never the system default device; `dry_run` and a safe state | [Audio tools](#audio-tools-audio-driver), `docs/AUDIO_TOOLS.md` |
 | `hamlib` | Radios through Hamlib's `rigctld` (a separate process; LGPL, not linked) | models, get and set, scan, watch, memory, load checks, transmit tests with an attestation and a watchdog | [Hamlib rigs](#hamlib-rigs-hamlib-driver), `docs/HAMLIB_TOOLS.md` |
 | `rotator` | Antenna rotators through `rotctld` | status, point, park, stop | [Rotators](#rotators-rotator-driver) |
-| `procedure` | The procedure runner | long multi-step programs (CPython) that call bench tools through the normal dispatcher, with failure reports, safe-state routines and saved examples | [Procedure runner](#procedure-runner-procedure-driver) |
+| `procedure` | The procedure runner (Python) | long multi-step Python programs (CPython 3 with numpy and scipy) that call bench tools through the normal dispatcher, with failure reports, safe-state routines and saved examples | [Procedure runner](#procedure-runner-procedure-driver) |
 | `example` | A template instrument with a simulated transport | the skeleton a new driver starts from, checked by the contributor tests | [Template instrument](#template-instrument-example-driver) |
 
 Across all drivers: safety tiers (`read_only`, `read_config`, `full`) with `dry_run`, confirm arguments and a safe-state
