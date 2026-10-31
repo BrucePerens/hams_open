@@ -13,6 +13,7 @@
 //! max_line_bytes = 1024
 //! request_timeout_ms = 2000
 //! cache_max_age_ms = 1000        # reads newer than this are answered from the cache
+//! secrets_dir = "/etc/radioctld/secrets"  # one file per secret, mode 0600; needed by ts890-lan
 //!
 //! [[rig]]
 //! name = "kx3"
@@ -21,7 +22,9 @@
 //! vfo_mode = false                         # rigctld's -o: \chk_vfo answers 1
 //! transmit = false                         # true opens the rig's transmit gate at start
 //! [rig.transport]
-//! kind = "virtual"                         # or "serial" (path/usb + baud, lines) or "tcp" (address)
+//! kind = "virtual"                         # or "serial" (path/usb + baud, lines) or "tcp" (address,
+//!                                          # framing = "raw" | "ts890-lan", lan_account,
+//!                                          # lan_administrator, lan_password_secret, idle_timeout_ms)
 //!
 //! [[rotator]]
 //! name = "g5500"
@@ -85,6 +88,7 @@ struct ServerSection {
     max_line_bytes: Option<usize>,
     request_timeout_ms: Option<u64>,
     cache_max_age_ms: Option<u64>,
+    secrets_dir: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -119,6 +123,11 @@ enum TransportSection {
     },
     Tcp {
         address: String,
+        framing: Option<String>,
+        lan_account: Option<String>,
+        lan_administrator: Option<bool>,
+        lan_password_secret: Option<String>,
+        idle_timeout_ms: Option<u64>,
     },
 }
 
@@ -147,6 +156,26 @@ pub struct ServerConfig {
     pub request_timeout: Duration,
     /// Reads at most this old are answered from the rig's cache.
     pub cache_max_age: Duration,
+    /// The directory of secret files (one per secret, readable by the owner only), when a
+    /// transport needs one. Relative to the configuration file.
+    pub secrets_dir: Option<PathBuf>,
+}
+
+/// What a TCP transport wraps the CAT stream in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TcpFraming {
+    /// Nothing: the CAT stream is the wire stream.
+    Raw,
+    /// The Kenwood TS-890S LAN session: `##CN;` connection request, `##ID` login, `ID;`
+    /// keep-alive. The password is read from the secret store at start, never from this file.
+    Ts890Lan {
+        /// The LAN account name (not a secret).
+        account: String,
+        /// Whether the account is the administrator account.
+        administrator: bool,
+        /// The name of the secret (a file in `server.secrets_dir`) holding the password.
+        password_secret: String,
+    },
 }
 
 /// How a rig is reached.
@@ -166,10 +195,15 @@ pub enum TransportConfig {
         /// Whether the port has modem control lines this daemon may use.
         lines: LineControl,
     },
-    /// A TCP connection (a network serial server or a radio with its own CAT port).
+    /// A TCP connection (a network serial server or a radio with its own CAT port), reconnected
+    /// with backoff after a loss.
     Tcp {
         /// `host:port`.
         address: String,
+        /// The session around the CAT stream.
+        framing: TcpFraming,
+        /// Silence on the wire after which the link is declared lost and reconnected.
+        idle_timeout: Option<Duration>,
     },
 }
 
@@ -254,8 +288,8 @@ fn in_range<T: PartialOrd + std::fmt::Display + Copy>(
 }
 
 // [@ANCHOR: radioctld_config_server]
-/// Validates the `[server]` section.
-fn server_config(section: ServerSection) -> Result<(ServerConfig, bool), String> {
+/// Validates the `[server]` section. `base_dir` resolves a relative `secrets_dir`.
+fn server_config(section: ServerSection, base_dir: &Path) -> Result<(ServerConfig, bool), String> {
     let explicit_allow = section.allow.is_some();
     let allow = match &section.allow {
         Some(entries) => AllowList::parse(entries)?,
@@ -293,6 +327,18 @@ fn server_config(section: ServerSection) -> Result<(ServerConfig, bool), String>
             0,
             60_000,
         )?),
+        secrets_dir: match section.secrets_dir.as_deref() {
+            None => None,
+            Some("") => return Err("secrets_dir is empty".to_string()),
+            Some(dir) => {
+                let dir = Path::new(dir);
+                Some(if dir.is_absolute() {
+                    dir.to_path_buf()
+                } else {
+                    base_dir.join(dir)
+                })
+            }
+        },
     };
     if section.allow_non_loopback_bind && !explicit_allow {
         return Err("allow_non_loopback_bind needs an explicit allow list".to_string());
@@ -300,9 +346,59 @@ fn server_config(section: ServerSection) -> Result<(ServerConfig, bool), String>
     Ok((server, section.allow_non_loopback_bind))
 }
 
+// [@ANCHOR: radioctld_config_tcp_framing]
+/// Validates a tcp transport's `framing` and the `lan_*` keys: `raw` (the default) takes none of
+/// them; `ts890-lan` needs `lan_account` and `lan_password_secret` (a secret name, never the
+/// password) and a `server.secrets_dir` to read it from.
+fn tcp_framing(
+    framing: Option<&str>,
+    lan_account: Option<String>,
+    lan_administrator: Option<bool>,
+    lan_password_secret: Option<String>,
+    has_secrets_dir: bool,
+) -> Result<TcpFraming, String> {
+    match framing.unwrap_or("raw") {
+        "raw" => {
+            if lan_account.is_some() || lan_administrator.is_some() || lan_password_secret.is_some()
+            {
+                return Err(
+                    "lan_account, lan_administrator and lan_password_secret need framing = \
+                     \"ts890-lan\""
+                        .to_string(),
+                );
+            }
+            Ok(TcpFraming::Raw)
+        }
+        "ts890-lan" => {
+            let account = lan_account
+                .filter(|a| !a.is_empty())
+                .ok_or("framing = \"ts890-lan\" needs lan_account (the LAN account name)")?;
+            let password_secret = lan_password_secret
+                .filter(|s| !s.is_empty())
+                .ok_or("framing = \"ts890-lan\" needs lan_password_secret (a secret name)")?;
+            if !has_secrets_dir {
+                return Err(
+                    "framing = \"ts890-lan\" needs server.secrets_dir to read the password from"
+                        .to_string(),
+                );
+            }
+            Ok(TcpFraming::Ts890Lan {
+                account,
+                administrator: lan_administrator.unwrap_or(false),
+                password_secret,
+            })
+        }
+        other => Err(format!("framing {other:?} is not \"raw\" or \"ts890-lan\"")),
+    }
+}
+
 // [@ANCHOR: radioctld_config_transport]
-/// Validates a rig's `[rig.transport]`.
-fn transport_config(section: TransportSection) -> Result<TransportConfig, String> {
+/// Validates a rig's `[rig.transport]`. `has_secrets_dir` says whether the server has a secret
+/// store for a framing that needs one.
+fn transport_config(
+    section: TransportSection,
+    has_secrets_dir: bool,
+) -> Result<TransportConfig, String> {
     match section {
         TransportSection::Virtual { reply_delay_ms } => Ok(TransportConfig::Virtual {
             reply_delay: Duration::from_millis(in_range(
@@ -346,9 +442,31 @@ fn transport_config(section: TransportSection) -> Result<TransportConfig, String
                 lines,
             })
         }
-        TransportSection::Tcp { address } => {
+        TransportSection::Tcp {
+            address,
+            framing,
+            lan_account,
+            lan_administrator,
+            lan_password_secret,
+            idle_timeout_ms,
+        } => {
             check_host_port(&address)?;
-            Ok(TransportConfig::Tcp { address })
+            let framing = tcp_framing(
+                framing.as_deref(),
+                lan_account,
+                lan_administrator,
+                lan_password_secret,
+                has_secrets_dir,
+            )?;
+            let idle_timeout = idle_timeout_ms
+                .map(|ms| in_range("idle_timeout_ms", Some(ms), 1000, 1000, 600_000))
+                .transpose()?
+                .map(Duration::from_millis);
+            Ok(TransportConfig::Tcp {
+                address,
+                framing,
+                idle_timeout,
+            })
         }
     }
 }
@@ -467,6 +585,7 @@ fn rig_config(
     index: usize,
     base_dir: &Path,
     non_loopback_ok: bool,
+    has_secrets_dir: bool,
 ) -> Result<RigConfig, String> {
     let name = section.name;
     check_name("rig", &name)?;
@@ -497,7 +616,7 @@ fn rig_config(
             .map(|s| in_range("max_transmit_s", Some(s), 1, 1, 3600))
             .transpose()?
             .map(Duration::from_secs),
-        transport: transport_config(section.transport)?,
+        transport: transport_config(section.transport, has_secrets_dir)?,
         description: if description.is_absolute() {
             description.to_path_buf()
         } else {
@@ -516,10 +635,17 @@ impl Config {
         if doc.rig.is_empty() && doc.rotator.is_empty() {
             return Err("config: no [[rig]] or [[rotator]] to serve".to_string());
         }
-        let (server, non_loopback_ok) = server_config(doc.server.unwrap_or_default())?;
+        let (server, non_loopback_ok) = server_config(doc.server.unwrap_or_default(), base_dir)?;
+        let has_secrets_dir = server.secrets_dir.is_some();
         let mut rigs = Vec::new();
         for (index, section) in doc.rig.into_iter().enumerate() {
-            rigs.push(rig_config(section, index, base_dir, non_loopback_ok)?);
+            rigs.push(rig_config(
+                section,
+                index,
+                base_dir,
+                non_loopback_ok,
+                has_secrets_dir,
+            )?);
         }
         let mut rotators = Vec::new();
         for (index, section) in doc.rotator.into_iter().enumerate() {
@@ -771,5 +897,81 @@ kind = "virtual"
         assert!(with("kind = \"tcp\"\naddress = \"10.0.0.7:4532\"").is_ok());
         assert!(with("kind = \"tcp\"\naddress = \"nonsense\"").is_err());
         assert!(with("kind = \"carrier-pigeon\"").is_err());
+    }
+
+    // Tests [@ANCHOR: radioctld_config_tcp_framing]
+    // Tests [@ANCHOR: radioctld_config_server]
+    // Tests [@ANCHOR: radioctld_config_transport]
+    #[test]
+    fn the_ts890_lan_framing_needs_an_account_a_secret_name_and_a_secret_store() {
+        let tcp = |extra: &str, server: &str| {
+            let text = format!("kind = \"tcp\"\naddress = \"192.168.1.50:60000\"\n{extra}");
+            parse(&format!(
+                "{server}{}",
+                MINIMAL.replace("kind = \"virtual\"", &text)
+            ))
+        };
+        let store = "[server]\nsecrets_dir = \"secrets\"\n";
+        // Raw is the default; the lan keys belong to ts890-lan only.
+        match &tcp("", "").expect("raw").rigs[0].transport {
+            TransportConfig::Tcp {
+                framing,
+                idle_timeout,
+                ..
+            } => {
+                assert_eq!(*framing, TcpFraming::Raw);
+                assert_eq!(*idle_timeout, None);
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(tcp("framing = \"raw\"", "").is_ok());
+        assert!(tcp("lan_account = \"kenwood\"", store).is_err());
+        assert!(tcp("framing = \"icom-lan\"", store).is_err());
+        // ts890-lan: account and secret name, plus a store. The password is never in the file.
+        let full = "framing = \"ts890-lan\"\nlan_account = \"kenwood\"\nlan_administrator = true\n\
+                    lan_password_secret = \"ts890-password\"\nidle_timeout_ms = 12000";
+        let config = tcp(full, store).expect("ts890-lan");
+        assert_eq!(
+            config.server.secrets_dir,
+            Some(Path::new(BASE).join("secrets"))
+        );
+        match &config.rigs[0].transport {
+            TransportConfig::Tcp {
+                framing,
+                idle_timeout,
+                ..
+            } => {
+                assert_eq!(
+                    *framing,
+                    TcpFraming::Ts890Lan {
+                        account: "kenwood".to_string(),
+                        administrator: true,
+                        password_secret: "ts890-password".to_string(),
+                    }
+                );
+                assert_eq!(*idle_timeout, Some(Duration::from_millis(12_000)));
+            }
+            other => panic!("{other:?}"),
+        }
+        let err = tcp(full, "").expect_err("no store");
+        assert!(err.contains("secrets_dir"), "{err}");
+        assert!(tcp(
+            "framing = \"ts890-lan\"\nlan_password_secret = \"x\"",
+            store
+        )
+        .is_err());
+        assert!(tcp("framing = \"ts890-lan\"\nlan_account = \"kenwood\"", store).is_err());
+        assert!(tcp("framing = \"ts890-lan\"\nlan_account = \"kenwood\"\nlan_password = \"admin\"\nlan_password_secret = \"x\"", store).is_err());
+        assert!(tcp("idle_timeout_ms = 10", "").is_err());
+        assert!(parse(&format!("[server]\nsecrets_dir = \"\"\n{MINIMAL}")).is_err());
+        assert_eq!(
+            parse(&format!(
+                "[server]\nsecrets_dir = \"/run/secrets\"\n{MINIMAL}"
+            ))
+            .expect("absolute")
+            .server
+            .secrets_dir,
+            Some(PathBuf::from("/run/secrets"))
+        );
     }
 }

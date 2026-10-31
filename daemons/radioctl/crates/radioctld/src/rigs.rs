@@ -2,7 +2,10 @@
 //! Building the rigs a configuration names: read the description, build its protocol engine, open
 //! its transport, spawn the rig actor on the runtime the caller passes in. No runtime is created
 //! here. A virtual rig is the same path with an in-memory transport, which is also what the tests
-//! use.
+//! use. A TCP rig is a reconnecting network link (`radioctl_core::net::open_link`), raw or inside
+//! the Kenwood TS-890S LAN session, whose password comes from the server's secret store at start
+//! and is held only in the framing's `LanCredentials` (its `Debug` hides it). Nothing here is
+//! verified against a real radio.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -12,17 +15,19 @@ use radioctl_core::capability::Capability;
 use radioctl_core::description::RigDescription;
 use radioctl_core::engine::{ProtocolEngine, Request};
 use radioctl_core::error::RigError;
+use radioctl_core::net::{open_link, Framing, NetConfig, NetMonitor, RawFraming};
 use radioctl_core::op::Op;
 use radioctl_core::rig::{spawn, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
 use radioctl_core::serial::{open_serial, SerialConfig, SerialMonitor};
-use radioctl_core::tcp::{connect_tcp, TcpConfig};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
+use radioctl_protocols::kenwood_ts890_lan::{LanCredentials, Ts890LanFraming, KEEPALIVE_EVERY};
 use radioctl_protocols::virtual_rig::VirtualRig;
+use radioctl_station::homeassistant::{FileSecrets, SecretStore};
 use tokio::runtime::Handle;
 
-use crate::config::{RigConfig, ServerConfig, TransportConfig};
+use crate::config::{RigConfig, ServerConfig, TcpFraming, TransportConfig};
 use crate::service::{RigService, ServiceConfig};
 
 /// A protocol engine behind a box, so one `spawn` serves every family.
@@ -53,6 +58,51 @@ pub struct BuiltRig {
     /// The serial port's control lines, status and counters, for serial rigs. Kept for the life
     /// of the rig: the actor's link watch and the keyer's lines depend on it.
     pub serial_link: Option<SerialMonitor>,
+    /// The network link's status and counters, for TCP rigs.
+    pub net_link: Option<NetMonitor>,
+}
+
+// [@ANCHOR: radioctld_rigs_tcp_framing]
+/// The framing of a TCP rig and the silence limit that goes with it. For the TS-890S LAN
+/// session the password is read now from the secret store named by `server.secrets_dir` (the
+/// file must be the owner's alone); the error for a missing or unreadable secret names the
+/// secret, never a value. Without an `idle_timeout` of its own, the session's limit is three
+/// keep-alive intervals (the radio itself hangs up after 10 s of silence); a raw stream has none.
+pub fn tcp_framing(
+    rig: &RigConfig,
+    server: &ServerConfig,
+    framing: &TcpFraming,
+    idle_timeout: Option<Duration>,
+) -> Result<(Box<dyn Framing>, Option<Duration>), String> {
+    match framing {
+        TcpFraming::Raw => Ok((Box::new(RawFraming), idle_timeout)),
+        TcpFraming::Ts890Lan {
+            account,
+            administrator,
+            password_secret,
+        } => {
+            let dir = server.secrets_dir.as_ref().ok_or_else(|| {
+                format!(
+                    "rig {}: the ts890-lan framing needs server.secrets_dir",
+                    rig.name
+                )
+            })?;
+            let password = FileSecrets::new(dir)
+                .secret(password_secret)
+                .map_err(|e| format!("rig {}: secret {password_secret}: {}", rig.name, e.detail))?;
+            let credentials = LanCredentials::new(*administrator, account, password.expose())
+                .map_err(|e| {
+                    format!(
+                        "rig {}: LAN account {account:?} or its password cannot be sent: {}",
+                        rig.name, e.detail
+                    )
+                })?;
+            Ok((
+                Box::new(Ts890LanFraming::new(credentials)),
+                Some(idle_timeout.unwrap_or(KEEPALIVE_EVERY * 3)),
+            ))
+        }
+    }
 }
 
 // [@ANCHOR: radioctld_rigs_load_description]
@@ -98,6 +148,7 @@ pub async fn build_rig(
     let fail = |e: RigError| format!("rig {}: {e}", rig.name);
     let mut virtual_control = None;
     let mut serial_link = None;
+    let mut net_link = None;
     let handle: RigHandle = match &rig.transport {
         TransportConfig::Virtual { reply_delay } => {
             let virtual_rig = VirtualRig::from_description(&description).map_err(fail)?;
@@ -121,11 +172,24 @@ pub async fn build_rig(
             serial_link = Some(serial);
             spawn(runtime, engine, transport, options).map_err(fail)?
         }
-        TransportConfig::Tcp { address } => {
-            let stream = connect_tcp(address.as_str(), &TcpConfig::default())
-                .await
-                .map_err(fail)?;
-            spawn(runtime, engine, stream, options).map_err(fail)?
+        TransportConfig::Tcp {
+            address,
+            framing,
+            idle_timeout,
+        } => {
+            let (framing, idle_timeout) = tcp_framing(rig, server, framing, *idle_timeout)?;
+            let mut net = NetConfig::new(address.clone());
+            net.first_attempts = 1;
+            net.idle_timeout = idle_timeout;
+            // One attempt at start, as for a serial port: a radio that cannot be reached, or
+            // refuses the login, stops the daemon from starting. After that the link reconnects
+            // without limit; the actor watches it, marks the link down meanwhile and unkeys the
+            // rig when it is back (RigOptions::link_watch).
+            let link = open_link(runtime, net, framing).await.map_err(fail)?;
+            options.link_watch = Some(link.watch());
+            let (transport, monitor) = link.into_parts();
+            net_link = Some(monitor);
+            spawn(runtime, engine, transport, options).map_err(fail)?
         }
     };
     // The unkey pass: a process that was killed while it had the radio keyed leaves it keyed
@@ -156,6 +220,7 @@ pub async fn build_rig(
         service,
         virtual_control,
         serial_link,
+        net_link,
     })
 }
 

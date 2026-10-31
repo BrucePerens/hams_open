@@ -13,6 +13,7 @@ line_timeout_secs = 10     # a request line that has begun must end within this
 max_line_bytes = 1024      # longest request line
 request_timeout_ms = 2000  # deadline for a request that has to go to the rig
 cache_max_age_ms = 1000    # reads newer than this are answered from the rig's cache
+# secrets_dir = "secrets"   # one file per secret, relative to this file; needed by framing = "ts890-lan"
 
 # One [[rig]] per radio. Each rig has its own listen address, as with one rigctld per radio.
 [[rig]]
@@ -37,8 +38,14 @@ kind = "virtual"                              # an in-memory rig generated from 
 # lines = "managed"                           # "unmanaged" for a pty or other port without DTR/RTS
 
 # [rig.transport]
-# kind = "tcp"                                # a network serial server or a radio's own CAT port
-# address = "192.168.1.50:4001"
+# kind = "tcp"                                # a network serial server or a radio's own CAT port;
+# address = "192.168.1.50:4001"               # reconnects with backoff after a loss, one attempt at start
+# framing = "raw"                             # or "ts890-lan": the Kenwood TS-890S LAN session, with
+# lan_account = "kenwood"                     #   the radio's LAN account name,
+# lan_administrator = false                   #   whether it is the administrator account, and
+# lan_password_secret = "ts890-password"      #   the name of the file under server.secrets_dir holding
+#                                             #   the password (mode 0600; never the password here)
+# idle_timeout_ms = 12000                     # silence that counts as a lost link (default: none for raw)
 
 # One [[rotator]] per rotator, served in Hamlib's rotctld text protocol on its own listener
 # (rotctl -m 2 -r 127.0.0.1:4533). Tested against the virtual rotator only; unverified on a real one.
