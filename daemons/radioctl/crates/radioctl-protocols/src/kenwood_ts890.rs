@@ -164,8 +164,9 @@ impl Ts890Engine {
                 parse_digits(d).map(|hz| Observation::Frequency(Vfo::B, Hz(hz)))
             }
             (Some("OM"), Some(rest)) if rest.len() == 2 && rest.starts_with('0') => rest
-                .bytes()
-                .nth(1)
+                .as_bytes()
+                .get(1)
+                .copied()
                 .and_then(|c| self.desc.code_mode(c))
                 .map(Observation::Mode),
             (Some("SM"), Some(d)) if d.len() == 4 => parse_digits(d)
