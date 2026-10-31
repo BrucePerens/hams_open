@@ -27,6 +27,8 @@ pub enum Family {
     YaesuLegacy,
     /// FlexRadio SmartSDR API: line text over TCP (FLEX-6000 and later).
     Flex,
+    /// OpenHPSDR (ANAN, Hermes) over UDP, control plane only (Protocol 1 or 2).
+    Hpsdr,
 }
 
 /// CI-V parameters.
@@ -95,6 +97,17 @@ pub struct FlexParams {
     pub scus: u8,
 }
 
+/// OpenHPSDR network radio parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HpsdrParams {
+    /// Model name (`ANAN-100`).
+    pub model: String,
+    /// Wire protocol, 1 or 2.
+    pub protocol: u8,
+    /// True for the ANAN-10 power calibration constant, false for the ANAN-100.
+    pub anan10: bool,
+}
+
 /// Command timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -127,6 +140,8 @@ pub struct RigDescription {
     pub yaesu_legacy: Option<YaesuLegacyParams>,
     /// FlexRadio parameters, present for [`Family::Flex`].
     pub flex: Option<FlexParams>,
+    /// OpenHPSDR parameters, present for [`Family::Hpsdr`].
+    pub hpsdr: Option<HpsdrParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// What the rig can do.
@@ -178,6 +193,7 @@ impl RigDescription {
             yaesu: None,
             yaesu_legacy: None,
             flex: None,
+            hpsdr: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
@@ -225,6 +241,7 @@ impl RigDescription {
             yaesu: None,
             yaesu_legacy: None,
             flex: None,
+            hpsdr: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,

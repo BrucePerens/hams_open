@@ -29,6 +29,7 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         Family::YaesuNewcat => Box::new(YaesuEngine::new(description.clone())?),
         Family::YaesuLegacy => Box::new(YaesuLegacyEngine::new(description.clone())?),
         Family::Flex => Box::new(crate::flex::FlexEngine::new(description.clone())?),
+        Family::Hpsdr => Box::new(crate::hpsdr_net::HpsdrEngine::new(description.clone())?),
     })
 }
 

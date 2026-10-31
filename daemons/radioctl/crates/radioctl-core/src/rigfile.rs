@@ -23,8 +23,8 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivParams, ElecraftParams, Family, FlexParams, KenwoodParams, RigDescription, ScopeParams,
-    Timing, YaesuLegacyParams, YaesuParams,
+    CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodParams, RigDescription,
+    ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
@@ -124,6 +124,7 @@ struct FileDoc {
     yaesu: Option<YaesuSection>,
     yaesu_legacy: Option<YaesuLegacySection>,
     flex: Option<FlexSection>,
+    hpsdr: Option<HpsdrSection>,
     scope: Option<ScopeSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
@@ -178,6 +179,14 @@ struct YaesuLegacySection {
 struct FlexSection {
     model: String,
     scus: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HpsdrSection {
+    model: String,
+    protocol: u8,
+    anan10: bool,
 }
 
 #[derive(Deserialize)]
@@ -268,6 +277,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "yaesu-newcat" => Family::YaesuNewcat,
         "yaesu-legacy" => Family::YaesuLegacy,
         "flex-smartsdr" => Family::Flex,
+        "hpsdr-network" => Family::Hpsdr,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
     match (
@@ -283,8 +293,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         | (Family::ElecraftAscii, None, None, Some(_), None, None)
         | (Family::YaesuNewcat, None, None, None, Some(_), None)
         | (Family::YaesuLegacy, None, None, None, None, Some(_))
-            if doc.flex.is_none() => {}
-        (Family::Flex, None, None, None, None, None) if doc.flex.is_some() => {}
+            if doc.flex.is_none() && doc.hpsdr.is_none() => {}
+        (Family::Flex, None, None, None, None, None)
+            if doc.flex.is_some() && doc.hpsdr.is_none() => {}
+        (Family::Hpsdr, None, None, None, None, None)
+            if doc.hpsdr.is_some() && doc.flex.is_none() => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
     let civ = doc.civ.as_ref().map(|c| CivParams {
@@ -310,6 +323,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         model: f.model.clone(),
         scus: f.scus,
     });
+    let hpsdr = doc.hpsdr.as_ref().map(|h| HpsdrParams {
+        model: h.model.clone(),
+        protocol: h.protocol,
+        anan10: h.anan10,
+    });
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
         let capability = Capability::from_name(name)
@@ -334,6 +352,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         yaesu,
         yaesu_legacy,
         flex,
+        hpsdr,
         scope,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
@@ -519,6 +538,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     if description.flex.is_some() {
         keys.push("flex.model".to_string());
         keys.push("flex.scus".to_string());
+    }
+    if description.hpsdr.is_some() {
+        keys.extend(["hpsdr.model", "hpsdr.protocol", "hpsdr.anan10"].map(String::from));
     }
     keys.extend(
         description

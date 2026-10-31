@@ -13,11 +13,13 @@ workspace = true
 [dependencies]
 tokio = { workspace = true, optional = true, features = ["rt", "sync", "time", "io-util", "net"] }
 radioctl-core = { path = "../radioctl-core" }
+# The OpenHPSDR client (control plane only is used here); a standalone crate in daemons/hpsdr.
+hpsdr = { path = "../../../hpsdr", optional = true }
 
 [features]
 # tokio glue that exposes a VirtualRig as an in-memory duplex stream (module `io`).
 default = ["tokio-io"]
-tokio-io = ["dep:tokio"]
+tokio-io = ["dep:tokio", "dep:hpsdr"]
 # Differential tests against Hamlib's rigctld (tests/rigctld_oracle.rs). Needs the `rigctld`
 # binary (or RIGCTLD=/path) and fails loudly without it; off by default so a machine without
 # Hamlib can still run the rest. Run: cargo test -p radioctl-protocols --features hamlib-oracle

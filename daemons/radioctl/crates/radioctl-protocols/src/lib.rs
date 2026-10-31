@@ -14,6 +14,7 @@ pub mod civ_scope;
 pub mod conformance;
 pub mod elecraft;
 pub mod flex;
+pub mod hpsdr_net;
 pub mod kenwood;
 pub mod virtual_flex;
 pub mod virtual_rig;
@@ -22,5 +23,7 @@ pub mod yaesu_legacy;
 
 #[cfg(feature = "tokio-io")]
 pub mod flex_io;
+#[cfg(feature = "tokio-io")]
+pub mod hpsdr_io;
 #[cfg(feature = "tokio-io")]
 pub mod io;
