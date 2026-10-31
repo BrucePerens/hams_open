@@ -23,6 +23,11 @@ transmitter (a rig keyed by Morse, or one whose owner record was lost, has no ow
 multi-thread runtime (two workers) for all rigs and hands its `Handle` to the library, which creates
 none.
 
+Before it listens, the daemon sends each rig an unkey (the emergency path: no gate, never refused), so a
+radio left keyed by a killed predecessor is released at once instead of at the watchdog's limit. A radio that
+does not answer it is not served: `radioctld: rig NAME: the startup unkey failed, the radio may be keyed`
+is usually a wrong baud rate or CI-V address.
+
 One `[[rig]]` per radio, each with its own listen address, as with one `rigctld` per radio. If the
 first connection to a rig fails (the port is missing, the TCP connect times out) the daemon does not
 start; it does not wait for the radio to appear.
@@ -98,6 +103,10 @@ intervals (the daemon uses the library defaults); the list of capabilities (that
   `allow` list. The loader refuses the first without the second.
 - There is **no authentication and no encryption** in the `rigctld` protocol. Anyone the allow list admits
   can read and set the radio, and key it if `transmit = true`. Put it behind a network you control.
+- **A one-shot `rigctl -m 2 ... T 1` keys the rig and unkeys it again an instant later**: the client
+  disconnects, and a disconnecting owner unkeys the rig. Keep the connection open for as long as the
+  rig should stay keyed, for example `(echo "T 1"; sleep 4; echo "T 0"; sleep 1) | nc 127.0.0.1 4532`,
+  or an interactive `rigctl -m 2 -r 127.0.0.1:4532`.
 - Bounds on a client: the client count, the line length, idle time, time to finish a started line, and
   write time (10 s). A client that breaks one is disconnected; a disconnecting client that owned the
   transmitter unkeys the rig.

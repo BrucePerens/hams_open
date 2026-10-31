@@ -246,7 +246,7 @@ It does:
 It does **not**:
 
 - stop a transmission when the process that keyed it is killed. `kill -9` takes the actor with it and leaves
-  the radio keyed; a CAT radio stays keyed until its own time-out, if it has one. A program that merely
+  the radio keyed (a restarted `radioctld` unkeys every rig before serving it); a CAT radio stays keyed until its own time-out, if it has one. A program that merely
   returns or panics is covered (the last handle drops, above), and one that hangs is covered by the
   watchdog (the maximum transmit time, and the heartbeat if the owner set one).
 - limit how long a transmission lasts below the default, or at all if the owner disabled the limit.
