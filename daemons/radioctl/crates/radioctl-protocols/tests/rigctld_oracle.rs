@@ -1069,7 +1069,7 @@ fn known_yaesu_divergences(_file: &str) -> Vec<&'static str> {
 
 /// The Yaesu, Elecraft and Kenwood ASCII descriptions added in the October 31 batches, with
 /// Hamlib's model number and the baud rate the comparison uses.
-const ASCII_BATCH: [(&str, u32, u32); 15] = [
+const ASCII_BATCH: [(&str, u32, u32); 31] = [
     ("yaesu-ft-450", 1027, 38400),
     ("yaesu-ft-450d", 1046, 38400),
     ("yaesu-ft-950", 1028, 38400),
@@ -1085,6 +1085,22 @@ const ASCII_BATCH: [(&str, u32, u32); 15] = [
     ("elecraft-k3s", 2043, 38400),
     ("elecraft-kx2", 2044, 38400),
     ("elecraft-k4", 2047, 38400),
+    ("kenwood-ts-50s", 2001, 57600),
+    ("kenwood-ts-140s", 2025, 57600),
+    ("kenwood-ts-450s", 2003, 57600),
+    ("kenwood-ts-480", 2028, 57600),
+    ("kenwood-ts-570d", 2004, 57600),
+    ("kenwood-ts-570s", 2016, 57600),
+    ("kenwood-ts-680s", 2024, 57600),
+    ("kenwood-ts-690s", 2005, 57600),
+    ("kenwood-ts-711", 2006, 57600),
+    ("kenwood-ts-790", 2007, 57600),
+    ("kenwood-ts-811", 2008, 57600),
+    ("kenwood-ts-850", 2009, 57600),
+    ("kenwood-ts-870s", 2010, 57600),
+    ("kenwood-ts-940s", 2011, 57600),
+    ("kenwood-ts-950s", 2012, 57600),
+    ("kenwood-ts-950sdx", 2013, 57600),
 ];
 
 // Tests [@ANCHOR: radioctl_yaesu_engine_encode]
@@ -1130,10 +1146,21 @@ fn the_ascii_batch_files_against_hamlib_record_every_disagreement() {
 /// frequency step then fails and it reads back 0. Which of the two matches a real FT-450 or
 /// FTDX-9000 is unknown; the descriptions claim `second-vfo` (the `FB` command is in both
 /// guides) but not `split`. The other twelve agree on every step the harness can express.
+///
+/// Kenwood: on the TS-450S, TS-480, TS-570D and TS-570S Hamlib reads the second frequency back
+/// with `FA;` after enabling split where radioctl reads `FB;` (the same step the TS-590 files pin
+/// in `known_kenwood_divergences`; Hamlib's answer is the first VFO's frequency). Which of the two
+/// a real radio answers correctly is unknown. The TS-140S, TS-680S, TS-711, TS-811, TS-950S and
+/// TS-950SDX would have diverged on the VFO B steps (Hamlib's drivers have no way to set VFO B for
+/// them), so their descriptions do not claim `second-vfo`; the other six Kenwood files agree on
+/// every step.
 fn known_ascii_batch_divergences(file: &str) -> Vec<&'static str> {
     match file {
         "yaesu-ft-450" | "yaesu-ft-450d" | "yaesu-ftdx-9000" => {
             vec!["SetFrequency(B, Hz(14025000))", "GetFrequency(B)"]
+        }
+        "kenwood-ts-450s" | "kenwood-ts-480" | "kenwood-ts-570d" | "kenwood-ts-570s" => {
+            vec!["GetFrequency(B)"]
         }
         _ => Vec::new(),
     }

@@ -1,0 +1,96 @@
+# Rig description: Kenwood TS-870S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Kenwood publishes no PC command reference for this model that could be downloaded (kenwood.com refused the download of its
+# guides in this session and hosts none for the older sets), so the facts come from Hamlib 4.6.2 (rigs/kenwood/ts870s.c, kenwood.c, read for
+# facts only, and `rigctl -m 2010 --dump-caps` output), named in each fact below. Kenwood's guides for other models were not used for this one.
+# Hamlib lists: serial 1200..57600 baud, 8N1, no handshake; PC interface: see the radio's manual (older Kenwoods need the IF-232C/IC-10 level converter); receive 0.1 to 30 MHz in 2 ranges; transmit 1.8 to 29.7 MHz in 36 ranges; RIT range -9.990kHz/+9.990kHz; attenuator 6/12/18 dB.
+# Hamlib's get-level list for this model: PREAMP ATT AF RF SQL RFPOWER MICGAIN COMP AGC SWR ALC STRENGTH. The description format has no field for frequency ranges, filter tables or function lists,
+# so they are not repeated here.
+# Engine: the classic Kenwood engine (IF; answer of 38 characters, MD; mode letters, FA/FB 11 digits). Hamlib's backend assumes the same IF length for this model.
+# Known gap: no levels are declared: the AG/RG/PC/KS forms of this model are not documented by a source we may use here.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "rit-xit", "identify"]
+
+[rig]
+id = "kenwood-ts-870s"
+name = "Kenwood TS-870S"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 15
+
+[timing]
+timeout_ms = 500
+retries = 10
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 2010 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c, the kenwood_ids table (numeric id 15) and kenwood_id_string_list (\"015\") for RIG_MODEL_TS870S", note = "The ID; answer is three digits (ID009; is 9). Hamlib's own comment says the numeric ids were tested only with the TS-450." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 2010 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 500ms, 10 retry", note = "Hamlib's settings, not a measurement of the radio. retries is capped at 10 in this repository." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig; the frequency is moved inside this model's receive range where needed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts870s.c, the rig_caps of RIG_MODEL_TS870S: .get_ptt present, .set_ptt present, .get_split_vfo present, .get_rit present, .set_trn present; kenwood_get_mode; get_xit present; set_xit present", note = "A capability is declared only where Hamlib implements the matching function (read-ptt from get_ptt, second-vfo and split from set_split_vfo (get_split_vfo too for split), which is how Hamlib reaches VFO B, rit-xit from get/set rit and xit, transceive from set_trn); FA, FB, MD, ID, IF, TX, RX, RT, XT, RC, RU, RD, FR, FT and AI are the Kenwood commands the classic engine sends. The vendor guide for this model was not available to check the answers." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_set_ptt (TX; and RX;)", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=RTTY, 7=CWR, 9=RTTYR); the mode list is that of `rigctl -m 2010 --dump-caps`", note = "Mode codes are Hamlib's default Kenwood mode table; modes Hamlib does not list for this model are omitted." }
+verified = { state = "unverified" }

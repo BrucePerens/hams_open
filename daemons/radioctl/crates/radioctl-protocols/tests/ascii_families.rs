@@ -26,7 +26,7 @@ const NOW: Duration = Duration::from_secs(10);
 /// Description id, the number the model answers to `ID;` and the digits of its frequency fields
 /// (Yaesu only; 0 elsewhere). A second, independent copy of the numbers in each file: a typo in
 /// either shows up here. The sources are named in each file's facts.
-const BATCH: [(&str, u16, u8); 15] = [
+const BATCH: [(&str, u16, u8); 31] = [
     ("yaesu-ft-450", 241, 8),
     ("yaesu-ft-450d", 244, 8),
     ("yaesu-ft-950", 310, 8),
@@ -42,6 +42,22 @@ const BATCH: [(&str, u16, u8); 15] = [
     ("elecraft-k3s", 17, 0),
     ("elecraft-kx2", 17, 0),
     ("elecraft-k4", 17, 0),
+    ("kenwood-ts-50s", 13, 0),
+    ("kenwood-ts-140s", 6, 0),
+    ("kenwood-ts-450s", 10, 0),
+    ("kenwood-ts-480", 20, 0),
+    ("kenwood-ts-570d", 17, 0),
+    ("kenwood-ts-570s", 18, 0),
+    ("kenwood-ts-680s", 6, 0),
+    ("kenwood-ts-690s", 11, 0),
+    ("kenwood-ts-711", 3, 0),
+    ("kenwood-ts-790", 7, 0),
+    ("kenwood-ts-811", 2, 0),
+    ("kenwood-ts-850", 9, 0),
+    ("kenwood-ts-870s", 15, 0),
+    ("kenwood-ts-940s", 1, 0),
+    ("kenwood-ts-950s", 8, 0),
+    ("kenwood-ts-950sdx", 12, 0),
 ];
 
 /// The ASCII descriptions in `rigs/` that this test drives (the TS-890S dialect has its own
@@ -136,7 +152,7 @@ fn model_id(desc: &RigDescription) -> u16 {
 #[test]
 fn every_ascii_file_round_trips_what_it_claims_and_refuses_the_rest() {
     let files = ascii_files();
-    assert!(files.len() >= 15 + 7, "{} ASCII files", files.len());
+    assert!(files.len() >= 31 + 7, "{} ASCII files", files.len());
     for desc in files {
         let id = desc.id.clone();
         let mut engine = engine_for(&desc).expect("engine");
@@ -258,6 +274,10 @@ fn the_batch_ids_and_frequency_widths_match_the_sources_and_no_two_files_share_a
         if let Some(yaesu) = &desc.yaesu {
             assert_eq!(yaesu.frequency_digits, digits, "{id}");
         }
-        assert!(desc.capabilities.has(Capability::Identify), "{id}");
+        // The TS-680S has no identify: Hamlib's number for it is a guess (see its file).
+        assert!(
+            desc.capabilities.has(Capability::Identify) || id == "kenwood-ts-680s",
+            "{id}"
+        );
     }
 }
