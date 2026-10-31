@@ -172,6 +172,14 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
   Unkeys are retried (three attempts, 100 ms backoff); a failed unkey is `Alarm::UnkeyFailed` and
   `RigStats::unkey_failures`. An unkey is never refused for a full emergency queue: it rides on
   the unkey already queued (`RigStats::unkeys_coalesced`). radioctld: `max_transmit_s` per rig.
+  An unkey a caller asked for that the rig did not take (timed out, refused, link down) is also
+  `Alarm::UnkeyFailed` and counted, whatever the caller does with the result, so
+  `RigService::disconnect`, `Splitter::cleanup` and `shutdown` never swallow one. An emergency
+  unkey skips inter-command spacing, and a rig file with `timeout_ms = 0` (or above 30 s) or
+  `inter_command_ms` above 2 s is refused at load. Loss of the link is `Alarm::LinkDown`, emitted
+  once per loss; a reconnect-time unkey pass is still to do (see the safety to-do in hams_com).
+  A late reply on a rig without `Capability::Transceive` counts in `RigStats::late_replies` and
+  never slows polling.
 - Tests use the same code paths as production; no test-only features.
 
 ## Function reference
@@ -431,7 +439,9 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_actor_watchdog_due] (radioctl-core) When the transmit watchdog fires while the rig transmits: the earlier of the transmit time limit and the heartbeat lapse.
 - [@ANCHOR: radioctl:radioctl_core_actor_watchdog_fire] (radioctl-core) The watchdog lapsed: reports `Alarm::TransmitTimeout` or `Alarm::HeartbeatLapsed`, unkeys through the fail-closed path, disarms.
 - [@ANCHOR: radioctl:radioctl_core_actor_arm_watchdog] (radioctl-core) Starts the transmit watchdog when the rig is seen keyed or Morse is sent.
-- [@ANCHOR: radioctl:radioctl_core_actor_alarm] (radioctl-core) Emits an alarm event (`Field::Alarm`, `Source::Watchdog`), never deduplicated, never cached.
+- [@ANCHOR: radioctl:radioctl_core_actor_alarm] (radioctl-core) Emits an alarm event (`Field::Alarm`) attributed to the watchdog or to the caller whose unkey failed, never deduplicated, never cached.
+- [@ANCHOR: radioctl:radioctl_core_actor_link_down] (radioctl-core) Marks the transport down and reports the loss once as `Alarm::LinkDown`; every later command is refused with `LinkDown`.
+- [@ANCHOR: radioctl:radioctl_core_actor_note_unsolicited] (radioctl-core) A frame nobody waited for: transceive traffic (slows polling) on a rig with `Capability::Transceive`, a counted late reply (`RigStats::late_replies`, polling unchanged) on any other.
 - [@ANCHOR: radioctl:radioctl_core_actor_emit] (radioctl-core) Sends an event to the stream subscribers and the callback dispatcher.
 - [@ANCHOR: radioctl:radioctl_core_handle_events] (radioctl-core) An async stream of status changes, starting now.
 - [@ANCHOR: radioctl:radioctl_core_handle_cached] (radioctl-core) The cached value of a field with its age, without touching the rig.
@@ -459,7 +469,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_actor_apply_set] (radioctl-core) Records a successful set in the cache.
 - [@ANCHOR: radioctl:radioctl_core_actor_await_reply] (radioctl-core) Waits for the reply until the attempt deadline; an emergency command abandons the wait.
 - [@ANCHOR: radioctl:radioctl_core_actor_log] (radioctl-core) Appends to the 16-line transcript kept for error reports.
-- [@ANCHOR: radioctl:radioctl_core_actor_spacing] (radioctl-core) Enforces the description's minimum gap between commands.
+- [@ANCHOR: radioctl:radioctl_core_actor_spacing] (radioctl-core) Enforces the description's minimum gap between commands; an emergency unkey is exempt.
 - [@ANCHOR: radioctl:radioctl_core_handle_read] (radioctl-core) Cached or fresh read of a field, by freshness.
 - [@ANCHOR: radioctl:radioctl_core_handle_submit] (radioctl-core) Checks capability and transmit gate, then queues the command without waiting (full queue is a typed error).
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_fail_closed] (radioctl-core) Writes an unkey and waits for its answer, not preemptible, up to three attempts with backoff: used when a transmit command was written but never answered, when the watchdog fires and when the actor stops. An unkey that cannot be done is counted (`unkey_failures`) and reported as `Alarm::UnkeyFailed`.
@@ -495,6 +505,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_conformance_check_decoding] (radioctl-protocols) Checks that the engine decodes a step's rx exactly as the transcript expects.
 - [@ANCHOR: radioctl:radioctl_conformance_expected_inbound] (radioctl-protocols) Maps a transcript expectation to the engine's Inbound value.
 - [@ANCHOR: radioctl:radioctl_conformance_panel_change] (radioctl-protocols) Maps a transcript knob change to the virtual rig's PanelChange.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_check_timing] (radioctl-core) Refuses a `[timing]` block that would defeat or delay an unkey: `timeout_ms` outside 1..=30000, `inter_command_ms` above 2000.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_scope] (radioctl-core) Validates the optional `[scope]` block (icom-civ only; receivers 1 or 2, positive sizes, a span list).
 - [@ANCHOR: radioctl:radioctl_civ_engine_scope_request] (radioctl-protocols) The request for a scope command (command 27). Fails when the model has no scope or a value does not fit its field.
 - [@ANCHOR: radioctl:radioctl_civ_engine_scope_dropped] (radioctl-protocols) Scope frames or sweeps discarded as out of order or malformed.

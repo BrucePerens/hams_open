@@ -356,13 +356,39 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         scope,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
-        timing: Timing {
-            timeout: Duration::from_millis(doc.timing.timeout_ms),
-            retries: doc.timing.retries,
-            inter_command: Duration::from_millis(doc.timing.inter_command_ms),
-        },
+        timing: check_timing(&doc.timing)?,
         default_frequency: Hz(doc.defaults.frequency_hz),
         default_mode,
+    })
+}
+
+/// Bounds on the timing block. A zero reply timeout makes every command time out at once (and
+/// every key a fail-closed unkey); a long inter-command gap holds every command, so both are
+/// refused at load rather than discovered on the air.
+const TIMEOUT_MS: std::ops::RangeInclusive<u64> = 1..=30_000;
+const INTER_COMMAND_MS_MAX: u64 = 2_000;
+
+// [@ANCHOR: radioctl_core_rigfile_check_timing]
+/// Validates the timing block: `timeout_ms` in 1..=30000, `inter_command_ms` at most 2000.
+fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
+    if !TIMEOUT_MS.contains(&timing.timeout_ms) {
+        return Err(bad(format!(
+            "timing.timeout_ms = {} is outside {}..={} ms",
+            timing.timeout_ms,
+            TIMEOUT_MS.start(),
+            TIMEOUT_MS.end()
+        )));
+    }
+    if timing.inter_command_ms > INTER_COMMAND_MS_MAX {
+        return Err(bad(format!(
+            "timing.inter_command_ms = {} is more than {INTER_COMMAND_MS_MAX} ms",
+            timing.inter_command_ms
+        )));
+    }
+    Ok(Timing {
+        timeout: Duration::from_millis(timing.timeout_ms),
+        retries: timing.retries,
+        inter_command: Duration::from_millis(timing.inter_command_ms),
     })
 }
 
@@ -715,6 +741,29 @@ verified = { state = "unverified" }
         assert_eq!(
             loaded.description.timing.timeout,
             Duration::from_millis(200)
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_check_timing]
+    #[test]
+    fn timing_that_would_delay_or_defeat_an_unkey_is_rejected() {
+        expect_rejected(
+            &GOOD.replace("timeout_ms = 200", "timeout_ms = 0"),
+            "timing.timeout_ms = 0",
+        );
+        expect_rejected(
+            &GOOD.replace("timeout_ms = 200", "timeout_ms = 60000"),
+            "timing.timeout_ms = 60000",
+        );
+        expect_rejected(
+            &GOOD.replace("inter_command_ms = 0", "inter_command_ms = 2001"),
+            "timing.inter_command_ms = 2001",
+        );
+        let loaded = parse(&GOOD.replace("inter_command_ms = 0", "inter_command_ms = 2000"))
+            .expect("the bound itself loads");
+        assert_eq!(
+            loaded.description.timing.inter_command,
+            Duration::from_millis(2000)
         );
     }
 

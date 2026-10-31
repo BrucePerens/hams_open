@@ -8,12 +8,15 @@ use std::sync::mpsc as std_mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use radioctl_core::capability::{Capability, CapabilitySet};
 use radioctl_core::description::RigDescription;
 use radioctl_core::error::ErrorKind;
 use radioctl_core::event::{RigEvent, Source};
 use radioctl_core::op::{Alarm, Field, Observation, Op};
 use radioctl_core::poll::PollConfig;
-use radioctl_core::rig::{spawn, spawn_current, Freshness, RigHandle, RigOptions, TransmitPermit};
+use radioctl_core::rig::{
+    spawn, spawn_current, EventStream, Freshness, RigHandle, RigOptions, TransmitPermit,
+};
 use radioctl_core::units::{Hz, Mode, Vfo};
 use radioctl_protocols::civ::CivEngine;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
@@ -266,13 +269,145 @@ async fn ptt_off_abandons_a_slow_read_on_the_same_rig() {
         .expect("join")
         .expect("unkey acknowledged in the end");
     assert_eq!(rig.stats().preempted, 1);
-    // The late answer to the abandoned read does not confuse the next command.
+    // The late answer to the abandoned read does not confuse the next command: the frequency
+    // moves on the front panel in between, so a stale answer taken for the fresh one would show.
     control.set_reply_delay(Duration::ZERO);
+    control.front_panel(PanelChange::Frequency(Hz(7_030_000)));
     let next = rig
         .frequency(Vfo::A, Freshness::Fresh)
         .await
         .expect("next read");
-    assert_eq!(next.value, Hz(14_074_000));
+    assert_eq!(next.value, Hz(7_030_000));
+}
+
+fn alarms(events: &[RigEvent]) -> Vec<(Source, Alarm)> {
+    events
+        .iter()
+        .flat_map(|e| {
+            e.changes.iter().filter_map(move |c| match c.new {
+                Observation::Alarm(alarm) => Some((e.source, alarm)),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+async fn drain(events: &mut EventStream) -> Vec<RigEvent> {
+    let mut seen = Vec::new();
+    while let Ok(Some(event)) = timeout(Duration::from_millis(10), events.next()).await {
+        seen.push(event);
+    }
+    seen
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_serve]
+// Tests [@ANCHOR: radioctl_core_actor_alarm]
+#[tokio::test(start_paused = true)]
+async fn an_unkey_the_rig_does_not_answer_is_reported_as_an_alarm() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    let mut events = rig.events();
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    drain(&mut events).await;
+    // The radio stops answering; the caller's unkey times out and, as `RigService::disconnect`
+    // and `Splitter::cleanup` do, the caller drops the result.
+    control.set_reply_delay(Duration::from_secs(5));
+    let _ = rig
+        .execute_from(Op::SetPtt(false), Duration::from_secs(2), Source::Splitter)
+        .await;
+    assert_eq!(rig.stats().unkey_failures, 1);
+    assert_eq!(
+        alarms(&drain(&mut events).await),
+        vec![(Source::Splitter, Alarm::UnkeyFailed)]
+    );
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+// Tests [@ANCHOR: radioctl_core_actor_spacing]
+#[tokio::test(start_paused = true)]
+async fn an_emergency_unkey_does_not_wait_for_inter_command_spacing() {
+    let mut desc = RigDescription::ic7300();
+    desc.timing.inter_command = Duration::from_secs(10);
+    let rig_model = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, control) = spawn_virtual_rig(&Handle::current(), rig_model, Duration::ZERO);
+    let rig = spawn_current(CivEngine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("keyed");
+    let started = Instant::now();
+    rig.set_ptt(false).await.expect("unkeyed");
+    assert!(!control.state().ptt);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "the unkey waited {:?} for inter-command spacing",
+        started.elapsed()
+    );
+    // An ordinary command still keeps the gap.
+    let started = Instant::now();
+    rig.execute_within(Op::GetFrequency(Vfo::A), Duration::from_secs(30))
+        .await
+        .expect("read");
+    assert!(started.elapsed() >= Duration::from_secs(9));
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_note_unsolicited]
+// Tests [@ANCHOR: radioctl_core_actor_absorb]
+#[tokio::test(start_paused = true)]
+async fn a_late_reply_on_a_polled_rig_is_not_taken_for_transceive() {
+    let mut desc = RigDescription::ts2000();
+    desc.timing.timeout = Duration::from_secs(1);
+    desc.timing.retries = 0;
+    desc.capabilities = CapabilitySet::of(&[
+        Capability::ReadFrequency,
+        Capability::SetFrequency,
+        Capability::ReadMode,
+        Capability::SetMode,
+        Capability::SetPtt,
+        Capability::ReadSignal,
+    ]);
+    let rig_model = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, control) = spawn_virtual_rig(&Handle::current(), rig_model, Duration::ZERO);
+    let rig =
+        spawn_current(KenwoodEngine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
+    // One answer arrives after its command was given up.
+    control.set_reply_delay(Duration::from_secs(3));
+    let failed = rig
+        .execute_within(Op::GetFrequency(Vfo::A), Duration::from_secs(2))
+        .await
+        .expect_err("timed out");
+    assert_eq!(failed.kind, ErrorKind::Timeout);
+    sleep(Duration::from_secs(4)).await;
+    let stats = rig.stats();
+    assert_eq!(
+        stats.late_replies, 1,
+        "the late answer is counted as a late reply"
+    );
+    assert_eq!(
+        stats.unsolicited, 0,
+        "a rig without Transceive never reports on its own: nothing may slow its polling"
+    );
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_link_down]
+#[tokio::test(start_paused = true)]
+async fn link_loss_while_keyed_is_a_visible_alarm() {
+    let (near, far) = tokio::io::duplex(64);
+    let rig = spawn_current(
+        CivEngine::new(RigDescription::ic7300()).expect("engine"),
+        near,
+        quiet(),
+    )
+    .expect("spawn");
+    let mut events = rig.events();
+    drop(far);
+    sleep(Duration::from_millis(10)).await;
+    assert!(!rig.link_up());
+    assert_eq!(
+        alarms(&drain(&mut events).await),
+        vec![(Source::Api, Alarm::LinkDown)]
+    );
+    // A second failure of the same dead link is not reported again.
+    let _ = rig.mode(Freshness::Fresh).await;
+    assert!(alarms(&drain(&mut events).await).is_empty());
 }
 
 // Tests [@ANCHOR: radioctl_core_rig_options_with_callback]

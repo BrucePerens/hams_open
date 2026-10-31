@@ -92,7 +92,10 @@ records the decisions that shape the code.
     enforced only while transmitting) the actor unkeys through the fail-closed path, preempting a
     command that is waiting for a reply, and emits an `Alarm` event. Fail-closed unkeys are retried
     three times with a short backoff; a failure is counted and reported as `Alarm::UnkeyFailed`,
-    never swallowed. An unkey never gets `QueueFull`: when the emergency queue is full it rides on
+    never swallowed; so is an unkey a caller asked for that the rig did not take, whatever the
+    caller does with its result. An emergency unkey skips inter-command spacing and rig files
+    with a timing block that would delay or defeat it are refused at load. Link loss is reported
+    once as `Alarm::LinkDown`. An unkey never gets `QueueFull`: when the emergency queue is full it rides on
     the unkey already queued and receives that unkey's result. This is the library's layer; the
     relay's own time-out and the FX2 hardware time-out (`RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md`
     4.2) remain the outer layers.
