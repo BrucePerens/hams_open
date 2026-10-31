@@ -21,6 +21,7 @@ A carrier at `freq_hz` and `level_db`, amplitude modulated by a sine of `mod_hz`
 * `mod_hz`: modulation frequency, 1 to 3000 Hz; default 500. Above about 3 kHz the unit's 18.75 kHz modulation clock gives too few steps per cycle.
 * `depth_pct`: modulation depth, 1 to 100 percent; default 100.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

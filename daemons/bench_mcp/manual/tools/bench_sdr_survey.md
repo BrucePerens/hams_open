@@ -17,6 +17,7 @@ Steps the tuning from `start_hz` to `stop_hz`, keeps 70 % of each capture's band
 <!-- arguments -->
 
 * `instrument`: the SDR alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `start_hz`: first frequency in hertz. Required; within the radio's tuning range (see [bench_sdr_capture](tools/bench_sdr_capture)).
 * `stop_hz`: last frequency; default `start_hz` plus 1 MHz; must be above `start_hz`.
 * `sample_rate_hz`: default 10e6; the span per step is 70 % of it.

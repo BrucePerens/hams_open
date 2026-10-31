@@ -21,6 +21,7 @@ Sweeps one calibration standard and stores it with the settings and the `cable` 
 * `cable`: free text describing what is between the ports and the reference plane; it must be identical later when the calibration is applied.
 * `start_hz`, `stop_hz`, `points`, `if_hz`, `point_ms`, `rf_level`: as in [bench_vna_sweep](tools/bench_vna_sweep); `points` is at least 2 here.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

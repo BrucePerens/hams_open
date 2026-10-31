@@ -17,6 +17,7 @@ Downloads the channel's waveform memory (every point, no decimation), scales the
 <!-- arguments -->
 
 * `instrument`: the scope alias; optional when only one scope is configured.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `channel`: `1` or `2`.
 * `allow_stopped`: by default a scope in `STOP` is refused, because its memory is an old frozen frame. Pass `true` only when you stopped it on purpose to capture a single event; otherwise set `trigger_mode` `AUTO` with [bench_set](tools/bench_set) first.
 

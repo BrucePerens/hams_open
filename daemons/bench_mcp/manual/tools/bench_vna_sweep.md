@@ -17,6 +17,7 @@ Sweeps `start_hz` to `stop_hz` in `points` points with RF on the TX port and mea
 <!-- arguments -->
 
 * `instrument`: the VNA alias; optional when only one VNA is configured.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `start_hz`: first frequency in hertz, above 0 and at most 1.3 GHz. Required.
 * `stop_hz`: last frequency in hertz; default `start_hz` (a single point).
 * `points`: whole number from 1 to 401, default 1.

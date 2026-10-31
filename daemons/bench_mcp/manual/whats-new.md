@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- concepts/several-instruments: the group form of the config, the `device` argument on every tool, per-instance tiers and locks, shared-device rules; every tool page gains `device`
 - instruments/vna/nanovna: the NanoVNA driver (not hardware-verified), and a NanoVNA note on every bench_vna tool page
 - procedures/sweep-series-with-retries: the shipped procedure example-sweep-series (repeat a sweep, retry, power-cycle after failures, tabulate the spread)
 - procedures/soak-round: the shipped procedure example-soak-round (generator steps read on the scope and the VNA against a baseline)

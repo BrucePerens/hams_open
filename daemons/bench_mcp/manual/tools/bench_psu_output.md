@@ -21,6 +21,7 @@ Switches the output of the bench supply and drives whatever is connected to it. 
 * `for_s`: seconds until the server switches the output off, 1 to `max_on_s`; default `max_on_s`.
 * `dry_run`: reads the setpoints stored in the supply and returns the plan, including whether the call would be refused. Nothing is switched.
 * `instrument`: the supply alias; optional when only one supply is configured.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

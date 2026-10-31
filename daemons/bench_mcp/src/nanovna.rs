@@ -686,6 +686,10 @@ pub mod testkit {
         pub board: &'static str,
         /// Bytes returned per read (0: all that is queued).
         pub chunk: usize,
+        /// Added to S11's real part, so two fakes give different results.
+        pub offset: f64,
+        /// Milliseconds a data or scan reply takes.
+        pub delay_ms: u64,
         pub garbage: bool,
         pub silent: bool,
         pub sweep: (u64, u64, usize),
@@ -701,6 +705,8 @@ pub mod testkit {
                 echo: true,
                 board: "NanoVNA-H",
                 chunk: 0,
+                offset: 0.0,
+                delay_ms: 0,
                 garbage: false,
                 silent: false,
                 sweep: (50_000, 900_000_000, 101),
@@ -732,6 +738,9 @@ pub mod testkit {
         }
 
         fn reply(&mut self, line: &str) -> Vec<String> {
+            if self.delay_ms > 0 && (line.starts_with("data") || line.starts_with("scan")) {
+                std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
+            }
             let w: Vec<&str> = line.split_whitespace().collect();
             let num = |i: usize| w.get(i).and_then(|s| s.parse::<u64>().ok());
             match w.first().copied() {
@@ -774,7 +783,14 @@ pub mod testkit {
                         .iter()
                         .map(|f| {
                             let (a, b) = Fake::s(*f);
-                            let z = if which == 0 { a } else { b };
+                            let z = if which == 0 {
+                                Complex {
+                                    re: a.re + self.offset,
+                                    ..a
+                                }
+                            } else {
+                                b
+                            };
                             format!("{:.6} {:.6}", z.re, z.im)
                         })
                         .collect()
@@ -789,7 +805,13 @@ pub mod testkit {
                         .iter()
                         .map(|f| {
                             let (x, y) = Fake::s(*f);
-                            format!("{f} {:.6} {:.6} {:.6} {:.6}", x.re, x.im, y.re, y.im)
+                            format!(
+                                "{f} {:.6} {:.6} {:.6} {:.6}",
+                                x.re + self.offset,
+                                x.im,
+                                y.re,
+                                y.im
+                            )
                         })
                         .collect()
                 }

@@ -19,6 +19,7 @@ One tool for the settings of the scope and the setpoints of the supply. Several 
 Scope:
 
 * `instrument`: the alias (needed when both a scope and a supply are configured).
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `timebase_s`: seconds per division (for example `1e-6`).
 * `channel`: which input `vdiv_v`, `offset_v`, `coupling`, `attenuation` and `trigger_type` apply to; `1` or `2`.
 * `vdiv_v`: volts per division at the scope input (after the probe ratio is applied by the scope).

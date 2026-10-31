@@ -121,6 +121,31 @@ pub fn calibrated_csv(
     t
 }
 
+/// The tools that need the VNWA to be connected fail with a typed `device not present` error when `present` says it is not, before
+/// anything else is attempted; power cycling, calibration building, identify and status do not need it.
+pub fn ensure_present(tool: &str, present: &dyn Fn() -> bool) -> Result<(), String> {
+    // [@ANCHOR: bench_vna_ensure_present]
+    const NEEDS_UNIT: &[&str] = &[
+        "bench_vna_sweep",
+        "bench_vna_generator_on",
+        "bench_vna_generator_off",
+        "bench_vna_generator_level",
+        "bench_vna_generator_am",
+        "bench_vna_generator_fm",
+        "bench_vna_meter",
+        "bench_vna_spectrum",
+        "bench_vna_calibrate_measure",
+    ];
+    if NEEDS_UNIT.contains(&tool) && !present() {
+        return Err(format!(
+            "device not present: the VNWA ({:04x}:{:04x}) is not on the USB bus (not connected, or switched off at its hub port); {tool} was not attempted",
+            vnwa_open::VID,
+            vnwa_open::PID
+        ));
+    }
+    Ok(())
+}
+
 pub fn identify(cfg: &Config) -> Value {
     json!({
         "idn": format!("DG8SAQ VNWA ({:04x}:{:04x}) driven by vnwa_open", vnwa_open::VID, vnwa_open::PID),
@@ -435,6 +460,26 @@ mod tests {
             json!({"start_hz": "1e6"}),
         ] {
             assert!(sweep_args(&bad, &base).is_err(), "{bad}");
+        }
+    }
+
+    // Tests [@ANCHOR: bench_vna_ensure_present]
+    #[test]
+    fn an_absent_vnwa_fails_its_tools_with_a_typed_error_and_leaves_the_rest_alone() {
+        let e = ensure_present("bench_vna_sweep", &|| false).unwrap_err();
+        assert!(
+            e.starts_with("device not present") && e.contains("bench_vna_sweep"),
+            "{e}"
+        );
+        assert!(ensure_present("bench_vna_generator_off", &|| false).is_err());
+        assert!(ensure_present("bench_vna_sweep", &|| true).is_ok());
+        for t in [
+            "bench_vna_power_cycle",
+            "bench_vna_calibrate_build",
+            "bench_identify",
+            "bench_status",
+        ] {
+            assert!(ensure_present(t, &|| false).is_ok(), "{t}");
         }
     }
 

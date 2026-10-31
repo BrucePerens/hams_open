@@ -22,6 +22,7 @@ At each of `points` frequencies from `start_hz` to `stop_hz` the unit's local os
 * `point_ms`: the unit's time per point, 5 to 100; default 20. The analysis window is twice this.
 * `tracking_db`: 0 to -50; turns the tracking generator on at that level (a negative attenuation). In a loopback the TX then appears as a line at 12 kHz, so use a `band_hz` above 12000 to see it.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

@@ -18,6 +18,7 @@ Changes the level of a running generator without changing its frequency.
 
 * `level_db`: negative attenuation from the top level, 0 to -50 dB (0 dB is about -17 dBm). Required.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

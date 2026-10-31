@@ -19,6 +19,7 @@ Measures the frequency of the signal on the RX input within +/-25 Hz of `freq_hz
 * `freq_hz`: the centre frequency in hertz (the expected frequency of the signal). Required.
 * `point_ms`: measurement time per point in milliseconds, 0.2 to 100, default 60.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

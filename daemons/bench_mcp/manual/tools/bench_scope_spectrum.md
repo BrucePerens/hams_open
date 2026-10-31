@@ -25,6 +25,7 @@ Captures the channel, windows the first `points` samples, transforms them on the
 * `range_db`: only peaks within this many dB of the strongest, default 60.
 * `allow_stopped`: as in [bench_capture](tools/bench_capture).
 * `instrument`: the scope alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

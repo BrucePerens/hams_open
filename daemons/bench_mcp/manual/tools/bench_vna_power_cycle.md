@@ -17,6 +17,7 @@ Switches the unit's power-switching hub port off, waits, switches it on, waits f
 <!-- arguments -->
 
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `verify`: default `true`; `false` skips the check sweep.
 
 ## Returns
