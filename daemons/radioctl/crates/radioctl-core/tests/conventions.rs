@@ -110,7 +110,15 @@ fn anchors_are_in_parity_between_source_and_tests() {
 
 #[test]
 fn every_anchor_is_documented_in_the_readme() {
-    let readme = fs::read_to_string(workspace_root().join("README.md")).expect("readme");
+    let mut readme = fs::read_to_string(workspace_root().join("README.md")).expect("readme");
+    // A crate may keep its own anchor list in its own README (radioctl-station does).
+    if let Ok(entries) = fs::read_dir(workspace_root().join("crates")) {
+        for entry in entries.flatten() {
+            if let Ok(text) = fs::read_to_string(entry.path().join("README.md")) {
+                readme.push_str(&text);
+            }
+        }
+    }
     let declared = anchors(&rust_files(), &declared_marker());
     for id in declared {
         let cite = format!("[@{}: radioctl:{id}]", "ANCHOR");
