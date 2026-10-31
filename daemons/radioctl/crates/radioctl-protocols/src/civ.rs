@@ -615,6 +615,11 @@ impl ProtocolEngine for CivEngine {
                     .desc
                     .mode_code(*mode)
                     .ok_or_else(|| Self::unsupported("mode not in the description"))?;
+                // The filter index table depends on the mode (AM differs from the rest, FM has
+                // none), and `M mode width` sends the width at once, before any read could
+                // report the new mode: take the mode being set as the mode now. A refused set
+                // is corrected by the next mode read, which is what `feed` stores.
+                self.mode = Some(*mode);
                 self.command(0x06, &[code], ack)
             }
             Op::GetPtt => self.command(0x1C, &[0x00], ReplyKind::Observation(Field::Ptt)),
@@ -1058,6 +1063,43 @@ mod tests {
             e.feed(&reply(0x94, 0x1A, &[0x03, 0x7F]), T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_encode]
+    // Tests [@ANCHOR: radioctl_civ_engine_filter_table_is_am]
+    #[test]
+    fn a_width_sent_right_after_a_mode_change_uses_the_new_modes_table() {
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
+        e.feed(&reply(0x94, 0x04, &[0x01, 0x01]), T0); // the rig reports USB
+        let bytes = |e: &mut CivEngine, op: Op| e.encode(&op).map(|r| r.bytes);
+        let with = |body: &[u8]| [&[0xFE, 0xFE, 0x94, 0xE0][..], body, &[0xFD]].concat();
+        // USB to AM, then 6000 Hz at once: index 29 of the AM table (200 Hz steps), not an
+        // SSB width (the SSB table ends at 3600 Hz).
+        assert!(bytes(&mut e, Op::SetMode(Mode::Am)).is_ok());
+        assert_eq!(
+            bytes(&mut e, Op::SetFilterWidth(Hz(6000))).expect("AM width"),
+            with(&[0x1A, 0x03, 0x29])
+        );
+        // AM back to USB: 2400 Hz is index 28 of the SSB table, not AM index 11.
+        assert!(bytes(&mut e, Op::SetMode(Mode::Usb)).is_ok());
+        assert_eq!(
+            bytes(&mut e, Op::SetFilterWidth(Hz(2400))).expect("SSB width"),
+            with(&[0x1A, 0x03, 0x28])
+        );
+        // FM has no filter width; the way out of FM must not stay refused until a poll.
+        assert!(bytes(&mut e, Op::SetMode(Mode::Fm)).is_ok());
+        assert!(bytes(&mut e, Op::SetFilterWidth(Hz(500))).is_err());
+        assert!(bytes(&mut e, Op::SetMode(Mode::Cw)).is_ok());
+        assert_eq!(
+            bytes(&mut e, Op::SetFilterWidth(Hz(500))).expect("CW width"),
+            with(&[0x1A, 0x03, 0x09])
+        );
+        // A mode the description lacks is refused and leaves the known mode alone.
+        assert!(bytes(&mut e, Op::SetMode(Mode::Wfm)).is_err());
+        assert_eq!(
+            bytes(&mut e, Op::SetFilterWidth(Hz(500))).expect("still CW"),
+            with(&[0x1A, 0x03, 0x09])
+        );
     }
 
     // Tests [@ANCHOR: radioctl_civ_engine_decode]
