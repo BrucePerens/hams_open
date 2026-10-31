@@ -172,6 +172,7 @@ impl VirtualFlex {
         )
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_interlock_line]
     fn interlock_line(&self) -> String {
         let (state, extra) = if self.state.keyed {
             ("TRANSMITTING", " source=SW")
@@ -201,6 +202,7 @@ impl VirtualFlex {
         format!("R{seq}|{code:X}|{message}\n")
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_with_status]
     /// Joins a reply with the status it caused, in the configured order.
     fn with_status(&self, reply: String, status: String) -> String {
         match self.order {
@@ -209,6 +211,7 @@ impl VirtualFlex {
         }
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_slice_status_if_subscribed]
     fn slice_status_if_subscribed(&self) -> String {
         if self.sub_slice {
             self.slice_line()
@@ -380,6 +383,7 @@ impl VirtualFlex {
         out.into_bytes()
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_line]
     fn line(&mut self, line: &str) -> String {
         let Some(rest) = line.strip_prefix('C') else {
             return String::new();
@@ -445,6 +449,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_virtual_flex_feed]
     // Tests [@ANCHOR: radioctl_virtual_flex_command]
+    // Tests [@ANCHOR: radioctl_virtual_flex_line]
     #[test]
     fn commands_get_one_reply_each_and_junk_gets_none() {
         let mut r = radio();
@@ -467,6 +472,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_virtual_flex_command]
+    // Tests [@ANCHOR: radioctl_virtual_flex_with_status]
+    // Tests [@ANCHOR: radioctl_virtual_flex_slice_status_if_subscribed]
+    // Tests [@ANCHOR: radioctl_virtual_flex_interlock_line]
     #[test]
     fn subscriptions_send_status_in_the_chosen_order() {
         let mut r = radio();

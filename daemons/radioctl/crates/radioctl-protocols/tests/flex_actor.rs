@@ -140,6 +140,7 @@ async fn a_virtual_flex_over_tcp_answers_reads_and_sets_status_first() {
 }
 
 // Tests [@ANCHOR: radioctl_virtual_flex_front_panel]
+// Tests [@ANCHOR: radioctl_virtual_flex_control_front_panel]
 // Tests [@ANCHOR: radioctl_flex_engine_feed]
 #[tokio::test]
 async fn a_change_at_the_radio_reaches_the_cache_and_the_event_stream() {

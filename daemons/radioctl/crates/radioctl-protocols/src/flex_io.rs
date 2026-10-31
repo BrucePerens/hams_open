@@ -95,6 +95,7 @@ impl VirtualFlexControl {
         lock(&self.shared.rig).order = order;
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_control_front_panel]
     /// Changes something at the radio; status goes to the connected client at once.
     pub fn front_panel(&self, change: FlexPanel) {
         let bytes = lock(&self.shared.rig).front_panel(change);

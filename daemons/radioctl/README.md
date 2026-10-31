@@ -254,6 +254,11 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_flex_front_panel] (radioctl-protocols) A change made at the virtual radio, pushed as status to subscribers.
 - [@ANCHOR: radioctl:radioctl_virtual_flex_serve] (radioctl-protocols) Serves a virtual FlexRadio on a real TCP listener.
 - [@ANCHOR: radioctl:radioctl_virtual_flex_control_state] (radioctl-protocols) A copy of the served virtual FlexRadio's state.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_interlock_line] (radioctl-protocols) The virtual radio's interlock status line.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_line] (radioctl-protocols) Parses one `C<seq>|text` line and answers it.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_slice_status_if_subscribed] (radioctl-protocols) The slice status line when the client subscribed to slices, else nothing.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_with_status] (radioctl-protocols) Joins a reply and the status it caused in the configured order.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_control_front_panel] (radioctl-protocols) Changes something at the served virtual radio; status goes to the client at once.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_set_meta] (radioctl-protocols) Stores a `K2n`/`K3n` meta-command value of the virtual Elecraft rig (Basic formats are still used).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.
