@@ -50,6 +50,9 @@ use crate::transport::Transport;
 use crate::txstate::TxState;
 use crate::units::{Hz, Mode, Vfo};
 
+mod easy;
+pub use easy::TransmitLease;
+
 const TRANSCRIPT_LINES: usize = 16;
 const READ_BUFFER: usize = 256;
 const EMERGENCY_QUEUE: usize = 16;
@@ -590,7 +593,7 @@ impl RigHandle {
     }
 
     // [@ANCHOR: radioctl_core_handle_read]
-    async fn read(
+    pub(crate) async fn read(
         &self,
         field: Field,
         op: Op,

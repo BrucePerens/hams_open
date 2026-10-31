@@ -16,6 +16,7 @@ pub mod keyer;
 pub mod net;
 pub mod op;
 pub mod poll;
+pub mod prelude;
 pub mod rig;
 pub mod rigfile;
 pub mod scope;

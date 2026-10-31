@@ -18,6 +18,7 @@
 //! and `tested`: exactly what was tested on which radio and firmware).
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -262,6 +263,36 @@ struct FactEntry {
 
 fn bad(detail: impl Into<String>) -> RigError {
     RigError::new(ErrorKind::Malformed, detail)
+}
+
+// [@ANCHOR: radioctl_core_rigfile_rigs_dir]
+/// The directory of rig descriptions: `$RADIOCTL_RIGS`; else `./rigs` when it exists (binaries
+/// copied to a bench machine run from the directory that holds `rigs/`); else the `rigs/`
+/// directory of the checkout this library was built from.
+pub fn rigs_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("RADIOCTL_RIGS") {
+        return PathBuf::from(dir);
+    }
+    let here = PathBuf::from("rigs");
+    if here.is_dir() {
+        return here;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs")
+}
+
+// [@ANCHOR: radioctl_core_rigfile_load]
+/// Reads and validates a description. `which` is a rig id found in [`rigs_dir`]
+/// (`"icom-ic-7300"` reads `icom-ic-7300.toml`), or a path to a description file (anything that
+/// ends in `.toml` or has a directory part). The error names the file.
+pub fn load(which: &str) -> Result<LoadedDescription, RigError> {
+    let path = if which.ends_with(".toml") || which.contains('/') {
+        PathBuf::from(which)
+    } else {
+        rigs_dir().join(format!("{which}.toml"))
+    };
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| bad(format!("cannot read {}: {e}", path.display())))?;
+    parse(&text).map_err(|e| bad(format!("{}: {}", path.display(), e.detail)))
 }
 
 // [@ANCHOR: radioctl_core_rigfile_parse]

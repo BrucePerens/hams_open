@@ -700,6 +700,21 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_handle_ptt] (radioctl-core) The transmit state.
 - [@ANCHOR: radioctl:radioctl_core_handle_set_ptt] (radioctl-core) Keys (needs the transmit gate open) or unkeys (always allowed, jumps the queue).
 - [@ANCHOR: radioctl:radioctl_core_handle_signal] (radioctl-core) The S-meter in raw units.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_rigs_dir] (radioctl-core) The directory of rig descriptions: `$RADIOCTL_RIGS`, else `./rigs`, else the checkout this library was built from.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_load] (radioctl-core) Reads and validates a description by rig id or file path; the error names the file.
+- [@ANCHOR: radioctl:radioctl_core_easy_level] (radioctl-core) A numeric level in the rig's own units, from the cache or the radio.
+- [@ANCHOR: radioctl:radioctl_core_easy_set_level] (radioctl-core) Sets a numeric level in the rig's own units.
+- [@ANCHOR: radioctl:radioctl_core_easy_meter] (radioctl-core) A raw meter (SWR, ALC, COMP, Vd, Id) in the rig's own scale.
+- [@ANCHOR: radioctl:radioctl_core_easy_start_scope] (radioctl-core) Subscribes to the scope sweeps, then tells the rig to send them.
+- [@ANCHOR: radioctl:radioctl_core_easy_stop_scope] (radioctl-core) Tells the rig to stop sending scope sweeps.
+- [@ANCHOR: radioctl:radioctl_core_easy_transmit_lease] (radioctl-core) Opens the transmit gate under an explicit permit for at most a given time; returns the lease.
+- [@ANCHOR: radioctl:radioctl_core_easy_next_change] (radioctl-core) Waits for the next event that changes a given field.
+- [@ANCHOR: radioctl:radioctl_core_easy_lease_remaining] (radioctl-core) How long a transmit lease has left.
+- [@ANCHOR: radioctl:radioctl_core_easy_lease_key] (radioctl-core) Keys the rig inside a lease.
+- [@ANCHOR: radioctl:radioctl_core_easy_lease_unkey] (radioctl-core) Unkeys the rig inside a lease.
+- [@ANCHOR: radioctl:radioctl_core_easy_lease_transmit_for] (radioctl-core) Keys, holds for a duration (cut short by the lease), and unkeys.
+- [@ANCHOR: radioctl:radioctl_core_easy_lease_release] (radioctl-core) Ends the lease now: closes the gate and unkeys.
+- [@ANCHOR: radioctl:radioctl_core_easy_lease_drop] (radioctl-core) Ends an unfinished lease on drop: the gate closes and the rig is unkeyed.
 - [@ANCHOR: radioctl:radioctl_core_event_stream_poll] (radioctl-core) Polls for the next event, skipping and counting any the subscriber missed.
 - [@ANCHOR: radioctl:radioctl_core_event_stream_next] (radioctl-core) The next event, or `None` once the rig has stopped. Cancel-safe: dropping the future loses no event. Events missed while lagging are skipped and counted.
 - [@ANCHOR: radioctl:radioctl_core_event_stream_lagged] (radioctl-core) Events this subscriber has missed because it fell behind, in total.
