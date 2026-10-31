@@ -9,21 +9,21 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **120** (125 description files)
+- With a radioctl description: **121** (126 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 120 |
-| engine only | 19 |
+| described | 121 |
+| engine only | 18 |
 | needs variant | 37 |
 | needs engine | 83 |
 | odd device | 54 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 290 |
-| manual-checked | 23 |
+| unverified | 289 |
+| manual-checked | 24 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -31,7 +31,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 116 |
+| A | data only on an existing engine | 135 | 117 |
 | B | variants of an existing engine | 41 | 4 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
@@ -43,7 +43,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_serial | C/D | - | 94 | 0 | 0 |
 | icom_civ | A | civ | 79 | 75 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
-| kenwood_ascii | A | kenwood | 25 | 21 | 0 |
+| kenwood_ascii | A | kenwood | 25 | 22 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
 | kenwood_hh_ascii | B | - | 10 | 0 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
@@ -258,7 +258,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | `kenwood-ts-940s` | unverified | - | described |
 | 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | `kenwood-ts-950s` | unverified | - | described |
 | 2013 | Kenwood | TS-950SDX | A | kenwood_ascii | kenwood | `kenwood-ts-950sdx` | unverified | - | described |
-| 2039 | Kenwood | TS-990S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2039 | Kenwood | TS-990S | A | kenwood_ascii | kenwood | `kenwood-ts-990s` | manual-checked | - | described |
 | 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | - | - | unverified | - | odd device |
 | 2050 | Lab599 | TX-500 | C | other_serial | - | - | unverified | - | needs engine |
 | 10004 | Lowe | HF-235 | C | other_serial | - | - | unverified | - | needs engine |

@@ -127,6 +127,8 @@ impl RigState {
 mod virtual_ts440;
 #[path = "virtual_ts890.rs"]
 mod virtual_ts890;
+#[path = "virtual_ts990.rs"]
+mod virtual_ts990;
 
 #[derive(Debug)]
 enum Wire {
@@ -741,6 +743,11 @@ impl VirtualRig {
         if self.is_ts440() {
             return self.ts440_command(text);
         }
+        if self.is_ts990() {
+            if let Some(reply) = self.ts990_command(text) {
+                return reply;
+            }
+        }
         let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
         let reply = match (name, arg) {
             ("FA", "") => Some(format!("FA{:011};", self.state.freq_a.0)),
@@ -1093,7 +1100,10 @@ impl VirtualRig {
         let id = self.kenwood_id();
         let offset = self.state.rit_offset;
         let sign = if offset < 0 { '-' } else { '+' };
-        let region = if self.is_ts440() {
+        let region = if self.is_ts990() {
+            // P2 is five spaces and P3 a sign and four digits (PC command reference, IF).
+            format!("     {sign}{:04}", offset.unsigned_abs())
+        } else if self.is_ts440() {
             // P2 is five characters and P3 a sign and four digits (IC-10 manual, page 18).
             format!("00000{sign}{:04}", offset.unsigned_abs())
         } else if id == 21 || id == 23 {
@@ -1112,7 +1122,8 @@ impl VirtualRig {
             frequency.0,
             u8::from(self.state.rit),
             u8::from(self.state.xit),
-            u8::from(self.state.ptt),
+            // P8 is always 0 on the TS-990S: the transmit state is not in IF.
+            u8::from(self.state.ptt && !self.is_ts990()),
             mode,
             self.kenwood_rx_vfo,
             u8::from(self.state.split),

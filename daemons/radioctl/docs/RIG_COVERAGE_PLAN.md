@@ -6,7 +6,7 @@ verified, and make a best effort to make them work out of the box.
 
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
-Today 120 of 313 models have a description (125 files, because the four FlexRadio 6000-series files share Hamlib's one
+Today 121 of 313 models have a description (126 files, because the four FlexRadio 6000-series files share Hamlib's one
 "6xxx" model and the two ANAN files have no Hamlib model), and none is hardware-verified.
 
 | Tier | Work | Models | Described | Left |
@@ -82,7 +82,7 @@ Left, with the reason:
 |---|---|
 | R-5000 (2015) | Hamlib's IC-10 dialect with an `IF` of 32 characters; the TS-440S is done as `kenwood.dialect = "ts440"` (its IC-10 manual shows a 38-character `IF`, not Hamlib's 37) and the R-5000 needs a twin |
 | TS-930 (2022) | Hamlib has no `ID` for it (the number is unknown), so the description cannot be written honestly; needs a volunteer's `ID;` answer |
-| TS-990S (2039) | Main/Sub receivers with no VFO A/B in Hamlib's model and its own mode letters (C to H): needs a Main/Sub model in the engine. The PC command reference (May 2015) is downloaded (people.freebsd.org mirror) and ready to read |
+| TS-990S (2039) | Described from its PC command reference (`kenwood.dialect = "ts990"`: main band only, mode as `OM0`, no split, PTT read or levels). Open: the sub receiver as a second rig, the levels (band digits, other ranges) and the LAN stream (`##CN`, `##ID`), unverified |
 | TRC-80 (2030) | a transceiver module for a commercial radio; Hamlib reads its frequency from `IF` (`kenwood_get_freq_if`), a different path from the other models; needs a guide or a volunteer |
 | Levels, signal and meters on the older models (all but the TS-480) | the per-model AG/RG/PC/KS/SM forms. The TS-870S manual was read: AGnnn, RGnnn, SMnnnn, KS 001-100, PC 010-100, parameterless RU/RD (a TS-870S dialect of the engine, or per-description level ranges, would carry these). The TS-480's RG is 000-100 (pinned). Manuals for the rest are in `~/manuals/kenwood/` but their command tables are scanned images not yet read |
 | The 10 TH/TM handhelds (`kenwood_hh_ascii`, Tier B) | a different command family (CR-terminated, no `IF`); not covered here |
