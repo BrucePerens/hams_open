@@ -29,6 +29,16 @@ pub enum Value {
     Port(u32),
 }
 
+/// What an amplifier or tuner control line does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AmpFunction {
+    /// Operate (on) or standby (off).
+    Operate,
+    /// Start the tune cycle (a pulse).
+    Tune,
+}
+
 /// The typed kind of a switch channel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -66,6 +76,23 @@ pub enum ChannelKind {
         /// How long a new level must hold before it is believed.
         #[serde(default)]
         debounce_ms: u64,
+    },
+    /// An amplifier or tuner control line. `function = "operate"` is a binary output (on =
+    /// operate, off = standby; standby is the safe state and must be declared); `function =
+    /// "tune"` is a momentary pulse that starts a tuner or amplifier tune cycle (it only starts
+    /// the device's own cycle; the station never keys a transmitter for it).
+    Amplifier {
+        /// The amplifier or tuner this line belongs to.
+        device: DeviceId,
+        /// What the line does.
+        function: AmpFunction,
+        /// Pulse width, for `tune` only.
+        #[serde(default)]
+        pulse_ms: u64,
+        /// A status input (a fault or trip line, high = tripped) that must read low and known
+        /// before the amplifier may be put in operate.
+        #[serde(default)]
+        fault_input: Option<ChannelId>,
     },
     /// A radio or amplifier key line, timed in firmware; defined so a map can name it, but the
     /// switchboard never drives it (phase 3, the FX2 firmware).
@@ -153,6 +180,17 @@ impl ChannelDef {
             }
             ChannelKind::Ptt { max_on_ms: 0, .. } => {
                 bad("a ptt channel needs a maximum on-time".into())
+            }
+            ChannelKind::Amplifier {
+                function: AmpFunction::Tune,
+                pulse_ms,
+                ..
+            } if pulse_ms == 0 || pulse_ms > 10_000 => bad("a tune pulse is 1 to 10000 ms".into()),
+            ChannelKind::Amplifier {
+                function: AmpFunction::Operate,
+                ..
+            } if self.safe != Some(Value::Off) => {
+                bad("an operate channel needs safe = \"off\" (standby is the safe state)".into())
             }
             _ => Ok(()),
         }
@@ -371,6 +409,40 @@ impl StationDef {
             for dep in &d.depends_on {
                 if self.device(dep).is_none() {
                     return bad(format!("device {} depends on unknown {}", d.id.0, dep.0));
+                }
+            }
+        }
+        let mut operate = BTreeSet::new();
+        for c in &self.channels {
+            if let ChannelKind::Amplifier {
+                device,
+                function,
+                fault_input,
+                ..
+            } = &c.kind
+            {
+                match self.device(device).map(|d| d.kind) {
+                    Some(DeviceKind::Amplifier | DeviceKind::Tuner) => {}
+                    _ => {
+                        return bad(format!(
+                            "channel {}: {} is not an amplifier or tuner device",
+                            c.id.0, device.0
+                        ))
+                    }
+                }
+                if *function == AmpFunction::Operate && !operate.insert(device) {
+                    return bad(format!("device {} has two operate channels", device.0));
+                }
+                if let Some(f) = fault_input {
+                    if !matches!(
+                        self.channel(f).map(|x| &x.kind),
+                        Some(ChannelKind::Input { .. })
+                    ) {
+                        return bad(format!(
+                            "channel {}: fault input {} is not an input channel",
+                            c.id.0, f.0
+                        ));
+                    }
                 }
             }
         }

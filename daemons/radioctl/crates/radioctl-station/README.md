@@ -56,6 +56,18 @@ is dead (a transport that ended, such as a plain TCP stream at end of file), the
 The off time of a power channel (`min_off_ms`) is counted from a commanded or observed turn-off,
 never from the first sight of the channel: a radio found off at start-up can be switched on at once.
 
+## Amplifier and tuner channels
+
+`type = "amplifier"` channels belong to an amplifier or tuner device. `function = "operate"` is a
+binary output (on = operate, off = standby) and must declare `safe = "off"`; `function = "tune"` is
+a momentary pulse (`pulse_ms`) that starts the device's own tune cycle (the station never keys a
+transmitter). Rules: operate is an RF-path change, so it is refused while anything is keyed or the
+keyed state is unknown; standby is the safe direction and passes an unknown keyed state (like a
+power-off). Operate is refused unless the device is confirmed powered on and, when the channel names
+a `fault_input` (an input channel, high = tripped), unless that line is confirmed clear; a tripped
+or unknown line refuses. Powering an amplifier off puts it in standby first, and the emergency
+`all_off` writes standby before anything else.
+
 ## Home Assistant
 
 `homeassistant::HomeAssistant` is a channel driver whose lines are Home Assistant entities
@@ -311,3 +323,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_driver_assurance] (radioctl-station) The assurance level of channels on a driver; host-supervised unless the driver says otherwise.
 - [@ANCHOR: radioctl:radioctl_station_board_assurance] (radioctl-station) The assurance level of a channel's driver.
 - [@ANCHOR: radioctl:radioctl_station_station_power_assurance] (radioctl-station) The assurance level of the channel that powers a device.
+- [@ANCHOR: radioctl:radioctl_station_station_check_operate] (radioctl-station) The refusals for putting an amplifier in operate: its device must be confirmed powered on, and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault line refuses: fail closed).
+- [@ANCHOR: radioctl:radioctl_station_station_check_amp_powered] (radioctl-station) Refuses unless the amplifier or tuner is confirmed powered on.
+- [@ANCHOR: radioctl:radioctl_station_station_standby] (radioctl-station) Puts a device's amplifier channel in standby before its power goes, best effort: a failure is already an event on the switchboard and does not stop the power-off, because removing power is the safe direction.

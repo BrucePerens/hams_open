@@ -17,8 +17,8 @@ use crate::channel::{Assurance, BoxFuture, StationEvent, Switchboard};
 use crate::error::{StationError, StationErrorKind};
 use crate::lifecycle::RadioState;
 use crate::model::{
-    ChannelId, ChannelKind, DeviceDef, DeviceId, DeviceKind, PowerSource, ProfileStep, StationDef,
-    Value,
+    AmpFunction, ChannelDef, ChannelId, ChannelKind, DeviceDef, DeviceId, DeviceKind, PowerSource,
+    ProfileStep, StationDef, Value,
 };
 use radioctl_core::capability::Capability;
 use radioctl_core::op::{Field, Observation};
@@ -252,10 +252,17 @@ impl Station {
     /// The class of setting a channel by hand: off on a power channel is [`Action::PowerOff`]; on
     /// for the power channel of a down radio is [`Action::PowerOnRadio`]; the rest is RF path.
     fn classify_channel(&self, id: &ChannelId, value: Value) -> Action {
-        let is_power = self
-            .def
-            .channel(id)
-            .is_some_and(|c| matches!(c.kind, ChannelKind::Power { .. }));
+        // Switching off a power channel, or an amplifier to standby, can only reduce RF.
+        let is_power = self.def.channel(id).is_some_and(|c| {
+            matches!(
+                c.kind,
+                ChannelKind::Power { .. }
+                    | ChannelKind::Amplifier {
+                        function: AmpFunction::Operate,
+                        ..
+                    }
+            )
+        });
         match value {
             Value::Off if is_power => Action::PowerOff,
             Value::On => self
@@ -318,7 +325,71 @@ impl Station {
                 self.check_power_on(d)?;
             }
         }
+        if value == Value::On {
+            if let Some(c) = self.def.channel(id) {
+                self.check_operate(c)?;
+            }
+        }
         self.board.set(id, value).await.map(|_| ())
+    }
+
+    // [@ANCHOR: radioctl_station_station_check_operate]
+    /// The refusals for putting an amplifier in operate: its device must be confirmed powered on,
+    /// and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault
+    /// line refuses: fail closed). Other channels pass.
+    fn check_operate(&self, c: &ChannelDef) -> Result<(), StationError> {
+        let ChannelKind::Amplifier {
+            device,
+            function: AmpFunction::Operate,
+            fault_input,
+            ..
+        } = &c.kind
+        else {
+            return Ok(());
+        };
+        self.check_amp_powered(device)?;
+        if let Some(fault) = fault_input {
+            match self.board.status(fault)?.confirmed {
+                Some(Value::Off) => {}
+                Some(_) => {
+                    return Err(refused(format!(
+                        "{} will not go to operate: fault line {} is tripped",
+                        device.0, fault.0
+                    )))
+                }
+                None => {
+                    return Err(refused(format!(
+                        "{} will not go to operate: fault line {} is unknown",
+                        device.0, fault.0
+                    )))
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // [@ANCHOR: radioctl_station_station_check_amp_powered]
+    /// Refuses unless the amplifier or tuner is confirmed powered on.
+    fn check_amp_powered(&self, device: &DeviceId) -> Result<(), StationError> {
+        if self.device_power(device)? != Some(Value::On) {
+            return Err(refused(format!("{} is not confirmed powered on", device.0)));
+        }
+        Ok(())
+    }
+
+    // [@ANCHOR: radioctl_station_station_standby]
+    /// Puts a device's amplifier channel in standby before its power goes, best effort: a failure
+    /// is already an event on the switchboard and does not stop the power-off, because removing
+    /// power is the safe direction.
+    async fn standby(&self, device: &DeviceId) {
+        let operate = self.def.channels.iter().find(|c| {
+            matches!(&c.kind, ChannelKind::Amplifier { device: d, function: AmpFunction::Operate, .. } if d == device)
+        });
+        if let Some(c) = operate {
+            if self.board.status(&c.id).map(|s| s.confirmed) != Ok(Some(Value::Off)) {
+                let _ = self.board.set(&c.id, Value::Off).await;
+            }
+        }
     }
 
     // [@ANCHOR: radioctl_station_station_select]
@@ -333,6 +404,14 @@ impl Station {
     pub async fn pulse(&self, id: &ChannelId) -> Result<(), StationError> {
         self.guard_action(self.classify_pulse(id), &format!("pulse {}", id.0))
             .await?;
+        if let Some(ChannelKind::Amplifier {
+            device,
+            function: AmpFunction::Tune,
+            ..
+        }) = self.def.channel(id).map(|c| &c.kind)
+        {
+            self.check_amp_powered(device)?;
+        }
         self.board.pulse(id).await
     }
 
@@ -429,6 +508,7 @@ impl Station {
             }
             self.guard_action(Action::PowerOff, &format!("power off {}", dev.0))
                 .await?;
+            self.standby(&dev).await;
             sleep(Duration::from_millis(d.off_delay_ms)).await;
             match &d.power {
                 PowerSource::AlwaysOn => {
@@ -542,7 +622,22 @@ impl Station {
     /// channel does not stop the rest, and each is limited to a few seconds. Selectors are left
     /// where they are. Momentary-powered radios have no off line here and are not touched.
     pub async fn all_off(&self) -> AllOffReport {
-        let mut order: Vec<ChannelId> = Vec::new();
+        // Amplifiers to standby first: it is what stops RF into the antenna.
+        let mut order: Vec<ChannelId> = self
+            .def
+            .channels
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.kind,
+                    ChannelKind::Amplifier {
+                        function: AmpFunction::Operate,
+                        ..
+                    }
+                )
+            })
+            .map(|c| c.id.clone())
+            .collect();
         for dev in self
             .def
             .power_on_order()

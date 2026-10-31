@@ -8,7 +8,7 @@
 //! Where a driver cannot read back, the channel reports commanded state only.
 
 use crate::error::{StationError, StationErrorKind};
-use crate::model::{ChannelDef, ChannelId, ChannelKind, Value};
+use crate::model::{AmpFunction, ChannelDef, ChannelId, ChannelKind, Value};
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::pin::Pin;
@@ -611,6 +611,13 @@ impl Switchboard {
                 }
             }
             (ChannelKind::Power { .. } | ChannelKind::Output, Value::On | Value::Off) => {}
+            (
+                ChannelKind::Amplifier {
+                    function: AmpFunction::Operate,
+                    ..
+                },
+                Value::On | Value::Off,
+            ) => {}
             (ChannelKind::Selector { ways, .. }, Value::Port(n)) if (1..=*ways).contains(&n) => {}
             (ChannelKind::Selector { .. }, Value::Off) => {}
             _ => {
@@ -685,8 +692,14 @@ impl Switchboard {
     /// The line is turned off again even if waiting is cancelled by an error.
     pub(crate) async fn pulse(&self, id: &ChannelId) -> Result<(), StationError> {
         let c = self.chan(id)?;
-        let ChannelKind::Momentary { pulse_ms } = c.def.kind else {
-            return Err(config(format!("channel {} is not momentary", id.0)));
+        let pulse_ms = match c.def.kind {
+            ChannelKind::Momentary { pulse_ms }
+            | ChannelKind::Amplifier {
+                function: AmpFunction::Tune,
+                pulse_ms,
+                ..
+            } => pulse_ms,
+            _ => return Err(config(format!("channel {} is not momentary", id.0))),
         };
         let _op = c.op.lock().await;
         self.emit(StationEvent::Commanded {
@@ -714,7 +727,13 @@ impl Switchboard {
     pub(crate) async fn force_off(&self, id: &ChannelId) -> Result<(), StationError> {
         let c = self.chan(id)?;
         match c.def.kind {
-            ChannelKind::Power { .. } | ChannelKind::Output | ChannelKind::Selector { .. } => {}
+            ChannelKind::Power { .. }
+            | ChannelKind::Output
+            | ChannelKind::Selector { .. }
+            | ChannelKind::Amplifier {
+                function: AmpFunction::Operate,
+                ..
+            } => {}
             _ => return Ok(()),
         }
         let mut first = Ok(());
