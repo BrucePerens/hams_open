@@ -6,13 +6,13 @@
 #   constant for the ANAN-100 is 0.095 (Appendix A, Hermes), applied in the hpsdr crate.
 # SCOPE: control plane only (frequency, PTT through the transmit gate, forward power, SWR). Receive I/Q is
 #   the data plane of the hpsdr crate (IqStream), not a radioctl operation. There is no mode (demodulation
-#   happens in the host) and no attenuator Op in the core vocabulary yet.
+#   happens in the host) and no preamplifier. The step attenuator is Level::Attenuator.
 #
 # EVERYTHING HERE IS UNVERIFIED: written from the documents, never run against a radio. Whether a real
 # radio is Protocol 1 or 2 depends on its firmware; `protocol` below is the one the radioctl driver is
 # configured for, and the board id is shared by the ANAN-10 and ANAN-100.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-ptt", "set-ptt", "read-power", "read-swr"]
+capabilities = ["read-frequency", "set-frequency", "read-ptt", "set-ptt", "read-power", "read-swr", "levels"]
 
 [rig]
 id = "anan-100"
@@ -23,6 +23,11 @@ family = "hpsdr-network"
 model = "ANAN-100"
 protocol = 1
 anan10 = false
+
+[levels]
+attenuator_db = []
+attenuator_any_up_to_db = 31
+preamp_steps = 0
 
 [timing]
 timeout_ms = 1500
@@ -46,6 +51,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "timing.*"
 provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/hpsdr_io.rs", note = "Our choice; the bridge answers from its own state, so the timeout covers the in-memory link only. Transmit commands are never retried." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "repo-code", reference = "daemons/hpsdr/src/p1.rs P1Config::att_db and session_p2.rs P2Config::att_adc0 (step attenuator, whole decibels 0 to 31); radioctl-protocols/src/hpsdr_io.rs HpsdrControl::set_attenuator", note = "The hpsdr crate was written from the OpenHPSDR protocol documents; the 31 dB limit is the crate's own bound. No preamplifier is defined by those documents for this control plane." }
 verified = { state = "unverified" }
 
 [[facts]]

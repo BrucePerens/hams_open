@@ -145,6 +145,19 @@ async fn hamlibs_rigctl_drives_a_virtual_kx3_through_radioctld() {
     })
     .await;
     assert_eq!(printed(&rigctl(&daemon, &["l", "KEYSPD"]).await), "25\n");
+    // The front end through Hamlib's own client: attenuator in decibels, preamplifier as a step.
+    rigctl(&daemon, &["L", "ATT", "10"]).await;
+    eventually("attenuator", || {
+        rig.state().levels.get(&Level::Attenuator) == Some(&10)
+    })
+    .await;
+    assert_eq!(printed(&rigctl(&daemon, &["l", "ATT"]).await), "10\n");
+    rigctl(&daemon, &["L", "PREAMP", "1"]).await;
+    eventually("preamplifier", || {
+        rig.state().levels.get(&Level::Preamp) == Some(&1)
+    })
+    .await;
+    assert_eq!(printed(&rigctl(&daemon, &["l", "PREAMP"]).await), "1\n");
     rigctl(&daemon, &["L", "AF", "0.5"]).await;
     let raw = control(&daemon)
         .state()
@@ -188,6 +201,8 @@ async fn hamlibs_client_reads_back_the_capabilities_radioctld_advertises() {
     assert!(caps.contains("RAWSTR(0..255/1)"), "{caps}");
     assert!(caps.contains("Max RIT: -9.999kHz/+9.999kHz"), "{caps}");
     assert!(caps.contains("VFO list: VFOA VFOB"), "{caps}");
+    assert!(caps.contains("Attenuator: 10dB"), "{caps}");
+    assert!(caps.contains("Preamp: 1dB"), "{caps}");
     kx3.stop().await;
 
     let ic = start(&config_text(
@@ -209,7 +224,12 @@ async fn hamlibs_client_reads_back_the_capabilities_radioctld_advertises() {
         !caps.contains("KEYSPD"),
         "CI-V keyer speed is not implemented: {caps}"
     );
-    assert!(caps.contains("Preamp: None"), "{caps}");
+    // The front-end lists are read back by Hamlib's own client from \dump_state: the preamplifier
+    // as step numbers (Hamlib prints them with its dB unit), the attenuator in decibels.
+    assert!(caps.contains("Preamp: 1dB 2dB"), "{caps}");
+    assert!(caps.contains("Attenuator: 20dB"), "{caps}");
+    assert!(caps.contains("ATT(0..20/1)"), "{caps}");
+    assert!(caps.contains("PREAMP(0..2/1)"), "{caps}");
     assert!(caps.contains("VFO list: VFOA VFOB"), "{caps}");
     ic.stop().await;
 }

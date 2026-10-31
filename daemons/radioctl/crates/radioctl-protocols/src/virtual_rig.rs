@@ -26,6 +26,8 @@ use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::units::{Hz, Level, Mode};
 
+use crate::attenuation;
+
 use crate::civ::{self, Frame, FrameParser, Parsed};
 use crate::civ_scope::{ScopeAnswer, ScopeSim, SCOPE_CMD, SUB_WAVEFORM};
 use crate::elecraft;
@@ -461,6 +463,10 @@ impl VirtualRig {
                 self.state.xit = *state == 1;
                 CivReply::Ok
             }
+            (0x11, []) => self.civ_front_end_get(Level::Attenuator),
+            (0x11, [byte]) => self.civ_front_end_set(Level::Attenuator, *byte),
+            (0x16, [0x02]) => self.civ_front_end_get(Level::Preamp),
+            (0x16, [0x02, step]) => self.civ_front_end_set(Level::Preamp, *step),
             (0x14, [sub]) => self.civ_level_get(*sub),
             (0x14, [sub, value @ ..]) => self.civ_level_set(*sub, value),
             (0x1A, [0x03]) => self.civ_filter_get(),
@@ -522,6 +528,36 @@ impl VirtualRig {
                 CivReply::Ok
             }
             _ => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_front_end_get]
+    /// `11` (attenuator, one BCD byte of decibels) and `16 02` (preamplifier step) reads.
+    fn civ_front_end_get(&self, level: Level) -> CivReply {
+        match attenuation::virtual_get(&self.desc, &self.state.levels, level) {
+            Some(value) if level == Level::Attenuator => {
+                CivReply::Data(0x11, vec![bcd_byte(u8::try_from(value).unwrap_or(0))])
+            }
+            Some(value) => CivReply::Data(0x16, vec![0x02, u8::try_from(value).unwrap_or(0)]),
+            None => CivReply::Ng,
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_front_end_set]
+    fn civ_front_end_set(&mut self, level: Level, byte: u8) -> CivReply {
+        let value = if level == Level::Attenuator {
+            let (high, low) = (byte >> 4, byte & 15);
+            if high > 9 || low > 9 {
+                return CivReply::Ng;
+            }
+            u16::from(high) * 10 + u16::from(low)
+        } else {
+            u16::from(byte)
+        };
+        if attenuation::virtual_set(&self.desc, &mut self.state.levels, level, value) {
+            CivReply::Ok
+        } else {
+            CivReply::Ng
         }
     }
 
@@ -674,6 +710,9 @@ impl VirtualRig {
             }
             ("RU" | "RD", digits) => self.kenwood_move_offset(name == "RU", digits),
             ("AG" | "RG" | "MG" | "ML" | "PC" | "KS", _) => self.kenwood_level(name, arg),
+            ("RA" | "PA", _) => {
+                attenuation::virtual_kenwood(&self.desc, &mut self.state.levels, name, arg)
+            }
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()
@@ -839,6 +878,9 @@ impl VirtualRig {
             ("RF", "0") if id != 670 => Some("RF01;".to_string()),
             ("RF", rest) if id != 670 && rest.len() == 2 && rest.starts_with('0') => None,
             ("AG" | "RG" | "MG" | "PC" | "KS", _) => self.yaesu_level(name, arg),
+            ("RA" | "PA", _) => {
+                attenuation::virtual_yaesu(&self.desc, &mut self.state.levels, name, arg)
+            }
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()
@@ -1197,6 +1239,9 @@ impl VirtualRig {
                 let sent = text.get(3..).unwrap_or("").to_string();
                 self.state.cw_sent.push(sent);
                 None
+            }
+            (prefix @ ("RA" | "PA"), data) => {
+                attenuation::virtual_elecraft(&self.desc, &mut self.state.levels, prefix, data)
             }
             (prefix, data) => match [
                 Level::AfGain,

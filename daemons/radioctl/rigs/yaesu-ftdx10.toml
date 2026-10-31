@@ -12,6 +12,11 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 761
 
+[levels]
+attenuator_db = [6, 12, 18]
+attenuator_any_up_to_db = 0
+preamp_steps = 2
+
 [timing]
 timeout_ms = 2000
 retries = 3
@@ -74,6 +79,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "timing.*"
 provenance = { kind = "program-output", reference = "rigctl -m 1042 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 2000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX10 CAT Operation Reference Manual, file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: RA (RF ATTENUATOR) PDF p. 20, PA (PRE-AMP (IPO)) PDF p. 19: RA0P2 (P2 0 OFF, 1 6 dB, 2 12 dB, 3 18 dB); PA0P2 (P2 0 IPO, 1 AMP 1, 2 AMP 2); preamp step 0 is IPO" }
 verified = { state = "unverified" }
 
 [[facts]]

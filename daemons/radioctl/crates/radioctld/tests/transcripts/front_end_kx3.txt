@@ -1,0 +1,34 @@
+# Virtual Elecraft KX3: the receive attenuator (ATT, decibels; one step, 10 dB) and preamplifier
+# (PREAMP, step number; one step). Hamlib's own PREAMP is in decibels; radioctld serves the step.
+> l ATT
+< 0
+> L ATT 10
+< RPRT 0
+> l ATT
+< 10
+> L ATT 5
+< RPRT -1
+> L ATT 20
+< RPRT -1
+> L ATT 0
+< RPRT 0
+> l ATT
+< 0
+> l PREAMP
+< 0
+> L PREAMP 1
+< RPRT 0
+> l PREAMP
+< 1
+> L PREAMP 2
+< RPRT -1
+> +l ATT
+< get_level: ATT
+< 0
+< RPRT 0
+> L PREAMP 0
+< RPRT 0
+> l PREAMP
+< 0
+> L PREAMP 3
+< RPRT -1

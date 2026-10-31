@@ -23,6 +23,11 @@ samples_per_frame = 50
 amplitude_max = 160
 spans_hz = [5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000]
 
+[levels]
+attenuator_db = [20]
+attenuator_any_up_to_db = 0
+preamp_steps = 2
+
 [timing]
 timeout_ms = 1000
 retries = 3
@@ -97,6 +102,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "timing.*"
 provenance = { kind = "program-output", reference = "rigctl -m 3085 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 1000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 rigs/icom/ic7300.c: rig_caps `.attenuator` and `.preamp` of the IC-705 (defined in the same file); rigs/icom/icom.c icom_set_level and icom_get_level (RIG_LEVEL_ATT: command 0x11 with the attenuation as a BCD byte; RIG_LEVEL_PREAMP: command 0x16 sub-command 0x02, data 1 = P.AMP1, 2 = P.AMP2); rigs/icom/icom_defs.h (C_CTL_ATT 0x11, C_CTL_FUNC 0x16, S_FUNC_PAMP 0x02)", note = "Facts only, no code or table copied. Icom's CI-V guide was not used (see the file header). The attenuator list is Hamlib's; the radio may offer more steps than Hamlib lists. A preamplifier step is a P.AMP number, not a gain in dB." }
 verified = { state = "unverified" }
 
 [[facts]]

@@ -108,6 +108,12 @@ fn granularity(info: &LevelInfo, description: &RigDescription) -> (String, Strin
     match info.source {
         LevelSource::Radio(level) if !info.fraction => {
             let (min, max) = crate::names::level_range(description, level).unwrap_or((0, 0));
+            if info.bit <= 4 {
+                // The first entries are read by Hamlib's client as the raw union value, so an
+                // integer level there is its plain decimal (an integer level at a later index is
+                // read as a float's bit pattern).
+                return (min.to_string(), max.to_string(), "1".to_string());
+            }
             (
                 wire_int_as_float(u32::from(min)),
                 wire_int_as_float(u32::from(max)),
@@ -126,6 +132,24 @@ fn granularity(info: &LevelInfo, description: &RigDescription) -> (String, Strin
             wire_int_as_float(1),
         ),
     }
+}
+
+// [@ANCHOR: radioctld_caps_preamp_list]
+/// The `\dump_state` preamplifier line: the step numbers the model accepts, ended by 0.
+fn preamp_list(description: &RigDescription) -> String {
+    let steps = (1..=description.levels.preamp_steps).map(|s| format!("{s} "));
+    format!("{}0", steps.collect::<String>())
+}
+
+// [@ANCHOR: radioctld_caps_attenuator_list]
+/// The `\dump_state` attenuator line: the decibel values the model accepts, ended by 0.
+fn attenuator_list(description: &RigDescription) -> String {
+    let steps = description
+        .levels
+        .attenuator_db
+        .iter()
+        .map(|d| format!("{d} "));
+    format!("{}0", steps.collect::<String>())
 }
 
 // [@ANCHOR: radioctld_caps_dump_state]
@@ -172,7 +196,12 @@ pub fn dump_state(view: &CapsView<'_>) -> String {
         ));
     }
     out.push_str("0 0\n");
-    out.push_str(&format!("{max_rit}\n{max_rit}\n0\n0\n0\n0\n"));
+    out.push_str(&format!("{max_rit}\n{max_rit}\n0\n0\n"));
+    out.push_str(&format!(
+        "{}\n{}\n",
+        preamp_list(desc),
+        attenuator_list(desc)
+    ));
     out.push_str(&format!(
         "{:#x}\n{:#x}\n",
         func_mask(rit_xit),
@@ -330,6 +359,26 @@ mod tests {
             .find(|l| l.starts_with("level_gran="))
             .expect("gran");
         assert_eq!(level_gran.matches(';').count(), 64);
+    }
+
+    // Tests [@ANCHOR: radioctld_caps_preamp_list]
+    // Tests [@ANCHOR: radioctld_caps_attenuator_list]
+    // Tests [@ANCHOR: radioctld_caps_dump_state]
+    #[test]
+    fn the_front_end_lists_follow_the_description() {
+        let none = dump_state(&view(&kx3_like(), false));
+        assert!(none.contains("\n9999\n9999\n0\n0\n0\n0\n"), "{none}");
+        let mut desc = kx3_like();
+        desc.levels.attenuator_db = vec![6, 12, 18];
+        desc.levels.preamp_steps = 2;
+        let text = dump_state(&view(&desc, false));
+        assert!(
+            text.contains("\n9999\n9999\n0\n0\n1 2 0\n6 12 18 0\n"),
+            "{text}"
+        );
+        // Plain decimals: the client reads entries 0 to 4 as the raw union value.
+        assert!(text.contains("1=0,18,1;"), "{text}");
+        assert!(text.contains("0=0,2,1;"), "{text}");
     }
 
     // Tests [@ANCHOR: radioctld_caps_dump_state]

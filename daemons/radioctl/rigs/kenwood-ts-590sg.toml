@@ -12,6 +12,11 @@ family = "kenwood-ascii"
 [kenwood]
 model_id = 23
 
+[levels]
+attenuator_db = [12]
+attenuator_any_up_to_db = 0
+preamp_steps = 1
+
 [timing]
 timeout_ms = 500
 retries = 3
@@ -66,6 +71,16 @@ verified = { state = "unverified" }
 [[facts]]
 key = "timing.*"
 provenance = { kind = "program-output", reference = "rigctl -m 2037 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 500ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.attenuator_db"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 rigs/kenwood/ts590.c: rig_caps `.attenuator` of the TS-590SG (12)", note = "The guide says only ATT ON and OFF (RA); the 12 dB figure is Hamlib's, read for facts only." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999: RA p. 23 (P1 00 ATT OFF, 01 ATT ON; answer RAP1P1P2P2 with P2 always 00), PA p. 21 (P1 0 off, 1 on; answer PAP1P2 with P2 always 0)" }
 verified = { state = "unverified" }
 
 [[facts]]

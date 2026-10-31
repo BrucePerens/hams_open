@@ -68,8 +68,8 @@ An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported`
 | `J` | `set_rit` | [vfo] offset | | 0 switches RIT off; any other offset sets it and switches RIT on. |
 | `z` | `get_xit` | [vfo] | `XIT` | |
 | `Z` | `set_xit` | [vfo] offset | | Likewise for XIT. |
-| `l` | `get_level` | [vfo] name | value only | Names: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR` (those the rig has). Levels are 0 to 1 floats, except `KEYSPD` (words per minute), `RAWSTR` (raw) and `SWR`. |
-| `L` | `set_level` | [vfo] name value | | An out-of-range value is `RPRT -1`. |
+| `l` | `get_level` | [vfo] name | value only | Names: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR`, `ATT`, `PREAMP` (those the rig has). Levels are 0 to 1 floats, except `KEYSPD` (words per minute), `RAWSTR` (raw), `SWR`, `ATT` (integer decibels; only the values in the rig's `Attenuator` list) and `PREAMP` (an integer step, 0 off; Hamlib's own is decibels). |
+| `L` | `set_level` | [vfo] name value | | An out-of-range value, or an `ATT` or `PREAMP` value the rig has no step for, is `RPRT -1`. |
 | `u` | `get_func` | [vfo] name | value only | 0 or 1. Functions served: `RIT`, `XIT`. |
 | `U` | `set_func` | [vfo] name 0\|1 | | |
 | `b` | `send_morse` | text | | At most 64 characters. Transmits: gate, link and ownership rules as `T 1`, and it claims the transmitter the same way. |

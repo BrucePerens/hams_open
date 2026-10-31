@@ -132,15 +132,24 @@ pub enum Level {
     KeyerSpeed,
     /// Requested transmit power setting, in the rig's units (watts on an Elecraft KX3).
     RfPower,
+    /// Receive attenuator, in decibels of attenuation; 0 is off. The values a model accepts are
+    /// the `levels.attenuator_db` list of its description.
+    Attenuator,
+    /// Receive preamplifier as a step number: 0 is off (a Yaesu "IPO"), 1 and 2 are the rig's first
+    /// and second stage. The gain of a stage differs by band and model and is not stated here; a
+    /// model accepts steps up to `levels.preamp_steps` of its description.
+    Preamp,
 }
 
-const LEVEL_NAMES: [(Level, &str); 6] = [
+const LEVEL_NAMES: [(Level, &str); 8] = [
     (Level::AfGain, "af-gain"),
     (Level::RfGain, "rf-gain"),
     (Level::MicGain, "mic-gain"),
     (Level::MonitorLevel, "monitor-level"),
     (Level::KeyerSpeed, "keyer-speed"),
     (Level::RfPower, "rf-power"),
+    (Level::Attenuator, "attenuator"),
+    (Level::Preamp, "preamp"),
 ];
 
 impl Level {

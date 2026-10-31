@@ -38,6 +38,7 @@ use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::units::{Hz, Level, Vfo};
 
+use crate::attenuation;
 use crate::kenwood::{parse_digits, Token, Tokenizer};
 
 /// Largest frequency the 9-digit field holds.
@@ -63,7 +64,7 @@ fn level_wire(level: Level) -> Option<LevelWire> {
         Level::MicGain => ("MG", false, 0, 100),
         Level::KeyerSpeed => ("KS", false, 4, 60),
         Level::RfPower => ("PC", false, 5, 100),
-        Level::MonitorLevel => return None,
+        Level::MonitorLevel | Level::Attenuator | Level::Preamp => return None,
     };
     Some(LevelWire {
         name,
@@ -147,6 +148,22 @@ impl YaesuEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_decode_front_end]
+    /// An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero)
+    /// and the step, mapped by the description.
+    fn decode_front_end(&self, name: &str, digits: &str) -> Option<Observation> {
+        let level = if name == "RA" {
+            Level::Attenuator
+        } else {
+            Level::Preamp
+        };
+        let step = u8::try_from(parse_digits(
+            digits.strip_prefix('0').filter(|r| r.len() == 1)?,
+        )?)
+        .ok()?;
+        attenuation::value_of(&self.desc, level, step).map(|v| Observation::Level(level, v))
+    }
+
     // [@ANCHOR: radioctl_yaesu_engine_decode]
     fn decode(&self, text: &str) -> Vec<Inbound> {
         if text == "?" {
@@ -186,6 +203,7 @@ impl YaesuEngine {
             (Some("ID"), Some(d)) if d.len() == 4 => parse_digits(d)
                 .and_then(|v| u16::try_from(v).ok())
                 .map(Observation::ModelId),
+            (Some(name @ ("RA" | "PA")), Some(digits)) => self.decode_front_end(name, digits),
             (Some(name), Some(digits)) => decode_level(name, digits),
             _ => None,
         };
@@ -289,6 +307,24 @@ impl ProtocolEngine for YaesuEngine {
                     h => format!("RD{:04};", h.unsigned_abs()),
                 };
                 Self::command(format!("RC;{step}"), none)
+            }
+            Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
+                attenuation::step_of(&self.desc, *level, 0)?;
+                let name = if *level == Level::Attenuator {
+                    "RA"
+                } else {
+                    "PA"
+                };
+                Self::command(format!("{name}0;"), observe(Field::Level(*level)))
+            }
+            Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
+                let step = attenuation::step_of(&self.desc, *level, *value)?;
+                let name = if *level == Level::Attenuator {
+                    "RA"
+                } else {
+                    "PA"
+                };
+                Self::command(format!("{name}0{step};"), none)
             }
             Op::GetLevel(level) => {
                 let wire = level_wire(*level)
