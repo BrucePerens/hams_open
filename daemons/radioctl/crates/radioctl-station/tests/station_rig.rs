@@ -12,7 +12,8 @@ use radioctl_protocols::io::spawn_virtual_rig;
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_station::channel::{Switchboard, VirtualBank};
 use radioctl_station::error::StationErrorKind;
-use radioctl_station::model::{ChannelId, StationDef, Value};
+use radioctl_station::manager::{RadioLink, RigLinks};
+use radioctl_station::model::{ChannelId, DeviceId, StationDef, Value};
 use radioctl_station::station::{KeyState, KeyedSource, Station};
 use tokio::runtime::Handle;
 
@@ -70,4 +71,32 @@ safe = "off"
         .await
         .expect("unkeyed");
     assert!(bank.line(0));
+}
+
+// Tests [@ANCHOR: radioctl_station_riglinks_new]
+// Tests [@ANCHOR: radioctl_station_riglinks_set]
+// Tests [@ANCHOR: radioctl_station_riglinks_link_up]
+// Tests [@ANCHOR: radioctl_station_riglinks_present]
+// Tests [@ANCHOR: radioctl_station_riglinks_connect]
+#[tokio::test]
+async fn rig_links_report_a_radio_without_a_handle_as_down_and_a_live_handle_as_up() {
+    let links = RigLinks::new();
+    let radio = DeviceId("ic7300".to_string());
+    assert!(!links.link_up(&radio).await);
+    assert_eq!(links.present(&radio).await, None);
+    assert!(links.connect(&radio).await.is_err());
+
+    let desc = RigDescription::ic7300();
+    let rig = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, _control) = spawn_virtual_rig(&Handle::current(), rig, std::time::Duration::ZERO);
+    let handle = spawn_current(
+        CivEngine::new(desc).expect("engine"),
+        stream,
+        RigOptions::default(),
+    )
+    .expect("spawn");
+    links.set(radio.clone(), handle);
+    assert!(links.link_up(&radio).await);
+    assert_eq!(links.present(&radio).await, None);
+    assert!(matches!(links.connect(&radio).await, Ok(None)));
 }
