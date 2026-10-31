@@ -78,6 +78,7 @@ reply_delay_ms = 0
 | `server.max_line_bytes` | 1024 | 64 to 65536 | Longest request line. An over-long line gets `RPRT -1` and the connection is closed. |
 | `server.request_timeout_ms` | 2000 | 100 to 30000 | Deadline for a request that must go to the rig. |
 | `server.cache_max_age_ms` | 1000 | 0 to 60000 | Reads newer than this are answered from the actor's cache. |
+| `server.secrets_dir` | none | a directory, relative to the configuration file | One file per secret, a regular file readable by the owner only (mode 0600), one trailing newline dropped. Needed by `framing = "ts890-lan"`. |
 | `rig.name` | required | 1 to 32 of `A-Za-z0-9_.-` | Used in logs. |
 | `rig.description` | required | | Rig description file, relative to the configuration file. |
 | `rig.listen` | `127.0.0.1:` 4532 plus the rig's index | `ip:port` | A non-loopback address needs `allow_non_loopback_bind`. |
@@ -90,7 +91,10 @@ reply_delay_ms = 0
 | `transport.kind` | required | `virtual`, `serial`, `tcp` | See below. |
 | virtual: `reply_delay_ms` | 0 | 0 to 10000 | How long the virtual rig takes to answer. |
 | serial: `path` or `usb`, `baud`, `lines` | `lines = "managed"` | baud 300 to 4000000; `lines` is `managed` or `unmanaged` | Exactly one of `path = "/dev/ttyUSB0"` and `usb = { vid, pid, serial }`. The port is opened 8N1 with the modem lines inactive and one open attempt. `lines = "unmanaged"` is for a port that has no DTR and RTS (a pseudo-terminal such as the one `virtual_radio_pty` makes, a CDC ACM gadget): the lines are never touched. With the default a pty fails the open with `LinkDown: DTR ... Not a typewriter`; a real radio's USB port must keep `managed`. |
-| tcp: `address` | | `host:port` | A network serial server or a radio's own CAT port. No reconnect (chapter [5](05-transports.md)). |
+| tcp: `address` | | `host:port` | A network serial server or a radio's own CAT port, on the reconnecting network link (chapter [5](05-transports.md#network-links)): one connection attempt at start (a radio that cannot be reached stops the daemon), then reconnection with backoff; the rig actor marks the link down meanwhile (transmit commands fail closed) and unkeys the rig when it is back. |
+| tcp: `framing` | `raw` | `raw`, `ts890-lan` | `ts890-lan` is the Kenwood TS-890S LAN session (`##CN;`, the `##ID` login, an `ID;` keep-alive every 4 s; chapter [5](05-transports.md#the-ts-890s-over-the-lan)) around the CAT stream. |
+| tcp: `lan_account`, `lan_administrator`, `lan_password_secret` | `lan_administrator = false` | | For `ts890-lan` only. `lan_account` is the radio's LAN account name (1 to 32 printable ASCII, no `;`), `lan_administrator` whether it is the administrator account, `lan_password_secret` the name of the file in `server.secrets_dir` holding the password. The password is read when the rig is brought up and held only in the session; it is never in this file, a log line or an error. A refused login (`##ID0;`), a denied connection (`##CN0;`), a missing or world-readable secret stops the daemon from starting. |
+| tcp: `idle_timeout_ms` | none for `raw`; 12000 for `ts890-lan` | 1000 to 600000 | Silence on the wire after which the link is declared lost and reconnected. The TS-890S hangs up after 10 s without communication; three keep-alive intervals is the default. |
 
 `radioctld.example.toml` in the crate root is the annotated example. Not configurable today: serial data
 bits, parity, flow control and the idle level of DTR and RTS; the number of open attempts; polling
@@ -142,6 +146,9 @@ Rot2Prog and DCU engines, and the relay's `rotor_steer` dispatch are still to do
   IPv6 addresses are normalised.
 - Serving beyond loopback needs two things written down: `allow_non_loopback_bind = true` and an explicit
   `allow` list. The loader refuses the first without the second.
+- The only secret the daemon handles is a TS-890S LAN password (`framing = "ts890-lan"`): it is read
+  from a file in `server.secrets_dir` that only the owner can read, held in the session's
+  `LanCredentials` (whose `Debug` hides it), sent in the login frame, and in no message or log.
 - There is **no authentication and no encryption** in the `rigctld` protocol. Anyone the allow list admits
   can read and set the radio, and key it if `transmit = true`. Put it behind a network you control.
 - **A one-shot `rigctl -m 2 ... T 1` keys the rig and unkeys it again an instant later**: the client

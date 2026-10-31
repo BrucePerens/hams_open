@@ -45,6 +45,8 @@ pub struct Served {
     /// The serial port's control lines and status, for serial rigs; held so the port's
     /// supervisor and the actor's link watch live as long as the rig is served.
     pub serial_link: Option<SerialMonitor>,
+    /// The network link's status and counters, for TCP rigs.
+    pub net_link: Option<NetMonitor>,
 }
 
 /// The running daemon.
@@ -154,6 +156,7 @@ async fn start_one(
         server,
         virtual_control: built.virtual_control,
         serial_link: built.serial_link,
+        net_link: built.net_link,
     })
 }
 

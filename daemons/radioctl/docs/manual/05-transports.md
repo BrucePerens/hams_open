@@ -180,8 +180,8 @@ pub async fn connect_tcp<A: ToSocketAddrs + Copy>(
 A bounded connect (default: 3 attempts, 3 s each, with the backoff between) so a radio that is
 booting or a network that is down ends in a typed `LinkDown`, never a hang. Nagle's algorithm is
 switched off. After connecting there is **no reconnect**: if the connection drops, the actor marks
-its link down and stays down; restart the rig (for `radioctld`, restart the daemon). This is the
-`tcp` transport of `radioctld` as well. For a link that reconnects, use `net::open_link` below.
+its link down and stays down; restart the rig. `radioctl-capi`'s TCP rigs use it; `radioctld`'s `tcp`
+transport is on `net::open_link` below, which reconnects.
 
 ## Network links
 
@@ -261,6 +261,15 @@ is the application's business (a secret store, never a configuration file or a l
 keep-alive interval; after the login the stream is the ordinary TS-890S CAT stream
 (`Ts890Engine`). A wrong password or a denied connection fails `open_link` with `LinkDown` and a message
 that says which; the bandscope output (`##DD2`, `##DD3`) is not implemented.
+
+`radioctld` wires this session into its `tcp` transport: `framing = "ts890-lan"` with `lan_account`,
+`lan_administrator` and `lan_password_secret` (the name of a file in `server.secrets_dir`; chapter
+[9](09-radioctld.md#configuration-reference)). The password is read at start from that file, which
+must be the owner's alone, and appears in no message. Tested against a fake radio on loopback only
+(`crates/radioctld/tests/ts890_lan.rs`: login, CAT, the keep-alive, a second login after the radio
+drops the connection, a refused password, a missing secret); **unverified on a radio**. After a
+reconnect the actor unkeys the rig but the engine's session state is not re-sent (`AI2;`): chapter
+[13](13-roadmap.md).
 
 ## Keying with RTS or DTR
 
