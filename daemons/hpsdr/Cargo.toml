@@ -11,7 +11,7 @@ rust-version = "1.98"
 # Async only: no runtime of our own. The caller passes a runtime Handle to every constructor that
 # spawns a task or opens a socket; "rt" is for Handle::enter / spawn, "net" and "time" for sockets
 # and timers, "sync" for the block channels.
-tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "sync"] }
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "sync", "macros"] }
 
 [lints.rust]
 unsafe_code = "forbid"
