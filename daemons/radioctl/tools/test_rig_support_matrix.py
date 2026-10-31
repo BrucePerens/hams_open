@@ -40,7 +40,7 @@ class SupportMatrixTests(unittest.TestCase):
 
     # Tests [@ANCHOR: radioctl_support_check_consistency]
     def test_disagreements_are_reported(self):
-        descriptions = {"a": {"hardware": [{"state": "hardware-verified"}], "highest": "hardware-verified"},
+        descriptions: dict[str, dict] = {"a": {"hardware": [{"state": "hardware-verified"}], "highest": "hardware-verified"},
                         "b": {"hardware": [], "highest": "unverified"}}
         reports = [{"rig": "b", "radio": "r", "firmware": "1", "date": "2026-11-01", "reporter": "x", "issue": "u"},
                    {"rig": "ghost", "radio": "r"}]
@@ -54,7 +54,7 @@ class SupportMatrixTests(unittest.TestCase):
     # Tests [@ANCHOR: radioctl_support_classify]
     # Tests [@ANCHOR: radioctl_support_status]
     def test_every_model_gets_a_tier_and_the_family_counts_match_the_plan(self):
-        tiers = {}
+        tiers: dict[str, set[str]] = {}
         for m in MODELS:
             family, tier, engine = sup.classify(m)
             self.assertIn(tier, "ABCD")
