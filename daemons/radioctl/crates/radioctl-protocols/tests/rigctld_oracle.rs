@@ -69,6 +69,7 @@ fn hamlib_mode(mode: Mode) -> &'static str {
         Mode::RttyR => "RTTYR",
         Mode::Data => "PKTUSB",
         Mode::DataR => "PKTLSB",
+        Mode::DStar => "D-STAR",
     }
 }
 
@@ -86,6 +87,7 @@ fn from_hamlib_mode(name: &str) -> Option<Mode> {
         Mode::RttyR,
         Mode::Data,
         Mode::DataR,
+        Mode::DStar,
     ]
     .into_iter()
     .find(|m| hamlib_mode(*m) == name)
@@ -957,6 +959,15 @@ const ICOM_BATCH_ONE: &[(&str, u32)] = &[
     ("icom-ic-r8500", 3042),
     ("icom-ic-r9000", 3043),
     ("icom-ic-rx7", 3069),
+    ("icom-id-5100", 3071),
+    ("icom-id-1", 3054),
+    ("icom-id-31", 3083),
+    ("icom-id-4100", 3082),
+    ("icom-id-51", 3084),
+    ("icom-ic-r6", 3077),
+    ("icom-ic-r10", 3036),
+    ("icom-ic-r20", 3058),
+    ("icom-ic-r30", 3080),
 ];
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
@@ -1037,6 +1048,13 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
 /// (`S_R7000_SSB`, `rigs/icom/frame.c`), the code the common table (and the description) gives to
 /// FM, so the two sides end in different modes. Which is right for the radio is unknown (no manual
 /// read): an open question, pinned.
+///
+/// ID-5100 (fifth batch, unverified, no manual read): Hamlib's own `id5100` model fails the PTT
+/// read and the AF-gain read against the virtual rig although radioctl's plain `1C 00` and
+/// `14 01` are answered (the recorded frames show Hamlib sending the same bytes, so the model
+/// answers differently from what Hamlib's reader accepts, or the ID-5100 forms differ); its split
+/// starts with `07 D0` (Main band), which the virtual rig does not model, as for the IC-756.
+/// Open questions, pinned.
 fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     let main_sub = vec![
         "SetSplit(true)",
@@ -1053,6 +1071,13 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
         "icom-ic-7851" => main_sub,
         "icom-ic-7760" => main_sub[..4].to_vec(),
         "icom-ic-7700" | "icom-ic-r7000" => vec!["final mode"],
+        "icom-id-5100" => vec![
+            "GetPtt",
+            "GetLevel(AfGain)",
+            "SetSplit(true)",
+            "GetSplit",
+            "SetSplit(false)",
+        ],
         _ => Vec::new(),
     }
 }

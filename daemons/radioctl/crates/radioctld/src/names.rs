@@ -17,7 +17,7 @@ struct ModeEntry {
     nominal_width_hz: u32,
 }
 
-const MODES: [ModeEntry; 11] = [
+const MODES: [ModeEntry; 12] = [
     ModeEntry {
         mode: Mode::Am,
         name: "AM",
@@ -83,6 +83,12 @@ const MODES: [ModeEntry; 11] = [
         name: "PKTUSB",
         bit: 11,
         nominal_width_hz: 3000,
+    },
+    ModeEntry {
+        mode: Mode::DStar,
+        name: "D-STAR",
+        bit: 24,
+        nominal_width_hz: 6250,
     },
 ];
 
