@@ -49,3 +49,4 @@ with a login or their own framing. Manual: `docs/manual/05-transports.md`.
 - [@ANCHOR: radioctl:radioctl_core_net_proto_name] (radioctl-core) `proto_name` (see the source).
 - [@ANCHOR: radioctl:radioctl_core_net_read_size] (radioctl-core) `read_size` (see the source).
 - [@ANCHOR: radioctl:radioctl_core_net_open_link] (radioctl-core) Opens a network link on `runtime` and returns once the first connection is ready, or with the last attempt's error after `config.first_attempts` ([`ErrorKind::LinkDown`]).
+- [@ANCHOR: radioctl:radioctl_core_net_framing_keepalive_sent] (radioctl-core) Called after each keep-alive was sent, so a framing can recognise and swallow the radio's answer to it.

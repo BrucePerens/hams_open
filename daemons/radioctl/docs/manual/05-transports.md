@@ -19,7 +19,8 @@ transport exists; that comment is out of date.
 | Network link, TCP or UDP (`net::open_link`: network serial server, a radio's own CAT port, a FlexRadio's SmartSDR port 4992 (unverified), `rigctld`, framed or login radios through the `Framing` hooks) | **Implemented**, tested against loopback fakes, unverified on a radio | yes, with backoff, and the actor unkeys on every reconnect |
 | Pseudo-terminal | works as a serial path with `LineControl::Unmanaged` | as serial |
 | Native USB (`nusb`) | **Planned** | |
-| Kenwood TS-890S LAN and Icom network control framing | **Planned**: only the generic `Framing` hooks exist (no public manual was used) | |
+| Kenwood TS-890S LAN (`kenwood_ts890_lan::Ts890LanFraming`: `##CN`, `##ID` login, keep-alive) | **Implemented** from Kenwood's public guide, tested against a fake radio, unverified on a radio | yes: the link logs in again after a reconnect |
+| Icom network control (UDP with its own login and audio streams) | **Planned**: no public manual was used; only the generic `Framing` hooks exist | |
 
 ## Serial
 
@@ -232,12 +233,34 @@ limit, the default backoff and one first attempt. `open_link` returns once the f
   radio answers, for example a login), a `keepalive`, and `reset` at every connect. `Decoded` can
   carry bytes to pass up, bytes to send straight back (a login answer) and a failure that forces a
   reconnect. `RawFraming` is the identity and `LengthFraming` is the 2 or 4 byte length-prefixed
-  form. No manufacturer's network protocol is implemented: the Kenwood TS-890S LAN login and the
-  Icom network control (a UDP protocol with its own login and audio streams) are added as engines
-  once their documentation is in hand, and until then this is the hook they will use.
+  form. The one manufacturer's network session implemented is the Kenwood TS-890S LAN login
+  (`kenwood_ts890_lan`, below). Icom network control (a UDP protocol with its own login and audio
+  streams) is added the same way once its documentation is in hand; until then the hooks are all
+  there is.
 - The link supervisor stops, and the status becomes `Closed`, when the byte stream is dropped.
 - `radioctld` still uses `connect_tcp` for its `tcp` transport (no reconnect); moving it to
   `open_link` is a small change in `rigs.rs`, listed in the roadmap.
+
+### The TS-890S over the LAN
+
+Kenwood's TS-890S PC Control Command Reference Guide describes the LAN connector: TCP, UTF-8, the PC
+sends `##CN;`, the radio answers `##CN1;` (or `##CN0;`, denied: a LAN connection already exists), the
+PC sends `##ID<type><len><len><account><password>;`, and `##ID1;` completes the connection (`##ID0;`
+is an authorisation failure). **A connection with no communication for 10 seconds is closed by the
+radio**, so the session sends the read-only `ID;` every 4 seconds and swallows its answer.
+`Ts890LanFraming` is that session as a `Framing`:
+
+```rust signatures
+pub fn new(credentials: LanCredentials) -> Ts890LanFraming
+```
+
+`LanCredentials::new(administrator, account, password)` checks the account and password (1 to 32
+printable ASCII characters, no `;`) and its `Debug` hides the password. Where the password comes from
+is the application's business (a secret store, never a configuration file or a log). Pass
+`Box::new(Ts890LanFraming::new(credentials))` to `open_link` with `idle_timeout` a little above the
+keep-alive interval; after the login the stream is the ordinary TS-890S CAT stream
+(`Ts890Engine`). A wrong password or a denied connection fails `open_link` with `LinkDown` and a message
+that says which; the bandscope output (`##DD2`, `##DD3`) is not implemented.
 
 ## Keying with RTS or DTR
 
