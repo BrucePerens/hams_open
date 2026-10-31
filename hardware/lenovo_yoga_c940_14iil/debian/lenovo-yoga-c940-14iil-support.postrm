@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    remove|purge)
+        rm -f /etc/tlp.d/20-lenovo-yoga-c940-14iil.conf
+        if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+            tlp start >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+#DEBHELPER#

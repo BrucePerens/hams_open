@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+
+case "$1" in
+    configure)
+        if grep -q '^Lenovo Yoga C940-14IIL' /sys/class/dmi/id/product_version 2>/dev/null; then
+            install -D -m 0644 /usr/share/lenovo-yoga-c940-14iil-support/20-lenovo-yoga-c940-14iil.conf \
+                /etc/tlp.d/20-lenovo-yoga-c940-14iil.conf
+            if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+                tlp start >/dev/null 2>&1 || true
+            fi
+        fi
+        ;;
+esac
+#DEBHELPER#

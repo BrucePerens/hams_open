@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+P = debian/lenovo-yoga-c940-14iil-support
+
+override_dh_auto_install:
+	install -D -m 0644 tlp.d/20-lenovo-yoga-c940-14iil.conf $(P)/usr/share/lenovo-yoga-c940-14iil-support/20-lenovo-yoga-c940-14iil.conf
+	install -D -m 0755 scripts/check-features $(P)/usr/lib/lenovo-yoga-c940-14iil-support/check-features
