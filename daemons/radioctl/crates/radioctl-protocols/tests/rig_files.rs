@@ -71,13 +71,25 @@ fn the_ic7300_file_loads_and_extends_the_builtin_description() {
 // Tests [@ANCHOR: radioctl_core_rigfile_is_hardware_verified]
 #[test]
 fn the_worked_file_claims_no_verification_it_does_not_have() {
+    // The only files that may hold `manual-checked` facts: those whose vendor manual was read
+    // (see the facts' references, each with the manual's SHA-256). Nothing else is verified in
+    // any way, and nothing is hardware-verified or transcript-checked.
+    const MANUAL_READ: [&str; 3] = ["kenwood-ts-480", "kenwood-ts-870s", "yaesu-ft-450"];
     for loaded in load_all() {
         let summary = loaded.verification_summary();
-        assert_eq!(summary.len(), 1, "{summary:?}");
+        let id = loaded.description.id.as_str();
         assert!(
             summary.contains_key("unverified"),
-            "{} claims verification: {summary:?}",
-            loaded.description.id
+            "{id} claims verification: {summary:?}"
+        );
+        let allowed: &[&str] = if MANUAL_READ.contains(&id) {
+            &["unverified", "manual-checked"]
+        } else {
+            &["unverified"]
+        };
+        assert!(
+            summary.keys().all(|k| allowed.contains(k)),
+            "{id} claims verification it does not have: {summary:?}"
         );
         assert!(!loaded.is_hardware_verified());
     }

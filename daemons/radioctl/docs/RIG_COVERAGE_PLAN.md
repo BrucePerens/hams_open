@@ -71,7 +71,7 @@ in the engine: the oracle records that as divergences. Fixing that is an engine 
 
 ### Kenwood ASCII: what is done and what is left
 
-Done (16, batch of 2026-10-31, Hamlib 4.6.2 facts and `--dump-caps` only, because kenwood.com refused the download of its PC command guides): TS-50S, 140S, 450S, 480, 570D, 570S, 680S, 690S, 711, 790, 811, 850, 870S, 940S, 950S, 950SDX. Declared capabilities are those Hamlib implements; levels only for the TS-480.
+Done (16, batch of 2026-10-31, first written from Hamlib 4.6.2 facts and `--dump-caps` because kenwood.com refuses automated downloads; the TS-480 and TS-870S were then checked against public copies of their manuals, see below): TS-50S, 140S, 450S, 480, 570D, 570S, 680S, 690S, 711, 790, 811, 850, 870S, 940S, 950S, 950SDX. Declared capabilities are those Hamlib implements; levels only for the TS-480.
 
 Left, with the reason:
 
@@ -79,14 +79,14 @@ Left, with the reason:
 |---|---|
 | TS-440S (2002), R-5000 (2015) | Hamlib's IC-10 dialect: `IF` of 37 (TS-440S) or 32 (R-5000) characters and other commands; a dialect in the Kenwood engine and a twin |
 | TS-930 (2022) | Hamlib has no `ID` for it (the number is unknown), so the description cannot be written honestly; needs a volunteer's `ID;` answer |
-| TS-990S (2039) | Main/Sub receivers with no VFO A/B in Hamlib's model, its own mode letters (C to H) and the TS-990 guide (kenwood.com refused the download): needs a Main/Sub model in the engine |
+| TS-990S (2039) | Main/Sub receivers with no VFO A/B in Hamlib's model and its own mode letters (C to H): needs a Main/Sub model in the engine. The PC command reference (May 2015) is downloaded (people.freebsd.org mirror) and ready to read |
 | TRC-80 (2030) | a transceiver module for a commercial radio; Hamlib reads its frequency from `IF` (`kenwood_get_freq_if`), a different path from the other models; needs a guide or a volunteer |
-| Levels, signal and meters on the older models (all but the TS-480) | the per-model AG/RG/PC/KS/SM forms (`AG` has three forms) from a usable source; Kenwood's guides for these models could not be downloaded |
+| Levels, signal and meters on the older models (all but the TS-480) | the per-model AG/RG/PC/KS/SM forms. The TS-870S manual was read: AGnnn, RGnnn, SMnnnn, KS 001-100, PC 010-100, parameterless RU/RD (a TS-870S dialect of the engine, or per-description level ranges, would carry these). The TS-480's RG is 000-100 (pinned). Manuals for the rest are in `~/manuals/kenwood/` but their command tables are scanned images not yet read |
 | The 10 TH/TM handhelds (`kenwood_hh_ascii`, Tier B) | a different command family (CR-terminated, no `IF`); not covered here |
 
 ### Yaesu newcat and Elecraft: what is done and what is left
 
-Done (15, batch of 2026-10-31, from Yaesu's and Elecraft's public guides with sha256 per fact, Hamlib 4.6.2 as cross-check): Yaesu FT-450D, FT-450 (Hamlib facts only), FT-950, FT-2000, FTDX-1200, FTDX-3000, FTDX-5000, FTDX-9000, FT-891, FT-710, FTDX-101MP; Elecraft K3, K3S, KX2, K4. Engine change: `yaesu.frequency_digits` (8 for the older models). Source terms: none of the Yaesu or Elecraft documents forbids reuse of its facts; nothing was copied.
+Done (15, batch of 2026-10-31, from Yaesu's and Elecraft's public guides with sha256 per fact, Hamlib 4.6.2 as cross-check): Yaesu FT-450D, FT-450 (written from Hamlib facts; compared on 2026-10-31 with the FT-450 CAT Operation Reference Book: ID, 8-digit frequency, 27-character IF and modes agree; `read-power` added; MG, PC and clarifier forms still differ from the engine), FT-950, FT-2000, FTDX-1200, FTDX-3000, FTDX-5000, FTDX-9000, FT-891, FT-710, FTDX-101MP; Elecraft K3, K3S, KX2, K4. Engine change: `yaesu.frequency_digits` (8 for the older models). Source terms: none of the Yaesu or Elecraft documents forbids reuse of its facts; nothing was copied.
 
 Left, with the reason:
 
