@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# cargo-deny policy for the broker: a tiny dependency tree (nix, libc, proptest for tests), all
+# from crates.io, permissive or copyleft-compatible licences only. Run `cargo deny check` here.
+[graph]
+targets = []
+
+[advisories]
+ignore = []
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause", "Zlib", "MPL-2.0", "AGPL-3.0-or-later"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

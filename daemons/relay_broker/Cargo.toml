@@ -1,0 +1,38 @@
+[package]
+name = "relay_broker"
+description = "hams-relay-broker prototype: the relay's privileged broker (fd policy gate, device search, group provisioning)"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+publish = false
+rust-version = "1.98"
+default-run = "hams-relay-broker"
+
+[lib]
+name = "relay_broker"
+path = "src/lib.rs"
+
+[[bin]]
+name = "hams-relay-broker"
+path = "src/main.rs"
+
+[lints.rust]
+# nix wraps every OS call this crate needs (SO_PEERCRED, sendmsg/recvmsg with SCM_RIGHTS, open with
+# O_NOFOLLOW, fstat). Two commented unsafe blocks adopt descriptors the kernel handed us:
+# one received over SCM_RIGHTS (transport::adopt_received_fd) and systemd's activated socket
+# (server::activated_listener). Nothing else may add unsafe.
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[dependencies]
+# Only the OS wrappers: no serde, no tokio, no web. The wire format and the config file are
+# hand-parsed so the whole input surface is in this crate and can be read in one sitting.
+nix = { version = "0.31", default-features = false, features = ["socket", "uio", "fs", "user", "poll"] }
+
+[dev-dependencies]
+proptest = { version = "1.12", default-features = false, features = ["std"] }

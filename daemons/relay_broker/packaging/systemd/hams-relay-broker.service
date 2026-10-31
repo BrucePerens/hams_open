@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Example only: not installed by anything. The broker runs as root only in the sense that the
+# capability bounding set below decides what it can do; the default build (fd policy gate) needs
+# no capability at all when the device nodes are group-accessible, and the two provisioning
+# actions are dry-run until apply_groups = true in the config.
+#
+# Capabilities, per action (RELAY_ZERO_PRIVILEGE_SPLIT.md 3.1 option (c), 3.6):
+#   list_devices      none (sysfs is world-readable)
+#   open_device       CAP_DAC_READ_SEARCH would allow read-only opens of 0660 nodes; read-write
+#                     opens of a node the broker's own user cannot open need CAP_DAC_OVERRIDE.
+#                     Prefer running the broker as a user in dialout+audio and no capability.
+#   grant_group       CAP_CHOWN/CAP_DAC_OVERRIDE via gpasswd (setuid), only with apply_groups.
+# Start with the empty bounding set and add exactly one line when an action proves to need it.
+[Unit]
+Description=hams relay privileged broker
+Requires=hams-relay-broker.socket
+After=hams-relay-broker.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/hams-relay-broker --config /etc/hams-relay-broker.conf
+# The broker exits by itself after idle_exit_secs; the socket restarts it on demand.
+Restart=no
+User=hams-relay-broker
+Group=hams-relay-broker
+SupplementaryGroups=dialout audio
+CapabilityBoundingSet=
+AmbientCapabilities=
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# The broker must see /dev to open device nodes: PrivateDevices stays off, deliberately.
+PrivateDevices=false
+DevicePolicy=closed
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
+DeviceAllow=char-alsa rw
+DeviceAllow=/dev/ttyS0 rw
+LogsDirectory=hams-relay-broker
+LogsDirectoryMode=0700
+RuntimeDirectory=hams-relay-broker
+UMask=0077

@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Example only: not installed by anything. Socket activation for hams-relay-broker: the broker
+# is not resident; systemd holds the socket and starts the service on the first connection.
+# Authorization is the socket's own permissions (group hams-relay) plus SO_PEERCRED against the
+# allow-list in /etc/hams-relay-broker.conf; no polkit, no password, no prompt (3.5, 3.6).
+[Unit]
+Description=hams relay privileged broker socket
+
+[Socket]
+ListenStream=/run/hams-relay-broker/broker.sock
+SocketMode=0660
+SocketUser=root
+SocketGroup=hams-relay
+DirectoryMode=0755
+# One connection is one request; the broker serves them in turn and exits when idle.
+Accept=no
+MaxConnections=16
+
+[Install]
+WantedBy=sockets.target
