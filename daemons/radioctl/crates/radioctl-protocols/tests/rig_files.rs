@@ -117,10 +117,18 @@ fn a_corrupted_byte_in_the_shipped_transcript_is_caught() {
         .find(|(_, t)| t.rig == "icom-ic-7300")
         .expect("the IC-7300 transcript");
     let text = fs::read_to_string(path).expect("read");
-    let corrupted = text.replacen("fe fe e0 94 04 01 01 fd", "fe fe e0 94 04 02 01 fd", 1);
+    let corrupted = text.replacen(
+        "fe fe e0 94 26 00 01 00 01 fd",
+        "fe fe e0 94 26 00 02 00 01 fd",
+        1,
+    );
     assert_ne!(text, corrupted);
     let transcript = transcript::parse(&corrupted).expect("still parses");
-    let description = RigDescription::ic7300();
+    let description = load_all()
+        .into_iter()
+        .map(|l| l.description)
+        .find(|d| d.id == "icom-ic-7300")
+        .expect("the IC-7300 file");
     let problems = conformance::replay(&description, &transcript).expect_err("must be caught");
     assert!(
         problems.iter().any(|p| p.contains("virtual rig answered")),

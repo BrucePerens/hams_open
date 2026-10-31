@@ -68,7 +68,7 @@ An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported`
 | `J` | `set_rit` | [vfo] offset | | 0 switches RIT off; any other offset sets it and switches RIT on. |
 | `z` | `get_xit` | [vfo] | `XIT` | |
 | `Z` | `set_xit` | [vfo] offset | | Likewise for XIT. |
-| `l` | `get_level` | [vfo] name | value only | Names: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR`, `ATT`, `PREAMP` (those the rig has). Levels are 0 to 1 floats, except `KEYSPD` (words per minute), `RAWSTR` (raw), `SWR`, `ATT` (integer decibels; only the values in the rig's `Attenuator` list) and `PREAMP` (an integer step, 0 off; Hamlib's own is decibels). |
+| `l` | `get_level` | [vfo] name | value only | Names: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR`, `ATT`, `PREAMP` (those the rig has). Levels are 0 to 1 floats, except `KEYSPD` (words per minute), `RAWSTR` (raw), `SWR`, `ATT` (integer decibels; only the values in the rig's `Attenuator` list) and `PREAMP` (an integer step, 0 off; Hamlib's own is decibels). `SWR` needs the rig's `read-swr` (a calibrated ratio): the CI-V rigs report only raw meter deflections (`read-meters`, the library's `GetMeter` and `bench_console`'s `meter`), which radioctld does not serve as `ALC`/`SWR`/`COMP_METER` yet, so on an IC-7300 those names are `RPRT -11`. |
 | `L` | `set_level` | [vfo] name value | | An out-of-range value, or an `ATT` or `PREAMP` value the rig has no step for, is `RPRT -1`. |
 | `u` | `get_func` | [vfo] name | value only | 0 or 1. Functions served: `RIT`, `XIT`. |
 | `U` | `set_func` | [vfo] name 0\|1 | | |

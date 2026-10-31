@@ -54,15 +54,22 @@ A frame is `FE FE <to> <from> <command> [data] FD`. A reply either echoes the co
 a partial frame older than 500 ms and bounds its buffer; with `echo = true` the bus echo of our own
 frame is skipped.
 
-- **Covers:** frequency (selected VFO `03`/`05`/`25 00`, the unselected VFO `25 01`), mode (`04`, `06`),
-  PTT (`1C 00`), S-meter (`15 02`), power meter (`15 11`), CW text (`17`, 1 to 30 characters), split
+- **Covers:** frequency (selected VFO `03`/`05`/`25 00`, the unselected VFO `25 01`), mode (`04`, `06`;
+  on a description that lists `data` and `data-r`, `26 00` read and `26 00 <mode> <data> <filter>` set,
+  which carry the DATA flag: `Mode::Data` is USB-D, `Mode::DataR` LSB-D, and the filter byte is the filter
+  number last reported, 1 before any read), PTT (`1C 00`), S-meter (`15 02`), power meter (`15 11`), the
+  raw meters SWR, ALC, COMP, Vd and Id (`15 12` to `15 16`, `Op::GetMeter`, a 0 to 255 deflection;
+  read-only, gate closed or open), CW text (`17`, 1 to 30 characters), split
   (`0F`), RIT/XIT on and offset (`21`), filter width by index tables (`1A 03`), levels (`14`), model id
   (`19 00`), and unsolicited transceive frames (`00`, `01`).
-- **Does not cover (deliberately not guessed):** the keyer-speed level, SWR, calibrated power and
-  S-meter (the tables are per-model measurements), switching transceive on or off (`SetTransceive` is
+- **Does not cover (deliberately not guessed):** the keyer-speed level, the calibrated SWR ratio
+  (`Op::GetSwr`), power and S-meter (Hamlib's tables are per-model measurements; radioctl reports the raw
+  deflection instead), switching transceive on or off (`SetTransceive` is
   refused: on these radios it is a menu item reached through `1A 05` with model-specific numbers, found
-  but with no field in the description format yet), data-mode and filter-number selection (`26`), the IC-9700's XIT, and the
-  Main/Sub family of command `07` on the IC-7610 and IC-9700.
+  but with no field in the description format yet), filter-number selection, AM-D and FM-D (no mode
+  name for them), the older `1A 06` data-mode form, the IC-9700's XIT, and the
+  Main/Sub family of command `07` on the IC-7610 and IC-9700. Whether `06` clears DATA on a real radio,
+  and whether the filter byte of `26 00` may be left out, are IC-7300 bench questions.
 - **VFO labels:** `Vfo::A` is the *selected* VFO and `Vfo::B` the *unselected* one (the transmit VFO in
   split). The engine does not
   track `07 00` and `07 01`, so after the radio's selection changes the labels swap. Split on the

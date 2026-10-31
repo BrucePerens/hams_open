@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::error::{ErrorKind, RigError};
 use crate::op::{Observation, Op};
-use crate::units::{Hz, Level, Mode, Vfo};
+use crate::units::{Hz, Level, Meter, Mode, Vfo};
 
 /// What the engine must report for the rig's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,6 +122,7 @@ enum OpSpec {
     GetLevel { level: String },
     SetLevel { level: String, value: u16 },
     GetSwr,
+    GetMeter { meter: String },
     GetModelId,
     GetFirmware,
 }
@@ -143,6 +144,7 @@ enum ExpectSpec {
     FilterWidth { hz: u64 },
     Level { level: String, value: u16 },
     Swr { value: u16 },
+    Meter { meter: String, value: u16 },
     ModelId { value: u16 },
     Firmware { major: u8, minor: u8 },
     Ack,
@@ -187,6 +189,10 @@ fn level(name: &str) -> Result<Level, RigError> {
     Level::from_name(name).ok_or_else(|| bad(format!("unknown level {name:?}")))
 }
 
+fn meter(name: &str) -> Result<Meter, RigError> {
+    Meter::from_name(name).ok_or_else(|| bad(format!("unknown meter {name:?}")))
+}
+
 fn mode(name: &str) -> Result<Mode, RigError> {
     Mode::from_name(name).ok_or_else(|| bad(format!("unknown mode {name:?}")))
 }
@@ -229,6 +235,7 @@ fn build_op(spec: OpSpec) -> Result<Op, RigError> {
         OpSpec::GetLevel { level: l } => Op::GetLevel(level(&l)?),
         OpSpec::SetLevel { level: l, value } => Op::SetLevel(level(&l)?, value),
         OpSpec::GetSwr => Op::GetSwr,
+        OpSpec::GetMeter { meter: m } => Op::GetMeter(meter(&m)?),
         OpSpec::GetModelId => Op::GetModelId,
         OpSpec::GetFirmware => Op::GetFirmware,
     })
@@ -255,6 +262,9 @@ fn build_expect(spec: ExpectSpec) -> Result<Expect, RigError> {
             Expect::Observation(Observation::Level(level(&l)?, value))
         }
         ExpectSpec::Swr { value } => Expect::Observation(Observation::Swr(value)),
+        ExpectSpec::Meter { meter: m, value } => {
+            Expect::Observation(Observation::Meter(meter(&m)?, value))
+        }
         ExpectSpec::ModelId { value } => Expect::Observation(Observation::ModelId(value)),
         ExpectSpec::Firmware { major, minor } => {
             Expect::Observation(Observation::Firmware(major, minor))
