@@ -25,7 +25,7 @@ Status: **verified** = evidence captured; **detected** = device and driver prese
 | Feature | Status | Evidence / notes |
 | --- | --- | --- |
 | Camera (Bison 5986:2115, UVC) | verified | `ffmpeg -f v4l2 ... /dev/video0` gave a 1280x720 frame of a real scene (mean luma 126, viewed). `uvcvideo`, PipeWire lists it. Needs no extra package. The `camera_power` switch of ideapad-laptop reads 0. |
-| Fingerprint (Synaptics 06cb:00be) | **not working** | libfprint 1.94.9 (Debian 13) lists 06cb:00be under "Known unsupported devices"; `fprintd-list` says "No devices available". The only known driver (synaTudor) is third party and needs the Windows driver, so it is not packaged. |
+| Fingerprint (Synaptics 06cb:00be) | **not working** | Not supported by libfprint 1.94.9 (Debian 13) nor by upstream master (1.94.100, 2026-09-02); adding the id to the synaptics driver was tried and fails. Details in section Fingerprint below. |
 | Wi-Fi AX201 | verified | `iwlwifi` loaded firmware 77 (`Qu-c0-hr-b0-77.ucode`), associated to the home AP. `iwl-debug-yoyo.bin` "failed to load" lines are optional-file noise. |
 | Bluetooth AX201 | verified | `ibt-19-32-4.sfi` loaded, `bluetoothctl list` shows the controller. Pairing a device not tried. |
 | Audio device, SOF + ALC298 | verified | `sof-hda-dsp` card; UCM `sof-hda-dsp` present; PipeWire sinks Speaker, 3x HDMI/DP, source Stereo Microphone. Codec subsystem 17aa:3818 matches the kernel's "Lenovo C940" quirk. |
@@ -49,9 +49,32 @@ Status: **verified** = evidence captured; **detected** = device and driver prese
 Observation: the battery reports `energy_full` 6.9 Wh against 60 Wh design (capacity 99%); either a firmware unit quirk or
 a worn pack. Not investigated.
 
+## Fingerprint
+
+Evidence, 2026-10-31, on this machine (all tested through libfprint's own probe, no raw USB writes, nothing flashed or installed
+system-wide):
+
+- Upstream libfprint master (commit 6f9479c, 2026-09-02, "1.94.100") lists 06cb:00be only in the "known unsupported devices"
+  hwdb list; the synaptics driver table has 00BD, 00C2 ... but not 00BE. Debian 13 has libfprint 1.94.9 and fprintd 1.94.5, also
+  without it. Six upstream issues ask for 00be (#296, #328, #609, #664, #757, #812), all closed without a driver.
+- fwupd (`fwupdmgr get-devices`) lists no fingerprint device here, so the `synaptics_prometheus` plugin does not claim 00be and no firmware update
+  exists on LVFS for it. Nothing was flashed.
+- Experiment: master built with only `{ .pid = 0x00BE }` added to `drivers/synaptics/synaptics.c` (scratch build under `~/fp`,
+  not installed). The sensor answers the first command (firmware: version 10.1, build 3031663, build time 2019-08-14, product 65),
+  then the driver's next command gets "Corrupted message received", and probe ends with "unsupported firmware version"; no device
+  is created. This matches upstream issue #812 byte for byte. So 00be speaks a different message format from the Prometheus
+  parts the driver handles (possibly the older "Tudor" family that only the third-party synaTudor, built from the
+  Windows driver, drives; not verified). Stopped there, as agreed: no further guessing at the protocol.
+- Same family on the HP Spectre x360 16 (06cb:00ff) is also on the unsupported list; the same one-line change is not expected
+  to work there.
+
+What would be needed: a clean-room driver for the Tudor/Metallica protocol (needs USB captures from Windows), or Synaptics
+publishing it. Follow-up: `night_shift_todo/low/yoga-c940-fingerprint-00be-needs-new-driver-*.md` in hams_com.
+Revert note: the experiment installed no packages; only build tools (`apt-get build-dep libfprint-2-2`, git) were added to the machine.
+
 ## Checklist for Bruce (needs a human)
 
-1. Fingerprint: not supported; nothing to enroll. If a future libfprint supports it: `fprintd-enroll`, then GNOME Settings, Users.
+1. Fingerprint: not supported, nothing to enroll (see Fingerprint). If a future libfprint supports it: `fprintd-enroll`, then GNOME Settings, Users.
 2. Rotate the lid to tablet position: `sudo libinput debug-events` (package `libinput-tools`) shows `SWITCH_TOGGLE tablet-mode`;
    the screen should rotate when the machine is turned and the on-screen keyboard appear.
 3. Touch the screen and draw with the pen: `sudo libinput debug-events` shows `TOUCH_DOWN` and `TABLET_TOOL_*`.
