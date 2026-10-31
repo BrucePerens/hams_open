@@ -172,14 +172,37 @@ async fn operate_is_an_rf_path_change_and_standby_is_the_safe_direction() {
         .await
         .unwrap();
 
-    // Keyed (known): neither direction passes, like a power-off.
+    // Keyed (known): standby passes like a power-off (it is the first step of one, Bruce
+    // 2026-10-31); operate does not.
     key.0.store(1, Ordering::SeqCst);
-    assert!(station
+    assert_eq!(
+        station
+            .set_channel(&ch("amp_operate"), Value::On)
+            .await
+            .unwrap_err()
+            .kind,
+        StationErrorKind::Refused
+    );
+    station
         .set_channel(&ch("amp_operate"), Value::Off)
         .await
-        .is_err());
-    assert!(bank.line(2));
+        .unwrap();
+    assert!(!bank.line(2));
+    assert_eq!(
+        station
+            .set_channel(&ch("amp_operate"), Value::On)
+            .await
+            .unwrap_err()
+            .kind,
+        StationErrorKind::Refused
+    );
+    assert!(!bank.line(2));
     // Unknown keyed state: standby passes (it can only stop RF), operate does not.
+    key.0.store(0, Ordering::SeqCst);
+    station
+        .set_channel(&ch("amp_operate"), Value::On)
+        .await
+        .unwrap();
     key.0.store(2, Ordering::SeqCst);
     station
         .set_channel(&ch("amp_operate"), Value::Off)

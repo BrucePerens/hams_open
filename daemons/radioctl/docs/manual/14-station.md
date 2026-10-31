@@ -56,6 +56,44 @@ system sits between the station and the device). The Home Assistant driver is `M
   WebSocket: no TLS is implemented;
 - every service call and session event goes to an `AuditLog`.
 
+## The interlock: what the keyed state blocks
+
+Every switching command passes one guard, which classifies the command by what it does to the RF
+path (`station::Action`). The rule was decided by Bruce on 2026-10-31: emergency operations are
+never blocked.
+
+| Command | Rig known keyed | Keyed state unknown (link down, never read) | Unkeyed |
+|---|---|---|---|
+| Power-off of any device (amplifier, rig; the amplifier's standby step) | allowed | allowed | allowed |
+| Power-on of a radio (default: its power channel is not a shared supply) | allowed | allowed | allowed |
+| Power button on, off, reboot (default) | allowed | allowed | allowed |
+| Power-on or reboot of a radio whose power channel has `shared_supply = true` | refused (`Refused`) | refused (`KeyedUnknown`) | allowed |
+| Antenna selection, amplifier power-on and operate, band switching, any other output | refused (`Refused`) | refused (`KeyedUnknown`) | allowed |
+| Emergency `all_off` | allowed | allowed | allowed |
+
+Power-off and power-on need no confirmation and no password: cutting power can only stop a
+transmission, and an off radio cannot be keyed. The **shared-supply protection** is opt-in and off
+by default: set it on a radio's power channel when that channel also feeds an amplifier, antenna
+switch or other RF-path device, so that switching the radio on cannot hot-switch RF. A reboot of
+such a radio is refused up front rather than after cutting power. The flag is accepted only on the
+power channel of a radio; anywhere else the definition is refused at load.
+
+```toml fragment
+[[channels]]
+id = "radio_pwr"
+type = "power"
+driver = "bank"
+line = 0
+safe = "off"
+shared_supply = true   # this outlet also feeds the amplifier: radio power-on waits for unkeyed
+```
+
+The station never touches the transmit gate, which belongs to `radioctl-core`, is closed by default
+and is opened only by `open_transmit_gate(TransmitPermit)`: no keyed state and no power command
+opens it. `crates/radioctl-station/tests/station_rig.rs` pins the table against a real rig actor (a
+keyed virtual IC-7300, and a dead link), `src/station.rs`, `src/manager.rs` and `tests/amplifier.rs`
+against a fake keyed source, default and opt-in alike.
+
 ## Amplifier and tuner channels
 
 ```toml fragment
@@ -72,8 +110,8 @@ safe = "off"
 
 Operate is an RF-path change: refused while anything is keyed or the keyed state is unknown, and
 refused unless the amplifier is confirmed powered on and its fault line is confirmed clear (a tripped
-or unknown line refuses). Standby is the safe direction and passes an unknown keyed state, like a
-power-off. Powering an amplifier off puts it in standby first, and the emergency all-off writes
+or unknown line refuses). Standby is the safe direction and passes every keyed state, like a
+power-off (it is the first step of one). Powering an amplifier off puts it in standby first, and the emergency all-off writes
 standby before anything else. `function = "tune"` is a momentary pulse (`pulse_ms`) that starts the
 device's own tune cycle; the station never keys a transmitter for it.
 

@@ -105,6 +105,22 @@ records the decisions that shape the code.
     relay's own time-out and the FX2 hardware time-out (`RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md`
     4.2) remain the outer layers.
 
+19. **The station interlock and the keyed state** (Bruce, 2026-10-31; emergency operations are
+    never blocked). `radioctl-station` classifies every switching command by what it does to the RF
+    path. Power-off of any device (the amplifier, the rig, the standby step an amplifier power-off
+    begins with) and power-on of a radio pass in every keyed state, known keyed and unknown alike,
+    with no confirmation and no password: cutting power can only stop a transmission, and an off
+    radio cannot be keyed. The one exception is opt-in and off by default: `shared_supply = true`
+    on a radio's power channel (it also feeds an amplifier, antenna switch or other RF-path
+    device) makes that radio's power-on an RF-path change, refused while any rig is keyed or its
+    keyed state is unknown, and its reboot is refused up front. Everything that could hot-switch an
+    RF path (antenna selection, amplifier power-on and operate, band switching, any other output)
+    is refused while any rig is known keyed or its keyed state is unknown. The emergency all-off
+    never looks at the keyed state. None of it touches the transmit gate (decision 14). History:
+    until 2026-10-30 an unknown keyed state counted as keyed and blocked everything but the
+    all-off; 2026-10-30 let power-off and the power-on of a down radio pass an unknown state
+    (confirmed 2026-10-31); 2026-10-31 settled the rest as above. Nothing else relaxes.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

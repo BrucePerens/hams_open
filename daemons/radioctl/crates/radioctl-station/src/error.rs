@@ -10,7 +10,8 @@ pub enum StationErrorKind {
     Config,
     /// An interlock or dependency refused the command; nothing was switched.
     Refused,
-    /// The keyed state of a rig could not be determined; fails closed.
+    /// The keyed state of a rig could not be determined: an RF-path command is refused (power-off
+    /// and a radio's power-on pass; Bruce, 2026-10-31).
     KeyedUnknown,
     /// The driver could not reach the hardware or it answered something unknown.
     Driver,

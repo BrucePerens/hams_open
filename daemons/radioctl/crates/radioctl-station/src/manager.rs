@@ -361,7 +361,7 @@ impl RadioManager {
             );
         }
         let (events, _) = broadcast::channel(EVENT_BUFFER);
-        let mgr = RadioManager {
+        RadioManager {
             station,
             link,
             store,
@@ -372,11 +372,7 @@ impl RadioManager {
             inner: Mutex::new(map),
             events,
             problems: Mutex::new(loaded.problems),
-        };
-        for id in mgr.ids() {
-            mgr.station.set_radio_state(&id, RadioState::Unreachable);
         }
-        mgr
     }
 
     // [@ANCHOR: radioctl_station_manager_problems]
@@ -499,8 +495,8 @@ impl RadioManager {
     }
 
     // [@ANCHOR: radioctl_station_manager_apply]
-    /// Applies a transition: updates the hint, the record's health and lifecycle, saves, and
-    /// publishes the event.
+    /// Applies a transition: updates the record's health and lifecycle, saves, and publishes the
+    /// event.
     fn apply(
         &self,
         radio: &DeviceId,
@@ -530,7 +526,6 @@ impl RadioManager {
                 }
             }
         }
-        self.station.set_radio_state(radio, t.to);
         let _ = self.persist();
         let ev = RadioEvent {
             radio: radio.clone(),
@@ -728,14 +723,22 @@ impl RadioManager {
     /// The power button of a radio with a power source: on, off or reboot, behind the interlocks
     /// and the dependency graph (the station checks them). On a radio that is already up does
     /// nothing; on a powered but Unreachable radio is refused (use reboot). A radio with no power
-    /// source has no button. The outcome is the state the radio ended in; settings are never
-    /// restored.
+    /// source has no button. Off and On pass every keyed state (Bruce, 2026-10-31) unless the
+    /// radio's power channel is a `shared_supply`; then a reboot is refused up front rather than
+    /// cutting power and refusing the power-on. The outcome is the state the radio ended in;
+    /// settings are never restored.
     pub async fn press(
         &self,
         radio: &DeviceId,
         button: Button,
     ) -> Result<ButtonReport, StationError> {
         let source = self.power_source(radio)?;
+        if button == Button::Reboot {
+            let action = self.station.power_on_action(radio)?;
+            self.station
+                .guard_action(action, &format!("reboot {}", radio.0))
+                .await?;
+        }
         let mut powered_off = Vec::new();
         if matches!(button, Button::Off | Button::Reboot) {
             powered_off = self.station.power_off(radio).await?;
@@ -862,8 +865,6 @@ impl RadioManager {
                         ..t
                     };
                     self.apply(&radio, t2, None);
-                } else {
-                    self.station.set_radio_state(&radio, resolved);
                 }
             }
             items.push(ReconcileItem {
@@ -970,7 +971,24 @@ power = { source = "always_on" }
     }
 
     fn build(path: std::path::PathBuf, boot: Option<Duration>, bank: VirtualBank) -> Rig {
-        let def = StationDef::from_toml(DEF).unwrap();
+        build_def(DEF, path, boot, bank)
+    }
+
+    /// The same station with the opt-in shared-supply protection on the radio's power channel.
+    fn shared_supply(name: &str) -> Rig {
+        let path = std::env::temp_dir().join(format!("rs-mgr-{name}-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let def = DEF.replacen("safe = \"off\"", "safe = \"off\"\nshared_supply = true", 1);
+        build_def(&def, path, Some(secs(3)), VirtualBank::new())
+    }
+
+    fn build_def(
+        toml: &str,
+        path: std::path::PathBuf,
+        boot: Option<Duration>,
+        bank: VirtualBank,
+    ) -> Rig {
+        let def = StationDef::from_toml(toml).unwrap();
         let mut b = Switchboard::new();
         for c in def.channels.clone() {
             b.add_channel(c, Arc::new(bank.clone())).unwrap();
@@ -1148,17 +1166,34 @@ power = { source = "always_on" }
             r.bank.log(),
             vec![(0, true), (1, false), (0, false), (0, true)]
         );
-        // a known keyed state refuses even the reboot
+        // a known keyed state does not stop the power button (Bruce, 2026-10-31): the radio's
+        // power channel is not a shared supply, so off, reboot and on all pass
         r.key.0.store(1, Ordering::SeqCst);
+        let rep = r.mgr.press(&dev("ic7300"), Button::Reboot).await.unwrap();
+        assert_eq!(rep.state, RadioState::Ready);
+        assert_eq!(rep.powered_off, vec![dev("ic7300")]);
+        let rep = r.mgr.press(&dev("ic7300"), Button::Off).await.unwrap();
+        assert_eq!(rep.powered_off, vec![dev("ic7300")]);
+        assert_eq!(r.bank.log().last(), Some(&(0, false)));
+        sleep(secs(1)).await; // the channel's minimum off time
+        r.mgr.press(&dev("ic7300"), Button::On).await.unwrap();
+        assert_eq!(r.mgr.state(&dev("ic7300")), Some(RadioState::Ready));
+        // with the shared-supply protection opted in, the reboot is refused up front: no write
+        let shared = shared_supply("shared");
+        shared.mgr.press(&dev("ic7300"), Button::On).await.unwrap();
+        shared.key.0.store(1, Ordering::SeqCst);
+        let before = shared.bank.log().len();
         assert_eq!(
-            r.mgr
+            shared
+                .mgr
                 .press(&dev("ic7300"), Button::Reboot)
                 .await
                 .unwrap_err()
                 .kind,
             StationErrorKind::Refused
         );
-        assert_eq!(r.mgr.state(&dev("ic7300")), Some(RadioState::Ready));
+        assert_eq!(shared.bank.log().len(), before);
+        let _ = std::fs::remove_file(&shared.path);
         // health was counted
         assert!(r.mgr.record(&dev("ic7300")).unwrap().health.failures >= 1);
         let _ = std::fs::remove_file(&r.path);
