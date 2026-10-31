@@ -436,6 +436,7 @@ async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys_the_rig() 
     drop(a);
     wait_for(|| splitter.ptt_owner().is_none() && control.bytes_received() > before).await;
     assert!(!control.state().ptt);
+}
 
 // Tests [@ANCHOR: radioctl_splitter_keyed_split_frequency]
 // Nothing is keyed on hardware: the rig is virtual, the transmit gate is closed, and the "key"
