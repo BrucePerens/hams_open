@@ -18,6 +18,7 @@ pub mod flex;
 pub mod hpsdr_net;
 pub mod kenwood;
 pub mod kenwood_ts890;
+pub mod kenwood_ts890_lan;
 pub mod virtual_flex;
 pub mod virtual_rig;
 pub mod yaesu;

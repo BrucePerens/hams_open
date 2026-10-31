@@ -130,6 +130,10 @@ pub trait Framing: Send + Sync + 'static {
     fn decode(&mut self, wire: &[u8]) -> Decoded;
     /// A keep-alive: how often to send it and what. `None` for no keep-alive.
     fn keepalive(&self) -> Option<(Duration, Vec<u8>)>;
+    // [@ANCHOR: radioctl_core_net_framing_keepalive_sent]
+    /// Called after each keep-alive was sent, so a framing can recognise and swallow the radio's
+    /// answer to it instead of passing it up as CAT data. Does nothing by default.
+    fn keepalive_sent(&mut self) {}
 }
 
 /// No framing: the CAT stream is the wire stream, nothing is greeted, nothing is kept alive.
@@ -669,6 +673,7 @@ impl Supervisor {
                         if let Err(why) = self.send(&mut wire, probe).await {
                             return SessionEnd::Lost(why);
                         }
+                        self.framing.keepalive_sent();
                         next_keepalive = Some(Instant::now() + *every);
                     }
                 }

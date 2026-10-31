@@ -23,8 +23,8 @@
 //!
 //! Not implemented: the bandscope (`BS` commands and the LAN-only `##DD2`/`##DD3` waveform data), CW
 //! text, memories, the LAN session beyond the two login frames in [`lan_connect_request`] and
-//! [`lan_login`] (a transport that sends them, with the owner's administrator or user account, is not
-//! written), and any of the many menu commands. Never run against a radio.
+//! [`lan_login`] (the session that sends them, with the owner's account, and keeps the line alive is
+//! [`crate::kenwood_ts890_lan::Ts890LanFraming`]), and any of the many menu commands. Never run against a radio.
 
 use std::time::Duration;
 
