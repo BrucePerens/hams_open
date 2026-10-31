@@ -53,8 +53,8 @@ fn main() {
         Response::Devices(devs) => {
             for d in devs {
                 println!(
-                    "{:?} {} {:04x}:{:04x} {}",
-                    d.class, d.path, d.vid, d.pid, d.product
+                    "{:?} {} {:04x}:{:04x} {} {}",
+                    d.class, d.path, d.vid, d.pid, d.manufacturer, d.product
                 );
             }
         }

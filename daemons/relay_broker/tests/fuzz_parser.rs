@@ -36,14 +36,18 @@ fn any_response() -> impl Strategy<Value = Response> {
         any::<u16>(),
         any::<u16>(),
         "[a-zA-Z ]{0,20}",
+        "[a-zA-Z ]{0,20}",
     )
-        .prop_map(|(class, path, vid, pid, product)| DeviceDescriptor {
-            class,
-            path,
-            vid,
-            pid,
-            product,
-        });
+        .prop_map(
+            |(class, path, vid, pid, product, manufacturer)| DeviceDescriptor {
+                class,
+                path,
+                vid,
+                pid,
+                product,
+                manufacturer,
+            },
+        );
     prop_oneof![
         proptest::collection::vec(dev, 0..16).prop_map(Response::Devices),
         Just(Response::Opened),
