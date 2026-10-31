@@ -75,6 +75,13 @@ One transmitter, one owner (`arbiter::PttOwner`), shared with `radioctld`.
 - The claim is made before the rig is asked and given back if the rig refuses.
 - The rig's transmit gate still applies to every keying request. With the gate closed (the default),
   every program is refused, and nothing is written to the radio ([chapter 10](10-safety.md)).
+- **Bounds.** `serve_tcp` serves at most `SplitterConfig::max_clients` connections at a time (16 by
+  default, as `radioctld`); one past that is closed before a byte is read and counted in
+  `SplitterStats::connections_refused`. A stream client silent for `SplitterConfig::idle_timeout` (600 s
+  by default, as `radioctld`) is disconnected, which gives up its transmitter and unkeys the rig
+  (`idle_disconnects`). Clients attached directly (`attach_stream`, `attach_channels`, a pty) are not
+  counted against the limit but do have the idle timeout. `ClientHandle::abort` ends a stream client's
+  reader and writer tasks with it, so the stream closes.
 
 ## Using it
 

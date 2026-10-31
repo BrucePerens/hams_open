@@ -184,9 +184,50 @@ impl Drop for RadioOnPty {
     }
 }
 
+/// A spawned `rigctld` that is killed and reaped when this is dropped, on every path out of
+/// the harness: a panic while waiting for it to listen, a failed assertion, a normal return.
+/// It is created the instant the process exists, before anything that can fail. `rigctld`
+/// forks nothing, so killing the one process is the whole job; it is left in the test's own
+/// process group on purpose, so that a Ctrl-C to `cargo test` (SIGINT to the foreground group,
+/// which runs no destructor) reaches it too.
+struct Reaped(Child);
+
+impl Reaped {
+    fn pid(&self) -> u32 {
+        self.0.id()
+    }
+}
+
+impl Drop for Reaped {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// The pids of every `rigctld` process whose command line names `slave` (so one started by
+/// another test, or another session, is not counted): what must be empty once a harness on
+/// that pty is gone.
+fn rigctld_pids_on(slave: &str) -> Vec<u32> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| {
+            let pid: u32 = entry.file_name().to_str()?.parse().ok()?;
+            let cmdline = std::fs::read(entry.path().join("cmdline")).ok()?;
+            let args: Vec<&[u8]> = cmdline.split(|b| *b == 0).collect();
+            let is_rigctld = args.first().is_some_and(|arg0| arg0.ends_with(b"rigctld"));
+            let on_slave = args.contains(&slave.as_bytes());
+            (is_rigctld && on_slave).then_some(pid)
+        })
+        .collect()
+}
+
 /// A running `rigctld` and a connection to it.
 struct Rigctld {
-    child: Child,
+    child: Reaped,
     reader: BufReader<TcpStream>,
     writer: TcpStream,
 }
@@ -195,32 +236,37 @@ fn rigctld_binary() -> String {
     std::env::var("RIGCTLD").unwrap_or_else(|_| "rigctld".to_string())
 }
 
+/// How long one answer from `rigctld` may take (see the note at its use).
+const ANSWER_TIMEOUT: Duration = Duration::from_secs(40);
+
 impl Rigctld {
     fn start(model: u32, slave: &str, baud: u32) -> Rigctld {
         let port = {
             let probe = TcpListener::bind("127.0.0.1:0").expect("free port");
             probe.local_addr().expect("addr").port()
         };
-        let child = Command::new(rigctld_binary())
-            .args([
-                "-m",
-                &model.to_string(),
-                "-r",
-                slave,
-                "-s",
-                &baud.to_string(),
-            ])
-            .args(["-T", "127.0.0.1", "-t", &port.to_string()])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .unwrap_or_else(|e| {
-                panic!(
-                    "cannot start {:?} ({e}); install Hamlib or set RIGCTLD=/path/to/rigctld",
-                    rigctld_binary()
-                )
-            });
+        let child = Reaped(
+            Command::new(rigctld_binary())
+                .args([
+                    "-m",
+                    &model.to_string(),
+                    "-r",
+                    slave,
+                    "-s",
+                    &baud.to_string(),
+                ])
+                .args(["-T", "127.0.0.1", "-t", &port.to_string()])
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "cannot start {:?} ({e}); install Hamlib or set RIGCTLD=/path/to/rigctld",
+                        rigctld_binary()
+                    )
+                }),
+        );
         let started = Instant::now();
         let stream = loop {
             match TcpStream::connect(("127.0.0.1", port)) {
@@ -237,7 +283,7 @@ impl Rigctld {
             // longer than 6 s when the machine is busy (seen: the FT-818 and TS-890S steps all
             // reading NoAnswer in a whole-workspace run, passing alone). A generous bound costs
             // time only when an answer really is missing.
-            .set_read_timeout(Some(Duration::from_secs(30)))
+            .set_read_timeout(Some(ANSWER_TIMEOUT))
             .expect("timeout");
         let writer = stream.try_clone().expect("clone");
         Rigctld {
@@ -278,10 +324,44 @@ impl Rigctld {
 
 impl Drop for Rigctld {
     fn drop(&mut self) {
+        // A polite quit first; `Reaped` kills and reaps whatever is left.
         let _ = writeln!(self.writer, "q");
-        let _ = self.child.kill();
-        let _ = self.child.wait();
     }
+}
+
+// Tests the harness itself: no `rigctld` outlives it, on the normal path or a panicking one.
+#[test]
+fn no_rigctld_outlives_its_harness() {
+    let desc = kx3();
+    let radio = RadioOnPty::start(&desc);
+    let slave = radio.slave.clone();
+    let pid = {
+        let oracle = Rigctld::start(HAMLIB_KX3, &slave, 38400);
+        let pid = oracle.child.pid();
+        assert_eq!(rigctld_pids_on(&slave), vec![pid]);
+        pid
+    };
+    assert!(
+        !std::path::Path::new(&format!("/proc/{pid}")).exists(),
+        "rigctld {pid} was not reaped when its harness was dropped"
+    );
+    assert!(rigctld_pids_on(&slave).is_empty());
+    // The panicking path: the guard runs during unwinding, before the test sees the panic.
+    let seen = Arc::new(Mutex::new(None));
+    let seen_inside = Arc::clone(&seen);
+    let slave_inside = slave.clone();
+    let outcome = std::panic::catch_unwind(move || {
+        let oracle = Rigctld::start(HAMLIB_KX3, &slave_inside, 38400);
+        *seen_inside.lock().expect("lock") = Some(oracle.child.pid());
+        panic!("a failing assertion in a test");
+    });
+    assert!(outcome.is_err());
+    let pid = seen.lock().expect("lock").expect("rigctld was started");
+    assert!(
+        !std::path::Path::new(&format!("/proc/{pid}")).exists(),
+        "rigctld {pid} outlived a panicking test"
+    );
+    assert!(rigctld_pids_on(&slave).is_empty());
 }
 
 fn field<'a>(fields: &'a [(String, String)], key: &str) -> Option<&'a str> {
