@@ -11,10 +11,14 @@
 //! - [`gpio_map`]: the GPIO function-map format (TOML) and board models, with validation.
 //! - [`channel`]: channel drivers, the virtual bank, the switchboard (commanded and confirmed
 //!   state, break-before-make selectors, momentary pulses, debounced inputs).
+//! - [`modbus`]: sans-IO Modbus framing and the coil relay driver (ASCII and RTU).
+//! - [`http_relay`]: Shelly Gen2 and Tasmota channel drivers.
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
 pub mod channel;
 pub mod error;
 pub mod gpio_map;
+pub mod http_relay;
+pub mod modbus;
 pub mod model;
 pub mod station;
