@@ -526,6 +526,11 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_transcript_build_op] (radioctl-core) Builds the command of a transcript step.
 - [@ANCHOR: radioctl:radioctl_core_transcript_build_panel] (radioctl-core) Builds the knob change of an unsolicited transcript step.
 - [@ANCHOR: radioctl:radioctl_conformance_check_decoding] (radioctl-protocols) Checks that the engine decodes a step's rx exactly as the transcript expects.
+- [@ANCHOR: radioctl:radioctl_conformance_stand_in_for] (radioctl-protocols) The radio stand-in a transcript replays against: the family's virtual radio, the virtual FlexRadio, or a stand-in for the `hpsdr_io` bridge.
+- [@ANCHOR: radioctl:radioctl_conformance_stand_in_prologue] (radioctl-protocols) What the stand-in sends before being asked anything (a FlexRadio's `V` and `H` lines), checked against a transcript's first, op-less step.
+- [@ANCHOR: radioctl:radioctl_conformance_stand_in_feed] (radioctl-protocols) The stand-in's answer to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_conformance_stand_in_front_panel] (radioctl-protocols) Turns a knob at the stand-in; names a knob it has not got.
+- [@ANCHOR: radioctl:radioctl_conformance_bridge_stand_in_feed] (radioctl-protocols) Answers the hpsdr-network engine's line protocol as the `hpsdr_io` bridge does, with no radio behind it (power 0, SWR 1.0).
 - [@ANCHOR: radioctl:radioctl_conformance_expected_inbound] (radioctl-protocols) Maps a transcript expectation to the engine's Inbound value.
 - [@ANCHOR: radioctl:radioctl_conformance_panel_change] (radioctl-protocols) Maps a transcript knob change to the virtual rig's PanelChange.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_check_timing] (radioctl-core) Refuses a `[timing]` block that would defeat or delay an unkey: `timeout_ms` outside 1..=30000, `inter_command_ms` above 2000.

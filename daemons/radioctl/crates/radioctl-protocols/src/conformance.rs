@@ -14,6 +14,7 @@ use crate::civ::CivEngine;
 use crate::elecraft::ElecraftEngine;
 use crate::kenwood::KenwoodEngine;
 use crate::kenwood_ts890::Ts890Engine;
+use crate::virtual_flex::{FlexPanel, VirtualFlex};
 use crate::virtual_rig::{PanelChange, VirtualRig};
 use crate::yaesu::YaesuEngine;
 use crate::yaesu_legacy::YaesuLegacyEngine;
@@ -71,13 +72,146 @@ fn panel_change(panel: Panel) -> PanelChange {
     }
 }
 
+/// The radio's stand-in a transcript replays against: the family's virtual radio, or, for an
+/// OpenHPSDR description, a stand-in for the `hpsdr_io` bridge the engine really talks to.
+enum StandIn {
+    Rig(Box<VirtualRig>),
+    Flex(Box<VirtualFlex>),
+    HpsdrBridge(BridgeStandIn),
+}
+
+/// What the `hpsdr_io` bridge answers on its line protocol, with no radio behind it: frequency,
+/// PTT and attenuator are kept; forward power reads 0 and SWR 1.0 (`10` tenths), as the bridge
+/// reports with no forward power. Transcripts for the ANAN files are of this protocol, not of
+/// the radio's UDP wire (chapter 7 of the manual).
+struct BridgeStandIn {
+    freq: u64,
+    ptt: bool,
+    att_db: u64,
+}
+
+impl BridgeStandIn {
+    // [@ANCHOR: radioctl_conformance_bridge_stand_in_feed]
+    /// Answers one request line as `hpsdr_io::handle_line` does.
+    fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
+        let mut out = String::new();
+        for line in String::from_utf8_lossy(bytes).lines() {
+            let mut parts = line.split_whitespace();
+            let answer = match (
+                parts.next(),
+                parts.next().and_then(|v| v.parse::<u64>().ok()),
+            ) {
+                (Some("GF"), _) => format!(
+                    "F {}
+",
+                    self.freq
+                ),
+                (Some("GP"), _) => format!(
+                    "P {}
+",
+                    u8::from(self.ptt)
+                ),
+                (Some("GW"), _) => "W 0
+"
+                .to_string(),
+                (Some("GR"), _) => "R 10
+"
+                .to_string(),
+                (Some("GA"), _) => format!(
+                    "A {}
+",
+                    self.att_db
+                ),
+                (Some("A"), Some(db)) if db <= 31 => {
+                    self.att_db = db;
+                    "OK
+"
+                    .to_string()
+                }
+                (Some("F"), Some(hz)) if u32::try_from(hz).is_ok() => {
+                    self.freq = hz;
+                    "OK
+"
+                    .to_string()
+                }
+                (Some("P"), Some(on @ (0 | 1))) => {
+                    self.ptt = on == 1;
+                    "OK
+"
+                    .to_string()
+                }
+                _ => "ERR command
+"
+                .to_string(),
+            };
+            out.push_str(&answer);
+        }
+        out.into_bytes()
+    }
+}
+
+impl StandIn {
+    // [@ANCHOR: radioctl_conformance_stand_in_for]
+    /// The stand-in for a description's family.
+    fn for_description(description: &RigDescription) -> Result<StandIn, RigError> {
+        Ok(match description.family {
+            Family::Flex => StandIn::Flex(Box::new(VirtualFlex::from_description(description)?)),
+            Family::Hpsdr => StandIn::HpsdrBridge(BridgeStandIn {
+                freq: description.default_frequency.0,
+                ptt: false,
+                att_db: 0,
+            }),
+            _ => StandIn::Rig(Box::new(VirtualRig::from_description(description)?)),
+        })
+    }
+
+    // [@ANCHOR: radioctl_conformance_stand_in_prologue]
+    /// What the radio sends before it is asked anything (a FlexRadio's `V` and `H` lines).
+    fn prologue(&self) -> Vec<u8> {
+        match self {
+            StandIn::Flex(radio) => radio.greeting(),
+            StandIn::Rig(_) | StandIn::HpsdrBridge(_) => Vec::new(),
+        }
+    }
+
+    // [@ANCHOR: radioctl_conformance_stand_in_feed]
+    /// The radio's answer to the controller's bytes.
+    fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
+        match self {
+            StandIn::Rig(rig) => rig.feed(bytes, NOW),
+            StandIn::Flex(radio) => radio.feed(bytes, NOW),
+            StandIn::HpsdrBridge(bridge) => bridge.feed(bytes),
+        }
+    }
+
+    // [@ANCHOR: radioctl_conformance_stand_in_front_panel]
+    /// Turns a knob at the radio; `Err` names a knob this stand-in has not got.
+    fn front_panel(&mut self, panel: Panel) -> Result<Vec<u8>, String> {
+        match self {
+            StandIn::Rig(rig) => Ok(rig.front_panel(panel_change(panel))),
+            StandIn::Flex(radio) => {
+                let change = match panel {
+                    Panel::Frequency(hz) => FlexPanel::Tune(hz),
+                    Panel::Mode(mode) => FlexPanel::SetMode(mode),
+                    Panel::Ptt(on) => FlexPanel::Mox(on),
+                    other => return Err(format!("a FlexRadio has no {other:?} knob here")),
+                };
+                Ok(radio.front_panel(change))
+            }
+            StandIn::HpsdrBridge(_) => Err("the hpsdr_io bridge pushes nothing unasked".into()),
+        }
+    }
+}
+
 // [@ANCHOR: radioctl_conformance_replay]
 /// Replays `transcript` against the engine and the virtual rig built from `description`.
 ///
 /// Per solicited step: the engine must encode the op to exactly `tx`, with a reply expectation
 /// that matches whether `rx` is empty; the virtual rig fed `tx` must answer exactly `rx`; the
 /// engine fed `rx` must decode exactly `expect`. Per unsolicited step: the virtual rig turning
-/// the knob must send exactly `rx`, and the engine must decode it as `expect`. Returns the number
+/// the knob must send exactly `rx`, and the engine must decode it as `expect`. A step with
+/// neither op nor knob but with `rx` is the radio speaking first (a prologue): the virtual rig's
+/// prologue must be exactly `rx` and the engine must decode it as `expect`. Returns the number
 /// of steps replayed, or every mismatch found.
 pub fn replay(description: &RigDescription, transcript: &Transcript) -> Result<usize, Vec<String>> {
     let mut problems = Vec::new();
@@ -90,7 +224,7 @@ pub fn replay(description: &RigDescription, transcript: &Transcript) -> Result<u
     }
     let (mut engine, mut rig) = match (
         engine_for(description),
-        VirtualRig::from_description(description),
+        StandIn::for_description(description),
     ) {
         (Ok(engine), Ok(rig)) => (engine, rig),
         (Err(e), _) | (_, Err(e)) => return Err(vec![e.to_string()]),
@@ -101,10 +235,22 @@ pub fn replay(description: &RigDescription, transcript: &Transcript) -> Result<u
                 replay_solicited(engine.as_mut(), &mut rig, op, step, index, &mut problems)
             }
             (None, Some(panel)) => {
-                let bytes = rig.front_panel(panel_change(*panel));
+                match rig.front_panel(*panel) {
+                    Ok(bytes) if bytes == step.rx => {}
+                    Ok(bytes) => problems.push(format!(
+                        "step {index}: virtual rig sent {} but transcript has {}",
+                        hex(&bytes),
+                        hex(&step.rx)
+                    )),
+                    Err(why) => problems.push(format!("step {index}: {why}")),
+                }
+                true
+            }
+            (None, None) if !step.rx.is_empty() => {
+                let bytes = rig.prologue();
                 if bytes != step.rx {
                     problems.push(format!(
-                        "step {index}: virtual rig sent {} but transcript has {}",
+                        "step {index}: virtual rig's prologue is {} but transcript has {}",
                         hex(&bytes),
                         hex(&step.rx)
                     ));
@@ -127,7 +273,7 @@ pub fn replay(description: &RigDescription, transcript: &Transcript) -> Result<u
 // [@ANCHOR: radioctl_conformance_replay_solicited]
 fn replay_solicited(
     engine: &mut dyn ProtocolEngine,
-    rig: &mut VirtualRig,
+    rig: &mut StandIn,
     op: &radioctl_core::op::Op,
     step: &radioctl_core::transcript::Step,
     index: usize,
@@ -151,7 +297,7 @@ fn replay_solicited(
             }
         }
     }
-    let answer = rig.feed(&step.tx, NOW);
+    let answer = rig.feed(&step.tx);
     if answer != step.rx {
         problems.push(format!(
             "step {index}: virtual rig answered {} but transcript has {}",
@@ -236,5 +382,47 @@ expect = { kind = "frequency", vfo = "a", hz = 14074000 }
         let other_rig =
             transcript::parse(&GOOD.replace("icom-ic-7300", "kenwood-ts-2000")).expect("parses");
         assert!(replay(&desc, &other_rig).expect_err("must fail")[0].contains("transcript is for"));
+    }
+
+    // Tests [@ANCHOR: radioctl_conformance_stand_in_for]
+    // Tests [@ANCHOR: radioctl_conformance_stand_in_prologue]
+    // Tests [@ANCHOR: radioctl_conformance_stand_in_front_panel]
+    // Tests [@ANCHOR: radioctl_conformance_bridge_stand_in_feed]
+    #[test]
+    fn the_stand_ins_name_a_wrong_prologue_a_missing_knob_and_a_refused_line() {
+        let flex = radioctl_core::rigfile::parse(include_str!("../../../rigs/flex-6400.toml"))
+            .expect("flex file")
+            .description;
+        let wrong_prologue = transcript::parse(
+            r#"
+schema = 1
+rig = "flex-6400"
+origin = "unit test"
+[[step]]
+rx_text = "V9.9.9.9\nH00000001\n"
+[[step]]
+panel = { kind = "signal", value = 3 }
+rx_text = "S0|nothing\n"
+"#,
+        )
+        .expect("parses");
+        let problems = replay(&flex, &wrong_prologue).expect_err("must fail");
+        assert!(
+            problems.iter().any(|p| p.contains("prologue is")),
+            "{problems:?}"
+        );
+        assert!(
+            problems.iter().any(|p| p.contains("no Signal(3) knob")),
+            "{problems:?}"
+        );
+        let anan = radioctl_core::rigfile::parse(include_str!("../../../rigs/anan-100.toml"))
+            .expect("anan file")
+            .description;
+        let mut bridge = StandIn::for_description(&anan).expect("stand-in");
+        assert!(bridge.prologue().is_empty());
+        assert_eq!(bridge.feed(b"GF\n"), b"F 7100000\n");
+        assert_eq!(bridge.feed(b"A 40\n"), b"ERR command\n", "past 31 dB");
+        assert_eq!(bridge.feed(b"P 1\nGP\nP 0\nGP\n"), b"OK\nP 1\nOK\nP 0\n");
+        assert!(bridge.front_panel(Panel::Ptt(true)).is_err());
     }
 }

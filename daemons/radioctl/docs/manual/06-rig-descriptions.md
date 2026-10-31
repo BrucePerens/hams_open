@@ -76,7 +76,15 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Twenty-four files. All are unverified. Eighteen carry a hand-written transcript; the FlexRadio and ANAN files do not (their protocols are not a plain request and reply stream, so they are tested through the actor against virtual radios instead: `flex_actor.rs`, `hpsdr_actor.rs`).
+Twenty-seven files. All are unverified. Every family has a hand-written transcript for at least one file
+(twenty-three transcripts). The FlexRadio and ANAN ones are of a different kind and say so in their
+`origin`: `flex-6400-basic.toml` is the SmartSDR text protocol as radioctl's virtual FLEX-6400 speaks it
+(it opens with the radio's prologue step, `V` and `H` lines, and the first command carries the engine's
+subscriptions); `anan-100-basic.toml` is the line protocol between the `hpsdr-network` engine and the
+`hpsdr_io` bridge, replayed against a stand-in for the bridge, because an OpenHPSDR radio has no command
+stream (its control plane is UDP datagrams the `hpsdr` crate assembles). Neither says anything about a
+radio; both families are also tested through the actor against virtual radios (`flex_actor.rs`,
+`hpsdr_actor.rs`).
 
 | Family | Files | Written from |
 |---|---|---|
@@ -102,7 +110,9 @@ A transcript (`rigs/transcripts/<id>-basic.toml`) is a list of steps: a command 
 controller sends (`tx`, hex, or `tx_text` for ASCII protocols), the bytes the radio answers (`rx` or
 `rx_text`), and what the engine must decode (`expect`). A step may instead be a front-panel change
 (`panel`): the virtual radio's knob is turned, it sends the unsolicited bytes `rx`, and the engine must
-decode them. `origin` is required and says honestly where the bytes came from.
+decode them. The first step alone may be `rx` by itself: the radio's prologue, what it sends before being
+asked anything (a FlexRadio's version and handle lines). `origin` is required and says honestly where
+the bytes came from.
 
 ```toml transcript
 schema = 1
