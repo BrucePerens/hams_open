@@ -129,6 +129,17 @@ impl KenwoodEngine {
                 "not a Kenwood description",
             ));
         }
+        // The TS-890S has its own engine (`kenwood_ts890.rs`): this one would send it `IF` and `MD`.
+        if desc
+            .kenwood
+            .as_ref()
+            .is_some_and(|k| k.dialect != radioctl_core::description::KenwoodDialect::Classic)
+        {
+            return Err(RigError::new(
+                ErrorKind::Unsupported,
+                "a TS-890S description needs Ts890Engine",
+            ));
+        }
         Ok(KenwoodEngine {
             desc,
             tokenizer: Tokenizer::default(),

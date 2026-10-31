@@ -24,7 +24,7 @@ Schema version 1 is the only one the reader accepts. Unknown fields and unknown 
 | `capabilities` | A non-empty list of capability names (appendix [A](A-capability-matrix.md)), without duplicates. |
 | `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii`, `yaesu-newcat`, `yaesu-legacy`, `flex-smartsdr` or `hpsdr-network`. The id and name are our own labels. |
 | `[civ]` | Required for `icom-civ`, forbidden for others: `address` (the rig's CI-V address), `controller` (the software's, conventionally `0xE0`), `model_id` (what the read-ID command returns), `echo` (true if the bus echoes every frame back, as a single-wire interface does). |
-| `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. |
+| `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. `[kenwood]` also takes `dialect`: `classic` (the default; TS-2000, TS-590) or `ts890` (needs a `kenwood.dialect` fact). |
 | `[yaesu_legacy]` | `yaesu-legacy` only: `stop_bits` (2 on the FT-817, FT-857 and FT-897). |
 | `[flex]` | `flex-smartsdr` only: `model` (the name the radio reports) and `scus` (spectrum capture units, 1 or 2). |
 | `[hpsdr]` | `hpsdr-network` only: `model` (`ANAN-100`), `protocol` (1 or 2) and `anan10` (true for the ANAN-10 power calibration constant). |
@@ -76,13 +76,13 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Twenty-three files, at the time of writing (commit `f54256f4`). All are unverified. Seventeen carry a hand-written transcript; the FlexRadio and ANAN files do not (their protocols are not a plain request and reply stream, so they are tested through the actor against virtual radios instead: `flex_actor.rs`, `hpsdr_actor.rs`).
+Twenty-four files. All are unverified. Eighteen carry a hand-written transcript; the FlexRadio and ANAN files do not (their protocols are not a plain request and reply stream, so they are tested through the actor against virtual radios instead: `flex_actor.rs`, `hpsdr_actor.rs`).
 
 | Family | Files | Written from |
 |---|---|---|
 | `icom-civ` | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700` | Hamlib 4.6.2 source (facts only, file and function per fact) and `rigctl --dump-caps` output. Not Icom's CI-V guides. Each has a `[scope]` block. |
 | `icom-civ` (Xiegu) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x108g` | Hamlib facts only; deliberately small (frequency, mode, PTT, signal). |
-| `kenwood-ascii` | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg` | Kenwood's published PC command references; the TS-2000 text was read from a third-party transcription of its manual, which its facts say. |
+| `kenwood-ascii` | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s` | Kenwood's published PC command references; the TS-2000 text was read from a third-party transcription of its manual, which its facts say. The TS-890S file is from its own guide (January 30, 2019), dialect `ts890`. |
 | `elecraft-ascii` | `elecraft-kx3` | Elecraft's Programmer's Reference, Rev. G5, cited by command heading and printed page. |
 | `yaesu-newcat` | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals, with page and SHA-256 per fact. |
 | `yaesu-legacy` | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d` | Yaesu's operating manuals (CAT chapters), with page and SHA-256; the one fact the manuals leave out, the level of the PTT bit, is from Hamlib 4.6.2 and labelled `hamlib-source`. No FT-818 description (no manual found). Binary transcripts. |

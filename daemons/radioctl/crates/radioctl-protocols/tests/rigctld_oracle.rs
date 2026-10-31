@@ -35,6 +35,7 @@ use serialport::{SerialPort, TTYPort};
 const HAMLIB_TS2000: u32 = 2014;
 const HAMLIB_TS590S: u32 = 2031;
 const HAMLIB_TS590SG: u32 = 2037;
+const HAMLIB_TS890S: u32 = 2041;
 const HAMLIB_KX3: u32 = 2045;
 const HAMLIB_IC7300: u32 = 3073;
 const HAMLIB_IC7610: u32 = 3078;
@@ -559,6 +560,45 @@ fn known_kenwood_divergences(file: &str) -> Vec<&'static str> {
         "kenwood-ts-590s" | "kenwood-ts-590sg" => vec!["GetLevel(AfGain)", "GetFrequency(B)"],
         _ => Vec::new(),
     }
+}
+
+// Tests [@ANCHOR: radioctl_ts890_engine_encode]
+// Tests [@ANCHOR: radioctl_ts890_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_ts890_command]
+#[test]
+fn the_ts890_file_against_hamlib_records_every_disagreement() {
+    let desc = shipped("kenwood-ts-890s");
+    let steps: Vec<Op> = icom_scenario(7_074_000, 14_060_000, 14_025_000);
+    let (divergences, refused, wire) = compare(HAMLIB_TS890S, &desc, 115_200, &steps);
+    report("kenwood-ts-890s", &divergences, &refused, &wire);
+    let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+    assert_eq!(got, known_ts890_divergences(), "{divergences:#?}");
+}
+
+/// The steps on which Hamlib's TS-890S backend and radioctl disagree.
+///
+/// Hamlib's backend reads the frequency and mode with `IF;` and sets the frequency with `SF`,
+/// neither of which is in Kenwood's TS-890S PC command guide (which has `FA`, `OM` and no `IF`;
+/// the recorded bytes show both refused by the virtual rig). So every frequency and mode step
+/// that passes through them diverges, and so do the final frequency and mode. Hamlib also put no
+/// `AG` set on the wire (only reads), so its AF level stays at the starting 30; why is not
+/// investigated. Whether a real TS-890S answers `IF;` is unknown (the guide does not list it); a
+/// bench run would settle it, and radioctl follows the guide until then.
+fn known_ts890_divergences() -> Vec<&'static str> {
+    vec![
+        "GetMode",
+        "SetFrequency(A, Hz(7074000))",
+        "GetFrequency(A)",
+        "SetMode(Lsb)",
+        "GetMode",
+        "SetFrequency(A, Hz(14060000))",
+        "SetMode(Cw)",
+        "GetFrequency(A)",
+        "GetMode",
+        "GetLevel(AfGain)",
+        "final freq_a",
+        "final mode",
+    ]
 }
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]

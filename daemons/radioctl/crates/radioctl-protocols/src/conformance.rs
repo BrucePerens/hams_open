@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use radioctl_core::description::{Family, RigDescription};
+use radioctl_core::description::{Family, KenwoodDialect, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
 use radioctl_core::error::RigError;
 use radioctl_core::transcript::{Expect, Panel, Transcript};
@@ -13,6 +13,7 @@ use radioctl_core::transcript::{Expect, Panel, Transcript};
 use crate::civ::CivEngine;
 use crate::elecraft::ElecraftEngine;
 use crate::kenwood::KenwoodEngine;
+use crate::kenwood_ts890::Ts890Engine;
 use crate::virtual_rig::{PanelChange, VirtualRig};
 use crate::yaesu::YaesuEngine;
 use crate::yaesu_legacy::YaesuLegacyEngine;
@@ -24,6 +25,14 @@ const NOW: Duration = Duration::from_secs(1);
 pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
     Ok(match description.family {
         Family::IcomCiv => Box::new(CivEngine::new(description.clone())?),
+        Family::KenwoodAscii
+            if description
+                .kenwood
+                .as_ref()
+                .is_some_and(|k| k.dialect == KenwoodDialect::Ts890) =>
+        {
+            Box::new(Ts890Engine::new(description.clone())?)
+        }
         Family::KenwoodAscii => Box::new(KenwoodEngine::new(description.clone())?),
         Family::ElecraftAscii => Box::new(ElecraftEngine::new(description.clone())?),
         Family::YaesuNewcat => Box::new(YaesuEngine::new(description.clone())?),

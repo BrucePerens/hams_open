@@ -11,13 +11,14 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 |---|---|---|---|
 | `icom-civ` | `civ::CivEngine` | IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X108G | binary frames, BCD numbers |
 | `kenwood-ascii` | `kenwood::KenwoodEngine` | TS-2000, TS-590S, TS-590SG | ASCII commands ending in `;` |
+| `kenwood-ascii`, `dialect = "ts890"` | `kenwood_ts890::Ts890Engine` | TS-890S | the same framing, its own command set |
 | `elecraft-ascii` | `elecraft::ElecraftEngine` | KX3 (K3 and KX2 share the protocol; no description yet) | ASCII, Kenwood-like with its own replies |
 | `yaesu-newcat` | `yaesu::YaesuEngine` | FT-991A, FTDX10, FTDX101D | ASCII, Kenwood-like with different widths |
 | `yaesu-legacy` | `yaesu_legacy::YaesuLegacyEngine` | FT-817ND, FT-857D, FT-897D | five-byte binary blocks, unframed answers |
 | `flex-smartsdr` | `flex::FlexEngine` | FLEX-6300, 6400, 6600, 6700 | SmartSDR line text over TCP (control plane only) |
 | `hpsdr-network` | `hpsdr_net::HpsdrEngine` | ANAN-10, ANAN-100 | a small line protocol to a bridge over the `hpsdr` crate (control plane only) |
 
-**Planned, not on `main` when this was written:** the Kenwood TS-890S dialect, K3/K4 descriptions, the
+**Planned, not on `main` when this was written:** K3/K4 descriptions, the
 FT-818 (no manual found), FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
 Kenwood and Icom LAN protocols.
 
@@ -94,12 +95,39 @@ on `;`.
 - **Split** is `FR0;FT1;` (VFO A receives, VFO B transmits) and is read from `IF;`. `IF;` also yields
   the receive VFO (its P10 field) and, from the split flag, the transmit VFO; `FT;` reads the transmit
   VFO directly (`Op::GetTxVfo`).
-- **Does not cover:** the TS-890S dialect (no `IF`, mode set with `OM`, a bandscope), CW text, power and
+- **Does not cover:** the TS-890S dialect (its own engine, below), CW text, power and
   SWR meters, the 590's `ML` limit of 20 on the SG (the engine takes 9), data mode (the 590's `IF` cannot be
   read in data mode), the `RU`/`RD` step (taken as hertz from a cleared offset, which the guides do not
   state outright), and the bandscope.
 - **Known disagreement:** the TS-590 VFO B frequency read differs from Hamlib's (chapter [4](04-api.md)
   on issue 138) and the AF gain level differs.
+
+## Kenwood TS-890S (`kenwood_ts890.rs`)
+
+The TS-890S shares the framing of the classic Kenwood family (`;`-ended ASCII, `?;` for a refusal) and
+nothing else of the command set, so it has its own engine, chosen by `[kenwood] dialect = "ts890"` in the
+description (the classic engine refuses such a description, and `conformance::engine_for` picks this one).
+Source: Kenwood's "TS-890S PC CONTROL COMMAND Reference Guide", January/30/2019 (page and SHA-256 in each
+fact of `rigs/kenwood-ts-890s.toml`).
+
+- **Differs from the classic family:** no `IF` (split is `TB`, the VFOs `FR` and `FT`, RIT and XIT `RT` and
+  `XT`, the RIT/XIT offset is read with `RF` and set with `RC` then `RU` or `RD`); the mode is `OM0;` and
+  `OM0<m>;` where the code is 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R, C LSB-D, D USB-D (no
+  `MD`); `AG` has no receiver digit; `KS` runs from 4; there is no monitor level; `SM;` answers four digits; `RA`
+  and `PA` take one digit (attenuator 0 off, 6, 12 or 18 dB; preamplifier 0 off, PRE 1, PRE 2). The transmit
+  state has no read command, so the description has no `read-ptt` (the actor learns the state from what it
+  sent). `ID;` answers `ID024;`.
+- **LAN:** the guide documents a TCP connection (UTF-8; the radio drops it after 10 s of silence): `##CN;`
+  then `##ID` with an account type, the two lengths, the account and the password. The frames are built by
+  `lan_connect_request` and `lan_login` and the answers read by `lan_reply`. **No transport sends them yet:** a
+  session needs the owner's administrator or user account from the radio's LAN menu, which belongs in the
+  station's secret store and never in a description. The commands after login are those of the serial link.
+- **Does not cover:** the bandscope (`BS0` to `BS9` and the LAN-only waveform data `##DD2`, `##DD3`), CW text,
+  memories, the menu (`EX`), the `PSQ/PKS` pin note, and LAN session keep-alive.
+- **Oracle:** Hamlib 4.6.2's TS-890S backend reads the frequency and mode with `IF;` and sets the frequency
+  with `SF`, neither of which is in the guide, so the virtual rig refuses them and the frequency and mode steps
+  diverge (`rigctld_oracle.rs` records which). A bench run would show whether a real TS-890S answers `IF;`;
+  until then radioctl follows the guide.
 
 ## Elecraft (`elecraft.rs`)
 

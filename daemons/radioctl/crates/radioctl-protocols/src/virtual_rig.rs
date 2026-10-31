@@ -98,6 +98,9 @@ impl RigState {
     }
 }
 
+#[path = "virtual_ts890.rs"]
+mod virtual_ts890;
+
 #[derive(Debug)]
 enum Wire {
     Civ {
@@ -656,6 +659,9 @@ impl VirtualRig {
 
     // [@ANCHOR: radioctl_virtual_kenwood_command]
     fn kenwood_command(&mut self, text: &str) -> Vec<u8> {
+        if self.is_ts890() {
+            return self.ts890_command(text);
+        }
         let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
         let reply = match (name, arg) {
             ("FA", "") => Some(format!("FA{:011};", self.state.freq_a.0)),

@@ -1,0 +1,141 @@
+# Conformance transcript for rigs/kenwood-ts-890s.toml (all steps are ASCII on the wire).
+# ORIGIN: written by hand from the command formats in Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77 (see the description's provenance).
+# This is NOT a recording of a radio. It proves the guide's formats, the engine, the virtual rig and the
+# description agree with each other, not that they agree with a TS-890S.
+schema = 1
+rig = "kenwood-ts-890s"
+origin = "hand-written from Kenwood's published PC command reference; not a capture of a radio"
+
+[[step]]
+op = { kind = "get-model-id" }
+tx_text = "ID;"
+rx_text = "ID024;"
+expect = { kind = "model-id", value = 24 }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "FA;"
+rx_text = "FA00014074000;"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
+tx_text = "FA00007030000;"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "FA;"
+rx_text = "FA00007030000;"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "b", hz = 7040000 }
+tx_text = "FB00007040000;"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "b" }
+tx_text = "FB;"
+rx_text = "FB00007040000;"
+expect = { kind = "frequency", vfo = "b", hz = 7040000 }
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "OM0;"
+rx_text = "OM02;"
+expect = { kind = "mode", mode = "usb" }
+
+[[step]]
+op = { kind = "set-mode", mode = "cw" }
+tx_text = "OM03;"
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "OM0;"
+rx_text = "OM03;"
+expect = { kind = "mode", mode = "cw" }
+
+[[step]]
+op = { kind = "set-mode", mode = "data" }
+tx_text = "OM0D;"
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "OM0;"
+rx_text = "OM0D;"
+expect = { kind = "mode", mode = "data" }
+
+[[step]]
+op = { kind = "get-signal" }
+tx_text = "SM;"
+rx_text = "SM0030;"
+expect = { kind = "signal", value = 30 }
+
+[[step]]
+op = { kind = "set-split", on = true }
+tx_text = "TB1;"
+
+[[step]]
+op = { kind = "get-split" }
+tx_text = "TB;"
+rx_text = "TB1;"
+expect = { kind = "split", on = true }
+
+[[step]]
+op = { kind = "set-rit", on = true }
+tx_text = "RT1;"
+
+[[step]]
+op = { kind = "get-rit" }
+tx_text = "RT;"
+rx_text = "RT1;"
+expect = { kind = "rit", on = true }
+
+[[step]]
+op = { kind = "set-rit-offset", hz = -120 }
+tx_text = "RC;RD00120;"
+
+[[step]]
+op = { kind = "get-rit-offset" }
+tx_text = "RF;"
+rx_text = "RF10120;"
+expect = { kind = "rit-offset", hz = -120 }
+
+[[step]]
+op = { kind = "set-level", level = "af-gain", value = 128 }
+tx_text = "AG128;"
+
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx_text = "AG;"
+rx_text = "AG128;"
+expect = { kind = "level", level = "af-gain", value = 128 }
+
+[[step]]
+op = { kind = "set-level", level = "keyer-speed", value = 4 }
+tx_text = "KS004;"
+
+[[step]]
+op = { kind = "get-level", level = "keyer-speed" }
+tx_text = "KS;"
+rx_text = "KS004;"
+expect = { kind = "level", level = "keyer-speed", value = 4 }
+
+[[step]]
+op = { kind = "set-level", level = "attenuator", value = 12 }
+tx_text = "RA2;"
+
+[[step]]
+op = { kind = "get-level", level = "attenuator" }
+tx_text = "RA;"
+rx_text = "RA2;"
+expect = { kind = "level", level = "attenuator", value = 12 }
+
+[[step]]
+op = { kind = "set-level", level = "preamp", value = 2 }
+tx_text = "PA2;"
+
+[[step]]
+op = { kind = "get-level", level = "preamp" }
+tx_text = "PA;"
+rx_text = "PA2;"
+expect = { kind = "level", level = "preamp", value = 2 }
