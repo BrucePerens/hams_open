@@ -43,7 +43,7 @@ A feature is called implemented only if this manual's author found it in the cod
 | [14. The station: power, switches, rotators, amplifiers](14-station.md) | use `radioctl-station`: the radio manager over real actors, Home Assistant, amplifier channels, rotators |
 | [Appendix A. Capability matrix](A-capability-matrix.md) | summary of the generated Hamlib 4.6.2 matrix and the radioctl rigs |
 | [Appendix B. Glossary](B-glossary.md) | terms and abbreviations |
-| [Rig support list](../RIG_SUPPORT.md), [coverage plan](../RIG_COVERAGE_PLAN.md), [volunteer testing](../VOLUNTEER_TESTING.md) | see which of Hamlib's 313 models have a description and which are verified, what is planned, and how to test your radio with the read-only `rig_selftest` |
+| [Rig support list](../RIG_SUPPORT.md), [coverage plan](../RIG_COVERAGE_PLAN.md), [volunteer testing](../VOLUNTEER_TESTING.md) | see which of Hamlib's 313 models have a description and which are verified, what is planned, and how to test your radio with the read-only `radioctl-selftest` (it uploads its report to hams.com) |
 | [Appendix C. radioctld command reference](C-radioctld-command-reference.md) | every command, response format and error code |
 
 ## Which chapters for which goal

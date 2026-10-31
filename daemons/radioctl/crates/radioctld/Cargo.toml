@@ -18,6 +18,11 @@ path = "src/lib.rs"
 name = "radioctld"
 path = "src/main.rs"
 
+# The read-only volunteer self-test for every rig description (docs/VOLUNTEER_TESTING.md).
+[[bin]]
+name = "radioctl-selftest"
+path = "src/bin/radioctl_selftest.rs"
+
 [features]
 # Differential tests against Hamlib's own `rigctl` client (tests/rigctl_oracle.rs). Needs the
 # `rigctl` binary (or RIGCTL=/path) and fails loudly without it; off by default so a machine
@@ -32,10 +37,21 @@ radioctl-splitter = { path = "../radioctl-splitter", default-features = false }
 radioctl-station = { path = "../radioctl-station" }
 serde = { workspace = true }
 toml = { workspace = true }
+serde_json = { workspace = true }
+# The self-test's report upload: TLS with the ring provider and the Mozilla root list, and a UUID's randomness.
+webpki-roots = "1"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+getrandom = "0.4"
+# The self-update: the relay's own signed bundles (zipsign, the same pinned version the relay's updater uses), their
+# sha256, and the one executable read out of the zip.
+zipsign-api = { version = "=0.2.2", default-features = false, features = ["verify-zip"] }
+sha2 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # The binary owns the one runtime (multi-thread); the library only takes a Handle.
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros", "signal"] }
 
 [dev-dependencies]
+zipsign-api = { version = "=0.2.2", features = ["sign-zip", "verify-zip"] }
 proptest = "1"
 # The virtual_radio_pty example makes a pseudo-terminal for a virtual radio.
 serialport = { version = "4.10", default-features = false }
