@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::runtime::Handle;
-use tokio::sync::{broadcast, mpsc, oneshot, Notify};
+use tokio::sync::{broadcast, mpsc, oneshot, watch, Notify};
 use tokio::time::{sleep_until, timeout_at, Instant};
 
 use crate::capability::{Capability, CapabilitySet};
@@ -42,6 +42,7 @@ use crate::event::{Change, RigEvent, Source};
 use crate::op::{Alarm, Field, Observation, Op};
 use crate::poll::{PollConfig, PollSchedule};
 use crate::scope::ScopeFrame;
+use crate::serial::LinkStatus;
 use crate::transport::Transport;
 use crate::txstate::TxState;
 use crate::units::{Hz, Mode, Vfo};
@@ -72,6 +73,14 @@ pub struct RigOptions {
     pub scope_capacity: usize,
     /// The status-change callback, if any.
     pub callback: Option<Callback>,
+    /// The transport's link status, when the transport can report it
+    /// ([`crate::serial::SerialLink::watch`]). The serial supervisor keeps the byte stream alive
+    /// across a port loss (writes are dropped and counted, not failed), so without this the actor
+    /// would never learn that the port went away or came back. With it, the actor marks the link
+    /// down (and refuses commands with `LinkDown`) while the port is `Reconnecting`, and on every
+    /// reopen after the first it marks the link up and unkeys the rig before serving any other
+    /// command: the rig may have been keyed when the link dropped.
+    pub link_watch: Option<watch::Receiver<LinkStatus>>,
     /// The longest the rig may transmit in one go before the actor unkeys it on its own
     /// ([`DEFAULT_MAX_TRANSMIT`] when the owner sets none). Measured from the moment the rig is
     /// keyed or Morse is sent; `Duration::MAX` disables the limit, which the owner must decide.
@@ -92,6 +101,7 @@ impl Default for RigOptions {
             stream_capacity: 64,
             scope_capacity: 16,
             callback: None,
+            link_watch: None,
             max_transmit: DEFAULT_MAX_TRANSMIT,
             heartbeat: None,
         }
@@ -320,6 +330,8 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         keyed_since: None,
         max_transmit: options.max_transmit,
         heartbeat: options.heartbeat,
+        link_watch: options.link_watch,
+        link_generation: 0,
     };
     runtime.spawn(actor.run());
     Ok(RigHandle {
@@ -842,16 +854,24 @@ struct Actor<E, T> {
     keyed_since: Option<Instant>,
     max_transmit: Duration,
     heartbeat: Option<Duration>,
+    /// The transport's link status, when it has one ([`RigOptions::link_watch`]).
+    link_watch: Option<watch::Receiver<LinkStatus>>,
+    /// The `generation` of the last `Connected` status seen; 0 before the first.
+    link_generation: u32,
 }
 
 impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     // [@ANCHOR: radioctl_core_actor_run]
     async fn run(mut self) {
+        // A status that changed before the actor started (the port was lost during spawn) is
+        // not an edge the watch would deliver: look once.
+        self.link_status_changed().await;
         loop {
             let due = self.poll.next_due();
             let link = self.shared.link_up.load(Ordering::Acquire);
             let watchdog = self.watchdog_due();
             let shared = Arc::clone(&self.shared);
+            let has_watch = self.link_watch.is_some();
             tokio::select! {
                 biased;
                 command = self.emergency.recv() => match command {
@@ -861,6 +881,15 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     }
                     None => break,
                 },
+                changed = link_changed(self.link_watch.as_mut()), if has_watch => {
+                    if changed {
+                        self.link_status_changed().await;
+                    } else {
+                        // The supervisor is gone: the link will not come back.
+                        self.link_watch = None;
+                        self.link_down("link status watch closed");
+                    }
+                }
                 _ = wait_until(watchdog) => self.watchdog_fire().await,
                 _ = shared.heartbeat_wake.notified(), if watchdog.is_some() => {}
                 command = self.normal.recv() => match command {
@@ -880,6 +909,42 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             }
         }
         self.unkey_on_stop().await;
+    }
+
+    // [@ANCHOR: radioctl_core_actor_link_status_changed]
+    /// Applies the transport's current link status. `Reconnecting` and `Closed` take the link
+    /// down (every command is refused with `LinkDown`, reported once as [`Alarm::LinkDown`]).
+    /// `Connected` with a generation the actor has not seen brings the link up; when it is a
+    /// reopen (generation above the first seen), the rig is unkeyed through the fail-closed path
+    /// before any queued command is served, because the rig may have been keyed when the port
+    /// was lost and nothing could unkey it meanwhile. The unkey comes first, then the event
+    /// [`Alarm::LinkRestored`], so a subscriber that reacts to the event finds the rig unkeyed.
+    async fn link_status_changed(&mut self) {
+        let status = match self.link_watch.as_mut() {
+            Some(watch) => watch.borrow_and_update().clone(),
+            None => return,
+        };
+        match status {
+            LinkStatus::Connected { generation, .. } => {
+                let first = self.link_generation == 0;
+                if generation == self.link_generation {
+                    return;
+                }
+                self.link_generation = generation;
+                let was_up = self.shared.link_up.swap(true, Ordering::AcqRel);
+                if first && was_up {
+                    return;
+                }
+                self.transcript
+                    .push_back(format!("LINK UP generation {generation}"));
+                self.unkey_fail_closed("link restored", Source::Api).await;
+                self.alarm(Alarm::LinkRestored, Source::Api);
+            }
+            LinkStatus::Reconnecting { last_error, .. } => {
+                self.link_down(&format!("port lost: {last_error}"));
+            }
+            LinkStatus::Closed => self.link_down("serial supervisor closed"),
+        }
     }
 
     // [@ANCHOR: radioctl_core_actor_unkey_on_stop]
@@ -936,6 +1001,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Alarm::HeartbeatLapsed => "caller heartbeat lapsed",
             Alarm::UnkeyFailed => "unkey failed",
             Alarm::LinkDown => "link down",
+            Alarm::LinkRestored => "link restored",
         };
         self.unkey_fail_closed(why, Source::Watchdog).await;
     }
@@ -1436,6 +1502,16 @@ fn deadline_after(from: Instant, wait: Duration) -> Instant {
             }
         }
     })
+}
+
+// [@ANCHOR: radioctl_core_link_changed]
+/// Waits for the next link status change; `false` when the watch's sender is gone. Pending
+/// forever without a watch (the branch that calls it is disabled then).
+async fn link_changed(watch: Option<&mut watch::Receiver<LinkStatus>>) -> bool {
+    match watch {
+        Some(watch) => watch.changed().await.is_ok(),
+        None => std::future::pending::<bool>().await,
+    }
 }
 
 // [@ANCHOR: radioctl_core_wait_until]

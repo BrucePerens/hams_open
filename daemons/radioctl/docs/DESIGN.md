@@ -57,7 +57,9 @@ records the decisions that shape the code.
     caller's runtime. Control lines are an immediate call on a second handle of the port, never
     behind a queued read. A vanished device moves the link to reconnecting with exponential backoff
     and the port is looked up again by USB id; bytes written meanwhile are dropped and counted, and
-    the command ends in its own typed timeout. Keying through RTS or DTR (`LineKeyer`) is refused
+    the command ends in its own typed timeout. The actor follows the status through
+    `RigOptions::link_watch`: down (commands refused, `Alarm::LinkDown`) while reconnecting, and
+    on the reopen an unkey pass before any other command, then `Alarm::LinkRestored`. Keying through RTS or DTR (`LineKeyer`) is refused
     unless the rig's transmit gate is open; releasing is always allowed. Opening asserts DTR/RTS in
     the kernel for an instant before the library makes them inactive; ports without modem lines say
     so (`LineControl::Unmanaged`) instead of the library pretending.

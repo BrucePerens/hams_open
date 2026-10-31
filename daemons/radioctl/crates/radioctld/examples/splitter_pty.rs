@@ -47,6 +47,10 @@ impl ProtocolEngine for AnyEngine {
     }
 }
 
+/// The serial monitor of the rig, if the rig is on a serial port; held for the program's life.
+static SERIAL_MONITOR: std::sync::OnceLock<radioctl_core::serial::SerialMonitor> =
+    std::sync::OnceLock::new();
+
 async fn open_rig(rig_id: &str, transport: &str) -> Result<RigHandle, Box<dyn Error>> {
     let rigs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs");
     let text = std::fs::read_to_string(rigs.join(format!("{rig_id}.toml")))?;
@@ -63,11 +67,18 @@ async fn open_rig(rig_id: &str, transport: &str) -> Result<RigHandle, Box<dyn Er
         .ok_or("TRANSPORT is `virtual` or PATH:BAUD")?;
     let target = PortTarget::Path(PathBuf::from(path));
     let link = open_serial(&handle, SerialConfig::new(target, baud.parse()?)).await?;
-    Ok(spawn_current(
-        engine,
-        link.transport,
-        RigOptions::default(),
-    )?)
+    // The actor watches the port and unkeys on every reopen. The monitor (control lines, status)
+    // is kept with the rig handle so the link object outlives every client of the splitter.
+    let options = RigOptions {
+        link_watch: Some(link.watch()),
+        ..RigOptions::default()
+    };
+    let (transport, monitor) = link.into_parts();
+    let rig = spawn_current(engine, transport, options)?;
+    SERIAL_MONITOR
+        .set(monitor)
+        .map_err(|_| "serial monitor already set")?;
+    Ok(rig)
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]

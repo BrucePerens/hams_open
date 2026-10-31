@@ -262,12 +262,60 @@ impl SerialLink {
     // [@ANCHOR: radioctl_core_serial_link_stats]
     /// A snapshot of the counters.
     pub fn stats(&self) -> SerialStats {
-        SerialStats {
-            bytes_in: self.counters.bytes_in.load(Ordering::Relaxed),
-            bytes_out: self.counters.bytes_out.load(Ordering::Relaxed),
-            bytes_dropped: self.counters.bytes_dropped.load(Ordering::Relaxed),
-            reconnects: self.counters.reconnects.load(Ordering::Relaxed),
-        }
+        snapshot(&self.counters)
+    }
+
+    // [@ANCHOR: radioctl_core_serial_link_into_parts]
+    /// Splits the link into the byte stream (for [`crate::rig::spawn`]) and the rest: the
+    /// control lines, the status watch and the counters, which the owner keeps for the life of
+    /// the rig. Dropping the monitor does not close the port; dropping the stream does.
+    pub fn into_parts(self) -> (DuplexStream, SerialMonitor) {
+        (
+            self.transport,
+            SerialMonitor {
+                control: self.control,
+                status: self.status,
+                counters: self.counters,
+            },
+        )
+    }
+}
+
+/// The part of a [`SerialLink`] that stays with the owner after the byte stream went to the
+/// actor: the control lines, the link status and the counters.
+pub struct SerialMonitor {
+    /// The control lines.
+    pub control: SerialControl,
+    status: watch::Receiver<LinkStatus>,
+    counters: Arc<Counters>,
+}
+
+impl SerialMonitor {
+    // [@ANCHOR: radioctl_core_serial_monitor_status]
+    /// The current link status.
+    pub fn status(&self) -> LinkStatus {
+        self.status.borrow().clone()
+    }
+
+    // [@ANCHOR: radioctl_core_serial_monitor_watch]
+    /// A receiver that wakes on every status change.
+    pub fn watch(&self) -> watch::Receiver<LinkStatus> {
+        self.status.clone()
+    }
+
+    // [@ANCHOR: radioctl_core_serial_monitor_stats]
+    /// A snapshot of the counters.
+    pub fn stats(&self) -> SerialStats {
+        snapshot(&self.counters)
+    }
+}
+
+fn snapshot(counters: &Counters) -> SerialStats {
+    SerialStats {
+        bytes_in: counters.bytes_in.load(Ordering::Relaxed),
+        bytes_out: counters.bytes_out.load(Ordering::Relaxed),
+        bytes_dropped: counters.bytes_dropped.load(Ordering::Relaxed),
+        reconnects: counters.reconnects.load(Ordering::Relaxed),
     }
 }
 

@@ -1042,3 +1042,92 @@ async fn an_unkey_is_never_refused_when_the_emergency_queue_is_full() {
         "the overflow rode on a queued unkey"
     );
 }
+
+// Tests [@ANCHOR: radioctl_core_actor_link_status_changed]
+// Tests [@ANCHOR: radioctl_core_link_changed]
+// Tests [@ANCHOR: radioctl_core_handle_link_up]
+#[tokio::test(start_paused = true)]
+async fn a_port_loss_takes_the_link_down_and_a_reopen_unkeys_before_serving_the_queue() {
+    use radioctl_core::serial::LinkStatus;
+    let (status_tx, status_rx) = tokio::sync::watch::channel(LinkStatus::Connected {
+        port: std::path::PathBuf::from("/dev/ttyUSB0"),
+        generation: 1,
+    });
+    let options = RigOptions {
+        link_watch: Some(status_rx),
+        ..quiet()
+    };
+    let (rig, control) = civ(options, Duration::from_millis(5));
+    let mut events = rig.events();
+    rig.open_transmit_gate(permit());
+    rig.set_ptt(true).await.expect("key");
+    assert!(control.state().ptt);
+    assert!(rig.link_up());
+
+    // The USB adapter is unplugged: the supervisor reconnects underneath and drops writes
+    // meanwhile. The actor must know, refuse commands with LinkDown (not a misleading
+    // Timeout) and raise the alarm.
+    status_tx
+        .send(LinkStatus::Reconnecting {
+            attempt: 1,
+            last_error: "no such device".into(),
+        })
+        .expect("send");
+    sleep(Duration::from_millis(10)).await;
+    assert!(!rig.link_up());
+    assert_eq!(
+        rig.frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect_err("down")
+            .kind,
+        ErrorKind::LinkDown
+    );
+    let mut alarms = Vec::new();
+    while let Ok(Some(event)) = timeout(Duration::from_millis(50), events.next()).await {
+        for change in event.changes {
+            if let Observation::Alarm(alarm) = change.new {
+                alarms.push(alarm);
+            }
+        }
+    }
+    assert_eq!(alarms, vec![Alarm::LinkDown]);
+
+    // A read arrives in the same instant as the reopen; the actor must run the unkey pass
+    // before serving it. With the rig answering in 5 ms (paused time), the unkey's round trip
+    // ends at +5 ms and the read's, written only after it, at +10 ms.
+    status_tx
+        .send(LinkStatus::Connected {
+            port: std::path::PathBuf::from("/dev/ttyUSB0"),
+            generation: 2,
+        })
+        .expect("send");
+    let reader = {
+        let rig = rig.clone();
+        tokio::spawn(async move { rig.frequency(Vfo::A, Freshness::Fresh).await })
+    };
+    sleep(Duration::from_millis(7)).await;
+    assert!(rig.link_up());
+    assert!(!control.state().ptt, "the reopen must unkey the rig first");
+    assert!(
+        !reader.is_finished(),
+        "the queued read must wait for the unkey pass"
+    );
+    sleep(Duration::from_millis(10)).await;
+    reader
+        .await
+        .expect("task")
+        .expect("the read is served after the unkey");
+    assert_eq!(
+        rig.cached(Field::Ptt).map(|c| c.value),
+        Some(Observation::Ptt(false))
+    );
+    let mut alarms = Vec::new();
+    while let Ok(Some(event)) = timeout(Duration::from_millis(50), events.next()).await {
+        for change in event.changes {
+            if let Observation::Alarm(alarm) = change.new {
+                alarms.push(alarm);
+            }
+        }
+    }
+    assert_eq!(alarms, vec![Alarm::LinkRestored]);
+}

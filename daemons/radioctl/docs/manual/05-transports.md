@@ -106,11 +106,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let link = open_serial(&Handle::current(), config).await?;
     println!("link: {:?}", link.status());
 
-    let rig = spawn_current(
-        ElecraftEngine::new(description)?,
-        link.transport,
-        RigOptions::default(),
-    )?;
+    // The actor watches the port: a reopen after a USB glitch unkeys the rig first. The monitor
+    // (control lines, status, counters) stays alive here for the life of the rig.
+    let options = RigOptions {
+        link_watch: Some(link.watch()),
+        ..RigOptions::default()
+    };
+    let (transport, _monitor) = link.into_parts();
+    let rig = spawn_current(ElecraftEngine::new(description)?, transport, options)?;
     let frequency = rig.frequency(Vfo::A, Freshness::Fresh).await?;
     println!("VFO A: {} Hz", frequency.value.0);
     Ok(())
@@ -143,12 +146,18 @@ What the caller sees, and does not see:
 
 - Bytes written while the port is down are **dropped and counted** (`SerialStats::bytes_dropped`).
   The command that wrote them ends in its own typed `Timeout`.
-- The byte stream held by the actor stays open throughout. The actor therefore does **not** notice
-  the unplug: `RigHandle::link_up()` stays true, and a dead cable looks like timeouts. The place to
-  see `Reconnecting` is `SerialLink::status()` or `watch()`.
-- `radioctld` drops the `SerialLink` after taking its stream, so it cannot observe the link status at
-  all; to its clients an unplugged radio is a run of `RPRT -5` or `-6` errors, and `\get_powerstat`
-  keeps answering 1. **Open item:** surface the link status in the daemon and in `RigHandle`.
+- The byte stream held by the actor stays open throughout, so the actor learns of the unplug only
+  through the status: pass `link.watch()` as `RigOptions::link_watch` (the example above does;
+  `radioctld` and the splitter example do). The actor then marks the link down while the port is
+  `Reconnecting` (`RigHandle::link_up()` is false, every command is refused with `LinkDown`, the
+  loss is reported once as `Alarm::LinkDown`) and, on the reopen, marks it up again and **unkeys
+  the radio before serving any queued command**, because the radio may have been keyed when the
+  port was lost and nothing could unkey it meanwhile; `Alarm::LinkRestored` follows the unkey, and
+  an unkey that fails is `Alarm::UnkeyFailed` as always. Without the watch, a dead cable looks like
+  timeouts and `link_up()` stays true.
+- `SerialLink::into_parts()` gives the byte stream for `rig::spawn` and a `SerialMonitor` (the
+  control lines, `status()`, `watch()`, `stats()`) that the owner keeps for the life of the rig.
+  `radioctld` keeps it in the served rig; it is never dropped while the rig is served.
 - Nothing is re-initialised after a reconnect. A radio that lost power comes back in its own default
   state (for example with transceive off), and the cache still holds the old values until polling or
   a read replaces them. The proposal's explicit lifecycle (`Off`, `Booting`, `Ready`, ...) is
@@ -193,6 +202,14 @@ pub fn release(&self) -> Result<(), RigError>
   ports that have none (a pty, a CDC ACM gadget): the lines are never touched and `set_line`
   reports them unsupported.
 - With `Flow::Hardware`, RTS belongs to flow control; do not also key with RTS.
+- **Installation note (the open glitch).** Opening a serial port asserts DTR and RTS for a short
+  time before `open_port` makes them inactive: the operating system and the USB-serial driver do
+  it, not radioctl, and it happens again on **every reconnect** after a USB glitch, when nobody is
+  watching. An interface that keys the transmitter from RTS or DTR must tolerate that glitch: use
+  one that needs the line held for longer than the open takes (an RC delay or a keying circuit with
+  a time constant of tens of milliseconds), or key through CAT instead, or put a hardware stop in
+  the PTT line (the FX2 switch board of `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.2). Do not
+  wire a bare RTS or DTR line to a transmitter's PTT on a port that reconnects on its own.
 - A `LineKeyer` that is dropped (its holder returned or panicked while keyed) makes its line inactive, so
   a lost keyer does not leave RTS or DTR asserted. That covers the keyer only; nothing releases a line
   when the whole process is killed.

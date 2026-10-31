@@ -14,7 +14,7 @@ use radioctl_core::error::RigError;
 use radioctl_core::op::Op;
 use radioctl_core::rig::{spawn, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
-use radioctl_core::serial::{open_serial, SerialConfig};
+use radioctl_core::serial::{open_serial, SerialConfig, SerialMonitor};
 use radioctl_core::tcp::{connect_tcp, TcpConfig};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
@@ -49,6 +49,9 @@ pub struct BuiltRig {
     pub service: Arc<RigService>,
     /// Control of the virtual rig behind the service (state, front panel), for virtual rigs.
     pub virtual_control: Option<VirtualRigControl>,
+    /// The serial port's control lines, status and counters, for serial rigs. Kept for the life
+    /// of the rig: the actor's link watch and the keyer's lines depend on it.
+    pub serial_link: Option<SerialMonitor>,
 }
 
 // [@ANCHOR: radioctld_rigs_load_description]
@@ -92,6 +95,7 @@ pub async fn build_rig(
     }
     let fail = |e: RigError| format!("rig {}: {e}", rig.name);
     let mut virtual_control = None;
+    let mut serial_link = None;
     let handle: RigHandle = match &rig.transport {
         TransportConfig::Virtual { reply_delay } => {
             let virtual_rig = VirtualRig::from_description(&description).map_err(fail)?;
@@ -103,7 +107,13 @@ pub async fn build_rig(
             let link = open_serial(runtime, SerialConfig::new(target.clone(), *baud))
                 .await
                 .map_err(fail)?;
-            spawn(runtime, engine, link.transport, options).map_err(fail)?
+            // The actor watches the port: a port loss takes the link down, a reopen unkeys the
+            // rig before any other command (RigOptions::link_watch). The control lines and
+            // the status stay with the service so the link object is never dropped early.
+            options.link_watch = Some(link.watch());
+            let (transport, serial) = link.into_parts();
+            serial_link = Some(serial);
+            spawn(runtime, engine, transport, options).map_err(fail)?
         }
         TransportConfig::Tcp { address } => {
             let stream = connect_tcp(address.as_str(), &TcpConfig::default())
@@ -126,6 +136,7 @@ pub async fn build_rig(
     Ok(BuiltRig {
         service,
         virtual_control,
+        serial_link,
     })
 }
 

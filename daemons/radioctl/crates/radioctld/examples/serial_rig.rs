@@ -41,11 +41,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let link = open_serial(&Handle::current(), config).await?;
     println!("link: {:?}", link.status());
 
-    let rig = spawn_current(
-        ElecraftEngine::new(description)?,
-        link.transport,
-        RigOptions::default(),
-    )?;
+    // The actor watches the port: a reopen after a USB glitch unkeys the rig first. The monitor
+    // (control lines, status, counters) stays alive here for the life of the rig.
+    let options = RigOptions {
+        link_watch: Some(link.watch()),
+        ..RigOptions::default()
+    };
+    let (transport, _monitor) = link.into_parts();
+    let rig = spawn_current(ElecraftEngine::new(description)?, transport, options)?;
     let frequency = rig.frequency(Vfo::A, Freshness::Fresh).await?;
     println!("VFO A: {} Hz", frequency.value.0);
     Ok(())

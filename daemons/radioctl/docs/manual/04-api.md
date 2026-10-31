@@ -40,6 +40,7 @@ pub struct RigOptions {
     pub stream_capacity: usize,
     pub scope_capacity: usize,
     pub callback: Option<Callback>,
+    pub link_watch: Option<watch::Receiver<LinkStatus>>,
     pub max_transmit: Duration,
     pub heartbeat: Option<Duration>,
 }
@@ -54,7 +55,7 @@ pub struct PollConfig {
 ```
 
 Defaults: queue of 64, 2 second deadline, polling on (fast fields 250 ms to 2 s, meters 1 s to 5 s),
-a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, a 180 second transmit limit (`DEFAULT_MAX_TRANSMIT`), no heartbeat, no callback.
+a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, a 180 second transmit limit (`DEFAULT_MAX_TRANSMIT`), no heartbeat, no callback, no link watch (`link_watch`: a serial link's `watch()`, chapter [5](05-transports.md), so the actor follows the port across a reconnect and unkeys when it is back).
 
 ## Rig handles
 
