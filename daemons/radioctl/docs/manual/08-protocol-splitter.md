@@ -63,7 +63,9 @@ One transmitter, one owner (`arbiter::PttOwner`), shared with `radioctld`.
 
 - The first client to key owns the transmitter. Another client's keying request, or its Morse text, is
   refused (CI-V NG, TS-2000 `?;`) until the owner unkeys or goes away. The refusal is counted as a
-  `ptt_conflict`.
+  `ptt_conflict`. Morse puts RF on the air, so a client that sends Morse claims the transmitter exactly as
+  a key does (the claim is given back if the rig refuses), and a Morse sender that goes away unkeys the
+  rig.
 - Unkeying is open to every client and clears the ownership.
 - A client that disconnects while owning the transmitter unkeys the rig. For a pty, a program closing it
   counts as disconnecting; the endpoint stays for the next program.

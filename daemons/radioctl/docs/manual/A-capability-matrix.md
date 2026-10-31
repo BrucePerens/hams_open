@@ -43,38 +43,108 @@ Derived protocol families (models, of the 312 dumped):
 (The remainder: Icom marine 4, Icom PCR 4, parallel 2, virtual 2, other 2.)
 
 What the Hamlib 4.6.2 matrix says about the families radioctl has not covered yet is a measure of the
-work ahead: 31 legacy Yaesu models, 9 FlexRadio network models and 79 Icom CI-V models against the four
-Icom radios described.
+work ahead: 79 Icom CI-V models against the four Icom and three Xiegu radios described, 31 legacy Yaesu
+models against three, and 9 FlexRadio network models against four.
 
 ## radioctl's rig descriptions
 
-Fourteen files in `rigs/`, at the time of writing. A `yes` means the description lists the capability
-(and therefore the handle accepts the operation); the engine must also implement it (chapter
-[7](07-protocol-engines.md)). Everything is unverified. `transceive` for the Icom and Xiegu radios
-means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot switch
-transceive on.
+Twenty-one files in `rigs/`, at the time of writing (commit `7590e737`). A `yes` means the description
+lists the capability (and therefore the handle accepts the operation); the engine must also implement it
+(chapter [7](07-protocol-engines.md)). Everything is unverified. `transceive` for the Icom and Xiegu
+radios means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot
+switch transceive on. For the FlexRadio files it means the engine subscribes to the radio's status.
+The FlexRadio files claim no S-meter, power or SWR because those arrive on streams the engine does not
+read. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.toml` for the source of truth.
 
-| Capability | 7300 | 705 | 7610 | 9700 | G90 | X6100 | X108G | TS-2000 | 590S | 590SG | KX3 | 991A | DX10 | DX101D |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `read-frequency` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `set-frequency` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `second-vfo` | yes | yes | yes | yes | - | - | - | yes | yes | yes | yes | yes | yes | - |
-| `read-mode` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `set-mode` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `read-ptt` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `set-ptt` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `read-signal` | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes | yes |
-| `read-power` | yes | yes | yes | yes | - | - | - | - | - | - | yes | yes | yes | yes |
-| `send-cw` | yes | yes | yes | yes | - | - | - | - | - | - | yes | - | - | - |
-| `transceive` | yes | yes | yes | yes | - | - | - | yes | yes | yes | yes | yes | yes | yes |
-| `split` | yes | yes | yes | yes | - | - | - | yes | yes | yes | yes | yes | - | - |
-| `rit-xit` | yes | yes | yes | yes | - | - | - | yes | yes | yes | yes | yes | yes | yes |
-| `filter` | yes | yes | yes | yes | - | - | - | - | - | - | yes | - | - | - |
-| `levels` | yes | yes | yes | yes | - | - | - | yes | yes | yes | yes | yes | yes | yes |
-| `read-swr` | - | - | - | - | - | - | - | - | - | - | yes | - | - | - |
-| `identify` | yes | yes | yes | yes | - | - | - | yes | yes | yes | yes | yes | yes | yes |
-| `[scope]` block | yes | yes | yes | yes | - | - | - | - | - | - | - | - | - | - |
+**Icom and Xiegu (CI-V)**
 
-Columns: Icom IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X108G; Kenwood TS-2000, TS-590S,
-TS-590SG; Elecraft KX3; Yaesu FT-991A, FTDX10, FTDX101D. The tool that produced this table is a few lines
-of Python over `rigs/*.toml`; run `grep capabilities rigs/*.toml` to see the source of truth.
+| Capability | IC-7300 | IC-705 | IC-7610 | IC-9700 | G90 | X6100 | X108G |
+|---|---|---|---|---|---|---|---|
+| `read-frequency` | yes | yes | yes | yes | yes | yes | yes |
+| `set-frequency` | yes | yes | yes | yes | yes | yes | yes |
+| `second-vfo` | yes | yes | yes | yes | - | - | - |
+| `read-mode` | yes | yes | yes | yes | yes | yes | yes |
+| `set-mode` | yes | yes | yes | yes | yes | yes | yes |
+| `read-ptt` | yes | yes | yes | yes | yes | yes | yes |
+| `set-ptt` | yes | yes | yes | yes | yes | yes | yes |
+| `read-signal` | yes | yes | yes | yes | yes | yes | yes |
+| `read-power` | yes | yes | yes | yes | - | - | - |
+| `send-cw` | yes | yes | yes | yes | - | - | - |
+| `transceive` | yes | yes | yes | yes | - | - | - |
+| `split` | yes | yes | yes | yes | - | - | - |
+| `rit-xit` | yes | yes | yes | yes | - | - | - |
+| `filter` | yes | yes | yes | yes | - | - | - |
+| `levels` | yes | yes | yes | yes | - | - | - |
+| `read-swr` | - | - | - | - | - | - | - |
+| `identify` | yes | yes | yes | yes | - | - | - |
+| `[scope]` block | yes | yes | yes | yes | - | - | - |
+
+**Kenwood and Elecraft**
+
+| Capability | TS-2000 | TS-590S | TS-590SG | KX3 |
+|---|---|---|---|---|
+| `read-frequency` | yes | yes | yes | yes |
+| `set-frequency` | yes | yes | yes | yes |
+| `second-vfo` | yes | yes | yes | yes |
+| `read-mode` | yes | yes | yes | yes |
+| `set-mode` | yes | yes | yes | yes |
+| `read-ptt` | yes | yes | yes | yes |
+| `set-ptt` | yes | yes | yes | yes |
+| `read-signal` | yes | yes | yes | yes |
+| `read-power` | - | - | - | yes |
+| `send-cw` | - | - | - | yes |
+| `transceive` | yes | yes | yes | yes |
+| `split` | yes | yes | yes | yes |
+| `rit-xit` | yes | yes | yes | yes |
+| `filter` | - | - | - | yes |
+| `levels` | yes | yes | yes | yes |
+| `read-swr` | - | - | - | yes |
+| `identify` | yes | yes | yes | yes |
+| `[scope]` block | - | - | - | - |
+
+**Yaesu**
+
+| Capability | FT-991A | FTDX10 | FTDX101D | FT-817ND | FT-857D | FT-897D |
+|---|---|---|---|---|---|---|
+| `read-frequency` | yes | yes | yes | yes | yes | yes |
+| `set-frequency` | yes | yes | yes | yes | yes | yes |
+| `second-vfo` | yes | yes | - | - | - | - |
+| `read-mode` | yes | yes | yes | yes | yes | yes |
+| `set-mode` | yes | yes | yes | yes | yes | yes |
+| `read-ptt` | yes | yes | yes | yes | yes | yes |
+| `set-ptt` | yes | yes | yes | yes | yes | yes |
+| `read-signal` | yes | yes | yes | yes | yes | yes |
+| `read-power` | yes | yes | yes | yes | yes | yes |
+| `send-cw` | - | - | - | - | - | - |
+| `transceive` | yes | yes | yes | - | - | - |
+| `split` | yes | - | - | yes | yes | yes |
+| `rit-xit` | yes | yes | yes | yes | yes | yes |
+| `filter` | - | - | - | - | - | - |
+| `levels` | yes | yes | yes | - | - | - |
+| `read-swr` | - | - | - | - | - | - |
+| `identify` | yes | yes | yes | - | - | - |
+| `[scope]` block | - | - | - | - | - | - |
+
+**FlexRadio**
+
+| Capability | 6300 | 6400 | 6600 | 6700 |
+|---|---|---|---|---|
+| `read-frequency` | yes | yes | yes | yes |
+| `set-frequency` | yes | yes | yes | yes |
+| `second-vfo` | - | - | - | - |
+| `read-mode` | yes | yes | yes | yes |
+| `set-mode` | yes | yes | yes | yes |
+| `read-ptt` | yes | yes | yes | yes |
+| `set-ptt` | yes | yes | yes | yes |
+| `read-signal` | - | - | - | - |
+| `read-power` | - | - | - | - |
+| `send-cw` | yes | yes | yes | yes |
+| `transceive` | yes | yes | yes | yes |
+| `split` | - | - | - | - |
+| `rit-xit` | - | - | - | - |
+| `filter` | yes | yes | yes | yes |
+| `levels` | yes | yes | yes | yes |
+| `read-swr` | - | - | - | - |
+| `identify` | yes | yes | yes | yes |
+| `[scope]` block | - | - | - | - |
+

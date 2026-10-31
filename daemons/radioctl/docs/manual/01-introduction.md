@@ -9,7 +9,7 @@ knob on the front panel, and tells your program. It is a Rust workspace of four 
 | Crate | What it holds |
 |---|---|
 | `radioctl-core` | Typed values (`Hz`, `Mode`, `Vfo`), the capability model, errors, the rig actor and its `RigHandle`, the event callback and stream, polling, the rig description file format, and the transports (serial, USB-serial, TCP). |
-| `radioctl-protocols` | One sans-IO protocol engine per radio family (Icom CI-V, Kenwood, Elecraft, Yaesu newcat), the virtual rigs that stand in for radios in tests, and the transcript replay. |
+| `radioctl-protocols` | One sans-IO protocol engine per radio family (Icom CI-V, Kenwood, Elecraft, Yaesu newcat, Yaesu legacy, FlexRadio SmartSDR), the virtual rigs that stand in for radios in tests, and the transcript replay. |
 | `radioctl-splitter` | Virtual IC-7300 CI-V and TS-2000 CAT endpoints (pseudo-terminals or TCP) so several outside programs can share one radio. |
 | `radioctld` | A server for the Hamlib `rigctld` text protocol, as a library plus the `radioctld` binary. |
 
@@ -34,7 +34,7 @@ so that:
 - every fact about a radio says where it came from and what has been checked.
 
 It is **not** a replacement for Hamlib today. Hamlib 4.6.2 lists 313 radio models ([appendix A](A-capability-matrix.md));
-radioctl has descriptions for 14. It is not a drop-in `libhamlib`, and a C ABI is planned but absent
+radioctl has descriptions for 21. It is not a drop-in `libhamlib`, and a C ABI is planned but absent
 ([chapter 13](13-roadmap.md)). The plan is hybrid: radios move to radioctl one at a time, once a
 description has been verified on real hardware, and Hamlib stays the fallback and the test oracle.
 
@@ -63,8 +63,9 @@ A [glossary](B-glossary.md) covers the ham-radio terms (VFO, split, RIT, CI-V an
 Phase 0/1 foundation, as the crate README says. What is implemented:
 
 - **Implemented:** the rig actor with a priority queue, deadlines, cache with age, adaptive polling,
-  status callback and event stream; engines for Icom CI-V (also used for Xiegu), Kenwood ASCII,
-  Elecraft ASCII and Yaesu newcat ASCII; virtual rigs; serial, USB-serial-by-id and TCP transports
+  status callback and event stream, and a fail-closed unkey when a transmit command goes unanswered or
+  the last handle is dropped; engines for Icom CI-V (also used for Xiegu), Kenwood ASCII, Elecraft ASCII,
+  Yaesu newcat ASCII, Yaesu legacy five-byte CAT and the FlexRadio SmartSDR control plane; virtual rigs; serial, USB-serial-by-id and TCP transports
   with reconnect for serial; the splitter; `radioctld`; the rig description format with provenance;
   transcript replay; differential tests against Hamlib's own binaries.
 - **Unverified:** all of the above against real radios. No radio description has a single
@@ -73,9 +74,9 @@ Phase 0/1 foundation, as the crate README says. What is implemented:
   a manual or from our own simulator. A passing test means the description, the engine and the virtual
   rig agree with each other, not that they agree with a radio.
 - **Planned, not in the code:** a dead-man timer, a maximum transmit duration, unkey on link loss, an
-  `active_tx_frequency` operation, scope operations through the API, the legacy Yaesu family, the
-  Kenwood TS-890S dialect, network and SDR radios, a C ABI, rotators and amplifiers, and external
-  switches. [Chapter 13](13-roadmap.md) is the complete list.
+  `active_tx_frequency` operation, scope operations through the API, the Kenwood TS-890S dialect,
+  FlexRadio streams (meters, spectrum, audio) and discovery on the wire, HPSDR/ANAN and the Kenwood and
+  Icom LAN radios as radioctl rigs, a C ABI, rotators and amplifiers, and external switches. [Chapter 13](13-roadmap.md) is the complete list.
 
 There is no transmit path to real hardware that has been exercised. Everything that can transmit
 fails closed behind the gate ([chapter 10](10-safety.md)), and no test in the repository keys a

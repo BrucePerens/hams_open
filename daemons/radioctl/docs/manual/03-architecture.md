@@ -61,6 +61,15 @@ answer: a value, or a typed `RigError`. The actor never hangs a caller. Behaviou
 - **Preemption.** Unkeying jumps the queue and abandons a command that is waiting for a reply (that
   command ends with `Cancelled`). It never interrupts a write in progress. The abandoned command's
   late answer, if it arrives, reaches the cache as an unsolicited observation.
+- **Fail closed on the unknown.** If a command that transmits (`SetPtt(true)`, `SendCw`) was written to
+  the radio and never answered, or its write timed out part way, the actor sends an unkey itself before
+  it reports the timeout, because the radio may be keyed. That unkey is not preemptible, waits at most
+  the engine's reply timeout, and leaves `FAIL CLOSED unkey: <why>` in the transcript. When the last
+  `RigHandle` is dropped and the actor stops, it does the same for a radio whose cache says keyed or whose
+  transmit gate was open. It is best effort and does nothing if the link is down or the radio cannot be
+  unkeyed by command.
+- **Saturating deadlines.** A timeout too large for the clock (`Duration::MAX`) becomes the farthest
+  representable instant instead of a panic.
 - **Cache.** A successful set updates the cache at once, including Kenwood-style sets that have no
   reply; polling reconciles it with the radio later.
 - **Link loss.** If the transport read or write fails or ends, the actor marks the link down and
@@ -140,7 +149,7 @@ Chapter [4](04-api.md) shows both.
 
 | Thing | Runs on | Stops when |
 |---|---|---|
-| Rig actor | the caller's runtime | every `RigHandle` clone is dropped |
+| Rig actor | the caller's runtime | every `RigHandle` clone is dropped (after its fail-closed unkey) |
 | Callback dispatcher | its own OS thread | the rig is dropped (it finishes what is queued) |
 | Serial supervisor and reader | OS threads, one supervisor per port and one reader per connection | the byte stream handed to the actor is dropped |
 | Pty reader and writer (splitter) | two OS threads per endpoint | the `PtyEndpoint` is dropped |
@@ -154,8 +163,9 @@ Cancellation rules, from the code:
 - Every command has a deadline enforced inside the actor, not by the caller's future. A command whose
   deadline has passed before it runs ends with `Timeout`.
 - The emergency unkey is the only preemption.
-- Shutting a rig down means dropping its handles. For `radioctld`, `Daemon::stop` closes the
-  listeners and clients and unkeys a rig that a client was keying.
+- Shutting a rig down means dropping its handles; the actor then unkeys a radio that may be keyed, as
+  above. For `radioctld`, `Daemon::stop` closes the listeners and clients and always sends each rig an
+  unkey.
 
 ## What the tests prove about this chapter
 

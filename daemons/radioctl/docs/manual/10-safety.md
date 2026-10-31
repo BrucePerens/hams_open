@@ -117,12 +117,30 @@ Unkeying is repeated on a timeout like any non-transmit command (up to the descr
 more times, within the deadline). It is not a guarantee that the radio stopped: it is a command, and a
 radio can ignore a command.
 
+## When the outcome is unknown: fail closed
+
+Three cases where the radio may be transmitting and nobody asked it to stop, handled in the actor itself,
+below every client:
+
+1. **An unanswered key.** A `SetPtt(true)` or `SendCw` that was written and never answered, or whose write
+   timed out part way, is followed at once by an unkey, before the `Timeout` is reported. The unkey is not
+   preemptible and waits at most the engine's reply timeout. Without this, `radioctld` and the splitter would
+   have released their claim on a rig that was in fact keyed, and no later disconnect would have unkeyed it.
+2. **The last handle is dropped.** The actor unkeys a rig whose cache says keyed, or whose gate was open,
+   before it ends. A holder that returns, panics or is cancelled does not leave RF on the air.
+3. **A dropped `LineKeyer`** makes its RTS or DTR line inactive.
+
+Each is written to the transcript as `FAIL CLOSED unkey: <why>`. All are best effort: they do nothing if
+the link is down or the radio cannot be unkeyed by command, and nobody is told if the unkey itself fails.
+They do not cover a process that is killed or hangs (below).
+
 ## PTT ownership
 
 In the splitter and in `radioctld`, a `PttOwner` (`radioctl-splitter/src/arbiter.rs`) gives the
 transmitter to the first client that keys it. Another client's key or Morse request is refused until the
-owner unkeys, or disconnects, which unkeys the rig. A claim is made before the rig is asked and given
-back if the rig refuses. Stopping `radioctld` unkeys a rig a client was keying. These behaviours are
+owner unkeys, or disconnects, which unkeys the rig. Morse claims the transmitter the same way a key does,
+so a Morse sender that disconnects unkeys the rig too. A claim is made before the rig is asked and given
+back if the rig refuses. Stopping `radioctld` always sends each rig an unkey. These behaviours are
 tested (`radioctld/tests/arbitration.rs`, `radioctl-splitter/tests/splitter.rs`), including a refused
 transmit command leaving no byte on the rig's transport. The library API itself has no owner concept:
 two tasks holding handles can both key; ownership is the service's job.
@@ -137,8 +155,8 @@ relay on top of radioctl; the point of the table is to avoid claiming otherwise.
 | # | Requirement | In radioctl today |
 |---|---|---|
 | 1 | Fail closed; a new radio is receive-only | **Implemented**: the gate (handle, actor, `radioctld`). |
-| 2 | Per-rig dead-man timer independent of the caller; dead actor, dropped link or crashed process forces unkey where supported | **Not implemented.** Nothing unkeys a rig whose caller vanished, except `radioctld` unkeying for a disconnecting owner or at shutdown, and the splitter for a disconnecting owner. |
-| 3 | Documented, tested carrier drop after link loss | **Not implemented.** The actor reports `LinkDown` and stops; it does not send an unkey. |
+| 2 | Per-rig dead-man timer independent of the caller; dead actor, dropped link or crashed process forces unkey where supported | **Partly.** No timer. The actor unkeys after an unanswered key and when its last handle is dropped; `radioctld` and the splitter unkey for a disconnecting owner and at shutdown. A killed or hung process is not covered. |
+| 3 | Documented, tested carrier drop after link loss | **Not implemented.** On a failed transport the actor reports `LinkDown` and sends nothing; an unkey cannot be written to a link that is down. |
 | 4 | One transmitter per radio, maximum transmit duration, ownership modes | **Partly**: one owner per radio in the splitter and `radioctld`. No maximum duration; no ownership modes (shared receive, exclusive, transmit-locked). |
 | 5 | Frequency, mode, power and privilege limits per operator; identification timers | **Not in radioctl.** It is the relay's job; the gate is the hook it uses. |
 | 6 | Drive and signal limits, telemetry-based derating, SWR inhibit | **Not in radioctl.** SWR and power are readable on some radios; nothing acts on them. |
@@ -159,6 +177,7 @@ It does:
 - refuse transmit-capable commands while a rig's gate is closed, at two points, and in `radioctld`
   before anything is queued;
 - put unkeying ahead of everything and keep a slow callback or a slow other rig from delaying it;
+- unkey a radio that may be keyed when a transmit command goes unanswered or the last handle is dropped;
 - bound every command by a deadline and answer it with a typed error;
 - never repeat a transmit command;
 - let only one client at a time key a rig behind the splitter or `radioctld`, and unkey for an owner that
@@ -166,9 +185,10 @@ It does:
 
 It does **not**:
 
-- stop a transmission when the program that keyed it dies, hangs or loses its connection to the radio
-  outside those two services. `kill -9` of a process using the library leaves the radio keyed; a CAT
-  radio stays keyed until its own time-out, if it has one. There is no dead-man.
+- stop a transmission when the program that keyed it is killed or hangs. `kill -9` of a process using the
+  library leaves the radio keyed; a CAT radio stays keyed until its own time-out, if it has one. A program that
+  merely returns or panics is covered (the last handle drops, above); a hung one holding a handle is not.
+  There is no dead-man timer.
 - limit how long a transmission lasts.
 - unkey on link loss, or tell the application that a serial link is reconnecting (chapter
   [5](05-transports.md)). During a reconnect, unkey commands are dropped with the rest of the bytes and

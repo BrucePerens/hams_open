@@ -15,7 +15,7 @@ transport exists; that comment is out of date.
 |---|---|---|
 | Serial port by path | **Implemented**, unverified on a radio | yes, with backoff |
 | USB serial by vendor id, product id and serial number | **Implemented** (Linux sysfs; other systems through the `serialport` crate) | yes, finds the port again |
-| TCP (network serial server, a radio's own CAT port, `rigctld`) | **Implemented** | no: bounded connect only |
+| TCP (network serial server, a radio's own CAT port, a FlexRadio's SmartSDR port 4992 (unverified), `rigctld`) | **Implemented** | no: bounded connect only |
 | Pseudo-terminal | works as a serial path with `LineControl::Unmanaged` | as serial |
 | Native USB (`nusb`), UDP, Ethernet radios (Kenwood LAN, Icom LAN, SmartSDR, HPSDR) | **Planned** | |
 
@@ -193,6 +193,9 @@ pub fn release(&self) -> Result<(), RigError>
   ports that have none (a pty, a CDC ACM gadget): the lines are never touched and `set_line`
   reports them unsupported.
 - With `Flow::Hardware`, RTS belongs to flow control; do not also key with RTS.
+- A `LineKeyer` that is dropped (its holder returned or panicked while keyed) makes its line inactive, so
+  a lost keyer does not leave RTS or DTR asserted. That covers the keyer only; nothing releases a line
+  when the whole process is killed.
 - `LineKeyer` is a library part only: no engine and neither `radioctld` nor the splitter uses it.
   PTT through `Op::SetPtt` is always a CAT command today.
 

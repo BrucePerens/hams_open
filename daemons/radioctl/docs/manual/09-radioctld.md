@@ -18,7 +18,8 @@ radioctld --config FILE [--check]
 `--check` validates the configuration and every rig description it names, prints
 `radioctld: configuration ok, N rig(s)`, and exits without listening. Without it the daemon brings up
 every rig, prints one `radioctld: NAME listening on ADDRESS` line each, and runs until Ctrl-C. On exit
-it stops the listeners and clients and unkeys any rig that a client was keying. The binary builds one
+it stops the listeners and clients and always sends each rig an unkey, whoever is recorded as holding the
+transmitter (a rig keyed by Morse, or one whose owner record was lost, has no owner). The binary builds one
 multi-thread runtime (two workers) for all rigs and hands its `Handle` to the library, which creates
 none.
 
@@ -136,7 +137,7 @@ transmits"; `S 1 VFOB` turns it on, and `S` with any other transmit VFO is `RPRT
 
 | Difference | Why |
 |---|---|
-| PTT has one owner: another client's `T 1` or `b` is `RPRT -9` until the owner unkeys or disconnects, which unkeys the rig. Anyone may unkey. | One transmitter, one owner; a vanished client must not leave a carrier on the air. |
+| PTT has one owner: another client's `T 1` or `b` is `RPRT -9` until the owner unkeys or disconnects, which unkeys the rig. `b` (Morse) claims the transmitter as `T 1` does. Anyone may unkey. | One transmitter, one owner; a vanished client must not leave a carrier on the air. |
 | Transmit commands are refused up front with `RPRT -9` while the rig's transmit gate is closed or its link is down; nothing is queued. `\dump_state` advertises a transmit range only when the gate is open. | Fail closed. |
 | `rig.transmit = false` is the default. | The gate is opened by the operator, never implied. |
 | The raw `send_cmd` is not served. | An escape hatch is a separate, explicit capability, never on by default. |
@@ -145,7 +146,7 @@ transmits"; `S 1 VFOB` turns it on, and `S` with any other transmit VFO is `RPRT
 | `X` and `\set_split_freq_mode` accept only the mode the rig is already in. | A transmit mode different from the receive mode is not modelled. |
 | Passbands for rigs without filter control are the mode's typical width. | Honest about what is unknown; `M` with a passband of 0 or -1 keeps the rig's width. |
 | Levels are scaled to 0 to 1 (or the rig's own integer for keyer speed) by the ranges the engines enforce. `names::level_range` holds them, and `tests/levels.rs` pins them to the engines. | Hamlib's levels are floats; the engines work in the radio's units. |
-| Levels served: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR`. The CI-V keyer speed is not served. | Only what an engine carries. |
+| Levels served: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR`, each only where the description has the capability and the engine has a range for it. The CI-V keyer speed is not served; the legacy Yaesu family has no levels; the Flex levels are percentages. | Only what an engine carries. |
 | Functions served: `RIT` and `XIT`. Others Hamlib knows are `RPRT -11`. | Same. |
 | One listener per rig. | As one `rigctld` per radio. |
 

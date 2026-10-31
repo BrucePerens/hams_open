@@ -190,7 +190,7 @@ pub enum RetryHint {
 
 | `ErrorKind` | Meaning | Default retry hint |
 |---|---|---|
-| `Timeout` | no answer before the deadline | `Now` |
+| `Timeout` | no answer before the deadline. For a transmit command the actor has already sent an unkey (chapter [3](03-architecture.md)). | `Now` |
 | `Rejected` | the radio refused (CI-V NG, Kenwood `?;`) | `Never` |
 | `Unsupported` | the rig, its description or its engine lacks the operation | `Never` |
 | `LinkDown` | the transport is down or the actor stopped | `After(1 s)` |
@@ -200,7 +200,7 @@ pub enum RetryHint {
 | `QueueFull` | the command queue is full; nothing was waited for | `Now` |
 
 `transcript_tail` holds the last 16 wire lines before the failure, oldest first, as direction-prefixed
-hex: `TX 46 41 3b`, `RX ...`, `?? ...` for bytes that formed no frame, and `LINK DOWN <reason>`. Errors
+hex: `TX 46 41 3b`, `RX ...`, `?? ...` for bytes that formed no frame, `LINK DOWN <reason>`, and `FAIL CLOSED unkey: <reason>` when the actor unkeyed after an unanswered transmit command. Errors
 raised before a command reaches the actor (unsupported, gate closed in the handle, queue full) have an
 empty tail. `RigError` implements `std::error::Error`, so `?` works in any `Box<dyn Error>` context.
 

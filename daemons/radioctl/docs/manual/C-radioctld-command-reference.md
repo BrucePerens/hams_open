@@ -71,7 +71,7 @@ An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported`
 | `L` | `set_level` | [vfo] name value | | An out-of-range value is `RPRT -1`. |
 | `u` | `get_func` | [vfo] name | value only | 0 or 1. Functions served: `RIT`, `XIT`. |
 | `U` | `set_func` | [vfo] name 0\|1 | | |
-| `b` | `send_morse` | text | | At most 64 characters. Transmits: gate, link and ownership rules as `T 1`. |
+| `b` | `send_morse` | text | | At most 64 characters. Transmits: gate, link and ownership rules as `T 1`, and it claims the transmitter the same way. |
 | `1` | `dump_caps` | | free text, then `RPRT 0` | |
 | | `dump_state` | | free text | Generated from the description. A transmit range is advertised only while the gate is open. |
 | | `chk_vfo` | | `ChkVFO` | 1 in `vfo_mode`, else 0. |

@@ -22,9 +22,11 @@ Schema version 1 is the only one the reader accepts. Unknown fields and unknown 
 |---|---|
 | `schema` | Must be `1`. |
 | `capabilities` | A non-empty list of capability names (appendix [A](A-capability-matrix.md)), without duplicates. |
-| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii` or `yaesu-newcat`. The id and name are our own labels. |
+| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii`, `yaesu-newcat`, `yaesu-legacy` or `flex-smartsdr`. The id and name are our own labels. |
 | `[civ]` | Required for `icom-civ`, forbidden for others: `address` (the rig's CI-V address), `controller` (the software's, conventionally `0xE0`), `model_id` (what the read-ID command returns), `echo` (true if the bus echoes every frame back, as a single-wire interface does). |
 | `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. |
+| `[yaesu_legacy]` | `yaesu-legacy` only: `stop_bits` (2 on the FT-817, FT-857 and FT-897). |
+| `[flex]` | `flex-smartsdr` only: `model` (the name the radio reports) and `scus` (spectrum capture units, 1 or 2). |
 | `[scope]` | Optional, `icom-civ` only: `receivers` (1 or 2), `line_length`, `samples_per_frame`, `amplitude_max`, `spans_hz`. |
 | `[timing]` | `timeout_ms` (wait for a reply), `retries` (extra attempts after a timeout; a transmit command is never repeated), `inter_command_ms` (minimum gap between writes). |
 | `[defaults]` | `frequency_hz` and `mode` of a virtual rig of this model at start. They say nothing about the radio. |
@@ -72,7 +74,7 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Fourteen files, at the time of writing. All are unverified and all carry hand-written transcripts.
+Twenty-one files, at the time of writing (commit `7590e737`). All are unverified and all carry hand-written transcripts.
 
 | Family | Files | Written from |
 |---|---|---|
@@ -81,6 +83,8 @@ Fourteen files, at the time of writing. All are unverified and all carry hand-wr
 | `kenwood-ascii` | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg` | Kenwood's published PC command references; the TS-2000 text was read from a third-party transcription of its manual, which its facts say. |
 | `elecraft-ascii` | `elecraft-kx3` | Elecraft's Programmer's Reference, Rev. G5, cited by command heading and printed page. |
 | `yaesu-newcat` | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals, with page and SHA-256 per fact. |
+| `yaesu-legacy` | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d` | Yaesu's operating manuals (CAT chapters), with page and SHA-256; the one fact the manuals leave out, the level of the PTT bit, is from Hamlib 4.6.2 and labelled `hamlib-source`. No FT-818 description (no manual found). Binary transcripts. |
+| `flex-smartsdr` | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's published SmartSDR API wiki (commit and pages named in `flex.rs`); control plane only. |
 
 The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
 have no description (address and a usable document are missing). Chapter [7](07-protocol-engines.md)
@@ -229,8 +233,8 @@ verified = { state = "unverified" }
 7. **Document and merge** following the repository rules: a pull request, the linters, the test
    results in the PR text, and the manual's chapter 6 table updated.
 
-**A new family** (a radio with a different protocol). The Yaesu newcat commit touched exactly these
-places, in this order; the compiler finds most of them if you add the variant first.
+**A new family** (a radio with a different protocol). The Yaesu newcat, Yaesu legacy and Flex commits
+touched these places, in this order; the compiler finds most of them if you add the variant first.
 
 1. `radioctl-core/src/description.rs`: a `Family` variant and a parameters struct (such as `YaesuParams`)
    and the field in `RigDescription`.

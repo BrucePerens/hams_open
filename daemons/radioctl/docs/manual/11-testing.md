@@ -81,7 +81,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 Set `RIGCTLD=/path` or `RIGCTL=/path` if the binaries are not on the `PATH`. The tests ran and passed
 for this manual's release. Recorded disagreements at that time: the TS-590 and TS-590SG VFO B frequency
-and AF gain; the IC-7610's split flow and VFO B; the IC-9700's VFO B; the Xiegu X108G's final VFO A. The Yaesu files have none. Each is an open question for a bench check, not a verdict.
+and AF gain; the IC-7610's split flow and VFO B; the IC-9700's VFO B; the Xiegu X108G's final VFO A; for the legacy Yaesu files, Hamlib's reads of frequency and mode fail against the virtual radio (its writes agree, and its FT-817 backend is not run because it sends an EEPROM read no manual documents). The Yaesu newcat files have none. The Flex files are not run through the oracle at all. Each is an open question for a bench check, not a verdict.
 
 ## Property tests and fuzzing
 
