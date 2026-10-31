@@ -1,8 +1,11 @@
 # FX2LP station I/O firmware and shared core (hams_open)
 
-Status: bring-up image, tested on one real board on 2026-10-30. SPDX: AGPL-3.0-or-later
-(firmware and host tool). The schematic/hardware licence is still undecided
-(`hams_com/docs/proposals/HAMS_USB_DEVICE_PROTOCOL.md` section 7).
+Status: bring-up image, tested on one real board on 2026-10-30. Licence: AGPL-3.0-or-later
+for the firmware, the shared core, the host tool and the tests (full text in `LICENSE` in this
+directory; every source file carries the SPDX identifier). The schematic and layout licence for the
+reference output stage is not decided yet (an open-hardware licence such as CERN-OHL-S-2.0 is the
+candidate; `hams_com/docs/proposals/HAMS_USB_DEVICE_PROTOCOL.md` section 7). Every device under the
+USB identifier stays under an OSI-approved open-source licence (the pid.codes promise).
 
 This is the first piece of the "Station I/O" device type of the hams USB device family
 (`HAMS_USB_DEVICE_PROTOCOL.md`, `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` sections 4.2 to 4.4).
