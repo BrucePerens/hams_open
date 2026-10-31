@@ -165,6 +165,24 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "yaesu-ftdx101d": [1040],
 }
 
+# Hamlib model id -> why radioctl cannot support the model (status `not applicable`). Only for models with
+# no documented serial, USB or network protocol that a program may speak itself; a reason is mandatory.
+_WINRADIO_DRIVER = (
+    "WiNRADiO: Hamlib reaches the radio only through the vendor's driver API (a Linux kernel driver's ioctl "
+    "interface or the Windows vendor DLL); the radio's own USB protocol is not published, so radioctl has no wire "
+    "protocol to speak"
+)
+NOT_APPLICABLE: dict[int, str] = {
+    15001: _WINRADIO_DRIVER,
+    15002: _WINRADIO_DRIVER,
+    15003: _WINRADIO_DRIVER,
+    15004: _WINRADIO_DRIVER,
+    15005: _WINRADIO_DRIVER,
+    15006: _WINRADIO_DRIVER,
+    15007: _WINRADIO_DRIVER,
+    15009: _WINRADIO_DRIVER,
+}
+
 # Hamlib family hint (derived.family) -> (tier, radioctl engine name or None).
 FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
     "icom_civ": ("A", "civ"),
@@ -193,7 +211,7 @@ TIER_TITLES = {
     "C": "new engine",
     "D": "odd device",
 }
-STATUS_ORDER = ["described", "engine only", "needs variant", "needs engine", "odd device"]
+STATUS_ORDER = ["described", "engine only", "needs variant", "needs engine", "odd device", "not applicable"]
 
 
 # [@ANCHOR: radioctl_support_load_descriptions]
@@ -261,10 +279,12 @@ def classify(model: dict) -> tuple[str, str, str | None]:
 
 
 # [@ANCHOR: radioctl_support_status]
-def status_of(tier: str, engine: str | None, described: bool) -> str:
-    """described / engine only / needs variant / needs engine / odd device."""
+def status_of(tier: str, engine: str | None, described: bool, not_applicable: bool = False) -> str:
+    """described / engine only / needs variant / needs engine / odd device / not applicable."""
     if described:
         return "described"
+    if not_applicable:
+        return "not applicable"
     return {"A": "engine only", "B": "needs variant", "C": "needs engine", "D": "odd device"}[tier]
 
 
@@ -289,7 +309,7 @@ def build_rows(models: list[dict], descriptions: dict[str, dict], reports: list[
         rows.append({
             "id": info["model_id"], "mfg": info["mfg"], "model": info["model"], "family": family,
             "tier": tier, "engine": engine, "descriptions": rig_ids, "level": top,
-            "who": "; ".join(who) or "-", "status": status_of(tier, engine, bool(rig_ids)),
+            "who": "; ".join(who) or "-", "status": status_of(tier, engine, bool(rig_ids), info["model_id"] in NOT_APPLICABLE),
         })
     rows.sort(key=lambda r: (r["mfg"].lower(), r["model"].lower(), r["id"]))
     return rows
@@ -319,7 +339,8 @@ def render(rows: list[dict], descriptions: dict[str, dict]) -> str:
         "`verified` state among the description's facts; **Verified by** comes from `rigs/reports/verified.toml`. "
         "Status: `described` = a `rigs/*.toml` exists; `engine only` = the engine exists, data missing; "
         "`needs variant` = an existing engine needs model variants; `needs engine` = a new engine; "
-        "`odd device` = SDR board, network driver, parallel or dummy.",
+        "`odd device` = SDR board, network driver, parallel or dummy; `not applicable` = no wire protocol radioctl can "
+        "speak (the reason is in the section below).",
         "",
     ]
     total = len(rows)
@@ -359,6 +380,8 @@ def render(rows: list[dict], descriptions: dict[str, dict]) -> str:
     mapped = {rid for r in rows for rid in r["descriptions"]}
     orphans = sorted(set(descriptions) - mapped)
     out += [f"- `{rid}` ({descriptions[rid]['name']}): highest level {descriptions[rid]['highest']}" for rid in orphans] or ["- none"]
+    out += ["", "## Models that are not applicable", ""]
+    out += [f"- {r['mfg']} {r['model']} ({r['id']}): {NOT_APPLICABLE[r['id']]}" for r in rows if r["id"] in NOT_APPLICABLE] or ["- none"]
     out += ["", "## Every model", "",
             "| Hamlib id | Manufacturer | Model | Tier | Family | Engine | Description | Verification | Verified by | Status |",
             "|---:|---|---|---|---|---|---|---|---|---|"]

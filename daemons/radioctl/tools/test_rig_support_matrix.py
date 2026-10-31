@@ -67,6 +67,19 @@ class SupportMatrixTests(unittest.TestCase):
         self.assertEqual(sup.classify({"rig_list": {"model_id": 3, "mfg": "H", "model": "N"}, "derived": None})[0], "unclassified")
         self.assertEqual(sup.status_of("A", "civ", False), "engine only")
         self.assertEqual(sup.status_of("C", None, True), "described")
+        self.assertEqual(sup.status_of("C", None, False, True), "not applicable")
+        self.assertEqual(sup.status_of("C", None, True, True), "described")
+
+    # Tests [@ANCHOR: radioctl_support_build_rows]
+    def test_every_not_applicable_model_exists_and_says_why(self):
+        ids = {m["rig_list"]["model_id"] for m in MODELS}
+        rows = {r["id"]: r for r in sup.build_rows(MODELS, sup.load_descriptions(), sup.load_reports())}
+        self.assertTrue(sup.NOT_APPLICABLE)
+        for model_id, reason in sup.NOT_APPLICABLE.items():
+            self.assertIn(model_id, ids)
+            self.assertGreater(len(reason), 40)
+            self.assertEqual(rows[model_id]["status"], "not applicable")
+        self.assertEqual({rows[i]["mfg"] for i in sup.NOT_APPLICABLE}, {"Winradio"})
 
     # Tests [@ANCHOR: radioctl_support_build_rows]
     def test_rows_cover_every_model_once_and_ic7300_is_described(self):

@@ -124,6 +124,12 @@ descriptions for every model in that family. Order by number of models and by ho
    Lab599, Hilberling, Guohe, Vertex VX-1700).
 4. Icom marine (4): CI-V-like variants for IC-M700PRO, M710, M802, M803.
 
+Winradio (8 models, Hamlib ids 15001 to 15007 and 15009) is **not applicable**: Hamlib reaches these radios only through
+the vendor's driver (the Linux `/dev/winradio` ioctl interface of the kernel driver, or the vendor DLL on Windows;
+the G313 through its vendor API). There is no serial, USB or network protocol document a program can speak, so radioctl
+has nothing to implement. `tools/rig_support_matrix.py` records each as `not applicable` with this reason. If Winradio
+ever publishes the USB protocol, or a volunteer documents it, they move to Tier C.
+
 Skip any model whose only documentation forbids copying; mark it "needs engine, no usable source" in RIG_SUPPORT.md.
 
 ## Tier D: odd devices (54 models)
