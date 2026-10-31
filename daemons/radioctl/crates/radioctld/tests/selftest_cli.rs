@@ -104,6 +104,7 @@ fn host(ports: Vec<PortInfo>) -> Host {
         lan_window: Duration::ZERO,
         update: None,
         restart_after_update: false,
+        enter_pressed: None,
     }
 }
 
@@ -220,6 +221,14 @@ async fn one_run_tests_every_identified_rig_and_uploads_one_report_each() {
         shown.contains("Tested 2 radios; 2 reports uploaded."),
         "{shown}"
     );
+    let ic_report =
+        std::fs::read_to_string(dir.join("radioctl-selftest-icom-ic-7300.txt")).expect("report");
+    assert!(
+        ic_report.contains("unsolicited status (turn the VFO knob)")
+            && ic_report.contains("skipped: no terminal"),
+        "{ic_report}"
+    );
+    assert!(!shown.contains("Please turn the VFO knob"), "{shown}");
     let bodies = bodies.lock().expect("lock").clone();
     assert_eq!(bodies.len(), 2, "{shown}");
     let docs: Vec<serde_json::Value> = bodies

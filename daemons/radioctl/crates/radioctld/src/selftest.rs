@@ -336,7 +336,7 @@ where
 }
 
 /// `spawn_current` wants a sized engine type; this lets the engine of any family go through it.
-struct AnyEngine(Box<dyn ProtocolEngine>);
+pub(crate) struct AnyEngine(pub(crate) Box<dyn ProtocolEngine>);
 
 impl ProtocolEngine for AnyEngine {
     fn description(&self) -> &RigDescription {

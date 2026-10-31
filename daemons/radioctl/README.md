@@ -1038,6 +1038,14 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_cli_test_one] (radioctld) Tests one rig and writes its local report. `Err` only for a rig that could not be opened.
 - [@ANCHOR: radioctl:radioctld_update_entry_name] (radioctld) The file name of the self-test inside a bundle.
 - [@ANCHOR: radioctl:radioctld_upload_exchange] (radioctld) One request and the status and body it earned; any network trouble is an `Err` with a short
+- [@ANCHOR: radioctl:radioctld_knob_claims_unsolicited] (radioctld) True when the description claims the rig reports changes on its own.
+- [@ANCHOR: radioctl:radioctld_knob_watch] (radioctld) Watches the rig's event stream for up to `wait` for a frequency change whose source is
+- [@ANCHOR: radioctl:radioctld_knob_result] (radioctld) The report line for an outcome. A knob that was not seen counts as a check that did not pass
+- [@ANCHOR: radioctl:radioctld_knob_check] (radioctld) The whole check, or `None` when the description does not claim the capability. Without a
+- [@ANCHOR: radioctl:radioctld_cli_stdin_lines_from] (radioctld) Lines from `rx` as a [`BufRead`], and a poll that is true once a line was waiting (and
+- [@ANCHOR: radioctl:radioctld_cli_stdin_lines_spawn] (radioctld) Starts the thread that reads the process's standard input line by line.
+- [@ANCHOR: radioctl:radioctld_cli_stdin_lines_read] (radioctld) Reads from the current line.
+- [@ANCHOR: radioctl:radioctld_cli_stdin_lines_fill_buf] (radioctld) Waits for the next line when the current one is used up; end of input gives no bytes.
 - [@ANCHOR: radioctl:radioctl_support_load_descriptions] (tools) Reads rigs/*.toml: name, family, highest verified state, hardware facts.
 - [@ANCHOR: radioctl:radioctl_support_load_reports] (tools) The [[report]] entries of rigs/reports/verified.toml.
 - [@ANCHOR: radioctl:radioctl_support_check_consistency] (tools) Problems that would make RIG_SUPPORT.md lie: map, facts and reports must agree.

@@ -49,6 +49,21 @@ give one. If a check did not pass it says instead "Thank You! Your report on Ico
 not pass. That is a problem in our software, not something you did wrong, and we will look into it." followed by the same two sentences (checks the description does not support are not
 counted). With `--no-upload`, or when the upload fails, there is no thank-you, only the one-line status.
 
+## The VFO knob check
+
+For a radio whose description claims that it reports its own changes (Icom CI-V transceive, Elecraft/Kenwood/Yaesu
+auto-information, Flex subscriptions), and only at a terminal, the last check asks you to turn the VFO knob:
+
+> Please turn the VFO knob a little, in either direction, now (waiting up to 15 seconds; press Enter to skip)
+
+The check sends nothing to the radio. It listens to the radio's own status events and counts only changes the radio
+reported without being asked (not the answers to our polls or commands), and reports the frequency change it saw.
+Press Enter to skip it. If nothing arrives it says: "No unsolicited update was seen. Some radios need this turned on
+in the menu (for example the KX3's auto-info/transceive setting, or CI-V Transceive on an Icom); if yours has it,
+enable it and run this again. If it is on, this is a problem in our software." The program never turns the setting
+on by itself. Without a terminal the check is skipped (`skipped: no terminal`) and does not count against the radio.
+In the upload it is an ordinary check named `unsolicited status (turn the VFO knob)`.
+
 ## Updating
 
 The copy that ships with the local relay checks at the start of each run whether a newer version has been
