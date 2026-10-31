@@ -94,9 +94,10 @@ the chip); otherwise unplug and replug to return to the ROM state.
 - **Pin facts.** With every pin an input, all of PA, PB and PD read high (0xFF), as with fx2lafw.
   PA0 and PA1 can be driven low and high and read back what was driven (PA=0xFC/0xFD/0xFE/0xFF
   for the four patterns); other pins stay inputs; a USB bus reset releases them (OEA 3 -> 0).
-  **Not yet verified: that the LEDs D1/D2 are on PA0/PA1 and their polarity.** The wiki-based
-  inference (LEDs from Vcc through J1, 1 kohm: PA low = LED on) is untested by eye; Bruce is
-  asked to look while running `blink` (about 0.8 s per pattern: both low, PA0 high, PA1 high, both high).
+  **Confirmed by eye (Bruce, 2026-10-30): running `blink` makes the board's LEDs blink ("Works!").** The
+  mapping of D1 and D2 to PA0 and PA1 and the polarity are consistent with the wiki-based inference (LEDs from Vcc
+  through J1, 1 kohm: PA low = LED on) but which LED is which pin, and whether low means lit, was not recorded; to be
+  noted the next time the board is on the bench (continuity from the LEDs and the J1 and J2 traces are still to do).
   With J1 fitted the released pins read high, which is consistent with LEDs to Vcc.
 
 ## Findings worth keeping (bugs found while bringing it up)
