@@ -76,8 +76,9 @@ frame is skipped.
   from Hamlib 4.6.2 source for facts only. Icom's guides were not used (chapter
   [12](12-provenance-and-licensing.md)). Never verified on a radio.
 - **Xiegu:** G90, X6100, X6200, X108G and X5105 use this engine with only frequency, mode, PTT and signal claimed. The
-  oracle shows the X108G disagreeing with Hamlib on the final VFO A frequency; the cause is
-  uninvestigated.
+  oracle shows the X108G and the X5105 (which Hamlib gives the X108G's settings) disagreeing with Hamlib on
+  the final VFO A frequency: Hamlib selects VFO B first and writes there, radioctl never sends `07`. The G90, X6100
+  and X6200 agree.
 
 ## Kenwood ASCII (`kenwood.rs`)
 
