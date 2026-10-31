@@ -1,0 +1,21 @@
+# Hardware verification reports for radioctl rig descriptions. HUMAN-EDITED by a maintainer.
+#
+# This file is the only place that records WHO reported a hardware test. The state itself lives in
+# the `verified` field of the facts in rigs/<id>.toml (state = "hardware-verified", with radio,
+# firmware, date and tested). `tools/rig_support_matrix.py` and its test fail if the two disagree:
+# every description with a hardware-verified fact needs a [[report]] here, and every [[report]]
+# needs a description with a hardware-verified fact. Nothing is copied between them.
+#
+# How a report gets here: docs/VOLUNTEER_TESTING.md ("How a maintainer promotes a description").
+# No radio has been verified yet; the first entries are expected from the IC-7300 bench day.
+#
+# Entry format (keep one [[report]] per radio and test day):
+#
+#   [[report]]
+#   rig = "icom-ic-7300"                  # the description id (file stem in rigs/)
+#   radio = "IC-7300"                     # as in the facts' `radio` field; no serial numbers
+#   firmware = "1.40"                     # as in the facts' `firmware` field
+#   date = "2026-11-07"                   # YYYY-MM-DD, as in the facts' `date` field
+#   reporter = "K6BP"                     # callsign or GitHub user name, as the reporter wishes
+#   issue = "https://github.com/OWNER/REPO/issues/0"   # the report the maintainer worked from
+#   transmit_tested = false               # true only if the transmit procedure was run
