@@ -1,0 +1,87 @@
+# Rig description: Yaesu FT-818ND (legacy five-byte CAT, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's published FT-818ND operating manual (document, page and sha256 in each fact), whose file layout follows
+# yaesu-ft-817.toml; every fact was checked against the FT-818ND manual's CAT chapter, and the documented differences
+# from the FT-817ND are listed in crates/radioctl-protocols/src/yaesu_legacy.rs. No radio has been
+# connected, so every `verified` is unverified. Gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "split", "rit-xit"]
+
+[rig]
+id = "yaesu-ft-818"
+name = "Yaesu FT-818ND"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[timing]
+timeout_ms = 3000
+retries = 5
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "cw-r"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x08
+
+[[modes]]
+mode = "data"
+code = 0x0a
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-818ND Operating Manual, CAT System Programming (file FT-818ND_OM_ENG_E13772004_2003u-ES-1.pdf from yaesu.com, sha256 e723eab91774d62bfcc525681a60f66a4a801d014d368d64c88a534a8d9df802): CAT Data Protocol, PDF pages 67-69 (printed 65-67): one start bit, 8 data bits, no parity, two stop bits" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 1041 --dump-caps (Hamlib 4.6.2): Write delay 1ms, timeout 3000ms, 5 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-818ND Operating Manual, CAT System Programming (file FT-818ND_OM_ENG_E13772004_2003u-ES-1.pdf from yaesu.com, sha256 e723eab91774d62bfcc525681a60f66a4a801d014d368d64c88a534a8d9df802): opcode chart and Notes 3 to 5, PDF pages 67-69 (printed 65-67): 01 set frequency, 03 read frequency and mode (4 BCD bytes of 10 Hz, then the mode), 07 mode, 08/88 PTT, 02/82 split, 05/85 clarifier, F5 clarifier frequency, E7 RX status (bits 0-3 S-meter), F7 TX status (bits 0-3 power meter, bit 5 split 0=ON)", note = "The clarifier has no read command, so rit-xit is set-only here (Op::GetRit and the like are refused by the engine). The VFO toggle (81) is not modelled, so there is no second VFO." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-ptt"
+provenance = { kind = "manual", reference = "Yaesu FT-818ND Operating Manual, CAT System Programming (file FT-818ND_OM_ENG_E13772004_2003u-ES-1.pdf from yaesu.com, sha256 e723eab91774d62bfcc525681a60f66a4a801d014d368d64c88a534a8d9df802): Note 4 Read TX Status, PDF p. 69 (printed 67): bit 7 PTT, 0 = PTT ON (TX), 1 = PTT OFF (RX)", note = "Unlike the FT-817ND manual, whose figure leaves the level out, this manual states it. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-818ND Operating Manual, CAT System Programming (file FT-818ND_OM_ENG_E13772004_2003u-ES-1.pdf from yaesu.com, sha256 e723eab91774d62bfcc525681a60f66a4a801d014d368d64c88a534a8d9df802): Operating Mode opcode 07, PDF pages 67-69 (printed 65-67): 00 LSB, 01 USB, 02 CW, 03 CWR, 04 AM, 08 FM, 0A DIG", note = "DIG is mapped to radioctl's data mode. PKT (0C) and WFM (06, which this manual lists only among the codes a read can return, not among the codes the mode command sets) are not mapped." }
+verified = { state = "unverified" }

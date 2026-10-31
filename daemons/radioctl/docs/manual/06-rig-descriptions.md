@@ -81,16 +81,18 @@ Twenty-four files. All are unverified. Eighteen carry a hand-written transcript;
 | Family | Files | Written from |
 |---|---|---|
 | `icom-civ` | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700` | Hamlib 4.6.2 source (facts only, file and function per fact) and `rigctl --dump-caps` output. Not Icom's CI-V guides. Each has a `[scope]` block. |
-| `icom-civ` (Xiegu) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x108g` | Hamlib facts only; deliberately small (frequency, mode, PTT, signal). |
+| `icom-civ` (Xiegu) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only; deliberately small (frequency, mode, PTT, signal). |
 | `kenwood-ascii` | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s` | Kenwood's published PC command references; the TS-2000 text was read from a third-party transcription of its manual, which its facts say. The TS-890S file is from its own guide (January 30, 2019), dialect `ts890`. |
 | `elecraft-ascii` | `elecraft-kx3` | Elecraft's Programmer's Reference, Rev. G5, cited by command heading and printed page. |
 | `yaesu-newcat` | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals, with page and SHA-256 per fact. |
-| `yaesu-legacy` | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d` | Yaesu's operating manuals (CAT chapters), with page and SHA-256; the one fact the manuals leave out, the level of the PTT bit, is from Hamlib 4.6.2 and labelled `hamlib-source`. No FT-818 description (no manual found). Binary transcripts. |
+| `yaesu-legacy` | `yaesu-ft-817`, `yaesu-ft-818`, `yaesu-ft-857d`, `yaesu-ft-897d` | Yaesu's operating manuals (CAT chapters), with page and SHA-256; the one fact the manuals leave out, the level of the PTT bit, is from Hamlib 4.6.2 and labelled `hamlib-source`. The FT-818ND file is from its own operating manual (chapter [7](07-protocol-engines.md) lists how its CAT chapter differs from the FT-817ND's), and takes the PTT level from that manual. Binary transcripts. |
 | `flex-smartsdr` | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's published SmartSDR API wiki (commit and pages named in `flex.rs`); control plane only. |
 | `hpsdr-network` | `anan-10`, `anan-100` | The OpenHPSDR protocol work in the `hpsdr` crate (`daemons/hpsdr`, see its README for sources); control plane only. |
 
 The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
-have no description (address and a usable document are missing). Chapter [7](07-protocol-engines.md)
+files are copies in structure of the X108G and X6100 files: Hamlib 4.6.2 gives the X5105 the X108G's settings (CI-V
+address 0x70) and the X6200 the X6100's (0xA4), and no document that may be used states otherwise, so the
+addresses are Hamlib's, unverified, and may well differ on the radios. Chapter [7](07-protocol-engines.md)
 describes what each engine implements and chapter [12](12-provenance-and-licensing.md) why the Icom
 files do not come from Icom's manuals.
 

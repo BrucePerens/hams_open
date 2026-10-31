@@ -707,6 +707,8 @@ fn the_xiegu_files_against_hamlib_record_every_disagreement() {
         ("xiegu-g90", 3088),
         ("xiegu-x6100", 3087),
         ("xiegu-x108g", 3076),
+        ("xiegu-x5105", 3089),
+        ("xiegu-x6200", 3091),
     ] {
         let desc = shipped(file);
         let mut steps = scenario();
@@ -724,13 +726,14 @@ fn the_xiegu_files_against_hamlib_record_every_disagreement() {
 
 /// The steps on which Hamlib and radioctl disagree for a Xiegu file.
 ///
-/// The G90 and X6100 agree. On the X108G Hamlib selects VFO B (`07 01`) before it works, so its
+/// The G90, X6100 and X6200 agree. The X5105 behaves as the X108G, whose settings Hamlib shares
+/// with it. On the X108G Hamlib selects VFO B (`07 01`) before it works, so its
 /// frequency writes land in the virtual rig's VFO B while radioctl's engine, which assumes VFO A
 /// is selected and never sends `07`, writes VFO A: the virtual rig's VFO A ends at a different
 /// frequency. Which VFO a real X108G treats as "the" VFO is unknown.
 fn known_xiegu_divergences(file: &str) -> Vec<&'static str> {
     match file {
-        "xiegu-x108g" => vec!["final freq_a"],
+        "xiegu-x108g" | "xiegu-x5105" => vec!["final freq_a"],
         _ => Vec::new(),
     }
 }
@@ -776,11 +779,15 @@ fn known_yaesu_divergences(_file: &str) -> Vec<&'static str> {
 // Tests [@ANCHOR: radioctl_virtual_legacy_block]
 #[test]
 fn the_yaesu_legacy_files_against_hamlib_record_every_disagreement() {
-    // Frequency, mode and the PTT read: what the legacy descriptions can read back. The FT-817
-    // is not run: Hamlib's FT-817 backend sends an EEPROM read (opcode BB, in no manual) at open
+    // Frequency, mode and the PTT read: what the legacy descriptions can read back. The FT-818 runs
+    // (Hamlib's 818 model answers); the FT-817 Hamlib's FT-817 backend sends an EEPROM read (opcode BB, in no manual) at open
     // and its retries (3 s, 5 times) make every step answer nothing (seen: all steps NoAnswer,
     // 20 s per file).
-    for (file, model) in [("yaesu-ft-857d", 1022), ("yaesu-ft-897d", 1043)] {
+    for (file, model) in [
+        ("yaesu-ft-818", 1041),
+        ("yaesu-ft-857d", 1022),
+        ("yaesu-ft-897d", 1043),
+    ] {
         let desc = shipped(file);
         let mut steps = scenario();
         steps.push(Op::GetPtt);
@@ -803,6 +810,16 @@ fn the_yaesu_legacy_files_against_hamlib_record_every_disagreement() {
 /// documents and the virtual rig, built from the manuals only, does not answer. The cause of the
 /// failed reads was not isolated; it may be that unanswered probing, or a difference in the answer
 /// that only a real radio can settle.
-fn known_yaesu_legacy_divergences(_file: &str) -> Vec<&'static str> {
+///
+/// The FT-818 is different: Hamlib's FT-817-family backend reads its frequency and mode without
+/// trouble, and only the PTT read disagrees. That backend (`ft817_get_ptt`, read for facts only)
+/// reports transmitting for any TX status byte other than 0xFF, while the manual defines bit 7 as
+/// PTT (0 transmitting) and the virtual rig answers by the manual, so an idle virtual rig reads as
+/// transmitting to Hamlib. What a real radio returns while receiving would settle which reading is
+/// right; radioctl follows the manual.
+fn known_yaesu_legacy_divergences(file: &str) -> Vec<&'static str> {
+    if file == "yaesu-ft-818" {
+        return vec!["GetPtt"];
+    }
     vec!["GetFrequency(A)", "GetMode"]
 }

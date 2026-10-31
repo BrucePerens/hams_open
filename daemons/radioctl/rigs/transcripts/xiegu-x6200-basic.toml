@@ -1,0 +1,90 @@
+# Conformance transcript for rigs/xiegu-x6200.toml.
+# ORIGIN: hand-written from the CI-V basics the Xiegu description claims (facts read from Hamlib 4.6.2; no
+# Xiegu document was used). NOT a capture of a radio: it proves the engine, the virtual rig and the
+# description agree with each other, not that they agree with a Xiegu X6200.
+schema = 1
+rig = "xiegu-x6200"
+origin = "hand-written from Hamlib 4.6.2 facts and tools/rig_simulator.py; not a capture of a radio"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx = "fe fe a4 e0 03 fd"
+rx = "fe fe e0 a4 03 00 40 07 14 00 fd"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
+tx = "fe fe a4 e0 05 00 00 03 07 00 fd"
+rx = "fe fe e0 a4 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx = "fe fe a4 e0 03 fd"
+rx = "fe fe e0 a4 03 00 00 03 07 00 fd"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+
+[[step]]
+op = { kind = "get-mode" }
+tx = "fe fe a4 e0 04 fd"
+rx = "fe fe e0 a4 04 01 01 fd"
+expect = { kind = "mode", mode = "usb" }
+
+[[step]]
+op = { kind = "set-mode", mode = "cw" }
+tx = "fe fe a4 e0 06 03 fd"
+rx = "fe fe e0 a4 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-mode" }
+tx = "fe fe a4 e0 04 fd"
+rx = "fe fe e0 a4 04 03 01 fd"
+expect = { kind = "mode", mode = "cw" }
+
+[[step]]
+op = { kind = "set-ptt", on = true }
+tx = "fe fe a4 e0 1c 00 01 fd"
+rx = "fe fe e0 a4 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-ptt" }
+tx = "fe fe a4 e0 1c 00 fd"
+rx = "fe fe e0 a4 1c 00 01 fd"
+expect = { kind = "ptt", on = true }
+
+[[step]]
+op = { kind = "set-ptt", on = false }
+tx = "fe fe a4 e0 1c 00 00 fd"
+rx = "fe fe e0 a4 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-ptt" }
+tx = "fe fe a4 e0 1c 00 fd"
+rx = "fe fe e0 a4 1c 00 00 fd"
+expect = { kind = "ptt", on = false }
+
+[[step]]
+op = { kind = "get-signal" }
+tx = "fe fe a4 e0 15 02 fd"
+rx = "fe fe e0 a4 15 02 00 30 fd"
+expect = { kind = "signal", value = 30 }
+
+[[step]]
+op = { kind = "set-mode", mode = "lsb" }
+tx = "fe fe a4 e0 06 00 fd"
+rx = "fe fe e0 a4 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 14250000 }
+tx = "fe fe a4 e0 05 00 00 25 14 00 fd"
+rx = "fe fe e0 a4 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+panel = { kind = "frequency", hz = 21074000 }
+rx = "fe fe 00 a4 00 00 40 07 21 00 fd"
+expect = { kind = "frequency", vfo = "a", hz = 21074000 }

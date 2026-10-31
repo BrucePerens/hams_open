@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Yaesu legacy CAT (FT-817, FT-857, FT-897): five-byte binary blocks, sans-IO client engine.
+//! Yaesu legacy CAT (FT-817, FT-818, FT-857, FT-897): five-byte binary blocks, sans-IO client engine.
 //!
 //! Every command is five bytes, four parameters then the opcode; one start bit, eight data bits,
 //! no parity, two stop bits, at most 200 ms between bytes. The radio sends nothing back for a
@@ -29,9 +29,19 @@
 //! (`rigs/yaesu/ft817.c`, the comment on `tx_status`: "Highest bit 0 = PTT"): a clear bit 7 means
 //! transmitting. That is a `hamlib-source` fact in the description and is unverified.
 //!
+//! **FT-818.** Yaesu's FT-818ND operating manual (`FT-818ND_OM_ENG_E13772004_2003u-ES-1.pdf`, sha256
+//! e723eab91774d62bfcc525681a60f66a4a801d014d368d64c88a534a8d9df802, PDF pages 67 to 69, printed 65 to
+//! 67) has the same 17 opcodes with the same parameters as the FT-817ND's. Compared chapter against
+//! chapter, the documented differences are: Note 4 states the PTT level (bit 7: 0 is PTT ON, TX),
+//! which the FT-817ND figure leaves out, so the FT-818 description takes `read-ptt` from the manual
+//! and not from Hamlib; Note 5 lists `06` (WFM) among the modes a read can return, which the mode
+//! command's table does not list, so it is not mapped; the power-on note names the FT-818's
+//! SBR-32MH battery pack where the FT-817ND's names the FNB-85. The FT-817ND's Note 5
+//! is a figure that was not read, so whether it also lists `06` is not known. Nothing else in the
+//! text of the two CAT chapters differs.
+//!
 //! Not implemented: the VFO A/B toggle (`81`, so no second VFO), lock, repeater offset, CTCSS and
-//! DCS, power on and off, the clarifier frequency read (there is none), FM-N and PKT modes, and
-//! the FT-818 (no manual was found; Hamlib treats it as an FT-817 derivative).
+//! DCS, power on and off, the clarifier frequency read (there is none), FM-N and PKT modes.
 
 // TODO(radioctl tx frequency): split and the transmit VFO (`Observation::TxVfo`, `Op::GetTxVfo`) are
 // not mapped here; another agent is rebasing this engine. When it lands, report `TxVfo` from the
