@@ -963,19 +963,31 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
 
 /// The steps on which Hamlib and radioctl disagree for a file of the first Icom batch.
 ///
-/// Eleven of the nineteen agree on everything the harness can express. The IC-7600, IC-7800 and
-/// IC-7850/7851 are Main/Sub rigs like the IC-7610: Hamlib's split flow starts with `07 C2` (dual
-/// watch), `07 D2` and `07 D0`, which the virtual rig refuses (the Main/Sub family of command 07
-/// is not implemented), so Hamlib's split and second-frequency steps fail there while radioctl
-/// treats VFO B as "the other VFO" (`25 01`). Which of the two matches a real radio is unknown:
-/// an open question, not a result. The IC-7760 does the same without `07 C2`. On the IC-7700
-/// every step agrees but the final mode of the virtual rig differs (Hamlib ends in USB where
-/// radioctl ends in CW). The recorded Hamlib frames show no mode write at all (no `06` and no
-/// `26 00`) between its two frequency writes, only `1A 06 00 00` (data mode off) and `07 00` /
-/// `07 B0` (VFO and memory selection), so on this model's path Hamlib's mode set produced no mode
-/// frame; why is an open question, kept visible here. The IC-706MkIIG has the capability `levels`
-/// only for its attenuator and preamplifier (the capability is one switch for every level): Hamlib
-/// has no AF gain for the model and refuses it, radioctl would send `14 01`.
+/// Read against Icom's instruction manuals (archive.org copies, `~/manuals/icom/SHA256SUMS`; each
+/// fact in the rig files carries the document, PDF page and sha256), the eleven files that agree
+/// on everything the harness can express are unchanged, and the open questions of the first batch
+/// stand as follows.
+///
+/// Main/Sub radios. The IC-7600, IC-7800 and IC-7700 manuals have no command 25 (second VFO) and
+/// no command 21 (RIT/XIT), so those two capabilities were removed from their descriptions and the
+/// VFO B steps no longer run. What is left on the IC-7600 and IC-7800 is the split flow: their
+/// tables have `0F 00/01` for split and `07 B0/B1/C0/C1/D0/D1` for the bands (no `07 C2`), which
+/// is what radioctl sends (`0F`), while Hamlib's split flow fails against the virtual rig; Hamlib
+/// is the one that differs from the manual. The IC-7850/7851 manual has `25`/`26` with 00 = main
+/// and 01 = sub band, so radioctl's VFO B (`25 01`) is the sub band there; Hamlib's flow
+/// (`07 C2`, `07 D0`) is also documented (`07 C2` dualwatch, `07 D2` band) but the virtual rig
+/// has no model of command 07's band forms, so the divergence stays, as an engine gap and not as
+/// an error of radioctl. The IC-7760 has no manual that could be read: its pin is unchanged.
+///
+/// IC-7700 final mode: the manual lists the VFO A/B forms `07 00/01` and mode setting by `06`
+/// (no command 26), which radioctl sends; the recorded Hamlib frames show no mode write between
+/// its two frequency writes, only `1A 06 00 00`, `07 00` and `07 B0`, so on this model's path
+/// Hamlib's mode set produced no mode frame. The manual does not say why; kept visible.
+///
+/// IC-706MkIIG AF gain: settled by the manual. Its command table (PDF page 49 of the instruction
+/// manual) has no command 14, so Hamlib is right and radioctl, whose `levels` capability is one
+/// switch for every level, would send `14 01` where the radio has no such command. Fixing it
+/// needs a per-level capability in the description format; the pin stays until then.
 fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     let main_sub = vec![
         "SetSplit(true)",
@@ -985,7 +997,8 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
         "SetSplit(false)",
     ];
     match file {
-        "icom-ic-7600" | "icom-ic-7800" | "icom-ic-7851" => main_sub,
+        "icom-ic-7600" | "icom-ic-7800" => vec!["SetSplit(true)", "GetSplit", "SetSplit(false)"],
+        "icom-ic-7851" => main_sub,
         "icom-ic-7760" => main_sub[..4].to_vec(),
         "icom-ic-7700" => vec!["final mode"],
         "icom-ic-706mkiig" => vec!["SetLevel(AfGain, 128)", "GetLevel(AfGain)"],

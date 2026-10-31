@@ -22,8 +22,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 310 |
-| manual-checked | 3 |
+| unverified | 295 |
+| manual-checked | 18 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -150,11 +150,11 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3085 | Icom | IC-705 | A | icom_civ | civ | `icom-ic-705` | unverified | - | described |
 | 3009 | Icom | IC-706 | A | icom_civ | civ | `icom-ic-706` | unverified | - | described |
 | 3010 | Icom | IC-706MkII | A | icom_civ | civ | `icom-ic-706mkii` | unverified | - | described |
-| 3011 | Icom | IC-706MkIIG | A | icom_civ | civ | `icom-ic-706mkiig` | unverified | - | described |
+| 3011 | Icom | IC-706MkIIG | A | icom_civ | civ | `icom-ic-706mkiig` | manual-checked | - | described |
 | 3012 | Icom | IC-707 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3070 | Icom | IC-7100 | A | icom_civ | civ | `icom-ic-7100` | unverified | - | described |
-| 3013 | Icom | IC-718 | A | icom_civ | civ | `icom-ic-718` | unverified | - | described |
-| 3061 | Icom | IC-7200 | A | icom_civ | civ | `icom-ic-7200` | unverified | - | described |
+| 3070 | Icom | IC-7100 | A | icom_civ | civ | `icom-ic-7100` | manual-checked | - | described |
+| 3013 | Icom | IC-718 | A | icom_civ | civ | `icom-ic-718` | manual-checked | - | described |
+| 3061 | Icom | IC-7200 | A | icom_civ | civ | `icom-ic-7200` | manual-checked | - | described |
 | 3014 | Icom | IC-725 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3015 | Icom | IC-726 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3016 | Icom | IC-728 | A | icom_civ | civ | - | unverified | - | engine only |
@@ -164,30 +164,30 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3020 | Icom | IC-736 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3021 | Icom | IC-737 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3022 | Icom | IC-738 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3067 | Icom | IC-7410 | A | icom_civ | civ | `icom-ic-7410` | unverified | - | described |
-| 3023 | Icom | IC-746 | A | icom_civ | civ | `icom-ic-746` | unverified | - | described |
-| 3046 | Icom | IC-746PRO | A | icom_civ | civ | `icom-ic-746pro` | unverified | - | described |
+| 3067 | Icom | IC-7410 | A | icom_civ | civ | `icom-ic-7410` | manual-checked | - | described |
+| 3023 | Icom | IC-746 | A | icom_civ | civ | `icom-ic-746` | manual-checked | - | described |
+| 3046 | Icom | IC-746PRO | A | icom_civ | civ | `icom-ic-746pro` | manual-checked | - | described |
 | 3024 | Icom | IC-751 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3026 | Icom | IC-756 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3027 | Icom | IC-756PRO | A | icom_civ | civ | - | unverified | - | engine only |
 | 3047 | Icom | IC-756PROII | A | icom_civ | civ | - | unverified | - | engine only |
 | 3057 | Icom | IC-756PROIII | A | icom_civ | civ | - | unverified | - | engine only |
-| 3063 | Icom | IC-7600 | A | icom_civ | civ | `icom-ic-7600` | unverified | - | described |
+| 3063 | Icom | IC-7600 | A | icom_civ | civ | `icom-ic-7600` | manual-checked | - | described |
 | 3028 | Icom | IC-761 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3078 | Icom | IC-7610 | A | icom_civ | civ | `icom-ic-7610` | unverified | - | described |
 | 3029 | Icom | IC-765 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3062 | Icom | IC-7700 | A | icom_civ | civ | `icom-ic-7700` | unverified | - | described |
+| 3062 | Icom | IC-7700 | A | icom_civ | civ | `icom-ic-7700` | manual-checked | - | described |
 | 3030 | Icom | IC-775 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3092 | Icom | IC-7760 | A | icom_civ | civ | `icom-ic-7760` | unverified | - | described |
 | 3045 | Icom | IC-78 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3056 | Icom | IC-7800 | A | icom_civ | civ | `icom-ic-7800` | unverified | - | described |
+| 3056 | Icom | IC-7800 | A | icom_civ | civ | `icom-ic-7800` | manual-checked | - | described |
 | 3031 | Icom | IC-781 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3075 | Icom | IC-7850/7851 | A | icom_civ | civ | `icom-ic-7851` | unverified | - | described |
+| 3075 | Icom | IC-7850/7851 | A | icom_civ | civ | `icom-ic-7851` | manual-checked | - | described |
 | 3032 | Icom | IC-820H | A | icom_civ | civ | - | unverified | - | engine only |
 | 3034 | Icom | IC-821H | A | icom_civ | civ | - | unverified | - | engine only |
 | 3090 | Icom | IC-905 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3044 | Icom | IC-910 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3068 | Icom | IC-9100 | A | icom_civ | civ | `icom-ic-9100` | unverified | - | described |
+| 3068 | Icom | IC-9100 | A | icom_civ | civ | `icom-ic-9100` | manual-checked | - | described |
 | 3065 | Icom | IC-92D | A | icom_civ | civ | - | unverified | - | engine only |
 | 3035 | Icom | IC-970 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3081 | Icom | IC-9700 | A | icom_civ | civ | `icom-ic-9700` | unverified | - | described |
@@ -208,10 +208,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3037 | Icom | IC-R71 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3041 | Icom | IC-R7100 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3038 | Icom | IC-R72 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3039 | Icom | IC-R75 | A | icom_civ | civ | `icom-ic-r75` | unverified | - | described |
-| 3079 | Icom | IC-R8600 | A | icom_civ | civ | `icom-ic-r8600` | unverified | - | described |
+| 3039 | Icom | IC-R75 | A | icom_civ | civ | `icom-ic-r75` | manual-checked | - | described |
+| 3079 | Icom | IC-R8600 | A | icom_civ | civ | `icom-ic-r8600` | manual-checked | - | described |
 | 3043 | Icom | IC-R9000 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3066 | Icom | IC-R9500 | A | icom_civ | civ | `icom-ic-r9500` | unverified | - | described |
+| 3066 | Icom | IC-R9500 | A | icom_civ | civ | `icom-ic-r9500` | manual-checked | - | described |
 | 3069 | Icom | IC-RX7 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3042 | Icom | ICR-8500 | A | icom_civ | civ | - | unverified | - | engine only |
 | 3083 | Icom | ID-31 | A | icom_civ | civ | - | unverified | - | engine only |

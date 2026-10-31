@@ -74,7 +74,26 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
     // The only files that may hold `manual-checked` facts: those whose vendor manual was read
     // (see the facts' references, each with the manual's SHA-256). Nothing else is verified in
     // any way, and nothing is hardware-verified or transcript-checked.
-    const MANUAL_READ: [&str; 3] = ["kenwood-ts-480", "kenwood-ts-870s", "yaesu-ft-450"];
+    const MANUAL_READ: [&str; 18] = [
+        "kenwood-ts-480",
+        "kenwood-ts-870s",
+        "yaesu-ft-450",
+        "icom-ic-7100",
+        "icom-ic-7200",
+        "icom-ic-7410",
+        "icom-ic-7600",
+        "icom-ic-7700",
+        "icom-ic-7800",
+        "icom-ic-7851",
+        "icom-ic-9100",
+        "icom-ic-r75",
+        "icom-ic-r8600",
+        "icom-ic-r9500",
+        "icom-ic-706mkiig",
+        "icom-ic-718",
+        "icom-ic-746",
+        "icom-ic-746pro",
+    ];
     for loaded in load_all() {
         let summary = loaded.verification_summary();
         let id = loaded.description.id.as_str();
@@ -91,6 +110,24 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
             summary.keys().all(|k| allowed.contains(k)),
             "{id} claims verification it does not have: {summary:?}"
         );
+        for fact in &loaded.facts {
+            if let radioctl_core::rigfile::Verified::ManualChecked { reference } = &fact.verified {
+                // A manual-checked fact needs a manual provenance and, for the Icom files, a PDF page.
+                assert_eq!(
+                    fact.provenance.kind,
+                    radioctl_core::rigfile::ProvenanceKind::Manual,
+                    "{} {}: manual-checked without a manual provenance",
+                    loaded.description.id,
+                    fact.key
+                );
+                assert!(
+                    !loaded.description.id.starts_with("icom-") || reference.contains("PDF page"),
+                    "{} {}: manual-checked without a page",
+                    loaded.description.id,
+                    fact.key
+                );
+            }
+        }
         assert!(!loaded.is_hardware_verified());
     }
 }

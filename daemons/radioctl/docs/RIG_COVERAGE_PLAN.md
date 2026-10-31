@@ -22,8 +22,14 @@ These are the rules the existing 46 descriptions already follow.
 
 1. **Facts come from public manuals and protocol documentation**, with the document, edition and section recorded in
    the fact's `provenance`. Never copy code or tables from anywhere.
-2. **Skip sources whose terms forbid copying** (as with Icom's CI-V guides and the Xiegu X6200 document); record in the
+2. **Skip sources whose terms forbid copying** (as with the Xiegu X6200 document); record in the
    fact that the source was skipped and why. Do not ask for permission, and do not use the skipped text.
+   Exception, by Bruce Perens' decision of 2026-10-31: the Icom manuals (their terms are unreasonable and would not
+   survive a court) and any manual with redistribution provisions may be downloaded and read for facts. They are
+   stored outside every git repository (`~/manuals/icom/`, sha256 in `SHA256SUMS`), only publicly reachable files are
+   fetched (robots.txt honoured: Icom's `/api/` download endpoint is excluded, so the archive.org mirrors are used),
+   and they are never committed, published or redistributed; facts are written in our own words with the document,
+   page, URL and sha256 in the fact.
 3. **Hamlib is an oracle and a fact check, not a source of code.** Read its source for facts only (an address, a
    command number), name the file and function in the `provenance`, and cross-check with the `hamlib-oracle`
    differential tests where the model's virtual twin allows. `rigctl -l` and `--dump-caps` output are program output.
@@ -43,7 +49,7 @@ Elecraft (7), FlexRadio (9). The work is a `rigs/*.toml` per model with its addr
 capabilities, plus an engine fix when a model differs.
 
 - Source: the vendor's public manual or CAT reference where its terms allow, else Hamlib facts with
-  provenance. Icom and Xiegu documents forbid reuse: use Hamlib facts and `--dump-caps` and say so, as the shipped files do.
+  provenance. Xiegu documents forbid reuse: use Hamlib facts and `--dump-caps` and say so, as the shipped files do. Icom's manuals are read for facts (rule 2).
 - Order inside the tier: models with many users first (Icom IC-7000/7100/7200/746/756 series, Kenwood TS-480/570/990/50,
   Yaesu FT-710/891/950/2000/FTDX-3000/5000, Elecraft K3/K3S/KX2/K4), then the rest by family, one pull request per family.
 - 68 are done (the 18 earlier ones, 19 Icom CI-V models, 15 Yaesu newcat and Elecraft models and 16 Kenwood ASCII models, see below). Done means a description exists, not that it is verified.
@@ -53,7 +59,7 @@ capabilities, plus an engine fix when a model differs.
 
 Done (28, incl. 5 Xiegu): IC-7300, 705, 7610, 9700 (first batch); IC-7000, 7100, 7200, 7410, 7600, 7700, 7760, 7800, 7850/7851,
 9100, R8600, R75, R9500, 706, 706MkII, 706MkIIG, 718, 746, 746PRO (batch of 2026-10-31, generated from Hamlib 4.6.2 facts
-and `rigctl --dump-caps`); Xiegu G90, X6100, X6200, X108G, X5105.
+and `rigctl --dump-caps`, then re-read against Icom's manuals under Bruce's decision: 15 of the 19 have a readable manual, see README); Xiegu G90, X6100, X6200, X108G, X5105.
 
 Left (51), with the reason each is not yet done:
 

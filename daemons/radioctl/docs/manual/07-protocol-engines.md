@@ -80,8 +80,8 @@ frame is skipped.
   for the actor's scope stream ([chapter 4](04-api.md#scope-and-spectrum)); hold and speed have encoders
   but no `Op`.
 - **Sources:** the basic commands come from this repository's own simulator and relay bridge; the rest
-  from Hamlib 4.6.2 source for facts only. Icom's guides were not used (chapter
-  [12](12-provenance-and-licensing.md)). Never verified on a radio.
+  from Hamlib 4.6.2 source for facts only. Icom's manuals were read for facts of the later models, under Bruce
+  Perens' decision of 2026-10-31 (chapter [12](12-provenance-and-licensing.md)). Never verified on a radio.
 - **Xiegu:** G90, X6100, X6200, X108G and X5105 use this engine with only frequency, mode, PTT and signal claimed. The
   oracle shows the X108G and the X5105 (which Hamlib gives the X108G's settings) disagreeing with Hamlib on
   the final VFO A frequency: Hamlib selects VFO B first and writes there, radioctl never sends `07`. The G90, X6100

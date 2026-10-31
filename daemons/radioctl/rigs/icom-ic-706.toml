@@ -1,6 +1,6 @@
 # Rig description: Icom IC-706 over CI-V (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
-# Icom's published CI-V guide was NOT used (its download terms forbid reuse of its data); the facts come from Hamlib 4.6.2
+# No readable copy of Icom's CI-V reference for this model could be obtained; the facts come from Hamlib 4.6.2
 # (rigs/icom/ic706.c, read for facts only, and `rigctl -m 3009 --dump-caps` output), named in each fact below.
 # Hamlib lists: serial 300..19200 baud, 8N1, ctrl=NONE; receive see dump; transmit none (receiver). The description format has no field for
 # frequency ranges, filter tables or function lists, so they are not repeated here; the CI-V address, baud rate and
@@ -63,7 +63,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "civ.address"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic706.c (the IC-706 icom_priv_caps block `ic706_priv_caps`, `default address` field)", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Hamlib's default may differ from a radio's menu setting (the address is user-changeable on the radio)." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic706.c (the IC-706 icom_priv_caps block `ic706_priv_caps`, `default address` field)", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. Hamlib's default may differ from a radio's menu setting (the address is user-changeable on the radio)." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -93,7 +93,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "rigctl -m 3009 --dump-caps (Hamlib 4.6.2): \"Can set/get PTT\", \"Can set Split VFO\", \"Can set RIT\", \"Can send Morse\", \"Targetable features\", \"Get level\" lines; rigs/icom/ic706.c rig_caps", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. A capability is claimed when Hamlib's capability list for the model includes it and the engine implements the command (CI-V 03/04/05/06, 0F, 11, 14, 15, 16, 17, 19, 1A 03, 1C 00, 21, 25); absence in Hamlib is taken as absence on the radio, which may be too cautious. `identify` (command 19 00) is claimed on every file regardless of Hamlib's list; an older radio may answer NG, which the volunteer self-test reports. Settings and CI-V menu items (address, baud rate, transceive) are set at the radio." }
+provenance = { kind = "program-output", reference = "rigctl -m 3009 --dump-caps (Hamlib 4.6.2): \"Can set/get PTT\", \"Can set Split VFO\", \"Can set RIT\", \"Can send Morse\", \"Targetable features\", \"Get level\" lines; rigs/icom/ic706.c rig_caps", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. A capability is claimed when Hamlib's capability list for the model includes it and the engine implements the command (CI-V 03/04/05/06, 0F, 11, 14, 15, 16, 17, 19, 1A 03, 1C 00, 21, 25); absence in Hamlib is taken as absence on the radio, which may be too cautious. `identify` (command 19 00) is claimed on every file regardless of Hamlib's list; an older radio may answer NG, which the volunteer self-test reports. Settings and CI-V menu items (address, baud rate, transceive) are set at the radio." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -103,5 +103,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3009 --dump-caps` Mode list", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (none). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3009 --dump-caps` Mode list", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (none). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
 verified = { state = "unverified" }
