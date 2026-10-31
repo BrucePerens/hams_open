@@ -963,7 +963,7 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
 
 /// The steps on which Hamlib and radioctl disagree for a file of the first Icom batch.
 ///
-/// Twelve of the nineteen agree on everything the harness can express. The IC-7600, IC-7800 and
+/// Eleven of the nineteen agree on everything the harness can express. The IC-7600, IC-7800 and
 /// IC-7850/7851 are Main/Sub rigs like the IC-7610: Hamlib's split flow starts with `07 C2` (dual
 /// watch), `07 D2` and `07 D0`, which the virtual rig refuses (the Main/Sub family of command 07
 /// is not implemented), so Hamlib's split and second-frequency steps fail there while radioctl
@@ -973,7 +973,9 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
 /// radioctl ends in CW). The recorded Hamlib frames show no mode write at all (no `06` and no
 /// `26 00`) between its two frequency writes, only `1A 06 00 00` (data mode off) and `07 00` /
 /// `07 B0` (VFO and memory selection), so on this model's path Hamlib's mode set produced no mode
-/// frame; why is an open question, kept visible here.
+/// frame; why is an open question, kept visible here. The IC-706MkIIG has the capability `levels`
+/// only for its attenuator and preamplifier (the capability is one switch for every level): Hamlib
+/// has no AF gain for the model and refuses it, radioctl would send `14 01`.
 fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     let main_sub = vec![
         "SetSplit(true)",
@@ -986,6 +988,7 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
         "icom-ic-7600" | "icom-ic-7800" | "icom-ic-7851" => main_sub,
         "icom-ic-7760" => main_sub[..4].to_vec(),
         "icom-ic-7700" => vec!["final mode"],
+        "icom-ic-706mkiig" => vec!["SetLevel(AfGain, 128)", "GetLevel(AfGain)"],
         _ => Vec::new(),
     }
 }
