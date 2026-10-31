@@ -55,6 +55,9 @@ pub struct Step {
     pub panel: Option<Panel>,
 }
 
+// A step with neither `op` nor `panel` but with `rx`, allowed as the first step only, is the
+// radio's prologue: what it sends before being asked anything.
+
 /// A transcript.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transcript {
@@ -303,9 +306,15 @@ pub fn parse(text: &str) -> Result<Transcript, RigError> {
         };
         let solicited = step.op.is_some() && !step.tx.is_empty() && step.panel.is_none();
         let unsolicited = step.op.is_none() && step.tx.is_empty() && step.panel.is_some();
-        if !solicited && !unsolicited {
+        // The radio speaking first (a FlexRadio's version and handle lines): only as step 0.
+        let prologue = index == 0
+            && step.op.is_none()
+            && step.tx.is_empty()
+            && step.panel.is_none()
+            && !step.rx.is_empty();
+        if !solicited && !unsolicited && !prologue {
             return Err(bad(format!(
-                "step {index}: needs either op and tx, or only a panel"
+                "step {index}: needs either op and tx, or only a panel, or (first step only) rx alone as the radio's prologue"
             )));
         }
         if step.expect.is_none() && !step.expect_more.is_empty() {

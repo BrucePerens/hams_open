@@ -1,0 +1,175 @@
+# Conformance transcript for rigs/flex-6400.toml: the SmartSDR TCP/IP API as the FlexRadio engine
+# speaks it (text lines; every tx_text and rx_text is ASCII on the wire).
+# ORIGIN: written by hand from radioctl's own virtual FLEX-6400 (crates/radioctl-protocols/src/
+# virtual_flex.rs) and the engine, both written from FlexRadio's published SmartSDR API wiki pages
+# named in flex.rs. This is NOT a recording of a radio. It proves the engine, the virtual radio and
+# the description agree with each other, not that they agree with a FLEX-6400. The handle
+# (6F4EC23D), the version strings and the starting levels are the virtual radio's own values.
+# The first step is the radio's prologue (V and H lines); the first command carries the engine's
+# subscriptions and an `info` ahead of the `ping` that reads the slice state.
+schema = 1
+rig = "flex-6400"
+origin = "hand-written from radioctl's virtual FLEX-6400 and the SmartSDR wiki; not a capture of a radio"
+
+[[step]]
+rx_text = "V1.4.0.0\nH6F4EC23D\n"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "C1|sub slice all\nC2|sub tx all\nC3|sub pan all\nC4|info\nC5|ping\n"
+rx_text = "R1|0|\nS6F4EC23D|slice 0 in_use=1 RF_frequency=14.074000 mode=USB filter_lo=0.000100 filter_hi=0.002800 audio_level=50\nR2|0|\nS0|interlock state=READY tx_allowed=1\nS6F4EC23D|transmit rfpower=10 miclevel=40\nR3|0|\nS6F4EC23D|display pan 0x40000000 center=14.074000 bandwidth=0.200000 x_pixels=800 y_pixels=400 fps=20\nR4|0|model=\"FLEX-6400\",name=\"Virtual\",callsign=\"N0CALL\",scu=1,slice=4,software_ver=3.2.31\nR5|0|\n"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
+expect_more = [
+  { kind = "mode", mode = "usb" },
+  { kind = "filter-width", hz = 2700 },
+  { kind = "level", level = "af-gain", value = 50 },
+  { kind = "ptt", on = false },
+  { kind = "level", level = "rf-power", value = 10 },
+  { kind = "level", level = "mic-gain", value = 40 },
+  { kind = "frequency", vfo = "a", hz = 14074000 },
+]
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
+tx_text = "C6|slice t 0 7.030000\n"
+rx_text = "R6|0|\nS6F4EC23D|slice 0 in_use=1 RF_frequency=7.030000 mode=USB filter_lo=0.000100 filter_hi=0.002800 audio_level=50\n"
+expect = { kind = "ack" }
+expect_more = [
+  { kind = "frequency", vfo = "a", hz = 7030000 },
+  { kind = "mode", mode = "usb" },
+  { kind = "filter-width", hz = 2700 },
+  { kind = "level", level = "af-gain", value = 50 },
+]
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "C7|ping\n"
+rx_text = "R7|0|\n"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "C8|ping\n"
+rx_text = "R8|0|\n"
+expect = { kind = "mode", mode = "usb" }
+
+[[step]]
+op = { kind = "set-mode", mode = "cw" }
+tx_text = "C9|slice s 0 mode=cw\n"
+rx_text = "R9|0|\nS6F4EC23D|slice 0 in_use=1 RF_frequency=7.030000 mode=CW filter_lo=0.000100 filter_hi=0.002800 audio_level=50\n"
+expect = { kind = "ack" }
+expect_more = [
+  { kind = "frequency", vfo = "a", hz = 7030000 },
+  { kind = "mode", mode = "cw" },
+  { kind = "filter-width", hz = 2700 },
+  { kind = "level", level = "af-gain", value = 50 },
+]
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "C10|ping\n"
+rx_text = "R10|0|\n"
+expect = { kind = "mode", mode = "cw" }
+
+[[step]]
+op = { kind = "get-ptt" }
+tx_text = "C11|ping\n"
+rx_text = "R11|0|\n"
+expect = { kind = "ptt", on = false }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "C12|ping\n"
+rx_text = "R12|0|\n"
+expect = { kind = "filter-width", hz = 2700 }
+
+[[step]]
+op = { kind = "set-filter-width", hz = 500 }
+tx_text = "C13|filt 0 100 600\n"
+rx_text = "R13|0|\nS6F4EC23D|slice 0 in_use=1 RF_frequency=7.030000 mode=CW filter_lo=0.000100 filter_hi=0.000600 audio_level=50\n"
+expect = { kind = "ack" }
+expect_more = [
+  { kind = "frequency", vfo = "a", hz = 7030000 },
+  { kind = "mode", mode = "cw" },
+  { kind = "filter-width", hz = 500 },
+  { kind = "level", level = "af-gain", value = 50 },
+]
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "C14|ping\n"
+rx_text = "R14|0|\n"
+expect = { kind = "filter-width", hz = 500 }
+
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx_text = "C15|ping\n"
+rx_text = "R15|0|\n"
+expect = { kind = "level", level = "af-gain", value = 50 }
+
+[[step]]
+op = { kind = "set-level", level = "af-gain", value = 40 }
+tx_text = "C16|slice s 0 audio_level=40\n"
+rx_text = "R16|0|\nS6F4EC23D|slice 0 in_use=1 RF_frequency=7.030000 mode=CW filter_lo=0.000100 filter_hi=0.000600 audio_level=40\n"
+expect = { kind = "ack" }
+expect_more = [
+  { kind = "frequency", vfo = "a", hz = 7030000 },
+  { kind = "mode", mode = "cw" },
+  { kind = "filter-width", hz = 500 },
+  { kind = "level", level = "af-gain", value = 40 },
+]
+
+[[step]]
+op = { kind = "get-level", level = "af-gain" }
+tx_text = "C17|ping\n"
+rx_text = "R17|0|\n"
+expect = { kind = "level", level = "af-gain", value = 40 }
+
+[[step]]
+op = { kind = "get-level", level = "rf-power" }
+tx_text = "C18|ping\n"
+rx_text = "R18|0|\n"
+expect = { kind = "level", level = "rf-power", value = 10 }
+
+[[step]]
+op = { kind = "set-level", level = "rf-power", value = 25 }
+tx_text = "C19|transmit set rfpower=25\n"
+rx_text = "R19|0|\nS6F4EC23D|transmit rfpower=25 miclevel=40\n"
+expect = { kind = "ack" }
+expect_more = [
+  { kind = "level", level = "rf-power", value = 25 },
+  { kind = "level", level = "mic-gain", value = 40 },
+]
+
+[[step]]
+op = { kind = "get-firmware" }
+tx_text = "C20|version\n"
+rx_text = "R20|0|SmartSDR-MB=3.2.31.1#PSoC-MBTRX=1.3.1.6#FPGA-MB=0.6.0.0\n"
+expect = { kind = "firmware", major = 3, minor = 2 }
+
+[[step]]
+op = { kind = "set-ptt", on = false }
+tx_text = "C21|xmit 0\n"
+rx_text = "R21|0|\nS0|interlock state=READY tx_allowed=1\n"
+expect = { kind = "ack" }
+expect_more = [{ kind = "ptt", on = false }]
+
+[[step]]
+panel = { kind = "frequency", hz = 14250000 }
+rx_text = "S6F4EC23D|slice 0 in_use=1 RF_frequency=14.250000 mode=CW filter_lo=0.000100 filter_hi=0.000600 audio_level=40\n"
+expect = { kind = "frequency", vfo = "a", hz = 14250000 }
+expect_more = [
+  { kind = "mode", mode = "cw" },
+  { kind = "filter-width", hz = 500 },
+  { kind = "level", level = "af-gain", value = 40 },
+]
+
+[[step]]
+panel = { kind = "ptt", on = true }
+rx_text = "S0|interlock state=TRANSMITTING source=SW tx_allowed=1\n"
+expect = { kind = "ptt", on = true }
+
+[[step]]
+panel = { kind = "ptt", on = false }
+rx_text = "S0|interlock state=READY tx_allowed=1\n"
+expect = { kind = "ptt", on = false }

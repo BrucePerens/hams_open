@@ -1,0 +1,84 @@
+# Conformance transcript for rigs/anan-100.toml: the line protocol between the hpsdr-network
+# engine and the hpsdr_io bridge (crates/radioctl-protocols/src/hpsdr_net.rs, hpsdr_io.rs), NOT the
+# radio's UDP wire. An OpenHPSDR radio has no command stream of the kind a transcript records: its
+# control plane is UDP datagrams the hpsdr crate assembles, so this is the nearest request-and-reply
+# layer radioctl has, replayed against a stand-in for the bridge (conformance.rs, BridgeStandIn).
+# ORIGIN: written by hand from the engine and the bridge, both our own code. This is NOT a recording
+# of a radio and says nothing about an ANAN-100; the radio side is tested through the hpsdr crate's
+# emulators (tests/hpsdr_actor.rs). The stand-in reads forward power 0 and SWR 1.0 (10 tenths), as
+# the bridge reports with no forward power.
+schema = 1
+rig = "anan-100"
+origin = "hand-written from the engine-to-bridge line protocol; not the radio's wire, not a capture"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "GF\n"
+rx_text = "F 7100000\n"
+expect = { kind = "frequency", vfo = "a", hz = 7100000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
+tx_text = "F 7030000\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "GF\n"
+rx_text = "F 7030000\n"
+expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+
+[[step]]
+op = { kind = "get-ptt" }
+tx_text = "GP\n"
+rx_text = "P 0\n"
+expect = { kind = "ptt", on = false }
+
+[[step]]
+op = { kind = "set-ptt", on = false }
+tx_text = "P 0\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-power" }
+tx_text = "GW\n"
+rx_text = "W 0\n"
+expect = { kind = "power", value = 0 }
+
+[[step]]
+op = { kind = "get-swr" }
+tx_text = "GR\n"
+rx_text = "R 10\n"
+expect = { kind = "swr", value = 10 }
+
+[[step]]
+op = { kind = "get-level", level = "attenuator" }
+tx_text = "GA\n"
+rx_text = "A 0\n"
+expect = { kind = "level", level = "attenuator", value = 0 }
+
+[[step]]
+op = { kind = "set-level", level = "attenuator", value = 10 }
+tx_text = "A 10\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-level", level = "attenuator" }
+tx_text = "GA\n"
+rx_text = "A 10\n"
+expect = { kind = "level", level = "attenuator", value = 10 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 14074000 }
+tx_text = "F 14074000\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "GF\n"
+rx_text = "F 14074000\n"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
