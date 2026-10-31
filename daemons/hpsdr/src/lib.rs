@@ -10,14 +10,16 @@
 //! * **Tokio only, no runtime of our own.** Anything that opens a socket or spawns a task takes a
 //!   [`tokio::runtime::Handle`].
 //! * **Everything is `verified=unverified`** until run against a real radio.
-#![doc = "Modules: [`error`], [`gate`], [`iq`] stream interface, [`types`], [`p1`] Protocol 1 wire format, [`discovery`], [`session`] receive session, [`emulator`] loopback radio."]
+#![doc = "Modules: [`error`], [`gate`], [`iq`] stream interface, [`types`], [`p1`] Protocol 1 wire format, [`discovery`], [`session`] receive session, [`emulator`] loopback radio, [`session_p2`] Protocol 2 receive session, [`emulator_p2`] Protocol 2 loopback radio."]
 
 pub mod discovery;
 pub mod emulator;
+pub mod emulator_p2;
 pub mod error;
 pub mod gate;
 pub mod iq;
 pub mod p1;
 pub mod p2;
 pub mod session;
+pub mod session_p2;
 pub mod types;
