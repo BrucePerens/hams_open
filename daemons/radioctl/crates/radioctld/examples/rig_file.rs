@@ -5,17 +5,31 @@
 //! Usage: `rig_file [RIG_ID]` (default `elecraft-kx3`), run from anywhere inside the workspace.
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use radioctl_core::rigfile::{self, Verified};
 use radioctl_core::transcript;
 use radioctl_protocols::conformance;
 
+/// The directory of rig descriptions: `$RADIOCTL_RIGS`, else `./rigs` when it exists (the binaries
+/// copied to a bench machine run from the directory that holds `rigs/`), else the checkout this
+/// program was built from.
+fn rigs_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("RADIOCTL_RIGS") {
+        return PathBuf::from(dir);
+    }
+    let here = PathBuf::from("rigs");
+    if here.is_dir() {
+        return here;
+    }
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs")
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let id = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "elecraft-kx3".to_string());
-    let rigs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs");
+    let rigs = rigs_dir();
     let loaded = rigfile::parse(&std::fs::read_to_string(rigs.join(format!("{id}.toml")))?)?;
     let description = &loaded.description;
     println!("{}: family {:?}", description.name, description.family);

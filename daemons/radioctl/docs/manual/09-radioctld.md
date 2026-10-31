@@ -82,7 +82,7 @@ reply_delay_ms = 0
 | `rig.hamlib_model` | 1 | | The model number `\dump_state` reports. |
 | `transport.kind` | required | `virtual`, `serial`, `tcp` | See below. |
 | virtual: `reply_delay_ms` | 0 | 0 to 10000 | How long the virtual rig takes to answer. |
-| serial: `path` or `usb`, `baud` | | baud 300 to 4000000 | Exactly one of `path = "/dev/ttyUSB0"` and `usb = { vid, pid, serial }`. The port is opened 8N1 with the modem lines inactive and one open attempt. |
+| serial: `path` or `usb`, `baud`, `lines` | `lines = "managed"` | baud 300 to 4000000; `lines` is `managed` or `unmanaged` | Exactly one of `path = "/dev/ttyUSB0"` and `usb = { vid, pid, serial }`. The port is opened 8N1 with the modem lines inactive and one open attempt. `lines = "unmanaged"` is for a port that has no DTR and RTS (a pseudo-terminal such as the one `virtual_radio_pty` makes, a CDC ACM gadget): the lines are never touched. With the default a pty fails the open with `LinkDown: DTR ... Not a typewriter`; a real radio's USB port must keep `managed`. |
 | tcp: `address` | | `host:port` | A network serial server or a radio's own CAT port. No reconnect (chapter [5](05-transports.md)). |
 
 `radioctld.example.toml` in the crate root is the annotated example. Not configurable today: serial data

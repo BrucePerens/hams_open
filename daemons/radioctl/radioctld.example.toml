@@ -34,6 +34,7 @@ kind = "virtual"                              # an in-memory rig generated from 
 # kind = "serial"                             # a serial or USB-serial port
 # path = "/dev/ttyUSB0"                       # or: usb = { vid = 0x0403, pid = 0x6001, serial = "A12345" }
 # baud = 38400
+# lines = "managed"                           # "unmanaged" for a pty or other port without DTR/RTS
 
 # [rig.transport]
 # kind = "tcp"                                # a network serial server or a radio's own CAT port

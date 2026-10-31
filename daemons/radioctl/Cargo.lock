@@ -502,6 +502,7 @@ dependencies = [
  "radioctl-protocols",
  "radioctl-splitter",
  "serde",
+ "serialport",
  "tokio",
  "toml 0.8.23",
 ]

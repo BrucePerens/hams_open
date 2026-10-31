@@ -80,6 +80,37 @@ The ids here are the common CP210x bridge, shown as an illustration; read yours 
 description is unverified, so start by reading only. Chapter [5](05-transports.md) covers ports and
 unplugging.
 
+## Rehearse a real-radio session with no radio
+
+The example `virtual_radio_pty` puts the virtual radio of a description on a pseudo-terminal, so
+`radioctld`'s serial path, Hamlib's `rigctl` and your own tools see a serial port that answers like the
+radio. Nothing opens a real device. Run the programs from the directory that holds `rigs/` (or set
+`RADIOCTL_RIGS`); the front panel and the cable are typed on its standard input:
+
+```sh
+mkfifo ctl; exec 3<>ctl                       # keeps standard input open
+virtual_radio_pty icom-ic-7300 /tmp/ic7300-pty wire.log <&3 &
+echo "freq 14250000" >&3                      # a hand on the tuning knob
+echo "unplug" >&3; echo "plug" >&3            # the cable pulled and pushed back
+```
+
+```toml radioctld
+[[rig]]
+name = "ic7300"
+description = "rigs/icom-ic-7300.toml"
+listen = "127.0.0.1:4532"
+hamlib_model = 3073
+[rig.transport]
+kind = "serial"
+path = "/tmp/ic7300-pty"
+baud = 19200
+lines = "unmanaged"
+```
+
+`lines = "unmanaged"` is needed because a pty has no DTR or RTS; with a real radio leave it out. The
+file `wire.log` records every byte in both directions as hexadecimal. Hamlib's own driver can be
+pointed at the same port: `rigctl -m 3073 -r /tmp/ic7300-pty -s 19200 f`.
+
 ## Use it from Rust in 30 lines
 
 The program below builds the same virtual KX3, spawns a rig actor for it on your runtime, reads and

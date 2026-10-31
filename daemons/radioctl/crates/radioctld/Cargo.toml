@@ -35,4 +35,6 @@ tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time",
 
 [dev-dependencies]
 proptest = "1"
+# The virtual_radio_pty example makes a pseudo-terminal for a virtual radio.
+serialport = { version = "4.10", default-features = false }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros", "signal", "test-util"] }

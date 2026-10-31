@@ -103,10 +103,14 @@ pub async fn build_rig(
             virtual_control = Some(control);
             spawn(runtime, engine, stream, options).map_err(fail)?
         }
-        TransportConfig::Serial { target, baud } => {
-            let link = open_serial(runtime, SerialConfig::new(target.clone(), *baud))
-                .await
-                .map_err(fail)?;
+        TransportConfig::Serial {
+            target,
+            baud,
+            lines,
+        } => {
+            let mut serial = SerialConfig::new(target.clone(), *baud);
+            serial.lines = *lines;
+            let link = open_serial(runtime, serial).await.map_err(fail)?;
             // The actor watches the port: a port loss takes the link down, a reopen unkeys the
             // rig before any other command (RigOptions::link_watch). The control lines and
             // the status stay with the service so the link object is never dropped early.
