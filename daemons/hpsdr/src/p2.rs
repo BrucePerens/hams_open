@@ -73,10 +73,14 @@ impl Default for RadioPorts {
     }
 }
 
+// [@ANCHOR: hpsdr_p2_put16]
+/// Store a big-endian 16-bit value.
 fn put16(p: &mut [u8], at: usize, v: u16) {
     p[at..at + 2].copy_from_slice(&v.to_be_bytes());
 }
 
+// [@ANCHOR: hpsdr_p2_put32]
+/// Store a big-endian 32-bit value.
 fn put32(p: &mut [u8], at: usize, v: u32) {
     p[at..at + 4].copy_from_slice(&v.to_be_bytes());
 }
@@ -238,6 +242,8 @@ pub struct HpRx {
     pub phase_clock_hz: Option<f64>,
 }
 
+// [@ANCHOR: hpsdr_p2_hp_base]
+/// The receive part of a High Priority packet, shared by both encoders.
 fn hp_base(seq: u32, hp: &HpRx) -> Result<Vec<u8>, HpsdrError> {
     if hp.ddc_hz.len() > MAX_DDC || hp.atten_adc0 > 31 || hp.atten_adc1 > 31 {
         return Err(HpsdrError::Config("high priority settings".into()));
@@ -530,6 +536,9 @@ mod tests {
     fn receive_high_priority_never_carries_transmit_state() {
         // Tests [@ANCHOR: hpsdr_p2_phase_word]
         // Tests [@ANCHOR: hpsdr_p2_encode_hp_rx]
+        // Tests [@ANCHOR: hpsdr_p2_hp_base]
+        // Tests [@ANCHOR: hpsdr_p2_put16]
+        // Tests [@ANCHOR: hpsdr_p2_put32]
         let p = encode_high_priority_rx(9, &hp()).unwrap_or_default();
         assert_eq!((p.len(), p[4]), (1444, 1), "run only; the PTT bit is clear");
         assert_eq!(&p[9..13], &7_074_000u32.to_be_bytes());

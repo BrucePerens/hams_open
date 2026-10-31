@@ -124,12 +124,15 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_p1_apply_status_cc] (p1) Fold one radio-to-PC C&C quintuple into `st`. C0 bits 7..3 are the address; bits 2..0 are the
 - [@ANCHOR: hpsdr:hpsdr_p1_encode_status_cc] (p1) Build the radio-to-PC C&C quintuple for status address `addr` (0..=4) from `st` (emulator side).
 - [@ANCHOR: hpsdr:hpsdr_p2_ports_default] (p2) The default port map from the specification.
+- [@ANCHOR: hpsdr:hpsdr_p2_put16] (p2) Store a big-endian 16-bit value.
+- [@ANCHOR: hpsdr:hpsdr_p2_put32] (p2) Store a big-endian 32-bit value.
 - [@ANCHOR: hpsdr:hpsdr_p2_discovery_packet] (p2) Discovery request: sequence 0, command 0x02, zeros (P2, "Discovery Packet"). Send to port 1024.
 - [@ANCHOR: hpsdr:hpsdr_p2_parse_reply] (p2) Parse a discovery reply. Replies with board type 254/255 (XML or full description) are reported
 - [@ANCHOR: hpsdr:hpsdr_p2_encode_reply] (p2) Build a discovery reply (emulator side). The board type byte is the P2 number of `board_type`.
 - [@ANCHOR: hpsdr:hpsdr_p2_encode_general] (p2) The General packet (command 0): the port map, the hardware reset timer enabled (byte 38 bit 0, so
 - [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc_specific] (p2) The DDC Specific packet (to the DDC-specific port): number of ADCs, dither, random, per-DDC enable
 - [@ANCHOR: hpsdr:hpsdr_p2_phase_word] (p2) `2^32 * f / clock`, rounded (P2, "General Packet" byte 37 text).
+- [@ANCHOR: hpsdr:hpsdr_p2_hp_base] (p2) The receive part of a High Priority packet, shared by both encoders.
 - [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_rx] (p2) A receive-only High Priority packet: run bit and DDC frequencies and attenuators. PTT (byte 4 bit
 - [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_tx] (p2) A High Priority packet that may key the transmitter. Returns [`HpsdrError::GateClosed`] and builds
 - [@ANCHOR: hpsdr:hpsdr_p2_encode_duc_iq] (p2) A DUC I/Q packet (to the DUC0 I/Q port): 240 samples of 24-bit I then Q, big-endian (P2, "DUC I&Q
