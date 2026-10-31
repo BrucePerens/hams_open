@@ -53,6 +53,10 @@ pub enum KenwoodDialect {
     /// The TS-890S command set: no `IF`, the mode through `OM`, `AGnnn`, split through `TB`,
     /// one-digit `RA` and `PA`.
     Ts890,
+    /// The older Kenwood set of the TS-440S (IC-10 manual) and its relatives: `IF` as the classic
+    /// set, but `MD` only sets (the mode is read from `IF`), `FN` and `SP` replace `FR` and `FT`,
+    /// `RU` and `RD` take no parameter, and there is no `SM`, `AG`, `RG`, `PC` or `KS`.
+    Ts440,
 }
 
 impl KenwoodDialect {
@@ -62,6 +66,7 @@ impl KenwoodDialect {
         match self {
             KenwoodDialect::Classic => "classic",
             KenwoodDialect::Ts890 => "ts890",
+            KenwoodDialect::Ts440 => "ts440",
         }
     }
 
@@ -71,6 +76,7 @@ impl KenwoodDialect {
         match name {
             "classic" => Some(KenwoodDialect::Classic),
             "ts890" => Some(KenwoodDialect::Ts890),
+            "ts440" => Some(KenwoodDialect::Ts440),
             _ => None,
         }
     }
@@ -403,7 +409,11 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_kenwood_dialect_from_name]
     #[test]
     fn kenwood_dialect_names_round_trip() {
-        for d in [KenwoodDialect::Classic, KenwoodDialect::Ts890] {
+        for d in [
+            KenwoodDialect::Classic,
+            KenwoodDialect::Ts890,
+            KenwoodDialect::Ts440,
+        ] {
             assert_eq!(KenwoodDialect::from_name(d.name()), Some(d));
         }
         assert_eq!(KenwoodDialect::from_name("ts2000"), None);

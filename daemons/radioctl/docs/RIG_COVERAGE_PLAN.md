@@ -6,7 +6,7 @@ verified, and make a best effort to make them work out of the box.
 
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
-Today 72 of 313 models have a description (77 files, because the four FlexRadio 6000-series files share Hamlib's one
+Today 73 of 313 models have a description (78 files, because the four FlexRadio 6000-series files share Hamlib's one
 "6xxx" model and the two ANAN files have no Hamlib model), and none is hardware-verified.
 
 | Tier | Work | Models | Described | Left |
@@ -84,7 +84,7 @@ Left, with the reason:
 
 | Model (Hamlib id) | What is needed |
 |---|---|
-| TS-440S (2002), R-5000 (2015) | Hamlib's IC-10 dialect: `IF` of 37 (TS-440S) or 32 (R-5000) characters and other commands; a dialect in the Kenwood engine and a twin |
+| R-5000 (2015) | Hamlib's IC-10 dialect with an `IF` of 32 characters; the TS-440S is done as `kenwood.dialect = "ts440"` (its IC-10 manual shows a 38-character `IF`, not Hamlib's 37) and the R-5000 needs a twin |
 | TS-930 (2022) | Hamlib has no `ID` for it (the number is unknown), so the description cannot be written honestly; needs a volunteer's `ID;` answer |
 | TS-990S (2039) | Main/Sub receivers with no VFO A/B in Hamlib's model and its own mode letters (C to H): needs a Main/Sub model in the engine. The PC command reference (May 2015) is downloaded (people.freebsd.org mirror) and ready to read |
 | TRC-80 (2030) | a transceiver module for a commercial radio; Hamlib reads its frequency from `IF` (`kenwood_get_freq_if`), a different path from the other models; needs a guide or a volunteer |

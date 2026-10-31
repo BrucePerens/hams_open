@@ -123,6 +123,8 @@ impl RigState {
     }
 }
 
+#[path = "virtual_ts440.rs"]
+mod virtual_ts440;
 #[path = "virtual_ts890.rs"]
 mod virtual_ts890;
 
@@ -727,6 +729,9 @@ impl VirtualRig {
         if self.is_ts890() {
             return self.ts890_command(text);
         }
+        if self.is_ts440() {
+            return self.ts440_command(text);
+        }
         let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
         let reply = match (name, arg) {
             ("FA", "") => Some(format!("FA{:011};", self.state.freq_a.0)),
@@ -1079,7 +1084,10 @@ impl VirtualRig {
         let id = self.kenwood_id();
         let offset = self.state.rit_offset;
         let sign = if offset < 0 { '-' } else { '+' };
-        let region = if id == 21 || id == 23 {
+        let region = if self.is_ts440() {
+            // P2 is five characters and P3 a sign and four digits (IC-10 manual, page 18).
+            format!("00000{sign}{:04}", offset.unsigned_abs())
+        } else if id == 21 || id == 23 {
             format!("     {sign}{:04}", offset.unsigned_abs())
         } else {
             format!("0000{sign}{:05}", offset.unsigned_abs())

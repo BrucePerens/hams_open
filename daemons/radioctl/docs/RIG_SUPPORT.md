@@ -9,21 +9,21 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **72** (77 description files)
+- With a radioctl description: **73** (78 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 72 |
-| engine only | 67 |
+| described | 73 |
+| engine only | 66 |
 | needs variant | 37 |
 | needs engine | 83 |
 | odd device | 54 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 295 |
-| manual-checked | 18 |
+| unverified | 294 |
+| manual-checked | 19 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -31,7 +31,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 68 |
+| A | data only on an existing engine | 135 | 69 |
 | B | variants of an existing engine | 41 | 4 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
@@ -43,7 +43,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_serial | C/D | - | 94 | 0 | 0 |
 | icom_civ | A | civ | 79 | 28 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
-| kenwood_ascii | A | kenwood | 25 | 20 | 0 |
+| kenwood_ascii | A | kenwood | 25 | 21 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
 | kenwood_hh_ascii | B | - | 10 | 0 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
@@ -238,7 +238,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2030 | Kenwood | TRC-80 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
 | 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | `kenwood-ts-140s` | unverified | - | described |
 | 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
-| 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | `kenwood-ts-440s` | manual-checked | - | described |
 | 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | `kenwood-ts-450s` | unverified | - | described |
 | 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | `kenwood-ts-480` | manual-checked | - | described |
 | 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | `kenwood-ts-50s` | unverified | - | described |

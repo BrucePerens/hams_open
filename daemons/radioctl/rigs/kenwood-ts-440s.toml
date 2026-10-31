@@ -1,0 +1,92 @@
+# Rig description: Kenwood TS-440S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The command facts marked manual-checked were compared with the
+# IC-10 manual's command pages for the TS-440S (printed pages 12 to 31; the pages actually read are named in each fact; sha256 in each fact).
+# Dialect "ts440": the older Kenwood command set. MD only sets (the mode is P9 of IF), FN and SP replace FR and FT, RU and RD take no parameter, and there is no SM, AG, RG, MG, PC or KS.
+# The IC-10 manual shows IF answering 38 characters with the semicolon in column 38, the classic layout; Hamlib's note of 37 characters for this model is not what the manual shows.
+# Interface: the IF-232C / IC-10 level converter, 4800 bit/s 8N2 (from the previous research pass; not re-read here and not a field of this format). Hamlib 4.6.2 (rigs/kenwood/ts440.c) was not used.
+# Known gaps: an exact RIT offset cannot be set (RU and RD move it by an unstated step, so the engine refuses it); no signal meter or level commands exist in this dialect; mode letters are the usual Kenwood table and not checked against a page.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "rit-xit", "identify"]
+
+[rig]
+id = "kenwood-ts-440s"
+name = "Kenwood TS-440S"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 4
+dialect = "ts440"
+
+[timing]
+timeout_ms = 1000
+retries = 2
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-450s.toml", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "manual", reference = "Kenwood 'IC-10 Interface Kit' manual (the TS-440S computer-interface manual; file qslnet_IC-10-IC-KIT-Manual.pdf, a scan copied from qslnet.de; sha256 2a737b9f9f3f3860e582bb669bdcb6037ef856af4bcbfd340eac58b5f1ed4331): ID, printed page 17 (P1 format 16, MODEL No. 004)", note = "Three digits: ID004;." }
+verified = { state = "manual-checked", reference = "IC-10 manual, ID, printed page 17" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "manual", reference = "Kenwood 'IC-10 Interface Kit' manual (the TS-440S computer-interface manual; file qslnet_IC-10-IC-KIT-Manual.pdf, a scan copied from qslnet.de; sha256 2a737b9f9f3f3860e582bb669bdcb6037ef856af4bcbfd340eac58b5f1ed4331): MD printed page 21 (set command only; read and answer blank), FN page 16 (set only), SP page 29 (set only), RD/RU page 25 (no parameter), IF page 18 (answer to column 38), command list page 12 (no SM, AG, RG, PC, KS)", note = "Our name for the command set: radioctl-protocols/src/kenwood.rs." }
+verified = { state = "manual-checked", reference = "IC-10 manual, pages 12, 16, 18, 21, 25, 29" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "IC-10 manual command list, printed page 12 (RX/TX, page 27, not read)", note = "Transmit-capable: the rig transmit gate applies and stays closed by default. PTT is unverified on hardware." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Kenwood 'IC-10 Interface Kit' manual (the TS-440S computer-interface manual; file qslnet_IC-10-IC-KIT-Manual.pdf, a scan copied from qslnet.de; sha256 2a737b9f9f3f3860e582bb669bdcb6037ef856af4bcbfd340eac58b5f1ed4331): AI printed page 13 (one parameter digit; sends IF on a change, every 1.5 s), FA and FB page 15 (P1 format 4, set and read), FN page 16, ID page 17, IF page 18 (P1 frequency, P3 RIT frequency, P4 RIT, P5 XIT, P8 TX/RX, P9 mode, P10 function, P12 split), MD page 21, RD/RU page 25, SP page 29", note = "Split is FN then SP; the mode, PTT, RIT, XIT, split and RIT offset are read from IF. CW and levels are not declared." }
+verified = { state = "manual-checked", reference = "IC-10 manual, pages 13, 15, 16, 17, 18, 21, 25, 29" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=RTTY)", note = "The IC-10 manual MD and IF pages read here show a one-character mode parameter but no table of letters." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-450s.toml", note = "Our own choice for a slow serial interface, not a measurement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-590sg.toml", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+

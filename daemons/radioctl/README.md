@@ -19,7 +19,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect), Elecraft KX3, Yaesu newcat and legacy five-byte, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V).
-- Rig descriptions: 77 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
+- Rig descriptions: 78 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
 - Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -141,7 +141,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 |---|---|---|
 | Elecraft | `elecraft-kx3`, `elecraft-k3`, `elecraft-k3s`, `elecraft-kx2`, `elecraft-k4` | Elecraft Programmer's Reference Rev. G5, cited by command heading and page, with the PDF's sha256; transcript hand-written from the same manual |
 | Icom CI-V | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700`, `icom-ic-7000`, `icom-ic-7100`, `icom-ic-7200`, `icom-ic-7410`, `icom-ic-7600`, `icom-ic-7700`, `icom-ic-7760`, `icom-ic-7800`, `icom-ic-7851`, `icom-ic-9100`, `icom-ic-r8600`, `icom-ic-r75`, `icom-ic-r9500`, `icom-ic-706`, `icom-ic-706mkii`, `icom-ic-706mkiig`, `icom-ic-718`, `icom-ic-746`, `icom-ic-746pro` | Hamlib 4.6.2 source (facts only) and `rigctl --dump-caps` output (see below); for the 19 later models, Icom's instruction manuals (archive.org copies) where one could be read, facts only, `manual-checked` per fact |
-| Kenwood | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s`, `kenwood-ts-50s`, `kenwood-ts-140s`, `kenwood-ts-450s`, `kenwood-ts-480`, `kenwood-ts-570d`, `kenwood-ts-570s`, `kenwood-ts-680s`, `kenwood-ts-690s`, `kenwood-ts-711`, `kenwood-ts-790`, `kenwood-ts-811`, `kenwood-ts-850`, `kenwood-ts-870s`, `kenwood-ts-940s`, `kenwood-ts-950s`, `kenwood-ts-950sdx` | Kenwood's published PC command references (document, page and, for the TS-590 guide, the PDF's sha256 per fact); the sixteen newer files from Hamlib 4.6.2 facts only |
+| Kenwood | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s`, `kenwood-ts-50s`, `kenwood-ts-140s`, `kenwood-ts-440s`, `kenwood-ts-450s`, `kenwood-ts-480`, `kenwood-ts-570d`, `kenwood-ts-570s`, `kenwood-ts-680s`, `kenwood-ts-690s`, `kenwood-ts-711`, `kenwood-ts-790`, `kenwood-ts-811`, `kenwood-ts-850`, `kenwood-ts-870s`, `kenwood-ts-940s`, `kenwood-ts-950s`, `kenwood-ts-950sdx` | Kenwood's published PC command references (document, page and, for the TS-590 guide, the PDF's sha256 per fact); the sixteen newer files from Hamlib 4.6.2 facts only |
 | Xiegu (CI-V) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only, with Hamlib's shared addresses |
 | Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d`, `yaesu-ft-450d`, `yaesu-ft-450`, `yaesu-ft-950`, `yaesu-ft-2000`, `yaesu-ftdx-1200`, `yaesu-ftdx-3000`, `yaesu-ftdx-5000`, `yaesu-ftdx-9000`, `yaesu-ft-891`, `yaesu-ft-710`, `yaesu-ftdx-101mp` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact); the FT-450 from Hamlib 4.6.2 facts only |
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
@@ -188,7 +188,8 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   - A command the model lacks in Hamlib is left out, not guessed: `read-ptt`, `split`, `rit-xit`, `transceive` only where Hamlib has the matching function; `second-vfo` only where Hamlib can set VFO B (not on the TS-140S, 680S, 711, 811, 950S and 950SDX); `levels` and `read-signal` only on the TS-480 (whose guide has now been read); the AG/RG/PC/KS forms of the older models differ and have not been read yet.
   - The TS-680S has no `identify`: Hamlib supposes it answers `ID006;` like the TS-140S and cannot tell them apart. The TS-940S has no `rtty` mode: Hamlib's mode table has no code for it.
   - Hamlib reads the second frequency back with `FA;` where radioctl reads `FB;` on the TS-450S, 480, 570D and 570S: pinned in `known_ascii_batch_divergences`. The other six agree on every step.
-  - Not done: the TS-440S and R-5000 (Hamlib's IC-10 dialect: 32 or 37-character `IF`, different commands), the TS-930 (no known `ID`), the TS-990S (Main/Sub receivers, no VFO A/B in Hamlib, its own mode letters). The TH and TM handhelds are a different command family. See `docs/RIG_COVERAGE_PLAN.md`.
+  - Older dialect (`kenwood.dialect = "ts440"`): the TS-440S, from the IC-10 manual's command pages (read as images; `manual-checked` for the pages named in its facts): `MD` only sets, the mode and transmit VFO are read from the 38-character `IF`, split is `FN0;SP<n>;`, `RU`/`RD` take no parameter (an exact RIT offset is refused), and there is no `SM` or level command. Tests: `tests/ts440.rs`.
+  - Not done: the R-5000 (Hamlib's IC-10 dialect: 32-character `IF`), the TS-930 (no known `ID`), the TS-990S (Main/Sub receivers, no VFO A/B in Hamlib, its own mode letters). The TH and TM handhelds are a different command family. See `docs/RIG_COVERAGE_PLAN.md`.
 - The TS-2000 text was read from a third-party transcription of its manual, which the facts say.
 - The `IF;` layout that was unverified is resolved in `kenwood.rs`.
 - The **TS-890S** (`kenwood-ts-890s`, dialect `ts890`) has its own engine, `kenwood_ts890.rs`, written from its own guide (January 30, 2019):
@@ -600,6 +601,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_civ_frame_or_junk] (radioctl-protocols) Turns the bytes FE FE ... FD into a frame or junk; a second preamble restarts the frame.
 - [@ANCHOR: radioctl:radioctl_civ_engine_decode] (radioctl-protocols) Decodes one CI-V frame into an Inbound; drops echoes and other stations.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_decode] (radioctl-protocols) Decodes one Kenwood reply token into an Inbound.
+- [@ANCHOR: radioctl:radioctl_kenwood_engine_encode_ts440] (radioctl-protocols) The operations whose wire form differs in the TS-440S dialect (IC-10 manual): the mode and transmit VFO read from `IF`, split as `FN0;SP<n>;`, `AI` with one digit, and no exact RIT offset, signal or level.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_decode_front_end] (radioctl-protocols) An `RA` (attenuator: `P1P1` then an always-zero `P2P2`) or `PA` (preamplifier: `P1` then an always-zero `P2`) answer, mapped to a level by the description's steps.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_front_end_set] (radioctl-protocols) The set command for the attenuator (`RA01;`) or preamplifier (`PA1;`).
 - [@ANCHOR: radioctl:radioctl_virtual_state_power] (radioctl-protocols) Power meter of a virtual rig: nonzero only while keyed.
@@ -1157,6 +1159,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_decode_level] (radioctl-protocols) A numeric level answer: the command name and its three digits (`AG128`).
 - [@ANCHOR: radioctl:radioctl_ts890_engine_encode] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_feed] (radioctl-protocols) See the source.
+- [@ANCHOR: radioctl:radioctl_virtual_ts440_is] (radioctl-protocols) True when this rig speaks the TS-440S dialect.
+- [@ANCHOR: radioctl:radioctl_virtual_ts440_command] (radioctl-protocols) One TS-440S command; the reply bytes (none for a setting, `?;` for a refusal).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_is] (radioctl-protocols) True when this rig speaks the TS-890S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_command] (radioctl-protocols) One TS-890S command; the reply bytes (none for a setting, `?;` for a refusal).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_level] (radioctl-protocols) `AGnnn`, `RGnnn`, `MGnnn`, `KSnnn`, `PCnnn`: a read when `arg` is empty, else a set inside the guide's range.
