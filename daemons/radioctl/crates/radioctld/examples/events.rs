@@ -4,27 +4,15 @@
 use std::error::Error;
 use std::time::Duration;
 
-use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::rig::{spawn_current, RigOptions};
-use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Vfo};
-use radioctl_protocols::elecraft::ElecraftEngine;
-use radioctl_protocols::io::spawn_virtual_rig;
-use radioctl_protocols::virtual_rig::{PanelChange, VirtualRig};
-use tokio::runtime::Handle;
+use radioctl_protocols::prelude::*;
 use tokio::time::timeout;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let description = rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))?.description;
-    let radio = VirtualRig::from_description(&description)?;
-    let (transport, front_panel) = spawn_virtual_rig(&Handle::current(), radio, Duration::ZERO);
-
-    let rig = spawn_current(
-        ElecraftEngine::new(description)?,
-        transport,
-        RigOptions::default(),
-    )?;
+    let SpawnedVirtualRig {
+        rig,
+        control: front_panel,
+    } = VirtualRig::spawn("elecraft-kx3")?;
     // Every `events()` call is its own subscriber. This one runs on a task of its own, so a slow
     // subscriber never delays the actor or another subscriber; it only skips events.
     let mut other = rig.events();
@@ -42,21 +30,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     rig.execute(Op::SetTransceive(true)).await?;
     front_panel.front_panel(PanelChange::Frequency(Hz(7_100_000)));
 
+    // Wait for the next change of VFO A; other events are skipped.
     let wanted = Field::Frequency(Vfo::A);
-    loop {
-        let event = timeout(Duration::from_secs(5), stream.next())
-            .await?
-            .ok_or("the rig stopped")?;
-        if let Some(change) = event.changes.iter().find(|c| c.field == wanted) {
-            if change.new == Observation::Frequency(Vfo::A, Hz(7_100_000)) {
-                println!(
-                    "stream: VFO A changed to 7100000 Hz (source {:?})",
-                    event.source
-                );
-                break;
-            }
-        }
-    }
+    let (change, source) = timeout(Duration::from_secs(5), stream.next_change(wanted))
+        .await?
+        .ok_or("the rig stopped")?;
+    assert_eq!(change.new, Observation::Frequency(Vfo::A, Hz(7_100_000)));
+    println!("stream: VFO A changed to 7100000 Hz (source {source:?})");
+
     // The other subscriber saw the same changes, in order, on its own task.
     let mut subscriber_events = subscriber_events;
     loop {

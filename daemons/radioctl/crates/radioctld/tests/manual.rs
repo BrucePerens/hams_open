@@ -380,6 +380,8 @@ fn the_other_examples_run_and_print_what_their_chapters_show() {
     assert_output_in_manual("09-radioctld.md", "embed_daemon", &embedded);
     let splitter = run_example("splitter_tcp", &[]);
     assert_output_in_manual("08-protocol-splitter.md", "splitter_tcp", &splitter);
+    let long_form = run_example("long_form", &[]);
+    assert_output_in_manual("02-quick-start.md", "long_form", &long_form);
     let file = run_example("rig_file", &["icom-ic-7300"]);
     assert!(file.contains("engine, virtual rig and file agree"));
 }

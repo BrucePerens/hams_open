@@ -157,28 +157,12 @@ fn panel(rig: &SharedRig, change: PanelChange) -> Vec<u8> {
         .unwrap_or_default()
 }
 
-/// The directory of rig descriptions: `$RADIOCTL_RIGS`, else `./rigs` when it exists (the binaries
-/// copied to a bench machine run from the directory that holds `rigs/`), else the checkout this
-/// program was built from.
-fn rigs_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("RADIOCTL_RIGS") {
-        return PathBuf::from(dir);
-    }
-    let here = PathBuf::from("rigs");
-    if here.is_dir() {
-        return here;
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs")
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let [rig_id, link, rest @ ..] = args.as_slice() else {
         return Err("usage: virtual_radio_pty RIG_ID LINK [WIRE_LOG]".into());
     };
-    let rigs = rigs_dir();
-    let text = std::fs::read_to_string(rigs.join(format!("{rig_id}.toml")))?;
-    let description: RigDescription = rigfile::parse(&text)?.description;
+    let description: RigDescription = rigfile::load(rig_id)?.description;
     let rig: SharedRig = Arc::new(Mutex::new(VirtualRig::from_description(&description)?));
     let log: SharedLog = Arc::new(Mutex::new(match rest.first() {
         Some(path) => Some(File::create(path)?),

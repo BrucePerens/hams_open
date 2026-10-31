@@ -28,7 +28,7 @@ A feature is called implemented only if this manual's author found it in the cod
 | Chapter | Read it to |
 |---|---|
 | [1. Introduction and concepts](01-introduction.md) | learn what radioctl is, why it exists and where it stands |
-| [2. Quick start](02-quick-start.md) | build it, run `radioctld` with a virtual radio, drive it from Rust in 30 lines |
+| [2. Quick start](02-quick-start.md) | build it, run `radioctld` with a virtual radio, drive it from Rust in a dozen lines |
 | [3. Architecture](03-architecture.md) | understand the layers, the rig actor, the runtime rules and the threads |
 | [4. The API](04-api.md) | use `RigHandle`: operations, typed values, errors, events, polling and the cache |
 | [5. Transports](05-transports.md) | connect to a radio over serial, USB serial or TCP, and survive unplugging |
