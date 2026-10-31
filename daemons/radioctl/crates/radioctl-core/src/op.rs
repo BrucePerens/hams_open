@@ -3,6 +3,7 @@
 //! reports back.
 
 use crate::capability::Capability;
+use crate::scope::ScopeAxis;
 use crate::units::{Hz, Level, Mode, Vfo};
 
 /// A command to a rig.
@@ -60,6 +61,24 @@ pub enum Op {
     GetModelId,
     /// Read the rig's main firmware revision.
     GetFirmware,
+    /// Switch the rig's waveform output (the scope sweeps it sends on its own) on or off.
+    SetScopeOutput(bool),
+    /// Read whether waveform output is on.
+    GetScopeOutput,
+    /// Set how a receiver's scope axis is anchored (receiver 0 is Main, 1 is Sub).
+    SetScopeAxis(u8, ScopeAxis),
+    /// Read a receiver's scope axis mode.
+    GetScopeAxis(u8),
+    /// Set a receiver's scope span (the full width in hertz; the rig offers fixed choices).
+    SetScopeSpan(u8, Hz),
+    /// Read a receiver's scope span.
+    GetScopeSpan(u8),
+    /// Set the fixed-mode edges: range number, edge number (1 based), lower and upper edge.
+    SetScopeEdges(u8, u8, Hz, Hz),
+    /// Set a receiver's reference level, in hundredths of a dB.
+    SetScopeReference(u8, i16),
+    /// Read a receiver's reference level.
+    GetScopeReference(u8),
 }
 
 /// A kind of value the actor caches.
@@ -100,6 +119,14 @@ pub enum Field {
     ModelId,
     /// The firmware revision.
     Firmware,
+    /// Waveform output on or off.
+    ScopeOutput,
+    /// A receiver's scope axis mode.
+    ScopeAxis(u8),
+    /// A receiver's scope span.
+    ScopeSpan(u8),
+    /// A receiver's scope reference level.
+    ScopeReference(u8),
 }
 
 /// A value reported by a rig, solicited or not.
@@ -139,6 +166,14 @@ pub enum Observation {
     ModelId(u16),
     /// The firmware revision, major and minor (`02.37` is `(2, 37)`).
     Firmware(u8, u8),
+    /// Waveform output on or off.
+    ScopeOutput(bool),
+    /// A receiver's scope axis mode.
+    ScopeAxis(u8, ScopeAxis),
+    /// A receiver's scope span (full width).
+    ScopeSpan(u8, Hz),
+    /// A receiver's scope reference level in hundredths of a dB.
+    ScopeReference(u8, i16),
 }
 
 impl Observation {
@@ -163,6 +198,10 @@ impl Observation {
             Observation::Swr(_) => Field::Swr,
             Observation::ModelId(_) => Field::ModelId,
             Observation::Firmware(..) => Field::Firmware,
+            Observation::ScopeOutput(_) => Field::ScopeOutput,
+            Observation::ScopeAxis(rx, _) => Field::ScopeAxis(*rx),
+            Observation::ScopeSpan(rx, _) => Field::ScopeSpan(*rx),
+            Observation::ScopeReference(rx, _) => Field::ScopeReference(*rx),
         }
     }
 }
@@ -195,6 +234,15 @@ impl Op {
             Op::GetLevel(_) | Op::SetLevel(..) => Capability::Levels,
             Op::GetSwr => Capability::ReadSwr,
             Op::GetModelId | Op::GetFirmware => Capability::Identify,
+            Op::SetScopeOutput(_)
+            | Op::GetScopeOutput
+            | Op::SetScopeAxis(..)
+            | Op::GetScopeAxis(_)
+            | Op::SetScopeSpan(..)
+            | Op::GetScopeSpan(_)
+            | Op::SetScopeEdges(..)
+            | Op::SetScopeReference(..)
+            | Op::GetScopeReference(_) => Capability::Scope,
         }
     }
 
@@ -251,6 +299,19 @@ mod tests {
         assert_eq!(Observation::Swr(15).field(), Field::Swr);
         assert_eq!(Observation::ModelId(17).field(), Field::ModelId);
         assert_eq!(Observation::Firmware(2, 37).field(), Field::Firmware);
+        assert_eq!(Observation::ScopeOutput(true).field(), Field::ScopeOutput);
+        assert_eq!(
+            Observation::ScopeAxis(1, ScopeAxis::Fixed).field(),
+            Field::ScopeAxis(1)
+        );
+        assert_eq!(
+            Observation::ScopeSpan(0, Hz(50_000)).field(),
+            Field::ScopeSpan(0)
+        );
+        assert_eq!(
+            Observation::ScopeReference(0, -200).field(),
+            Field::ScopeReference(0)
+        );
     }
 
     // Tests [@ANCHOR: radioctl_core_op_capability]
@@ -267,6 +328,14 @@ mod tests {
         assert_eq!(Op::SetPtt(false).required_capability(), Capability::SetPtt);
         assert_eq!(Op::SetSplit(true).required_capability(), Capability::Split);
         assert_eq!(Op::GetTxVfo.required_capability(), Capability::Split);
+        assert_eq!(
+            Op::SetScopeSpan(0, Hz(50_000)).required_capability(),
+            Capability::Scope
+        );
+        assert_eq!(
+            Op::SetScopeEdges(1, 1, Hz(1), Hz(2)).required_capability(),
+            Capability::Scope
+        );
         assert_eq!(Op::GetRitOffset.required_capability(), Capability::RitXit);
         assert_eq!(
             Op::SetFilterWidth(Hz(500)).required_capability(),

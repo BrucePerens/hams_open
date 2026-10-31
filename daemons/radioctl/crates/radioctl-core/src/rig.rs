@@ -32,6 +32,7 @@ use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
 use crate::op::{Field, Observation, Op};
 use crate::poll::{PollConfig, PollSchedule};
+use crate::scope::ScopeFrame;
 use crate::transport::Transport;
 use crate::txstate::TxState;
 use crate::units::{Hz, Mode, Vfo};
@@ -53,6 +54,8 @@ pub struct RigOptions {
     pub dispatcher_capacity: usize,
     /// Events held per async-stream subscriber before it lags.
     pub stream_capacity: usize,
+    /// Scope frames held per scope-stream subscriber before it lags.
+    pub scope_capacity: usize,
     /// The status-change callback, if any.
     pub callback: Option<Callback>,
 }
@@ -65,6 +68,7 @@ impl Default for RigOptions {
             poll: PollConfig::default(),
             dispatcher_capacity: 64,
             stream_capacity: 64,
+            scope_capacity: 16,
             callback: None,
         }
     }
@@ -143,6 +147,10 @@ pub struct RigStats {
     pub events: u64,
     /// Events a stream subscriber missed because it lagged.
     pub stream_lagged: u64,
+    /// Scope frames published.
+    pub scope_frames: u64,
+    /// Scope frames a stream subscriber missed because it lagged.
+    pub scope_lagged: u64,
     /// The callback dispatcher's counters.
     pub dispatcher: DispatcherCounters,
 }
@@ -157,6 +165,8 @@ struct Counters {
     unrecognised: AtomicU64,
     events: AtomicU64,
     stream_lagged: AtomicU64,
+    scope_frames: AtomicU64,
+    scope_lagged: AtomicU64,
 }
 
 struct CacheEntry {
@@ -174,6 +184,7 @@ struct Shared {
     emergency_pending: AtomicUsize,
     emergency_wake: Notify,
     events: broadcast::Sender<RigEvent>,
+    scope: broadcast::Sender<ScopeFrame>,
     dispatcher: Option<Dispatcher>,
     counters: Counters,
     default_timeout: Duration,
@@ -228,6 +239,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         None => None,
     };
     let (events, _) = broadcast::channel(options.stream_capacity.max(1));
+    let (scope, _) = broadcast::channel(options.scope_capacity.max(1));
     let shared = Arc::new(Shared {
         id,
         capabilities,
@@ -238,6 +250,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         emergency_pending: AtomicUsize::new(0),
         emergency_wake: Notify::new(),
         events,
+        scope,
         dispatcher,
         counters: Counters::default(),
         default_timeout: options.default_timeout,
@@ -369,6 +382,8 @@ impl RigHandle {
             unrecognised: c.unrecognised.load(Ordering::Relaxed),
             events: c.events.load(Ordering::Relaxed),
             stream_lagged: c.stream_lagged.load(Ordering::Relaxed),
+            scope_frames: c.scope_frames.load(Ordering::Relaxed),
+            scope_lagged: c.scope_lagged.load(Ordering::Relaxed),
             dispatcher: self
                 .shared
                 .dispatcher
@@ -389,6 +404,17 @@ impl RigHandle {
     pub fn events(&self) -> EventStream {
         EventStream {
             rx: self.shared.events.subscribe(),
+            shared: Arc::clone(&self.shared),
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_handle_scope_frames]
+    /// A stream of the rig's scope sweeps, starting now. Frames have a stream of their own
+    /// (not the status-change events): a subscriber that falls behind skips frames and the miss
+    /// is counted in `scope_lagged`. The rig sends sweeps once `Op::SetScopeOutput(true)` has run.
+    pub fn scope_frames(&self) -> ScopeStream {
+        ScopeStream {
+            rx: self.shared.scope.subscribe(),
             shared: Arc::clone(&self.shared),
         }
     }
@@ -656,6 +682,32 @@ impl RigHandle {
                 ErrorKind::Malformed,
                 format!("expected signal, got {other:?}"),
             )),
+        }
+    }
+}
+
+/// An async stream of scope sweeps.
+pub struct ScopeStream {
+    rx: broadcast::Receiver<ScopeFrame>,
+    shared: Arc<Shared>,
+}
+
+impl ScopeStream {
+    // [@ANCHOR: radioctl_core_scope_stream_next]
+    /// The next sweep, or `None` once the rig has stopped. Frames missed while lagging are
+    /// skipped and counted.
+    pub async fn next(&mut self) -> Option<ScopeFrame> {
+        loop {
+            match self.rx.recv().await {
+                Ok(frame) => return Some(frame),
+                Err(broadcast::error::RecvError::Lagged(missed)) => {
+                    self.shared
+                        .counters
+                        .scope_lagged
+                        .fetch_add(missed, Ordering::Relaxed);
+                }
+                Err(broadcast::error::RecvError::Closed) => return None,
+            }
         }
     }
 }
@@ -985,6 +1037,16 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                         self.note_unsolicited();
                     }
                 }
+                Inbound::ScopeFrame(mut frame) => {
+                    let seq = self
+                        .shared
+                        .counters
+                        .scope_frames
+                        .fetch_add(1, Ordering::Relaxed)
+                        + 1;
+                    frame.seq = seq;
+                    let _ = self.shared.scope.send(frame);
+                }
                 Inbound::Ack if done.is_none() && expect == ReplyKind::Ack => done = Some(Ok(None)),
                 Inbound::Nak if done.is_none() && expect != ReplyKind::None => {
                     done = Some(Err(
@@ -1030,6 +1092,12 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Op::SetRitOffset(hz) => self.observe(Observation::RitOffset(*hz), source),
             Op::SetFilterWidth(hz) => self.observe(Observation::FilterWidth(*hz), source),
             Op::SetLevel(level, value) => self.observe(Observation::Level(*level, *value), source),
+            Op::SetScopeOutput(on) => self.observe(Observation::ScopeOutput(*on), source),
+            Op::SetScopeAxis(rx, axis) => self.observe(Observation::ScopeAxis(*rx, *axis), source),
+            Op::SetScopeSpan(rx, span) => self.observe(Observation::ScopeSpan(*rx, *span), source),
+            Op::SetScopeReference(rx, centi_db) => {
+                self.observe(Observation::ScopeReference(*rx, *centi_db), source)
+            }
             _ => {}
         }
     }

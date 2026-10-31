@@ -101,6 +101,16 @@ impl VirtualRigControl {
         }
     }
 
+    // [@ANCHOR: radioctl_virtual_io_scope_sweep]
+    /// Makes the rig send one scope sweep of its Main receiver on its own, as a rig with waveform
+    /// output on does; nothing goes out when the model has no scope or output is off.
+    pub fn scope_sweep(&self) {
+        let bytes = lock(&self.shared.rig).scope_sweep();
+        if !bytes.is_empty() {
+            let _ = self.shared.outbox.send((Instant::now(), bytes));
+        }
+    }
+
     // [@ANCHOR: radioctl_virtual_io_set_reply_delay]
     /// Changes how long answers take from now on.
     pub fn set_reply_delay(&self, delay: Duration) {

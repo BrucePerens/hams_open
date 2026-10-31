@@ -40,10 +40,12 @@ pub enum Capability {
     ReadSwr,
     /// Ask the rig for its identifier and firmware revision.
     Identify,
+    /// Spectrum scope: settings and waveform frames.
+    Scope,
 }
 
 /// Every capability with its file-format name.
-const NAMES: [(Capability, &str); 17] = [
+const NAMES: [(Capability, &str); 18] = [
     (Capability::ReadFrequency, "read-frequency"),
     (Capability::SetFrequency, "set-frequency"),
     (Capability::ReadMode, "read-mode"),
@@ -61,6 +63,7 @@ const NAMES: [(Capability, &str); 17] = [
     (Capability::Levels, "levels"),
     (Capability::ReadSwr, "read-swr"),
     (Capability::Identify, "identify"),
+    (Capability::Scope, "scope"),
 ];
 
 impl Capability {

@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope"]
 
 [rig]
 id = "icom-ic-7610"
