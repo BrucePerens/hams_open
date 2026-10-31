@@ -7,8 +7,24 @@ from the rig crates. Proposal: `docs/proposals/RELAY_EXTERNAL_SWITCHES_AND_POWER
 
 Phase 1 is virtual: no hardware, nothing is ever switched at start-up, and every transmit-related
 path stays behind radioctl's closed gate. Interlock rule: nothing switches while any attached rig is
-keyed or reads PTT on; an unknown keyed state counts as keyed; the emergency all-off is never
-blocked and needs no confirmation.
+keyed or reads PTT on; the emergency all-off is never blocked and needs no confirmation.
+
+**DECISION FOR BRUCE TO CONFIRM (2026-10-30).** The first rule said an unknown keyed state (link
+down, or never read) counted as keyed and blocked everything but `all_off`. That made a radio whose
+link dropped impossible to power-cycle. Now, while the keyed state is UNKNOWN: powering OFF any
+device is always allowed (it can only stop a transmission); powering ON a radio that is Off or
+Unreachable is allowed; everything that could hot-switch an RF path (antenna selection, amplifier
+power-on, band switching, any other output) stays blocked. A KNOWN keyed state still blocks
+everything except `all_off`, power-off included. (Open question: should power-off also pass while
+a rig is known to be keyed? It is not changed here.)
+
+## Radio lifecycle and records
+
+`lifecycle` is the sans-IO state machine (Off, PoweringOn, Booting, Ready, Degraded, Unreachable)
+fed by the switch channel state, the rig actor's link state and hotplug or ping evidence.
+`record` is the durable radio record: one JSON file, mode 0600, atomic replace; a corrupt file is
+set aside and never trusted, a bad record is dropped. Neither switches anything, and nothing is
+restored to a radio by itself after it reconnects.
 
 ## Anchors
 
@@ -104,4 +120,26 @@ blocked and needs no confirmation.
 - [@ANCHOR: radioctl:radioctl_station_station_run_profile] (radioctl-station) Runs a profile's steps in order within its timeout, with a `Step` event at each. A device
 - [@ANCHOR: radioctl:radioctl_station_station_stop_profile] (radioctl-station) Powers off the devices a profile powers on, in reverse order, with the off delays and the
 - [@ANCHOR: radioctl:radioctl_station_station_all_off] (radioctl-station) The emergency all-off. Never blocked: no keyed-state check, no minimum times, no delays,
+- [@ANCHOR: radioctl:radioctl_station_times_default] (radioctl-station) 20 s boot, 10 s grace, 10 s switch confirmation, 60 s degraded.
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_new] (radioctl-station) A machine in `state` since `now`.
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_state] (radioctl-station) The current state.
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_since] (radioctl-station) When the current state began.
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_goto] (radioctl-station) Moves to `to` unless already there.
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_power_on_commanded] (radioctl-station) The power-on was commanded (the power button or a profile). A radio that is already
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_power_off_commanded] (radioctl-station) The power-off was commanded and the switch is going off: the radio is no longer expected
+- [@ANCHOR: radioctl:radioctl_station_lifecycle_step] (radioctl-station) Feeds one snapshot at `now` and returns the transition it caused, if any. At most one
+- [@ANCHOR: radioctl:radioctl_station_record_new] (radioctl-station) A bare record: unknown state, Unreachable, no history.
+- [@ANCHOR: radioctl:radioctl_station_record_validate] (radioctl-station) Rejects a record that cannot be trusted: empty ids, absurd boot time, non-finite levels,
+- [@ANCHOR: radioctl:radioctl_station_record_cached] (radioctl-station) The last-known state with its age at `now_unix` (a clock that went backwards gives age 0).
+- [@ANCHOR: radioctl:radioctl_station_store_new] (radioctl-station) A store over `path`. Nothing is read or written.
+- [@ANCHOR: radioctl:radioctl_station_store_path] (radioctl-station) The file.
+- [@ANCHOR: radioctl:radioctl_station_store_load] (radioctl-station) Reads the file. A missing file is an empty store. A file that is too big, not JSON, of
+- [@ANCHOR: radioctl:radioctl_station_store_tighten] (radioctl-station) Removes group and other permissions from an existing record file.
+- [@ANCHOR: radioctl:radioctl_station_store_set_aside] (radioctl-station) Renames a bad file to `<name>.bad-<n>` (first free n) so it is kept but not read again.
+- [@ANCHOR: radioctl:radioctl_station_store_save] (radioctl-station) Writes every record atomically with mode 0600: a temporary file in the same directory,
+- [@ANCHOR: radioctl:radioctl_station_station_guard_action] (radioctl-station) The interlock with the action's class: a keyed source always refuses; an unknown keyed
+- [@ANCHOR: radioctl:radioctl_station_station_set_hint] (radioctl-station) The lifecycle state of a radio, as the lifecycle manager sees it, so powering it on can
+- [@ANCHOR: radioctl:radioctl_station_station_classify_on] (radioctl-station) The class of powering `d` on: a radio that is Off or Unreachable (by the lifecycle hint, or
+- [@ANCHOR: radioctl:radioctl_station_station_classify_channel] (radioctl-station) The class of setting a channel by hand: off on a power channel is [`Action::PowerOff`]; on
+- [@ANCHOR: radioctl:radioctl_station_station_classify_pulse] (radioctl-station) The class of pulsing a momentary line: a device's off line is [`Action::PowerOff`], its on
 
