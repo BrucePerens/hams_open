@@ -14,6 +14,7 @@
 //! - [`modbus`]: sans-IO Modbus framing and the coil relay driver (ASCII and RTU).
 //! - [`http_relay`]: Shelly Gen2 and Tasmota channel drivers.
 //! - [`lifecycle`]: the radio lifecycle state machine (sans-IO).
+//! - [`manager`]: lifecycle per radio, power button, reconnect with backoff, start-up reconcile.
 //! - [`record`]: the durable radio record (JSON, owner-only, atomic).
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
@@ -22,6 +23,7 @@ pub mod error;
 pub mod gpio_map;
 pub mod http_relay;
 pub mod lifecycle;
+pub mod manager;
 pub mod modbus;
 pub mod model;
 pub mod record;
