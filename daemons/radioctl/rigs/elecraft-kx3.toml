@@ -23,6 +23,11 @@ family = "elecraft-ascii"
 [elecraft]
 model_id = 17
 
+[levels]
+attenuator_db = [10]
+attenuator_any_up_to_db = 0
+preamp_steps = 1
+
 [timing]
 timeout_ms = 600
 retries = 2
@@ -80,6 +85,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "timing.inter_command_ms"
 provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/elecraft.rs", note = "Our choice; the manual specifies no minimum gap (Response Time, p. 3 warns only that fast polling during transmit should be tested)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Elecraft K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (Feb. 20, 2019), file pgmrs_ref_g5.pdf, sha256 015b60c1b5f44346247a00375a23174012ce4da66a6a27eaa00c00c20877f95d: RA p. 22 (RAnn; for the KX3 nn 00 off, 01 on, -10 dB), PA p. 22 (PAn; n 0 off, 1 on; 2 is the K3's KXV3B module)", note = "Main receiver only; the sub-receiver forms (RA$, PA$) are not used." }
 verified = { state = "unverified" }
 
 [[facts]]

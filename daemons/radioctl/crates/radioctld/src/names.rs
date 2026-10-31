@@ -201,7 +201,22 @@ pub struct LevelInfo {
     pub fraction: bool,
 }
 
-const LEVELS: [LevelInfo; 8] = [
+const LEVELS: [LevelInfo; 10] = [
+    // Hamlib's PREAMP and ATT are integer levels in decibels. radioctld serves the attenuator in
+    // decibels but the preamplifier as a step number (1, 2): a stage's gain varies by band and
+    // model and no source we may use states it. The `\dump_state` lists carry the step numbers.
+    LevelInfo {
+        name: "PREAMP",
+        bit: 0,
+        source: LevelSource::Radio(Level::Preamp),
+        fraction: false,
+    },
+    LevelInfo {
+        name: "ATT",
+        bit: 1,
+        source: LevelSource::Radio(Level::Attenuator),
+        fraction: false,
+    },
     LevelInfo {
         name: "AF",
         bit: 3,
@@ -253,9 +268,7 @@ const LEVELS: [LevelInfo; 8] = [
 ];
 
 /// Level names Hamlib has that radioctld does not serve: asking for one is "not available".
-const OTHER_LEVELS: [&str; 24] = [
-    "PREAMP",
-    "ATT",
+const OTHER_LEVELS: [&str; 22] = [
     "VOXDELAY",
     "SQL",
     "IF",
@@ -309,6 +322,20 @@ pub fn level_lookup(name: &str) -> LevelLookup {
 /// tables are private to their engines, so they are repeated here and the test
 /// `level_ranges_match_what_each_engine_accepts` pins them to the engines' own limits).
 pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u16)> {
+    // The front-end levels come from the description's `[levels]` block, whatever the family.
+    match level {
+        Level::Attenuator => {
+            return description
+                .levels
+                .max_attenuation_db()
+                .map(|max| (0, u16::from(max)))
+        }
+        Level::Preamp => {
+            return (description.levels.preamp_steps > 0)
+                .then(|| (0, u16::from(description.levels.preamp_steps)))
+        }
+        _ => {}
+    }
     match description.family {
         Family::ElecraftAscii => {
             let wire = radioctl_protocols::elecraft::level_wire(level);
@@ -324,13 +351,14 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Level::MonitorLevel => (0, 9),
             Level::KeyerSpeed => (10, 60),
             Level::RfPower => (5, 100),
+            Level::Attenuator | Level::Preamp => (0, 0),
         }),
         Family::YaesuNewcat => match level {
             Level::AfGain | Level::RfGain => Some((0, 255)),
             Level::MicGain => Some((0, 100)),
             Level::KeyerSpeed => Some((4, 60)),
             Level::RfPower => Some((5, 100)),
-            Level::MonitorLevel => None,
+            Level::MonitorLevel | Level::Attenuator | Level::Preamp => None,
         },
         // The legacy five-byte engine has no level commands, so no level has a range.
         Family::YaesuLegacy => None,
@@ -339,7 +367,11 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
         // SmartSDR levels are percentages (0-100) in the engine.
         Family::Flex => match level {
             Level::AfGain | Level::MicGain | Level::RfPower => Some((0, 100)),
-            Level::RfGain | Level::KeyerSpeed | Level::MonitorLevel => None,
+            Level::RfGain
+            | Level::KeyerSpeed
+            | Level::MonitorLevel
+            | Level::Attenuator
+            | Level::Preamp => None,
         },
     }
 }
@@ -506,7 +538,18 @@ mod tests {
         ]);
         assert_eq!(level_range(&kx, Level::KeyerSpeed), Some((8, 50)));
         let served = served_levels(&kx);
-        assert_eq!(served.len(), LEVELS.len());
+        assert_eq!(
+            served.len(),
+            LEVELS.len() - 2,
+            "no ATT or PREAMP without steps"
+        );
+        kx.levels.attenuator_db = vec![12];
+        kx.levels.preamp_steps = 1;
+        assert_eq!(served_levels(&kx).len(), LEVELS.len());
+        assert_eq!(level_range(&kx, Level::Attenuator), Some((0, 12)));
+        assert_eq!(level_range(&kx, Level::Preamp), Some((0, 1)));
+        kx.levels = Default::default();
+        let served = served_levels(&kx);
         let get = level_mask(&served, false);
         let set = level_mask(&served, true);
         assert_ne!(get, set);

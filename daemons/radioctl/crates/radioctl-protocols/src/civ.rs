@@ -37,6 +37,8 @@ use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::scope::ScopeFrame;
 use radioctl_core::units::{Hz, Level, Mode, Vfo};
 
+use crate::attenuation;
+
 use crate::civ_scope::{self, ScopeAssembler, ScopeCommand, ScopeMode};
 
 /// Start-of-frame byte (sent twice).
@@ -360,7 +362,7 @@ fn level_sub(level: Level) -> Option<u8> {
         Level::RfPower => Some(0x0A),
         Level::MicGain => Some(0x0B),
         Level::MonitorLevel => Some(0x15),
-        Level::KeyerSpeed => None,
+        Level::KeyerSpeed | Level::Attenuator | Level::Preamp => None,
     }
 }
 
@@ -436,6 +438,13 @@ pub fn filter_hz_to_index(am: bool, hz: u32) -> Option<u8> {
 
 fn bcd_pair(value: u16) -> u8 {
     (((value / 10) as u8) << 4) | ((value % 10) as u8)
+}
+
+// [@ANCHOR: radioctl_civ_decode_bcd_byte]
+/// One BCD byte (`0x20` is 20); `None` if a nibble is not a digit.
+fn decode_bcd_byte(byte: u8) -> Option<u16> {
+    let (high, low) = (byte >> 4, byte & 15);
+    (high <= 9 && low <= 9).then(|| u16::from(high) * 10 + u16::from(low))
 }
 
 impl CivEngine {
@@ -514,9 +523,33 @@ impl CivEngine {
         })
     }
 
+    // [@ANCHOR: radioctl_civ_engine_encode_front_end]
+    /// Sets the attenuator (`11`, one BCD byte of decibels) or the preamplifier (`16 02`, a step
+    /// number), when the description lists the value.
+    fn encode_front_end(&self, level: Level, value: u16) -> Result<Request, RigError> {
+        let step = attenuation::step_of(&self.desc, level, value)?;
+        if level == Level::Attenuator {
+            if value > 99 {
+                return Err(Self::unsupported("attenuation does not fit one BCD byte"));
+            }
+            Ok(self.set(0x11, &[bcd_pair(value)]))
+        } else {
+            Ok(self.set(0x16, &[0x02, step]))
+        }
+    }
+
     // [@ANCHOR: radioctl_civ_engine_encode_levels_and_filter]
     fn encode_levels_and_filter(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
+            Op::GetLevel(level @ Level::Attenuator) => {
+                Ok(self.get(0x11, &[], Field::Level(*level)))
+            }
+            Op::GetLevel(level @ Level::Preamp) => {
+                Ok(self.get(0x16, &[0x02], Field::Level(*level)))
+            }
+            Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
+                self.encode_front_end(*level, *value)
+            }
             Op::GetLevel(level) => match level_sub(*level) {
                 Some(sub) => Ok(self.get(0x14, &[sub], Field::Level(*level))),
                 None => Err(Self::unsupported("level not implemented for CI-V")),
@@ -673,6 +706,15 @@ impl CivEngine {
                     .filter(|value| *value <= MAX_LEVEL)
                     .map(|value| Observation::Level(level, value))
             }),
+            (0x11, [byte]) => decode_bcd_byte(*byte)
+                .and_then(|db| {
+                    attenuation::step_of(&self.desc, Level::Attenuator, db)
+                        .ok()
+                        .map(|_| db)
+                })
+                .map(|db| Observation::Level(Level::Attenuator, db)),
+            (0x16, [0x02, step]) => attenuation::value_of(&self.desc, Level::Preamp, *step)
+                .map(|v| Observation::Level(Level::Preamp, v)),
             (0x1A, [0x03, index]) => self.decode_filter(*index),
             (0x19, [0x00, id]) => Some(Observation::ModelId(u16::from(*id))),
             (0x1C, [0x00, state]) => Some(Observation::Ptt(*state != 0)),

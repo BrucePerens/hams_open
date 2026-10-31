@@ -10,7 +10,8 @@
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `elecraft.model_id`, `yaesu.model_id`,
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
-//! `scope.spans_hz` (an optional `[scope]` block, icom-civ only), `capability.<name>`, `mode.<name>`.
+//! `scope.spans_hz` (an optional `[scope]` block, icom-civ only), `levels.attenuator_db` and
+//! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
 //!
 //! Verified states: `unverified`; `manual-checked` (needs `reference`); `transcript-checked`
 //! (needs `reference`, the transcript); `hardware-verified` (needs `radio`, `firmware`, `date`
@@ -23,8 +24,8 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodParams, RigDescription,
-    ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
+    CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodParams, LevelParams,
+    RigDescription, ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
@@ -126,6 +127,7 @@ struct FileDoc {
     flex: Option<FlexSection>,
     hpsdr: Option<HpsdrSection>,
     scope: Option<ScopeSection>,
+    levels: Option<LevelsSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
     capabilities: Vec<String>,
@@ -197,6 +199,15 @@ struct ScopeSection {
     samples_per_frame: u16,
     amplitude_max: u16,
     spans_hz: Vec<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LevelsSection {
+    attenuator_db: Vec<u8>,
+    #[serde(default)]
+    attenuator_any_up_to_db: u8,
+    preamp_steps: u8,
 }
 
 #[derive(Deserialize)]
@@ -313,6 +324,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         model_id: e.model_id,
     });
     let scope = build_scope(doc.scope.as_ref(), family)?;
+    let levels = build_levels(doc.levels.as_ref())?;
     let yaesu = doc.yaesu.as_ref().map(|y| YaesuParams {
         model_id: y.model_id,
     });
@@ -354,6 +366,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         flex,
         hpsdr,
         scope,
+        levels,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
         timing: check_timing(&doc.timing)?,
@@ -389,6 +402,43 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
         timeout: Duration::from_millis(timing.timeout_ms),
         retries: timing.retries,
         inter_command: Duration::from_millis(timing.inter_command_ms),
+    })
+}
+
+/// Most attenuator steps a model may list.
+const MAX_ATTENUATOR_STEPS: usize = 9;
+/// Most preamplifier steps a model may declare.
+const MAX_PREAMP_STEPS: u8 = 3;
+
+// [@ANCHOR: radioctl_core_rigfile_build_levels]
+fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError> {
+    let Some(levels) = section else {
+        return Ok(LevelParams::default());
+    };
+    let ascending = levels
+        .attenuator_db
+        .windows(2)
+        .all(|w| matches!(w, [a, b] if a < b));
+    let first_positive = levels.attenuator_db.first().is_none_or(|d| *d > 0);
+    if !ascending || !first_positive || levels.attenuator_db.len() > MAX_ATTENUATOR_STEPS {
+        return Err(bad(format!(
+            "levels.attenuator_db must be at most {MAX_ATTENUATOR_STEPS} ascending positive decibel values"
+        )));
+    }
+    if levels.attenuator_any_up_to_db > 0 && !levels.attenuator_db.is_empty() {
+        return Err(bad(
+            "levels.attenuator_db and levels.attenuator_any_up_to_db are alternatives",
+        ));
+    }
+    if levels.preamp_steps > MAX_PREAMP_STEPS {
+        return Err(bad(format!(
+            "levels.preamp_steps is more than {MAX_PREAMP_STEPS}"
+        )));
+    }
+    Ok(LevelParams {
+        attenuator_db: levels.attenuator_db.clone(),
+        attenuator_any_up_to_db: levels.attenuator_any_up_to_db,
+        preamp_steps: levels.preamp_steps,
     })
 }
 
@@ -545,6 +595,16 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
                 "scope.samples_per_frame",
                 "scope.amplitude_max",
                 "scope.spans_hz",
+            ]
+            .map(String::from),
+        );
+    }
+    if description.levels != LevelParams::default() {
+        keys.extend(
+            [
+                "levels.attenuator_db",
+                "levels.attenuator_any_up_to_db",
+                "levels.preamp_steps",
             ]
             .map(String::from),
         );
@@ -873,6 +933,55 @@ verified = { state = "unverified" }
         assert_eq!(summary.get("unverified"), Some(&(8 + 1 + 2)));
         assert!(!loaded.is_hardware_verified());
     }
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_levels]
+    // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_step]
+    // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_db]
+    // Tests [@ANCHOR: radioctl_core_levelparams_max_attenuation]
+    #[test]
+    fn a_levels_block_is_sane_and_needs_its_facts() {
+        let levels = "\n[levels]\nattenuator_db = [6, 12, 18]\npreamp_steps = 2\n";
+        let with = format!("{GOOD}{levels}");
+        expect_rejected(&with, "no provenance fact covers \"levels.attenuator_db\"");
+        let fact = "\n[[facts]]\nkey = \"levels.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let loaded = parse(&format!("{with}{fact}")).expect("loads");
+        let params = loaded.description.levels;
+        assert_eq!(params.attenuator_step(0), Some(0));
+        assert_eq!(params.attenuator_step(12), Some(2));
+        assert_eq!(params.attenuator_step(7), None);
+        assert_eq!(params.attenuator_db_of(3), Some(18));
+        assert_eq!(params.attenuator_db_of(0), Some(0));
+        assert_eq!(params.attenuator_db_of(4), None);
+        assert_eq!(params.preamp_steps, 2);
+        let any = "attenuator_db = []\nattenuator_any_up_to_db = 31\npreamp_steps = 0";
+        let loaded = parse(&format!("{GOOD}\n[levels]\n{any}\n{fact}")).expect("loads");
+        let params = loaded.description.levels;
+        assert_eq!(params.attenuator_step(31), Some(31));
+        assert_eq!(params.attenuator_step(32), None);
+        assert_eq!(params.attenuator_db_of(7), Some(7));
+        assert_eq!(params.attenuator_db_of(32), None);
+        assert_eq!(params.max_attenuation_db(), Some(31));
+        assert_eq!(LevelParams::default().max_attenuation_db(), None);
+        for bad in [
+            "attenuator_db = [12]\nattenuator_any_up_to_db = 31",
+            "attenuator_db = [12, 6]",
+            "attenuator_db = [0, 6]",
+            "attenuator_db = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+            "preamp_steps = 4",
+        ] {
+            let line = if bad.starts_with("preamp") {
+                bad.to_string()
+            } else {
+                format!("{bad}\npreamp_steps = 0")
+            };
+            let doc = if bad.starts_with("preamp") {
+                format!("{GOOD}\n[levels]\nattenuator_db = []\n{line}\n{fact}")
+            } else {
+                format!("{GOOD}\n[levels]\n{line}\n{fact}")
+            };
+            expect_rejected(&doc, "levels.");
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_core_rigfile_build_scope]
     #[test]
     fn a_scope_block_is_icom_only_sane_and_needs_its_facts() {

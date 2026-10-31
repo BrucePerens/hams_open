@@ -43,6 +43,8 @@ use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::units::{Hz, Level, Vfo};
 
+use crate::attenuation;
+
 /// Command terminator.
 pub const TERMINATOR: u8 = b';';
 /// Buffered bytes beyond this without a terminator are dropped.
@@ -178,6 +180,7 @@ impl KenwoodEngine {
             (Some("FT"), Some(vfo @ ("0" | "1"))) => Some(Observation::TxVfo(vfo_of(vfo))),
             (Some("RT"), Some(flag @ ("0" | "1"))) => Some(Observation::Rit(*flag == *"1")),
             (Some("XT"), Some(flag @ ("0" | "1"))) => Some(Observation::Xit(*flag == *"1")),
+            (Some(name @ ("RA" | "PA")), Some(digits)) => self.decode_front_end(name, digits),
             (Some(name), Some(digits)) => decode_level(name, digits),
             _ => None,
         };
@@ -185,6 +188,34 @@ impl KenwoodEngine {
             Some(value) => Inbound::Observation(value),
             None => Inbound::Unrecognised(format!("{text};").into_bytes()),
         }]
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_decode_front_end]
+    /// An `RA` (attenuator: `P1P1` then an always-zero `P2P2`) or `PA` (preamplifier: `P1` then an
+    /// always-zero `P2`) answer, mapped to a level by the description's steps.
+    fn decode_front_end(&self, name: &str, digits: &str) -> Option<Observation> {
+        let (level, width) = if name == "RA" {
+            (Level::Attenuator, 2)
+        } else {
+            (Level::Preamp, 1)
+        };
+        if !(digits.len() == width || digits.len() == 2 * width) {
+            return None;
+        }
+        let step = u8::try_from(parse_digits(digits.get(..width)?)?).ok()?;
+        attenuation::value_of(&self.desc, level, step).map(|v| Observation::Level(level, v))
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_front_end_set]
+    /// The set command for the attenuator (`RA01;`) or preamplifier (`PA1;`).
+    fn front_end_set(&self, level: Level, value: u16) -> Result<Request, RigError> {
+        let step = attenuation::step_of(&self.desc, level, value)?;
+        let text = if level == Level::Attenuator {
+            format!("RA{step:02};")
+        } else {
+            format!("PA{step};")
+        };
+        Ok(Self::command(text, ReplyKind::None))
     }
 
     // [@ANCHOR: radioctl_kenwood_engine_decode_if]
@@ -262,6 +293,10 @@ fn level_wire(level: Level) -> LevelWire {
         Level::MonitorLevel => ("ML", false, 0, 9),
         Level::KeyerSpeed => ("KS", false, 10, 60),
         Level::RfPower => ("PC", false, 5, 100),
+        // Not read through this table: the attenuator and preamplifier have their own two-digit
+        // and one-digit forms (`front_end_command`); the names are kept for `decode`.
+        Level::Attenuator => ("RA", false, 0, 0),
+        Level::Preamp => ("PA", false, 0, 0),
     };
     LevelWire {
         name,
@@ -377,6 +412,17 @@ impl ProtocolEngine for KenwoodEngine {
                     h => format!("RD{:05};", h.unsigned_abs()),
                 };
                 Self::command(format!("RC;{step}"), none)
+            }
+            Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
+                attenuation::step_of(&self.desc, *level, 0)?;
+                let name = level_wire(*level).name;
+                Self::command(
+                    format!("{name};"),
+                    ReplyKind::Observation(Field::Level(*level)),
+                )
+            }
+            Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
+                return self.front_end_set(*level, *value);
             }
             Op::GetLevel(level) => {
                 let wire = level_wire(*level);

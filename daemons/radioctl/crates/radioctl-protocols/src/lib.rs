@@ -9,6 +9,7 @@
 //! Bytes are always handled with checked access (`get`, never indexing): reply parsing is the
 //! attack surface.
 
+pub mod attenuation;
 pub mod civ;
 pub mod civ_scope;
 pub mod conformance;

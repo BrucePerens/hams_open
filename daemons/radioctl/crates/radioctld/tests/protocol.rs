@@ -111,3 +111,12 @@ async fn vfo_mode_transcript() {
     let text = config_text("", "kx3", "elecraft-kx3.toml", false, true);
     replay(&text, None, include_str!("transcripts/kx3_vfo_mode.txt")).await;
 }
+
+// Tests [@ANCHOR: radioctld_service_get_level]
+// Tests [@ANCHOR: radioctld_service_set_level]
+// Tests [@ANCHOR: radioctld_names_served_levels]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_virtual_kx3_attenuator_and_preamplifier() {
+    let text = config_text("", "kx3", "elecraft-kx3.toml", false, false);
+    replay(&text, None, include_str!("transcripts/front_end_kx3.txt")).await;
+}

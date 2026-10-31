@@ -21,6 +21,30 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 FT-818 (no manual found), FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
 Kenwood and Icom LAN protocols.
 
+## Receive attenuator and preamplifier (`attenuation.rs`)
+
+`Level::Attenuator` is decibels of attenuation (0 is off) and `Level::Preamp` a step number (0 is off;
+1 and 2 are the rig's first and second stage; a Yaesu "IPO" is step 0). A stage's gain varies by band and
+model and no source we may use states it, so the preamplifier is not in decibels, and radioctld serves it
+as a step (Hamlib's own `PREAMP` is in decibels: a Hamlib client sees the step numbers in the lists of
+`\dump_state`). The values a model has are its description's `[levels]` block; `attenuation::step_of`
+turns a value into the wire step and refuses any value the block does not list, so no engine carries a
+table of its own. The wire forms are:
+
+| Family | Attenuator | Preamplifier | Models with a `[levels]` block |
+|---|---|---|---|
+| `icom-civ` | `11` with one BCD byte of decibels | `16 02` with 0, 1 (P.AMP1) or 2 (P.AMP2) | IC-7300, IC-705, IC-7610, IC-9700 |
+| `kenwood-ascii` | `RAnn;` (00 off, 01 on), answer `RAnn00;` | `PAn;`, answer `PAn0;` | TS-590S, TS-590SG |
+| `elecraft-ascii` | `RAnn;` (00 off, 01 on, 10 dB) | `PAn;` | KX3 |
+| `yaesu-newcat` | `RA0n;` (`n` the step: 0 off, 1 on or 6 dB, 2 12 dB, 3 18 dB) | `PA0n;` (0 IPO, 1 AMP 1, 2 AMP 2) | FT-991A, FTDX10, FTDX101D (main band) |
+| `hpsdr-network` | line `A <db>`, 0 to 31 | none | ANAN-10, ANAN-100 |
+
+The TS-2000 has no block (its command text is known only from a third-party transcription), the Xiegu
+radios and the FT-817, FT-857D and FT-897D have none (the Xiegu descriptions are deliberately minimal;
+the legacy five-byte family has no attenuator or preamplifier command), and the Flex engine refuses both.
+The attenuation of the on-or-off attenuators (12 dB on the Kenwood TS-590 and the FT-991A) is Hamlib's
+figure, read for facts only and marked as such in the description.
+
 ## Icom CI-V (`civ.rs`, `civ_scope.rs`)
 
 A frame is `FE FE <to> <from> <command> [data] FD`. A reply either echoes the command with data or is
@@ -173,8 +197,9 @@ receive I/Q is a separate data plane. So the engine speaks a small line protocol
 
 - **Covers:** frequency, PTT, forward power and SWR (the descriptions claim `read-frequency`,
   `set-frequency`, `read-ptt`, `set-ptt`, `read-power`, `read-swr`).
-- **Does not cover:** a mode (an SDR's demodulation happens in the host), an attenuator (no `Op` for it
-  yet), receive I/Q (the `hpsdr` crate's `IqStream` is not wired into the actor), and discovery inside
+- **Attenuator:** `Level::Attenuator` in whole decibels, 0 to 31 (`GA` and `A <db>` on the bridge's line
+  protocol; the same call as `HpsdrControl::set_attenuator`, which remains for code that holds the handle).
+- **Does not cover:** a mode (an SDR's demodulation happens in the host), a preamplifier, receive I/Q (the `hpsdr` crate's `IqStream` is not wired into the actor), and discovery inside
   radioctl.
 - **Transmit:** `Op::SetPtt(true)` is the only command that can key, and the actor refuses it unless the
   rig's transmit gate is open. The bridge then opens the `hpsdr` crate's own, separate gate for a bounded

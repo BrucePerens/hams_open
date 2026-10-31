@@ -74,6 +74,67 @@ pub struct ScopeParams {
     pub spans_hz: Vec<u64>,
 }
 
+/// The receive attenuator and preamplifier steps a model has. Empty and zero mean the model has
+/// neither, or radioctl knows no command for them: the engines then refuse the levels.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LevelParams {
+    /// The attenuation in decibels of each attenuator step, ascending; step `n` (1-based) is the
+    /// `n`th entry and step 0 is off. A one-entry list is an attenuator that is simply on or off.
+    pub attenuator_db: Vec<u8>,
+    /// For a step attenuator that takes any whole number of decibels from 0 up to this (an
+    /// OpenHPSDR radio's 0 to 31 dB), the largest; 0 when `attenuator_db` lists the steps.
+    pub attenuator_any_up_to_db: u8,
+    /// How many preamplifier steps above off the model has (0 for none).
+    pub preamp_steps: u8,
+}
+
+impl LevelParams {
+    // [@ANCHOR: radioctl_core_levelparams_max_attenuation]
+    /// The largest attenuation in decibels, `None` when the model has no attenuator.
+    pub fn max_attenuation_db(&self) -> Option<u8> {
+        if self.attenuator_any_up_to_db > 0 {
+            Some(self.attenuator_any_up_to_db)
+        } else {
+            self.attenuator_db.last().copied()
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_levelparams_attenuator_step]
+    /// The 1-based step whose attenuation is `db`, or 0 for `db == 0` (off); `None` if no step has
+    /// that attenuation.
+    pub fn attenuator_step(&self, db: u16) -> Option<u8> {
+        if db == 0 {
+            return Some(0);
+        }
+        if self.attenuator_any_up_to_db > 0 {
+            return u8::try_from(db)
+                .ok()
+                .filter(|d| *d <= self.attenuator_any_up_to_db);
+        }
+        let index = self
+            .attenuator_db
+            .iter()
+            .position(|d| u16::from(*d) == db)?;
+        u8::try_from(index + 1).ok()
+    }
+
+    // [@ANCHOR: radioctl_core_levelparams_attenuator_db]
+    /// The attenuation in decibels of 1-based step `step` (0 is off, 0 dB); `None` for a step the
+    /// model does not have.
+    pub fn attenuator_db_of(&self, step: u8) -> Option<u16> {
+        if step == 0 {
+            return Some(0);
+        }
+        if self.attenuator_any_up_to_db > 0 {
+            return (step <= self.attenuator_any_up_to_db).then_some(u16::from(step));
+        }
+        usize::from(step)
+            .checked_sub(1)
+            .and_then(|index| self.attenuator_db.get(index))
+            .map(|d| u16::from(*d))
+    }
+}
+
 /// Yaesu newcat parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YaesuParams {
@@ -144,6 +205,8 @@ pub struct RigDescription {
     pub hpsdr: Option<HpsdrParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
+    /// Attenuator and preamplifier steps.
+    pub levels: LevelParams,
     /// What the rig can do.
     pub capabilities: CapabilitySet,
     /// Mode to wire code: a CI-V mode byte, or the ASCII byte of a Kenwood `MD` digit.
@@ -195,6 +258,7 @@ impl RigDescription {
             flex: None,
             hpsdr: None,
             scope: None,
+            levels: LevelParams::default(),
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,
@@ -243,6 +307,7 @@ impl RigDescription {
             flex: None,
             hpsdr: None,
             scope: None,
+            levels: LevelParams::default(),
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,

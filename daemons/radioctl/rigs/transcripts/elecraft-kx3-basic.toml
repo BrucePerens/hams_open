@@ -234,3 +234,25 @@ tx_text = "AI0;"
 
 [[step]]
 panel = { kind = "frequency", hz = 7110000 }
+
+# Receive attenuator and preamplifier (RAnn, PAn; Programmer's Reference Rev. G5 p. 22).
+
+[[step]]
+op = { kind = "set-level", level = "attenuator", value = 10 }
+tx_text = "RA01;"
+
+[[step]]
+op = { kind = "get-level", level = "attenuator" }
+tx_text = "RA;"
+rx_text = "RA01;"
+expect = { kind = "level", level = "attenuator", value = 10 }
+
+[[step]]
+op = { kind = "set-level", level = "preamp", value = 1 }
+tx_text = "PA1;"
+
+[[step]]
+op = { kind = "get-level", level = "preamp" }
+tx_text = "PA;"
+rx_text = "PA1;"
+expect = { kind = "level", level = "preamp", value = 1 }

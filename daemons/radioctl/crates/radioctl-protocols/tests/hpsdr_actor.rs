@@ -11,10 +11,10 @@ use hpsdr::emulator::{Emulator, EmulatorConfig, EmulatorCounters};
 use hpsdr::emulator_p2::{loopback_ports, EmulatorP2, P2Counters, P2EmulatorConfig};
 use hpsdr::types::HardwareStatus;
 use radioctl_core::error::ErrorKind;
-use radioctl_core::op::{Field, Observation};
+use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::rig::{spawn, Freshness, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Vfo};
+use radioctl_core::units::{Hz, Level, Vfo};
 use radioctl_protocols::hpsdr_io::{serve_hpsdr, start_session, HpsdrControl, HpsdrOptions};
 use radioctl_protocols::hpsdr_net::HpsdrEngine;
 use tokio::runtime::Handle;
@@ -76,6 +76,7 @@ async fn rig_for(
 // Tests [@ANCHOR: radioctl_hpsdr_options_default]
 // Tests [@ANCHOR: radioctl_hpsdr_control_status]
 // Tests [@ANCHOR: radioctl_hpsdr_control_set_attenuator]
+// Tests [@ANCHOR: radioctl_hpsdr_set_attenuator]
 // Tests [@ANCHOR: radioctl_hpsdr_control_take_streams]
 #[tokio::test]
 async fn protocol_1_virtual_anan_tunes_reports_power_and_keeps_the_gate_closed() {
@@ -152,7 +153,28 @@ async fn common(rig: &RigHandle, control: &HpsdrControl) {
     })
     .await;
     assert!((control.status().supply_volts() - 2.82).abs() < 0.05);
-    control.set_attenuator(12).expect("attenuator");
+    // The attenuator as a core level through the actor, then the bridge handle's own bounds.
+    rig.execute(Op::SetLevel(Level::Attenuator, 20))
+        .await
+        .expect("attenuator set");
+    let read = rig
+        .execute(Op::GetLevel(Level::Attenuator))
+        .await
+        .expect("attenuator read");
+    assert_eq!(read, Some(Observation::Level(Level::Attenuator, 20)));
+    let refused = rig
+        .execute(Op::SetLevel(Level::Attenuator, 32))
+        .await
+        .expect_err("beyond 31 dB");
+    assert_eq!(refused.kind, ErrorKind::Unsupported);
+    let refused = rig
+        .execute(Op::SetLevel(Level::Preamp, 1))
+        .await
+        .expect_err("no preamplifier");
+    assert_eq!(refused.kind, ErrorKind::Unsupported);
+    rig.execute(Op::SetLevel(Level::Attenuator, 12))
+        .await
+        .expect("attenuator set");
     assert!(control.set_attenuator(32).is_err());
     assert!(!control.take_streams().is_empty());
 }

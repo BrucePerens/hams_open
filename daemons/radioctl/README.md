@@ -314,6 +314,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_hpsdr_control_set_attenuator] (radioctl-protocols) Sets the step attenuator in dB (0..=31).
 - [@ANCHOR: radioctl:radioctl_hpsdr_control_status] (radioctl-protocols) The latest hardware status of the radio.
 - [@ANCHOR: radioctl:radioctl_hpsdr_control_take_streams] (radioctl-protocols) Hands over the receive I/Q streams of the session (the data plane), once.
+- [@ANCHOR: radioctl:radioctl_hpsdr_set_attenuator] (radioctl-protocols) Sets the step attenuator of either session, in decibels (the session refuses more than 31).
 - [@ANCHOR: radioctl:radioctl_hpsdr_set_frequency] (radioctl-protocols) Retunes DDC0 (and the transmit frequency, which follows it).
 - [@ANCHOR: radioctl:radioctl_hpsdr_request_ptt] (radioctl-protocols) Keys or unkeys through the `hpsdr` session, which re-checks its gate before every packet.
 - [@ANCHOR: radioctl:radioctl_hpsdr_handle_line] (radioctl-protocols) Answers one request line.
@@ -336,6 +337,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_civ_frame_or_junk] (radioctl-protocols) Turns the bytes FE FE ... FD into a frame or junk; a second preamble restarts the frame.
 - [@ANCHOR: radioctl:radioctl_civ_engine_decode] (radioctl-protocols) Decodes one CI-V frame into an Inbound; drops echoes and other stations.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_decode] (radioctl-protocols) Decodes one Kenwood reply token into an Inbound.
+- [@ANCHOR: radioctl:radioctl_kenwood_engine_decode_front_end] (radioctl-protocols) An `RA` (attenuator: `P1P1` then an always-zero `P2P2`) or `PA` (preamplifier: `P1` then an always-zero `P2`) answer, mapped to a level by the description's steps.
+- [@ANCHOR: radioctl:radioctl_kenwood_engine_front_end_set] (radioctl-protocols) The set command for the attenuator (`RA01;`) or preamplifier (`PA1;`).
 - [@ANCHOR: radioctl:radioctl_virtual_state_power] (radioctl-protocols) Power meter of a virtual rig: nonzero only while keyed.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_frame] (radioctl-protocols) Answers one CI-V frame: address filter, bus echo, OK/NG.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_dispatch] (radioctl-protocols) The virtual CI-V command table (frequency, mode, PTT, CW, ID, meters).
@@ -516,6 +519,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_conformance_expected_inbound] (radioctl-protocols) Maps a transcript expectation to the engine's Inbound value.
 - [@ANCHOR: radioctl:radioctl_conformance_panel_change] (radioctl-protocols) Maps a transcript knob change to the virtual rig's PanelChange.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_check_timing] (radioctl-core) Refuses a `[timing]` block that would defeat or delay an unkey: `timeout_ms` outside 1..=30000, `inter_command_ms` above 2000.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_levels] (radioctl-core) Validates the optional `[levels]` block: ascending positive attenuator decibels (at most 9) or a whole-decibel maximum, and at most 3 preamplifier steps.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_scope] (radioctl-core) Validates the optional `[scope]` block (icom-civ only; receivers 1 or 2, positive sizes, a span list).
 - [@ANCHOR: radioctl:radioctl_civ_engine_scope_request] (radioctl-protocols) The request for a scope command (command 27). Fails when the model has no scope or a value does not fit its field.
 - [@ANCHOR: radioctl:radioctl_civ_engine_scope_dropped] (radioctl-protocols) Scope frames or sweeps discarded as out of order or malformed.
@@ -523,6 +527,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_civ_decode_rit_offset] (radioctl-protocols) The offset in hertz from the 3 data bytes after `21 00`.
 - [@ANCHOR: radioctl:radioctl_civ_filter_index_to_hz] (radioctl-protocols) The width in hertz of filter index `index` (command `1A 03`): 0 to 9 are 50 to 500 Hz in steps of 50, 10 to 40 are 600 to 3600 Hz in steps of 100 (SSB, CW, RTTY); for AM the index 0 to 49 is 200 to 10000 Hz in steps of 200. `None` outside the table.
 - [@ANCHOR: radioctl:radioctl_civ_filter_hz_to_index] (radioctl-protocols) The filter index whose width is exactly `hz`, or `None` when the table has no such width.
+- [@ANCHOR: radioctl:radioctl_civ_decode_bcd_byte] (radioctl-protocols) One BCD byte (`0x20` is 20); `None` if a nibble is not a digit.
 - [@ANCHOR: radioctl:radioctl_civ_engine_decode_filter] (radioctl-protocols) The filter width for index byte `index`, by the mode last reported.
 - [@ANCHOR: radioctl:radioctl_civ_engine_decode_scope] (radioctl-protocols) Feeds a waveform frame to the assembler; settings replies are not kept.
 - [@ANCHOR: radioctl:radioctl_scope_mode_code] (radioctl-protocols) The wire code of the mode.
@@ -544,6 +549,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_scope_sample_value] (radioctl-protocols) The deterministic synthetic amplitude of pixel `index` in sweep `sweep`.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_slot] (radioctl-protocols) The frequency of the selected VFO, or of the other one when `other` is true.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_set_freq] (radioctl-protocols) Sets the selected (or the other) VFO from 5 BCD bytes; NG on a malformed field.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_front_end_get] (radioctl-protocols) `11` (attenuator, one BCD byte of decibels) and `16 02` (preamplifier step) reads.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_front_end_set] (radioctl-protocols) Stores an attenuator (BCD byte) or preamplifier (step) value in a virtual CI-V rig.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_level] (radioctl-protocols) Answers `14 <sub>` with the level as 4-digit BCD; NG for a level the rig does not have.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_level_set] (radioctl-protocols) Sets a level from `14 <sub> <BCD>`; NG above 255 or on a non-BCD value.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_filter] (radioctl-protocols) Answers `1A 03` with the filter index for the current width and mode; NG when the width is not in the mode's table.
@@ -554,6 +561,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_civ_engine_filter_table_is_am] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode_vfo_b_split] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode_rit_xit] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
+- [@ANCHOR: radioctl:radioctl_civ_engine_encode_front_end] (radioctl-protocols) Sets the attenuator (`11`, one BCD byte of decibels) or the preamplifier (`16 02`, a step number), when the description lists the value.
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode_levels_and_filter] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
 - [@ANCHOR: radioctl:radioctl_scope_line_from] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
 - [@ANCHOR: radioctl:radioctl_scope_sim_try_handle] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
@@ -577,6 +585,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctld_caps_wire_float] (radioctld) A value as the `level_gran` text of Hamlib's `rigctld` writes it for the first levels (AF, RF):
 - [@ANCHOR: radioctl:radioctld_caps_wire_int] (radioctld) An integer level value as the text Hamlib's client expects for an integer level: the integer's
 - [@ANCHOR: radioctl:radioctld_caps_granularity] (radioctld) Min, max and step of one served level in the form the client parses for that level.
+- [@ANCHOR: radioctl:radioctld_caps_preamp_list] (radioctld) The `\dump_state` preamplifier line: the step numbers the model accepts, ended by 0.
+- [@ANCHOR: radioctl:radioctld_caps_attenuator_list] (radioctld) The `\dump_state` attenuator line: the decibel values the model accepts, ended by 0.
 - [@ANCHOR: radioctl:radioctld_caps_dump_state] (radioctld) The `\dump_state` text.
 - [@ANCHOR: radioctl:radioctld_caps_dump_caps] (radioctld) The `\dump_caps` text: a readable summary, ended by a blank line.
 - [@ANCHOR: radioctl:radioctld_command_linebuffer_new] (radioctld) A buffer that accepts lines of at most `max` bytes.
@@ -683,6 +693,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_yaesu_decode_level] (radioctl-protocols) A newcat level answer (command name and digits).
 - [@ANCHOR: radioctl:radioctl_yaesu_parse_clarifier] (radioctl-protocols) The clarifier offset in the five characters of IF P3: a sign and four digits.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_new] (radioctl-protocols) Builds a newcat engine from a yaesu-newcat description.
+- [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_front_end] (radioctl-protocols) An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero) and the step, mapped by the description.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode] (radioctl-protocols) Decodes one newcat reply into observations.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_if] (radioctl-protocols) The observations in an IF answer (frequency of VFO A, mode, RIT, XIT, clarifier offset).
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_encode] (radioctl-protocols) Encodes an operation as a newcat command.
@@ -694,6 +705,18 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_ylegacy_decode_frequency_mode] (radioctl-protocols) The frequency of VFO A and the mode from a five-byte 03 answer.
 - [@ANCHOR: radioctl:radioctl_ylegacy_engine_encode] (radioctl-protocols) Encodes an operation as a five-byte block and remembers which answer to count bytes for.
 - [@ANCHOR: radioctl:radioctl_ylegacy_engine_feed] (radioctl-protocols) Counts answer bytes (5 for frequency and mode, 1 for a status read) and decodes them.
+- [@ANCHOR: radioctl:radioctl_core_levelparams_max_attenuation] (radioctl-core) The largest attenuation in decibels, `None` when the model has no attenuator.
+- [@ANCHOR: radioctl:radioctl_core_levelparams_attenuator_step] (radioctl-core) The 1-based step whose attenuation is `db`, or 0 for `db == 0` (off); `None` if no step has that attenuation.
+- [@ANCHOR: radioctl:radioctl_core_levelparams_attenuator_db] (radioctl-core) The attenuation in decibels of 1-based step `step` (0 is off, 0 dB); `None` for a step the model does not have.
+- [@ANCHOR: radioctl:radioctl_att_is_level] (radioctl-protocols) True for the two levels this module handles.
+- [@ANCHOR: radioctl:radioctl_att_step] (radioctl-protocols) The wire step of a front-end level value: for the attenuator the 1-based step whose attenuation is `value` dB (0 is off), for the preamplifier the step itself. `Unsupported` when the model has no such control or no such step.  # Errors  `Unsupported` for a level that is not a front-end level, a model without the control and a value the model has no step for.
+- [@ANCHOR: radioctl:radioctl_att_value] (radioctl-protocols) The level value of a wire step reported by the rig, the inverse of [`step_of`]; `None` for a step the description does not have (the reply is then unrecognised, not guessed at).
+- [@ANCHOR: radioctl:radioctl_att_virtual_get] (radioctl-protocols) What a virtual rig answers to a read of a front-end level: its stored value, `None` when the model has no such control.
+- [@ANCHOR: radioctl:radioctl_att_virtual_set] (radioctl-protocols) Stores a front-end level in a virtual rig; false (nothing stored) for a value the model has no step for.
+- [@ANCHOR: radioctl:radioctl_att_virtual_ascii] (radioctl-protocols) The shared body of the Kenwood-style and Elecraft virtual `RA`/`PA` handlers; `second_field` appends the always-zero second parameter Kenwood answers carry.
+- [@ANCHOR: radioctl:radioctl_att_virtual_kenwood] (radioctl-protocols) The `RA` and `PA` commands of a virtual Kenwood-style rig: `RA;` answers `RAnn00;` (step, then the always-zero second field) and `RAnn;` sets; `PA;` answers `PAn0;` and `PAn;` sets. A refusal is `?;`.
+- [@ANCHOR: radioctl:radioctl_att_virtual_elecraft] (radioctl-protocols) The `RA` and `PA` commands of a virtual Elecraft rig: `RA;` answers `RAnn;`, `PA;` answers `PAn;` and the same forms set (Programmer's Reference Rev. G5, p. 22). A refusal is `?;`.
+- [@ANCHOR: radioctl:radioctl_att_virtual_yaesu] (radioctl-protocols) The `RA` and `PA` commands of a virtual Yaesu newcat rig: `RA0;` answers `RA0n;` (the leading 0 is the main receiver) and `RA0n;` sets; the same for `PA`. A refusal is `?;`.
 
 
-OpenHPSDR (ANAN-10, ANAN-100; family `hpsdr-network`, `[hpsdr]` block, files `anan-10` and `anan-100`): control plane only, a line-protocol engine (`hpsdr_net.rs`) over an in-memory stream to a bridge (`hpsdr_io.rs`) that owns an `hpsdr` crate Protocol 1 or 2 session (`daemons/hpsdr`). Claims frequency, PTT, forward power and SWR; no mode (placeholder code only) and no attenuator `Op` yet (`HpsdrControl::set_attenuator`). PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate for a bounded lease at drive zero by default. All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.
+OpenHPSDR (ANAN-10, ANAN-100; family `hpsdr-network`, `[hpsdr]` block, files `anan-10` and `anan-100`): control plane only, a line-protocol engine (`hpsdr_net.rs`) over an in-memory stream to a bridge (`hpsdr_io.rs`) that owns an `hpsdr` crate Protocol 1 or 2 session (`daemons/hpsdr`). Claims frequency, PTT, forward power and SWR; no mode (placeholder code only) and the step attenuator as `Level::Attenuator` (0 to 31 dB; also `HpsdrControl::set_attenuator`), no preamplifier. PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate for a bounded lease at drive zero by default. All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.

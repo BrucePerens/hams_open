@@ -3,10 +3,11 @@
 //!
 //! An OpenHPSDR radio has no command stream of the kind the actor drives: control is UDP datagrams
 //! and receive I/Q is a separate data plane. So the engine speaks a small line protocol (`GF`, `F <hz>`,
-//! `GP`, `P 0|1`, `GW`, `GR`; replies `OK`, `ERR <text>`, `F <hz>`, `P <0|1>`, `W <raw>`, `R <tenths>`)
+//! `GP`, `P 0|1`, `GW`, `GR`, `GA`, `A <db>`; replies `OK`, `ERR <text>`, `F <hz>`, `P <0|1>`, `W <raw>`, `R <tenths>`, `A <db>`)
 //! to the bridge in [`crate::hpsdr_io`], which owns the `hpsdr` crate session. Frequency, PTT, forward
-//! power and SWR are claimed; there is no mode (an SDR radio's demodulation happens in the host) and no
-//! attenuator `Op` in the core vocabulary yet (the bridge's control handle offers one).
+//! power, SWR and the step attenuator (`Level::Attenuator`, whole decibels as the description's
+//! `levels.attenuator_any_up_to_db` allows) are claimed; there is no mode (an SDR radio's
+//! demodulation happens in the host) and no preamplifier.
 //!
 //! Transmit: `Op::SetPtt(true)` is the only command that can key, and the rig actor refuses it
 //! unless its transmit gate is open before it reaches [`HpsdrEngine::encode`]. The bridge then opens
@@ -18,7 +19,9 @@ use radioctl_core::description::{Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Vfo};
+use radioctl_core::units::{Hz, Level, Vfo};
+
+use crate::attenuation;
 
 /// Longest line accepted from the bridge.
 const MAX_LINE: usize = 128;
@@ -65,6 +68,10 @@ fn parse_line(line: &str) -> Inbound {
         (Some("R"), Some(v)) => {
             Inbound::Observation(Observation::Swr(u16::try_from(v).unwrap_or(u16::MAX)))
         }
+        (Some("A"), Some(v)) => u16::try_from(v).map_or_else(
+            |_| Inbound::Unrecognised(line.as_bytes().to_vec()),
+            |db| Inbound::Observation(Observation::Level(Level::Attenuator, db)),
+        ),
         _ => Inbound::Unrecognised(line.as_bytes().to_vec()),
     }
 }
@@ -88,6 +95,17 @@ impl ProtocolEngine for HpsdrEngine {
             Op::SetPtt(on) => (format!("P {}", u8::from(*on)), ReplyKind::Ack),
             Op::GetPower => ("GW".to_string(), ReplyKind::Observation(Field::Power)),
             Op::GetSwr => ("GR".to_string(), ReplyKind::Observation(Field::Swr)),
+            Op::GetLevel(Level::Attenuator) => {
+                attenuation::step_of(&self.desc, Level::Attenuator, 0)?;
+                (
+                    "GA".to_string(),
+                    ReplyKind::Observation(Field::Level(Level::Attenuator)),
+                )
+            }
+            Op::SetLevel(Level::Attenuator, db) => {
+                attenuation::step_of(&self.desc, Level::Attenuator, *db)?;
+                (format!("A {db}"), ReplyKind::Ack)
+            }
             _ => {
                 return Err(RigError::new(
                     ErrorKind::Unsupported,
@@ -155,6 +173,20 @@ mod tests {
             ErrorKind::Unsupported
         );
         assert!(e.encode(&Op::SetFrequency(Vfo::B, Hz(1))).is_err());
+        assert_eq!(
+            e.encode(&Op::SetLevel(Level::Attenuator, 12))
+                .expect("encodes")
+                .bytes,
+            b"A 12\n"
+        );
+        assert_eq!(
+            e.encode(&Op::GetLevel(Level::Attenuator))
+                .expect("encodes")
+                .bytes,
+            b"GA\n"
+        );
+        assert!(e.encode(&Op::SetLevel(Level::Attenuator, 32)).is_err());
+        assert!(e.encode(&Op::SetLevel(Level::Preamp, 1)).is_err());
         assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(u64::MAX))).is_err());
         let other = rigfile::parse(include_str!("../../../rigs/icom-ic-7300.toml")).expect("file");
         assert!(HpsdrEngine::new(other.description).is_err());
@@ -167,7 +199,7 @@ mod tests {
         let mut e = engine();
         assert!(e.feed(b"F 71000", Duration::ZERO).is_empty());
         let got = e.feed(
-            b"00\nOK\nERR gate\nW 123\nR 15\nP 1\nwhat\n",
+            b"00\nOK\nERR gate\nW 123\nR 15\nP 1\nA 12\nA 70000\nwhat\n",
             Duration::ZERO,
         );
         assert_eq!(
@@ -179,6 +211,8 @@ mod tests {
                 Inbound::Observation(Observation::Power(123)),
                 Inbound::Observation(Observation::Swr(15)),
                 Inbound::Observation(Observation::Ptt(true)),
+                Inbound::Observation(Observation::Level(Level::Attenuator, 12)),
+                Inbound::Unrecognised(b"A 70000".to_vec()),
                 Inbound::Unrecognised(b"what".to_vec()),
             ]
         );

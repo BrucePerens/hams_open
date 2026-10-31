@@ -73,6 +73,10 @@ pub fn level_wire(level: Level) -> LevelWire {
         Level::MonitorLevel => ("ML", 0, 60),
         Level::KeyerSpeed => ("KS", 8, 50),
         Level::RfPower => ("PC", 0, 110),
+        // Not numeric levels: `RAnn;` and `PAn;` carry steps (see `front_end_set`). The ranges
+        // here are never read for them; the prefixes make the command names available.
+        Level::Attenuator => ("RA", 0, 0),
+        Level::Preamp => ("PA", 0, 0),
     };
     LevelWire { prefix, min, max }
 }
@@ -242,6 +246,14 @@ impl ElecraftEngine {
                 }
                 Self::set(format!("BW{:04};", hz.0 / 10))
             }
+            Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
+                let step = crate::attenuation::step_of(&self.desc, *level, *value)?;
+                if *level == Level::Attenuator {
+                    Self::set(format!("RA{step:02};"))
+                } else {
+                    Self::set(format!("PA{step};"))
+                }
+            }
             Op::SetLevel(level, value) => {
                 let wire = level_wire(*level);
                 if *value < wire.min || *value > wire.max {
@@ -302,6 +314,17 @@ impl ElecraftEngine {
             "1" => Some(true),
             _ => None,
         };
+        if matches!(name, "RA" | "PA") {
+            let (level, width) = if name == "RA" {
+                (Level::Attenuator, 2)
+            } else {
+                (Level::Preamp, 1)
+            };
+            return number(width)
+                .and_then(|step| u8::try_from(step).ok())
+                .and_then(|step| crate::attenuation::value_of(&self.desc, level, step))
+                .map(|v| Observation::Level(level, v));
+        }
         if let Some(level) = [
             Level::AfGain,
             Level::RfGain,
@@ -360,8 +383,11 @@ impl ProtocolEngine for ElecraftEngine {
             return Err(Self::unsupported("capability not in the rig description"));
         }
         let level_get = |level: Level| {
+            if crate::attenuation::is_front_end_level(level) {
+                crate::attenuation::step_of(&self.desc, level, 0)?;
+            }
             let command = format!("{};", level_wire(level).prefix);
-            Self::get(&command, Field::Level(level))
+            Ok::<Request, RigError>(Self::get(&command, Field::Level(level)))
         };
         Ok(match op {
             Op::GetFrequency(Vfo::A) => Self::get("FA;", Field::Frequency(Vfo::A)),
@@ -376,7 +402,7 @@ impl ProtocolEngine for ElecraftEngine {
             Op::GetXit => Self::get("XT;", Field::Xit),
             Op::GetRitOffset => Self::get("RO;", Field::RitOffset),
             Op::GetFilterWidth => Self::get("BW;", Field::FilterWidth),
-            Op::GetLevel(level) => level_get(*level),
+            Op::GetLevel(level) => level_get(*level)?,
             Op::GetSwr => Self::get("SW;", Field::Swr),
             Op::GetModelId => Self::get("ID;", Field::ModelId),
             Op::GetFirmware => Self::get("RVM;", Field::Firmware),

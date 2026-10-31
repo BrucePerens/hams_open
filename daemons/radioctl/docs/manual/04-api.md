@@ -125,7 +125,7 @@ Everything else is an `Op`:
 | Transmit | `GetPtt`, `SetPtt(bool)`, `SendCw(String)` (both can transmit), `StopCw` (stops Morse in progress; an emergency command like `SetPtt(false)`, chapter [10](10-safety.md)), `GetPower`, `GetSwr` |
 | Receive | `GetSignal`, `GetFilterWidth`, `SetFilterWidth(Hz)` |
 | Split, RIT, XIT | `GetSplit`, `SetSplit(bool)`, `GetTxVfo`, `GetRit`, `SetRit(bool)`, `GetXit`, `SetXit(bool)`, `GetRitOffset`, `SetRitOffset(i16)` |
-| Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed and RF power setting |
+| Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed, RF power setting, and the receive attenuator (`Level::Attenuator`, decibels, 0 is off) and preamplifier (`Level::Preamp`, a step number, 0 is off). Which attenuator values and preamplifier steps a model has is its description's `[levels]` block (chapter [6](06-rig-descriptions.md)); an engine refuses any other value with `Unsupported`. |
 | Reporting | `SetTransceive(bool)` |
 | Identity | `GetModelId`, `GetFirmware` |
 | Scope | `SetScopeOutput`, `GetScopeOutput`, `SetScopeAxis`, `GetScopeAxis`, `SetScopeSpan`, `GetScopeSpan`, `SetScopeEdges`, `SetScopeReference`, `GetScopeReference` (see the end of this chapter) |

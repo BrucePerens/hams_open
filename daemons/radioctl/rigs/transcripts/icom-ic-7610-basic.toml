@@ -238,3 +238,28 @@ expect = { kind = "frequency", vfo = "a", hz = 21074000 }
 panel = { kind = "mode", mode = "lsb" }
 rx = "fe fe 00 98 01 00 01 fd"
 expect = { kind = "mode", mode = "lsb" }
+
+# Receive attenuator (18 dB; command 11, one BCD byte) and preamplifier (command 16 02, P.AMP number).
+[[step]]
+op = { kind = "set-level", level = "attenuator", value = 18 }
+tx = "fe fe 98 e0 11 18 fd"
+rx = "fe fe e0 98 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-level", level = "attenuator" }
+tx = "fe fe 98 e0 11 fd"
+rx = "fe fe e0 98 11 18 fd"
+expect = { kind = "level", level = "attenuator", value = 18 }
+
+[[step]]
+op = { kind = "set-level", level = "preamp", value = 2 }
+tx = "fe fe 98 e0 16 02 02 fd"
+rx = "fe fe e0 98 fb fd"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-level", level = "preamp" }
+tx = "fe fe 98 e0 16 02 fd"
+rx = "fe fe e0 98 16 02 02 fd"
+expect = { kind = "level", level = "preamp", value = 2 }

@@ -511,6 +511,14 @@ impl RigService {
         if raw < f64::from(min) || raw > f64::from(max) {
             return Err(EINVAL);
         }
+        // A value the model has no step for (7 dB on a 6/12/18 dB attenuator) is an invalid
+        // argument, not a missing feature.
+        if radioctl_protocols::attenuation::is_front_end_level(level)
+            && radioctl_protocols::attenuation::step_of(&self.description, level, raw as u16)
+                .is_err()
+        {
+            return Err(EINVAL);
+        }
         self.set(Op::SetLevel(level, raw as u16)).await
     }
 

@@ -64,7 +64,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// Handle on the served bridge: the attenuator (not an `Op` in the core vocabulary yet) and the status.
+/// Handle on the served bridge: the attenuator (also reachable as `Level::Attenuator` through the
+/// actor) and the status.
 #[derive(Clone)]
 pub struct HpsdrControl {
     shared: Arc<Shared>,
@@ -75,11 +76,7 @@ impl HpsdrControl {
     /// Sets the step attenuator in dB (0..=31).
     pub fn set_attenuator(&self, db: u8) -> Result<(), hpsdr::error::HpsdrError> {
         match lock(&self.shared.link).as_ref() {
-            Some(HpsdrLink::P1(r)) => r.update(|c| {
-                c.att_db = db;
-                c.att_enable = true;
-            }),
-            Some(HpsdrLink::P2(r)) => r.update(|c| c.att_adc0 = db),
+            Some(link) => set_attenuator(link, db),
             None => Err(hpsdr::error::HpsdrError::Stopped),
         }
     }
@@ -102,6 +99,18 @@ impl HpsdrControl {
             Some(HpsdrLink::P2(r)) => r.take_streams(),
             None => Vec::new(),
         }
+    }
+}
+
+// [@ANCHOR: radioctl_hpsdr_set_attenuator]
+/// Sets the step attenuator of either session, in decibels (the session refuses more than 31).
+fn set_attenuator(link: &HpsdrLink, db: u8) -> Result<(), hpsdr::error::HpsdrError> {
+    match link {
+        HpsdrLink::P1(r) => r.update(|c| {
+            c.att_db = db;
+            c.att_enable = true;
+        }),
+        HpsdrLink::P2(r) => r.update(|c| c.att_adc0 = db),
     }
 }
 
@@ -133,6 +142,8 @@ fn request_ptt(link: &HpsdrLink, on: bool, drive: u8) -> Result<(), hpsdr::error
 struct State {
     freq: u32,
     ptt: bool,
+    /// The attenuation last set through the bridge, in decibels.
+    att_db: u8,
 }
 
 // [@ANCHOR: radioctl_hpsdr_handle_line]
@@ -151,6 +162,17 @@ fn handle_line(line: &str, shared: &Shared, st: &mut State, opts: &HpsdrOptions)
         (Some("GP"), _) => format!("P {}\n", u8::from(st.ptt)),
         (Some("GW"), _) => format!("W {}\n", status_of(link).forward_raw),
         (Some("GR"), _) => format!("R {}\n", swr_tenths(&status_of(link), opts)),
+        (Some("GA"), _) => format!("A {}\n", st.att_db),
+        (Some("A"), Some(db)) => match u8::try_from(db)
+            .map_err(|_| hpsdr::error::HpsdrError::Stopped)
+            .and_then(|d| set_attenuator(link, d).map(|()| d))
+        {
+            Ok(d) => {
+                st.att_db = d;
+                "OK\n".into()
+            }
+            Err(_) => "ERR attenuator\n".into(),
+        },
         (Some("F"), Some(hz)) => match u32::try_from(hz).map(|h| set_frequency(link, h)) {
             Ok(Ok(())) => {
                 st.freq = hz as u32;
@@ -218,7 +240,11 @@ pub fn serve_hpsdr(
     });
     let task = Arc::clone(&shared);
     runtime.spawn(async move {
-        let mut st = State { freq, ptt: false };
+        let mut st = State {
+            freq,
+            ptt: false,
+            att_db: 0,
+        };
         let (mut buf, mut line) = ([0u8; 256], Vec::<u8>::new());
         let mut tick = tokio::time::interval(opts.status_every);
         loop {
