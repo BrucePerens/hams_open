@@ -75,6 +75,13 @@ impl PollSchedule {
                     Op::GetFrequency(Vfo::A),
                     true,
                 ),
+                (
+                    Capability::SecondVfo,
+                    Field::Frequency(Vfo::B),
+                    Op::GetFrequency(Vfo::B),
+                    true,
+                ),
+                (Capability::Split, Field::Split, Op::GetSplit, true),
                 (Capability::ReadMode, Field::Mode, Op::GetMode, true),
                 (Capability::ReadPtt, Field::Ptt, Op::GetPtt, true),
                 (Capability::ReadSignal, Field::Signal, Op::GetSignal, false),

@@ -70,6 +70,7 @@ async fn replay(daemon_text: &str, descriptions: Option<Vec<RigDescription>>, tr
 // Tests [@ANCHOR: radioctld_server_write]
 // Tests [@ANCHOR: radioctld_service_new]
 // Tests [@ANCHOR: radioctld_service_config]
+// Tests [@ANCHOR: radioctld_service_tx_state]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_virtual_kx3_transcript() {
     let text = config_text("", "kx3", "elecraft-kx3.toml", false, false);

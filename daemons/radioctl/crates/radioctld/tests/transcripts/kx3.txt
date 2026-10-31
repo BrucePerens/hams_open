@@ -61,11 +61,23 @@
 < RPRT 0
 > i
 < 14077000
+# Split on: a bare f is still the frequency of the VFO asked for (Hamlib's meaning); the active
+# transmit frequency has its own command and is the transmit VFO's.
+> f
+< 14075000
+> \get_active_tx_freq
+< 14077000
+> +\get_active_tx_freq
+< get_active_tx_freq:
+< Active TX Frequency: 14077000
+< RPRT 0
 > S 0 VFOA
 < RPRT 0
 > s
 < 0
 < VFOA
+> \get_active_tx_freq
+< 14075000
 > V VFOB
 < RPRT 0
 > v

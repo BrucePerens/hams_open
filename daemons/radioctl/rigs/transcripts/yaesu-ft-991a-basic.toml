@@ -102,6 +102,7 @@ op = { kind = "get-split" }
 tx_text = "FT;"
 rx_text = "FT0;"
 expect = { kind = "split", on = false }
+expect_more = [{ kind = "tx-vfo", vfo = "a" }]
 
 [[step]]
 op = { kind = "set-split", on = true }
@@ -112,6 +113,7 @@ op = { kind = "get-split" }
 tx_text = "FT;"
 rx_text = "FT1;"
 expect = { kind = "split", on = true }
+expect_more = [{ kind = "tx-vfo", vfo = "b" }]
 
 [[step]]
 op = { kind = "set-rit", on = true }

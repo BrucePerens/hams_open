@@ -33,6 +33,7 @@ use crate::event::{Change, RigEvent, Source};
 use crate::op::{Field, Observation, Op};
 use crate::poll::{PollConfig, PollSchedule};
 use crate::transport::Transport;
+use crate::txstate::TxState;
 use crate::units::{Hz, Mode, Vfo};
 
 const TRANSCRIPT_LINES: usize = 16;
@@ -524,6 +525,74 @@ impl RigHandle {
         }
     }
 
+    // [@ANCHOR: radioctl_core_handle_split]
+    /// Whether the rig is in split operation.
+    pub async fn split(&self, freshness: Freshness) -> Result<Cached<bool>, RigError> {
+        let read = self.read(Field::Split, Op::GetSplit, freshness).await?;
+        match read.value {
+            Observation::Split(on) => Ok(Cached {
+                value: on,
+                age: read.age,
+            }),
+            other => Err(RigError::new(
+                ErrorKind::Malformed,
+                format!("expected split, got {other:?}"),
+            )),
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_handle_tx_state]
+    /// Brings the inputs of the transmit-frequency derivation up to date: split state and both
+    /// VFO frequencies (the second only when the rig has one), asking the rig for what the
+    /// cache lacks or, with [`Freshness::Fresh`], for everything.
+    async fn tx_state(&self, freshness: Freshness) -> Result<TxState, RigError> {
+        if self.capabilities().has(Capability::Split) {
+            self.split(freshness).await?;
+            if self.capabilities().has(Capability::SecondVfo) {
+                self.frequency(Vfo::B, freshness).await?;
+            }
+        }
+        self.frequency(Vfo::A, freshness).await?;
+        Ok(TxState::from_cache(|f| self.cached(f).map(|c| c.value)))
+    }
+
+    // [@ANCHOR: radioctl_core_handle_tx_vfo]
+    /// The VFO the rig transmits on: VFO B (the unselected VFO on CI-V) in split operation on
+    /// most rigs, VFO A otherwise; the rig's own report where its protocol gives one.
+    pub async fn tx_vfo(&self, freshness: Freshness) -> Result<Vfo, RigError> {
+        Ok(self.tx_state(freshness).await?.tx_vfo())
+    }
+
+    // [@ANCHOR: radioctl_core_handle_rx_frequency]
+    /// The frequency the rig receives on: VFO A, or the receive VFO the rig reports (Kenwood).
+    pub async fn rx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError> {
+        self.tx_state(freshness)
+            .await?
+            .rx_frequency()
+            .ok_or_else(|| RigError::new(ErrorKind::Malformed, "receive frequency unknown"))
+    }
+
+    // [@ANCHOR: radioctl_core_handle_tx_frequency]
+    /// The frequency of the transmit VFO, which is the receive frequency when not split. Unlike
+    /// [`RigHandle::frequency`] it never depends on which VFO the caller names.
+    pub async fn tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError> {
+        self.tx_state(freshness)
+            .await?
+            .tx_frequency()
+            .ok_or_else(|| RigError::new(ErrorKind::Malformed, "transmit frequency unknown"))
+    }
+
+    // [@ANCHOR: radioctl_core_handle_active_tx_frequency]
+    /// The frequency the rig transmits on now, or will when keyed, correct in split operation
+    /// and while keyed. Amplifiers, tuners, antenna selectors and band decoders follow this; the
+    /// status-change callback reports `Field::ActiveTxFrequency` when it changes.
+    pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError> {
+        self.tx_state(freshness)
+            .await?
+            .active_tx_frequency()
+            .ok_or_else(|| RigError::new(ErrorKind::Malformed, "transmit frequency unknown"))
+    }
+
     // [@ANCHOR: radioctl_core_handle_set_frequency]
     /// Sets a VFO's frequency.
     pub async fn set_frequency(&self, vfo: Vfo, hz: Hz) -> Result<(), RigError> {
@@ -969,23 +1038,47 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     fn observe(&mut self, value: Observation, source: Source) {
         let field = value.field();
         let now = Instant::now();
-        let old = {
+        let mut changes = Vec::new();
+        {
             let mut cache = guard(&self.shared.cache);
             let old = cache.get(&field).map(|e| e.value);
             cache.insert(field, CacheEntry { value, at: now });
-            old
-        };
-        if old == Some(value) {
+            if old != Some(value) {
+                changes.push(Change {
+                    field,
+                    old,
+                    new: value,
+                });
+            }
+            // The transmit frequency is derived here, so every engine gets it and the callback
+            // fires when it changes, whichever field moved it.
+            let state = TxState::from_cache(|f| cache.get(&f).map(|e| e.value));
+            if let Some(hz) = state.active_tx_frequency() {
+                let derived = Observation::ActiveTxFrequency(hz);
+                let before = cache.get(&Field::ActiveTxFrequency).map(|e| e.value);
+                if before != Some(derived) {
+                    cache.insert(
+                        Field::ActiveTxFrequency,
+                        CacheEntry {
+                            value: derived,
+                            at: now,
+                        },
+                    );
+                    changes.push(Change {
+                        field: Field::ActiveTxFrequency,
+                        old: before,
+                        new: derived,
+                    });
+                }
+            }
+        }
+        if changes.is_empty() {
             return;
         }
         let event = RigEvent {
             rig: self.shared.id.clone(),
             source,
-            changes: vec![Change {
-                field,
-                old,
-                new: value,
-            }],
+            changes,
         };
         self.shared.counters.events.fetch_add(1, Ordering::Relaxed);
         let _ = self.shared.events.send(event.clone());

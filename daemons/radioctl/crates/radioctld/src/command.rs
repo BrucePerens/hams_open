@@ -27,6 +27,9 @@ pub const MAX_HZ: u64 = 99_999_999_999;
 pub enum Command {
     /// `f`
     GetFreq,
+    /// `\get_active_tx_freq`: the frequency the rig transmits on now (or will when keyed),
+    /// whatever VFO is current. `f` keeps Hamlib's meaning, the frequency of the VFO asked for.
+    GetActiveTxFreq,
     /// `F freq`
     SetFreq(u64),
     /// `m`
@@ -237,7 +240,7 @@ const SHORTS: [(char, &str); 24] = [
 ];
 
 /// Long names served (the one-letter forms are in [`SHORTS`]; `1`, `q` and `Q` are special).
-const SERVED: [&str; 39] = [
+const SERVED: [&str; 40] = [
     "get_freq",
     "set_freq",
     "get_mode",
@@ -254,6 +257,7 @@ const SERVED: [&str; 39] = [
     "set_split_mode",
     "get_split_freq_mode",
     "set_split_freq_mode",
+    "get_active_tx_freq",
     "get_rit",
     "set_rit",
     "get_xit",
@@ -351,6 +355,7 @@ fn takes_vfo(name: &str) -> bool {
     !matches!(
         name,
         "dump_caps"
+            | "get_active_tx_freq"
             | "dump_state"
             | "chk_vfo"
             | "get_info"
@@ -452,6 +457,7 @@ fn build(name: &str, args: &[&str], rest: &str) -> Result<Command, i32> {
     };
     match (name, args) {
         ("get_freq", _) => no_args(Command::GetFreq),
+        ("get_active_tx_freq", _) => no_args(Command::GetActiveTxFreq),
         ("set_freq", [f]) => parse_hz(f).map(Command::SetFreq).ok_or(EINVAL),
         ("get_mode", _) => no_args(Command::GetMode),
         ("set_mode", _) => {
@@ -674,6 +680,7 @@ mod tests {
     fn the_common_commands_parse_with_and_without_a_vfo_token() {
         let cmd = |line: &str| parse_line(line).expect("a command").command;
         assert_eq!(cmd("f"), Ok(Command::GetFreq));
+        assert_eq!(cmd("\\get_active_tx_freq"), Ok(Command::GetActiveTxFreq));
         assert_eq!(cmd("f VFOA"), Ok(Command::GetFreq));
         assert_eq!(cmd("F 14074000"), Ok(Command::SetFreq(14_074_000)));
         assert_eq!(cmd("F VFOB 7074000.5"), Ok(Command::SetFreq(7_074_000)));

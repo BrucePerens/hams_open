@@ -166,6 +166,21 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 ## Function reference
 
+- [@ANCHOR: radioctl:radioctl_core_vfo_other] (radioctl-core) The other VFO.
+- [@ANCHOR: radioctl:radioctl_core_txstate_from_cache] (radioctl-core) The inputs of the transmit-frequency derivation, read from the cached observations.
+- [@ANCHOR: radioctl:radioctl_core_txstate_rx_vfo] (radioctl-core) The VFO the rig receives on (the reported one, else VFO A).
+- [@ANCHOR: radioctl:radioctl_core_txstate_tx_vfo] (radioctl-core) The VFO the rig transmits on: the receive VFO when simplex, else the reported transmit VFO, else the other VFO.
+- [@ANCHOR: radioctl:radioctl_core_txstate_rx_frequency] (radioctl-core) The receive frequency.
+- [@ANCHOR: radioctl:radioctl_core_txstate_tx_frequency] (radioctl-core) The frequency of the transmit VFO.
+- [@ANCHOR: radioctl:radioctl_core_txstate_active_tx_frequency] (radioctl-core) The frequency the rig transmits on now or when keyed; what amplifiers, tuners and band decoders follow.
+- [@ANCHOR: radioctl:radioctl_core_handle_split] (radioctl-core) Whether the rig is in split operation.
+- [@ANCHOR: radioctl:radioctl_core_handle_tx_state] (radioctl-core) Brings the inputs of the transmit-frequency derivation up to date.
+- [@ANCHOR: radioctl:radioctl_core_handle_tx_vfo] (radioctl-core) The VFO the rig transmits on.
+- [@ANCHOR: radioctl:radioctl_core_handle_rx_frequency] (radioctl-core) The receive frequency, independent of which VFO the caller names.
+- [@ANCHOR: radioctl:radioctl_core_handle_tx_frequency] (radioctl-core) The transmit VFO's frequency, independent of which VFO the caller names.
+- [@ANCHOR: radioctl:radioctl_core_handle_active_tx_frequency] (radioctl-core) The frequency the rig transmits on now, correct in split and while keyed; the status-change callback reports `Field::ActiveTxFrequency` when it changes (Hamlib issue 138).
+- [@ANCHOR: radioctl:radioctl_splitter_keyed_split_frequency] (radioctl-splitter) While keyed in split, a plain current-frequency read answers with the transmit frequency (switchable).
+- [@ANCHOR: radioctl:radioctld_service_tx_state] (radioctld) The receive and transmit VFOs as the rig last reported them; `\get_active_tx_freq` answers the transmit frequency, `f` keeps the named-VFO meaning.
 - [@ANCHOR: radioctl:radioctl_core_hz_from_khz] Builds a frequency in hertz from whole kilohertz, refusing overflow.
 - [@ANCHOR: radioctl:radioctl_core_level_name] (radioctl-core) The name of a level (AF gain, RF gain, mic gain, monitor level, keyer speed, RF power) in description and transcript files.
 - [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.

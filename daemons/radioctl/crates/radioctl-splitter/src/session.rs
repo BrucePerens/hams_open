@@ -16,9 +16,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use radioctl_core::event::Source;
-use radioctl_core::op::{Field, Op};
+use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::rig::RigHandle;
 use radioctl_core::transport::Transport;
+use radioctl_core::units::{Hz, Vfo};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
@@ -57,6 +58,11 @@ pub struct SplitterConfig {
     pub max_age: Duration,
     /// Deadline for a request that has to go to the rig.
     pub request_timeout: Duration,
+    /// While the rig is keyed in split operation, a plain read of the current frequency (CI-V
+    /// `03`, TS-2000 `FA;`) answers with the transmit frequency, as OmniRig-style clients
+    /// assume (Hamlib issue 138). Reads that name the other VFO (`25 01`, `FB;`) are unchanged.
+    /// Turn it off for a client that wants the receive frequency while keyed.
+    pub report_tx_frequency_while_keyed: bool,
 }
 
 impl SplitterConfig {
@@ -67,6 +73,7 @@ impl SplitterConfig {
             protocol,
             max_age: Duration::from_secs(5),
             request_timeout: Duration::from_secs(2),
+            report_tx_frequency_while_keyed: true,
         }
     }
 }
@@ -284,6 +291,29 @@ impl Splitter {
         counter.fetch_add(1, Ordering::Relaxed);
     }
 
+    // [@ANCHOR: radioctl_splitter_keyed_split_frequency]
+    /// The transmit frequency to answer a plain read of the current frequency with: only while
+    /// keyed in split operation, only for VFO A (the current VFO of both personalities), and only
+    /// when the configuration allows it. `None` means answer as usual.
+    fn keyed_split_frequency(&self, vfo: Vfo) -> Option<Hz> {
+        if vfo != Vfo::A || !self.inner.config.report_tx_frequency_while_keyed {
+            return None;
+        }
+        let cached = |field| self.inner.rig.cached(field).map(|c| c.value);
+        match (
+            cached(Field::Ptt),
+            cached(Field::Split),
+            cached(Field::ActiveTxFrequency),
+        ) {
+            (
+                Some(Observation::Ptt(true)),
+                Some(Observation::Split(true)),
+                Some(Observation::ActiveTxFrequency(hz)),
+            ) => Some(hz),
+            _ => None,
+        }
+    }
+
     // [@ANCHOR: radioctl_splitter_read]
     /// A read: the cached value if fresh enough, else asks the rig.
     async fn read(&self, field: Field, op: Op) -> Outcome {
@@ -323,10 +353,13 @@ impl Splitter {
     async fn execute(&self, client: ClientId, request: &Request) -> Outcome {
         self.count(&self.inner.counters.requests);
         let outcome = match request {
-            Request::ReadFrequency(vfo) => {
-                self.read(Field::Frequency(*vfo), Op::GetFrequency(*vfo))
-                    .await
-            }
+            Request::ReadFrequency(vfo) => match self.keyed_split_frequency(*vfo) {
+                Some(hz) => Outcome::Value(Observation::Frequency(*vfo, hz)),
+                None => {
+                    self.read(Field::Frequency(*vfo), Op::GetFrequency(*vfo))
+                        .await
+                }
+            },
             Request::ReadMode => self.read(Field::Mode, Op::GetMode).await,
             Request::ReadPtt => self.read(Field::Ptt, Op::GetPtt).await,
             Request::ReadSignal => self.read(Field::Signal, Op::GetSignal).await,

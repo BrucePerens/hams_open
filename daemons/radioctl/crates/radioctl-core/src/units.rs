@@ -88,6 +88,15 @@ pub enum Vfo {
 }
 
 impl Vfo {
+    // [@ANCHOR: radioctl_core_vfo_other]
+    /// The other VFO.
+    pub fn other(self) -> Vfo {
+        match self {
+            Vfo::A => Vfo::B,
+            Vfo::B => Vfo::A,
+        }
+    }
+
     // [@ANCHOR: radioctl_core_vfo_name]
     /// The name used in rig description files.
     pub fn name(self) -> &'static str {
@@ -181,6 +190,7 @@ mod tests {
         assert_eq!(Level::from_name("volume"), None);
     }
 
+    // Tests [@ANCHOR: radioctl_core_vfo_other]
     // Tests [@ANCHOR: radioctl_core_vfo_name]
     // Tests [@ANCHOR: radioctl_core_vfo_from_name]
     #[test]
@@ -189,6 +199,8 @@ mod tests {
             assert_eq!(Vfo::from_name(vfo.name()), Some(vfo));
         }
         assert_eq!(Vfo::from_name("c"), None);
+        assert_eq!(Vfo::A.other(), Vfo::B);
+        assert_eq!(Vfo::B.other(), Vfo::A);
     }
 
     // Tests [@ANCHOR: radioctl_core_hz_from_khz]

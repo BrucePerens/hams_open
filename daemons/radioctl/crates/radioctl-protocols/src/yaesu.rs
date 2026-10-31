@@ -189,10 +189,15 @@ impl YaesuEngine {
             (Some(name), Some(digits)) => decode_level(name, digits),
             _ => None,
         };
-        vec![match observation {
-            Some(value) => Inbound::Observation(value),
-            None => Inbound::Unrecognised(format!("{text};").into_bytes()),
-        }]
+        match observation {
+            // `FT` here is the split flag; the transmitter is on B in split and on A otherwise.
+            Some(value @ Observation::Split(on)) => vec![
+                Inbound::Observation(value),
+                Inbound::Observation(Observation::TxVfo(if on { Vfo::B } else { Vfo::A })),
+            ],
+            Some(value) => vec![Inbound::Observation(value)],
+            None => vec![Inbound::Unrecognised(format!("{text};").into_bytes())],
+        }
     }
 
     // [@ANCHOR: radioctl_yaesu_engine_decode_if]
@@ -267,6 +272,7 @@ impl ProtocolEngine for YaesuEngine {
             Op::GetPower => Self::command("RM5;".into(), observe(Field::Power)),
             Op::SetTransceive(on) => Self::command(format!("AI{};", u8::from(*on)), none),
             Op::GetSplit => Self::command("FT;".into(), observe(Field::Split)),
+            Op::GetTxVfo => Self::command("FT;".into(), observe(Field::TxVfo)),
             Op::SetSplit(on) => Self::command(format!("FT{};", if *on { 3 } else { 2 }), none),
             Op::GetRit => Self::command("RT;".into(), observe(Field::Rit)),
             Op::GetXit => Self::command("XT;".into(), observe(Field::Xit)),
@@ -415,6 +421,7 @@ mod tests {
                 Inbound::Observation(Observation::Mode(Mode::Usb)),
                 Inbound::Observation(Observation::Ptt(true)),
                 Inbound::Observation(Observation::Split(true)),
+                Inbound::Observation(Observation::TxVfo(Vfo::B)),
                 Inbound::Observation(Observation::Rit(true)),
                 Inbound::Observation(Observation::Xit(false)),
                 Inbound::Observation(Observation::Signal(123)),
