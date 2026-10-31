@@ -6,12 +6,12 @@ verified, and make a best effort to make them work out of the box.
 
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
-Today 56 of 313 models have a description (61 files, because the four FlexRadio 6000-series files share Hamlib's one
+Today 72 of 313 models have a description (77 files, because the four FlexRadio 6000-series files share Hamlib's one
 "6xxx" model and the two ANAN files have no Hamlib model), and none is hardware-verified.
 
 | Tier | Work | Models | Described | Left |
 |---|---|---:|---:|---:|
-| A | data only, on an existing engine | 135 | 52 | 83 |
+| A | data only, on an existing engine | 135 | 68 | 67 |
 | B | variants of an existing engine | 41 | 4 | 37 |
 | C | a new engine per family | 83 | 0 | 83 |
 | D | odd devices | 54 | 0 | 54 |
@@ -46,7 +46,7 @@ capabilities, plus an engine fix when a model differs.
   provenance. Icom and Xiegu documents forbid reuse: use Hamlib facts and `--dump-caps` and say so, as the shipped files do.
 - Order inside the tier: models with many users first (Icom IC-7000/7100/7200/746/756 series, Kenwood TS-480/570/990/50,
   Yaesu FT-710/891/950/2000/FTDX-3000/5000, Elecraft K3/K3S/KX2/K4), then the rest by family, one pull request per family.
-- 52 are done (the 18 earlier ones, 19 Icom CI-V models and 15 Yaesu newcat and Elecraft models, see below). Done means a description exists, not that it is verified.
+- 68 are done (the 18 earlier ones, 19 Icom CI-V models, 15 Yaesu newcat and Elecraft models and 16 Kenwood ASCII models, see below). Done means a description exists, not that it is verified.
 - Flex: the SmartSDR "slice A to H" models are the same network engine; one file covers them with the slice letter as a parameter.
 
 ### Icom CI-V: what is done and what is left (79 models in Hamlib's `icom_civ` family)
@@ -68,6 +68,21 @@ Left (51), with the reason each is not yet done:
 
 The Main/Sub radios (IC-7600, 7800, 7850/7851, 7760; the IC-7610 and IC-9700 before them) have no model of command `07 C2`/`D0`/`D1`/`D2`
 in the engine: the oracle records that as divergences. Fixing that is an engine task, to be done with a transcript from a real radio.
+
+### Kenwood ASCII: what is done and what is left
+
+Done (16, batch of 2026-10-31, Hamlib 4.6.2 facts and `--dump-caps` only, because kenwood.com refused the download of its PC command guides): TS-50S, 140S, 450S, 480, 570D, 570S, 680S, 690S, 711, 790, 811, 850, 870S, 940S, 950S, 950SDX. Declared capabilities are those Hamlib implements; levels only for the TS-480.
+
+Left, with the reason:
+
+| Model (Hamlib id) | What is needed |
+|---|---|
+| TS-440S (2002), R-5000 (2015) | Hamlib's IC-10 dialect: `IF` of 37 (TS-440S) or 32 (R-5000) characters and other commands; a dialect in the Kenwood engine and a twin |
+| TS-930 (2022) | Hamlib has no `ID` for it (the number is unknown), so the description cannot be written honestly; needs a volunteer's `ID;` answer |
+| TS-990S (2039) | Main/Sub receivers with no VFO A/B in Hamlib's model, its own mode letters (C to H) and the TS-990 guide (kenwood.com refused the download): needs a Main/Sub model in the engine |
+| TRC-80 (2030) | a transceiver module for a commercial radio; Hamlib reads its frequency from `IF` (`kenwood_get_freq_if`), a different path from the other models; needs a guide or a volunteer |
+| Levels, signal and meters on the older models (all but the TS-480) | the per-model AG/RG/PC/KS/SM forms (`AG` has three forms) from a usable source; Kenwood's guides for these models could not be downloaded |
+| The 10 TH/TM handhelds (`kenwood_hh_ascii`, Tier B) | a different command family (CR-terminated, no `IF`); not covered here |
 
 ### Yaesu newcat and Elecraft: what is done and what is left
 

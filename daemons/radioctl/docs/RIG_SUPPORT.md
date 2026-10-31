@@ -9,13 +9,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **56** (61 description files)
+- With a radioctl description: **72** (77 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 56 |
-| engine only | 83 |
+| described | 72 |
+| engine only | 67 |
 | needs variant | 37 |
 | needs engine | 83 |
 | odd device | 54 |
@@ -31,7 +31,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 52 |
+| A | data only on an existing engine | 135 | 68 |
 | B | variants of an existing engine | 41 | 4 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
@@ -43,7 +43,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_serial | C/D | - | 94 | 0 | 0 |
 | icom_civ | A | civ | 79 | 28 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
-| kenwood_ascii | A | kenwood | 25 | 4 | 0 |
+| kenwood_ascii | A | kenwood | 25 | 20 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
 | kenwood_hh_ascii | B | - | 10 | 0 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
@@ -236,28 +236,28 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2027 | Kenwood | TM-V7 | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
 | 2035 | Kenwood | TM-V71(A) | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
 | 2030 | Kenwood | TRC-80 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | `kenwood-ts-140s` | unverified | - | described |
 | 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
 | 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | `kenwood-ts-450s` | unverified | - | described |
+| 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | `kenwood-ts-480` | unverified | - | described |
+| 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | `kenwood-ts-50s` | unverified | - | described |
+| 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | `kenwood-ts-570d` | unverified | - | described |
+| 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | `kenwood-ts-570s` | unverified | - | described |
 | 2031 | Kenwood | TS-590S | A | kenwood_ascii | kenwood | `kenwood-ts-590s` | unverified | - | described |
 | 2037 | Kenwood | TS-590SG | A | kenwood_ascii | kenwood | `kenwood-ts-590sg` | unverified | - | described |
-| 2024 | Kenwood | TS-680S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2005 | Kenwood | TS-690S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2006 | Kenwood | TS-711 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2007 | Kenwood | TS-790 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2008 | Kenwood | TS-811 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2009 | Kenwood | TS-850 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2024 | Kenwood | TS-680S | A | kenwood_ascii | kenwood | `kenwood-ts-680s` | unverified | - | described |
+| 2005 | Kenwood | TS-690S | A | kenwood_ascii | kenwood | `kenwood-ts-690s` | unverified | - | described |
+| 2006 | Kenwood | TS-711 | A | kenwood_ascii | kenwood | `kenwood-ts-711` | unverified | - | described |
+| 2007 | Kenwood | TS-790 | A | kenwood_ascii | kenwood | `kenwood-ts-790` | unverified | - | described |
+| 2008 | Kenwood | TS-811 | A | kenwood_ascii | kenwood | `kenwood-ts-811` | unverified | - | described |
+| 2009 | Kenwood | TS-850 | A | kenwood_ascii | kenwood | `kenwood-ts-850` | unverified | - | described |
+| 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | `kenwood-ts-870s` | unverified | - | described |
 | 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | unverified | - | described |
 | 2022 | Kenwood | TS-930 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2013 | Kenwood | TS-950SDX | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | `kenwood-ts-940s` | unverified | - | described |
+| 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | `kenwood-ts-950s` | unverified | - | described |
+| 2013 | Kenwood | TS-950SDX | A | kenwood_ascii | kenwood | `kenwood-ts-950sdx` | unverified | - | described |
 | 2039 | Kenwood | TS-990S | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
 | 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | - | - | unverified | - | odd device |
 | 2050 | Lab599 | TX-500 | C | other_serial | - | - | unverified | - | needs engine |
