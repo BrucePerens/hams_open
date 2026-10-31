@@ -103,7 +103,11 @@ pub async fn stop(&self) -> Result<(), StationError>
   seen. `VirtualRotator` (both protocols, a slewing model, stuck and silent faults) and
   `serve_virtual_rotator` give tests a rotator on a loopback socket.
 
-Planned: rotator control from `radioctld` or the relay, and rotators in the C ABI.
+`radioctld` serves a rotator in Hamlib's `rotctld` text protocol from a `[[rotator]]` section
+(chapter [9](09-radioctld.md#rotators)), over a reconnecting TCP link or against the virtual rotator;
+tested against the virtual rotator and Hamlib's `rotctl -m 2` only, unverified on a real rotator.
+Planned: rotator control from the relay (`rotor_steer`), serial transports and further engines
+(Easycomm, Rot2Prog, DCU), and rotators in the C ABI.
 
 ## The C ABI
 

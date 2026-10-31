@@ -22,6 +22,13 @@
 //! transmit = false                         # true opens the rig's transmit gate at start
 //! [rig.transport]
 //! kind = "virtual"                         # or "serial" (path/usb + baud, lines) or "tcp" (address)
+//!
+//! [[rotator]]
+//! name = "g5500"
+//! model = "yaesu-g-5500-gs232b"            # an id from data/station/rotators.toml
+//! listen = "127.0.0.1:4533"                # default: loopback, port 4533 + index
+//! [rotator.transport]
+//! kind = "virtual"                         # or "tcp" (address)
 //! ```
 
 use std::net::{IpAddr, SocketAddr};
@@ -30,12 +37,15 @@ use std::time::Duration;
 
 use radioctl_core::serial::{LineControl, PortTarget};
 use radioctl_core::usb::UsbMatcher;
+use radioctl_station::rotator::RotatorDescription;
 use serde::Deserialize;
 
 use crate::access::AllowList;
 
 /// The first port used when a rig has no `listen`.
 const BASE_PORT: u16 = 4532;
+/// The first port used when a rotator has no `listen` (Hamlib's `rotctld` default).
+const ROTATOR_BASE_PORT: u16 = 4533;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,6 +53,24 @@ struct FileDoc {
     server: Option<ServerSection>,
     #[serde(default)]
     rig: Vec<RigSection>,
+    #[serde(default)]
+    rotator: Vec<RotatorSection>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RotatorSection {
+    name: String,
+    model: String,
+    listen: Option<String>,
+    transport: RotatorTransportSection,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
+enum RotatorTransportSection {
+    Virtual,
+    Tcp { address: String },
 }
 
 #[derive(Deserialize, Default)]
@@ -172,13 +200,41 @@ pub struct RigConfig {
     pub transport: TransportConfig,
 }
 
-/// A validated configuration.
+/// How a rotator is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RotatorTransportConfig {
+    /// A virtual rotator of the model, served inside the daemon (for tests and demonstrations).
+    Virtual,
+    /// A TCP connection (a Hamlib `rotctld`, or a serial server in front of a GS-232 controller),
+    /// reconnected when it is lost.
+    Tcp {
+        /// `host:port`.
+        address: String,
+    },
+}
+
+/// One rotator to serve.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RotatorConfig {
+    /// The name used in logs.
+    pub name: String,
+    /// The description, from the shipped rotator descriptions.
+    pub description: RotatorDescription,
+    /// Where clients connect.
+    pub listen: SocketAddr,
+    /// How to reach the rotator.
+    pub transport: RotatorTransportConfig,
+}
+
+/// A validated configuration.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Config {
     /// Server-wide settings.
     pub server: ServerConfig,
     /// The rigs, in file order.
     pub rigs: Vec<RigConfig>,
+    /// The rotators, in file order.
+    pub rotators: Vec<RotatorConfig>,
 }
 
 // [@ANCHOR: radioctld_config_in_range]
@@ -291,15 +347,116 @@ fn transport_config(section: TransportSection) -> Result<TransportConfig, String
             })
         }
         TransportSection::Tcp { address } => {
-            if address
-                .rsplit_once(':')
-                .is_none_or(|(h, p)| h.is_empty() || p.parse::<u16>().is_err())
-            {
-                return Err(format!("tcp address {address:?} is not host:port"));
-            }
+            check_host_port(&address)?;
             Ok(TransportConfig::Tcp { address })
         }
     }
+}
+
+// [@ANCHOR: radioctld_config_check_name]
+/// Checks a rig's or rotator's name: 1 to 32 of `[A-Za-z0-9_.-]`.
+fn check_name(kind: &str, name: &str) -> Result<(), String> {
+    if name.is_empty()
+        || name.len() > 32
+        || !name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+    {
+        return Err(format!(
+            "{kind} name {name:?} must be 1-32 of [A-Za-z0-9_.-]"
+        ));
+    }
+    Ok(())
+}
+
+// [@ANCHOR: radioctld_config_listen_address]
+/// The listen address of a rig or rotator: the one given, or loopback at `base + index`.
+/// `non_loopback_ok` is the server's explicit permission to bind beyond this machine.
+fn listen_address(
+    kind: &str,
+    name: &str,
+    given: Option<&String>,
+    base: u16,
+    index: usize,
+    non_loopback_ok: bool,
+) -> Result<SocketAddr, String> {
+    let listen: SocketAddr = match given {
+        Some(text) => text
+            .parse()
+            .map_err(|_| format!("{kind} {name}: listen {text:?} is not ip:port"))?,
+        None => {
+            let port = u16::try_from(index)
+                .ok()
+                .and_then(|i| base.checked_add(i))
+                .ok_or(format!("too many {kind}s for the default ports"))?;
+            SocketAddr::new(IpAddr::from([127, 0, 0, 1]), port)
+        }
+    };
+    if !listen.ip().is_loopback() && !non_loopback_ok {
+        return Err(format!(
+            "{kind} {name}: {listen} is not a loopback address; set server.allow_non_loopback_bind \
+             = true with an explicit server.allow list to serve the network"
+        ));
+    }
+    Ok(listen)
+}
+
+// [@ANCHOR: radioctld_config_rotator]
+/// Validates one `[[rotator]]`: a known model from the shipped descriptions, a listen address
+/// (default: loopback, port 4533 + index) and a transport.
+fn rotator_config(
+    section: RotatorSection,
+    index: usize,
+    non_loopback_ok: bool,
+) -> Result<RotatorConfig, String> {
+    let name = section.name;
+    check_name("rotator", &name)?;
+    let listen = listen_address(
+        "rotator",
+        &name,
+        section.listen.as_ref(),
+        ROTATOR_BASE_PORT,
+        index,
+        non_loopback_ok,
+    )?;
+    let known = RotatorDescription::builtin();
+    let description = known
+        .iter()
+        .find(|d| d.id == section.model)
+        .cloned()
+        .ok_or_else(|| {
+            let ids: Vec<&str> = known.iter().map(|d| d.id.as_str()).collect();
+            format!(
+                "rotator {name}: model {:?} is not one of {}",
+                section.model,
+                ids.join(", ")
+            )
+        })?;
+    let transport = match section.transport {
+        RotatorTransportSection::Virtual => RotatorTransportConfig::Virtual,
+        RotatorTransportSection::Tcp { address } => {
+            check_host_port(&address)?;
+            RotatorTransportConfig::Tcp { address }
+        }
+    };
+    Ok(RotatorConfig {
+        name,
+        description,
+        listen,
+        transport,
+    })
+}
+
+// [@ANCHOR: radioctld_config_check_host_port]
+/// Checks that a TCP address is `host:port`.
+fn check_host_port(address: &str) -> Result<(), String> {
+    if address
+        .rsplit_once(':')
+        .is_none_or(|(h, p)| h.is_empty() || p.parse::<u16>().is_err())
+    {
+        return Err(format!("tcp address {address:?} is not host:port"));
+    }
+    Ok(())
 }
 
 // [@ANCHOR: radioctld_config_rig]
@@ -312,30 +469,15 @@ fn rig_config(
     non_loopback_ok: bool,
 ) -> Result<RigConfig, String> {
     let name = section.name;
-    if name.is_empty()
-        || name.len() > 32
-        || !name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
-    {
-        return Err(format!("rig name {name:?} must be 1-32 of [A-Za-z0-9_.-]"));
-    }
-    let port = BASE_PORT.checked_add(u16::try_from(index).map_err(|_| "too many rigs")?);
-    let listen: SocketAddr = match &section.listen {
-        Some(text) => text
-            .parse()
-            .map_err(|_| format!("rig {name}: listen {text:?} is not ip:port"))?,
-        None => SocketAddr::new(
-            IpAddr::from([127, 0, 0, 1]),
-            port.ok_or("too many rigs for the default ports")?,
-        ),
-    };
-    if !listen.ip().is_loopback() && !non_loopback_ok {
-        return Err(format!(
-            "rig {name}: {listen} is not a loopback address; set server.allow_non_loopback_bind \
-             = true with an explicit server.allow list to serve the network"
-        ));
-    }
+    check_name("rig", &name)?;
+    let listen = listen_address(
+        "rig",
+        &name,
+        section.listen.as_ref(),
+        BASE_PORT,
+        index,
+        non_loopback_ok,
+    )?;
     let rx_low_hz = section.rx_low_hz.unwrap_or(30_000);
     let rx_high_hz = section.rx_high_hz.unwrap_or(60_000_000);
     if rx_low_hz >= rx_high_hz || rx_high_hz > crate::command::MAX_HZ {
@@ -371,27 +513,54 @@ impl Config {
     /// from `base_dir` (the directory of the file).
     pub fn parse(text: &str, base_dir: &Path) -> Result<Config, String> {
         let doc: FileDoc = toml::from_str(text).map_err(|e| format!("config: {e}"))?;
-        if doc.rig.is_empty() {
-            return Err("config: no [[rig]] to serve".to_string());
+        if doc.rig.is_empty() && doc.rotator.is_empty() {
+            return Err("config: no [[rig]] or [[rotator]] to serve".to_string());
         }
         let (server, non_loopback_ok) = server_config(doc.server.unwrap_or_default())?;
         let mut rigs = Vec::new();
         for (index, section) in doc.rig.into_iter().enumerate() {
             rigs.push(rig_config(section, index, base_dir, non_loopback_ok)?);
         }
+        let mut rotators = Vec::new();
+        for (index, section) in doc.rotator.into_iter().enumerate() {
+            rotators.push(rotator_config(section, index, non_loopback_ok)?);
+        }
+        // Names are unique within rigs and within rotators; listen addresses across both.
         for (i, rig) in rigs.iter().enumerate() {
             if rigs.iter().skip(i + 1).any(|other| other.name == rig.name) {
                 return Err(format!("config: rig name {:?} is used twice", rig.name));
             }
-            if rigs
+        }
+        for (i, rotator) in rotators.iter().enumerate() {
+            if rotators
                 .iter()
                 .skip(i + 1)
-                .any(|other| other.listen == rig.listen)
+                .any(|other| other.name == rotator.name)
             {
-                return Err(format!("config: {} is the address of two rigs", rig.listen));
+                return Err(format!(
+                    "config: rotator name {:?} is used twice",
+                    rotator.name
+                ));
             }
         }
-        Ok(Config { server, rigs })
+        let listens: Vec<SocketAddr> = rigs
+            .iter()
+            .map(|r| r.listen)
+            .chain(rotators.iter().map(|r| r.listen))
+            .collect();
+        for (i, listen) in listens.iter().enumerate() {
+            if listen.port() != 0 && listens.iter().skip(i + 1).any(|other| other == listen) {
+                return Err(format!(
+                    "config: {listen} is the address of two rigs or rotators; give one a listen \
+                     address of its own"
+                ));
+            }
+        }
+        Ok(Config {
+            server,
+            rigs,
+            rotators,
+        })
     }
 }
 
@@ -498,6 +667,73 @@ kind = "virtual"
         let two = format!("{MINIMAL}{}", MINIMAL.replace("\"kx3\"", "\"other\""));
         let config = parse(&two).expect("two rigs");
         assert_eq!(config.rigs[1].listen.port(), 4533);
+    }
+
+    const ROTATOR: &str = r#"
+[[rotator]]
+name = "g5500"
+model = "yaesu-g-5500-gs232b"
+[rotator.transport]
+kind = "virtual"
+"#;
+
+    // Tests [@ANCHOR: radioctld_config_rotator]
+    // Tests [@ANCHOR: radioctld_config_check_name]
+    // Tests [@ANCHOR: radioctld_config_listen_address]
+    // Tests [@ANCHOR: radioctld_config_check_host_port]
+    // Tests [@ANCHOR: radioctld_config_parse]
+    #[test]
+    fn rotators_are_validated_and_share_the_address_space_with_rigs() {
+        // A file of rotators only is enough to serve.
+        let config = parse(ROTATOR).expect("rotators only");
+        assert!(config.rigs.is_empty());
+        let rotator = &config.rotators[0];
+        assert_eq!(rotator.name, "g5500");
+        assert_eq!(rotator.description.id, "yaesu-g-5500-gs232b");
+        assert_eq!(rotator.listen, "127.0.0.1:4533".parse().expect("addr"));
+        assert_eq!(rotator.transport, RotatorTransportConfig::Virtual);
+        // The second rotator takes the next port.
+        let two = format!("{ROTATOR}{}", ROTATOR.replace("\"g5500\"", "\"other\""));
+        assert_eq!(parse(&two).expect("two").rotators[1].listen.port(), 4534);
+        // Rigs and rotators share one address space: a second rig would default to 4533.
+        let clash = format!("{MINIMAL}{}{ROTATOR}", MINIMAL.replace("\"kx3\"", "\"k2\""));
+        let err = parse(&clash).expect_err("clash");
+        assert!(err.contains("4533") && err.contains("listen"), "{err}");
+        // Ephemeral ports never clash.
+        let ephemeral = format!(
+            "{}{}",
+            MINIMAL.replace("[[rig]]", "[[rig]]\nlisten = \"127.0.0.1:0\""),
+            ROTATOR.replace("[[rotator]]", "[[rotator]]\nlisten = \"127.0.0.1:0\"")
+        );
+        assert!(parse(&ephemeral).is_ok());
+        // Unknown model, bad name, duplicate name, non-loopback bind, bad transport.
+        let err = parse(&ROTATOR.replace("yaesu-g-5500-gs232b", "acme")).expect_err("model");
+        assert!(err.contains("generic-rotctld"), "{err}");
+        assert!(parse(&ROTATOR.replace("\"g5500\"", "\"a b\"")).is_err());
+        assert!(parse(&format!("{ROTATOR}{ROTATOR}"))
+            .expect_err("dup")
+            .contains("used twice"));
+        assert!(
+            parse(&ROTATOR.replace("[[rotator]]", "[[rotator]]\nlisten = \"0.0.0.0:4533\""))
+                .expect_err("bind")
+                .contains("not a loopback address")
+        );
+        let tcp = ROTATOR.replace(
+            "kind = \"virtual\"",
+            "kind = \"tcp\"\naddress = \"192.168.1.9:4533\"",
+        );
+        assert_eq!(
+            parse(&tcp).expect("tcp").rotators[0].transport,
+            RotatorTransportConfig::Tcp {
+                address: "192.168.1.9:4533".to_string()
+            }
+        );
+        assert!(
+            parse(&ROTATOR.replace("kind = \"virtual\"", "kind = \"tcp\"\naddress = \"x\""))
+                .is_err()
+        );
+        assert!(parse(&ROTATOR.replace("kind = \"virtual\"", "kind = \"serial\"")).is_err());
+        assert!(parse(&ROTATOR.replace("model =", "bogus = 1\nmodel =")).is_err());
     }
 
     // Tests [@ANCHOR: radioctld_config_transport]

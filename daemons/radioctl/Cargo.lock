@@ -501,6 +501,7 @@ dependencies = [
  "radioctl-core",
  "radioctl-protocols",
  "radioctl-splitter",
+ "radioctl-station",
  "serde",
  "serialport",
  "tokio",

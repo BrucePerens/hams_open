@@ -12,6 +12,8 @@ use crate::names::VfoSel;
 
 /// Invalid parameter.
 pub const EINVAL: i32 = -1;
+/// Hamlib `RIG_ECONF`: an invalid configuration.
+pub const ECONF: i32 = -2;
 /// Function not implemented.
 pub const ENIMPL: i32 = -4;
 /// Communication timed out.
