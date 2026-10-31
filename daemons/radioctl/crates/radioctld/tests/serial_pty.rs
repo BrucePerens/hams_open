@@ -154,3 +154,66 @@ async fn a_radio_that_cannot_be_unkeyed_is_not_served() {
     assert!(message.contains("unkey"), "unexpected refusal: {message}");
     drop(master);
 }
+
+// Tests [@ANCHOR: radioctld_rigs_build_rig]
+// Tests [@ANCHOR: radioctld_rigs_serial_config]
+// Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_new]
+// Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_open]
+// Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_close]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_baud_probe_on_a_pty_finds_the_radio_and_the_daemon_serves_it_at_that_rate() {
+    // A pty ignores the baud rate, so this proves the wiring only (the first rate answers, the
+    // port is released between the probe and the real open, the daemon then serves the radio
+    // with the gate closed), never the choice of rate: that is the in-memory probe tests' job.
+    let (slave, stop, thread, _rig) = radio_on_pty();
+    let handle = Handle::current();
+    let text = format!(
+        "[[rig]]\nname = \"ic7300\"\ndescription = {:?}\nlisten = \"127.0.0.1:0\"\n\
+         [rig.transport]\nkind = \"serial\"\npath = {slave:?}\nbaud = \"auto\"\n\
+         lines = \"unmanaged\"\n",
+        rigs_dir().join("icom-ic-7300.toml").display().to_string()
+    );
+    let config = Config::parse(&text, Path::new(".")).expect("config");
+    let description = load_description(&config.rigs[0].description).expect("description");
+    let daemon = daemon::start(&handle, &config, vec![description], quiet_options)
+        .await
+        .expect("daemon on the pty after the probe");
+    let found = daemon.rigs[0]
+        .baud_probe
+        .clone()
+        .expect("a probed rig reports what it found");
+    assert_eq!(found.baud, 4800, "the first rate answers on a pty");
+    assert_eq!(found.tried, vec![4800]);
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("f").await, "14074000\n");
+    assert_eq!(
+        client.ask("T 1").await,
+        "RPRT -9\n",
+        "the gate stays closed"
+    );
+    daemon.stop().await;
+
+    // A silent port with the probe on: refused as a probe failure naming the rates, before any
+    // unkey pass, and nothing is served.
+    let (master, silent) = TTYPort::pair().expect("pty pair");
+    let silent_path = silent.name().expect("slave name");
+    drop(silent);
+    let text = format!(
+        "[[rig]]\nname = \"ic7300\"\ndescription = {:?}\nlisten = \"127.0.0.1:0\"\n\
+         [rig.transport]\nkind = \"serial\"\npath = {silent_path:?}\n\
+         baud_probe = [19200, 4800]\nlines = \"unmanaged\"\n",
+        rigs_dir().join("icom-ic-7300.toml").display().to_string()
+    );
+    let config = Config::parse(&text, Path::new(".")).expect("config");
+    let description = load_description(&config.rigs[0].description).expect("description");
+    let refused = daemon::start(&handle, &config, vec![description], quiet_options).await;
+    let message = refused.err().expect("a silent radio fails the probe");
+    assert!(
+        message.contains("baud probe") && message.contains("19200, 4800"),
+        "unexpected refusal: {message}"
+    );
+    drop(master);
+
+    stop.store(true, Ordering::Release);
+    thread.join().expect("radio thread");
+}

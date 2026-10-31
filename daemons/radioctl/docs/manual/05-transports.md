@@ -123,6 +123,44 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 ```
 
+## The baud probe
+
+Off unless you ask for it. When the radio's rate is unknown, `radioctl_core::baud_probe` finds it by
+asking, at each candidate rate in turn, the one question that changes nothing:
+
+```rust signatures
+pub trait ProbePort: Send {
+```
+
+```rust signatures
+pub async fn probe<P: ProbePort, E: ProtocolEngine>(
+    port: &mut P,
+    engine: &mut E,
+    rates: &[u32],
+) -> Result<ProbeResult, RigError>
+```
+
+For each rate in order, `probe` opens the port at that rate, writes the engine's own encoding of
+`Op::GetFrequency(Vfo::A)` (CI-V command `03` on an Icom; never a hand-written frame, and the probe refuses to
+run at all if the engine's reply kind for that request is anything but the VFO A frequency observation),
+waits one description timeout (`Timing::timeout`) for an `Inbound::Observation`, and closes the port. The
+first rate that answers wins and the probe stops: no later rate is opened and no second request is sent.
+`ProbeResult { baud, tried }` names the winner and every rate opened. No answer at any rate is
+`ErrorKind::LinkDown` naming every rate tried; an open error (the device is missing or not permitted) is
+not a baud problem and ends the probe with that error. The probe never touches the transmit gate; it runs
+before the rig actor exists, so the actor's start-up unkey pass still runs, at the chosen rate.
+
+`ProbePort` is the policy's only contact with a port, so the policy is tested without one
+(`crates/radioctl-core/tests/baud_probe.rs`: an in-memory virtual IC-7300 that answers at one rate only
+proves the order, one request per rate, one timeout per silent rate, the stop, and that the wire carried
+nothing but the read). `SerialProbePort` is the real one: each `open` is `open_serial` at the given rate with
+the same `SerialConfig` as the real link (so DTR and RTS are made inactive after every open, or never touched
+for `lines = Unmanaged`), and `close` waits for the supervisor to report `Closed`, because the port is held
+exclusively and the next open would otherwise find it busy. `DEFAULT_RATES` is 4800, 9600, 19200, 38400,
+57600, 115200. radioctld exposes the probe as `baud = "auto"` or `baud_probe = [...]` (chapter
+[9](09-radioctld.md#configuration-reference)). A pseudo-terminal ignores the rate, so a pty proves the wiring
+only; the rates and the IC-7300's answer are unverified until a real radio is benched.
+
 ## Finding a USB radio by what it is
 
 `/dev/ttyUSB0` today is `/dev/ttyUSB1` after the next re-plug. A `PortTarget::Usb(UsbMatcher { vid,

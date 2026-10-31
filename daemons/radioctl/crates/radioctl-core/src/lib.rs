@@ -6,6 +6,7 @@
 //! protocol engines sans-IO.
 
 pub mod backoff;
+pub mod baud_probe;
 pub mod capability;
 pub mod description;
 pub mod dispatcher;

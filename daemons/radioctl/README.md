@@ -5,7 +5,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
 2026-10-30; every Rust file carries an SPDX header and the manifests inherit the licence from the
 workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`. The programmer's manual is [`docs/manual/README.md`](docs/manual/README.md).
 
-Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect) and TCP transports exist; there is no transmit
+Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, an optional read-only baud probe that is off unless configured) and TCP transports exist; there is no transmit
 path to real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -399,6 +399,13 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_serial_session] (radioctl-core) One connection: the writer loop plus a reader thread.
 - [@ANCHOR: radioctl:radioctl_core_serial_read_loop] (radioctl-core) The reader thread: port to async side until stop or failure.
 - [@ANCHOR: radioctl:radioctl_core_serial_open] (radioctl-core) Opens a serial port on a caller-supplied runtime handle and returns the byte stream, control lines and status.
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_read_request] (radioctl-core) The engine's own frequency read for the baud probe, refused unless its expected reply is the VFO A frequency observation (so the probe can never send a command that changes the radio).
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_wait_for_observation] (radioctl-core) Reads the probe's transport for at most one description timeout, feeding the engine; true at the first decoded observation.
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_probe] (radioctl-core) The optional baud probe: each configured rate in order, one read-only frequency request and one timeout per rate, stops at the first answer; `LinkDown` naming every rate when none answers. Off unless configured; never touches the transmit gate.
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_rates_text] (radioctl-core) A rate list as text for a log line or an error.
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_serial_port_new] (radioctl-core) A real serial port as a probe port; the configured rate is replaced at every open.
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_serial_port_open] (radioctl-core) Opens the configured device at a probe rate through `open_serial` (same line handling as the real link, one attempt).
+- [@ANCHOR: radioctl:radioctl_core_baud_probe_serial_port_close] (radioctl-core) Waits (bounded) until the probe's last link reports `Closed`, so the device is released before the next open.
 - [@ANCHOR: radioctl:radioctl_splitter_civ_status_frame] (radioctl-splitter) An OK or NG frame to the sender.
 - [@ANCHOR: radioctl:radioctl_splitter_personality] (radioctl-splitter) A new personality for the configured protocol.
 - [@ANCHOR: radioctl:radioctl_splitter_set] (radioctl-splitter) A set: asks the rig and reports done or refused.
@@ -654,6 +661,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctld_config_in_range] (radioctld) A value checked against an inclusive range, naming the key in the error.
 - [@ANCHOR: radioctl:radioctld_config_server] (radioctld) Validates the `[server]` section.
 - [@ANCHOR: radioctl:radioctld_config_transport] (radioctld) Validates a rig's `[rig.transport]`.
+- [@ANCHOR: radioctl:radioctld_config_baud_rate] (radioctld) One baud rate within 300..=4000000.
+- [@ANCHOR: radioctl:radioctld_config_baud_setting] (radioctld) A serial rig's `baud` and `baud_probe`: a number is a fixed rate and probes nothing (the default); `baud = "auto"` probes the default rates; `baud_probe = [...]` probes that list; a fixed rate with a list, no rate, an empty or repeating list or a rate out of range is an error.
 - [@ANCHOR: radioctl:radioctld_config_rig] (radioctld) Validates one `[[rig]]`. `index` picks the default port; `non_loopback_ok` is the server's
 - [@ANCHOR: radioctl:radioctld_config_parse] (radioctld) Parses and validates a configuration file's text. Relative description paths are taken
 - [@ANCHOR: radioctl:radioctld_daemon_start] (radioctld) Brings up every rig of `config` (descriptions given in the same order) and starts listening.
@@ -704,6 +713,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctld_rigs_load_description] (radioctld) Reads and validates a rig description file.
 - [@ANCHOR: radioctl:radioctld_rigs_service_config] (radioctld) The per-rig service settings from the configuration.
 - [@ANCHOR: radioctl:radioctld_rigs_build_rig] (radioctld) Brings up one rig on `runtime`: engine, transport, actor, service. The transmit gate is
+- [@ANCHOR: radioctl:radioctld_rigs_serial_config] (radioctld) The serial configuration of a rig at a rate: 8N1, the configured line handling, one open attempt; the baud probe and the real link open the port the same way.
 - [@ANCHOR: radioctl:radioctld_rigs_tcp_framing] (radioctld) The framing of a TCP rig and its silence limit; for the TS-890S LAN session the password is read from the secret store now, and the error for a missing secret names the secret, never a value.
 - [@ANCHOR: radioctl:radioctld_config_tcp_framing] (radioctld) Validates a tcp transport's `framing` and `lan_*` keys: `raw` takes none; `ts890-lan` needs `lan_account`, `lan_password_secret` (a secret name) and `server.secrets_dir`.
 - [@ANCHOR: radioctl:radioctld_server_limits_from_config] (radioctld) The limits of a configuration.

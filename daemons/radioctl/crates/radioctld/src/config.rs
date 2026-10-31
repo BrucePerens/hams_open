@@ -22,7 +22,9 @@
 //! vfo_mode = false                         # rigctld's -o: \chk_vfo answers 1
 //! transmit = false                         # true opens the rig's transmit gate at start
 //! [rig.transport]
-//! kind = "virtual"                         # or "serial" (path/usb + baud, lines) or "tcp" (address,
+//! kind = "virtual"                         # or "serial" (path/usb + baud, lines; baud = "auto" or
+//!                                          # baud_probe = [...] probes the rate with a frequency
+//!                                          # read, off unless configured) or "tcp" (address,
 //!                                          # framing = "raw" | "ts890-lan", lan_account,
 //!                                          # lan_administrator, lan_password_secret, idle_timeout_ms)
 //!
@@ -38,6 +40,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use radioctl_core::baud_probe::DEFAULT_RATES;
 use radioctl_core::serial::{LineControl, PortTarget};
 use radioctl_core::usb::UsbMatcher;
 use radioctl_station::rotator::RotatorDescription;
@@ -118,7 +121,8 @@ enum TransportSection {
     Serial {
         path: Option<String>,
         usb: Option<UsbSection>,
-        baud: u32,
+        baud: Option<BaudSection>,
+        baud_probe: Option<Vec<u32>>,
         lines: Option<String>,
     },
     Tcp {
@@ -129,6 +133,14 @@ enum TransportSection {
         lan_password_secret: Option<String>,
         idle_timeout_ms: Option<u64>,
     },
+}
+
+/// `baud = 19200` or `baud = "auto"`.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BaudSection {
+    Rate(u32),
+    Word(String),
 }
 
 #[derive(Deserialize)]
@@ -178,6 +190,17 @@ pub enum TcpFraming {
     },
 }
 
+/// A serial rig's baud rate: the default is a fixed rate and nothing probes unless the file
+/// says `baud = "auto"` or gives a `baud_probe` list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BaudSetting {
+    /// Open the port at this rate.
+    Fixed(u32),
+    /// Find the rate with the read-only baud probe (`radioctl_core::baud_probe`), trying these
+    /// rates in this order; the port is then opened at the first one that answered.
+    Probe(Vec<u32>),
+}
+
 /// How a rig is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransportConfig {
@@ -190,8 +213,8 @@ pub enum TransportConfig {
     Serial {
         /// The port, by path or by USB ids.
         target: PortTarget,
-        /// Baud rate.
-        baud: u32,
+        /// The baud rate, fixed or probed.
+        baud: BaudSetting,
         /// Whether the port has modem control lines this daemon may use.
         lines: LineControl,
     },
@@ -392,6 +415,60 @@ fn tcp_framing(
     }
 }
 
+// [@ANCHOR: radioctld_config_baud_rate]
+/// One baud rate within 300..=4000000.
+fn baud_rate(rate: u32) -> Result<u32, String> {
+    if !(300..=4_000_000).contains(&rate) {
+        return Err(format!("baud {rate} is outside 300..=4000000"));
+    }
+    Ok(rate)
+}
+
+// [@ANCHOR: radioctld_config_baud_setting]
+/// A serial rig's `baud` and `baud_probe`: a number is a fixed rate and probes nothing (the
+/// default behaviour); `baud = "auto"` probes `radioctl_core::baud_probe::DEFAULT_RATES`;
+/// `baud_probe = [...]` probes that list in that order (with `baud` absent or `"auto"`). A fixed
+/// rate together with a list, no rate at all, an empty or repeating list, or a rate out of range
+/// is an error.
+fn baud_setting(
+    baud: Option<BaudSection>,
+    baud_probe: Option<Vec<u32>>,
+) -> Result<BaudSetting, String> {
+    // (fixed rate, "auto" given)
+    let given = match baud {
+        None => (None, false),
+        Some(BaudSection::Rate(rate)) => (Some(baud_rate(rate)?), false),
+        Some(BaudSection::Word(word)) if word == "auto" => (None, true),
+        Some(BaudSection::Word(word)) => {
+            return Err(format!("baud {word:?} is not a rate or \"auto\""));
+        }
+    };
+    match (given, baud_probe) {
+        ((Some(rate), _), None) => Ok(BaudSetting::Fixed(rate)),
+        ((Some(_), _), Some(_)) => {
+            Err("baud_probe needs baud = \"auto\" or no baud, not a fixed rate".to_string())
+        }
+        ((None, false), None) => {
+            Err("serial transport needs baud = RATE, baud = \"auto\" or baud_probe".to_string())
+        }
+        ((None, true), None) => Ok(BaudSetting::Probe(DEFAULT_RATES.to_vec())),
+        ((None, _), Some(rates)) => {
+            if rates.is_empty() {
+                return Err("baud_probe must name at least one rate".to_string());
+            }
+            let mut seen = Vec::with_capacity(rates.len());
+            for rate in &rates {
+                let rate = baud_rate(*rate)?;
+                if seen.contains(&rate) {
+                    return Err(format!("baud_probe names {rate} twice"));
+                }
+                seen.push(rate);
+            }
+            Ok(BaudSetting::Probe(seen))
+        }
+    }
+}
+
 // [@ANCHOR: radioctld_config_transport]
 /// Validates a rig's `[rig.transport]`. `has_secrets_dir` says whether the server has a secret
 /// store for a framing that needs one.
@@ -413,6 +490,7 @@ fn transport_config(
             path,
             usb,
             baud,
+            baud_probe,
             lines,
         } => {
             let target = match (path, usb) {
@@ -424,9 +502,7 @@ fn transport_config(
                 }),
                 _ => return Err("serial transport needs exactly one of path and usb".to_string()),
             };
-            if !(300..=4_000_000).contains(&baud) {
-                return Err(format!("baud {baud} is outside 300..=4000000"));
-            }
+            let baud = baud_setting(baud, baud_probe)?;
             let lines = match lines.as_deref() {
                 None | Some("managed") => LineControl::Managed,
                 Some("unmanaged") => LineControl::Unmanaged,
@@ -863,6 +939,8 @@ kind = "virtual"
     }
 
     // Tests [@ANCHOR: radioctld_config_transport]
+    // Tests [@ANCHOR: radioctld_config_baud_rate]
+    // Tests [@ANCHOR: radioctld_config_baud_setting]
     #[test]
     fn transports_are_validated() {
         let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));
@@ -876,6 +954,36 @@ kind = "virtual"
         )
         .is_err());
         assert!(with("kind = \"serial\"\npath = \"/dev/x\"\nbaud = 5").is_err());
+        // The baud probe is off unless configured: a number is a fixed rate and probes nothing.
+        let baud_of = |baud: &str| {
+            let text = format!("kind = \"serial\"\npath = \"/dev/x\"\n{baud}");
+            match parse(&MINIMAL.replace("kind = \"virtual\"", &text)) {
+                Ok(config) => match &config.rigs[0].transport {
+                    TransportConfig::Serial { baud, .. } => Some(baud.clone()),
+                    _ => None,
+                },
+                Err(_) => None,
+            }
+        };
+        assert_eq!(baud_of("baud = 19200"), Some(BaudSetting::Fixed(19200)));
+        assert_eq!(
+            baud_of("baud = \"auto\""),
+            Some(BaudSetting::Probe(DEFAULT_RATES.to_vec()))
+        );
+        assert_eq!(
+            baud_of("baud_probe = [115200, 19200]"),
+            Some(BaudSetting::Probe(vec![115200, 19200]))
+        );
+        assert_eq!(
+            baud_of("baud = \"auto\"\nbaud_probe = [9600]"),
+            Some(BaudSetting::Probe(vec![9600]))
+        );
+        assert_eq!(baud_of(""), None, "a serial rig needs a rate or the probe");
+        assert_eq!(baud_of("baud = \"fast\""), None);
+        assert_eq!(baud_of("baud = 19200\nbaud_probe = [9600]"), None);
+        assert_eq!(baud_of("baud_probe = []"), None);
+        assert_eq!(baud_of("baud_probe = [9600, 9600]"), None);
+        assert_eq!(baud_of("baud_probe = [9600, 5]"), None);
         // `lines` says whether the port has modem lines; managed unless told otherwise.
         let lines_of = |extra: &str| {
             let text = format!("kind = \"serial\"\npath = \"/dev/x\"\nbaud = 19200\n{extra}");
