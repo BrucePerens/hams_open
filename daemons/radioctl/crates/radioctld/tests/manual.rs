@@ -393,8 +393,15 @@ fn bench_console_reads_sets_scopes_and_cannot_transmit() {
     build_examples_once();
     let binary = example_binary("bench_console");
     assert!(binary.exists(), "{} was not built", binary.display());
+    let wire_file =
+        std::env::temp_dir().join(format!("bench-console-wire-{}.txt", std::process::id()));
     let mut child = Command::new(&binary)
-        .args(["icom-ic-7300", "virtual"])
+        .args([
+            "--wire",
+            &wire_file.display().to_string(),
+            "icom-ic-7300",
+            "virtual",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -419,6 +426,17 @@ fn bench_console_reads_sets_scopes_and_cannot_transmit() {
     assert!(text.contains("= Level(AfGain,"), "{text}");
     assert!(text.contains("scope seq="), "scope sweeps arrive: {text}");
     assert!(text.contains("= Ptt(false)"), "{text}");
+    // The tap records both directions of the link, as hexadecimal lines with the time.
+    let wire = fs::read_to_string(&wire_file).expect("the wire tap file");
+    let _ = fs::remove_file(&wire_file);
+    assert!(
+        wire.contains(" tx fe fe 94 e0 03 fd"),
+        "a frequency read went out: {wire}"
+    );
+    assert!(
+        wire.contains(" rx fe fe e0 94 03 "),
+        "its answer came back: {wire}"
+    );
     for word in ["setptt", "key"] {
         assert!(
             text.contains(&format!("unknown command \"{word}\"")),
