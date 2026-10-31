@@ -17,7 +17,8 @@ and the transmit safety baseline (`RELAY_SDR_RADIOCTL_ROADMAP.md` section 2a). P
 | `session`: configure, start, stream several DDC receivers, status, stop; gated PTT and transmit I/Q queue | written, tested against the emulator |
 | `emulator`: loopback-only Protocol 1 server with synthetic tones, status, loss injection and transmit counters | written |
 | `p2`: Protocol 2 discovery, General, DDC-specific, High Priority (receive and gated transmit), gated DUC I/Q, HP status and DDC packet parsers | written, unit-tested by round trip only |
-| Protocol 2 session and emulator | **not written**: Protocol 2 has no network-level test yet |
+| `session_p2`: Protocol 2 session (General, DDC-specific, High Priority; DDC streams demultiplexed by source port; gated PTT and DUC I/Q) | written, tested against the Protocol 2 emulator |
+| `emulator_p2`: loopback-only Protocol 2 server with synthetic tones, attenuator, status, loss injection and transmit counters | written |
 | Hardware status for the ANAN-100: temperature | not defined by the published specs |
 
 ## Using it
@@ -62,7 +63,7 @@ Facts (byte layouts, field meanings, calibration constants) were read from, and 
 No terms in these documents forbid reuse of the facts they describe. No source code of pihpsdr, Thetis, PowerSDR or
 any other OpenHPSDR program was read or copied. Nothing is copied from the documents' text beyond field names and numbers.
 
-Known open points (all `verified=unverified`): Protocol 2 sends each DDC stream from its own source port to the host port of the discovery; whether a real radio delivers them all to one host socket (this crate's planned demultiplexing by source port) or to per-stream destination ports is not settled by the text; whether a radio streams EP6 while receiving EP2 only at the pacing used
+Known open points (all `verified=unverified`): Protocol 2 sends each DDC stream from its own source port (`ddc0 + n`); the specification text does not say whether the General packet's radio-to-host port fields are the radio's source ports or the host's destination ports, nor whether a real radio delivers every stream to the one host socket that sent the General packet. `session_p2` assumes the first and demultiplexes by source port; `Radio2::stray_datagrams` counts anything else, so a radio that behaves otherwise shows up as stray traffic, not as wrong data. The emulator does not model the one-second host watchdog (the session sends High Priority packets every tick regardless); the DDC packet carries no DDC number, so demultiplexing needs the port; whether a radio streams EP6 while receiving EP2 only at the pacing used
 here; whether Rx8 is addressable in Protocol 1 (v1.60 lists NCO addresses for Rx1..Rx7 only); the I/Q swap on transmit
 (USB v1.60 says the PC must swap them); the Protocol 2 text says "little Endian" for hardware to host in one place but
 revision 1.3 fixed the order to big-endian, which is what is implemented.
@@ -87,6 +88,18 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_emulator_handle_datagram] (emulator) Act on one datagram from a client; returns the reply to send to `from`, if any.
 - [@ANCHOR: hpsdr:hpsdr_emulator_next_ep6] (emulator) Build the next EP6 datagram from the current settings; `n` is the sample index of its first sample.
 - [@ANCHOR: hpsdr:hpsdr_emulator_run_p1] (emulator) The emulator task: answer datagrams and, after a Start, send EP6 datagrams at `cfg.pace`.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_config_default] (emulator_p2) A Hermes with one -6 dBFS tone at 7.1005 MHz, phase words, fast pacing, default ports.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_counters_get] (emulator_p2) Read one counter.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_loopback_ports] (emulator_p2) A port map with every port free on `127.0.0.1` right now: a block of 40 consecutive ports is probed
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_start] (emulator_p2) Bind `127.0.0.1:port` (0 picks a free port) for discovery and General, plus the ports of
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_addr] (emulator_p2) The loopback command address (discovery and General go here).
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_counters] (emulator_p2) What it has seen so far.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_stop] (emulator_p2) Stop serving and release the sockets.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_apply_ddc_specific] (emulator_p2) Fold a DDC-specific packet into the settings: enable bits from byte 7, rate from byte 18 of each
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_apply_hp] (emulator_p2) Fold a High Priority packet into the settings and the counters.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_handle_cmd] (emulator_p2) Act on one datagram on the command port; returns the reply to send to `from`, if any.
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_ddc_packet] (emulator_p2) The next DDC packet of receiver `n`: `DDC_SAMPLES` samples from sample index `at` at the receiver's
+- [@ANCHOR: hpsdr:hpsdr_emulator_p2_run] (emulator_p2) The emulator task: answer datagrams on its ports and, while the run bit is set, send one DDC packet
 - [@ANCHOR: hpsdr:hpsdr_error_fmt] (error) Display text of a rejection.
 - [@ANCHOR: hpsdr:hpsdr_error_from_io] (error) Wraps an I/O error.
 - [@ANCHOR: hpsdr:hpsdr_gate_new] (gate) A closed gate.
@@ -152,6 +165,22 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_session_request_ptt] (session) Ask to key (or unkey) the transmitter with `drive` 0..=255. Refused with
 - [@ANCHOR: hpsdr:hpsdr_session_send_tx_iq] (session) Queue transmit I/Q (16-bit pairs at 48 ksps). Refused while the gate is closed or the queue
 - [@ANCHOR: hpsdr:hpsdr_session_stop] (session) Unkey, send Stop, and end the session task.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_config_default] (session_p2) One receiver at 48 ksps on 7.1 MHz, no attenuation, the specification's default ports.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_config_validate] (session_p2) Reject settings the protocol cannot express.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_config_ddcs] (session_p2) The DDC-specific settings: every receiver enabled on ADC0 at the common rate.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_lock] (session_p2) Lock a mutex, taking the data even if a panic poisoned it (the gate still decides on transmit).
+- [@ANCHOR: hpsdr:hpsdr_session_p2_hp_rx] (session_p2) The receive High Priority settings from the configuration; `run` is the run bit.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_next_packets] (session_p2) The next High Priority packet and, only while keyed, a DUC I/Q packet. They are transmit packets
+- [@ANCHOR: hpsdr:hpsdr_session_p2_handle_datagram] (session_p2) Decode one received datagram by the radio's source port: a DDC packet becomes a block on its
+- [@ANCHOR: hpsdr:hpsdr_session_p2_run] (session_p2) The session task: send High Priority packets (and DDC-specific packets when the settings changed or
+- [@ANCHOR: hpsdr:hpsdr_session_p2_start] (session_p2) Configure the radio (General, DDC-specific, then High Priority with the run bit) and begin
+- [@ANCHOR: hpsdr:hpsdr_session_p2_take_streams] (session_p2) Hand over the per-receiver streams (index = DDC number). Returns an empty list the second time.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_update] (session_p2) Change settings (frequency, sample rate, attenuator...). The receiver count and the port map are
+- [@ANCHOR: hpsdr:hpsdr_session_p2_status] (session_p2) The latest hardware status (ADC overload, power counts, supply).
+- [@ANCHOR: hpsdr:hpsdr_session_p2_stray] (session_p2) Datagrams that arrived from a source port that belongs to no stream or status.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_request_ptt] (session_p2) Ask to key (or unkey) the transmitter with `drive` 0..=255. Refused with
+- [@ANCHOR: hpsdr:hpsdr_session_p2_send_tx_iq] (session_p2) Queue transmit I/Q (16-bit pairs). Refused while the gate is closed or the queue would exceed
+- [@ANCHOR: hpsdr:hpsdr_session_p2_stop] (session_p2) Unkey, send a High Priority packet with the run bit clear, and end the session task.
 - [@ANCHOR: hpsdr:hpsdr_types_board_from_p1_id] (types) Protocol 1 `Board_ID` (Metis v1.33: 0 Metis, 1 Hermes, 2 Griffin, 4 Angelia, 5 Orion, 6 Hermes Lite).
 - [@ANCHOR: hpsdr:hpsdr_types_board_from_p2_type] (types) Protocol 2 board type (spec v4.4 Discovery Reply byte 11).
 - [@ANCHOR: hpsdr:hpsdr_types_board_dsp_clock] (types) DSP clock in hertz, needed for phase words (spec v4.4 Appendix A gives 122.88 MHz for Hermes);

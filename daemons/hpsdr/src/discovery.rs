@@ -33,6 +33,8 @@ pub struct Discovered {
     pub protocol_version: Option<u8>,
     /// Number of DDCs implemented (Protocol 2 byte 20).
     pub num_ddcs: Option<u8>,
+    /// Protocol 2 radio wants frequencies as phase words (byte 21); false for Protocol 1.
+    pub phase_word: bool,
 }
 
 // [@ANCHOR: hpsdr_discovery_broadcast_target]
@@ -55,6 +57,7 @@ pub fn parse_reply(from: SocketAddr, d: &[u8]) -> Result<Discovered, HpsdrError>
             busy: r.running,
             protocol_version: Some(r.protocol_version),
             num_ddcs: Some(r.num_ddcs),
+            phase_word: r.phase_word,
         });
     }
     let r = p1::parse_reply(d)?;
@@ -67,6 +70,7 @@ pub fn parse_reply(from: SocketAddr, d: &[u8]) -> Result<Discovered, HpsdrError>
         busy: r.running,
         protocol_version: None,
         num_ddcs: None,
+        phase_word: false,
     })
 }
 
@@ -91,7 +95,9 @@ pub async fn discover(
     let sock = udp_socket(handle, SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))?;
     sock.set_broadcast(true)?;
     for t in targets {
+        // A Protocol 1 radio answers the Metis packet and ignores the other; a Protocol 2 radio the reverse.
         sock.send_to(&p1::discovery_packet(), t).await?;
+        sock.send_to(&p2::discovery_packet(), t).await?;
     }
     let deadline = TokioInstant::now() + wait;
     let mut found: Vec<Discovered> = Vec::new();
