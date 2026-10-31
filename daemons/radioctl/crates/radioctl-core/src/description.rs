@@ -46,6 +46,19 @@ pub struct CivParams {
     /// `civ_731_mode`: IC-735, IC-820H, IC-821H) and 6 for a model whose field is 5 bytes up to
     /// 5.85 GHz and 6 bytes above it (Hamlib's IC-905 rule). See [`CivParams::field_len`].
     pub frequency_bytes: u8,
+    /// Which command set sets the frequency and the mode (see [`CivCommandSet`]).
+    pub command_set: CivCommandSet,
+}
+
+/// The command numbers a CI-V model uses to set the frequency and to read and set the mode.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CivCommandSet {
+    /// `05` sets the frequency, `04` reads the mode and `06` sets it (every model but one).
+    #[default]
+    Standard,
+    /// The IC-F8101: `1A 35` sets the frequency, `1A 34` reads the mode and `1A 36` sets it, each
+    /// with a two-byte mode field (`00`, code). The frequency is still read with `03`.
+    F8101,
 }
 
 impl CivParams {
@@ -332,6 +345,7 @@ impl RigDescription {
                 model_id: 0x94,
                 echo: false,
                 frequency_bytes: 5,
+                command_set: CivCommandSet::Standard,
             }),
             kenwood: None,
             elecraft: None,

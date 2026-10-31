@@ -968,6 +968,10 @@ const ICOM_BATCH_ONE: &[(&str, u32)] = &[
     ("icom-ic-r10", 3036),
     ("icom-ic-r20", 3058),
     ("icom-ic-r30", 3080),
+    ("icom-ic-820h", 3032),
+    ("icom-ic-821h", 3034),
+    ("icom-ic-92d", 3065),
+    ("icom-ic-f8101", 3086),
 ];
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
@@ -1068,6 +1072,17 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
         | "icom-ic-756proiii" | "icom-ic-2730" => {
             vec!["SetSplit(true)", "GetSplit", "SetSplit(false)"]
         }
+        // IC-820H and IC-821H (Hamlib refuses the scenario's HF frequencies because the model is
+        // 2 m / 70 cm only, and the virtual rig then keeps 145 MHz): not a disagreement about the
+        // radio but about the harness's HF scenario. The 5-byte versus Hamlib's 4-byte field
+        // (civ.* fact of those files) is not exercised by it; pinned as an open question.
+        "icom-ic-820h" | "icom-ic-821h" => vec![
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetFrequency(A, Hz(14060000))",
+            "GetFrequency(A)",
+            "final freq_a",
+        ],
         "icom-ic-7851" => main_sub,
         "icom-ic-7760" => main_sub[..4].to_vec(),
         "icom-ic-7700" | "icom-ic-r7000" => vec!["final mode"],

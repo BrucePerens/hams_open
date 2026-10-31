@@ -61,13 +61,11 @@ Done (75, incl. 5 Xiegu): IC-7300, 705, 7610, 9700 (first batch); IC-7000, 7100,
 9100, R8600, R75, R9500, 706, 706MkII, 706MkIIG, 718, 746, 746PRO (batch of 2026-10-31, generated from Hamlib 4.6.2 facts
 and `rigctl --dump-caps`, then re-read against Icom's manuals under Bruce's decision: 15 of the 19 have a readable manual, see README); Xiegu G90, X6100, X6200, X108G, X5105; third batch of 2026-10-31 (16, Hamlib facts only, no manual read): IC-703, 756, 756PRO, 756PROII, 756PROIII, 910, 2730, 78, 707, 729, 736, 737, 738, 775, 781, 970; and the IC-735 and IC-905 (engine change `civ.frequency_bytes`: 4 for Hamlib's `civ_731_mode`, 6 for the IC-905, whose field is 5 bytes up to 5.85 GHz and 6 above, as in Hamlib's `icom_set_freq`). Fourth batch of 2026-10-31 (20, Hamlib facts only, no manual read): IC-725, 726, 728, 751, 761, 765, 1275, 271, 275, 375, 471, 475, 575, R71, R72, R7000, R7100, R8500, R9000, RX7. Fifth batch of 2026-10-31 (9, Hamlib facts only, no manual read): the D-STAR models ID-5100, ID-31, ID-4100, ID-51 (new mode `d-star`, code 17, Hamlib name D-STAR, bit 24), ID-1 and the handheld receivers R6, R10, R20, R30. Engine change: `levels.absent` (per-description list of the plain `14` levels a model lacks; the IC-706MkIIG now lists all six and the oracle pin is gone).
 
-Left (4), with the reason each is not yet done:
+All 79 have a description. The last four (2026-10-31, Hamlib facts; none verified):
 
-| Group | Hamlib models (id) | What is needed |
-|---|---|---|
-| IC-92D (3065) | Hamlib's `ic92d` model has no frequency or mode functions at all (only `get_info`), so a description could claim nothing but `identify`; waits for a manual | the model's own CI-V frequency commands |
-| IC-F8101 (3086) | Hamlib's `icf8101` reads and sets frequency and mode with command `1A 34`/`35`/`36` and `1A 05`, not `03`/`05`/`04`/`06` (seen in the oracle frames); needs an engine variant for that dialect | a CI-V dialect in the engine |
-| Four-byte frequency, VHF/UHF | IC-820H (3032), IC-821H (3034) | Hamlib's `civ_731_mode` sends 8 BCD digits of hertz, which cannot hold 145 or 435 MHz (Hamlib's `to_bcd` truncates); the radio most likely counts in another unit that no source read here states. Held back until a manual or a volunteer's capture says which; the engine field is ready |
+- IC-820H (3032) and IC-821H (3034): Hamlib sets its 8-digit `civ_731_mode`, which cannot hold 145 or 435 MHz. The general Icom CI-V Reference Manual (1993) gives a fixed five-byte field to every radio but the IC-735/IC-73S, so both files use five bytes; Hamlib disagrees (pinned in `rigctld_oracle.rs`).
+- IC-F8101 (3086): `civ.command_set = "f8101"`: frequency set `1A 35`, mode read `1A 34`, mode set `1A 36` (Hamlib `icf8101.c`); Hamlib split (`1A 05`) and PTT (`1A 00`) are not implemented.
+- IC-92D (3065): Hamlib has no frequency or mode function for it, so its description claims only `identify` (address 0x01, 38400 bit/s). Its own CI-V commands wait for a manual or a volunteer.
 
 The Main/Sub radios (IC-7600, 7800, 7850/7851, 7760; the IC-7610 and IC-9700 before them) have no model of command `07 C2`/`D0`/`D1`/`D2`
 in the engine: the oracle records that as divergences. Fixing that is an engine task, to be done with a transcript from a real radio.

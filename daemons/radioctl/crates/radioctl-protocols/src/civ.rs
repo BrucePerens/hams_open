@@ -43,7 +43,7 @@
 
 use std::time::Duration;
 
-use radioctl_core::description::{CivParams, Family, RigDescription};
+use radioctl_core::description::{CivCommandSet, CivParams, Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
@@ -592,6 +592,30 @@ impl CivEngine {
             .ok_or_else(|| Self::unsupported("frequency has more digits than the model's field"))
     }
 
+    // [@ANCHOR: radioctl_civ_engine_encode_f8101]
+    /// The IC-F8101's own commands for the frequency set (`1A 35` and the five-byte field) and
+    /// the mode read and set (`1A 34`, `1A 36`, each with a `00` byte before the mode code).
+    /// Facts from Hamlib 4.6.2 `rigs/icom/icf8101.c` (`icf8101_set_freq`, `icf8101_set_mode`,
+    /// `icf8101_get_mode`); the radio's own CI-V table was not read. Unverified on a radio.
+    fn encode_f8101(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
+        Some(match op {
+            Op::SetFrequency(Vfo::A, hz) => self.freq_bytes(*hz).map(|bcd| {
+                let mut data = vec![0x35];
+                data.extend(bcd);
+                self.set(0x1A, &data)
+            }),
+            Op::GetMode => Ok(self.get(0x1A, &[0x34], Field::Mode)),
+            Op::SetMode(mode) => match self.desc.mode_code(*mode) {
+                Some(code) => {
+                    self.mode = Some(*mode);
+                    Ok(self.set(0x1A, &[0x36, 0x00, code]))
+                }
+                None => Err(Self::unsupported("mode not in the description")),
+            },
+            _ => return None,
+        })
+    }
+
     // [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
     fn encode_vfo_b_or_split(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
@@ -704,6 +728,16 @@ impl ProtocolEngine for CivEngine {
             .or_else(|| self.encode_scope(op))
         {
             return done;
+        }
+        if self
+            .desc
+            .civ
+            .as_ref()
+            .is_some_and(|c| c.command_set == CivCommandSet::F8101)
+        {
+            if let Some(done) = self.encode_f8101(op) {
+                return done;
+            }
         }
         let request = match op {
             Op::GetFrequency(_) => {
@@ -845,6 +879,7 @@ impl CivEngine {
             (0x16, [0x02, step]) => attenuation::value_of(&self.desc, Level::Preamp, *step)
                 .map(|v| Observation::Level(Level::Preamp, v)),
             (0x1A, [0x03, index]) => self.decode_filter(*index),
+            (0x1A, [0x34, 0x00, code]) => self.decode_mode(*code, false, None),
             (0x19, [0x00, id]) => Some(Observation::ModelId(u16::from(*id))),
             (0x1C, [0x00, state]) => Some(Observation::Ptt(*state != 0)),
             (0x15, [0x02, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Signal),

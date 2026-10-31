@@ -20,7 +20,7 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use radioctl_core::description::{
-    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, YaesuParams,
+    CivCommandSet, CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, YaesuParams,
 };
 use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
@@ -452,6 +452,20 @@ impl VirtualRig {
         match (frame.cmd, data) {
             (0x03, []) => data_reply(0x03, self.civ_freq_field(params, false), &[]),
             (0x05, bcd) => self.civ_set_freq(params, false, bcd),
+            (0x1A, [0x35, bcd @ ..]) if params.command_set == CivCommandSet::F8101 => {
+                self.civ_set_freq(params, false, bcd)
+            }
+            (0x1A, [0x34]) if params.command_set == CivCommandSet::F8101 => {
+                match self.civ_mode_reply(0x04, &[]) {
+                    CivReply::Data(_, bytes) => {
+                        CivReply::Data(0x1A, [&[0x34, 0x00][..], &bytes[..1]].concat())
+                    }
+                    other => other,
+                }
+            }
+            (0x1A, [0x36, 0x00, code]) if params.command_set == CivCommandSet::F8101 => {
+                self.civ_mode_set(*code, false)
+            }
             (0x25, [0x00]) => data_reply(0x25, self.civ_freq_field(params, false), &[0x00]),
             (0x25, [0x00, bcd @ ..]) => self.civ_set_freq(params, false, bcd),
             (0x25, [0x01]) => data_reply(0x25, self.civ_freq_field(params, true), &[0x01]),

@@ -9,13 +9,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **121** (126 description files)
+- With a radioctl description: **125** (130 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 121 |
-| engine only | 18 |
+| described | 125 |
+| engine only | 14 |
 | needs variant | 37 |
 | needs engine | 75 |
 | odd device | 54 |
@@ -32,7 +32,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 117 |
+| A | data only on an existing engine | 135 | 121 |
 | B | variants of an existing engine | 41 | 4 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
@@ -42,7 +42,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
 | other_serial | C/D | - | 94 | 0 | 0 |
-| icom_civ | A | civ | 79 | 75 | 0 |
+| icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 22 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
@@ -195,15 +195,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3056 | Icom | IC-7800 | A | icom_civ | civ | `icom-ic-7800` | manual-checked | - | described |
 | 3031 | Icom | IC-781 | A | icom_civ | civ | `icom-ic-781` | unverified | - | described |
 | 3075 | Icom | IC-7850/7851 | A | icom_civ | civ | `icom-ic-7851` | manual-checked | - | described |
-| 3032 | Icom | IC-820H | A | icom_civ | civ | - | unverified | - | engine only |
-| 3034 | Icom | IC-821H | A | icom_civ | civ | - | unverified | - | engine only |
+| 3032 | Icom | IC-820H | A | icom_civ | civ | `icom-ic-820h` | unverified | - | described |
+| 3034 | Icom | IC-821H | A | icom_civ | civ | `icom-ic-821h` | unverified | - | described |
 | 3090 | Icom | IC-905 | A | icom_civ | civ | `icom-ic-905` | unverified | - | described |
 | 3044 | Icom | IC-910 | A | icom_civ | civ | `icom-ic-910` | unverified | - | described |
 | 3068 | Icom | IC-9100 | A | icom_civ | civ | `icom-ic-9100` | manual-checked | - | described |
-| 3065 | Icom | IC-92D | A | icom_civ | civ | - | unverified | - | engine only |
+| 3065 | Icom | IC-92D | A | icom_civ | civ | `icom-ic-92d` | unverified | - | described |
 | 3035 | Icom | IC-970 | A | icom_civ | civ | `icom-ic-970` | unverified | - | described |
 | 3081 | Icom | IC-9700 | A | icom_civ | civ | `icom-ic-9700` | unverified | - | described |
-| 3086 | Icom | IC-F8101 | A | icom_civ | civ | - | unverified | - | engine only |
+| 3086 | Icom | IC-F8101 | A | icom_civ | civ | `icom-ic-f8101` | unverified | - | described |
 | 30001 | Icom | IC-M700PRO | C | icom_marine | - | - | unverified | - | needs engine |
 | 30003 | Icom | IC-M710 | C | icom_marine | - | - | unverified | - | needs engine |
 | 30002 | Icom | IC-M802 | C | icom_marine | - | - | unverified | - | needs engine |
