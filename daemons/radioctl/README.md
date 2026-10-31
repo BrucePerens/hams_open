@@ -477,8 +477,13 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_io_state] (radioctl-protocols) A copy of the rig's current state.
 - [@ANCHOR: radioctl:radioctl_virtual_io_front_panel] (radioctl-protocols) Turns a knob on the rig; any unsolicited bytes go out without delay.
 - [@ANCHOR: radioctl:radioctl_virtual_io_set_reply_delay] (radioctl-protocols) Changes how long answers take from now on.
+- [@ANCHOR: radioctl:radioctl_virtual_io_drop_replies] (radioctl-protocols) Fault injection: loses the next answers on the way back, the commands still taking effect.
 - [@ANCHOR: radioctl:radioctl_virtual_io_bytes_received] (radioctl-protocols) How many bytes the controller has written to the rig.
-- [@ANCHOR: radioctl:radioctl_core_actor_absorb] (radioctl-core) Feeds received bytes to the engine; decides the waiting command, updates the cache, counts unrecognised bytes.
+- [@ANCHOR: radioctl:radioctl_core_actor_absorb] (radioctl-core) Feeds received bytes to the engine; decides the waiting command by the order rule (a reply an abandoned earlier command is owed is never this command's), updates the cache, counts unrecognised bytes.
+- [@ANCHOR: radioctl:radioctl_core_actor_next_seq] (radioctl-core) A fresh identity for one command; its retries share it.
+- [@ANCHOR: radioctl:radioctl_core_actor_note_written] (radioctl-core) Remembers a request that expects a reply, for two reply timeouts, so its answer is matched to it even after the command is given up.
+- [@ANCHOR: radioctl:radioctl_core_actor_claim_reply] (radioctl-core) Which outstanding request a reply answers: the oldest it fits (Ack to Ack, observation to its field, Nak to any), because the rig answers in order.
+- [@ANCHOR: radioctl:radioctl_core_actor_drain_stale] (radioctl-core) Before a normal command is written, absorbs an abandoned command's late reply (or waits for the expectation to lapse) so it is not taken for the new command's answer; emergency commands skip it.
 - [@ANCHOR: radioctl:radioctl_core_actor_apply_set] (radioctl-core) Records a successful set in the cache.
 - [@ANCHOR: radioctl:radioctl_core_actor_await_reply] (radioctl-core) Waits for the reply until the attempt deadline; an emergency command abandons the wait.
 - [@ANCHOR: radioctl:radioctl_core_actor_log] (radioctl-core) Appends to the 16-line transcript kept for error reports.

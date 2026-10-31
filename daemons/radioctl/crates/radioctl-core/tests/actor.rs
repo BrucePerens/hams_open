@@ -341,6 +341,102 @@ async fn stop_morse_jumps_the_queue_needs_no_gate_and_leaves_the_key_alone() {
     assert!(!control.state().ptt);
 }
 
+// Tests [@ANCHOR: radioctl_core_actor_absorb]
+// Tests [@ANCHOR: radioctl_core_actor_claim_reply]
+// Tests [@ANCHOR: radioctl_core_actor_note_written]
+// Tests [@ANCHOR: radioctl_core_actor_next_seq]
+#[tokio::test(start_paused = true)]
+async fn a_late_ack_for_a_timed_out_key_is_not_taken_for_the_unkeys_answer() {
+    // Reply timeout 1 s, no retries; the radio answers 1.5 s late. The key times out at 1 s and
+    // the fail-closed unkey goes out; the key's late OK arrives at 1.5 s while the unkey waits for
+    // an OK of its own. By order it is the key's: the unkey's answer comes at 2.5 s.
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    rig.open_transmit_gate(permit());
+    control.set_reply_delay(Duration::from_millis(1500));
+    let started = Instant::now();
+    let error = rig.set_ptt(true).await.expect_err("the key times out");
+    assert_eq!(error.kind, ErrorKind::Timeout);
+    let waited = started.elapsed();
+    assert!(
+        waited >= Duration::from_millis(2400),
+        "the unkey took the key's late OK as its own answer after {waited:?}"
+    );
+    assert!(!control.state().ptt);
+    let stats = rig.stats();
+    assert_eq!(stats.stale_replies, 1, "the key's late OK was told apart");
+    assert_eq!(stats.late_replies, 1);
+    assert_eq!(
+        stats.unkey_failures, 0,
+        "the unkey was answered, by its own OK"
+    );
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_absorb]
+// Tests [@ANCHOR: radioctl_core_actor_drain_stale]
+#[tokio::test(start_paused = true)]
+async fn a_late_frequency_is_not_taken_for_the_next_reads_answer() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    control.set_reply_delay(Duration::from_millis(1500));
+    let first = rig.frequency(Vfo::A, Freshness::Fresh).await;
+    assert_eq!(first.expect_err("times out").kind, ErrorKind::Timeout);
+    // The dial moves; the late answer to the first read still carries the old frequency and is
+    // on its way. The next read must report the new one, not the old answer.
+    control.front_panel(PanelChange::Frequency(Hz(7_030_000)));
+    control.set_reply_delay(Duration::ZERO);
+    let started = Instant::now();
+    let next = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("the next read is answered");
+    assert_eq!(next.value, Hz(7_030_000));
+    assert!(
+        started.elapsed() >= Duration::from_millis(400),
+        "the actor waited for the late answer before asking again"
+    );
+    let stats = rig.stats();
+    assert_eq!(stats.late_replies, 1);
+    assert_eq!(stats.stale_drains, 1);
+    assert_eq!(
+        stats.stale_replies, 0,
+        "the late answer arrived before the new read went out"
+    );
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_drain_stale]
+// Tests [@ANCHOR: radioctl_core_actor_claim_reply]
+// Tests [@ANCHOR: radioctl_virtual_io_drop_replies]
+#[tokio::test(start_paused = true)]
+async fn a_reply_that_never_comes_stops_being_expected_and_does_not_eat_the_next_answer() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    // The radio's answer to the first read is lost (a corrupted frame): it never comes.
+    control.drop_replies(1);
+    assert_eq!(
+        rig.frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect_err("times out")
+            .kind,
+        ErrorKind::Timeout
+    );
+    let started = Instant::now();
+    let next = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("answered: the expectation of a late reply lapsed");
+    assert_eq!(next.value, Hz(14_074_000));
+    let waited = started.elapsed();
+    assert!(
+        waited >= Duration::from_millis(900) && waited < Duration::from_millis(1300),
+        "waited one more timeout for the late reply, then asked: {waited:?}"
+    );
+    assert_eq!(rig.stats().stale_replies, 0);
+    // An emergency command does not wait for a late reply.
+    control.drop_replies(1);
+    let _ = rig.frequency(Vfo::A, Freshness::Fresh).await;
+    let started = Instant::now();
+    rig.set_ptt(false).await.expect("unkeyed");
+    assert!(started.elapsed() < Duration::from_millis(100));
+}
+
 fn alarms(events: &[RigEvent]) -> Vec<(Source, Alarm)> {
     events
         .iter()
