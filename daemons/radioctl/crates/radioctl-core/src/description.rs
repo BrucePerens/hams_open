@@ -25,6 +25,8 @@ pub enum Family {
     YaesuNewcat,
     /// Yaesu legacy five-byte binary CAT blocks (FT-817, FT-857, FT-897).
     YaesuLegacy,
+    /// FlexRadio SmartSDR API: line text over TCP (FLEX-6000 and later).
+    Flex,
 }
 
 /// CI-V parameters.
@@ -84,6 +86,15 @@ pub struct YaesuLegacyParams {
     pub stop_bits: u8,
 }
 
+/// FlexRadio SmartSDR parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlexParams {
+    /// The model name the radio reports in `info` and in discovery (`FLEX-6300`).
+    pub model: String,
+    /// Spectrum capture units (receiver front ends): 1, or 2 on the FLEX-6700.
+    pub scus: u8,
+}
+
 /// Command timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -114,6 +125,8 @@ pub struct RigDescription {
     pub yaesu: Option<YaesuParams>,
     /// Yaesu legacy parameters, present for [`Family::YaesuLegacy`].
     pub yaesu_legacy: Option<YaesuLegacyParams>,
+    /// FlexRadio parameters, present for [`Family::Flex`].
+    pub flex: Option<FlexParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// What the rig can do.
@@ -164,6 +177,7 @@ impl RigDescription {
             elecraft: None,
             yaesu: None,
             yaesu_legacy: None,
+            flex: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
@@ -210,6 +224,7 @@ impl RigDescription {
             elecraft: None,
             yaesu: None,
             yaesu_legacy: None,
+            flex: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,

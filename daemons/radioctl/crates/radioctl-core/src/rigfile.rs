@@ -23,8 +23,8 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, ScopeParams, Timing,
-    YaesuLegacyParams, YaesuParams,
+    CivParams, ElecraftParams, Family, FlexParams, KenwoodParams, RigDescription, ScopeParams,
+    Timing, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
@@ -123,6 +123,7 @@ struct FileDoc {
     elecraft: Option<ElecraftSection>,
     yaesu: Option<YaesuSection>,
     yaesu_legacy: Option<YaesuLegacySection>,
+    flex: Option<FlexSection>,
     scope: Option<ScopeSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
@@ -170,6 +171,13 @@ struct YaesuSection {
 #[serde(deny_unknown_fields)]
 struct YaesuLegacySection {
     stop_bits: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FlexSection {
+    model: String,
+    scus: u8,
 }
 
 #[derive(Deserialize)]
@@ -259,6 +267,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "elecraft-ascii" => Family::ElecraftAscii,
         "yaesu-newcat" => Family::YaesuNewcat,
         "yaesu-legacy" => Family::YaesuLegacy,
+        "flex-smartsdr" => Family::Flex,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
     match (
@@ -273,7 +282,9 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         | (Family::KenwoodAscii, None, Some(_), None, None, None)
         | (Family::ElecraftAscii, None, None, Some(_), None, None)
         | (Family::YaesuNewcat, None, None, None, Some(_), None)
-        | (Family::YaesuLegacy, None, None, None, None, Some(_)) => {}
+        | (Family::YaesuLegacy, None, None, None, None, Some(_))
+            if doc.flex.is_none() => {}
+        (Family::Flex, None, None, None, None, None) if doc.flex.is_some() => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
     let civ = doc.civ.as_ref().map(|c| CivParams {
@@ -294,6 +305,10 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     });
     let yaesu_legacy = doc.yaesu_legacy.as_ref().map(|y| YaesuLegacyParams {
         stop_bits: y.stop_bits,
+    });
+    let flex = doc.flex.as_ref().map(|f| FlexParams {
+        model: f.model.clone(),
+        scus: f.scus,
     });
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
@@ -318,6 +333,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         elecraft,
         yaesu,
         yaesu_legacy,
+        flex,
         scope,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
@@ -499,6 +515,10 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.yaesu_legacy.is_some() {
         keys.push("yaesu_legacy.stop_bits".to_string());
+    }
+    if description.flex.is_some() {
+        keys.push("flex.model".to_string());
+        keys.push("flex.scus".to_string());
     }
     keys.extend(
         description
