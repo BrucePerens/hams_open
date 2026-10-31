@@ -185,6 +185,8 @@ fn handle_line(line: &str, shared: &Shared, st: &mut State, opts: &HpsdrOptions)
     }
 }
 
+// [@ANCHOR: radioctl_hpsdr_status_of]
+/// The latest hardware status of either session.
 fn status_of(link: &HpsdrLink) -> HardwareStatus {
     match link {
         HpsdrLink::P1(r) => r.status(),

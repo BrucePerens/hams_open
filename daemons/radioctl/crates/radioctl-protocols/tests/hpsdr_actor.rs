@@ -67,6 +67,7 @@ async fn rig_for(
 }
 
 // Tests [@ANCHOR: radioctl_hpsdr_serve]
+// Tests [@ANCHOR: radioctl_hpsdr_status_of]
 // Tests [@ANCHOR: radioctl_hpsdr_handle_line]
 // Tests [@ANCHOR: radioctl_hpsdr_virtual_anan]
 // Tests [@ANCHOR: radioctl_hpsdr_set_frequency]

@@ -296,6 +296,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_hpsdr_set_frequency] (radioctl-protocols) Retunes DDC0 (and the transmit frequency, which follows it).
 - [@ANCHOR: radioctl:radioctl_hpsdr_request_ptt] (radioctl-protocols) Keys or unkeys through the `hpsdr` session, which re-checks its gate before every packet.
 - [@ANCHOR: radioctl:radioctl_hpsdr_handle_line] (radioctl-protocols) Answers one request line.
+- [@ANCHOR: radioctl:radioctl_hpsdr_status_of] (radioctl-protocols) The latest hardware status of either session.
 - [@ANCHOR: radioctl:radioctl_hpsdr_swr_tenths] (radioctl-protocols) SWR in tenths from forward and reverse counts; 10 (1.0:1) with no forward power.
 - [@ANCHOR: radioctl:radioctl_hpsdr_serve] (radioctl-protocols) Serves `link` behind an in-memory stream for the rig actor, and returns the control handle. The task
 - [@ANCHOR: radioctl:radioctl_hpsdr_virtual_anan] (radioctl-protocols) A virtual ANAN: a Protocol 1 or 2 session on a loopback emulator that the caller started. The gate
