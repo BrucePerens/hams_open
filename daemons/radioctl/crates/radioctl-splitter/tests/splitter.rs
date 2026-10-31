@@ -404,12 +404,104 @@ async fn a_client_ends_when_its_stream_ends_or_when_aborted() {
     timeout(Duration::from_secs(3), ended.wait())
         .await
         .expect("the client ended with its stream");
-    let (_near, far) = duplex(1024);
+    let (mut near, far) = duplex(1024);
     let running = splitter.attach_stream(&Handle::current(), far);
     running.abort();
     timeout(Duration::from_secs(3), running.wait())
         .await
         .expect("the aborted client ended");
+    // The abort also ends the stream's reader and writer tasks, so the stream is dropped and the
+    // far end sees it close instead of a reader task living on with the stream's read half.
+    let mut byte = [0u8; 1];
+    let closed = timeout(Duration::from_secs(3), near.read(&mut byte))
+        .await
+        .expect("the aborted client's stream was closed, not leaked to its reader task")
+        .expect("read");
+    assert_eq!(closed, 0);
+}
+
+// Tests [@ANCHOR: radioctl_splitter_serve_tcp]
+// Tests [@ANCHOR: radioctl_splitter_config_new]
+// Tests [@ANCHOR: radioctl_splitter_stats]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tcp_connections_past_the_client_limit_are_closed_and_a_freed_slot_is_reused() {
+    let (rig, _control) = virtual_kx3().await;
+    let config = SplitterConfig {
+        max_clients: 2,
+        ..SplitterConfig::new(Protocol::Ts2000)
+    };
+    let splitter = Splitter::new(rig, config);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let addr = listener.local_addr().expect("addr");
+    let task = splitter.serve_tcp(&Handle::current(), listener);
+    let mut first = tokio::net::TcpStream::connect(addr).await.expect("connect");
+    let mut second = tokio::net::TcpStream::connect(addr).await.expect("connect");
+    for stream in [&mut first, &mut second] {
+        stream.write_all(b"FA;").await.expect("write");
+        let mut reply = [0u8; 14];
+        timeout(Duration::from_secs(3), stream.read_exact(&mut reply))
+            .await
+            .expect("in time")
+            .expect("read");
+    }
+    let mut third = tokio::net::TcpStream::connect(addr).await.expect("connect");
+    let mut byte = [0u8; 1];
+    let closed = timeout(Duration::from_secs(3), third.read(&mut byte))
+        .await
+        .expect("the third connection was closed, not left hanging")
+        .expect("read");
+    assert_eq!(closed, 0, "closed before a byte was served");
+    assert_eq!(splitter.stats().connections_refused, 1);
+    // A client leaving frees its slot (after its tasks have noticed, so try for a while).
+    drop(first);
+    let started = std::time::Instant::now();
+    let reply = loop {
+        let mut fourth = tokio::net::TcpStream::connect(addr).await.expect("connect");
+        fourth.write_all(b"FA;").await.expect("write");
+        let mut reply = [0u8; 14];
+        match timeout(Duration::from_secs(3), fourth.read_exact(&mut reply)).await {
+            Ok(Ok(_)) => break reply,
+            _ if started.elapsed() < Duration::from_secs(5) => {
+                sleep(Duration::from_millis(50)).await;
+            }
+            other => panic!("the freed slot was never reused: {other:?}"),
+        }
+    };
+    assert_eq!(&reply, b"FA00014060000;");
+    task.abort();
+}
+
+// Tests [@ANCHOR: radioctl_splitter_attach_stream]
+// Tests [@ANCHOR: radioctl_splitter_cleanup]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_silent_client_is_disconnected_after_the_idle_timeout_and_gives_up_the_transmitter() {
+    let (rig, control) = virtual_kx3().await;
+    let config = SplitterConfig {
+        idle_timeout: Duration::from_millis(300),
+        ..SplitterConfig::new(Protocol::Ts2000)
+    };
+    let splitter = Splitter::new(rig.clone(), config);
+    rig.open_transmit_gate(TransmitPermit::new("test: virtual rig only"));
+    let (mut near, far) = duplex(1024);
+    let handle = splitter.attach_stream(&Handle::current(), far);
+    near.write_all(b"TX;").await.expect("write");
+    wait_for(|| control.state().ptt).await;
+    assert_eq!(splitter.ptt_owner(), Some(handle.id));
+    // The client goes silent, holding the transmitter: the idle timeout disconnects it, which
+    // gives up the transmitter and unkeys the rig.
+    timeout(Duration::from_secs(3), handle.wait())
+        .await
+        .expect("the silent client was disconnected");
+    wait_for(|| !control.state().ptt && splitter.ptt_owner().is_none()).await;
+    assert_eq!(splitter.stats().idle_disconnects, 1);
+    let mut byte = [0u8; 1];
+    let closed = timeout(Duration::from_secs(3), near.read(&mut byte))
+        .await
+        .expect("closed")
+        .expect("read");
+    assert_eq!(closed, 0);
 }
 
 // Tests [@ANCHOR: radioctl_splitter_send_cw]

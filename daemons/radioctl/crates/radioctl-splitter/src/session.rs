@@ -23,9 +23,9 @@ use radioctl_core::units::{Hz, Vfo};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio::task::JoinHandle;
-use tokio::time::Instant;
+use tokio::time::{timeout, Instant};
 
 use crate::arbiter::{ClientId, PttOwner};
 use crate::civ_personality::CivPersonality;
@@ -63,17 +63,32 @@ pub struct SplitterConfig {
     /// assume (Hamlib issue 138). Reads that name the other VFO (`25 01`, `FB;`) are unchanged.
     /// Turn it off for a client that wants the receive frequency while keyed.
     pub report_tx_frequency_while_keyed: bool,
+    /// Most simultaneous TCP clients (`serve_tcp`); a connection past the limit is closed before
+    /// a byte is read. Clients attached directly (`attach_stream`, `attach_channels`, a pty) are
+    /// not counted: the caller made each of those on purpose.
+    pub max_clients: usize,
+    /// A stream client silent for this long is disconnected (its PTT given up, its tasks ended),
+    /// so an abandoned connection cannot hold a slot, or the transmitter, for ever.
+    pub idle_timeout: Duration,
 }
+
+/// The TCP client limit, the same as `radioctld`'s (`radioctld::config::ServerConfig`).
+pub const DEFAULT_MAX_CLIENTS: usize = 16;
+/// The idle timeout, the same as `radioctld`'s.
+pub const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(600);
 
 impl SplitterConfig {
     // [@ANCHOR: radioctl_splitter_config_new]
-    /// Defaults: cached reads up to 5 seconds old, 2 second deadline for the rig.
+    /// Defaults: cached reads up to 5 seconds old, 2 second deadline for the rig, 16 TCP clients,
+    /// a 600 second idle timeout.
     pub fn new(protocol: Protocol) -> SplitterConfig {
         SplitterConfig {
             protocol,
             max_age: Duration::from_secs(5),
             request_timeout: Duration::from_secs(2),
             report_tx_frequency_while_keyed: true,
+            max_clients: DEFAULT_MAX_CLIENTS,
+            idle_timeout: DEFAULT_IDLE_TIMEOUT,
         }
     }
 }
@@ -100,6 +115,10 @@ pub struct SplitterStats {
     pub ptt_conflicts: u64,
     /// Clients attached so far.
     pub clients: u64,
+    /// TCP connections closed at once because `max_clients` were already connected.
+    pub connections_refused: u64,
+    /// Stream clients disconnected for being silent longer than `idle_timeout`.
+    pub idle_disconnects: u64,
 }
 
 #[derive(Default)]
@@ -109,6 +128,8 @@ struct Counters {
     refused: AtomicU64,
     ptt_conflicts: AtomicU64,
     clients: AtomicU64,
+    connections_refused: AtomicU64,
+    idle_disconnects: AtomicU64,
 }
 
 struct Inner {
@@ -137,6 +158,8 @@ pub struct ClientHandle {
     /// The client's identifier (the PTT owner id).
     pub id: ClientId,
     task: JoinHandle<()>,
+    /// The stream's reader and writer tasks (`attach_stream`); none for channel clients.
+    io: Vec<JoinHandle<()>>,
 }
 
 impl ClientHandle {
@@ -144,13 +167,20 @@ impl ClientHandle {
     /// Waits until the client's task has ended.
     pub async fn wait(self) {
         let _ = self.task.await;
+        for task in self.io {
+            task.abort();
+        }
     }
 
     // [@ANCHOR: radioctl_splitter_client_abort]
-    /// Stops the client's task. Its PTT ownership is not released by this; drop the stream to
-    /// disconnect cleanly.
+    /// Stops the client's task and, for a stream client, its reader and writer tasks, so the
+    /// stream is dropped and the far end sees it close. Its PTT ownership is not released by
+    /// this; drop the stream to disconnect cleanly.
     pub fn abort(&self) {
         self.task.abort();
+        for task in &self.io {
+            task.abort();
+        }
     }
 }
 
@@ -180,6 +210,8 @@ impl Splitter {
             refused: c.refused.load(Ordering::Relaxed),
             ptt_conflicts: c.ptt_conflicts.load(Ordering::Relaxed),
             clients: c.clients.load(Ordering::Relaxed),
+            connections_refused: c.connections_refused.load(Ordering::Relaxed),
+            idle_disconnects: c.idle_disconnects.load(Ordering::Relaxed),
         }
     }
 
@@ -219,53 +251,87 @@ impl Splitter {
             output,
             persistent,
         ));
-        ClientHandle { id, task }
+        ClientHandle {
+            id,
+            task,
+            io: Vec::new(),
+        }
     }
 
     // [@ANCHOR: radioctl_splitter_attach_stream]
     /// Attaches a client that is any byte stream (a TCP connection, an in-memory duplex). The end
-    /// of the stream disconnects the client.
+    /// of the stream disconnects the client, and so does silence longer than
+    /// `SplitterConfig::idle_timeout`.
     pub fn attach_stream<S: Transport>(&self, runtime: &Handle, stream: S) -> ClientHandle {
         let (mut reader, mut writer) = tokio::io::split(stream);
         let (input_tx, input_rx) = mpsc::channel(CHANNEL);
         let (output_tx, mut output_rx) = mpsc::channel::<Vec<u8>>(CHANNEL);
-        runtime.spawn(async move {
+        let idle = self.inner.config.idle_timeout;
+        let inner = Arc::clone(&self.inner);
+        let read_task = runtime.spawn(async move {
             let mut buffer = [0u8; READ_BUFFER];
             loop {
-                match reader.read(&mut buffer).await {
-                    Ok(n) if n > 0 => {
+                match timeout(idle, reader.read(&mut buffer)).await {
+                    Ok(Ok(n)) if n > 0 => {
                         let chunk = buffer.get(..n).unwrap_or(&[]).to_vec();
                         if input_tx.send(ClientInput::Bytes(chunk)).await.is_err() {
                             return;
                         }
                     }
-                    _ => {
+                    Err(_) => {
+                        inner
+                            .counters
+                            .idle_disconnects
+                            .fetch_add(1, Ordering::Relaxed);
+                        let _ = input_tx.send(ClientInput::Disconnected).await;
+                        return;
+                    }
+                    Ok(_) => {
                         let _ = input_tx.send(ClientInput::Disconnected).await;
                         return;
                     }
                 }
             }
         });
-        runtime.spawn(async move {
+        let write_task = runtime.spawn(async move {
             while let Some(bytes) = output_rx.recv().await {
                 if writer.write_all(&bytes).await.is_err() {
                     break;
                 }
             }
         });
-        self.attach_channels(runtime, input_rx, output_tx, false)
+        let mut handle = self.attach_channels(runtime, input_rx, output_tx, false);
+        handle.io = vec![read_task, write_task];
+        handle
     }
 
     // [@ANCHOR: radioctl_splitter_serve_tcp]
     /// Accepts connections on `listener` until the returned task is aborted; each connection is a
-    /// client. Bind the listener to loopback unless the network is meant to reach the radio.
+    /// client, up to `SplitterConfig::max_clients` at a time (a connection past that is closed at
+    /// once and counted in `connections_refused`). Bind the listener to loopback unless the
+    /// network is meant to reach the radio.
     pub fn serve_tcp(&self, runtime: &Handle, listener: TcpListener) -> JoinHandle<()> {
         let splitter = self.clone();
         let handle = runtime.clone();
+        let slots = Arc::new(Semaphore::new(splitter.inner.config.max_clients.max(1)));
         runtime.spawn(async move {
             while let Ok((socket, _)) = listener.accept().await {
+                let Ok(permit) = Arc::clone(&slots).try_acquire_owned() else {
+                    splitter
+                        .inner
+                        .counters
+                        .connections_refused
+                        .fetch_add(1, Ordering::Relaxed);
+                    drop(socket);
+                    continue;
+                };
                 let _ = socket.set_nodelay(true);
-                splitter.attach_stream(&handle, socket);
+                let client = splitter.attach_stream(&handle, socket);
+                // The slot is held until the client's task ends, whatever ended it.
+                handle.spawn(async move {
+                    client.wait().await;
+                    drop(permit);
+                });
             }
         })
     }
