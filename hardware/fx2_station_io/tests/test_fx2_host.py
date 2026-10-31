@@ -33,14 +33,14 @@ class ParseGetInfoTests(unittest.TestCase):
     # Tests [@ANCHOR: HAMS_FX2_parse_get_info]
     def test_parses_simulator_record(self):
         info = h.parse_get_info(SIM_INFO)
-        self.assertEqual((info.proto_major, info.proto_minor), (0, 1))
+        self.assertEqual((info.proto_major, info.proto_minor), (0, 2))
         self.assertEqual(info.device_type, 1)
-        self.assertEqual(info.fw_version, (0, 1, 0))
-        self.assertEqual(info.safe_state_kind, 0)
-        self.assertEqual(info.hw_timeout_ms, 0)
+        self.assertEqual(info.fw_version, (0, 2, 0))
+        self.assertEqual(info.safe_state_kind, 1)
+        self.assertEqual(info.hw_timeout_ms, 5000)
         self.assertEqual(info.drivable_a, 0x03)
         self.assertEqual(info.endpoints, [(0, 1)])
-        self.assertEqual(info.capability_names(), ["gpio_cmd", "msos20", "webusb", "safe_on_reset"])
+        self.assertEqual(info.capability_names(), ["gpio_cmd", "msos20", "webusb", "hw_timeout", "heartbeat", "safe_on_reset"])
 
     def test_ignores_unknown_trailing_fields(self):
         longer = bytearray(SIM_INFO) + b"\xAA\xBB"

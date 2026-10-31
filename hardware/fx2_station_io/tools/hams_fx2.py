@@ -34,6 +34,16 @@ REQ_GET_INFO = 0x01
 REQ_GPIO_SET = 0x02
 REQ_GPIO_GET = 0x03
 REQ_GET_TICK = 0x04
+REQ_GET_STATUS = 0x05
+REQ_HEARTBEAT = 0x06
+REQ_GET_EVENTS = 0x07
+REQ_GET_EDGES = 0x08
+REQ_MAP_BEGIN = 0x10
+REQ_MAP_PIN = 0x11
+REQ_MAP_PARAM = 0x12
+REQ_MAP_HEARTBEAT = 0x13
+REQ_MAP_COMMIT = 0x14
+REQ_KEY = 0x15
 REQ_MSOS20 = 0x20
 INFO_ADDR = 0x2300                      # fixed address of the record in the image
 
@@ -41,7 +51,7 @@ CAP_NAMES = {
     0x1: "gpio_cmd", 0x2: "msos20", 0x4: "webusb",
     0x8: "hw_timeout", 0x10: "heartbeat", 0x20: "safe_on_reset",
 }
-SAFE_KINDS = {0: "release_all"}
+SAFE_KINDS = {0: "release_all", 1: "per_map"}
 EP_ROLES = {1: "control"}
 DEVICE_TYPES = {0x0001: "station_io"}
 LED_MASK = 0x03                         # PA0 and PA1 are the only pins this image drives
@@ -51,8 +61,16 @@ class Fx2Error(Exception):
     """A protocol, safety or hardware problem; the message says what to do."""
 
 
+class Stalled(Fx2Error):
+    """The device answered a control request with a STALL (it refused the request)."""
+
+
 class Transport:
     """Control-transfer access to one device."""
+
+    def sleep(self, seconds: float) -> None:
+        """Let time pass on the device's clock (the simulator advances its virtual clock)."""
+        time.sleep(seconds)
 
     def ctrl_in(self, req_type: int, req: int, value: int, index: int, length: int) -> bytes:
         raise NotImplementedError
@@ -230,6 +248,161 @@ def read_tick(t: Transport) -> Tick:
                 int.from_bytes(d[6:8], "little"))
 
 
+PIN_PA0, PIN_PA1 = 0x00, 0x01           # pin id = port << 4 | bit (port 0 = A, 1 = B, 2 = D)
+FUNC_NONE, FUNC_PTT, FUNC_KEYLINE, FUNC_POWER = 0, 1, 2, 3
+SAFE_LOW, SAFE_HIGH, SAFE_RELEASED = 0, 1, 2
+PARAM_MAX_ON_MS, PARAM_MIN_OFF_MS, PARAM_LEAD_MS, PARAM_LAG_MS, PARAM_PARTNER = 1, 2, 3, 4, 5
+FLAG_ACTIVE_HIGH, FLAG_SAFE_DEFINED = 0x04, 0x08
+STATUS_LEN = 23
+
+RELEASE_REASONS = {
+    0: "none", 1: "timeout", 2: "heartbeat_lapse", 3: "heartbeat_sequence",
+    4: "heartbeat_mismatch", 5: "usb_reset", 6: "usb_suspend", 7: "host_command", 8: "map_cleared",
+}
+MAP_ERRORS = {
+    0: "none", 1: "pin_not_allowed", 2: "pin_has_two_functions", 3: "bad_function",
+    4: "safe_state_undefined", 5: "safe_state_is_active_level", 6: "bad_parameter",
+    7: "bad_partner", 8: "no_timeout", 9: "no_heartbeat", 10: "not_loading",
+    11: "lead_lag_without_keyline",
+}
+REFUSALS = {0: "none", 1: "no_map", 2: "no_heartbeat", 3: "minimum_off_time", 4: "busy",
+            5: "bad_channel"}
+REL_TIMEOUT, REL_HB_LAPSE, REL_HB_SEQUENCE, REL_HB_MISMATCH = 1, 2, 3, 4
+REL_USB_RESET, REL_USB_SUSPEND, REL_HOST, REL_MAP_CLEARED = 5, 6, 7, 8
+CH_ST = {0: "idle", 1: "lead", 2: "on", 3: "lag"}
+
+
+@dataclasses.dataclass
+class Status:
+    """The status record (README, "Status record")."""
+    map_valid: bool
+    hb_alive: bool
+    out_of_sync: bool
+    map_loading: bool
+    keyed: int              # logical state: bit per channel (a ptt channel and its keyline together)
+    active: int             # lines currently at their active level, bit per channel
+    last_reason: int
+    last_channel: int
+    release_count: int
+    map_error: int
+    refusal: int
+    state: List[int]
+    last_seq: int
+    ms: int                 # firmware clock, low 16 bits
+    remaining_ms: List[int]  # maximum on-time left per channel (0xFFFF = not keyed)
+    hb_remaining_ms: int    # heartbeat lapse time left (0xFFFF = no heartbeat running)
+    loop_max: int
+
+    @property
+    def reason_name(self) -> str:
+        return RELEASE_REASONS.get(self.last_reason, f"unknown_{self.last_reason}")
+
+
+def _u16(d: bytes, i: int) -> int:
+    return d[i] | (d[i + 1] << 8)
+
+
+def parse_status(d: bytes) -> Status:
+    if len(d) < STATUS_LEN or d[0] < STATUS_LEN:
+        raise Fx2Error(f"status record too short: {len(d)} bytes")
+    return Status(
+        map_valid=bool(d[1] & 1), hb_alive=bool(d[1] & 2), out_of_sync=bool(d[1] & 4),
+        map_loading=bool(d[1] & 8), keyed=d[2], active=d[3], last_reason=d[4],
+        last_channel=d[5], release_count=d[6], map_error=d[7], refusal=d[8],
+        state=[d[9], d[10]], last_seq=_u16(d, 11), ms=_u16(d, 13), remaining_ms=[_u16(d, 15), _u16(d, 17)],
+        hb_remaining_ms=_u16(d, 19), loop_max=_u16(d, 21))
+
+
+@dataclasses.dataclass
+class PinSpec:
+    """One map entry: a pin, its function, safe state and timers."""
+    pin: int
+    func: int
+    safe: int = SAFE_LOW
+    active_high: bool = True
+    safe_defined: bool = True
+    max_on_ms: Optional[int] = None
+    min_off_ms: Optional[int] = None
+    lead_ms: Optional[int] = None
+    lag_ms: Optional[int] = None
+    partner: Optional[int] = None
+
+
+# [@ANCHOR: HAMS_FX2_function_map]
+def load_map(t: Transport, pins: List[PinSpec], heartbeat_ms: Optional[int] = None) -> None:
+    """Send a function map and commit it. The firmware validates; a refusal raises Fx2Error with
+    the firmware's own error code (a pin with two functions, an undefined safe state, a pin the
+    board map does not allow, a ptt without a time-out...). Everything is released on refusal."""
+    steps: List[Tuple[int, int, int]] = [(REQ_MAP_BEGIN, 0, 0)]
+    for p in pins:
+        flags = (p.safe & 3) | (FLAG_ACTIVE_HIGH if p.active_high else 0) \
+            | (FLAG_SAFE_DEFINED if p.safe_defined else 0)
+        steps.append((REQ_MAP_PIN, p.pin | (p.func << 8), flags))
+        for pid, val in ((PARAM_MAX_ON_MS, p.max_on_ms), (PARAM_MIN_OFF_MS, p.min_off_ms),
+                         (PARAM_LEAD_MS, p.lead_ms), (PARAM_LAG_MS, p.lag_ms),
+                         (PARAM_PARTNER, p.partner)):
+            if val is not None:
+                steps.append((REQ_MAP_PARAM, p.pin | (pid << 8), val))
+    if heartbeat_ms is not None:
+        steps.append((REQ_MAP_HEARTBEAT, 0, heartbeat_ms))
+    steps.append((REQ_MAP_COMMIT, 0, 0))
+    for req, value, index in steps:
+        try:
+            t.ctrl_out(0x40, req, value, index)
+        except Stalled as exc:
+            code = get_status(t).map_error
+            raise Fx2Error(f"map refused by the firmware: {MAP_ERRORS.get(code, code)}") from exc
+
+
+def get_status(t: Transport) -> Status:
+    return parse_status(bytes(t.ctrl_in(0xC0, REQ_GET_STATUS, 0, 0, 64)))
+
+
+def heartbeat(t: Transport, seq: int, commanded: int) -> Status:
+    """One heartbeat: the sequence number and the commanded state of every channel (bit per
+    channel; a ptt channel and its keyline carry the same bit). Returns the board's own state."""
+    return parse_status(bytes(t.ctrl_in(0xC0, REQ_HEARTBEAT, seq & 0xFFFF, commanded & 0xFF, 64)))
+
+
+def key(t: Transport, pin: int, down: bool) -> None:
+    """Key down or up. Raises Stalled when the firmware refuses (see Status.refusal)."""
+    t.ctrl_out(0x40, REQ_KEY, pin, 1 if down else 0)
+
+
+def get_events(t: Transport) -> Tuple[int, List[Tuple[int, int, int]]]:
+    """(total release count mod 256, [(reason, channel, ms16)] newest first)."""
+    d = bytes(t.ctrl_in(0xC0, REQ_GET_EVENTS, 0, 0, 64))
+    n = (len(d) - 1) // 4
+    return d[0], [(d[1 + 4 * i], d[2 + 4 * i], d[3 + 4 * i] | (d[4 + 4 * i] << 8)) for i in range(n)]
+
+
+def get_edges(t: Transport) -> Tuple[int, List[Tuple[int, int, float]]]:
+    """(total edge count mod 256, [(channel, level, ms)] newest first). Level 0 or 1 is a driven
+    level, 2 is released to input. ms is the firmware clock modulo 65536 with 250 ns resolution."""
+    d = bytes(t.ctrl_in(0xC0, REQ_GET_EDGES, 0, 0, 64))
+    n = (len(d) - 1) // 5
+    out = []
+    for i in range(n):
+        o = 1 + 5 * i
+        ms = d[o + 1] | (d[o + 2] << 8)
+        sub = d[o + 3] | (d[o + 4] << 8)
+        out.append((d[o] & 0x0F, d[o] >> 4, ms + sub / 4000.0))
+    return d[0], out
+
+
+class Heartbeater:
+    """Sequence-numbered heartbeats with the commanded state, as the relay's transmit task sends."""
+
+    def __init__(self, t: Transport) -> None:
+        self.t = t
+        self.seq = 0
+        self.commanded = 0
+
+    def beat(self) -> Status:
+        self.seq = (self.seq + 1) & 0xFFFF
+        return heartbeat(self.t, self.seq, self.commanded)
+
+
 class UsbTransport(Transport):
     """pyusb transport for one device. Control transfers only; no interface is claimed."""
 
@@ -237,10 +410,23 @@ class UsbTransport(Transport):
         self.dev = dev
 
     def ctrl_in(self, req_type, req, value, index, length):
-        return bytes(self.dev.ctrl_transfer(req_type, req, value, index, length, timeout=2000))
+        import usb.core
+        try:
+            return bytes(self.dev.ctrl_transfer(req_type, req, value, index, length, timeout=2000))
+        except usb.core.USBError as exc:
+            if exc.errno == 32:             # EPIPE: the device stalled the request
+                raise Stalled(f"request 0x{req:02x} stalled") from exc
+            raise
 
     def ctrl_out(self, req_type, req, value, index, data=b""):
-        self.dev.ctrl_transfer(req_type, req, value, index, bytes(data) if data else None, timeout=2000)
+        import usb.core
+        try:
+            self.dev.ctrl_transfer(req_type, req, value, index, bytes(data) if data else None,
+                                   timeout=2000)
+        except usb.core.USBError as exc:
+            if exc.errno == 32:
+                raise Stalled(f"request 0x{req:02x} stalled") from exc
+            raise
 
 
 def find_device(vid: int, pid: int, port: str):
