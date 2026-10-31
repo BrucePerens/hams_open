@@ -21,14 +21,14 @@
 //! vfo_mode = false                         # rigctld's -o: \chk_vfo answers 1
 //! transmit = false                         # true opens the rig's transmit gate at start
 //! [rig.transport]
-//! kind = "virtual"                         # or "serial" (path/usb + baud) or "tcp" (address)
+//! kind = "virtual"                         # or "serial" (path/usb + baud, lines) or "tcp" (address)
 //! ```
 
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use radioctl_core::serial::PortTarget;
+use radioctl_core::serial::{LineControl, PortTarget};
 use radioctl_core::usb::UsbMatcher;
 use serde::Deserialize;
 
@@ -87,6 +87,7 @@ enum TransportSection {
         path: Option<String>,
         usb: Option<UsbSection>,
         baud: u32,
+        lines: Option<String>,
     },
     Tcp {
         address: String,
@@ -134,6 +135,8 @@ pub enum TransportConfig {
         target: PortTarget,
         /// Baud rate.
         baud: u32,
+        /// Whether the port has modem control lines this daemon may use.
+        lines: LineControl,
     },
     /// A TCP connection (a network serial server or a radio with its own CAT port).
     Tcp {
@@ -254,7 +257,12 @@ fn transport_config(section: TransportSection) -> Result<TransportConfig, String
                 10_000,
             )?),
         }),
-        TransportSection::Serial { path, usb, baud } => {
+        TransportSection::Serial {
+            path,
+            usb,
+            baud,
+            lines,
+        } => {
             let target = match (path, usb) {
                 (Some(path), None) if !path.is_empty() => PortTarget::Path(PathBuf::from(path)),
                 (None, Some(usb)) => PortTarget::Usb(UsbMatcher {
@@ -267,7 +275,20 @@ fn transport_config(section: TransportSection) -> Result<TransportConfig, String
             if !(300..=4_000_000).contains(&baud) {
                 return Err(format!("baud {baud} is outside 300..=4000000"));
             }
-            Ok(TransportConfig::Serial { target, baud })
+            let lines = match lines.as_deref() {
+                None | Some("managed") => LineControl::Managed,
+                Some("unmanaged") => LineControl::Unmanaged,
+                Some(other) => {
+                    return Err(format!(
+                        "serial lines {other:?} is not \"managed\" or \"unmanaged\""
+                    ))
+                }
+            };
+            Ok(TransportConfig::Serial {
+                target,
+                baud,
+                lines,
+            })
         }
         TransportSection::Tcp { address } => {
             if address
@@ -493,6 +514,24 @@ kind = "virtual"
         )
         .is_err());
         assert!(with("kind = \"serial\"\npath = \"/dev/x\"\nbaud = 5").is_err());
+        // `lines` says whether the port has modem lines; managed unless told otherwise.
+        let lines_of = |extra: &str| {
+            let text = format!("kind = \"serial\"\npath = \"/dev/x\"\nbaud = 19200\n{extra}");
+            match parse(&MINIMAL.replace("kind = \"virtual\"", &text)) {
+                Ok(config) => match &config.rigs[0].transport {
+                    TransportConfig::Serial { lines, .. } => Some(*lines),
+                    _ => None,
+                },
+                Err(_) => None,
+            }
+        };
+        assert_eq!(lines_of(""), Some(LineControl::Managed));
+        assert_eq!(lines_of("lines = \"managed\""), Some(LineControl::Managed));
+        assert_eq!(
+            lines_of("lines = \"unmanaged\""),
+            Some(LineControl::Unmanaged)
+        );
+        assert_eq!(lines_of("lines = \"maybe\""), None);
         assert!(with("kind = \"tcp\"\naddress = \"10.0.0.7:4532\"").is_ok());
         assert!(with("kind = \"tcp\"\naddress = \"nonsense\"").is_err());
         assert!(with("kind = \"carrier-pigeon\"").is_err());
