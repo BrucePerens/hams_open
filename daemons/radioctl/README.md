@@ -181,6 +181,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_handle_active_tx_frequency] (radioctl-core) The frequency the rig transmits on now, correct in split and while keyed; the status-change callback reports `Field::ActiveTxFrequency` when it changes (Hamlib issue 138).
 - [@ANCHOR: radioctl:radioctl_splitter_keyed_split_frequency] (radioctl-splitter) While keyed in split, a plain current-frequency read answers with the transmit frequency (switchable).
 - [@ANCHOR: radioctl:radioctld_service_tx_state] (radioctld) The receive and transmit VFOs as the rig last reported them; `\get_active_tx_freq` answers the transmit frequency, `f` keeps the named-VFO meaning.
+- [@ANCHOR: radioctl:radioctl_core_txstate_frequency] (radioctl-core) A VFO's cached frequency.
+- [@ANCHOR: radioctl:radioctl_kenwood_vfo_of] (radioctl-protocols) The VFO an `FR`/`FT` digit names.
 - [@ANCHOR: radioctl:radioctl_core_hz_from_khz] Builds a frequency in hertz from whole kilohertz, refusing overflow.
 - [@ANCHOR: radioctl:radioctl_core_level_name] (radioctl-core) The name of a level (AF gain, RF gain, mic gain, monitor level, keyer speed, RF power) in description and transcript files.
 - [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.

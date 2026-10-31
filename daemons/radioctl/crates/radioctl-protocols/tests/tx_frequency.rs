@@ -148,6 +148,7 @@ async fn yaesu_newcat_split_keyed_transmits_on_vfo_b() {
 }
 
 // Tests [@ANCHOR: radioctl_kenwood_engine_decode_if]
+// Tests [@ANCHOR: radioctl_kenwood_vfo_of]
 #[test]
 fn kenwood_if_and_ft_report_receive_on_b_and_transmit_on_a() {
     use radioctl_core::engine::Inbound;

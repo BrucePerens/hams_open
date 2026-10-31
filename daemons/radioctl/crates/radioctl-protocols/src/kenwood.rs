@@ -233,6 +233,7 @@ impl KenwoodEngine {
     }
 }
 
+// [@ANCHOR: radioctl_kenwood_vfo_of]
 /// The VFO named by an `FR`/`FT` digit (`0` is A).
 fn vfo_of(digit: &str) -> Vfo {
     if digit == "1" {

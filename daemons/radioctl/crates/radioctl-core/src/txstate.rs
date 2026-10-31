@@ -73,6 +73,7 @@ impl TxState {
         }
     }
 
+    // [@ANCHOR: radioctl_core_txstate_frequency]
     fn frequency(&self, vfo: Vfo) -> Option<Hz> {
         match vfo {
             Vfo::A => self.freq_a,
@@ -114,6 +115,7 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: radioctl_core_txstate_frequency]
     // Tests [@ANCHOR: radioctl_core_txstate_rx_vfo]
     // Tests [@ANCHOR: radioctl_core_txstate_tx_vfo]
     // Tests [@ANCHOR: radioctl_core_txstate_rx_frequency]
