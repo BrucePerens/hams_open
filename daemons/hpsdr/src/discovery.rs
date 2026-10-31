@@ -6,8 +6,8 @@
 //! broadcast address is not implemented in the firmware).
 
 use crate::error::HpsdrError;
-use crate::p1;
 use crate::types::{Board, Protocol};
+use crate::{p1, p2};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::time::Duration;
 use tokio::net::UdpSocket;
@@ -44,6 +44,19 @@ pub fn broadcast_target() -> SocketAddr {
 // [@ANCHOR: hpsdr_discovery_parse_reply]
 /// Classify and parse one reply datagram received from `from`.
 pub fn parse_reply(from: SocketAddr, d: &[u8]) -> Result<Discovered, HpsdrError> {
+    if d.len() >= 2 && d[..2] != [0xEF, 0xFE] {
+        let r = p2::parse_reply(d)?;
+        return Ok(Discovered {
+            protocol: Protocol::P2,
+            addr: from,
+            mac: r.mac,
+            board: r.board,
+            code_version: r.firmware,
+            busy: r.running,
+            protocol_version: Some(r.protocol_version),
+            num_ddcs: Some(r.num_ddcs),
+        });
+    }
     let r = p1::parse_reply(d)?;
     Ok(Discovered {
         protocol: Protocol::P1,
