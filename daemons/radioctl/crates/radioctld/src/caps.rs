@@ -232,7 +232,9 @@ pub fn dump_state(view: &CapsView<'_>) -> String {
         "rigctld_version=radioctld {}\n",
         env!("CARGO_PKG_VERSION")
     ));
-    out.push_str("agc_levels=\nctcss_list=\ndcs_list=\n");
+    // `agc_levels=`, `ctcss_list=` and `dcs_list=` are left out: Hamlib 4.6.2's `rigctld` prints
+    // each only when the list is non-empty (`tests/rigctl_parse.c`, `dumpstate`), no description
+    // has any of the three, and an empty line made `rigctl -vvv` log "invalid dumpcaps line".
     out.push_str(&format!("level_gran={}\n", level_gran(&levels, desc)));
     out.push_str(&format!("parm_gran={}\n", level_gran(&[], desc)));
     out.push_str(&format!("rig_model={}\n", view.hamlib_model));
@@ -359,6 +361,14 @@ mod tests {
             .find(|l| l.starts_with("level_gran="))
             .expect("gran");
         assert_eq!(level_gran.matches(';').count(), 64);
+        // Hamlib prints these lists only when they are non-empty; an empty one is an "invalid
+        // dumpcaps line" to its client.
+        for empty in ["agc_levels=", "ctcss_list=", "dcs_list="] {
+            assert!(
+                !lines.iter().any(|l| l.starts_with(empty)),
+                "{empty} must not be printed empty"
+            );
+        }
     }
 
     // Tests [@ANCHOR: radioctld_caps_preamp_list]

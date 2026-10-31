@@ -153,10 +153,9 @@ transmits"; `S 1 VFOB` turns it on, and `S` with any other transmit VFO is `RPRT
 | `\get_active_tx_freq` exists. `f` keeps Hamlib's meaning (the frequency of the VFO asked for). | Issue 138: a follower needs the transmit frequency without guessing which VFO to ask for (chapter [4](04-api.md)). |
 | One listener per rig. | As one `rigctld` per radio. |
 
-The protocol subset was compared with Hamlib 4.6.2 only. **Open item:** `-vvv` output of `rigctl` shows
-"invalid dumpcaps line" for the empty `agc_levels=`, `ctcss_list=` and `dcs_list=` lines of
-radioctld's `\dump_caps`. Hamlib's own `rigctld` does not trigger it. It is harmless in the oracle tests,
-and not yet understood.
+The protocol subset was compared with Hamlib 4.6.2 only. `\dump_state` prints `agc_levels=`,
+`ctcss_list=` and `dcs_list=` only when non-empty, as Hamlib's `rigctld` does (an empty one was an
+"invalid dumpcaps line" to `rigctl -vvv`); no description has any of the three, so none is printed.
 
 ## Embedding the daemon in your own program
 

@@ -49,16 +49,15 @@ manual.
    a level is not noticed unless the radio reports it.
 3. **CI-V transceive cannot be switched on by the engine** (`SetTransceive` is `Unsupported`; it is a menu
    item). The Icom descriptions nevertheless list the capability.
-4. **`radioctld` `\dump_caps` emits empty `agc_levels=`, `ctcss_list=` and `dcs_list=` lines**; Hamlib's
-   `rigctl -vvv` logs "invalid dumpcaps line" for them. Hamlib's own `rigctld` does not. Harmless to the
-   oracle tests; not understood.
+4. Fixed 2026-10-30: `\dump_state` no longer prints empty `agc_levels=`, `ctcss_list=` and `dcs_list=`
+   lines (Hamlib's `rigctld` prints each only when non-empty; the empty ones were "invalid dumpcaps
+   line" to `rigctl -vvv`).
 5. **Oracle disagreements to settle on real radios:** TS-590 VFO B read (`FA;` or `FB;`) and AF gain,
    IC-7610 split flow, IC-9700 VFO B, X108G final VFO A.
 6. **The TS-2000 splitter personality still refuses `IF;`**, though the Kenwood engine decodes it.
-7. **Stale comments in the code:** `radioctl-core/src/transport.rs` says no real transport exists;
-   `radioctl-core/src/description.rs` says the TOML format arrives in a later PR; `docs/DESIGN.md` item 16
-   still says the TS-2000 personality refuses `IF` for an unverified layout. Fix them with the files'
-   owners; the manual follows the code.
+7. Fixed 2026-10-30: the stale module notes in `transport.rs` and `description.rs` and the `IF` wording of
+   `docs/DESIGN.md` item 16 (the personality still does not answer `IF`; the reason is a missing encoder,
+   not an unverified layout).
 8. **`radioctld` serial transport is fixed** at 8N1 with one open attempt and default idle lines; there is
    no configuration for data bits, parity, flow control or reopen attempts.
 9. **Nothing has run on hardware.** All 233 facts in the 23 descriptions are `unverified`; no client other
