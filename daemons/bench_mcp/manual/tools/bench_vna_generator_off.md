@@ -23,3 +23,7 @@ If the generator was started with [bench_vna_generator_am](tools/bench_vna_gener
 ## Returns
 
 `{"generator": "off"}`, or with `recovered_by_power_cycle: true` when the unit had to be power cycled.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is not supported (it returns a typed error). See [the NanoVNA page](instruments/vna/nanovna).

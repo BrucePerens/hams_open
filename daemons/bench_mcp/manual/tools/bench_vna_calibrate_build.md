@@ -24,3 +24,7 @@ Builds `cal_<session>.cal` in the output directory from the stored standards: op
 ## Returns
 
 `file`, `start_hz`, `stop_hz`, `points`, `s11_calibrated`, `s21_calibrated`, the `if_hz`, `point_ms`, `rf_level` and `cable` of the calibration, and the note on how to apply it: `bench_vna_sweep` with `calibration=<file>` and the same `cable`. It is refused at other settings, cable text or frequency range.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is supported. See [the NanoVNA page](instruments/vna/nanovna).

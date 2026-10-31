@@ -37,3 +37,7 @@ Argument errors name the argument and range. `no signal on the reference channel
 ## Example
 
 Loopback check, TX cabled to RX: `bench_vna_sweep {"start_hz": 1e6, "stop_hz": 300e6, "points": 11}`. A cable between TX and RX is not 0 dB raw: about -1 dB at 10 MHz rising to +2.6 dB at 300 MHz with a phase linear in frequency (measured 2026-10-28, see the VNA pages).
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is supported (limits and arguments differ). See [the NanoVNA page](instruments/vna/nanovna).

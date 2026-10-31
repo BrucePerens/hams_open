@@ -23,6 +23,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("example", Kind::Example),
     ("hamlib", Kind::Hamlib),
     ("limesdr", Kind::Sdr),
+    ("nanovna", Kind::Vna),
     ("procedure", Kind::Procedure),
     ("rotator", Kind::Rotator),
     ("siglent_sds", Kind::Scope),
@@ -92,6 +93,8 @@ pub struct Instrument {
     pub max_on_s: f64,
     /// VNA only: the settings of `vnwa_open::sweep::Config` (defaults for the other kinds, unused).
     pub vna: vnwa_open::sweep::Config,
+    /// NanoVNA only (driver `nanovna`).
+    pub nanovna: crate::nanovna::Config,
     pub sdr: crate::sdr::Config,
     pub usb: crate::usb_hub::Config,
     pub audio: crate::audio::Config,
@@ -210,6 +213,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
             usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
+            nanovna: module_config!(nanovna, driver_name, c, name),
             audio: module_config!(audio, driver_name, c, name),
             hamlib: module_config!(hamlib, driver_name, c, name),
             rotator: module_config!(rotator, driver_name, c, name),

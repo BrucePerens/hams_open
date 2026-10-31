@@ -31,3 +31,7 @@ Arguments outside the ranges are refused. Level steps were verified on a scope f
 ## Example
 
 `bench_vna_generator_on {"freq_hz": 10e6, "level_db": -6}` then measure on the scope with [bench_scope_spectrum](tools/bench_scope_spectrum).
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is not supported (it returns a typed error). See [the NanoVNA page](instruments/vna/nanovna).

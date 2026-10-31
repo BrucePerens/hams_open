@@ -26,3 +26,7 @@ At each of `points` frequencies from `start_hz` to `stop_hz` the unit's local os
 ## Returns
 
 `noise_floor_counts` (the median), `peaks` (up to ten local maxima more than 3 times the floor), `rows` (the points, when 51 or fewer), `file` (the CSV with `freq_hz`, `rms_counts`, `db_rel_floor`), a note and the recovery counters.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is not supported (it returns a typed error). See [the NanoVNA page](instruments/vna/nanovna).

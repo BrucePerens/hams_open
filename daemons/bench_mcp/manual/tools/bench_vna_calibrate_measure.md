@@ -25,3 +25,7 @@ Sweeps one calibration standard and stores it with the settings and the `cable` 
 ## Returns
 
 `session`, `standard`, `points`, `file` and a note naming the next step. The person must connect the standard before each call; ask them.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is supported (cable text only in the settings line). See [the NanoVNA page](instruments/vna/nanovna).
