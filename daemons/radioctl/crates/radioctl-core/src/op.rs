@@ -4,7 +4,7 @@
 
 use crate::capability::Capability;
 use crate::scope::ScopeAxis;
-use crate::units::{Hz, Level, Mode, Vfo};
+use crate::units::{Hz, Level, Meter, Mode, Vfo};
 
 /// A command to a rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +61,10 @@ pub enum Op {
     SetLevel(Level, u16),
     /// Read the SWR meter (tenths of a unit).
     GetSwr,
+    /// Read a transmitter or supply meter in the rig's raw scale (see [`Meter`]). Read-only:
+    /// it works with the transmit gate closed and means most while the rig is keyed by other
+    /// means.
+    GetMeter(Meter),
     /// Read the rig's model identifier.
     GetModelId,
     /// Read the rig's main firmware revision.
@@ -119,6 +123,8 @@ pub enum Field {
     Level(Level),
     /// The SWR meter.
     Swr,
+    /// A raw meter.
+    Meter(Meter),
     /// The model identifier.
     ModelId,
     /// The firmware revision.
@@ -187,6 +193,8 @@ pub enum Observation {
     Level(Level, u16),
     /// The SWR in tenths of a unit (10 is 1.0:1).
     Swr(u16),
+    /// A meter deflection in the rig's raw scale (Icom: 0 to 255), uncalibrated.
+    Meter(Meter, u16),
     /// The model identifier the rig reports.
     ModelId(u16),
     /// The firmware revision, major and minor (`02.37` is `(2, 37)`).
@@ -223,6 +231,7 @@ impl Observation {
             Observation::FilterWidth(_) => Field::FilterWidth,
             Observation::Level(level, _) => Field::Level(*level),
             Observation::Swr(_) => Field::Swr,
+            Observation::Meter(meter, _) => Field::Meter(*meter),
             Observation::ModelId(_) => Field::ModelId,
             Observation::Firmware(..) => Field::Firmware,
             Observation::ScopeOutput(_) => Field::ScopeOutput,
@@ -261,6 +270,7 @@ impl Op {
             Op::GetFilterWidth | Op::SetFilterWidth(_) => Capability::Filter,
             Op::GetLevel(_) | Op::SetLevel(..) => Capability::Levels,
             Op::GetSwr => Capability::ReadSwr,
+            Op::GetMeter(_) => Capability::ReadMeters,
             Op::GetModelId | Op::GetFirmware => Capability::Identify,
             Op::SetScopeOutput(_)
             | Op::GetScopeOutput
@@ -334,6 +344,10 @@ mod tests {
             Field::Level(Level::AfGain)
         );
         assert_eq!(Observation::Swr(15).field(), Field::Swr);
+        assert_eq!(
+            Observation::Meter(Meter::Alc, 120).field(),
+            Field::Meter(Meter::Alc)
+        );
         assert_eq!(Observation::ModelId(17).field(), Field::ModelId);
         assert_eq!(Observation::Firmware(2, 37).field(), Field::Firmware);
         assert_eq!(Observation::ScopeOutput(true).field(), Field::ScopeOutput);
@@ -384,6 +398,11 @@ mod tests {
             Capability::Levels
         );
         assert_eq!(Op::GetSwr.required_capability(), Capability::ReadSwr);
+        assert_eq!(
+            Op::GetMeter(Meter::Swr).required_capability(),
+            Capability::ReadMeters
+        );
+        assert!(!Op::GetMeter(Meter::Alc).transmits());
         assert_eq!(Op::GetFirmware.required_capability(), Capability::Identify);
         assert_eq!(
             Op::SendCw("x".into()).required_capability(),

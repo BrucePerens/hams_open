@@ -38,6 +38,9 @@ pub enum Capability {
     Levels,
     /// Read the SWR meter.
     ReadSwr,
+    /// Read the raw transmitter and supply meters (SWR, ALC, COMP, Vd, Id) in the rig's own
+    /// scale. Read-only.
+    ReadMeters,
     /// Ask the rig for its identifier and firmware revision.
     Identify,
     /// Spectrum scope: settings and waveform frames.
@@ -45,7 +48,7 @@ pub enum Capability {
 }
 
 /// Every capability with its file-format name.
-const NAMES: [(Capability, &str); 18] = [
+const NAMES: [(Capability, &str); 19] = [
     (Capability::ReadFrequency, "read-frequency"),
     (Capability::SetFrequency, "set-frequency"),
     (Capability::ReadMode, "read-mode"),
@@ -62,6 +65,7 @@ const NAMES: [(Capability, &str); 18] = [
     (Capability::Filter, "filter"),
     (Capability::Levels, "levels"),
     (Capability::ReadSwr, "read-swr"),
+    (Capability::ReadMeters, "read-meters"),
     (Capability::Identify, "identify"),
     (Capability::Scope, "scope"),
 ];

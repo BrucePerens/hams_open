@@ -31,7 +31,7 @@ use radioctl_core::rig::{spawn_current, RigHandle, RigOptions};
 use radioctl_core::rigfile;
 use radioctl_core::scope::ScopeAxis;
 use radioctl_core::serial::{open_serial, LineControl, PortTarget, SerialConfig};
-use radioctl_core::units::{Hz, Level, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Meter, Mode, Vfo};
 use radioctl_core::usb::UsbMatcher;
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::spawn_virtual_rig;
@@ -90,8 +90,8 @@ impl Out {
 }
 
 const HELP: &str = "\
-reads:   freq [a|b] | mode | signal | power | swr | ptt | split | txvfo | rit | xit | ritoffset
-         filter | level NAME | id | firmware | cached | stats
+reads:   freq [a|b] | mode | signal | power | swr | meter swr|alc|comp|vd|id | ptt | split
+         txvfo | rit | xit | ritoffset | filter | level NAME | id | firmware | cached | stats
 sets:    setfreq a|b HZ | setmode NAME | setsplit 0|1 | setrit 0|1 | setxit 0|1 | setritoffset HZ
          setfilter HZ | setlevel NAME RAW | transceive 0|1
 scope:   scope on|off|state | axis [RX] | setaxis RX center|fixed|scroll-center|scroll-fixed
@@ -167,6 +167,12 @@ fn parse_op(words: &[&str]) -> Result<Op, String> {
         "signal" => Op::GetSignal,
         "power" => Op::GetPower,
         "swr" => Op::GetSwr,
+        "meter" => Op::GetMeter(
+            words
+                .get(1)
+                .and_then(|w| Meter::from_name(w))
+                .ok_or("meter must be swr, alc, comp, vd or id (raw readings)")?,
+        ),
         "ptt" => Op::GetPtt,
         "split" => Op::GetSplit,
         "txvfo" => Op::GetTxVfo,

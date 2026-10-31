@@ -497,7 +497,20 @@ fn build_mode_codes(entries: &[ModeEntry]) -> Result<Vec<(Mode, u8)>, RigError> 
                 _ => return Err(bad(format!("mode code {text:?} must be one character"))),
             },
         };
-        if out.iter().any(|(m, c)| *m == mode || *c == code) {
+        // A code may be shared by a sideband and its data variant (CI-V: `data` is the USB code
+        // plus the DATA flag), the plain mode listed first so a code read back without the flag
+        // is the plain mode.
+        let sideband_of = |data: Mode| match data {
+            Mode::Data => Some(Mode::Usb),
+            Mode::DataR => Some(Mode::Lsb),
+            _ => None,
+        };
+        let shared_with_sideband = sideband_of(mode)
+            .is_some_and(|sideband| out.iter().any(|(m, c)| *m == sideband && *c == code));
+        let duplicate = out
+            .iter()
+            .any(|(m, c)| *m == mode || (*c == code && !shared_with_sideband));
+        if duplicate {
             return Err(bad(format!(
                 "mode {:?} or its code {code:#x} appears twice",
                 entry.mode

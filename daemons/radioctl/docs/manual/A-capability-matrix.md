@@ -54,7 +54,11 @@ lists the capability (and therefore the handle accepts the operation); the engin
 radios means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot
 switch transceive on. For the FlexRadio files it means the engine subscribes to the radio's status.
 The FlexRadio files claim no S-meter, power or SWR because those arrive on streams the engine does not
-read. The ANAN files claim no mode: an SDR's demodulation happens in the host. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.toml` for the source of truth.
+read. `read-meters` is the raw Icom meter family (SWR, ALC, COMP, Vd, Id as a 0 to 255 deflection, read
+with command `15`); `read-swr` is a calibrated ratio in tenths, which the CI-V engine cannot derive without
+a per-model table, so the IC-7300 claims the first and not the second. The IC-705, IC-7610 and IC-9700
+files could claim both the meters and the data modes on the same Hamlib facts; they were left as they
+were until a bench run or a review adds them. The ANAN files claim no mode: an SDR's demodulation happens in the host. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.toml` for the source of truth.
 
 **Icom and Xiegu (CI-V)**
 
@@ -76,8 +80,10 @@ read. The ANAN files claim no mode: an SDR's demodulation happens in the host. T
 | `filter` | yes | yes | yes | yes | - | - | - |
 | `levels` | yes | yes | yes | yes | - | - | - |
 | `read-swr` | - | - | - | - | - | - | - |
+| `read-meters` | yes | - | - | - | - | - | - |
 | `identify` | yes | yes | yes | yes | - | - | - |
 | `scope` | yes | - | yes | - | - | - | - |
+| data modes (`data`, `data-r`) | yes | - | - | - | - | - | - |
 | `[scope]` block | yes | yes | yes | yes | - | - | - |
 
 **Kenwood and Elecraft**

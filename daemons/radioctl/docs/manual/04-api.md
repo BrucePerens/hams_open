@@ -124,7 +124,7 @@ Everything else is an `Op`:
 | Group | Ops |
 |---|---|
 | Frequency, mode | `GetFrequency(Vfo)`, `SetFrequency(Vfo, Hz)`, `GetMode`, `SetMode(Mode)` |
-| Transmit | `GetPtt`, `SetPtt(bool)`, `SendCw(String)` (both can transmit), `StopCw` (stops Morse in progress; an emergency command like `SetPtt(false)`, chapter [10](10-safety.md)), `GetPower`, `GetSwr` |
+| Transmit | `GetPtt`, `SetPtt(bool)`, `SendCw(String)` (both can transmit), `StopCw` (stops Morse in progress; an emergency command like `SetPtt(false)`, chapter [10](10-safety.md)), `GetPower`, `GetSwr` (a ratio in tenths), `GetMeter(Meter)` (a raw 0 to 255 deflection of the SWR, ALC, COMP, Vd or Id meter, uncalibrated; read-only, works with the transmit gate closed and means most while the rig is keyed by other means) |
 | Receive | `GetSignal`, `GetFilterWidth`, `SetFilterWidth(Hz)` |
 | Split, RIT, XIT | `GetSplit`, `SetSplit(bool)`, `GetTxVfo`, `GetRit`, `SetRit(bool)`, `GetXit`, `SetXit(bool)`, `GetRitOffset`, `SetRitOffset(i16)` |
 | Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed, RF power setting, and the receive attenuator (`Level::Attenuator`, decibels, 0 is off) and preamplifier (`Level::Preamp`, a step number, 0 is off). Which attenuator values and preamplifier steps a model has is its description's `[levels]` block (chapter [6](06-rig-descriptions.md)); an engine refuses any other value with `Unsupported`. |
@@ -135,7 +135,7 @@ Everything else is an `Op`:
 Each `Op` names the `Capability` it needs (`Op::required_capability`). The set of capabilities comes
 from the rig description (appendix [A](A-capability-matrix.md)): `read-frequency`, `set-frequency`,
 `second-vfo`, `read-mode`, `set-mode`, `read-ptt`, `set-ptt`, `read-signal`, `read-power`, `send-cw`,
-`transceive`, `split`, `rit-xit`, `filter`, `levels`, `read-swr`, `identify`, `scope`. Asking for something the rig lacks fails
+`transceive`, `split`, `rit-xit`, `filter`, `levels`, `read-swr`, `read-meters`, `identify`, `scope`. Asking for something the rig lacks fails
 at once with `Unsupported` and uses no queue slot. A capability in the description does not
 guarantee that the engine implements the operation for that family; the engine then returns
 `Unsupported` too. For example, the CI-V engine refuses `SetTransceive` (it is a menu item on those

@@ -20,7 +20,10 @@
 < CW
 < 500
 > M PKTUSB 0
-< RPRT -11
+< RPRT 0
+> m
+< PKTUSB
+< 500
 > M FM 0
 < RPRT 0
 > m

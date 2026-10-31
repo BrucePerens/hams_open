@@ -27,7 +27,7 @@ use radioctl_core::description::RigDescription;
 use radioctl_core::engine::{Inbound, ProtocolEngine};
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Level, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Meter, Mode, Vfo};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::virtual_rig::{RigState, VirtualRig};
 use serialport::{SerialPort, TTYPort};
@@ -482,6 +482,14 @@ fn through_hamlib(oracle: &mut Rigctld, op: &Op) -> Reading {
         Op::GetSplit => oracle.call("s"),
         Op::SetFrequency(Vfo::B, hz) => oracle.call(&format!("I {}", hz.0)),
         Op::GetFrequency(Vfo::B) => oracle.call("i"),
+        // Hamlib answers a meter as a calibrated float (its per-model tables); radioctl reports
+        // the raw deflection. Only "answered" is compared: it proves the virtual rig's `15 1x`
+        // replies satisfy Hamlib's read and radioctl's decode alike, nothing about the scale.
+        Op::GetMeter(Meter::Swr) => oracle.call("l SWR"),
+        Op::GetMeter(Meter::Alc) => oracle.call("l ALC"),
+        Op::GetMeter(Meter::Comp) => oracle.call("l COMP_METER"),
+        Op::GetMeter(Meter::Vd) => oracle.call("l VD_METER"),
+        Op::GetMeter(Meter::Id) => oracle.call("l ID_METER"),
         other => panic!("the harness has no Hamlib command for {other:?}"),
     };
     let Ok((fields, code)) = answered else {
@@ -553,6 +561,7 @@ fn through_radioctl(engine: &mut dyn ProtocolEngine, rig: &mut VirtualRig, op: &
             Inbound::Observation(Observation::Level(_, value)) => {
                 reading = Reading::Number(i64::from(value));
             }
+            Inbound::Observation(Observation::Meter(..)) => reading = Reading::Done,
             Inbound::Nak => reading = Reading::Failed,
             _ => {}
         }
@@ -832,11 +841,27 @@ fn the_four_icom_files_against_hamlib_record_every_disagreement() {
     ] {
         let desc = shipped(file);
         // The IC-9700 covers 144, 430 and 1240 MHz only; the others are HF/50 MHz rigs.
-        let steps = if file == "icom-ic-9700" {
+        let mut steps = if file == "icom-ic-9700" {
             icom_scenario(144_300_000, 432_100_000, 145_500_000)
         } else {
             icom_scenario(7_074_000, 14_060_000, 14_025_000)
         };
+        // Data mode (`M PKTUSB`, command 26 with the DATA flag) and the raw meters, on the
+        // files that claim them.
+        if desc.mode_code(Mode::Data).is_some() {
+            steps.extend([
+                Op::SetMode(Mode::Data),
+                Op::GetMode,
+                Op::SetMode(Mode::Usb),
+                Op::GetMode,
+            ]);
+        }
+        if desc
+            .capabilities
+            .has(radioctl_core::capability::Capability::ReadMeters)
+        {
+            steps.extend(Meter::ALL.map(Op::GetMeter));
+        }
         let (divergences, refused, wire) = compare(model, &desc, 19200, &steps);
         report(file, &divergences, &refused, &wire);
         let steps: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();

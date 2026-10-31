@@ -17,10 +17,23 @@
 //! their download terms forbid reuse of their data and radioctl skips such sources. No radio has
 //! verified this engine. Scope data (command 27) is in [`crate::civ_scope`].
 //!
+//! Meters (`15 12` SWR, `15 13` ALC, `15 14` COMP, `15 15` Vd, `15 16` Id: `S_SWR`, `S_ALC`,
+//! `S_CMP`, `S_VD`, `S_ID` in `icom_defs.h`, the sub-command chosen per level in `icom.c`
+//! `icom_get_level`) are reported raw as `Observation::Meter`: Hamlib turns the deflection into a
+//! ratio or a fraction through per-model calibration tables (`swr_cal`, `alc_cal` and the rest in
+//! `ic7300.c`), which are measurements this engine does not copy, so `Op::GetSwr` (tenths) stays
+//! unsupported here. Data modes: a description that lists `data` and `data-r` (the sideband code
+//! plus the DATA flag) makes the engine read the mode with `26 00` and set it with
+//! `26 00 <mode> <data> <filter>`, the layout of `icom_set_mode_x26` and `icom_get_mode_x26` in
+//! `icom.c` for the models Hamlib marks `RIG_TARGETABLE_MODE` (IC-7300, IC-7610, IC-9700,
+//! IC-705); Hamlib sends no `06` first on those. The filter byte is the filter number last
+//! reported by `04` or `26 00` (Hamlib resends the one it read), 1 until a reply has named one.
+//! The older `1A 06` data-mode form is not sent.
+//!
 //! Known gaps, deliberately not guessed: the keyer-speed level (Hamlib maps 0 to 255 to words per
-//! minute through a table), SWR and the calibrated power and S-meter (calibration tables are
+//! minute through a table), the calibrated SWR, power and S-meter (calibration tables are
 //! per-model measurements), transceive on and off over CAT (a menu item reached through
-//! `1A 05` with model-specific numbers), data-mode and filter-number selection (`26`), and the
+//! `1A 05` with model-specific numbers), filter-number selection, and the
 //! XIT of the IC-9700 (Hamlib lists RIT only). Transceive: Hamlib's per-model menu items were
 //! found (`1A 05`: IC-7300 `00 71`, IC-9700 `01 27`, IC-705 `01 31`) but the description format has
 //! no field for them yet. `Vfo::A` is the *selected* VFO (`03`, `05`, `25 00`) and `Vfo::B` the
@@ -35,7 +48,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::scope::ScopeFrame;
-use radioctl_core::units::{Hz, Level, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Meter, Mode, Vfo};
 
 use crate::attenuation;
 
@@ -238,6 +251,8 @@ pub struct CivEngine {
     parser: FrameParser,
     /// The last mode the rig reported; the filter index tables depend on it.
     mode: Option<Mode>,
+    /// The filter number (1 to 3) the rig last reported with its mode; resent with `26 00`.
+    filter_number: u8,
     scope: Option<ScopeAssembler>,
     /// True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>`
     /// instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement.
@@ -263,6 +278,7 @@ impl CivEngine {
             params,
             parser: FrameParser::default(),
             mode: None,
+            filter_number: DEFAULT_FILTER_NUMBER,
             scope,
             awaiting_ptt_ack: false,
         })
@@ -366,6 +382,49 @@ fn level_sub(level: Level) -> Option<u8> {
     }
 }
 
+// [@ANCHOR: radioctl_civ_meter_sub]
+/// Wire sub-command of a raw meter under `15` (`S_SWR` to `S_ID` of Hamlib's `icom_defs.h`).
+pub fn meter_sub(meter: Meter) -> u8 {
+    match meter {
+        Meter::Swr => 0x12,
+        Meter::Alc => 0x13,
+        Meter::Comp => 0x14,
+        Meter::Vd => 0x15,
+        Meter::Id => 0x16,
+    }
+}
+
+// [@ANCHOR: radioctl_civ_sub_meter]
+/// The raw meter behind a `15` sub-command.
+pub fn sub_meter(sub: u8) -> Option<Meter> {
+    Meter::ALL
+        .into_iter()
+        .find(|meter| meter_sub(*meter) == sub)
+}
+
+// [@ANCHOR: radioctl_civ_base_mode]
+/// The sideband a data mode sits on and the DATA flag: `Data` is USB with DATA, `DataR` LSB
+/// with DATA, every other mode itself with DATA off.
+pub fn base_mode(mode: Mode) -> (Mode, bool) {
+    match mode {
+        Mode::Data => (Mode::Usb, true),
+        Mode::DataR => (Mode::Lsb, true),
+        other => (other, false),
+    }
+}
+
+// [@ANCHOR: radioctl_civ_mode_with_data]
+/// The mode a sideband plus the DATA flag stands for; `None` for DATA on a mode that has no
+/// data variant in radioctl's vocabulary (AM-D and FM-D exist on the radios but not here).
+pub fn mode_with_data(base: Mode, data: bool) -> Option<Mode> {
+    match (base, data) {
+        (Mode::Usb, true) => Some(Mode::Data),
+        (Mode::Lsb, true) => Some(Mode::DataR),
+        (_, true) => None,
+        (mode, false) => Some(mode),
+    }
+}
+
 /// The level behind a `14` sub-command.
 fn sub_level(sub: u8) -> Option<Level> {
     [
@@ -381,6 +440,11 @@ fn sub_level(sub: u8) -> Option<Level> {
 
 /// Largest level value a rig takes (levels are 0000 to 0255 in BCD).
 const MAX_LEVEL: u16 = 255;
+/// Largest raw meter deflection (meters are 0000 to 0255 in BCD).
+const MAX_METER: u16 = 255;
+/// The filter number sent with `26 00` before any reply has reported one (unverified choice:
+/// the radios number their filters 1 to 3 and Hamlib resends the number it last read).
+const DEFAULT_FILTER_NUMBER: u8 = 1;
 /// Largest RIT/XIT offset, in hertz (4 BCD digits).
 const MAX_OFFSET_HZ: u16 = 9_999;
 
@@ -483,6 +547,27 @@ impl CivEngine {
                 "read the mode before the filter width: the index tables differ",
             )),
         }
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_has_data_modes]
+    /// True when the description lists `data` (USB plus DATA): the model takes command `26` for
+    /// the mode, which carries the DATA flag that `04` and `06` lack.
+    fn has_data_modes(&self) -> bool {
+        self.desc.mode_code(Mode::Data).is_some()
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_decode_mode]
+    /// The mode of a `04`/`01` reply (`code filter`) or a `26 00` reply (`code data filter`):
+    /// the code's plain mode, or its data variant when the DATA byte is set. The filter number
+    /// is kept for the next `26 00` set.
+    fn decode_mode(&mut self, code: u8, data: bool, filter: Option<u8>) -> Option<Observation> {
+        let base = self.desc.code_mode(code)?;
+        let base = base_mode(base).0;
+        let mode = mode_with_data(base, data)?;
+        if let Some(filter) = filter.filter(|f| (1..=3).contains(f)) {
+            self.filter_number = filter;
+        }
+        Some(Observation::Mode(mode))
     }
 
     // [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
@@ -609,6 +694,9 @@ impl ProtocolEngine for CivEngine {
                     .ok_or_else(|| Self::unsupported("frequency above 10 BCD digits"))?;
                 self.command(0x05, &bcd, ack)
             }
+            Op::GetMode if self.has_data_modes() => {
+                self.command(0x26, &[0x00], ReplyKind::Observation(Field::Mode))
+            }
             Op::GetMode => self.command(0x04, &[], ReplyKind::Observation(Field::Mode)),
             Op::SetMode(mode) => {
                 let code = self
@@ -620,8 +708,18 @@ impl ProtocolEngine for CivEngine {
                 // report the new mode: take the mode being set as the mode now. A refused set
                 // is corrected by the next mode read, which is what `feed` stores.
                 self.mode = Some(*mode);
-                self.command(0x06, &[code], ack)
+                if self.has_data_modes() {
+                    let (_, data) = base_mode(*mode);
+                    self.command(0x26, &[0x00, code, u8::from(data), self.filter_number], ack)
+                } else {
+                    self.command(0x06, &[code], ack)
+                }
             }
+            Op::GetMeter(meter) => self.command(
+                0x15,
+                &[meter_sub(*meter)],
+                ReplyKind::Observation(Field::Meter(*meter)),
+            ),
             Op::GetPtt => self.command(0x1C, &[0x00], ReplyKind::Observation(Field::Ptt)),
             Op::SetPtt(on) => self.command(0x1C, &[0x00, u8::from(*on)], ack),
             Op::GetSignal => self.command(0x15, &[0x02], ReplyKind::Observation(Field::Signal)),
@@ -701,7 +799,14 @@ impl CivEngine {
                 0x01 => Some(Observation::Frequency(Vfo::B, hz)),
                 _ => None,
             }),
-            (0x01 | 0x04, [code, ..]) => self.desc.code_mode(*code).map(Observation::Mode),
+            (0x01 | 0x04, [code, rest @ ..]) => {
+                self.decode_mode(*code, false, rest.first().copied())
+            }
+            (0x26, [0x00, code, rest @ ..]) => self.decode_mode(
+                *code,
+                rest.first().is_some_and(|d| *d != 0),
+                rest.get(1).copied(),
+            ),
             (0x0F, [state]) => Some(Observation::Split(*state != 0)),
             (0x21, [0x00, rest @ ..]) => decode_rit_offset(rest).map(Observation::RitOffset),
             (0x21, [0x01, state]) => Some(Observation::Rit(*state != 0)),
@@ -725,6 +830,11 @@ impl CivEngine {
             (0x1C, [0x00, state]) => Some(Observation::Ptt(*state != 0)),
             (0x15, [0x02, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Signal),
             (0x15, [0x11, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Power),
+            (0x15, [sub, rest @ ..]) => sub_meter(*sub).and_then(|meter| {
+                decode_bcd_meter(rest)
+                    .filter(|value| *value <= MAX_METER)
+                    .map(|value| Observation::Meter(meter, value))
+            }),
             _ => None,
         };
         Some(match observation {
@@ -1026,7 +1136,154 @@ mod tests {
         assert!(e.encode(&Op::GetLevel(Level::KeyerSpeed)).is_err());
         assert!(e.encode(&Op::SetRitOffset(10_000)).is_err());
         assert!(e.encode(&Op::GetFilterWidth).is_err(), "mode unknown yet");
-        assert!(e.encode(&Op::GetSwr).is_err(), "SWR is a gap");
+        assert!(e.encode(&Op::GetSwr).is_err(), "calibrated SWR is a gap");
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_meter_sub]
+    // Tests [@ANCHOR: radioctl_civ_sub_meter]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    #[test]
+    fn raw_meters_are_read_under_15_and_decoded_raw() {
+        for (meter, sub) in [
+            (Meter::Swr, 0x12),
+            (Meter::Alc, 0x13),
+            (Meter::Comp, 0x14),
+            (Meter::Vd, 0x15),
+            (Meter::Id, 0x16),
+        ] {
+            assert_eq!(meter_sub(meter), sub);
+            assert_eq!(sub_meter(sub), Some(meter));
+        }
+        assert_eq!(sub_meter(0x02), None, "the S-meter is Observation::Signal");
+        assert_eq!(
+            sub_meter(0x11),
+            None,
+            "the power meter is Observation::Power"
+        );
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
+        let request = e.encode(&Op::GetMeter(Meter::Swr)).expect("encodes");
+        assert_eq!(
+            request.bytes,
+            vec![0xFE, 0xFE, 0x94, 0xE0, 0x15, 0x12, 0xFD]
+        );
+        assert_eq!(
+            request.reply,
+            ReplyKind::Observation(Field::Meter(Meter::Swr))
+        );
+        assert!(
+            !Op::GetMeter(Meter::Alc).transmits(),
+            "a read, gate or no gate"
+        );
+        assert_eq!(
+            e.feed(&reply(0x94, 0x15, &[0x13, 0x01, 0x20]), T0),
+            vec![Inbound::Observation(Observation::Meter(Meter::Alc, 120))]
+        );
+        assert_eq!(
+            e.feed(&reply(0x94, 0x15, &[0x15, 0x00, 0x00]), T0),
+            vec![Inbound::Observation(Observation::Meter(Meter::Vd, 0))]
+        );
+        for bad in [
+            vec![0x12, 0x03, 0x00],
+            vec![0x12, 0x1A, 0x00],
+            vec![0x17, 0x00, 0x10],
+        ] {
+            assert!(
+                matches!(
+                    e.feed(&reply(0x94, 0x15, &bad), T0).as_slice(),
+                    [Inbound::Unrecognised(_)]
+                ),
+                "{bad:?}"
+            );
+        }
+        // A description without the capability refuses the read before the wire.
+        let mut plain = CivEngine::new(RigDescription::ic7300()).expect("engine");
+        assert!(plain.encode(&Op::GetMeter(Meter::Swr)).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_base_mode]
+    // Tests [@ANCHOR: radioctl_civ_mode_with_data]
+    // Tests [@ANCHOR: radioctl_civ_engine_has_data_modes]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode_mode]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    #[test]
+    fn data_modes_go_through_command_26_with_the_data_flag() {
+        assert_eq!(base_mode(Mode::Data), (Mode::Usb, true));
+        assert_eq!(base_mode(Mode::DataR), (Mode::Lsb, true));
+        assert_eq!(base_mode(Mode::Cw), (Mode::Cw, false));
+        assert_eq!(mode_with_data(Mode::Usb, true), Some(Mode::Data));
+        assert_eq!(mode_with_data(Mode::Lsb, true), Some(Mode::DataR));
+        assert_eq!(mode_with_data(Mode::Am, true), None);
+        assert_eq!(mode_with_data(Mode::Am, false), Some(Mode::Am));
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
+        let with = |body: &[u8]| [&[0xFE, 0xFE, 0x94, 0xE0][..], body, &[0xFD]].concat();
+        let get = e.encode(&Op::GetMode).expect("get");
+        assert_eq!(get.bytes, with(&[0x26, 0x00]));
+        assert_eq!(get.reply, ReplyKind::Observation(Field::Mode));
+        // Before any reply has named a filter the set sends filter 1.
+        assert_eq!(
+            e.encode(&Op::SetMode(Mode::Data)).expect("set").bytes,
+            with(&[0x26, 0x00, 0x01, 0x01, 0x01])
+        );
+        assert_eq!(
+            e.encode(&Op::SetMode(Mode::DataR)).expect("set").bytes,
+            with(&[0x26, 0x00, 0x00, 0x01, 0x01])
+        );
+        assert_eq!(
+            e.encode(&Op::SetMode(Mode::Cw)).expect("set").bytes,
+            with(&[0x26, 0x00, 0x03, 0x00, 0x01])
+        );
+        // The DATA byte decides between the sideband and its data mode; the filter is kept.
+        assert_eq!(
+            e.feed(&reply(0x94, 0x26, &[0x00, 0x01, 0x01, 0x02]), T0),
+            vec![Inbound::Observation(Observation::Mode(Mode::Data))]
+        );
+        assert_eq!(
+            e.encode(&Op::SetMode(Mode::Usb)).expect("set").bytes,
+            with(&[0x26, 0x00, 0x01, 0x00, 0x02]),
+            "the filter number last read is resent"
+        );
+        assert_eq!(
+            e.feed(&reply(0x94, 0x26, &[0x00, 0x00, 0x01, 0x03]), T0),
+            vec![Inbound::Observation(Observation::Mode(Mode::DataR))]
+        );
+        assert_eq!(
+            e.feed(&reply(0x94, 0x26, &[0x00, 0x01, 0x00, 0x03]), T0),
+            vec![Inbound::Observation(Observation::Mode(Mode::Usb))]
+        );
+        assert_eq!(
+            e.feed(&reply(0x94, 0x04, &[0x01, 0x01]), T0),
+            vec![Inbound::Observation(Observation::Mode(Mode::Usb))],
+            "04 has no flag: the sideband"
+        );
+        assert!(
+            matches!(
+                e.feed(&reply(0x94, 0x26, &[0x00, 0x02, 0x01, 0x01]), T0)
+                    .as_slice(),
+                [Inbound::Unrecognised(_)]
+            ),
+            "AM-D is not in the vocabulary"
+        );
+        // The filter width after a data-mode set uses the SSB table.
+        assert!(e.encode(&Op::SetMode(Mode::Data)).is_ok());
+        assert_eq!(
+            e.encode(&Op::SetFilterWidth(Hz(2400)))
+                .expect("width")
+                .bytes,
+            with(&[0x1A, 0x03, 0x28])
+        );
+        // A model without data modes keeps 04 and 06.
+        let mut g90 = CivEngine::new(shipped("xiegu-g90")).expect("engine");
+        assert_eq!(
+            g90.encode(&Op::GetMode).expect("get").bytes,
+            vec![0xFE, 0xFE, 0xA4, 0xE0, 0x04, 0xFD]
+        );
+        assert_eq!(
+            g90.encode(&Op::SetMode(Mode::Cw)).expect("set").bytes,
+            vec![0xFE, 0xFE, 0xA4, 0xE0, 0x06, 0x03, 0xFD]
+        );
+        assert!(g90.encode(&Op::SetMode(Mode::Data)).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_civ_engine_decode]

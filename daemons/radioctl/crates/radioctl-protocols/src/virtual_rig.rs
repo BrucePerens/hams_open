@@ -24,7 +24,7 @@ use radioctl_core::description::{
 };
 use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
-use radioctl_core::units::{Hz, Level, Mode};
+use radioctl_core::units::{Hz, Level, Meter, Mode};
 
 use crate::attenuation;
 
@@ -43,6 +43,17 @@ const KEYED_POWER: u16 = 128;
 const ELECRAFT_FIRMWARE: (u8, u8) = (2, 37);
 /// SWR (tenths) a virtual rig reports: 1.0:1.
 const DEFAULT_SWR: u16 = 10;
+/// Raw CI-V meter deflections (0 to 255) of a virtual Icom rig while keyed: SWR, ALC, COMP and
+/// Id read nonzero only while transmitting, Vd at any time. Our own choices, not a radio's.
+const KEYED_METERS: [(Meter, u16); 5] = [
+    (Meter::Swr, 12),
+    (Meter::Alc, 80),
+    (Meter::Comp, 0),
+    (Meter::Vd, 130),
+    (Meter::Id, 90),
+];
+/// The filter number (1 to 3) a virtual Icom rig reports with its mode.
+const CIV_FILTER_NUMBER: u8 = 0x01;
 
 /// The mutable state of a virtual rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,6 +103,20 @@ impl RigState {
     pub fn power(&self) -> u16 {
         if self.ptt {
             KEYED_POWER
+        } else {
+            0
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_state_meter]
+    /// A raw CI-V meter: the supply voltage at any time, the transmitter meters only while keyed.
+    pub fn meter(&self, meter: Meter) -> u16 {
+        let keyed = KEYED_METERS
+            .iter()
+            .find(|(m, _)| *m == meter)
+            .map_or(0, |(_, value)| *value);
+        if self.ptt || meter == Meter::Vd {
+            keyed
         } else {
             0
         }
@@ -483,14 +508,30 @@ impl VirtualRig {
                 None => CivReply::Ng,
             },
             (0x04, []) => self.civ_mode_reply(0x04, &[]),
-            (0x26, [0x00]) => self.civ_mode_reply(0x26, &[0x00]),
-            (0x06, [code, ..]) | (0x26, [0x00, code, ..]) => match self.desc.code_mode(*code) {
-                Some(mode) => {
-                    self.state.mode = mode;
-                    CivReply::Ok
+            // `26 01` is the unselected VFO's mode; the virtual rig keeps one mode for both.
+            (0x26, [sel @ (0x00 | 0x01)]) => self.civ_mode_reply(0x26, &[*sel]),
+            (0x06, [code, ..]) => self.civ_mode_set(*code, false),
+            (0x26, [0x00 | 0x01, code]) => self.civ_mode_set(*code, false),
+            (0x26, [0x00 | 0x01, code, data, rest @ ..])
+                if rest.len() <= 1 && rest.iter().all(|f| (1..=3).contains(f)) =>
+            {
+                self.civ_mode_set(*code, *data != 0)
+            }
+            (0x1A, [0x06]) => CivReply::Data(
+                0x1A,
+                vec![
+                    0x06,
+                    u8::from(civ::base_mode(self.state.mode).1),
+                    CIV_FILTER_NUMBER,
+                ],
+            ),
+            (0x1A, [0x06, data, rest @ ..]) if rest.len() <= 1 => {
+                let (base, _) = civ::base_mode(self.state.mode);
+                match self.desc.mode_code(base) {
+                    Some(code) => self.civ_mode_set(code, *data != 0),
+                    None => CivReply::Ng,
                 }
-                None => CivReply::Ng,
-            },
+            }
             (0x1C, [0x00]) => CivReply::Data(0x1C, vec![0x00, u8::from(self.state.ptt)]),
             (0x1C, [0x00, state]) => {
                 self.state.ptt = *state != 0;
@@ -509,6 +550,10 @@ impl VirtualRig {
             (0x19, [0x00]) => CivReply::Data(0x19, vec![0x00, params.model_id]),
             (0x15, [0x02]) => meter_reply(0x02, self.state.signal),
             (0x15, [0x11]) => meter_reply(0x11, self.state.power()),
+            (0x15, [sub]) => match civ::sub_meter(*sub) {
+                Some(meter) => meter_reply(*sub, self.state.meter(meter)),
+                None => CivReply::Ng,
+            },
             _ => CivReply::Ng,
         }
     }
@@ -634,20 +679,37 @@ impl VirtualRig {
     }
 
     // [@ANCHOR: radioctl_virtual_civ_mode_reply]
+    /// `04` answers `code filter`; `26 <sel>` answers `code data filter`. A data mode is its
+    /// sideband's code with the DATA byte set; `04` cannot show the flag, so it shows the
+    /// sideband. Hamlib reads the filter byte as the DATA flag if it is missing (found by the
+    /// rigctld oracle test).
     fn civ_mode_reply(&self, cmd: u8, prefix: &[u8]) -> CivReply {
-        let Some(code) = self.desc.mode_code(self.state.mode) else {
+        let (base, data) = civ::base_mode(self.state.mode);
+        let Some(code) = self.desc.mode_code(base) else {
             return CivReply::Ng;
         };
-        let mut data = prefix.to_vec();
-        data.push(code);
+        let mut reply = prefix.to_vec();
+        reply.push(code);
         if cmd == 0x26 {
-            // `26 00` also reports the DATA flag (off) between the mode and the filter; Hamlib
-            // reads the filter byte as the DATA flag if it is missing (found by the rigctld
-            // oracle test).
-            data.push(0x00);
+            reply.push(u8::from(data));
         }
-        data.push(0x01);
-        CivReply::Data(cmd, data)
+        reply.push(CIV_FILTER_NUMBER);
+        CivReply::Data(cmd, reply)
+    }
+
+    // [@ANCHOR: radioctl_virtual_civ_mode_set]
+    /// Sets the mode from a code and the DATA flag. `06` carries no flag, so it lands on the
+    /// plain mode (a choice: whether a real radio keeps DATA across `06` is a bench question).
+    /// DATA on a mode with no data variant in radioctl (AM, FM) is refused.
+    fn civ_mode_set(&mut self, code: u8, data: bool) -> CivReply {
+        let plain = self.desc.code_mode(code).map(|mode| civ::base_mode(mode).0);
+        match plain.and_then(|base| civ::mode_with_data(base, data)) {
+            Some(mode) => {
+                self.state.mode = mode;
+                CivReply::Ok
+            }
+            None => CivReply::Ng,
+        }
     }
 
     // [@ANCHOR: radioctl_virtual_stop_cw]
@@ -1694,6 +1756,76 @@ mod tests {
         let text = std::fs::read_to_string(path).expect("rig file");
         let loaded = radioctl_core::rigfile::parse(&text).expect("loads");
         VirtualRig::from_description(&loaded.description).expect("rig")
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_state_meter]
+    // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+    #[test]
+    fn civ_raw_meters_read_zero_unkeyed_and_the_supply_voltage_always() {
+        let mut rig = shipped_rig("icom-ic-7300");
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x15, 0x12]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x15, 0x12, 0x00, 0x00, 0xFD]
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x15, 0x15]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x15, 0x15, 0x01, 0x30, 0xFD]
+        );
+        rig.front_panel(PanelChange::Ptt(true));
+        assert_eq!(rig.state().meter(Meter::Swr), 12);
+        assert_eq!(rig.state().meter(Meter::Alc), 80);
+        assert_eq!(rig.state().meter(Meter::Id), 90);
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x15, 0x13]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x15, 0x13, 0x00, 0x80, 0xFD]
+        );
+        assert!(civ_ask(&mut rig, 0x94, &[0x15, 0x17]).ends_with(&[0xFA, 0xFD]));
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_civ_mode_reply]
+    // Tests [@ANCHOR: radioctl_virtual_civ_mode_set]
+    // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+    #[test]
+    fn civ_data_modes_are_the_sideband_plus_the_data_flag_of_26() {
+        let mut rig = shipped_rig("icom-ic-7300");
+        let ok = vec![0xFE, 0xFE, 0xE0, 0x94, 0xFB, 0xFD];
+        // Hamlib's form: 26 00 <mode> <data> <filter>.
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x26, 0x00, 0x01, 0x01, 0x01]), ok);
+        assert_eq!(rig.state().mode, Mode::Data);
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x26, 0x00]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x26, 0x00, 0x01, 0x01, 0x01, 0xFD]
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x04]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x04, 0x01, 0x01, 0xFD],
+            "04 cannot show the flag"
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x26, 0x01]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x26, 0x01, 0x01, 0x01, 0x01, 0xFD],
+            "the unselected VFO shares the one mode"
+        );
+        assert_eq!(
+            civ_ask(&mut rig, 0x94, &[0x1A, 0x06]),
+            vec![0xFE, 0xFE, 0xE0, 0x94, 0x1A, 0x06, 0x01, 0x01, 0xFD]
+        );
+        // Without the filter byte, and the older 1A 06 form.
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x26, 0x00, 0x00, 0x01]), ok);
+        assert_eq!(rig.state().mode, Mode::DataR);
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x1A, 0x06, 0x00]), ok);
+        assert_eq!(rig.state().mode, Mode::Lsb);
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x1A, 0x06, 0x01, 0x02]), ok);
+        assert_eq!(rig.state().mode, Mode::DataR);
+        // 06 carries no flag: the plain mode.
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x06, 0x01]), ok);
+        assert_eq!(rig.state().mode, Mode::Usb);
+        // DATA on a mode with no data variant, or a filter outside 1 to 3, is refused.
+        let ng = vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD];
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x26, 0x00, 0x02, 0x01, 0x01]), ng);
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x26, 0x00, 0x01, 0x01, 0x04]), ng);
+        assert_eq!(civ_ask(&mut rig, 0x94, &[0x26, 0x00, 0x03, 0x00, 0x02]), ok);
+        assert_eq!(rig.state().mode, Mode::Cw);
     }
 
     fn civ_ask(rig: &mut VirtualRig, address: u8, body: &[u8]) -> Vec<u8> {

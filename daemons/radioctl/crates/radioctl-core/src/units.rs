@@ -152,6 +152,57 @@ const LEVEL_NAMES: [(Level, &str); 8] = [
     (Level::Preamp, "preamp"),
 ];
 
+/// A transmitter or power-supply meter read in the rig's own raw scale. Unlike
+/// [`crate::op::Observation::Swr`] (tenths of a ratio) these are not calibrated: Icom radios report a
+/// 0 to 255 meter deflection and the mapping to a ratio, a fraction, volts or amperes is a per-model
+/// measurement table that no source radioctl may copy provides. A reading is meaningful only while
+/// the rig transmits (SWR, ALC, COMP, Id) or at any time (Vd); the read itself never transmits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Meter {
+    /// SWR meter deflection.
+    Swr,
+    /// ALC meter deflection.
+    Alc,
+    /// Speech compressor meter deflection.
+    Comp,
+    /// Supply (drain) voltage meter deflection.
+    Vd,
+    /// Final-stage drain current meter deflection.
+    Id,
+}
+
+const METER_NAMES: [(Meter, &str); 5] = [
+    (Meter::Swr, "swr"),
+    (Meter::Alc, "alc"),
+    (Meter::Comp, "comp"),
+    (Meter::Vd, "vd"),
+    (Meter::Id, "id"),
+];
+
+impl Meter {
+    /// Every meter, in a stable order.
+    pub const ALL: [Meter; 5] = [Meter::Swr, Meter::Alc, Meter::Comp, Meter::Vd, Meter::Id];
+
+    // [@ANCHOR: radioctl_core_meter_name]
+    /// The name used in transcript files and consoles.
+    pub fn name(self) -> &'static str {
+        METER_NAMES
+            .iter()
+            .find(|(m, _)| *m == self)
+            .map(|(_, n)| *n)
+            .unwrap_or("unknown")
+    }
+
+    // [@ANCHOR: radioctl_core_meter_from_name]
+    /// The meter with a file-format name.
+    pub fn from_name(name: &str) -> Option<Meter> {
+        METER_NAMES
+            .iter()
+            .find(|(_, n)| *n == name)
+            .map(|(m, _)| *m)
+    }
+}
+
 impl Level {
     // [@ANCHOR: radioctl_core_level_name]
     /// The name used in rig description and transcript files.
@@ -197,6 +248,18 @@ mod tests {
             assert_eq!(Level::from_name(name), Some(level));
         }
         assert_eq!(Level::from_name("volume"), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_meter_name]
+    // Tests [@ANCHOR: radioctl_core_meter_from_name]
+    #[test]
+    fn meter_names_round_trip() {
+        for (meter, name) in METER_NAMES {
+            assert_eq!(meter.name(), name);
+            assert_eq!(Meter::from_name(name), Some(meter));
+        }
+        assert_eq!(Meter::ALL.len(), METER_NAMES.len());
+        assert_eq!(Meter::from_name("temp"), None);
     }
 
     // Tests [@ANCHOR: radioctl_core_vfo_other]

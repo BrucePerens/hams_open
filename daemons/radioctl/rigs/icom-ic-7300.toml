@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope", "read-meters"]
 
 [rig]
 id = "icom-ic-7300"
@@ -69,6 +69,16 @@ code = 0x07
 mode = "rtty-r"
 code = 0x08
 
+# Data modes are a sideband code plus the DATA flag of command 26 (USB-D, LSB-D); they are listed after the
+# plain modes so that a code read back without the flag is the plain mode. See the "mode.data" fact.
+[[modes]]
+mode = "data"
+code = 0x01
+
+[[modes]]
+mode = "data-r"
+code = 0x00
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3073 --dump-caps`." }
@@ -127,4 +137,14 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 07 CW-R, 08 RTTY-R)", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's mode vocabulary (D-STAR 17, DD 22, PSK 12 and 13) are not listed. The model's own mode list is in `rigctl -m 3073 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.data"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h C_SEND_SEL_MODE 0x26, S_MEM_DATA_MODE 0x06; rigs/icom/icom.c icom_set_mode (datamode byte 1 for PKTUSB/PKTLSB, 0 otherwise), icom_set_mode_x26 (26 <vfo> <mode> <data> <filter>) and icom_get_mode_x26 (reply 26 <vfo> <mode> <data> <filter>); rigs/icom/ic7300.c targetable_vfo RIG_TARGETABLE_MODE, x25x26_always, mode_with_filter", note = "Facts only, no code copied; Icom's CI-V guide was not used (file header). `data` is USB (01) with DATA set, `data-r` LSB (00) with DATA set; the engine reads the mode with 26 00 and sets it with 26 00 <code> <data> <filter> on this model, as Hamlib does (no 06 first). The filter byte sent is the number last read (1 before any read). AM-D and FM-D are not in radioctl's mode vocabulary. Whether 06 clears DATA, and whether the filter byte may be left out, are bench questions." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-meters"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h C_RD_SQSM 0x15 with S_SWR 0x12, S_ALC 0x13, S_CMP 0x14, S_VD 0x15, S_ID 0x16; rigs/icom/icom.c icom_get_level (the sub-command per level, a 2-byte BCD reading); rigs/icom/ic7300.c has_get_level and the swr_cal, alc_cal, comp_meter_cal, vd_meter_cal, id_meter_cal tables", note = "Facts only, no code or table copied. The readings are reported raw (0 to 255): Hamlib converts them with per-model calibration tables, which are measurements radioctl does not copy, so `read-swr` (a ratio in tenths) is not claimed. Read-only; works with the transmit gate closed. Bench: compare the raw SWR, ALC, Id and Vd with the front panel meter while keyed into the dummy load at minimum power; unkeyed the transmitter meters should read 0." }
 verified = { state = "unverified" }

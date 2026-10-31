@@ -222,6 +222,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_scope_axis_from_mode] (radioctl-protocols) The core scope axis for a CI-V scope mode.
 - [@ANCHOR: radioctl:radioctl_scope_mode_from_axis] (radioctl-protocols) The CI-V scope mode for a core scope axis.
 - [@ANCHOR: radioctl:radioctl_core_hz_from_khz] Builds a frequency in hertz from whole kilohertz, refusing overflow.
+- [@ANCHOR: radioctl:radioctl_core_meter_name] (radioctl-core) The name of a raw meter (`swr`, `alc`, `comp`, `vd`, `id`).
+- [@ANCHOR: radioctl:radioctl_core_meter_from_name] (radioctl-core) The raw meter with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_level_name] (radioctl-core) The name of a level (AF gain, RF gain, mic gain, monitor level, keyer speed, RF power) in description and transcript files.
 - [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_transcript_step_bytes] (radioctl-core) One direction of a transcript step, as hex or as ASCII text (not both).
@@ -580,6 +582,14 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_scope_sweep] (radioctl-protocols) The bytes the rig sends on its own for one scope sweep of the Main receiver at the VFO A frequency, as broadcast frames; empty when the model has no scope, output is off or the scope is held.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_level_of] (radioctl-protocols) The level behind a `14` sub-command (AF 01, RF 02, power 0A, mic 0B, monitor 15).
 - [@ANCHOR: radioctl:radioctl_civ_level_sub] (radioctl-protocols) Wire sub-command of a level under `14`, for the levels this engine supports.
+- [@ANCHOR: radioctl:radioctl_civ_meter_sub] (radioctl-protocols) Wire sub-command of a raw meter under `15` (SWR 12, ALC 13, COMP 14, Vd 15, Id 16).
+- [@ANCHOR: radioctl:radioctl_civ_sub_meter] (radioctl-protocols) The raw meter behind a `15` sub-command.
+- [@ANCHOR: radioctl:radioctl_civ_base_mode] (radioctl-protocols) The sideband a data mode sits on and the DATA flag.
+- [@ANCHOR: radioctl:radioctl_civ_mode_with_data] (radioctl-protocols) The mode a sideband plus the DATA flag stands for; `None` for DATA on a mode with no data variant.
+- [@ANCHOR: radioctl:radioctl_civ_engine_has_data_modes] (radioctl-protocols) True when the description lists `data`: the mode goes through command `26`, which carries the DATA flag.
+- [@ANCHOR: radioctl:radioctl_civ_engine_decode_mode] (radioctl-protocols) The mode of a `04`/`01` or `26 00` reply, with the DATA byte, keeping the filter number for the next set.
+- [@ANCHOR: radioctl:radioctl_virtual_state_meter] (radioctl-protocols) A raw CI-V meter of the virtual rig: Vd at any time, the transmitter meters only while keyed.
+- [@ANCHOR: radioctl:radioctl_virtual_civ_mode_set] (radioctl-protocols) Sets the virtual rig's mode from a code and the DATA flag; `06` lands on the plain mode.
 - [@ANCHOR: radioctl:radioctl_civ_engine_filter_table_is_am] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode_vfo_b_split] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode_rit_xit] (radioctl-protocols) Internal helper of the CI-V engine or the scope module; see the source and its test.
