@@ -325,6 +325,13 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Level::KeyerSpeed => (10, 60),
             Level::RfPower => (5, 100),
         }),
+        Family::YaesuNewcat => match level {
+            Level::AfGain | Level::RfGain => Some((0, 255)),
+            Level::MicGain => Some((0, 100)),
+            Level::KeyerSpeed => Some((4, 60)),
+            Level::RfPower => Some((5, 100)),
+            Level::MonitorLevel => None,
+        },
     }
 }
 
