@@ -4,8 +4,9 @@
 //! USB ids name the bridge chip (Silicon Labs CP210x, FTDI, WCH), not the radio, so they cannot
 //! choose a description. The only evidence used here is the device's own product string, and only
 //! when it contains a description's model name. A device with no such evidence gets no
-//! candidate, only the full list; a device with several gets all of them, flagged. radioctl never
-//! picks one for the user.
+//! candidate, only the full list; a device with several gets all of them, flagged. radioctl picks
+//! one only when the device's own text names exactly one description and it is the only port
+//! ([`auto_pick`]); otherwise the user chooses.
 
 use std::path::Path;
 
@@ -52,7 +53,7 @@ pub fn highest_state(loaded: &LoadedDescription) -> &'static str {
 // [@ANCHOR: radioctld_candidates_load_summaries]
 /// Reads every `*.toml` in `dir` as a rig description, sorted by id.
 pub fn load_summaries(dir: &Path) -> Result<Vec<RigSummary>, String> {
-    let mut out = Vec::new();
+    let mut texts = Vec::new();
     let entries =
         std::fs::read_dir(dir).map_err(|e| format!("cannot read {}: {e}", dir.display()))?;
     for entry in entries.flatten() {
@@ -62,7 +63,18 @@ pub fn load_summaries(dir: &Path) -> Result<Vec<RigSummary>, String> {
         }
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-        let loaded = rigfile::parse(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        texts.push((path.display().to_string(), text));
+    }
+    summaries_from(&texts)
+}
+
+// [@ANCHOR: radioctld_candidates_summaries_from]
+/// Parses `(label, description text)` pairs into summaries sorted by id; the label names the
+/// source in an error. This is what the embedded descriptions and a directory both go through.
+pub fn summaries_from(texts: &[(String, String)]) -> Result<Vec<RigSummary>, String> {
+    let mut out = Vec::new();
+    for (label, text) in texts {
+        let loaded = rigfile::parse(text).map_err(|e| format!("{label}: {e}"))?;
         out.push(RigSummary {
             id: loaded.description.id.clone(),
             name: loaded.description.name.clone(),
@@ -72,6 +84,32 @@ pub fn load_summaries(dir: &Path) -> Result<Vec<RigSummary>, String> {
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(out)
+}
+
+// [@ANCHOR: radioctld_candidates_auto_pick]
+/// The one port and description the devices themselves name: exactly one USB port whose product
+/// string fits exactly one description. Anything else (no port, several ports, no evidence, two
+/// models) is an `Err` that says why, and the caller prints the listing instead of choosing.
+pub fn auto_pick<'a>(
+    ports: &'a [PortInfo],
+    rigs: &'a [RigSummary],
+) -> Result<(&'a PortInfo, &'a RigSummary), String> {
+    let named: Vec<(&PortInfo, &RigSummary)> = ports
+        .iter()
+        .filter_map(|port| {
+            let found = candidates_for_product(port.product.as_deref()?, rigs);
+            match found.as_slice() {
+                [one] => Some((port, *one)),
+                _ => None,
+            }
+        })
+        .collect();
+    match (named.as_slice(), ports.len()) {
+        ([one], 1) => Ok(*one),
+        (_, 0) => Err("no USB serial port found".into()),
+        ([], _) => Err("no port's own product string names exactly one rig description".into()),
+        _ => Err("more than one serial port, or a port that fits more than one description".into()),
+    }
 }
 
 // [@ANCHOR: radioctld_candidates_squash]
@@ -101,7 +139,7 @@ pub fn candidates_for_product<'a>(product: &str, rigs: &'a [RigSummary]) -> Vec<
 }
 
 // [@ANCHOR: radioctld_candidates_render]
-/// The text `rig_selftest --list` prints: each port, what the ids and product string say, and the
+/// The text `radioctl-selftest --list` prints: each port, what the ids and product string say, and the
 /// descriptions that exist. Never names a single choice unless the device's own text does.
 pub fn render_listing(ports: &[PortInfo], rigs: &[RigSummary]) -> String {
     let mut text = String::new();
@@ -117,7 +155,7 @@ pub fn render_listing(ports: &[PortInfo], rigs: &[RigSummary]) -> String {
                 port.product.as_deref().unwrap_or("(none)")
             ));
             text.push_str(&format!(
-                "  target for rig_selftest: usb:{vid:04x}:{pid:04x}\n"
+                "  target for radioctl-selftest: usb:{vid:04x}:{pid:04x}\n"
             ));
         }
         let found = port
@@ -184,6 +222,38 @@ mod tests {
         assert!(rigs.len() >= 27, "{}", rigs.len());
         assert!(rigs.iter().any(|r| r.id == "icom-ic-7300"));
         assert!(rigs.iter().all(|r| r.highest != "hardware-verified"));
+    }
+
+    // Tests [@ANCHOR: radioctld_candidates_summaries_from]
+    #[test]
+    fn summaries_come_from_text_and_a_bad_one_names_its_label() {
+        let embedded = crate::builtin::embedded_texts();
+        assert_eq!(
+            summaries_from(&embedded).expect("embedded").len(),
+            rigs().len()
+        );
+        let bad = [("mine.toml".to_string(), "not a description".to_string())];
+        assert!(summaries_from(&bad)
+            .expect_err("bad")
+            .starts_with("mine.toml:"));
+    }
+
+    // Tests [@ANCHOR: radioctld_candidates_auto_pick]
+    #[test]
+    fn auto_pick_needs_one_port_naming_one_description() {
+        let rigs = rigs();
+        let one = [port(Some("IC-7300"))];
+        let picked = auto_pick(&one, &rigs).expect("one");
+        assert_eq!(picked.1.id, "icom-ic-7300");
+        for ports in [
+            vec![],
+            vec![port(Some("CP2102 USB to UART Bridge Controller"))],
+            vec![port(Some("TS-590SG"))],
+            vec![port(Some("IC-7300")), port(Some("IC-7300"))],
+            vec![port(Some("IC-7300")), port(None)],
+        ] {
+            assert!(auto_pick(&ports, &rigs).is_err(), "{ports:?}");
+        }
     }
 
     // Tests [@ANCHOR: radioctld_candidates_squash]

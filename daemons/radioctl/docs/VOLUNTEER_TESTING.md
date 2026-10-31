@@ -2,68 +2,125 @@
 
 radioctl describes every rig Hamlib lists, but its authors own only a handful of radios. A description stays
 `unverified` until someone with the radio confirms it. This page tells you how to do that safely, with no
-transmitting, no upload and no account other than the GitHub issue you choose to file. The current list of what is
-verified is [RIG_SUPPORT.md](RIG_SUPPORT.md).
+transmitting. The current list of what is verified is [RIG_SUPPORT.md](RIG_SUPPORT.md).
+
+## Run radioctl-selftest
+
+`radioctl-selftest` ships with the hams.com local relay (the relay's packages and downloads install it next to
+the relay: `/usr/bin/radioctl-selftest` on Linux, the relay's install folder on Windows and macOS). To get it
+from a radioctl checkout instead: `cd daemons/radioctl && cargo build --release -p radioctld --bin radioctl-selftest`.
+It is one program for every rig description, with all descriptions built in; there is nothing else to install.
+
+1. Connect the radio's CAT or USB cable, power it on, and set its CAT baud rate and CI-V/CAT options as the
+   radio's manual says. Write down the firmware version from its menu if you can.
+2. Close every other program that uses the serial port (logger, WSJT-X, `rigctld`).
+3. Run `radioctl-selftest`. It finds the radios, prints a table, tests each one in turn, writes a report file per
+   radio and uploads each report to hams.com.
 
 ## What the self-test does and does not do
 
 - It sends only read commands: identify, frequency, mode, transmit-state read, and the meters and levels the
   description claims. The list is fixed in `crates/radioctld/src/selftest.rs` (`is_read_only`); any other
-  operation is refused by the tool itself.
-- It never transmits. It has no PTT, Morse or set command, never opens the transmit gate, and makes no network
-  connection. Nothing is uploaded and there is no telemetry. The report is a file on your disk.
+  operation is refused by the tool itself. It runs only the checks the description claims, so it needs no
+  per-rig code.
+- It never transmits. It has no PTT, Morse or set command and never opens the transmit gate.
+- **It uploads.** At the end of every run it sends one report per radio to `https://hams.com/api/rig-reports`,
+  with no question asked (`--no-upload` turns it off). What is sent is exactly the JSON in
+  [RIG_REPORT_UPLOAD.md](RIG_REPORT_UPLOAD.md): the check results, the bytes exchanged with the radio, the
+  radioctl version, your OS and CPU type, and the name and email you gave. No host name, user name, file path,
+  IP address or USB serial number is sent. The local report file is always written first, and the program prints
+  what it is about to send and where the local copy is. If the upload fails (offline, an error, 10 seconds
+  with no answer) it says so in one line and the test result is unchanged.
+- The first time you run it at a terminal it asks for your **name** and then your **email**, so hams.com can
+  contact you about your rig; they are sent with the report. Press Enter to skip either. The answers are saved
+  in your user configuration folder (`~/.config/radioctl/selftest-contact.json`, readable only by you) and you
+  are not asked again. For scripts use `--name`, `--email` or the environment variables
+  `RADIOCTL_SELFTEST_NAME` and `RADIOCTL_SELFTEST_EMAIL`; a run that is not at a terminal never waits for input.
 - It records every byte exchanged with the radio, both directions, in the report. This is what lets a maintainer
   check the description without your radio.
 
-## Before you start
+After a **successful** upload it thanks you, once per radio (and a short closing line when several were tested):
 
-1. Build radioctl from a checkout: `cd daemons/radioctl && cargo build --example rig_selftest`.
-2. Connect the radio's CAT or USB cable, power it on, and set its CAT baud rate and CI-V/CAT options as the radio's
-   manual says. If you can, write down the radio's firmware version from its menu.
-3. Close every other program that uses the serial port (logger, WSJT-X, `rigctld`).
-4. Run `cargo run --example rig_selftest -- --list`. It prints the serial ports it finds, the USB ids and the
-   descriptions that exist. USB ids only identify the cable's chip, so the list does not choose for you: it names a
-   description only when the device's own product string contains the model, and says AMBIGUOUS when two fit.
-   If your model has no description, see [RIG_SUPPORT.md](RIG_SUPPORT.md) and file an issue to ask for it.
+> Thank You! You have verified the operation of Icom IC-7300 1.2. Please feel free to re-run this program any time and
+> with new radios. We may contact you again if we see bugs and want to resolve them.
 
-## Run the read-only self-test
+The rig is the maker and model; the version is the firmware read from the radio and is left out when the radio did not
+give one. If a check did not pass it says instead "Thank You! Your report on Icom IC-7300 1.2 is in. 1 of 12 checks did
+not pass. That is a problem in our software, not something you did wrong, and we will look into it." followed by the same two sentences (checks the description does not support are not
+counted). With `--no-upload`, or when the upload fails, there is no thank-you, only the one-line status.
+
+## Updating
+
+The copy that ships with the local relay checks at the start of each run whether a newer version has been
+released, using the relay's own release channel and signing (the same `latest_info` and signed bundle the relay
+updates from; there is no separate trust scheme). It never updates silently:
+
+- At a terminal it asks `A newer radioctl-selftest (X.Y.Z) is available; update now? [y/N]`. On `y` it downloads the
+  signed bundle for your OS and CPU, checks its sha256 and its signature against the relay's release key, replaces
+  itself (the old program is kept next to it as `radioctl-selftest.prev`) and starts again with the same arguments.
+- Without a terminal it only prints the notice; `--update` installs without asking. `--no-update-check` skips the check.
+- Offline, a slow server (5 seconds), a failed or unverifiable download: one line, the existing program is left
+  untouched, and the test carries on.
+- A copy you built from source has no update channel and does not check. As with the relay, there is no version
+  floor: a newer signed release is installed, and a bad release is answered by a newer one or the signed revocation list.
+
+## Discovery (the default)
+
+With no options the program looks for radios and prints a table first: each USB serial port with its USB ids and
+product string, and what was decided.
+
+- A port whose own text says it is not a radio (a GPS receiver, an Arduino, a programmer) is skipped and never opened.
+- A port whose product string names exactly one description is tested with it.
+- A port whose product string fits several descriptions (`TS-590S` and `TS-590SG`) is asked with the
+  descriptions' own read-only identify commands, at the rates the baud probe tries, and chosen by the answer.
+  If that does not leave exactly one, the table says `ambiguous: candidates ...` and the port is skipped.
+- A port with no such evidence (most USB cables only identify their chip, not the radio) is `unidentified`, is
+  never written to, and is not tested. Name it yourself with `--description` and `--port`.
+- FlexRadio network radios that announce themselves are listed (the program only listens). Testing network
+  radios is not supported yet.
+
+One radio is tested at a time. Each gets its own report (`radioctl-selftest-ID.txt`, in `--out-dir` or the
+current folder) and its own upload, and a run summary `radioctl-selftest-summary.txt` is written.
+
+## Choosing a radio yourself
 
 ```
-cargo run --example rig_selftest -- RIG_ID TARGET [BAUD]
-cargo run --example rig_selftest -- icom-ic-7300 /dev/ttyUSB0 115200
-cargo run --example rig_selftest -- --out my-report.txt yaesu-ft-991a usb:10c4:ea60 38400
+radioctl-selftest --list
+radioctl-selftest --description icom-ic-7300 --port /dev/ttyUSB0 --baud 115200
+radioctl-selftest --description yaesu-ft-991a --port usb:10c4:ea60 --baud auto
+radioctl-selftest icom-ic-7300 /dev/ttyUSB0 115200
 ```
 
-- `RIG_ID` is a file name in `rigs/` without `.toml`. Pick the one that names your radio. A neighbouring model is
-  not a test of yours: do not run the FT-817 description on an FT-818 unless asked.
-- `TARGET` is a serial path or `usb:VID:PID[:SERIAL]` (hexadecimal). `virtual` runs against an in-memory radio to
-  try the tool without a radio.
-- `BAUD` defaults to 19200; use the rate set in the radio.
-- The report is `rig_selftest-RIG_ID.txt` unless you pass `--out`.
+- `--list` prints the ports found, the USB ids, and every description (the built-in set, or `--rigs-dir DIR`, or
+  `$RADIOCTL_RIGS`, in that order of precedence).
+- `--description ID` is a file name in `rigs/` without `.toml`. A neighbouring model is not a test of yours: do not
+  run the FT-817 description on an FT-818 unless asked.
+- `--port` is a serial path, `usb:VID:PID[:SERIAL]` (hexadecimal), or `virtual` (an in-memory radio, to try the
+  tool without a radio). Naming only one of the two uses the only port, or the port's own product string.
+- `--baud N` sets the rate (default 19200). `--baud auto` tries the usual rates with the description's own
+  frequency read and uses the first that answers; the rates tried are in the report.
+- `--no-discover` turns discovery off (then `--description` and `--port` are required). `--no-upload` writes the
+  local report only. `--server URL` uploads somewhere else (https, or http to this computer; for testing).
+  `--out FILE` names the report of a single radio; `--out-dir DIR` the folder for all of them.
+- `--unmanaged` leaves the DTR and RTS lines alone (needed for pseudo-terminals).
+- Exit status: 0 if no check failed, 1 if a check failed or a radio could not be opened, 2 for a usage error. A
+  failed upload never changes it.
 
-Each check prints `Pass`, `Fail` or `NotApplicable`. A `Fail` or a timeout is a useful result: do not fix the
-settings until after you have saved the report, then file it.
+Each check prints `Pass`, `Fail` or `NotApplicable`. A check that did not pass is a problem in radioctl or in the rig
+description, never something you did wrong, and it is a useful result: the report says which check and what was sent
+and received. (It could also be that the radio is off or the port differs; if so, run again.)
 
-## What to include in the report
+## What to add to your report
 
-Attach the whole report file (it already has the tool version, your system, the description and its facts, the
-target, every check and the raw bytes) and add in the issue text:
+The upload already carries the results and the bytes. To help us check the radio, also write to us (reply to the
+contact you were given, or file an issue) with:
 
 - the radio's exact model and firmware version, and any option boards or accessories on the CAT line;
 - the cable or interface (the radio's own USB, a CP210x/FTDI cable, a level shifter) and the radio's CAT settings;
-- the radioctl commit (`git rev-parse HEAD`) and whether you changed anything in `rigs/`;
 - what you saw on the radio itself (the frequency and mode on its display when you ran the test).
 
-Before posting, open the file and remove anything private. The tool removes a USB serial number from the target, but
-the raw bytes can include a radio serial number or a callsign set in the radio. Replace such values with `XXXX`,
-and say in the issue that you did.
-
-## How to file it
-
-There is no upload command. Open a new issue in the radioctl repository on GitHub, titled
-`rig test: MAKER MODEL (description-id): result`, paste or attach the report file, and add the items above. The
-maintainers read it; no one else is contacted. If you have no GitHub account, send the file to the maintainers
-by the contact in the repository README.
+The raw bytes can include a radio serial number or a callsign set in the radio; the report file is yours to read
+before you share it anywhere else.
 
 ## Transmit tests: a separate, manual procedure
 
@@ -91,7 +148,7 @@ Levels, from lowest: `unverified` (no check) < `manual-checked` (compared with a
 `transcript-checked` (replayed against a recorded transcript) < `hardware-verified` (tested on a real radio).
 The level is stored per fact in `rigs/<id>.toml`, in the fact's `verified` field; there is no other copy.
 
-1. Read the issue and the whole report. Confirm the model, the description id and that the radio was in a sane state.
+1. Read the uploaded report (or the issue) and the whole report. Confirm the model, the description id and that the radio was in a sane state.
 2. `transcript-checked`: scrub the wire log (serial numbers, callsigns), turn it into a `[[step]]` transcript under
    `rigs/transcripts/` with `origin = "capture"`, and set the facts it covers to
    `verified = { state = "transcript-checked", reference = "<transcript path>" }`.

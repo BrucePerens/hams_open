@@ -2,16 +2,16 @@
 //! The volunteer self-test: read-only checks of one rig description against one real radio, and a
 //! plain-text report to attach to a bug report by hand.
 //!
-//! What it never does: transmit, open the transmit gate, or touch the network. Every operation it
-//! plans passes [`is_read_only`], and the rig is opened with the default options (gate closed).
-//! The report holds every byte exchanged with the radio, in both directions, so a maintainer can
-//! turn it into a transcript. Nothing leaves the machine; the volunteer reads the file and files
-//! it by hand (docs/VOLUNTEER_TESTING.md).
+//! What it never does: transmit, or open the transmit gate. Every operation it plans passes
+//! [`is_read_only`], and the rig is opened with the default options (gate closed). The report
+//! holds every byte exchanged with the radio, in both directions, so a maintainer can turn it
+//! into a transcript. The report is written to a local file first; `radioctl-selftest` then
+//! uploads it to hams.com (see [`crate::upload`] and docs/RIG_REPORT_UPLOAD.md).
 
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -29,6 +29,10 @@ use radioctl_protocols::io::spawn_virtual_rig;
 use radioctl_protocols::virtual_rig::VirtualRig;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::runtime::Handle;
+
+/// What the program says wherever a check did not pass: the fault is in radioctl or the
+/// description, not the user; the one hint about the user's side is a hint, not the explanation.
+pub const FAILURE_NOTE: &str = "A check that did not pass is a problem in radioctl or the rig description, not something you did wrong. It could be the radio is off or the port differs; if so, run again.";
 
 /// How one check ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +56,9 @@ pub struct CheckResult {
     pub verdict: Verdict,
     /// Milliseconds from sending to the verdict.
     pub millis: u128,
+    /// The wire log lines (hexadecimal, both directions) written during this check; empty when
+    /// no wire file was given.
+    pub wire: String,
 }
 
 /// What the report header states about the run.
@@ -71,6 +78,10 @@ pub struct ReportHeader {
     pub started: String,
     /// Facts of the description per verified state.
     pub verified: BTreeMap<&'static str, usize>,
+    /// The USB identity of the port (ids and product string, never the serial number), or empty.
+    pub port_identity: String,
+    /// What the baud probe tried, winner last, or empty when it did not run.
+    pub baud_probe: String,
 }
 
 // [@ANCHOR: radioctld_selftest_is_read_only]
@@ -216,10 +227,7 @@ pub fn render_report(header: &ReportHeader, results: &[CheckResult], wire: &str)
         text.push('\n');
     };
     line("radioctl rig self-test report (read-only; nothing was transmitted)".into());
-    line(format!(
-        "tool version: radioctld {}",
-        env!("CARGO_PKG_VERSION")
-    ));
+    line(format!("radioctl version: {}", env!("CARGO_PKG_VERSION")));
     line(format!(
         "system: {} {}",
         std::env::consts::OS,
@@ -237,12 +245,18 @@ pub fn render_report(header: &ReportHeader, results: &[CheckResult], wire: &str)
         .collect();
     line(format!("description facts: {}", states.join(", ")));
     line(format!("target: {} at {} baud", header.target, header.baud));
+    if !header.port_identity.is_empty() {
+        line(format!("serial identity: {}", header.port_identity));
+    }
+    if !header.baud_probe.is_empty() {
+        line(format!("baud probe tried: {}", header.baud_probe));
+    }
     line(String::new());
     for r in results {
         let (word, detail) = match &r.verdict {
             Verdict::Pass(d) => ("PASS", d.as_str()),
             Verdict::NotApplicable(d) => ("N/A ", d.as_str()),
-            Verdict::Fail(d) => ("FAIL", d.as_str()),
+            Verdict::Fail(d) => ("DID NOT PASS", d.as_str()),
         };
         line(format!(
             "{word} {} [{}] {} ms: {detail}",
@@ -252,11 +266,14 @@ pub fn render_report(header: &ReportHeader, results: &[CheckResult], wire: &str)
     let count = |f: fn(&Verdict) -> bool| results.iter().filter(|r| f(&r.verdict)).count();
     line(String::new());
     line(format!(
-        "summary: {} pass, {} fail, {} not applicable",
+        "summary: {} pass, {} did not pass, {} not applicable",
         count(|v| matches!(v, Verdict::Pass(_))),
         count(|v| matches!(v, Verdict::Fail(_))),
         count(|v| matches!(v, Verdict::NotApplicable(_)))
     ));
+    if count(|v| matches!(v, Verdict::Fail(_))) > 0 {
+        line(FAILURE_NOTE.into());
+    }
     line(String::new());
     line(
         "wire log (seconds since start, tx = sent to the radio, rx = received, hex bytes):".into(),
@@ -396,9 +413,22 @@ pub async fn open(
 /// Runs the planned checks one after another and returns what happened. An operation that is not
 /// read-only is refused here even if a plan ever contained one.
 pub async fn run_checks(rig: &RigHandle, plan: Vec<(String, Op)>) -> Vec<CheckResult> {
+    run_checks_logged(rig, plan, None).await
+}
+
+// [@ANCHOR: radioctld_selftest_run_checks_logged]
+/// [`run_checks`], and when `wire_path` names the wire file the tap writes, each result also
+/// holds the wire lines written during its check.
+pub async fn run_checks_logged(
+    rig: &RigHandle,
+    plan: Vec<(String, Op)>,
+    wire_path: Option<&Path>,
+) -> Vec<CheckResult> {
+    let size = |p: &Path| std::fs::metadata(p).map_or(0, |m| m.len() as usize);
     let mut results = Vec::new();
     for (name, op) in plan {
         let text = format!("{op:?}");
+        let before = wire_path.map_or(0, size);
         let started = Instant::now();
         let verdict = if !is_read_only(&op) {
             Verdict::Fail("refused: not a read-only operation".into())
@@ -410,11 +440,16 @@ pub async fn run_checks(rig: &RigHandle, plan: Vec<(String, Op)>) -> Vec<CheckRe
                 Err(e) => Verdict::Fail(format!("{:?}: {}", e.kind, e.detail)),
             }
         };
+        let wire = wire_path
+            .and_then(|p| std::fs::read(p).ok())
+            .map(|bytes| String::from_utf8_lossy(bytes.get(before..).unwrap_or(&[])).into_owned())
+            .unwrap_or_default();
         results.push(CheckResult {
             name,
             op: text,
             verdict,
             millis: started.elapsed().as_millis(),
+            wire,
         });
     }
     results
@@ -499,8 +534,39 @@ mod tests {
         assert_eq!(utc_stamp(1_793_404_800 + 3_723), "2026-10-31 01:02:03 UTC");
     }
 
+    // Tests [@ANCHOR: radioctld_selftest_render_report]
+    #[test]
+    fn a_check_that_did_not_pass_is_never_blamed_on_the_user() {
+        let header = ReportHeader {
+            rig_id: "x".into(),
+            rig_name: "X Y".into(),
+            family: "F".into(),
+            target: "t".into(),
+            baud: 1,
+            started: utc_stamp(0),
+            verified: BTreeMap::new(),
+            port_identity: String::new(),
+            baud_probe: String::new(),
+        };
+        let failed = CheckResult {
+            name: "read mode".into(),
+            op: "GetMode".into(),
+            verdict: Verdict::Fail("Timeout".into()),
+            millis: 1,
+            wire: String::new(),
+        };
+        let report = render_report(&header, &[failed], "");
+        assert!(report.contains("DID NOT PASS read mode"));
+        assert!(report.contains("1 did not pass"));
+        assert!(report.contains("not something you did wrong"));
+        assert!(report.contains("radio is off or the port differs; if so, run again"));
+        assert!(!report.to_lowercase().contains("check your"));
+        assert!(!render_report(&header, &[], "").contains("not something you did wrong"));
+    }
+
     // Tests [@ANCHOR: radioctld_selftest_open]
     // Tests [@ANCHOR: radioctld_selftest_run_checks]
+    // Tests [@ANCHOR: radioctld_selftest_run_checks_logged]
     // Tests [@ANCHOR: radioctld_selftest_wire_tap]
     // Tests [@ANCHOR: radioctld_selftest_render_report]
     // Tests [@ANCHOR: radioctld_selftest_any_engine_encode]
@@ -512,7 +578,7 @@ mod tests {
         let rig = open(&description, "virtual", 19_200, true, wire)
             .await
             .expect("virtual rig opens");
-        let results = run_checks(&rig, plan_checks(&description)).await;
+        let results = run_checks_logged(&rig, plan_checks(&description), Some(&path)).await;
         assert!(
             results
                 .iter()
@@ -522,6 +588,10 @@ mod tests {
         assert!(results
             .iter()
             .any(|r| r.name == "read frequency A" && matches!(r.verdict, Verdict::Pass(_))));
+        assert!(
+            results.iter().any(|r| r.wire.contains(" tx ")),
+            "{results:?}"
+        );
         let wire_text = std::fs::read_to_string(&path).expect("wire file");
         std::fs::remove_file(&path).ok();
         assert!(wire_text.contains(" tx "), "{wire_text}");
@@ -536,12 +606,17 @@ mod tests {
             baud: 19_200,
             started: utc_stamp(0),
             verified: BTreeMap::from([("unverified", 3)]),
+            port_identity: "usb 10c4:ea60".into(),
+            baud_probe: "4800, 9600".into(),
         };
         let report = render_report(&header, &results, &wire_text);
         assert!(report.contains("nothing was transmitted"));
         assert!(report.contains("PASS read frequency A"));
         assert!(report.contains("summary: "));
         assert!(report.contains("3 unverified"));
+        assert!(report.contains("radioctl version: "));
+        assert!(report.contains("serial identity: usb 10c4:ea60"));
+        assert!(report.contains("baud probe tried: 4800, 9600"));
         assert!(report.contains(" tx "));
     }
 }

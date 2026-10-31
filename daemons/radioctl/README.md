@@ -220,7 +220,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 - radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today none is hardware-verified.
 - The plan, in four tiers with counts and source rules, is [docs/RIG_COVERAGE_PLAN.md](docs/RIG_COVERAGE_PLAN.md).
-- To test your own radio, run the read-only `cargo run --example rig_selftest -- --list` and then `rig_selftest RIG_ID TARGET`; it never transmits, uploads nothing and writes a report you file by hand. See [docs/VOLUNTEER_TESTING.md](docs/VOLUNTEER_TESTING.md).
+- To test your own radio, run `radioctl-selftest` (shipped with the hams.com local relay; or build `-p radioctld --bin radioctl-selftest`). It discovers radios, runs only read-only checks, never transmits, writes a local report per radio and uploads each to hams.com (`--no-upload` to skip). See [docs/VOLUNTEER_TESTING.md](docs/VOLUNTEER_TESTING.md) and [docs/RIG_REPORT_UPLOAD.md](docs/RIG_REPORT_UPLOAD.md).
 - Hardware reports are recorded in `rigs/reports/verified.toml`; the verification state itself stays in each rig file's facts.
 
 ## Tier 1 capability matrix
@@ -967,7 +967,61 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_candidates_load_summaries] (radioctld) Reads every description in a directory for listings.
 - [@ANCHOR: radioctl:radioctld_candidates_squash] (radioctld) Letters and digits only, lower case, for comparing model names.
 - [@ANCHOR: radioctl:radioctld_candidates_for_product] (radioctld) The descriptions whose model name a USB product string contains.
-- [@ANCHOR: radioctl:radioctld_candidates_render] (radioctld) The `rig_selftest --list` text: ports, evidence, descriptions; never a silent pick.
+- [@ANCHOR: radioctl:radioctld_candidates_render] (radioctld) The `radioctl-selftest --list` text: ports, evidence, descriptions; never a silent pick.
+- [@ANCHOR: radioctl:radioctld_builtin_embedded_texts] (radioctld) The embedded descriptions as `(label, text)` pairs; the label is `embedded:ID`.
+- [@ANCHOR: radioctl:radioctld_builtin_choose_source] (radioctld) The source of descriptions: `--rigs-dir` wins, then `RADIOCTL_RIGS` (when not empty), else the
+- [@ANCHOR: radioctl:radioctld_builtin_load_texts] (radioctld) Every description of `source` as `(label, text)` pairs. A directory is read as `*.toml` files.
+- [@ANCHOR: radioctl:radioctld_discovery_not_radio_reason] (radioctld) Why this port is clearly not a radio, or `None`. Only the device's own ids and text are used.
+- [@ANCHOR: radioctl:radioctld_discovery_expected_id] (radioctld) The model id the description says the radio answers to an identify read, if it states one.
+- [@ANCHOR: radioctl:radioctld_discovery_ask_radio] (radioctld) Asks the radio at `path` whether it is `description`: the baud probe's frequency read at each
+- [@ANCHOR: radioctl:radioctld_discovery_discover_ports] (radioctld) Classifies every port. `descriptions` are the loaded descriptions and `rigs` their summaries.
+- [@ANCHOR: radioctl:radioctld_discovery_net_from_packet] (radioctld) A network finding from one discovery datagram, matched to a description by model name.
+- [@ANCHOR: radioctl:radioctld_discovery_listen_flex] (radioctld) Listens (receive only, nothing is sent) for FlexRadio discovery broadcasts for `window`.
+- [@ANCHOR: radioctl:radioctld_discovery_render_table] (radioctld) The discovery table: where, what the device says it is, and what was chosen.
+- [@ANCHOR: radioctl:radioctld_discovery_identified] (radioctld) The serial path of a finding that was identified, with its description id.
+- [@ANCHOR: radioctl:radioctld_cli_parse_args] (radioctld) Parses the command line (without the program name). `ID PORT [BAUD]` positionals are the
+- [@ANCHOR: radioctl:radioctld_cli_parse_baud] (radioctld) `auto`, or a rate between 300 and 4,000,000.
+- [@ANCHOR: radioctl:radioctld_cli_find_description] (radioctld) The loaded description with this id, or an error that lists the ids there are.
+- [@ANCHOR: radioctl:radioctld_cli_port_identity] (radioctld) The USB identity of the port named by `target` (a path or `usb:VID:PID`), with no serial number.
+- [@ANCHOR: radioctl:radioctld_cli_describe_identity] (radioctld) `usb 10c4:ea60, product "..."` for the report; empty when the port has no USB ids.
+- [@ANCHOR: radioctl:radioctld_cli_report_path] (radioctld) Where a rig's local report goes: `--out` for a single rig, else
+- [@ANCHOR: radioctl:radioctld_cli_render_summary] (radioctld) The run summary: the discovery table and one line per tested rig.
+- [@ANCHOR: radioctl:radioctld_cli_choose_targets] (radioctld) The rigs to test: the one named by `--description` and `--port`, or what discovery
+- [@ANCHOR: radioctl:radioctld_cli_run] (radioctld) Runs the program for `o`; returns the exit status: 0 when every check of every rig passed or
+- [@ANCHOR: radioctl:radioctld_upload_uuid_v4] (radioctld) Formats 16 random bytes as a version 4 UUID.
+- [@ANCHOR: radioctl:radioctld_upload_new_report_id] (radioctld) A fresh random report id, or an error if the system has no randomness.
+- [@ANCHOR: radioctl:radioctld_upload_rfc3339] (radioctld) `YYYY-MM-DDTHH:MM:SSZ` for a Unix time.
+- [@ANCHOR: radioctl:radioctld_upload_build_payload] (radioctld) The upload document, at most [`MAX_BODY`] bytes: raw bytes are dropped from the last check
+- [@ANCHOR: radioctl:radioctld_upload_config_dir] (radioctld) The per-user configuration directory for radioctl: `$XDG_CONFIG_HOME` or `~/.config` on
+- [@ANCHOR: radioctl:radioctld_upload_load_saved] (radioctld) The saved contact answers, or `None` when the volunteer has not been asked yet.
+- [@ANCHOR: radioctl:radioctld_upload_save] (radioctld) Saves the answers in a file only the owner can read (mode 0600 where the system has modes).
+- [@ANCHOR: radioctl:radioctld_upload_valid_email] (radioctld) A plain shape check (something, `@`, a dotted domain, no spaces); it does not verify the address.
+- [@ANCHOR: radioctl:radioctld_upload_prompt_contact] (radioctld) Asks for the name, then the email, saying why. Enter skips either; an email that does not look
+- [@ANCHOR: radioctl:radioctld_upload_resolve_contact] (radioctld) The contact to send. A flag beats an environment variable beats the saved answers. The
+- [@ANCHOR: radioctl:radioctld_upload_parse_server] (radioctld) `https://HOST[:PORT]/PATH`, or `http://` only for a loopback host (`localhost`, `127.0.0.1`,
+- [@ANCHOR: radioctl:radioctld_upload_post_report] (radioctld) Sends `body` to `url` within [`UPLOAD_TIMEOUT`]. `Ok` only for a 2xx answer; every failure
+- [@ANCHOR: radioctl:radioctld_upload_notice] (radioctld) What is said before uploading: what is sent, to where, and where the local copy is.
+- [@ANCHOR: radioctl:radioctld_candidates_summaries_from] (radioctld) Parses `(label, description text)` pairs into summaries sorted by id; the label names the
+- [@ANCHOR: radioctl:radioctld_candidates_auto_pick] (radioctld) The one port and description the devices themselves name: exactly one USB port whose product
+- [@ANCHOR: radioctl:radioctld_selftest_run_checks_logged] (radioctld) [`run_checks`], and when `wire_path` names the wire file the tap writes, each result also
+- [@ANCHOR: radioctl:radioctld_cli_firmware_text] (radioctld) The firmware version read from the rig, as text, if any.
+- [@ANCHOR: radioctl:radioctld_cli_thanks] (radioctld) The thank-you printed after a successful upload.
+- [@ANCHOR: radioctl:radioctld_cli_update_flow] (radioctld) The start-of-run version check. Offline or any error is one line and the test carries on
+- [@ANCHOR: radioctl:radioctld_cli_main_from_env] (radioctld) The whole program for a binary's `main`: arguments, terminal, environment and the real serial
+- [@ANCHOR: radioctl:radioctld_cli_main_with_bundle] (radioctld) [`main_from_env`] for a program shipped inside a signed release bundle: `bundle` is the bundle's version
+- [@ANCHOR: radioctl:radioctld_upload_decode_body] (radioctld) The body of a complete HTTP/1.1 response read to the end of the connection: the bytes after
+- [@ANCHOR: radioctl:radioctld_upload_request] (radioctld) `method` (`POST` with a JSON `body`, or `GET` with none) to `url` within `timeout`; returns the
+- [@ANCHOR: radioctl:radioctld_update_platform] (radioctld) The release platform name of this build, as the relay's channel calls it, or `None` on a
+- [@ANCHOR: radioctl:radioctld_update_is_newer] (radioctld) True when `candidate` is a higher `X.Y.Z` than `current`. Anything else is an error.
+- [@ANCHOR: radioctl:radioctld_update_fetch_latest] (radioctld) Asks the release channel for the newest version of `platform` (the relay bridge's
+- [@ANCHOR: radioctl:radioctld_update_download] (radioctld) Downloads the signed bundle of `platform` (at most [`MAX_BUNDLE`] bytes, within [`DOWNLOAD_TIMEOUT`]).
+- [@ANCHOR: radioctl:radioctld_update_verify_and_extract] (radioctld) The self-test executable out of `bundle`, but only if the bundle's sha256 is `sha256` and its
+- [@ANCHOR: radioctl:radioctld_update_replace_exe] (radioctld) Replaces `exe` with `new_bytes`, keeping the old file beside it as `NAME.prev`. The new file is
+- [@ANCHOR: radioctl:radioctld_update_restart] (radioctld) Starts the replaced program with the same arguments and returns its exit status (on Unix the
+- [@ANCHOR: radioctl:radioctld_cli_probe_baud] (radioctld) Probes the baud for `description` on `path`, the way `baud = "auto"` does.
+- [@ANCHOR: radioctl:radioctld_cli_test_one] (radioctld) Tests one rig and writes its local report. `Err` only for a rig that could not be opened.
+- [@ANCHOR: radioctl:radioctld_update_entry_name] (radioctld) The file name of the self-test inside a bundle.
+- [@ANCHOR: radioctl:radioctld_upload_exchange] (radioctld) One request and the status and body it earned; any network trouble is an `Err` with a short
 - [@ANCHOR: radioctl:radioctl_support_load_descriptions] (tools) Reads rigs/*.toml: name, family, highest verified state, hardware facts.
 - [@ANCHOR: radioctl:radioctl_support_load_reports] (tools) The [[report]] entries of rigs/reports/verified.toml.
 - [@ANCHOR: radioctl:radioctl_support_check_consistency] (tools) Problems that would make RIG_SUPPORT.md lie: map, facts and reports must agree.
