@@ -1,0 +1,44 @@
+[package]
+name = "radioctl-capi"
+description = "radioctl C ABI: opaque handles, explicit runtime ownership, transmit gate closed by default"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+# This crate is the one place in the workspace that must contain `unsafe` (raw pointers across an
+# FFI boundary), so it does not inherit the workspace's `unsafe_code = "forbid"`. It denies
+# `unsafe_code` crate-wide and allows it in the single `ffi` module only; every other lint of the
+# workspace table is repeated here.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[lib]
+name = "radioctl_capi"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = ["owned-runtime"]
+# `rctl_runtime_new`: the library builds and owns a tokio runtime for a C caller. Without the
+# feature a C caller cannot create a runtime; a Rust host that links this crate supplies its own
+# with `runtime_from_handle`.
+owned-runtime = ["tokio/rt-multi-thread"]
+
+[dependencies]
+radioctl-core = { path = "../radioctl-core" }
+radioctl-protocols = { path = "../radioctl-protocols" }
+tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "net", "macros"] }
+
+[build-dependencies]
+cbindgen = { version = "0.29", default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros"] }

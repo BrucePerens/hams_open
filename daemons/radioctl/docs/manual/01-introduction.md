@@ -34,7 +34,7 @@ so that:
 - every fact about a radio says where it came from and what has been checked.
 
 It is **not** a replacement for Hamlib today. Hamlib 4.6.2 lists 313 radio models ([appendix A](A-capability-matrix.md));
-radioctl has descriptions for 23. It is not a drop-in `libhamlib`, and a C ABI is planned but absent
+radioctl has descriptions for 23. It is not a drop-in `libhamlib`; a C ABI exists as a sketch (`radioctl-capi`, [chapter 14](14-station.md#the-c-abi))
 ([chapter 13](13-roadmap.md)). The plan is hybrid: radios move to radioctl one at a time, once a
 description has been verified on real hardware, and Hamlib stays the fallback and the test oracle.
 
@@ -76,7 +76,7 @@ Phase 0/1 foundation, as the crate README says. What is implemented:
   rig agree with each other, not that they agree with a radio.
 - **Planned, not in the code:** unkey on link loss, ownership modes, scope for non-Icom radios,
   FlexRadio streams (meters, spectrum, audio) and discovery on the wire, the OpenHPSDR data plane (I/Q) and
-  the Kenwood and Icom LAN radios, a C ABI, rotators and amplifiers, and external switches. [Chapter 13](13-roadmap.md) is the complete list.
+  the Kenwood and Icom LAN radios, the rest of the C ABI, and external-switch hardware. [Chapter 13](13-roadmap.md) is the complete list.
 
 There is no transmit path to real hardware that has been exercised. Everything that can transmit
 fails closed behind the gate ([chapter 10](10-safety.md)), and no test in the repository keys a

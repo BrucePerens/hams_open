@@ -12,7 +12,9 @@ the last section before relying on any of it.
 - **One transmitter, one owner.** Several clients can read a rig; only one at a time can key it.
 - **No hardware safety net is assumed** to exist on the other end of the cable.
 - **No `unsafe` and no panics** in library code (workspace lints: `unsafe_code = "forbid"`,
-  `unwrap_used`, `expect_used` and `panic` denied); every byte parser uses checked access, because reply
+  `unwrap_used`, `expect_used` and `panic` denied). The one exception is the C ABI crate
+  `radioctl-capi`, which must hold raw pointers: it denies `unsafe_code` crate-wide, allows it in one
+  module (`ffi.rs`), keeps the other denials, and catches every panic at the boundary; every byte parser uses checked access, because reply
   parsing is the attack surface.
 
 ## The transmit gate (implemented, unverified on hardware)
