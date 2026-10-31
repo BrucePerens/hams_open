@@ -13,6 +13,7 @@ pub mod engine;
 pub mod error;
 pub mod event;
 pub mod keyer;
+pub mod net;
 pub mod op;
 pub mod poll;
 pub mod rig;
