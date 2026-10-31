@@ -174,6 +174,10 @@ impl LevelParams {
 pub struct YaesuParams {
     /// The number the rig returns for `ID;` (`ID0670;` is 670).
     pub model_id: u16,
+    /// Digits of the `FA`/`FB` frequency and of the `IF` VFO-A frequency: 9 on the FT-991A,
+    /// FT-891, FT-710, FTDX10 and FTDX101, 8 on the FT-450, FT-950, FT-2000, FTDX1200,
+    /// FTDX3000, FTDX5000 and FTDX9000.
+    pub frequency_digits: u8,
 }
 
 /// Yaesu legacy five-byte CAT parameters.

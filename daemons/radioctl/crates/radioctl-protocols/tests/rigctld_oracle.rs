@@ -1067,6 +1067,78 @@ fn known_yaesu_divergences(_file: &str) -> Vec<&'static str> {
     Vec::new()
 }
 
+/// The Yaesu, Elecraft and Kenwood ASCII descriptions added in the October 31 batches, with
+/// Hamlib's model number and the baud rate the comparison uses.
+const ASCII_BATCH: [(&str, u32, u32); 15] = [
+    ("yaesu-ft-450", 1027, 38400),
+    ("yaesu-ft-450d", 1046, 38400),
+    ("yaesu-ft-950", 1028, 38400),
+    ("yaesu-ft-2000", 1029, 38400),
+    ("yaesu-ftdx-1200", 1034, 38400),
+    ("yaesu-ftdx-3000", 1037, 38400),
+    ("yaesu-ftdx-5000", 1032, 38400),
+    ("yaesu-ftdx-9000", 1030, 38400),
+    ("yaesu-ft-891", 1036, 38400),
+    ("yaesu-ft-710", 1049, 38400),
+    ("yaesu-ftdx-101mp", 1044, 38400),
+    ("elecraft-k3", 2029, 38400),
+    ("elecraft-k3s", 2043, 38400),
+    ("elecraft-kx2", 2044, 38400),
+    ("elecraft-k4", 2047, 38400),
+];
+
+// Tests [@ANCHOR: radioctl_yaesu_engine_encode]
+// Tests [@ANCHOR: radioctl_yaesu_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_yaesu_command]
+// Tests [@ANCHOR: radioctl_elecraft_engine_encode]
+// Tests [@ANCHOR: radioctl_elecraft_engine_feed]
+// Tests [@ANCHOR: radioctl_virtual_elecraft_command]
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+// Tests [@ANCHOR: radioctl_virtual_kenwood_command]
+#[test]
+fn the_ascii_batch_files_against_hamlib_record_every_disagreement() {
+    // Frequency, mode, PTT read, second VFO and split as far as each description claims them; no
+    // RIT offset steps (Hamlib answers from its cache part of the time, as for the other files).
+    let mut wrong = Vec::new();
+    for (file, model, baud) in ASCII_BATCH {
+        let desc = shipped(file);
+        let steps: Vec<Op> = icom_scenario(7_074_000, 14_060_000, 14_025_000)
+            .into_iter()
+            .filter(|op| {
+                !matches!(op, Op::SetRitOffset(_) | Op::GetRitOffset)
+                    && desc.capabilities.has(op.required_capability())
+            })
+            .collect();
+        let (divergences, refused, wire) = compare(model, &desc, baud, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        if got != known_ascii_batch_divergences(file) {
+            wrong.push(format!("{file}: {divergences:#?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The steps on which Hamlib and radioctl disagree for a file of the ASCII batches. Filled in
+/// from the first run of the harness; each entry is an open question about which side matches a
+/// real radio, not a result.
+///
+/// The FT-450, FT-450D and FTDX-9000 are the only three that differ, on the same two steps: to
+/// reach VFO B Hamlib sends `FT1;` (on these models FT selects the displayed or the opposite
+/// band, or the main or sub transmitter band) before `FB`, which the virtual rig refuses because
+/// the engine's `FT` is the FT-991A form (`FT2;`/`FT3;`, VFO A or B transmits). Hamlib's second
+/// frequency step then fails and it reads back 0. Which of the two matches a real FT-450 or
+/// FTDX-9000 is unknown; the descriptions claim `second-vfo` (the `FB` command is in both
+/// guides) but not `split`. The other twelve agree on every step the harness can express.
+fn known_ascii_batch_divergences(file: &str) -> Vec<&'static str> {
+    match file {
+        "yaesu-ft-450" | "yaesu-ft-450d" | "yaesu-ftdx-9000" => {
+            vec!["SetFrequency(B, Hz(14025000))", "GetFrequency(B)"]
+        }
+        _ => Vec::new(),
+    }
+}
+
 // Tests [@ANCHOR: radioctl_ylegacy_engine_encode]
 // Tests [@ANCHOR: radioctl_ylegacy_engine_feed]
 // Tests [@ANCHOR: radioctl_virtual_legacy_block]

@@ -9,6 +9,7 @@
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `elecraft.model_id`, `yaesu.model_id`,
+//! `yaesu.frequency_digits` (only when not 9),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ only), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
@@ -171,6 +172,8 @@ struct ElecraftSection {
 #[serde(deny_unknown_fields)]
 struct YaesuSection {
     model_id: u16,
+    #[serde(default)]
+    frequency_digits: Option<u8>,
 }
 
 #[derive(Deserialize)]
@@ -370,9 +373,22 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     });
     let scope = build_scope(doc.scope.as_ref(), family)?;
     let levels = build_levels(doc.levels.as_ref())?;
-    let yaesu = doc.yaesu.as_ref().map(|y| YaesuParams {
-        model_id: y.model_id,
-    });
+    let yaesu = doc
+        .yaesu
+        .as_ref()
+        .map(|y| {
+            let frequency_digits = y.frequency_digits.unwrap_or(9);
+            if !matches!(frequency_digits, 8 | 9) {
+                return Err(bad(format!(
+                    "yaesu.frequency_digits must be 8 or 9, not {frequency_digits}"
+                )));
+            }
+            Ok::<YaesuParams, RigError>(YaesuParams {
+                model_id: y.model_id,
+                frequency_digits,
+            })
+        })
+        .transpose()?;
     let yaesu_legacy = doc.yaesu_legacy.as_ref().map(|y| YaesuLegacyParams {
         stop_bits: y.stop_bits,
     });
@@ -680,8 +696,11 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     if description.elecraft.is_some() {
         keys.push("elecraft.model_id".to_string());
     }
-    if description.yaesu.is_some() {
+    if let Some(yaesu) = &description.yaesu {
         keys.push("yaesu.model_id".to_string());
+        if yaesu.frequency_digits != 9 {
+            keys.push("yaesu.frequency_digits".to_string());
+        }
     }
     if description.yaesu_legacy.is_some() {
         keys.push("yaesu_legacy.stop_bits".to_string());
@@ -1015,6 +1034,33 @@ verified = { state = "unverified" }
         assert_eq!(
             classic.description.kenwood.map(|k| k.dialect),
             Some(KenwoodDialect::Classic)
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
+    // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    #[test]
+    fn a_yaesu_frequency_width_is_8_or_9_and_a_non_default_needs_its_fact() {
+        let yaesu = GOOD
+            .replace("family = \"kenwood-ascii\"", "family = \"yaesu-newcat\"")
+            .replace("[kenwood]", "[yaesu]")
+            .replace("key = \"kenwood.model_id\"", "key = \"yaesu.model_id\"");
+        let nine = parse(&yaesu).expect("loads");
+        assert_eq!(nine.description.yaesu.map(|y| y.frequency_digits), Some(9));
+        let eight = yaesu.replace("model_id = 19", "model_id = 19\nfrequency_digits = 8");
+        expect_rejected(
+            &eight,
+            "no provenance fact covers \"yaesu.frequency_digits\"",
+        );
+        let fact = "\n[[facts]]\nkey = \"yaesu.frequency_digits\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let loaded = parse(&format!("{eight}{fact}")).expect("loads");
+        assert_eq!(
+            loaded.description.yaesu.map(|y| y.frequency_digits),
+            Some(8)
+        );
+        expect_rejected(
+            &yaesu.replace("model_id = 19", "model_id = 19\nfrequency_digits = 10"),
+            "yaesu.frequency_digits must be 8 or 9",
         );
     }
 

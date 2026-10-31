@@ -1,0 +1,164 @@
+# Rig description: Elecraft K3 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+#
+# SOURCE: Elecraft "K3S/K3/KX3/KX2 Programmer's Reference", Rev. G5, February 20, 2019,
+#   https://ftp.elecraft.com/KX3/Manuals%20Downloads/K3S&K3&KX3&KX2%20Pgmrs%20Ref,%20G5.pdf
+#   sha256 015b60c1b5f44346247a00375a23174012ce4da66a6a27eaa00c00c20877f95d
+# The manual has no numbered sections; references below give the manual's own command or
+# heading names and the printed page number ("p.").
+#
+# Written for the K3 from the same Programmer's Reference as the KX3 file: the K3 family shares the command set (the KX3 and KX2 accept all K3 commands). The K3 and K3S have no PO command (KX3/KX2 only), so `read-power` is not claimed.
+# EVERYTHING HERE IS UNVERIFIED: written from the manual, never run against a radio (a bench run
+# of the first K3 is what upgrades `verified`). Hamlib source was not read for this file.
+schema = 1
+capabilities = [
+  "read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt",
+  "read-signal", "send-cw", "transceive", "split", "rit-xit", "filter", "levels",
+  "read-swr", "identify",
+]
+
+[rig]
+id = "elecraft-k3"
+name = "Elecraft K3"
+family = "elecraft-ascii"
+
+[elecraft]
+model_id = 17
+
+[levels]
+attenuator_db = [10]
+attenuator_any_up_to_db = 0
+preamp_steps = 1
+
+[timing]
+timeout_ms = 600
+retries = 2
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14060000
+mode = "cw"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+[[modes]]
+mode = "usb"
+code = "2"
+[[modes]]
+mode = "cw"
+code = "3"
+[[modes]]
+mode = "fm"
+code = "4"
+[[modes]]
+mode = "am"
+code = "5"
+[[modes]]
+mode = "data"
+code = "6"
+[[modes]]
+mode = "cw-r"
+code = "7"
+[[modes]]
+mode = "data-r"
+code = "9"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: title page and Command Set Overview p. 2 (KX3 and KX2 accept all K3 commands; some are KX3/KX2 only)", note = "The id and display name are our own labels." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "elecraft.model_id"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: ID (Transceiver Identifier), p. 14: IDnnn; where nnn is 017; the K3, KX3 and KX2 are told apart with K3; and OM;", note = "Not a unique identifier of a KX3." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.timeout_ms"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: Response Time, p. 3: typically under 10 ms, worst case about 100 ms, up to 500 ms for commands that change bands", note = "600 ms is the 500 ms band-change worst case plus margin." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.retries"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/elecraft.rs", note = "Our choice; the manual says nothing about retries." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.inter_command_ms"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/elecraft.rs", note = "Our choice; the manual specifies no minimum gap (Response Time, p. 3 warns only that fast polling during transmit should be tested)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Elecraft K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (Feb. 20, 2019), file pgmrs_ref_g5.pdf, sha256 015b60c1b5f44346247a00375a23174012ce4da66a6a27eaa00c00c20877f95d: RA p. 22 (RAnn; for the KX3 nn 00 off, 01 on, -10 dB), PA p. 22 (PAn; n 0 off, 1 on; 2 is the K3's KXV3B module)", note = "Main receiver only; the sub-receiver forms (RA$, PA$) are not used." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: Command Format p. 3 and FA and FB p. 11, example FA00014060000;", note = "Only the starting state of a virtual rig; says nothing about the radio. Mode cw is our choice." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: TX (Transmit Mode) p. 28 and RX (Receive Mode) p. 23", note = "Transmit-capable; the rig actor's transmit gate applies. TX is ignored by the radio in direct data modes (FSK-D, PSK-D)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.send-cw"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: KY (CW or CW-to-DATA Keying from Text) p. 15: KY*[text]; 0 to 24 characters", note = "Transmit-capable; the engine refuses text with ; < > or control characters." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: Meta-commands: AI p. 4 and AI p. 7; the engine sends AI2; (AI0; to turn off)", note = "AI1 (an IF answer on frequency and mode events) is also decoded if the radio is set to it." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-ptt"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: TQ (Transmit Query) p. 27; TQ1 also during TX TEST and pre-armed CW transmit" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-signal"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: SM (S-meter Read) p. 23, Basic format 0000-0015 (S9 = 6)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-swr"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: SW (SWR) p. 24, SWnnn; tenths of a unit, 010-999" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.split"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: FT (TX VFO Assignment and optional SPLIT Enable) and FR (SPLIT Cancel) p. 11; split is entered with FT1; and left with FR0;" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.rit-xit"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: RT p. 23, XT p. 28, RO (RIT/XIT Offset, Absolute) p. 23, range -9999 to +9999 Hz under computer control" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.filter"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: BW (Filter Bandwidth) p. 8, BWxxxx; in 10 Hz units; BW is used instead of the legacy FW", note = "May be quantized or range limited by the radio's mode." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.levels"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: AG p. 7 (000-255), RG p. 23 (000-250), MG and ML p. 16 (000-060), KS p. 15 (008-050), PC p. 22 (KX3: 000-012 or 000-015 without a KXPA100, 000-110 with one)", note = "The engine accepts PC up to 110; the radio decides what it accepts." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.identify"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: ID p. 14 and RV (Firmware Revisions) p. 23, RVM for the MCU" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: FA and FB p. 11, MD p. 16, command formats on p. 3" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: MD (Operating Mode) p. 16: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA, 7 CW-REV, 9 DATA-REV", note = "FM does not apply to the KX2." }
+verified = { state = "unverified" }

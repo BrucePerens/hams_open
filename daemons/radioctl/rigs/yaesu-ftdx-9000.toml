@@ -1,0 +1,106 @@
+# Rig description: Yaesu FTDX-9000 (newcat ASCII, schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Written from Yaesu's published Yaesu 'FT DX 9000 Series CAT Operation Reference' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
+# Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
+# Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
+# Gaps and open questions: The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255). Details: crates/radioctl-protocols/src/yaesu.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "identify"]
+
+[rig]
+id = "yaesu-ftdx-9000"
+name = "Yaesu FTDX-9000"
+family = "yaesu-newcat"
+
+[yaesu]
+model_id = 101
+frequency_digits = 8
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "data-r"
+code = "8"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[modes]]
+mode = "data"
+code = "C"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the guide and in Hamlib 4.6.2", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 1030 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.model_id"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: ID, PDF p. 11; The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255).", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.frequency_digits"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: FA, PDF p. 11 (FA example with 8 digits), IF, PDF p. 12 (P2 is eight digits); Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_get_info, which accepts an IF answer of 27 characters as an 8-digit model", note = "Pinned question for the oracle test: whether Hamlib sends the same width." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 1030 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 2000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: ID p. 11, FA p. 11, FB p. 11, IF p. 12, MD p. 13, TX p. 18, SM p. 18, AI p. 5, RT p. 17, XT p. 19, RC p. 16, RD p. 16", note = "The guide's command pages. The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: TX, PDF p. 18 (TX1 is CAT TX on, TX0 off)", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: MD, PDF p. 13: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK (RTTY-LSB), 7 CW-R, 8 PKT-L, 9 FSK-R (RTTY-USB), A PKT-FM, B FM-N, C PKT-U", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 8 (PKT-L) is data-r and C (PKT-U) is data; A and B are not described." }
+verified = { state = "unverified" }

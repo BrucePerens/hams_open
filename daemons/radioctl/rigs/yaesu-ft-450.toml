@@ -1,0 +1,106 @@
+# Rig description: Yaesu FT-450 (newcat ASCII, schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Written from Hamlib 4.6.2 only (rigs/yaesu/ft450.c, newcat.c, `rigctl -m 1027 --dump-caps`), read for facts only: no vendor guide for this model was used.
+# Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
+# Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
+# Gaps and open questions: Hamlib's FT-450 driver is the FT-450D driver with the ID 0241; the FT-450D guide was not used for this older radio, so every fact here is Hamlib's. No split, XIT, read-power or levels (same reasons as the FT-450D). Details: crates/radioctl-protocols/src/yaesu.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "identify"]
+
+[rig]
+id = "yaesu-ft-450"
+name = "Yaesu FT-450"
+family = "yaesu-newcat"
+
+[yaesu]
+model_id = 241
+frequency_digits = 8
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "data-r"
+code = "8"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[modes]]
+mode = "data"
+code = "C"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the guide and in Hamlib 4.6.2", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 1027 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c, the NC_RIGID table (241 for this model)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.frequency_digits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_get_info (IF answer of 27 characters, width_frequency 8) and rigs/yaesu/ft450.c", note = "The FT-450 shares the FT-450D's 8-digit frequency field per Hamlib." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 1027 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 2000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft450.c (rig_caps), rigs/yaesu/newcat.c (FA, FB, IF, MD, TX, SM, AI)", note = "Declared from the FT-450D's capabilities as Hamlib implements them in the shared newcat driver." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_set_ptt (TX1; and TX0;)", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/newcat.c newcat_set_mode / newcat_get_mode (MD0 and the mode letters) and `rigctl -m 1027 --dump-caps`", note = "Mapping to radioctl modes is ours; the letters are those of the FT-991A convention." }
+verified = { state = "unverified" }

@@ -6,12 +6,12 @@ verified, and make a best effort to make them work out of the box.
 
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
-Today 41 of 313 models have a description (46 files, because the four FlexRadio 6000-series files share Hamlib's one
+Today 56 of 313 models have a description (61 files, because the four FlexRadio 6000-series files share Hamlib's one
 "6xxx" model and the two ANAN files have no Hamlib model), and none is hardware-verified.
 
 | Tier | Work | Models | Described | Left |
 |---|---|---:|---:|---:|
-| A | data only, on an existing engine | 135 | 37 | 98 |
+| A | data only, on an existing engine | 135 | 52 | 83 |
 | B | variants of an existing engine | 41 | 4 | 37 |
 | C | a new engine per family | 83 | 0 | 83 |
 | D | odd devices | 54 | 0 | 54 |
@@ -46,7 +46,7 @@ capabilities, plus an engine fix when a model differs.
   provenance. Icom and Xiegu documents forbid reuse: use Hamlib facts and `--dump-caps` and say so, as the shipped files do.
 - Order inside the tier: models with many users first (Icom IC-7000/7100/7200/746/756 series, Kenwood TS-480/570/990/50,
   Yaesu FT-710/891/950/2000/FTDX-3000/5000, Elecraft K3/K3S/KX2/K4), then the rest by family, one pull request per family.
-- 37 are done (the 18 earlier ones and 19 Icom CI-V models, see below). Done means a description exists, not that it is verified.
+- 52 are done (the 18 earlier ones, 19 Icom CI-V models and 15 Yaesu newcat and Elecraft models, see below). Done means a description exists, not that it is verified.
 - Flex: the SmartSDR "slice A to H" models are the same network engine; one file covers them with the slice letter as a parameter.
 
 ### Icom CI-V: what is done and what is left (79 models in Hamlib's `icom_civ` family)
@@ -68,6 +68,22 @@ Left (51), with the reason each is not yet done:
 
 The Main/Sub radios (IC-7600, 7800, 7850/7851, 7760; the IC-7610 and IC-9700 before them) have no model of command `07 C2`/`D0`/`D1`/`D2`
 in the engine: the oracle records that as divergences. Fixing that is an engine task, to be done with a transcript from a real radio.
+
+### Yaesu newcat and Elecraft: what is done and what is left
+
+Done (15, batch of 2026-10-31, from Yaesu's and Elecraft's public guides with sha256 per fact, Hamlib 4.6.2 as cross-check): Yaesu FT-450D, FT-450 (Hamlib facts only), FT-950, FT-2000, FTDX-1200, FTDX-3000, FTDX-5000, FTDX-9000, FT-891, FT-710, FTDX-101MP; Elecraft K3, K3S, KX2, K4. Engine change: `yaesu.frequency_digits` (8 for the older models). Source terms: none of the Yaesu or Elecraft documents forbids reuse of its facts; nothing was copied.
+
+Left, with the reason:
+
+| Model (Hamlib id) | What is needed |
+|---|---|
+| Yaesu FTDX-9000 Old (1050) | Hamlib's separate model for older firmware; its ID is not in the FTDX9000 guide. Needs a volunteer's `ID;` answer |
+| Elecraft K2 (2021) | the K2 answers a shorter `IF`/`MD` set (K2 Owner's Manual appendix); needs a K2 dialect in `elecraft.rs` |
+| Elecraft XG3 (2038) | a signal source, not a transceiver: no frequency/mode commands of the K3 family; needs its own engine or a note as "not a rig" |
+| Levels on the FT-450D, FT-950, FT-2000, FTDX-5000, FTDX-9000 (MG and PC 0-255) and FT-891 (RG 0-30) | per-model level ranges in the Yaesu engine (the table is the FT-991A's) |
+| Split on the FT-891 (`ST`), FT-710 and the dual-receiver Yaesus (`FT` selects a band) | `ST` and band-transmitter forms in the Yaesu engine |
+| XIT/RIT on the FT-450, FT-891, FT-710 (`CF`, no `RT`/`XT`) | the `CF` clarifier command in the Yaesu engine |
+| K4 levels, RIT/XIT, signal and split | the K4 forms of AG, RG, KS, MG, PC, RA, PA, RT/XT/RU/RD and SM differ from the K3 ones the Elecraft engine sends |
 
 ## Tier B: variants of an existing engine (41 models)
 

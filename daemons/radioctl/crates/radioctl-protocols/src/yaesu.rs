@@ -20,6 +20,10 @@
 //!   c1f65e35fc406fedea6cd75aaa710831f1be2b5058b6e23befa8d7e22039d88c: `ID` 0681,
 //!   `FT`, `AG`/`RG`/`MD` with a MAIN/SUB first parameter.
 //!
+//! The 8-digit models (FT-450, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000, FTDX9000) are
+//! selected by `yaesu.frequency_digits = 8` in the description: `FA`, `FB` and P2 of `IF` have 8
+//! digits and the `IF` answer is 27 characters with `;` (their guides, cited in each file).
+//!
 //! The page numbers are in each description fact. The composite `IF;` answer is 28 characters:
 //! P1 3 characters (memory channel, or letters on the FTDX10), P2 the 9-digit VFO-A frequency,
 //! P3 the clarifier direction and 4-digit offset, P4 RX clarifier, P5 TX clarifier, P6 mode,
@@ -41,8 +45,6 @@ use radioctl_core::units::{Hz, Level, Vfo};
 use crate::attenuation;
 use crate::kenwood::{parse_digits, Token, Tokenizer};
 
-/// Largest frequency the 9-digit field holds.
-const MAX_HZ: u64 = 999_999_999;
 /// Largest clarifier offset, in hertz.
 const MAX_OFFSET_HZ: u16 = 9_999;
 
@@ -137,6 +139,15 @@ impl YaesuEngine {
         })
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_digits]
+    /// Digits of the frequency fields (`FA`, `FB`, and P2 of `IF`): 9, or 8 on the older models.
+    fn digits(&self) -> usize {
+        self.desc
+            .yaesu
+            .as_ref()
+            .map_or(9, |y| usize::from(y.frequency_digits))
+    }
+
     fn unsupported(what: &str) -> RigError {
         RigError::new(ErrorKind::Unsupported, what.to_string())
     }
@@ -175,10 +186,10 @@ impl YaesuEngine {
                 .unwrap_or_else(|| vec![Inbound::Unrecognised(format!("{text};").into_bytes())]);
         }
         let observation = match (text.get(..2), text.get(2..)) {
-            (Some("FA"), Some(d)) if d.len() == 9 => {
+            (Some("FA"), Some(d)) if d.len() == self.digits() => {
                 parse_digits(d).map(|hz| Observation::Frequency(Vfo::A, Hz(hz)))
             }
-            (Some("FB"), Some(d)) if d.len() == 9 => {
+            (Some("FB"), Some(d)) if d.len() == self.digits() => {
                 parse_digits(d).map(|hz| Observation::Frequency(Vfo::B, Hz(hz)))
             }
             (Some("MD"), Some(rest)) if rest.len() == 2 && rest.starts_with('0') => rest
@@ -219,21 +230,23 @@ impl YaesuEngine {
     }
 
     // [@ANCHOR: radioctl_yaesu_engine_decode_if]
-    /// The observations in an `IF` answer without `IF` and `;`: 25 characters.
+    /// The observations in an `IF` answer without `IF` and `;`: 25 characters with a 9-digit
+    /// frequency, 24 with an 8-digit one.
     fn decode_if(&self, body: &str) -> Option<Vec<Inbound>> {
-        if body.len() != 25 || !body.is_ascii() {
+        let digits = self.digits();
+        if body.len() != digits + 16 || !body.is_ascii() {
             return None;
         }
-        let frequency = parse_digits(body.get(3..12)?)?;
-        let offset = parse_clarifier(body.get(12..17)?)?;
+        let frequency = parse_digits(body.get(3..3 + digits)?)?;
+        let offset = parse_clarifier(body.get(3 + digits..8 + digits)?)?;
         let flag = |at: usize| match body.get(at..at + 1) {
             Some("0") => Some(false),
             Some("1") => Some(true),
             _ => None,
         };
-        let (rit, xit) = (flag(17)?, flag(18)?);
+        let (rit, xit) = (flag(8 + digits)?, flag(9 + digits)?);
         let mode = body
-            .get(19..20)?
+            .get(10 + digits..11 + digits)?
             .bytes()
             .next()
             .and_then(|c| self.desc.code_mode(c))?;
@@ -270,11 +283,14 @@ impl ProtocolEngine for YaesuEngine {
                 Self::command(format!("{name};"), observe(Field::Frequency(*vfo)))
             }
             Op::SetFrequency(vfo, hz) => {
-                if hz.0 > MAX_HZ {
-                    return Err(Self::unsupported("frequency above 9 digits"));
+                let width = self.digits();
+                if hz.0 >= 10u64.pow(u32::try_from(width).unwrap_or(9)) {
+                    return Err(Self::unsupported(
+                        "frequency does not fit the model's frequency field",
+                    ));
                 }
                 let name = if *vfo == Vfo::A { "FA" } else { "FB" };
-                Self::command(format!("{name}{:09};", hz.0), none)
+                Self::command(format!("{name}{:0width$};", hz.0), none)
             }
             Op::GetMode => Self::command("MD0;".into(), observe(Field::Mode)),
             Op::SetMode(mode) => {
@@ -391,6 +407,76 @@ mod tests {
     fn engine_refuses_other_families() {
         let err = YaesuEngine::new(RigDescription::ts2000()).expect_err("must refuse");
         assert_eq!(err.kind, ErrorKind::Unsupported);
+    }
+
+    /// The FT-991A description with the 8-digit frequency field of the FT-950 family.
+    fn eight_digit() -> YaesuEngine {
+        let mut desc = shipped("yaesu-ft-991a");
+        desc.yaesu.as_mut().expect("yaesu block").frequency_digits = 8;
+        YaesuEngine::new(desc).expect("engine")
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_digits]
+    // Tests [@ANCHOR: radioctl_yaesu_engine_encode]
+    // Tests [@ANCHOR: radioctl_yaesu_engine_feed]
+    // Tests [@ANCHOR: radioctl_yaesu_engine_decode]
+    // Tests [@ANCHOR: radioctl_yaesu_engine_decode_if]
+    #[test]
+    fn an_eight_digit_model_writes_reads_and_parses_eight_digit_frequencies() {
+        let mut nine = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
+        let mut e = eight_digit();
+        assert_eq!(nine.digits(), 9);
+        assert_eq!(e.digits(), 8);
+        let set = e
+            .encode(&Op::SetFrequency(Vfo::A, Hz(14_074_000)))
+            .expect("encode");
+        assert_eq!(set.bytes, b"FA14074000;");
+        let set_b = e
+            .encode(&Op::SetFrequency(Vfo::B, Hz(7_030_000)))
+            .expect("encode");
+        assert_eq!(set_b.bytes, b"FB07030000;");
+        assert_eq!(
+            e.encode(&Op::SetFrequency(Vfo::A, Hz(100_000_000)))
+                .expect_err("nine digits do not fit")
+                .kind,
+            ErrorKind::Unsupported
+        );
+        assert!(nine
+            .encode(&Op::SetFrequency(Vfo::A, Hz(100_000_000)))
+            .is_ok());
+        assert_eq!(
+            e.feed(b"FA14074000;", T0),
+            vec![Inbound::Observation(Observation::Frequency(
+                Vfo::A,
+                Hz(14_074_000)
+            ))]
+        );
+        assert!(matches!(
+            e.feed(b"FA014074000;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+        // P1 channel, P2 8-digit frequency, P3 offset, RX CLAR, TX CLAR, mode, VFO, tone, P9, P10.
+        let answer = "IF00114074000+005001200000;";
+        assert_eq!(answer.len(), 28 - 1);
+        assert_eq!(
+            e.feed(answer.as_bytes(), T0),
+            vec![
+                Inbound::Observation(Observation::Frequency(Vfo::A, Hz(14_074_000))),
+                Inbound::Observation(Observation::Mode(Mode::Usb)),
+                Inbound::Observation(Observation::Rit(false)),
+                Inbound::Observation(Observation::Xit(true)),
+                Inbound::Observation(Observation::RitOffset(50)),
+            ]
+        );
+        // The 9-digit answer is the wrong length for an 8-digit model, and the reverse.
+        assert!(matches!(
+            e.feed(b"IF001014074000+005001200000;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+        assert!(matches!(
+            nine.feed(answer.as_bytes(), T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
     }
 
     // Tests [@ANCHOR: radioctl_yaesu_parse_clarifier]
