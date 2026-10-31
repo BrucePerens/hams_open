@@ -23,6 +23,8 @@ pub enum Family {
     ElecraftAscii,
     /// Yaesu "newcat" ASCII commands ended by `;` (FT-991A, FTDX10, FTDX101).
     YaesuNewcat,
+    /// Yaesu legacy five-byte binary CAT blocks (FT-817, FT-857, FT-897).
+    YaesuLegacy,
 }
 
 /// CI-V parameters.
@@ -75,6 +77,13 @@ pub struct YaesuParams {
     pub model_id: u16,
 }
 
+/// Yaesu legacy five-byte CAT parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YaesuLegacyParams {
+    /// Stop bits on the CAT serial line (2 on the FT-817, FT-857 and FT-897).
+    pub stop_bits: u8,
+}
+
 /// Command timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -103,6 +112,8 @@ pub struct RigDescription {
     pub elecraft: Option<ElecraftParams>,
     /// Yaesu newcat parameters, present for [`Family::YaesuNewcat`].
     pub yaesu: Option<YaesuParams>,
+    /// Yaesu legacy parameters, present for [`Family::YaesuLegacy`].
+    pub yaesu_legacy: Option<YaesuLegacyParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// What the rig can do.
@@ -152,6 +163,7 @@ impl RigDescription {
             kenwood: None,
             elecraft: None,
             yaesu: None,
+            yaesu_legacy: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
@@ -197,6 +209,7 @@ impl RigDescription {
             kenwood: Some(KenwoodParams { model_id: 19 }),
             elecraft: None,
             yaesu: None,
+            yaesu_legacy: None,
             scope: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,

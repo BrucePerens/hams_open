@@ -15,6 +15,7 @@ use crate::elecraft::ElecraftEngine;
 use crate::kenwood::KenwoodEngine;
 use crate::virtual_rig::{PanelChange, VirtualRig};
 use crate::yaesu::YaesuEngine;
+use crate::yaesu_legacy::YaesuLegacyEngine;
 
 const NOW: Duration = Duration::from_secs(1);
 
@@ -26,6 +27,7 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         Family::KenwoodAscii => Box::new(KenwoodEngine::new(description.clone())?),
         Family::ElecraftAscii => Box::new(ElecraftEngine::new(description.clone())?),
         Family::YaesuNewcat => Box::new(YaesuEngine::new(description.clone())?),
+        Family::YaesuLegacy => Box::new(YaesuLegacyEngine::new(description.clone())?),
     })
 }
 

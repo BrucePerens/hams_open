@@ -24,7 +24,7 @@ use serde::Deserialize;
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, ScopeParams, Timing,
-    YaesuParams,
+    YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
@@ -122,6 +122,7 @@ struct FileDoc {
     kenwood: Option<KenwoodSection>,
     elecraft: Option<ElecraftSection>,
     yaesu: Option<YaesuSection>,
+    yaesu_legacy: Option<YaesuLegacySection>,
     scope: Option<ScopeSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
@@ -163,6 +164,12 @@ struct ElecraftSection {
 #[serde(deny_unknown_fields)]
 struct YaesuSection {
     model_id: u16,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct YaesuLegacySection {
+    stop_bits: u8,
 }
 
 #[derive(Deserialize)]
@@ -251,13 +258,22 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "kenwood-ascii" => Family::KenwoodAscii,
         "elecraft-ascii" => Family::ElecraftAscii,
         "yaesu-newcat" => Family::YaesuNewcat,
+        "yaesu-legacy" => Family::YaesuLegacy,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
-    match (family, &doc.civ, &doc.kenwood, &doc.elecraft, &doc.yaesu) {
-        (Family::IcomCiv, Some(_), None, None, None)
-        | (Family::KenwoodAscii, None, Some(_), None, None)
-        | (Family::ElecraftAscii, None, None, Some(_), None)
-        | (Family::YaesuNewcat, None, None, None, Some(_)) => {}
+    match (
+        family,
+        &doc.civ,
+        &doc.kenwood,
+        &doc.elecraft,
+        &doc.yaesu,
+        &doc.yaesu_legacy,
+    ) {
+        (Family::IcomCiv, Some(_), None, None, None, None)
+        | (Family::KenwoodAscii, None, Some(_), None, None, None)
+        | (Family::ElecraftAscii, None, None, Some(_), None, None)
+        | (Family::YaesuNewcat, None, None, None, Some(_), None)
+        | (Family::YaesuLegacy, None, None, None, None, Some(_)) => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
     let civ = doc.civ.as_ref().map(|c| CivParams {
@@ -275,6 +291,9 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let scope = build_scope(doc.scope.as_ref(), family)?;
     let yaesu = doc.yaesu.as_ref().map(|y| YaesuParams {
         model_id: y.model_id,
+    });
+    let yaesu_legacy = doc.yaesu_legacy.as_ref().map(|y| YaesuLegacyParams {
+        stop_bits: y.stop_bits,
     });
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
@@ -298,6 +317,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         kenwood,
         elecraft,
         yaesu,
+        yaesu_legacy,
         scope,
         capabilities: CapabilitySet::of(&capabilities),
         mode_codes: build_mode_codes(&doc.modes)?,
@@ -476,6 +496,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.yaesu.is_some() {
         keys.push("yaesu.model_id".to_string());
+    }
+    if description.yaesu_legacy.is_some() {
+        keys.push("yaesu_legacy.stop_bits".to_string());
     }
     keys.extend(
         description

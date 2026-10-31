@@ -332,6 +332,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Level::RfPower => Some((5, 100)),
             Level::MonitorLevel => None,
         },
+        // The legacy five-byte engine has no level commands, so no level has a range.
+        Family::YaesuLegacy => None,
     }
 }
 
