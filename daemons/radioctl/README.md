@@ -1,12 +1,26 @@
 # radioctl
 
 A thread-safe, async-only Rust rig-control library intended to replace Hamlib in the relay, plus a
-`rigctld`-protocol server (`radioctld`). Licence: AGPL-3.0-or-later (Bruce's decision of
-2026-10-30; every Rust file carries an SPDX header and the manifests inherit the licence from the
-workspace). Planning lives in `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`. The programmer's manual is [`docs/manual/README.md`](docs/manual/README.md).
+`rigctld`-protocol server (`radioctld`).
 
-Status: Phase 0/1 foundation (vocabulary, CI-V, Kenwood and Elecraft KX3 engines, virtual rigs, rig actor with queue, cache, polling, events). Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, an optional read-only baud probe that is off unless configured) and TCP transports exist; there is no transmit
-path to real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
+- Licence: AGPL-3.0-or-later (Bruce's decision of 2026-10-30). Every Rust file carries an SPDX header
+  and the manifests inherit the licence from the workspace.
+- Planning: `hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`.
+- Programmer's manual: [`docs/manual/README.md`](docs/manual/README.md).
+- Design decisions: [`docs/DESIGN.md`](docs/DESIGN.md).
+
+## Status
+
+- Phase 0/1 foundation. Nothing here has been used with real hardware; treat every item below as
+  `unverified` unless it says otherwise.
+- Implemented (tests on `main`, no radio):
+  - Vocabulary, sans-IO protocol engines and virtual rigs.
+  - Rig actor with queue, cache, polling, events and the transmit gate.
+  - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
+  - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
+- Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect), Elecraft KX3, Yaesu newcat and legacy five-byte, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V).
+- Rig descriptions: 27 files in `rigs/` (list below). All facts are `unverified`; no description is `hardware-verified`.
+- Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
 
@@ -14,88 +28,192 @@ path to real hardware. Anything that can transmit must fail closed behind an exp
 daemons/radioctl/
   Cargo.toml              workspace (resolver 2), shared lints: no unsafe, no unwrap/expect/panic
   rust-toolchain.toml     pinned toolchain
-  crates/radioctl-core/       typed values, capability model, errors, rig actor (PR 3 on)
-  crates/radioctl-protocols/  sans-IO protocol engines, one per family (PR 3 on)
+  radioctld.example.toml  annotated example configuration
+  crates/radioctl-core/       typed values, capability model, errors, rig actor, network links, rig-file loader
+  crates/radioctl-protocols/  sans-IO protocol engines (one per family), virtual rigs, conformance replay, hpsdr bridge
   crates/radioctl-splitter/   virtual IC-7300 CI-V / TS-2000 CAT endpoints (pty, TCP) in front of one rig actor
-  crates/radioctld/           rigctld text-protocol server (library + binary `radioctld`)
-  crates/radioctl-station/    station control: switches, power, interlocks, radio manager, Home Assistant, rotators, amplifier channels
-  crates/radioctl-capi/       C ABI sketch (cdylib, staticlib, cbindgen header include/radioctl.h)
+  crates/radioctld/           rigctld text-protocol server (library + binary `radioctld`) and the examples
+  crates/radioctl-station/    station control: switches, power, interlocks, radio manager, Home Assistant, rotators, amplifier/tuner channels (own README)
+  crates/radioctl-capi/       C ABI sketch (cdylib, staticlib, cbindgen header include/radioctl.h; own README)
+  rigs/                   rig description files (*.toml) and rigs/transcripts/
   docs/DESIGN.md          design note (ADR style)
-  docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md); its code is checked by crates/radioctld/tests/manual.rs, and its examples are crates/radioctld/examples/
+  docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md)
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
   data/hamlib-<version>/  generated capability_matrix.json and HAMLIB_DIFFERENCES.md
 ```
 
-Layout changes from the proposal (record every change here):
+- The manual's code blocks are checked by `crates/radioctld/tests/manual.rs`.
+- The manual's runnable examples are in `crates/radioctld/examples/` (see "Examples" below).
 
-- The crates are used as named. Dependency direction: `radioctl-protocols` depends on `radioctl-core`
-  (which holds the vocabulary: `Hz`, `Mode`, `Vfo`, `Op`, `Observation`, `Capability`, `RigDescription`,
-  `RigError`, and the `ProtocolEngine` trait); `radioctld` depends on both. The actor in `radioctl-core`
-  is generic over `ProtocolEngine`, so core never depends on the protocols crate.
-- `RigDescription` is a Rust struct; the two built-in descriptions (IC-7300 style CI-V, TS-2000
-  style Kenwood) are written in code from our own simulator and bridges and are unverified. The TOML
-  format with provenance and `verified` fields (`rigs/*.toml`, below) deserialises into the same struct.
-- Virtual rigs live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines; the optional
-  `io` module (cargo feature `tokio-io`, default on) runs one behind an in-memory duplex stream with a
-  reply delay and a control handle. `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
-- `radioctl-splitter` (new crate, so the library crates stay free of pty code) depends on core and protocols; `radioctld` uses its PTT arbiter (`PttOwner`), so the two share one set of ownership semantics.
-- `radioctl-core` has the cargo feature `owned-runtime` (off by default): the one place the library builds a
-  tokio runtime of its own, for programs that are not tokio programs (`radioctl-capi` builds its own runtime instead). `radioctld` does not
-  use it: the `radioctld` binary builds the one multi-thread runtime of its process and passes its `Handle`
-  to the library, which creates none.
-- No `deny.toml`: no other Rust crate in hams_open has one, so this workspace follows suit. Add one
-  when the repository gets a shared policy.
+### Layout changes from the proposal
+
+Record every change here.
+
+- **Crate names and dependency direction**
+  - The crates are used as named.
+  - `radioctl-protocols` depends on `radioctl-core`.
+  - `radioctl-core` holds the vocabulary: `Hz`, `Mode`, `Vfo`, `Op`, `Observation`, `Capability`, `RigDescription`, `RigError` and the `ProtocolEngine` trait.
+  - `radioctld` depends on both.
+  - The actor in `radioctl-core` is generic over `ProtocolEngine`, so core never depends on the protocols crate.
+- **`RigDescription`**
+  - It is a Rust struct.
+  - The two built-in descriptions (IC-7300 style CI-V, TS-2000 style Kenwood) are written in code from our own simulator and bridges and are unverified.
+  - The TOML format (`rigs/*.toml`, below) deserialises into the same struct.
+- **Virtual rigs**
+  - They live in `radioctl-protocols::virtual_rig` and are sans-IO like the engines.
+  - The optional `io` module (cargo feature `tokio-io`, default on) runs one behind an in-memory duplex stream with a reply delay and a control handle.
+  - `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
+- **`radioctl-splitter`**
+  - It is a separate crate so the library crates stay free of pty code.
+  - It depends on core and protocols.
+  - `radioctld` uses its PTT arbiter (`PttOwner`), so the two share one set of ownership semantics.
+- **`radioctl-station` and `radioctl-capi`**
+  - Both are workspace crates; the station layer is a radioctl module (Bruce, 2026-10-30), not a sibling crate.
+  - `radioctld` serves rotators through the station crate's engines.
+- **Cargo feature `owned-runtime`** (`radioctl-core`, off by default)
+  - It is the one place the library builds a tokio runtime of its own, for programs that are not tokio programs.
+  - `radioctl-capi` enables it by default for C callers.
+  - `radioctld` does not use it: the binary builds the one multi-thread runtime of its process and passes its `Handle` to the library, which creates none.
+- **Dependency policy**
+  - This workspace has no `deny.toml`.
+  - Only `daemons/relay_broker/deny.toml` exists in the repository; add one here when the repository gets a shared policy.
 
 ## Build and test
 
-```
-CARGO_TARGET_DIR=$HOME/.cache/hams-cargo-target-radioctl nice -n 10 cargo fmt --check
-CARGO_TARGET_DIR=... nice -n 10 cargo clippy --all-targets -- -D warnings
-CARGO_TARGET_DIR=... nice -n 10 cargo test
-```
-
-Differential tests against Hamlib's `rigctld` (needs the binary, or `RIGCTLD=/path`; they fail
-loudly without it, so they sit behind a feature):
+Run from `daemons/radioctl`, with a target directory of your own that you delete when the job is done. Never use a per-worktree `target/` (AGENTS.md).
 
 ```
-CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctl-protocols --features hamlib-oracle --test rigctld_oracle -- --nocapture
+export CARGO_TARGET_DIR=$HOME/.cache/hams-cargo-target-radioctl
+nice -n 10 cargo fmt --check
+nice -n 10 cargo clippy --all-targets --all-features -- -D warnings
+nice -n 10 cargo test --all-features --no-fail-fast
 ```
 
-Each rig's virtual twin is driven twice, once through `rigctld` (started on a pty whose master is the
-virtual rig) and once through radioctl's engine, and the readings and final states are compared;
-the bytes Hamlib sent are printed. First results (Hamlib 4.6.2): KX3 and IC-7300 agree on frequency,
-mode, PTT read, RIT offset and keyer speed; the TS-2000 differs because Hamlib's backend reads
-the frequency from `IF;`, which the virtual TS-2000 refuses (layout unverified), and that known gap
-is pinned by its own test. The oracle also found and fixed two virtual-rig errors (IC-7300 `26 00`
-lacked the DATA flag byte; the virtual KX3 lacked `PS`, `K2`/`K3`, `OM`, `IF`, `RV` for other
-modules, which Hamlib's KX3 backend sends at start-up).
+- `--all-features` turns on the `hamlib-oracle` tests. They need Hamlib's `rigctld` and `rigctl` binaries (or `RIGCTLD=/path`, `RIGCTL=/path`) and fail loudly without them.
+- Without the feature the rest runs on a machine with no Hamlib.
+- Toolchain: pinned in `rust-toolchain.toml`.
+- Test layers and what each proves: manual chapter 11 ([`docs/manual/11-testing.md`](docs/manual/11-testing.md)).
 
-Never a per-worktree `target/`; delete the target directory when the job is done (AGENTS.md).
+### Differential tests against Hamlib
+
+```
+nice -n 10 cargo test -p radioctl-protocols --features hamlib-oracle --test rigctld_oracle -- --nocapture
+nice -n 10 cargo test -p radioctld --features hamlib-oracle
+```
+
+- Each rig's virtual twin is driven twice: once through Hamlib's `rigctld` (started on a pty whose master is the virtual rig) and once through radioctl's engine.
+- The readings and final states are compared, and the bytes Hamlib sent are printed.
+- The harness decides that `rigctld` is ready from the kernel's tables (`/proc/net/tcp`, `/proc/<pid>/fd`), not by connecting, and turns Hamlib's cache off so every answer is read from the radio. It retries when `rigctld` lost the port race and reaps the processes it started.
+- `radioctld`'s own oracle runs Hamlib's `rigctl` client against a virtual KX3, IC-7300 and TS-590SG, and `rotctl -m 2` against the virtual rotator.
+- First results (Hamlib 4.6.2):
+  - KX3 and IC-7300 agree on frequency, mode, PTT read, RIT offset and keyer speed.
+  - The TS-2000 differs because Hamlib's backend reads the frequency from `IF;`, which the virtual TS-2000 refuses (layout unverified). A test pins that known gap.
+  - The oracle found and fixed two virtual-rig errors: IC-7300 `26 00` lacked the DATA flag byte, and the virtual KX3 lacked `PS`, `K2`/`K3`, `OM`, `IF`, `RV`, which Hamlib's KX3 backend sends at start-up.
+- Known disagreements are pinned in `tests/rigctld_oracle.rs`: `known_icom_divergences`, `known_ts890_divergences`.
+
+### Other test layers
+
+- Property tests (`proptest`): `radioctl-protocols/tests/robustness.rs` (Yaesu, Flex, scope, HPSDR engines and `hpsdr` packet parsers; a virtual-rig panic found this way was fixed) and `radioctld/tests/parser_props.rs`.
+- Hand-written transcripts for the FLEX-6400 and ANAN-100 are replayed through a per-family stand-in.
+- Convention test: `crates/radioctl-core/tests/conventions.rs` (see "Conventions").
+- Manual test: `crates/radioctld/tests/manual.rs`.
+- Virtual-rig fault injection: jitter, echo, chunked and truncated replies, dropped replies (manual chapter 11).
 
 ## Rig descriptions and conformance
 
-`rigs/*.toml` are rig description files (schema 1; format documented at the top of
-`crates/radioctl-core/src/rigfile.rs`). Every datum must be explained by a `[[facts]]` entry with a
-`provenance` (manual, capture, owner, repo-code, program-output) and a `verified` state (`unverified`,
-`manual-checked`, `transcript-checked`, `hardware-verified` with radio, firmware, date and what was
-tested); a file with an unexplained or unknown datum does not load. `rigs/transcripts/*.toml` are wire
-transcripts replayed by `radioctl_protocols::conformance::replay` against the engine and the virtual rig
-generated from the same description (tests in `crates/radioctl-protocols/tests/rig_files.rs`).
+### Files and format
 
-The descriptions are `rigs/elecraft-kx3.toml` and four Icom CI-V files (`icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700`). **The Icom files are not written from Icom's CI-V guides**: the download terms of icomjapan.com forbid reuse of the manuals' data and radioctl skips sources whose terms forbid reuse, so their facts were read from Hamlib 4.6.2 source (facts only, provenance kind `hamlib-source`, file and function named per fact) and from `rigctl --dump-caps` output. Their scope support (command 0x27) is in `crates/radioctl-protocols/src/civ_scope.rs`; it is reachable through `Op` (`SetScopeOutput`, `SetScopeAxis`, `SetScopeSpan`, `SetScopeEdges`, `SetScopeReference` and their reads, capability `scope`, on the IC-7300 and IC-7610), and `CivEngine` returns each complete sweep as `Inbound::ScopeFrame`, a typed `radioctl_core::scope::ScopeFrame` that the actor publishes on `RigHandle::scope_frames()` (a stream apart from the status-change events). Disagreements with Hamlib's `rigctld` are pinned in `tests/rigctld_oracle.rs` (`known_icom_divergences`). The Kenwood files (`kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s`) are written from Kenwood's published PC command references (document, page and, for the TS-590 guide, the PDF's sha256 in each fact); the TS-2000 text was read from a third-party transcription of its manual, which the facts say. The `IF;` layout that was unverified is resolved in `kenwood.rs`; the TS-890S (`kenwood-ts-890s`, dialect `ts890`: no `IF`, `OM` for the mode, split through `TB`) has its own engine, `kenwood_ts890.rs`, written from its own guide (January 30, 2019; the LAN session `kenwood_ts890_lan` is wired into `radioctld`'s `tcp` transport as `framing = "ts890-lan"`, tested against a fake radio on loopback only; the bandscope is not implemented); Hamlib's TS-890S backend reads with `IF;`, which the guide does not list, so the oracle records the frequency and mode steps as divergences (`known_ts890_divergences`). The Xiegu files (`xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105`) are deliberately small and use Hamlib facts only: the one public Xiegu CI-V document found (Radioddity's X6200 extract) forbids use without written permission, so it was skipped, as was the X5105 Instruction Manual's copyright-reserved text (it holds no CI-V table anyway); the X5105 and X6200 descriptions are Hamlib facts only, with Hamlib's shared addresses. The Yaesu newcat files (`yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d`) are written from Yaesu's published CAT Operation Reference Manuals (document, PDF page and sha256 per fact; the FTDX101D copy is a mirror of the yaesu.com PDF). They use the new family `yaesu-newcat` with a `[yaesu]` block. Split is claimed for the FT-991A only (the FTDX10 has a separate `ST`, the FTDX101's FA/FB are the MAIN and SUB bands); the legacy five-byte family (`yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, family `yaesu-legacy`, binary transcripts) is written from the operating manuals' CAT chapters, with the PTT-bit level taken from Hamlib (the manual's figure is silent, so that fact is `hamlib-source`); the FT-818ND (`yaesu-ft-818`) is written from its own operating manual and takes the PTT level from it. The KX3 file (written from Elecraft's published Programmer's Reference Rev. G5, cited by command heading and page since the manual has no numbered sections, with the PDF's sha256; its transcript is hand-written from the same manual). **Everything in these files is unverified**, and its
-transcript is hand-written from our own simulator and bridge code (its `origin` says so): it proves that
-the description, the engine and the virtual rig agree with each other, not that they agree with an
-IC-7300. A real capture or an owner's bench run is what upgrades a `verified` field.
+- `rigs/*.toml` are rig description files (schema 1; format documented at the top of `crates/radioctl-core/src/rigfile.rs`).
+- Every datum must be explained by a `[[facts]]` entry with:
+  - a `provenance`: manual, capture, owner, repo-code, program-output (also `hamlib-source`, see below);
+  - a `verified` state: `unverified`, `manual-checked`, `transcript-checked`, `hardware-verified` (with radio, firmware, date and what was tested).
+- A file with an unexplained or unknown datum does not load.
+- Optional `[levels]` block: `levels.attenuator_db` (receive attenuator steps) and `levels.preamp_steps` (preamplifier steps). `Level::Attenuator` takes dB; `Level::Preamp` takes a step number.
+- Optional `[scope]` block (`scope.spans_hz`, icom-civ only).
+- `rigs/transcripts/*.toml` are wire transcripts replayed by `radioctl_protocols::conformance::replay` against the engine and the virtual rig generated from the same description (tests in `crates/radioctl-protocols/tests/rig_files.rs`).
+- Everything in these files is unverified, and the transcripts are hand-written from our own simulator and bridge code (each `origin` says so). They prove that the description, the engine and the virtual rig agree with each other, not that they agree with a radio.
+- A real capture or an owner's bench run is what upgrades a `verified` field.
 
-The FlexRadio files (`flex-6300`, `flex-6400`, `flex-6600`, `flex-6700`, family `flex-smartsdr`, a `[flex]` block) are written from FlexRadio's published SmartSDR API wiki (github.com/flexradio/smartsdr-api-docs, commit and pages named in `crates/radioctl-protocols/src/flex.rs`; its embedded `messages.h` forbids copying and was skipped; no 8000-series description because the wiki does not mention that series). Control plane only: SmartSDR has no get commands, so the engine subscribes (`sub slice|tx|pan all`) and answers reads from the status it has seen. Meters, spectrum and audio are VITA-49 UDP streams (port 4991, `client udpport`, stream ids from the create and `meter list` replies), so the files claim no `read-signal`, `read-power` or `read-swr`. All unverified; the radio was off. `virtual_flex.rs` is a sans-IO virtual radio for them (our reading of the wiki, not a model of the real radio) and `flex_io.rs` serves it on a TCP listener; `tests/flex_actor.rs` drives it through the TCP transport and the rig actor and checks on the wire that no transmit command is sent while the gate is closed.
+### Rig list
+
+| Family | Files in `rigs/` | Source of the facts |
+|---|---|---|
+| Elecraft | `elecraft-kx3` | Elecraft Programmer's Reference Rev. G5, cited by command heading and page, with the PDF's sha256; transcript hand-written from the same manual |
+| Icom CI-V | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700` | Hamlib 4.6.2 source and `rigctl --dump-caps` output (see below) |
+| Kenwood | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s` | Kenwood's published PC command references (document, page and, for the TS-590 guide, the PDF's sha256 per fact) |
+| Xiegu (CI-V) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only, with Hamlib's shared addresses |
+| Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact) |
+| Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
+| FlexRadio | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
+| OpenHPSDR | `anan-10`, `anan-100` | `daemons/hpsdr` and the OpenHPSDR protocols |
+
+### Icom CI-V
+
+- The Icom files are **not written from Icom's CI-V guides**: the download terms of icomjapan.com forbid reuse of the manuals' data, and radioctl skips sources whose terms forbid reuse.
+- Their facts were read from Hamlib 4.6.2 source (facts only, provenance kind `hamlib-source`, file and function named per fact) and from `rigctl --dump-caps` output.
+- Engine features: VFO B, split, RIT/XIT, levels, filter, model id.
+- Raw meters (`Op::GetMeter`: SWR, ALC, COMP, Vd, Id as 0 to 255 deflections, uncalibrated) and data modes (`USB-D`, `LSB-D`; `M PKTUSB` / `PKTLSB` through `radioctld`) are implemented for the IC-7300. The engine takes the mode being set as the mode for the filter table.
+- Scope (command 0x27) is in `crates/radioctl-protocols/src/civ_scope.rs`:
+  - reachable through `Op` (`SetScopeOutput`, `SetScopeAxis`, `SetScopeSpan`, `SetScopeEdges`, `SetScopeReference` and their reads), capability `scope`, on the IC-7300 and IC-7610;
+  - `CivEngine` returns each complete sweep as `Inbound::ScopeFrame`, a typed `radioctl_core::scope::ScopeFrame`;
+  - the actor publishes sweeps on `RigHandle::scope_frames()`, a stream apart from the status-change events.
+- `baud = "auto"` (or `baud_probe = [...]`) in `radioctld` runs a read-only frequency read at several baud rates (off unless configured; manual chapter 5).
+
+### Kenwood
+
+- The TS-2000 text was read from a third-party transcription of its manual, which the facts say.
+- The `IF;` layout that was unverified is resolved in `kenwood.rs`.
+- The **TS-890S** (`kenwood-ts-890s`, dialect `ts890`) has its own engine, `kenwood_ts890.rs`, written from its own guide (January 30, 2019):
+  - no `IF`; `OM` carries the mode; split goes through `TB`;
+  - the LAN session `kenwood_ts890_lan` (`##CN;`, `##ID` login, keep-alive) is wired into `radioctld`'s `tcp` transport as `framing = "ts890-lan"`;
+  - tested against a fake radio on loopback only;
+  - the bandscope is not implemented;
+  - Hamlib's TS-890S backend reads with `IF;`, which the guide does not list, so the oracle records the frequency and mode steps as divergences (`known_ts890_divergences`).
+
+### Xiegu
+
+- The Xiegu files are deliberately small and use Hamlib facts only.
+- The one public Xiegu CI-V document found (Radioddity's X6200 extract) forbids use without written permission, so it was skipped.
+- The X5105 Instruction Manual's copyright-reserved text was skipped too (it holds no CI-V table anyway).
+- The X5105 and X6200 descriptions use Hamlib's shared addresses.
+
+### Yaesu
+
+- Newcat files use the family `yaesu-newcat` with a `[yaesu]` block.
+- The FTDX101D copy of the manual is a mirror of the yaesu.com PDF.
+- Split is claimed for the FT-991A only: the FTDX10 has a separate `ST`, and the FTDX101's FA/FB are the MAIN and SUB bands.
+- Legacy five-byte files (FT-817ND, FT-857D, FT-897D; family `yaesu-legacy`) use binary transcripts. The PTT-bit level is taken from Hamlib, because the manual's figure is silent (that fact is `hamlib-source`).
+- The FT-818ND (`yaesu-ft-818`) is written from its own operating manual and takes the PTT level from it.
+
+### FlexRadio
+
+- Files: `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700`; family `flex-smartsdr`; a `[flex]` block.
+- Source: FlexRadio's published SmartSDR API wiki (github.com/flexradio/smartsdr-api-docs; commit and pages named in `crates/radioctl-protocols/src/flex.rs`).
+- Its embedded `messages.h` forbids copying and was skipped. There is no 8000-series description because the wiki does not mention that series.
+- Control plane only: SmartSDR has no get commands, so the engine subscribes (`sub slice|tx|pan all`) and answers reads from the status it has seen.
+- Meters, spectrum and audio are VITA-49 UDP streams (port 4991, `client udpport`, stream ids from the create and `meter list` replies), so the files claim no `read-signal`, `read-power` or `read-swr`.
+- Test support:
+  - `virtual_flex.rs` is a sans-IO virtual radio (our reading of the wiki, not a model of the real radio);
+  - `flex_io.rs` serves it on a TCP listener;
+  - `tests/flex_actor.rs` drives it through the TCP transport and the rig actor and checks on the wire that no transmit command is sent while the gate is closed.
+- All unverified; the radio was off.
+
+### OpenHPSDR
+
+- Rigs: ANAN-10 and ANAN-100; family `hpsdr-network`; `[hpsdr]` block; files `anan-10` and `anan-100`.
+- Control plane only: a line-protocol engine (`hpsdr_net.rs`) over an in-memory stream to a bridge (`hpsdr_io.rs`) that owns an `hpsdr` crate Protocol 1 or 2 session (`daemons/hpsdr`).
+- Claims: frequency, PTT, forward power, SWR, and the step attenuator as `Level::Attenuator` (0 to 31 dB; also `HpsdrControl::set_attenuator`).
+- No mode (placeholder code only) and no preamplifier.
+- PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate, for a bounded lease at drive zero by default.
+- All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.
 
 ## Tier 1 capability matrix
 
-`tools/hamlib_caps_matrix.py` runs `rigctl -l` and `rigctl -m N --dump-caps` for every model and writes
-`data/hamlib-<version>/capability_matrix.json` and `HAMLIB_DIFFERENCES.md`. The input is program output
-only; no Hamlib source is read or copied. Parsed fields are under `dump`; the protocol family, VFO model,
-scope flag and quirk hints under `derived` are radioctl's own classification rules (from the script, with
-the rule that fired recorded as `family_basis`) and are planning hints, not statements about a wire protocol.
+- `tools/hamlib_caps_matrix.py` runs `rigctl -l` and `rigctl -m N --dump-caps` for every model.
+- It writes `data/hamlib-<version>/capability_matrix.json` and `HAMLIB_DIFFERENCES.md`.
+- The input is program output only; no Hamlib source is read or copied.
+- Parsed fields are under `dump`.
+- The protocol family, VFO model, scope flag and quirk hints under `derived` are radioctl's own classification rules (the rule that fired is recorded as `family_basis`). They are planning hints, not statements about a wire protocol.
 
 ```
 nice -n 10 python3 tools/hamlib_caps_matrix.py --out-dir data/hamlib-4.6.2           # regenerate
@@ -103,104 +221,187 @@ nice -n 10 python3 tools/hamlib_caps_matrix.py --check --out-dir data/hamlib-4.6
 cd tools && python3 -m unittest test_hamlib_caps_matrix                            # tests
 ```
 
-For a new Hamlib release, run it into a new `data/hamlib-<version>/` directory and diff against the old one.
-Hamlib 4.6.2 lists 313 models (the proposal said 314; that count included the header line); 312 dump,
-model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as not dumpable.
+- For a new Hamlib release, run it into a new `data/hamlib-<version>/` directory and diff against the old one.
+- Hamlib 4.6.2 lists 313 models (the proposal said 314; that count included the header line).
+- 312 models dump; model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as not dumpable.
 
 ## radioctld
 
-`radioctld --config FILE [--check]` serves the Hamlib `rigctld` text protocol (as documented in the
-`rigctl`/`rigctld` man pages and as observed from Hamlib 4.6.2's `rigctld`) for any radioctl rig, real
-or virtual, so WSJT-X, fldigi, loggers and `rigctl -m 2` work against it unchanged. One `[[rig]]` per
-radio, each with its own listen address (as with one `rigctld` per radio); see `radioctld.example.toml`.
+`radioctld --config FILE [--check]` serves the Hamlib `rigctld` text protocol (as documented in the `rigctl`/`rigctld` man pages and as observed from Hamlib 4.6.2's `rigctld`) for any radioctl rig, real or virtual. WSJT-X, fldigi, loggers and `rigctl -m 2` work against it unchanged.
 
-- Commands: `f F m M v V t T s S i I x X j J z Z l L u U b` (Morse), `1`/`\dump_caps`, `\dump_state`,
-  `\chk_vfo`, `\get_powerstat`, `\get_info`, `\get_lock_mode`, `\get_vfo_info`, `\get_vfo_list`,
-  `\get_split_freq_mode`, `\set_split_freq_mode`, `q`; the extended `+` response format; every
-  VFO-taking command accepts the VFO argument or not, in either VFO mode (`vfo_mode`). Other Hamlib
-  commands answer `RPRT -4`; unknown words `RPRT -1`; what the rig cannot do `RPRT -11`.
-  The raw `send_cmd` (`w`), power control and Morse stop are never served (`RPRT -11`).
-  Arguments are checked strictly: a missing, surplus or malformed argument is `RPRT -1`, never a wait
-  for another line (Hamlib's `rigctld` waits).
-- Several clients share a rig through its single actor queue; reads come from the actor's cache when
-  newer than `cache_max_age_ms`. No locks around the rig.
-- PTT: one owner at a time, with the splitter's `PttOwner`. The first client to key owns the
-  transmitter; another client's `T 1` or `b` is `RPRT -9` (rejected) until the owner unkeys or
-  disconnects (which unkeys the rig); anyone may unkey. Morse (`b`) claims the transmitter the same
-  way, so a Morse sender that disconnects unkeys the rig too; stopping the daemon always unkeys. Transmit commands are refused with `RPRT -9`
-  before anything is queued while the rig's transmit gate is closed or its link is down. The gate is
-  closed unless the configuration says `transmit = true`; `\dump_state` advertises a transmit range only
-  when it is open. Stopping the daemon unkeys a rig a client was keying.
-- Fail closed in the actor itself, below every client: a key or Morse command that was written
-  to the rig but never answered (a timeout, a lost reply) is followed at once by an unkey, because
-  the rig may be transmitting; when the last handle to a rig is dropped the actor unkeys a rig whose
-  cache says keyed or whose gate was open before it ends; a `LineKeyer` makes its line inactive when
-  it is dropped. Each is written to the transcript as `FAIL CLOSED unkey`.
-- Network exposure: every listener binds loopback by default and the allow list defaults to loopback.
-  Serving beyond it needs `allow_non_loopback_bind = true` together with an explicit `allow` list
-  (checked at load; the allow list is applied on accept, before a byte is read).
-- Bounds: line length (`max_line_bytes`), clients per rig, idle time, time to finish a started line,
-  write time; an over-long line gets `RPRT -1` and the connection is closed.
-- Rotators: a `[[rotator]]` section serves one rotator in Hamlib's `rotctld` text protocol on its own
-  listener (default port 4533 + index), through `radioctl-station`'s rotator engines (`rotctld` and GS-232
-  models from `data/station/rotators.toml`) over a reconnecting TCP link or against the virtual rotator
-  served inside the daemon: `P p S K _ \dump_state q`, the `+` format; a position outside the model's
-  travel is refused (`RPRT -1`) before anything is written; other Hamlib rotator commands `RPRT -4`. The
-  same server, allow list and bounds as a rig (`server::LineService`). Tested against the virtual
-  rotator and Hamlib's `rotctl -m 2` (`--features hamlib-oracle`) only; unverified on a real rotator.
-- TCP rigs are on the reconnecting network link (`net::open_link`): one attempt at start, then
-  reconnection with backoff; the actor marks the link down meanwhile and unkeys the rig when it is
-  back. `framing = "ts890-lan"` puts the Kenwood TS-890S LAN session (`##CN;`, `##ID` login, `ID;`
-  keep-alive every 4 s, silence limit 12 s unless `idle_timeout_ms` says otherwise) around the CAT
-  stream; `lan_account` names the account and `lan_password_secret` a file in `server.secrets_dir`
-  (owner-readable only) holding the password, which is never in the configuration file or a message.
-  A refused login or a missing secret stops the daemon from starting. Tested against a fake radio on
-  loopback only (`tests/ts890_lan.rs`); unverified on a radio. After a reconnect the engine's session
-  state (the TS-890S's `AI2;`, a Flex's subscriptions) is not re-sent: a known gap (manual chapter 13).
+- One `[[rig]]` per radio, each with its own listen address (as with one `rigctld` per radio). See `radioctld.example.toml`.
 - Runtime: the `radioctld` binary owns the one multi-thread tokio runtime; the library takes a `Handle`.
-- Deviations from `rigctld`, all on purpose: PTT is released when its owner disconnects; the VFO
-  selected by `V` is radioctld's own state (radioctl addresses VFOs explicitly); split is VFO A to
-  receive and VFO B to transmit, and `X`/`\set_split_freq_mode` accept only the mode the rig is already
-  in; passbands the rig has no filter control for are the mode's typical width; levels are scaled
-  (0 to 1, or the rig's own integer for keyer speed) by the ranges the engines enforce, repeated in
-  `names::level_range` and pinned to the engines by `tests/levels.rs`; the CI-V keyer speed is not
-  served because that engine does not carry it.
-- Tests: protocol transcripts (`tests/transcripts/`), two or more clients, arbitration and the closed
-  gate (a refused transmit command leaves no byte on the rig's transport), the bounds, property tests
-  of the parser and a whole-pipeline fuzz, and the Hamlib `rigctl` client as an oracle against a virtual
-  KX3, IC-7300 and TS-590SG (`--features hamlib-oracle`, needs `rigctl` or `RIGCTL=/path`):
 
-```
-CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
-```
+### Commands
+
+- Served: `f F m M v V t T s S i I x X j J z Z l L u U b` (`b` is Morse), `1`/`\dump_caps`, `\dump_state`, `\chk_vfo`, `\get_powerstat`, `\get_info`, `\get_lock_mode`, `\get_vfo_info`, `\get_vfo_list`, `\get_split_freq_mode`, `\set_split_freq_mode`, `q`.
+- The extended `+` response format is supported.
+- Every VFO-taking command accepts the VFO argument or not, in either VFO mode (`vfo_mode`).
+- Data modes are `PKTUSB` and `PKTLSB` (`M PKTUSB`).
+- Errors:
+  - other Hamlib commands: `RPRT -4`;
+  - unknown words: `RPRT -1`;
+  - what the rig cannot do: `RPRT -11`.
+- Never served (`RPRT -11`): the raw `send_cmd` (`w`), power control, and Morse stop.
+- Arguments are checked strictly: a missing, surplus or malformed argument is `RPRT -1`, never a wait for another line (Hamlib's `rigctld` waits).
+- Full reference: manual appendix C.
+
+### Sharing and PTT
+
+- Several clients share a rig through its single actor queue. Reads come from the actor's cache when newer than `cache_max_age_ms`. No locks around the rig.
+- PTT has one owner at a time, using the splitter's `PttOwner`:
+  - the first client to key owns the transmitter;
+  - another client's `T 1` or `b` is `RPRT -9` (rejected) until the owner unkeys or disconnects (which unkeys the rig);
+  - anyone may unkey;
+  - Morse (`b`) claims the transmitter the same way, so a Morse sender that disconnects unkeys the rig too;
+  - stopping the daemon always unkeys a rig a client was keying.
+- Transmit gate:
+  - closed unless the configuration says `transmit = true`;
+  - transmit commands are refused with `RPRT -9` before anything is queued while the gate is closed or the link is down;
+  - `\dump_state` advertises a transmit range only when the gate is open.
+- The PTT poll keeps a reserved share of the actor's time under a flooding client.
+- A late reply is matched to the command it answers and never taken for the next one.
+
+### Fail closed
+
+- In the actor itself, below every client:
+  - a key or Morse command that was written to the rig but never answered (a timeout, a lost reply) is followed at once by an unkey, because the rig may be transmitting;
+  - when the last handle to a rig is dropped, the actor unkeys a rig whose cache says keyed or whose gate was open before it ends;
+  - a `LineKeyer` makes its line inactive when it is dropped.
+- Each is written to the transcript as `FAIL CLOSED unkey`.
+- At start-up `radioctld` unkeys every rig, and refuses to serve a rig it cannot unkey.
+
+### Network exposure and bounds
+
+- Every listener binds loopback by default and the allow list defaults to loopback.
+- Serving beyond loopback needs `allow_non_loopback_bind = true` together with an explicit `allow` list. This is checked at load; the allow list is applied on accept, before a byte is read.
+- Bounds: line length (`max_line_bytes`), clients per rig, idle time, time to finish a started line, write time.
+- An over-long line gets `RPRT -1` and the connection is closed.
+- The protocol splitter has a TCP client limit and an idle timeout, and an abort closes the stream.
+
+### Serial and TCP rigs
+
+- Serial: `path` or `usb = { vid, pid, serial }`, `baud` (fixed, or `"auto"` / `baud_probe` for the optional read-only probe).
+- `lines = "managed"` (default) drives DTR/RTS; `lines = "unmanaged"` is for a pty or other port without DTR/RTS.
+- TCP rigs use the reconnecting network link (`net::open_link`):
+  - one attempt at start, then reconnection with backoff;
+  - the actor marks the link down meanwhile and unkeys the rig when it is back.
+- `framing = "ts890-lan"` puts the Kenwood TS-890S LAN session around the CAT stream:
+  - `##CN;` and `##ID` login;
+  - `ID;` keep-alive every 4 s;
+  - silence limit 12 s unless `idle_timeout_ms` says otherwise;
+  - `lan_account` names the account;
+  - `lan_password_secret` names a file in `server.secrets_dir` (owner-readable only) holding the password, which is never in the configuration file or a message;
+  - a refused login or a missing secret stops the daemon from starting.
+- Tested against a fake radio on loopback only (`tests/ts890_lan.rs`); unverified on a radio.
+- Known gap: after a reconnect the engine's session state (the TS-890S's `AI2;`, a Flex's subscriptions) is not re-sent (manual chapter 13).
+
+### Rotators
+
+- A `[[rotator]]` section serves one rotator in Hamlib's `rotctld` text protocol on its own listener (default port 4533 + index).
+- It runs through `radioctl-station`'s rotator engines (`rotctld` and GS-232 models from `data/station/rotators.toml`), over a reconnecting TCP link or against the virtual rotator served inside the daemon.
+- Commands: `P p S K _ \dump_state q`, and the `+` format.
+- A position outside the model's travel is refused (`RPRT -1`) before anything is written. Other Hamlib rotator commands get `RPRT -4`.
+- It uses the same server, allow list and bounds as a rig (`server::LineService`).
+- Tested against the virtual rotator and Hamlib's `rotctl -m 2` (`--features hamlib-oracle`) only; unverified on a real rotator.
+
+### Deviations from `rigctld`
+
+All on purpose.
+
+- PTT is released when its owner disconnects.
+- The VFO selected by `V` is radioctld's own state (radioctl addresses VFOs explicitly).
+- Split is VFO A to receive and VFO B to transmit. `X`/`\set_split_freq_mode` accept only the mode the rig is already in.
+- Passbands for a rig with no filter control are the mode's typical width.
+- Levels are scaled (0 to 1, or the rig's own integer for keyer speed) by the ranges the engines enforce. The ranges are repeated in `names::level_range` and pinned to the engines by `tests/levels.rs`.
+- The CI-V keyer speed is not served because that engine does not carry it.
+
+### Tests
+
+- Protocol transcripts (`tests/transcripts/`).
+- Two or more clients, arbitration, and the closed gate (a refused transmit command leaves no byte on the rig's transport).
+- The bounds.
+- Property tests of the parser and a whole-pipeline fuzz.
+- Hamlib `rigctl` as an oracle against a virtual KX3, IC-7300 and TS-590SG (`--features hamlib-oracle`; needs `rigctl` or `RIGCTL=/path`).
+- `tests/ts890_lan.rs` for the TS-890S LAN session.
+
+## Examples
+
+In `crates/radioctld/examples/`; they find `rigs/` next to the binary.
+
+| Example | What it does |
+|---|---|
+| `quickstart`, `events`, `transmit_gate`, `embed_daemon`, `serial_rig`, `splitter_tcp` | Copied verbatim into manual chapters and built by cargo |
+| `rig_file` | Checks one rig description: loads it, lists what is verified, replays its transcript |
+| `splitter_pty` | The splitter on virtual serial ports, one pty per outside program |
+| `bench_console` | Receive-only console for a first day with a real radio: one command per line on stdin; replies, events and scope frames timestamped and logged. `--unmanaged` for a pty; `--wire FILE` taps every byte in both directions. No key, no Morse, no way to open the gate |
+| `virtual_radio_pty` | A rig description's virtual radio on a pty for rehearsing a bench day (usage `virtual_radio_pty RIG_ID LINK [WIRE_LOG]`); stdin commands stand in for the front panel; sends scope sweeps |
+
+## radioctl-station
+
+Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README.md); manual chapter 14.
+
+- Radio manager with power button, reconnect backoff, event stream and start-up reconcile; lifecycle states Off, PoweringOn, Booting, Ready, Degraded, Unreachable.
+- `ActorLinks` respawns dead rig actors and runs the unkey pass; `min_off_ms` counts from an observed turn-off only.
+- `DescriptionSpawner` wires the radio manager to real transports and engines.
+- Drivers: Modbus coil relay (SainSmart 16ch), Shelly/Tasmota HTTP, Home Assistant (WebSocket state events, REST service calls) with assurance levels, secret store and audit interfaces.
+- Amplifier and tuner channels: operate/standby, tune pulse, fault input.
+- Rotators: `rotctld` and GS-232 engines, bounded command handle, virtual rotator.
+- Keyed-state interlock (decided by Bruce, 2026-10-31; emergency operations are never blocked):
+
+| Command | Rig known keyed | Keyed state unknown | Unkeyed |
+|---|---|---|---|
+| Power-off of any device | allowed | allowed | allowed |
+| Power-on of a radio; power button on, off, reboot (default) | allowed | allowed | allowed |
+| Power-on or reboot of a radio with `shared_supply = true` (opt-in) | refused | refused | allowed |
+| Antenna selection, amplifier power-on and operate, band switching, any other output | refused | refused | allowed |
+| Emergency `all_off` | allowed | allowed | allowed |
+
+- The station never touches the transmit gate; no keyed state and no power command opens it.
+- Unverified on hardware.
+
+## radioctl-capi
+
+- C ABI sketch (own README): explicit runtime ownership, and the transmit gate closed by default.
+- Builds as `cdylib` and `staticlib`; header `include/radioctl.h` by cbindgen.
+- Unverified sketch.
 
 ## Conventions
 
-- Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test carries
-  `// Tests [@ANCHOR: id]`, and this README cites it as `[@ANCHOR: radioctl:id]` below.
-  `crates/radioctl-core/tests/conventions.rs` fails when source, tests and README disagree, and
-  when a Rust file lacks its SPDX header.
+- **Anchors** (ADR 0090)
+  - A function carries `// [@ANCHOR: id]` in source.
+  - Its test carries `// Tests [@ANCHOR: id]`.
+  - This README cites it as `[@ANCHOR: radioctl:id]` below.
+  - `crates/radioctl-core/tests/conventions.rs` fails when source, tests and README disagree, and when a Rust file lacks its SPDX header. A crate may keep its own anchor list in its own README (`radioctl-station` does); the test reads every crate README.
 - Protocol engines are sans-IO (see `docs/DESIGN.md`).
-- Transmit watchdog (baseline 2a.2 to 2a.4): every rig has a maximum transmit duration enforced
-  by its actor, independent of the caller (`RigOptions::max_transmit`, default three minutes,
-  `DEFAULT_MAX_TRANSMIT`; `Duration::MAX` disables it, the owner's decision), counted from the
-  moment the rig is keyed, seen keyed, or sent Morse. `RigOptions::heartbeat` adds a dead-man
-  period the caller must keep alive with `RigHandle::heartbeat()` while transmitting. Either lapse
-  forces an unkey through the fail-closed path and emits an `Alarm` event with `Source::Watchdog`.
-  Unkeys are retried (three attempts, 100 ms backoff); a failed unkey is `Alarm::UnkeyFailed` and
-  `RigStats::unkey_failures`. An unkey is never refused for a full emergency queue: it rides on
-  the unkey already queued (`RigStats::unkeys_coalesced`). radioctld: `max_transmit_s` per rig.
-  An unkey a caller asked for that the rig did not take (timed out, refused, link down) is also
-  `Alarm::UnkeyFailed` and counted, whatever the caller does with the result, so
-  `RigService::disconnect`, `Splitter::cleanup` and `shutdown` never swallow one. An emergency
-  unkey skips inter-command spacing, and a rig file with `timeout_ms = 0` (or above 30 s) or
-  `inter_command_ms` above 2 s is refused at load. Loss of the link is `Alarm::LinkDown`, emitted
-  once per loss. A serial link's status reaches the actor through `RigOptions::link_watch`
-  (`SerialLink::watch()`): the link is marked down while the port reconnects and, when it is back,
-  the actor unkeys the rig before any other command and emits `Alarm::LinkRestored`.
-  A late reply on a rig without `Capability::Transceive` counts in `RigStats::late_replies` and
-  never slows polling.
 - Tests use the same code paths as production; no test-only features.
+
+### Transmit watchdog (baseline 2a.2 to 2a.4)
+
+- Every rig has a maximum transmit duration enforced by its actor, independent of the caller:
+  - `RigOptions::max_transmit`, default three minutes (`DEFAULT_MAX_TRANSMIT`);
+  - `Duration::MAX` disables it (the owner's decision);
+  - counted from the moment the rig is keyed, seen keyed, or sent Morse;
+  - `radioctld`: `max_transmit_s` per rig.
+- `RigOptions::heartbeat` adds a dead-man period the caller must keep alive with `RigHandle::heartbeat()` while transmitting.
+- Either lapse forces an unkey through the fail-closed path and emits an `Alarm` event with `Source::Watchdog`.
+
+### Unkey rules
+
+- Unkeys are retried (three attempts, 100 ms backoff).
+- A failed unkey is `Alarm::UnkeyFailed` and counts in `RigStats::unkey_failures`.
+- An unkey is never refused for a full emergency queue: it rides on the unkey already queued (`RigStats::unkeys_coalesced`).
+- An unkey a caller asked for that the rig did not take (timed out, refused, link down) is also `Alarm::UnkeyFailed` and counted, whatever the caller does with the result. So `RigService::disconnect`, `Splitter::cleanup` and `shutdown` never swallow one.
+- An emergency unkey skips inter-command spacing.
+- `Op::StopCw` stops Morse on every engine that has a stop path; it is an emergency command like `SetPtt(false)`.
+
+### Links and timing
+
+- A rig file with `timeout_ms = 0` (or above 30 s) or `inter_command_ms` above 2 s is refused at load.
+- Loss of the link is `Alarm::LinkDown`, emitted once per loss.
+- A serial link's status reaches the actor through `RigOptions::link_watch` (`SerialLink::watch()`). The link is marked down while the port reconnects. When it is back, the actor unkeys the rig before any other command and emits `Alarm::LinkRestored`.
+- Network links report the same status.
+- A late reply on a rig without `Capability::Transceive` counts in `RigStats::late_replies` and never slows polling.
 
 ## Function reference
 
@@ -811,6 +1012,3 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_is] (radioctl-protocols) True when this rig speaks the TS-890S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_command] (radioctl-protocols) One TS-890S command; the reply bytes (none for a setting, `?;` for a refusal).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_level] (radioctl-protocols) `AGnnn`, `RGnnn`, `MGnnn`, `KSnnn`, `PCnnn`: a read when `arg` is empty, else a set inside the guide's range.
-
-
-OpenHPSDR (ANAN-10, ANAN-100; family `hpsdr-network`, `[hpsdr]` block, files `anan-10` and `anan-100`): control plane only, a line-protocol engine (`hpsdr_net.rs`) over an in-memory stream to a bridge (`hpsdr_io.rs`) that owns an `hpsdr` crate Protocol 1 or 2 session (`daemons/hpsdr`). Claims frequency, PTT, forward power and SWR; no mode (placeholder code only) and the step attenuator as `Level::Attenuator` (0 to 31 dB; also `HpsdrControl::set_attenuator`), no preamplifier. PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate for a bounded lease at drive zero by default. All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.
