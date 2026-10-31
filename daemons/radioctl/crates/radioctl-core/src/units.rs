@@ -44,9 +44,11 @@ pub enum Mode {
     Data,
     /// Data mode, reverse sideband.
     DataR,
+    /// D-STAR digital voice (Icom code 17); the D-STAR models only.
+    DStar,
 }
 
-const MODE_NAMES: [(Mode, &str); 11] = [
+const MODE_NAMES: [(Mode, &str); 12] = [
     (Mode::Lsb, "lsb"),
     (Mode::Usb, "usb"),
     (Mode::Am, "am"),
@@ -58,6 +60,7 @@ const MODE_NAMES: [(Mode, &str); 11] = [
     (Mode::Wfm, "wfm"),
     (Mode::Data, "data"),
     (Mode::DataR, "data-r"),
+    (Mode::DStar, "d-star"),
 ];
 
 impl Mode {

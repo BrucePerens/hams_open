@@ -84,6 +84,15 @@ const ADDRESSES: &[(&str, u8)] = &[
     ("icom-ic-r8500", 0x4A),
     ("icom-ic-r9000", 0x2A),
     ("icom-ic-rx7", 0x78),
+    ("icom-id-5100", 0x8C),
+    ("icom-id-1", 0x01),
+    ("icom-id-31", 0xA0),
+    ("icom-id-4100", 0x9A),
+    ("icom-id-51", 0x86),
+    ("icom-ic-r6", 0x7E),
+    ("icom-ic-r10", 0x52),
+    ("icom-ic-r20", 0x6C),
+    ("icom-ic-r30", 0x9C),
 ];
 
 fn icom_files() -> Vec<RigDescription> {

@@ -9,13 +9,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **111** (116 description files)
+- With a radioctl description: **120** (125 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 111 |
-| engine only | 28 |
+| described | 120 |
+| engine only | 19 |
 | needs variant | 37 |
 | needs engine | 83 |
 | odd device | 54 |
@@ -31,7 +31,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 107 |
+| A | data only on an existing engine | 135 | 116 |
 | B | variants of an existing engine | 41 | 4 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
@@ -41,7 +41,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
 | other_serial | C/D | - | 94 | 0 | 0 |
-| icom_civ | A | civ | 79 | 66 | 0 |
+| icom_civ | A | civ | 79 | 75 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 21 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
@@ -136,7 +136,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2 | Hamlib | NET rigctl | D | unclassified | - | - | unverified | - | odd device |
 | 2046 | Hilberling | PT-8000A | C | other_serial | - | - | unverified | - | needs engine |
 | 25019 | HobbyPCB | RS-HFIQ | D | other_serial | - | - | unverified | - | odd device |
-| 3054 | Icom | IC ID-1 | A | icom_civ | civ | - | unverified | - | engine only |
+| 3054 | Icom | IC ID-1 | A | icom_civ | civ | `icom-id-1` | unverified | - | described |
 | 3002 | Icom | IC-1275 | A | icom_civ | civ | `icom-ic-1275` | unverified | - | described |
 | 3003 | Icom | IC-271 | A | icom_civ | civ | `icom-ic-271` | unverified | - | described |
 | 3072 | Icom | IC-2730 | A | icom_civ | civ | `icom-ic-2730` | unverified | - | described |
@@ -200,10 +200,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 4001 | Icom | IC-PCR1000 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
 | 4003 | Icom | IC-PCR1500 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
 | 4004 | Icom | IC-PCR2500 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
-| 3036 | Icom | IC-R10 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3058 | Icom | IC-R20 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3080 | Icom | IC-R30 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3077 | Icom | IC-R6 | A | icom_civ | civ | - | unverified | - | engine only |
+| 3036 | Icom | IC-R10 | A | icom_civ | civ | `icom-ic-r10` | unverified | - | described |
+| 3058 | Icom | IC-R20 | A | icom_civ | civ | `icom-ic-r20` | unverified | - | described |
+| 3080 | Icom | IC-R30 | A | icom_civ | civ | `icom-ic-r30` | unverified | - | described |
+| 3077 | Icom | IC-R6 | A | icom_civ | civ | `icom-ic-r6` | unverified | - | described |
 | 3040 | Icom | IC-R7000 | A | icom_civ | civ | `icom-ic-r7000` | unverified | - | described |
 | 3037 | Icom | IC-R71 | A | icom_civ | civ | `icom-ic-r71` | unverified | - | described |
 | 3041 | Icom | IC-R7100 | A | icom_civ | civ | `icom-ic-r7100` | unverified | - | described |
@@ -214,10 +214,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3066 | Icom | IC-R9500 | A | icom_civ | civ | `icom-ic-r9500` | manual-checked | - | described |
 | 3069 | Icom | IC-RX7 | A | icom_civ | civ | `icom-ic-rx7` | unverified | - | described |
 | 3042 | Icom | ICR-8500 | A | icom_civ | civ | `icom-ic-r8500` | unverified | - | described |
-| 3083 | Icom | ID-31 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3082 | Icom | ID-4100 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3084 | Icom | ID-51 | A | icom_civ | civ | - | unverified | - | engine only |
-| 3071 | Icom | ID-5100 | A | icom_civ | civ | - | unverified | - | engine only |
+| 3083 | Icom | ID-31 | A | icom_civ | civ | `icom-id-31` | unverified | - | described |
+| 3082 | Icom | ID-4100 | A | icom_civ | civ | `icom-id-4100` | unverified | - | described |
+| 3084 | Icom | ID-51 | A | icom_civ | civ | `icom-id-51` | unverified | - | described |
+| 3071 | Icom | ID-5100 | A | icom_civ | civ | `icom-id-5100` | unverified | - | described |
 | 6001 | JRC | JST-145 | C | other_serial | - | - | unverified | - | needs engine |
 | 6002 | JRC | JST-245 | C | other_serial | - | - | unverified | - | needs engine |
 | 6005 | JRC | NRD-525 | C | other_serial | - | - | unverified | - | needs engine |
