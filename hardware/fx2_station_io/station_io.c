@@ -9,9 +9,11 @@
  */
 #include "core/fx2_core.h"
 #include "core/hams_usb.h"
+#include "core/io_engine.h"
+#include "core/fx2_timer.h"
 
 #define FW_MAJOR 0
-#define FW_MINOR 1
+#define FW_MINOR 2
 #define FW_PATCH 0
 #define HW_ID_GEEETECH_MINI 1    /* board map id: Geeetech "Lcsoft Mini Board" variant */
 #define DRIVABLE_A 0x03          /* PA0, PA1 */
@@ -23,11 +25,12 @@ const __code __at(ADDR_APP_INFO) u8 app_get_info[23] = {
     HAMS_DEVTYPE_STATION_IO & 0xFF, HAMS_DEVTYPE_STATION_IO >> 8, /* 3, 4 sub-ID */
     FW_MAJOR, FW_MINOR, FW_PATCH,           /*  5-7 firmware version */
     HW_ID_GEEETECH_MINI,                    /*  8 hardware / board map id */
-    (u8)((HAMS_CAP_GPIO_CMD | HAMS_CAP_MSOS20 | HAMS_CAP_WEBUSB | HAMS_CAP_SAFE_ON_RESET) & 0xFF),
+    (u8)((HAMS_CAP_GPIO_CMD | HAMS_CAP_MSOS20 | HAMS_CAP_WEBUSB | HAMS_CAP_SAFE_ON_RESET
+          | HAMS_CAP_HW_TIMEOUT | HAMS_CAP_HEARTBEAT) & 0xFF),
     0, 0, 0,                                /*  9-12 capability flags, little endian */
-    HAMS_SAFE_RELEASE_ALL,                  /* 13 safe-state kind */
-    0, 0,                                   /* 14, 15 hardware time-out ms (0 = none) */
-    0, 0,                                   /* 16, 17 heartbeat period ms (0 = none) */
+    HAMS_SAFE_PER_MAP,                      /* 13 safe-state kind */
+    IO_DEFAULT_MAX_ON_MS & 0xFF, IO_DEFAULT_MAX_ON_MS >> 8,       /* 14, 15 default max on-time ms */
+    IO_DEFAULT_HEARTBEAT_MS & 0xFF, IO_DEFAULT_HEARTBEAT_MS >> 8, /* 16, 17 default heartbeat lapse ms */
     0x07,                                   /* 18 ports exposed: bit0 A, bit1 B, bit2 D */
     DRIVABLE_A,                             /* 19 port A pins the firmware may drive */
     1,                                      /* 20 endpoint count */
@@ -42,16 +45,28 @@ const __code __at(ADDR_APP_PRODUCT) u8 app_str_product[70] = {
     'P',0,'I',0,'D',0,')',0
 };
 
+/* Board table: this board exposes all of PA, PB and PD, but only PA0 and PA1 (the two LEDs) may be
+ * outputs, and they are channels 0 and 1. Pin id = port << 4 | bit. */
+const u8 board_chan_pin[IO_NCH] = { 0, 1 };
+
+u8 board_pin_channel(u8 pin)
+{
+    return (pin < IO_NCH) ? pin : IO_NO_CHAN;
+}
+
+static __xdata u8 g_reply[48];
+
 static void release_outputs(void)
 {
-    OEA = 0x00; OEB = 0x00; OED = 0x00;   /* safe state: everything an input (TRM 13.2) */
+    io_release_all(IO_REL_USB_RESET);
 }
 
 void app_init(void)
 {
     IFCONFIG = IFCONFIG_PORTS; SYNCDELAY();   /* B and D are plain I/O, not FIFO pins */
     PORTACFG = 0;                             /* PA7/FLAGD and PA3/WU2 etc: plain I/O */
-    release_outputs();
+    OEA = 0x00; OEB = 0x00; OED = 0x00;       /* everything an input (TRM 13.2) */
+    io_init();
 }
 
 void app_usb_reset(void)
@@ -61,18 +76,53 @@ void app_usb_reset(void)
 
 void app_usb_suspend(void)
 {
-    release_outputs();
+    io_release_all(IO_REL_USB_SUSPEND);
 }
 
 void app_tick(void)
 {
+    io_tick();
 }
 
 u8 app_vendor_request(u8 bm, u8 req, u16 value, u16 index, u16 length)
 {
     u8 st[4];
     (void)length;
-    if (req == HAMS_REQ_GPIO_SET && bm == 0x40) {
+    if (bm == 0x40 && req >= HAMS_REQ_MAP_BEGIN && req <= HAMS_REQ_KEY) {
+        u8 ok = 0;
+        switch (req) {
+        case HAMS_REQ_MAP_BEGIN: ok = io_map_begin(); break;
+        case HAMS_REQ_MAP_PIN: ok = io_map_pin((u8)value, (u8)(value >> 8), (u8)index); break;
+        case HAMS_REQ_MAP_PARAM: ok = io_map_param((u8)value, (u8)(value >> 8), index); break;
+        case HAMS_REQ_MAP_HEARTBEAT: ok = io_map_heartbeat(index); break;
+        case HAMS_REQ_MAP_COMMIT: ok = io_map_commit(); break;
+        case HAMS_REQ_KEY: ok = io_key((u8)value, (u8)index); break;
+        default: break;
+        }
+        if (!ok) {
+            return 0;
+        }
+        core_ep0_ack();
+        return 1;
+    }
+    if (bm == 0xC0 && req == HAMS_REQ_GET_STATUS) {
+        core_ep0_reply(g_reply, io_fill_status(g_reply));
+        return 1;
+    }
+    if (bm == 0xC0 && req == HAMS_REQ_HEARTBEAT) {
+        (void)io_heartbeat(value, (u8)index);
+        core_ep0_reply(g_reply, io_fill_status(g_reply));
+        return 1;
+    }
+    if (bm == 0xC0 && req == HAMS_REQ_GET_EVENTS) {
+        core_ep0_reply(g_reply, io_fill_events(g_reply));
+        return 1;
+    }
+    if (bm == 0xC0 && req == HAMS_REQ_GET_EDGES) {
+        core_ep0_reply(g_reply, io_fill_edges(g_reply));
+        return 1;
+    }
+    if (req == HAMS_REQ_GPIO_SET && bm == 0x40 && io_map_state() != IO_MAP_VALID) {
         u8 oe = (u8)value;
         u8 lvl = (u8)index;
         if ((oe & (u8)~DRIVABLE_A) || (lvl & (u8)~DRIVABLE_A) || (value >> 8) || (index >> 8)) {
