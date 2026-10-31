@@ -131,6 +131,41 @@ records the decisions that shape the code.
     `EventStream::lagged()`. A stream holds the rig only weakly, so it ends (`None`) when the rig
     stops. Per-event semantics (old and new, `Source`, `ActiveTxFrequency`) are unchanged. The
     transmit gate and watchdog are untouched. No per-field filter or `watch` view was added.
+21. **A convenience layer over the same API: preludes, by-name constructors, one-call helpers**
+    (Bruce, 2026-10-31: "the 30-line example is very verbose"). Before: the quick start was 30 lines
+    and a virtual rig took four calls (`rigfile::parse`, `VirtualRig::from_description`,
+    `spawn_virtual_rig`, `spawn_current(Engine::new(..))`), repeated in five examples. The lower
+    API is unchanged and stays the reference; the layer only composes it. Rules: no new crate;
+    no unsafe; no helper opens a transmit gate (the one that touches the gate takes the
+    `TransmitPermit` as an argument, so the decision is visible at the call site); every helper
+    has a cited test (ADR 0090).
+    *Added in `radioctl-core`:*
+    - `radioctl_core::prelude`: the usual vocabulary in one `use`.
+    - `rigfile::rigs_dir()` and `rigfile::load(id_or_path)`: the three-step rig directory rule
+      (`$RADIOCTL_RIGS`, `./rigs`, the checkout) that three examples and a test each copied.
+    - `RigHandle::level`, `set_level`, `meter`: typed like `frequency` and `signal`.
+    - `RigHandle::start_scope` / `stop_scope`: subscribe first, then `SetScopeOutput(true)`; the
+      order is easy to get wrong by hand and loses the first sweep.
+    - `EventStream::next_change(field)`: the "loop until this field changes" every events example
+      wrote. A pull helper on the stream, not a filtered stream and not a callback; decision 20
+      still holds.
+    - `RigHandle::transmit_lease(permit, max)` returning a `TransmitLease` with `key`, `unkey`,
+      `transmit_for`, `remaining`, `release`. The permit is a required argument; the lease refuses a
+      gate that is already open (someone else's decision), a zero length and a missing runtime.
+      A timer task on the caller's runtime ends it at `max`; ending (timer, `release`, `Drop`)
+      closes the gate and sends an unkey on the emergency path, which needs no await, so `Drop`
+      works. It is a bound on the permission, not a second transmit watchdog: `max_transmit` and
+      the heartbeat still apply inside it.
+    *Rejected:*
+    - A `RigOptions` builder or `without_polling()`: struct-update syntax (`RigOptions { max_transmit: .., ..Default::default() }`)
+      is already one expression and "polling off" is written in three places in the code base.
+    - `spawn_subscriber(|event| ..)`: it is the callback decision 20 removed.
+    - A helper that opens the gate "for this one call", a boolean `transmit = true` option, or
+      keying inside `set_frequency`: the gate is opened only by an explicit `TransmitPermit`.
+    - A second transmit watchdog inside the lease, and heartbeats sent for the caller: with a
+      `RigOptions::heartbeat` set, the caller still calls `heartbeat()`.
+    - Typed wrappers for `Op` groups that have one caller (RIT, split offsets, filter width): `execute(Op::..)`
+      is already one call.
 
 ## Consequences
 
