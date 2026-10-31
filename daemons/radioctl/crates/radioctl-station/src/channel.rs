@@ -424,6 +424,8 @@ impl Switchboard {
         })
     }
 
+    // [@ANCHOR: radioctl_station_board_store]
+    /// Records commanded and/or confirmed state, noting when a channel went off.
     fn store(&self, c: &Chan, commanded: Option<Option<Value>>, confirmed: Option<Option<Value>>) {
         let mut s = lock(&c.state);
         if let Some(v) = commanded {
@@ -445,6 +447,7 @@ impl Switchboard {
         });
     }
 
+    // [@ANCHOR: radioctl_station_board_read_value]
     /// Reads a binary channel, or a selector's lines, as one value. `Ok(None)`: ambiguous
     /// (more than one way closed).
     async fn read_value(&self, c: &Chan) -> Result<Option<Value>, StationError> {
@@ -483,6 +486,7 @@ impl Switchboard {
         }
     }
 
+    // [@ANCHOR: radioctl_station_board_verify]
     /// Compares the read-back with `want`, records and reports it.
     async fn verify(&self, c: &Chan, want: Value) -> Result<SetOutcome, StationError> {
         if !c.driver.can_read_back() {
@@ -827,6 +831,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_board_emit]
     // Tests [@ANCHOR: radioctl_station_board_status]
     // Tests [@ANCHOR: radioctl_station_board_set]
+    // Tests [@ANCHOR: radioctl_station_board_store]
+    // Tests [@ANCHOR: radioctl_station_board_read_value]
+    // Tests [@ANCHOR: radioctl_station_board_verify]
     #[tokio::test]
     async fn power_is_commanded_then_confirmed_and_mismatches_alarm() {
         let bank = VirtualBank::new();

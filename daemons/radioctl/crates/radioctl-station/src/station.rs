@@ -203,6 +203,8 @@ impl Station {
         self.board.pulse(id).await
     }
 
+    // [@ANCHOR: radioctl_station_station_check_power_on]
+    /// The dependency refusals: dependencies confirmed on, required antennas selected.
     fn check_power_on(&self, d: &DeviceDef) -> Result<(), StationError> {
         for dep in &d.depends_on {
             if self.device_power(dep)? != Some(Value::On) {
@@ -246,6 +248,8 @@ impl Station {
         self.wait_ready(&d).await
     }
 
+    // [@ANCHOR: radioctl_station_station_power_kind]
+    /// The channel kind that powers a device (an output kind for none).
     fn power_kind(&self, d: &DeviceDef) -> ChannelKind {
         match &d.power {
             PowerSource::Channel { channel } => self.def.channel(channel).map(|c| c.kind.clone()),
@@ -254,6 +258,8 @@ impl Station {
         .unwrap_or(ChannelKind::Output)
     }
 
+    // [@ANCHOR: radioctl_station_station_wait_ready]
+    /// Waits for a device to answer, up to its ready timeout.
     async fn wait_ready(&self, d: &DeviceDef) -> Result<(), StationError> {
         let Some(ready) = self.ready.as_ref().filter(|_| d.ready_timeout_ms > 0) else {
             return Ok(());
@@ -490,6 +496,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_station_def]
     // Tests [@ANCHOR: radioctl_station_station_device_power]
     // Tests [@ANCHOR: radioctl_station_station_power_on]
+    // Tests [@ANCHOR: radioctl_station_station_check_power_on]
+    // Tests [@ANCHOR: radioctl_station_station_power_kind]
+    // Tests [@ANCHOR: radioctl_station_station_wait_ready]
     #[tokio::test(start_paused = true)]
     async fn an_amplifier_needs_the_radio_an_antenna_and_a_quiet_band() {
         let (st, bank, key) = rig(None);
