@@ -15,9 +15,12 @@ pub mod conformance;
 pub mod elecraft;
 pub mod flex;
 pub mod kenwood;
+pub mod virtual_flex;
 pub mod virtual_rig;
 pub mod yaesu;
 pub mod yaesu_legacy;
 
+#[cfg(feature = "tokio-io")]
+pub mod flex_io;
 #[cfg(feature = "tokio-io")]
 pub mod io;

@@ -84,7 +84,7 @@ transcript is hand-written from our own simulator and bridge code (its `origin` 
 the description, the engine and the virtual rig agree with each other, not that they agree with an
 IC-7300. A real capture or an owner's bench run is what upgrades a `verified` field.
 
-The FlexRadio files (`flex-6300`, `flex-6400`, `flex-6600`, `flex-6700`, family `flex-smartsdr`, a `[flex]` block) are written from FlexRadio's published SmartSDR API wiki (github.com/flexradio/smartsdr-api-docs, commit and pages named in `crates/radioctl-protocols/src/flex.rs`; its embedded `messages.h` forbids copying and was skipped; no 8000-series description because the wiki does not mention that series). Control plane only: SmartSDR has no get commands, so the engine subscribes (`sub slice|tx|pan all`) and answers reads from the status it has seen. Meters, spectrum and audio are VITA-49 UDP streams (port 4991, `client udpport`, stream ids from the create and `meter list` replies), so the files claim no `read-signal`, `read-power` or `read-swr`. All unverified; the radio was off.
+The FlexRadio files (`flex-6300`, `flex-6400`, `flex-6600`, `flex-6700`, family `flex-smartsdr`, a `[flex]` block) are written from FlexRadio's published SmartSDR API wiki (github.com/flexradio/smartsdr-api-docs, commit and pages named in `crates/radioctl-protocols/src/flex.rs`; its embedded `messages.h` forbids copying and was skipped; no 8000-series description because the wiki does not mention that series). Control plane only: SmartSDR has no get commands, so the engine subscribes (`sub slice|tx|pan all`) and answers reads from the status it has seen. Meters, spectrum and audio are VITA-49 UDP streams (port 4991, `client udpport`, stream ids from the create and `meter list` replies), so the files claim no `read-signal`, `read-power` or `read-swr`. All unverified; the radio was off. `virtual_flex.rs` is a sans-IO virtual radio for them (our reading of the wiki, not a model of the real radio) and `flex_io.rs` serves it on a TCP listener; `tests/flex_actor.rs` drives it through the TCP transport and the rig actor and checks on the wire that no transmit command is sent while the gate is closed.
 
 ## Tier 1 capability matrix
 
@@ -247,6 +247,13 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_flex_apply_slice] (radioctl-protocols) Applies a slice status line to the slice state and returns the observations for VFO A.
 - [@ANCHOR: radioctl:radioctl_flex_subscription_lines] (radioctl-protocols) The `sub` or `unsub` lines for slice, tx and pan status.
 - [@ANCHOR: radioctl:radioctl_flex_apply_transmit] (radioctl-protocols) Applies a transmit status line (RF power and mic level).
+- [@ANCHOR: radioctl:radioctl_virtual_flex_signed_mhz] (radioctl-protocols) Formats signed hertz as signed megahertz for virtual status lines.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_new] (radioctl-protocols) Builds a virtual FlexRadio from a Flex description.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_command] (radioctl-protocols) Answers one SmartSDR command line (subscriptions, tuning, mode, filter, levels, `xmit`, `cwx`) with one `R` reply and any status.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_feed] (radioctl-protocols) The virtual FlexRadio side of the byte stream: `C<seq>|text` lines in, `R` and `S` lines out.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_front_panel] (radioctl-protocols) A change made at the virtual radio, pushed as status to subscribers.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_serve] (radioctl-protocols) Serves a virtual FlexRadio on a real TCP listener.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_control_state] (radioctl-protocols) A copy of the served virtual FlexRadio's state.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_set_meta] (radioctl-protocols) Stores a `K2n`/`K3n` meta-command value of the virtual Elecraft rig (Basic formats are still used).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.
