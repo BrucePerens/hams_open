@@ -111,7 +111,7 @@ Appendix [C](C-radioctld-command-reference.md) lists every command. In short:
   the `RPRT` line.
 - **Served:** `f F m M v V t T s S i I x X j J z Z l L u U b`, `1` and `\dump_caps`, `\dump_state`,
   `\chk_vfo`, `\get_powerstat`, `\get_info`, `\get_lock_mode`, `\get_vfo_info`, `\get_vfo_list`,
-  `\get_split_freq_mode`, `\set_split_freq_mode`, `q`.
+  `\get_split_freq_mode`, `\set_split_freq_mode`, `\get_active_tx_freq` (radioctld's own), `q`.
 - **Known to Hamlib, not implemented** (`RPRT -4`): memories, channels, scan, CTCSS and DCS, repeater
   shift and offset, antenna, tuning step, parameters, DTMF, `vfo_op`, `reset` and the like. Unknown words
   are `RPRT -1`. What the rig cannot do is `RPRT -11`.
@@ -124,7 +124,7 @@ Appendix [C](C-radioctld-command-reference.md) lists every command. In short:
 
 Every VFO-taking command accepts the VFO argument or not, in either mode. Tokens (case-insensitive):
 `VFOA`, `Main`, `MainA` (VFO A), `VFOB`, `MainB` (VFO B), `currVFO` (the VFO selected by `V`), `RX` (A) and
-`TX` (B if split is on, else A). `VFOC`, `SubA`, `SubB`, `Sub`, `MEM`, `Mem` and `None` name VFOs radioctl
+`TX` (the transmit VFO: B in split on most rigs, else A; what the rig reports where its protocol says). `VFOC`, `SubA`, `SubB`, `Sub`, `MEM`, `Mem` and `None` name VFOs radioctl
 does not have: `RPRT -11`. With `vfo_mode = true`, `\chk_vfo` answers 1. An extended-format header echoes
 the VFO token the client sent, or `currVFO` when `vfo_mode` is true and none was sent
 (`get_freq: VFOA`, `set_freq: VFOA:14074000`); with `vfo_mode = false` and no token it shows none.
@@ -148,6 +148,7 @@ transmits"; `S 1 VFOB` turns it on, and `S` with any other transmit VFO is `RPRT
 | Levels are scaled to 0 to 1 (or the rig's own integer for keyer speed) by the ranges the engines enforce. `names::level_range` holds them, and `tests/levels.rs` pins them to the engines. | Hamlib's levels are floats; the engines work in the radio's units. |
 | Levels served: `AF`, `RF`, `RFPOWER`, `MICGAIN`, `KEYSPD`, `MONITOR_GAIN`, `RAWSTR`, `SWR`, each only where the description has the capability and the engine has a range for it. The CI-V keyer speed is not served; the legacy Yaesu family has no levels; the Flex levels are percentages. | Only what an engine carries. |
 | Functions served: `RIT` and `XIT`. Others Hamlib knows are `RPRT -11`. | Same. |
+| `\get_active_tx_freq` exists. `f` keeps Hamlib's meaning (the frequency of the VFO asked for). | Issue 138: a follower needs the transmit frequency without guessing which VFO to ask for (chapter [4](04-api.md)). |
 | One listener per rig. | As one `rigctld` per radio. |
 
 The protocol subset was compared with Hamlib 4.6.2 only. **Open item:** `-vvv` output of `rigctl` shows

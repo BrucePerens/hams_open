@@ -70,6 +70,9 @@ answer: a value, or a typed `RigError`. The actor never hangs a caller. Behaviou
   unkeyed by command.
 - **Saturating deadlines.** A timeout too large for the clock (`Duration::MAX`) becomes the farthest
   representable instant instead of a panic.
+- **Derived transmit frequency.** After every observation the actor recomputes `active_tx_frequency` from
+  the cached split, VFO and frequency values and adds it to the event when it changed (chapter
+  [4](04-api.md)).
 - **Cache.** A successful set updates the cache at once, including Kenwood-style sets that have no
   reply; polling reconciles it with the radio later.
 - **Link loss.** If the transport read or write fails or ends, the actor marks the link down and

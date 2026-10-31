@@ -38,8 +38,10 @@ Limits, all from the code:
 - The TS-2000 personality answers `IF;` with `?;`, although the Kenwood engine can decode `IF`. Software
   that needs transmit state from `IF` will not work against this endpoint.
 - S-meter values pass through in the real radio's units, not the emulated radio's scale.
-- It does not report the transmit frequency while keyed in split mode (the proposal's issue-138
-  requirement for the personalities; chapter [4](04-api.md) says what exists).
+- While the rig is keyed **in split**, a plain read of the current frequency (CI-V `03`, TS-2000 `FA;`)
+  answers with the transmit frequency, as OmniRig-style clients assume (Hamlib issue 138, chapter
+  [4](04-api.md)). Reads that name the other VFO are unchanged. `SplitterConfig::report_tx_frequency_while_keyed`
+  turns this off (it is on by default).
 
 ## Echo and unsolicited traffic
 

@@ -11,7 +11,7 @@ Do not build on a planned item as if it existed.
 | Item | Source | Status in code |
 |---|---|---|
 | **Safety:** per-rig dead-man timer; forced unkey for a crashed or hung process; carrier drop after link loss; maximum transmit duration; ownership modes (shared receive, exclusive transceive, transmit-locked); a mismatch event between intended and actual transmit state | RC section 8; roadmap 2a items 2 to 4 | the actor unkeys after an unanswered key and when its last handle is dropped; the rest none |
-| **`active_tx_frequency`** and a first-class transmit frequency and transmit VFO, per-engine transmit-VFO reads, the splitter personalities reporting the transmit frequency while keyed in split, the amplifier-follower test | RC section 14 (Hamlib issue 138) | none; only the VFO-explicit API and `radioctld`'s `TX` and split-frequency handling |
+| **Transmit frequency for the remaining radios:** a transmit-VFO report for Yaesu legacy, a model for band-wise split (FTDX10, FTDX101D), the follower test on a real radio | RC section 14 (Hamlib issue 138) | implemented for Kenwood, Elecraft, Yaesu newcat and CI-V on virtual radios (chapter [4](04-api.md)); Yaesu legacy has a `TODO` |
 | **Scope through the API:** a scope `Op`, scope events, scope settings, non-Icom scopes | RC, roadmap track E | CI-V scope decoder exists, unreachable from `RigHandle` |
 | **Capability traits** per capability, typed methods for every operation, memories, functions (NB, NR, preamp, attenuator), tuner and amplifier, power on and off | RC section 4 | one `Op` enum and `Capability` set |
 | **Raw-command escape hatch** behind its own named capability | RC section 4 | none; `radioctld` refuses `send_cmd` |
@@ -45,7 +45,7 @@ manual.
 1. **Link state is invisible above the serial layer.** During a serial reconnect `RigHandle::link_up()` stays
    true and `radioctld` drops the `SerialLink`, so a pulled cable looks like timeouts; `\get_powerstat`
    keeps answering 1. A dead TCP link is permanent for that actor.
-2. **Polling reads only VFO A, mode, PTT and the two meters.** A front-panel change of VFO B, split, RIT or
+2. **Polling reads VFO A, VFO B, split, mode, PTT and the two meters.** A front-panel change of RIT, XIT or
    a level is not noticed unless the radio reports it.
 3. **CI-V transceive cannot be switched on by the engine** (`SetTransceive` is `Unsupported`; it is a menu
    item). The Icom descriptions nevertheless list the capability.

@@ -38,7 +38,8 @@ frame is skipped.
   refused: on these radios it is a menu item reached through `1A 05` with model-specific numbers, found
   but with no field in the description format yet), data-mode and filter-number selection (`26`), the IC-9700's XIT, and the
   Main/Sub family of command `07` on the IC-7610 and IC-9700.
-- **VFO labels:** `Vfo::A` is the *selected* VFO and `Vfo::B` the *unselected* one. The engine does not
+- **VFO labels:** `Vfo::A` is the *selected* VFO and `Vfo::B` the *unselected* one (the transmit VFO in
+  split). The engine does not
   track `07 00` and `07 01`, so after the radio's selection changes the labels swap. Split on the
   Main/Sub radios differs from Hamlib's flow; the oracle test records it.
 - **Scope (`civ_scope.rs`):** command `27`. Frame parsing, a reassembler that collects a whole sweep,
@@ -65,7 +66,9 @@ on `;`.
   the sign nearest the end of the ten characters that differ between the models. The layout is from
   Kenwood's PC command references (document, page and PDF SHA-256 in each fact); the TS-2000 text was
   read from a third-party transcription of its manual.
-- **Split** is `FR0;FT1;` (VFO A receives, VFO B transmits) and is read from `IF;`.
+- **Split** is `FR0;FT1;` (VFO A receives, VFO B transmits) and is read from `IF;`. `IF;` also yields
+  the receive VFO (its P10 field) and, from the split flag, the transmit VFO; `FT;` reads the transmit
+  VFO directly (`Op::GetTxVfo`).
 - **Does not cover:** the TS-890S dialect (no `IF`, mode set with `OM`, a bandscope), CW text, power and
   SWR meters, the 590's `ML` limit of 20 on the SG (the engine takes 9), data mode (the 590's `IF` cannot be
   read in data mode), the `RU`/`RD` step (taken as hertz from a cleared offset, which the guides do not
@@ -79,7 +82,8 @@ Written from Elecraft's Programmer's Reference Rev. G5 only; no Hamlib source wa
 response formats are used and the extension modes (`K2n;`, `K3n;`) are never sent.
 
 - **Covers:** `FA`/`FB`, `MD`, PTT read `TQ`, key and unkey (`TX`, `RX`), S-meter `SM`, power `PO`, SWR
-  `SW`, bandwidth `BW` (the non-modal command, not `FW`), split `FT`/`FR`, RIT/XIT `RT`, `XT`, `RO`,
+  `SW`, bandwidth `BW` (the non-modal command, not `FW`), split `FT`/`FR` (`FT1` transmits on B; an `FT`
+  answer also reports the transmit VFO), RIT/XIT `RT`, `XT`, `RO`,
   levels (`AG`, `RG`, `MG`, `ML`, `KS`, `PC`), CW text `KY`, `ID`, firmware `RV`, the composite `IF`
   decoder, and `AI` (`AI2;` to turn on specific reports, `AI0;` to turn off; `AI1;` replies are decoded
   too).
@@ -99,7 +103,7 @@ each fact).
 - **Covers:** frequency (9 digits, `FA`/`FB`), mode `MD0<code>;`, PTT read `TX;`, S-meter and power
   `SM0`, `RM`, split (the FT-991A only), clarifier RIT/XIT (`RT`, `XT`, `RC`, `RU`, `RD`), levels
   (`AG0`, `RG0`, `MG`, `PC`, `KS`), model id, and `AI`.
-- **Split:** the FT-991A has VFO split with `FT2;`/`FT3;`. The FTDX10 and FTDX101D split by band
+- **Split:** the FT-991A has VFO split with `FT2;`/`FT3;`; its `FT` answer also reports the transmit VFO. The FTDX10 and FTDX101D split by band
   (MAIN/SUB transmitter), so their descriptions have no `split` capability.
 - **Does not cover:** SWR and calibrated meters (the `RM` scales are model tables), VFO B reads on the
   MAIN/SUB models beyond `FB`, monitor level, the data and narrow modes (A, B, D, E, F), memory channels,
@@ -123,7 +127,7 @@ under the opcode chart are figures; they were read from rendered pages of the FT
 - **The PTT bit level is not in the manuals** (the figure leaves it out). A clear bit 7 of the TX status
   byte means transmitting, from a comment in Hamlib 4.6.2's FT-817 backend; that single fact is labelled
   `hamlib-source` and unverified. A wrong guess here inverts the PTT read.
-- **Does not cover:** a second VFO (the A/B toggle `81` is not used), lock, repeater offset, CTCSS and DCS,
+- **Does not cover:** a transmit-VFO report (a `TODO` in the module), a second VFO (the A/B toggle `81` is not used), lock, repeater offset, CTCSS and DCS,
   power on and off, FM-N and PKT modes, levels, and the FT-818.
 - **Oracle:** Hamlib's writes agree with the virtual FT-857D and FT-897D, but its reads of frequency and mode
   fail against the virtual radio; the two steps are pinned as known. Hamlib's FT-817 backend sends an
@@ -153,6 +157,10 @@ ranges) are used, no text. The wiki's embedded `messages.h` forbids copying and 
 - **Transmit:** `xmit 1` and `cwx send` are the only lines that can put RF on the air, from the two ops
   that `Op::transmits()` flags; a test checks that every transmitting wire line comes from such an op. CW
   text with a quote, `|`, a control character or anything outside printable ASCII is refused.
+- **A virtual FlexRadio exists** (`virtual_flex.rs`, a sans-IO model of the radio's side of the TCP API
+  built from the same wiki pages, and `flex_io.rs`, which serves it on a real TCP listener, one client at a
+  time). The actor tests run the engine over the TCP transport against it and check on the wire that no
+  keying command is sent while the gate is closed. It is our reading of the wiki, not a model of the radio.
 - **Never run against a radio** (the crate README notes the radio was off). Not covered by the Hamlib oracle.
 
 ## What "agree" means here

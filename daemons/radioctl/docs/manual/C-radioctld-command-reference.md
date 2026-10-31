@@ -24,7 +24,7 @@ explains the design and the differences from Hamlib's `rigctld`.
 
 - Frequencies are integer hertz in responses; `F` also accepts a decimal such as `7074000.000000`.
 - Every command that takes a VFO accepts an optional leading VFO token (`VFOA`, `VFOB`, `currVFO`,
-  `Main`, `MainA`, `MainB`, `RX`, `TX`) in either mode.
+  `Main`, `MainA`, `MainB`, `RX`, `TX`) in either mode. `RX` and `TX` are the receive and transmit VFOs from the rig's last reports (chapter 4).
 
 ## Error codes
 
@@ -61,6 +61,7 @@ An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported`
 | `I` | `set_split_freq` | [vfo] freq | | Sets VFO B. |
 | `x` | `get_split_mode` | [vfo] | `TX Mode`, `TX Passband` | The rig's mode. |
 | `X` | `set_split_mode` | [vfo] mode passband | | Only the mode the rig is already in; others `RPRT -11`. |
+| | `get_active_tx_freq` | | `Active TX Frequency` | radioctld's own command (not in Hamlib): the frequency the rig transmits on now or when keyed, whichever VFO is current. `f` keeps Hamlib's meaning, the frequency of the VFO asked for. |
 | | `get_split_freq_mode` | [vfo] | `TX Frequency`, `TX Mode`, `TX Passband` | |
 | | `set_split_freq_mode` | [vfo] freq mode passband | | Same mode rule as `X`. |
 | `j` | `get_rit` | [vfo] | `RIT` | The offset in Hz while RIT is on, else 0. |

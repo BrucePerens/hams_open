@@ -31,8 +31,10 @@ that must use `expect` say so with an `allow` at the top.
 | Unit tests | next to the code | encoders, decoders, name tables, the schedule and cache logic |
 | Virtual rigs | `radioctl-protocols/src/virtual_rig.rs`, `io.rs` | an engine and a simulated radio generated from the same description agree on every operation |
 | Transcript replay | `rigs/transcripts/`, `tests/rig_files.rs`, `conformance::replay` | a description, its engine and its virtual rig agree on the bytes of a recorded or hand-written session |
+| FlexRadio over TCP | `radioctl-protocols/tests/flex_actor.rs` | the Flex engine, the actor and the TCP transport against a virtual radio on a loopback listener; no keying line reaches the wire while the gate is closed |
 | The actor | `radioctl-core/tests/actor.rs` | priorities, deadlines, preemption, the cache, polling, callbacks, two runtimes; time is paused with `start_paused` so the tests are fast and deterministic |
 | Transports | `radioctl-core/tests/transports.rs` | real pseudo-terminals, a vanished and reopened port, control lines, TCP, a fake sysfs tree |
+| Transmit frequency | `radioctl-protocols/tests/tx_frequency.rs` | on virtual Kenwood, Elecraft, Yaesu newcat and CI-V radios in split, `active_tx_frequency` equals the transmit VFO's frequency and the callback reports it |
 | The splitter | `radioctl-splitter/tests/splitter.rs` | shared reads, CI-V echo, unsolicited frames, PTT ownership, real ptys, TCP clients |
 | radioctld | `radioctld/tests/*.rs` | recorded protocol transcripts, several clients, arbitration, the closed gate leaving no byte on the transport, the bounds |
 | Property tests | `radioctl-protocols/tests/robustness.rs`, `radioctld/tests/parser_props.rs` | no byte sequence panics a parser; chunking does not change what a parser finds; whole-pipeline lines never transmit through a closed gate |

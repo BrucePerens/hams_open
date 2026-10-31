@@ -117,7 +117,7 @@ Everything else is an `Op`:
 | Frequency, mode | `GetFrequency(Vfo)`, `SetFrequency(Vfo, Hz)`, `GetMode`, `SetMode(Mode)` |
 | Transmit | `GetPtt`, `SetPtt(bool)`, `SendCw(String)` (both can transmit), `GetPower`, `GetSwr` |
 | Receive | `GetSignal`, `GetFilterWidth`, `SetFilterWidth(Hz)` |
-| Split, RIT, XIT | `GetSplit`, `SetSplit(bool)`, `GetRit`, `SetRit(bool)`, `GetXit`, `SetXit(bool)`, `GetRitOffset`, `SetRitOffset(i16)` |
+| Split, RIT, XIT | `GetSplit`, `SetSplit(bool)`, `GetTxVfo`, `GetRit`, `SetRit(bool)`, `GetXit`, `SetXit(bool)`, `GetRitOffset`, `SetRitOffset(i16)` |
 | Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed and RF power setting |
 | Reporting | `SetTransceive(bool)` |
 | Identity | `GetModelId`, `GetFirmware` |
@@ -207,7 +207,8 @@ empty tail. `RigError` implements `std::error::Error`, so `?` works in any `Box<
 ## Status changes: callback and stream
 
 Every change of a cached value produces a `RigEvent` (a read that returns the same value as before is
-not a change):
+not a change). The event also carries the change of the derived `Field::ActiveTxFrequency` when the
+value changed:
 
 ```rust signatures
 pub struct RigEvent {
@@ -302,10 +303,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 The actor polls so that a knob turned at the radio shows up as an event. Polling is the lowest
 priority work: it runs only when no command is waiting.
 
-- **What is polled:** VFO A's frequency, the mode and the PTT state (the fast group) and the S-meter
-  and power meter (the slow group), each only if the description has the capability. VFO B, split,
-  RIT, XIT, filter width and levels are **not** polled: a front-panel change of those is seen only
-  when the radio reports it by itself or a caller reads it.
+- **What is polled:** VFO A's frequency, VFO B's frequency (rigs with `second-vfo`), the split state
+  (rigs with `split`), the mode and the PTT state (the fast group) and the S-meter and power meter (the
+  slow group), each only if the description has the capability. RIT, XIT, the RIT offset, filter width
+  and levels are **not** polled: a front-panel change of those is seen only when the radio reports it by
+  itself or a caller reads it. VFO B and split are polled so that `active_tx_frequency` follows a change
+  made at the radio.
 - **Adaptive intervals:** a change resets a field to its fastest interval; no change doubles it up to
   the maximum; a failed poll jumps to the maximum.
 - **While the rig transmits** only the PTT state and the power meter are polled.
@@ -320,28 +323,65 @@ Hamlib's issue 138 (TS-590, "split frequency reporting via CAT not working",
 <https://github.com/Hamlib/Hamlib/issues/138>) is a lesson in what "the frequency" means. An
 amplifier controller needed the frequency the radio would transmit on; Hamlib answered with the
 frequency of whichever VFO was asked for, as its maintainers intended, and other programs assumed the
-transmit VFO. The proposal (section 14) draws these requirements for radioctl: a first-class
-transmit frequency, one value, `active_tx_frequency`, that is correct in split mode and while keyed,
-that amplifier and antenna followers use, and whose changes fire the callback; each engine states how
-it knows the transmit VFO; and a test that the follower's value equals the radio's actual transmit
-frequency in every split configuration.
+transmit VFO. The proposal (section 14) therefore asks radioctl for a first-class transmit frequency:
+one value that is correct in split mode and while keyed, that amplifier and antenna followers use, and
+whose changes fire the callback, including a change made on the front panel.
 
-What exists today:
+**Implemented** (unverified on real radios):
 
-- **Implemented:** the API is explicit about VFOs (`Op::GetFrequency(Vfo)`), so nothing is guessed
-  from PTT state. Split is a boolean `Split` observation, and the model is the one every engine
-  implements: VFO A receives, VFO B transmits. `radioctld` follows Hamlib's "ask for the VFO you
-  want" rule: `f` with `VFOA` reads A; with `TX` it reads B when the cached split state is on, else A;
-  the split-frequency commands (`i`, `\get_split_freq_mode`) read VFO B. Chapter [9](09-radioctld.md) has the details.
-- **Not implemented (planned):** `active_tx_frequency` and a typed `tx_frequency`/transmit-VFO read
-  and their events; transmit-VFO reads per engine (Kenwood `IF;`, `FR;`/`FT;`; CI-V unselected-VFO
-  read; KX3's own reads); the splitter personalities reporting the transmit frequency while keyed in
-  split; and the amplifier-follower test. Today a program that needs the transmit frequency must
-  read VFO B itself when it knows split is on. The FTDX10 and FTDX101D descriptions have no `split`
-  capability because those radios split by band, not VFO, and radioctl's model cannot express it yet.
+- The API is explicit about VFOs (`Op::GetFrequency(Vfo)`), so nothing is guessed from PTT state, and it
+  offers the questions a follower asks:
+
+```rust signatures
+pub async fn split(&self, freshness: Freshness) -> Result<Cached<bool>, RigError>
+
+pub async fn tx_vfo(&self, freshness: Freshness) -> Result<Vfo, RigError>
+
+pub async fn rx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError>
+
+pub async fn tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError>
+
+pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigError>
+```
+
+- **The derivation** is a pure function in `radioctl_core::txstate` (`TxState`). The receive VFO is the
+  one the rig reports, else VFO A. The transmit VFO is the receive VFO when split is off; in split it is
+  the one the rig reports, else the other VFO. The transmit frequency is that VFO's frequency.
+  `active_tx_frequency` is the transmit frequency: "now, or when keyed". A RIT or XIT offset is
+  deliberately **not** folded in (a few kilohertz at most; a band decoder wants the VFO frequency).
+- **The actor publishes it.** After every observation the actor recomputes the value from the cache and,
+  if it changed, adds a `Change` for `Field::ActiveTxFrequency` (an `Observation::ActiveTxFrequency`) to
+  the event, so the callback and the stream report it whichever field moved it. It is derived: no engine
+  reports it and no command reads it. `Observation::RxVfo` and `TxVfo` carry the rig's own statement
+  where the protocol gives one.
+- **Each engine says how it knows.** Kenwood reads the receive VFO (`FR`/`IF` field) and the transmit
+  VFO (`FT`; split is `FR0;FT1;`, and from `IF` the other VFO when the split flag is set); Elecraft
+  `FT` (`FT1` transmits on B); Yaesu newcat `FT` (the FT-991A, B in split); CI-V uses the
+  unselected VFO (`Vfo::B`) as the transmit VFO in split.
+- **The follower test exists on virtual rigs.** `radioctl-protocols/tests/tx_frequency.rs` drives the
+  Kenwood, Elecraft, Yaesu newcat and CI-V virtual radios into split, keys them on the virtual front panel
+  (the gate stays closed; nothing reaches hardware), and checks that `active_tx_frequency` equals the
+  transmit VFO's frequency and that the callback reports it. It has not been run on a real radio.
+- **The splitter** answers a plain read of the current frequency (CI-V `03`, TS-2000 `FA;`) with the
+  transmit frequency while the rig is keyed in split, as OmniRig-style clients assume. Reads that name
+  the other VFO (`25 01`, `FB;`) are unchanged. `SplitterConfig::report_tx_frequency_while_keyed`
+  (default true) turns it off for a client that wants the receive frequency while keyed.
+- **`radioctld`** keeps Hamlib's meaning: `f` returns the frequency of the VFO asked for (`VFOA`, `VFOB`,
+  `currVFO`, `RX`, `TX`), and the new `\get_active_tx_freq` returns the transmit frequency whichever VFO
+  is current. The tokens `RX` and `TX` resolve through the same derivation.
+
+**Not done**
+
+- Yaesu legacy does not report a transmit VFO yet (a `TODO` note in `yaesu_legacy.rs`), so
+  `active_tx_frequency` on an FT-817, FT-857D or FT-897D follows the generic rule only.
+- The FTDX10 and FTDX101D split by band (MAIN/SUB), not by VFO, so their descriptions have no `split`
+  capability and radioctl cannot express their split yet.
+- FlexRadio has no second VFO or split in the model.
+- RIT and XIT offsets are excluded from the value by design.
 - **Open, bench check needed:** after enabling split, Hamlib 4.6.2 reads the other frequency of a
   TS-590 with `FA;` where radioctl reads `FB;`. The oracle test records the disagreement
-  (`GetFrequency(B)` in `known_kenwood_divergences`); a real TS-590 decides which is right.
+  (`GetFrequency(B)` in `known_kenwood_divergences`); a real TS-590 decides which is right. The same
+  goes for every derived value: all of it follows the manuals and the virtual radios.
 
 ## Scope and spectrum
 
