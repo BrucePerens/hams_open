@@ -94,6 +94,7 @@ pub struct Lifecycle {
     state: RadioState,
     since: Duration,
     times: LifecycleTimes,
+    prev_present: Option<bool>,
 }
 
 impl Lifecycle {
@@ -104,6 +105,7 @@ impl Lifecycle {
             state,
             since: now,
             times,
+            prev_present: None,
         }
     }
 
@@ -147,6 +149,16 @@ impl Lifecycle {
         }
     }
 
+    // [@ANCHOR: radioctl_station_lifecycle_assume_powered]
+    /// A momentary power-on line was pulsed, which has no read-back: the radio is taken to be
+    /// powered and booting.
+    pub fn assume_powered(&mut self, now: Duration) -> Option<Transition> {
+        match self.state {
+            RadioState::PoweringOn => self.goto(RadioState::Booting, now, "power line pulsed"),
+            _ => None,
+        }
+    }
+
     // [@ANCHOR: radioctl_station_lifecycle_power_off_commanded]
     /// The power-off was commanded and the switch is going off: the radio is no longer expected
     /// to answer. The switch's confirmed state then keeps it Off.
@@ -159,6 +171,9 @@ impl Lifecycle {
     /// transition per call, so every intermediate state is seen by the event stream.
     pub fn step(&mut self, now: Duration, ev: &Evidence) -> Option<Transition> {
         let waited = now.saturating_sub(self.since);
+        // a device that has been there all along is not "appearing"
+        let appeared = ev.present == Some(true) && self.prev_present != Some(true);
+        self.prev_present = ev.present;
         if ev.power == PowerEvidence::Off {
             return self.goto(RadioState::Off, now, "switch is off");
         }
@@ -214,7 +229,7 @@ impl Lifecycle {
             RadioState::Unreachable => {
                 if ev.link_up {
                     self.goto(RadioState::Ready, now, "link up")
-                } else if ev.present == Some(true) {
+                } else if appeared {
                     self.goto(RadioState::Booting, now, "device appeared")
                 } else {
                     None
@@ -248,6 +263,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_lifecycle_since]
     // Tests [@ANCHOR: radioctl_station_lifecycle_goto]
     // Tests [@ANCHOR: radioctl_station_lifecycle_power_on_commanded]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_assume_powered]
     // Tests [@ANCHOR: radioctl_station_lifecycle_step]
     #[test]
     fn the_happy_path_goes_through_every_state_in_order() {
@@ -256,6 +272,10 @@ mod tests {
         assert!(l.power_on_commanded(secs(1)).is_some());
         assert_eq!(l.since(), secs(1));
         assert!(l.power_on_commanded(secs(2)).is_none());
+        // a momentary line has no read-back: pulsing it is taken as powered
+        let mut m = Lifecycle::new(RadioState::PoweringOn, T0, LifecycleTimes::default());
+        assert_eq!(m.assume_powered(secs(1)).unwrap().to, RadioState::Booting);
+        assert!(m.assume_powered(secs(2)).is_none());
         let t = l
             .step(secs(2), &ev(PowerEvidence::On, false, None))
             .unwrap();

@@ -210,7 +210,10 @@ impl Station {
             .get(&d.id)
             .copied();
         let down = match hint {
-            Some(state) => matches!(state, RadioState::Off | RadioState::Unreachable),
+            Some(state) => matches!(
+                state,
+                RadioState::Off | RadioState::PoweringOn | RadioState::Unreachable
+            ),
             None => matches!(self.device_power(&d.id), Ok(Some(Value::Off))),
         };
         if down {
