@@ -26,6 +26,6 @@ tokio-io = ["dep:tokio", "dep:hpsdr"]
 hamlib-oracle = []
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros", "time", "io-util", "sync", "test-util"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "io-util", "sync", "test-util"] }
 proptest = "1"
 serialport = { version = "4.10", default-features = false }

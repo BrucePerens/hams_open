@@ -156,6 +156,22 @@ records the decisions that shape the code.
       closes the gate and sends an unkey on the emergency path, which needs no await, so `Drop`
       works. It is a bound on the permission, not a second transmit watchdog: `max_transmit` and
       the heartbeat still apply inside it.
+    *Added in `radioctl-protocols` (the crate that sees both the core and the engines, so the
+    dependency direction is unchanged):*
+    - `radioctl_protocols::prelude`: the core prelude plus `engine_for`, `VirtualRig`,
+      `PanelChange` and the constructors below.
+    - `VirtualRig::spawn("icom-ic-7300")` and `spawn_virtual(runtime, description, options,
+      reply_delay)`: the four calls in one, returning `SpawnedVirtualRig { rig, control }` (the
+      control is needed for front-panel changes, state and fault injection, so a bare handle
+      would not replace the examples). The id is looked up with `rigfile::load`; no rig
+      descriptions are compiled into the library.
+    - `open_serial_rig(id_or_file, port, baud)` and `open_serial_rig_with(runtime, description,
+      SerialConfig, RigOptions)`: description, engine, port, link watch, actor, and the start-up
+      unkey radioctld already sends (unkeying needs no gate; a radio that cannot be unkeyed is
+      not handed over). It returns `SerialRig { rig, link }`: the port monitor is returned, not
+      swallowed, because the link watch and a line keyer depend on it living.
+    Follow-up, not done here: `radioctld::rigs::BoxedEngine` and the self-test's boxed engine
+    duplicate `impl ProtocolEngine for Box<dyn ProtocolEngine>`, which `radioctl-core` already has.
     *Rejected:*
     - A `RigOptions` builder or `without_polling()`: struct-update syntax (`RigOptions { max_transmit: .., ..Default::default() }`)
       is already one expression and "polling off" is written in three places in the code base.
@@ -164,6 +180,10 @@ records the decisions that shape the code.
       keying inside `set_frequency`: the gate is opened only by an explicit `TransmitPermit`.
     - A second transmit watchdog inside the lease, and heartbeats sent for the caller: with a
       `RigOptions::heartbeat` set, the caller still calls `heartbeat()`.
+    - A TCP constructor and a `usb:VID:PID` port string: `net::open_link` is two lines and USB
+      matching is the volunteer self-test's job; neither repeats in the manual.
+    - Compiling the rig descriptions into the library (`include_str!` of `rigs/`): every binary
+      would carry 28 files; `rigfile::rigs_dir` finds them and the error names the file.
     - Typed wrappers for `Op` groups that have one caller (RIT, split offsets, filter width): `execute(Op::..)`
       is already one call.
 

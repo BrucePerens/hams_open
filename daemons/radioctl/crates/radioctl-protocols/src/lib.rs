@@ -19,11 +19,14 @@ pub mod hpsdr_net;
 pub mod kenwood;
 pub mod kenwood_ts890;
 pub mod kenwood_ts890_lan;
+pub mod prelude;
 pub mod virtual_flex;
 pub mod virtual_rig;
 pub mod yaesu;
 pub mod yaesu_legacy;
 
+#[cfg(feature = "tokio-io")]
+pub mod easy;
 #[cfg(feature = "tokio-io")]
 pub mod flex_io;
 #[cfg(feature = "tokio-io")]
