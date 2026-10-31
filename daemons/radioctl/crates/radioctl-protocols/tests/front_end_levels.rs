@@ -74,7 +74,11 @@ fn every_listed_step_round_trips_and_nothing_else_is_accepted() {
         }
         let mut engine = engine_for(&desc).expect("engine");
         let mut rig = VirtualRig::from_description(&desc).expect("rig");
-        for db in std::iter::once(0).chain(desc.levels.attenuator_db.iter().copied().map(u16::from))
+        // A model may have only one of the two controls (the IC-R9000 has an attenuator only).
+        let has_att = desc.levels.max_attenuation_db().is_some();
+        for db in std::iter::once(0)
+            .chain(desc.levels.attenuator_db.iter().copied().map(u16::from))
+            .filter(|_| has_att)
         {
             assert_eq!(
                 set_and_read(engine.as_mut(), &mut rig, Level::Attenuator, db),
@@ -84,7 +88,9 @@ fn every_listed_step_round_trips_and_nothing_else_is_accepted() {
             );
             checked += 1;
         }
-        for step in 0..=u16::from(desc.levels.preamp_steps) {
+        for step in
+            (0..=u16::from(desc.levels.preamp_steps)).filter(|_| desc.levels.preamp_steps > 0)
+        {
             assert_eq!(
                 set_and_read(engine.as_mut(), &mut rig, Level::Preamp, step),
                 Some(step),
