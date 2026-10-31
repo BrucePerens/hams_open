@@ -4,7 +4,7 @@
 CC = sdcc
 CFLAGS = -mmcs51 --model-small --std-sdcc11 --opt-code-size -I core
 BUILD = build
-OBJS = $(BUILD)/station_io.rel $(BUILD)/fx2_core.rel $(BUILD)/descriptors.rel
+OBJS = $(BUILD)/station_io.rel $(BUILD)/fx2_core.rel $(BUILD)/descriptors.rel $(BUILD)/fx2_timer.rel
 
 all: $(BUILD)/station_io.ihx
 

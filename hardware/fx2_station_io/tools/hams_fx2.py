@@ -33,6 +33,7 @@ CHUNK = 1024                            # bytes per request, well below the 16 K
 REQ_GET_INFO = 0x01
 REQ_GPIO_SET = 0x02
 REQ_GPIO_GET = 0x03
+REQ_GET_TICK = 0x04
 REQ_MSOS20 = 0x20
 INFO_ADDR = 0x2300                      # fixed address of the record in the image
 
@@ -204,6 +205,31 @@ def gpio_get(t: Transport) -> Dict[str, int]:
     return {"oea": d[0], "pa": d[1], "pb": d[2], "pd": d[3]}
 
 
+@dataclasses.dataclass
+class Tick:
+    """The firmware's millisecond clock (Timer 2) and worst-case main-loop latency (Timer 0)."""
+    ms: int
+    sub: int              # 250 ns counts into the current millisecond (0-3999)
+    loop_max: int         # longest pass of the main loop, 250 ns counts (0xFFFF = saturated)
+
+    @property
+    def seconds(self) -> float:
+        return self.ms / 1000.0 + self.sub * 250e-9
+
+    @property
+    def loop_max_us(self) -> float:
+        return self.loop_max * 0.25
+
+
+# [@ANCHOR: HAMS_FX2_tick]
+def read_tick(t: Transport) -> Tick:
+    d = bytes(t.ctrl_in(0xC0, REQ_GET_TICK, 0, 0, 8))
+    if len(d) != 8:
+        raise Fx2Error(f"GET_TICK returned {len(d)} bytes")
+    return Tick(int.from_bytes(d[0:4], "little"), int.from_bytes(d[4:6], "little"),
+                int.from_bytes(d[6:8], "little"))
+
+
 class UsbTransport(Transport):
     """pyusb transport for one device. Control transfers only; no interface is claimed."""
 
@@ -299,6 +325,19 @@ def cmd_blink(args) -> int:
     return 0
 
 
+def cmd_tick(args) -> int:
+    t = _open_hams(args)
+    a = read_tick(t)
+    h0 = time.monotonic()
+    time.sleep(args.seconds)
+    b = read_tick(t)
+    h1 = time.monotonic()
+    dev = (b.seconds - a.seconds) / (h1 - h0)
+    print(f"firmware {b.seconds - a.seconds:.4f} s, host {h1 - h0:.4f} s, ratio {dev:.5f}; "
+          f"longest loop pass {b.loop_max_us:.1f} us")
+    return 0
+
+
 def cmd_probe(args) -> int:
     t = _open_hams(args)
     gpio_set(t, 0, 0)
@@ -323,6 +362,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("--count", type=int, default=3)
     p.add_argument("--delay", type=float, default=0.6)
     p.set_defaults(fn=cmd_blink)
+    p = sub.add_parser("tick", help="compare the firmware millisecond clock with the host clock")
+    p.add_argument("--seconds", type=float, default=2.0)
+    p.set_defaults(fn=cmd_tick)
     sub.add_parser("probe", help="release outputs and print all input pin states").set_defaults(fn=cmd_probe)
     args = ap.parse_args(argv)
     try:

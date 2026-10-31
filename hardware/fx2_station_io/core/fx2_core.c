@@ -9,6 +9,7 @@
  */
 #include "fx2_core.h"
 #include "hams_usb.h"
+#include "fx2_timer.h"
 
 extern const __code u8 desc_device[18];
 extern const __code u8 desc_qualifier[10];
@@ -21,15 +22,6 @@ extern const __code u8 desc_bos[57];
 extern const __code u8 desc_msos20[162];
 
 static u8 g_config;      /* current configuration value (0 or 1) */
-
-static void delay_ms(u16 ms)
-{
-    volatile u16 i;
-    while (ms--) {
-        /* about 1 ms at the 48 MHz CPU clock (4 clocks per machine cycle); not precise */
-        for (i = 0; i < 700; i++) { }
-    }
-}
 
 void core_ep0_ack(void)
 {
@@ -155,6 +147,18 @@ static void vendor_request(u8 bm, u8 req, u16 value, u16 index, u16 length)
         core_ep0_send_code(APP_GET_INFO, APP_GET_INFO[0]);
         return;
     }
+    if (req == HAMS_REQ_GET_TICK && bm == 0xC0) {
+        u8 r[8];
+        u32 ms;
+        u16 sub, mx;
+        timer_stamp(&ms, &sub);
+        mx = timer_loop_max();
+        r[0] = (u8)ms; r[1] = (u8)(ms >> 8); r[2] = (u8)(ms >> 16); r[3] = (u8)(ms >> 24);
+        r[4] = (u8)sub; r[5] = (u8)(sub >> 8);
+        r[6] = (u8)mx; r[7] = (u8)(mx >> 8);
+        core_ep0_reply(r, 8);
+        return;
+    }
     if (req == HAMS_REQ_MSOS20 && bm == 0xC0 && index == 7) {
         core_ep0_send_code(desc_msos20, sizeof desc_msos20);
         return;
@@ -190,7 +194,7 @@ static void renumerate(void)
 {
     USBCS |= USBCS_DISCON;
     USBCS |= USBCS_RENUM;
-    delay_ms(500);
+    timer_delay_ms(500);
     USBIRQ = 0xFF;                       /* clear stale request flags (write 1 to clear) */
     USBCS &= (u8)~USBCS_DISCON;
 }
@@ -209,11 +213,21 @@ void core_run(void)
     EP6CFG = 0;    SYNCDELAY();
     EP8CFG = 0;    SYNCDELAY();
 
+    timer_init();
     app_init();
     renumerate();
+    timer_loop_reset();
 
     for (;;) {
         u8 irq = USBIRQ;
+        timer_loop_mark();
+        if (timer_poll()) {
+            app_tick();
+        }
+        if (irq & USBIRQ_SUSP) {
+            USBIRQ = USBIRQ_SUSP;
+            app_usb_suspend();
+        }
         if (irq & USBIRQ_URES) {
             USBIRQ = USBIRQ_URES;
             g_config = 0;

@@ -9,7 +9,9 @@ the README, not from the compiled image; tests/test_fx2_host.py compares it with
 """
 from __future__ import annotations
 
-from hams_fx2 import (CPUCS_ADDR, REQ_FIRMWARE_LOAD, REQ_GET_INFO, REQ_GPIO_GET, REQ_GPIO_SET,
+import time
+
+from hams_fx2 import (CPUCS_ADDR, REQ_FIRMWARE_LOAD, REQ_GET_INFO, REQ_GPIO_GET, REQ_GET_TICK, REQ_GPIO_SET,
                       Fx2Error, LED_MASK, Transport)
 
 SIM_INFO = bytes([
@@ -30,6 +32,7 @@ class SimulatedFx2(Transport):
         self.ioa_latch = 0
         self.eeprom_writes = 0       # must stay zero: the tool never touches the EEPROM
         self.log = []
+        self._t0 = time.monotonic()
 
     def ctrl_out(self, req_type, req, value, index, data=b""):
         self.log.append(("out", req_type, req, value, index, bytes(data)))
@@ -64,6 +67,10 @@ class SimulatedFx2(Transport):
             raise Fx2Error("simulator: vendor request to an unprogrammed device")
         if req_type == 0xC0 and req == REQ_GET_INFO:
             return SIM_INFO[:length]
+        if req_type == 0xC0 and req == REQ_GET_TICK:
+            elapsed_counts = int((time.monotonic() - self._t0) * 4_000_000)    # 250 ns counts
+            ms, sub = divmod(elapsed_counts, 4000)
+            return (ms & 0xFFFFFFFF).to_bytes(4, "little") + sub.to_bytes(2, "little") + b"\x20\x01"
         if req_type == 0xC0 and req == REQ_GPIO_GET:
             pins = (self.ioa_latch & self.oea) | (0xFF & ~self.oea)   # released pins float high
             return bytes([self.oea, pins & 0xFF, 0xFF, 0xFF])[:length]

@@ -16,6 +16,7 @@
 #define HAMS_REQ_GET_INFO 0x01   /* IN, device: the self-describing record */
 #define HAMS_REQ_GPIO_SET 0x02   /* OUT, no data: wValueL = output-enable mask, wIndexL = levels */
 #define HAMS_REQ_GPIO_GET 0x03   /* IN, 4 bytes: OEA, IOA, IOB, IOD (pin states) */
+#define HAMS_REQ_GET_TICK 0x04   /* IN, 8 bytes: ms (u32), 250 ns counts into the ms (u16), longest loop pass (u16) */
 #define HAMS_REQ_MSOS20   0x20   /* Microsoft OS 2.0 descriptor set, wIndex 7 */
 #define HAMS_REQ_WEBUSB   0x21   /* WebUSB vendor code (no landing page offered) */
 
