@@ -172,6 +172,87 @@ fn sdr_config(driver: &str, c: &Value) -> Result<crate::sdr::Config, String> {
     Ok(cfg)
 }
 
+/// The named instances of a config. An entry with a `driver` is one instance named by its key (the old form, unchanged). An entry
+/// without one whose members are all objects with a `driver` is a group (`"vna": {"vnwa": {...}, "nano": {...}}`): each member is an
+/// instance named by its own key, and the group's key is only a label. Names must be unique across the whole config.
+fn flatten_entries(map: &serde_json::Map<String, Value>) -> Result<Vec<(&String, &Value)>, String> {
+    // [@ANCHOR: bench_mcp_config_flatten]
+    let mut out: Vec<(&String, &Value)> = Vec::new();
+    for (key, c) in map {
+        let group = c.as_object().filter(|o| {
+            !o.contains_key("driver")
+                && !o.is_empty()
+                && o.values().all(|m| m.get("driver").is_some())
+        });
+        match group {
+            Some(o) => out.extend(o.iter()),
+            None => out.push((key, c)),
+        }
+    }
+    for (i, (n, _)) in out.iter().enumerate() {
+        if out[..i].iter().any(|(m, _)| m == n) {
+            return Err(format!(
+                "config: two instances are named {n:?}; every instance name must be unique"
+            ));
+        }
+    }
+    Ok(out)
+}
+
+/// Refuses two instances that claim the same physical thing: one serial device (compared after resolving symlinks), one scope
+/// host and port, one VNWA (the `vnwa_open` driver opens the one USB unit), or one power-switching hub port.
+fn reject_shared_claims(insts: &[Instrument]) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_config_shared_claims]
+    let real = |p: &str| {
+        std::fs::canonicalize(p)
+            .map(|x| x.display().to_string())
+            .unwrap_or_else(|_| p.to_string())
+    };
+    for (i, a) in insts.iter().enumerate() {
+        for b in &insts[i + 1..] {
+            let clash = |what: String| {
+                Err(format!(
+                    "{} and {} both claim {what}; each device belongs to one instance",
+                    a.name, b.name
+                ))
+            };
+            let serial = |x: &Instrument| match x.kind {
+                Kind::Psu => x.serial.clone(),
+                Kind::Vna if x.driver == "nanovna" => x.nanovna.serial.clone(),
+                _ => None,
+            };
+            if let (Some(x), Some(y)) = (serial(a), serial(b)) {
+                if real(&x) == real(&y) {
+                    return clash(format!("the serial port {x}"));
+                }
+            }
+            if a.kind == Kind::Scope
+                && b.kind == Kind::Scope
+                && a.host.is_some()
+                && a.host == b.host
+                && a.port == b.port
+            {
+                return clash(format!(
+                    "the scope at {}:{}",
+                    a.host.clone().unwrap(),
+                    a.port
+                ));
+            }
+            if a.driver == "vnwa_open" && b.driver == "vnwa_open" {
+                return clash("the VNWA USB unit".to_string());
+            }
+            if a.kind == Kind::Vna && b.kind == Kind::Vna {
+                if let (Some(x), Some(y)) = (&a.vna.hub, &b.vna.hub) {
+                    if x.hub == y.hub && x.port == y.port {
+                        return clash(format!("hub {} port {}", x.hub, x.port));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
     // [@ANCHOR: bench_mcp_config]
     let v: Value = serde_json::from_str(text).map_err(|e| format!("config: {e}"))?;
@@ -180,7 +261,8 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
         .and_then(|i| i.as_object())
         .ok_or("config: no \"instruments\" object")?;
     let mut out = Vec::new();
-    for (name, c) in map {
+    let entries = flatten_entries(map)?;
+    for (name, c) in entries {
         let driver = c
             .get("driver")
             .and_then(|d| d.as_str())
@@ -241,6 +323,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
         }
         out.push(inst);
     }
+    reject_shared_claims(&out)?;
     if out.is_empty() {
         return Err("config: no instruments".into());
     }

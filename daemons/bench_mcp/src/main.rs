@@ -189,10 +189,16 @@ fn pick<'a>(
     // [@ANCHOR: bench_mcp_pick]
     let fits = |i: &&Instrument| tool.kinds.contains(&i.kind);
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
-        let i = insts
-            .iter()
-            .find(|i| i.name == n)
-            .ok_or_else(|| format!("no instrument named {n:?}"))?;
+        let i = insts.iter().find(|i| i.name == n).ok_or_else(|| {
+            format!(
+                "no instrument named {n:?} (argument `device`); configured: {}",
+                insts
+                    .iter()
+                    .map(|i| i.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
         return if fits(&i) {
             Ok(i)
         } else {
@@ -204,7 +210,7 @@ fn pick<'a>(
         [one] => Ok(one),
         [] => Err(format!("{} applies to no configured instrument", tool.name)),
         many => Err(format!(
-            "name the instrument: {}",
+            "name the instrument (argument `device`): {}",
             many.iter()
                 .map(|i| i.name.as_str())
                 .collect::<Vec<_>>()
@@ -232,8 +238,49 @@ fn instrument_lock(name: &str) -> Arc<Mutex<()>> {
         .clone()
 }
 
+/// `device` is the name of an instance, the same as `instrument`; giving both with different names is an error.
+fn with_device(args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_main_device_arg]
+    let Some(d) = args.get("device").filter(|d| !d.is_null()) else {
+        return Ok(args.clone());
+    };
+    let d = d
+        .as_str()
+        .ok_or("device must be the name of an instrument")?;
+    if let Some(i) = args.get("instrument").and_then(|i| i.as_str()) {
+        if i != d {
+            return Err(format!(
+                "device {d:?} and instrument {i:?} differ; give one"
+            ));
+        }
+    }
+    let mut a = args.clone();
+    a["instrument"] = json!(d);
+    Ok(a)
+}
+
+/// `bench_identify` and `bench_status` without a device, when several instruments could answer: every one of them, each with its
+/// kind, driver, tier and state (`ok` with its answer, or `error` with the reason), so one absent instrument does not hide the rest.
+fn survey(insts: &[Instrument], tool: &ToolSpec, name: &str, args: &Value) -> Value {
+    // [@ANCHOR: bench_mcp_main_survey]
+    let rows: Vec<Value> = insts
+        .iter()
+        .filter(|i| tool.kinds.contains(&i.kind))
+        .map(|i| {
+            let mut a = args.clone();
+            a["instrument"] = json!(i.name);
+            let r = call(insts, name, &a);
+            json!({"name": i.name, "kind": format!("{:?}", i.kind), "driver": i.driver, "tier": format!("{:?}", i.tier),
+                   "state": if r.is_ok() { "ok" } else { "error" },
+                   "result": r.as_ref().ok(), "error": r.as_ref().err()})
+        })
+        .collect();
+    json!({"instruments": rows})
+}
+
 fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: bench_mcp_main_call]
+    let args = &with_device(args)?;
     if manual::is_manual_tool(name) {
         return manual::call(name, args);
     }
@@ -250,6 +297,16 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             .map(|i| json!({"name": i.name, "driver": i.driver, "tier": format!("{:?}", i.tier)}))
             .collect::<Vec<_>>()));
     }
+    if matches!(name, "bench_identify" | "bench_status")
+        && args.get("instrument").is_none()
+        && insts
+            .iter()
+            .filter(|i| tool.kinds.contains(&i.kind))
+            .count()
+            > 1
+    {
+        return Ok(survey(insts, tool, name, args));
+    }
     let inst = pick(insts, tool, args)?;
     if inst.tier < tool.tier {
         return Err(format!(
@@ -259,12 +316,26 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     }
     let lock = instrument_lock(&inst.name);
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
+    // Instances on one power-switching hub take turns switching it (after their own lock, always in this order).
+    let hub_lock = inst.vna.hub.as_ref().filter(|_| {
+        inst.kind == Kind::Vna
+            && matches!(name, "bench_vna_power_cycle" | "bench_vna_generator_off")
+    });
+    let hub_lock = hub_lock.map(|h| instrument_lock(&format!("hub:{}", h.hub)));
+    let _hub_held = hub_lock
+        .as_ref()
+        .map(|l| l.lock().unwrap_or_else(|e| e.into_inner()));
     if inst.kind == Kind::Vna && inst.driver == "nanovna" {
         return nanovna::call(inst, name, args, &out_dir());
     }
     if inst.kind == Kind::Vna {
         // The unit's recovery inside measurements power cycles through the hub module's implementation.
         vna::install_power_hook();
+        // Arguments are refused before the unit is looked for.
+        if name == "bench_vna_sweep" {
+            vna::sweep_args(args, &inst.vna)?;
+        }
+        vna::ensure_present(name, &vnwa_open::power::unit_present)?;
         return match name {
             "bench_identify" => Ok(vna::identify(&inst.vna)),
             "bench_status" => vna::status(&inst.vna),
@@ -410,8 +481,25 @@ fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
         })
         .chain(MODULES.iter().flat_map(|m| (m.tool_defs)(insts)))
         .chain(manual::tool_defs())
+        .map(with_device_property)
         .collect();
     manual::with_pointers(tools)
+}
+
+/// Adds the `device` argument next to `instrument` in the schema of a tool that takes one.
+pub(crate) fn with_device_property(mut tool: Tool) -> Tool {
+    // [@ANCHOR: bench_mcp_main_device_property]
+    let mut schema = (*tool.input_schema).clone();
+    if let Some(Value::Object(p)) = schema.get_mut("properties") {
+        if p.contains_key("instrument")
+            && !p.contains_key("device")
+            && !tool.name.starts_with("bench_manual_")
+        {
+            p.insert("device".into(), json!({"type": "string", "description": "the name of the instrument instance to use (same as instrument); required when several fit"}));
+        }
+    }
+    tool.input_schema = Arc::new(schema);
+    tool
 }
 
 struct BenchServer {
@@ -730,6 +818,158 @@ mod tests {
         // The vnwa_open default is unchanged.
         let v = config::parse(r#"{"instruments":{"v":{"driver":"vnwa_open"}}}"#).unwrap();
         assert_eq!(v[0].nanovna, crate::nanovna::Config::default());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_config_flatten]
+    // Tests [@ANCHOR: bench_mcp_config_shared_claims]
+    #[test]
+    fn groups_of_named_instances_load_and_two_claims_on_one_device_are_refused() {
+        let p = |body: &str| config::parse(&format!(r#"{{"instruments":{{{body}}}}}"#));
+        let v = p(r#""vna":{"vnwa":{"driver":"vnwa_open","tier":"full"},"nano":{"driver":"nanovna","serial":"/dev/null"}},"psu":{"driver":"atm6301","serial":"/dev/zero"}"#).unwrap();
+        assert_eq!(
+            v.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(),
+            ["psu", "nano", "vnwa"]
+        );
+        // The old single-object form still names the instance by its key.
+        assert_eq!(p(r#""vna":{"driver":"vnwa_open"}"#).unwrap()[0].name, "vna");
+        // Names are unique across groups and plain entries; /dev/null is claimed by one instance only.
+        assert!(p(
+            r#""a":{"x":{"driver":"vnwa_open"}},"x":{"driver":"atm6301","serial":"/dev/null"}"#
+        )
+        .unwrap_err()
+        .contains("unique"));
+        let e = p(r#""n1":{"driver":"nanovna","serial":"/dev/null"},"psu":{"driver":"atm6301","serial":"/dev/null"}"#).unwrap_err();
+        assert!(e.contains("both claim the serial port"), "{e}");
+        let dir = std::env::temp_dir().join(format!("bench_alias_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let alias = dir.join("alias");
+        let _ = std::fs::remove_file(&alias);
+        std::os::unix::fs::symlink("/dev/null", &alias).unwrap();
+        let e = p(&format!(r#""n1":{{"driver":"nanovna","serial":"/dev/null"}},"n2":{{"driver":"nanovna","serial":{:?}}}"#, alias.display().to_string())).unwrap_err();
+        assert!(e.contains("both claim"), "{e}");
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(
+            p(r#""a":{"driver":"vnwa_open"},"b":{"driver":"vnwa_open"}"#)
+                .unwrap_err()
+                .contains("VNWA")
+        );
+        let hub = |h: u8| format!(r#""hub":"3-2","hub_port":{h}"#);
+        assert!(p(&format!(
+            r#""a":{{"driver":"vnwa_open",{}}},"b":{{"driver":"nanovna","serial":"/dev/zero",{}}}"#,
+            hub(2),
+            hub(2)
+        ))
+        .unwrap_err()
+        .contains("hub 3-2 port 2"));
+        assert!(p(&format!(
+            r#""a":{{"driver":"vnwa_open",{}}},"b":{{"driver":"nanovna","serial":"/dev/zero",{}}}"#,
+            hub(2),
+            hub(3)
+        ))
+        .is_ok());
+        assert!(p(r#""s1":{"driver":"siglent_sds","host":"10.0.0.5"},"s2":{"driver":"siglent_sds","host":"10.0.0.5"}"#).unwrap_err().contains("scope at 10.0.0.5"));
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_device_arg]
+    // Tests [@ANCHOR: bench_mcp_main_survey]
+    // Tests [@ANCHOR: bench_mcp_main_device_property]
+    // Tests [@ANCHOR: bench_mcp_main_call]
+    #[test]
+    fn two_vnas_are_driven_at_once_by_device_name_each_with_its_own_tier() {
+        use crate::nanovna::testkit::{Fake, PtyServer};
+        let a = PtyServer::start(Fake {
+            offset: 0.25,
+            delay_ms: 400,
+            ..Fake::new()
+        });
+        let b = PtyServer::start(Fake {
+            offset: -0.25,
+            delay_ms: 400,
+            ..Fake::new()
+        });
+        let cfg = format!(
+            r#"{{"instruments":{{"vna":{{"first":{{"driver":"nanovna","tier":"read_config","serial":{:?},"settle_ms":0}},"second":{{"driver":"nanovna","tier":"read_config","serial":{:?},"settle_ms":0}},"viewer":{{"driver":"nanovna","tier":"read_only","serial":"/dev/zero"}},"unit":{{"driver":"vnwa_open","tier":"read_config"}}}}}}}}"#,
+            a.path, b.path
+        );
+        let v = config::parse(&cfg).unwrap();
+        let sweep = json!({"start_hz": 1e6, "stop_hz": 3e6, "points": 3});
+        let with = |d: &str| {
+            let mut x = sweep.clone();
+            x["device"] = json!(d);
+            x
+        };
+        // Several fit and none is named: nothing is touched and the names are listed.
+        let e = call(&v, "bench_vna_sweep", &sweep).unwrap_err();
+        assert!(
+            e.contains("name the instrument") && e.contains("first, second"),
+            "{e}"
+        );
+        let e = call(&v, "bench_vna_sweep", &with("third")).unwrap_err();
+        assert!(
+            e.contains("no instrument named") && e.contains("configured: first"),
+            "{e}"
+        );
+        let mut both = with("first");
+        both["instrument"] = json!("second");
+        assert!(call(&v, "bench_vna_sweep", &both)
+            .unwrap_err()
+            .contains("differ"));
+        // Per-instance tier.
+        assert!(call(&v, "bench_vna_sweep", &with("viewer"))
+            .unwrap_err()
+            .contains("needs tier"));
+        // Both at once: each takes 0.4 s per data read, so serial calls would need more than 1.6 s.
+        let t0 = std::time::Instant::now();
+        let (v1, v2) = (v.clone(), v.clone());
+        let (s1, s2) = (with("first"), with("second"));
+        let h1 = std::thread::spawn(move || call(&v1, "bench_vna_sweep", &s1));
+        let h2 = std::thread::spawn(move || call(&v2, "bench_vna_sweep", &s2));
+        let (r1, r2) = (h1.join().unwrap().unwrap(), h2.join().unwrap().unwrap());
+        assert!(
+            t0.elapsed() < std::time::Duration::from_millis(1500),
+            "{:?}",
+            t0.elapsed()
+        );
+        let s11 = |r: &Value| r["rows"][0]["s11_db"].as_f64().unwrap();
+        assert!(
+            (s11(&r1) - s11(&r2)).abs() > 0.1,
+            "{} {}",
+            s11(&r1),
+            s11(&r2)
+        );
+        // The absent VNWA fails cleanly while the others answer; identify lists every instance.
+        let e = call(&v, "bench_vna_sweep", &with("unit"));
+        if !vnwa_open::power::unit_present() {
+            assert!(e.unwrap_err().starts_with("device not present"));
+        }
+        let all = call(&v, "bench_identify", &json!({})).unwrap();
+        let rows = all["instruments"].as_array().unwrap();
+        assert_eq!(rows.len(), 4);
+        let state = |n: &str| {
+            rows.iter().find(|r| r["name"] == n).unwrap()["state"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(
+            (
+                state("first").as_str(),
+                state("second").as_str(),
+                state("unit").as_str()
+            ),
+            ("ok", "ok", "ok")
+        );
+        assert_eq!(state("viewer"), "error");
+        let one = call(&v, "bench_identify", &json!({"device": "second"})).unwrap();
+        assert!(one["idn"].as_str().unwrap().contains("NanoVNA"));
+        // `device` is in the schema of the tools that take `instrument`, and not in the manual search.
+        let defs = tool_defs(&v);
+        let has = |t: &str| {
+            defs.iter().find(|x| x.name == t).unwrap().input_schema["properties"]
+                .get("device")
+                .is_some()
+        };
+        assert!(has("bench_vna_sweep") && has("bench_identify") && !has("bench_manual_search"));
     }
 
     // Tests [@ANCHOR: bench_mcp_main_psu_output]

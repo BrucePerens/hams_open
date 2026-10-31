@@ -17,6 +17,7 @@ Tunes the radio to `freq_hz`, captures `samples` complex samples at `sample_rate
 <!-- arguments -->
 
 * `instrument`: the SDR alias; needed when both radios are configured.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `freq_hz`: centre frequency in hertz. Required. LimeSDR: 30 MHz to 3.8 GHz. bladeRF: 237.5 MHz to 3.8 GHz, or 9 kHz to 3.8 GHz when the entry has `xb200` (the XB-200 transverter; below 237.5 MHz the bladeRF cannot tune without it).
 * `sample_rate_hz`: default 2e6; 0.25e6 up to 30.72e6 (LimeSDR) or 20e6 (bladeRF).
 * `gain_db`: default 30, 0 to 70.

@@ -20,6 +20,7 @@ Builds `cal_<session>.cal` in the output directory from the stored standards: op
 * `kit_file`: optional path of a kit definition (the real kit's published numbers; the text format of `vnwa_open` `cal::KitDefinition`). Without it ideal standards are assumed.
 * `created`: optional text recorded in the file (a date or a note).
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

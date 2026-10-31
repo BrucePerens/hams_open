@@ -21,6 +21,7 @@ A carrier at `freq_hz` and `level_db`, frequency modulated by a sine of `mod_hz`
 * `level_db`: 0 to -50 dB; default -20.
 * `mod_hz`: modulation frequency, 1 to 3000 Hz; default 500.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

@@ -17,6 +17,7 @@ Captures both receivers together at `freq_hz`, repeats with a fresh tune each ti
 <!-- arguments -->
 
 * `instrument`: the SDR alias; the radio must have two receive channels (the LimeSDR; a bladeRF is refused).
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `freq_hz`: frequency in hertz, 30 MHz to 3.8 GHz. Required.
 * `sample_rate_hz`: default 2e6, 0.25e6 to 30.72e6.
 * `gain_db`: default 30, 0 to 70.

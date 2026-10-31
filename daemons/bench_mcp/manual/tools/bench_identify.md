@@ -17,6 +17,7 @@ Confirms that the instrument behind an alias is reachable and is what the config
 <!-- arguments -->
 
 * `instrument`: the alias from [bench_list](tools/bench_list). Optional when exactly one scope, supply, VNA or SDR is configured; otherwise the call fails with `name the instrument: ...`.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

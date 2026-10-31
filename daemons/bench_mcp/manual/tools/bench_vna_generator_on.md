@@ -19,6 +19,7 @@ CW on the TX port. It stays on until [bench_vna_generator_off](tools/bench_vna_g
 * `freq_hz`: carrier frequency in hertz, above 0 and at most 1.3e9.
 * `level_db`: level as a negative attenuation from the top level, 0 to -50 dB; 0 dB is about -17 dBm.
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

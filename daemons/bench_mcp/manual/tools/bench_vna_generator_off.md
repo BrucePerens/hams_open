@@ -19,6 +19,7 @@ If the generator was started with [bench_vna_generator_am](tools/bench_vna_gener
 <!-- arguments -->
 
 * `instrument`: the VNA alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

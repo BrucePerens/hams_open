@@ -17,6 +17,7 @@ Reads the current state. Use it before changing anything and after any error fro
 <!-- arguments -->
 
 * `instrument`: the alias; optional when only one instrument fits.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

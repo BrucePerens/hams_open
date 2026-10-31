@@ -30,6 +30,6 @@ That is the bench this manual was written against (aliases `scope`, `psu`, `vna`
 | `usb_hub` | the host's USB tree and switchable hub ports | [instruments/usb-hubs](instruments/usb-hubs) |
 | `audio` | the host's sound devices | [instruments/sound](instruments/sound) |
 
-Choosing the instrument: the `instrument` argument of a tool is optional when exactly one configured instrument can serve the tool (the only scope, the only supply). With two or more candidates the call fails with `name the instrument: a, b`. A name that does not exist fails with `no instrument named "x"`; a name of the wrong kind with `<tool> does not apply to "x"`.
+Choosing the instrument: the `instrument` argument (or its alias `device`; see [several instruments](concepts/several-instruments), which also describes the group form of the config) of a tool is optional when exactly one configured instrument can serve the tool (the only scope, the only supply). With two or more candidates the call fails with `name the instrument (argument `device`): a, b`. A name that does not exist fails with `no instrument named "x"`; a name of the wrong kind with `<tool> does not apply to "x"`.
 
 A bad value in the file is refused when the server starts (the whole file, with the entry's name), so a running server has a valid configuration. Per-driver settings are on each instrument's `setup` page. The configuration cannot be changed through the tools.

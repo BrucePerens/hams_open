@@ -17,6 +17,7 @@ Asks the scope for its display (`SCDP`) and writes the image into the output dir
 <!-- arguments -->
 
 * `instrument`: the scope alias; optional when only one scope is configured.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 

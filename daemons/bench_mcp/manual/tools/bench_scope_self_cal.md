@@ -19,6 +19,7 @@ Runs the scope's `*CAL?` self-calibration. It rewrites the stored calibration, t
 * `confirm_inputs_disconnected`: must be `true`, and it must be true because the person at the bench has unplugged every probe and cable. Without it the call is refused. Never set it on your own judgement.
 * `dry_run`: returns the plan and sends nothing; allowed without the confirmation.
 * `instrument`: the scope alias.
+* `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 
 ## Returns
 
