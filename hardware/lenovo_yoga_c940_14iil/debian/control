@@ -1,0 +1,31 @@
+Source: lenovo-yoga-c940-14iil
+Section: kernel
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/lenovo_yoga_c940_14iil
+
+Package: lenovo-yoga-c940-14iil-support
+Architecture: all
+Depends: convertible-helper (>= 1.3.0), convertible-power (>= 1.0.0), grub-large-console (>= 1.0.0),
+         firmware-iwlwifi, firmware-intel-misc, firmware-intel-graphics, firmware-sof-signed,
+         alsa-ucm-conf, alsa-topology-conf, iio-sensor-proxy, bluez, udev, ${misc:Depends}
+Recommends: thermald, bolt, v4l-utils, fprintd, libpam-fprintd, intel-media-va-driver
+Description: Lenovo Yoga C940-14IIL (81Q9) hardware support for Debian
+ Settings and firmware dependencies for the Lenovo Yoga C940-14IIL (type 81Q9,
+ Ice Lake Core i7) on a stock Debian GNOME desktop: Wi-Fi and Bluetooth
+ firmware (AX201), Smart Sound (SOF) audio firmware and UCM profiles, Intel
+ graphics firmware, auto-rotate (iio-sensor-proxy), tablet mode
+ (convertible-helper), power management (convertible-power plus this laptop's
+ TLP settings) and readable GRUB text (grub-large-console).
+ .
+ The fingerprint reader (06cb:00be) has no free driver and cannot be made to
+ work from the Debian archive; fprintd is only recommended.  See README.md.
+ .
+ The settings are applied only when the DMI product version is
+ "Lenovo Yoga C940-14IIL".
+# A separate binary package carrying a Windows virtual machine for this
+# laptop is to be added here later, from this same source directory.  Do not
+# add it as part of this package.

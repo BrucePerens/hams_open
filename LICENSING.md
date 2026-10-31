@@ -75,6 +75,9 @@ reason as `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table
 **`hardware/grub_large_console/` (a shell script and Debian packaging, added 2026-10-29) is GPL-3.0-or-later**, for the same reason as
 `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
 
+**`hardware/lenovo_yoga_c940_14iil/` (Debian packaging, a TLP settings file and a check script for the Lenovo Yoga C940-14IIL, added 2026-10-31) is GPL-3.0-or-later**, for the same reason as
+`hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
+
 **`hardware/convertible_helper/` (a user service and udev rule for convertible laptops, added 2026-10-28) is GPL-3.0-or-later**, for the same reason as
 `hardware/panasonic_cf19/`: it is a desktop-side tool, not a network service. Not counted in the 2026-08-25 survey table above.
 

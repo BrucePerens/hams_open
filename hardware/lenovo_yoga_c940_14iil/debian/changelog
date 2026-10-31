@@ -1,0 +1,9 @@
+lenovo-yoga-c940-14iil (1.0.0) unstable; urgency=medium
+
+  * Initial release: depends on convertible-helper, convertible-power and
+    grub-large-console, on the Wi-Fi, Bluetooth, SOF audio and Intel graphics
+    firmware packages and on iio-sensor-proxy, and installs this laptop's TLP
+    settings.  Includes a feature check script.  The fingerprint reader
+    (06cb:00be) is unsupported by libfprint and is not made to work.
+
+ -- Bruce Perens <bruce@perens.com>  Sat, 31 Oct 2026 12:30:00 -0700
