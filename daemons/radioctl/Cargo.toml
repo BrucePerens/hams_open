@@ -4,6 +4,7 @@ members = [
   "crates/radioctl-core",
   "crates/radioctl-protocols",
   "crates/radioctl-splitter",
+  "crates/radioctl-station",
   "crates/radioctld",
 ]
 
@@ -18,6 +19,7 @@ rust-version = "1.98"
 tokio = { version = "1", default-features = false }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
+serde_json = "1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
