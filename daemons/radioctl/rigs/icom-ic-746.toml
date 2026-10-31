@@ -1,6 +1,6 @@
 # Rig description: Icom IC-746 over CI-V (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
-# Icom's published CI-V guide was NOT used (its download terms forbid reuse of its data); the facts come from Hamlib 4.6.2
+# Icom's manual (where a copy could be read, see the facts marked manual-checked) was read for facts only, under Bruce Perens' decision of 2026-10-31; other facts come from Hamlib 4.6.2
 # (rigs/icom/ic746.c, read for facts only, and `rigctl -m 3023 --dump-caps` output), named in each fact below.
 # Hamlib lists: serial 300..19200 baud, 8N1, ctrl=NONE; receive 0.03-60 MHz; 108-174 MHz; transmit 1.81 to 146 MHz in 22 ranges. The description format has no field for
 # frequency ranges, filter tables or function lists, so they are not repeated here; the CI-V address, baud rate and
@@ -72,8 +72,8 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "civ.address"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic746.c (the IC-746 icom_priv_caps block `ic746_priv_caps`, `default address` field)", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Hamlib's default may differ from a radio's menu setting (the address is user-changeable on the radio)." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Icom IC-746 Instruction Manual, no document number read on the cover, PDF page 76 (data-format example showing the radio's default address in the preamble; printed page numbers differ), https://archive.org/download/icom_ic-746/ic-746.pdf, sha256 049516930a285c53814cb14e261b74b9a0bc148e4e52fd362a6c66fc87944a73", note = "The manual's default CI-V address is 0x56, equal to this file's. Cross-check: Hamlib 4.6.2 rigs/icom (default address). WHY: Icom's own download endpoint is excluded by robots.txt (icomjapan.com and icomamerica.com disallow /api/) and the direct file path answers 403, so the copy read is the public archive.org mirror. Read for facts under Bruce Perens' decision of 2026-10-31; nothing was copied or redistributed; the PDF is kept outside every git repository in ~/manuals/icom/ with its sha256 in SHA256SUMS." }
+verified = { state = "manual-checked", reference = "Icom IC-746 Instruction Manual, PDF page 76, CI-V default address" }
 
 [[facts]]
 key = "civ.controller"
@@ -107,7 +107,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "rigctl -m 3023 --dump-caps (Hamlib 4.6.2): \"Can set/get PTT\", \"Can set Split VFO\", \"Can set RIT\", \"Can send Morse\", \"Targetable features\", \"Get level\" lines; rigs/icom/ic746.c rig_caps", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. A capability is claimed when Hamlib's capability list for the model includes it and the engine implements the command (CI-V 03/04/05/06, 0F, 11, 14, 15, 16, 17, 19, 1A 03, 1C 00, 21, 25); absence in Hamlib is taken as absence on the radio, which may be too cautious. `identify` (command 19 00) is claimed on every file regardless of Hamlib's list; an older radio may answer NG, which the volunteer self-test reports. Settings and CI-V menu items (address, baud rate, transceive) are set at the radio." }
+provenance = { kind = "program-output", reference = "rigctl -m 3023 --dump-caps (Hamlib 4.6.2): \"Can set/get PTT\", \"Can set Split VFO\", \"Can set RIT\", \"Can send Morse\", \"Targetable features\", \"Get level\" lines; rigs/icom/ic746.c rig_caps", note = "Icom's manual for this model was read for facts under Bruce Perens' decision of 2026-10-31 (see the facts marked manual-checked); this fact was not compared with it and is still Hamlib's. Facts only were read from Hamlib; no code or table was copied. A capability is claimed when Hamlib's capability list for the model includes it and the engine implements the command (CI-V 03/04/05/06, 0F, 11, 14, 15, 16, 17, 19, 1A 03, 1C 00, 21, 25); absence in Hamlib is taken as absence on the radio, which may be too cautious. `identify` (command 19 00) is claimed on every file regardless of Hamlib's list; an older radio may answer NG, which the volunteer self-test reports. Settings and CI-V menu items (address, baud rate, transceive) are set at the radio." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -117,5 +117,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3023 --dump-caps` Mode list", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (none). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3023 --dump-caps` Mode list", note = "Icom's manual for this model was read for facts under Bruce Perens' decision of 2026-10-31 (see the facts marked manual-checked); this fact was not compared with it and is still Hamlib's. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (none). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
 verified = { state = "unverified" }

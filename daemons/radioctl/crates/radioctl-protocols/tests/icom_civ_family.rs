@@ -23,8 +23,9 @@ use radioctl_protocols::virtual_rig::VirtualRig;
 const NOW: Duration = Duration::from_secs(10);
 
 /// Description id and the CI-V address recorded from Hamlib 4.6.2 (`rigs/icom/<model>.c`, the
-/// `default address` field of the model's private caps). A second, independent copy of the
-/// number in each file: a typo in either shows up here.
+/// `default address` field of the model's private caps) and read in Icom's instruction manual
+/// where a copy could be had (every one but the IC-7000, IC-7760, IC-706 and IC-706MkII). A
+/// second, independent copy of the number in each file: a typo in either shows up here.
 const ADDRESSES: [(&str, u8); 19] = [
     ("icom-ic-7000", 0x70),
     ("icom-ic-7100", 0x88),
