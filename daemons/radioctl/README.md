@@ -84,6 +84,8 @@ transcript is hand-written from our own simulator and bridge code (its `origin` 
 the description, the engine and the virtual rig agree with each other, not that they agree with an
 IC-7300. A real capture or an owner's bench run is what upgrades a `verified` field.
 
+The FlexRadio files (`flex-6300`, `flex-6400`, `flex-6600`, `flex-6700`, family `flex-smartsdr`, a `[flex]` block) are written from FlexRadio's published SmartSDR API wiki (github.com/flexradio/smartsdr-api-docs, commit and pages named in `crates/radioctl-protocols/src/flex.rs`; its embedded `messages.h` forbids copying and was skipped; no 8000-series description because the wiki does not mention that series). Control plane only: SmartSDR has no get commands, so the engine subscribes (`sub slice|tx|pan all`) and answers reads from the status it has seen. Meters, spectrum and audio are VITA-49 UDP streams (port 4991, `client udpport`, stream ids from the create and `meter list` replies), so the files claim no `read-signal`, `read-power` or `read-swr`. All unverified; the radio was off.
+
 ## Tier 1 capability matrix
 
 `tools/hamlib_caps_matrix.py` runs `rigctl -l` and `rigctl -m N --dump-caps` for every model and writes
@@ -218,6 +220,32 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_elecraft_engine_feed] (radioctl-protocols) Decodes Elecraft replies, `IF` answers, auto-information and `?;`.
 - [@ANCHOR: radioctl:radioctl_elecraft_decode] (radioctl-protocols) Decodes one Elecraft reply token into observations.
 - [@ANCHOR: radioctl:radioctl_elecraft_decode_one] (radioctl-protocols) Decodes the single-value Elecraft replies (`FA`, `MD`, `TQ`, `SM`, levels, ...).
+- [@ANCHOR: radioctl:radioctl_flex_parse_mhz] (radioctl-protocols) Parses a megahertz decimal string to integer hertz without floating point.
+- [@ANCHOR: radioctl:radioctl_flex_parse_mhz_signed] (radioctl-protocols) Parses a signed megahertz string (filter edges) to signed hertz.
+- [@ANCHOR: radioctl:radioctl_flex_format_mhz] (radioctl-protocols) Formats hertz as megahertz with six decimals.
+- [@ANCHOR: radioctl:radioctl_flex_mode_name] (radioctl-protocols) The SmartSDR spelling of a core mode (`digu` for data).
+- [@ANCHOR: radioctl:radioctl_flex_mode_from_name] (radioctl-protocols) The core mode for a SmartSDR mode spelling, any case.
+- [@ANCHOR: radioctl:radioctl_flex_line_may_transmit] (radioctl-protocols) Classifies a command line as one that can put RF on the air (`xmit`, `transmit tune`, `cwx`, `dvk`, `atu start`).
+- [@ANCHOR: radioctl:radioctl_flex_cwx_text] (radioctl-protocols) Quotes CW text for `cwx send` (spaces as 0x7f) and refuses quotes, bars, control and non-ASCII characters.
+- [@ANCHOR: radioctl:radioctl_flex_parse_reply] (radioctl-protocols) Decodes `R<seq>|<hex>|message`.
+- [@ANCHOR: radioctl:radioctl_flex_parse_pairs] (radioctl-protocols) The `key=value` words of a status line.
+- [@ANCHOR: radioctl:radioctl_flex_parse_info] (radioctl-protocols) Decodes the quoted `key=value` list of the `info` reply.
+- [@ANCHOR: radioctl:radioctl_flex_parse_firmware] (radioctl-protocols) The SmartSDR-MB major and minor of a `version` reply.
+- [@ANCHOR: radioctl:radioctl_flex_parse_discovery] (radioctl-protocols) Decodes a VITA-49 discovery datagram into model, serial, name, address and port.
+- [@ANCHOR: radioctl:radioctl_flex_engine_new] (radioctl-protocols) Builds an engine from a FlexRadio description.
+- [@ANCHOR: radioctl:radioctl_flex_shadow_value] (radioctl-protocols) The observation the engine's status shadow holds for a field.
+- [@ANCHOR: radioctl:radioctl_flex_engine_commands] (radioctl-protocols) Maps an Op to SmartSDR command lines; the transmit ones only for `SetPtt` and `SendCw`.
+- [@ANCHOR: radioctl:radioctl_flex_engine_status] (radioctl-protocols) Decodes slice, panadapter, interlock and transmit status lines into observations.
+- [@ANCHOR: radioctl:radioctl_flex_engine_line] (radioctl-protocols) Decodes one received line (`V`, `H`, `R`, `S`, `M`).
+- [@ANCHOR: radioctl:radioctl_flex_interlock_keyed] (radioctl-protocols) True for interlock states in which RF is or may be on the air.
+- [@ANCHOR: radioctl:radioctl_flex_engine_encode] (radioctl-protocols) Encodes an Op as numbered SmartSDR commands, with the subscriptions before the first one.
+- [@ANCHOR: radioctl:radioctl_flex_engine_feed] (radioctl-protocols) Splits received bytes into lines (CR, LF or CRLF, bounded) and decodes them.
+- [@ANCHOR: radioctl:radioctl_flex_answer_reply] (radioctl-protocols) Turns an `R` reply into an acknowledgement, a refusal, an observation from the shadow, or a wait.
+- [@ANCHOR: radioctl:radioctl_flex_apply_interlock] (radioctl-protocols) Applies an interlock status line (state to transmit flag).
+- [@ANCHOR: radioctl:radioctl_flex_apply_pan] (radioctl-protocols) Applies a panadapter status line to the panadapter state.
+- [@ANCHOR: radioctl:radioctl_flex_apply_slice] (radioctl-protocols) Applies a slice status line to the slice state and returns the observations for VFO A.
+- [@ANCHOR: radioctl:radioctl_flex_subscription_lines] (radioctl-protocols) The `sub` or `unsub` lines for slice, tx and pan status.
+- [@ANCHOR: radioctl:radioctl_flex_apply_transmit] (radioctl-protocols) Applies a transmit status line (RF power and mic level).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_set_meta] (radioctl-protocols) Stores a `K2n`/`K3n` meta-command value of the virtual Elecraft rig (Basic formats are still used).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.

@@ -13,6 +13,7 @@ pub mod civ;
 pub mod civ_scope;
 pub mod conformance;
 pub mod elecraft;
+pub mod flex;
 pub mod kenwood;
 pub mod virtual_rig;
 pub mod yaesu;
