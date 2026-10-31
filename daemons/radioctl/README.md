@@ -162,6 +162,15 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
   `crates/radioctl-core/tests/conventions.rs` fails when source, tests and README disagree, and
   when a Rust file lacks its SPDX header.
 - Protocol engines are sans-IO (see `docs/DESIGN.md`).
+- Transmit watchdog (baseline 2a.2 to 2a.4): every rig has a maximum transmit duration enforced
+  by its actor, independent of the caller (`RigOptions::max_transmit`, default three minutes,
+  `DEFAULT_MAX_TRANSMIT`; `Duration::MAX` disables it, the owner's decision), counted from the
+  moment the rig is keyed, seen keyed, or sent Morse. `RigOptions::heartbeat` adds a dead-man
+  period the caller must keep alive with `RigHandle::heartbeat()` while transmitting. Either lapse
+  forces an unkey through the fail-closed path and emits an `Alarm` event with `Source::Watchdog`.
+  Unkeys are retried (three attempts, 100 ms backoff); a failed unkey is `Alarm::UnkeyFailed` and
+  `RigStats::unkey_failures`. An unkey is never refused for a full emergency queue: it rides on
+  the unkey already queued (`RigStats::unkeys_coalesced`). radioctld: `max_transmit_s` per rig.
 - Tests use the same code paths as production; no test-only features.
 
 ## Function reference
@@ -402,6 +411,12 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_handle_gate_state] (radioctl-core) Who opened the gate, or `None` while it is closed.
 - [@ANCHOR: radioctl:radioctl_core_handle_stats] (radioctl-core) A snapshot of the counters.
 - [@ANCHOR: radioctl:radioctl_core_handle_link_up] (radioctl-core) False once the transport has failed.
+- [@ANCHOR: radioctl:radioctl_core_handle_heartbeat] (radioctl-core) The caller's dead-man heartbeat: with `RigOptions::heartbeat` set, a keyed rig whose caller stops beating is unkeyed when the period lapses.
+- [@ANCHOR: radioctl:radioctl_core_actor_watchdog_due] (radioctl-core) When the transmit watchdog fires while the rig transmits: the earlier of the transmit time limit and the heartbeat lapse.
+- [@ANCHOR: radioctl:radioctl_core_actor_watchdog_fire] (radioctl-core) The watchdog lapsed: reports `Alarm::TransmitTimeout` or `Alarm::HeartbeatLapsed`, unkeys through the fail-closed path, disarms.
+- [@ANCHOR: radioctl:radioctl_core_actor_arm_watchdog] (radioctl-core) Starts the transmit watchdog when the rig is seen keyed or Morse is sent.
+- [@ANCHOR: radioctl:radioctl_core_actor_alarm] (radioctl-core) Emits an alarm event (`Field::Alarm`, `Source::Watchdog`), never deduplicated, never cached.
+- [@ANCHOR: radioctl:radioctl_core_actor_emit] (radioctl-core) Sends an event to the stream subscribers and the callback dispatcher.
 - [@ANCHOR: radioctl:radioctl_core_handle_events] (radioctl-core) An async stream of status changes, starting now.
 - [@ANCHOR: radioctl:radioctl_core_handle_cached] (radioctl-core) The cached value of a field with its age, without touching the rig.
 - [@ANCHOR: radioctl:radioctl_core_handle_execute] (radioctl-core) Runs a command with the default deadline.
@@ -431,7 +446,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_actor_spacing] (radioctl-core) Enforces the description's minimum gap between commands.
 - [@ANCHOR: radioctl:radioctl_core_handle_read] (radioctl-core) Cached or fresh read of a field, by freshness.
 - [@ANCHOR: radioctl:radioctl_core_handle_submit] (radioctl-core) Checks capability and transmit gate, then queues the command without waiting (full queue is a typed error).
-- [@ANCHOR: radioctl:radioctl_core_actor_unkey_fail_closed] (radioctl-core) Writes an unkey and waits for its answer, not preemptible: used when a transmit command was written but never answered (the rig may be keyed) and when the actor stops.
+- [@ANCHOR: radioctl:radioctl_core_actor_unkey_fail_closed] (radioctl-core) Writes an unkey and waits for its answer, not preemptible, up to three attempts with backoff: used when a transmit command was written but never answered, when the watchdog fires and when the actor stops. An unkey that cannot be done is counted (`unkey_failures`) and reported as `Alarm::UnkeyFailed`.
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_on_stop] (radioctl-core) When the last handle is dropped, a rig whose cache says keyed or whose gate was open is unkeyed before the actor ends.
 - [@ANCHOR: radioctl:radioctl_core_deadline_after] (radioctl-core) Saturating `Instant + Duration`: an absurd timeout (a caller's `Duration::MAX`, a rig file's timing) never panics the actor or the caller.
 - [@ANCHOR: radioctl:radioctl_core_wait_until] (radioctl-core) Sleeps until the next poll is due, or forever when nothing is polled.

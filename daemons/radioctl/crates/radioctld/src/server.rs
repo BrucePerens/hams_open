@@ -187,7 +187,11 @@ async fn accept_loop(listener: TcpListener, shared: Arc<Shared>, handle: Handle)
         let _ = socket.set_nodelay(true);
         shared.counters.accepted.fetch_add(1, Ordering::Relaxed);
         shared.counters.active.fetch_add(1, Ordering::Relaxed);
-        handle.spawn(run_client(socket, Arc::clone(&shared), permit));
+        // The client's number is taken here, in accept order, not in the spawned task: two
+        // tasks started back to back would otherwise race for it and the ids would not follow
+        // the order the clients connected in.
+        let client = shared.counters.next_client.fetch_add(1, Ordering::Relaxed) + 1;
+        handle.spawn(run_client(socket, client, Arc::clone(&shared), permit));
     }
 }
 
@@ -247,8 +251,12 @@ async fn write_reply(
 
 // [@ANCHOR: radioctld_server_run_client]
 /// The task of one client, until it leaves, misbehaves, or the server stops.
-async fn run_client(socket: TcpStream, shared: Arc<Shared>, _permit: OwnedSemaphorePermit) {
-    let client = shared.counters.next_client.fetch_add(1, Ordering::Relaxed) + 1;
+async fn run_client(
+    socket: TcpStream,
+    client: u64,
+    shared: Arc<Shared>,
+    _permit: OwnedSemaphorePermit,
+) {
     let (mut reader, mut writer) = socket.into_split();
     let mut lines = LineBuffer::new(shared.limits.max_line_bytes);
     let mut shutdown = shared.shutdown.clone();

@@ -15,6 +15,8 @@ pub enum Source {
     Transceive,
     /// An operation that arrived through the protocol splitter.
     Splitter,
+    /// The actor's own transmit watchdog: a forced unkey, or an unkey that failed.
+    Watchdog,
 }
 
 /// One changed field with its old and new value.

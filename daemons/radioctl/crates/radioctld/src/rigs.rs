@@ -86,6 +86,10 @@ pub async fn build_rig(
     options: RigOptions,
 ) -> Result<BuiltRig, String> {
     let engine = BoxedEngine(engine_for(&description).map_err(|e| format!("{}: {e}", rig.name))?);
+    let mut options = options;
+    if let Some(limit) = rig.max_transmit {
+        options.max_transmit = limit;
+    }
     let fail = |e: RigError| format!("rig {}: {e}", rig.name);
     let mut virtual_control = None;
     let handle: RigHandle = match &rig.transport {
