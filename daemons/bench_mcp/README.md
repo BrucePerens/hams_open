@@ -1,11 +1,32 @@
 # bench_mcp
 
-One MCP server (official `rmcp` SDK, stdio) for the bench test equipment. Drivers: a Siglent
-**SDS1000X-E** series oscilloscope over the LAN (written against an SDS1202X-E, firmware 1.3.27),
-an **Abestop ATM6301** bench supply (0-60 V, 0-10 A) on its CH340 USB-serial port, and a **DG8SAQ VNWA 3E**
-vector network analyser (USB and its two audio codecs, through the `vnwa_open` crate, no vendor software). Status
-(2026-10-26): all three checked on the real instruments. Adding an instrument means one driver file and
-a `Kind`.
+One MCP server (official `rmcp` SDK, stdio) for the bench test equipment, with about 100 tools (each with a manual page served
+through the MCP itself) and drivers for the instruments below. Adding an instrument means one driver module and one row in
+`DRIVER_KINDS` and `MODULES` (see `docs/EXTENDING.md`). Instrument status is in each driver's manual pages (`verified` front
+matter says what was checked on the real hardware and when).
+
+| Driver (`driver` in the config) | What it is | Highlights | Section / doc |
+|---|---|---|---|
+| `siglent_sds` | Siglent SDS1000X-E oscilloscope over the LAN (written against an SDS1202X-E, firmware 1.3.27) | capture, screenshot, measure, spectrum, self-calibration | [Tools](#tools), [Scope functions](#scope-functions-probed-on-the-sds1202x-e-firmware-1327-2026-10-28) |
+| `atm6301` | Abestop ATM6301 bench supply (0-60 V, 0-10 A), CH340 USB-serial | setpoints with caps, output switch with `confirm_load_connected`, `max_on_s` and a safe-state tool | [Tools](#tools) |
+| `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
+| `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
+| `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
+| `audio` | Sound devices, with discovery by signature | play, record, meter, loopback, speak, alert, verify, synthesizers; never the system default device; `dry_run` and a safe state | [Audio tools](#audio-tools-audio-driver), `docs/AUDIO_TOOLS.md` |
+| `hamlib` | Radios through Hamlib's `rigctld` (a separate process; LGPL, not linked) | models, get and set, scan, watch, memory, load checks, transmit tests with an attestation and a watchdog | [Hamlib rigs](#hamlib-rigs-hamlib-driver), `docs/HAMLIB_TOOLS.md` |
+| `rotator` | Antenna rotators through `rotctld` | status, point, park, stop | [Rotators](#rotators-rotator-driver) |
+| `procedure` | The procedure runner | long multi-step programs (CPython) that call bench tools through the normal dispatcher, with failure reports, safe-state routines and saved examples | [Procedure runner](#procedure-runner-procedure-driver) |
+| `example` | A template instrument with a simulated transport | the skeleton a new driver starts from, checked by the contributor tests | [Template instrument](#template-instrument-example-driver) |
+
+Across all drivers: safety tiers (`read_only`, `read_config`, `full`) with `dry_run`, confirm arguments and a safe-state
+companion on every tool that actuates; bounded timeouts and retries on every I/O call; the hierarchical **manual** served by the
+MCP (`bench_manual_index`, `_read`, `_search`, `_for_tool`, `_whats_new`); the **contributor guide** for other people's agents
+(`docs/EXTENDING.md`) with checklist tests that fail until a new tool has its page, tier, fixtures and anchors; and fixtures
+scrubbed of serial numbers.
+
+**Planned (not built yet):** an FX2LP bench instrument (GPIO, logic capture, I2C, SPI, a UART bridge, pulse and timing outputs,
+frequency counting; see `night_shift_todo/low/fx2-bench-instrument-image-and-bench-mcp-tools-4d8f2b61.md` in hams_com).
+USB cable testing is left to other contributors.
 
 Licence: AGPL-3.0-or-later. Not published to crates.io.
 
