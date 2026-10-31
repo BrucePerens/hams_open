@@ -1062,7 +1062,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_support_load_reports] (tools) The [[report]] entries of rigs/reports/verified.toml.
 - [@ANCHOR: radioctl:radioctl_support_check_consistency] (tools) Problems that would make RIG_SUPPORT.md lie: map, facts and reports must agree.
 - [@ANCHOR: radioctl:radioctl_support_classify] (tools) Family, tier and engine for a Hamlib model.
-- [@ANCHOR: radioctl:radioctl_support_status] (tools) described / engine only / needs variant / needs engine / odd device.
+- [@ANCHOR: radioctl:radioctl_support_status] (tools) described / engine only / needs variant / needs engine / odd device / not applicable.
 - [@ANCHOR: radioctl:radioctl_support_build_rows] (tools) One row per Hamlib model.
 - [@ANCHOR: radioctl:radioctl_support_render] (tools) The RIG_SUPPORT.md text.
 - [@ANCHOR: radioctl:radioctl_support_generate] (tools) The Markdown for the repository as it is now.
