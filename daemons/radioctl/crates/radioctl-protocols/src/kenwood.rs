@@ -121,6 +121,8 @@ pub struct KenwoodEngine {
     older: bool,
     /// Split through `FN` and `SP` (the TS-440S) and not through `FR` and `FT` (the TS-450S).
     fn_sp: bool,
+    /// The TS-990S dialect (`kenwood.dialect = "ts990"`): the mode through `OM0`, no `MD`.
+    ts990: bool,
 }
 
 impl KenwoodEngine {
@@ -148,11 +150,13 @@ impl KenwoodEngine {
         let dialect = desc.kenwood.as_ref().map(|k| k.dialect);
         let older = matches!(dialect, Some(KenwoodDialect::Ts440 | KenwoodDialect::Ts450));
         let fn_sp = dialect == Some(KenwoodDialect::Ts440);
+        let ts990 = dialect == Some(KenwoodDialect::Ts990);
         Ok(KenwoodEngine {
             desc,
             tokenizer: Tokenizer::default(),
             older,
             fn_sp,
+            ts990,
         })
     }
 
@@ -193,6 +197,23 @@ impl KenwoodEngine {
             )
         {
             return vec![Inbound::Unrecognised(format!("{text};").into_bytes())];
+        }
+        if self.ts990 {
+            // `OM0<m>`: the operating mode of the main band (the PC command reference, OM). It has
+            // no `MD`, `FR` or `FT`, and the levels and front end have other forms here.
+            if let Some(code) = text.strip_prefix("OM0").filter(|c| c.len() == 1) {
+                let mode = code.bytes().next().and_then(|c| self.desc.code_mode(c));
+                return vec![mode.map_or_else(
+                    || Inbound::Unrecognised(format!("{text};").into_bytes()),
+                    |m| Inbound::Observation(Observation::Mode(m)),
+                )];
+            }
+            if matches!(
+                text.get(..2),
+                Some("MD" | "FR" | "FT" | "AG" | "RG" | "MG" | "ML" | "PC" | "KS" | "RA" | "PA")
+            ) {
+                return vec![Inbound::Unrecognised(format!("{text};").into_bytes())];
+            }
         }
         if let Some(rest) = text.strip_prefix("IF") {
             return self
@@ -269,6 +290,34 @@ impl KenwoodEngine {
         })
     }
 
+    // [@ANCHOR: radioctl_kenwood_engine_encode_ts990]
+    /// The operations whose wire form differs in the TS-990S dialect (PC command reference, `OM`
+    /// PDF page 45): the mode is `OM0;` and `OM0<m>;`; there is no `MD`, `FR`, `FT`, level or `KY`
+    /// form the engine can use. `None` where the classic form is also the TS-990S form.
+    fn encode_ts990(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        Some(match op {
+            Op::GetMode => Ok(Self::command(
+                "OM0;".into(),
+                ReplyKind::Observation(Field::Mode),
+            )),
+            Op::SetMode(mode) => self
+                .desc
+                .mode_code(*mode)
+                .map(|code| Self::command(format!("OM0{};", char::from(code)), ReplyKind::None))
+                .ok_or_else(|| Self::unsupported("mode not in the description")),
+            // The sub band is a second receiver, `SP` starts a split-frequency setting and the
+            // transmit state is not in `IF`: none of these is a VFO B, a split flag or a read of PTT.
+            Op::GetTxVfo
+            | Op::SetSplit(_)
+            | Op::GetSplit
+            | Op::GetPtt
+            | Op::GetLevel(_)
+            | Op::SetLevel(..)
+            | Op::StopCw => Err(Self::unsupported("not in the TS-990S command set")),
+            _ => return None,
+        })
+    }
+
     // [@ANCHOR: radioctl_kenwood_engine_decode_front_end]
     /// An `RA` (attenuator: `P1P1` then an always-zero `P2P2`) or `PA` (preamplifier: `P1` then an
     /// always-zero `P2`) answer, mapped to a level by the description's steps.
@@ -317,6 +366,22 @@ impl KenwoodEngine {
             .bytes()
             .next()
             .and_then(|c| self.desc.code_mode(c))?;
+        if self.ts990 {
+            // TS-990S: P1 is the main band's frequency (what `FA` sets), P8 (transmit) and P10 are
+            // always 0 and so are not read, and the sub band is a second receiver, not a VFO B.
+            return Some(
+                [
+                    Observation::Frequency(Vfo::A, Hz(frequency)),
+                    Observation::Mode(mode),
+                    Observation::Rit(rit),
+                    Observation::Xit(xit),
+                    Observation::RitOffset(offset),
+                ]
+                .into_iter()
+                .map(Inbound::Observation)
+                .collect(),
+            );
+        }
         let mut out = Vec::new();
         // P10 is the receive VFO (`FR`): the frequency is that VFO's. The transmit VFO is not in
         // `IF`; it is the other VFO when the split flag is set and the same one otherwise (`FT;`
@@ -440,6 +505,11 @@ impl ProtocolEngine for KenwoodEngine {
         }
         if self.older {
             if let Some(result) = self.encode_ts440(op) {
+                return result;
+            }
+        }
+        if self.ts990 {
+            if let Some(result) = self.encode_ts990(op) {
                 return result;
             }
         }

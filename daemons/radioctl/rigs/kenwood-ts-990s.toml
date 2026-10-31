@@ -1,0 +1,113 @@
+# Rig description: Kenwood TS-990S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The command facts marked manual-checked were compared with Kenwood's TS-990S PC command reference (PDF pages named in each fact, sha256 in the fact); Kenwood's only terms in it are a disclaimer that it does not support nor warrant the document. Nothing here comes from Hamlib source.
+# Dialect "ts990": it has the classic IF, FA, RT, XT, RC, RU/RD, SM0, AI2, TX and RX, but the mode is OM0 (read) and OM0<m> (set), there is no MD, FR or FT, and IF has no transmit state (P8 is always 0), so there is no read-ptt.
+# The TS-990S has Main and Sub receivers: FA is the main band and FB the sub band, which is a second receiver and not a VFO B, so no second-vfo or split is declared (SP starts a split-frequency setting, it is not a flag).
+# Not declared, and why: levels (AG and RG carry a band digit, MG is 000 to 255, PC 005 to 200, KS 004 to 060: the engine's forms and ranges differ, and RA and PA are read with a band digit); CW (KY not implemented for it).
+# LAN: the TS-990S also has a TCP/IP CAT stream with ##CN and ##ID login commands (PDF p. 62: account and password lengths 1 to 8, UTF-16, closed after 10 s without traffic). Not implemented here and unverified; the frames differ from the TS-890S's.
+# Transmit: set-ptt (TX and RX) is declared; the rig actor's transmit gate stays closed by default and PTT is unverified on hardware.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "rit-xit", "identify"]
+
+[rig]
+id = "kenwood-ts-990s"
+name = "Kenwood TS-990S"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 22
+dialect = "ts990"
+
+[timing]
+timeout_ms = 200
+retries = 1
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[modes]]
+mode = "data-r"
+code = "C"
+
+[[modes]]
+mode = "data"
+code = "D"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): title page", note = "The id and display name are our own labels." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): ID, PDF p. 31 (P1 022)", note = "Three digits: ID022;." }
+verified = { state = "manual-checked", reference = "TS-990S PC command reference, ID, PDF p. 31" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): OM PDF p. 45 (read OM0;, answer OM0<m>;), IF PDF p. 32 (P8 always 0), and no MD, FR or FT entry in the command tables", note = "Our name for the command set: radioctl-protocols/src/kenwood.rs (dialect ts990)." }
+verified = { state = "manual-checked", reference = "TS-990S PC command reference, PDF pp. 32, 45" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-890s.toml", note = "Our own choice borrowed from the TS-890S file; the reference gives no response time, and this is not a measurement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-590sg.toml", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): TX PDF p. 59 (TX0; transmits by SEND/PTT; with no P1 it is 0; a response only when AI is on) and RX PDF p. 51", note = "Transmit-capable: the rig transmit gate applies and stays closed by default. The transmit state cannot be read (P8 of IF is always 0), so there is no read-ptt. PTT is unverified on hardware." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): AI, PDF p. 5 (AI2: on)" }
+verified = { state = "manual-checked", reference = "TS-990S PC command reference, AI, PDF p. 5" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): FA (main band, 11 digits, set and read) PDF p. 29; IF (P1 frequency, P3 RIT/XIT frequency, P4 RIT, P5 XIT, P9 mode) PDF p. 32; OM PDF p. 45; RC, RD and RU (set 2: five digits, 00000 to 09999) PDF p. 49; RT PDF p. 51; SM (SM0 read, answer SM0 and four digits, 0000 to 0070) PDF p. 54; XT PDF p. 61", note = "FA is the main band. The RIT offset is read from IF and set with RC then RU or RD." }
+verified = { state = "manual-checked", reference = "TS-990S PC command reference, PDF pp. 29, 32, 45, 49, 51, 54, 61" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): OM, PDF p. 45: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R, C LSB-D1, D USB-D1", note = "Mapping to radioctl modes is ours, as for the TS-890S: FSK is rtty, FSK-R is rtty-r, LSB-D1 is data-r, USB-D1 is data. PSK, FM-D, AM-D and the D2 and D3 letters are not mapped." }
+verified = { state = "manual-checked", reference = "TS-990S PC command reference, OM, PDF p. 45" }
+

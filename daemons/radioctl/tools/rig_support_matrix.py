@@ -149,6 +149,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "kenwood-ts-2000": [2014],
     "kenwood-ts-590s": [2031],
     "kenwood-ts-590sg": [2037],
+    "kenwood-ts-990s": [2039],
     "kenwood-ts-890s": [2041],
     "xiegu-g90": [3088],
     "xiegu-x108g": [3076],
