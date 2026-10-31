@@ -59,6 +59,7 @@ async fn replay(daemon_text: &str, descriptions: Option<Vec<RigDescription>>, tr
 // Tests [@ANCHOR: radioctld_reply_render]
 // Tests [@ANCHOR: radioctld_service_execute]
 // Tests [@ANCHOR: radioctld_server_answer]
+// Tests [@ANCHOR: radioctld_server_rig_answer]
 // Tests [@ANCHOR: radioctld_server_run_client]
 // Tests [@ANCHOR: radioctld_server_accept_loop]
 // Tests [@ANCHOR: radioctld_daemon_start]

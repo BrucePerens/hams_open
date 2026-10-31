@@ -107,6 +107,7 @@ async fn the_dump_state_of_a_closed_rig_advertises_no_transmit() {
 // Tests [@ANCHOR: radioctld_service_key]
 // Tests [@ANCHOR: radioctld_service_unkey]
 // Tests [@ANCHOR: radioctld_service_disconnect]
+// Tests [@ANCHOR: radioctld_server_rig_disconnect]
 // Tests [@ANCHOR: radioctld_service_ptt_owner]
 // Tests [@ANCHOR: radioctld_service_send_morse]
 // Tests [@ANCHOR: radioctld_rigs_build_rig]

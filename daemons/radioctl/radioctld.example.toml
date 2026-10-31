@@ -39,3 +39,16 @@ kind = "virtual"                              # an in-memory rig generated from 
 # [rig.transport]
 # kind = "tcp"                                # a network serial server or a radio's own CAT port
 # address = "192.168.1.50:4001"
+
+# One [[rotator]] per rotator, served in Hamlib's rotctld text protocol on its own listener
+# (rotctl -m 2 -r 127.0.0.1:4533). Tested against the virtual rotator only; unverified on a real one.
+# [[rotator]]
+# name = "g5500"                              # required; 1-32 of A-Z a-z 0-9 _ . -
+# model = "yaesu-g-5500-gs232b"               # required; an id from data/station/rotators.toml:
+#                                             # generic-rotctld, yaesu-g-5500-gs232b, yaesu-g-450-gs232a
+# listen = "127.0.0.1:4533"                   # default: loopback, port 4533 + the rotator's index
+#                                             # (a second rig would take 4533 too: give one a listen of its own)
+# [rotator.transport]
+# kind = "virtual"                            # the model's virtual rotator, served inside the daemon
+# # kind = "tcp"                              # a rotctld, or a serial server in front of a GS-232 controller
+# # address = "192.168.1.60:4533"             # reconnects after a loss; one attempt at start

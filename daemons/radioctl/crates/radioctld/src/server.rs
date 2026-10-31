@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The TCP server for one rig: accept, check the allow-list, bound the number of clients, and run
-//! one task per client that reads lines, asks the rig's service, and writes the answers.
+//! The TCP server for one rig or rotator: accept, check the allow-list, bound the number of
+//! clients, and run one task per client that reads lines, asks the service ([`LineService`]: a
+//! rig's [`RigService`] or a rotator's [`crate::rotctl::RotatorService`]), and writes the answers.
 //!
 //! Bounds (all from the configuration): the client count, the length of a line, how long a
 //! connection may be silent, how long a started line may take, how long a write may take. A client
 //! that breaks one is disconnected; a disconnecting client that owned the transmitter unkeys the
 //! rig. The server creates no runtime: every task runs on the `Handle` passed to [`serve`].
 
+use std::future::Future;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,6 +33,32 @@ const READ_BUFFER: usize = 1024;
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 const ACCEPT_ERROR_PAUSE: Duration = Duration::from_millis(100);
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(3);
+
+/// A boxed future, for the object-safe [`LineService`].
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// What a server answers request lines with. One client task calls `answer` for every complete
+/// line, in order, and `disconnect` once when the client is gone.
+pub trait LineService: Send + Sync {
+    /// The text to send for one request line, and whether the connection closes after it.
+    fn answer<'a>(&'a self, client: u64, line: &'a Line) -> BoxFuture<'a, (String, bool)>;
+    /// The client left (or was dropped); anything it held is released.
+    fn disconnect(&self, client: u64) -> BoxFuture<'_, ()>;
+}
+
+impl LineService for RigService {
+    // [@ANCHOR: radioctld_server_rig_answer]
+    /// [`answer`] for a rig.
+    fn answer<'a>(&'a self, client: u64, line: &'a Line) -> BoxFuture<'a, (String, bool)> {
+        Box::pin(answer(self, client, line))
+    }
+
+    // [@ANCHOR: radioctld_server_rig_disconnect]
+    /// Releases the transmitter if the client held it (unkeying the rig).
+    fn disconnect(&self, client: u64) -> BoxFuture<'_, ()> {
+        Box::pin(RigService::disconnect(self, client))
+    }
+}
 
 /// The bounds a server enforces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,7 +115,7 @@ struct Counters {
 }
 
 struct Shared {
-    service: Arc<RigService>,
+    service: Arc<dyn LineService>,
     access: Arc<AllowList>,
     limits: Limits,
     counters: Counters,
@@ -107,7 +136,7 @@ pub struct ServerHandle {
 pub fn serve(
     handle: &Handle,
     listener: TcpListener,
-    service: Arc<RigService>,
+    service: Arc<dyn LineService>,
     access: Arc<AllowList>,
     limits: Limits,
 ) -> std::io::Result<ServerHandle> {
@@ -297,7 +326,7 @@ async fn run_client(
             None
         };
         for line in &complete {
-            let (reply, close) = answer(&shared.service, client, line).await;
+            let (reply, close) = shared.service.answer(client, line).await;
             if !write_reply(&mut writer, &shared, &reply).await || close {
                 break 'client;
             }

@@ -141,6 +141,13 @@ radio, each with its own listen address (as with one `rigctld` per radio); see `
   (checked at load; the allow list is applied on accept, before a byte is read).
 - Bounds: line length (`max_line_bytes`), clients per rig, idle time, time to finish a started line,
   write time; an over-long line gets `RPRT -1` and the connection is closed.
+- Rotators: a `[[rotator]]` section serves one rotator in Hamlib's `rotctld` text protocol on its own
+  listener (default port 4533 + index), through `radioctl-station`'s rotator engines (`rotctld` and GS-232
+  models from `data/station/rotators.toml`) over a reconnecting TCP link or against the virtual rotator
+  served inside the daemon: `P p S K _ \dump_state q`, the `+` format; a position outside the model's
+  travel is refused (`RPRT -1`) before anything is written; other Hamlib rotator commands `RPRT -4`. The
+  same server, allow list and bounds as a rig (`server::LineService`). Tested against the virtual
+  rotator and Hamlib's `rotctl -m 2` (`--features hamlib-oracle`) only; unverified on a real rotator.
 - Runtime: the `radioctld` binary owns the one multi-thread tokio runtime; the library takes a `Handle`.
 - Deviations from `rigctld`, all on purpose: PTT is released when its owner disconnects; the VFO
   selected by `V` is radioctld's own state (radioctl addresses VFOs explicitly); split is VFO A to
@@ -628,6 +635,25 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctld_daemon_start] (radioctld) Brings up every rig of `config` (descriptions given in the same order) and starts listening.
 - [@ANCHOR: radioctl:radioctld_daemon_start_one] (radioctld) Brings up one rig and its listener.
 - [@ANCHOR: radioctl:radioctld_daemon_stop] (radioctld) Stops every listener and client, and unkeys any rig whose transmitter a client held.
+- [@ANCHOR: radioctl:radioctld_config_check_name] (radioctld) Checks a rig's or rotator's name: 1 to 32 of `[A-Za-z0-9_.-]`.
+- [@ANCHOR: radioctl:radioctld_config_listen_address] (radioctld) The listen address of a rig or rotator: the one given, or loopback at `base + index`.
+- [@ANCHOR: radioctl:radioctld_config_rotator] (radioctld) Validates one `[[rotator]]`: a known model from the shipped descriptions, a listen address and a transport.
+- [@ANCHOR: radioctl:radioctld_config_check_host_port] (radioctld) Checks that a TCP address is `host:port`.
+- [@ANCHOR: radioctl:radioctld_daemon_start_rotator] (radioctld) Brings up one rotator and its listener.
+- [@ANCHOR: radioctl:radioctld_rotators_build_rotator] (radioctld) Brings up one rotator on `runtime`: engine, reconnecting link (to the rotator, or to a virtual rotator served on a loopback socket), handle, service.
+- [@ANCHOR: radioctl:radioctld_rotctl_resolve] (radioctld) The long name of a rotator command word and whether it is served; `None` for a word Hamlib does not know.
+- [@ANCHOR: radioctl:radioctld_rotctl_degrees] (radioctld) A finite degree value from an argument.
+- [@ANCHOR: radioctl:radioctld_rotctl_parse_line] (radioctld) Parses one `rotctld` request line. `None` for a blank line.
+- [@ANCHOR: radioctl:radioctld_rotctl_error_code] (radioctld) The `RPRT` code for a rotator error: a refused position is `-1`, a refused park `-11`.
+- [@ANCHOR: radioctl:radioctld_rotctl_service_new] (radioctld) A rotator service for a `Rotator` handle.
+- [@ANCHOR: radioctl:radioctld_rotctl_service_rotator] (radioctld) The rotator handle.
+- [@ANCHOR: radioctl:radioctld_rotctl_dump_state] (radioctld) The `\dump_state` text in the shape Hamlib 4.6.2's `rotctld` prints and `rotctl -m 2` reads.
+- [@ANCHOR: radioctl:radioctld_rotctl_service_execute] (radioctld) Executes one rotator command; every wait is bounded by the description's reply timeout.
+- [@ANCHOR: radioctl:radioctld_rotctl_answer] (radioctld) The text to send for one rotator request line, and whether the connection closes after it.
+- [@ANCHOR: radioctl:radioctld_rotctl_service_answer] (radioctld) `LineService::answer` for a rotator.
+- [@ANCHOR: radioctl:radioctld_rotctl_service_disconnect] (radioctld) `LineService::disconnect` for a rotator: nothing is held per client.
+- [@ANCHOR: radioctl:radioctld_server_rig_answer] (radioctld) `LineService::answer` for a rig.
+- [@ANCHOR: radioctl:radioctld_server_rig_disconnect] (radioctld) `LineService::disconnect` for a rig: releases the transmitter if the client held it.
 - [@ANCHOR: radioctl:radioctld_main_parse_args] (radioctld) Parses the command line (without the program name).
 - [@ANCHOR: radioctl:radioctld_main_load] (radioctld) Reads the configuration file and every rig description it names.
 - [@ANCHOR: radioctl:radioctld_main_run] (radioctld) Runs the daemon until the process is interrupted.

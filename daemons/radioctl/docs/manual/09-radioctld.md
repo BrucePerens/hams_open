@@ -30,7 +30,9 @@ is usually a wrong baud rate or CI-V address.
 
 One `[[rig]]` per radio, each with its own listen address, as with one `rigctld` per radio. If the
 first connection to a rig fails (the port is missing, the TCP connect times out) the daemon does not
-start; it does not wait for the radio to appear.
+start; it does not wait for the radio to appear. A `[[rotator]]` is served the same way in the
+`rotctld` protocol, on its own listener (`radioctld: rotator NAME listening on ADDRESS`); see
+[Rotators](#rotators) below.
 
 ## Configuration reference
 
@@ -93,6 +95,45 @@ reply_delay_ms = 0
 `radioctld.example.toml` in the crate root is the annotated example. Not configurable today: serial data
 bits, parity, flow control and the idle level of DTR and RTS; the number of open attempts; polling
 intervals (the daemon uses the library defaults); the list of capabilities (that is the description's).
+
+### Rotators
+
+A `[[rotator]]` section serves one rotator in Hamlib's `rotctld` text protocol, on a listener of its
+own, through `radioctl-station`'s rotator engines (chapter [14](14-station.md#rotators)). A file may
+hold rigs, rotators or both; names are unique within each kind, and listen addresses across both.
+
+```toml radioctld
+[[rotator]]
+name = "g5500"
+model = "yaesu-g-5500-gs232b"
+listen = "127.0.0.1:4533"
+
+[rotator.transport]
+kind = "virtual"
+```
+
+| Key | Default | Range | Meaning |
+|---|---|---|---|
+| `rotator.name` | required | 1 to 32 of `A-Za-z0-9_.-` | Used in logs. |
+| `rotator.model` | required | an `id` from `data/station/rotators.toml` | `generic-rotctld` (any rotator behind a Hamlib `rotctld`), `yaesu-g-5500-gs232b`, `yaesu-g-450-gs232a` (azimuth only). The loader names the known ids when it refuses one. |
+| `rotator.listen` | `127.0.0.1:` 4533 plus the rotator's index | `ip:port` | 4533 is Hamlib's `rotctld` default. A second rig would also default to 4533, so a file with both gives one of them a `listen` of its own (the loader refuses the clash). A non-loopback address needs `allow_non_loopback_bind`. |
+| `transport.kind` | required | `virtual`, `tcp` | `virtual` serves the model's virtual rotator inside the daemon (on a loopback socket of its own, port chosen by the kernel) and reaches it over the same link a real one uses. `tcp` is `address = "host:port"`: a `rotctld`, or a serial server in front of a GS-232 controller. The link reconnects with backoff after a loss; the first connection is one attempt, and a rotator that cannot be reached stops the daemon from starting, as a rig does. No serial transport for rotators yet. |
+
+What the rotator listener speaks: `P az el`/`\set_pos`, `p`/`\get_pos` (two lines, two decimals;
+`Azimuth:`/`Elevation:` in the extended format), `S`/`\stop`, `K`/`\park`, `_`/`\get_info` (the
+description's name), `\dump_state` (the shape Hamlib 4.6.2's `rotctld` prints and `rotctl -m 2` reads on
+connect: protocol version 1, model, `min_az=` to `max_el=`, `south_zero=0`, `rot_type=AzEl` or `Az`,
+`done`), `q`; the `+` extended format. Every other Hamlib rotator command (`M`, `R`, levels, the locator
+and distance calculations) answers `RPRT -4`; an unknown word `RPRT -1`; the raw `w` `RPRT -11`. A
+position outside the model's travel is **refused** with `RPRT -1` before anything is written to the
+rotator (Hamlib's `rot_set_position` answers `RIG_EINVAL` for one outside the limits), never clamped;
+`K` on a model with no park position is `RPRT -11`. A rotator error maps as a rig's does: a timeout is
+`-5`, a link or controller fault `-6`. A rotator has no owner and no transmit path, so nothing is released
+when a client disconnects, and stopping the daemon leaves the rotator where it is (it keeps its own
+target, as it would if a `rotctld` stopped). Tested against the virtual rotator only, and with Hamlib's
+own `rotctl -m 2` as an oracle under `--features hamlib-oracle`; **nothing is verified against a real
+rotator**. Verifying the shipped descriptions (`verified = true` per fact), serial transports, Easycomm,
+Rot2Prog and DCU engines, and the relay's `rotor_steer` dispatch are still to do.
 
 ## Access control and exposure
 

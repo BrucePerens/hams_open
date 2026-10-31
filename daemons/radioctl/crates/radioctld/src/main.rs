@@ -66,7 +66,11 @@ fn load(path: &Path) -> Result<(Config, Vec<radioctl_core::description::RigDescr
 fn run(cli: &Cli) -> Result<(), String> {
     let (config, descriptions) = load(&cli.config)?;
     if cli.check {
-        eprintln!("radioctld: configuration ok, {} rig(s)", config.rigs.len());
+        eprintln!(
+            "radioctld: configuration ok, {} rig(s), {} rotator(s)",
+            config.rigs.len(),
+            config.rotators.len()
+        );
         return Ok(());
     }
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -81,6 +85,13 @@ fn run(cli: &Cli) -> Result<(), String> {
         for served in &daemon.rigs {
             eprintln!(
                 "radioctld: {} listening on {}",
+                served.name,
+                served.server.local_addr()
+            );
+        }
+        for served in &daemon.rotators {
+            eprintln!(
+                "radioctld: rotator {} listening on {}",
                 served.name,
                 served.server.local_addr()
             );

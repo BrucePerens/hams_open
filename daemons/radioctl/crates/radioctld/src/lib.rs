@@ -11,6 +11,9 @@
 //!   while the rig's transmit gate is closed (it is closed unless the configuration opens it).
 //! - Loopback by default, an explicit option and an allow-list to serve a network, bounded line
 //!   length, bounded client count, timeouts everywhere ([`config`], [`access`], [`server`]).
+//! - Rotators (`[[rotator]]`) are served the same way in Hamlib's `rotctld` text protocol
+//!   ([`rotctl`], [`rotators`]), through `radioctl-station`'s rotator engines; a position outside
+//!   the description's travel is refused before anything is written.
 
 pub mod access;
 pub mod caps;
@@ -20,5 +23,7 @@ pub mod daemon;
 pub mod names;
 pub mod reply;
 pub mod rigs;
+pub mod rotators;
+pub mod rotctl;
 pub mod server;
 pub mod service;
