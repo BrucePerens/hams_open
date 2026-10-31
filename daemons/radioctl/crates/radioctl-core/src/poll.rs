@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Adaptive per-field polling. Polling is the lowest priority work of the actor: it runs only
 //! when no command is queued, backs off while a field does not change, and (for rigs with
-//! transceive) slows to its maximum interval once the rig has reported on its own.
+//! transceive) slows to its maximum interval once the rig has reported on its own. One
+//! exception: the transmit state keeps a reserved share ([`PollConfig::ptt_reserve`]), so that a
+//! client issuing back-to-back commands cannot keep the actor from noticing a radio that unkeyed
+//! or keyed on its own.
 
 use std::time::Duration;
 
@@ -24,6 +27,9 @@ pub struct PollConfig {
     pub slow_min: Duration,
     /// Slowest interval for meters.
     pub slow_max: Duration,
+    /// The transmit state is read at least this often whatever the command traffic: a PTT poll
+    /// not done for this long is run before the next queued command.
+    pub ptt_reserve: Duration,
 }
 
 impl Default for PollConfig {
@@ -34,6 +40,7 @@ impl Default for PollConfig {
             fast_max: Duration::from_secs(2),
             slow_min: Duration::from_secs(1),
             slow_max: Duration::from_secs(5),
+            ptt_reserve: Duration::from_secs(2),
         }
     }
 }
@@ -49,6 +56,8 @@ pub struct PollEntry {
     max: Duration,
     interval: Duration,
     due: Instant,
+    /// When the field was last polled (the schedule's creation before the first poll).
+    polled_at: Instant,
 }
 
 /// The poll schedule of one rig.
@@ -101,6 +110,7 @@ impl PollSchedule {
                         max,
                         interval: min,
                         due: now,
+                        polled_at: now,
                     });
                 }
             }
@@ -136,6 +146,16 @@ impl PollSchedule {
         Some(entry.clone())
     }
 
+    // [@ANCHOR: radioctl_core_poll_take_starved]
+    /// The entry for `field` when it has not been polled for `reserve` or longer, whether or not
+    /// its own interval is due: the reserved share the actor runs ahead of queued commands.
+    pub fn take_starved(&self, field: Field, now: Instant, reserve: Duration) -> Option<PollEntry> {
+        self.entries
+            .iter()
+            .find(|e| e.field == field && e.polled_at + reserve <= now)
+            .cloned()
+    }
+
     // [@ANCHOR: radioctl_core_poll_report]
     /// Records the outcome of polling `field`: a change resets the interval to its minimum, no
     /// change doubles it up to the maximum, a failure jumps to the maximum. With transceive
@@ -151,6 +171,7 @@ impl PollSchedule {
                 (entry.interval * 2).min(entry.max)
             };
             entry.due = now + entry.interval;
+            entry.polled_at = now;
         }
     }
 
@@ -249,6 +270,30 @@ mod tests {
         assert_eq!(schedule.interval(field), Some(Duration::from_millis(250)));
         schedule.report(field, false, true, now);
         assert_eq!(schedule.interval(field), Some(Duration::from_secs(2)));
+    }
+
+    // Tests [@ANCHOR: radioctl_core_poll_take_starved]
+    #[test]
+    fn the_transmit_state_is_starved_after_the_reserve_whatever_its_interval() {
+        let now = Instant::now();
+        let mut schedule = schedule(now);
+        let reserve = Duration::from_secs(2);
+        assert!(schedule.take_starved(Field::Ptt, now, reserve).is_none());
+        schedule.report(Field::Ptt, false, false, now);
+        let later = now + Duration::from_millis(1999);
+        assert!(schedule.take_starved(Field::Ptt, later, reserve).is_none());
+        let starved = schedule
+            .take_starved(Field::Ptt, now + reserve, reserve)
+            .expect("starved");
+        assert_eq!(starved.op, Op::GetPtt);
+        // Polling it resets the clock; a field without a reserve is never starved.
+        schedule.report(Field::Ptt, false, false, now + reserve);
+        assert!(schedule
+            .take_starved(Field::Ptt, now + reserve, reserve)
+            .is_none());
+        assert!(schedule
+            .take_starved(Field::Swr, now + reserve, reserve)
+            .is_none());
     }
 
     // Tests [@ANCHOR: radioctl_core_poll_note_transceive]
