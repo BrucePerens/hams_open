@@ -1,0 +1,120 @@
+# Rig description: Kenwood TS-890S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Written from Kenwood's published PC command reference (document, PDF page and sha256 in each fact). The
+# TS-890S speaks its own dialect (no IF, the mode through OM, no receiver digit on AG): `dialect = "ts890"`
+# selects the engine in crates/radioctl-protocols/src/kenwood_ts890.rs, where the gaps are listed. No radio
+# has been connected, so every `verified` is unverified.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify"]
+
+[rig]
+id = "kenwood-ts-890s"
+name = "Kenwood TS-890S"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 24
+dialect = "ts890"
+
+[levels]
+attenuator_db = [6, 12, 18]
+attenuator_any_up_to_db = 0
+preamp_steps = 2
+
+[timing]
+timeout_ms = 200
+retries = 1
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[modes]]
+mode = "data-r"
+code = "C"
+
+[[modes]]
+mode = "data"
+code = "D"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: title page and ID, PDF p. 36", note = "The id and display name are our own labels." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: ID, PDF p. 36 (024: TS-890S)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: whole guide; there is no IF or MD command, the mode is OM (PDF p. 52), AG has no receiver digit (PDF p. 4), split is TB (PDF p. 64)", note = "Our name for the command set: radioctl-protocols/src/kenwood_ts890.rs." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 2041 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 200ms, 1 retry", note = "Hamlib's settings, not a measurement of the radio. The guide gives no response time." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: RA (Attenuator) PDF p. 57: P1 0 OFF, 1 6 dB, 2 12 dB, 3 18 dB; PA (Pre-amplifier) PDF p. 52: P1 0 OFF, 1 PRE 1, 2 PRE 2" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-590sg.toml", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: TX, PDF p. 67 (TX0 transmits by SEND/PTT) and RX, PDF p. 59", note = "Transmit-capable: the rig's transmit gate applies. The guide has no read form of TX, so there is no read-ptt." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: AI, PDF p. 4 (AI2: on, not backed up)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: FA and FB PDF p. 32, FR PDF p. 34, FT PDF p. 35, ID PDF p. 36, OM PDF p. 52, RF PDF p. 58, RC/RD/RU PDF p. 57, RT PDF p. 59, SM PDF p. 62, TB PDF p. 64, XT PDF p. 70, AG PDF p. 4, MG PDF p. 47, KS PDF p. 38, PC PDF p. 54, RG PDF p. 58", note = "Split is TB; the RIT offset is read with RF and set with RC then RU or RD." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: OM, PDF p. 52: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R, C LSB-D, D USB-D", note = "Mapping to radioctl modes is ours: FSK is rtty, FSK-R is rtty-r, LSB-D is data-r, USB-D is data. PSK, FM-D and AM-D (A, B, E, F) are not mapped." }
+verified = { state = "unverified" }

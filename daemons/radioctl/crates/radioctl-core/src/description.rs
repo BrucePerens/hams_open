@@ -44,11 +44,45 @@ pub struct CivParams {
     pub echo: bool,
 }
 
+/// Which command set a Kenwood-style rig speaks.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum KenwoodDialect {
+    /// The TS-2000 and TS-590 command set: `IF`, `MD`, `AG0nnn`.
+    #[default]
+    Classic,
+    /// The TS-890S command set: no `IF`, the mode through `OM`, `AGnnn`, split through `TB`,
+    /// one-digit `RA` and `PA`.
+    Ts890,
+}
+
+impl KenwoodDialect {
+    // [@ANCHOR: radioctl_core_kenwood_dialect_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        match self {
+            KenwoodDialect::Classic => "classic",
+            KenwoodDialect::Ts890 => "ts890",
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_kenwood_dialect_from_name]
+    /// The dialect with a file-format name.
+    pub fn from_name(name: &str) -> Option<KenwoodDialect> {
+        match name {
+            "classic" => Some(KenwoodDialect::Classic),
+            "ts890" => Some(KenwoodDialect::Ts890),
+            _ => None,
+        }
+    }
+}
+
 /// Kenwood-style parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KenwoodParams {
     /// The number the rig returns for `ID;`.
     pub model_id: u16,
+    /// The command set.
+    pub dialect: KenwoodDialect,
 }
 
 /// Elecraft-style parameters.
@@ -300,7 +334,10 @@ impl RigDescription {
             name: "Kenwood TS-2000".into(),
             family: Family::KenwoodAscii,
             civ: None,
-            kenwood: Some(KenwoodParams { model_id: 19 }),
+            kenwood: Some(KenwoodParams {
+                model_id: 19,
+                dialect: KenwoodDialect::Classic,
+            }),
             elecraft: None,
             yaesu: None,
             yaesu_legacy: None,
@@ -356,6 +393,17 @@ mod tests {
         assert_eq!(RigDescription::ic7300().mode_code(Mode::Usb), Some(0x01));
         assert_eq!(RigDescription::ts2000().mode_code(Mode::Usb), Some(b'2'));
         assert_eq!(RigDescription::ts2000().code_mode(b'8'), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_kenwood_dialect_name]
+    // Tests [@ANCHOR: radioctl_core_kenwood_dialect_from_name]
+    #[test]
+    fn kenwood_dialect_names_round_trip() {
+        for d in [KenwoodDialect::Classic, KenwoodDialect::Ts890] {
+            assert_eq!(KenwoodDialect::from_name(d.name()), Some(d));
+        }
+        assert_eq!(KenwoodDialect::from_name("ts2000"), None);
+        assert_eq!(KenwoodDialect::default(), KenwoodDialect::Classic);
     }
 
     // Tests [@ANCHOR: radioctl_core_description_ic7300]

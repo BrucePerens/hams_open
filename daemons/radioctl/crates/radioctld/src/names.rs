@@ -345,6 +345,20 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Level::KeyerSpeed => None,
             _ => Some((0, 255)),
         },
+        // The TS-890S dialect has no monitor-level command and a keyer speed from 4.
+        Family::KenwoodAscii
+            if description.kenwood.as_ref().is_some_and(|k| {
+                k.dialect == radioctl_core::description::KenwoodDialect::Ts890
+            }) =>
+        {
+            match level {
+                Level::AfGain | Level::RfGain => Some((0, 255)),
+                Level::MicGain => Some((0, 100)),
+                Level::KeyerSpeed => Some((4, 60)),
+                Level::RfPower => Some((5, 100)),
+                Level::MonitorLevel | Level::Attenuator | Level::Preamp => None,
+            }
+        }
         Family::KenwoodAscii => Some(match level {
             Level::AfGain | Level::RfGain => (0, 255),
             Level::MicGain => (0, 100),

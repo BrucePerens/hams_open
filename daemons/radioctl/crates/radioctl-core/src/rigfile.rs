@@ -8,7 +8,7 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `elecraft.model_id`, `yaesu.model_id`,
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `elecraft.model_id`, `yaesu.model_id`,
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ only), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
@@ -24,8 +24,8 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodParams, LevelParams,
-    RigDescription, ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
+    CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodDialect, KenwoodParams,
+    LevelParams, RigDescription, ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Mode};
@@ -156,6 +156,8 @@ struct CivSection {
 #[serde(deny_unknown_fields)]
 struct KenwoodSection {
     model_id: u16,
+    #[serde(default)]
+    dialect: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -317,9 +319,21 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         model_id: c.model_id,
         echo: c.echo,
     });
-    let kenwood = doc.kenwood.as_ref().map(|k| KenwoodParams {
-        model_id: k.model_id,
-    });
+    let kenwood = doc
+        .kenwood
+        .as_ref()
+        .map(|k| {
+            let dialect = match k.dialect.as_deref() {
+                None => KenwoodDialect::Classic,
+                Some(name) => KenwoodDialect::from_name(name)
+                    .ok_or_else(|| bad(format!("unknown kenwood.dialect {name:?}")))?,
+            };
+            Ok::<KenwoodParams, RigError>(KenwoodParams {
+                model_id: k.model_id,
+                dialect,
+            })
+        })
+        .transpose()?;
     let elecraft = doc.elecraft.as_ref().map(|e| ElecraftParams {
         model_id: e.model_id,
     });
@@ -611,6 +625,13 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.kenwood.is_some() {
         keys.push("kenwood.model_id".to_string());
+        if description
+            .kenwood
+            .as_ref()
+            .is_some_and(|k| k.dialect != KenwoodDialect::Classic)
+        {
+            keys.push("kenwood.dialect".to_string());
+        }
     }
     if description.elecraft.is_some() {
         keys.push("elecraft.model_id".to_string());
@@ -933,6 +954,26 @@ verified = { state = "unverified" }
         assert_eq!(summary.get("unverified"), Some(&(8 + 1 + 2)));
         assert!(!loaded.is_hardware_verified());
     }
+    // Tests [@ANCHOR: radioctl_core_rigfile_parse]
+    #[test]
+    fn a_kenwood_dialect_is_named_known_and_needs_its_fact() {
+        let ts890 = GOOD.replace("model_id = 19", "model_id = 19\ndialect = \"ts890\"");
+        expect_rejected(&ts890, "no provenance fact covers \"kenwood.dialect\"");
+        let fact = "\n[[facts]]\nkey = \"kenwood.dialect\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let loaded = parse(&format!("{ts890}{fact}")).expect("loads");
+        assert_eq!(
+            loaded.description.kenwood.map(|k| k.dialect),
+            Some(KenwoodDialect::Ts890)
+        );
+        expect_rejected(&ts890.replace("ts890", "ts9000"), "unknown kenwood.dialect");
+        let classic = parse(&GOOD.replace("model_id = 19", "model_id = 19\ndialect = \"classic\""))
+            .expect("loads");
+        assert_eq!(
+            classic.description.kenwood.map(|k| k.dialect),
+            Some(KenwoodDialect::Classic)
+        );
+    }
+
     // Tests [@ANCHOR: radioctl_core_rigfile_build_levels]
     // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_step]
     // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_db]

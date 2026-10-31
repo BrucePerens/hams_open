@@ -74,7 +74,7 @@ Phase 0/1 foundation, as the crate README says. What is implemented:
   ([chapter 12](12-provenance-and-licensing.md) says why), and every transcript is hand-written from
   a manual or from our own simulator (the FlexRadio and ANAN files have none). A passing test means the description, the engine and the virtual
   rig agree with each other, not that they agree with a radio.
-- **Planned, not in the code:** unkey on link loss, ownership modes, scope for non-Icom radios, the Kenwood TS-890S dialect,
+- **Planned, not in the code:** unkey on link loss, ownership modes, scope for non-Icom radios,
   FlexRadio streams (meters, spectrum, audio) and discovery on the wire, the OpenHPSDR data plane (I/Q) and
   the Kenwood and Icom LAN radios, a C ABI, rotators and amplifiers, and external switches. [Chapter 13](13-roadmap.md) is the complete list.
 
