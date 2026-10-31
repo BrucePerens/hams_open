@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use radioctl_core::capability::Capability;
 use radioctl_core::description::RigDescription;
 use radioctl_core::engine::{ProtocolEngine, Request};
 use radioctl_core::error::RigError;
@@ -79,8 +80,9 @@ pub fn service_config(rig: &RigConfig, server: &ServerConfig) -> ServiceConfig {
 }
 
 // [@ANCHOR: radioctld_rigs_build_rig]
-/// Brings up one rig on `runtime`: engine, transport, actor, service. The transmit gate is
-/// opened only when the configuration says `transmit = true`.
+/// Brings up one rig on `runtime`: engine, transport, actor, service. The radio is sent an unkey
+/// first (a killed predecessor may have left it keyed). The transmit gate is opened only when the
+/// configuration says `transmit = true`.
 pub async fn build_rig(
     runtime: &Handle,
     rig: &RigConfig,
@@ -126,6 +128,19 @@ pub async fn build_rig(
             spawn(runtime, engine, stream, options).map_err(fail)?
         }
     };
+    // The unkey pass: a process that was killed while it had the radio keyed leaves it keyed
+    // (nothing else would unkey it until its own time-out, or this actor's watchdog after a poll
+    // sees it). Unkeying is always allowed and needs no gate, so every start begins with one. A
+    // radio that cannot be unkeyed is not served: the failure is the first sign of a wrong
+    // address or baud rate, and it may be keyed.
+    if handle.capabilities().has(Capability::SetPtt) {
+        handle.set_ptt(false).await.map_err(|e| {
+            format!(
+                "rig {}: the startup unkey failed, the radio may be keyed: {e}",
+                rig.name
+            )
+        })?;
+    }
     if rig.transmit {
         handle.open_transmit_gate(TransmitPermit::new(format!(
             "radioctld config: rig {} transmit = true",

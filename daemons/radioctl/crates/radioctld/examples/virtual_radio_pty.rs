@@ -73,9 +73,31 @@ impl Cable {
             let _ = master.set_timeout(Duration::from_millis(20));
             let started = Instant::now();
             let mut buffer = [0u8; 512];
+            let mut last_sweep = Instant::now();
             while !stop_t.load(Ordering::Acquire) {
-                let Ok(n) = master.read(&mut buffer) else {
-                    continue;
+                // A radio with its waveform output on sends sweeps by itself, about ten a second.
+                if last_sweep.elapsed() >= Duration::from_millis(100) {
+                    last_sweep = Instant::now();
+                    let sweep = rig_t
+                        .lock()
+                        .map(|mut rig| rig.scope_sweep())
+                        .unwrap_or_default();
+                    if !sweep.is_empty() {
+                        note(&log_t, "->", &sweep);
+                        if let Ok(mut port) = writer_t.lock() {
+                            let _ = port.write_all(&sweep);
+                        }
+                    }
+                }
+                let n = match master.read(&mut buffer) {
+                    Ok(n) => n,
+                    Err(error) => {
+                        // Nobody has the slave open: the read fails at once, so wait a little.
+                        if error.kind() != std::io::ErrorKind::TimedOut {
+                            thread::sleep(Duration::from_millis(20));
+                        }
+                        continue;
+                    }
                 };
                 let bytes = buffer.get(..n).unwrap_or(&[]);
                 note(&log_t, "<-", bytes);

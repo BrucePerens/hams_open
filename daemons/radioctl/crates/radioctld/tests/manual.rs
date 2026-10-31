@@ -383,3 +383,46 @@ fn the_other_examples_run_and_print_what_their_chapters_show() {
     let file = run_example("rig_file", &["icom-ic-7300"]);
     assert!(file.contains("engine, virtual rig and file agree"));
 }
+
+/// The bench console, fed a script on a virtual IC-7300: reads, sets, a status change with its
+/// source, scope sweeps, and no way to transmit.
+#[test]
+fn bench_console_reads_sets_scopes_and_cannot_transmit() {
+    use std::io::Write;
+    use std::process::Stdio;
+    build_examples_once();
+    let binary = example_binary("bench_console");
+    assert!(binary.exists(), "{} was not built", binary.display());
+    let mut child = Command::new(&binary)
+        .args(["icom-ic-7300", "virtual"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn bench_console");
+    let script = "freq a\\nsetfreq a 7074000\\nfreq a\\nmode\\nlevel af-gain\\nscope on\\n\
+                  frames 2\\nptt\\nsetptt 1\\nkey\\nquit\\n"
+        .replace("\\n", "\n");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(script.as_bytes())
+        .expect("script");
+    let output = child.wait_with_output().expect("bench_console");
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("= Frequency(A, Hz(14074000))"), "{text}");
+    assert!(text.contains("= ok"), "the set was acknowledged: {text}");
+    assert!(text.contains("= Frequency(A, Hz(7074000))"), "{text}");
+    assert!(text.contains("= Mode(Usb)"), "{text}");
+    assert!(text.contains("= Level(AfGain,"), "{text}");
+    assert!(text.contains("scope seq="), "scope sweeps arrive: {text}");
+    assert!(text.contains("= Ptt(false)"), "{text}");
+    for word in ["setptt", "key"] {
+        assert!(
+            text.contains(&format!("unknown command \"{word}\"")),
+            "the console must have no transmit command ({word}): {text}"
+        );
+    }
+}
