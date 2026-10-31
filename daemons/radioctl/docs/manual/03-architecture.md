@@ -102,7 +102,7 @@ The application owns the tokio runtime. This is design decision 1 and the propos
 - The library never builds a runtime of its own by default and contains no `block_on`.
 - One exception exists behind the cargo feature `owned-runtime` (off by default):
   `rig::spawn_with_owned_runtime` builds a one-worker runtime and returns an `OwnedRig`, for a
-  program that is not a tokio program. It is meant for a future C ABI. `radioctld` does not use it:
+  program that is not a tokio program. It was meant for the C ABI, but `radioctl-capi` builds its own runtime so that a C caller can block on it from any thread. `radioctld` does not use it:
   the `radioctld` binary builds one multi-thread runtime for all rigs and passes its `Handle` in. The
   binary calls `block_on` on it; that is the application's right, not the library's.
 - A `RigHandle` only awaits `mpsc` and `oneshot` channels, which work across runtimes. So a handle

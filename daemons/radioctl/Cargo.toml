@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "crates/radioctl-capi",
   "crates/radioctl-core",
   "crates/radioctl-protocols",
   "crates/radioctl-splitter",

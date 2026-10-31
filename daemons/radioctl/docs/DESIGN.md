@@ -29,7 +29,9 @@ records the decisions that shape the code.
    opened for that rig. Until real transports exist nothing can reach hardware at all.
 6. **Typed values.** Frequencies are integer hertz (`Hz`); units appear in type and field names.
 7. **No `unsafe`, no `unwrap`/`expect`/`panic` in library code** (workspace lints). Tests may use
-   `expect`.
+   `expect`. The one exception is `radioctl-capi`, the C ABI, which cannot avoid raw pointers: it
+   opts out of the workspace table, denies `unsafe_code` crate-wide, allows it in `ffi.rs` only, and
+   keeps the unwrap/expect/panic denials.
 8. **Knowledge sources.** Vendor manuals, our own captures and existing repo code, and (Tier 1)
    program output of `rigctl --dump-caps`. Hamlib source may be read later for facts only, with a
    provenance note per entry and no copied code or tables.

@@ -18,6 +18,8 @@ daemons/radioctl/
   crates/radioctl-protocols/  sans-IO protocol engines, one per family (PR 3 on)
   crates/radioctl-splitter/   virtual IC-7300 CI-V / TS-2000 CAT endpoints (pty, TCP) in front of one rig actor
   crates/radioctld/           rigctld text-protocol server (library + binary `radioctld`)
+  crates/radioctl-station/    station control: switches, power, interlocks, radio manager, Home Assistant, rotators, amplifier channels
+  crates/radioctl-capi/       C ABI sketch (cdylib, staticlib, cbindgen header include/radioctl.h)
   docs/DESIGN.md          design note (ADR style)
   docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md); its code is checked by crates/radioctld/tests/manual.rs, and its examples are crates/radioctld/examples/
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
@@ -38,7 +40,7 @@ Layout changes from the proposal (record every change here):
   reply delay and a control handle. `radioctl-core` dev-depends on `radioctl-protocols` for its actor tests.
 - `radioctl-splitter` (new crate, so the library crates stay free of pty code) depends on core and protocols; `radioctld` uses its PTT arbiter (`PttOwner`), so the two share one set of ownership semantics.
 - `radioctl-core` has the cargo feature `owned-runtime` (off by default): the one place the library builds a
-  tokio runtime of its own, for programs that are not tokio programs (the planned C ABI). `radioctld` does not
+  tokio runtime of its own, for programs that are not tokio programs (`radioctl-capi` builds its own runtime instead). `radioctld` does not
   use it: the `radioctld` binary builds the one multi-thread runtime of its process and passes its `Handle`
   to the library, which creates none.
 - No `deny.toml`: no other Rust crate in hams_open has one, so this workspace follows suit. Add one
