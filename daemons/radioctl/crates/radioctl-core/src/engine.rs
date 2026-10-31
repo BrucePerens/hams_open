@@ -64,3 +64,65 @@ pub trait ProtocolEngine: Send + 'static {
     /// Consumes received bytes; `now` is the caller's monotonic time.
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>;
 }
+
+impl ProtocolEngine for Box<dyn ProtocolEngine> {
+    // [@ANCHOR: radioctl_core_engine_box_description]
+    /// The boxed engine's description, so one `spawn` serves every protocol family.
+    fn description(&self) -> &RigDescription {
+        self.as_ref().description()
+    }
+
+    // [@ANCHOR: radioctl_core_engine_box_encode]
+    /// Encodes through the boxed engine.
+    fn encode(&mut self, op: &Op) -> Result<Request, RigError> {
+        self.as_mut().encode(op)
+    }
+
+    // [@ANCHOR: radioctl_core_engine_box_feed]
+    /// Feeds the boxed engine.
+    fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
+        self.as_mut().feed(bytes, now)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::units::Hz;
+
+    struct Echo(RigDescription);
+
+    impl ProtocolEngine for Echo {
+        fn description(&self) -> &RigDescription {
+            &self.0
+        }
+        fn encode(&mut self, _op: &Op) -> Result<Request, RigError> {
+            Ok(Request {
+                bytes: b"x".to_vec(),
+                reply: ReplyKind::None,
+            })
+        }
+        fn feed(&mut self, bytes: &[u8], _now: Duration) -> Vec<Inbound> {
+            vec![Inbound::Unrecognised(bytes.to_vec())]
+        }
+    }
+
+    // Tests [@ANCHOR: radioctl_core_engine_box_description]
+    // Tests [@ANCHOR: radioctl_core_engine_box_encode]
+    // Tests [@ANCHOR: radioctl_core_engine_box_feed]
+    #[test]
+    fn a_boxed_engine_is_an_engine() {
+        let mut boxed: Box<dyn ProtocolEngine> = Box::new(Echo(RigDescription::ic7300()));
+        assert_eq!(ProtocolEngine::description(&boxed).id, "icom-ic-7300");
+        let request = ProtocolEngine::encode(
+            &mut boxed,
+            &Op::SetFrequency(crate::units::Vfo::A, Hz(7_000_000)),
+        )
+        .expect("encode");
+        assert_eq!(request.bytes, b"x");
+        assert_eq!(
+            ProtocolEngine::feed(&mut boxed, b"yz", Duration::ZERO),
+            vec![Inbound::Unrecognised(b"yz".to_vec())]
+        );
+    }
+}

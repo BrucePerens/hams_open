@@ -7,6 +7,26 @@ Rules, in short: explicit runtime ownership, the transmit gate closed until the 
 call, no panic across the boundary, no raw command. Manual: `docs/manual/14-station.md`, "The C
 ABI". This is the only crate in the workspace with `unsafe`; it is confined to `src/ffi.rs`.
 
+## Using it from C
+
+```c
+#include "radioctl.h"
+rctl_runtime *rt = NULL;
+rctl_rig *rig = NULL;
+if (rctl_runtime_new(&rt) != RCTL_OK) { /* rctl_last_error() says why */ }
+if (rctl_rig_open_tcp(rt, rigfile_text, "192.168.1.50:4992", &rig) == RCTL_OK) {
+    uint64_t hz;
+    rctl_rig_get_frequency(rig, 0, &hz);   /* works with the transmit gate closed */
+    /* rctl_rig_set_ptt(rig, 1) returns RCTL_ERR_TX_GATE_CLOSED until
+       rctl_rig_permit_transmit(rig, "who decided") */
+    rctl_rig_close(rig);                   /* unkeys first */
+}
+rctl_runtime_free(rt);                     /* RCTL_ERR_BUSY while a rig is still open */
+```
+
+Link with `-lradioctl_capi`; the working example is `tests/c/capi_test.c`. Every call returns a
+negative `RCTL_ERR_*` code on failure and sets a per-thread message read with `rctl_last_error()`.
+
 ## Anchors
 
 - [@ANCHOR: radioctl:radioctl_capi_keep_connected] (radioctl-capi) Whether the transport, when it reports a status, says it is connected.
@@ -19,9 +39,6 @@ ABI". This is the only crate in the workspace with `unsafe`; it is confined to `
 - [@ANCHOR: radioctl:radioctl_capi_rig_ref] (radioctl-capi) A live rig handle as a reference.
 - [@ANCHOR: radioctl:radioctl_capi_out] (radioctl-capi) Checks an out-pointer.
 - [@ANCHOR: radioctl:radioctl_capi_vfo] (radioctl-capi) 0 is VFO A and 1 is VFO B.
-- [@ANCHOR: radioctl:radioctl_capi_boxed_description] (radioctl-capi) `description` (see the source).
-- [@ANCHOR: radioctl:radioctl_capi_boxed_encode] (radioctl-capi) `encode` (see the source).
-- [@ANCHOR: radioctl:radioctl_capi_boxed_feed] (radioctl-capi) `feed` (see the source).
 - [@ANCHOR: radioctl:radioctl_capi_runtime_from_handle] (radioctl-capi) A runtime object for a Rust host that already has a tokio runtime and wants a C caller to use it.
 - [@ANCHOR: radioctl:radioctl_capi_abi_version] (radioctl-capi) `rctl_abi_version` (see the source).
 - [@ANCHOR: radioctl:radioctl_capi_version] (radioctl-capi) `rctl_version` (see the source).

@@ -50,3 +50,6 @@ with a login or their own framing. Manual: `docs/manual/05-transports.md`.
 - [@ANCHOR: radioctl:radioctl_core_net_read_size] (radioctl-core) `read_size` (see the source).
 - [@ANCHOR: radioctl:radioctl_core_net_open_link] (radioctl-core) Opens a network link on `runtime` and returns once the first connection is ready, or with the last attempt's error after `config.first_attempts` ([`ErrorKind::LinkDown`]).
 - [@ANCHOR: radioctl:radioctl_core_net_framing_keepalive_sent] (radioctl-core) Called after each keep-alive was sent, so a framing can recognise and swallow the radio's answer to it.
+- [@ANCHOR: radioctl:radioctl_core_engine_box_description] (radioctl-core) The boxed engine's description, so one `spawn` serves every protocol family.
+- [@ANCHOR: radioctl:radioctl_core_engine_box_encode] (radioctl-core) Encodes through the boxed engine.
+- [@ANCHOR: radioctl:radioctl_core_engine_box_feed] (radioctl-core) Feeds the boxed engine.

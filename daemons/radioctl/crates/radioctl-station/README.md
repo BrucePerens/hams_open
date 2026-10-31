@@ -56,6 +56,13 @@ is dead (a transport that ended, such as a plain TCP stream at end of file), the
 The off time of a power channel (`min_off_ms`) is counted from a commanded or observed turn-off,
 never from the first sight of the channel: a radio found off at start-up can be switched on at once.
 
+`spawner::DescriptionSpawner` is the ready-made `RigSpawner`: per radio a `RigSpec` (the rig
+description, an endpoint: a TCP address with an optional framing factory such as the TS-890S LAN
+login, or a serial port, and the actor options). It builds the engine for the description, opens a
+reconnecting transport and spawns the actor with the transport's link status; the transmit gate stays
+closed and credentials never pass through it (a framing factory closes over what the application read
+from its secret store).
+
 ## Amplifier and tuner channels
 
 `type = "amplifier"` channels belong to an amplifier or tuner device. `function = "operate"` is a
@@ -376,3 +383,9 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_set_stuck] (radioctl-station) Makes the rotator stuck (or frees it).
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_set_silent] (radioctl-station) Makes the rotator silent (or lets it answer).
 - [@ANCHOR: radioctl:radioctl_station_vrot_serve] (radioctl-station) Serves `rotator` on `listener` from a task on `runtime`; one client at a time, a new connection replaces the old one.
+- [@ANCHOR: radioctl:radioctl_station_rigspec_tcp] (radioctl-station) A radio at a TCP address with the raw CAT stream and default settings.
+- [@ANCHOR: radioctl:radioctl_station_rigspec_serial] (radioctl-station) A radio on a serial port at `baud`, with default settings.
+- [@ANCHOR: radioctl:radioctl_station_dspawner_new] (radioctl-station) No radios yet.
+- [@ANCHOR: radioctl:radioctl_station_dspawner_add] (radioctl-station) Adds (or replaces) the spec of a radio.
+- [@ANCHOR: radioctl:radioctl_station_dspawner_fail] (radioctl-station) `fail` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_dspawner_spawn] (radioctl-station) Builds the engine, opens the transport (reconnecting), and spawns the actor with the transport's link status.

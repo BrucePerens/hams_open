@@ -13,7 +13,6 @@ use std::time::Duration;
 
 use radioctl_core::capability::Capability;
 use radioctl_core::description::RigDescription;
-use radioctl_core::engine::{Inbound, ProtocolEngine, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::net::{open_link, NetConfig, NetMonitor, RawFraming};
 use radioctl_core::op::Op;
@@ -240,26 +239,6 @@ fn vfo(code: c_int) -> Result<Vfo, Fail> {
     }
 }
 
-/// A protocol engine behind a box, so one `spawn` serves every family.
-struct BoxedEngine(Box<dyn ProtocolEngine>);
-
-impl ProtocolEngine for BoxedEngine {
-    // [@ANCHOR: radioctl_capi_boxed_description]
-    fn description(&self) -> &RigDescription {
-        self.0.description()
-    }
-
-    // [@ANCHOR: radioctl_capi_boxed_encode]
-    fn encode(&mut self, op: &Op) -> Result<Request, RigError> {
-        self.0.encode(op)
-    }
-
-    // [@ANCHOR: radioctl_capi_boxed_feed]
-    fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
-        self.0.feed(bytes, now)
-    }
-}
-
 // [@ANCHOR: radioctl_capi_runtime_from_handle]
 /// A runtime object for a Rust host that already has a tokio runtime and wants a C caller to use
 /// it. The returned pointer is owned by the caller and freed with `rctl_runtime_free`; this
@@ -410,7 +389,7 @@ pub unsafe extern "C" fn rctl_rig_open_virtual(
         open_with(rt, toml, out_rig, |handle, description| {
             let virtual_rig =
                 VirtualRig::from_description(&description).map_err(|e| from_rig_error(&e))?;
-            let engine = BoxedEngine(engine_for(&description).map_err(|e| from_rig_error(&e))?);
+            let engine = engine_for(&description).map_err(|e| from_rig_error(&e))?;
             let (stream, _control) = spawn_virtual_rig(handle, virtual_rig, Duration::ZERO);
             let rig = spawn(handle, engine, stream, options()).map_err(|e| from_rig_error(&e))?;
             Ok((rig, Keep::Nothing))
@@ -440,7 +419,7 @@ pub unsafe extern "C" fn rctl_rig_open_tcp(
         // SAFETY: the caller's contract.
         let address = unsafe { str_arg(address, "address", 255) }?.to_string();
         open_with(rt, toml, out_rig, |handle, description| {
-            let engine = BoxedEngine(engine_for(&description).map_err(|e| from_rig_error(&e))?);
+            let engine = engine_for(&description).map_err(|e| from_rig_error(&e))?;
             let link = rt
                 .shared
                 .handle
@@ -485,7 +464,7 @@ pub unsafe extern "C" fn rctl_rig_open_serial(
             return Err(fail(RCTL_ERR_INVALID_ARG, "baud must be positive"));
         }
         open_with(rt, toml, out_rig, |handle, description| {
-            let engine = BoxedEngine(engine_for(&description).map_err(|e| from_rig_error(&e))?);
+            let engine = engine_for(&description).map_err(|e| from_rig_error(&e))?;
             let config = SerialConfig::new(PortTarget::Path(path.into()), baud);
             let link = rt
                 .shared
