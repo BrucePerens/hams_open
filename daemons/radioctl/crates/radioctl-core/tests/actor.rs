@@ -1357,3 +1357,194 @@ async fn a_port_loss_takes_the_link_down_and_a_reopen_unkeys_before_serving_the_
     }
     assert_eq!(alarms, vec![Alarm::LinkRestored]);
 }
+
+// Timing policy under injected faults, on the virtual IC-7300 (nothing is keyed).
+
+// Tests [@ANCHOR: radioctl_virtual_io_set_reply_jitter]
+// Tests [@ANCHOR: radioctl_virtual_io_next_jitter]
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+#[tokio::test(start_paused = true)]
+async fn jitter_inside_the_timeout_never_costs_a_command() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    control.set_reply_delay(Duration::from_millis(200));
+    control.set_reply_jitter(Duration::from_millis(500));
+    for _ in 0..20 {
+        let read = rig
+            .frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect("answered");
+        assert_eq!(read.value, Hz(14_074_000));
+    }
+    let stats = rig.stats();
+    assert_eq!(stats.commands_ok, 20);
+    assert_eq!(stats.commands_failed, 0);
+    assert_eq!(stats.late_replies, 0);
+    // Jitter that can exceed the timeout costs commands but never answers: a late answer
+    // is drained, the next command is answered with the right value.
+    control.set_reply_jitter(Duration::from_millis(1500));
+    let mut failed = 0;
+    for _ in 0..20 {
+        match rig.frequency(Vfo::A, Freshness::Fresh).await {
+            Ok(read) => assert_eq!(read.value, Hz(14_074_000)),
+            Err(e) => {
+                assert_eq!(e.kind, ErrorKind::Timeout);
+                failed += 1;
+            }
+        }
+    }
+    assert!(
+        failed > 0,
+        "the jitter reached past the timeout at least once"
+    );
+    assert_eq!(
+        rig.stats().stale_replies,
+        0,
+        "no late answer was taken for a newer one"
+    );
+}
+
+// Tests [@ANCHOR: radioctl_virtual_io_set_echo]
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
+#[tokio::test(start_paused = true)]
+async fn a_bus_echo_of_our_own_frames_is_skipped_not_misread() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    control.set_echo(true);
+    for _ in 0..5 {
+        let read = rig
+            .frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect("answered");
+        assert_eq!(read.value, Hz(14_074_000));
+    }
+    rig.set_frequency(Vfo::A, Hz(7_030_000)).await.expect("set");
+    let read = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("answered");
+    assert_eq!(read.value, Hz(7_030_000));
+    let stats = rig.stats();
+    assert_eq!(stats.commands_failed, 0);
+    assert_eq!(stats.unrecognised, 0, "an echo is never junk");
+    assert_eq!(stats.unsolicited, 0, "an echo is never a transceive report");
+}
+
+// Tests [@ANCHOR: radioctl_virtual_io_set_reply_chunk]
+// Tests [@ANCHOR: radioctl_civ_parser_feed]
+#[tokio::test(start_paused = true)]
+async fn an_answer_split_across_reads_is_still_one_answer() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    control.set_reply_chunk(1);
+    for _ in 0..5 {
+        let read = rig
+            .frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect("answered");
+        assert_eq!(read.value, Hz(14_074_000));
+    }
+    control.set_reply_chunk(3);
+    let mode = rig.mode(Freshness::Fresh).await.expect("answered");
+    assert_eq!(mode.value, Mode::Usb);
+    let stats = rig.stats();
+    assert_eq!(stats.commands_failed, 0);
+    assert_eq!(stats.unrecognised, 0);
+}
+
+// Tests [@ANCHOR: radioctl_virtual_io_truncate_replies]
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+#[tokio::test(start_paused = true)]
+async fn a_frame_cut_short_times_out_and_the_retry_is_answered_cleanly() {
+    let (rig, control) = civ_with_timing(Duration::from_millis(500), 1);
+    control.truncate_replies(1);
+    let started = Instant::now();
+    let read = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("the retry is answered");
+    assert_eq!(read.value, Hz(14_074_000));
+    let waited = started.elapsed();
+    assert!(
+        waited >= Duration::from_millis(500) && waited < Duration::from_millis(1100),
+        "one timeout, then the retry: {waited:?}"
+    );
+    // The partial frame left in the parser is restarted by the next preamble, not glued to
+    // the retry's answer.
+    let stats = rig.stats();
+    assert_eq!(stats.commands_failed, 0);
+    assert_eq!(stats.commands_ok, 1);
+    // Without a retry the caller sees the timeout and nothing else is poisoned.
+    let (rig, control) = civ_with_timing(Duration::from_millis(500), 0);
+    control.truncate_replies(1);
+    let err = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect_err("times out");
+    assert_eq!(err.kind, ErrorKind::Timeout);
+    let read = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("answered");
+    assert_eq!(read.value, Hz(14_074_000));
+}
+
+// Tests [@ANCHOR: radioctl_virtual_io_drop_replies]
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+#[tokio::test(start_paused = true)]
+async fn a_radio_that_never_answers_fails_within_timeout_times_attempts() {
+    let (rig, control) = civ_with_timing(Duration::from_millis(500), 2);
+    control.drop_replies(3);
+    let started = Instant::now();
+    let err = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect_err("times out");
+    assert_eq!(err.kind, ErrorKind::Timeout);
+    let waited = started.elapsed();
+    assert!(
+        waited >= Duration::from_millis(1500) && waited < Duration::from_millis(2100),
+        "three attempts of 500 ms: {waited:?}"
+    );
+    assert_eq!(
+        control.bytes_received(),
+        6 * 3,
+        "one frame per attempt, nothing more"
+    );
+    let read = rig
+        .frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("answered again");
+    assert_eq!(read.value, Hz(14_074_000));
+}
+
+// Tests [@ANCHOR: radioctl_virtual_io_front_panel]
+// Tests [@ANCHOR: radioctl_core_actor_claim_reply]
+#[tokio::test(start_paused = true)]
+async fn a_transceive_frame_arriving_before_a_pending_answer_is_an_event_not_the_answer() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(2), 0);
+    let mut events = rig.events();
+    control.set_reply_delay(Duration::from_millis(600));
+    let pending = {
+        let rig = rig.clone();
+        tokio::spawn(async move { rig.mode(Freshness::Fresh).await })
+    };
+    sleep(Duration::from_millis(100)).await;
+    // The dial moves while the mode read is in flight: its unsolicited frame reaches the
+    // engine before the mode answer does.
+    control.front_panel(PanelChange::Frequency(Hz(7_030_000)));
+    let mode = pending
+        .await
+        .expect("task")
+        .expect("the mode read is answered");
+    assert_eq!(mode.value, Mode::Usb);
+    let seen = drain(&mut events).await;
+    assert!(
+        seen.iter().any(|e| e.source == Source::Transceive
+            && e.changes
+                .iter()
+                .any(|c| c.new == Observation::Frequency(Vfo::A, Hz(7_030_000)))),
+        "the knob is an event of its own: {seen:?}"
+    );
+    let stats = rig.stats();
+    assert_eq!(stats.unsolicited, 1);
+    assert_eq!(stats.commands_failed, 0);
+    assert_eq!(stats.stale_replies, 0);
+}
