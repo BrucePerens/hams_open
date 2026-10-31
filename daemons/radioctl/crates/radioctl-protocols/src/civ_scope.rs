@@ -95,6 +95,7 @@ impl ScopeMode {
 }
 
 impl From<ScopeMode> for ScopeAxis {
+    // [@ANCHOR: radioctl_scope_axis_from_mode]
     fn from(mode: ScopeMode) -> ScopeAxis {
         match mode {
             ScopeMode::Center => ScopeAxis::Center,
@@ -106,6 +107,7 @@ impl From<ScopeMode> for ScopeAxis {
 }
 
 impl From<ScopeAxis> for ScopeMode {
+    // [@ANCHOR: radioctl_scope_mode_from_axis]
     fn from(axis: ScopeAxis) -> ScopeMode {
         match axis {
             ScopeAxis::Center => ScopeMode::Center,

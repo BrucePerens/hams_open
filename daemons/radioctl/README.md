@@ -189,6 +189,9 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_handle_scope_frames] (radioctl-core) A stream of the rig's scope sweeps as typed frames, separate from the status-change events; lag is counted.
 - [@ANCHOR: radioctl:radioctl_core_scope_stream_next] (radioctl-core) The next scope sweep; frames missed while lagging are skipped and counted.
 - [@ANCHOR: radioctl:radioctl_virtual_io_scope_sweep] (radioctl-protocols) Makes a virtual rig send one scope sweep on its own.
+- [@ANCHOR: radioctl:radioctl_civ_engine_scope_request_for] (radioctl-protocols) A scope command as a CI-V request with the reply the caller will wait for.
+- [@ANCHOR: radioctl:radioctl_scope_axis_from_mode] (radioctl-protocols) The core scope axis for a CI-V scope mode.
+- [@ANCHOR: radioctl:radioctl_scope_mode_from_axis] (radioctl-protocols) The CI-V scope mode for a core scope axis.
 - [@ANCHOR: radioctl:radioctl_core_hz_from_khz] Builds a frequency in hertz from whole kilohertz, refusing overflow.
 - [@ANCHOR: radioctl:radioctl_core_level_name] (radioctl-core) The name of a level (AF gain, RF gain, mic gain, monitor level, keyer speed, RF power) in description and transcript files.
 - [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.

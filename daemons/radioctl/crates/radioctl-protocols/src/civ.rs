@@ -279,6 +279,7 @@ impl CivEngine {
         self.scope_request_for(command, reply)
     }
 
+    // [@ANCHOR: radioctl_civ_engine_scope_request_for]
     fn scope_request_for(
         &self,
         command: ScopeCommand,
@@ -1067,6 +1068,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_civ_engine_scope_request]
+    // Tests [@ANCHOR: radioctl_civ_engine_scope_request_for]
     // Tests [@ANCHOR: radioctl_civ_engine_scope_dropped]
     // Tests [@ANCHOR: radioctl_civ_engine_decode_scope]
     #[test]

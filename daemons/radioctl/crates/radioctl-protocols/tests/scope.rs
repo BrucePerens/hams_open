@@ -60,6 +60,8 @@ fn frames(engine: &mut CivEngine, rig: &mut VirtualRig) -> Vec<radioctl_core::sc
 }
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode_scope]
+// Tests [@ANCHOR: radioctl_scope_axis_from_mode]
+// Tests [@ANCHOR: radioctl_scope_mode_from_axis]
 // Tests [@ANCHOR: radioctl_civ_engine_decode_scope]
 // Tests [@ANCHOR: radioctl_scope_sim_try_handle]
 // Tests [@ANCHOR: radioctl_scope_sim_sweep]
