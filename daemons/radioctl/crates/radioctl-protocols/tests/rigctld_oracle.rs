@@ -937,6 +937,26 @@ const ICOM_BATCH_ONE: &[(&str, u32)] = &[
     ("icom-ic-970", 3035),
     ("icom-ic-735", 3019),
     ("icom-ic-905", 3090),
+    ("icom-ic-725", 3014),
+    ("icom-ic-726", 3015),
+    ("icom-ic-728", 3016),
+    ("icom-ic-751", 3024),
+    ("icom-ic-761", 3028),
+    ("icom-ic-765", 3029),
+    ("icom-ic-1275", 3002),
+    ("icom-ic-271", 3003),
+    ("icom-ic-275", 3004),
+    ("icom-ic-375", 3005),
+    ("icom-ic-471", 3006),
+    ("icom-ic-475", 3007),
+    ("icom-ic-575", 3008),
+    ("icom-ic-r71", 3037),
+    ("icom-ic-r72", 3038),
+    ("icom-ic-r7000", 3040),
+    ("icom-ic-r7100", 3041),
+    ("icom-ic-r8500", 3042),
+    ("icom-ic-r9000", 3043),
+    ("icom-ic-rx7", 3069),
 ];
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
@@ -1012,6 +1032,11 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
 /// steps fail where radioctl uses `0F`. Same open question as the IC-7600 and IC-7800 above: which
 /// of the two matches a real radio is unknown, and no manual was read for these five. Pinned, not
 /// weakened.
+///
+/// IC-R7000 final mode: Hamlib sets USB and LSB on this radio with the one code `05`
+/// (`S_R7000_SSB`, `rigs/icom/frame.c`), the code the common table (and the description) gives to
+/// FM, so the two sides end in different modes. Which is right for the radio is unknown (no manual
+/// read): an open question, pinned.
 fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     let main_sub = vec![
         "SetSplit(true)",
@@ -1027,7 +1052,7 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
         }
         "icom-ic-7851" => main_sub,
         "icom-ic-7760" => main_sub[..4].to_vec(),
-        "icom-ic-7700" => vec!["final mode"],
+        "icom-ic-7700" | "icom-ic-r7000" => vec!["final mode"],
         _ => Vec::new(),
     }
 }

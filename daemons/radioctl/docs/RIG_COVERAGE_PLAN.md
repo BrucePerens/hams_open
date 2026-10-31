@@ -6,12 +6,12 @@ verified, and make a best effort to make them work out of the box.
 
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
-Today 91 of 313 models have a description (96 files, because the four FlexRadio 6000-series files share Hamlib's one
+Today 111 of 313 models have a description (116 files, because the four FlexRadio 6000-series files share Hamlib's one
 "6xxx" model and the two ANAN files have no Hamlib model), and none is hardware-verified.
 
 | Tier | Work | Models | Described | Left |
 |---|---|---:|---:|---:|
-| A | data only, on an existing engine | 135 | 86 | 49 |
+| A | data only, on an existing engine | 135 | 107 | 28 |
 | B | variants of an existing engine | 41 | 4 | 37 |
 | C | a new engine per family | 83 | 0 | 83 |
 | D | odd devices | 54 | 0 | 54 |
@@ -52,23 +52,22 @@ capabilities, plus an engine fix when a model differs.
   provenance. Xiegu documents forbid reuse: use Hamlib facts and `--dump-caps` and say so, as the shipped files do. Icom's manuals are read for facts (rule 2).
 - Order inside the tier: models with many users first (Icom IC-7000/7100/7200/746/756 series, Kenwood TS-480/570/990/50,
   Yaesu FT-710/891/950/2000/FTDX-3000/5000, Elecraft K3/K3S/KX2/K4), then the rest by family, one pull request per family.
-- 86 are done (the 18 earlier ones, 37 Icom CI-V models, 15 Yaesu newcat and Elecraft models and 16 Kenwood ASCII models, see below). Done means a description exists, not that it is verified.
+- 107 are done (the 18 earlier ones, 57 Icom CI-V models, 15 Yaesu newcat and Elecraft models and 16 Kenwood ASCII models, see below). Done means a description exists, not that it is verified.
 - Flex: the SmartSDR "slice A to H" models are the same network engine; one file covers them with the slice letter as a parameter.
 
 ### Icom CI-V: what is done and what is left (79 models in Hamlib's `icom_civ` family)
 
-Done (46, incl. 5 Xiegu): IC-7300, 705, 7610, 9700 (first batch); IC-7000, 7100, 7200, 7410, 7600, 7700, 7760, 7800, 7850/7851,
+Done (66, incl. 5 Xiegu): IC-7300, 705, 7610, 9700 (first batch); IC-7000, 7100, 7200, 7410, 7600, 7700, 7760, 7800, 7850/7851,
 9100, R8600, R75, R9500, 706, 706MkII, 706MkIIG, 718, 746, 746PRO (batch of 2026-10-31, generated from Hamlib 4.6.2 facts
-and `rigctl --dump-caps`, then re-read against Icom's manuals under Bruce's decision: 15 of the 19 have a readable manual, see README); Xiegu G90, X6100, X6200, X108G, X5105; third batch of 2026-10-31 (16, Hamlib facts only, no manual read): IC-703, 756, 756PRO, 756PROII, 756PROIII, 910, 2730, 78, 707, 729, 736, 737, 738, 775, 781, 970; and the IC-735 and IC-905 (engine change `civ.frequency_bytes`: 4 for Hamlib's `civ_731_mode`, 6 for the IC-905, whose field is 5 bytes up to 5.85 GHz and 6 above, as in Hamlib's `icom_set_freq`). Engine change: `levels.absent` (per-description list of the plain `14` levels a model lacks; the IC-706MkIIG now lists all six and the oracle pin is gone).
+and `rigctl --dump-caps`, then re-read against Icom's manuals under Bruce's decision: 15 of the 19 have a readable manual, see README); Xiegu G90, X6100, X6200, X108G, X5105; third batch of 2026-10-31 (16, Hamlib facts only, no manual read): IC-703, 756, 756PRO, 756PROII, 756PROIII, 910, 2730, 78, 707, 729, 736, 737, 738, 775, 781, 970; and the IC-735 and IC-905 (engine change `civ.frequency_bytes`: 4 for Hamlib's `civ_731_mode`, 6 for the IC-905, whose field is 5 bytes up to 5.85 GHz and 6 above, as in Hamlib's `icom_set_freq`). Fourth batch of 2026-10-31 (20, Hamlib facts only, no manual read): IC-725, 726, 728, 751, 761, 765, 1275, 271, 275, 375, 471, 475, 575, R71, R72, R7000, R7100, R8500, R9000, RX7. Engine change: `levels.absent` (per-description list of the plain `14` levels a model lacks; the IC-706MkIIG now lists all six and the oracle pin is gone).
 
-Left (33), with the reason each is not yet done:
+Left (13), with the reason each is not yet done:
 
 | Group | Hamlib models (id) | What is needed |
 |---|---|---|
 | HF/VHF, 5-byte frequency, data only | ID-5100 (3071) | a D-STAR model: waits for the D-STAR modes |
-| Older HF and VHF/UHF, 5-byte | IC-725 (3014), 726 (3015), 728 (3016), 751 (3024), 761 (3028), 765 (3029), 1275 (3002), 271 (3003), 275 (3004), 375 (3005), 471 (3006), 475 (3007), 575 (3008) | a description each |
 | Four-byte frequency, VHF/UHF | IC-820H (3032), IC-821H (3034) | Hamlib's `civ_731_mode` sends 8 BCD digits of hertz, which cannot hold 145 or 435 MHz (Hamlib's `to_bcd` truncates); the radio most likely counts in another unit that no source read here states. Held back until a manual or a volunteer's capture says which; the engine field is ready |
-| Receivers | IC-R10 (3036), R20 (3058), R6 (3077), R30 (3080), R71 (3037), R72 (3038), R7000 (3040), R7100 (3041), R8500 (3042), R9000 (3043), RX7 (3069) | a description each; the handhelds (R6, R10, R20, R30) are to be checked for mode codes |
+| Receivers | IC-R10 (3036), R20 (3058), R6 (3077), R30 (3080) | the four handhelds: mode codes to be checked (wide AM, D-STAR-era modes) |
 | D-STAR and handhelds | IC-92D (3065), ID-1 (3054), ID-31 (3083), ID-4100 (3082), ID-51 (3084), IC-F8101 (3086) | mode vocabulary (D-STAR modes are not in `Mode`), a description each |
 
 The Main/Sub radios (IC-7600, 7800, 7850/7851, 7760; the IC-7610 and IC-9700 before them) have no model of command `07 C2`/`D0`/`D1`/`D2`
