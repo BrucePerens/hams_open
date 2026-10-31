@@ -14,12 +14,12 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 | `kenwood-ascii`, `dialect = "ts890"` | `kenwood_ts890::Ts890Engine` | TS-890S | the same framing, its own command set |
 | `elecraft-ascii` | `elecraft::ElecraftEngine` | KX3 (K3 and KX2 share the protocol; no description yet) | ASCII, Kenwood-like with its own replies |
 | `yaesu-newcat` | `yaesu::YaesuEngine` | FT-991A, FTDX10, FTDX101D | ASCII, Kenwood-like with different widths |
-| `yaesu-legacy` | `yaesu_legacy::YaesuLegacyEngine` | FT-817ND, FT-857D, FT-897D | five-byte binary blocks, unframed answers |
+| `yaesu-legacy` | `yaesu_legacy::YaesuLegacyEngine` | FT-817ND, FT-818ND, FT-857D, FT-897D | five-byte binary blocks, unframed answers |
 | `flex-smartsdr` | `flex::FlexEngine` | FLEX-6300, 6400, 6600, 6700 | SmartSDR line text over TCP (control plane only) |
 | `hpsdr-network` | `hpsdr_net::HpsdrEngine` | ANAN-10, ANAN-100 | a small line protocol to a bridge over the `hpsdr` crate (control plane only) |
 
 **Planned, not on `main` when this was written:** K3/K4 descriptions, the
-FT-818 (no manual found), FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
+FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
 Kenwood and Icom LAN protocols.
 
 ## Receive attenuator and preamplifier (`attenuation.rs`)
@@ -181,7 +181,7 @@ under the opcode chart are figures; they were read from rendered pages of the FT
   byte means transmitting, from a comment in Hamlib 4.6.2's FT-817 backend; that single fact is labelled
   `hamlib-source` and unverified. A wrong guess here inverts the PTT read.
 - **Does not cover:** a transmit-VFO report (a `TODO` in the module), a second VFO (the A/B toggle `81` is not used), lock, repeater offset, CTCSS and DCS,
-  power on and off, FM-N and PKT modes, levels, and the FT-818.
+  power on and off, FM-N and PKT modes, and levels.
 - **Oracle:** Hamlib's writes agree with the virtual FT-857D and FT-897D, but its reads of frequency and mode
   fail against the virtual radio; the two steps are pinned as known. Hamlib's FT-817 backend sends an
   EEPROM read (opcode `BB`) that no manual documents, so the FT-817 is not run through the oracle. Whether
