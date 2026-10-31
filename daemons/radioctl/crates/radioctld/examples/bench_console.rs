@@ -19,7 +19,7 @@
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -55,19 +55,6 @@ impl ProtocolEngine for AnyEngine {
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
         self.0.feed(bytes, now)
     }
-}
-
-/// The directory of rig descriptions: `$RADIOCTL_RIGS`, else `./rigs` when it exists, else the
-/// checkout this program was built from.
-fn rigs_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("RADIOCTL_RIGS") {
-        return PathBuf::from(dir);
-    }
-    let here = PathBuf::from("rigs");
-    if here.is_dir() {
-        return here;
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs")
 }
 
 /// Prints a line with the time since start and copies it to the log file.
@@ -292,8 +279,7 @@ async fn open_rig(
     options: RigOptions,
     out: &Out,
 ) -> Result<RigHandle, Box<dyn Error>> {
-    let text = std::fs::read_to_string(rigs_dir().join(format!("{rig_id}.toml")))?;
-    let description = rigfile::parse(&text)?.description;
+    let description = rigfile::load(rig_id)?.description;
     let engine = AnyEngine(engine_for(&description)?);
     if target == "virtual" {
         let radio = VirtualRig::from_description(&description)?;

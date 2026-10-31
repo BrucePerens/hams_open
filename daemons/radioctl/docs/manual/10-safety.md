@@ -42,29 +42,16 @@ There is no boolean shortcut. `radioctld` opens the gate only when its configura
 `crates/radioctld/examples/transmit_gate.rs` shows the lifecycle on a virtual radio, and the tests run it:
 
 ```rust example=transmit_gate
-//! The transmit gate on a virtual radio: closed by default, opened with a permit, unkeying
-//! always allowed. Nothing here touches a real transmitter.
+//! The transmit gate on a virtual radio: closed by default, opened by an explicit permit (or by a
+//! lease that takes one), unkeying always allowed. Nothing here touches a real transmitter.
 use std::error::Error;
 use std::time::Duration;
 
-use radioctl_core::error::ErrorKind;
-use radioctl_core::rig::{spawn_current, Freshness, RigOptions, TransmitPermit};
-use radioctl_core::rigfile;
-use radioctl_protocols::elecraft::ElecraftEngine;
-use radioctl_protocols::io::spawn_virtual_rig;
-use radioctl_protocols::virtual_rig::VirtualRig;
-use tokio::runtime::Handle;
+use radioctl_protocols::prelude::*;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let description = rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))?.description;
-    let radio = VirtualRig::from_description(&description)?;
-    let (transport, virtual_control) = spawn_virtual_rig(&Handle::current(), radio, Duration::ZERO);
-    let rig = spawn_current(
-        ElecraftEngine::new(description)?,
-        transport,
-        RigOptions::default(),
-    )?;
+    let SpawnedVirtualRig { rig, control } = VirtualRig::spawn("elecraft-kx3")?;
 
     let refused = rig.set_ptt(true).await.err().map(|e| e.kind);
     println!("gate closed: keying -> {refused:?}");
@@ -78,18 +65,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "gate open: PTT reads {}",
         rig.ptt(Freshness::Fresh).await?.value
     );
-    println!(
-        "virtual radio is transmitting: {}",
-        virtual_control.state().ptt
-    );
+    println!("virtual radio is transmitting: {}", control.state().ptt);
 
     // Unkeying uses the emergency path and does not need the gate.
     rig.close_transmit_gate();
     rig.set_ptt(false).await?;
     println!(
         "gate closed again: unkeyed, virtual radio transmitting: {}",
-        virtual_control.state().ptt
+        control.state().ptt
     );
+
+    // A lease is the same decision for a bounded time: it takes the permit, opens the gate, and
+    // closes it and unkeys when it ends (here by `transmit_for` returning and the lease dropping).
+    let lease = rig.transmit_lease(
+        TransmitPermit::new("manual example: lease"),
+        Duration::from_secs(5),
+    )?;
+    lease.transmit_for(Duration::from_millis(100)).await?;
+    drop(lease);
+    println!("lease ended: gate permit {:?}", rig.transmit_permit());
     Ok(())
 }
 ```
@@ -101,7 +95,16 @@ gate closed: keying -> Some(TransmitGateClosed)
 gate open: PTT reads true
 virtual radio is transmitting: true
 gate closed again: unkeyed, virtual radio transmitting: false
+lease ended: gate permit None
 ```
+
+- **A lease is the same decision for a bounded time** (chapter [4](04-api.md#the-short-way-preludes-and-one-call-helpers)).
+  `transmit_lease(permit, max)` takes the permit as an argument, refuses a gate somebody else already
+  opened, and closes the gate and unkeys when it ends: at `max`, on `release`, or on drop.
+- **Nothing else opens the gate for you.** No prelude item, constructor or helper opens it; the rig from
+  `VirtualRig::spawn` or `open_serial_rig` comes back closed.
+- **The keyed state also guards the station's switching commands** (power, amplifiers): chapter
+  [14](14-station.md#the-interlock-what-the-keyed-state-blocks). Emergency operations are never blocked.
 
 **Closing the gate does not unkey a radio that is already keyed.** It blocks later transmit commands.
 Whoever closes the gate for safety must also send `set_ptt(false)`.
@@ -114,8 +117,7 @@ reply (that command ends in `Cancelled`). They never interrupt a write already i
 gate and skip inter-command spacing. The tests `ptt_off_abandons_a_slow_read_on_the_same_rig`,
 `a_slow_rig_does_not_delay_another_rigs_ptt_off` and
 `stop_morse_jumps_the_queue_needs_no_gate_and_leaves_the_key_alone` cover the same-rig, cross-rig and
-Morse cases; a stalled or panicking event subscriber cannot delay them because subscribers run on tasks of their own, behind a broadcast channel
-their own thread.
+Morse cases; a stalled or panicking event subscriber cannot delay them because subscribers run on tasks of their own, behind a broadcast channel.
 
 `StopCw` clears the radio's CW text buffer and ends the element being sent; it is the stop path for Morse
 that `SendCw` started (or that another program or the front panel started). It is not an unkey: a radio

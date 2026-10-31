@@ -4,6 +4,96 @@ All of this chapter is **implemented** unless marked **planned**, and all of it 
 against real radios. The reference is the rustdoc of `radioctl-core`; this chapter explains how the
 parts fit. The signatures below are copied from the source and checked by the manual test.
 
+## The short way: preludes and one-call helpers
+
+- Decision 21 of the design notes: a convenience layer composes the calls below; it removes none of them.
+- **No helper opens the transmit gate.** The one that touches it takes the `TransmitPermit` as an argument.
+- Rig descriptions are read from `rigfile::rigs_dir()`: `$RADIOCTL_RIGS`, else `./rigs`, else the
+  `rigs/` of the checkout the library was built from. An id such as `"icom-ic-7300"` names
+  `icom-ic-7300.toml` there; anything that ends in `.toml` or has a `/` is a file path.
+
+| One `use` | Brings in |
+|---|---|
+| `radioctl_core::prelude::*` | `RigHandle`, `RigOptions`, `Freshness`, `Cached`, `TransmitPermit`, `TransmitLease`, `EventStream`, `ScopeStream`, `spawn`, `spawn_current`, `Hz`, `Mode`, `Vfo`, `Level`, `Meter`, `Op`, `Field`, `Observation`, `Change`, `RigEvent`, `Source`, `RigError`, `ErrorKind`, `Capability`, `RigDescription`, `rigfile` |
+| `radioctl_protocols::prelude::*` | all of the above, and `engine_for`, `VirtualRig`, `PanelChange`, `VirtualRigControl`, `SpawnedVirtualRig`, `SerialRig`, `spawn_virtual`, `open_serial_rig`, `open_serial_rig_with` |
+
+Constructors (crate `radioctl-protocols`, which sees both the core and the engines):
+
+```rust signatures
+pub fn spawn(which: &str) -> Result<SpawnedVirtualRig, RigError>
+
+pub fn spawn_virtual(
+    runtime: &Handle,
+    description: RigDescription,
+    options: RigOptions,
+    reply_delay: Duration,
+) -> Result<SpawnedVirtualRig, RigError>
+
+pub async fn open_serial_rig(which: &str, port: &str, baud: u32) -> Result<SerialRig, RigError>
+
+pub async fn open_serial_rig_with(
+    runtime: &Handle,
+    description: &RigDescription,
+    config: SerialConfig,
+    mut options: RigOptions,
+) -> Result<SerialRig, RigError>
+```
+
+- `VirtualRig::spawn(which)` is the four calls of the long form (chapter [2](02-quick-start.md#what-the-helpers-do-the-long-form))
+  in one, on the current runtime. It returns `SpawnedVirtualRig { rig, control }`: the control is the
+  front panel, the state and the fault-injection knobs of the virtual radio (chapter [11](11-testing.md)).
+- `open_serial_rig` opens the port, builds the engine, sets the link watch and **sends the start-up
+  unkey**, as `radioctld` does (chapter [9](09-radioctld.md)). Unkeying needs no gate. A radio that cannot be unkeyed is
+  an error naming that. It returns `SerialRig { rig, link }`: keep `link` while the rig is in use.
+- Neither constructor opens a gate; the rig it returns refuses to transmit.
+
+Methods on `RigHandle` and `EventStream` (crate `radioctl-core`):
+
+```rust signatures
+pub async fn level(&self, level: Level, freshness: Freshness) -> Result<Cached<u16>, RigError>
+
+pub async fn set_level(&self, level: Level, value: u16) -> Result<(), RigError>
+
+pub async fn meter(&self, meter: Meter, freshness: Freshness) -> Result<Cached<u16>, RigError>
+
+pub async fn start_scope(&self) -> Result<ScopeStream, RigError>
+
+pub async fn stop_scope(&self) -> Result<(), RigError>
+
+pub async fn next_change(&mut self, field: Field) -> Option<(Change, Source)>
+
+pub fn transmit_lease(
+    &self,
+    permit: TransmitPermit,
+    max: Duration,
+) -> Result<TransmitLease, RigError>
+```
+
+| Activity | Helper | Notes |
+|---|---|---|
+| Read or set frequency, mode, PTT state, S-meter | `frequency`, `set_frequency`, `mode`, `set_mode`, `ptt`, `signal` | already typed (below) |
+| Read or set a level | `level`, `set_level` | the rig's own units; `Unsupported` if the description lacks `levels` |
+| Read a meter | `meter(Meter::Swr, ..)` | raw scale; `Unsupported` without `read-meters` |
+| Wait for a field to change | `events().next_change(field)` | skips other events; wrap in `tokio::time::timeout` |
+| Run a scope stream | `start_scope()`, `stop_scope()` | subscribes first, then switches the output on, so no sweep is missed |
+| Key for a bounded time | `transmit_lease(permit, max)` | see below |
+
+The transmit lease:
+
+- `transmit_lease(permit, max)` opens this rig's gate under `permit` and returns a `TransmitLease`. The
+  permit is a required argument, so the decision is written at the call site.
+- It is refused with `Rejected` if the gate is **already open** (someone else decided that), if `max` is zero,
+  and with `Unsupported` outside a tokio runtime.
+- `lease.key()`, `lease.unkey()`, `lease.transmit_for(duration)` (key, hold, unkey; cut short if the lease ends),
+  `lease.remaining()` and `lease.release().await`.
+- The lease ends at `max` (a timer task on your runtime), on `release`, or when it is dropped. Ending it
+  closes the gate and sends an unkey on the emergency path, which needs no `await`, so `Drop` works.
+- It bounds the permission. It is not a second watchdog: `RigOptions::max_transmit` and the heartbeat still apply
+  inside it, and with a heartbeat configured you still call `heartbeat()`.
+
+Rejected on purpose (decision 21): a `RigOptions` builder (struct-update syntax is one expression), a
+callback-taking subscriber (decision 20), and any helper that opens the gate for you.
+
 ## Getting a handle
 
 ```rust signatures
@@ -23,11 +113,12 @@ pub fn spawn_current<E: ProtocolEngine, T: Transport>(
 
 `engine` is one of the engines of `radioctl-protocols` built from a rig description. `transport` is
 any tokio `AsyncRead + AsyncWrite + Send + Unpin + 'static`: a serial link's stream, a `TcpStream`, a
-virtual rig's in-memory stream. `radioctl_protocols::conformance::engine_for` returns the right
-engine for a description as a `Box<dyn ProtocolEngine>`; `Box<dyn ProtocolEngine>` itself does not
-implement the trait, so `radioctld` wraps it in a small adapter (`rigs::BoxedEngine`). A program that
-knows its radio simply constructs `CivEngine::new`, `KenwoodEngine::new`, `ElecraftEngine::new` or
-`YaesuEngine::new` with the description.
+virtual rig's in-memory stream. `radioctl_protocols::conformance::engine_for` returns the right engine for a description as a
+`Box<dyn ProtocolEngine>`, and `Box<dyn ProtocolEngine>` implements the trait itself, so
+`spawn(&runtime, engine_for(&description)?, transport, options)` works for every family. A program
+that knows its radio can construct `CivEngine::new`, `KenwoodEngine::new`, `ElecraftEngine::new` or
+`YaesuEngine::new` with the description. (`radioctld::rigs::BoxedEngine` is an older adapter for the
+same thing.)
 
 Options:
 
@@ -248,7 +339,8 @@ is available per subscriber as `EventStream::lagged()`. The stream returns `None
 slow or panicking subscriber task cannot delay an unkey, the watchdog or another subscriber. (Before
 decision 20 of the design notes there was a `with_callback` option on a dedicated thread; it is gone.)
 
-Shown by `crates/radioctld/examples/events.rs`, with two subscribers:
+`next_change(field)` waits for the next event that changes one field and returns the change with its
+source. Shown by `crates/radioctld/examples/events.rs`, with two subscribers:
 
 ```rust example=events
 //! Status changes: the async event stream, with a second subscriber on its own task, fed by a knob
@@ -256,27 +348,15 @@ Shown by `crates/radioctld/examples/events.rs`, with two subscribers:
 use std::error::Error;
 use std::time::Duration;
 
-use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::rig::{spawn_current, RigOptions};
-use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Vfo};
-use radioctl_protocols::elecraft::ElecraftEngine;
-use radioctl_protocols::io::spawn_virtual_rig;
-use radioctl_protocols::virtual_rig::{PanelChange, VirtualRig};
-use tokio::runtime::Handle;
+use radioctl_protocols::prelude::*;
 use tokio::time::timeout;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let description = rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))?.description;
-    let radio = VirtualRig::from_description(&description)?;
-    let (transport, front_panel) = spawn_virtual_rig(&Handle::current(), radio, Duration::ZERO);
-
-    let rig = spawn_current(
-        ElecraftEngine::new(description)?,
-        transport,
-        RigOptions::default(),
-    )?;
+    let SpawnedVirtualRig {
+        rig,
+        control: front_panel,
+    } = VirtualRig::spawn("elecraft-kx3")?;
     // Every `events()` call is its own subscriber. This one runs on a task of its own, so a slow
     // subscriber never delays the actor or another subscriber; it only skips events.
     let mut other = rig.events();
@@ -294,21 +374,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     rig.execute(Op::SetTransceive(true)).await?;
     front_panel.front_panel(PanelChange::Frequency(Hz(7_100_000)));
 
+    // Wait for the next change of VFO A; other events are skipped.
     let wanted = Field::Frequency(Vfo::A);
-    loop {
-        let event = timeout(Duration::from_secs(5), stream.next())
-            .await?
-            .ok_or("the rig stopped")?;
-        if let Some(change) = event.changes.iter().find(|c| c.field == wanted) {
-            if change.new == Observation::Frequency(Vfo::A, Hz(7_100_000)) {
-                println!(
-                    "stream: VFO A changed to 7100000 Hz (source {:?})",
-                    event.source
-                );
-                break;
-            }
-        }
-    }
+    let (change, source) = timeout(Duration::from_secs(5), stream.next_change(wanted))
+        .await?
+        .ok_or("the rig stopped")?;
+    assert_eq!(change.new, Observation::Frequency(Vfo::A, Hz(7_100_000)));
+    println!("stream: VFO A changed to 7100000 Hz (source {source:?})");
+
     // The other subscriber saw the same changes, in order, on its own task.
     let mut subscriber_events = subscriber_events;
     loop {
@@ -461,3 +534,16 @@ pub async fn next(&mut self) -> Option<ScopeFrame>
 - **Planned:** scope for non-Icom radios, scope speed and hold settings through `Op`, the descriptions of
   the IC-705 and IC-9700 listing the capability, and the relay's own scope-source frame built from a
   `ScopeFrame` (the relay does that, not this crate).
+
+## Where the rest of the API is documented
+
+| Topic | Where |
+|---|---|
+| Serial ports, USB matching, `baud = "auto"` and the baud probe | chapter [5](05-transports.md#the-baud-probe) |
+| Network links (`net::open_link`), TCP rigs, the TS-890S LAN session | chapter [5](05-transports.md); `ts890-lan` framing in chapter [9](09-radioctld.md) |
+| Start-up unkey of every rig | chapters [5](05-transports.md), [9](09-radioctld.md) and [10](10-safety.md) |
+| `[[rotator]]` sections and the `rotctld` protocol | chapter [9](09-radioctld.md#rotators); engines in chapter [14](14-station.md#rotators) |
+| CI-V raw meters (`GetMeter`) and data modes (`Mode::Data`, `Mode::DataR`) | chapter [7](07-protocol-engines.md) |
+| The keyed-state interlock for power and amplifier commands | chapter [14](14-station.md#the-interlock-what-the-keyed-state-blocks) |
+| Fault-injection knobs of the virtual rig (`drop_replies`, `set_reply_jitter`, ...) | chapter [11](11-testing.md#fault-injection-on-the-virtual-rig) |
+| The C ABI (`radioctl-capi`) | chapter [14](14-station.md#the-c-abi) |

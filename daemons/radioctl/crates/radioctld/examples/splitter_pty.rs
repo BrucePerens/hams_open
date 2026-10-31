@@ -13,7 +13,7 @@
 //! The transmit gate stays closed, so keying is refused. Run on a real radio only if its
 //! description is one you trust: every shipped description is unverified.
 use std::error::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use radioctl_core::description::RigDescription;
@@ -52,9 +52,7 @@ static SERIAL_MONITOR: std::sync::OnceLock<radioctl_core::serial::SerialMonitor>
     std::sync::OnceLock::new();
 
 async fn open_rig(rig_id: &str, transport: &str) -> Result<RigHandle, Box<dyn Error>> {
-    let rigs = rigs_dir();
-    let text = std::fs::read_to_string(rigs.join(format!("{rig_id}.toml")))?;
-    let description = rigfile::parse(&text)?.description;
+    let description = rigfile::load(rig_id)?.description;
     let engine = AnyEngine(engine_for(&description)?);
     let handle = Handle::current();
     if transport == "virtual" {
@@ -79,20 +77,6 @@ async fn open_rig(rig_id: &str, transport: &str) -> Result<RigHandle, Box<dyn Er
         .set(monitor)
         .map_err(|_| "serial monitor already set")?;
     Ok(rig)
-}
-
-/// The directory of rig descriptions: `$RADIOCTL_RIGS`, else `./rigs` when it exists (the binaries
-/// copied to a bench machine run from the directory that holds `rigs/`), else the checkout this
-/// program was built from.
-fn rigs_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("RADIOCTL_RIGS") {
-        return PathBuf::from(dir);
-    }
-    let here = PathBuf::from("rigs");
-    if here.is_dir() {
-        return here;
-    }
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs")
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]

@@ -333,13 +333,20 @@ All on purpose.
 - Hamlib `rigctl` as an oracle against a virtual KX3, IC-7300 and TS-590SG (`--features hamlib-oracle`; needs `rigctl` or `RIGCTL=/path`).
 - `tests/ts890_lan.rs` for the TS-890S LAN session.
 
+## Using the library
+
+- `use radioctl_protocols::prelude::*;` brings in the usual names (design decision 21).
+- `VirtualRig::spawn("icom-ic-7300")` builds a virtual rig and its actor in one call; `open_serial_rig(id, port, baud)` does the same for a serial port.
+- Helpers: `level`, `set_level`, `meter`, `start_scope`, `events().next_change(field)`, `transmit_lease(permit, max)`. None opens the transmit gate; the lease takes the permit as an argument.
+- The lower-level calls are unchanged. Manual chapter 4 lists every helper; chapter 2 shows the long form.
+
 ## Examples
 
 In `crates/radioctld/examples/`; they find `rigs/` next to the binary.
 
 | Example | What it does |
 |---|---|
-| `quickstart`, `events`, `transmit_gate`, `embed_daemon`, `serial_rig`, `splitter_tcp` | Copied verbatim into manual chapters and built by cargo |
+| `quickstart`, `long_form`, `events`, `transmit_gate`, `embed_daemon`, `serial_rig`, `splitter_tcp` | Copied verbatim into manual chapters and built by cargo |
 | `rig_file` | Checks one rig description: loads it, lists what is verified, replays its transcript |
 | `splitter_pty` | The splitter on virtual serial ports, one pty per outside program |
 | `bench_console` | Receive-only console for a first day with a real radio: one command per line on stdin; replies, events and scope frames timestamped and logged. `--unmanaged` for a pty; `--wire FILE` taps every byte in both directions. No key, no Morse, no way to open the gate |
