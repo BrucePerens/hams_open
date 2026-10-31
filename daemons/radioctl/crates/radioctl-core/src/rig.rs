@@ -165,6 +165,9 @@ pub struct RigStats {
     pub polls: u64,
     /// Observations the rig sent on its own.
     pub unsolicited: u64,
+    /// Replies that arrived after their command had been given up (a rig without the
+    /// `Transceive` capability answering late); they never slow polling.
+    pub late_replies: u64,
     /// Received bytes no frame could be made of.
     pub unrecognised: u64,
     /// Events produced.
@@ -192,6 +195,7 @@ struct Counters {
     preempted: AtomicU64,
     polls: AtomicU64,
     unsolicited: AtomicU64,
+    late_replies: AtomicU64,
     unrecognised: AtomicU64,
     events: AtomicU64,
     stream_lagged: AtomicU64,
@@ -426,6 +430,7 @@ impl RigHandle {
             preempted: c.preempted.load(Ordering::Relaxed),
             polls: c.polls.load(Ordering::Relaxed),
             unsolicited: c.unsolicited.load(Ordering::Relaxed),
+            late_replies: c.late_replies.load(Ordering::Relaxed),
             unrecognised: c.unrecognised.load(Ordering::Relaxed),
             events: c.events.load(Ordering::Relaxed),
             stream_lagged: c.stream_lagged.load(Ordering::Relaxed),
@@ -925,22 +930,24 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             .counters
             .watchdog_unkeys
             .fetch_add(1, Ordering::Relaxed);
-        self.alarm(alarm);
+        self.alarm(alarm, Source::Watchdog);
         let why = match alarm {
             Alarm::TransmitTimeout => "transmit time limit reached",
             Alarm::HeartbeatLapsed => "caller heartbeat lapsed",
             Alarm::UnkeyFailed => "unkey failed",
+            Alarm::LinkDown => "link down",
         };
         self.unkey_fail_closed(why, Source::Watchdog).await;
     }
 
     // [@ANCHOR: radioctl_core_actor_alarm]
-    /// Emits an alarm event. Alarms are never deduplicated and never cached.
-    fn alarm(&mut self, alarm: Alarm) {
+    /// Emits an alarm event attributed to `source` (the watchdog, or the caller whose unkey
+    /// failed). Alarms are never deduplicated and never cached.
+    fn alarm(&mut self, alarm: Alarm, source: Source) {
         self.transcript.push_back(format!("ALARM {alarm:?}"));
         self.emit(RigEvent {
             rig: self.shared.id.clone(),
-            source: Source::Watchdog,
+            source,
             changes: vec![Change {
                 field: Field::Alarm,
                 old: None,
@@ -1001,7 +1008,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 .counters
                 .unkey_failures
                 .fetch_add(1, Ordering::Relaxed);
-            self.alarm(Alarm::UnkeyFailed);
+            self.alarm(Alarm::UnkeyFailed, source);
         }
     }
 
@@ -1009,9 +1016,16 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         Instant::now().saturating_duration_since(self.epoch)
     }
 
+    // [@ANCHOR: radioctl_core_actor_link_down]
+    /// The transport failed: every later command is refused with `LinkDown`, and the loss is
+    /// reported once as [`Alarm::LinkDown`] (a keyed rig whose link drops is on the air with no
+    /// way to unkey it by command, which the operator must hear about at once).
     fn link_down(&mut self, why: &str) {
-        self.shared.link_up.store(false, Ordering::Release);
+        let was_up = self.shared.link_up.swap(false, Ordering::AcqRel);
         self.transcript.push_back(format!("LINK DOWN {why}"));
+        if was_up {
+            self.alarm(Alarm::LinkDown, Source::Api);
+        }
     }
 
     // [@ANCHOR: radioctl_core_actor_log]
@@ -1052,6 +1066,16 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             }
         }
         if command.op.is_emergency() {
+            // An unkey a caller asked for and the rig did not take (timed out, refused, link
+            // down) leaves the rig possibly on the air: count and report it, whatever the
+            // caller does with its own copy of the result.
+            if result.is_err() {
+                self.shared
+                    .counters
+                    .unkey_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                self.alarm(Alarm::UnkeyFailed, command.source);
+            }
             let waiters: Vec<_> = guard(&self.shared.unkey_waiters).drain(..).collect();
             for waiter in waiters {
                 let _ = waiter.send(result.clone());
@@ -1088,8 +1112,12 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             1 + u32::from(timing.retries)
         };
         for _ in 0..attempts {
-            if let Some(ready) = self.spacing(timing.inter_command, deadline) {
-                sleep_until(ready).await;
+            // Inter-command spacing is a courtesy to the rig's parser; an emergency unkey does
+            // not wait for it, so a generous `inter_command_ms` never delays getting off the air.
+            if !op.is_emergency() {
+                if let Some(ready) = self.spacing(timing.inter_command, deadline) {
+                    sleep_until(ready).await;
+                }
             }
             match timeout_at(deadline, self.transport.write_all(&request.bytes)).await {
                 Err(_) => {
@@ -1240,12 +1268,24 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         done
     }
 
+    // [@ANCHOR: radioctl_core_actor_note_unsolicited]
+    /// A frame arrived that no command was waiting for. On a rig that reports on its own
+    /// (`Capability::Transceive`) that is transceive traffic and polling slows to the maximum
+    /// interval; on any other rig it is a late reply to a command already given up, counted as
+    /// such and never allowed to pin polling for the rig's lifetime.
     fn note_unsolicited(&mut self) {
-        self.shared
-            .counters
-            .unsolicited
-            .fetch_add(1, Ordering::Relaxed);
-        self.poll.note_transceive();
+        if self.shared.capabilities.has(Capability::Transceive) {
+            self.shared
+                .counters
+                .unsolicited
+                .fetch_add(1, Ordering::Relaxed);
+            self.poll.note_transceive();
+        } else {
+            self.shared
+                .counters
+                .late_replies
+                .fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     /// Handles bytes that arrive while no command waits (transceive, late replies).

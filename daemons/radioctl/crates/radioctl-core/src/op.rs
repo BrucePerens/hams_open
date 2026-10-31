@@ -142,6 +142,9 @@ pub enum Alarm {
     HeartbeatLapsed,
     /// An unkey failed after every attempt: the rig may still be transmitting.
     UnkeyFailed,
+    /// The transport to the rig failed. A rig that was keyed cannot be unkeyed by command until
+    /// the link is back; every command is refused with `LinkDown` meanwhile.
+    LinkDown,
 }
 
 /// A value reported by a rig, solicited or not.
