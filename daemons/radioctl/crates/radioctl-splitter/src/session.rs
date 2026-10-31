@@ -375,6 +375,9 @@ impl Splitter {
                 outcome
             }
             Request::SendCw(text) => self.send_cw(client, text).await,
+            // A stop path: any client, owner or not, gate open or closed. The owner keeps the
+            // transmitter (it may still be keyed by PTT); an unkey or its departure clears it.
+            Request::StopCw => self.set(Op::StopCw).await,
         };
         if outcome == Outcome::Refused {
             self.count(&self.inner.counters.refused);

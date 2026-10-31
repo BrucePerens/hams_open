@@ -568,7 +568,7 @@ impl RigHandle {
                     self.shared.emergency_wake.notify_one();
                     Ok(())
                 }
-                Err(mpsc::error::TrySendError::Full(command)) => {
+                Err(mpsc::error::TrySendError::Full(command)) if command.op.is_unkey() => {
                     // An unkey is never refused: one pending unkey is enough for everybody, so
                     // this request rides on it and is answered with its result.
                     self.shared.emergency_pending.fetch_sub(1, Ordering::AcqRel);
@@ -579,9 +579,11 @@ impl RigHandle {
                         .fetch_add(1, Ordering::Relaxed);
                     Ok(())
                 }
-                Err(closed) => {
+                Err(other) => {
+                    // A stop-Morse that finds the queue full is refused: the queue holds unkeys
+                    // only, and each of those ends the transmission it would have stopped.
                     self.shared.emergency_pending.fetch_sub(1, Ordering::AcqRel);
-                    Err(closed)
+                    Err(other)
                 }
             }
         } else {
@@ -1131,10 +1133,11 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     .fetch_add(1, Ordering::Relaxed);
             }
         }
-        if command.op.is_emergency() {
+        if command.op.is_unkey() {
             // An unkey a caller asked for and the rig did not take (timed out, refused, link
             // down) leaves the rig possibly on the air: count and report it, whatever the
-            // caller does with its own copy of the result.
+            // caller does with its own copy of the result. A failed stop-Morse is the caller's
+            // alone: it is not an unkey and nobody rides on it.
             if result.is_err() {
                 self.shared
                     .counters
@@ -1379,6 +1382,10 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 self.observe(Observation::ScopeReference(*rx, *centi_db), source)
             }
             Op::SendCw(_) => self.arm_watchdog(Instant::now()),
+            // A stop clears the CW buffer but says nothing about PTT: the rig may still be keyed
+            // by hand or by a `SetPtt(true)`, so the watchdog stays armed until a poll or a
+            // transceive report shows the rig receiving.
+            Op::StopCw => {}
             _ => {}
         }
     }

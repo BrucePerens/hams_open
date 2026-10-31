@@ -309,6 +309,14 @@ impl ProtocolEngine for YaesuEngine {
                 Self::command(format!("{}{digit}{value:03};", wire.name), none)
             }
             Op::GetModelId => Self::command("ID;".into(), observe(Field::ModelId)),
+            // No Morse over CAT: the three guides' `KY` plays back keyer memories 1 to 5 and
+            // message keyer 1 to 5 only, and none documents a stop, so `StopCw` is refused with
+            // the rest. Unkeying (`TX0;`) remains the stop path.
+            Op::SendCw(_) | Op::StopCw => {
+                return Err(Self::unsupported(
+                    "the CAT guides have no Morse text command and no stop for one",
+                ))
+            }
             _ => return Err(Self::unsupported("not implemented for the Yaesu engine")),
         };
         Ok(request)
@@ -396,6 +404,10 @@ mod tests {
             .encode(&Op::SetFrequency(Vfo::A, Hz(1_000_000_000)))
             .is_err());
         assert!(e.encode(&Op::SendCw("cq".into())).is_err());
+        assert_eq!(
+            e.encode(&Op::StopCw).expect_err("no stop").kind,
+            ErrorKind::Unsupported
+        );
         let mut x = YaesuEngine::new(shipped("yaesu-ftdx10")).expect("engine");
         assert!(
             x.encode(&Op::SetSplit(true)).is_err(),

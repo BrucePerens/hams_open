@@ -115,6 +115,7 @@ impl CivPersonality {
             (0x19, [0x00]) => Action::Local(self.frame(frame.from, 0x19, &[0x00, self.address])),
             (0x15, [0x02]) => rig(Request::ReadSignal, &[0x02]),
             (0x15, [0x11]) => rig(Request::ReadPower, &[0x11]),
+            (0x17, [0xFF]) => rig(Request::StopCw, &[]),
             (0x17, text) if !text.is_empty() && text.iter().all(|b| (0x20..0x7F).contains(b)) => {
                 rig(
                     Request::SendCw(String::from_utf8_lossy(text).into_owned()),
@@ -261,6 +262,8 @@ mod tests {
             context_of(&ask(&mut p, &cw)).0,
             Request::SendCw("CQ".into())
         );
+        let stop = [0xFE, 0xFE, 0x94, 0xE0, 0x17, 0xFF, 0xFD];
+        assert_eq!(context_of(&ask(&mut p, &stop)).0, Request::StopCw);
         let id = [0xFE, 0xFE, 0x00, 0xE0, 0x19, 0x00, 0xFD];
         assert_eq!(
             ask(&mut p, &id).action,

@@ -395,6 +395,11 @@ impl ProtocolEngine for KenwoodEngine {
                 Self::command(format!("{}{digit}{value:03};", wire.name), none)
             }
             Op::GetModelId => Self::command("ID;".into(), ReplyKind::Observation(Field::ModelId)),
+            // The TS-590 guide, "KY" (Set 2): `KY0;` stops the keying started by `KY <text>`.
+            // The TS-2000 transcription read for this module has no `KY` entry at all, and no
+            // Kenwood description carries `send-cw`, so the actor refuses this before it is
+            // encoded (`Unsupported`); the encoding is here for a description that gains it.
+            Op::StopCw => Self::command("KY0;".into(), none),
             _ => {
                 return Err(Self::unsupported("not implemented for the Kenwood engine"));
             }
@@ -418,6 +423,7 @@ impl ProtocolEngine for KenwoodEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use radioctl_core::capability::{Capability, CapabilitySet};
     use radioctl_core::units::{Level, Mode};
 
     const T0: Duration = Duration::from_secs(1);
@@ -500,6 +506,17 @@ mod tests {
             "the built-in lacks ReadPtt"
         );
         assert!(engine.encode(&Op::SendCw("cq".into())).is_err());
+        assert_eq!(
+            engine.encode(&Op::StopCw).expect_err("no send-cw").kind,
+            ErrorKind::Unsupported,
+            "no Kenwood description carries send-cw"
+        );
+        let mut with_cw = RigDescription::ts2000();
+        let mut list: Vec<_> = with_cw.capabilities.iter().collect();
+        list.push(Capability::SendCw);
+        with_cw.capabilities = CapabilitySet::of(&list);
+        let mut engine = KenwoodEngine::new(with_cw).expect("engine");
+        assert_eq!(engine.encode(&Op::StopCw).expect("stop").bytes, b"KY0;");
         assert!(engine
             .encode(&Op::SetFrequency(Vfo::A, Hz(100_000_000_000)))
             .is_err());

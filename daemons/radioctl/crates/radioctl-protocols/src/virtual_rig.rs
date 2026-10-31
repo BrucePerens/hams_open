@@ -57,6 +57,8 @@ pub struct RigState {
     pub signal: u16,
     /// Every Morse text received.
     pub cw_sent: Vec<String>,
+    /// How many times a stop-Morse command cleared the buffer (`cw_sent` is emptied too).
+    pub cw_stops: u32,
     /// True when the rig reports front-panel changes on its own (CI-V transceive, Kenwood AI).
     pub transceive: bool,
     /// Split operation (Elecraft).
@@ -177,6 +179,7 @@ impl VirtualRig {
             ptt: false,
             signal: DEFAULT_SIGNAL,
             cw_sent: Vec::new(),
+            cw_stops: 0,
             transceive: desc.civ.is_some(),
             split: false,
             rit: false,
@@ -251,6 +254,12 @@ impl VirtualRig {
                 for token in tokens {
                     out.extend(match token {
                         Token::Command(text) => self.elecraft_command(&text),
+                        // The documented stop, `KY <space><EOT>;`, carries a control byte the
+                        // client-side tokenizer classes as junk; the radio takes it ("KY", p. 15).
+                        Token::Junk(raw) if raw.eq_ignore_ascii_case(b"KY \x04;") => {
+                            self.stop_cw();
+                            Vec::new()
+                        }
                         Token::Junk(_) => b"?;".to_vec(),
                     });
                 }
@@ -478,6 +487,10 @@ impl VirtualRig {
                 self.state.ptt = *state != 0;
                 CivReply::Ok
             }
+            (0x17, [0xFF]) => {
+                self.stop_cw();
+                CivReply::Ok
+            }
             (0x17, text) => {
                 self.state
                     .cw_sent
@@ -598,6 +611,13 @@ impl VirtualRig {
         CivReply::Data(cmd, data)
     }
 
+    // [@ANCHOR: radioctl_virtual_stop_cw]
+    /// A stop-Morse command arrived: the text buffer is emptied and the stop counted.
+    fn stop_cw(&mut self) {
+        self.state.cw_sent.clear();
+        self.state.cw_stops = self.state.cw_stops.saturating_add(1);
+    }
+
     // [@ANCHOR: radioctl_virtual_kenwood_command]
     fn kenwood_command(&mut self, text: &str) -> Vec<u8> {
         let (name, arg) = (text.get(..2).unwrap_or(""), text.get(2..).unwrap_or(""));
@@ -614,6 +634,10 @@ impl VirtualRig {
             }
             ("RX", _) => {
                 self.state.ptt = false;
+                None
+            }
+            ("KY", "0") => {
+                self.stop_cw();
                 None
             }
             ("ID", "") => Some(format!("ID{:03};", self.kenwood_id())),
@@ -1165,6 +1189,10 @@ impl VirtualRig {
             ("K3", "") => Some(format!("K3{};", self.state.k3_mode)),
             ("K3", mode) => self.set_meta(mode, 1, false),
             ("KY", "") => Some("KY0;".to_string()),
+            ("KY", " \u{4}") => {
+                self.stop_cw();
+                None
+            }
             ("KY", _) => {
                 let sent = text.get(3..).unwrap_or("").to_string();
                 self.state.cw_sent.push(sent);
@@ -1501,6 +1529,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_virtual_elecraft_id]
     // Tests [@ANCHOR: radioctl_virtual_elecraft_power]
     // Tests [@ANCHOR: radioctl_virtual_from_description]
+    // Tests [@ANCHOR: radioctl_virtual_stop_cw]
     #[test]
     fn elecraft_commands_follow_the_programmers_reference() {
         let mut rig = kx3_rig();
@@ -1534,6 +1563,9 @@ mod tests {
         assert_eq!(rig.feed(b"FT;", T0), b"FT0;");
         assert!(rig.feed(b"KY CQ DE K6BP;", T0).is_empty());
         assert_eq!(rig.state().cw_sent, vec!["CQ DE K6BP".to_string()]);
+        assert!(rig.feed(b"KY \x04;", T0).is_empty());
+        assert!(rig.state().cw_sent.is_empty());
+        assert_eq!(rig.state().cw_stops, 1);
         assert_eq!(rig.feed(b"KY;", T0), b"KY0;");
         assert_eq!(rig.feed(b"SW;", T0), b"SW010;");
         for refused in [

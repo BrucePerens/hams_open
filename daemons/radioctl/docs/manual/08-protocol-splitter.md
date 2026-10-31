@@ -24,7 +24,7 @@ rig, a socket or a clock. Two exist:
 
 | Personality | Selected by | Commands answered |
 |---|---|---|
-| IC-7300 CI-V | `Protocol::Civ { address, echo }` (address `0x94` for the IC-7300) | `03` read frequency, `05` set frequency, `25 00`/`25 01` read or set the selected or unselected VFO, `04` and `26 00` read mode, `06` and `26 00` set mode, `1C 00` read or set PTT, `19 00` read ID, `15 02` S-meter, `15 11` power meter, `17` Morse text. Anything else is NG. |
+| IC-7300 CI-V | `Protocol::Civ { address, echo }` (address `0x94` for the IC-7300) | `03` read frequency, `05` set frequency, `25 00`/`25 01` read or set the selected or unselected VFO, `04` and `26 00` read mode, `06` and `26 00` set mode, `1C 00` read or set PTT, `19 00` read ID, `15 02` S-meter, `15 11` power meter, `17` Morse text, `17 FF` stop Morse. Anything else is NG. |
 | TS-2000 CAT | `Protocol::Ts2000` | `FA`, `FB` read or set a VFO (11 digits), `MD` read or set mode, `TX`, `RX` key and unkey, `SM0` S-meter, `ID` (019), `AI` auto-information for this client, `PS` (power is on). A refusal or an unknown command is `?;`. |
 
 Requests reach the rig as one of: read or set a VFO's frequency, read or set the mode, read or set
@@ -68,7 +68,8 @@ One transmitter, one owner (`arbiter::PttOwner`), shared with `radioctld`.
   `ptt_conflict`. Morse puts RF on the air, so a client that sends Morse claims the transmitter exactly as
   a key does (the claim is given back if the rig refuses), and a Morse sender that goes away unkeys the
   rig.
-- Unkeying is open to every client and clears the ownership.
+- Unkeying is open to every client and clears the ownership. Stopping Morse (`17 FF`) is open to every
+  client too and needs no permit; it leaves the ownership as it is, because the owner may still be keyed.
 - A client that disconnects while owning the transmitter unkeys the rig. For a pty, a program closing it
   counts as disconnecting; the endpoint stays for the next program.
 - The claim is made before the rig is asked and given back if the rig refuses.

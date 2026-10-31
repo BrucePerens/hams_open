@@ -361,6 +361,14 @@ impl RigService {
         outcome
     }
 
+    // [@ANCHOR: radioctld_service_stop_morse]
+    /// Stops Morse in progress. A stop path like the unkey: open to every client, owner or not,
+    /// gate open or closed; it jumps the rig's queue. The owner record is left alone (the rig
+    /// may still be keyed by PTT); `ENAVAIL` on a rig whose engine has no stop command.
+    async fn stop_morse(&self) -> Result<Body, i32> {
+        self.set(Op::StopCw).await
+    }
+
     // [@ANCHOR: radioctld_service_split_vfo]
     /// `s`: whether split is on and which VFO transmits.
     async fn split_vfo(&self) -> Result<Body, i32> {
@@ -661,7 +669,8 @@ impl RigService {
                 Ok(Body::Fields(vec![("VFOs", list.to_string())]))
             }
             Command::SendMorse(text) => self.send_morse(client, text).await,
-            Command::SetPowerStat(_) | Command::StopMorse | Command::SendCmd(_) => Err(ENAVAIL),
+            Command::StopMorse => self.stop_morse().await,
+            Command::SetPowerStat(_) | Command::SendCmd(_) => Err(ENAVAIL),
             Command::Quit => Ok(Body::Close),
         }
     }

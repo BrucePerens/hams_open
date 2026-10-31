@@ -32,6 +32,8 @@ pub enum Request {
     ReadPower,
     /// Send Morse text.
     SendCw(String),
+    /// Stop Morse in progress (always allowed, no owner check: a stop path).
+    StopCw,
 }
 
 /// What the splitter did with a [`Request`].
