@@ -766,6 +766,10 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_vfo_name] (radioctl-core) The name used in rig description files.
 - [@ANCHOR: radioctl:radioctl_core_vfo_from_name] (radioctl-core) The VFO with a file-format name.
 - [@ANCHOR: radioctl:radioctl_conformance_engine_for] (radioctl-protocols) The engine for a description's protocol family.
+- [@ANCHOR: radioctl:radioctl_easy_spawn_virtual] (radioctl-protocols) Builds the virtual radio and the engine from a description and spawns the rig actor on a runtime; the gate is closed.
+- [@ANCHOR: radioctl:radioctl_easy_virtual_rig_spawn] (radioctl-protocols) A virtual rig of a named model on the current runtime in one call; the gate is closed.
+- [@ANCHOR: radioctl:radioctl_easy_open_serial_rig_with] (radioctl-protocols) Opens a serial port, builds the engine, spawns the rig with the link watch and sends the start-up unkey; the gate is closed.
+- [@ANCHOR: radioctl:radioctl_easy_open_serial_rig] (radioctl-protocols) A rig from a description id or file and a serial port path, on the current runtime.
 - [@ANCHOR: radioctl:radioctl_conformance_replay] (radioctl-protocols) Replays a transcript against the engine and the virtual rig built from one description; reports every byte-level disagreement.
 - [@ANCHOR: radioctl:radioctl_conformance_replay_solicited] (radioctl-protocols) Replays one command step: engine encoding, reply expectation and virtual rig answer against the transcript bytes.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_description] (radioctl-core) Builds the RigDescription from the parsed file: family, capabilities, defaults, timing, mode codes.
