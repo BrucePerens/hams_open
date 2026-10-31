@@ -1,0 +1,266 @@
+# 6. Rig descriptions
+
+A rig description is a TOML file with everything radioctl knows about one model, and a record of where
+each piece of knowledge came from. The same file builds the protocol engine and the virtual rig that
+stands in for the model in tests, so a driver and its test double cannot drift apart. The files are in
+`rigs/`; the format is implemented in `radioctl-core/src/rigfile.rs`, whose module comment is the
+normative text.
+
+A description is deliberately small. It is **data** for the parts that vary between models of one
+family (addresses, identifiers, mode codes, timing, which capabilities exist). Command layouts live in
+the engine of the family (chapter [7](07-protocol-engines.md)). **Planned:** the proposal also wants a
+command table, meter scaling, per-firmware differences and an overridable per-model trait for odd
+cases; none of that is in the format. Today a model that needs a different command is an engine
+change.
+
+## The format, field by field
+
+Schema version 1 is the only one the reader accepts. Unknown fields and unknown names are errors
+(`deny_unknown_fields`), as are duplicates and missing blocks.
+
+| Key | Meaning |
+|---|---|
+| `schema` | Must be `1`. |
+| `capabilities` | A non-empty list of capability names (appendix [A](A-capability-matrix.md)), without duplicates. |
+| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii` or `yaesu-newcat`. The id and name are our own labels. |
+| `[civ]` | Required for `icom-civ`, forbidden for others: `address` (the rig's CI-V address), `controller` (the software's, conventionally `0xE0`), `model_id` (what the read-ID command returns), `echo` (true if the bus echoes every frame back, as a single-wire interface does). |
+| `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. |
+| `[scope]` | Optional, `icom-civ` only: `receivers` (1 or 2), `line_length`, `samples_per_frame`, `amplitude_max`, `spans_hz`. |
+| `[timing]` | `timeout_ms` (wait for a reply), `retries` (extra attempts after a timeout; a transmit command is never repeated), `inter_command_ms` (minimum gap between writes). |
+| `[defaults]` | `frequency_hz` and `mode` of a virtual rig of this model at start. They say nothing about the radio. |
+| `[[modes]]` | One per supported mode: `mode` (a name from the `Mode` list in chapter [4](04-api.md): `lsb`, `usb`, `am`, `cw`, `cw-r`, `rtty`, `rtty-r`, `fm`, `wfm`, `data`, `data-r`) and `code`, either a byte (`0x01`) or a one-character string (`"1"`, for an ASCII mode digit). A mode or a code may appear once. |
+| `[[facts]]` | Provenance and verification records; see below. |
+
+## Provenance and `verified`
+
+Nothing in a description is taken on trust. Every datum must be covered by a `[[facts]]` entry, and
+every fact must cover something: the file does not load otherwise. A fact's `key` is exact
+(`civ.address`, `kenwood.model_id`, `capability.set-ptt`, `mode.usb`, `rig.id`, `timing.timeout_ms`,
+`scope.line_length`) or a prefix wildcard (`capability.*`, `mode.*`, `rig.*`, `timing.*`,
+`defaults.*`); an exact fact wins over a wildcard.
+
+```toml fragment
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Document title, revision, page and command", note = "Why it is trusted, or its caveat." }
+verified = { state = "unverified" }
+```
+
+`provenance.kind` says what kind of source:
+
+| Kind | Meaning, and what `reference` must name |
+|---|---|
+| `manual` | A vendor manual: document, revision, page, command. Add the PDF's SHA-256 if you can. |
+| `capture` | A recording of a real radio: the capture. |
+| `owner` | Run by the owner on a radio: who and when. |
+| `repo-code` | Existing code in this repository: file and symbol. |
+| `program-output` | The output of a program run: the command (for example `rigctl --dump-caps`). |
+| `hamlib-source` | A fact read from Hamlib's source, used only where no vendor manual could be: Hamlib release, file and function; `note` says why a manual was not the source. |
+
+`verified.state` says what has been checked:
+
+| State | Needs | Means |
+|---|---|---|
+| `unverified` | nothing | never checked. Every fact in every shipped file is in this state today. |
+| `manual-checked` | `reference` | compared with a vendor manual |
+| `transcript-checked` | `reference` (the transcript) | replayed against a recorded transcript |
+| `hardware-verified` | `radio`, `firmware`, `date` (`YYYY-MM-DD`), `tested` | run on a real radio; `tested` says exactly what, with which firmware |
+
+An empty `provenance.reference` is an error, as is a `verified` state without the fields it needs. The
+reader checks that a source is named, not that it is true: "from Hamlib" without a file and function
+is not an acceptable reference, and review will ask for them.
+
+## The shipped descriptions
+
+Fourteen files, at the time of writing. All are unverified and all carry hand-written transcripts.
+
+| Family | Files | Written from |
+|---|---|---|
+| `icom-civ` | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700` | Hamlib 4.6.2 source (facts only, file and function per fact) and `rigctl --dump-caps` output. Not Icom's CI-V guides. Each has a `[scope]` block. |
+| `icom-civ` (Xiegu) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x108g` | Hamlib facts only; deliberately small (frequency, mode, PTT, signal). |
+| `kenwood-ascii` | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg` | Kenwood's published PC command references; the TS-2000 text was read from a third-party transcription of its manual, which its facts say. |
+| `elecraft-ascii` | `elecraft-kx3` | Elecraft's Programmer's Reference, Rev. G5, cited by command heading and printed page. |
+| `yaesu-newcat` | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals, with page and SHA-256 per fact. |
+
+The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
+have no description (address and a usable document are missing). Chapter [7](07-protocol-engines.md)
+describes what each engine implements and chapter [12](12-provenance-and-licensing.md) why the Icom
+files do not come from Icom's manuals.
+
+## Transcripts and conformance
+
+A transcript (`rigs/transcripts/<id>-basic.toml`) is a list of steps: a command (`op`), the bytes the
+controller sends (`tx`, hex, or `tx_text` for ASCII protocols), the bytes the radio answers (`rx` or
+`rx_text`), and what the engine must decode (`expect`). A step may instead be a front-panel change
+(`panel`): the virtual radio's knob is turned, it sends the unsolicited bytes `rx`, and the engine must
+decode them. `origin` is required and says honestly where the bytes came from.
+
+```toml transcript
+schema = 1
+rig = "example-er1"
+origin = "hand-written for the manual; not a capture of a radio"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "FA;"
+rx_text = "FA00014074000;"
+expect = { kind = "frequency", vfo = "a", hz = 14074000 }
+
+[[step]]
+op = { kind = "set-mode", mode = "usb" }
+tx_text = "MD2;"
+```
+
+`radioctl_protocols::conformance::replay(description, transcript)` plays a transcript against the
+engine and the virtual rig built from the same description. Per solicited step the engine must encode
+the `op` to exactly `tx`, the virtual rig fed `tx` must answer exactly `rx`, and the engine fed `rx`
+must decode exactly `expect`. It returns the number of steps or every mismatch. A pass means the file,
+the engine and the virtual rig agree with each other. A hand-written transcript cannot show that they
+agree with a radio; only a capture or an owner's bench run can, and then the `verified` field is
+upgraded.
+
+## A complete, fictional example
+
+This file describes a radio that does not exist, "Example ER-1", in the Kenwood family. It is
+**example only**: its facts cite a manual that is not real and the radio must never be added. It is
+parsed by the production reader when the manual's test runs.
+
+```toml rigfile
+# EXAMPLE ONLY: a fictional radio used to show the format.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt"]
+
+[rig]
+id = "example-er1"
+name = "Example ER-1"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 99
+
+[timing]
+timeout_ms = 500
+retries = 2
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+[[modes]]
+mode = "usb"
+code = "2"
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "EXAMPLE ONLY: the ER-1 CAT manual, p. 1", note = "The id and name are our own labels." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "manual", reference = "EXAMPLE ONLY: ER-1 CAT manual, ID command, p. 4" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/kenwood.rs", note = "Our choice; the manual gives no figures." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "this example", note = "Only the starting state of a virtual rig." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "EXAMPLE ONLY: ER-1 CAT manual, TX and RX commands, p. 9", note = "Transmit-capable: the rig's transmit gate applies." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "EXAMPLE ONLY: ER-1 CAT manual, FA, FB and MD commands, p. 6" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "EXAMPLE ONLY: ER-1 CAT manual, MD command, p. 7: 1 LSB, 2 USB, 3 CW" }
+verified = { state = "unverified" }
+```
+
+## Adding a radio, step by step
+
+**A radio of a family that exists** (the common case). Use the Xiegu and Yaesu commits as models.
+
+1. **Find the sources.** Prefer the vendor's published CAT or CI-V reference. Check its terms first:
+   a document whose terms forbid reuse is skipped, not used and not asked about
+   (chapter [12](12-provenance-and-licensing.md)). Record the title, revision, date, URL and the PDF's
+   SHA-256. If no usable manual exists, Hamlib source may be read for facts only, with its release,
+   file and function in each fact. Do not copy code or tables.
+2. **Copy the closest shipped file** into `rigs/<make>-<model>.toml` and change it fact by fact.
+   Identity (`id`, `name`, the CI-V address or model id), `timing` (from the manual's response-time
+   statement), the capability list (only what the manual defines and the engine implements), the
+   mode code table, and the `[scope]` block if the radio has one. Do not claim a capability the engine
+   cannot encode; the engine will return `Unsupported` for it and the description will have lied.
+3. **Mark every fact `unverified`** unless you ran it. Never write `manual-checked`,
+   `transcript-checked` or `hardware-verified` for something you did not check.
+4. **Write the transcript** `rigs/transcripts/<id>-basic.toml` by hand from the manual's examples.
+   State in `origin` that it is hand-written.
+5. **Run the checks.** `cargo run -p radioctld --example rig_file -- <id>` loads the file, prints
+   the verified states, and replays the transcript:
+
+   ```text
+   Elecraft KX3: family ElecraftAscii
+   facts by verified state: {"unverified": 20}
+   transcript origin: hand-written from the Elecraft Programmer's Reference Rev. G5; not a capture of a radio
+   replayed 44 steps: engine, virtual rig and file agree
+   ```
+
+   The workspace tests (`tests/rig_files.rs`) load every file in `rigs/` and replay every transcript
+   in `rigs/transcripts/`, so a new file is checked without further wiring.
+6. **Compare with Hamlib** where the oracle can: add the file to the relevant `*_divergences` list in
+   `crates/radioctl-protocols/tests/rigctld_oracle.rs` (chapter [11](11-testing.md)) and record each
+   disagreement with the reason.
+7. **Document and merge** following the repository rules: a pull request, the linters, the test
+   results in the PR text, and the manual's chapter 6 table updated.
+
+**A new family** (a radio with a different protocol). The Yaesu newcat commit touched exactly these
+places, in this order; the compiler finds most of them if you add the variant first.
+
+1. `radioctl-core/src/description.rs`: a `Family` variant and a parameters struct (such as `YaesuParams`)
+   and the field in `RigDescription`.
+2. `radioctl-core/src/rigfile.rs`: the family name, the optional block, the match that requires exactly
+   the family's block, and `expected_keys`.
+3. `radioctl-protocols/src/<family>.rs`: the sans-IO engine (`ProtocolEngine`), with checked byte
+   access only, no panics.
+4. `radioctl-protocols/src/virtual_rig.rs`: the simulated radio of the family, including the fixed
+   answers Hamlib's backend needs at start-up, so the oracle can run.
+5. `radioctl-protocols/src/conformance.rs`: `engine_for`.
+6. `radioctld/src/names.rs`: `level_range` for the family, so levels scale correctly.
+7. Descriptions, transcripts, oracle tests and a README paragraph, as above.
+
+## Verifying on real hardware and recording it
+
+This is the step that makes a fact worth more than a hand-written transcript. It is for a radio's
+owner.
+
+1. Agree the plan with the owner first. Read before you write, and never key a transmitter in a test:
+   use a dummy load only with the owner's explicit decision, and keep the transmit gate closed
+   everywhere else.
+2. Capture the exchange (a serial tap, or the transcript tail of a `RigError`), and keep the capture
+   free of serial numbers, keys and addresses.
+3. For each fact you exercised, change `verified` to `hardware-verified` with the radio, its firmware
+   version, the date and what exactly you tested:
+
+   ```toml fragment
+   # Illustrative values, not a real test run.
+   verified = { state = "hardware-verified", radio = "Elecraft KX3 (owner's)", firmware = "02.37", date = "2026-11-02", tested = "FA and FB reads and sets on 20 m, MD cycle, TQ read; no transmit" }
+   ```
+4. Add the capture as a transcript and its origin as `capture`.
+5. Say in the pull request what was run. "Fixtures only" is an acceptable statement; an untrue date is
+   not.
