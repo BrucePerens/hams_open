@@ -235,6 +235,12 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_flex_interlock_keyed] (radioctl-protocols) True for interlock states in which RF is or may be on the air.
 - [@ANCHOR: radioctl:radioctl_flex_engine_encode] (radioctl-protocols) Encodes an Op as numbered SmartSDR commands, with the subscriptions before the first one.
 - [@ANCHOR: radioctl:radioctl_flex_engine_feed] (radioctl-protocols) Splits received bytes into lines (CR, LF or CRLF, bounded) and decodes them.
+- [@ANCHOR: radioctl:radioctl_flex_answer_reply] (radioctl-protocols) Turns an `R` reply into an acknowledgement, a refusal, an observation from the shadow, or a wait.
+- [@ANCHOR: radioctl:radioctl_flex_apply_interlock] (radioctl-protocols) Applies an interlock status line (state to transmit flag).
+- [@ANCHOR: radioctl:radioctl_flex_apply_pan] (radioctl-protocols) Applies a panadapter status line to the panadapter state.
+- [@ANCHOR: radioctl:radioctl_flex_apply_slice] (radioctl-protocols) Applies a slice status line to the slice state and returns the observations for VFO A.
+- [@ANCHOR: radioctl:radioctl_flex_subscription_lines] (radioctl-protocols) The `sub` or `unsub` lines for slice, tx and pan status.
+- [@ANCHOR: radioctl:radioctl_flex_apply_transmit] (radioctl-protocols) Applies a transmit status line (RF power and mic level).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_set_meta] (radioctl-protocols) Stores a `K2n`/`K3n` meta-command value of the virtual Elecraft rig (Basic formats are still used).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.

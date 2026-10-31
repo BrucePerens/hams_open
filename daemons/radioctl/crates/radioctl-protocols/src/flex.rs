@@ -588,6 +588,7 @@ impl FlexEngine {
         self.seq
     }
 
+    // [@ANCHOR: radioctl_flex_subscription_lines]
     fn subscription_lines(on: bool) -> [String; 3] {
         let verb = if on { "sub" } else { "unsub" };
         [
@@ -708,6 +709,7 @@ impl FlexEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_flex_apply_slice]
     /// Applies one `key=value` list of a slice status line; returns the observations.
     fn apply_slice(&mut self, index: u8, pairs: &[(&str, &str)]) -> Vec<Observation> {
         let mut out = Vec::new();
@@ -782,6 +784,7 @@ impl FlexEngine {
         out
     }
 
+    // [@ANCHOR: radioctl_flex_apply_pan]
     fn apply_pan(&mut self, id: u32, pairs: &[(&str, &str)]) {
         let pan = self.pans.entry(id).or_default();
         for (key, value) in pairs {
@@ -796,6 +799,7 @@ impl FlexEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_flex_apply_interlock]
     fn apply_interlock(&mut self, pairs: &[(&str, &str)]) -> Vec<Observation> {
         let mut out = Vec::new();
         for (key, value) in pairs {
@@ -811,6 +815,7 @@ impl FlexEngine {
         out
     }
 
+    // [@ANCHOR: radioctl_flex_apply_transmit]
     fn apply_transmit(&mut self, pairs: &[(&str, &str)]) -> Vec<Observation> {
         let mut out = Vec::new();
         for (key, value) in pairs {
@@ -868,6 +873,7 @@ impl FlexEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_flex_answer_reply]
     fn answer_reply(&mut self, reply: Reply) -> Vec<Inbound> {
         let Some(at) = self.pending.iter().position(|p| p.seq == reply.seq) else {
             return vec![Inbound::Unrecognised(
@@ -1231,6 +1237,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_flex_engine_encode]
     // Tests [@ANCHOR: radioctl_flex_engine_commands]
+    // Tests [@ANCHOR: radioctl_flex_subscription_lines]
     #[test]
     fn the_first_command_carries_the_subscriptions_and_later_ones_do_not() {
         let mut e = engine();
@@ -1291,6 +1298,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_flex_engine_line]
     // Tests [@ANCHOR: radioctl_flex_engine_status]
     // Tests [@ANCHOR: radioctl_flex_shadow_value]
+    // Tests [@ANCHOR: radioctl_flex_apply_slice]
+    // Tests [@ANCHOR: radioctl_flex_answer_reply]
     #[test]
     fn a_read_is_answered_from_status_in_either_order() {
         // The R line first, then the status line it caused.
@@ -1349,6 +1358,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_flex_engine_feed]
+    // Tests [@ANCHOR: radioctl_flex_apply_pan]
     #[test]
     fn partial_stale_oversize_and_odd_lines_are_survived() {
         let mut e = engine();
@@ -1389,6 +1399,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_flex_interlock_keyed]
+    // Tests [@ANCHOR: radioctl_flex_apply_interlock]
     #[test]
     fn interlock_states_map_to_the_transmit_flag() {
         let mut e = engine();
@@ -1406,6 +1417,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_flex_engine_encode]
+    // Tests [@ANCHOR: radioctl_flex_apply_transmit]
     #[test]
     fn filter_width_and_levels_come_from_status_and_set_from_the_low_edge() {
         let mut e = engine();
