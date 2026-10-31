@@ -424,3 +424,32 @@ fn sysfs_lists_usb_ports_and_skips_the_rest() {
     // The real machine: whatever it has, listing must not panic.
     let _ = list_ports();
 }
+
+// Tests [@ANCHOR: radioctl_core_serial_link_into_parts]
+// Tests [@ANCHOR: radioctl_core_serial_monitor_status]
+// Tests [@ANCHOR: radioctl_core_serial_monitor_watch]
+// Tests [@ANCHOR: radioctl_core_serial_monitor_stats]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_split_link_keeps_status_and_counters_on_the_monitor() {
+    let (mut master, path) = pty();
+    let link = open_serial(&Handle::current(), fast_config(&path))
+        .await
+        .expect("open");
+    let (mut transport, monitor) = link.into_parts();
+    assert!(matches!(
+        monitor.status(),
+        LinkStatus::Connected { generation: 1, .. }
+    ));
+    assert!(matches!(
+        monitor.watch().borrow().clone(),
+        LinkStatus::Connected { generation: 1, .. }
+    ));
+    master.write_all(b"FA;").expect("master write");
+    assert_eq!(read_exactly(&mut transport, 3).await, b"FA;");
+    // The monitor sees the traffic of the stream it was split from.
+    assert_eq!(monitor.stats().bytes_in, 3);
+    // Dropping the monitor does not close the port: the stream still carries bytes.
+    drop(monitor);
+    master.write_all(b"MD;").expect("master write");
+    assert_eq!(read_exactly(&mut transport, 3).await, b"MD;");
+}

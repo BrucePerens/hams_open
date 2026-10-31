@@ -178,7 +178,7 @@ relay on top of radioctl; the point of the table is to avoid claiming otherwise.
 |---|---|---|
 | 1 | Fail closed; a new radio is receive-only | **Implemented**: the gate (handle, actor, `radioctld`). |
 | 2 | Per-rig dead-man timer independent of the caller; dead actor, dropped link or crashed process forces unkey where supported | **Implemented in the actor**: the watchdog (maximum transmit time, optional caller heartbeat), the unkey after an unanswered key and when the last handle is dropped, with alarms for failures. `radioctld` and the splitter also unkey for a disconnecting owner and at shutdown. A process that is killed takes its actors with it: nothing unkeys the radio then. |
-| 3 | Documented, tested carrier drop after link loss | **Not implemented.** On a failed transport the actor reports `LinkDown` and sends nothing; an unkey cannot be written to a link that is down. |
+| 3 | Documented, tested carrier drop after link loss | **Partly.** While a link is down nothing can be written to it: the actor reports `LinkDown` and refuses commands. A serial link that comes back (`RigOptions::link_watch`, chapter [5](05-transports.md)) is unkeyed by the actor before any other command and `Alarm::LinkRestored` reports it; the carrier therefore drops at the reopen, whose time is the supervisor's backoff, not a fixed figure. A CAT radio with no hardware time-out stays keyed until then. |
 | 4 | One transmitter per radio, maximum transmit duration, ownership modes | **Partly**: one owner per radio in the splitter and `radioctld`; the maximum transmit duration is the watchdog's. No ownership modes (shared receive, exclusive, transmit-locked). |
 | 5 | Frequency, mode, power and privilege limits per operator; identification timers | **Not in radioctl.** It is the relay's job; the gate is the hook it uses. |
 | 6 | Drive and signal limits, telemetry-based derating, SWR inhibit | **Not in radioctl.** SWR and power are readable on some radios; nothing acts on them. |
@@ -214,9 +214,10 @@ It does **not**:
   returns or panics is covered (the last handle drops, above), and one that hangs is covered by the
   watchdog (the maximum transmit time, and the heartbeat if the owner set one).
 - limit how long a transmission lasts below the default, or at all if the owner disabled the limit.
-- unkey on link loss, or tell the application that a serial link is reconnecting (chapter
-  [5](05-transports.md)). During a reconnect, unkey commands are dropped with the rest of the bytes and
-  end in a timeout.
+- unkey on link loss: nothing can be written to a port that is gone. With `RigOptions::link_watch`
+  (chapter [5](05-transports.md)) the application is told (`link_up()`, `Alarm::LinkDown`) and the
+  radio is unkeyed as soon as the port is back; without it, unkey commands during a reconnect are
+  dropped with the rest of the bytes and end in a timeout.
 - guarantee that a description is right. Every description is unverified; a wrong command could key a
   radio or change its state in ways the author did not intend. Read-only trials come first.
 - avoid the open-time DTR/RTS glitch, which can key a radio wired to those lines; that is the operating

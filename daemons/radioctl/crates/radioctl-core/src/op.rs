@@ -145,6 +145,9 @@ pub enum Alarm {
     /// The transport to the rig failed. A rig that was keyed cannot be unkeyed by command until
     /// the link is back; every command is refused with `LinkDown` meanwhile.
     LinkDown,
+    /// The transport came back after [`Alarm::LinkDown`]; the actor has run its unkey pass
+    /// (see `unkey_failures` / [`Alarm::UnkeyFailed`] for one that did not succeed).
+    LinkRestored,
 }
 
 /// A value reported by a rig, solicited or not.

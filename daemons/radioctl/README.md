@@ -177,7 +177,9 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
   `RigService::disconnect`, `Splitter::cleanup` and `shutdown` never swallow one. An emergency
   unkey skips inter-command spacing, and a rig file with `timeout_ms = 0` (or above 30 s) or
   `inter_command_ms` above 2 s is refused at load. Loss of the link is `Alarm::LinkDown`, emitted
-  once per loss; a reconnect-time unkey pass is still to do (see the safety to-do in hams_com).
+  once per loss. A serial link's status reaches the actor through `RigOptions::link_watch`
+  (`SerialLink::watch()`): the link is marked down while the port reconnects and, when it is back,
+  the actor unkeys the rig before any other command and emits `Alarm::LinkRestored`.
   A late reply on a rig without `Capability::Transceive` counts in `RigStats::late_replies` and
   never slows polling.
 - Tests use the same code paths as production; no test-only features.
@@ -360,6 +362,10 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_serial_link_status] (radioctl-core) The link status: connected (with generation), reconnecting, closed.
 - [@ANCHOR: radioctl:radioctl_core_serial_link_watch] (radioctl-core) A receiver that wakes on link status changes.
 - [@ANCHOR: radioctl:radioctl_core_serial_link_stats] (radioctl-core) Bytes in, out, dropped while down, and reconnects.
+- [@ANCHOR: radioctl:radioctl_core_serial_link_into_parts] (radioctl-core) Splits a link into the byte stream for the actor and a `SerialMonitor` the owner keeps.
+- [@ANCHOR: radioctl:radioctl_core_serial_monitor_status] (radioctl-core) The link status from the monitor.
+- [@ANCHOR: radioctl:radioctl_core_serial_monitor_watch] (radioctl-core) A status receiver from the monitor.
+- [@ANCHOR: radioctl:radioctl_core_serial_monitor_stats] (radioctl-core) The counters from the monitor.
 - [@ANCHOR: radioctl:radioctl_core_serial_resolve] (radioctl-core) The device path for a target: the path, or the one port matching the USB ids.
 - [@ANCHOR: radioctl:radioctl_core_serial_open_port] (radioctl-core) Opens and configures the port and makes DTR/RTS inactive (or fails).
 - [@ANCHOR: radioctl:radioctl_core_serial_write_fully] (radioctl-core) Writes all bytes, riding out short timeouts for about two seconds.
@@ -440,6 +446,8 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_actor_watchdog_fire] (radioctl-core) The watchdog lapsed: reports `Alarm::TransmitTimeout` or `Alarm::HeartbeatLapsed`, unkeys through the fail-closed path, disarms.
 - [@ANCHOR: radioctl:radioctl_core_actor_arm_watchdog] (radioctl-core) Starts the transmit watchdog when the rig is seen keyed or Morse is sent.
 - [@ANCHOR: radioctl:radioctl_core_actor_alarm] (radioctl-core) Emits an alarm event (`Field::Alarm`) attributed to the watchdog or to the caller whose unkey failed, never deduplicated, never cached.
+- [@ANCHOR: radioctl:radioctl_core_actor_link_status_changed] (radioctl-core) Applies the transport's link status: down while reconnecting; on a reopen, link up, an unkey pass before any queued command, then `Alarm::LinkRestored`.
+- [@ANCHOR: radioctl:radioctl_core_link_changed] (radioctl-core) Waits for the next link status change; false when the watch is closed.
 - [@ANCHOR: radioctl:radioctl_core_actor_link_down] (radioctl-core) Marks the transport down and reports the loss once as `Alarm::LinkDown`; every later command is refused with `LinkDown`.
 - [@ANCHOR: radioctl:radioctl_core_actor_note_unsolicited] (radioctl-core) A frame nobody waited for: transceive traffic (slows polling) on a rig with `Capability::Transceive`, a counted late reply (`RigStats::late_replies`, polling unchanged) on any other.
 - [@ANCHOR: radioctl:radioctl_core_actor_emit] (radioctl-core) Sends an event to the stream subscribers and the callback dispatcher.

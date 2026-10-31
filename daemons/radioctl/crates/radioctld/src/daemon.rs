@@ -13,6 +13,7 @@ use tokio::runtime::Handle;
 use crate::config::Config;
 use crate::server::{serve, Limits, ServerHandle};
 use crate::service::RigService;
+use radioctl_core::serial::SerialMonitor;
 
 /// One rig being served.
 pub struct Served {
@@ -24,6 +25,9 @@ pub struct Served {
     pub server: ServerHandle,
     /// Control of the virtual rig behind the service, for virtual rigs.
     pub virtual_control: Option<VirtualRigControl>,
+    /// The serial port's control lines and status, for serial rigs; held so the port's
+    /// supervisor and the actor's link watch live as long as the rig is served.
+    pub serial_link: Option<SerialMonitor>,
 }
 
 /// The running daemon.
@@ -85,6 +89,7 @@ async fn start_one(
         service: built.service,
         server,
         virtual_control: built.virtual_control,
+        serial_link: built.serial_link,
     })
 }
 
