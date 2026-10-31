@@ -11,7 +11,7 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-tokio = { workspace = true, optional = true, features = ["rt", "sync", "time", "io-util"] }
+tokio = { workspace = true, optional = true, features = ["rt", "sync", "time", "io-util", "net"] }
 radioctl-core = { path = "../radioctl-core" }
 
 [features]
