@@ -66,6 +66,15 @@ impl<C: ControlLines> LineKeyer<C> {
     }
 }
 
+impl<C: ControlLines> Drop for LineKeyer<C> {
+    // [@ANCHOR: radioctl_core_keyer_drop]
+    /// A keyer that goes away (its holder returned, panicked or was dropped while keyed) makes
+    /// the line inactive, so RF never stays on the air for want of a release call.
+    fn drop(&mut self) {
+        let _ = self.release();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,17 +95,47 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_keyer_new]
     // Tests [@ANCHOR: radioctl_core_keyer_release]
+    // Tests [@ANCHOR: radioctl_core_keyer_drop]
     #[test]
-    fn a_new_keyer_makes_its_line_inactive_and_release_does_too() {
+    fn a_new_keyer_makes_its_line_inactive_and_release_and_drop_do_too() {
         let high = Recorder::default();
         let keyer = LineKeyer::new(high.clone(), KeyLine::Rts, true).expect("keyer");
         keyer.release().expect("release");
+        drop(keyer);
         let low = Recorder::default();
         let keyer = LineKeyer::new(low.clone(), KeyLine::Dtr, false).expect("keyer");
         keyer.release().expect("release");
+        drop(keyer);
         let calls = high.0.lock().expect("lock").clone();
-        assert_eq!(calls, vec![(KeyLine::Rts, false), (KeyLine::Rts, false)]);
+        assert_eq!(
+            calls,
+            vec![
+                (KeyLine::Rts, false),
+                (KeyLine::Rts, false),
+                (KeyLine::Rts, false)
+            ]
+        );
         let calls = low.0.lock().expect("lock").clone();
-        assert_eq!(calls, vec![(KeyLine::Dtr, true), (KeyLine::Dtr, true)]);
+        assert_eq!(
+            calls,
+            vec![
+                (KeyLine::Dtr, true),
+                (KeyLine::Dtr, true),
+                (KeyLine::Dtr, true)
+            ]
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_keyer_drop]
+    // Tests [@ANCHOR: radioctl_core_keyer_key]
+    #[test]
+    fn a_keyer_dropped_while_keyed_releases_the_line() {
+        let lines = Recorder::default();
+        let keyer = LineKeyer::new(lines.clone(), KeyLine::Rts, true).expect("keyer");
+        // Key through the line directly (the gate check needs a rig; it is tested with one).
+        keyer.lines.set_line(KeyLine::Rts, true).expect("key");
+        drop(keyer);
+        let last = lines.0.lock().expect("lock").last().copied();
+        assert_eq!(last, Some((KeyLine::Rts, false)));
     }
 }

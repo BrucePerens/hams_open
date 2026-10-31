@@ -25,7 +25,7 @@ use tokio::runtime::Handle;
 use tokio::sync::{broadcast, mpsc, oneshot, Notify};
 use tokio::time::{sleep_until, timeout_at, Instant};
 
-use crate::capability::CapabilitySet;
+use crate::capability::{Capability, CapabilitySet};
 use crate::dispatcher::{Callback, Dispatcher, DispatcherCounters};
 use crate::engine::{Inbound, ProtocolEngine, ReplyKind};
 use crate::error::{ErrorKind, RigError};
@@ -450,7 +450,7 @@ impl RigHandle {
         let (reply, receiver) = oneshot::channel();
         let command = Command {
             op,
-            deadline: Instant::now() + timeout,
+            deadline: deadline_after(Instant::now(), timeout),
             source,
             reply,
         };
@@ -668,6 +668,58 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 _ = wait_until(due), if link => self.poll_once().await,
             }
         }
+        self.unkey_on_stop().await;
+    }
+
+    // [@ANCHOR: radioctl_core_actor_unkey_on_stop]
+    /// The last handle is gone: a rig that may be transmitting (its cache says keyed, or its
+    /// gate was open) is unkeyed before the actor ends, so a dropped handle never leaves RF on
+    /// the air. Best effort: the result goes to the transcript, there is nobody left to tell.
+    async fn unkey_on_stop(&mut self) {
+        let keyed = matches!(
+            guard(&self.shared.cache).get(&Field::Ptt).map(|e| e.value),
+            Some(Observation::Ptt(true))
+        );
+        if keyed || self.shared.gate.load(Ordering::Acquire) {
+            self.unkey_fail_closed("actor stopping").await;
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_actor_unkey_fail_closed]
+    /// Writes an unkey to the rig and waits for its answer within the engine's timeout, not
+    /// preemptible. Used when the outcome of a transmit command is unknown and when the actor
+    /// stops. Does nothing when the rig cannot be unkeyed by command or the link is down.
+    async fn unkey_fail_closed(&mut self, why: &str) {
+        if !self.shared.link_up.load(Ordering::Acquire)
+            || !self.shared.capabilities.has(Capability::SetPtt)
+        {
+            return;
+        }
+        let Ok(request) = self.engine.encode(&Op::SetPtt(false)) else {
+            return;
+        };
+        self.transcript
+            .push_back(format!("FAIL CLOSED unkey: {why}"));
+        let until = deadline_after(Instant::now(), self.engine.description().timing.timeout);
+        match timeout_at(until, self.transport.write_all(&request.bytes)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                self.link_down(&error.to_string());
+                return;
+            }
+            Err(_) => return,
+        }
+        self.last_write = Some(Instant::now());
+        self.log("TX", &request.bytes);
+        let done = request.reply == ReplyKind::None
+            || matches!(
+                self.await_reply(request.reply, until, Source::Api, false)
+                    .await,
+                Wait::Done(Ok(_))
+            );
+        if done {
+            self.apply_set(&Op::SetPtt(false), Source::Api);
+        }
     }
 
     fn now(&self) -> Duration {
@@ -752,10 +804,15 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             }
             match timeout_at(deadline, self.transport.write_all(&request.bytes)).await {
                 Err(_) => {
+                    // Part of a transmit command may already be on the wire.
+                    if op.transmits() {
+                        self.unkey_fail_closed("transmit command write timed out")
+                            .await;
+                    }
                     return Err(self.error(
                         ErrorKind::Timeout,
                         "write did not finish before the deadline",
-                    ))
+                    ));
                 }
                 Ok(Err(error)) => {
                     self.link_down(&error.to_string());
@@ -769,7 +826,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 self.apply_set(op, source);
                 return Ok(None);
             }
-            let until = deadline.min(Instant::now() + timing.timeout);
+            let until = deadline.min(deadline_after(Instant::now(), timing.timeout));
             match self
                 .await_reply(request.reply, until, source, may_preempt)
                 .await
@@ -793,6 +850,12 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 Wait::TimedOut => {}
             }
         }
+        // A transmit command was written and never answered: the rig may be keyed. Fail closed
+        // and unkey it rather than report a timeout and leave RF on the air.
+        if op.transmits() {
+            self.unkey_fail_closed("transmit command not answered")
+                .await;
+        }
         Err(self.error(ErrorKind::Timeout, "no reply from the rig"))
     }
 
@@ -800,7 +863,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     /// When the next command may be written, if that is in the future.
     fn spacing(&self, gap: Duration, deadline: Instant) -> Option<Instant> {
         let last = self.last_write?;
-        let ready = (last + gap).min(deadline);
+        let ready = deadline_after(last, gap).min(deadline);
         (ready > Instant::now()).then_some(ready)
     }
 
@@ -952,7 +1015,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         let timeout = self.engine.description().timing.timeout;
         self.shared.counters.polls.fetch_add(1, Ordering::Relaxed);
         let result = self
-            .run_command(&entry.op, now + timeout, Source::Poll, true)
+            .run_command(&entry.op, deadline_after(now, timeout), Source::Poll, true)
             .await;
         let after = guard(&self.shared.cache).get(&entry.field).map(|e| e.value);
         self.poll.report(
@@ -962,6 +1025,22 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Instant::now(),
         );
     }
+}
+
+// [@ANCHOR: radioctl_core_deadline_after]
+/// `from + wait`, saturating: a duration too large for the clock (`Duration::MAX`, an absurd
+/// timing value from a rig file) gives the farthest representable instant instead of a panic
+/// that would kill the actor or the caller's task.
+fn deadline_after(from: Instant, wait: Duration) -> Instant {
+    from.checked_add(wait).unwrap_or_else(|| {
+        let mut wait = wait;
+        loop {
+            wait /= 2;
+            if let Some(at) = from.checked_add(wait) {
+                return at;
+            }
+        }
+    })
 }
 
 // [@ANCHOR: radioctl_core_wait_until]

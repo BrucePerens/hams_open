@@ -125,6 +125,11 @@ radio, each with its own listen address (as with one `rigctld` per radio); see `
   before anything is queued while the rig's transmit gate is closed or its link is down. The gate is
   closed unless the configuration says `transmit = true`; `\dump_state` advertises a transmit range only
   when it is open. Stopping the daemon unkeys a rig a client was keying.
+- Fail closed in the actor itself, below every client: a key or Morse command that was written
+  to the rig but never answered (a timeout, a lost reply) is followed at once by an unkey, because
+  the rig may be transmitting; when the last handle to a rig is dropped the actor unkeys a rig whose
+  cache says keyed or whose gate was open before it ends; a `LineKeyer` makes its line inactive when
+  it is dropped. Each is written to the transcript as `FAIL CLOSED unkey`.
 - Network exposure: every listener binds loopback by default and the allow list defaults to loopback.
   Serving beyond it needs `allow_non_loopback_bind = true` together with an explicit `allow` list
   (checked at load; the allow list is applied on accept, before a byte is read).
@@ -248,6 +253,7 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_keyer_new] (radioctl-core) A control-line keyer; makes its line inactive when built.
 - [@ANCHOR: radioctl:radioctl_core_keyer_key] (radioctl-core) Keys through the line; refused unless the rig's transmit gate is open.
 - [@ANCHOR: radioctl:radioctl_core_keyer_release] (radioctl-core) Unkeys the line; always allowed.
+- [@ANCHOR: radioctl:radioctl_core_keyer_drop] (radioctl-core) A dropped keyer makes its line inactive, so a holder that returns or panics while keyed never leaves RF on the air.
 - [@ANCHOR: radioctl:radioctl_core_tcp_connect] (radioctl-core) Connects over TCP with a per-attempt timeout and backed-off retries.
 - [@ANCHOR: radioctl:radioctl_core_serial_config_new] (radioctl-core) A serial configuration: 8N1, lines managed and inactive, default backoff, one open attempt.
 - [@ANCHOR: radioctl:radioctl_core_serial_control_set_line] (radioctl-core) Sets RTS or DTR immediately on the open port.
@@ -357,6 +363,9 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_core_actor_spacing] (radioctl-core) Enforces the description's minimum gap between commands.
 - [@ANCHOR: radioctl:radioctl_core_handle_read] (radioctl-core) Cached or fresh read of a field, by freshness.
 - [@ANCHOR: radioctl:radioctl_core_handle_submit] (radioctl-core) Checks capability and transmit gate, then queues the command without waiting (full queue is a typed error).
+- [@ANCHOR: radioctl:radioctl_core_actor_unkey_fail_closed] (radioctl-core) Writes an unkey and waits for its answer, not preemptible: used when a transmit command was written but never answered (the rig may be keyed) and when the actor stops.
+- [@ANCHOR: radioctl:radioctl_core_actor_unkey_on_stop] (radioctl-core) When the last handle is dropped, a rig whose cache says keyed or whose gate was open is unkeyed before the actor ends.
+- [@ANCHOR: radioctl:radioctl_core_deadline_after] (radioctl-core) Saturating `Instant + Duration`: an absurd timeout (a caller's `Duration::MAX`, a rig file's timing) never panics the actor or the caller.
 - [@ANCHOR: radioctl:radioctl_core_wait_until] (radioctl-core) Sleeps until the next poll is due, or forever when nothing is polled.
 - [@ANCHOR: radioctl:radioctl_core_dispatcher_run] (radioctl-core) The callback thread loop: pop, call under catch_unwind, count.
 - [@ANCHOR: radioctl:radioctl_core_capability_name] (radioctl-core) The name used in rig description files.
