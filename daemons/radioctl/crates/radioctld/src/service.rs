@@ -20,7 +20,8 @@ use radioctl_core::capability::Capability;
 use radioctl_core::description::RigDescription;
 use radioctl_core::event::Source;
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::rig::RigHandle;
+use radioctl_core::rig::{Freshness, RigHandle};
+use radioctl_core::txstate::TxState;
 use radioctl_core::units::{Hz, Mode, Vfo};
 use radioctl_splitter::arbiter::{ClientId, PttOwner};
 
@@ -197,20 +198,21 @@ impl RigService {
         self.exec(op).await.map(|_| Body::Done)
     }
 
+    // [@ANCHOR: radioctld_service_tx_state]
+    /// The receive and transmit VFOs as the rig last reported them (the core's derivation).
+    fn tx_state(&self) -> TxState {
+        TxState::from_cache(|field| self.rig.cached(field).map(|c| c.value))
+    }
+
     // [@ANCHOR: radioctld_service_resolve_vfo]
     /// The VFO a selection means right now.
     fn resolve_vfo(&self, selection: Option<VfoSel>) -> Result<Vfo, i32> {
         match selection.unwrap_or(VfoSel::Current) {
             VfoSel::Current => Ok(*locked(&self.current)),
-            VfoSel::A | VfoSel::Rx => Ok(Vfo::A),
+            VfoSel::A => Ok(Vfo::A),
             VfoSel::B => Ok(Vfo::B),
-            VfoSel::Tx => {
-                let split = matches!(
-                    self.rig.cached(Field::Split).map(|c| c.value),
-                    Some(Observation::Split(true))
-                );
-                Ok(if split { Vfo::B } else { Vfo::A })
-            }
+            VfoSel::Rx => Ok(self.tx_state().rx_vfo()),
+            VfoSel::Tx => Ok(self.tx_state().tx_vfo()),
             VfoSel::Absent => Err(ENAVAIL),
         }
     }
@@ -587,6 +589,17 @@ impl RigService {
             Command::SetPtt(_) => self.key(client).await,
             Command::GetSplitVfo => self.split_vfo().await,
             Command::SetSplitVfo { on, tx } => self.set_split_vfo(*on, *tx).await,
+            Command::GetActiveTxFreq => {
+                let hz = self
+                    .rig
+                    .active_tx_frequency(Freshness::MaxAge(self.config.cache_max_age))
+                    .await
+                    .map_err(|e| error_code(&e))?;
+                Ok(Body::Fields(vec![(
+                    "Active TX Frequency",
+                    hz.0.to_string(),
+                )]))
+            }
             Command::GetSplitFreq => {
                 let hz = self.frequency(Vfo::B).await?;
                 Ok(Body::Fields(vec![("TX Frequency", hz.to_string())]))

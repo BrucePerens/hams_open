@@ -132,6 +132,7 @@ pub fn decode_if(payload: &str, desc: &RigDescription) -> Option<Vec<Observation
     let hz = parse_digits(field(0, 11)?)?;
     let offset = parse_offset(field(16, 21)?)?;
     let mode_code = *field(27, 28)?.as_bytes().first()?;
+    let split = flag(30)?;
     Some(vec![
         Observation::Frequency(Vfo::A, Hz(hz)),
         Observation::RitOffset(offset),
@@ -139,7 +140,9 @@ pub fn decode_if(payload: &str, desc: &RigDescription) -> Option<Vec<Observation
         Observation::Xit(flag(22)?),
         Observation::Ptt(flag(26)?),
         Observation::Mode(desc.code_mode(mode_code)?),
-        Observation::Split(flag(30)?),
+        Observation::Split(split),
+        // The KX3 transmits on VFO B in split (`FT1`) and on A otherwise.
+        Observation::TxVfo(if split { Vfo::B } else { Vfo::A }),
     ])
 }
 
@@ -266,6 +269,11 @@ impl ElecraftEngine {
             };
         }
         match self.decode_one(text) {
+            // `FT` is the transmit-VFO command: FT1 transmits on B, FT0 on A.
+            Some(value @ Observation::Split(on)) if text.starts_with("FT") => vec![
+                Inbound::Observation(value),
+                Inbound::Observation(Observation::TxVfo(if on { Vfo::B } else { Vfo::A })),
+            ],
             Some(value) => vec![Inbound::Observation(value)],
             None => vec![Self::unrecognised(text)],
         }
@@ -358,6 +366,7 @@ impl ProtocolEngine for ElecraftEngine {
             Op::GetSignal => Self::get("SM;", Field::Signal),
             Op::GetPower => Self::get("PO;", Field::Power),
             Op::GetSplit => Self::get("FT;", Field::Split),
+            Op::GetTxVfo => Self::get("FT;", Field::TxVfo),
             Op::GetRit => Self::get("RT;", Field::Rit),
             Op::GetXit => Self::get("XT;", Field::Xit),
             Op::GetRitOffset => Self::get("RO;", Field::RitOffset),
@@ -537,11 +546,13 @@ mod tests {
         use Observation as O;
         let expect = |text: &str, value: Observation| {
             let mut e = engine();
-            assert_eq!(
-                one(&mut e, text),
-                vec![Inbound::Observation(value)],
-                "{text}"
-            );
+            let mut want = vec![Inbound::Observation(value)];
+            if let Observation::Split(on) = value {
+                // `FT` also says which VFO transmits.
+                let tx = if on { Vfo::B } else { Vfo::A };
+                want.push(Inbound::Observation(Observation::TxVfo(tx)));
+            }
+            assert_eq!(one(&mut e, text), want, "{text}");
         };
         expect("FA00014060000;", O::Frequency(Vfo::A, Hz(14_060_000)));
         expect("FB00007040000;", O::Frequency(Vfo::B, Hz(7_040_000)));
@@ -613,6 +624,7 @@ mod tests {
                 Inbound::Observation(Observation::Ptt(false)),
                 Inbound::Observation(Observation::Mode(Mode::Cw)),
                 Inbound::Observation(Observation::Split(true)),
+                Inbound::Observation(Observation::TxVfo(Vfo::B)),
             ]
         );
         let broken = good.replace("     +", "    X+");

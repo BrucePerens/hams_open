@@ -30,6 +30,8 @@ pub enum Op {
     SetTransceive(bool),
     /// Read split operation.
     GetSplit,
+    /// Read which VFO the rig transmits on.
+    GetTxVfo,
     /// Enter (`true`) or leave (`false`) split operation.
     SetSplit(bool),
     /// Read whether RIT is on.
@@ -75,6 +77,13 @@ pub enum Field {
     Power,
     /// Split operation.
     Split,
+    /// The VFO the rig receives on, when it can say (Kenwood `IF`/`FR`); otherwise VFO A.
+    RxVfo,
+    /// The VFO the rig transmits on.
+    TxVfo,
+    /// The frequency the rig transmits on, derived by the actor from the other fields; no
+    /// engine reports it and no command reads it.
+    ActiveTxFrequency,
     /// RIT on or off.
     Rit,
     /// XIT on or off.
@@ -108,6 +117,12 @@ pub enum Observation {
     Power(u16),
     /// Split operation on or off.
     Split(bool),
+    /// The VFO the rig receives on.
+    RxVfo(Vfo),
+    /// The VFO the rig transmits on.
+    TxVfo(Vfo),
+    /// The frequency the rig transmits on (derived; see [`crate::txstate`]).
+    ActiveTxFrequency(Hz),
     /// RIT on or off.
     Rit(bool),
     /// XIT on or off.
@@ -137,6 +152,9 @@ impl Observation {
             Observation::Signal(_) => Field::Signal,
             Observation::Power(_) => Field::Power,
             Observation::Split(_) => Field::Split,
+            Observation::RxVfo(_) => Field::RxVfo,
+            Observation::TxVfo(_) => Field::TxVfo,
+            Observation::ActiveTxFrequency(_) => Field::ActiveTxFrequency,
             Observation::Rit(_) => Field::Rit,
             Observation::Xit(_) => Field::Xit,
             Observation::RitOffset(_) => Field::RitOffset,
@@ -166,7 +184,7 @@ impl Op {
             Op::GetPower => Capability::ReadPower,
             Op::SendCw(_) => Capability::SendCw,
             Op::SetTransceive(_) => Capability::Transceive,
-            Op::GetSplit | Op::SetSplit(_) => Capability::Split,
+            Op::GetSplit | Op::SetSplit(_) | Op::GetTxVfo => Capability::Split,
             Op::GetRit
             | Op::SetRit(_)
             | Op::GetXit
@@ -213,6 +231,12 @@ mod tests {
         assert_eq!(Observation::Signal(1).field(), Field::Signal);
         assert_eq!(Observation::Power(1).field(), Field::Power);
         assert_eq!(Observation::Split(true).field(), Field::Split);
+        assert_eq!(Observation::RxVfo(Vfo::B).field(), Field::RxVfo);
+        assert_eq!(Observation::TxVfo(Vfo::B).field(), Field::TxVfo);
+        assert_eq!(
+            Observation::ActiveTxFrequency(Hz(1)).field(),
+            Field::ActiveTxFrequency
+        );
         assert_eq!(Observation::Rit(true).field(), Field::Rit);
         assert_eq!(Observation::Xit(true).field(), Field::Xit);
         assert_eq!(Observation::RitOffset(-5).field(), Field::RitOffset);
@@ -242,6 +266,7 @@ mod tests {
         );
         assert_eq!(Op::SetPtt(false).required_capability(), Capability::SetPtt);
         assert_eq!(Op::SetSplit(true).required_capability(), Capability::Split);
+        assert_eq!(Op::GetTxVfo.required_capability(), Capability::Split);
         assert_eq!(Op::GetRitOffset.required_capability(), Capability::RitXit);
         assert_eq!(
             Op::SetFilterWidth(Hz(500)).required_capability(),

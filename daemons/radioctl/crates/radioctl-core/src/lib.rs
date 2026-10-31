@@ -21,5 +21,6 @@ pub mod serial;
 pub mod tcp;
 pub mod transcript;
 pub mod transport;
+pub mod txstate;
 pub mod units;
 pub mod usb;

@@ -33,6 +33,10 @@
 //! DCS, power on and off, the clarifier frequency read (there is none), FM-N and PKT modes, and
 //! the FT-818 (no manual was found; Hamlib treats it as an FT-817 derivative).
 
+// TODO(radioctl tx frequency): split and the transmit VFO (`Observation::TxVfo`, `Op::GetTxVfo`) are
+// not mapped here; another agent is rebasing this engine. When it lands, report `TxVfo` from the
+// split flag so `active_tx_frequency` follows (see radioctl-core `txstate`).
+
 use std::time::Duration;
 
 use radioctl_core::description::{Family, RigDescription};

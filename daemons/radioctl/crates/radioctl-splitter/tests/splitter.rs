@@ -9,9 +9,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use radioctl_core::op::Op;
-use radioctl_core::rig::{spawn, RigHandle, RigOptions, TransmitPermit};
+use radioctl_core::rig::{spawn, Freshness, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Mode};
+use radioctl_core::units::{Hz, Mode, Vfo};
 use radioctl_protocols::elecraft::ElecraftEngine;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::virtual_rig::{PanelChange, VirtualRig};
@@ -436,4 +436,50 @@ async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys_the_rig() 
     drop(a);
     wait_for(|| splitter.ptt_owner().is_none() && control.bytes_received() > before).await;
     assert!(!control.state().ptt);
+}
+
+// Tests [@ANCHOR: radioctl_splitter_keyed_split_frequency]
+// Nothing is keyed on hardware: the rig is virtual, the transmit gate is closed, and the "key"
+// is the virtual rig's front-panel PTT.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_plain_frequency_read_reports_the_transmit_frequency_while_keyed_in_split() {
+    let (rig, control) = virtual_kx3().await;
+    rig.set_frequency(Vfo::B, Hz(7_100_000)).await.expect("b");
+    rig.execute(Op::SetSplit(true)).await.expect("split");
+    let ts2000 = splitter(&rig, Protocol::Ts2000);
+    let mut a = client(&ts2000);
+    let mut civ_client = client(&splitter(&rig, civ(false)));
+
+    // Not keyed: the receive frequency, as before.
+    a.write_all(b"FA;").await.expect("write");
+    assert_eq!(read_n(&mut a, 14).await, b"FA00014060000;");
+
+    control.front_panel(PanelChange::Ptt(true));
+    assert!(rig.ptt(Freshness::Fresh).await.expect("ptt").value);
+    assert!(rig.transmit_permit().is_none(), "the gate stayed closed");
+    // Keyed in split: a plain read says where the rig transmits; naming VFO B says the same,
+    // and the receive VFO is still readable through the rig handle.
+    a.write_all(b"FA;FB;").await.expect("write");
+    assert_eq!(read_n(&mut a, 28).await, b"FA00007100000;FB00007100000;");
+    civ_client.write_all(&READ_FREQ).await.expect("write");
+    assert_eq!(
+        read_n(&mut civ_client, 11).await,
+        freq_frame(0xE0, 0x03, BCD_7100000)
+            .iter()
+            .enumerate()
+            .map(|(i, b)| if i == 3 { 0x94 } else { *b })
+            .collect::<Vec<u8>>()
+    );
+    assert_eq!(
+        rig.rx_frequency(Freshness::Cached).await.expect("rx"),
+        Hz(14_060_000)
+    );
+
+    // With the switch off, the plain read is the receive frequency while keyed.
+    let mut config = SplitterConfig::new(Protocol::Ts2000);
+    config.report_tx_frequency_while_keyed = false;
+    let off = Splitter::new(rig.clone(), config);
+    let mut b = client(&off);
+    b.write_all(b"FA;").await.expect("write");
+    assert_eq!(read_n(&mut b, 14).await, b"FA00014060000;");
 }

@@ -174,6 +174,8 @@ impl KenwoodEngine {
             (Some("ID"), Some(digits)) if digits.len() == 3 => parse_digits(digits)
                 .and_then(|v| u16::try_from(v).ok())
                 .map(Observation::ModelId),
+            (Some("FR"), Some(vfo @ ("0" | "1"))) => Some(Observation::RxVfo(vfo_of(vfo))),
+            (Some("FT"), Some(vfo @ ("0" | "1"))) => Some(Observation::TxVfo(vfo_of(vfo))),
             (Some("RT"), Some(flag @ ("0" | "1"))) => Some(Observation::Rit(*flag == *"1")),
             (Some("XT"), Some(flag @ ("0" | "1"))) => Some(Observation::Xit(*flag == *"1")),
             (Some(name), Some(digits)) => decode_level(name, digits),
@@ -206,10 +208,18 @@ impl KenwoodEngine {
             .next()
             .and_then(|c| self.desc.code_mode(c))?;
         let mut out = Vec::new();
-        match field(28, 29)? {
-            "0" => out.push(Observation::Frequency(Vfo::A, Hz(frequency))),
-            "1" => out.push(Observation::Frequency(Vfo::B, Hz(frequency))),
-            _ => {}
+        // P10 is the receive VFO (`FR`): the frequency is that VFO's. The transmit VFO is not in
+        // `IF`; it is the other VFO when the split flag is set and the same one otherwise (`FT;`
+        // reads it directly).
+        let receive = match field(28, 29)? {
+            "0" => Some(Vfo::A),
+            "1" => Some(Vfo::B),
+            _ => None,
+        };
+        if let Some(vfo) = receive {
+            out.push(Observation::Frequency(vfo, Hz(frequency)));
+            out.push(Observation::RxVfo(vfo));
+            out.push(Observation::TxVfo(if split { vfo.other() } else { vfo }));
         }
         out.extend([
             Observation::Mode(mode),
@@ -220,6 +230,16 @@ impl KenwoodEngine {
             Observation::Split(split),
         ]);
         Some(out.into_iter().map(Inbound::Observation).collect())
+    }
+}
+
+// [@ANCHOR: radioctl_kenwood_vfo_of]
+/// The VFO named by an `FR`/`FT` digit (`0` is A).
+fn vfo_of(digit: &str) -> Vfo {
+    if digit == "1" {
+        Vfo::B
+    } else {
+        Vfo::A
     }
 }
 
@@ -336,6 +356,7 @@ impl ProtocolEngine for KenwoodEngine {
             Op::SetTransceive(on) => Self::command(format!("AI{};", if *on { 2 } else { 0 }), none),
             Op::GetPtt => Self::command("IF;".into(), ReplyKind::Observation(Field::Ptt)),
             Op::GetSplit => Self::command("IF;".into(), ReplyKind::Observation(Field::Split)),
+            Op::GetTxVfo => Self::command("FT;".into(), ReplyKind::Observation(Field::TxVfo)),
             Op::GetRit => Self::command("IF;".into(), ReplyKind::Observation(Field::Rit)),
             Op::GetXit => Self::command("IF;".into(), ReplyKind::Observation(Field::Xit)),
             Op::GetRitOffset => {
@@ -564,6 +585,8 @@ mod tests {
             e.feed(answer.as_bytes(), T0),
             vec![
                 Inbound::Observation(Observation::Frequency(Vfo::A, Hz(14_074_000))),
+                Inbound::Observation(Observation::RxVfo(Vfo::A)),
+                Inbound::Observation(Observation::TxVfo(Vfo::B)),
                 Inbound::Observation(Observation::Mode(Mode::Usb)),
                 Inbound::Observation(Observation::Ptt(true)),
                 Inbound::Observation(Observation::Rit(true)),

@@ -60,6 +60,7 @@ op = { kind = "get-split" }
 tx_text = "FT;"
 rx_text = "FT1;"
 expect = { kind = "split", on = true }
+expect_more = [{ kind = "tx-vfo", vfo = "b" }]
 
 [[step]]
 op = { kind = "set-rit", on = true }
@@ -225,7 +226,7 @@ panel = { kind = "ptt", on = false }
 panel = { kind = "rit-offset", hz = -120 }
 rx_text = "IF00007100000     -012010 0001001001 ;"
 expect = { kind = "frequency", vfo = "a", hz = 7100000 }
-expect_more = [{ kind = "rit-offset", hz = -120 }, { kind = "rit", on = true }, { kind = "xit", on = false }, { kind = "ptt", on = false }, { kind = "mode", mode = "lsb" }, { kind = "split", on = true }]
+expect_more = [{ kind = "rit-offset", hz = -120 }, { kind = "rit", on = true }, { kind = "xit", on = false }, { kind = "ptt", on = false }, { kind = "mode", mode = "lsb" }, { kind = "split", on = true }, { kind = "tx-vfo", vfo = "b" }]
 
 [[step]]
 op = { kind = "set-transceive", on = false }

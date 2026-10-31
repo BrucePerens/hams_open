@@ -60,7 +60,7 @@ op = { kind = "get-ptt" }
 tx_text = "IF;"
 rx_text = "IF00007030000     +000000000030000000;"
 expect = { kind = "frequency", vfo = "a", hz = 7030000 }
-expect_more = [{ kind = "mode", mode = "cw" }, { kind = "ptt", on = false }, { kind = "rit", on = false }, { kind = "xit", on = false }, { kind = "rit-offset", hz = 0 }, { kind = "split", on = false }]
+expect_more = [{ kind = "rx-vfo", vfo = "a" }, { kind = "tx-vfo", vfo = "a" }, { kind = "mode", mode = "cw" }, { kind = "ptt", on = false }, { kind = "rit", on = false }, { kind = "xit", on = false }, { kind = "rit-offset", hz = 0 }, { kind = "split", on = false }]
 
 [[step]]
 op = { kind = "set-split", on = true }
@@ -79,7 +79,7 @@ op = { kind = "get-rit-offset" }
 tx_text = "IF;"
 rx_text = "IF00007030000     +015010000030010000;"
 expect = { kind = "frequency", vfo = "a", hz = 7030000 }
-expect_more = [{ kind = "mode", mode = "cw" }, { kind = "ptt", on = false }, { kind = "rit", on = true }, { kind = "xit", on = false }, { kind = "rit-offset", hz = 150 }, { kind = "split", on = true }]
+expect_more = [{ kind = "rx-vfo", vfo = "a" }, { kind = "tx-vfo", vfo = "b" }, { kind = "mode", mode = "cw" }, { kind = "ptt", on = false }, { kind = "rit", on = true }, { kind = "xit", on = false }, { kind = "rit-offset", hz = 150 }, { kind = "split", on = true }]
 
 [[step]]
 op = { kind = "set-level", level = "af-gain", value = 128 }
