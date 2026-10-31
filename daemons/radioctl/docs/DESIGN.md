@@ -72,7 +72,8 @@ records the decisions that shape the code.
     (a first reading by a request is not a change). One transmitter, one owner: the first client to
     key owns it, others are refused until it unkeys or goes away (a pty closed by its program counts
     as going away and unkeys the rig); unkeying is open to all; the rig's closed transmit gate still
-    applies to every keying request. The TS-2000 personality refuses `IF` (layout unverified) and
+    applies to every keying request. The TS-2000 personality does not answer `IF` yet (the Kenwood
+    engine decodes it from the published guides; the personality has no composite-status encoder) and
     both personalities map data modes to the sideband they sit on.
 
 17. **radioctld is a library plus a thin binary, and the binary owns the one runtime.** The `rigctld`

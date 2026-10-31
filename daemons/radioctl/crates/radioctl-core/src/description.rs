@@ -2,10 +2,10 @@
 //! Rig descriptions: the per-model data that drives both a protocol engine and the virtual rig
 //! that stands in for the model in tests.
 //!
-//! This is the in-memory form. The TOML file format, with provenance and `verified` fields,
-//! arrives in a later PR and deserialises into these structs. The two built-in descriptions
-//! below come from `tools/rig_simulator.py` and the relay's CI-V and TS-2000 bridges (our own
-//! code); they are **not** verified against any radio.
+//! This is the in-memory form. The TOML file format, with provenance and `verified` fields, is
+//! [`crate::rigfile`], which deserialises into these structs (the shipped files are in `rigs/`).
+//! The two built-in descriptions below come from `tools/rig_simulator.py` and the relay's CI-V
+//! and TS-2000 bridges (our own code); they are **not** verified against any radio.
 
 use std::time::Duration;
 
