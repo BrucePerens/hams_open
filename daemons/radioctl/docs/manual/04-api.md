@@ -288,12 +288,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    let delivered = callback_events.recv_timeout(Duration::from_secs(5))?;
-    println!(
-        "callback: rig {} reported {} change(s)",
-        delivered.rig,
-        delivered.changes.len()
-    );
+    // The callback hears the same changes, in order, on its own thread.
+    loop {
+        let delivered = callback_events.recv_timeout(Duration::from_secs(5))?;
+        if delivered.changes.iter().any(|c| c.field == wanted) {
+            println!(
+                "callback: rig {} reported the change of VFO A",
+                delivered.rig
+            );
+            break;
+        }
+    }
     Ok(())
 }
 ```

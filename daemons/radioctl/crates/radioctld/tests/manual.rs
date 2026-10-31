@@ -312,13 +312,31 @@ fn example_binary(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Builds the examples once, so that running this test file alone (which builds no examples)
+/// never runs a stale binary. Same profile and target directory as the test itself.
+fn build_examples_once() {
+    static BUILT: std::sync::Once = std::sync::Once::new();
+    BUILT.call_once(|| {
+        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+        let release = std::env::current_exe()
+            .map(|p| p.components().any(|c| c.as_os_str() == "release"))
+            .unwrap_or(false);
+        let mut build = Command::new(cargo);
+        build
+            .args(["build", "-p", "radioctld", "--examples"])
+            .current_dir(workspace());
+        if release {
+            build.arg("--release");
+        }
+        let status = build.status().expect("cargo build --examples");
+        assert!(status.success(), "building the examples failed");
+    });
+}
+
 fn run_example(name: &str, args: &[&str]) -> String {
+    build_examples_once();
     let binary = example_binary(name);
-    assert!(
-        binary.exists(),
-        "{} was not built; run `cargo test` for the whole crate",
-        binary.display()
-    );
+    assert!(binary.exists(), "{} was not built", binary.display());
     let output = Command::new(&binary)
         .args(args)
         .output()
@@ -355,7 +373,7 @@ fn the_quick_start_example_prints_what_chapter_two_shows() {
 fn the_other_examples_run_and_print_what_their_chapters_show() {
     let events = run_example("events", &[]);
     assert!(events.contains("VFO A changed to 7100000 Hz"));
-    assert!(events.contains("callback: rig elecraft-kx3 reported 1 change(s)"));
+    assert!(events.contains("callback: rig elecraft-kx3 reported the change of VFO A"));
     let gate = run_example("transmit_gate", &[]);
     assert_output_in_manual("10-safety.md", "transmit_gate", &gate);
     let embedded = run_example("embed_daemon", &[]);
