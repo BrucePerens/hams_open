@@ -15,9 +15,11 @@ transport exists; that comment is out of date.
 |---|---|---|
 | Serial port by path | **Implemented**, unverified on a radio | yes, with backoff |
 | USB serial by vendor id, product id and serial number | **Implemented** (Linux sysfs; other systems through the `serialport` crate) | yes, finds the port again |
-| TCP (network serial server, a radio's own CAT port, a FlexRadio's SmartSDR port 4992 (unverified), `rigctld`) | **Implemented** | no: bounded connect only |
+| TCP, bounded connect only (`connect_tcp`) | **Implemented** | no |
+| Network link, TCP or UDP (`net::open_link`: network serial server, a radio's own CAT port, a FlexRadio's SmartSDR port 4992 (unverified), `rigctld`, framed or login radios through the `Framing` hooks) | **Implemented**, tested against loopback fakes, unverified on a radio | yes, with backoff, and the actor unkeys on every reconnect |
 | Pseudo-terminal | works as a serial path with `LineControl::Unmanaged` | as serial |
-| Native USB (`nusb`), UDP, Ethernet radios (Kenwood LAN, Icom LAN, SmartSDR, HPSDR) | **Planned** | |
+| Native USB (`nusb`) | **Planned** | |
+| Kenwood TS-890S LAN and Icom network control framing | **Planned**: only the generic `Framing` hooks exist (no public manual was used) | |
 
 ## Serial
 
@@ -178,7 +180,64 @@ A bounded connect (default: 3 attempts, 3 s each, with the backoff between) so a
 booting or a network that is down ends in a typed `LinkDown`, never a hang. Nagle's algorithm is
 switched off. After connecting there is **no reconnect**: if the connection drops, the actor marks
 its link down and stays down; restart the rig (for `radioctld`, restart the daemon). This is the
-`tcp` transport of `radioctld` as well.
+`tcp` transport of `radioctld` as well. For a link that reconnects, use `net::open_link` below.
+
+## Network links
+
+`net::open_link` is the network counterpart of `open_serial`: a supervisor task owns the socket,
+the actor gets an in-memory byte stream that stays open across reconnects, and a `LinkStatus` watch
+tells the actor when the network went away and came back.
+
+```rust signatures
+pub async fn open_link(
+    runtime: &Handle,
+    config: NetConfig,
+    framing: Box<dyn Framing>,
+) -> Result<NetLink, RigError>
+```
+
+```rust signatures
+pub struct NetConfig {
+    pub address: String,
+    pub protocol: NetProtocol,
+    pub connect_timeout: Duration,
+    pub handshake_timeout: Duration,
+    pub write_timeout: Duration,
+    pub idle_timeout: Option<Duration>,
+    pub backoff: Backoff,
+    pub first_attempts: u32,
+}
+```
+
+`NetConfig::new(address)` gives TCP, three-second connect, handshake and write limits, no silence
+limit, the default backoff and one first attempt. `open_link` returns once the first connection
+(and its handshake) is ready, or with `LinkDown` after `first_attempts`.
+
+- **Every wait is bounded:** connect, handshake, each write, and silence on the wire
+  (`idle_timeout`, off by default; set it together with a keep-alive).
+- **Reconnect is the serial story again.** On loss the status becomes `Reconnecting` and the actor
+  refuses commands with `LinkDown`; the supervisor retries without limit with exponential backoff
+  and publishes `Connected` with a higher `generation` once the new session is ready. Pass
+  `link.watch()` as `RigOptions::link_watch`: on that reconnect the actor **unkeys the radio before
+  serving any other command**, then reports `Alarm::LinkRestored`. Without the watch the actor
+  cannot know.
+- **Bytes written while the link is down or still handshaking are dropped and counted**
+  (`NetStats::bytes_dropped`), never queued and replayed into the radio after the reconnect.
+- **UDP** (`NetProtocol::Udp`) sends one datagram per write and delivers one per read. There is no
+  connection to lose, so loss means an ICMP error from the stack or silence for `idle_timeout`; the
+  link then opens a fresh socket, repeats the greeting and counts a reconnect. A UDP radio needs a
+  keep-alive and an idle limit, or the link never notices that the radio is gone.
+- **Radios that wrap CAT in a framing or a login** implement `Framing`: a greeting sent at every
+  connect, `encode` and `decode` for the wire, `needs_handshake` (the link is up only after the
+  radio answers, for example a login), a `keepalive`, and `reset` at every connect. `Decoded` can
+  carry bytes to pass up, bytes to send straight back (a login answer) and a failure that forces a
+  reconnect. `RawFraming` is the identity and `LengthFraming` is the 2 or 4 byte length-prefixed
+  form. No manufacturer's network protocol is implemented: the Kenwood TS-890S LAN login and the
+  Icom network control (a UDP protocol with its own login and audio streams) are added as engines
+  once their documentation is in hand, and until then this is the hook they will use.
+- The link supervisor stops, and the status becomes `Closed`, when the byte stream is dropped.
+- `radioctld` still uses `connect_tcp` for its `tcp` transport (no reconnect); moving it to
+  `open_link` is a small change in `rigs.rs`, listed in the roadmap.
 
 ## Keying with RTS or DTR
 

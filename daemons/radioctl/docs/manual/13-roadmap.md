@@ -44,7 +44,7 @@ manual.
 
 1. **Link state is invisible above the serial layer.** During a serial reconnect `RigHandle::link_up()` stays
    true and `radioctld` drops the `SerialLink`, so a pulled cable looks like timeouts; `\get_powerstat`
-   keeps answering 1. A dead TCP link is permanent for that actor.
+   keeps answering 1. A dead `connect_tcp` link is permanent for that actor; `net::open_link` reconnects and reports its status, but `radioctld` does not use it yet (a small change in `rigs.rs`).
 2. **Polling reads VFO A, VFO B, split, mode, PTT and the two meters.** A front-panel change of RIT, XIT or
    a level is not noticed unless the radio reports it.
 3. **CI-V transceive cannot be switched on by the engine** (`SetTransceive` is `Unsupported`; it is a menu
