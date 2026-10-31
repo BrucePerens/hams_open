@@ -68,6 +68,13 @@ a `fault_input` (an input channel, high = tripped), unless that line is confirme
 or unknown line refuses. Powering an amplifier off puts it in standby first, and the emergency
 `all_off` writes standby before anything else.
 
+## Rotators
+
+`rotator` holds the descriptions (`data/station/rotators.toml`), the `rotctld` and GS-232 engines and
+the `Rotator` command handle; `virtual_rotator` is the virtual rotator and a loopback server for it.
+See the manual, chapter 14. Positions outside the travel are refused, never clamped; every wait is
+bounded; nothing is written to a down link; nothing is restored after a reconnect.
+
 ## Home Assistant
 
 `homeassistant::HomeAssistant` is a channel driver whose lines are Home Assistant entities
@@ -326,3 +333,46 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_station_check_operate] (radioctl-station) The refusals for putting an amplifier in operate: its device must be confirmed powered on, and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault line refuses: fail closed).
 - [@ANCHOR: radioctl:radioctl_station_station_check_amp_powered] (radioctl-station) Refuses unless the amplifier or tuner is confirmed powered on.
 - [@ANCHOR: radioctl:radioctl_station_station_standby] (radioctl-station) Puts a device's amplifier channel in standby before its power goes, best effort: a failure is already an event on the switchboard and does not stop the power-off, because removing power is the safe direction.
+- [@ANCHOR: radioctl:radioctl_station_rot_err] (radioctl-station) `rot_err` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_rot_desc_validate] (radioctl-station) Checks the description on its own: ordered finite limits, sane travel, a park position inside the travel, a GS-232 description inside what that protocol can carry.
+- [@ANCHOR: radioctl:radioctl_station_rot_desc_contains] (radioctl-station) Whether a position is inside the travel.
+- [@ANCHOR: radioctl:radioctl_station_rot_desc_parse] (radioctl-station) Parses a file of `[[rotators]]` and validates every one.
+- [@ANCHOR: radioctl:radioctl_station_rot_desc_builtin] (radioctl-station) The shipped descriptions.
+- [@ANCHOR: radioctl:radioctl_station_rot_desc_engine] (radioctl-station) The protocol engine for this description.
+- [@ANCHOR: radioctl:radioctl_station_rot_resolve] (radioctl-station) The position a command means: the explicit one (checked against the travel), or the park position.
+- [@ANCHOR: radioctl:radioctl_station_rot_line] (radioctl-station) The first line in `buf` (any leading CR or LF skipped): its text and the bytes used including the terminator, or `None` if the line is not complete yet.
+- [@ANCHOR: radioctl:radioctl_station_rotctld_new] (radioctl-station) An engine for `desc`.
+- [@ANCHOR: radioctl:radioctl_station_rotctld_rprt] (radioctl-station) The meaning of a Hamlib `RPRT` code.
+- [@ANCHOR: radioctl:radioctl_station_rotctld_description] (radioctl-station) `description` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_rotctld_encode] (radioctl-station) `encode` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_rotctld_parse] (radioctl-station) `parse` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_gs232_new] (radioctl-station) An engine for `desc`.
+- [@ANCHOR: radioctl:radioctl_station_gs232_parse_position] (radioctl-station) A GS-232 position line: `+0aaa+eee` (signed fields, the leading zero of the azimuth optional), or `AZ=aaa EL=eee`.
+- [@ANCHOR: radioctl:radioctl_station_gs232_description] (radioctl-station) `description` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_gs232_encode] (radioctl-station) `encode` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_gs232_parse] (radioctl-station) `parse` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_rotator_new] (radioctl-station) A rotator over `transport`.
+- [@ANCHOR: radioctl:radioctl_station_rotator_description] (radioctl-station) The description.
+- [@ANCHOR: radioctl:radioctl_station_rotator_set_position] (radioctl-station) Moves to a position inside the travel.
+- [@ANCHOR: radioctl:radioctl_station_rotator_position] (radioctl-station) Reads the position.
+- [@ANCHOR: radioctl:radioctl_station_rotator_stop] (radioctl-station) Stops the rotator.
+- [@ANCHOR: radioctl:radioctl_station_rotator_park] (radioctl-station) Goes to the park position, if the description has one.
+- [@ANCHOR: radioctl:radioctl_station_rotator_wait_for] (radioctl-station) Polls the position until it is within `tolerance` degrees of `az`/`el`, up to `limit`.
+- [@ANCHOR: radioctl:radioctl_station_rotator_link_ok] (radioctl-station) Whether the transport's link, when it reports one, is up.
+- [@ANCHOR: radioctl:radioctl_station_rotator_transact] (radioctl-station) One command and its reply, bounded by the description's reply timeout.
+- [@ANCHOR: radioctl:radioctl_station_rotator_drain] (radioctl-station) Reads and discards whatever is waiting, until the line has been quiet for 10 ms.
+- [@ANCHOR: radioctl:radioctl_station_vrot_step] (radioctl-station) Moves `from` toward `to` by at most `amount`.
+- [@ANCHOR: radioctl:radioctl_station_vrot_new] (radioctl-station) A rotator at its minimum travel, at rest.
+- [@ANCHOR: radioctl:radioctl_station_vrot_advance] (radioctl-station) Lets time pass: moves toward the target at the slew rate unless stuck.
+- [@ANCHOR: radioctl:radioctl_station_vrot_state] (radioctl-station) The state now.
+- [@ANCHOR: radioctl:radioctl_station_vrot_received] (radioctl-station) Every command line received, in order.
+- [@ANCHOR: radioctl:radioctl_station_vrot_set_target] (radioctl-station) Accepts a target if it is inside the travel.
+- [@ANCHOR: radioctl:radioctl_station_vrot_feed] (radioctl-station) Bytes from the client; returns the reply bytes (none when silent).
+- [@ANCHOR: radioctl:radioctl_station_vrot_rotctld] (radioctl-station) One rotctld command line.
+- [@ANCHOR: radioctl:radioctl_station_vrot_gs232] (radioctl-station) One GS-232 command (CR-terminated, already trimmed): `Waaa eee`, `C2`, `S`.
+- [@ANCHOR: radioctl:radioctl_station_vrot_lock] (radioctl-station) `lock` (see the source).
+- [@ANCHOR: radioctl:radioctl_station_vrot_control_state] (radioctl-station) Where the rotator is and is going.
+- [@ANCHOR: radioctl:radioctl_station_vrot_control_received] (radioctl-station) Every command line received.
+- [@ANCHOR: radioctl:radioctl_station_vrot_control_set_stuck] (radioctl-station) Makes the rotator stuck (or frees it).
+- [@ANCHOR: radioctl:radioctl_station_vrot_control_set_silent] (radioctl-station) Makes the rotator silent (or lets it answer).
+- [@ANCHOR: radioctl:radioctl_station_vrot_serve] (radioctl-station) Serves `rotator` on `listener` from a task on `runtime`; one client at a time, a new connection replaces the old one.
