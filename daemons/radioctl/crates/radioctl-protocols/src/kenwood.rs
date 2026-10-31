@@ -117,6 +117,8 @@ pub fn parse_digits(text: &str) -> Option<u64> {
 pub struct KenwoodEngine {
     desc: RigDescription,
     tokenizer: Tokenizer,
+    /// The older TS-440S dialect (`kenwood.dialect = "ts440"`).
+    ts440: bool,
 }
 
 impl KenwoodEngine {
@@ -133,16 +135,21 @@ impl KenwoodEngine {
         if desc
             .kenwood
             .as_ref()
-            .is_some_and(|k| k.dialect != radioctl_core::description::KenwoodDialect::Classic)
+            .is_some_and(|k| k.dialect == radioctl_core::description::KenwoodDialect::Ts890)
         {
             return Err(RigError::new(
                 ErrorKind::Unsupported,
                 "a TS-890S description needs Ts890Engine",
             ));
         }
+        let ts440 = desc
+            .kenwood
+            .as_ref()
+            .is_some_and(|k| k.dialect == radioctl_core::description::KenwoodDialect::Ts440);
         Ok(KenwoodEngine {
             desc,
             tokenizer: Tokenizer::default(),
+            ts440,
         })
     }
 
@@ -161,6 +168,28 @@ impl KenwoodEngine {
     fn decode(&self, text: &str) -> Vec<Inbound> {
         if text == "?" {
             return vec![Inbound::Nak];
+        }
+        // The older dialect has no read form of MD, FR, FT, SM or the levels: such an answer is not
+        // one this rig gives.
+        if self.ts440
+            && matches!(
+                text.get(..2),
+                Some(
+                    "MD" | "FR"
+                        | "FT"
+                        | "SM"
+                        | "AG"
+                        | "RG"
+                        | "MG"
+                        | "ML"
+                        | "PC"
+                        | "KS"
+                        | "RA"
+                        | "PA"
+                )
+            )
+        {
+            return vec![Inbound::Unrecognised(format!("{text};").into_bytes())];
         }
         if let Some(rest) = text.strip_prefix("IF") {
             return self
@@ -199,6 +228,37 @@ impl KenwoodEngine {
             Some(value) => Inbound::Observation(value),
             None => Inbound::Unrecognised(format!("{text};").into_bytes()),
         }]
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_encode_ts440]
+    /// The operations whose wire form differs in the TS-440S dialect (IC-10 manual, printed pages
+    /// 13 to 29): `None` where the classic form is also the TS-440S form.
+    fn encode_ts440(op: &Op) -> Option<Result<Request, RigError>> {
+        let none = ReplyKind::None;
+        Some(match op {
+            // `MD` has no read form: the mode is P9 of `IF`.
+            Op::GetMode => Ok(Self::command(
+                "IF;".into(),
+                ReplyKind::Observation(Field::Mode),
+            )),
+            // `FT` has no read form: the transmit VFO follows from `IF` (split and P10).
+            Op::GetTxVfo => Ok(Self::command(
+                "IF;".into(),
+                ReplyKind::Observation(Field::TxVfo),
+            )),
+            // `FN0` selects VFO A; `SP` sets split on or off. Neither can be read back but by `IF`.
+            Op::SetSplit(on) => Ok(Self::command(format!("FN0;SP{};", u8::from(*on)), none)),
+            // `AI` has one parameter digit (page 13): 1 for on.
+            Op::SetTransceive(on) => Ok(Self::command(format!("AI{};", u8::from(*on)), none)),
+            // `RU` and `RD` carry no parameter and move the RIT by an unstated step, so an exact
+            // offset cannot be set; there is no `SM`, level or `KY` either.
+            Op::SetRitOffset(_)
+            | Op::GetSignal
+            | Op::GetLevel(_)
+            | Op::SetLevel(..)
+            | Op::StopCw => Err(Self::unsupported("not in the TS-440S command set")),
+            _ => return None,
+        })
     }
 
     // [@ANCHOR: radioctl_kenwood_engine_decode_front_end]
@@ -369,6 +429,11 @@ impl ProtocolEngine for KenwoodEngine {
     fn encode(&mut self, op: &Op) -> Result<Request, RigError> {
         if !self.desc.capabilities.has(op.required_capability()) {
             return Err(Self::unsupported("capability not in the rig description"));
+        }
+        if self.ts440 {
+            if let Some(result) = Self::encode_ts440(op) {
+                return result;
+            }
         }
         let none = ReplyKind::None;
         let request = match op {

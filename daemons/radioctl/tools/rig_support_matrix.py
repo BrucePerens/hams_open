@@ -84,6 +84,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "icom-ic-r9500": [3066],
     "kenwood-ts-50s": [2001],
     "kenwood-ts-140s": [2025],
+    "kenwood-ts-440s": [2002],
     "kenwood-ts-450s": [2003],
     "kenwood-ts-480": [2028],
     "kenwood-ts-570d": [2004],
