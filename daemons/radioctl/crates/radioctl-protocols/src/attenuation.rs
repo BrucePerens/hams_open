@@ -112,6 +112,7 @@ pub fn virtual_elecraft(
     virtual_ascii(desc, levels, name, arg, false)
 }
 
+// [@ANCHOR: radioctl_att_virtual_ascii]
 /// The shared body: `second_field` appends the always-zero second parameter Kenwood answers carry.
 fn virtual_ascii(
     desc: &RigDescription,
@@ -229,6 +230,7 @@ mod tests {
         assert_eq!(value_of(&none, Level::Preamp, 0), None);
     }
 
+    // Tests [@ANCHOR: radioctl_att_virtual_ascii]
     // Tests [@ANCHOR: radioctl_att_virtual_kenwood]
     // Tests [@ANCHOR: radioctl_att_virtual_elecraft]
     // Tests [@ANCHOR: radioctl_att_virtual_yaesu]
