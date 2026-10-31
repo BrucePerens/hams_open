@@ -128,3 +128,17 @@ nice -n 10 python3 hams_shared/tools/run_linters.py --only check_cargo_fmt
 
 Merge by pull request (`devbox_tools/prmerge.sh`), put the test results in the PR text, and remove the
 worktree and branch at once after the merge.
+
+## Fault injection on the virtual rig
+
+`spawn_virtual_rig` (radioctl-protocols `io.rs`) runs a virtual rig behind an in-memory stream, and its
+`VirtualRigControl` carries the knobs the timing-policy tests turn: `set_reply_delay` (a slow radio),
+`set_reply_jitter` (an uneven one, from a seeded generator so a run is repeatable), `set_echo` (the
+controller's own bytes come back first, as on a single-wire CI-V bus), `set_reply_chunk` (an answer
+arrives in pieces across several reads), `truncate_replies` (an answer loses its last byte: a frame that
+never ends) and `drop_replies` (an answer is lost altogether). `front_panel` while an answer is pending
+interleaves a transceive frame with it. The tests at the end of `crates/radioctl-core/tests/actor.rs` pin
+what the actor does under each: jitter inside the timeout costs nothing, an echo is neither junk nor a
+report, a split answer is one answer, a cut frame is a timeout and a clean retry, a silent radio fails
+within `timeout × (1 + retries)` with one frame per attempt, and a knob turned during a read is an event
+of its own. None of this keys anything.

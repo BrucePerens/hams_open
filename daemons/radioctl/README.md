@@ -501,6 +501,11 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_io_front_panel] (radioctl-protocols) Turns a knob on the rig; any unsolicited bytes go out without delay.
 - [@ANCHOR: radioctl:radioctl_virtual_io_set_reply_delay] (radioctl-protocols) Changes how long answers take from now on.
 - [@ANCHOR: radioctl:radioctl_virtual_io_drop_replies] (radioctl-protocols) Fault injection: loses the next answers on the way back, the commands still taking effect.
+- [@ANCHOR: radioctl:radioctl_virtual_io_next_jitter] (radioctl-protocols) The next random share of the reply jitter, from a seeded generator (repeatable).
+- [@ANCHOR: radioctl:radioctl_virtual_io_set_reply_jitter] (radioctl-protocols) Adds a random 0 to `jitter` to every answer's delay (fault injection).
+- [@ANCHOR: radioctl:radioctl_virtual_io_set_echo] (radioctl-protocols) Echoes the controller's own bytes back before the answer, as a single-wire bus does (fault injection).
+- [@ANCHOR: radioctl:radioctl_virtual_io_set_reply_chunk] (radioctl-protocols) Writes answers in pieces with a gap, so a frame arrives across several reads (fault injection).
+- [@ANCHOR: radioctl:radioctl_virtual_io_truncate_replies] (radioctl-protocols) Cuts the last byte off the next answers: a frame that never ends (fault injection).
 - [@ANCHOR: radioctl:radioctl_virtual_io_bytes_received] (radioctl-protocols) How many bytes the controller has written to the rig.
 - [@ANCHOR: radioctl:radioctl_core_actor_absorb] (radioctl-core) Feeds received bytes to the engine; decides the waiting command by the order rule (a reply an abandoned earlier command is owed is never this command's), updates the cache, counts unrecognised bytes.
 - [@ANCHOR: radioctl:radioctl_core_actor_next_seq] (radioctl-core) A fresh identity for one command; its retries share it.
