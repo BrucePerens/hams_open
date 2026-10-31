@@ -57,7 +57,8 @@ Every Rust block in these pages is one of three things, and the test `crates/rad
 fails when a page disagrees with the code:
 
 - `rust example=NAME`: a verbatim copy of `crates/radioctld/examples/NAME.rs`. Cargo builds every
-  example with `cargo test` and the test runs them (except `serial_rig`, which needs a radio).
+  example with `cargo test` and the test runs them, except `serial_rig` (needs a radio) and
+  `splitter_pty` (runs until Ctrl-C; checked by hand).
 - `rust signatures`: items copied from the source, with comments and attributes left out. Each must
   still exist.
 - `rust pseudo`: pseudo-code, not meant to compile.
