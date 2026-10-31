@@ -61,7 +61,9 @@ answer: a value, or a typed `RigError`. The actor never hangs a caller. Behaviou
   never repeated. (`SetPtt(false)` does not transmit, so it is repeated.)
 - **Preemption.** Unkeying jumps the queue and abandons a command that is waiting for a reply (that
   command ends with `Cancelled`). It never interrupts a write in progress. The abandoned command's
-  late answer, if it arrives, reaches the cache as an unsolicited observation.
+  late answer, if it arrives, is matched to the abandoned command by order (the radio answers in the
+  order it was asked) and never taken for a later command's reply; an observation among them still
+  reaches the cache as an older reading (chapter [10](10-safety.md), "Late replies").
 - **Fail closed on the unknown.** If a command that transmits (`SetPtt(true)`, `SendCw`) was written to
   the radio and never answered, or its write timed out part way, the actor sends an unkey itself before
   it reports the timeout, because the radio may be keyed. That unkey is not preemptible, waits at most

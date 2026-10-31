@@ -175,9 +175,15 @@ pub struct RigStats {
     pub polls: u64,
     /// Observations the rig sent on its own.
     pub unsolicited: u64,
-    /// Replies that arrived after their command had been given up (a rig without the
-    /// `Transceive` capability answering late); they never slow polling.
+    /// Replies that arrived after their command had been given up: matched to that command by
+    /// order (`absorb`), or, when no request is outstanding, counted as such on a rig without
+    /// the `Transceive` capability. They never slow polling.
     pub late_replies: u64,
+    /// Late replies that fitted the command then waiting and would have been taken for its
+    /// answer without the order rule (`absorb`): matched to the abandoned command instead.
+    pub stale_replies: u64,
+    /// Times a normal command waited for an abandoned command's late reply before being written.
+    pub stale_drains: u64,
     /// Received bytes no frame could be made of.
     pub unrecognised: u64,
     /// Events produced.
@@ -206,6 +212,8 @@ struct Counters {
     polls: AtomicU64,
     unsolicited: AtomicU64,
     late_replies: AtomicU64,
+    stale_replies: AtomicU64,
+    stale_drains: AtomicU64,
     unrecognised: AtomicU64,
     events: AtomicU64,
     stream_lagged: AtomicU64,
@@ -324,6 +332,8 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         emergency: emergency_rx,
         poll,
         transcript: VecDeque::new(),
+        outstanding: VecDeque::new(),
+        command_seq: 0,
         epoch: shared.epoch,
         buffer: [0u8; READ_BUFFER],
         last_write: None,
@@ -443,6 +453,8 @@ impl RigHandle {
             polls: c.polls.load(Ordering::Relaxed),
             unsolicited: c.unsolicited.load(Ordering::Relaxed),
             late_replies: c.late_replies.load(Ordering::Relaxed),
+            stale_replies: c.stale_replies.load(Ordering::Relaxed),
+            stale_drains: c.stale_drains.load(Ordering::Relaxed),
             unrecognised: c.unrecognised.load(Ordering::Relaxed),
             events: c.events.load(Ordering::Relaxed),
             stream_lagged: c.stream_lagged.load(Ordering::Relaxed),
@@ -860,7 +872,26 @@ struct Actor<E, T> {
     link_watch: Option<watch::Receiver<LinkStatus>>,
     /// The `generation` of the last `Connected` status seen; 0 before the first.
     link_generation: u32,
+    /// Requests written whose reply has not been seen: the current command's and those of
+    /// commands abandoned (timed out, preempted) whose answer may still arrive. Oldest first,
+    /// the order the rig answers in.
+    outstanding: VecDeque<Outstanding>,
+    /// Identifies one `run_command` or fail-closed unkey (its retries share it).
+    command_seq: u64,
 }
+
+/// A request on the wire whose reply has not been seen.
+struct Outstanding {
+    kind: ReplyKind,
+    seq: u64,
+    /// After this a reply is no longer expected: the entry is dropped so that an answer the rig
+    /// never gives cannot eat a later command's reply for ever.
+    expires: Instant,
+}
+
+/// How long after its write a request's reply is still expected, in reply timeouts: the one
+/// the command waited, and one more for a late answer.
+const STALE_WINDOW_TIMEOUTS: u32 = 2;
 
 impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     // [@ANCHOR: radioctl_core_actor_run]
@@ -1040,6 +1071,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         };
         let timeout = self.engine.description().timing.timeout;
         let mut done = false;
+        let seq = self.next_seq();
         if let Some(request) = request {
             for attempt in 0..UNKEY_ATTEMPTS {
                 if !self.shared.link_up.load(Ordering::Acquire) {
@@ -1059,9 +1091,11 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 }
                 self.last_write = Some(Instant::now());
                 self.log("TX", &request.bytes);
+                self.note_written(request.reply, seq, timeout);
                 done = request.reply == ReplyKind::None
                     || matches!(
-                        self.await_reply(request.reply, until, source, false).await,
+                        self.await_reply(request.reply, seq, until, source, false)
+                            .await,
                         Wait::Done(Ok(_))
                     );
                 if done {
@@ -1180,12 +1214,27 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         } else {
             1 + u32::from(timing.retries)
         };
+        let seq = self.next_seq();
         for _ in 0..attempts {
             // Inter-command spacing is a courtesy to the rig's parser; an emergency unkey does
             // not wait for it, so a generous `inter_command_ms` never delays getting off the air.
+            // Nor does it wait for an abandoned command's late reply: a stale answer is told
+            // apart by order instead (`absorb`).
             if !op.is_emergency() {
                 if let Some(ready) = self.spacing(timing.inter_command, deadline) {
                     sleep_until(ready).await;
+                }
+                match self.drain_stale(deadline, may_preempt).await {
+                    Some(Wait::Preempted) => {
+                        return Err(
+                            self.error(ErrorKind::Cancelled, "abandoned for an emergency command")
+                        )
+                    }
+                    Some(Wait::LinkDown(why)) => {
+                        self.link_down(&why);
+                        return Err(self.error(ErrorKind::LinkDown, &why));
+                    }
+                    _ => {}
                 }
             }
             match timeout_at(deadline, self.transport.write_all(&request.bytes)).await {
@@ -1212,9 +1261,10 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 self.apply_set(op, source);
                 return Ok(None);
             }
+            self.note_written(request.reply, seq, timing.timeout);
             let until = deadline.min(deadline_after(Instant::now(), timing.timeout));
             match self
-                .await_reply(request.reply, until, source, may_preempt)
+                .await_reply(request.reply, seq, until, source, may_preempt)
                 .await
             {
                 Wait::Done(result) => {
@@ -1257,6 +1307,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     async fn await_reply(
         &mut self,
         expect: ReplyKind,
+        seq: u64,
         until: Instant,
         source: Source,
         may_preempt: bool,
@@ -1284,7 +1335,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     Ok(Ok(n)) => {
                         let data = self.buffer.get(..n).unwrap_or(&[]).to_vec();
                         self.log("RX", &data);
-                        if let Some(done) = self.absorb(&data, expect, source) {
+                        if let Some(done) = self.absorb(&data, expect, seq, source) {
                             return Wait::Done(done);
                         }
                     }
@@ -1293,18 +1344,141 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         }
     }
 
+    // [@ANCHOR: radioctl_core_actor_next_seq]
+    /// A fresh identity for one command (its retries share it).
+    fn next_seq(&mut self) -> u64 {
+        self.command_seq = self.command_seq.wrapping_add(1).max(1);
+        self.command_seq
+    }
+
+    // [@ANCHOR: radioctl_core_actor_note_written]
+    /// A request that expects a reply went out: remember it, so that its answer is matched to it
+    /// even if it arrives after the command has been given up.
+    fn note_written(&mut self, kind: ReplyKind, seq: u64, timeout: Duration) {
+        if kind == ReplyKind::None {
+            return;
+        }
+        self.prune_outstanding(Instant::now());
+        self.outstanding.push_back(Outstanding {
+            kind,
+            seq,
+            expires: deadline_after(
+                Instant::now(),
+                timeout.saturating_mul(STALE_WINDOW_TIMEOUTS),
+            ),
+        });
+    }
+
+    fn prune_outstanding(&mut self, now: Instant) {
+        self.outstanding.retain(|o| o.expires > now);
+    }
+
+    // [@ANCHOR: radioctl_core_actor_claim_reply]
+    /// Which request a reply answers: the oldest outstanding one it fits, because the rig answers
+    /// in the order it was asked. `None` when nothing waited for it (transceive, a reply to a
+    /// request forgotten as expired). An Ack fits an Ack request, an observation its field, and
+    /// a Nak any request.
+    fn claim_reply(&mut self, inbound: &Inbound) -> Option<u64> {
+        self.prune_outstanding(Instant::now());
+        let fits = |o: &Outstanding| match inbound {
+            Inbound::Ack => o.kind == ReplyKind::Ack,
+            Inbound::Nak => true,
+            Inbound::Observation(value) => o.kind == ReplyKind::Observation(value.field()),
+            Inbound::ScopeFrame(_) | Inbound::Unrecognised(_) => false,
+        };
+        let at = self.outstanding.iter().position(fits)?;
+        self.outstanding.remove(at).map(|o| o.seq)
+    }
+
+    // [@ANCHOR: radioctl_core_actor_drain_stale]
+    /// Before a normal command is written: while an abandoned command's reply may still come,
+    /// read and absorb input so that it is matched to its own request and not taken for the new
+    /// command's answer. Waits at most until the last such expectation lapses, or `deadline`.
+    /// Emergency commands do not call this; they go out at once and rely on the order rule in
+    /// `absorb`. Returns `Some(Wait::Preempted)` or `Some(Wait::LinkDown)` when that cut it short.
+    async fn drain_stale(&mut self, deadline: Instant, may_preempt: bool) -> Option<Wait> {
+        let shared = Arc::clone(&self.shared);
+        loop {
+            self.prune_outstanding(Instant::now());
+            let last = self.outstanding.iter().map(|o| o.expires).max()?;
+            let until = last.min(deadline);
+            if until <= Instant::now() {
+                return None;
+            }
+            self.shared
+                .counters
+                .stale_drains
+                .fetch_add(1, Ordering::Relaxed);
+            let woken = shared.emergency_wake.notified();
+            tokio::select! {
+                biased;
+                _ = woken, if may_preempt => {
+                    if shared.emergency_pending.load(Ordering::Acquire) > 0 {
+                        return Some(Wait::Preempted);
+                    }
+                }
+                read = timeout_at(until, self.transport.read(&mut self.buffer)) => match read {
+                    Err(_) => return None,
+                    Ok(Err(error)) => return Some(Wait::LinkDown(error.to_string())),
+                    Ok(Ok(0)) => return Some(Wait::LinkDown("end of stream".to_string())),
+                    Ok(Ok(n)) => {
+                        let data = self.buffer.get(..n).unwrap_or(&[]).to_vec();
+                        self.log("RX", &data);
+                        self.ingest(&data);
+                    }
+                },
+            }
+        }
+    }
+
     // [@ANCHOR: radioctl_core_actor_absorb]
     /// Feeds received bytes to the engine; returns the command's result once it is decided.
-    fn absorb(&mut self, data: &[u8], expect: ReplyKind, source: Source) -> Option<Reply> {
+    /// A reply is the command's answer only when it fits the command and the oldest outstanding
+    /// request it fits is this command's (`seq`): the rig answers in order, so a fitting reply
+    /// that an abandoned earlier command is still owed belongs to that command. Such a stale
+    /// reply is counted, an observation among them still reaches the cache (it is a real, older
+    /// reading), and the actor keeps waiting for its own answer.
+    fn absorb(
+        &mut self,
+        data: &[u8],
+        expect: ReplyKind,
+        seq: u64,
+        source: Source,
+    ) -> Option<Reply> {
         let mut done: Option<Reply> = None;
         for item in self.engine.feed(data, self.now()) {
+            let owner = self.claim_reply(&item);
+            // The answer to a command already given up: never this command's, whatever it looks
+            // like. Counted as stale when it would otherwise have passed for this command's.
+            let stale = owner.is_some_and(|o| o != seq);
+            if stale {
+                self.shared
+                    .counters
+                    .late_replies
+                    .fetch_add(1, Ordering::Relaxed);
+                self.transcript
+                    .push_back("LATE reply matched to an abandoned command".into());
+                let would_fit = match &item {
+                    Inbound::Ack => expect == ReplyKind::Ack,
+                    Inbound::Nak => expect != ReplyKind::None,
+                    Inbound::Observation(value) => expect == ReplyKind::Observation(value.field()),
+                    Inbound::ScopeFrame(_) | Inbound::Unrecognised(_) => false,
+                };
+                if would_fit {
+                    self.shared
+                        .counters
+                        .stale_replies
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+            }
             match item {
                 Inbound::Observation(value) => {
-                    let wanted = done.is_none() && expect == ReplyKind::Observation(value.field());
+                    let wanted =
+                        done.is_none() && !stale && expect == ReplyKind::Observation(value.field());
                     self.observe(value, if wanted { source } else { Source::Transceive });
                     if wanted {
                         done = Some(Ok(Some(value)));
-                    } else {
+                    } else if owner.is_none() {
                         self.note_unsolicited();
                     }
                 }
@@ -1318,8 +1492,10 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     frame.seq = seq;
                     let _ = self.shared.scope.send(frame);
                 }
-                Inbound::Ack if done.is_none() && expect == ReplyKind::Ack => done = Some(Ok(None)),
-                Inbound::Nak if done.is_none() && expect != ReplyKind::None => {
+                Inbound::Ack if done.is_none() && !stale && expect == ReplyKind::Ack => {
+                    done = Some(Ok(None))
+                }
+                Inbound::Nak if done.is_none() && !stale && expect != ReplyKind::None => {
                     done = Some(Err(
                         self.error(ErrorKind::Rejected, "the rig refused the command")
                     ));
@@ -1359,7 +1535,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
 
     /// Handles bytes that arrive while no command waits (transceive, late replies).
     fn ingest(&mut self, data: &[u8]) {
-        self.absorb(data, ReplyKind::None, Source::Transceive);
+        self.absorb(data, ReplyKind::None, 0, Source::Transceive);
     }
 
     // [@ANCHOR: radioctl_core_actor_apply_set]

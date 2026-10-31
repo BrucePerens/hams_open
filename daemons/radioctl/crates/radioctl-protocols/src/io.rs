@@ -22,6 +22,8 @@ struct Shared {
     rig: Mutex<VirtualRig>,
     delay: Mutex<Duration>,
     received: AtomicUsize,
+    /// Answers still to be lost on the way back (fault injection: a corrupted frame).
+    drop_replies: AtomicUsize,
     outbox: mpsc::UnboundedSender<(Instant, Vec<u8>)>,
     epoch: Instant,
 }
@@ -52,6 +54,7 @@ pub fn spawn_virtual_rig(
         rig: Mutex::new(rig),
         delay: Mutex::new(reply_delay),
         received: AtomicUsize::new(0),
+        drop_replies: AtomicUsize::new(0),
         outbox,
         epoch: Instant::now(),
     });
@@ -69,7 +72,14 @@ pub fn spawn_virtual_rig(
                 buffer.get(..n).unwrap_or(&[]),
                 now.saturating_duration_since(rx_shared.epoch),
             );
-            if !reply.is_empty() {
+            if reply.is_empty() {
+                continue;
+            }
+            let lost = rx_shared
+                .drop_replies
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+                .is_ok();
+            if !lost {
                 let _ = rx_shared.outbox.send((now + delay, reply));
             }
         }
@@ -115,6 +125,13 @@ impl VirtualRigControl {
     /// Changes how long answers take from now on.
     pub fn set_reply_delay(&self, delay: Duration) {
         *lock(&self.shared.delay) = delay;
+    }
+
+    // [@ANCHOR: radioctl_virtual_io_drop_replies]
+    /// Loses the next `count` answers on the way back (as a corrupted frame would be), the
+    /// commands themselves still taking effect.
+    pub fn drop_replies(&self, count: usize) {
+        self.shared.drop_replies.store(count, Ordering::Release);
     }
 
     // [@ANCHOR: radioctl_virtual_io_bytes_received]

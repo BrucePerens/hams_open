@@ -132,6 +132,26 @@ more times, within the deadline). An unkey is never refused for want of a queue 
 queue is full, the request rides on the unkey already queued and gets its result. It is not a guarantee
 that the radio stopped: it is a command, and a radio can ignore a command.
 
+## Late replies
+
+A command that timed out or was abandoned for an emergency may still be answered. The protocols
+cannot label the answer: a CI-V `FB`/`FA`, a Kenwood or Elecraft `?;` and an observation look the same
+whichever command they answer (FlexRadio numbers its replies, and its engine matches on the number).
+So the actor matches by order, which is how every radio answers: it keeps a list of requests written
+whose reply has not been seen (for two reply timeouts each), and a reply belongs to the *oldest*
+outstanding request it fits (`FB` to a set, a frequency to a frequency read, `?;` to any). A fitting
+reply that an abandoned earlier command is still owed is therefore never the waiting command's answer:
+it is counted (`RigStats::late_replies`, and `stale_replies` when it would have passed for the answer), an
+observation among them still updates the cache as the older reading, and the command keeps waiting for
+its own. Before a normal command is written while such a reply is still expected, the actor first reads
+input until it arrives or the expectation lapses (`stale_drains`); an emergency command (unkey,
+stop-Morse) is written at once and relies on the order rule alone. The case this closes: a key that
+times out is followed by the fail-closed unkey, and the key's late `FB` arrived while the unkey waited
+for its own; before, the cache said unkeyed on the strength of the wrong `FB`. Tests:
+`a_late_ack_for_a_timed_out_key_is_not_taken_for_the_unkeys_answer`,
+`a_late_frequency_is_not_taken_for_the_next_reads_answer` and
+`a_reply_that_never_comes_stops_being_expected_and_does_not_eat_the_next_answer`.
+
 ## The transmit watchdog
 
 Independent of the caller, each rig's actor runs a dead-man timer while the radio transmits. It starts when
