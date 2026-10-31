@@ -6,17 +6,34 @@ is a radioctl module, built as a new crate in this workspace so it can be built 
 from the rig crates. Proposal: `docs/proposals/RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md`.
 
 Phase 1 is virtual: no hardware, nothing is ever switched at start-up, and every transmit-related
-path stays behind radioctl's closed gate. Interlock rule: nothing switches while any attached rig is
-keyed or reads PTT on; the emergency all-off is never blocked and needs no confirmation.
+path stays behind radioctl's closed gate.
 
-**DECISION FOR BRUCE TO CONFIRM (2026-10-30).** The first rule said an unknown keyed state (link
-down, or never read) counted as keyed and blocked everything but `all_off`. That made a radio whose
-link dropped impossible to power-cycle. Now, while the keyed state is UNKNOWN: powering OFF any
-device is always allowed (it can only stop a transmission); powering ON a radio that is Off or
-Unreachable is allowed; everything that could hot-switch an RF path (antenna selection, amplifier
-power-on, band switching, any other output) stays blocked. A KNOWN keyed state still blocks
-everything except `all_off`, power-off included. (Open question: should power-off also pass while
-a rig is known to be keyed? It is not changed here.)
+**Interlock rule (decided by Bruce, 2026-10-31; emergency operations are never blocked).** The
+guard classifies every command by what it does to the RF path (`station::Action`):
+
+- **Power-off of any device** (the amplifier, the rig; the standby step an amplifier power-off
+  begins with) passes in every keyed state: known keyed, unknown (link down or never read) and
+  unkeyed. Cutting power can only stop a transmission. No confirmation, no password.
+- **Power-on of a radio** passes in every keyed state too: an off radio cannot be keyed, and a
+  radio whose link dropped must be power-cyclable. No confirmation, no password. The power button
+  (on, off, reboot) follows.
+- **Shared-supply protection, opt-in, off by default:** `shared_supply = true` on a radio's power
+  channel (set it when that channel also feeds an amplifier, antenna switch or other RF-path
+  device) makes that radio's power-on an RF-path change: refused while any attached rig is keyed
+  or its keyed state is unknown, and a reboot is refused up front rather than after cutting power.
+  The flag is accepted only on the power channel of a radio (`StationDef::validate`).
+- **Everything that could hot-switch an RF path** (antenna selection, amplifier power-on and
+  operate, band switching, any other output) is refused while any rig is known keyed (`Refused`)
+  or its keyed state is unknown (`KeyedUnknown`).
+- The emergency `all_off` is never blocked and does not look at the keyed state at all.
+
+History: the first rule treated an unknown keyed state as keyed and blocked everything but
+`all_off`, which made a radio whose link dropped impossible to power-cycle; 2026-10-30 let
+power-off and the power-on of a down radio pass an unknown state (confirmed by Bruce 2026-10-31),
+and the same day Bruce decided the rest: power-off and radio power-on pass every keyed state, the
+shared-supply protection is the opt-in exception. Nothing else relaxes. None of this touches the
+transmit gate, which is `radioctl-core`'s and closed by default: no keyed state and no power
+command opens it (`tests/station_rig.rs` pins both against a real rig actor).
 
 ## Radio lifecycle and records
 
@@ -69,8 +86,8 @@ from its secret store).
 binary output (on = operate, off = standby) and must declare `safe = "off"`; `function = "tune"` is
 a momentary pulse (`pulse_ms`) that starts the device's own tune cycle (the station never keys a
 transmitter). Rules: operate is an RF-path change, so it is refused while anything is keyed or the
-keyed state is unknown; standby is the safe direction and passes an unknown keyed state (like a
-power-off). Operate is refused unless the device is confirmed powered on and, when the channel names
+keyed state is unknown; standby is the safe direction and passes every keyed state (like a
+power-off, of which it is the first step). Operate is refused unless the device is confirmed powered on and, when the channel names
 a `fault_input` (an input channel, high = tripped), unless that line is confirmed clear; a tripped
 or unknown line refuses. Powering an amplifier off puts it in standby first, and the emergency
 `all_off` writes standby before anything else.
@@ -196,10 +213,10 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_station_select] (radioctl-station) Selects a way on a selector, behind the interlock.
 - [@ANCHOR: radioctl:radioctl_station_station_pulse] (radioctl-station) Pulses a momentary channel, behind the interlock.
 - [@ANCHOR: radioctl:radioctl_station_station_check_power_on] (radioctl-station) The dependency refusals: dependencies confirmed on, required antennas selected.
-- [@ANCHOR: radioctl:radioctl_station_station_power_on] (radioctl-station) Powers a device on: refused while anything is keyed, while a device it depends on is not
+- [@ANCHOR: radioctl:radioctl_station_station_power_on] (radioctl-station) Powers a device on, behind the interlock for its class (a radio passes every keyed state depends on is not
 - [@ANCHOR: radioctl:radioctl_station_station_power_kind] (radioctl-station) The channel kind that powers a device (an output kind for none).
 - [@ANCHOR: radioctl:radioctl_station_station_wait_ready] (radioctl-station) Waits for a device to answer, up to its ready timeout.
-- [@ANCHOR: radioctl:radioctl_station_station_power_off] (radioctl-station) Orderly power-off: refused while anything is keyed. Devices that depend on this one go
+- [@ANCHOR: radioctl:radioctl_station_station_power_off] (radioctl-station) Orderly power-off: never refused for the keyed state (known keyed, unknown or unkeyed:
 - [@ANCHOR: radioctl:radioctl_station_station_run_profile] (radioctl-station) Runs a profile's steps in order within its timeout, with a `Step` event at each. A device
 - [@ANCHOR: radioctl:radioctl_station_station_stop_profile] (radioctl-station) Powers off the devices a profile powers on, in reverse order, with the off delays and the
 - [@ANCHOR: radioctl:radioctl_station_station_all_off] (radioctl-station) The emergency all-off. Never blocked: no keyed-state check, no minimum times, no delays,
@@ -220,9 +237,9 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_store_tighten] (radioctl-station) Removes group and other permissions from an existing record file.
 - [@ANCHOR: radioctl:radioctl_station_store_set_aside] (radioctl-station) Renames a bad file to `<name>.bad-<n>` (first free n) so it is kept but not read again.
 - [@ANCHOR: radioctl:radioctl_station_store_save] (radioctl-station) Writes every record atomically with mode 0600: a temporary file in the same directory,
-- [@ANCHOR: radioctl:radioctl_station_station_guard_action] (radioctl-station) The interlock with the action's class: a keyed source always refuses; an unknown keyed
-- [@ANCHOR: radioctl:radioctl_station_station_set_hint] (radioctl-station) The lifecycle state of a radio, as the lifecycle manager sees it, so powering it on can
-- [@ANCHOR: radioctl:radioctl_station_station_classify_on] (radioctl-station) The class of powering `d` on: a radio that is Off or Unreachable (by the lifecycle hint, or
+- [@ANCHOR: radioctl:radioctl_station_station_guard_action] (radioctl-station) The interlock with the action's class (Bruce, 2026-10-31): an [`Action::PowerOff`] and an
+- [@ANCHOR: radioctl:radioctl_station_station_power_on_action] (radioctl-station) The class of powering device `id` on, for callers that must know before they start (a
+- [@ANCHOR: radioctl:radioctl_station_station_classify_on] (radioctl-station) The class of powering `d` on: a radio is [`Action::PowerOnRadio`] unless its power channel
 - [@ANCHOR: radioctl:radioctl_station_station_classify_channel] (radioctl-station) The class of setting a channel by hand: off on a power channel is [`Action::PowerOff`]; on
 - [@ANCHOR: radioctl:radioctl_station_station_classify_pulse] (radioctl-station) The class of pulsing a momentary line: a device's off line is [`Action::PowerOff`], its on
 - [@ANCHOR: radioctl:radioctl_station_lifecycle_assume_powered] (radioctl-station) A momentary power-on line was pulsed, which has no read-back: the radio is taken to be
@@ -256,7 +273,7 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_manager_now] (radioctl-station) Time since the manager was built.
 - [@ANCHOR: radioctl:radioctl_station_manager_power_evidence] (radioctl-station) The switch channel's confirmed state as evidence.
 - [@ANCHOR: radioctl:radioctl_station_manager_gather] (radioctl-station) One snapshot of evidence.
-- [@ANCHOR: radioctl:radioctl_station_manager_apply] (radioctl-station) Applies a transition: updates the hint, the record's health and lifecycle, saves, and
+- [@ANCHOR: radioctl:radioctl_station_manager_apply] (radioctl-station) Applies a transition: updates the record's health and lifecycle, saves, and publishes the, saves, and
 - [@ANCHOR: radioctl:radioctl_station_manager_poll] (radioctl-station) Gathers evidence and steps the radio's state machine once.
 - [@ANCHOR: radioctl:radioctl_station_manager_connect_step] (radioctl-station) One reconnect attempt, if one is due: the radio is powered (or its power is unknown), not
 - [@ANCHOR: radioctl:radioctl_station_manager_tick] (radioctl-station) A reconnect attempt if due, then one step of the state machine. A state the radio reports

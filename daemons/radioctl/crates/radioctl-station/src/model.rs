@@ -45,6 +45,11 @@ pub enum AmpFunction {
 pub enum ChannelKind {
     /// On/off power. `inrush_stagger_ms` is the wait before the next power-on in a sequence;
     /// `min_off_ms` the shortest time it stays off before it may come on again.
+    /// `shared_supply` is the opt-in shared-supply protection (Bruce, 2026-10-31): set it on a
+    /// radio's power channel that also feeds an amplifier, antenna switch or other RF-path device,
+    /// and powering that radio on is refused while any attached rig is keyed or its keyed state
+    /// is unknown. Off (the default) means a radio's power-on passes every keyed state: an off
+    /// radio cannot be keyed.
     Power {
         /// Contact or load rating, informational.
         #[serde(default)]
@@ -55,6 +60,10 @@ pub enum ChannelKind {
         /// Minimum off time.
         #[serde(default)]
         min_off_ms: u64,
+        /// The channel also feeds an RF-path device: treat the radio's power-on as an RF-path
+        /// change. Off by default.
+        #[serde(default)]
+        shared_supply: bool,
     },
     /// An n-way exclusive selector, break-before-make.
     Selector {
@@ -338,8 +347,9 @@ impl StationDef {
     }
 
     // [@ANCHOR: radioctl_station_def_validate]
-    /// Checks names, references, channel kinds, one device per power channel, and that the
-    /// dependency graph has no cycle.
+    /// Checks names, references, channel kinds, one device per power channel, that a
+    /// `shared_supply` power channel powers a radio (anywhere else it would protect nothing),
+    /// and that the dependency graph has no cycle.
     pub fn validate(&self) -> Result<(), StationError> {
         let bad = |m: String| Err(StationError::new(StationErrorKind::Config, m));
         let mut seen = BTreeSet::new();
@@ -347,6 +357,21 @@ impl StationDef {
             c.validate()?;
             if !seen.insert(&c.id) {
                 return bad(format!("channel {} is defined twice", c.id.0));
+            }
+            if matches!(
+                c.kind,
+                ChannelKind::Power {
+                    shared_supply: true,
+                    ..
+                }
+            ) && !self.devices.iter().any(|d| {
+                d.kind == DeviceKind::Radio
+                    && matches!(&d.power, PowerSource::Channel { channel } if *channel == c.id)
+            }) {
+                return bad(format!(
+                    "channel {}: shared_supply applies to the power channel of a radio",
+                    c.id.0
+                ));
             }
         }
         let mut lines = BTreeSet::new();
@@ -638,7 +663,41 @@ steps = [
                 SAMPLE.replace("channel = \"amp_pwr\"", "channel = \"radio_pwr\""),
                 "powers two",
             ),
+            // shared_supply on the amplifier's power channel protects nothing: refused
+            (
+                SAMPLE.replacen(
+                    "min_off_ms = 500",
+                    "min_off_ms = 500\nshared_supply = true",
+                    1,
+                ),
+                "shared_supply",
+            ),
         ];
+        // shared_supply on a radio's power channel is accepted, and is off by default
+        let def = StationDef::from_toml(&SAMPLE.replacen(
+            "safe = \"off\"",
+            "safe = \"off\"\nshared_supply = true",
+            1,
+        ))
+        .unwrap();
+        assert!(matches!(
+            def.channel(&ChannelId("radio_pwr".into())).unwrap().kind,
+            ChannelKind::Power {
+                shared_supply: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            StationDef::from_toml(SAMPLE)
+                .unwrap()
+                .channel(&ChannelId("radio_pwr".into()))
+                .unwrap()
+                .kind,
+            ChannelKind::Power {
+                shared_supply: false,
+                ..
+            }
+        ));
         for (text, want) in cases {
             let err = StationDef::from_toml(&text).unwrap_err();
             assert_eq!(err.kind, StationErrorKind::Config);
