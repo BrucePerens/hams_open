@@ -192,7 +192,10 @@ impl VirtualRig {
                 last_byte_at: Duration::ZERO,
             },
             (Family::YaesuNewcat, _, _) if desc.yaesu.is_some() => Wire::Yaesu {
-                params: desc.yaesu.clone().unwrap_or(YaesuParams { model_id: 0 }),
+                params: desc.yaesu.clone().unwrap_or(YaesuParams {
+                    model_id: 0,
+                    frequency_digits: 9,
+                }),
                 tokenizer: Tokenizer::default(),
             },
             _ => {
@@ -358,8 +361,8 @@ impl VirtualRig {
             (Wire::Kenwood { .. }, PanelChange::Frequency(hz)) => {
                 format!("FA{:011};", hz.0).into_bytes()
             }
-            (Wire::Yaesu { .. }, PanelChange::Frequency(hz)) => {
-                format!("FA{:09};", hz.0).into_bytes()
+            (Wire::Yaesu { params, .. }, PanelChange::Frequency(hz)) => {
+                format!("FA{:0w$};", hz.0, w = usize::from(params.frequency_digits)).into_bytes()
             }
             (Wire::Yaesu { .. }, PanelChange::Mode(mode)) => self
                 .desc
@@ -879,8 +882,16 @@ impl VirtualRig {
             _ => 0,
         };
         let reply = match (name, arg) {
-            ("FA", "") => Some(format!("FA{:09};", self.state.freq_a.0)),
-            ("FB", "") => Some(format!("FB{:09};", self.state.freq_b.0)),
+            ("FA", "") => Some(format!(
+                "FA{:0w$};",
+                self.state.freq_a.0,
+                w = self.yaesu_digits()
+            )),
+            ("FB", "") => Some(format!(
+                "FB{:0w$};",
+                self.state.freq_b.0,
+                w = self.yaesu_digits()
+            )),
             ("FA" | "FB", digits) => self.yaesu_set_frequency(name == "FA", digits),
             ("MD", "0") => self
                 .desc
@@ -966,9 +977,19 @@ impl VirtualRig {
         reply.map(String::into_bytes).unwrap_or_default()
     }
 
+    // [@ANCHOR: radioctl_virtual_yaesu_digits]
+    /// Digits of the frequency fields of this Yaesu model (9, or 8 on the older ones).
+    fn yaesu_digits(&self) -> usize {
+        match &self.wire {
+            Wire::Yaesu { params, .. } => usize::from(params.frequency_digits),
+            _ => 9,
+        }
+    }
+
     // [@ANCHOR: radioctl_virtual_yaesu_set_frequency]
     fn yaesu_set_frequency(&mut self, vfo_a: bool, digits: &str) -> Option<String> {
-        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == 9) else {
+        let width = self.yaesu_digits();
+        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == width) else {
             return Some("?;".to_string());
         };
         if vfo_a {
@@ -986,11 +1007,12 @@ impl VirtualRig {
         let sign = if offset < 0 { '-' } else { '+' };
         let mode = self.desc.mode_code(self.state.mode).map_or('0', char::from);
         format!(
-            "IF001{:09}{sign}{:04}{}{}{mode}00000;",
+            "IF001{:0w$}{sign}{:04}{}{}{mode}00000;",
             self.state.freq_a.0,
             offset.unsigned_abs(),
             u8::from(self.state.rit),
             u8::from(self.state.xit),
+            w = self.yaesu_digits(),
         )
     }
 
@@ -2011,6 +2033,33 @@ mod tests {
             assert_eq!(s590.feed(bad, T0), b"?;", "{bad:?}");
         }
         assert_eq!(s590.feed(b"ID;", T0), b"ID023;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_digits]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_command]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_set_frequency]
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_if]
+    // Tests [@ANCHOR: radioctl_virtual_from_description]
+    #[test]
+    fn an_eight_digit_yaesu_twin_speaks_eight_digit_frequencies() {
+        let path = format!(
+            "{}/../../rigs/yaesu-ft-991a.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(path).expect("rig file");
+        let mut desc = radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description;
+        desc.yaesu.as_mut().expect("yaesu block").frequency_digits = 8;
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_eq!(rig.feed(b"FA;FB;", T0), b"FA14074000;FB14074000;");
+        assert!(rig.feed(b"FA07074000;", T0).is_empty());
+        assert_eq!(rig.feed(b"FA;", T0), b"FA07074000;");
+        assert_eq!(rig.feed(b"FA007074000;", T0), b"?;", "nine digits refused");
+        assert_eq!(rig.feed(b"FA7074000;", T0), b"?;", "seven digits refused");
+        let answer = String::from_utf8(rig.feed(b"IF;", T0)).expect("ascii");
+        assert_eq!(answer, "IF00107074000+000000200000;");
+        assert_eq!(answer.len(), 28 - 1);
     }
 
     // Tests [@ANCHOR: radioctl_virtual_yaesu_command]

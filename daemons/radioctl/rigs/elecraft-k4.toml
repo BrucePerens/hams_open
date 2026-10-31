@@ -1,0 +1,104 @@
+# Rig description: Elecraft K4 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+#
+# SOURCE: Elecraft K4 Programmer's Reference Rev. D11 (May 1, 2026), sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf.
+# The K4 speaks the K3 command set in its K3-compatible (K40) meta mode, the one used here: the engine never sends K41;. Only commands
+# whose K4 form is the same as the K3's are claimed. The K4 differs from the K3 in AG (000-060), RG (negative dB), KS (8-100), MG (000-080),
+# PC (power with a range letter), RA/PA (3 dB steps, preamp 10/18/20 dB) and has no RO, so levels, rit-xit and read-signal are NOT claimed (open
+# to-do in docs/RIG_COVERAGE_PLAN.md). Split is not claimed: the guide's FT takes 0/1 but has no FR to leave split.
+# EVERYTHING HERE IS UNVERIFIED: written from the guide, never run against a radio. Hamlib 4.6.2 lists serial 4800..115200 baud, 8N1, no handshake.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw", "transceive", "identify"]
+
+[rig]
+id = "elecraft-k4"
+name = "Elecraft K4"
+family = "elecraft-ascii"
+
+[elecraft]
+model_id = 17
+
+[timing]
+timeout_ms = 600
+retries = 2
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14060000
+mode = "cw"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "data"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "data-r"
+code = "9"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "Elecraft K4 Programmer's Reference Rev. D11: title page and Introduction (all K4 remote-control commands; K3 compatibility in K40 mode)", note = "The id and display name are our own labels." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "elecraft.model_id"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): ID, PDF p. 16: ID017; in K40 mode (GET only, for K3 compatibility); in K41 mode the K4 returns its ID text instead", note = "Not a unique identifier of a K4; the engine never switches to K41. Hamlib's kenwood.c comment also says the Elecraft K2, K3 and KX3 return 17." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/elecraft.rs and rigs/elecraft-kx3.toml timing facts", note = "Our choice, the same as the KX3's; the K4 guide gives no response-time figure that this repository used." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): FA, PDF p. 14 (FAnnnnnnnnnnn;, 11 digits)", note = "Only the starting state of a virtual rig; mode cw is our choice." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): FA p. 14, FB p. 15, FT p. 15, MD p. 21 (MD$ entry), TQ p. 36, TX p. 37, RX p. 30, AI p. 6, ID p. 16, KY p. 18", note = "K40 (K3-compatible) formats. Not claimed, with the reason: levels (AG, RG, KS, MG, PC, RA, PA differ from the K3 forms the engine sends), rit-xit and read-signal (SM is a bar count 00-42 in K41 and meta-mode dependent), split (FT n without FR), read-power and read-swr (no K4 PO or SW query)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): TX (Go to Transmit Mode), PDF p. 37, and RX p. 30", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.send-cw"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): KY (CW/DATA Message Text), PDF p. 18: KY*[text]; the K4 takes up to 60 characters, the engine sends at most 24", note = "Transmit-capable; the engine refuses text with ; < > or control characters." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): AI (Auto-Info), PDF p. 6: AI2 is all control changes generate periodic responses; AI4 and AI5 (immediate notification) are not used", note = "The engine sends AI2; (AI0; to turn off)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): MD (Operating Mode), PDF p. 21: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA, 7 CW REV, 9 DATA REV (0 and 8 are N/A)", note = "Mapping to radioctl modes is ours: DATA is data, DATA REV is data-r." }
+verified = { state = "unverified" }

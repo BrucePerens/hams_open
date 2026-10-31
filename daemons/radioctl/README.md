@@ -19,7 +19,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect), Elecraft KX3, Yaesu newcat and legacy five-byte, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V).
-- Rig descriptions: 46 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
+- Rig descriptions: 61 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
 - Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -139,11 +139,11 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 | Family | Files in `rigs/` | Source of the facts |
 |---|---|---|
-| Elecraft | `elecraft-kx3` | Elecraft Programmer's Reference Rev. G5, cited by command heading and page, with the PDF's sha256; transcript hand-written from the same manual |
+| Elecraft | `elecraft-kx3`, `elecraft-k3`, `elecraft-k3s`, `elecraft-kx2`, `elecraft-k4` | Elecraft Programmer's Reference Rev. G5, cited by command heading and page, with the PDF's sha256; transcript hand-written from the same manual |
 | Icom CI-V | `icom-ic-7300`, `icom-ic-705`, `icom-ic-7610`, `icom-ic-9700`, `icom-ic-7000`, `icom-ic-7100`, `icom-ic-7200`, `icom-ic-7410`, `icom-ic-7600`, `icom-ic-7700`, `icom-ic-7760`, `icom-ic-7800`, `icom-ic-7851`, `icom-ic-9100`, `icom-ic-r8600`, `icom-ic-r75`, `icom-ic-r9500`, `icom-ic-706`, `icom-ic-706mkii`, `icom-ic-706mkiig`, `icom-ic-718`, `icom-ic-746`, `icom-ic-746pro` | Hamlib 4.6.2 source (facts only) and `rigctl --dump-caps` output (see below); Icom's CI-V guides are not used |
 | Kenwood | `kenwood-ts-2000`, `kenwood-ts-590s`, `kenwood-ts-590sg`, `kenwood-ts-890s` | Kenwood's published PC command references (document, page and, for the TS-590 guide, the PDF's sha256 per fact) |
 | Xiegu (CI-V) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only, with Hamlib's shared addresses |
-| Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact) |
+| Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d`, `yaesu-ft-450d`, `yaesu-ft-450`, `yaesu-ft-950`, `yaesu-ft-2000`, `yaesu-ftdx-1200`, `yaesu-ftdx-3000`, `yaesu-ftdx-5000`, `yaesu-ftdx-9000`, `yaesu-ft-891`, `yaesu-ft-710`, `yaesu-ftdx-101mp` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact); the FT-450 from Hamlib 4.6.2 facts only |
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
 | FlexRadio | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
 | OpenHPSDR | `anan-10`, `anan-100` | `daemons/hpsdr` and the OpenHPSDR protocols |
@@ -167,6 +167,15 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   - Skipped, with the same reason as above: Icom's CI-V guides for every one of these models.
   - Still to do: the list in `docs/RIG_COVERAGE_PLAN.md`.
 - `baud = "auto"` (or `baud_probe = [...]`) in `radioctld` runs a read-only frequency read at several baud rates (off unless configured; manual chapter 5).
+
+### Yaesu newcat and Elecraft (batch of October 31, 2026)
+
+- 11 Yaesu newcat models and 4 Elecraft models, all `unverified`. Sources: Yaesu's CAT Operation Reference Books for the FT-450D, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000, FTDX9000 (FT DX 9000 Series), FT-891, FT-710 and FTDX101MP/D (each fact names the file, the PDF page and the sha256); Elecraft's K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (K3, K3S, KX2) and the K4 Programmer's Reference Rev. D11. The FT-450 uses Hamlib 4.6.2 facts only (`hamlib-source`), because Yaesu's FT-450D guide is for another radio.
+- The FT-450, FT-450D, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000 and FTDX9000 write the frequency with **8 digits** (the IF answer is 27 characters): `yaesu.frequency_digits = 8` in the description, implemented in the engine and in the virtual rig; the others use 9.
+- A command the guide has in a different form is left out, not guessed: no `levels` on the FT-450D, FT-950, FT-2000, FTDX5000 and FTDX9000 (MG and PC are 0-255 there, the engine's ranges are the FT-991A's 0-100 and 5-100) or on the FT-891 (RG is 0-30); no `split` on the dual-receiver models (FT selects the main or sub band transmitter) or the FT-891 (ST); no `rit-xit` on the FT-450 family, FT-891 and FT-710; `read-power` only where RM 5 is the PO meter.
+- The K4 is described in its K3-compatible mode only: frequency, modes, PTT (TQ, TX, RX), KY text and AI; its AG, RG, KS, MG, PC, RA and PA differ from the K3 forms the engine sends.
+- Hamlib agrees with the engine on 12 of the 15 on every step the oracle harness can express; the FT-450, FT-450D and FTDX-9000 differ on the second-VFO steps (`FT1;`), pinned in `known_ascii_batch_divergences`. Two ID disagreements are recorded in the files: the FT-891 (guide 0650, Hamlib 135) and the FTDX-3000 (guide 0462, Hamlib 460).
+- Not done: the K2 (needs a K2 dialect of `IF`/`MD`), XG3 (a signal source, not a transceiver), FTDX-9000 "Old" (Hamlib's separate model; its ID is not in the guide). See `docs/RIG_COVERAGE_PLAN.md`.
 
 ### Kenwood
 
@@ -1082,7 +1091,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_service_vfo_info] (radioctld) `\get_vfo_info`: frequency, mode, width and split of the selected VFO.
 - [@ANCHOR: radioctl:radioctld_service_execute] (radioctld) Executes one command for `client`. The answer is the body of a success, or the `RPRT`
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_command] (radioctl-protocols) The newcat command interpreter of a virtual Yaesu (FA/FB, MD0, TX, FT/ST, RT/XT/RC/RU/RD, SM0, RM5, IF, ID, AI, levels and the fixed answers Hamlib needs).
-- [@ANCHOR: radioctl:radioctl_virtual_yaesu_set_frequency] (radioctl-protocols) Sets VFO A or B from nine digits; `?;` otherwise.
+- [@ANCHOR: radioctl:radioctl_virtual_yaesu_digits] (radioctl-protocols) Digits of the virtual Yaesu rig's frequency fields: 9, or 8 for the older models (`yaesu.frequency_digits`).
+- [@ANCHOR: radioctl:radioctl_virtual_yaesu_set_frequency] (radioctl-protocols) Sets VFO A or B from the model's digits (nine, or eight on the older models); `?;` otherwise.
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_if] (radioctl-protocols) The 28-character IF answer.
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_move_offset] (radioctl-protocols) RU/RD: moves the clarifier offset by four digits of hertz; refuses beyond 9999 Hz.
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_level] (radioctl-protocols) A newcat level read or set (AG0, RG0, MG, PC, KS), refusing values outside the guides' ranges.
@@ -1092,6 +1102,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_new] (radioctl-protocols) Builds a newcat engine from a yaesu-newcat description.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_front_end] (radioctl-protocols) An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero) and the step, mapped by the description.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode] (radioctl-protocols) Decodes one newcat reply into observations.
+- [@ANCHOR: radioctl:radioctl_yaesu_engine_digits] (radioctl-protocols) Digits of the frequency fields of `FA`, `FB` and `IF` for this model: 9, or 8 on the FT-450, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000 and FTDX9000.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_if] (radioctl-protocols) The observations in an IF answer (frequency of VFO A, mode, RIT, XIT, clarifier offset).
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_encode] (radioctl-protocols) Encodes an operation as a newcat command.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_feed] (radioctl-protocols) Feeds received bytes to the newcat engine.

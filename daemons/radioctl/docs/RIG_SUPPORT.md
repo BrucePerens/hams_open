@@ -9,13 +9,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **41** (46 description files)
+- With a radioctl description: **56** (61 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 41 |
-| engine only | 98 |
+| described | 56 |
+| engine only | 83 |
 | needs variant | 37 |
 | needs engine | 83 |
 | odd device | 54 |
@@ -31,7 +31,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 37 |
+| A | data only on an existing engine | 135 | 52 |
 | B | variants of an existing engine | 41 | 4 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
@@ -44,13 +44,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | icom_civ | A | civ | 79 | 28 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 4 | 0 |
-| yaesu_newcat_ascii | A | yaesu | 15 | 3 | 0 |
+| yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
 | kenwood_hh_ascii | B | - | 10 | 0 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
 | other_usb | D | - | 10 | 0 | 0 |
 | flexradio_network | A | flex | 9 | 1 | 0 |
 | other_network | C/D | - | 8 | 0 | 0 |
-| elecraft_ascii | A | elecraft | 7 | 1 | 0 |
+| elecraft_ascii | A | elecraft | 7 | 5 | 0 |
 | icom_marine | C | - | 4 | 0 | 0 |
 | icom_pcr_ascii | C | - | 4 | 0 | 0 |
 | other_parallel | D | - | 2 | 0 | 0 |
@@ -106,10 +106,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | odd device |
 | 33001 | ELAD | FDM-DUO | D | other_serial | - | - | unverified | - | odd device |
 | 2021 | Elecraft | K2 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
-| 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
-| 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
-| 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
-| 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
+| 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | `elecraft-k3` | unverified | - | described |
+| 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | `elecraft-k3s` | unverified | - | described |
+| 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | `elecraft-k4` | unverified | - | described |
+| 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | `elecraft-kx2` | unverified | - | described |
 | 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | unverified | - | described |
 | 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
 | 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | odd device |
@@ -342,12 +342,12 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1002 | Yaesu | FT-1000 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1003 | Yaesu | FT-1000D | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1024 | Yaesu | FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
-| 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
-| 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
+| 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-2000` | unverified | - | described |
+| 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450` | unverified | - | described |
+| 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450d` | unverified | - | described |
 | 1039 | Yaesu | FT-600 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1047 | Yaesu | FT-650 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1049 | Yaesu | FT-710 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
+| 1049 | Yaesu | FT-710 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-710` | unverified | - | described |
 | 1010 | Yaesu | FT-736R | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1005 | Yaesu | FT-747GX | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1006 | Yaesu | FT-757GX | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
@@ -360,23 +360,23 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1038 | Yaesu | FT-847UNI | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1022 | Yaesu | FT-857 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-857d` | unverified | - | described |
 | 1015 | Yaesu | FT-890 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
+| 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-891` | unverified | - | described |
 | 1023 | Yaesu | FT-897 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1043 | Yaesu | FT-897D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897d` | unverified | - | described |
 | 1013 | Yaesu | FT-900 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1014 | Yaesu | FT-920 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1028 | Yaesu | FT-950 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
+| 1028 | Yaesu | FT-950 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-950` | unverified | - | described |
 | 1031 | Yaesu | FT-980 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1016 | Yaesu | FT-990 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1048 | Yaesu | FT-990 Old Rom | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1035 | Yaesu | FT-991 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-991a` | unverified | - | described |
 | 1042 | Yaesu | FTDX-10 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx10` | unverified | - | described |
 | 1040 | Yaesu | FTDX-101D | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx101d` | unverified | - | described |
-| 1044 | Yaesu | FTDX-101MP | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
-| 1034 | Yaesu | FTDX-1200 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
-| 1037 | Yaesu | FTDX-3000 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
-| 1032 | Yaesu | FTDX-5000 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
-| 1030 | Yaesu | FTDX-9000 | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
+| 1044 | Yaesu | FTDX-101MP | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-101mp` | unverified | - | described |
+| 1034 | Yaesu | FTDX-1200 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-1200` | unverified | - | described |
+| 1037 | Yaesu | FTDX-3000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-3000` | unverified | - | described |
+| 1032 | Yaesu | FTDX-5000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-5000` | unverified | - | described |
+| 1030 | Yaesu | FTDX-9000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000` | unverified | - | described |
 | 1050 | Yaesu | FTDX-9000 Old | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
 | 1025 | Yaesu | MARK-V Field FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1004 | Yaesu | MARK-V FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |

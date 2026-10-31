@@ -347,6 +347,7 @@ async fn the_first_interactive_run_asks_once_and_a_scripted_run_never_asks() {
 }
 
 // Tests [@ANCHOR: radioctld_cli_main_from_env]
+// Tests [@ANCHOR: radioctld_cli_main_with_bundle]
 #[test]
 fn the_binary_reports_its_version_lists_embedded_rigs_and_rejects_bad_usage() {
     let bin = env!("CARGO_BIN_EXE_radioctl-selftest");

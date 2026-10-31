@@ -1,0 +1,115 @@
+# Rig description: Yaesu FTDX-101MP (newcat ASCII, schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Written from Yaesu's published Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
+# Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 70.5 MHz in 42 ranges; RIT range -9.999kHz/+9.999kHz.
+# Frequency fields are 9 digits (`yaesu.frequency_digits`); the IF answer is 28 characters with the semicolon.
+# Gaps and open questions: Same description as the FTDX101D except the ID (0682). Split is by band (FT selects the MAIN or SUB transmitter), so split is not claimed. Details: crates/radioctl-protocols/src/yaesu.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "rit-xit", "levels", "identify"]
+
+[rig]
+id = "yaesu-ftdx-101mp"
+name = "Yaesu FTDX-101MP"
+family = "yaesu-newcat"
+
+[yaesu]
+model_id = 682
+
+[levels]
+attenuator_db = [6, 12, 18]
+attenuator_any_up_to_db = 0
+preamp_steps = 2
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "data-r"
+code = "8"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
+[[modes]]
+mode = "data"
+code = "C"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the guide and in Hamlib 4.6.2", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 1044 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.model_id"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID, PDF p. 15; Same description as the FTDX101D except the ID (0682). Split is by band (FT selects the MAIN or SUB transmitter), so split is not claimed.", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 1044 --dump-caps (Hamlib 4.6.2): Write delay: 0ms, timeout 2000ms, 3 retry", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.attenuator_db"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rig_caps `.attenuator` of the Yaesu FTDX-101MP in rigs/yaesu ([6, 12, 18]) and `rigctl -m 1044 --dump-caps`", note = "The guide (RA p. 20) gives the RA steps; the dB figures are Hamlib's, read for facts only." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: RA (RF ATTENUATOR) p. 20, PA (PRE-AMP (IPO)) p. 19: RA0P2 and PA0P2 (P1 selects the receiver, 0 is MAIN); preamp step 0 is IPO", note = "Preamp steps are IPO, AMP 1 and AMP 2 (two steps)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID p. 15, FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 23, SM p. 22, AI p. 7, RM p. 21, RT p. 21, XT p. 25, RC p. 20, RD p. 20, AG p. 7, RG p. 21, MG p. 16, PC p. 19, KS p. 15, RA p. 20, PA p. 19", note = "The guide's command pages. Same description as the FTDX101D except the ID (0682). Split is by band (FT selects the MAIN or SUB transmitter), so split is not claimed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: TX, PDF p. 23 (TX1 is CAT TX on, TX0 off)", note = "Transmit-capable; the rig actor's transmit gate applies and stays closed by default. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: MD, PDF p. 16: 1 LSB, 2 USB, 3 CW-U, 4 FM, 5 AM, 6 RTTY-L, 7 CW-L, 8 DATA-L, 9 RTTY-U, A DATA-FM, B FM-N, C DATA-U", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 7 (CW-L) is cw-r, 8 (DATA-L) is data-r and C (DATA-U) is data; A and B are not described." }
+verified = { state = "unverified" }
