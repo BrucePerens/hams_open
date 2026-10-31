@@ -83,6 +83,8 @@ pub const OP_CLAR_FREQUENCY: u8 = 0xF5;
 const MAX_HZ: u64 = 999_999_990;
 /// Largest clarifier offset, in hertz (two BCD bytes of 10 Hz).
 const MAX_CLAR_HZ: u16 = 9_990;
+/// The same bound as a signed value, for the virtual rig's decode of the block.
+pub const MAX_CLAR_HZ_I16: i16 = 9_990;
 
 /// What the engine is waiting for after a read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

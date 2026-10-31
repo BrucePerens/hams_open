@@ -787,10 +787,22 @@ impl VirtualRig {
                 Vec::new()
             }
             legacy::OP_CLAR_FREQUENCY => {
-                let digit = |byte: u8| i16::from(byte >> 4) * 10 + i16::from(byte & 15);
-                let tens = digit(*c) * 100 + digit(*d);
-                let hz = tens * 10;
-                self.state.rit_offset = if *a == 0 { hz } else { -hz };
+                // Two BCD bytes of 10 Hz, at most 9.99 kHz (the engine's MAX_CLAR_HZ). A nibble
+                // above 9, or a value past the range, is not BCD the radio documents: ignored, as
+                // a setting the radio does not take. Computed in i32: the naive i16 arithmetic
+                // overflowed on non-BCD bytes (found by `parser_props.rs`).
+                let bcd = |byte: u8| {
+                    let (high, low) = (byte >> 4, byte & 15);
+                    (high <= 9 && low <= 9).then(|| i32::from(high) * 10 + i32::from(low))
+                };
+                if let (Some(high), Some(low)) = (bcd(*c), bcd(*d)) {
+                    let hz = (high * 100 + low) * 10;
+                    if let Ok(hz) = i16::try_from(hz) {
+                        if hz <= legacy::MAX_CLAR_HZ_I16 {
+                            self.state.rit_offset = if *a == 0 { hz } else { -hz };
+                        }
+                    }
+                }
                 Vec::new()
             }
             _ => Vec::new(),
@@ -1920,6 +1932,26 @@ mod tests {
         assert_eq!(ft991.feed(b"AI;", T0), b"AI1;");
         let mut dx10 = shipped_rig("yaesu-ftdx10");
         assert_eq!(dx10.feed(b"ID;RM5;", T0), b"ID0761;RM5000000;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_legacy_block]
+    #[test]
+    fn a_clarifier_block_that_is_not_bcd_is_ignored_not_a_panic() {
+        let mut rig = shipped_rig("yaesu-ft-897d");
+        // Found by parser_props.rs: nibbles above 9 overflowed the i16 arithmetic.
+        assert!(rig
+            .feed(&[0x00, 0x00, 0xFF, 0xFF, legacy::OP_CLAR_FREQUENCY], T0)
+            .is_empty());
+        assert_eq!(rig.state().rit_offset, 0);
+        // Past the documented 9.99 kHz is ignored too; a documented value is taken.
+        assert!(rig
+            .feed(&[0x00, 0x00, 0x99, 0x99, legacy::OP_CLAR_FREQUENCY], T0)
+            .is_empty());
+        assert_eq!(rig.state().rit_offset, 0);
+        assert!(rig
+            .feed(&[0x01, 0x00, 0x09, 0x99, legacy::OP_CLAR_FREQUENCY], T0)
+            .is_empty());
+        assert_eq!(rig.state().rit_offset, -9_990);
     }
 
     // Tests [@ANCHOR: radioctl_virtual_legacy_block]
