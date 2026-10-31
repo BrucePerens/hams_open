@@ -63,7 +63,7 @@ A [glossary](B-glossary.md) covers the ham-radio terms (VFO, split, RIT, CI-V an
 Phase 0/1 foundation, as the crate README says. What is implemented:
 
 - **Implemented:** the rig actor with a priority queue, deadlines, cache with age, adaptive polling,
-  status callback and event stream, a derived `active_tx_frequency` (Hamlib issue 138), and a fail-closed
+  status callback and event stream, a derived `active_tx_frequency` (Hamlib issue 138), Icom scope operations with a sweep stream, and a fail-closed
   unkey when a transmit command goes unanswered or the last handle is dropped; engines for Icom CI-V (also used for Xiegu), Kenwood ASCII, Elecraft ASCII,
   Yaesu newcat ASCII, Yaesu legacy five-byte CAT and the FlexRadio SmartSDR control plane; virtual rigs; serial, USB-serial-by-id and TCP transports
   with reconnect for serial; the splitter; `radioctld`; the rig description format with provenance;
@@ -74,7 +74,7 @@ Phase 0/1 foundation, as the crate README says. What is implemented:
   a manual or from our own simulator. A passing test means the description, the engine and the virtual
   rig agree with each other, not that they agree with a radio.
 - **Planned, not in the code:** a dead-man timer, a maximum transmit duration, unkey on link loss,
-  scope operations through the API, the Kenwood TS-890S dialect,
+  scope for non-Icom radios, the Kenwood TS-890S dialect,
   FlexRadio streams (meters, spectrum, audio) and discovery on the wire, HPSDR/ANAN and the Kenwood and
   Icom LAN radios as radioctl rigs, a C ABI, rotators and amplifiers, and external switches. [Chapter 13](13-roadmap.md) is the complete list.
 

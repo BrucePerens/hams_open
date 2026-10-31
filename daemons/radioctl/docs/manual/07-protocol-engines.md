@@ -43,9 +43,10 @@ frame is skipped.
   track `07 00` and `07 01`, so after the radio's selection changes the labels swap. Split on the
   Main/Sub radios differs from Hamlib's flow; the oracle test records it.
 - **Scope (`civ_scope.rs`):** command `27`. Frame parsing, a reassembler that collects a whole sweep,
-  settings encoders (on/off, mode, span, hold, reference level, speed, fixed edges) and a simulator.
-  Reachable only through `CivEngine::scope_request`, `take_scope_lines` and `scope_dropped`; there is no
-  `Op` for it ([chapter 4](04-api.md#scope-and-spectrum)).
+  settings encoders (on/off, mode, span, hold, reference level, speed, fixed edges) and a simulator. The
+  engine encodes the core scope operations and returns each assembled sweep as an `Inbound::ScopeFrame`
+  for the actor's scope stream ([chapter 4](04-api.md#scope-and-spectrum)); hold and speed have encoders
+  but no `Op`.
 - **Sources:** the basic commands come from this repository's own simulator and relay bridge; the rest
   from Hamlib 4.6.2 source for facts only. Icom's guides were not used (chapter
   [12](12-provenance-and-licensing.md)). Never verified on a radio.

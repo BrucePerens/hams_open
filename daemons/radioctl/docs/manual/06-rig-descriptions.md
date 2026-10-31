@@ -27,7 +27,7 @@ Schema version 1 is the only one the reader accepts. Unknown fields and unknown 
 | `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. |
 | `[yaesu_legacy]` | `yaesu-legacy` only: `stop_bits` (2 on the FT-817, FT-857 and FT-897). |
 | `[flex]` | `flex-smartsdr` only: `model` (the name the radio reports) and `scus` (spectrum capture units, 1 or 2). |
-| `[scope]` | Optional, `icom-civ` only: `receivers` (1 or 2), `line_length`, `samples_per_frame`, `amplitude_max`, `spans_hz`. |
+| `[scope]` | Optional, `icom-civ` only: `receivers` (1 or 2), `line_length`, `samples_per_frame`, `amplitude_max`, `spans_hz`. The capability `scope` is listed separately (the IC-7300 and IC-7610 do). |
 | `[timing]` | `timeout_ms` (wait for a reply), `retries` (extra attempts after a timeout; a transmit command is never repeated), `inter_command_ms` (minimum gap between writes). |
 | `[defaults]` | `frequency_hz` and `mode` of a virtual rig of this model at start. They say nothing about the radio. |
 | `[[modes]]` | One per supported mode: `mode` (a name from the `Mode` list in chapter [4](04-api.md): `lsb`, `usb`, `am`, `cw`, `cw-r`, `rtty`, `rtty-r`, `fm`, `wfm`, `data`, `data-r`) and `code`, either a byte (`0x01`) or a one-character string (`"1"`, for an ASCII mode digit). A mode or a code may appear once. |
@@ -74,7 +74,7 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Twenty-one files, at the time of writing (commit `7590e737`). All are unverified and all carry hand-written transcripts.
+Twenty-one files, at the time of writing (commit `5a636ff9`). All are unverified and all carry hand-written transcripts.
 
 | Family | Files | Written from |
 |---|---|---|

@@ -48,7 +48,7 @@ models against three, and 9 FlexRadio network models against four.
 
 ## radioctl's rig descriptions
 
-Twenty-one files in `rigs/`, at the time of writing (commit `7590e737`). A `yes` means the description
+Twenty-one files in `rigs/`, at the time of writing (commit `5a636ff9`). A `yes` means the description
 lists the capability (and therefore the handle accepts the operation); the engine must also implement it
 (chapter [7](07-protocol-engines.md)). Everything is unverified. `transceive` for the Icom and Xiegu
 radios means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot
@@ -77,6 +77,7 @@ read. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.tom
 | `levels` | yes | yes | yes | yes | - | - | - |
 | `read-swr` | - | - | - | - | - | - | - |
 | `identify` | yes | yes | yes | yes | - | - | - |
+| `scope` | yes | - | yes | - | - | - | - |
 | `[scope]` block | yes | yes | yes | yes | - | - | - |
 
 **Kenwood and Elecraft**

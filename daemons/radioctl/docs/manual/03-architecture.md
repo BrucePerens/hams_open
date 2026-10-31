@@ -123,14 +123,12 @@ pub enum ReplyKind {
     Ack,
     Observation(Field),
 }
-
-pub enum Inbound {
-    Observation(Observation),
-    Ack,
-    Nak,
-    Unrecognised(Vec<u8>),
-}
 ```
+
+`Inbound` is what an engine decodes from received bytes: an `Observation` (a value, asked for or not),
+`Ack` or `Nak` (the radio accepted or refused the last command), `Unrecognised(bytes)` (bytes that formed no
+known frame), or a `ScopeFrame` (one complete spectrum sweep, which the actor publishes on the scope stream
+rather than in the cache). The enum grows with the engines, so it is described here and not copied.
 
 Because an engine touches no socket, port, runtime or clock, it can be replayed from a transcript,
 driven by property tests with arbitrary bytes, and run against a virtual rig in a plain unit test. The

@@ -38,6 +38,7 @@ pub struct RigOptions {
     pub poll: PollConfig,
     pub dispatcher_capacity: usize,
     pub stream_capacity: usize,
+    pub scope_capacity: usize,
     pub callback: Option<Callback>,
 }
 
@@ -51,7 +52,7 @@ pub struct PollConfig {
 ```
 
 Defaults: queue of 64, 2 second deadline, polling on (fast fields 250 ms to 2 s, meters 1 s to 5 s),
-a callback queue and an event-stream buffer of 64 each, no callback.
+a callback queue and an event-stream buffer of 64 each, a scope-frame buffer of 16, no callback.
 
 ## Rig handles
 
@@ -121,11 +122,12 @@ Everything else is an `Op`:
 | Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed and RF power setting |
 | Reporting | `SetTransceive(bool)` |
 | Identity | `GetModelId`, `GetFirmware` |
+| Scope | `SetScopeOutput`, `GetScopeOutput`, `SetScopeAxis`, `GetScopeAxis`, `SetScopeSpan`, `GetScopeSpan`, `SetScopeEdges`, `SetScopeReference`, `GetScopeReference` (see the end of this chapter) |
 
 Each `Op` names the `Capability` it needs (`Op::required_capability`). The set of capabilities comes
 from the rig description (appendix [A](A-capability-matrix.md)): `read-frequency`, `set-frequency`,
 `second-vfo`, `read-mode`, `set-mode`, `read-ptt`, `set-ptt`, `read-signal`, `read-power`, `send-cw`,
-`transceive`, `split`, `rit-xit`, `filter`, `levels`, `read-swr`, `identify`. Asking for something the rig lacks fails
+`transceive`, `split`, `rit-xit`, `filter`, `levels`, `read-swr`, `identify`, `scope`. Asking for something the rig lacks fails
 at once with `Unsupported` and uses no queue slot. A capability in the description does not
 guarantee that the engine implements the operation for that family; the engine then returns
 `Unsupported` too. For example, the CI-V engine refuses `SetTransceive` (it is a menu item on those
@@ -390,10 +392,34 @@ pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigE
 
 ## Scope and spectrum
 
-- **Implemented, not reachable through the API:** the Icom CI-V scope (command `0x27`) is decoded in
-  `radioctl_protocols::civ_scope` (frame parsing, a sweep reassembler, a scope simulator), the
-  description format has an optional `[scope]` block (four Icom files carry one), and `CivEngine`
-  collects complete sweeps for `take_scope_lines` and builds scope requests with `scope_request`.
-- **Planned:** a scope `Op`, scope events on `RigHandle`, scope settings (span, mode, speed), and
-  scopes for non-Icom radios. Nothing in `radioctl-core` knows about a spectrum yet. All scope facts
-  are from Hamlib's source and unverified.
+A rig with a spectrum scope (band scope) has the capability `scope`. At the time of writing the IC-7300
+and IC-7610 descriptions list it; the IC-705 and IC-9700 descriptions carry a `[scope]` block but not
+yet the capability. **Implemented, unverified** (CI-V command `0x27`, facts from Hamlib's source; no scope
+has been used):
+
+- **Settings** are ordinary operations whose reads land in the cache: `SetScopeOutput(bool)` and
+  `GetScopeOutput` (whether the radio sends waveform sweeps on its own), `SetScopeAxis(receiver, axis)`
+  and `GetScopeAxis` (`ScopeAxis::Center`, `Fixed`, `ScrollCenter`, `ScrollFixed`),
+  `SetScopeSpan(receiver, Hz)` and `GetScopeSpan` (a span the model's menu does not offer is
+  `Unsupported`), `SetScopeEdges(range, edge, low, high)` for fixed mode, and `SetScopeReference` and
+  `GetScopeReference` (hundredths of a dB). Receiver 0 is Main, 1 is Sub.
+- **Sweeps** are not cache fields and not status events. The engine returns each complete sweep as a
+  `ScopeFrame` and the actor publishes it on a stream of its own:
+
+```rust signatures
+pub fn scope_frames(&self) -> ScopeStream
+
+pub async fn next(&mut self) -> Option<ScopeFrame>
+```
+
+  A `ScopeFrame` carries a sequence number, the receiver, the axis mode, the lowest and highest
+  frequency on the axis, an out-of-range flag, the largest sample value, and one amplitude byte per
+  pixel, lowest frequency first, in the rig's own units. The stream is bounded (`RigOptions::scope_capacity`,
+  16 by default); a subscriber that lags skips frames and the loss is counted (`scope_lagged` in the
+  stats, with `scope_frames` published). Sweeps flow once `SetScopeOutput(true)` has run. No dB
+  calibration is guessed.
+- The virtual IC-7300 and IC-7610 honour fixed edges and send sweeps; a test
+  (`radioctl-protocols/tests/scope.rs`) checks the round trip and the stream.
+- **Planned:** scope for non-Icom radios, scope speed and hold settings through `Op`, the descriptions of
+  the IC-705 and IC-9700 listing the capability, and the relay's own scope-source frame built from a
+  `ScopeFrame` (the relay does that, not this crate).

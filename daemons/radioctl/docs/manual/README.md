@@ -5,7 +5,7 @@ server (`radioctld`) that speaks Hamlib's `rigctld` text protocol and a protocol
 several programs share one radio. This manual is for a Rust programmer who wants to use the library,
 run the daemon, add a radio, or understand how the design keeps a transmitter safe.
 
-Manual status: written 2026-10-30 against `main` of `daemons/radioctl` at commit `7590e737` (Phase 0/1 foundation). The
+Manual status: written 2026-10-30 against `main` of `daemons/radioctl` at commit `5a636ff9` (Phase 0/1 foundation). The
 crate's own overview is [`../../README.md`](../../README.md) and the design decisions are in
 [`../DESIGN.md`](../DESIGN.md); this manual explains them and does not replace them.
 
