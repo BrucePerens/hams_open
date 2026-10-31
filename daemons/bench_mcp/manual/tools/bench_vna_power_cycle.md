@@ -26,3 +26,7 @@ Switches the unit's power-switching hub port off, waits, switches it on, waits f
 ## Failure modes
 
 `no hub configured for this VNA` when the entry lacks `hub` and `hub_port`. A hub that does not exist fails with the `uhubctl` error. `sudo -n uhubctl` must work (see the USB hub setup page). Use it to clear the silent state or a unit that does not answer, and to stop the AM generator. `bench_vna_sweep` already does this once by itself.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is supported only when hub and hub_port are configured. See [the NanoVNA page](instruments/vna/nanovna).

@@ -15,6 +15,7 @@ mod example;
 mod hamlib;
 mod link;
 mod manual;
+mod nanovna;
 mod procedure;
 mod psu;
 mod rotator;
@@ -258,6 +259,9 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     }
     let lock = instrument_lock(&inst.name);
     let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
+    if inst.kind == Kind::Vna && inst.driver == "nanovna" {
+        return nanovna::call(inst, name, args, &out_dir());
+    }
     if inst.kind == Kind::Vna {
         // The unit's recovery inside measurements power cycles through the hub module's implementation.
         vna::install_power_hook();
@@ -687,6 +691,45 @@ mod tests {
             let e = call(&vna("read_only"), n, &json!({})).unwrap_err();
             assert!(e.contains("needs tier"), "{n}: {e}");
         }
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_call]
+    #[test]
+    fn a_nanovna_entry_is_a_vna_behind_the_same_tools_with_typed_errors() {
+        let nano = |tier: &str| {
+            config::parse(&format!(r#"{{"instruments":{{"nano":{{"driver":"nanovna","tier":"{tier}","serial":"/dev/serial/by-id/absent-nanovna"}}}}}}"#)).unwrap()
+        };
+        assert_eq!(nano("full")[0].kind, Kind::Vna);
+        let listed: Vec<String> = tool_defs(&nano("read_config"))
+            .iter()
+            .map(|t| t.name.to_string())
+            .collect();
+        assert!(
+            listed.contains(&"bench_vna_sweep".to_string())
+                && listed.contains(&"bench_vna_generator_am".to_string())
+        );
+        let e = call(
+            &nano("read_only"),
+            "bench_vna_sweep",
+            &json!({"start_hz": 1e6, "stop_hz": 2e6}),
+        )
+        .unwrap_err();
+        assert!(e.contains("needs tier"), "{e}");
+        let e = call(
+            &nano("read_config"),
+            "bench_vna_sweep",
+            &json!({"start_hz": 1e6, "stop_hz": 2e6}),
+        )
+        .unwrap_err();
+        assert!(e.starts_with("device not present"), "{e}");
+        let e = call(&nano("read_config"), "bench_vna_generator_am", &json!({})).unwrap_err();
+        assert!(e.starts_with("not supported by this instrument"), "{e}");
+        let e = call(&nano("read_only"), "bench_identify", &json!({})).unwrap_err();
+        assert!(e.starts_with("device not present"), "{e}");
+        assert!(config::parse(r#"{"instruments":{"n":{"driver":"nanovna"}}}"#).is_err());
+        // The vnwa_open default is unchanged.
+        let v = config::parse(r#"{"instruments":{"v":{"driver":"vnwa_open"}}}"#).unwrap();
+        assert_eq!(v[0].nanovna, crate::nanovna::Config::default());
     }
 
     // Tests [@ANCHOR: bench_mcp_main_psu_output]

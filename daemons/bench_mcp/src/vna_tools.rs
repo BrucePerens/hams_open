@@ -259,13 +259,23 @@ fn cal_path(out: &Path, session: &str, what: &str) -> PathBuf {
 }
 
 /// The header line stored with each measured standard: the settings it was measured at.
+#[cfg(test)]
 fn meta_line(cfg: &Config, cable: &str) -> String {
+    meta_setup(&Setup {
+        if_hz: cfg.if_hz,
+        point_ms: cfg.point_ms,
+        rf_level: cfg.rf_level,
+        cable: cable.to_string(),
+    })
+}
+
+fn meta_setup(s: &Setup) -> String {
     format!(
         "# if_hz={};point_ms={};rf_level={};cable={}",
-        cfg.if_hz,
-        cfg.point_ms,
-        cfg.rf_level,
-        cable.replace(['\n', '\r'], " ")
+        s.if_hz,
+        s.point_ms,
+        s.rf_level,
+        s.cable.replace(['\n', '\r'], " ")
     )
 }
 
@@ -286,8 +296,9 @@ fn parse_meta(line: &str) -> Result<Setup, String> {
     Ok(s)
 }
 
-pub fn calibrate_measure(cfg: &Config, args: &Value, out: &Path) -> Result<Value, String> {
-    // [@ANCHOR: bench_vna_tools_calibrate_measure]
+/// The session, standard and cable of a calibration measurement call, checked.
+pub fn measure_names(args: &Value) -> Result<(String, String, String), String> {
+    // [@ANCHOR: bench_vna_tools_measure_names]
     let session = args
         .get("session")
         .and_then(|v| v.as_str())
@@ -301,14 +312,23 @@ pub fn calibrate_measure(cfg: &Config, args: &Value, out: &Path) -> Result<Value
         return Err("standard must be open, short, load or thru".into());
     }
     let cable = args.get("cable").and_then(|v| v.as_str()).ok_or("cable is required: say what is between the ports and the reference plane (it is stored and compared)")?;
-    let a = crate::vna::sweep_args(args, cfg)?;
-    if a.points < 2 {
+    Ok((session.into(), standard.into(), cable.into()))
+}
+
+/// Stores the measured points of one standard for `calibrate_build`, with the settings line.
+pub fn store_standard(
+    setup: &Setup,
+    pts: &[Point],
+    out: &Path,
+    session: &str,
+    standard: &str,
+) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_store_standard]
+    if pts.len() < 2 {
         return Err("a calibration needs at least 2 points".into());
     }
-    let mut vna = Vna::open(a.config.clone())?;
-    let pts = vna.sweep(a.start_hz, a.stop_hz, a.points)?;
-    let mut text = meta_line(&a.config, cable) + "\n";
-    for p in &pts {
+    let mut text = meta_setup(setup) + "\n";
+    for p in pts {
         text += &format!(
             "{:e},{:e},{:e},{:e},{:e}\n",
             p.freq_hz, p.s11.re, p.s11.im, p.s21.re, p.s21.im
@@ -319,6 +339,24 @@ pub fn calibrate_measure(cfg: &Config, args: &Value, out: &Path) -> Result<Value
     Ok(
         json!({"session": session, "standard": standard, "points": pts.len(), "file": file, "note": "measure open, short, load (and thru for S21) with the same start, stop, points and cable, then bench_vna_calibrate_build"}),
     )
+}
+
+pub fn calibrate_measure(cfg: &Config, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_tools_calibrate_measure]
+    let (session, standard, cable) = measure_names(args)?;
+    let a = crate::vna::sweep_args(args, cfg)?;
+    if a.points < 2 {
+        return Err("a calibration needs at least 2 points".into());
+    }
+    let mut vna = Vna::open(a.config.clone())?;
+    let pts = vna.sweep(a.start_hz, a.stop_hz, a.points)?;
+    let setup = Setup {
+        if_hz: a.config.if_hz,
+        point_ms: a.config.point_ms,
+        rf_level: a.config.rf_level,
+        cable,
+    };
+    store_standard(&setup, &pts, out, &session, &standard)
 }
 
 /// The settings, frequencies, S11 and S21 of one stored standard.
@@ -429,15 +467,30 @@ pub fn apply_calibration(
     points: &[Point],
 ) -> Result<(Calibration, Corrected), String> {
     // [@ANCHOR: bench_mcp_vna_cal_apply]
+    apply_calibration_setup(
+        file,
+        &Setup {
+            if_hz: cfg.if_hz,
+            point_ms: cfg.point_ms,
+            rf_level: cfg.rf_level,
+            cable: cable.to_string(),
+        },
+        points,
+    )
+}
+
+/// `apply_calibration` for any instrument: the calibration is refused unless `setup` equals the one it was made at. The correction
+/// is the same instrument-independent open/short/load/thru arithmetic.
+pub fn apply_calibration_setup(
+    file: &str,
+    setup: &Setup,
+    points: &[Point],
+) -> Result<(Calibration, Corrected), String> {
+    // [@ANCHOR: bench_vna_tools_apply_setup]
     let cal = Calibration::from_text(
         &std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?,
     )?;
-    cal.check_setup(&Setup {
-        if_hz: cfg.if_hz,
-        point_ms: cfg.point_ms,
-        rf_level: cfg.rf_level,
-        cable: cable.to_string(),
-    })?;
+    cal.check_setup(setup)?;
     let mut out = Vec::new();
     for p in points {
         let c = cal.correct(p)?;
@@ -470,6 +523,9 @@ mod tests {
     // Tests [@ANCHOR: bench_vna_tools_num]
     // Tests [@ANCHOR: bench_vna_tools_parse_meta]
     // Tests [@ANCHOR: bench_vna_tools_read_standard]
+    // Tests [@ANCHOR: bench_vna_tools_measure_names]
+    // Tests [@ANCHOR: bench_vna_tools_store_standard]
+    // Tests [@ANCHOR: bench_vna_tools_apply_setup]
     #[test]
     fn generator_arguments_are_checked_before_any_hardware_is_touched() {
         for bad in [

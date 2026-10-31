@@ -101,6 +101,26 @@ pub fn csv(points: &[Point]) -> String {
     out
 }
 
+/// The CSV text of calibrated values: frequency, then S11 and S21 as real and imaginary parts, dB and degrees (empty where the calibration does not cover a part).
+pub fn calibrated_csv(
+    points: &[Point],
+    corrected: &[(
+        Option<vnwa_open::audio::Complex>,
+        Option<vnwa_open::audio::Complex>,
+    )],
+) -> String {
+    // [@ANCHOR: bench_mcp_vna_calibrated_csv]
+    let mut t = String::from("freq_hz,s11_re,s11_im,s11_db,s11_deg,s21_re,s21_im,s21_db,s21_deg\n");
+    let cell = |z: Option<vnwa_open::audio::Complex>| match z {
+        Some(z) => format!("{:.6},{:.6},{:.3},{:.3}", z.re, z.im, db(z), z.phase_deg()),
+        None => ",,,".to_string(),
+    };
+    for (p, (s11, s21)) in points.iter().zip(corrected) {
+        t += &format!("{},{},{}\n", p.freq_hz, cell(*s11), cell(*s21));
+    }
+    t
+}
+
 pub fn identify(cfg: &Config) -> Value {
     json!({
         "idn": format!("DG8SAQ VNWA ({:04x}:{:04x}) driven by vnwa_open", vnwa_open::VID, vnwa_open::PID),
@@ -292,15 +312,7 @@ pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String
         Some(f) => {
             let cable = args.get("cable").and_then(|c| c.as_str()).ok_or("cable is required with calibration (the text given when the standards were measured)")?;
             let (_, corrected) = crate::vna_tools::apply_calibration(f, &a.config, cable, &points)?;
-            let mut t =
-                String::from("freq_hz,s11_re,s11_im,s11_db,s11_deg,s21_re,s21_im,s21_db,s21_deg\n");
-            let cell = |z: Option<vnwa_open::audio::Complex>| match z {
-                Some(z) => format!("{:.6},{:.6},{:.3},{:.3}", z.re, z.im, db(z), z.phase_deg()),
-                None => ",,,".to_string(),
-            };
-            for (p, (s11, s21)) in points.iter().zip(&corrected) {
-                t += &format!("{},{},{}\n", p.freq_hz, cell(*s11), cell(*s21));
-            }
+            let t = calibrated_csv(&points, &corrected);
             let cf = out_dir.join(format!("vna_sweep_{stamp}_calibrated.csv"));
             std::fs::write(&cf, t).map_err(|e| format!("{}: {e}", cf.display()))?;
             Some((cf, corrected))
@@ -427,6 +439,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_vna_csv]
+    // Tests [@ANCHOR: bench_mcp_vna_calibrated_csv]
     #[test]
     fn the_csv_has_a_header_and_one_row_per_point() {
         let p = Point {
@@ -440,6 +453,11 @@ mod tests {
         let lines: Vec<&str> = text.lines().collect();
         assert_eq!(lines.len(), 3);
         assert!(lines[0].starts_with("freq_hz,s21_re"));
+        let c = calibrated_csv(&[p], &[(Some(p.s11), None)]);
+        assert_eq!(
+            c.lines().nth(1).unwrap(),
+            "10000000,0.000000,1.000000,0.000,90.000,,,,"
+        );
         assert_eq!(
             lines[1],
             "10000000,-0.500000,0.000000,-6.021,180.000,0.000000,1.000000,0.000,90.000"

@@ -13,6 +13,7 @@ calibration does not pass through the agent's context step by step. There is als
 |---|---|---|---|
 | `siglent_sds` | Siglent SDS1000X-E oscilloscope over the LAN (written against an SDS1202X-E, firmware 1.3.27) | capture, screenshot, measure, spectrum, self-calibration | [Tools](#tools), [Scope functions](#scope-functions-probed-on-the-sds1202x-e-firmware-1327-2026-10-28) |
 | `atm6301` | Abestop ATM6301 bench supply (0-60 V, 0-10 A), CH340 USB-serial | setpoints with caps, output switch with `confirm_load_connected`, `max_on_s` and a safe-state tool | [Tools](#tools) |
+| `nanovna` (VNA) | NanoVNA-H (ChibiOS USB serial shell) behind the same `bench_vna_*` tools; NOT verified on hardware (the unit on the dev box did not answer 2026-10-31), tested against a fake, a pty fake and a synthetic transcript | S11/S21 sweeps (101 points on the H, 401 on the H4, 50 kHz to 900 MHz on the H), software SOLT calibration shared with the VNWA, power cycle with a hub; generator, AM, FM, meter and spectrum return `not supported by this instrument` | [manual page](manual/instruments/vna/nanovna.md) |
 | `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
 | `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
 | `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
@@ -43,6 +44,7 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
       "psu":   {"driver": "atm6301", "tier": "read_config", "serial": "/dev/ttyUSB0", "baud": 115200,
                 "max_volts": 5.5, "max_amps": 1.0, "max_on_s": 600},
       "vna":   {"driver": "vnwa_open", "tier": "read_config", "if_hz": 12000, "point_ms": 60, "rf_level": 16383},
+      "nano":  {"driver": "nanovna", "tier": "read_config", "serial": "/dev/serial/by-id/usb-STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_400-if00"},
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
       "lime":  {"driver": "limesdr", "tier": "read_config"},
       "rig":   {"driver": "hamlib", "tier": "read_only", "model": 1},
@@ -135,7 +137,9 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 * The power-cycle tool needs a hub in the config and read_config, and the VNA's lock does not hold up the scope or the supply. [@ANCHOR: bench_mcp_vna_power_cycle]
 * The host FFT finds a tone's frequency and level in every window, and the spectrum tool does so through a scope link. [@ANCHOR: bench_mcp_spectrum]
 * A calibration is built from stored standards and refused at other settings, cable or range; measuring a standard needs a valid session, standard and cable. [@ANCHOR: bench_mcp_vna_cal_build] [@ANCHOR: bench_mcp_vna_cal_apply]
-* A sweep is written as a CSV with a header and one row per point. [@ANCHOR: bench_mcp_vna_csv]
+* A sweep is written as a CSV with a header and one row per point; calibrated values go to a second CSV. [@ANCHOR: bench_mcp_vna_csv] [@ANCHOR: bench_mcp_vna_calibrated_csv]
+* A `nanovna` entry reads its settings, parses the shell's replies (echo, prompt, partial reads, garbage, unknown commands, timeouts), reads identity and limits from `version`, `info` and `help`, checks sweep arguments against the unit's limits, sweeps by `scan` or by `sweep`/`data` and restores the range, and returns typed errors for what it cannot do. [@ANCHOR: bench_nanovna_parse_config] [@ANCHOR: bench_nanovna_parse_reply] [@ANCHOR: bench_nanovna_command] [@ANCHOR: bench_nanovna_identify] [@ANCHOR: bench_nanovna_limits] [@ANCHOR: bench_nanovna_parse_sweep_query] [@ANCHOR: bench_nanovna_parse_columns] [@ANCHOR: bench_nanovna_check_range] [@ANCHOR: bench_nanovna_measure] [@ANCHOR: bench_nanovna_sweep_args] [@ANCHOR: bench_nanovna_call] [@ANCHOR: bench_nanovna_error_display] [@ANCHOR: bench_nanovna_scan_points] [@ANCHOR: bench_nanovna_sweep_and_read] [@ANCHOR: bench_nanovna_open_shell] [@ANCHOR: bench_nanovna_sweep_tool] [@ANCHOR: bench_nanovna_power_cycle] [@ANCHOR: bench_nanovna_calibrate_measure]
+* Calibration standards are stored, and a calibration applied, for any instrument. [@ANCHOR: bench_vna_tools_measure_names] [@ANCHOR: bench_vna_tools_store_standard] [@ANCHOR: bench_vna_tools_apply_setup]
 
 ## Checks this crate makes for the SDRs (anchors)
 

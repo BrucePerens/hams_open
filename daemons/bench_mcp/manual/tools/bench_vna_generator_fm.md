@@ -25,3 +25,7 @@ A carrier at `freq_hz` and `level_db`, frequency modulated by a sine of `mod_hz`
 ## Returns
 
 `generator: "FM on"`, the settings, what was verified and a warning.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is not supported (it returns a typed error). See [the NanoVNA page](instruments/vna/nanovna).

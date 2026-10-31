@@ -22,3 +22,7 @@ Changes the level of a running generator without changing its frequency.
 ## Returns
 
 `{"generator": "level set", "level_db": <value>}`. Refused when out of range.
+
+## NanoVNA
+
+With a `nanovna` instrument this tool is not supported (it returns a typed error). See [the NanoVNA page](instruments/vna/nanovna).
