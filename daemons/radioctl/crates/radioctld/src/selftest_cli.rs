@@ -26,6 +26,7 @@ use crate::candidates::{render_listing, summaries_from, RigSummary};
 use crate::discovery::{
     discover_ports, identified, listen_flex, render_table, Finding, NetFinding, Outcome,
 };
+use crate::knob::{knob_check, KNOB_WAIT};
 use crate::selftest::{
     open, plan_checks, redact_target, render_report, run_checks_logged, utc_stamp, CheckResult,
     ReportHeader, Verdict,
@@ -188,6 +189,8 @@ pub struct Host {
     pub update: Option<UpdateConfig>,
     /// Start the new program after an update (tests turn this off).
     pub restart_after_update: bool,
+    /// Polled during the knob check: true once the volunteer pressed Enter. `None`: never.
+    pub enter_pressed: Option<EnterPoll>,
 }
 
 /// One rig to test.
@@ -406,6 +409,9 @@ async fn test_one(
     t: &Target,
     loaded: &LoadedDescription,
     report: &Path,
+    interactive: bool,
+    enter: &mut dyn FnMut() -> bool,
+    out: &mut dyn Write,
 ) -> Result<Tested, String> {
     let description = &loaded.description;
     let wire_path = PathBuf::from(format!("{}.wire.tmp", report.display()));
@@ -430,7 +436,11 @@ async fn test_one(
         }
     };
     let rig = open(description, &t.target, baud, o.unmanaged, wire).await?;
-    let results = run_checks_logged(&rig, plan_checks(description), Some(&wire_path)).await;
+    let mut results = run_checks_logged(&rig, plan_checks(description), Some(&wire_path)).await;
+    // A virtual rig has no knob to turn.
+    if t.target != "virtual" {
+        results.extend(knob_check(description, &rig, interactive, enter, out, KNOB_WAIT).await);
+    }
     let identity = t.port.as_ref().map(describe_identity).unwrap_or_default();
     let header = ReportHeader {
         rig_id: description.id.clone(),
@@ -557,7 +567,7 @@ pub async fn update_flow(
 /// Runs the program for `o`; returns the exit status: 0 when every check of every rig passed or
 /// was not applicable, 1 when a check failed or a rig could not be opened, 2 for a usage error.
 /// An upload that fails never changes it.
-pub async fn run(o: Options, host: Host, input: &mut dyn BufRead, out: &mut dyn Write) -> i32 {
+pub async fn run(o: Options, mut host: Host, input: &mut dyn BufRead, out: &mut dyn Write) -> i32 {
     if o.version {
         let _ = writeln!(
             out,
@@ -597,6 +607,12 @@ pub async fn run(o: Options, host: Host, input: &mut dyn BufRead, out: &mut dyn 
             return status;
         }
     }
+    let mut enter_pressed = host.enter_pressed.take();
+    let mut no_enter = || false;
+    let enter: &mut dyn FnMut() -> bool = match enter_pressed.as_mut() {
+        Some(f) => f,
+        None => &mut no_enter,
+    };
     let named_both = o.description.is_some() && o.port.is_some();
     if o.no_discover && !named_both {
         let _ = writeln!(out, "--no-discover needs --description and --port\n{USAGE}");
@@ -653,7 +669,7 @@ pub async fn run(o: Options, host: Host, input: &mut dyn BufRead, out: &mut dyn 
                     "radioctl-selftest: {id} on {} (read only)",
                     redact_target(&t.target)
                 );
-                test_one(&o, &t, l, &report).await
+                test_one(&o, &t, l, &report, host.interactive, &mut *enter, out).await
             }
         };
         let tested_rig = match one {
@@ -761,6 +777,88 @@ pub async fn run(o: Options, host: Host, input: &mut dyn BufRead, out: &mut dyn 
     status
 }
 
+/// A poll that is true once the volunteer pressed Enter.
+pub type EnterPoll = Box<dyn FnMut() -> bool + Send>;
+
+/// Standard input read by one thread, one line at a time, so the program can both wait for a line
+/// (a prompt) and ask whether one has arrived (the knob check's Enter to skip).
+pub struct StdinLines {
+    rx: std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<String>>>,
+    buf: Vec<u8>,
+    pos: usize,
+}
+
+impl StdinLines {
+    // [@ANCHOR: radioctld_cli_stdin_lines_from]
+    /// Lines from `rx` as a [`BufRead`], and a poll that is true once a line was waiting (and
+    /// takes it).
+    pub fn from_receiver(
+        rx: std::sync::mpsc::Receiver<String>,
+    ) -> (StdinLines, impl FnMut() -> bool + Send) {
+        let shared = std::sync::Arc::new(std::sync::Mutex::new(rx));
+        let poll_rx = std::sync::Arc::clone(&shared);
+        let poll = move || poll_rx.lock().is_ok_and(|rx| rx.try_recv().is_ok());
+        (
+            StdinLines {
+                rx: shared,
+                buf: Vec::new(),
+                pos: 0,
+            },
+            poll,
+        )
+    }
+
+    // [@ANCHOR: radioctld_cli_stdin_lines_spawn]
+    /// Starts the thread that reads the process's standard input line by line.
+    pub fn spawn() -> (StdinLines, impl FnMut() -> bool + Send) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let stdin = std::io::stdin();
+            loop {
+                let mut line = String::new();
+                if !matches!(stdin.read_line(&mut line), Ok(n) if n > 0) || tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        StdinLines::from_receiver(rx)
+    }
+}
+
+impl std::io::Read for StdinLines {
+    // [@ANCHOR: radioctld_cli_stdin_lines_read]
+    /// Reads from the current line.
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        let data = BufRead::fill_buf(self)?;
+        let n = data.len().min(out.len());
+        out[..n].copy_from_slice(&data[..n]);
+        BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl BufRead for StdinLines {
+    // [@ANCHOR: radioctld_cli_stdin_lines_fill_buf]
+    /// Waits for the next line when the current one is used up; end of input gives no bytes.
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.pos >= self.buf.len() {
+            self.buf = self
+                .rx
+                .lock()
+                .ok()
+                .and_then(|rx| rx.recv().ok())
+                .unwrap_or_default()
+                .into_bytes();
+            self.pos = 0;
+        }
+        Ok(self.buf.get(self.pos..).unwrap_or(&[]))
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.pos += amount;
+    }
+}
+
 // [@ANCHOR: radioctld_cli_main_from_env]
 /// The whole program for a binary's `main`: arguments, terminal, environment and the real serial
 /// ports in, an exit status out. The relay's `radioctl-selftest` and radioctl's own are both this.
@@ -783,9 +881,18 @@ pub fn main_with_bundle(bundle: Option<(&str, Vec<[u8; 32]>)>) -> i32 {
         }
     };
     let var = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+    let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    // At a terminal one thread owns stdin, so a prompt and the knob check's "press Enter to skip"
+    // read the same lines; without one nothing is ever read from stdin but the plain lock.
+    let (stdin_lines, stdin_poll): (Option<StdinLines>, Option<EnterPoll>) = if interactive {
+        let (lines, poll) = StdinLines::spawn();
+        (Some(lines), Some(Box::new(poll)))
+    } else {
+        (None, None)
+    };
     let host = Host {
         ports: radioctl_core::usb::list_ports(),
-        interactive: std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
+        interactive,
         contact_file: crate::upload::config_dir(&var).map(|d| d.join("selftest-contact.json")),
         env_contact: Contact {
             name: var("RADIOCTL_SELFTEST_NAME"),
@@ -804,7 +911,9 @@ pub fn main_with_bundle(bundle: Option<(&str, Vec<[u8; 32]>)>) -> i32 {
             })
         }),
         restart_after_update: true,
+        enter_pressed: stdin_poll,
     };
+    let mut stdin_lines = stdin_lines;
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -816,12 +925,12 @@ pub fn main_with_bundle(bundle: Option<(&str, Vec<[u8; 32]>)>) -> i32 {
             return 2;
         }
     };
-    runtime.block_on(run(
-        options,
-        host,
-        &mut std::io::stdin().lock(),
-        &mut std::io::stdout(),
-    ))
+    let mut plain = std::io::stdin().lock();
+    let input: &mut dyn BufRead = match stdin_lines.as_mut() {
+        Some(lines) => lines,
+        None => &mut plain,
+    };
+    runtime.block_on(run(options, host, input, &mut std::io::stdout()))
 }
 
 #[cfg(test)]
@@ -892,8 +1001,48 @@ mod tests {
             port: None,
         };
         let report = std::env::temp_dir().join(format!("test-one-{}.txt", std::process::id()));
-        assert!(test_one(&o, &t, &loaded, &report).await.is_err());
+        assert!(test_one(
+            &o,
+            &t,
+            &loaded,
+            &report,
+            false,
+            &mut || false,
+            &mut Vec::new()
+        )
+        .await
+        .is_err());
         std::fs::remove_file(format!("{}.wire.tmp", report.display())).ok();
+    }
+
+    // Tests [@ANCHOR: radioctld_cli_stdin_lines_read]
+    // Tests [@ANCHOR: radioctld_cli_stdin_lines_fill_buf]
+    // Tests [@ANCHOR: radioctld_cli_stdin_lines_from]
+    // Tests [@ANCHOR: radioctld_cli_stdin_lines_spawn]
+    #[test]
+    fn a_line_can_be_read_by_a_prompt_or_taken_by_the_poll_but_not_both() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (mut lines, mut poll) = StdinLines::from_receiver(rx);
+        assert!(!poll());
+        tx.send("Ann\n".to_string()).expect("send");
+        assert!(poll());
+        assert!(!poll());
+        tx.send("Bob\n".to_string()).expect("send");
+        let mut line = String::new();
+        lines.read_line(&mut line).expect("read");
+        assert_eq!(line, "Bob\n");
+        drop(tx);
+        line.clear();
+        assert_eq!(lines.read_line(&mut line).expect("eof"), 0);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (mut lines, _poll) = StdinLines::from_receiver(rx);
+        tx.send("xy\n".to_string()).expect("send");
+        let mut two = [0u8; 2];
+        std::io::Read::read_exact(&mut lines, &mut two).expect("read");
+        assert_eq!(&two, b"xy");
+        // The real reader starts and is simply left running (it ends at the end of input).
+        let (_lines, mut real_poll) = StdinLines::spawn();
+        let _ = real_poll();
     }
 
     // Tests [@ANCHOR: radioctld_cli_find_description]
@@ -1040,6 +1189,7 @@ mod tests {
             lan_window: Duration::ZERO,
             update: None,
             restart_after_update: false,
+            enter_pressed: None,
         };
         let mut out = Vec::new();
         let o = parse_args(&args(&["--version"])).expect("o");

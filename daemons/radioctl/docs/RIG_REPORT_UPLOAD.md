@@ -57,4 +57,8 @@ Field notes:
 - `baud_probe` is present only for `--baud auto`; `chosen` is the last rate tried, the one that answered.
 - `contact` is always present; it holds `name` and/or `email` only if the volunteer gave them. `name` is at most 120
   characters, `email` at most 254 and has the shape `x@y.z`.
+- The interactive check `unsolicited status (turn the VFO knob)` is an ordinary entry in `checks`: `ok` true with a
+  summary such as `frequency changed by +1000 Hz, reported by the radio without being asked`; `ok` false with a summary
+  starting `not seen.` (nothing arrived), `skipped: no terminal`, or `skipped by you (Enter pressed)`. It is present
+  only for descriptions that claim the transceive capability. No field changes.
 - Strings are UTF-8 JSON. `sent_at` is UTC.

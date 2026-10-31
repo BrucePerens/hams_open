@@ -105,6 +105,7 @@ impl Setup {
                 exe: self.exe.clone(),
             }),
             restart_after_update: false,
+            enter_pressed: None,
         }
     }
 
