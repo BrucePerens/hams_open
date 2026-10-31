@@ -10,7 +10,7 @@
 use std::time::Duration;
 
 use crate::capability::{Capability, CapabilitySet};
-use crate::units::{Hz, Mode};
+use crate::units::{Hz, Level, Mode};
 
 /// A protocol family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,6 +42,22 @@ pub struct CivParams {
     pub model_id: u8,
     /// True when the bus echoes every transmitted frame back (single-wire interface).
     pub echo: bool,
+    /// Bytes of BCD in a frequency field: 5 (ten digits) for most models, 4 (eight digits, Hamlib's
+    /// `civ_731_mode`: IC-735, IC-820H, IC-821H) and 6 for a model whose field is 5 bytes up to
+    /// 5.85 GHz and 6 bytes above it (Hamlib's IC-905 rule). See [`CivParams::field_len`].
+    pub frequency_bytes: u8,
+}
+
+impl CivParams {
+    // [@ANCHOR: radioctl_core_civparams_field_len]
+    /// The number of BCD bytes the frequency field has for `hz` on this model.
+    pub fn field_len(&self, hz: Hz) -> usize {
+        match self.frequency_bytes {
+            6 if hz.0 > 5_850_000_000 => 6,
+            6 => 5,
+            other => usize::from(other),
+        }
+    }
 }
 
 /// Which command set a Kenwood-style rig speaks.
@@ -126,9 +142,19 @@ pub struct LevelParams {
     pub attenuator_any_up_to_db: u8,
     /// How many preamplifier steps above off the model has (0 for none).
     pub preamp_steps: u8,
+    /// Levels (of the plain `14` family: AF, RF, microphone, monitor, keyer, power) the model's
+    /// command table does not have; the CI-V engine and virtual rig refuse them. Empty means the
+    /// model has them all, which is what a description without `levels.absent` states.
+    pub absent: Vec<Level>,
 }
 
 impl LevelParams {
+    // [@ANCHOR: radioctl_core_levelparams_lacks]
+    /// True when the description lists `level` as absent from the model.
+    pub fn lacks(&self, level: Level) -> bool {
+        self.absent.contains(&level)
+    }
+
     // [@ANCHOR: radioctl_core_levelparams_max_attenuation]
     /// The largest attenuation in decibels, `None` when the model has no attenuator.
     pub fn max_attenuation_db(&self) -> Option<u8> {
@@ -294,6 +320,7 @@ impl RigDescription {
                 controller: 0xE0,
                 model_id: 0x94,
                 echo: false,
+                frequency_bytes: 5,
             }),
             kenwood: None,
             elecraft: None,

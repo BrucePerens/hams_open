@@ -1,0 +1,100 @@
+# Rig description: Icom IC-735 over CI-V (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Icom's published CI-V guide was NOT used (its download terms forbid reuse of its data); the facts come from Hamlib 4.6.2
+# (rigs/icom/ic735.c, read for facts only, and `rigctl -m 3019 --dump-caps` output), named in each fact below.
+# Hamlib lists: serial 1200..9600 baud, 8N1, ctrl=NONE; receive 0.03-30 MHz; transmit in 18 ranges. The description format has no field for
+# frequency ranges, filter tables or function lists, so they are not repeated here; the CI-V address, baud rate and
+# "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "identify"]
+
+[rig]
+id = "icom-ic-735"
+name = "Icom IC-735"
+family = "icom-civ"
+
+[civ]
+address = 0x04
+controller = 0xE0
+model_id = 0x04
+echo = false
+frequency_bytes = 4
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "am"
+code = 0x02
+
+[[modes]]
+mode = "cw"
+code = 0x03
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "fm"
+code = 0x05
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3019 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.address"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic735.c (`ic735_priv_caps` icom_priv_caps block, `default address` field)", note = "Icom's own CI-V reference guide was not used for this model: icomjapan.com's download terms forbid reuse of the manuals' data and its robots.txt excludes the endpoint, and radioctl skips such sources (no manual was read for this description). Facts only were read from Hamlib; no code or table was copied. Hamlib's default may differ from a radio's menu setting (the address is user-changeable on the radio)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.controller"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/src/civ_bridge.rs: DEFAULT_CONTROLLER_ADDRESS 0xE0", note = "The conventional controller address; not confirmed by a manual." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic735.c (`ic735_priv_caps`, `default address` field)", note = "Set equal to the CI-V address, as on the IC-7300 file. No source read states the 19 00 reply value for this model, so this is an assumption; an older radio may answer 19 00 with NG, which the volunteer self-test will report." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.frequency_bytes"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom.h `struct icom_priv_caps` (`civ_731_mode`: off, frequencies on 10 digits; on, 8 digits); rigs/icom/icom.c icom_set_freq and icom_get_freq (`freq_len = priv->civ_731_mode ? 4 : 5`); rigs/icom/ic735.c (`ic735_priv_caps`, `731 mode` field)", note = "Icom's own CI-V reference guide was not used for this model: icomjapan.com's download terms forbid reuse of the manuals' data and its robots.txt excludes the endpoint, and radioctl skips such sources (no manual was read for this description). Facts only were read from Hamlib; no code or table was copied. Hamlib sets the 8-digit field (4 BCD bytes) for this model; the mode commands then carry no passband byte, which the engine already does not send. " }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.echo"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: the simulator does not echo", note = "A design choice for the virtual rig; USB CI-V does not echo, a single-wire interface does (not measured here)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 3019 --dump-caps` (Hamlib 4.6.2): Write delay and timeout lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 3019 --dump-caps` (Hamlib 4.6.2): \"Can set/get PTT\", \"Can set Split VFO\", \"Can set RIT\", \"Can send Morse\", \"Targetable features\", \"Get level\" lines; rigs/icom/ic735.c rig_caps", note = "Icom's own CI-V reference guide was not used for this model: icomjapan.com's download terms forbid reuse of the manuals' data and its robots.txt excludes the endpoint, and radioctl skips such sources (no manual was read for this description). Facts only were read from Hamlib; no code or table was copied. A capability is claimed when Hamlib's capability list for the model includes it and the engine implements the command (CI-V 03/04/05/06, 0F, 11, 14, 15, 16, 17, 19, 1C 00, 25); absence in Hamlib is taken as absence on the radio, which may be too cautious. `filter`, `second-vfo` and `read-meters` are not claimed without a source for them. `identify` (command 19 00) is claimed on every file regardless of Hamlib's list; an older radio may answer NG, which the volunteer self-test reports. Settings and CI-V menu items (address, baud rate, transceive) are set at the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3019 --dump-caps` Mode list", note = "Icom's own CI-V reference guide was not used for this model: icomjapan.com's download terms forbid reuse of the manuals' data and its robots.txt excludes the endpoint, and radioctl skips such sources (no manual was read for this description). Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (none). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
+verified = { state = "unverified" }

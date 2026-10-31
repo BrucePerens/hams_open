@@ -899,7 +899,7 @@ fn known_icom_divergences(file: &str) -> Vec<&'static str> {
 }
 
 /// The Icom CI-V descriptions added after the first four, with Hamlib's model number for each.
-const ICOM_BATCH_ONE: [(&str, u32); 19] = [
+const ICOM_BATCH_ONE: &[(&str, u32)] = &[
     ("icom-ic-7000", 3060),
     ("icom-ic-7100", 3070),
     ("icom-ic-7200", 3061),
@@ -919,6 +919,24 @@ const ICOM_BATCH_ONE: [(&str, u32); 19] = [
     ("icom-ic-718", 3013),
     ("icom-ic-746", 3023),
     ("icom-ic-746pro", 3046),
+    ("icom-ic-703", 3055),
+    ("icom-ic-756", 3026),
+    ("icom-ic-756pro", 3027),
+    ("icom-ic-756proii", 3047),
+    ("icom-ic-756proiii", 3057),
+    ("icom-ic-910", 3044),
+    ("icom-ic-2730", 3072),
+    ("icom-ic-78", 3045),
+    ("icom-ic-707", 3012),
+    ("icom-ic-729", 3017),
+    ("icom-ic-736", 3020),
+    ("icom-ic-737", 3021),
+    ("icom-ic-738", 3022),
+    ("icom-ic-775", 3030),
+    ("icom-ic-781", 3031),
+    ("icom-ic-970", 3035),
+    ("icom-ic-735", 3019),
+    ("icom-ic-905", 3090),
 ];
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
@@ -931,7 +949,7 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
     // claims (a receiver has no PTT or split, an IC-7000 no RIT), plus data mode and the raw
     // meters where the file lists them.
     let mut wrong = Vec::new();
-    for (file, model) in ICOM_BATCH_ONE {
+    for &(file, model) in ICOM_BATCH_ONE {
         let desc = shipped(file);
         let mut steps: Vec<Op> = icom_scenario(7_074_000, 14_060_000, 14_025_000)
             .into_iter()
@@ -984,10 +1002,16 @@ fn the_icom_batch_one_files_against_hamlib_record_every_disagreement() {
 /// its two frequency writes, only `1A 06 00 00`, `07 00` and `07 B0`, so on this model's path
 /// Hamlib's mode set produced no mode frame. The manual does not say why; kept visible.
 ///
-/// IC-706MkIIG AF gain: settled by the manual. Its command table (PDF page 49 of the instruction
-/// manual) has no command 14, so Hamlib is right and radioctl, whose `levels` capability is one
-/// switch for every level, would send `14 01` where the radio has no such command. Fixing it
-/// needs a per-level capability in the description format; the pin stays until then.
+/// IC-706MkIIG AF gain: settled by the manual (no command 14, PDF page 49 of the instruction
+/// manual); the description lists the `14` levels under `levels.absent`, radioctl refuses them as
+/// Hamlib does, and the pin is gone.
+///
+/// IC-756, 756PRO, 756PROII, 756PROIII and IC-2730 (third batch, unverified): Hamlib's split flow
+/// for these five begins with `07 D0` (select the MAIN band, seen in the recorded frames), which
+/// the virtual rig refuses (command 07's Main/Sub forms are not modelled), so Hamlib's split
+/// steps fail where radioctl uses `0F`. Same open question as the IC-7600 and IC-7800 above: which
+/// of the two matches a real radio is unknown, and no manual was read for these five. Pinned, not
+/// weakened.
 fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     let main_sub = vec![
         "SetSplit(true)",
@@ -997,11 +1021,13 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
         "SetSplit(false)",
     ];
     match file {
-        "icom-ic-7600" | "icom-ic-7800" => vec!["SetSplit(true)", "GetSplit", "SetSplit(false)"],
+        "icom-ic-7600" | "icom-ic-7800" | "icom-ic-756" | "icom-ic-756pro" | "icom-ic-756proii"
+        | "icom-ic-756proiii" | "icom-ic-2730" => {
+            vec!["SetSplit(true)", "GetSplit", "SetSplit(false)"]
+        }
         "icom-ic-7851" => main_sub,
         "icom-ic-7760" => main_sub[..4].to_vec(),
         "icom-ic-7700" => vec!["final mode"],
-        "icom-ic-706mkiig" => vec!["SetLevel(AfGain, 128)", "GetLevel(AfGain)"],
         _ => Vec::new(),
     }
 }

@@ -399,6 +399,7 @@ pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo> {
         .filter(|info| match info.source {
             LevelSource::Radio(level) => {
                 description.capabilities.has(Capability::Levels)
+                    && !description.levels.lacks(level)
                     && level_range(description, level).is_some()
             }
             LevelSource::Swr => description.capabilities.has(Capability::ReadSwr),

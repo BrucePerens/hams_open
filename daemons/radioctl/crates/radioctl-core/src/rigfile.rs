@@ -30,7 +30,7 @@ use crate::description::{
     LevelParams, RigDescription, ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
-use crate::units::{Hz, Mode};
+use crate::units::{Hz, Level, Mode};
 
 /// The only schema version this reader accepts.
 pub const SCHEMA: u32 = 1;
@@ -152,6 +152,12 @@ struct CivSection {
     controller: u8,
     model_id: u8,
     echo: bool,
+    #[serde(default = "default_frequency_bytes")]
+    frequency_bytes: u8,
+}
+
+fn default_frequency_bytes() -> u8 {
+    5
 }
 
 #[derive(Deserialize)]
@@ -214,6 +220,8 @@ struct LevelsSection {
     #[serde(default)]
     attenuator_any_up_to_db: u8,
     preamp_steps: u8,
+    #[serde(default)]
+    absent: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -347,11 +355,19 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
             if doc.hpsdr.is_some() && doc.flex.is_none() => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
+    if doc
+        .civ
+        .as_ref()
+        .is_some_and(|c| !(4..=6).contains(&c.frequency_bytes))
+    {
+        return Err(bad("civ.frequency_bytes must be 4, 5 or 6"));
+    }
     let civ = doc.civ.as_ref().map(|c| CivParams {
         address: c.address,
         controller: c.controller,
         model_id: c.model_id,
         echo: c.echo,
+        frequency_bytes: c.frequency_bytes,
     });
     let kenwood = doc
         .kenwood
@@ -496,10 +512,26 @@ fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError
             "levels.preamp_steps is more than {MAX_PREAMP_STEPS}"
         )));
     }
+    let mut absent = Vec::new();
+    for name in &levels.absent {
+        match Level::from_name(name) {
+            Some(level) if !matches!(level, Level::Attenuator | Level::Preamp) => {
+                if !absent.contains(&level) {
+                    absent.push(level);
+                }
+            }
+            _ => {
+                return Err(bad(format!(
+                    "levels.absent names {name:?}, which is not one of af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power"
+                )));
+            }
+        }
+    }
     Ok(LevelParams {
         attenuator_db: levels.attenuator_db.clone(),
         attenuator_any_up_to_db: levels.attenuator_any_up_to_db,
         preamp_steps: levels.preamp_steps,
+        absent,
     })
 }
 
@@ -661,6 +693,13 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             ["civ.address", "civ.controller", "civ.model_id", "civ.echo"].map(String::from),
         );
     }
+    if description
+        .civ
+        .as_ref()
+        .is_some_and(|c| c.frequency_bytes != 5)
+    {
+        keys.push("civ.frequency_bytes".to_string());
+    }
     if description.scope.is_some() {
         keys.extend(
             [
@@ -682,6 +721,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             ]
             .map(String::from),
         );
+        if !description.levels.absent.is_empty() {
+            keys.push("levels.absent".to_string());
+        }
     }
     if description.kenwood.is_some() {
         keys.push("kenwood.model_id".to_string());
@@ -1062,6 +1104,67 @@ verified = { state = "unverified" }
             &yaesu.replace("model_id = 19", "model_id = 19\nfrequency_digits = 10"),
             "yaesu.frequency_digits must be 8 or 9",
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_civparams_field_len]
+    #[test]
+    fn civ_frequency_bytes_is_four_five_or_six_and_needs_its_fact() {
+        let civ = "[civ]\naddress = 1\ncontroller = 224\nmodel_id = 1\necho = false\n";
+        let doc = |extra: &str| {
+            format!(
+                "schema = 1\ncapabilities = [\"read-frequency\"]\n[rig]\nid = \"x\"\nname = \"X\"\nfamily = \"icom-civ\"\n{civ}{extra}\n[timing]\ntimeout_ms = 1000\nretries = 3\ninter_command_ms = 0\n[defaults]\nfrequency_hz = 7074000\nmode = \"usb\"\n[[modes]]\nmode = \"usb\"\ncode = 1\n"
+            )
+        };
+        let facts = "[[facts]]\nkey = \"rig.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let more = "[[facts]]\nkey = \"civ.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n[[facts]]\nkey = \"timing.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n[[facts]]\nkey = \"defaults.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n[[facts]]\nkey = \"capability.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n[[facts]]\nkey = \"mode.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let ok5 = parse(&format!("{}{facts}{more}", doc(""))).expect("loads");
+        let civ5 = ok5.description.civ.expect("civ");
+        assert_eq!(civ5.field_len(Hz(14_074_000)), 5);
+        let ok4 = parse(
+            &format!("{}{facts}{more}", doc(""))
+                .replace("echo = false", "echo = false\nfrequency_bytes = 4"),
+        );
+        // Without a `civ.frequency_bytes` fact it is rejected; `civ.*` covers it.
+        let civ4 = ok4
+            .expect("civ.* covers the key")
+            .description
+            .civ
+            .expect("civ");
+        assert_eq!(civ4.field_len(Hz(7_074_000)), 4);
+        let six = parse(
+            &format!("{}{facts}{more}", doc(""))
+                .replace("echo = false", "echo = false\nfrequency_bytes = 6"),
+        )
+        .expect("loads")
+        .description
+        .civ
+        .expect("civ");
+        assert_eq!(six.field_len(Hz(145_000_000)), 5);
+        assert_eq!(six.field_len(Hz(10_368_100_000)), 6);
+        expect_rejected(
+            &format!("{}{facts}{more}", doc(""))
+                .replace("echo = false", "echo = false\nfrequency_bytes = 3"),
+            "civ.frequency_bytes must be 4, 5 or 6",
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_levels]
+    // Tests [@ANCHOR: radioctl_core_levelparams_lacks]
+    #[test]
+    fn levels_absent_names_plain_levels_only() {
+        let fact = "\n[[facts]]\nkey = \"levels.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let head = format!("{GOOD}\n[levels]\nattenuator_db = []\npreamp_steps = 0\n");
+        let ok = parse(&format!(
+            "{head}absent = [\"af-gain\", \"af-gain\", \"rf-power\"]\n{fact}"
+        ))
+        .expect("loads");
+        let levels = ok.description.levels;
+        assert!(levels.lacks(Level::AfGain) && levels.lacks(Level::RfPower));
+        assert!(!levels.lacks(Level::MicGain));
+        assert_eq!(levels.absent.len(), 2);
+        for bad in ["absent = [\"attenuator\"]", "absent = [\"nonsense\"]"] {
+            expect_rejected(&format!("{head}{bad}\n{fact}"), "levels.absent names");
+        }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_levels]

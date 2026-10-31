@@ -352,9 +352,11 @@ impl VirtualRig {
             return Vec::new();
         }
         match (&self.wire, change) {
-            (Wire::Civ { params, .. }, PanelChange::Frequency(hz)) => civ::encode_bcd_freq(hz)
-                .map(|bcd| unsolicited_civ(params, 0x00, &bcd))
-                .unwrap_or_default(),
+            (Wire::Civ { params, .. }, PanelChange::Frequency(hz)) => {
+                civ::encode_bcd_freq_len(hz, params.field_len(hz))
+                    .map(|bcd| unsolicited_civ(params, 0x00, &bcd))
+                    .unwrap_or_default()
+            }
             (Wire::Civ { params, .. }, PanelChange::Mode(mode)) => self
                 .desc
                 .mode_code(mode)
@@ -446,14 +448,12 @@ impl VirtualRig {
     fn civ_dispatch(&mut self, frame: &Frame, params: &CivParams) -> CivReply {
         let data = frame.data.as_slice();
         match (frame.cmd, data) {
-            (0x03, []) => data_reply(0x03, civ::encode_bcd_freq(*self.civ_slot(false)), &[]),
-            (0x05, bcd) => self.civ_set_freq(false, bcd),
-            (0x25, [0x00]) => {
-                data_reply(0x25, civ::encode_bcd_freq(*self.civ_slot(false)), &[0x00])
-            }
-            (0x25, [0x00, bcd @ ..]) => self.civ_set_freq(false, bcd),
-            (0x25, [0x01]) => data_reply(0x25, civ::encode_bcd_freq(*self.civ_slot(true)), &[0x01]),
-            (0x25, [0x01, bcd @ ..]) => self.civ_set_freq(true, bcd),
+            (0x03, []) => data_reply(0x03, self.civ_freq_field(params, false), &[]),
+            (0x05, bcd) => self.civ_set_freq(params, false, bcd),
+            (0x25, [0x00]) => data_reply(0x25, self.civ_freq_field(params, false), &[0x00]),
+            (0x25, [0x00, bcd @ ..]) => self.civ_set_freq(params, false, bcd),
+            (0x25, [0x01]) => data_reply(0x25, self.civ_freq_field(params, true), &[0x01]),
+            (0x25, [0x01, bcd @ ..]) => self.civ_set_freq(params, true, bcd),
             (0x07, [0x00]) => {
                 self.civ_b_selected = false;
                 CivReply::Ok
@@ -573,10 +573,17 @@ impl VirtualRig {
         }
     }
 
+    // [@ANCHOR: radioctl_virtual_civ_freq_field]
+    /// The VFO's frequency as the model's BCD field.
+    fn civ_freq_field(&mut self, params: &CivParams, other: bool) -> Option<Vec<u8>> {
+        let hz = *self.civ_slot(other);
+        civ::encode_bcd_freq_len(hz, params.field_len(hz))
+    }
+
     // [@ANCHOR: radioctl_virtual_civ_set_freq]
-    fn civ_set_freq(&mut self, other: bool, bcd: &[u8]) -> CivReply {
+    fn civ_set_freq(&mut self, params: &CivParams, other: bool, bcd: &[u8]) -> CivReply {
         match civ::decode_bcd_freq(bcd) {
-            Some(hz) if bcd.len() == 5 => {
+            Some(hz) if bcd.len() == params.field_len(hz) => {
                 *self.civ_slot(other) = hz;
                 CivReply::Ok
             }
@@ -616,7 +623,9 @@ impl VirtualRig {
 
     // [@ANCHOR: radioctl_virtual_civ_level]
     fn civ_level_get(&self, sub: u8) -> CivReply {
-        let value = civ_level_of(sub).and_then(|level| self.state.levels.get(&level));
+        let value = civ_level_of(sub)
+            .filter(|level| !self.desc.levels.lacks(*level))
+            .and_then(|level| self.state.levels.get(&level));
         match value {
             Some(value) => {
                 let mut data = vec![sub];
@@ -630,7 +639,7 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_civ_level_set]
     fn civ_level_set(&mut self, sub: u8, value: &[u8]) -> CivReply {
         match (civ_level_of(sub), civ::decode_bcd_meter(value)) {
-            (Some(level), Some(raw)) if raw <= 255 => {
+            (Some(level), Some(raw)) if raw <= 255 && !self.desc.levels.lacks(level) => {
                 self.state.levels.insert(level, raw);
                 CivReply::Ok
             }
@@ -1489,7 +1498,7 @@ fn bcd_byte(value: u8) -> u8 {
 }
 
 // [@ANCHOR: radioctl_virtual_data_reply]
-fn data_reply(cmd: u8, bcd: Option<[u8; 5]>, prefix: &[u8]) -> CivReply {
+fn data_reply(cmd: u8, bcd: Option<Vec<u8>>, prefix: &[u8]) -> CivReply {
     match bcd {
         Some(bytes) => {
             let mut data = prefix.to_vec();
