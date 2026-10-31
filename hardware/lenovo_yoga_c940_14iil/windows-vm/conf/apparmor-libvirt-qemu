@@ -1,0 +1,3 @@
+# yoga-windows-vm: let the Windows VM read its copy of the firmware MSDM
+# (OEM key) table, which is passed with -acpitable.
+/srv/yoga-windows-vm/MSDM.aml r,

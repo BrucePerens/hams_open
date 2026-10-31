@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Windows (VM)
+Comment=Start the existing Windows installation in a virtual machine and open its window
+Exec=yoga-windows-vm launch
+Icon=computer
+Terminal=false
+Categories=System;Emulator;
+Keywords=windows;vm;virtual;
