@@ -1,0 +1,26 @@
+[package]
+name = "hpsdr"
+version = "0.1.0"
+edition = "2021"
+description = "OpenHPSDR (ANAN, Hermes) Protocol 1 and 2 client with a closed transmit gate, and a loopback emulator"
+license = "AGPL-3.0-or-later"
+publish = false
+rust-version = "1.98"
+
+[dependencies]
+# Async only: no runtime of our own. The caller passes a runtime Handle to every constructor that
+# spawns a task or opens a socket; "rt" is for Handle::enter / spawn, "net" and "time" for sockets
+# and timers, "sync" for the block channels.
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "sync"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt", "net", "time", "sync", "macros", "test-util"] }
