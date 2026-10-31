@@ -1,0 +1,29 @@
+# Board models known to radioctl-station: the pins each board exposes. A GPIO map is refused for
+# a pin the board does not expose. Per board model, written from the board that was inspected.
+
+[[board]]
+name = "fx2-lcsoft-mini"
+# CY7C68013A-56 development board (Geeetech variant of the Lcsoft Mini Board): ports A, B and D.
+# Ports B and D are the FIFO data bus and are plain GPIO only when the board is not in FIFO mode.
+pins = [
+  "PA0", "PA1", "PA2", "PA3", "PA4", "PA5", "PA6", "PA7",
+  "PB0", "PB1", "PB2", "PB3", "PB4", "PB5", "PB6", "PB7",
+  "PD0", "PD1", "PD2", "PD3", "PD4", "PD5", "PD6", "PD7",
+]
+notes = "unverified: pins read from a photo; PA0 and PA1 carry the LEDs when jumper J1 is fitted"
+
+[[board]]
+name = "sainsmart-16ch-modbus"
+# SainSmart 16-channel 9-36 V USB relay module (sku 101-70-208): coils 0 to 15 are channels 1 to 16.
+pins = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
+notes = "Modbus ASCII 9600 8N1, slave FE; no watchdog; relay state at power-up unknown"
+
+[[board]]
+name = "shelly-gen2-1ch"
+pins = ["1"]
+notes = "one Switch component; Gen2 RPC over HTTP, private address only"
+
+[[board]]
+name = "tasmota-4ch"
+pins = ["1", "2", "3", "4"]
+notes = "Tasmota HTTP commands Power1 to Power4, private address only"
