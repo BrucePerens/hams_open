@@ -222,6 +222,11 @@ pub struct DeviceDef {
     /// A wait before removing power in an orderly power-off (a tube amplifier cooling).
     #[serde(default)]
     pub off_delay_ms: u64,
+    /// The owner states that this device has a stop path that does not depend on its power
+    /// channel's driver: a hardware dead-man, or a plug-level auto-off timer. Required for an
+    /// amplifier powered through a channel of the lowest assurance level (Home Assistant).
+    #[serde(default)]
+    pub external_deadman: bool,
 }
 
 /// One step of a profile.

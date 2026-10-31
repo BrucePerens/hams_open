@@ -13,6 +13,8 @@
 //! - [`channel`]: channel drivers, the virtual bank, the switchboard (commanded and confirmed
 //!   state, break-before-make selectors, momentary pulses, debounced inputs).
 //! - [`modbus`]: sans-IO Modbus framing and the coil relay driver (ASCII and RTU).
+//! - [`homeassistant`]: the Home Assistant driver (WebSocket state events, REST service calls).
+//! - [`ws`]: a small sans-IO WebSocket codec used by it.
 //! - [`http_relay`]: Shelly Gen2 and Tasmota channel drivers.
 //! - [`lifecycle`]: the radio lifecycle state machine (sans-IO).
 //! - [`manager`]: lifecycle per radio, power button, reconnect with backoff, start-up reconcile.
@@ -23,6 +25,7 @@ pub mod actor_link;
 pub mod channel;
 pub mod error;
 pub mod gpio_map;
+pub mod homeassistant;
 pub mod http_relay;
 pub mod lifecycle;
 pub mod manager;
@@ -30,3 +33,4 @@ pub mod modbus;
 pub mod model;
 pub mod record;
 pub mod station;
+pub mod ws;
