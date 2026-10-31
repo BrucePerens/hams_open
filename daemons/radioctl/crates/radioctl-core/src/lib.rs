@@ -17,6 +17,7 @@ pub mod op;
 pub mod poll;
 pub mod rig;
 pub mod rigfile;
+pub mod scope;
 pub mod serial;
 pub mod tcp;
 pub mod transcript;

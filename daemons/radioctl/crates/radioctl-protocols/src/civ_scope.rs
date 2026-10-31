@@ -25,11 +25,12 @@
 //!   big-endian, hundredths of a dB> <sign>`, `27 1A <rx> <speed>`, `27 1E <range> <edge no.>
 //!   <low: 5 bytes> <high: 5 bytes>` (fixed edges). Reading is the same command without the value.
 //!
-//! The pieces are pure functions and a reassembler. They are not yet reachable through `Op`
-//! (radioctl-core's command vocabulary has no scope operation): `CivEngine` collects complete
-//! sweeps and hands them out through [`crate::civ::CivEngine::take_scope_lines`].
+//! The pieces are pure functions and a reassembler. `CivEngine` reaches them from the core API's
+//! scope operations (`Op::SetScopeSpan` and the others) and returns each complete sweep as
+//! `Inbound::ScopeFrame`.
 
 use radioctl_core::description::ScopeParams;
+use radioctl_core::scope::ScopeAxis;
 use radioctl_core::units::Hz;
 
 use crate::civ::{decode_bcd_freq, encode_bcd_freq};
@@ -89,6 +90,30 @@ impl ScopeMode {
             2 => Some(ScopeMode::ScrollCenter),
             3 => Some(ScopeMode::ScrollFixed),
             _ => None,
+        }
+    }
+}
+
+impl From<ScopeMode> for ScopeAxis {
+    // [@ANCHOR: radioctl_scope_axis_from_mode]
+    fn from(mode: ScopeMode) -> ScopeAxis {
+        match mode {
+            ScopeMode::Center => ScopeAxis::Center,
+            ScopeMode::Fixed => ScopeAxis::Fixed,
+            ScopeMode::ScrollCenter => ScopeAxis::ScrollCenter,
+            ScopeMode::ScrollFixed => ScopeAxis::ScrollFixed,
+        }
+    }
+}
+
+impl From<ScopeAxis> for ScopeMode {
+    // [@ANCHOR: radioctl_scope_mode_from_axis]
+    fn from(axis: ScopeAxis) -> ScopeMode {
+        match axis {
+            ScopeAxis::Center => ScopeMode::Center,
+            ScopeAxis::Fixed => ScopeMode::Fixed,
+            ScopeAxis::ScrollCenter => ScopeMode::ScrollCenter,
+            ScopeAxis::ScrollFixed => ScopeMode::ScrollFixed,
         }
     }
 }
@@ -456,6 +481,9 @@ pub struct ScopeSim {
     display: bool,
     output: bool,
     receivers: Vec<SimScope>,
+    /// The last fixed-mode edges set (any range and edge number): the sweep of a fixed scope
+    /// uses them instead of the tuned frequency's neighbourhood.
+    edges: Option<(Hz, Hz)>,
     sweeps: u32,
 }
 
@@ -476,6 +504,7 @@ impl ScopeSim {
             display: true,
             output: false,
             receivers: vec![one; usize::from(params.receivers)],
+            edges: None,
             sweeps: 0,
         }
     }
@@ -535,6 +564,15 @@ impl ScopeSim {
                 self.receivers[at].half_span = decode_bcd_freq(bcd).ok_or(())?;
                 Ok(None)
             }
+            (SUB_EDGES, [_range, _edge, bcd @ ..]) if bcd.len() == 10 => {
+                let low = decode_bcd_freq(bcd.get(..5).ok_or(())?).ok_or(())?;
+                let high = decode_bcd_freq(bcd.get(5..).ok_or(())?).ok_or(())?;
+                if low.0 >= high.0 {
+                    return Err(());
+                }
+                self.edges = Some((low, high));
+                Ok(None)
+            }
             (SUB_HOLD, [rx, on]) => {
                 let at = rx_of(Some(rx))?;
                 self.receivers[at].hold = *on != 0;
@@ -584,10 +622,10 @@ impl ScopeSim {
         let mode = scope.mode;
         let (edge_a, edge_b) = match mode {
             ScopeMode::Center | ScopeMode::ScrollCenter => (tuned, scope.half_span),
-            ScopeMode::Fixed | ScopeMode::ScrollFixed => (
+            ScopeMode::Fixed | ScopeMode::ScrollFixed => self.edges.unwrap_or((
                 Hz(tuned.0.saturating_sub(scope.half_span.0)),
                 Hz(tuned.0.saturating_add(scope.half_span.0)),
-            ),
+            )),
         };
         let per_frame = usize::from(self.params.samples_per_frame);
         let line = usize::from(self.params.line_length);

@@ -34,9 +34,10 @@ use radioctl_core::description::{CivParams, Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
+use radioctl_core::scope::ScopeFrame;
 use radioctl_core::units::{Hz, Level, Mode, Vfo};
 
-use crate::civ_scope::{self, ScopeAssembler, ScopeCommand, ScopeLine};
+use crate::civ_scope::{self, ScopeAssembler, ScopeCommand, ScopeMode};
 
 /// Start-of-frame byte (sent twice).
 pub const PREAMBLE: u8 = 0xFE;
@@ -236,7 +237,6 @@ pub struct CivEngine {
     /// The last mode the rig reported; the filter index tables depend on it.
     mode: Option<Mode>,
     scope: Option<ScopeAssembler>,
-    scope_lines: Vec<ScopeLine>,
     /// True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>`
     /// instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement.
     awaiting_ptt_ack: bool,
@@ -262,15 +262,29 @@ impl CivEngine {
             parser: FrameParser::default(),
             mode: None,
             scope,
-            scope_lines: Vec::new(),
             awaiting_ptt_ack: false,
         })
     }
 
     // [@ANCHOR: radioctl_civ_engine_scope_request]
     /// The request for a scope command (command 27). Fails when the model has no scope or a value
-    /// does not fit its field.
+    /// does not fit its field. A query's answer is not waited for (`ReplyKind::None`); the
+    /// operations of [`Op`] wait for it.
     pub fn scope_request(&self, command: ScopeCommand) -> Result<Request, RigError> {
+        let reply = if command.is_query() {
+            ReplyKind::None
+        } else {
+            ReplyKind::Ack
+        };
+        self.scope_request_for(command, reply)
+    }
+
+    // [@ANCHOR: radioctl_civ_engine_scope_request_for]
+    fn scope_request_for(
+        &self,
+        command: ScopeCommand,
+        reply: ReplyKind,
+    ) -> Result<Request, RigError> {
         if self.desc.scope.is_none() {
             return Err(Self::unsupported("this model has no scope description"));
         }
@@ -281,18 +295,53 @@ impl CivEngine {
             .ok_or_else(|| Self::unsupported("empty scope command"))?;
         let mut payload = vec![*sub];
         payload.extend_from_slice(rest);
-        let reply = if command.is_query() {
-            ReplyKind::None
-        } else {
-            ReplyKind::Ack
-        };
         Ok(self.command(civ_scope::SCOPE_CMD, &payload, reply))
     }
 
-    // [@ANCHOR: radioctl_civ_engine_take_scope_lines]
-    /// The complete scope sweeps received since the last call.
-    pub fn take_scope_lines(&mut self) -> Vec<ScopeLine> {
-        std::mem::take(&mut self.scope_lines)
+    // [@ANCHOR: radioctl_civ_engine_encode_scope]
+    /// The scope operations of the core API as command 27. A span the model's menu does not
+    /// offer is refused here rather than sent for the rig to refuse.
+    fn encode_scope(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        let ack = ReplyKind::Ack;
+        let (command, reply) = match op {
+            Op::SetScopeOutput(on) => (ScopeCommand::SetOutput(*on), ack),
+            Op::GetScopeOutput => (
+                ScopeCommand::GetOutput,
+                ReplyKind::Observation(Field::ScopeOutput),
+            ),
+            Op::SetScopeAxis(rx, axis) => (ScopeCommand::SetMode(*rx, (*axis).into()), ack),
+            Op::GetScopeAxis(rx) => (
+                ScopeCommand::GetMode(*rx),
+                ReplyKind::Observation(Field::ScopeAxis(*rx)),
+            ),
+            Op::SetScopeSpan(rx, span) => {
+                let offered = self
+                    .desc
+                    .scope
+                    .as_ref()
+                    .is_none_or(|s| s.spans_hz.is_empty() || s.spans_hz.contains(&span.0));
+                if !offered {
+                    return Some(Err(Self::unsupported("span not offered by this scope")));
+                }
+                (ScopeCommand::SetSpan(*rx, *span), ack)
+            }
+            Op::GetScopeSpan(rx) => (
+                ScopeCommand::GetSpan(*rx),
+                ReplyKind::Observation(Field::ScopeSpan(*rx)),
+            ),
+            Op::SetScopeEdges(range, edge, low, high) => {
+                (ScopeCommand::SetEdges(*range, *edge, *low, *high), ack)
+            }
+            Op::SetScopeReference(rx, centi_db) => {
+                (ScopeCommand::SetReference(*rx, *centi_db), ack)
+            }
+            Op::GetScopeReference(rx) => (
+                ScopeCommand::GetReference(*rx),
+                ReplyKind::Observation(Field::ScopeReference(*rx)),
+            ),
+            _ => return None,
+        };
+        Some(self.scope_request_for(command, reply))
     }
 
     // [@ANCHOR: radioctl_civ_engine_scope_dropped]
@@ -514,6 +563,7 @@ impl ProtocolEngine for CivEngine {
             .encode_vfo_b_or_split(op)
             .or_else(|| self.encode_rit_xit(op))
             .or_else(|| self.encode_levels_and_filter(op))
+            .or_else(|| self.encode_scope(op))
         {
             return done;
         }
@@ -592,8 +642,7 @@ impl CivEngine {
             return None;
         }
         if frame.cmd == civ_scope::SCOPE_CMD {
-            self.decode_scope(&frame.data);
-            return None;
+            return self.decode_scope(&frame.data);
         }
         let data = frame.data.as_slice();
         let ptt_echo = frame.cmd == 0x1C && matches!(data, [0x00, _]);
@@ -645,22 +694,47 @@ impl CivEngine {
     }
 
     // [@ANCHOR: radioctl_civ_engine_decode_scope]
-    /// Feeds a waveform frame to the assembler; settings replies are not kept.
-    fn decode_scope(&mut self, data: &[u8]) {
-        let [civ_scope::SUB_WAVEFORM, rest @ ..] = data else {
-            return;
-        };
-        let Some(assembler) = self.scope.as_mut() else {
-            return;
-        };
-        match civ_scope::parse_segment(rest) {
-            Some(segment) => {
-                if let Some(line) = assembler.push(segment) {
-                    self.scope_lines.push(line);
-                }
+    /// A command 27 frame from the rig: a waveform frame goes to the assembler and comes out as
+    /// a [`ScopeFrame`] when it completes a sweep; a setting's answer becomes its observation.
+    fn decode_scope(&mut self, data: &[u8]) -> Option<Inbound> {
+        let observation = match data {
+            [civ_scope::SUB_WAVEFORM, rest @ ..] => {
+                let assembler = self.scope.as_mut()?;
+                return match civ_scope::parse_segment(rest) {
+                    Some(segment) => {
+                        let line = assembler.push(segment)?;
+                        let amplitude_max = self.desc.scope.as_ref().map_or(0, |s| s.amplitude_max);
+                        Some(Inbound::ScopeFrame(ScopeFrame {
+                            seq: 0,
+                            receiver: line.receiver,
+                            axis: line.mode.into(),
+                            low: line.low,
+                            high: line.high,
+                            out_of_range: line.out_of_range,
+                            amplitude_max,
+                            samples: line.samples,
+                        }))
+                    }
+                    None => {
+                        assembler.note_malformed();
+                        None
+                    }
+                };
             }
-            None => assembler.note_malformed(),
-        }
+            [civ_scope::SUB_OUTPUT, on] => Observation::ScopeOutput(*on != 0),
+            [civ_scope::SUB_MODE, rx, code] => {
+                Observation::ScopeAxis(*rx, ScopeMode::from_code(*code)?.into())
+            }
+            [civ_scope::SUB_SPAN, rx, bcd @ ..] if bcd.len() == 5 => {
+                let half = decode_bcd_freq(bcd)?;
+                Observation::ScopeSpan(*rx, Hz(half.0.saturating_mul(2)))
+            }
+            [civ_scope::SUB_REFERENCE, rx, bcd @ ..] => {
+                Observation::ScopeReference(*rx, civ_scope::decode_reference(bcd)?)
+            }
+            _ => return None,
+        };
+        Some(Inbound::Observation(observation))
     }
 }
 
@@ -994,7 +1068,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_civ_engine_scope_request]
-    // Tests [@ANCHOR: radioctl_civ_engine_take_scope_lines]
+    // Tests [@ANCHOR: radioctl_civ_engine_scope_request_for]
     // Tests [@ANCHOR: radioctl_civ_engine_scope_dropped]
     // Tests [@ANCHOR: radioctl_civ_engine_decode_scope]
     #[test]
@@ -1016,17 +1090,25 @@ mod tests {
         let query = e.scope_request(ScopeCommand::GetMode(1)).expect("query");
         assert_eq!(query.reply, ReplyKind::None);
         let sweep = rig.scope_sweep();
-        assert!(e.feed(&sweep, T0).is_empty(), "scope frames are consumed");
-        let lines = e.take_scope_lines();
-        assert_eq!(lines.len(), 1);
-        assert_eq!(lines[0].samples.len(), 689);
-        assert_eq!(lines[0].mode, ScopeMode::Center);
-        assert!(e.take_scope_lines().is_empty());
+        let seen = e.feed(&sweep, T0);
+        let [Inbound::ScopeFrame(frame)] = seen.as_slice() else {
+            panic!("one scope frame and nothing unrecognised, got {seen:?}");
+        };
+        assert_eq!(frame.samples.len(), 689);
+        assert_eq!(ScopeMode::from(frame.axis), ScopeMode::Center);
+        assert!(
+            e.feed(&sweep, T0).len() == 1,
+            "the next sweep is another frame"
+        );
         let mut broken = sweep.clone();
         let cut = broken.len() / 2;
         broken.drain(..cut);
-        e.feed(&broken, T0);
-        assert!(e.take_scope_lines().is_empty());
+        assert!(
+            !e.feed(&broken, T0)
+                .iter()
+                .any(|i| matches!(i, Inbound::ScopeFrame(_))),
+            "half a sweep is never delivered"
+        );
         e.feed(&reply(0x98, 0x27, &[0x00, 0x05]), T0);
         assert!(e.scope_dropped() >= 1);
         assert!(e.scope_request(ScopeCommand::GetSpan(2)).is_err());

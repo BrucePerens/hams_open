@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::description::RigDescription;
 use crate::error::RigError;
 use crate::op::{Field, Observation, Op};
+use crate::scope::ScopeFrame;
 
 /// A partial frame older than this when more bytes arrive is discarded as stale.
 pub const PARTIAL_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
@@ -41,6 +42,9 @@ pub struct Request {
 pub enum Inbound {
     /// A value, whether asked for or sent unsolicited.
     Observation(Observation),
+    /// A complete scope sweep. It is not a cache field: the actor publishes it on the scope
+    /// frame stream (`seq` is assigned there).
+    ScopeFrame(ScopeFrame),
     /// The rig accepted the last command.
     Ack,
     /// The rig refused the last command.
