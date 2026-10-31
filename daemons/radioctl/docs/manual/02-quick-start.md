@@ -119,14 +119,14 @@ the example `bench_console`, a line-oriented console on the library API. It is r
 construction: it has no key, Morse or gate command.
 
 ```sh
-bench_console --log ic7300-session.txt icom-ic-7300 /dev/ttyUSB0 19200     # a real port
+bench_console --log session.txt --wire wire.txt icom-ic-7300 /dev/ttyUSB0 19200   # a real port
 bench_console --unmanaged icom-ic-7300 /tmp/ic7300-pty 19200               # a pty (see above)
 bench_console icom-ic-7300 virtual                                        # no port at all
 ```
 
 Type `help`. Every reply, every status change (`event source=Poll Frequency(A): ... -> ...`, with the
 source that found it) and every scope sweep is printed with its time and copied to the log file; the
-failure of a command prints the last wire lines. `frames 20 sweeps.csv` collects twenty sweeps and
+failure of a command prints the last wire lines. `--wire FILE` taps the link itself: one line per read or write, `SECONDS tx|rx HEX`, both directions, which is the raw material of a transcript fixture (scrub serial numbers before keeping one). `frames 20 sweeps.csv` collects twenty sweeps and
 prints the frame rate. `radioctld` and the console both hold the port exclusively: run one at a time.
 
 ## Use it from Rust in 30 lines

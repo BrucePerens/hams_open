@@ -5,12 +5,15 @@
 //! Morse and no way to open the transmit gate, so the radio cannot be keyed from here (use
 //! `radioctld` with `transmit = true` for that, deliberately).
 //!
-//! Usage: `bench_console [--unmanaged] [--log FILE] RIG_ID TARGET [BAUD]`
+//! Usage: `bench_console [--unmanaged] [--log FILE] [--wire FILE] RIG_ID TARGET [BAUD]`
 //!
 //! - `RIG_ID` names a file in `rigs/` (`icom-ic-7300`; see `RADIOCTL_RIGS`).
 //! - `TARGET` is `virtual` (an in-memory radio), a serial path (`/dev/ttyUSB0`) or
 //!   `usb:VID:PID[:SERIAL]` (hexadecimal ids). `BAUD` defaults to 19200.
 //! - `--unmanaged` is for a port without DTR and RTS (a pty); leave it off for a real radio.
+//! - `--wire FILE` taps the link: every byte in both directions, one line per read or write,
+//!   `SECONDS tx|rx HEX` (`tx` is what the console sent, `rx` what the radio sent). These are the raw
+//!   captures that become transcript fixtures; scrub serial numbers before keeping one.
 //!
 //! Type `help` for the commands.
 use std::error::Error;
@@ -33,6 +36,7 @@ use radioctl_core::usb::UsbMatcher;
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::spawn_virtual_rig;
 use radioctl_protocols::virtual_rig::VirtualRig;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
@@ -223,11 +227,62 @@ fn parse_op(words: &[&str]) -> Result<Op, String> {
     })
 }
 
+/// Puts a tap between the actor and the transport: bytes both ways go to `wire` as hexadecimal
+/// lines. Returns the stream the actor should use.
+fn tapped<T>(transport: T, wire: Arc<Mutex<File>>) -> DuplexStream
+where
+    T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
+{
+    let (actor_side, mut tap_side) = tokio::io::duplex(8192);
+    let started = Instant::now();
+    tokio::spawn(async move {
+        let mut inner = transport;
+        let (mut from_radio, mut from_actor) = ([0u8; 1024], [0u8; 1024]);
+        let record = |direction: &str, bytes: &[u8]| {
+            let hex: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
+            if let Ok(mut file) = wire.lock() {
+                let _ = writeln!(
+                    file,
+                    "{:9.3} {direction} {}",
+                    started.elapsed().as_secs_f64(),
+                    hex.join(" ")
+                );
+            }
+        };
+        loop {
+            tokio::select! {
+                read = inner.read(&mut from_radio) => match read {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let bytes = from_radio.get(..n).unwrap_or(&[]);
+                        record("rx", bytes);
+                        if tap_side.write_all(bytes).await.is_err() {
+                            break;
+                        }
+                    }
+                },
+                read = tap_side.read(&mut from_actor) => match read {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        let bytes = from_actor.get(..n).unwrap_or(&[]);
+                        record("tx", bytes);
+                        if inner.write_all(bytes).await.is_err() {
+                            break;
+                        }
+                    }
+                },
+            }
+        }
+    });
+    actor_side
+}
+
 async fn open_rig(
     rig_id: &str,
     target: &str,
     baud: u32,
     unmanaged: bool,
+    wire: Option<Arc<Mutex<File>>>,
     options: RigOptions,
     out: &Out,
 ) -> Result<RigHandle, Box<dyn Error>> {
@@ -244,7 +299,10 @@ async fn open_rig(
                 control.scope_sweep();
             }
         });
-        return Ok(spawn_current(engine, stream, options)?);
+        return Ok(match wire {
+            Some(wire) => spawn_current(engine, tapped(stream, wire), options)?,
+            None => spawn_current(engine, stream, options)?,
+        });
     }
     let port = match target.strip_prefix("usb:") {
         Some(ids) => {
@@ -271,7 +329,10 @@ async fn open_rig(
     let (transport, monitor) = link.into_parts();
     // The monitor (control lines, status, counters) lives as long as the program.
     std::mem::forget(monitor);
-    Ok(spawn_current(engine, transport, options)?)
+    Ok(match wire {
+        Some(wire) => spawn_current(engine, tapped(transport, wire), options)?,
+        None => spawn_current(engine, transport, options)?,
+    })
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -279,6 +340,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut unmanaged = false;
     let mut log_path = None;
+    let mut wire_path = None;
     while let Some(first) = args.first().map(String::as_str) {
         match first {
             "--unmanaged" => {
@@ -289,11 +351,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 log_path = Some(args.remove(1));
                 args.remove(0);
             }
+            "--wire" if args.len() > 1 => {
+                wire_path = Some(args.remove(1));
+                args.remove(0);
+            }
             _ => break,
         }
     }
     let [rig_id, target, rest @ ..] = args.as_slice() else {
-        return Err("usage: bench_console [--unmanaged] [--log FILE] RIG_ID TARGET [BAUD]".into());
+        return Err(
+            "usage: bench_console [--unmanaged] [--log FILE] [--wire FILE] RIG_ID TARGET [BAUD]"
+                .into(),
+        );
     };
     let baud: u32 = rest.first().map_or(Ok(19_200), |b| b.parse())?;
     let out = Out {
@@ -307,7 +376,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "bench_console: {rig_id} on {target} at {baud} baud (receive only)"
     ));
 
-    let rig = open_rig(rig_id, target, baud, unmanaged, RigOptions::default(), &out).await?;
+    let wire = match wire_path {
+        Some(path) => Some(Arc::new(Mutex::new(File::create(path)?))),
+        None => None,
+    };
+    let rig = open_rig(
+        rig_id,
+        target,
+        baud,
+        unmanaged,
+        wire,
+        RigOptions::default(),
+        &out,
+    )
+    .await?;
 
     // Every status change as it happens, with its source.
     let mut events = rig.events();
