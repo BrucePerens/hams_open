@@ -17,8 +17,17 @@ const RIT_STEP_HZ: i16 = 10;
 
 impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_ts440_is]
-    /// True when this rig speaks the TS-440S dialect.
+    /// True when this rig speaks the TS-440S or the TS-450S/TS-690S dialect.
     pub(super) fn is_ts440(&self) -> bool {
+        self.desc
+            .kenwood
+            .as_ref()
+            .is_some_and(|k| matches!(k.dialect, KenwoodDialect::Ts440 | KenwoodDialect::Ts450))
+    }
+
+    // [@ANCHOR: radioctl_virtual_ts440_is_fn_sp]
+    /// True for the TS-440S (`FN` and `SP`), false for the TS-450S dialect.
+    fn is_fn_sp(&self) -> bool {
         self.desc
             .kenwood
             .as_ref()
@@ -51,7 +60,7 @@ impl VirtualRig {
             }
             ("IF", "") => Some(self.kenwood_if()),
             // FN: 0 VFO A, 1 VFO B (2, memory, is not modelled). Set only.
-            ("FN", "0" | "1") => {
+            ("FN", "0" | "1") if self.is_fn_sp() => {
                 self.kenwood_rx_vfo = u8::from(arg == "1");
                 self.kenwood_tx_vfo = if self.state.split {
                     1 - self.kenwood_rx_vfo
@@ -61,7 +70,7 @@ impl VirtualRig {
                 None
             }
             // SP: split on or off. Set only.
-            ("SP", "0" | "1") => {
+            ("SP", "0" | "1") if self.is_fn_sp() => {
                 self.state.split = arg == "1";
                 self.kenwood_tx_vfo = if self.state.split {
                     1 - self.kenwood_rx_vfo
@@ -69,6 +78,10 @@ impl VirtualRig {
                     self.kenwood_rx_vfo
                 };
                 None
+            }
+            // TS-450S and TS-690S: FR and FT select the receive and transmit VFO (set only).
+            ("FR" | "FT", "0" | "1") if !self.is_fn_sp() => {
+                self.kenwood_select_vfo(arg, name == "FR")
             }
             ("RT", "0" | "1") => {
                 self.state.rit = arg == "1";

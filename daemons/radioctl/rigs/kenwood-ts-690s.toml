@@ -1,5 +1,6 @@
 # Rig description: Kenwood TS-690S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
-# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The facts marked manual-checked were compared with the TS-450S/TS-690S external-control manual (pages named in each fact, sha256 in the fact); the rest is Hamlib 4.6.2 (rigs/kenwood/ts450s.c, `rigctl --dump-caps`, facts only).
+# Dialect "ts450": in that manual MD and FR/FT are SET ONLY (the mode and the transmit VFO are read from IF), RD/RU take no parameter (no exact RIT offset can be set), AI has one digit (1 is on), and SM answers SMnnnn (0000 to 0030) without the receiver digit the engine expects, so read-signal is not declared. The IF answer is the classic layout.
 # Kenwood publishes no PC command reference for this model that could be downloaded (kenwood.com refused the download of its
 # guides in this session and hosts none for the older sets), so the facts come from Hamlib 4.6.2 (rigs/kenwood/ts690.c, kenwood.c, read for
 # facts only, and `rigctl -m 2005 --dump-caps` output), named in each fact below. Kenwood's guides for other models were not used for this one.
@@ -18,6 +19,7 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 11
+dialect = "ts450"
 
 [timing]
 timeout_ms = 1000
@@ -67,8 +69,13 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "kenwood.model_id"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c, the kenwood_ids table (numeric id 11) and kenwood_id_string_list (\"011\") for RIG_MODEL_TS690S", note = "The ID; answer is three digits (ID009; is 9). Hamlib's own comment says the numeric ids were tested only with the TS-450." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Kenwood TS-450S/TS-690S external-control manual (file qslnet_TS-450-690-Ext-control.pdf, a scan from qslnet.de; sha256 86b83837202d17e61a865e2955d6afe49c7a62e7c9cdae33dd945c47bc78310f): ID, printed page 11 (TS-450 010, TS-690 011)", note = "Three digits: ID011;. Hamlib's table agrees." }
+verified = { state = "manual-checked", reference = "TS-450/690 external-control manual, ID, printed p. 11" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "manual", reference = "Kenwood TS-450S/TS-690S external-control manual (file qslnet_TS-450-690-Ext-control.pdf, a scan from qslnet.de; sha256 86b83837202d17e61a865e2955d6afe49c7a62e7c9cdae33dd945c47bc78310f): MD printed page 13 (set command only), FR/FT printed page 10 (set command only), RD/RU printed page 16 (no parameter), AI printed page 8 (one digit, format 1), SM printed page 18 (P1 format 22, no receiver digit), IF printed page 11", note = "Our name for the command set: radioctl-protocols/src/kenwood.rs (dialect ts450)." }
+verified = { state = "manual-checked", reference = "TS-450/690 external-control manual, printed pp. 8, 10, 11, 13, 16, 18" }
 
 [[facts]]
 key = "timing.*"
@@ -82,8 +89,8 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts690.c, the rig_caps of RIG_MODEL_TS690S: .get_ptt present, .set_ptt present, .get_split_vfo present, .get_rit present, .set_trn present; kenwood_get_mode_if; get_xit present; set_xit present", note = "A capability is declared only where Hamlib implements the matching function (read-ptt from get_ptt, second-vfo and split from set_split_vfo (get_split_vfo too for split), which is how Hamlib reaches VFO B, rit-xit from get/set rit and xit, transceive from set_trn); FA, FB, MD, ID, IF, TX, RX, RT, XT, RC, RU, RD, FR, FT and AI are the Kenwood commands the classic engine sends. The vendor guide for this model was not available to check the answers." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Kenwood TS-450S/TS-690S external-control manual (file qslnet_TS-450-690-Ext-control.pdf, a scan from qslnet.de; sha256 86b83837202d17e61a865e2955d6afe49c7a62e7c9cdae33dd945c47bc78310f): command list printed page 7 (AI DN/UP FA/FB FL FR/FT FS ID IF LK MC MD MR MW MX PT RC RD/RU RM RT RX/TX SC SM TO VR XT); AI page 8, FR/FT page 10, ID and IF page 11 (P1 frequency, P3 RIT frequency, P4 RIT, P5 XIT, P8 TX/RX, P9 mode, P10 function, P12 split), MD page 13, RD/RU page 16; the FA/FB, RT, RX/TX and XT pages (9, 17, 20) were not read", note = "Mode, PTT, RIT, XIT and split are read from IF; split is set with FR0 then FT; the engine refuses an exact RIT offset (RU and RD take no parameter). Hamlib's capability list agrees except where this note says otherwise." }
+verified = { state = "manual-checked", reference = "TS-450/690 external-control manual, printed pp. 7, 8, 10, 11, 13, 16" }
 
 [[facts]]
 key = "capability.set-ptt"
@@ -92,5 +99,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=RTTY, 7=CWR, 9=RTTYR); the mode list is that of `rigctl -m 2005 --dump-caps`", note = "Mode codes are Hamlib's default Kenwood mode table; modes Hamlib does not list for this model are omitted." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Kenwood TS-450S/TS-690S external-control manual (file qslnet_TS-450-690-Ext-control.pdf, a scan from qslnet.de; sha256 86b83837202d17e61a865e2955d6afe49c7a62e7c9cdae33dd945c47bc78310f): Parameter List, format 2 MODE, printed page 6: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R", note = "The manual's list is the same eight letters as the file." }
+verified = { state = "manual-checked", reference = "TS-450/690 external-control manual, parameter list, printed p. 6" }

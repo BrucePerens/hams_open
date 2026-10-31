@@ -22,8 +22,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 294 |
-| manual-checked | 19 |
+| unverified | 290 |
+| manual-checked | 23 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -239,15 +239,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | `kenwood-ts-140s` | unverified | - | described |
 | 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
 | 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | `kenwood-ts-440s` | manual-checked | - | described |
-| 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | `kenwood-ts-450s` | unverified | - | described |
+| 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | `kenwood-ts-450s` | manual-checked | - | described |
 | 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | `kenwood-ts-480` | manual-checked | - | described |
 | 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | `kenwood-ts-50s` | unverified | - | described |
-| 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | `kenwood-ts-570d` | unverified | - | described |
-| 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | `kenwood-ts-570s` | unverified | - | described |
+| 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | `kenwood-ts-570d` | manual-checked | - | described |
+| 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | `kenwood-ts-570s` | manual-checked | - | described |
 | 2031 | Kenwood | TS-590S | A | kenwood_ascii | kenwood | `kenwood-ts-590s` | unverified | - | described |
 | 2037 | Kenwood | TS-590SG | A | kenwood_ascii | kenwood | `kenwood-ts-590sg` | unverified | - | described |
 | 2024 | Kenwood | TS-680S | A | kenwood_ascii | kenwood | `kenwood-ts-680s` | unverified | - | described |
-| 2005 | Kenwood | TS-690S | A | kenwood_ascii | kenwood | `kenwood-ts-690s` | unverified | - | described |
+| 2005 | Kenwood | TS-690S | A | kenwood_ascii | kenwood | `kenwood-ts-690s` | manual-checked | - | described |
 | 2006 | Kenwood | TS-711 | A | kenwood_ascii | kenwood | `kenwood-ts-711` | unverified | - | described |
 | 2007 | Kenwood | TS-790 | A | kenwood_ascii | kenwood | `kenwood-ts-790` | unverified | - | described |
 | 2008 | Kenwood | TS-811 | A | kenwood_ascii | kenwood | `kenwood-ts-811` | unverified | - | described |

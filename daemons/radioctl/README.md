@@ -190,6 +190,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   - The TS-680S has no `identify`: Hamlib supposes it answers `ID006;` like the TS-140S and cannot tell them apart. The TS-940S has no `rtty` mode: Hamlib's mode table has no code for it.
   - Hamlib reads the second frequency back with `FA;` where radioctl reads `FB;` on the TS-450S, 480, 570D and 570S: pinned in `known_ascii_batch_divergences`. The other six agree on every step.
   - Older dialect (`kenwood.dialect = "ts440"`): the TS-440S, from the IC-10 manual's command pages (read as images; `manual-checked` for the pages named in its facts): `MD` only sets, the mode and transmit VFO are read from the 38-character `IF`, split is `FN0;SP<n>;`, `RU`/`RD` take no parameter (an exact RIT offset is refused), and there is no `SM` or level command. Tests: `tests/ts440.rs`.
+  - Checked against the manuals (2026-10-31): the TS-570S/D appendix and the TS-450S/TS-690S external-control manual (tables read as page images). TS-570: `RU`/`RD` take no parameter (so `rit-xit` was removed, as for the TS-870S), `AG` is `AGnnn` and `SM` is `SMnnnn` (so no levels or signal), modes 7 and 9 added. TS-450S/TS-690S now use `kenwood.dialect = "ts450"` (`MD` and `FR`/`FT` set only, mode and transmit VFO read from `IF`, `AI1`). Tests: `tests/ts440.rs`.
   - Not done: the R-5000 (Hamlib's IC-10 dialect: 32-character `IF`), the TS-930 (no known `ID`), the TS-990S (Main/Sub receivers, no VFO A/B in Hamlib, its own mode letters). The TH and TM handhelds are a different command family. See `docs/RIG_COVERAGE_PLAN.md`.
 - The TS-2000 text was read from a third-party transcription of its manual, which the facts say.
 - The `IF;` layout that was unverified is resolved in `kenwood.rs`.
@@ -1166,6 +1167,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_engine_encode] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_feed] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_virtual_ts440_is] (radioctl-protocols) True when this rig speaks the TS-440S dialect.
+- [@ANCHOR: radioctl:radioctl_virtual_ts440_is_fn_sp] (radioctl-protocols) True for the TS-440S (`FN` and `SP`), false for the TS-450S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts440_command] (radioctl-protocols) One TS-440S command; the reply bytes (none for a setting, `?;` for a refusal).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_is] (radioctl-protocols) True when this rig speaks the TS-890S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_command] (radioctl-protocols) One TS-890S command; the reply bytes (none for a setting, `?;` for a refusal).

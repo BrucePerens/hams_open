@@ -1,5 +1,6 @@
 # Rig description: Kenwood TS-570D (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
-# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The facts marked manual-checked were compared with the TS-570 manual's command appendix (pages named in each fact, sha256 in the fact); the rest is Hamlib 4.6.2 (rigs/kenwood/ts570.c, `rigctl --dump-caps`, facts only).
+# Manual comparison: model number 017 for the TS-570D; FA/FB/FR/FT/ID/IF/RC/RD/RU/RT/RX/TX tables read; RU and RD take NO parameter, so rit-xit was removed (the engine sets an offset with RUnnnnn;), as for the TS-870S. AG is AGnnn with no leading 0 (the engine writes AG0nnn;), KS is 010 to 060 and PC 005 to 100, so levels stay undeclared; SM is SMnnnn (no receiver digit) so read-signal stays undeclared. Modes 7 (CW-R) and 9 (FSK-R) were added.
 # Kenwood publishes no PC command reference for this model that could be downloaded (kenwood.com refused the download of its
 # guides in this session and hosts none for the older sets), so the facts come from Hamlib 4.6.2 (rigs/kenwood/ts570.c, kenwood.c, read for
 # facts only, and `rigctl -m 2004 --dump-caps` output), named in each fact below. Kenwood's guides for other models were not used for this one.
@@ -7,9 +8,9 @@
 # Hamlib's get-level list for this model: PREAMP ATT AF RF SQL RFPOWER MICGAIN KEYSPD AGC SLOPE_LOW SLOPE_HIGH STRENGTH. The description format has no field for frequency ranges, filter tables or function lists,
 # so they are not repeated here.
 # Engine: the classic Kenwood engine (IF; answer of 38 characters, MD; mode letters, FA/FB 11 digits). Hamlib's backend assumes the same IF length for this model.
-# Known gap: no levels are declared: the AG/RG/PC/KS forms of this model are not documented by a source we may use here.
+# Known gap: no levels or signal meter are declared (see above); no exact RIT offset can be set.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "rit-xit", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "identify"]
 
 [rig]
 id = "kenwood-ts-570d"
@@ -52,6 +53,14 @@ code = "5"
 mode = "rtty"
 code = "6"
 
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[modes]]
+mode = "rtty-r"
+code = "9"
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 2004 --dump-caps`." }
@@ -59,8 +68,8 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "kenwood.model_id"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c, the kenwood_ids table (numeric id 17) and kenwood_id_string_list (\"017\") for RIG_MODEL_TS570D", note = "The ID; answer is three digits (ID009; is 9). Hamlib's own comment says the numeric ids were tested only with the TS-450." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Kenwood TS-570S/TS-570D Instruction Manual, 'APPENDIX: COM CONNECTOR PROTOCOL' (file ts570_user_manualsbase.pdf, an archive copy; sha256 de3f5ba3a55c6ffe5f7b1db3edc1fec78c48cd0fafd78b3e4063eb9762da03b8): Parameter Table, format 16 MODEL NUMBER (TS-570S 018, TS-570D 017), printed page 72, and ID, printed page 77", note = "Three digits: ID017;. Hamlib's table agrees." }
+verified = { state = "manual-checked", reference = "TS-570 manual appendix, parameter table format 16, printed pp. 72, 77" }
 
 [[facts]]
 key = "timing.*"
@@ -74,8 +83,8 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts570.c, the rig_caps of RIG_MODEL_TS570D: .get_ptt present, .set_ptt present, .get_split_vfo present, .get_rit present, .set_trn present; kenwood_get_mode; get_xit present; set_xit present", note = "A capability is declared only where Hamlib implements the matching function (read-ptt from get_ptt, second-vfo and split from set_split_vfo (get_split_vfo too for split), which is how Hamlib reaches VFO B, rit-xit from get/set rit and xit, transceive from set_trn); FA, FB, MD, ID, IF, TX, RX, RT, XT, RC, RU, RD, FR, FT and AI are the Kenwood commands the classic engine sends. The vendor guide for this model was not available to check the answers." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Kenwood TS-570S/TS-570D Instruction Manual, 'APPENDIX: COM CONNECTOR PROTOCOL' (file ts570_user_manualsbase.pdf, an archive copy; sha256 de3f5ba3a55c6ffe5f7b1db3edc1fec78c48cd0fafd78b3e4063eb9762da03b8): FA and FB (format 4, 11 digits, set and read) and FR and FT (format 3; set and read; FR places the rig in simplex) printed page 76; ID and IF (answer with P1 frequency, P3 RIT/XIT frequency, P4 RIT, P5 XIT, P8 TX/RX, P9 mode, P10 function, P12 split) printed page 77; RC, RD and RU (no parameter), RT printed page 79; AI format 32 (2: answers on a change) printed page 72", note = "rit-xit was removed in this revision: RU and RD of this model take no parameter, but the engine sets an offset with RUnnnnn;. The AG, KS, PC and SM forms differ from the engine's (see the file header), so no levels or signal are declared." }
+verified = { state = "manual-checked", reference = "TS-570 manual appendix, printed pp. 72, 76, 77, 79" }
 
 [[facts]]
 key = "capability.set-ptt"
@@ -84,5 +93,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=RTTY); the mode list is that of `rigctl -m 2004 --dump-caps`", note = "Mode codes are Hamlib's default Kenwood mode table; modes Hamlib does not list for this model are omitted." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Kenwood TS-570S/TS-570D Instruction Manual, 'APPENDIX: COM CONNECTOR PROTOCOL' (file ts570_user_manualsbase.pdf, an archive copy; sha256 de3f5ba3a55c6ffe5f7b1db3edc1fec78c48cd0fafd78b3e4063eb9762da03b8): Parameter Table, format 2 MODE, printed page 72: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R", note = "CW-R and FSK-R (7 and 9) were added from the manual." }
+verified = { state = "manual-checked", reference = "TS-570 manual appendix, parameter table format 2, printed p. 72" }

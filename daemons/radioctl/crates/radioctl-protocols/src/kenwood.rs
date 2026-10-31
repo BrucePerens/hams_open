@@ -117,8 +117,10 @@ pub fn parse_digits(text: &str) -> Option<u64> {
 pub struct KenwoodEngine {
     desc: RigDescription,
     tokenizer: Tokenizer,
-    /// The older TS-440S dialect (`kenwood.dialect = "ts440"`).
-    ts440: bool,
+    /// The older dialect (`kenwood.dialect` `ts440` or `ts450`).
+    older: bool,
+    /// Split through `FN` and `SP` (the TS-440S) and not through `FR` and `FT` (the TS-450S).
+    fn_sp: bool,
 }
 
 impl KenwoodEngine {
@@ -142,14 +144,15 @@ impl KenwoodEngine {
                 "a TS-890S description needs Ts890Engine",
             ));
         }
-        let ts440 = desc
-            .kenwood
-            .as_ref()
-            .is_some_and(|k| k.dialect == radioctl_core::description::KenwoodDialect::Ts440);
+        use radioctl_core::description::KenwoodDialect;
+        let dialect = desc.kenwood.as_ref().map(|k| k.dialect);
+        let older = matches!(dialect, Some(KenwoodDialect::Ts440 | KenwoodDialect::Ts450));
+        let fn_sp = dialect == Some(KenwoodDialect::Ts440);
         Ok(KenwoodEngine {
             desc,
             tokenizer: Tokenizer::default(),
-            ts440,
+            older,
+            fn_sp,
         })
     }
 
@@ -171,7 +174,7 @@ impl KenwoodEngine {
         }
         // The older dialect has no read form of MD, FR, FT, SM or the levels: such an answer is not
         // one this rig gives.
-        if self.ts440
+        if self.older
             && matches!(
                 text.get(..2),
                 Some(
@@ -231,9 +234,10 @@ impl KenwoodEngine {
     }
 
     // [@ANCHOR: radioctl_kenwood_engine_encode_ts440]
-    /// The operations whose wire form differs in the TS-440S dialect (IC-10 manual, printed pages
-    /// 13 to 29): `None` where the classic form is also the TS-440S form.
-    fn encode_ts440(op: &Op) -> Option<Result<Request, RigError>> {
+    /// The operations whose wire form differs in the older dialects (TS-440S: IC-10 manual, printed
+    /// pages 13 to 29; TS-450S and TS-690S: their external-control manual, pages 8 to 18): `None`
+    /// where the classic form is also theirs.
+    fn encode_ts440(&self, op: &Op) -> Option<Result<Request, RigError>> {
         let none = ReplyKind::None;
         Some(match op {
             // `MD` has no read form: the mode is P9 of `IF`.
@@ -246,8 +250,12 @@ impl KenwoodEngine {
                 "IF;".into(),
                 ReplyKind::Observation(Field::TxVfo),
             )),
-            // `FN0` selects VFO A; `SP` sets split on or off. Neither can be read back but by `IF`.
-            Op::SetSplit(on) => Ok(Self::command(format!("FN0;SP{};", u8::from(*on)), none)),
+            // TS-440S: `FN0` selects VFO A and `SP` sets split on or off. TS-450S and TS-690S: `FR0`
+            // then `FT` (set only). Neither can be read back but by `IF`.
+            Op::SetSplit(on) if self.fn_sp => {
+                Ok(Self::command(format!("FN0;SP{};", u8::from(*on)), none))
+            }
+            Op::SetSplit(on) => Ok(Self::command(format!("FR0;FT{};", u8::from(*on)), none)),
             // `AI` has one parameter digit (page 13): 1 for on.
             Op::SetTransceive(on) => Ok(Self::command(format!("AI{};", u8::from(*on)), none)),
             // `RU` and `RD` carry no parameter and move the RIT by an unstated step, so an exact
@@ -430,8 +438,8 @@ impl ProtocolEngine for KenwoodEngine {
         if !self.desc.capabilities.has(op.required_capability()) {
             return Err(Self::unsupported("capability not in the rig description"));
         }
-        if self.ts440 {
-            if let Some(result) = Self::encode_ts440(op) {
+        if self.older {
+            if let Some(result) = self.encode_ts440(op) {
                 return result;
             }
         }
