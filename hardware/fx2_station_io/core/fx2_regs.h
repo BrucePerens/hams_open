@@ -46,6 +46,7 @@ typedef unsigned long u32;
 #define USBIRQ XREG(0xE65D)
 #define USBIRQ_URES  0x10   /* bus reset */
 #define USBIRQ_SUDAV 0x01   /* setup data available */
+#define USBIRQ_SUSP  0x08   /* 3 ms of no bus activity: suspend signalling (TRM 15.7.8) */
 
 /* TRM 2.2, 15.12.10 EP0CS, 15.12.26 SUDPTR: endpoint zero. */
 #define EP0BCH XREG(0xE68A)
@@ -66,6 +67,34 @@ __sfr __at(0xB0) IOD;
 __sfr __at(0xB2) OEA;
 __sfr __at(0xB3) OEB;
 __sfr __at(0xB5) OED;
+
+/* TRM chapter 14 (Timers/Counters): TCON 0x88, TMOD 0x89, TL0/TL1/TH0/TH1 0x8A-0x8D, CKCON 0x8E
+ * (T2M bit 5, T1M bit 4, T0M bit 3: 0 = CLKOUT/12, 1 = CLKOUT/4; Table 14-4), T2CON 0xC8,
+ * RCAP2L/H 0xCA/0xCB, TL2/TH2 0xCC/0xCD. Timer 2 in 16-bit auto-reload mode (CP/RL2 = 0,
+ * TR2 = 1, TF2 set on overflow, cleared by software; Tables 14-5 and 14-6). */
+__sfr __at(0x88) TCON;
+__sfr __at(0x89) TMOD;
+__sfr __at(0x8A) TL0;
+__sfr __at(0x8B) TL1;
+__sfr __at(0x8C) TH0;
+__sfr __at(0x8D) TH1;
+__sfr __at(0x8E) CKCON;
+__sfr __at(0xC8) T2CON;
+__sfr __at(0xCA) RCAP2L;
+__sfr __at(0xCB) RCAP2H;
+__sfr __at(0xCC) TL2;
+__sfr __at(0xCD) TH2;
+#define TCON_TF0 0x20
+#define TCON_TR0 0x10
+#define TCON_TF1 0x80
+#define TCON_TR1 0x40
+#define T2CON_TF2 0x80
+#define T2CON_TR2 0x04
+#define TMOD_T0_MODE1 0x01      /* 16-bit counter, TMOD.1:0 = 01 (Table 14-2) */
+#define TMOD_T1_MODE1 0x10
+#define CKCON_T2M 0x20
+#define CKCON_T1M 0x10
+#define CKCON_T0M 0x08
 
 /* TRM 15.15: registers in 0xE600-0xE6FF need a few CPU cycles between some accesses. */
 #define SYNCDELAY() do { __asm nop __endasm; __asm nop __endasm; __asm nop __endasm; __asm nop __endasm; } while (0)

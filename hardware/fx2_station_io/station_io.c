@@ -59,6 +59,15 @@ void app_usb_reset(void)
     release_outputs();
 }
 
+void app_usb_suspend(void)
+{
+    release_outputs();
+}
+
+void app_tick(void)
+{
+}
+
 u8 app_vendor_request(u8 bm, u8 req, u16 value, u16 index, u16 length)
 {
     u8 st[4];

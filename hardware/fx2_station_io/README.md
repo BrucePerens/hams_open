@@ -63,6 +63,10 @@ required content but not the byte layout; adopt or change it there.
   (protocol constants), `fx2_core.c` (clock, ReNumeration, endpoint zero, standard requests,
   dispatcher; polled, no interrupts), `descriptors.c` (descriptors at fixed even code-RAM
   addresses so SUDPTR can serve them).
+- `core/fx2_timer.c` Timers 0/1/2 (TRM chapter 14), all CLKOUT/12 = 4 MHz (250 ns): Timer 2 auto-reload
+  1 ms tick (polled), Timer 1 blocking delays, Timer 0 free-running stopwatch for the longest main-loop
+  pass. Measured on the board 2026-10-30: firmware clock = host clock within 0.02 %, longest loop pass
+  about 110 us (`tools/hams_fx2.py tick`, request GET_TICK 0x04).
 - `station_io.c` the application: GET_INFO record, product string, PA0/PA1 commands.
 - `tools/hams_fx2.py` loader and test tool (pyusb); `tools/fx2_simulator.py` software model.
 - `tests/test_fx2_host.py` GET_INFO parser, Intel HEX, loader safety rules, simulator, and the
@@ -117,6 +121,7 @@ the chip); otherwise unplug and replug to return to the ROM state.
 Infrastructure anchors cited here as this module's contract: `[@ANCHOR: HAMS_FX2_parse_get_info]`
 (GET_INFO parser), `[@ANCHOR: HAMS_FX2_parse_ihx]` (Intel HEX reader), `[@ANCHOR: HAMS_FX2_image_chunks]`
 (code-RAM-only write plan), `[@ANCHOR: HAMS_FX2_load_ram]` (0xA0 loader with readback),
+`[@ANCHOR: HAMS_FX2_tick]` (millisecond clock and loop-latency read),
 `[@ANCHOR: HAMS_FX2_read_info]` and `[@ANCHOR: HAMS_FX2_gpio]` (host commands). The tools directory
 is excluded from the per-function ratchet like other `tools/` directories; the C firmware is covered by the
 compiled-image tests and the hardware run above.

@@ -8,6 +8,8 @@
 /* Provided by the application image. */
 extern void app_init(void);
 extern void app_usb_reset(void);
+extern void app_usb_suspend(void);   /* 3 ms without bus activity (TRM 4.4.2.3) */
+extern void app_tick(void);          /* once per millisecond, from the main loop */
 /* Return 1 if handled (reply sent or acknowledged), 0 to stall. */
 extern u8 app_vendor_request(u8 bm_request_type, u8 request, u16 value, u16 index, u16 length);
 /* The image supplies a GET_INFO record at ADDR_APP_INFO (byte 0 = total length) and its product

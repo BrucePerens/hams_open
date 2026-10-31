@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -147,6 +148,27 @@ class GpioTests(unittest.TestCase):
             with self.assertRaises(h.Fx2Error):
                 h.gpio_set(self.sim, oe, lv)
         self.assertEqual(self.sim.oea, 0)
+
+
+class TickTests(unittest.TestCase):
+    # Tests [@ANCHOR: HAMS_FX2_tick]
+    def test_tick_advances_at_one_millisecond_per_count(self):
+        sim = SimulatedFx2()
+        h.load_ram(sim, {0: 2, 1: 0, 2: 0x40})
+        a = h.read_tick(sim)
+        time.sleep(0.05)
+        b = h.read_tick(sim)
+        self.assertGreater(b.seconds - a.seconds, 0.04)
+        self.assertLess(b.seconds - a.seconds, 0.5)
+        self.assertLess(b.sub, 4000)
+        self.assertEqual(b.loop_max_us, 0x120 * 0.25)
+
+    def test_short_reply_refused(self):
+        class Short(SimulatedFx2):
+            def ctrl_in(self, *a):
+                return b"\x00" * 3
+        with self.assertRaises(h.Fx2Error):
+            h.read_tick(Short())
 
 
 @unittest.skipUnless(shutil.which("sdcc"), "SDCC not installed")
