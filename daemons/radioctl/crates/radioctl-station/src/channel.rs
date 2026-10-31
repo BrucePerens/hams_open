@@ -425,14 +425,24 @@ impl Switchboard {
     }
 
     // [@ANCHOR: radioctl_station_board_store]
-    /// Records commanded and/or confirmed state, noting when a channel went off.
+    /// Records commanded and/or confirmed state. The off-time stamp for the minimum off time is
+    /// taken only on an observed or commanded edge from a known non-off value to off: a channel
+    /// first seen off (the start-up read-back, or the first read after a driver fault) has no
+    /// known turn-off time, and the minimum off time is a protection for a device that was just
+    /// running, so it must not delay a power-on after a restart of the software.
     fn store(&self, c: &Chan, commanded: Option<Option<Value>>, confirmed: Option<Option<Value>>) {
         let mut s = lock(&c.state);
+        let edge = |old: Option<Value>, new: Option<Value>| {
+            new == Some(Value::Off) && old.is_some_and(|v| v != Value::Off)
+        };
         if let Some(v) = commanded {
+            if edge(s.commanded, v) {
+                s.last_off = Some(Instant::now());
+            }
             s.commanded = v;
         }
         if let Some(v) = confirmed {
-            if v == Some(Value::Off) && s.confirmed != Some(Value::Off) {
+            if edge(s.confirmed, v) {
                 s.last_off = Some(Instant::now());
             }
             s.confirmed = v;
@@ -896,6 +906,27 @@ mod tests {
         assert_eq!(err.kind, StationErrorKind::Refused);
         tokio::time::advance(Duration::from_millis(600)).await;
         b.set(&id("amp_pwr"), Value::On).await.unwrap();
+    }
+
+    // Tests [@ANCHOR: radioctl_station_board_store]
+    #[tokio::test(start_paused = true)]
+    async fn a_channel_first_seen_off_may_be_switched_on_at_once() {
+        // The start-up read-back finds the amplifier off. The software has only just started: the
+        // channel's minimum off time protects a device that was running, so it must not apply.
+        let bank = VirtualBank::new();
+        let b = board(&bank);
+        assert_eq!(b.read_back(&id("amp_pwr")).await.unwrap(), Some(Value::Off));
+        b.set(&id("amp_pwr"), Value::On).await.unwrap();
+
+        b.set(&id("amp_pwr"), Value::Off).await.unwrap();
+        tokio::time::advance(Duration::from_millis(600)).await;
+        b.set(&id("amp_pwr"), Value::On).await.unwrap();
+
+        // A real turn-off seen by read-back (someone flipped the switch by hand) is an edge.
+        bank.set_physical(1, false);
+        assert_eq!(b.read_back(&id("amp_pwr")).await.unwrap(), Some(Value::Off));
+        let err = b.set(&id("amp_pwr"), Value::On).await.unwrap_err();
+        assert_eq!(err.kind, StationErrorKind::Refused);
     }
 
     #[tokio::test(start_paused = true)]

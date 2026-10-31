@@ -1046,7 +1046,8 @@ power = { source = "always_on" }
             },
         );
         let items = r.mgr.reconcile().await;
-        sleep(secs(1)).await; // past the channel's minimum off time
+        // No wait for the channel's minimum off time: a radio found off at start-up may be
+        // switched on at once (the off time only counts from an observed turn-off).
         assert_eq!(items[0].resolved, RadioState::Off);
         let mut rx = r.mgr.subscribe();
         let rep = r.mgr.press(&dev("ic7300"), Button::On).await.unwrap();

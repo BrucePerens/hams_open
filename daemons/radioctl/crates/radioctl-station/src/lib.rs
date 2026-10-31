@@ -9,6 +9,7 @@
 //!
 //! - [`model`]: channels, devices, profiles and the station definition, with validation.
 //! - [`gpio_map`]: the GPIO function-map format (TOML) and board models, with validation.
+//! - [`actor_link`]: the real rig actor behind the manager: spawn, respawn, the unkey pass.
 //! - [`channel`]: channel drivers, the virtual bank, the switchboard (commanded and confirmed
 //!   state, break-before-make selectors, momentary pulses, debounced inputs).
 //! - [`modbus`]: sans-IO Modbus framing and the coil relay driver (ASCII and RTU).
@@ -18,6 +19,7 @@
 //! - [`record`]: the durable radio record (JSON, owner-only, atomic).
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
+pub mod actor_link;
 pub mod channel;
 pub mod error;
 pub mod gpio_map;
