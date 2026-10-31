@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Status changes: the callback (its own thread) and the async event stream, fed by a knob
+//! Status changes: the async event stream, with a second subscriber on its own task, fed by a knob
 //! turned on a virtual radio.
 use std::error::Error;
-use std::sync::mpsc;
 use std::time::Duration;
 
 use radioctl_core::op::{Field, Observation, Op};
@@ -21,13 +20,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let radio = VirtualRig::from_description(&description)?;
     let (transport, front_panel) = spawn_virtual_rig(&Handle::current(), radio, Duration::ZERO);
 
-    // The callback is plain synchronous code. It runs on a dedicated thread, never on the
-    // actor, so a slow callback cannot delay an unkey.
-    let (seen, callback_events) = mpsc::channel();
-    let options = RigOptions::default().with_callback(move |event| {
-        let _ = seen.send(event);
+    let rig = spawn_current(
+        ElecraftEngine::new(description)?,
+        transport,
+        RigOptions::default(),
+    )?;
+    // Every `events()` call is its own subscriber. This one runs on a task of its own, so a slow
+    // subscriber never delays the actor or another subscriber; it only skips events.
+    let mut other = rig.events();
+    let (seen, subscriber_events) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        while let Some(event) = other.next().await {
+            if seen.send(event).is_err() {
+                break;
+            }
+        }
     });
-    let rig = spawn_current(ElecraftEngine::new(description)?, transport, options)?;
     let mut stream = rig.events();
 
     // Ask the radio to report changes by itself, then turn a knob on it.
@@ -49,12 +57,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    // The callback hears the same changes, in order, on its own thread.
+    // The other subscriber saw the same changes, in order, on its own task.
+    let mut subscriber_events = subscriber_events;
     loop {
-        let delivered = callback_events.recv_timeout(Duration::from_secs(5))?;
+        let delivered = timeout(Duration::from_secs(5), subscriber_events.recv())
+            .await?
+            .ok_or("the subscriber task ended")?;
         if delivered.changes.iter().any(|c| c.field == wanted) {
             println!(
-                "callback: rig {} reported the change of VFO A",
+                "subscriber: rig {} reported the change of VFO A",
                 delivered.rig
             );
             break;

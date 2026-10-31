@@ -109,7 +109,7 @@ The application owns the tokio runtime. This is design decision 1 and the propos
   can be used from a different runtime than the actor's, or from a thread with no runtime (the
   tests do both; see the end of this chapter).
 - Blocking work runs on dedicated threads, never on runtime workers: serial port I/O, pseudo-terminal
-  I/O and the application callback.
+  I/O.
 
 ## Sans-IO engines
 
@@ -147,24 +147,21 @@ Because an engine touches no socket, port, runtime or clock, it can be replayed 
 driven by property tests with arbitrary bytes, and run against a virtual rig in a plain unit test. The
 price is a little glue per transport, which `radioctl-core` provides once.
 
-## The callback dispatcher thread
+## The event stream
 
-An application callback is ordinary synchronous code and may block. Running it on the actor, or on a
-runtime worker, would let one slow callback delay a PTT release. So `RigOptions::with_callback`
-starts a dedicated OS thread per rig (named `radioctl-callbacks-<rig id>`), and the actor hands events
-over through a bounded queue under a mutex held only for a push. The actor never waits for the
-callback. When the queue is full the new event is merged into the newest queued one (latest value
-per field wins) and the lost intermediate values are counted. A panic in the callback is caught and
-counted, and the thread keeps running. The async view of the same events is a `tokio` broadcast
-channel (`RigHandle::events`); a subscriber that lags skips events and the skip is counted.
-Chapter [4](04-api.md) shows both.
+Status changes reach the application through a `tokio::sync::broadcast` channel
+(`RigHandle::events`). The actor does one non-blocking `send` per event and never waits for a
+subscriber. Each subscriber is a stream the application drives from its own task on its own runtime;
+the library starts no thread for it. A subscriber that lags skips the oldest events and the skip is
+counted (`stream_lagged`, and `EventStream::lagged()` per subscriber). A subscriber that panics or
+stalls affects only itself. Chapter [4](04-api.md) shows it. (Earlier versions ran a synchronous
+callback on a dedicated thread; design decision 20 records why that was removed.)
 
 ## Threading and cancellation
 
 | Thing | Runs on | Stops when |
 |---|---|---|
 | Rig actor | the caller's runtime | every `RigHandle` clone is dropped (after its fail-closed unkey) |
-| Callback dispatcher | its own OS thread | the rig is dropped (it finishes what is queued) |
 | Serial supervisor and reader | OS threads, one supervisor per port and one reader per connection | the byte stream handed to the actor is dropped |
 | Pty reader and writer (splitter) | two OS threads per endpoint | the `PtyEndpoint` is dropped |
 | Splitter clients, `radioctld` listeners and clients | tasks on the caller's runtime | the client disconnects, or the server is shut down |
@@ -184,7 +181,6 @@ Cancellation rules, from the code:
 ## What the tests prove about this chapter
 
 `crates/radioctl-core/tests/actor.rs` contains, among others: a slow rig does not delay another rig's
-PTT-off; PTT-off abandons a slow read on the same rig; a blocked callback never delays PTT-off and its
-events coalesce; a panicking callback leaves the rig alone; a lagging stream subscriber skips and
-counts; two rigs on two runtimes work and a handle works with no runtime at all; the owned-runtime
+PTT-off; PTT-off abandons a slow read on the same rig; a stalled stream subscriber never delays PTT-off; a panicking subscriber task leaves the rig and other
+subscribers alone; a lagging stream subscriber skips and counts; the stream ends when the rig stops; two rigs on two runtimes work and a handle works with no runtime at all; the owned-runtime
 constructor works without any caller runtime; the description's inter-command gap is kept.

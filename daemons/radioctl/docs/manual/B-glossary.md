@@ -10,7 +10,7 @@
 | **CAT** | Computer Aided Transceiver: a radio's serial control protocol. Not one protocol: each maker has its own. |
 | **CI-V** | Icom's binary control protocol, `FE FE <to> <from> <cmd> [data] FD`. Xiegu radios speak a subset. |
 | **Capability** | One named thing a rig can do (`Capability`); a description lists them. |
-| **Callback** | The synchronous status-change function the application registers; runs on a dedicated thread. |
+| **Event stream** | `rig.events()`: a `Stream` of status changes, one subscriber per call, driven by the application's own task. |
 | **Clean room** | Working from documents and observations of behaviour rather than copying someone's code (chapter [12](12-provenance-and-licensing.md)). |
 | **Conformance** | A transcript replayed against the engine and the virtual rig of a description. |
 | **DTR, RTS** | Serial modem control lines. Some interfaces key a transmitter from them. |

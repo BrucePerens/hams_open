@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Status-change events: what the callback and the async stream receive.
+//! Status-change events: what the async event stream receives.
 
 use crate::op::{Field, Observation};
 

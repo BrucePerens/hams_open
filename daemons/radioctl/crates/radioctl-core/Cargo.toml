@@ -18,6 +18,7 @@ owned-runtime = ["tokio/rt-multi-thread"]
 [dependencies]
 serde = { workspace = true }
 toml = { workspace = true }
+futures-core = "0.3"
 tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "macros", "net"] }
 # No libudev: USB serial ports are found by reading sysfs on Linux (see usb.rs), so a build needs
 # no libudev development package and a release binary needs no libudev at run time.

@@ -114,7 +114,7 @@ reply (that command ends in `Cancelled`). They never interrupt a write already i
 gate and skip inter-command spacing. The tests `ptt_off_abandons_a_slow_read_on_the_same_rig`,
 `a_slow_rig_does_not_delay_another_rigs_ptt_off` and
 `stop_morse_jumps_the_queue_needs_no_gate_and_leaves_the_key_alone` cover the same-rig, cross-rig and
-Morse cases; a blocked or panicking application callback cannot delay them because callbacks run on
+Morse cases; a stalled or panicking event subscriber cannot delay them because subscribers run on tasks of their own, behind a broadcast channel
 their own thread.
 
 `StopCw` clears the radio's CW text buffer and ends the element being sent; it is the stop path for Morse
@@ -234,7 +234,7 @@ It does:
 
 - refuse transmit-capable commands while a rig's gate is closed, at two points, and in `radioctld`
   before anything is queued;
-- put unkeying ahead of everything and keep a slow callback or a slow other rig from delaying it;
+- put unkeying ahead of everything and keep a slow event subscriber or a slow other rig from delaying it;
 - unkey a radio that may be keyed when a transmit command goes unanswered, when the last handle is
   dropped, and when it has transmitted past its limit or its caller's heartbeat has lapsed;
 - report an unkey that failed, as an alarm, instead of dropping it;

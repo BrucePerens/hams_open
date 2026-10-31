@@ -8,7 +8,7 @@
 //! field. Waveform frames are not cache fields (a frame owns its samples and arrives many times a
 //! second): the engine returns each complete sweep as [`crate::engine::Inbound::ScopeFrame`] and
 //! the actor publishes it on [`crate::rig::RigHandle::scope_frames`], a bounded stream of its own
-//! that never goes through the status-change callback.
+//! that never goes through the status-change stream.
 //!
 //! The relay's `ScopeSource` frame (centre and span in hertz, bins, a sequence number) is built
 //! from a [`ScopeFrame`] by the relay; this crate keeps the rig's own integers (hertz and the

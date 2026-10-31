@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! The transmit frequency is first class (Hamlib issue 138): in split operation, with the rig
 //! keyed, `active_tx_frequency` is the transmit VFO's frequency on every engine, and the
-//! status-change callback reports it.
+//! status-change stream reports it.
 //!
 //! Everything here runs on virtual rigs in memory. The transmit gate stays closed throughout, so
 //! the actor refuses every keying command; the "key" is the virtual rig's front-panel PTT, which
@@ -45,11 +45,16 @@ fn start<E: ProtocolEngine>(
 ) -> (RigHandle, VirtualRigControl) {
     let rig = VirtualRig::from_description(desc).expect("virtual rig");
     let (stream, control) = spawn_virtual_rig(&Handle::current(), rig, Duration::ZERO);
-    let mut options = RigOptions::default().with_callback(move |event| {
-        events.lock().expect("events").push(event);
-    });
+    let mut options = RigOptions::default();
     options.poll.enabled = false;
     let handle = spawn(&Handle::current(), engine, stream, options).expect("spawn");
+    // A subscriber task on the test's runtime collects what the event stream reports.
+    let mut stream = handle.events();
+    tokio::spawn(async move {
+        while let Some(event) = stream.next().await {
+            events.lock().expect("events").push(event);
+        }
+    });
     (handle, control)
 }
 
@@ -81,7 +86,7 @@ async fn split_keyed_scenario<E: ProtocolEngine>(desc: RigDescription, engine: E
         Some(Observation::ActiveTxFrequency(TX))
     );
 
-    // The callback saw the transmit frequency change, from RX to TX.
+    // The event stream reported the transmit frequency change, from RX to TX.
     let mut seen = Vec::new();
     for _ in 0..200 {
         seen = events
@@ -97,13 +102,13 @@ async fn split_keyed_scenario<E: ProtocolEngine>(desc: RigDescription, engine: E
         {
             break;
         }
-        std::thread::sleep(Duration::from_millis(5));
+        tokio::time::sleep(Duration::from_millis(5)).await;
     }
     assert!(
         seen.iter()
             .any(|c| c.old == Some(Observation::ActiveTxFrequency(RX))
                 && c.new == Observation::ActiveTxFrequency(TX)),
-        "callback changes: {seen:?}"
+        "stream changes: {seen:?}"
     );
 
     // Leaving split brings the transmit frequency back to the receive frequency.

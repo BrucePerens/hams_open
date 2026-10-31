@@ -417,7 +417,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_handle_tx_vfo] (radioctl-core) The VFO the rig transmits on.
 - [@ANCHOR: radioctl:radioctl_core_handle_rx_frequency] (radioctl-core) The receive frequency, independent of which VFO the caller names.
 - [@ANCHOR: radioctl:radioctl_core_handle_tx_frequency] (radioctl-core) The transmit VFO's frequency, independent of which VFO the caller names.
-- [@ANCHOR: radioctl:radioctl_core_handle_active_tx_frequency] (radioctl-core) The frequency the rig transmits on now, correct in split and while keyed; the status-change callback reports `Field::ActiveTxFrequency` when it changes (Hamlib issue 138).
+- [@ANCHOR: radioctl:radioctl_core_handle_active_tx_frequency] (radioctl-core) The frequency the rig transmits on now, correct in split and while keyed; the status-change stream reports `Field::ActiveTxFrequency` when it changes (Hamlib issue 138).
 - [@ANCHOR: radioctl:radioctl_splitter_keyed_split_frequency] (radioctl-splitter) While keyed in split, a plain current-frequency read answers with the transmit frequency (switchable).
 - [@ANCHOR: radioctl:radioctld_service_tx_state] (radioctld) The receive and transmit VFOs as the rig last reported them; `\get_active_tx_freq` answers the transmit frequency, `f` keeps the named-VFO meaning.
 - [@ANCHOR: radioctl:radioctl_core_txstate_frequency] (radioctl-core) A VFO's cached frequency.
@@ -650,9 +650,6 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_unsolicited] (radioctl-splitter) `FA`/`FB`/`MD` pushes, only for a client that switched `AI1` on.
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_reset] (radioctl-splitter) Clears partial input and the auto-information flag on disconnect.
 - [@ANCHOR: radioctl:radioctl_core_handle_execute_from] (radioctl-core) Runs a command like `execute_within`, recording the given source on the events it causes (the splitter passes `Splitter`).
-- [@ANCHOR: radioctl:radioctl_core_dispatcher_start] (radioctl-core) Starts the dispatcher thread for `callback` with a queue of `capacity` events.
-- [@ANCHOR: radioctl:radioctl_core_dispatcher_submit] (radioctl-core) Queues an event without ever waiting for the callback.
-- [@ANCHOR: radioctl:radioctl_core_dispatcher_counters] (radioctl-core) A snapshot of the counters.
 - [@ANCHOR: radioctl:radioctl_core_event_merge] (radioctl-core) Folds a later event of the same rig into this one. Per field the earliest `old` and the
 - [@ANCHOR: radioctl:radioctl_core_poll_for_capabilities] (radioctl-core) Builds the schedule for the fields the capabilities allow, first due at `now`.
 - [@ANCHOR: radioctl:radioctl_core_poll_next_due] (radioctl-core) The earliest due time, if any field is polled.
@@ -661,7 +658,6 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_poll_report] (radioctl-core) Records the outcome of polling `field`: a change resets the interval to its minimum, no
 - [@ANCHOR: radioctl:radioctl_core_poll_note_transceive] (radioctl-core) Notes that the rig reports on its own; polling slows to the maximum interval.
 - [@ANCHOR: radioctl:radioctl_core_poll_interval] (radioctl-core) The current interval of `field`, for tests and diagnostics.
-- [@ANCHOR: radioctl:radioctl_core_rig_options_with_callback] (radioctl-core) Sets the status-change callback. It runs on a dedicated thread, never on the actor.
 - [@ANCHOR: radioctl:radioctl_core_transmit_permit_new] (radioctl-core) A permit recording who granted it (an operator, an attestation, a test name).
 - [@ANCHOR: radioctl:radioctl_core_transmit_permit_granted_by] (radioctl-core) Who granted the permit.
 - [@ANCHOR: radioctl:radioctl_core_rig_spawn] (radioctl-core) Spawns a rig actor on a caller-supplied tokio runtime Handle and returns its clonable handle.
@@ -684,8 +680,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_link_changed] (radioctl-core) Waits for the next link status change; false when the watch is closed.
 - [@ANCHOR: radioctl:radioctl_core_actor_link_down] (radioctl-core) Marks the transport down and reports the loss once as `Alarm::LinkDown`; every later command is refused with `LinkDown`.
 - [@ANCHOR: radioctl:radioctl_core_actor_note_unsolicited] (radioctl-core) A frame nobody waited for: transceive traffic (slows polling) on a rig with `Capability::Transceive`, a counted late reply (`RigStats::late_replies`, polling unchanged) on any other.
-- [@ANCHOR: radioctl:radioctl_core_actor_emit] (radioctl-core) Sends an event to the stream subscribers and the callback dispatcher.
-- [@ANCHOR: radioctl:radioctl_core_handle_events] (radioctl-core) An async stream of status changes, starting now.
+- [@ANCHOR: radioctl:radioctl_core_actor_emit] (radioctl-core) Sends an event to the stream subscribers. A broadcast send never waits for a subscriber.
+- [@ANCHOR: radioctl:radioctl_core_handle_events] (radioctl-core) The status-change stream, starting now: a `futures_core::Stream<Item = RigEvent>`. Spawn a task on your own runtime to consume it; see [`EventStream`] for lag behaviour.
 - [@ANCHOR: radioctl:radioctl_core_handle_cached] (radioctl-core) The cached value of a field with its age, without touching the rig.
 - [@ANCHOR: radioctl:radioctl_core_handle_execute] (radioctl-core) Runs a command with the default deadline.
 - [@ANCHOR: radioctl:radioctl_core_handle_execute_within] (radioctl-core) Runs a command that must finish within `timeout`. Unkeying the transmitter takes the
@@ -696,11 +692,14 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_handle_ptt] (radioctl-core) The transmit state.
 - [@ANCHOR: radioctl:radioctl_core_handle_set_ptt] (radioctl-core) Keys (needs the transmit gate open) or unkeys (always allowed, jumps the queue).
 - [@ANCHOR: radioctl:radioctl_core_handle_signal] (radioctl-core) The S-meter in raw units.
-- [@ANCHOR: radioctl:radioctl_core_event_stream_next] (radioctl-core) The next event, or `None` once the rig has stopped. A subscriber that falls behind skips
+- [@ANCHOR: radioctl:radioctl_core_event_stream_poll] (radioctl-core) Polls for the next event, skipping and counting any the subscriber missed.
+- [@ANCHOR: radioctl:radioctl_core_event_stream_next] (radioctl-core) The next event, or `None` once the rig has stopped. Cancel-safe: dropping the future loses no event. Events missed while lagging are skipped and counted.
+- [@ANCHOR: radioctl:radioctl_core_event_stream_lagged] (radioctl-core) Events this subscriber has missed because it fell behind, in total.
+- [@ANCHOR: radioctl:radioctl_core_event_stream_poll_next] (radioctl-core) `Stream::poll_next` for `EventStream`.
 - [@ANCHOR: radioctl:radioctl_core_actor_run] (radioctl-core) The actor loop: emergency channel first, then ordinary commands, unsolicited bytes from the rig, and polling last.
 - [@ANCHOR: radioctl:radioctl_core_actor_serve] (radioctl-core) Runs one command and answers its caller; counts successes, failures and preemptions.
 - [@ANCHOR: radioctl:radioctl_core_actor_run_command] (radioctl-core) Executes one command: deadline and gate checks, write, wait for the reply with retries, preemption by an emergency command, typed errors with the transcript tail.
-- [@ANCHOR: radioctl:radioctl_core_actor_observe] (radioctl-core) Updates the cache and, if the value changed, emits an event to the stream and the callback dispatcher.
+- [@ANCHOR: radioctl:radioctl_core_actor_observe] (radioctl-core) Updates the cache and, if the value changed, emits an event to the stream subscribers.
 - [@ANCHOR: radioctl:radioctl_core_actor_poll_once] (radioctl-core) Polls the next due field at lowest priority.
 - [@ANCHOR: radioctl:radioctl_core_actor_poll_entry] (radioctl-core) Reads one polled field and adapts its interval from whether it changed.
 - [@ANCHOR: radioctl:radioctl_core_actor_poll_reserved] (radioctl-core) Before a queued command is served, reads the PTT state if none has been read for `ptt_reserve`, so a flooding client cannot hide a radio that keyed or unkeyed on its own.
@@ -730,7 +729,6 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_on_stop] (radioctl-core) When the last handle is dropped, a rig whose cache says keyed or whose gate was open is unkeyed before the actor ends.
 - [@ANCHOR: radioctl:radioctl_core_deadline_after] (radioctl-core) Saturating `Instant + Duration`: an absurd timeout (a caller's `Duration::MAX`, a rig file's timing) never panics the actor or the caller.
 - [@ANCHOR: radioctl:radioctl_core_wait_until] (radioctl-core) Sleeps until the next poll is due, or forever when nothing is polled.
-- [@ANCHOR: radioctl:radioctl_core_dispatcher_run] (radioctl-core) The callback thread loop: pop, call under catch_unwind, count.
 - [@ANCHOR: radioctl:radioctl_core_capability_name] (radioctl-core) The name used in rig description files.
 - [@ANCHOR: radioctl:radioctl_core_capability_from_name] (radioctl-core) The capability with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_parse] (radioctl-core) Parses and validates a description file. Any unknown field, unknown name, duplicate,

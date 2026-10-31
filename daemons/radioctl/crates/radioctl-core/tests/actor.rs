@@ -4,11 +4,12 @@
 //! costs nothing and the assertions about delay are exact.
 #![allow(clippy::expect_used, clippy::panic)]
 
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc as std_mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures_core::Stream;
 use radioctl_core::capability::{Capability, CapabilitySet};
 use radioctl_core::description::RigDescription;
 use radioctl_core::error::ErrorKind;
@@ -636,27 +637,107 @@ async fn link_loss_while_keyed_is_a_visible_alarm() {
     assert!(alarms(&drain(&mut events).await).is_empty());
 }
 
-// Tests [@ANCHOR: radioctl_core_rig_options_with_callback]
-// Tests [@ANCHOR: radioctl_core_handle_stats]
-// Tests [@ANCHOR: radioctl_core_actor_observe]
-#[tokio::test(start_paused = true)]
-async fn a_blocked_callback_never_delays_ptt_off_and_events_coalesce() {
-    let (release_tx, release_rx) = std_mpsc::channel::<()>();
-    let release_rx = std::sync::Mutex::new(release_rx);
-    let (seen_tx, seen_rx) = std_mpsc::channel::<RigEvent>();
-    let options = RigOptions {
-        dispatcher_capacity: 1,
-        ..quiet()
+async fn stream_next(stream: &mut EventStream) -> Option<RigEvent> {
+    std::future::poll_fn(|cx| Pin::new(&mut *stream).poll_next(cx)).await
+}
+
+fn freq_of(event: &RigEvent) -> Option<Hz> {
+    match event.changes.first().map(|c| c.new) {
+        Some(Observation::Frequency(_, hz)) => Some(hz),
+        _ => None,
     }
-    .with_callback(move |event| {
-        let _ = seen_tx.send(event);
-        let held = release_rx.lock().unwrap_or_else(|p| p.into_inner());
-        let _ = held.recv_timeout(Duration::from_secs(30));
-    });
+}
+
+// Tests [@ANCHOR: radioctl_core_event_stream_poll_next]
+// Tests [@ANCHOR: radioctl_core_event_stream_poll]
+// Tests [@ANCHOR: radioctl_core_handle_events]
+#[tokio::test(start_paused = true)]
+async fn stream_trait_delivers_events_in_order_with_old_and_new() {
+    let (rig, _control) = civ(quiet(), Duration::ZERO);
+    let mut stream = rig.events();
+    for step in 0..5u64 {
+        rig.set_frequency(Vfo::A, Hz(7_000_000 + step))
+            .await
+            .expect("set");
+    }
+    let mut seen = Vec::new();
+    while let Ok(Some(event)) = timeout(Duration::from_millis(10), stream_next(&mut stream)).await {
+        assert_eq!(event.source, Source::Api);
+        seen.extend(freq_of(&event));
+    }
+    let expected: Vec<Hz> = (0..5u64).map(|s| Hz(7_000_000 + s)).collect();
+    assert_eq!(seen, expected);
+    assert_eq!(stream.lagged(), 0);
+}
+
+// Tests [@ANCHOR: radioctl_core_event_stream_next]
+// Tests [@ANCHOR: radioctl_core_event_stream_poll]
+#[tokio::test(start_paused = true)]
+async fn the_stream_ends_when_the_rig_stops() {
+    let (rig, _control) = civ(quiet(), Duration::ZERO);
+    let mut stream = rig.events();
+    let mut scope = rig.scope_frames();
+    drop(rig);
+    let ended = timeout(Duration::from_secs(5), stream.next())
+        .await
+        .expect("the stream ends instead of hanging");
+    assert!(ended.is_none());
+    assert!(stream_next(&mut stream).await.is_none(), "stays ended");
+    let ended = timeout(Duration::from_secs(5), scope.next())
+        .await
+        .expect("the scope stream ends too");
+    assert!(ended.is_none());
+}
+
+// Tests [@ANCHOR: radioctl_core_event_stream_poll]
+// Tests [@ANCHOR: radioctl_core_handle_events]
+#[tokio::test(start_paused = true)]
+async fn many_subscribers_each_get_every_event() {
+    let (rig, _control) = civ(quiet(), Duration::ZERO);
+    let mut tasks = Vec::new();
+    for _ in 0..8 {
+        let mut stream = rig.events();
+        tasks.push(tokio::spawn(async move {
+            let mut seen = Vec::new();
+            while seen.len() < 5 {
+                match stream.next().await {
+                    Some(event) => seen.extend(freq_of(&event)),
+                    None => break,
+                }
+            }
+            seen
+        }));
+    }
+    for step in 0..5u64 {
+        rig.set_frequency(Vfo::A, Hz(3_500_000 + step))
+            .await
+            .expect("set");
+    }
+    let expected: Vec<Hz> = (0..5u64).map(|s| Hz(3_500_000 + s)).collect();
+    for task in tasks {
+        assert_eq!(task.await.expect("subscriber task"), expected);
+    }
+}
+
+// Tests [@ANCHOR: radioctl_core_handle_events]
+// Tests [@ANCHOR: radioctl_core_event_stream_lagged]
+// Tests [@ANCHOR: radioctl_core_handle_stats]
+#[tokio::test(start_paused = true)]
+async fn a_stalled_subscriber_never_delays_ptt_off_and_counts_its_lag() {
+    let options = RigOptions {
+        stream_capacity: 1,
+        ..quiet()
+    };
     let (rig, control) = civ(options, Duration::ZERO);
+    // A subscriber task that takes one event and then never reads again.
+    let mut stalled = rig.events();
+    let stall = tokio::spawn(async move {
+        let _ = stalled.next().await;
+        std::future::pending::<()>().await;
+    });
+    let kept = rig.events();
     rig.open_transmit_gate(permit());
     rig.set_ptt(true).await.expect("keyed");
-    seen_seq(&seen_rx);
     let started = Instant::now();
     for step in 0..6u64 {
         rig.set_frequency(Vfo::A, Hz(14_000_000 + step))
@@ -669,55 +750,36 @@ async fn a_blocked_callback_never_delays_ptt_off_and_events_coalesce() {
         "virtual time barely moved"
     );
     assert!(!control.state().ptt);
-    let stats = rig.stats();
-    assert!(stats.dispatcher.queue_full > 0, "{stats:?}");
-    assert!(stats.dispatcher.values_coalesced > 0, "{stats:?}");
-    for _ in 0..8 {
-        let _ = release_tx.send(());
-    }
+    // A subscriber that did not read skips to the newest events and counts what it missed.
+    let mut kept = kept;
+    assert!(kept.next().await.is_some());
+    assert!(kept.lagged() > 0);
+    assert!(rig.stats().stream_lagged >= kept.lagged());
+    stall.abort();
 }
 
-fn seen_seq(rx: &std_mpsc::Receiver<RigEvent>) {
-    let first = rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("the first event reaches the callback");
-    assert_eq!(first.changes.first().map(|c| c.field), Some(Field::Ptt));
-}
-
-// Tests [@ANCHOR: radioctl_core_event_stream_next]
 // Tests [@ANCHOR: radioctl_core_handle_events]
+// Tests [@ANCHOR: radioctl_core_event_stream_poll]
 #[tokio::test(start_paused = true)]
-async fn a_panicking_callback_leaves_the_rig_and_later_events_alone() {
-    let (seen_tx, seen_rx) = std_mpsc::channel::<RigEvent>();
-    let calls = Arc::new(std::sync::atomic::AtomicU64::new(0));
-    let counter = Arc::clone(&calls);
-    let options = quiet().with_callback(move |event| {
-        if counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
-            panic!("application callback bug");
-        }
-        let _ = seen_tx.send(event);
+async fn a_panicking_subscriber_task_leaves_the_rig_and_other_subscribers_alone() {
+    let (rig, _control) = civ(quiet(), Duration::ZERO);
+    let mut bad = rig.events();
+    let bad_task = tokio::spawn(async move {
+        let _ = bad.next().await;
+        panic!("application subscriber bug");
     });
-    let (rig, _control) = civ(options, Duration::ZERO);
-    let mut stream = rig.events();
+    let mut good = rig.events();
     rig.set_frequency(Vfo::A, Hz(7_000_000))
         .await
         .expect("first change");
-    let panicked = timeout(Duration::from_secs(1), stream.next())
-        .await
-        .expect("stream event")
-        .expect("some");
-    assert_eq!(panicked.source, Source::Api);
+    assert!(bad_task.await.expect_err("the task panicked").is_panic());
     rig.set_frequency(Vfo::A, Hz(7_100_000))
         .await
         .expect("second change");
-    let later = seen_rx
-        .recv_timeout(Duration::from_secs(10))
-        .expect("delivered after the panic");
-    assert_eq!(
-        later.changes.first().map(|c| c.new),
-        Some(Observation::Frequency(Vfo::A, Hz(7_100_000)))
-    );
-    assert_eq!(rig.stats().dispatcher.callback_panics, 1);
+    let first = good.next().await.expect("first event");
+    let second = good.next().await.expect("second event");
+    assert_eq!(freq_of(&first), Some(Hz(7_000_000)));
+    assert_eq!(freq_of(&second), Some(Hz(7_100_000)));
     assert_eq!(
         rig.frequency(Vfo::A, Freshness::Fresh)
             .await

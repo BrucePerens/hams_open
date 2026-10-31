@@ -452,6 +452,7 @@ name = "radioctl-core"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "futures-core",
  "radioctl-protocols",
  "serde",
  "serialport",
