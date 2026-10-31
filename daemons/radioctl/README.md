@@ -285,6 +285,20 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_virtual_flex_slice_status_if_subscribed] (radioctl-protocols) The slice status line when the client subscribed to slices, else nothing.
 - [@ANCHOR: radioctl:radioctl_virtual_flex_with_status] (radioctl-protocols) Joins a reply and the status it caused in the configured order.
 - [@ANCHOR: radioctl:radioctl_virtual_flex_control_front_panel] (radioctl-protocols) Changes something at the served virtual radio; status goes to the client at once.
+- [@ANCHOR: radioctl:radioctl_hpsdr_engine_new] (radioctl-protocols) Builds an engine for an `hpsdr-network` description.
+- [@ANCHOR: radioctl:radioctl_hpsdr_engine_parse_line] (radioctl-protocols) One complete line from the bridge.
+- [@ANCHOR: radioctl:radioctl_hpsdr_engine_encode] (radioctl-protocols) 
+- [@ANCHOR: radioctl:radioctl_hpsdr_engine_feed] (radioctl-protocols) 
+- [@ANCHOR: radioctl:radioctl_hpsdr_options_default] (radioctl-protocols) A 3 second lease, drive zero, status every 250 ms, the ANAN-100 constant.
+- [@ANCHOR: radioctl:radioctl_hpsdr_control_set_attenuator] (radioctl-protocols) Sets the step attenuator in dB (0..=31).
+- [@ANCHOR: radioctl:radioctl_hpsdr_control_status] (radioctl-protocols) The latest hardware status of the radio.
+- [@ANCHOR: radioctl:radioctl_hpsdr_control_take_streams] (radioctl-protocols) Hands over the receive I/Q streams of the session (the data plane), once.
+- [@ANCHOR: radioctl:radioctl_hpsdr_set_frequency] (radioctl-protocols) Retunes DDC0 (and the transmit frequency, which follows it).
+- [@ANCHOR: radioctl:radioctl_hpsdr_request_ptt] (radioctl-protocols) Keys or unkeys through the `hpsdr` session, which re-checks its gate before every packet.
+- [@ANCHOR: radioctl:radioctl_hpsdr_handle_line] (radioctl-protocols) Answers one request line.
+- [@ANCHOR: radioctl:radioctl_hpsdr_swr_tenths] (radioctl-protocols) SWR in tenths from forward and reverse counts; 10 (1.0:1) with no forward power.
+- [@ANCHOR: radioctl:radioctl_hpsdr_serve] (radioctl-protocols) Serves `link` behind an in-memory stream for the rig actor, and returns the control handle. The task
+- [@ANCHOR: radioctl:radioctl_hpsdr_virtual_anan] (radioctl-protocols) A virtual ANAN: a Protocol 1 or 2 session on a loopback emulator that the caller started. The gate
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_command] (radioctl-protocols) The virtual Elecraft (KX3) command table.
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_set_meta] (radioctl-protocols) Stores a `K2n`/`K3n` meta-command value of the virtual Elecraft rig (Basic formats are still used).
 - [@ANCHOR: radioctl:radioctl_virtual_elecraft_level] (radioctl-protocols) Reads or sets a level of the virtual Elecraft rig, clamped to the manual's range.
@@ -641,3 +655,6 @@ CARGO_TARGET_DIR=... nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - [@ANCHOR: radioctl:radioctl_ylegacy_decode_frequency_mode] (radioctl-protocols) The frequency of VFO A and the mode from a five-byte 03 answer.
 - [@ANCHOR: radioctl:radioctl_ylegacy_engine_encode] (radioctl-protocols) Encodes an operation as a five-byte block and remembers which answer to count bytes for.
 - [@ANCHOR: radioctl:radioctl_ylegacy_engine_feed] (radioctl-protocols) Counts answer bytes (5 for frequency and mode, 1 for a status read) and decodes them.
+
+
+OpenHPSDR (ANAN-10, ANAN-100; family `hpsdr-network`, `[hpsdr]` block, files `anan-10` and `anan-100`): control plane only, a line-protocol engine (`hpsdr_net.rs`) over an in-memory stream to a bridge (`hpsdr_io.rs`) that owns an `hpsdr` crate Protocol 1 or 2 session (`daemons/hpsdr`). Claims frequency, PTT, forward power and SWR; no mode (placeholder code only) and no attenuator `Op` yet (`HpsdrControl::set_attenuator`). PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate for a bounded lease at drive zero by default. All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.

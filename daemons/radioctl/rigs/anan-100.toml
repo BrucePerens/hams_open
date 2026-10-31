@@ -1,0 +1,80 @@
+# Rig description: Apache Labs ANAN-100 (OpenHPSDR Hermes board), schema 1. See crates/radioctl-core/src/rigfile.rs.
+#
+# SOURCE: "openHPSDR Ethernet Protocol" v4.4 (Protocol 2, Appendix A for the Hermes board) and "Metis - How it
+#   works" v1.33 with "HPSDR - USB Data Protocol" v1.60 (Protocol 1), the TAPR OpenHPSDR documents cited in
+#   daemons/hpsdr/README.md. No source code of pihpsdr, Thetis or PowerSDR was read. The power calibration
+#   constant for the ANAN-100 is 0.095 (Appendix A, Hermes), applied in the hpsdr crate.
+# SCOPE: control plane only (frequency, PTT through the transmit gate, forward power, SWR). Receive I/Q is
+#   the data plane of the hpsdr crate (IqStream), not a radioctl operation. There is no mode (demodulation
+#   happens in the host) and no attenuator Op in the core vocabulary yet.
+#
+# EVERYTHING HERE IS UNVERIFIED: written from the documents, never run against a radio. Whether a real
+# radio is Protocol 1 or 2 depends on its firmware; `protocol` below is the one the radioctl driver is
+# configured for, and the board id is shared by the ANAN-10 and ANAN-100.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-ptt", "set-ptt", "read-power", "read-swr"]
+
+[rig]
+id = "anan-100"
+name = "Apache Labs ANAN-100"
+family = "hpsdr-network"
+
+[hpsdr]
+model = "ANAN-100"
+protocol = 1
+anan10 = false
+
+[timing]
+timeout_ms = 1500
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 7100000
+mode = "usb"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "openHPSDR Ethernet Protocol v4.4, Discovery Reply board types; Metis v1.33 Board_ID", note = "The id and display name are our own labels; the ANAN-100 is a Hermes board (type 1)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "hpsdr.*"
+provenance = { kind = "manual", reference = "openHPSDR Ethernet Protocol v4.4, Appendix A (Hermes power constants); USB Data Protocol v1.60", note = "Model name and the ANAN-10 / ANAN-100 constant choice. The protocol (1 or 2) is a configuration choice for the driver, not read from the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/hpsdr_io.rs", note = "Our choice; the bridge answers from its own state, so the timeout covers the in-memory link only. Transmit commands are never retried." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/hpsdr_net.rs", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "openHPSDR Ethernet Protocol v4.4, High Priority packet byte 4 bit 1; USB Data Protocol v1.60 C0 bit 0 (MOX)", note = "Transmit-capable. The actor's transmit gate applies, then the hpsdr crate's own gate (bounded lease, drive zero unless configured)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-power"
+provenance = { kind = "manual", reference = "openHPSDR Ethernet Protocol v4.4, High Priority Status bytes 14-15 and 22-23; USB Data Protocol v1.60 C&C address 1", note = "Raw ADC counts, forward power. Not temperature: no temperature is defined for this hardware." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "openHPSDR Ethernet Protocol v4.4 (High Priority DDC frequency, status); USB Data Protocol v1.60 (NCO addresses)", note = "Frequency is DDC0; ptt is read back from the bridge's request state; swr is computed from forward and reverse counts." }
+verified = { state = "unverified" }
+
+# The core needs one mode code per description. The radio has no mode: this is a placeholder for the host's
+# demodulator, never sent (the engine refuses GetMode and SetMode, and read-mode/set-mode are not claimed).
+[[modes]]
+mode = "usb"
+code = 0
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/hpsdr_net.rs", note = "Placeholder required by the description format; an SDR radio does not demodulate. Never sent." }
+verified = { state = "unverified" }
