@@ -18,6 +18,8 @@
 //! - [`http_relay`]: Shelly Gen2 and Tasmota channel drivers.
 //! - [`lifecycle`]: the radio lifecycle state machine (sans-IO).
 //! - [`manager`]: lifecycle per radio, power button, reconnect with backoff, start-up reconcile.
+//! - [`rotator`]: rotator descriptions, the rotctld and GS-232 engines, the command handle.
+//! - [`virtual_rotator`]: a virtual rotator (both protocols) for tests, served on a socket.
 //! - [`record`]: the durable radio record (JSON, owner-only, atomic).
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
@@ -32,5 +34,7 @@ pub mod manager;
 pub mod modbus;
 pub mod model;
 pub mod record;
+pub mod rotator;
 pub mod station;
+pub mod virtual_rotator;
 pub mod ws;

@@ -40,6 +40,7 @@ A feature is called implemented only if this manual's author found it in the cod
 | [11. Testing](11-testing.md) | run the test suites, the Hamlib oracle, and follow the anchor convention |
 | [12. Provenance and licensing](12-provenance-and-licensing.md) | see where facts about radios came from and what is licensed how |
 | [13. Roadmap and open items](13-roadmap.md) | find what is planned and what is known to be missing |
+| [14. The station: power, switches, rotators, amplifiers](14-station.md) | use `radioctl-station`: the radio manager over real actors, Home Assistant, amplifier channels, rotators |
 | [Appendix A. Capability matrix](A-capability-matrix.md) | summary of the generated Hamlib 4.6.2 matrix and the radioctl rigs |
 | [Appendix B. Glossary](B-glossary.md) | terms and abbreviations |
 | [Appendix C. radioctld command reference](C-radioctld-command-reference.md) | every command, response format and error code |
