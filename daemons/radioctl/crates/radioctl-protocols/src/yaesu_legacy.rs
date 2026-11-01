@@ -112,7 +112,6 @@ pub fn encode_bcd_frequency(hz: Hz) -> Option<[u8; 4]> {
     Some(out)
 }
 
-// [@ANCHOR: radioctl_ylegacy_decode_bcd_frequency]
 // [@ANCHOR: radioctl_ylegacy_encode_frequency]
 /// The four bytes of a frequency block. With `high_band_flag` (FT-736R), a frequency from 1.2 GHz
 /// up to 1.3 GHz is sent as the seven low digits of its 10 Hz count with the first nibble set to C,
@@ -139,6 +138,7 @@ pub fn decode_frequency(bytes: &[u8], high_band_flag: bool) -> Option<Hz> {
     decode_bcd_frequency(bytes)
 }
 
+// [@ANCHOR: radioctl_ylegacy_decode_bcd_frequency]
 /// The frequency in hertz from four BCD bytes (10 Hz units), or `None` on a non-digit nibble.
 pub fn decode_bcd_frequency(bytes: &[u8]) -> Option<Hz> {
     if bytes.len() != 4 {
