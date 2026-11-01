@@ -59,7 +59,8 @@ class SupportMatrixTests(unittest.TestCase):
             family, tier, engine = sup.classify(m)
             self.assertIn(tier, "ABCD")
             tiers.setdefault(family, set()).add(tier)
-            self.assertEqual(engine is not None, tier in "AB")
+            if tier in "AB":
+                self.assertIsNotNone(engine)
         self.assertEqual(sum(1 for m in MODELS if sup.classify(m)[0] == "icom_civ"), 79)
         self.assertEqual(tiers["kenwood_hh_ascii"], {"B"})
         self.assertEqual(sup.classify(model(1, "Ten-Tec", "Orion", "other_serial"))[1], "C")

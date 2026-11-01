@@ -1,0 +1,83 @@
+# Rig description: AOR AR2700 (aor protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (read for facts only: rigs/aor/aor.c, rigs/aor/ar2700.c) and `rigctl -m 5008 --dump-caps` output;
+# no vendor manual was read. The engine and its gaps: crates/radioctl-protocols/src/aor.rs.
+# Hamlib lists: serial 2400..9600 baud, 8N2, handshake XONXOFF; receive 500 kHz to 1300 MHz (2 range(s)); no transmit range (receiver). The description format has no field
+# for frequency ranges, filters or function lists, so they are not repeated beyond this note.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "aor-ar2700"
+name = "AOR AR2700"
+family = "receiver"
+
+[receiver]
+protocol = "aor"
+dialect = "ar2700"
+baud = 9600
+data_bits = 8
+parity = "N"
+stop_bits = 2
+flow = "xonxoff"
+
+[timing]
+timeout_ms = 400
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 145500000
+mode = "fm"
+
+[[modes]]
+mode = "wfm"
+code = 48
+
+[[modes]]
+mode = "fm"
+code = 49
+
+[[modes]]
+mode = "am"
+code = 50
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 5008 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/aor/aor.c (aor_transaction, aor_set_freq, aor_get_freq, aor_set_mode, aor_get_mode, aor_get_level): the shared ASCII command set RF, RX, MD, LM ended by CR", note = "Which of the dialect families of Hamlib's backend the model belongs to. Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/aor/ar2700.c (format2700_mode, parse2700_aor_mode), rigs/aor/aor.c (aor_get_level)", note = "Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 5008 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib gives a speed range (2400 to 9600); the default recorded here is 9600 (the top of the range, not a measurement). Hamlib's settings, not a measurement of the radio. The daemon does not yet apply these to the port; the operator configures them." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 5008 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/aor/aor.c rig_caps via the model file (has_get_level, set/get freq and mode entries); `rigctl -m 5008 --dump-caps` (Hamlib 4.6.2) Can get/set lines", note = "Receiver: no PTT, CW, power or SWR capability is claimed (Hamlib lists no transmit range and the engine has no transmit path). Frequency, mode and signal strength are the commands the engine implements (RF/RX, MD, LM or LB); attenuator, AGC, squelch, memories, scans and VFO selection are not implemented. Absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/aor/ar2700.c format2700_mode (AR2700_WFM '0', NFM '1', AM '2')", note = "Mode characters as in the model's format mode function; modes with no entry in radioctl's vocabulary (super-narrow FM, wide and narrow AM, synchronous AM) are not mapped." }
+verified = { state = "unverified" }

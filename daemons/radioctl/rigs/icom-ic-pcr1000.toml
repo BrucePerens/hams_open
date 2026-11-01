@@ -1,0 +1,95 @@
+# Rig description: Icom IC-PCR1000 (icom-pcr protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (read for facts only: rigs/pcr/pcr.c, rigs/pcr/pcr1000.c) and `rigctl -m 4001 --dump-caps` output;
+# no vendor manual was read. The engine and its gaps: crates/radioctl-protocols/src/icom_pcr.rs.
+# Hamlib lists: serial 9600..38400 baud, 8N1, handshake CTS/RTS; receive 10 kHz to 1300 MHz (4 range(s)); no transmit range (receiver). The description format has no field
+# for frequency ranges, filters or function lists, so they are not repeated beyond this note.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "icom-ic-pcr1000"
+name = "Icom IC-PCR1000"
+family = "receiver"
+
+[receiver]
+protocol = "icom-pcr"
+dialect = "pcr1000"
+baud = 9600
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "rtscts"
+
+[timing]
+timeout_ms = 400
+retries = 3
+inter_command_ms = 12
+
+[defaults]
+frequency_hz = 145500000
+mode = "fm"
+
+[[modes]]
+mode = "lsb"
+code = 48
+
+[[modes]]
+mode = "usb"
+code = 49
+
+[[modes]]
+mode = "am"
+code = 50
+
+[[modes]]
+mode = "cw"
+code = 51
+
+[[modes]]
+mode = "fm"
+code = 53
+
+[[modes]]
+mode = "wfm"
+code = 54
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 4001 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/pcr/pcr.c (pcr_send, pcr_transaction, pcr_parse_answer: commands ended by a line feed, answers G000/G001, H101/H100, I1xx)", note = "Which of the dialect families of Hamlib's backend the model belongs to. Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/pcr/pcr.c (pcr_set_freq: K0 command layout; pcr_get_freq and pcr_get_mode return the last values set) and rigs/pcr/pcr1000.c (reply_size, reply_offset)", note = "Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 4001 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib gives a speed range (9600 to 38400); the default recorded here is 9600 (Hamlib's startup speed for the PCR100 and PCR1000; the speed can then be changed with G1xx). Hamlib's settings, not a measurement of the radio. The daemon does not yet apply these to the port; the operator configures them." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 4001 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/pcr/pcr.c rig_caps entries in rigs/pcr/pcr1000.c; `rigctl -m 4001 --dump-caps` (Hamlib 4.6.2) Can get/set lines", note = "Receiver: no PTT, CW, power or SWR capability is claimed (Hamlib lists no transmit range). The radio cannot report its frequency or mode, so read-frequency and read-mode return what radioctl last set (Hamlib's behaviour), checked by a power-status query; signal strength is read with I1?. Squelch, volume, filters, noise blanker, AGC, the PCR2500's second receiver and the power-on and auto-update-off sequence (H101, G300) are not implemented. Absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/pcr/pcr.c MD_LSB '0', MD_USB '1', MD_AM '2', MD_CW '3', MD_FM '5', MD_WFM '6' and pcr_set_mode / pcr_get_mode", note = "D-STAR ('7') and P25 ('8') on the PCR2500 have no radioctl mode and are not mapped." }
+verified = { state = "unverified" }

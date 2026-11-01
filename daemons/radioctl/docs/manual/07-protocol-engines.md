@@ -14,6 +14,12 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 | `kenwood-ascii`, `dialect = "ts890"` | `kenwood_ts890::Ts890Engine` | TS-890S | the same framing, its own command set |
 | `elecraft-ascii` | `elecraft::ElecraftEngine` | KX3 (K3 and KX2 share the protocol; no description yet) | ASCII, Kenwood-like with its own replies |
 | `yaesu-newcat` | `yaesu::YaesuEngine` | FT-991A, FTDX10, FTDX101D | ASCII, Kenwood-like with different widths |
+| `receiver` (`aor`) | `aor::AorEngine` (a `receiver::LineEngine`) | AR8000, AR8200, AR8600, AR5000, AR5000A, AR2700, SR2200 | ASCII lines ended by CR (`RF`, `RX`, `MD`, `LM`); a setting is acknowledged by an empty line, `?` refuses |
+| `receiver` (`uniden`) | `uniden::UnidenEngine` | BC245XLT, BC250D, BC780XLT, BC895XLT, BC898T | ASCII lines ended by CR (`RF`, `RM`, `SG`), `OK` or `NG`/`ERR` |
+| `receiver` (`jrc`) | `jrc::JrcEngine` | NRD-525, NRD-535D, NRD-545 DSP, JST-145, JST-245 | ASCII commands ended by CR (`F`, `D`, `I`, `M`, `X`); settings are not answered |
+| `receiver` (`icom-pcr`) | `icom_pcr::PcrEngine` | IC-PCR100, PCR1000, PCR1500, PCR2500 | ASCII commands ended by LF (`K0` tune, `I1?` signal), `G000`/`G001` answers |
+| `receiver` (`icom-marine`) | `icom_marine::MarineEngine` | IC-M700PRO, M710, M802, M803 | NMEA-style `$PICOA` sentences with XOR checksum, the radio echoes a setting |
+| `receiver` (`rohde-schwarz`) | `rs::RsEngine` | ESMC, EB200 | ASCII `FREQ`, `DEM`, `SENS` commands framed by CR; settings are not answered |
 | `yaesu-legacy` | `yaesu_legacy::YaesuLegacyEngine` | FT-817ND, FT-818ND, FT-857D, FT-897D | five-byte binary blocks, unframed answers |
 | `flex-smartsdr` | `flex::FlexEngine` | FLEX-6300, 6400, 6600, 6700 | SmartSDR line text over TCP (control plane only) |
 | `hpsdr-network` | `hpsdr_net::HpsdrEngine` | ANAN-10, ANAN-100 | a small line protocol to a bridge over the `hpsdr` crate (control plane only) |

@@ -146,6 +146,14 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 | Xiegu (CI-V) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only, with Hamlib's shared addresses |
 | Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d`, `yaesu-ft-450d`, `yaesu-ft-450`, `yaesu-ft-950`, `yaesu-ft-2000`, `yaesu-ftdx-1200`, `yaesu-ftdx-3000`, `yaesu-ftdx-5000`, `yaesu-ftdx-9000`, `yaesu-ft-891`, `yaesu-ft-710`, `yaesu-ftdx-101mp` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact); the FT-450 from Hamlib 4.6.2 facts only |
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-897`, `yaesu-ft-847`, `yaesu-ft-847uni`, `yaesu-ft-650`, `yaesu-ft-736r`, `yaesu-ft-818` | Operating manuals' CAT chapters The FT-897, FT-847, FT-847UNI, FT-650 and FT-736R files are from Hamlib 4.6.2 facts only (the FT-897 shares the FT-897D's CAT chapter); the last three are set-only. |
+| AOR receivers (ASCII `RF`/`MD`/`LM`) | `aor-ar8000`, `aor-ar8200`, `aor-ar8600`, `aor-ar5000`, `aor-ar5000a`, `aor-ar2700`, `aor-sr2200` | Hamlib 4.6.2 source (facts only) |
+| Uniden scanners (ASCII `RF`/`RM`/`SG`) | `uniden-bc245xlt`, `uniden-bc250d`, `uniden-bc780xlt`, `uniden-bc895xlt`, `uniden-bc898t` | Hamlib 4.6.2 source (facts only) |
+| JRC (ASCII `F`/`D`/`I`) | `jrc-nrd-525`, `jrc-nrd-535d`, `jrc-nrd-545`, `jrc-jst-145`, `jrc-jst-245` | Hamlib 4.6.2 source (facts only) |
+| Icom PCR (ASCII `K0`) | `icom-ic-pcr100`, `icom-ic-pcr1000`, `icom-ic-pcr1500`, `icom-ic-pcr2500` | Hamlib 4.6.2 source (facts only) |
+| Icom marine (`$PICOA`) | `icom-ic-m700pro`, `icom-ic-m710`, `icom-ic-m802`, `icom-ic-m803` | Hamlib 4.6.2 source (facts only) |
+| Rohde and Schwarz (ASCII `FREQ`/`DEM`) | `rs-esmc`, `rs-eb200` | Hamlib 4.6.2 source (facts only) |
+| OptoScan boards (CI-V at 0x80) | `optoscan-os535`, `optoscan-os456` | Hamlib 4.6.2 source (facts only) |
+| Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
 | FlexRadio | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
 | OpenHPSDR | `anan-10`, `anan-100` | `daemons/hpsdr` and the OpenHPSDR protocols |
 
@@ -1228,3 +1236,70 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_is] (radioctl-protocols) True when this rig speaks the TS-890S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_command] (radioctl-protocols) One TS-890S command; the reply bytes (none for a setting, `?;` for a refusal).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_level] (radioctl-protocols) `AGnnn`, `RGnnn`, `MGnnn`, `KSnnn`, `PCnnn`: a read when `arg` is empty, else a set inside the guide's range.
+- [@ANCHOR: radioctl:radioctl_core_receiver_protocol_name] (radioctl-core) The name used in rig description files.
+- [@ANCHOR: radioctl:radioctl_core_receiver_protocol_from_name] (radioctl-core) The protocol with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_receiver] (radioctl-core) Core rigfile build receiver.
+- [@ANCHOR: radioctl:radioctl_receiver_engine_new] (radioctl-protocols) Builds the engine of a [`Family::Receiver`] description of protocol `protocol`.
+- [@ANCHOR: radioctl:radioctl_receiver_engine_split_lines] (radioctl-protocols) Takes every complete line out of the buffer: the text without line feeds and spaces at
+- [@ANCHOR: radioctl:radioctl_receiver_engine_description] (radioctl-protocols) Receiver engine description.
+- [@ANCHOR: radioctl:radioctl_receiver_engine_encode] (radioctl-protocols) Receiver engine encode.
+- [@ANCHOR: radioctl:radioctl_receiver_engine_feed] (radioctl-protocols) Receiver engine feed.
+- [@ANCHOR: radioctl:radioctl_receiver_virtual_new] (radioctl-protocols) The virtual radio of a description (the twin of its protocol).
+- [@ANCHOR: radioctl:radioctl_receiver_virtual_feed] (radioctl-protocols) Consumes bytes the controller wrote; the bytes the radio answers.
+- [@ANCHOR: radioctl:radioctl_aor_engine] (radioctl-protocols) The engine for an AOR description.
+- [@ANCHOR: radioctl:radioctl_aor_dialect_from_description] (radioctl-protocols) Aor dialect from description.
+- [@ANCHOR: radioctl:radioctl_aor_dialect_encode] (radioctl-protocols) Aor dialect encode.
+- [@ANCHOR: radioctl:radioctl_aor_dialect_decode] (radioctl-protocols) Aor dialect decode.
+- [@ANCHOR: radioctl:radioctl_aor_tagged_frequency] (radioctl-protocols) The frequency after the first `RF` (or, on the AR8000, `VA` or `VB`) in a line.
+- [@ANCHOR: radioctl:radioctl_aor_signal_reading] (radioctl-protocols) The raw signal value of an `LM` or `LB` line, `None` if the line is not one.
+- [@ANCHOR: radioctl:radioctl_aor_round_to_50_hz] (radioctl-protocols) A frequency rounded as the AOR command needs it (a multiple of 50 Hz), `None` above the ten
+- [@ANCHOR: radioctl:radioctl_aor_twin_new] (radioctl-protocols) The twin of an AOR description.
+- [@ANCHOR: radioctl:radioctl_aor_twin_reply] (radioctl-protocols) A reply line: a leading line feed and the closing CR, as Hamlib reads them.
+- [@ANCHOR: radioctl:radioctl_aor_twin_line] (radioctl-protocols) Aor twin line.
+- [@ANCHOR: radioctl:radioctl_uniden_engine] (radioctl-protocols) The engine for a Uniden description.
+- [@ANCHOR: radioctl:radioctl_uniden_dialect_from_description] (radioctl-protocols) Uniden dialect from description.
+- [@ANCHOR: radioctl:radioctl_uniden_dialect_encode] (radioctl-protocols) Uniden dialect encode.
+- [@ANCHOR: radioctl:radioctl_uniden_dialect_status] (radioctl-protocols) Uniden dialect status.
+- [@ANCHOR: radioctl:radioctl_uniden_dialect_decode] (radioctl-protocols) Uniden dialect decode.
+- [@ANCHOR: radioctl:radioctl_uniden_parse_units] (radioctl-protocols) A frequency from eight digits in units of 100 Hz.
+- [@ANCHOR: radioctl:radioctl_uniden_mode_named] (radioctl-protocols) The mode a radio's name stands for (`NFM` reads as FM), if the description has it.
+- [@ANCHOR: radioctl:radioctl_uniden_twin_new] (radioctl-protocols) The twin of a Uniden description.
+- [@ANCHOR: radioctl:radioctl_uniden_twin_line] (radioctl-protocols) Uniden twin line.
+- [@ANCHOR: radioctl:radioctl_conformance_receiver_engine] (radioctl-protocols) The engine of a receiver-family description, by its protocol.
+- [@ANCHOR: radioctl:radioctl_jrc_engine] (radioctl-protocols) The engine for a JRC description.
+- [@ANCHOR: radioctl:radioctl_jrc_dialect_from_description] (radioctl-protocols) Jrc dialect from description.
+- [@ANCHOR: radioctl:radioctl_jrc_dialect_encode] (radioctl-protocols) Jrc dialect encode.
+- [@ANCHOR: radioctl:radioctl_jrc_dialect_status] (radioctl-protocols) Jrc dialect status.
+- [@ANCHOR: radioctl:radioctl_jrc_dialect_decode] (radioctl-protocols) Jrc dialect decode.
+- [@ANCHOR: radioctl:radioctl_jrc_info_checked] (radioctl-protocols) The `I` answer if it has the length the model's answer has (the CR counts), else `None`.
+- [@ANCHOR: radioctl:radioctl_jrc_info_frequency] (radioctl-protocols) The frequency in an `I` answer: from the fifth character on the NRD, after three
+- [@ANCHOR: radioctl:radioctl_jrc_info_mode] (radioctl-protocols) The mode in an `I` answer: its fourth character.
+- [@ANCHOR: radioctl:radioctl_jrc_twin_new] (radioctl-protocols) The twin of a JRC description.
+- [@ANCHOR: radioctl:radioctl_jrc_twin_line] (radioctl-protocols) Jrc twin line.
+- [@ANCHOR: radioctl:radioctl_jrc_twin_set] (radioctl-protocols) Applies a setting (`F...` or `D.`); anything else is ignored, as these radios do not refuse.
+- [@ANCHOR: radioctl:radioctl_pcr_engine] (radioctl-protocols) The engine for an Icom PCR description.
+- [@ANCHOR: radioctl:radioctl_pcr_tuning_command] (radioctl-protocols) The `K0` tuning command for a frequency, mode character and filter character.
+- [@ANCHOR: radioctl:radioctl_pcr_dialect_from_description] (radioctl-protocols) Pcr dialect from description.
+- [@ANCHOR: radioctl:radioctl_pcr_dialect_encode] (radioctl-protocols) Pcr dialect encode.
+- [@ANCHOR: radioctl:radioctl_pcr_dialect_status] (radioctl-protocols) Pcr dialect status.
+- [@ANCHOR: radioctl:radioctl_pcr_dialect_decode] (radioctl-protocols) Pcr dialect decode.
+- [@ANCHOR: radioctl:radioctl_pcr_twin_new] (radioctl-protocols) The twin of an Icom PCR description.
+- [@ANCHOR: radioctl:radioctl_pcr_twin_line] (radioctl-protocols) Pcr twin line.
+- [@ANCHOR: radioctl:radioctl_marine_engine] (radioctl-protocols) The engine for an Icom marine description.
+- [@ANCHOR: radioctl:radioctl_marine_sentence] (radioctl-protocols) The command sentence for `command` (with its `,param` if any) to radio `id`, checksum and CR LF.
+- [@ANCHOR: radioctl:radioctl_marine_dialect_from_description] (radioctl-protocols) Marine dialect from description.
+- [@ANCHOR: radioctl:radioctl_marine_dialect_encode] (radioctl-protocols) Marine dialect encode.
+- [@ANCHOR: radioctl:radioctl_marine_dialect_more_lines] (radioctl-protocols) Marine dialect more lines.
+- [@ANCHOR: radioctl:radioctl_marine_dialect_status] (radioctl-protocols) Marine dialect status.
+- [@ANCHOR: radioctl:radioctl_marine_dialect_decode] (radioctl-protocols) Marine dialect decode.
+- [@ANCHOR: radioctl:radioctl_marine_mode_of] (radioctl-protocols) The mode a `MODE` answer names, if the description has it.
+- [@ANCHOR: radioctl:radioctl_marine_fields_parse] (radioctl-protocols) Splits a sentence, checking `$PICOA,`, the checksum and the minimum length Hamlib requires.
+- [@ANCHOR: radioctl:radioctl_marine_twin_new] (radioctl-protocols) The twin of an Icom marine description.
+- [@ANCHOR: radioctl:radioctl_marine_twin_line] (radioctl-protocols) Marine twin line.
+- [@ANCHOR: radioctl:radioctl_rs_engine] (radioctl-protocols) The engine for a Rohde and Schwarz description.
+- [@ANCHOR: radioctl:radioctl_rs_dialect_from_description] (radioctl-protocols) Rs dialect from description.
+- [@ANCHOR: radioctl:radioctl_rs_dialect_encode] (radioctl-protocols) Rs dialect encode.
+- [@ANCHOR: radioctl:radioctl_rs_dialect_status] (radioctl-protocols) Rs dialect status.
+- [@ANCHOR: radioctl:radioctl_rs_dialect_decode] (radioctl-protocols) Rs dialect decode.
+- [@ANCHOR: radioctl:radioctl_rs_twin_new] (radioctl-protocols) The twin of a Rohde and Schwarz description.
+- [@ANCHOR: radioctl:radioctl_rs_twin_line] (radioctl-protocols) Rs twin line.

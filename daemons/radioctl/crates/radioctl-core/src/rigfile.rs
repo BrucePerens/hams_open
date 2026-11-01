@@ -27,8 +27,9 @@ use serde::Deserialize;
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
-    KenwoodDialect, KenwoodHhParams, KenwoodParams, LevelParams, RigDescription, ScopeParams,
-    Timing, VendorParams, VendorProtocol, YaesuLegacyParams, YaesuParams,
+    KenwoodDialect, KenwoodHhParams, KenwoodParams, LevelParams, ReceiverParams, ReceiverProtocol,
+    RigDescription, ScopeParams, Timing, VendorParams, VendorProtocol, YaesuLegacyParams,
+    YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -131,6 +132,7 @@ struct FileDoc {
     flex: Option<FlexSection>,
     hpsdr: Option<HpsdrSection>,
     vendor: Option<VendorSection>,
+    receiver: Option<ReceiverSection>,
     scope: Option<ScopeSection>,
     levels: Option<LevelsSection>,
     timing: TimingSection,
@@ -214,6 +216,20 @@ struct KenwoodHhSection {
 struct FlexSection {
     model: String,
     scus: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReceiverSection {
+    protocol: String,
+    dialect: String,
+    #[serde(default)]
+    address: Option<u8>,
+    baud: u32,
+    data_bits: u8,
+    parity: String,
+    stop_bits: u8,
+    flow: String,
 }
 
 #[derive(Deserialize)]
@@ -363,6 +379,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "hpsdr-network" => Family::Hpsdr,
         "kenwood-hh" => Family::KenwoodHh,
         "serial-vendor" => Family::SerialVendor,
+        "receiver" => Family::Receiver,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
     let others = doc.civ.is_some()
@@ -373,6 +390,9 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         || doc.flex.is_some()
         || doc.hpsdr.is_some()
         || doc.kenwood_hh.is_some();
+    if doc.receiver.is_some() != (family == Family::Receiver) {
+        return Err(bad("the family block does not match rig.family"));
+    }
     match (
         family,
         &doc.civ,
@@ -394,6 +414,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         (Family::KenwoodHh, None, None, None, None, None)
             if doc.kenwood_hh.is_some() && doc.flex.is_none() && doc.hpsdr.is_none() => {}
         (Family::SerialVendor, ..) if doc.vendor.is_some() && !others => {}
+        (Family::Receiver, None, None, None, None, None)
+            if doc.flex.is_none()
+                && doc.hpsdr.is_none()
+                && doc.kenwood_hh.is_none()
+                && doc.vendor.is_none() => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
     if family != Family::SerialVendor && doc.vendor.is_some() {
@@ -487,6 +512,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
             })
         })
         .transpose()?;
+    let receiver = doc.receiver.as_ref().map(build_receiver).transpose()?;
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
         let capability = Capability::from_name(name)
@@ -514,6 +540,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         flex,
         hpsdr,
         vendor,
+        receiver,
         scope,
         levels,
         capabilities: CapabilitySet::of(&capabilities),
@@ -521,6 +548,41 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         timing: check_timing(&doc.timing)?,
         default_frequency: Hz(doc.defaults.frequency_hz),
         default_mode,
+    })
+}
+
+// [@ANCHOR: radioctl_core_rigfile_build_receiver]
+fn build_receiver(r: &ReceiverSection) -> Result<ReceiverParams, RigError> {
+    let protocol = ReceiverProtocol::from_name(&r.protocol)
+        .ok_or_else(|| bad(format!("unknown receiver.protocol {:?}", r.protocol)))?;
+    let parity = match r.parity.as_str() {
+        "N" => 'N',
+        "E" => 'E',
+        "O" => 'O',
+        other => {
+            return Err(bad(format!(
+                "receiver.parity must be N, E or O, not {other:?}"
+            )))
+        }
+    };
+    if !(5..=8).contains(&r.data_bits) || !(1..=2).contains(&r.stop_bits) || r.baud == 0 {
+        return Err(bad("receiver line settings out of range"));
+    }
+    if !matches!(r.flow.as_str(), "none" | "xonxoff" | "rtscts") {
+        return Err(bad("receiver.flow must be none, xonxoff or rtscts"));
+    }
+    if r.dialect.is_empty() {
+        return Err(bad("receiver.dialect is empty"));
+    }
+    Ok(ReceiverParams {
+        protocol,
+        dialect: r.dialect.clone(),
+        address: r.address,
+        baud: r.baud,
+        data_bits: r.data_bits,
+        parity,
+        stop_bits: r.stop_bits,
+        flow: r.flow.clone(),
     })
 }
 
@@ -838,6 +900,12 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.vendor.is_some() {
         keys.extend(["vendor.protocol", "vendor.dialect"].map(String::from));
+    }
+    if let Some(receiver) = &description.receiver {
+        keys.extend(["receiver.protocol", "receiver.dialect", "receiver.line"].map(String::from));
+        if receiver.address.is_some() {
+            keys.push("receiver.address".to_string());
+        }
     }
     if description.hpsdr.is_some() {
         keys.extend(["hpsdr.model", "hpsdr.protocol", "hpsdr.anan10"].map(String::from));
