@@ -9,18 +9,18 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- Not applicable (not a radio, or no transport radioctl has): **27**
-- Real radios (models less not applicable): **286**; with a radioctl description: **198** (203 description files), **69%** of the real radios
+- Not applicable (not a radio, or no transport radioctl has): **28**
+- Real radios (models less not applicable): **285**; with a radioctl description: **202** (207 description files), **70%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 198 |
+| described | 202 |
 | engine only | 9 |
 | needs variant | 22 |
 | needs engine | 34 |
-| odd device | 23 |
-| not applicable | 27 |
+| odd device | 18 |
+| not applicable | 28 |
 
 | Verification level | Models |
 |---|---:|
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 126 |
 | B | variants of an existing engine | 41 | 19 |
 | C | new engine | 83 | 41 |
-| D | odd device | 54 | 12 |
+| D | odd device | 54 | 16 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 35 | 0 |
+| other_serial | C/D | aor | 94 | 39 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -78,6 +78,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 - Hamlib Dummy (1): not a radio: a simulator; radioctl has its own virtual rigs (the virtual transport and the per-family twins)
 - Hamlib Dummy No VFO (6): not a radio: a simulator; radioctl has its own virtual rigs (the virtual transport and the per-family twins)
 - Hamlib NET rigctl (2): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
+- mRS miniVNA (25008): not a radio: a vector network analyser (antenna and component measurement) that Hamlib lists as a tuner so programs can sweep it; radioctl drives radios
 - N2ADR James Ahlstrom Quisk (10): not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the radio, not the program in front of it
 - N3FJP ACLog (8): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
 - OpenHPSDR PiHPSDR (2040): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
@@ -124,19 +125,19 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 32001 | Barrett | 2050 | C | other_serial | - | - | unverified | - | needs engine |
 | 32003 | Barrett | 4050 | C | other_serial | - | - | unverified | - | needs engine |
 | 32002 | Barrett | 950 | C | other_serial | - | - | unverified | - | needs engine |
-| 2053 | BG2FX | FX4/C/CR/L | D | other_serial | - | - | unverified | - | odd device |
+| 2053 | BG2FX | FX4/C/CR/L | D | other_serial | - | `bg2fx-fx4` | unverified | - | described |
 | 34001 | CODAN | Envoy | C | other_serial | - | - | unverified | - | needs engine |
 | 34002 | CODAN | NGT | C | other_serial | - | - | unverified | - | needs engine |
 | 25003 | Coding Technologies | Digital World Traveller | D | other_usb | - | `digital-world-traveller` | unverified | - | described |
 | 39001 | Commradio | CTX-10 | D | other_serial | - | - | unverified | - | odd device |
-| 2055 | DL2MAN | (tr)uSDX | D | other_serial | - | - | unverified | - | odd device |
+| 2055 | DL2MAN | (tr)uSDX | D | other_serial | - | `dl2man-trusdx` | unverified | - | described |
 | 31002 | Dorji | DRA818U | D | other_serial | - | - | unverified | - | odd device |
 | 31001 | Dorji | DRA818V | D | other_serial | - | - | unverified | - | odd device |
 | 9002 | Drake | R-8A | C | other_serial | - | `drake-r-8a` | unverified | - | described |
 | 9003 | Drake | R-8B | C | other_serial | - | `drake-r-8b` | unverified | - | described |
 | 23003 | DTTS Microwave Society | DttSP IPC | D | other_device_driver | - | - | unverified | - | not applicable |
 | 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | not applicable |
-| 33001 | ELAD | FDM-DUO | D | other_serial | - | - | unverified | - | odd device |
+| 33001 | ELAD | FDM-DUO | D | other_serial | - | `elad-fdm-duo` | unverified | - | described |
 | 2021 | Elecraft | K2 | A | elecraft_ascii | elecraft | `elecraft-k2` | unverified | - | described |
 | 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | `elecraft-k3` | unverified | - | described |
 | 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | `elecraft-k3s` | unverified | - | described |
@@ -295,12 +296,12 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2050 | Lab599 | TX-500 | C | other_serial | - | - | unverified | - | needs engine |
 | 10004 | Lowe | HF-235 | C | other_serial | - | - | unverified | - | needs engine |
 | 1045 | M0NKA | mcHF QRP | D | other_serial | - | - | unverified | - | odd device |
-| 2049 | Malachite | DSP | D | other_serial | - | - | unverified | - | odd device |
+| 2049 | Malachite | DSP | D | other_serial | - | `malachite-dsp` | unverified | - | described |
 | 36001 | MDS | 4710 | D | other_serial | - | - | unverified | - | odd device |
 | 36002 | MDS | 9710 | D | other_serial | - | - | unverified | - | odd device |
 | 38001 | Micom | Micom 2/3 | C | other_serial | - | - | unverified | - | needs engine |
 | 3074 | Microtelecom | Perseus | D | other_serial | - | - | unverified | - | odd device |
-| 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | odd device |
+| 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | not applicable |
 | 25014 | N2ADR | HiQSDR | D | other_network | - | - | unverified | - | odd device |
 | 10 | N2ADR James Ahlstrom | Quisk | D | other_network | - | - | unverified | - | not applicable |
 | 8 | N3FJP | ACLog | D | other_network | - | - | unverified | - | not applicable |
