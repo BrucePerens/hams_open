@@ -392,7 +392,8 @@ fn level_sub(level: Level) -> Option<u8> {
         Level::RfPower => Some(0x0A),
         Level::MicGain => Some(0x0B),
         Level::MonitorLevel => Some(0x15),
-        Level::KeyerSpeed | Level::Attenuator | Level::Preamp => None,
+        Level::KeyerSpeed => Some(KEYER_SUB),
+        Level::Attenuator | Level::Preamp => None,
     }
 }
 
@@ -447,9 +448,42 @@ fn sub_level(sub: u8) -> Option<Level> {
         Level::RfPower,
         Level::MicGain,
         Level::MonitorLevel,
+        Level::KeyerSpeed,
     ]
     .into_iter()
     .find(|level| level_sub(*level) == Some(sub))
+}
+
+/// The `14` sub-command of the CW keyer speed (`14 0C`).
+const KEYER_SUB: u8 = 0x0C;
+/// Slowest keyer speed in words per minute.
+pub const KEYER_WPM_MIN: u16 = 6;
+/// Fastest keyer speed in words per minute.
+pub const KEYER_WPM_MAX: u16 = 48;
+/// The raw `14 0C` value of each whole keyer speed from 6 to 48 wpm, in order. The radio's scale
+/// is not linear (its raw steps are 6, 5, 7 and 6 apart): these are the values Hamlib 4.6.2 sends
+/// and accepts for the IC-7300 family (facts from its behaviour, which settled the number of
+/// steps, the end points 0 and 250, and that the top of the 0 to 255 range is never used).
+/// Unverified on a radio.
+const KEYER_RAW: [u16; 43] = [
+    0, 7, 12, 19, 25, 31, 37, 43, 49, 55, 61, 67, 73, 79, 84, 91, 97, 103, 108, 114, 121, 128, 134,
+    140, 144, 151, 156, 164, 169, 175, 182, 188, 192, 199, 203, 211, 215, 224, 229, 234, 239, 244,
+    250,
+];
+
+// [@ANCHOR: radioctl_civ_keyer_wpm_to_raw]
+/// The raw `14 0C` value for a keyer speed in words per minute; `None` outside 6 to 48.
+pub fn keyer_wpm_to_raw(wpm: u16) -> Option<u16> {
+    let index = usize::from(wpm.checked_sub(KEYER_WPM_MIN)?);
+    KEYER_RAW.get(index).copied()
+}
+
+// [@ANCHOR: radioctl_civ_keyer_raw_to_wpm]
+/// The keyer speed in words per minute for a raw `14 0C` value: the slowest speed whose raw
+/// value is not below it; `None` above 250, which the radio never sends.
+pub fn keyer_raw_to_wpm(raw: u16) -> Option<u16> {
+    let index = KEYER_RAW.iter().position(|step| *step >= raw)?;
+    u16::try_from(index).ok().map(|i| i + KEYER_WPM_MIN)
 }
 
 /// Largest level value a rig takes (levels are 0000 to 0255 in BCD).
@@ -683,6 +717,14 @@ impl CivEngine {
                 Some(sub) => Ok(self.get(0x14, &[sub], Field::Level(*level))),
                 None => Err(Self::unsupported("level not implemented for CI-V")),
             },
+            Op::SetLevel(Level::KeyerSpeed, wpm) => match keyer_wpm_to_raw(*wpm) {
+                Some(raw) => {
+                    let mut data = vec![KEYER_SUB];
+                    data.extend(encode_bcd_meter(raw));
+                    Ok(self.set(0x14, &data))
+                }
+                None => Err(Self::unsupported("keyer speed outside 6 to 48 wpm")),
+            },
             Op::SetLevel(level, value) => match (level_sub(*level), *value <= MAX_LEVEL) {
                 (Some(sub), true) => {
                     let mut data = vec![sub];
@@ -867,6 +909,10 @@ impl CivEngine {
             (0x14, [sub, rest @ ..]) => sub_level(*sub).and_then(|level| {
                 decode_bcd_meter(rest)
                     .filter(|value| *value <= MAX_LEVEL)
+                    .and_then(|value| match level {
+                        Level::KeyerSpeed => keyer_raw_to_wpm(value),
+                        _ => Some(value),
+                    })
                     .map(|value| Observation::Level(level, value))
             }),
             (0x11, [byte]) => decode_bcd_byte(*byte)
@@ -1207,10 +1253,60 @@ mod tests {
         );
         assert_eq!(b(&mut e, Op::GetModelId), with(&[0x19, 0x00]));
         assert!(e.encode(&Op::SetLevel(Level::AfGain, 256)).is_err());
-        assert!(e.encode(&Op::GetLevel(Level::KeyerSpeed)).is_err());
+        assert_eq!(
+            b(&mut e, Op::GetLevel(Level::KeyerSpeed)),
+            with(&[0x14, 0x0C])
+        );
         assert!(e.encode(&Op::SetRitOffset(10_000)).is_err());
         assert!(e.encode(&Op::GetFilterWidth).is_err(), "mode unknown yet");
         assert!(e.encode(&Op::GetSwr).is_err(), "calibrated SWR is a gap");
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_keyer_wpm_to_raw]
+    // Tests [@ANCHOR: radioctl_civ_keyer_raw_to_wpm]
+    // Tests [@ANCHOR: radioctl_civ_level_sub]
+    // Tests [@ANCHOR: radioctl_civ_engine_encode_levels_and_filter]
+    #[test]
+    fn the_keyer_speed_is_words_per_minute_over_the_14_0c_scale() {
+        assert_eq!(keyer_wpm_to_raw(6), Some(0));
+        assert_eq!(keyer_wpm_to_raw(25), Some(114));
+        assert_eq!(keyer_wpm_to_raw(48), Some(250));
+        assert_eq!(keyer_wpm_to_raw(5), None);
+        assert_eq!(keyer_wpm_to_raw(49), None);
+        assert_eq!(keyer_raw_to_wpm(0), Some(6));
+        assert_eq!(keyer_raw_to_wpm(250), Some(48));
+        assert_eq!(keyer_raw_to_wpm(251), None);
+        assert_eq!(
+            keyer_raw_to_wpm(115),
+            Some(26),
+            "between two steps: the faster"
+        );
+        for wpm in KEYER_WPM_MIN..=KEYER_WPM_MAX {
+            let raw = keyer_wpm_to_raw(wpm).expect("in range");
+            assert_eq!(keyer_raw_to_wpm(raw), Some(wpm), "round trip of {wpm}");
+        }
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
+        let sent = e
+            .encode(&Op::SetLevel(Level::KeyerSpeed, 25))
+            .expect("encodes")
+            .bytes;
+        let raw = keyer_wpm_to_raw(25).expect("in range");
+        let [high, low] = encode_bcd_meter(raw);
+        assert_eq!(
+            sent,
+            vec![0xFE, 0xFE, 0x94, 0xE0, 0x14, 0x0C, high, low, 0xFD]
+        );
+        assert!(e.encode(&Op::SetLevel(Level::KeyerSpeed, 5)).is_err());
+        assert!(e.encode(&Op::SetLevel(Level::KeyerSpeed, 49)).is_err());
+        let [high, low] = encode_bcd_meter(250);
+        let heard = e.feed(&reply(0x94, 0x14, &[0x0C, high, low]), T0);
+        assert_eq!(
+            heard,
+            vec![Inbound::Observation(Observation::Level(
+                Level::KeyerSpeed,
+                48
+            ))]
+        );
     }
 
     // Tests [@ANCHOR: radioctl_civ_meter_sub]

@@ -60,7 +60,11 @@
 > l RFPOWER
 < 1
 > L KEYSPD 20
-< RPRT -11
+< RPRT 0
+> l KEYSPD
+< 20
+> L KEYSPD 5
+< RPRT -1
 > l SWR
 < 1
 > l ALC
