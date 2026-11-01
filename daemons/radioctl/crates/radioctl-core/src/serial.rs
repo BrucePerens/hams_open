@@ -37,6 +37,7 @@ use tokio::runtime::Handle;
 use tokio::sync::{mpsc, oneshot, watch};
 
 use crate::backoff::Backoff;
+use crate::description::RigDescription;
 use crate::error::{ErrorKind, RigError};
 use crate::keyer::{ControlLines, KeyLine};
 use crate::usb::{list_ports, select_port, UsbMatcher};
@@ -84,6 +85,8 @@ pub enum Flow {
     None,
     /// RTS/CTS. Do not combine with RTS keying.
     Hardware,
+    /// XON/XOFF characters in the data stream.
+    Software,
 }
 
 /// Whether the port has modem control lines this library may use.
@@ -152,6 +155,43 @@ impl SerialConfig {
             backoff: Backoff::default(),
             first_open_attempts: 1,
         }
+    }
+
+    // [@ANCHOR: radioctl_core_serial_config_with_description]
+    /// Takes the description's line settings (data bits, parity, stop bits, flow control) for the
+    /// port, leaving the baud rate, the target and the line handling as they are. A description
+    /// that states none (every family but the receivers and the Yaesu legacy CAT, which state
+    /// their stop bits) leaves the 8N1 defaults.
+    pub fn with_description_line(mut self, description: &RigDescription) -> SerialConfig {
+        if let Some(r) = &description.receiver {
+            self.data_bits = if r.data_bits == 7 {
+                DataBits::Seven
+            } else {
+                DataBits::Eight
+            };
+            self.parity = match r.parity {
+                'E' => Parity::Even,
+                'O' => Parity::Odd,
+                _ => Parity::None,
+            };
+            self.stop_bits = if r.stop_bits == 2 {
+                StopBits::Two
+            } else {
+                StopBits::One
+            };
+            self.flow = match r.flow.as_str() {
+                "rtscts" => Flow::Hardware,
+                "xonxoff" => Flow::Software,
+                _ => Flow::None,
+            };
+        } else if let Some(y) = &description.yaesu_legacy {
+            self.stop_bits = if y.stop_bits == 2 {
+                StopBits::Two
+            } else {
+                StopBits::One
+            };
+        }
+        self
     }
 }
 
@@ -361,6 +401,7 @@ fn open_port(config: &SerialConfig) -> Result<(Box<dyn SerialPort>, PathBuf), Ri
         .flow_control(match config.flow {
             Flow::None => serialport::FlowControl::None,
             Flow::Hardware => serialport::FlowControl::Hardware,
+            Flow::Software => serialport::FlowControl::Software,
         })
         .timeout(READ_SLICE)
         .open()
@@ -368,7 +409,7 @@ fn open_port(config: &SerialConfig) -> Result<(Box<dyn SerialPort>, PathBuf), Ri
     if config.lines == LineControl::Managed {
         port.write_data_terminal_ready(config.idle_dtr)
             .map_err(|e| link_error(format!("DTR on {name}: {e}")))?;
-        if config.flow == Flow::None {
+        if config.flow != Flow::Hardware {
             port.write_request_to_send(config.idle_rts)
                 .map_err(|e| link_error(format!("RTS on {name}: {e}")))?;
         }

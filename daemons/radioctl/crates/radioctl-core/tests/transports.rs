@@ -453,3 +453,44 @@ async fn a_split_link_keeps_status_and_counters_on_the_monitor() {
     master.write_all(b"MD;").expect("master write");
     assert_eq!(read_exactly(&mut transport, 3).await, b"MD;");
 }
+
+// Tests [@ANCHOR: radioctl_core_serial_config_with_description]
+// Tests [@ANCHOR: radioctl_core_serial_open_port]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_descriptions_line_settings_reach_the_port() {
+    // A receiver description (AR8000: 8 data bits, no parity, two stop bits, XON/XOFF) must be what
+    // the port is opened with; a Yaesu legacy description carries only its stop bits; an
+    // Elecraft one states none and keeps 8N1.
+    let cases = [
+        (
+            include_str!("../../../rigs/aor-ar8000.toml"),
+            serialport::StopBits::Two,
+            serialport::FlowControl::Software,
+        ),
+        (
+            include_str!("../../../rigs/yaesu-ft-817.toml"),
+            serialport::StopBits::Two,
+            serialport::FlowControl::None,
+        ),
+        (
+            include_str!("../../../rigs/elecraft-kx3.toml"),
+            serialport::StopBits::One,
+            serialport::FlowControl::None,
+        ),
+    ];
+    for (text, stop, flow) in cases {
+        let description = rigfile::parse(text).expect("file").description;
+        let (master, path) = pty();
+        let config = fast_config(&path).with_description_line(&description);
+        let link = open_serial(&Handle::current(), config).await.expect("open");
+        // A pty's termios is shared by both ends, so the master reports what the open set.
+        assert_eq!(master.stop_bits().expect("stop bits"), stop, "{text:.60}");
+        assert_eq!(master.flow_control().expect("flow"), flow, "{text:.60}");
+        assert_eq!(
+            master.data_bits().expect("data bits"),
+            serialport::DataBits::Eight
+        );
+        assert_eq!(master.parity().expect("parity"), serialport::Parity::None);
+        drop(link);
+    }
+}

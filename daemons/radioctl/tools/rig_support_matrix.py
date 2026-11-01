@@ -239,7 +239,44 @@ _WINRADIO_DRIVER = (
     "interface or the Windows vendor DLL); the radio's own USB protocol is not published, so radioctl has no wire "
     "protocol to speak"
 )
+_NOT_A_RADIO = "not a radio: a simulator; radioctl has its own virtual rigs (the virtual transport and the per-family twins)"
+_RIG_SERVER_CLIENT = "not a radio: a client of another rig server or logging program; radioctl talks to the radio itself"
+_SOFTWARE_RADIO = (
+    "not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the "
+    "radio, not the program in front of it"
+)
+_SOFTWARE_CAT = (
+    "not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself "
+    "(the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)"
+)
+_KERNEL_TUNER = (
+    "Video4Linux: Hamlib reaches the tuner only through the kernel's V4L ioctl interface (a driver, not a wire "
+    "protocol), and it is an FM/AM broadcast tuner card; radioctl has no device-driver transport"
+)
+_PARALLEL_PORT = (
+    "a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport "
+    "(serial, TCP, UDP only)"
+)
 NOT_APPLICABLE: dict[int, str] = {
+    1: _NOT_A_RADIO,
+    6: _NOT_A_RADIO,
+    2: _RIG_SERVER_CLIENT,
+    4: _RIG_SERVER_CLIENT,
+    5: _RIG_SERVER_CLIENT,
+    8: _RIG_SERVER_CLIENT,
+    9: _RIG_SERVER_CLIENT,
+    10: _SOFTWARE_RADIO,
+    23003: _SOFTWARE_RADIO,
+    23004: _SOFTWARE_RADIO,
+    2040: _SOFTWARE_CAT,
+    2048: _SOFTWARE_CAT,
+    2051: _SOFTWARE_CAT,
+    2054: _SOFTWARE_CAT,
+    2056: _SOFTWARE_CAT,
+    26001: _KERNEL_TUNER,
+    26002: _KERNEL_TUNER,
+    23001: _PARALLEL_PORT,
+    25006: _PARALLEL_PORT,
     15001: _WINRADIO_DRIVER,
     15002: _WINRADIO_DRIVER,
     15003: _WINRADIO_DRIVER,
@@ -428,12 +465,15 @@ def render(rows: list[dict], descriptions: dict[str, dict]) -> str:
     ]
     total = len(rows)
     described = sum(1 for r in rows if r["descriptions"])
+    na = sum(1 for r in rows if r["status"] == "not applicable")
     hw = sum(1 for r in rows if r["level"] == "hardware-verified")
     out += [
         "## Counts",
         "",
         f"- Hamlib 4.6.2 models: **{total}**",
-        f"- With a radioctl description: **{described}** ({len(descriptions)} description files)",
+        f"- Not applicable (not a radio, or no transport radioctl has): **{na}**",
+        f"- Real radios (models less not applicable): **{total - na}**; with a radioctl description: "
+        f"**{described}** ({len(descriptions)} description files), **{described * 100 // (total - na)}%** of the real radios",
         f"- Hardware-verified: **{hw}**",
         "",
         "| Status | Models |",

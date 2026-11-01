@@ -391,7 +391,8 @@ async fn probe_baud(
 ) -> Result<Vec<u32>, String> {
     let mut engine = engine_for(description).map_err(|e| e.detail)?;
     let port_target = crate::selftest::parse_target(target)?;
-    let mut template = SerialConfig::new(port_target, DEFAULT_RATES[1]);
+    let mut template =
+        SerialConfig::new(port_target, DEFAULT_RATES[1]).with_description_line(description);
     if unmanaged {
         template.lines = LineControl::Unmanaged;
     }

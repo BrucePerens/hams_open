@@ -80,7 +80,14 @@ class SupportMatrixTests(unittest.TestCase):
             self.assertIn(model_id, ids)
             self.assertGreater(len(reason), 40)
             self.assertEqual(rows[model_id]["status"], "not applicable")
-        self.assertEqual({rows[i]["mfg"] for i in sup.NOT_APPLICABLE}, {"Winradio"})
+            self.assertEqual(rows[model_id]["descriptions"], [], "a described model is not 'not applicable'")
+        makers = {rows[i]["mfg"] for i in sup.NOT_APPLICABLE}
+        self.assertIn("Winradio", makers)
+        # Only makers of drivers, simulators, rig-server clients, software programs and parallel-port kits.
+        self.assertLessEqual(makers - {"Winradio"}, {
+            "Hamlib", "FLRig", "TRXManager", "N3FJP", "Airspy", "N2ADR James Ahlstrom", "DTTS Microwave Society",
+            "OpenHPSDR", "FlexRadio/Apache", "SDRPlay", "Thetis", "SDR Radio", "Video4Linux", "Video4Linux2",
+            "FlexRadio", "AmQRP"})
 
     # Tests [@ANCHOR: radioctl_support_build_rows]
     def test_rows_cover_every_model_once_and_ic7300_is_described(self):

@@ -59,7 +59,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "receiver.line"
-provenance = { kind = "program-output", reference = "`rigctl -m 5016 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib gives a speed range (19200 to 38400); the default recorded here is 19200 (the bottom of Hamlib's 19200 to 38400 range). Hamlib's settings, not a measurement of the radio. The daemon does not yet apply these to the port; the operator configures them." }
+provenance = { kind = "program-output", reference = "`rigctl -m 5016 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib gives a speed range (19200 to 38400); the default recorded here is 19200 (the bottom of Hamlib's 19200 to 38400 range). Hamlib's settings, not a measurement of the radio." }
 verified = { state = "unverified" }
 
 [[facts]]
