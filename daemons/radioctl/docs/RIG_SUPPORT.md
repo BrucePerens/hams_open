@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **278** (284 description files), **97%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **279** (285 description files), **98%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 278 |
+| described | 279 |
 | engine only | 0 |
 | needs variant | 0 |
-| needs engine | 2 |
+| needs engine | 1 |
 | odd device | 4 |
 | not applicable | 29 |
 
@@ -35,7 +35,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 72 |
+| C | new engine | 82 | 73 |
 | D | odd device | 54 | 29 |
 
 ### By family
@@ -51,7 +51,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_device_driver | C/D | - | 10 | 0 | 0 |
 | other_usb | D | si570_usb | 10 | 10 | 0 |
 | flexradio_network | A | flex | 9 | 9 | 0 |
-| other_network | C/D | - | 8 | 1 | 0 |
+| other_network | C/D | - | 8 | 2 | 0 |
 | elecraft_ascii | A | elecraft | 7 | 7 | 0 |
 | icom_marine | C | icom_marine | 4 | 4 | 0 |
 | icom_pcr_ascii | C | icom_pcr | 4 | 4 | 0 |
@@ -316,7 +316,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 11003 | Racal | RA6790/GM | C | other_serial | - | `racal-ra6790-gm` | unverified | - | described |
 | 8004 | Radio Shack | PRO-2052 | C | other_serial | - | `radioshack-pro-2052` | unverified | - | described |
 | 24001 | RFT | EKD-500 | D | other_serial | - | `rft-ekd-500` | unverified | - | described |
-| 32004 | Rhode&Schwarz | 4100 | C | other_network | - | - | unverified | - | needs engine |
+| 32004 | Rhode&Schwarz | 4100 | C | other_network | - | `barrett-4100` | unverified | - | described |
 | 27002 | Rohde&Schwarz | EB200 | C | other_serial | rs | `rs-eb200` | unverified | - | described |
 | 27004 | Rohde&Schwarz | EK895/6 | C | other_serial | rs | `rs-ek895`, `rs-ek896` | manual-checked | - | described |
 | 27001 | Rohde&Schwarz | ESMC | C | other_serial | rs | `rs-esmc` | unverified | - | described |

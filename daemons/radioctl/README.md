@@ -814,6 +814,16 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_hiqsdr_twin_snapshot] (radioctl-protocols) The virtual HiQSDR's tuned frequency, mode byte and key state.
 - [@ANCHOR: radioctl:radioctl_hiqsdr_twin_feed] (radioctl-protocols) The virtual HiQSDR keeps the last 22-byte control frame it was sent.
 - [@ANCHOR: radioctl:radioctl_hiqsdr_twin_front_panel] (radioctl-protocols) The virtual HiQSDR has no front panel.
+- [@ANCHOR: radioctl:radioctl_barrett4100_command] (radioctl-protocols) A Barrett 4100 command on the wire: line feed, text, CR.
+- [@ANCHOR: radioctl:radioctl_barrett4100_engine_new] (radioctl-protocols) Builds a Barrett 4100 engine from a vendor description of dialect `barrett4100`.
+- [@ANCHOR: radioctl:radioctl_barrett4100_engine_encode] (radioctl-protocols) Encodes frequency, frequency read and PTT for the Barrett 4100; the first command carries the remote-mode command.
+- [@ANCHOR: radioctl:radioctl_barrett4100_engine_feed] (radioctl-protocols) Matches the framed answers to the commands sent: session, write acknowledgements, frequency.
+- [@ANCHOR: radioctl:radioctl_barrett4100_engine_link_restored] (radioctl-protocols) After a reconnect, drops owed answers and sends the remote-mode command again if the radio had been entered.
+- [@ANCHOR: radioctl:radioctl_barrett4100_twin_new] (radioctl-protocols) A virtual Barrett 4100 in the description's default state.
+- [@ANCHOR: radioctl:radioctl_barrett4100_twin_answer] (radioctl-protocols) The virtual Barrett 4100's answer text for one command line.
+- [@ANCHOR: radioctl:radioctl_barrett4100_twin_snapshot] (radioctl-protocols) The virtual Barrett 4100's receive frequency and key state.
+- [@ANCHOR: radioctl:radioctl_barrett4100_twin_feed] (radioctl-protocols) The virtual Barrett 4100 reads CR-ended commands and answers them framed by XOFF and XON.
+- [@ANCHOR: radioctl:radioctl_barrett4100_twin_front_panel] (radioctl-protocols) A knob turned at the virtual Barrett 4100: frequency or PTT.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
