@@ -13,6 +13,7 @@ use std::time::Duration;
 use radioctl_core::backoff::Backoff;
 use radioctl_core::error::ErrorKind;
 use radioctl_core::net::{open_link, NetConfig};
+use radioctl_core::op::{Alarm, Observation, Op};
 use radioctl_core::rig::{spawn, Freshness, RigOptions};
 use radioctl_core::rigfile;
 use radioctl_core::serial::LinkStatus;
@@ -27,12 +28,28 @@ use tokio::time::{sleep, timeout};
 
 const FILE: &str = include_str!("../../../rigs/kenwood-ts-890s.toml");
 
-#[derive(Default)]
 struct Counts {
     connections: AtomicU32,
     logins: AtomicU32,
     idle_drops: AtomicU32,
     refused: AtomicU32,
+    /// `AI2;` frames the radio received (counted after the login, over every connection).
+    ai2: AtomicU32,
+    /// Bumped to make the radio hang up on every open connection at once.
+    kill: tokio::sync::watch::Sender<u32>,
+}
+
+impl Default for Counts {
+    fn default() -> Counts {
+        Counts {
+            connections: AtomicU32::new(0),
+            logins: AtomicU32::new(0),
+            idle_drops: AtomicU32::new(0),
+            refused: AtomicU32::new(0),
+            ai2: AtomicU32::new(0),
+            kill: tokio::sync::watch::channel(0).0,
+        }
+    }
 }
 
 /// A TS-890S on its LAN port. `idle` is the no-communication limit (10 seconds in the guide).
@@ -56,8 +73,13 @@ async fn radio(
                 let mut buf = Vec::new();
                 let mut chunk = [0u8; 512];
                 let mut stage = 0;
+                let mut killed = counts.kill.subscribe();
                 loop {
-                    let n = match timeout(idle, stream.read(&mut chunk)).await {
+                    let read = tokio::select! {
+                        read = timeout(idle, stream.read(&mut chunk)) => read,
+                        _ = killed.changed() => return,
+                    };
+                    let n = match read {
                         Err(_) => {
                             counts.idle_drops.fetch_add(1, Ordering::SeqCst);
                             return;
@@ -89,7 +111,12 @@ async fn radio(
                                     return;
                                 }
                             }
-                            2 => rig.lock().expect("rig").feed(&frame, Duration::ZERO),
+                            2 => {
+                                if text == "AI2;" {
+                                    counts.ai2.fetch_add(1, Ordering::SeqCst);
+                                }
+                                rig.lock().expect("rig").feed(&frame, Duration::ZERO)
+                            }
                             _ => {
                                 // CAT before the login: the radio says nothing.
                                 counts.refused.fetch_add(1, Ordering::SeqCst);
@@ -265,4 +292,72 @@ async fn a_wrong_password_and_a_denied_connection_fail_the_open() {
         Err(e) => e,
     };
     assert!(error.detail.contains("denied"), "{}", error.detail);
+}
+
+// Tests [@ANCHOR: radioctl_ts890_engine_link_restored]
+// Tests [@ANCHOR: radioctl_core_actor_restore_session]
+// Tests [@ANCHOR: radioctl_core_actor_link_status_changed]
+#[tokio::test]
+async fn a_dropped_lan_session_logs_in_again_and_the_engine_turns_auto_information_back_on() {
+    let (addr, counts, _rig) = radio(Duration::from_secs(60), false).await;
+    let link = open_link(
+        &Handle::current(),
+        config(addr),
+        session("admin", Duration::from_secs(60)),
+    )
+    .await
+    .expect("link");
+    let mut options = RigOptions::default();
+    options.poll.enabled = false;
+    options.default_timeout = Duration::from_secs(2);
+    options.link_watch = Some(link.watch());
+    let description = rigfile::parse(FILE).expect("file").description;
+    let engine = engine_for(&description).expect("engine");
+    let (transport, monitor) = link.into_parts();
+    let rig = spawn(&Handle::current(), engine, transport, options).expect("spawn");
+    let mut events = rig.events();
+    // A client that never asked for auto-information gets none after a reconnect.
+    rig.frequency(Vfo::A, Freshness::Fresh).await.expect("read");
+    rig.execute(Op::SetTransceive(true)).await.expect("ai2");
+    rig.frequency(Vfo::A, Freshness::Fresh).await.expect("read");
+    assert_eq!(counts.ai2.load(Ordering::SeqCst), 1);
+    assert_eq!(counts.logins.load(Ordering::SeqCst), 1);
+
+    counts.kill.send_modify(|n| *n += 1);
+    timeout(Duration::from_secs(5), async {
+        while !matches!(
+            monitor.status(),
+            LinkStatus::Connected { generation, .. } if generation >= 2
+        ) {
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("reconnected");
+    // The restore step is complete when the event arrives: unkey first, session next.
+    timeout(Duration::from_secs(5), async {
+        while let Some(event) = events.next().await {
+            if event
+                .changes
+                .iter()
+                .any(|c| c.new == Observation::Alarm(Alarm::LinkRestored))
+            {
+                return;
+            }
+        }
+    })
+    .await
+    .expect("link restored event");
+    assert_eq!(counts.logins.load(Ordering::SeqCst), 2, "logged in again");
+    assert_eq!(
+        counts.ai2.load(Ordering::SeqCst),
+        2,
+        "AI2; sent again, once"
+    );
+    // Still gated, still unkeyed.
+    assert_eq!(
+        rig.set_ptt(true).await.expect_err("gate").kind,
+        ErrorKind::TransmitGateClosed
+    );
+    assert_eq!(counts.refused.load(Ordering::SeqCst), 0);
 }

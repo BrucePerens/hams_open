@@ -1030,12 +1030,51 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 self.transcript
                     .push_back(format!("LINK UP generation {generation}"));
                 self.unkey_fail_closed("link restored", Source::Api).await;
+                self.restore_session().await;
                 self.alarm(Alarm::LinkRestored, Source::Api);
             }
             LinkStatus::Reconnecting { last_error, .. } => {
                 self.link_down(&format!("port lost: {last_error}"));
             }
             LinkStatus::Closed => self.link_down("serial supervisor closed"),
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_actor_restore_session]
+    /// Writes the requests the engine returns from [`ProtocolEngine::link_restored`] (session
+    /// setup the rig forgot with the old link), once each, in order. Not retried and never
+    /// transmitting: a request that fails is noted in the transcript and the rest still go,
+    /// because the unkey has already been done and the link may be down again. Runs inside the
+    /// restore step, so no queued command is served in front of it.
+    async fn restore_session(&mut self) {
+        let requests = self.engine.link_restored();
+        let timeout = self.engine.description().timing.timeout;
+        for request in requests {
+            if !self.shared.link_up.load(Ordering::Acquire) {
+                break;
+            }
+            let until = deadline_after(Instant::now(), timeout);
+            match timeout_at(until, self.transport.write_all(&request.bytes)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    self.link_down(&error.to_string());
+                    break;
+                }
+                Err(_) => {
+                    self.transcript
+                        .push_back("SESSION RESTORE write timed out".to_string());
+                    continue;
+                }
+            }
+            self.last_write = Some(Instant::now());
+            self.log("TX", &request.bytes);
+            let seq = self.next_seq();
+            self.note_written(request.reply, seq, timeout);
+            if request.reply != ReplyKind::None {
+                let _ = self
+                    .await_reply(request.reply, seq, until, Source::Api, false)
+                    .await;
+            }
         }
     }
 

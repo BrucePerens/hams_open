@@ -127,6 +127,9 @@ pub struct KenwoodEngine {
     r5000: bool,
     /// The TRC-80 dialect: the frequency is read from `IF`.
     if_frequency: bool,
+    /// The auto-information the controller turned on (`AI` set to on, [`Op::SetTransceive`]) and
+    /// the rig loses with the link; sent again by [`ProtocolEngine::link_restored`].
+    transceive: bool,
 }
 
 impl KenwoodEngine {
@@ -166,6 +169,7 @@ impl KenwoodEngine {
             ts990,
             r5000: dialect == Some(KenwoodDialect::R5000),
             if_frequency: dialect == Some(KenwoodDialect::Trc80),
+            transceive: false,
         })
     }
 
@@ -267,7 +271,7 @@ impl KenwoodEngine {
     /// The operations whose wire form differs in the older dialects (TS-440S: IC-10 manual, printed
     /// pages 13 to 29; TS-450S and TS-690S: their external-control manual, pages 8 to 18): `None`
     /// where the classic form is also theirs.
-    fn encode_ts440(&self, op: &Op) -> Option<Result<Request, RigError>> {
+    fn encode_ts440(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
         let none = ReplyKind::None;
         Some(match op {
             // `MD` has no read form: the mode is P9 of `IF`.
@@ -287,7 +291,10 @@ impl KenwoodEngine {
             }
             Op::SetSplit(on) => Ok(Self::command(format!("FR0;FT{};", u8::from(*on)), none)),
             // `AI` has one parameter digit (page 13): 1 for on.
-            Op::SetTransceive(on) => Ok(Self::command(format!("AI{};", u8::from(*on)), none)),
+            Op::SetTransceive(on) => {
+                self.transceive = *on;
+                Ok(Self::command(format!("AI{};", u8::from(*on)), none))
+            }
             // `RU` and `RD` carry no parameter and move the RIT by an unstated step, so an exact
             // offset cannot be set; there is no `SM`, level or `KY` either.
             Op::SetRitOffset(_)
@@ -565,7 +572,10 @@ impl ProtocolEngine for KenwoodEngine {
             Op::GetSignal => Self::command("SM0;".into(), ReplyKind::Observation(Field::Signal)),
             // AI2 (extended format) is the "on" of both guides; AI1 and AI3, the old format, are
             // refused by the TS-2000 and are not offered by the TS-590.
-            Op::SetTransceive(on) => Self::command(format!("AI{};", if *on { 2 } else { 0 }), none),
+            Op::SetTransceive(on) => {
+                self.transceive = *on;
+                Self::command(format!("AI{};", if *on { 2 } else { 0 }), none)
+            }
             Op::GetPtt => Self::command("IF;".into(), ReplyKind::Observation(Field::Ptt)),
             Op::GetSplit => Self::command("IF;".into(), ReplyKind::Observation(Field::Split)),
             Op::GetTxVfo => Self::command("FT;".into(), ReplyKind::Observation(Field::TxVfo)),
@@ -640,6 +650,20 @@ impl ProtocolEngine for KenwoodEngine {
                 Token::Junk(junk) => vec![Inbound::Unrecognised(junk)],
             })
             .collect()
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_link_restored]
+    fn link_restored(&mut self) -> Vec<Request> {
+        // A half frame from the old link must not be joined to the new link's first bytes.
+        self.tokenizer = Tokenizer::default();
+        if !self.transceive {
+            return Vec::new();
+        }
+        // The rig forgot its auto-information with the link: turn it on again.
+        match self.encode(&Op::SetTransceive(true)) {
+            Ok(request) => vec![request],
+            Err(_) => Vec::new(),
+        }
     }
 }
 

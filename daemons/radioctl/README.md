@@ -1108,6 +1108,18 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_handle_submit] (radioctl-core) Checks capability and transmit gate, then queues the command without waiting (full queue is a typed error).
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_fail_closed] (radioctl-core) Writes an unkey and waits for its answer, not preemptible, up to three attempts with backoff: used when a transmit command was written but never answered, when the watchdog fires and when the actor stops. An unkey that cannot be done is counted (`unkey_failures`) and reported as `Alarm::UnkeyFailed`.
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_on_stop] (radioctl-core) When the last handle is dropped, a rig whose cache says keyed or whose gate was open is unkeyed before the actor ends.
+- [@ANCHOR: radioctl:radioctl_core_actor_restore_session] (radioctl-core) After the fail-closed unkey of a restored link, writes the requests the engine returns from `link_restored` (session set-up the rig forgot), once each, before the `LinkRestored` event.
+- [@ANCHOR: radioctl:radioctl_core_engine_box_link_restored] (radioctl-core) Forwards the link-restored hook to the boxed engine.
+- [@ANCHOR: radioctl:radioctl_elecraft_engine_link_restored] (radioctl-protocols) Drops a half frame and sends `AI2;` again if the controller had turned auto-information on.
+- [@ANCHOR: radioctl:radioctl_flex_engine_link_restored] (radioctl-protocols) Drops the old connection's half line and owed replies; sends the `sub` lines and `info` again, once, if the client was subscribed.
+- [@ANCHOR: radioctl:radioctl_kenwood_engine_link_restored] (radioctl-protocols) Drops a half frame and sends `AI` again if the controller had turned auto-information on.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_link_restored] (radioctl-protocols) Drops a half frame and sends `AI2;` again if the controller had turned auto-information on (the LAN login is the framing's).
+- [@ANCHOR: radioctl:radioctl_virtual_flex_control_forget_session] (radioctl-protocols) The virtual Flex forgets this client's subscriptions (the client reconnected).
+- [@ANCHOR: radioctl:radioctl_virtual_flex_control_subscribed] (radioctl-protocols) Whether the virtual Flex client is subscribed to slice, tx and pan status.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_forget_session] (radioctl-protocols) A new client connection: the virtual Flex keeps no subscriptions of the old one.
+- [@ANCHOR: radioctl:radioctl_virtual_flex_subscribed] (radioctl-protocols) Whether the virtual Flex client is subscribed to slice, tx and pan status.
+- [@ANCHOR: radioctl:radioctl_virtual_forget_session] (radioctl-protocols) The virtual rig loses its auto-information set-up (a dropped link); dial, mode and key stay.
+- [@ANCHOR: radioctl:radioctl_virtual_io_forget_session] (radioctl-protocols) The virtual rig on its stream forgets the session set up on the old link.
 - [@ANCHOR: radioctl:radioctl_core_deadline_after] (radioctl-core) Saturating `Instant + Duration`: an absurd timeout (a caller's `Duration::MAX`, a rig file's timing) never panics the actor or the caller.
 - [@ANCHOR: radioctl:radioctl_core_wait_until] (radioctl-core) Sleeps until the next poll is due, or forever when nothing is polled.
 - [@ANCHOR: radioctl:radioctl_core_capability_name] (radioctl-core) The name used in rig description files.

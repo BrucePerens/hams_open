@@ -1025,6 +1025,39 @@ impl ProtocolEngine for FlexEngine {
         Ok(Request { bytes, reply })
     }
 
+    // [@ANCHOR: radioctl_flex_engine_link_restored]
+    fn link_restored(&mut self) -> Vec<Request> {
+        // A new connection: the half line and the replies still owed belong to the old one, and
+        // the radio has forgotten this client's subscriptions.
+        self.line.clear();
+        self.discarding = false;
+        self.pending.clear();
+        self.awaiting.clear();
+        if !self.subscribed {
+            return Vec::new();
+        }
+        // The same lines the first command carried (`sub` for slice, tx and pan, then `info`),
+        // sent now, once; `subscribed` stays set so the next command does not repeat them.
+        let mut lines: Vec<(String, Kind)> = Self::subscription_lines(true)
+            .into_iter()
+            .map(|line| (line, Kind::Quiet))
+            .collect();
+        lines.insert(2, ("info".to_string(), Kind::Info));
+        if let Some(last) = lines.last_mut() {
+            last.1 = Kind::Set;
+        }
+        let mut bytes = Vec::new();
+        for (line, kind) in lines {
+            let seq = self.next_seq();
+            self.pending.push(Pending { seq, kind });
+            bytes.extend_from_slice(format!("C{seq}|{line}\n").as_bytes());
+        }
+        vec![Request {
+            bytes,
+            reply: ReplyKind::Ack,
+        }]
+    }
+
     // [@ANCHOR: radioctl_flex_engine_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
         if !self.line.is_empty() && now.saturating_sub(self.line_at) > PARTIAL_FRAME_TIMEOUT {

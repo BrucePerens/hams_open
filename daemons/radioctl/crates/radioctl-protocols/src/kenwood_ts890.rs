@@ -113,6 +113,10 @@ pub fn lan_reply(text: &str) -> Option<bool> {
 pub struct Ts890Engine {
     desc: RigDescription,
     tokenizer: Tokenizer,
+    /// `AI2;` was sent and the rig loses it with the LAN or serial session; sent again by
+    /// [`ProtocolEngine::link_restored`]. (The LAN login itself is the framing's, repeated by
+    /// `net::open_link` on every reconnect, not the engine's.)
+    transceive: bool,
 }
 
 impl Ts890Engine {
@@ -137,6 +141,7 @@ impl Ts890Engine {
         Ok(Ts890Engine {
             desc,
             tokenizer: Tokenizer::default(),
+            transceive: false,
         })
     }
 
@@ -278,7 +283,10 @@ impl ProtocolEngine for Ts890Engine {
             Op::SetPtt(true) => Self::command("TX0;".into(), none),
             Op::SetPtt(false) => Self::command("RX;".into(), none),
             Op::GetSignal => Self::command("SM;".into(), observe(Field::Signal)),
-            Op::SetTransceive(on) => Self::command(format!("AI{};", if *on { 2 } else { 0 }), none),
+            Op::SetTransceive(on) => {
+                self.transceive = *on;
+                Self::command(format!("AI{};", if *on { 2 } else { 0 }), none)
+            }
             Op::GetSplit => Self::command("TB;".into(), observe(Field::Split)),
             Op::SetSplit(on) => Self::command(format!("TB{};", u8::from(*on)), none),
             Op::GetTxVfo => Self::command("FT;".into(), observe(Field::TxVfo)),
@@ -346,5 +354,19 @@ impl ProtocolEngine for Ts890Engine {
                 Token::Junk(junk) => Inbound::Unrecognised(junk),
             })
             .collect()
+    }
+
+    // [@ANCHOR: radioctl_ts890_engine_link_restored]
+    fn link_restored(&mut self) -> Vec<Request> {
+        // A half frame from the old link must not be joined to the new link's first bytes.
+        self.tokenizer = Tokenizer::default();
+        if !self.transceive {
+            return Vec::new();
+        }
+        // The rig forgot its auto-information with the link: turn it on again.
+        match self.encode(&Op::SetTransceive(true)) {
+            Ok(request) => vec![request],
+            Err(_) => Vec::new(),
+        }
     }
 }
