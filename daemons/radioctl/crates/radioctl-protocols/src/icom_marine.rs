@@ -76,6 +76,8 @@ pub struct MarineDialect {
 }
 
 impl MarineDialect {
+    // [@ANCHOR: radioctl_marine_mode_name]
+    /// The name the radio uses for a mode, if the description has it.
     fn mode_name(&self, desc: &RigDescription, mode: Mode) -> Option<&'static str> {
         let code = desc.mode_code(mode)?;
         if code == RTTY_CODE {
@@ -485,6 +487,7 @@ mod tests {
         assert!(e.feed(b"\r\n", T0).is_empty());
     }
 
+    // Tests [@ANCHOR: radioctl_marine_mode_name]
     // Tests [@ANCHOR: radioctl_marine_twin_new]
     // Tests [@ANCHOR: radioctl_marine_twin_line]
     #[test]

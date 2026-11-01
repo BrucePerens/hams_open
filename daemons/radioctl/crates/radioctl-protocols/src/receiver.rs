@@ -47,6 +47,7 @@ pub trait Dialect: Debug + Send + 'static {
 
     /// Whether a line is a bare acknowledgement or refusal, before [`Dialect::decode`] sees it.
     /// The default: an empty line acknowledges a setting, a line starting `?` refuses.
+    // [@ANCHOR: radioctl_receiver_dialect_status_default]
     fn status(&mut self, expecting: ReplyKind, line: &str) -> Option<Vec<Inbound>> {
         if line.is_empty() {
             return Some(if expecting == ReplyKind::Ack {

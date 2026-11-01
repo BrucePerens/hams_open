@@ -124,6 +124,7 @@ impl Dialect for PcrDialect {
         }
     }
 
+    // [@ANCHOR: radioctl_pcr_dialect_terminator]
     fn terminator(&self) -> u8 {
         if self.lead {
             b'\r'
@@ -299,6 +300,7 @@ mod tests {
         assert!(tuning_command(Hz(10_000_000_000), b'5', b'1').is_none());
     }
 
+    // Tests [@ANCHOR: radioctl_pcr_dialect_terminator]
     // Tests [@ANCHOR: radioctl_pcr_engine]
     // Tests [@ANCHOR: radioctl_pcr_dialect_from_description]
     // Tests [@ANCHOR: radioctl_pcr_dialect_encode]

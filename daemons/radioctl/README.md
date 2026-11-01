@@ -1303,3 +1303,6 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_rs_dialect_decode] (radioctl-protocols) Rs dialect decode.
 - [@ANCHOR: radioctl:radioctl_rs_twin_new] (radioctl-protocols) The twin of a Rohde and Schwarz description.
 - [@ANCHOR: radioctl:radioctl_rs_twin_line] (radioctl-protocols) Rs twin line.
+- [@ANCHOR: radioctl:radioctl_marine_mode_name] (radioctl-protocols) The name the radio uses for a mode, if the description has it.
+- [@ANCHOR: radioctl:radioctl_pcr_dialect_terminator] (radioctl-protocols) Pcr dialect terminator.
+- [@ANCHOR: radioctl:radioctl_receiver_dialect_status_default] (radioctl-protocols) Receiver dialect status default.

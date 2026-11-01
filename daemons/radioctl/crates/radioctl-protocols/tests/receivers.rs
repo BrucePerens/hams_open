@@ -103,6 +103,7 @@ fn the_receiver_files_are_present_and_none_of_the_receivers_can_transmit() {
 // Tests [@ANCHOR: radioctl_receiver_engine_encode]
 // Tests [@ANCHOR: radioctl_receiver_engine_feed]
 // Tests [@ANCHOR: radioctl_receiver_engine_split_lines]
+// Tests [@ANCHOR: radioctl_receiver_dialect_status_default]
 #[test]
 fn every_receiver_round_trips_frequency_mode_and_signal_through_its_twin() {
     for desc in receivers() {
