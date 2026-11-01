@@ -16,6 +16,7 @@ pub mod aor_classic;
 pub mod ar7030;
 pub mod attenuation;
 pub mod barrett;
+pub mod barrett4100;
 pub mod civ;
 pub mod civ_scope;
 pub mod codan;

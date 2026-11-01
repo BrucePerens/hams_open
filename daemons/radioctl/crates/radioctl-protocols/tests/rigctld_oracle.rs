@@ -1995,6 +1995,9 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
 ///   ID command", so the twin (and, if Hamlib's comment is right, the radio) never answers and the
 ///   write fails in Hamlib while radioctl's engine, which sends no ID, succeeds. Open question:
 ///   whether a real Transfox answers `ID;`.
+/// * `barrett-4100` is not in the batch: Hamlib registers it as a network radio, so `rigctld`
+///   treats the batch's pty path as a network address and sends nothing (tried: no wire bytes,
+///   every step unanswered). Its driver is Beta and untested in Hamlib as well.
 /// * Lowe HF-235 is not in the batch: Hamlib 4.6.2's `rigctld` aborts ("stack smashing detected")
 ///   in `lowe_get_freq` whatever the radio answers (tried with a full, a short and an empty answer),
 ///   so no step can run.
