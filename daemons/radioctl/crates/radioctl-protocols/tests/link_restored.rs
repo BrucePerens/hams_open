@@ -219,3 +219,29 @@ async fn flex_subscriptions_come_back_once_and_the_gate_stays_closed() {
         ErrorKind::TransmitGateClosed
     );
 }
+
+// Tests [@ANCHOR: radioctl_core_actor_open_session]
+// Tests [@ANCHOR: radioctl_core_actor_write_session_requests]
+// Tests [@ANCHOR: radioctl_receiver_engine_open_requests]
+// Tests [@ANCHOR: radioctl_receiver_engine_link_restored]
+// Tests [@ANCHOR: radioctl_pcr_dialect_open_commands]
+#[tokio::test]
+async fn an_icom_pcr_is_powered_on_when_the_actor_starts_and_again_after_a_link_loss() {
+    let description = rigfile::parse(include_str!("../../../rigs/icom-ic-pcr1500.toml"))
+        .expect("pcr file")
+        .description;
+    let engine = radioctl_protocols::icom_pcr::engine(description.clone()).expect("engine");
+    let (rig, control, status) = ascii_rig(description, engine).await;
+    // The first read waits for the open requests: the actor serves nothing before they are out.
+    rig.frequency(Vfo::A, Freshness::Fresh).await.expect("read");
+    // `H101\n` and `G300\n` (5 bytes each), then the `H1?\n` liveness read (4 bytes).
+    assert_eq!(control.bytes_received(), 5 + 5 + 4);
+    let before = control.bytes_received();
+    drop_and_restore(&rig, &status, 2, || control.forget_session()).await;
+    // A receiver cannot transmit, so the restore's unkey puts nothing on the wire; the two open
+    // requests do.
+    assert_eq!(control.bytes_received() - before, 5 + 5);
+    rig.frequency(Vfo::A, Freshness::Fresh)
+        .await
+        .expect("read again");
+}

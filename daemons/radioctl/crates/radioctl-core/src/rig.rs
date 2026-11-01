@@ -39,7 +39,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch, Notify};
 use tokio::time::{sleep_until, timeout_at, Instant};
 
 use crate::capability::{Capability, CapabilitySet};
-use crate::engine::{Inbound, ProtocolEngine, ReplyKind};
+use crate::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
 use crate::op::{Alarm, Field, Observation, Op};
@@ -332,6 +332,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         ptt_reserve: options.poll.ptt_reserve,
         link_watch: options.link_watch,
         link_generation: 0,
+        session_opened: false,
     };
     runtime.spawn(actor.run());
     Ok(RigHandle {
@@ -978,6 +979,8 @@ struct Actor<E, T> {
     link_watch: Option<watch::Receiver<LinkStatus>>,
     /// The `generation` of the last `Connected` status seen; 0 before the first.
     link_generation: u32,
+    /// The open or restore requests have been written (once per actor start).
+    session_opened: bool,
     /// Requests written whose reply has not been seen: the current command's and those of
     /// commands abandoned (timed out, preempted) whose answer may still arrive. Oldest first,
     /// the order the rig answers in.
@@ -1005,6 +1008,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         // A status that changed before the actor started (the port was lost during spawn) is
         // not an edge the watch would deliver: look once.
         self.link_status_changed().await;
+        self.open_session().await;
         loop {
             let due = self.poll.next_due();
             let link = self.shared.link_up.load(Ordering::Acquire);
@@ -1080,6 +1084,7 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 self.transcript
                     .push_back(format!("LINK UP generation {generation}"));
                 self.unkey_fail_closed("link restored", Source::Api).await;
+                self.session_opened = true;
                 self.restore_session().await;
                 self.alarm(Alarm::LinkRestored, Source::Api);
             }
@@ -1098,6 +1103,27 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     /// restore step, so no queued command is served in front of it.
     async fn restore_session(&mut self) {
         let requests = self.engine.link_restored();
+        self.write_session_requests(requests).await;
+    }
+
+    // [@ANCHOR: radioctl_core_actor_open_session]
+    /// Once, as the actor starts with the link up: writes the requests the engine returns from
+    /// [`ProtocolEngine::open_requests`] (an Icom PCR is powered on and told to stop its automatic
+    /// updates here), before any queued command is served. Nothing is sent when the link was
+    /// down at the start or a restore already set the session up. A write that fails takes the
+    /// link down (every command then answers `LinkDown`), so a failed open does not hang.
+    async fn open_session(&mut self) {
+        if self.session_opened || !self.shared.link_up.load(Ordering::Acquire) {
+            return;
+        }
+        self.session_opened = true;
+        let requests = self.engine.open_requests();
+        self.write_session_requests(requests).await;
+    }
+
+    // [@ANCHOR: radioctl_core_actor_write_session_requests]
+    /// Writes session requests once each, in order, waiting for the reply the request names.
+    async fn write_session_requests(&mut self, requests: Vec<Request>) {
         let timeout = self.engine.description().timing.timeout;
         for request in requests {
             if !self.shared.link_up.load(Ordering::Acquire) {

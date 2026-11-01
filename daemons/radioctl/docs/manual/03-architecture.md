@@ -128,6 +128,10 @@ pub trait ProtocolEngine: Send + 'static {
     fn link_restored(&mut self) -> Vec<Request> {
         Vec::new()
     }
+
+    fn open_requests(&mut self) -> Vec<Request> {
+        Vec::new()
+    }
 }
 
 pub struct Request {
@@ -141,6 +145,11 @@ pub enum ReplyKind {
     Observation(Field),
 }
 ```
+
+`open_requests` and `link_restored` are the engine's session set-up: the actor writes the first
+once when it starts with the link up, the second after a link loss, before it serves any command.
+The Icom PCR engine uses both to send `H101` (power on) and `G300` (no automatic updates), as
+Hamlib does when it opens the rig.
 
 `Inbound` is what an engine decodes from received bytes: an `Observation` (a value, asked for or not),
 `Ack` or `Nak` (the radio accepted or refused the last command), `Unrecognised(bytes)` (bytes that formed no

@@ -76,6 +76,15 @@ pub trait ProtocolEngine: Send + 'static {
     fn link_restored(&mut self) -> Vec<Request> {
         Vec::new()
     }
+
+    /// The requests that make a freshly opened rig ready to talk (Icom PCR power-on `H101` and
+    /// `G300`, which Hamlib also sends when it opens the rig), in order, or none if the rig needs
+    /// nothing. The actor writes them once when it starts with the link up, before it serves a
+    /// command; a link that comes up later gets [`ProtocolEngine::link_restored`] instead, which
+    /// an engine with an open step answers with the same requests. Never keys the transmitter.
+    fn open_requests(&mut self) -> Vec<Request> {
+        Vec::new()
+    }
 }
 
 impl ProtocolEngine for Box<dyn ProtocolEngine> {
@@ -101,6 +110,12 @@ impl ProtocolEngine for Box<dyn ProtocolEngine> {
     /// Forwards the link-restored hook to the boxed engine.
     fn link_restored(&mut self) -> Vec<Request> {
         self.as_mut().link_restored()
+    }
+
+    // [@ANCHOR: radioctl_core_engine_box_open_requests]
+    /// Forwards the open hook to the boxed engine.
+    fn open_requests(&mut self) -> Vec<Request> {
+        self.as_mut().open_requests()
     }
 }
 
@@ -130,6 +145,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_engine_box_encode]
     // Tests [@ANCHOR: radioctl_core_engine_box_feed]
     // Tests [@ANCHOR: radioctl_core_engine_box_link_restored]
+    // Tests [@ANCHOR: radioctl_core_engine_box_open_requests]
     #[test]
     fn a_boxed_engine_is_an_engine() {
         let mut boxed: Box<dyn ProtocolEngine> = Box::new(Echo(RigDescription::ic7300()));
@@ -147,6 +163,10 @@ mod tests {
         assert!(
             ProtocolEngine::link_restored(&mut boxed).is_empty(),
             "an engine with no session state sets nothing up"
+        );
+        assert!(
+            ProtocolEngine::open_requests(&mut boxed).is_empty(),
+            "an engine with no open step sends nothing when the rig opens"
         );
     }
 }
