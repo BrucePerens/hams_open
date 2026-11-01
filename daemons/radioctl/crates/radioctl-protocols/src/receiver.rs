@@ -171,6 +171,13 @@ pub trait ReceiverTwin: Debug + Send {
     fn terminator(&self) -> u8 {
         b'\r'
     }
+
+    // [@ANCHOR: radioctl_receiver_twin_raw_default]
+    /// For a protocol that is not line-oriented: the bytes the radio sends for these bytes the
+    /// controller wrote, or `None` (the default) to have the line framing handle them.
+    fn raw(&mut self, _state: &mut RigState, _bytes: &[u8]) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 /// The line side of a virtual receiver: collects bytes into command lines for a twin.
@@ -190,6 +197,12 @@ impl VirtualReceiver {
             .as_ref()
             .ok_or_else(|| RigError::new(ErrorKind::Unsupported, "description lacks [receiver]"))?;
         let twin: Box<dyn ReceiverTwin> = match params.protocol {
+            ReceiverProtocol::Aor if crate::ar7030::handles(desc) => {
+                Box::new(crate::ar7030::Ar7030Twin::new(desc)?)
+            }
+            ReceiverProtocol::Aor if crate::aor_classic::handles(desc) => {
+                Box::new(crate::aor_classic::AorClassicTwin::new(desc)?)
+            }
             ReceiverProtocol::Aor => Box::new(crate::aor::AorTwin::new(desc)?),
             ReceiverProtocol::Uniden if crate::uniden_digital::handles(desc) => {
                 Box::new(crate::uniden_digital::UnidenDigitalTwin::new(desc)?)
@@ -217,6 +230,9 @@ impl VirtualReceiver {
             self.buffer.clear();
         }
         self.last_byte_at = now;
+        if let Some(answer) = self.twin.raw(state, bytes) {
+            return answer;
+        }
         self.buffer.extend_from_slice(bytes);
         let term = self.twin.terminator();
         let mut out = Vec::new();

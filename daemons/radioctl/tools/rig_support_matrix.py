@@ -66,6 +66,10 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "uniden-bcd396t": [8010],
     "uniden-bcd996t": [8011],
     "aor-ar2700": [5008],
+    "aor-ar3000a": [5006],
+    "aor-ar3030": [5005],
+    "aor-ar7030": [5003],
+    "aor-ar7030p": [5015],
     "aor-ar5000": [5004],
     "aor-ar5000a": [5014],
     "aor-ar8000": [5002],
@@ -360,7 +364,7 @@ FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
 # Hamlib model id -> radioctl engine, for Tier C models whose engine exists (a Tier C model not listed here
 # still `needs engine`). Descriptions of these models are `described`; an undescribed one is `engine only`.
 MODEL_ENGINES: dict[int, str] = {
-    **{i: "aor" for i in (5001, 5002, 5004, 5008, 5013, 5014, 5016)},
+    **{i: "aor" for i in (5001, 5002, 5003, 5004, 5005, 5006, 5008, 5013, 5014, 5015, 5016)},
     **{i: "civ" for i in (3052, 3053)},
     **{i: "rs" for i in (27001, 27002, 27003, 27004, 27005)},
     **{i: "icom_marine" for i in (30001, 30002, 30003, 30004)},

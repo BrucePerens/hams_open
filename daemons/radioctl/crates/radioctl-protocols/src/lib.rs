@@ -11,6 +11,8 @@
 
 pub mod alinco;
 pub mod aor;
+pub mod aor_classic;
+pub mod ar7030;
 pub mod attenuation;
 pub mod civ;
 pub mod civ_scope;
