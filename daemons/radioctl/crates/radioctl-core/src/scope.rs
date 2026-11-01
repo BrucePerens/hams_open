@@ -47,6 +47,35 @@ pub enum ScopeSetting {
     Attenuator,
     /// Peak hold: 0 off, 1 on.
     MaxHold,
+    /// Display averaging: 0 off, then levels 1 to 3.
+    Averaging,
+    /// Waterfall scroll speed, 1 (slowest) to 4.
+    WaterfallSpeed,
+    /// Expanded spectrum analysis range: 0 off, 1 on. The rig then sends a wider sweep than it shows.
+    Expand,
+    /// The audio scope's attenuator, in steps of 10 dB from 0.
+    AudioAttenuator,
+    /// The audio scope's span: 0 narrow (3 kHz), 1 wide (8 kHz).
+    AudioSpan,
+    /// The oscilloscope level, in steps of 10 dB down from 0.
+    OscilloscopeLevel,
+    /// The oscilloscope sweep time, from the shortest (0) up.
+    OscilloscopeSweep,
+    /// Where the scrolling marker sits: 0 four grids left of centre, 4 centre, 8 four grids right.
+    ShiftPosition,
+    /// The audio scope's display pause: 0 running, 1 paused.
+    AudioPause,
+    /// The scope's receive circuit state, read only: 0 normal, 1 overflow from too much input.
+    Overflow,
+}
+
+/// A one-shot scope command that has no value to set or read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScopeAction {
+    /// Clear the waterfall display.
+    ClearWaterfall,
+    /// Shift the marker (auto scroll mode) or centre it (fixed mode); the rig ignores it in centre mode.
+    MarkerShift,
 }
 
 /// One complete sweep of a rig's scope.

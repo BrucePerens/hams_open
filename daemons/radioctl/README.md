@@ -1612,9 +1612,11 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_decode_scope] (radioctl-protocols) A `BS` answer after the command name `BS` that is an observation (`BS3`, `BS4`, `BSC`, the scope settings).
 - [@ANCHOR: radioctl:radioctl_ts890_scope_setting_wire] (radioctl-protocols) The `BS` letter and the largest digit of a scope setting.
 - [@ANCHOR: radioctl:radioctl_ts890_scope_setting_of] (radioctl-protocols) The scope setting a `BS` letter names, if it is one of the mapped ones.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_action_wire] (radioctl-protocols) The `BS` letter of a one-shot scope action (`BSD` waterfall clear, `BSE` marker shift or centre).
 - [@ANCHOR: radioctl:radioctl_ts890_scope_edges_of] (radioctl-protocols) The edges of a `BSM0` answer, or none for another range number, a wrong length or edges that are not low to high.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_filter_scope_frame] (radioctl-protocols) A `##DD3` body as a filter-scope frame, or dropped and counted when malformed.
 - [@ANCHOR: radioctl:radioctl_ts890_scope_samples] (radioctl-protocols) The samples of a `##DD2` or `##DD3` body, none above the guide's maximum.
+- [@ANCHOR: radioctl:radioctl_ts890_expanded_span] (radioctl-protocols) The width a sweep covers with expand on, for the spans the guide gives (100 kHz is 300 kHz, 200 kHz is 400 kHz); `None` otherwise.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frame] (radioctl-protocols) A `##DD2` body as a frame placed from what the engine last saw, or dropped and counted.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_note] (radioctl-protocols) Keeps what the frame edges are computed from.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_scope_start] (radioctl-protocols) The commands that turn the waveform output on: read the context, then `DD0`.
@@ -1633,6 +1635,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_sweep] (radioctl-protocols) One `##DD2` frame from a virtual TS-890S when the LAN waveform output is on.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_filter_sweep] (radioctl-protocols) One `##DD3` frame from a virtual TS-890S when the LAN waveform output is on.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_edges_command] (radioctl-protocols) `BSM` on a virtual TS-890S: reads the edges in use, stores the edges of range 1 to 3, or restores the initial ones.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_current_edges] (radioctl-protocols) The edges the virtual TS-890S scope shows: the fixed range's, or in auto scroll the page of the span's width holding the receive frequency (our model).
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_marker_shift] (radioctl-protocols) `BSE` on the virtual TS-890S: re-centres a fixed range on the receive frequency, nothing in auto scroll, refused in center mode.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_name] (radioctl-core) The name used in rig description files.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_from_name] (radioctl-core) The protocol with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_usb] (radioctl-core) The USB-device parameters of a description file: protocol, USB ids, strings and multiplier.

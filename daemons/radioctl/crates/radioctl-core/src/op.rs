@@ -3,7 +3,7 @@
 //! reports back.
 
 use crate::capability::Capability;
-use crate::scope::{ScopeAxis, ScopeSetting};
+use crate::scope::{ScopeAction, ScopeAxis, ScopeSetting};
 use crate::units::{Hz, Level, Meter, Mode, Vfo};
 
 /// A command to a rig.
@@ -91,6 +91,8 @@ pub enum Op {
     SetScopeSetting(u8, ScopeSetting, u8),
     /// Read a receiver's scope setting.
     GetScopeSetting(u8, ScopeSetting),
+    /// Run a one-shot scope command on a receiver (see [`ScopeAction`]).
+    ScopeAction(u8, ScopeAction),
 }
 
 /// A kind of value the actor caches.
@@ -291,7 +293,8 @@ impl Op {
             | Op::SetScopeReference(..)
             | Op::GetScopeReference(_)
             | Op::SetScopeSetting(..)
-            | Op::GetScopeSetting(..) => Capability::Scope,
+            | Op::GetScopeSetting(..)
+            | Op::ScopeAction(..) => Capability::Scope,
         }
     }
 
@@ -376,6 +379,10 @@ mod tests {
         );
         assert_eq!(
             Op::GetScopeSetting(0, ScopeSetting::Pause).required_capability(),
+            Capability::Scope
+        );
+        assert_eq!(
+            Op::ScopeAction(0, ScopeAction::ClearWaterfall).required_capability(),
             Capability::Scope
         );
         assert_eq!(
