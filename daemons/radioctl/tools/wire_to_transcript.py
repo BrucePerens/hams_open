@@ -32,7 +32,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 WIRE_LINE = re.compile(r"^\s*(\d+\.\d+)\s+(tx|rx)\s*((?:[0-9a-fA-F]{2}\s*)*)$")
