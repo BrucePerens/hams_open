@@ -384,6 +384,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
         Family::YaesuLegacy | Family::KenwoodHh => None,
         // The OpenHPSDR control plane has no level commands.
         Family::Hpsdr => None,
+        // The vendor serial engines have no level commands yet.
+        Family::SerialVendor => None,
         // SmartSDR levels are percentages (0-100) in the engine.
         Family::Flex => match level {
             Level::AfGain | Level::MicGain | Level::RfPower => Some((0, 100)),
