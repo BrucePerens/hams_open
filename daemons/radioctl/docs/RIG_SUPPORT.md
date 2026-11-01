@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **275** (281 description files), **96%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **276** (282 description files), **97%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 275 |
+| described | 276 |
 | engine only | 0 |
 | needs variant | 0 |
-| needs engine | 4 |
+| needs engine | 3 |
 | odd device | 5 |
 | not applicable | 29 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 70 |
+| C | new engine | 82 | 71 |
 | D | odd device | 54 | 28 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 80 | 0 |
+| other_serial | C/D | aor | 94 | 81 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -340,7 +340,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 16002 | Ten-Tec | TT-538 Jupiter | C | other_serial | - | `tentec-tt-538` | unverified | - | described |
 | 16001 | Ten-Tec | TT-550 | C | other_serial | - | `tentec-tt-550` | manual-checked | - | described |
 | 16008 | Ten-Tec | TT-565/566 Orion I/II | C | other_serial | - | `tentec-tt-565` | unverified | - | described |
-| 16009 | Ten-Tec | TT-585 Paragon | C | other_serial | - | - | unverified | - | needs engine |
+| 16009 | Ten-Tec | TT-585 Paragon | C | other_serial | - | `tentec-tt-585` | unverified | - | described |
 | 16011 | Ten-Tec | TT-588 Omni VII | C | other_serial | - | `tentec-tt-588` | unverified | - | described |
 | 16013 | Ten-Tec | TT-599 Eagle | C | other_serial | - | `tentec-tt-599` | unverified | - | described |
 | 2054 | Thetis | - | D | other_serial | - | - | unverified | - | not applicable |

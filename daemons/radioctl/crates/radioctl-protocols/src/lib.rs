@@ -40,6 +40,7 @@ pub mod kenwood_ts890;
 pub mod kenwood_ts890_lan;
 pub mod lowe;
 pub mod mds;
+pub mod paragon;
 pub mod prelude;
 pub mod prm80;
 pub mod racal;

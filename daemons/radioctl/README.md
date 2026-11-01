@@ -781,6 +781,17 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_transfox_twin_snapshot] (radioctl-protocols) The virtual Transfox's frequency and transmit state, for the Hamlib oracle batch.
 - [@ANCHOR: radioctl:radioctl_transfox_twin_feed] (radioctl-protocols) The virtual Transfox answers `FA;` and `Cs;` and takes `FA<digits>;`, `TX;` and `RX;`.
 - [@ANCHOR: radioctl:radioctl_transfox_twin_front_panel] (radioctl-protocols) A knob turned at the virtual Transfox: frequency or transmit.
+- [@ANCHOR: radioctl:radioctl_paragon_frequency_text] (radioctl-protocols) The Paragon frequency command: megahertz with five decimals, `W` for the point, `@` at the end.
+- [@ANCHOR: radioctl:radioctl_paragon_mode_command] (radioctl-protocols) The Paragon mode command letters (`N`, `O`, `P`, `L`, `M`, `XP`).
+- [@ANCHOR: radioctl:radioctl_paragon_decode_status] (radioctl-protocols) Decodes the 30-byte Paragon status block into a frequency and a mode.
+- [@ANCHOR: radioctl:radioctl_paragon_engine_new] (radioctl-protocols) Builds a Paragon engine from a vendor description of dialect `paragon`.
+- [@ANCHOR: radioctl:radioctl_paragon_engine_encode] (radioctl-protocols) Encodes frequency, mode and the status request for the Paragon.
+- [@ANCHOR: radioctl:radioctl_paragon_engine_feed] (radioctl-protocols) Collects 30-byte status blocks and decodes them.
+- [@ANCHOR: radioctl:radioctl_paragon_twin_new] (radioctl-protocols) A virtual Paragon in the description's default state.
+- [@ANCHOR: radioctl:radioctl_paragon_twin_status] (radioctl-protocols) The virtual Paragon's 30-byte status block.
+- [@ANCHOR: radioctl:radioctl_paragon_twin_snapshot] (radioctl-protocols) The virtual Paragon's frequency and mode bit, for the Hamlib oracle batch.
+- [@ANCHOR: radioctl:radioctl_paragon_twin_feed] (radioctl-protocols) The virtual Paragon takes frequency, mode, filter and toggle commands and answers `\` with a status block.
+- [@ANCHOR: radioctl:radioctl_paragon_twin_front_panel] (radioctl-protocols) A knob turned at the virtual Paragon: frequency or mode.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
