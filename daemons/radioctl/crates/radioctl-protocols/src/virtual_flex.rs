@@ -92,6 +92,8 @@ pub struct VirtualFlex {
     handle: u32,
     model: String,
     scus: u8,
+    /// The one slice receiver the twin models (0 is slice A).
+    slice: u8,
     state: FlexRigState,
     buffer: Vec<u8>,
     discarding: bool,
@@ -124,6 +126,7 @@ impl VirtualFlex {
             handle: 0x6F4E_C23D,
             model: flex.model.clone(),
             scus: flex.scus,
+            slice: flex.slice,
             state: FlexRigState {
                 frequency: desc.default_frequency,
                 mode: desc.default_mode,
@@ -166,8 +169,9 @@ impl VirtualFlex {
     fn slice_line(&self) -> String {
         let mode = mode_name(self.state.mode).unwrap_or("usb").to_uppercase();
         format!(
-            "S{:08X}|slice 0 in_use=1 RF_frequency={} mode={mode} filter_lo={} filter_hi={} audio_level={}\n",
+            "S{:08X}|slice {} in_use=1 RF_frequency={} mode={mode} filter_lo={} filter_hi={} audio_level={}\n",
             self.handle,
+            self.slice,
             format_mhz(self.state.frequency),
             format_signed_mhz(self.state.filter_lo_hz),
             format_signed_mhz(self.state.filter_hi_hz),
@@ -276,7 +280,7 @@ impl VirtualFlex {
                 Self::reply(seq, 0, "")
             }
             ("slice", ["t", index, freq]) => {
-                if *index != "0" {
+                if *index != self.slice.to_string() {
                     return Self::reply(seq, INVALID_SLICE, "");
                 }
                 match parse_mhz(freq) {
@@ -288,7 +292,7 @@ impl VirtualFlex {
                 }
             }
             ("slice", ["s", index, rest @ ..]) => {
-                if *index != "0" {
+                if *index != self.slice.to_string() {
                     return Self::reply(seq, INVALID_SLICE, "");
                 }
                 let joined = rest.join(" ");
@@ -308,7 +312,7 @@ impl VirtualFlex {
                 self.with_status(Self::reply(seq, 0, ""), self.slice_status_if_subscribed())
             }
             ("filt", [index, lo, hi]) => {
-                if *index != "0" {
+                if *index != self.slice.to_string() {
                     return Self::reply(seq, INVALID_SLICE, "");
                 }
                 match (lo.parse::<i64>(), hi.parse::<i64>()) {

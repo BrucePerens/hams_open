@@ -156,7 +156,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 | Rohde and Schwarz HF (LF/CR blocks `F`/`I`, `*F`/`*I`) | `rs-ek895`, `rs-ek896` (operator manual, manual-checked), `rs-xk2100`, `rs-xk852` (Hamlib 4.6.2 source) | EK 895/896 manual chapter 2; Hamlib facts only |
 | OptoScan boards (CI-V at 0x80) | `optoscan-os535`, `optoscan-os456` | Hamlib 4.6.2 source (facts only) |
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
-| FlexRadio | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
+| FlexRadio | `flex-6300`, `flex-smartsdr-slice-a`, `flex-smartsdr-slice-b`, `flex-smartsdr-slice-c`, `flex-smartsdr-slice-d`, `flex-smartsdr-slice-e`, `flex-smartsdr-slice-f`, `flex-smartsdr-slice-g`, `flex-smartsdr-slice-h`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
 | OpenHPSDR | `anan-10`, `anan-100` | `daemons/hpsdr` and the OpenHPSDR protocols |
 
 ### Icom CI-V
@@ -233,7 +233,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 ### FlexRadio
 
-- Files: `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700`; family `flex-smartsdr`; a `[flex]` block.
+- Files: `flex-6300`, `flex-smartsdr-slice-a`, `flex-smartsdr-slice-b`, `flex-smartsdr-slice-c`, `flex-smartsdr-slice-d`, `flex-smartsdr-slice-e`, `flex-smartsdr-slice-f`, `flex-smartsdr-slice-g`, `flex-smartsdr-slice-h`, `flex-6400`, `flex-6600`, `flex-6700`; family `flex-smartsdr`; a `[flex]` block.
 - Source: FlexRadio's published SmartSDR API wiki (github.com/flexradio/smartsdr-api-docs; commit and pages named in `crates/radioctl-protocols/src/flex.rs`).
 - Its embedded `messages.h` forbids copying and was skipped. There is no 8000-series description because the wiki does not mention that series.
 - Control plane only: SmartSDR has no get commands, so the engine subscribes (`sub slice|tx|pan all`) and answers reads from the status it has seen.

@@ -515,9 +515,10 @@ impl FlexEngine {
                 "not a FlexRadio description",
             ));
         }
+        let slice = desc.flex.as_ref().map_or(0, |f| f.slice);
         Ok(FlexEngine {
             desc,
-            slice: 0,
+            slice,
             seq: 0,
             line: Vec::new(),
             line_at: Duration::ZERO,
