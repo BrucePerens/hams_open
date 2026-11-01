@@ -37,6 +37,35 @@ LEVELS = ["unverified", "manual-checked", "transcript-checked", "hardware-verifi
 
 # Description id -> Hamlib model ids it covers. Descriptions with no Hamlib model use [].
 HAMLIB_IDS: dict[str, list[int]] = {
+    "optoscan-os456": [3053],
+    "optoscan-os535": [3052],
+    "rs-eb200": [27002],
+    "rs-esmc": [27001],
+    "icom-ic-m700pro": [30001],
+    "icom-ic-m710": [30003],
+    "icom-ic-m802": [30002],
+    "icom-ic-m803": [30004],
+    "icom-ic-pcr100": [4002],
+    "icom-ic-pcr1000": [4001],
+    "icom-ic-pcr1500": [4003],
+    "icom-ic-pcr2500": [4004],
+    "jrc-jst-145": [6001],
+    "jrc-jst-245": [6002],
+    "jrc-nrd-525": [6005],
+    "jrc-nrd-535d": [6006],
+    "jrc-nrd-545": [6007],
+    "uniden-bc245xlt": [8002],
+    "uniden-bc250d": [8006],
+    "uniden-bc780xlt": [8001],
+    "uniden-bc895xlt": [8003],
+    "uniden-bc898t": [8012],
+    "aor-ar2700": [5008],
+    "aor-ar5000": [5004],
+    "aor-ar5000a": [5014],
+    "aor-ar8000": [5002],
+    "aor-ar8200": [5001],
+    "aor-ar8600": [5013],
+    "aor-sr2200": [5016],
     "anan-10": [],
     "anan-100": [],
     "elecraft-kx3": [2045],
@@ -223,6 +252,18 @@ FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
     "yaesu_other": ("C", None),
 }
 
+# Hamlib model id -> radioctl engine, for Tier C models whose engine exists (a Tier C model not listed here
+# still `needs engine`). Descriptions of these models are `described`; an undescribed one is `engine only`.
+MODEL_ENGINES: dict[int, str] = {
+    **{i: "aor" for i in (5001, 5002, 5004, 5008, 5013, 5014, 5016)},
+    **{i: "civ" for i in (3052, 3053)},
+    **{i: "rs" for i in (27001, 27002)},
+    **{i: "icom_marine" for i in (30001, 30002, 30003, 30004)},
+    **{i: "icom_pcr" for i in (4001, 4002, 4003, 4004)},
+    **{i: "jrc" for i in (6001, 6002, 6005, 6006, 6007)},
+    **{i: "uniden" for i in (8001, 8002, 8003, 8006, 8012)},
+}
+
 # Manufacturers whose models (outside the families above) need a new engine: Tier C. Every other
 # model in the remaining families is an odd device (SDR board, network driver, parallel, dummy): Tier D.
 TIER_C_MAKERS = {
@@ -298,9 +339,11 @@ def classify(model: dict) -> tuple[str, str, str | None]:
     family = (model.get("derived") or {}).get("family") or "unclassified"
     if family in FAMILY_TIERS:
         tier, engine = FAMILY_TIERS[family]
+        if tier == "C":
+            engine = MODEL_ENGINES.get(model["rig_list"]["model_id"], engine)
         return family, tier, engine
     if model["rig_list"]["mfg"] in TIER_C_MAKERS:
-        return family, "C", None
+        return family, "C", MODEL_ENGINES.get(model["rig_list"]["model_id"])
     return family, "D", None
 
 
@@ -311,6 +354,8 @@ def status_of(tier: str, engine: str | None, described: bool, not_applicable: bo
         return "described"
     if not_applicable:
         return "not applicable"
+    if tier == "C" and engine:
+        return "engine only"
     return {"A": "engine only", "B": "needs variant", "C": "needs engine", "D": "odd device"}[tier]
 
 

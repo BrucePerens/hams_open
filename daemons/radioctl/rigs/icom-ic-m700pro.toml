@@ -1,0 +1,97 @@
+# Rig description: Icom IC-M700PRO (icom-marine protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (read for facts only: rigs/icmarine/icmarine.c, rigs/icmarine/icm700pro.c) and `rigctl -m 30001 --dump-caps` output;
+# no vendor manual was read. The engine and its gaps: crates/radioctl-protocols/src/icom_marine.rs.
+# Hamlib lists: serial 4800..4800 baud, 8N1, handshake NONE; receive 500 kHz to 29.9999 MHz (2 range(s)); transmit 1.6 MHz to 27.5 MHz. The description format has no field
+# for frequency ranges, filters or function lists, so they are not repeated beyond this note.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal"]
+
+[rig]
+id = "icom-ic-m700pro"
+name = "Icom IC-M700PRO"
+family = "receiver"
+
+[receiver]
+protocol = "icom-marine"
+dialect = "icmarine"
+address = 2
+baud = 4800
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 500
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 4125000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 1
+
+[[modes]]
+mode = "usb"
+code = 2
+
+[[modes]]
+mode = "cw"
+code = 3
+
+[[modes]]
+mode = "am"
+code = 4
+
+[[modes]]
+mode = "rtty"
+code = 5
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 30001 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icmarine/icmarine.c (icmarine_transaction: $PICOA sentences with an XOR checksum and CR LF, command echoed back)", note = "Which of the dialect families of Hamlib's backend the model belongs to. Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icmarine/icm700pro.c (uses icmarine_* functions unchanged; FSK name J2B)", note = "Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 30001 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib gives a speed range (4800 to 4800); the default recorded here is 4800 (the only speed Hamlib lists). Hamlib's settings, not a measurement of the radio. The daemon does not yet apply these to the port; the operator configures them." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.address"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icmarine/icm700pro.c (`default_remote_id` in the model's priv caps)", note = "Hamlib's default; the address is user-settable on the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 30001 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icmarine/icmarine.c and the rig_caps in rigs/icmarine/icm700pro.c; `rigctl -m 30001 --dump-caps` (Hamlib 4.6.2) Can get/set lines", note = "A transceiver: set-ptt is encoded (TRX,TX / TRX,RX) but unverified, and the transmit gate stays closed by default. Frequency (RXF, with TXF sent first as Hamlib does), mode, PTT and the S-meter (SIGM) are what the engine implements; split, levels, tuner, noise blanker, AGC and the REMOTE,ON sentence Hamlib sends at open are not. The remote id (receiver.address) must match the radio's menu setting." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icmarine/icmarine.c MD_LSB \"LSB\", MD_USB \"USB\", MD_CW \"CW\", MD_AM \"AM\", MD_FSK \"J2B\"", note = "The codes 1 LSB, 2 USB, 3 CW, 4 AM, 5 RTTY are radioctl's own numbering (the wire spells the mode as a name). Hamlib's own tx mode list excludes AM; AM is mapped as a receive mode." }
+verified = { state = "unverified" }

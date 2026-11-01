@@ -130,11 +130,11 @@ Each engine is a pull request with its protocol document recorded, a virtual twi
 descriptions for every model in that family. Order by number of models and by how many amateurs own them:
 
 1. Ten-Tec (13: Argonaut, Jupiter, Pegasus, Omni, Orion, Eagle, RX-320 and others): one binary and ASCII protocol family.
-2. AOR (11 receivers) and Uniden/Radio Shack (8) and Icom PCR (4): ASCII scanners and receivers.
-3. Rohde and Schwarz (6), JRC (5), Winradio (8 through their vendor interface), Barrett (3), Alinco (2), Racal (2),
-   Drake (2), CODAN (2), Skanti (2), Optoelectronics (2) and single models (Lowe, Watkins-Johnson, Kachina, Micom,
+2. AOR (11 receivers; the AR8000, AR8200, AR8600, AR5000, AR5000A, AR2700 and SR2200 are done in `aor.rs`; the AR3000A, AR3030 and the binary AR7030 and AR7030 Plus have command sets of their own and are still open) and Uniden/Radio Shack (8) and Icom PCR (4): ASCII scanners and receivers. The Uniden BC245XLT, BC250D, BC780XLT, BC895XLT and BC898T are done in `uniden.rs`, the Icom PCR four in `icom_pcr.rs`; the BCD-396T and BCD-996T are open (Hamlib's `uniden_digital.c` has only stubs for frequency and mode, so there is no source for them yet).
+3. Rohde and Schwarz (6; the ESMC and EB200 are done in `rs.rs`, the EK895/6, XK852 and XK2100 are separate Hamlib backends and open), JRC (5; done in `jrc.rs`), Winradio (8 through their vendor interface), Barrett (3), Alinco (2), Racal (2),
+   Drake (2), CODAN (2), Skanti (2), Optoelectronics (2; done: the OptoScan boards speak Icom CI-V at address 0x80, so they are plain `icom-civ` descriptions) and single models (Lowe, Watkins-Johnson, Kachina, Micom,
    Lab599, Hilberling, Guohe, Vertex VX-1700).
-4. Icom marine (4): CI-V-like variants for IC-M700PRO, M710, M802, M803.
+4. Icom marine (4): done in `icom_marine.rs`. They are not CI-V-like: Hamlib speaks NMEA-style `$PICOA` sentences to them.
 
 Winradio (8 models, Hamlib ids 15001 to 15007 and 15009) is **not applicable**: Hamlib reaches these radios only through
 the vendor's driver (the Linux `/dev/winradio` ioctl interface of the kernel driver, or the vendor DLL on Windows;

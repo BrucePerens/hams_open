@@ -34,6 +34,9 @@ pub enum Family {
     /// Vendor serial protocols of the smaller makers (Ten-Tec, Drake, Racal, ...): one engine
     /// per protocol, chosen by [`VendorParams::protocol`].
     SerialVendor,
+    /// Receivers, scanners and marine radios with a line or frame protocol of their own
+    /// (AOR, Uniden, JRC, Rohde and Schwarz, Icom PCR and marine); see [`ReceiverProtocol`].
+    Receiver,
 }
 
 /// The protocol of a [`Family::SerialVendor`] rig; each has its own engine file.
@@ -69,6 +72,75 @@ pub struct VendorParams {
     pub protocol: VendorProtocol,
     /// The model variant inside the protocol (`orion`, `argonaut`, ...); the engine validates it.
     pub dialect: String,
+}
+
+/// Which protocol engine a [`Family::Receiver`] description uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReceiverProtocol {
+    /// AOR ASCII commands (AR8000, AR8200, AR8600, AR5000, AR3000A, AR3030, AR2700, SR2200).
+    Aor,
+    /// Uniden and Bearcat scanners (BC245, BC250, BC780, BC895, BC898, BCD-396T, BCD-996T).
+    Uniden,
+    /// JRC receivers and transceivers (NRD-525, NRD-535, NRD-545, JST-145, JST-245).
+    Jrc,
+    /// Rohde and Schwarz (EB200, ESMC, EK895/6, XK852, XK2100).
+    RohdeSchwarz,
+    /// Icom PCR computer-controlled receivers (PCR100, PCR1000, PCR1500, PCR2500).
+    IcomPcr,
+    /// Icom marine transceivers (IC-M700PRO, IC-M710, IC-M802, IC-M803).
+    IcomMarine,
+}
+
+impl ReceiverProtocol {
+    // [@ANCHOR: radioctl_core_receiver_protocol_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        match self {
+            ReceiverProtocol::Aor => "aor",
+            ReceiverProtocol::Uniden => "uniden",
+            ReceiverProtocol::Jrc => "jrc",
+            ReceiverProtocol::RohdeSchwarz => "rohde-schwarz",
+            ReceiverProtocol::IcomPcr => "icom-pcr",
+            ReceiverProtocol::IcomMarine => "icom-marine",
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_receiver_protocol_from_name]
+    /// The protocol with a file-format name.
+    pub fn from_name(name: &str) -> Option<ReceiverProtocol> {
+        [
+            ReceiverProtocol::Aor,
+            ReceiverProtocol::Uniden,
+            ReceiverProtocol::Jrc,
+            ReceiverProtocol::RohdeSchwarz,
+            ReceiverProtocol::IcomPcr,
+            ReceiverProtocol::IcomMarine,
+        ]
+        .into_iter()
+        .find(|p| p.name() == name)
+    }
+}
+
+/// Receiver-family parameters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceiverParams {
+    /// The protocol engine.
+    pub protocol: ReceiverProtocol,
+    /// The model's command set within the protocol (`ar8000`, `bc780`, ...); the engine's tables
+    /// are keyed by it.
+    pub dialect: String,
+    /// The bus address (the Icom marine radios' and JRC's), when the protocol has one.
+    pub address: Option<u8>,
+    /// The default line speed in baud.
+    pub baud: u32,
+    /// Data bits on the serial line.
+    pub data_bits: u8,
+    /// Parity: `N`, `E` or `O`.
+    pub parity: char,
+    /// Stop bits.
+    pub stop_bits: u8,
+    /// Flow control: `none`, `xonxoff` or `rtscts`.
+    pub flow: String,
 }
 
 /// CI-V parameters.
@@ -389,6 +461,8 @@ pub struct RigDescription {
     pub hpsdr: Option<HpsdrParams>,
     /// Vendor serial parameters, present for [`Family::SerialVendor`].
     pub vendor: Option<VendorParams>,
+    /// Receiver parameters, present for [`Family::Receiver`].
+    pub receiver: Option<ReceiverParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// Attenuator and preamplifier steps.
@@ -447,6 +521,7 @@ impl RigDescription {
             flex: None,
             hpsdr: None,
             vendor: None,
+            receiver: None,
             scope: None,
             levels: LevelParams::default(),
             capabilities: CapabilitySet::of(&[
@@ -501,6 +576,7 @@ impl RigDescription {
             flex: None,
             hpsdr: None,
             vendor: None,
+            receiver: None,
             scope: None,
             levels: LevelParams::default(),
             capabilities: CapabilitySet::of(&[
@@ -595,6 +671,23 @@ mod tests {
         }
         assert_eq!(KenwoodDialect::from_name("ts2000"), None);
         assert_eq!(KenwoodDialect::default(), KenwoodDialect::Classic);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_receiver_protocol_name]
+    // Tests [@ANCHOR: radioctl_core_receiver_protocol_from_name]
+    #[test]
+    fn receiver_protocol_names_round_trip() {
+        for p in [
+            ReceiverProtocol::Aor,
+            ReceiverProtocol::Uniden,
+            ReceiverProtocol::Jrc,
+            ReceiverProtocol::RohdeSchwarz,
+            ReceiverProtocol::IcomPcr,
+            ReceiverProtocol::IcomMarine,
+        ] {
+            assert_eq!(ReceiverProtocol::from_name(p.name()), Some(p));
+        }
+        assert_eq!(ReceiverProtocol::from_name("winradio"), None);
     }
 
     // Tests [@ANCHOR: radioctl_core_description_ic7300]

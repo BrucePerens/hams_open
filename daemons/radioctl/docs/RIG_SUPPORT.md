@@ -9,15 +9,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **147** (152 description files)
+- With a radioctl description: **176** (181 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 147 |
+| described | 176 |
 | engine only | 14 |
 | needs variant | 22 |
-| needs engine | 68 |
+| needs engine | 39 |
 | odd device | 54 |
 | not applicable | 8 |
 
@@ -34,14 +34,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 121 |
 | B | variants of an existing engine | 41 | 19 |
-| C | new engine | 83 | 7 |
+| C | new engine | 83 | 36 |
 | D | odd device | 54 | 0 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | - | 94 | 7 | 0 |
+| other_serial | C/D | aor | 94 | 28 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 22 | 0 |
@@ -52,8 +52,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | flexradio_network | A | flex | 9 | 1 | 0 |
 | other_network | C/D | - | 8 | 0 | 0 |
 | elecraft_ascii | A | elecraft | 7 | 5 | 0 |
-| icom_marine | C | - | 4 | 0 | 0 |
-| icom_pcr_ascii | C | - | 4 | 0 | 0 |
+| icom_marine | C | icom_marine | 4 | 4 | 0 |
+| icom_pcr_ascii | C | icom_pcr | 4 | 4 | 0 |
 | other_parallel | D | - | 2 | 0 | 0 |
 | virtual | D | - | 2 | 0 | 0 |
 | other_none | C | - | 1 | 0 | 0 |
@@ -90,17 +90,17 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25013 | AMSAT-UK | FUNcube Dongle | D | other_usb | - | - | unverified | - | odd device |
 | 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | - | - | unverified | - | odd device |
 | 37001 | AnyTone | D578A | D | other_serial | - | - | unverified | - | odd device |
-| 5008 | AOR | AR2700 | C | other_serial | - | - | unverified | - | needs engine |
+| 5008 | AOR | AR2700 | C | other_serial | aor | `aor-ar2700` | unverified | - | described |
 | 5006 | AOR | AR3000A | C | other_serial | - | - | unverified | - | needs engine |
 | 5005 | AOR | AR3030 | C | other_serial | - | - | unverified | - | needs engine |
-| 5004 | AOR | AR5000 | C | other_serial | - | - | unverified | - | needs engine |
-| 5014 | AOR | AR5000A | C | other_serial | - | - | unverified | - | needs engine |
+| 5004 | AOR | AR5000 | C | other_serial | aor | `aor-ar5000` | unverified | - | described |
+| 5014 | AOR | AR5000A | C | other_serial | aor | `aor-ar5000a` | unverified | - | described |
 | 5003 | AOR | AR7030 | C | other_serial | - | - | unverified | - | needs engine |
 | 5015 | AOR | AR7030 Plus | C | other_serial | - | - | unverified | - | needs engine |
-| 5002 | AOR | AR8000 | C | other_serial | - | - | unverified | - | needs engine |
-| 5001 | AOR | AR8200 | C | other_serial | - | - | unverified | - | needs engine |
-| 5013 | AOR | AR8600 | C | other_serial | - | - | unverified | - | needs engine |
-| 5016 | AOR | SR2200 | C | other_serial | - | - | unverified | - | needs engine |
+| 5002 | AOR | AR8000 | C | other_serial | aor | `aor-ar8000` | unverified | - | described |
+| 5001 | AOR | AR8200 | C | other_serial | aor | `aor-ar8200` | unverified | - | described |
+| 5013 | AOR | AR8600 | C | other_serial | aor | `aor-ar8600` | unverified | - | described |
+| 5016 | AOR | SR2200 | C | other_serial | aor | `aor-sr2200` | unverified | - | described |
 | 32001 | Barrett | 2050 | C | other_serial | - | - | unverified | - | needs engine |
 | 32003 | Barrett | 4050 | C | other_serial | - | - | unverified | - | needs engine |
 | 32002 | Barrett | 950 | C | other_serial | - | - | unverified | - | needs engine |
@@ -204,14 +204,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3035 | Icom | IC-970 | A | icom_civ | civ | `icom-ic-970` | unverified | - | described |
 | 3081 | Icom | IC-9700 | A | icom_civ | civ | `icom-ic-9700` | unverified | - | described |
 | 3086 | Icom | IC-F8101 | A | icom_civ | civ | `icom-ic-f8101` | unverified | - | described |
-| 30001 | Icom | IC-M700PRO | C | icom_marine | - | - | unverified | - | needs engine |
-| 30003 | Icom | IC-M710 | C | icom_marine | - | - | unverified | - | needs engine |
-| 30002 | Icom | IC-M802 | C | icom_marine | - | - | unverified | - | needs engine |
-| 30004 | Icom | IC-M803 | C | icom_marine | - | - | unverified | - | needs engine |
-| 4002 | Icom | IC-PCR100 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
-| 4001 | Icom | IC-PCR1000 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
-| 4003 | Icom | IC-PCR1500 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
-| 4004 | Icom | IC-PCR2500 | C | icom_pcr_ascii | - | - | unverified | - | needs engine |
+| 30001 | Icom | IC-M700PRO | C | icom_marine | icom_marine | `icom-ic-m700pro` | unverified | - | described |
+| 30003 | Icom | IC-M710 | C | icom_marine | icom_marine | `icom-ic-m710` | unverified | - | described |
+| 30002 | Icom | IC-M802 | C | icom_marine | icom_marine | `icom-ic-m802` | unverified | - | described |
+| 30004 | Icom | IC-M803 | C | icom_marine | icom_marine | `icom-ic-m803` | unverified | - | described |
+| 4002 | Icom | IC-PCR100 | C | icom_pcr_ascii | icom_pcr | `icom-ic-pcr100` | unverified | - | described |
+| 4001 | Icom | IC-PCR1000 | C | icom_pcr_ascii | icom_pcr | `icom-ic-pcr1000` | unverified | - | described |
+| 4003 | Icom | IC-PCR1500 | C | icom_pcr_ascii | icom_pcr | `icom-ic-pcr1500` | unverified | - | described |
+| 4004 | Icom | IC-PCR2500 | C | icom_pcr_ascii | icom_pcr | `icom-ic-pcr2500` | unverified | - | described |
 | 3036 | Icom | IC-R10 | A | icom_civ | civ | `icom-ic-r10` | unverified | - | described |
 | 3058 | Icom | IC-R20 | A | icom_civ | civ | `icom-ic-r20` | unverified | - | described |
 | 3080 | Icom | IC-R30 | A | icom_civ | civ | `icom-ic-r30` | unverified | - | described |
@@ -230,11 +230,11 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3082 | Icom | ID-4100 | A | icom_civ | civ | `icom-id-4100` | unverified | - | described |
 | 3084 | Icom | ID-51 | A | icom_civ | civ | `icom-id-51` | unverified | - | described |
 | 3071 | Icom | ID-5100 | A | icom_civ | civ | `icom-id-5100` | unverified | - | described |
-| 6001 | JRC | JST-145 | C | other_serial | - | - | unverified | - | needs engine |
-| 6002 | JRC | JST-245 | C | other_serial | - | - | unverified | - | needs engine |
-| 6005 | JRC | NRD-525 | C | other_serial | - | - | unverified | - | needs engine |
-| 6006 | JRC | NRD-535D | C | other_serial | - | - | unverified | - | needs engine |
-| 6007 | JRC | NRD-545 DSP | C | other_serial | - | - | unverified | - | needs engine |
+| 6001 | JRC | JST-145 | C | other_serial | jrc | `jrc-jst-145` | unverified | - | described |
+| 6002 | JRC | JST-245 | C | other_serial | jrc | `jrc-jst-245` | unverified | - | described |
+| 6005 | JRC | NRD-525 | C | other_serial | jrc | `jrc-nrd-525` | unverified | - | described |
+| 6006 | JRC | NRD-535D | C | other_serial | jrc | `jrc-nrd-535d` | unverified | - | described |
+| 6007 | JRC | NRD-545 DSP | C | other_serial | jrc | `jrc-nrd-545` | unverified | - | described |
 | 18001 | Kachina | 505DSP | C | other_serial | - | - | unverified | - | needs engine |
 | 2015 | Kenwood | R-5000 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
 | 2033 | Kenwood | TH-D72A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d72a` | unverified | - | described |
@@ -285,8 +285,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 10 | N2ADR James Ahlstrom | Quisk | D | other_network | - | - | unverified | - | odd device |
 | 8 | N3FJP | ACLog | D | other_network | - | - | unverified | - | odd device |
 | 2040 | OpenHPSDR | PiHPSDR | D | other_serial | - | - | unverified | - | odd device |
-| 3053 | Optoelectronics | OptoScan456 | C | other_serial | - | - | unverified | - | needs engine |
-| 3052 | Optoelectronics | OptoScan535 | C | other_serial | - | - | unverified | - | needs engine |
+| 3053 | Optoelectronics | OptoScan456 | C | other_serial | civ | `optoscan-os456` | unverified | - | described |
+| 3052 | Optoelectronics | OptoScan535 | C | other_serial | civ | `optoscan-os535` | unverified | - | described |
 | 28001 | Philips/Simoco | PRM8060 | D | other_serial | - | - | unverified | - | odd device |
 | 2052 | QRPLabs | QCX/QDX | D | other_serial | - | - | unverified | - | odd device |
 | 2057 | QRPLabs | QMX | D | other_serial | - | - | unverified | - | odd device |
@@ -295,9 +295,9 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 8004 | Radio Shack | PRO-2052 | C | other_serial | - | - | unverified | - | needs engine |
 | 24001 | RFT | EKD-500 | D | other_serial | - | - | unverified | - | odd device |
 | 32004 | Rhode&Schwarz | 4100 | C | other_network | - | - | unverified | - | needs engine |
-| 27002 | Rohde&Schwarz | EB200 | C | other_serial | - | - | unverified | - | needs engine |
+| 27002 | Rohde&Schwarz | EB200 | C | other_serial | rs | `rs-eb200` | unverified | - | described |
 | 27004 | Rohde&Schwarz | EK895/6 | C | other_serial | - | - | unverified | - | needs engine |
-| 27001 | Rohde&Schwarz | ESMC | C | other_serial | - | - | unverified | - | needs engine |
+| 27001 | Rohde&Schwarz | ESMC | C | other_serial | rs | `rs-esmc` | unverified | - | described |
 | 27003 | Rohde&Schwarz | XK2100 | C | other_serial | - | - | unverified | - | needs engine |
 | 27005 | Rohde&Schwarz | XK852 | C | other_serial | - | - | unverified | - | needs engine |
 | 25002 | SAT-Schneider | DRT1 | D | other_serial | - | - | unverified | - | odd device |
@@ -323,11 +323,11 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 16013 | Ten-Tec | TT-599 Eagle | C | other_serial | - | `tentec-tt-599` | unverified | - | described |
 | 2054 | Thetis | - | D | other_serial | - | - | unverified | - | odd device |
 | 5 | TRXManager | TRXManager 5.7.630+ | D | other_network | - | - | unverified | - | odd device |
-| 8002 | Uniden | BC245xlt | C | other_serial | - | - | unverified | - | needs engine |
-| 8006 | Uniden | BC250D | C | other_serial | - | - | unverified | - | needs engine |
-| 8001 | Uniden | BC780xlt | C | other_serial | - | - | unverified | - | needs engine |
-| 8003 | Uniden | BC895xlt | C | other_serial | - | - | unverified | - | needs engine |
-| 8012 | Uniden | BC898T | C | other_serial | - | - | unverified | - | needs engine |
+| 8002 | Uniden | BC245xlt | C | other_serial | uniden | `uniden-bc245xlt` | unverified | - | described |
+| 8006 | Uniden | BC250D | C | other_serial | uniden | `uniden-bc250d` | unverified | - | described |
+| 8001 | Uniden | BC780xlt | C | other_serial | uniden | `uniden-bc780xlt` | unverified | - | described |
+| 8003 | Uniden | BC895xlt | C | other_serial | uniden | `uniden-bc895xlt` | unverified | - | described |
+| 8012 | Uniden | BC898T | C | other_serial | uniden | `uniden-bc898t` | unverified | - | described |
 | 8010 | Uniden | BCD-396T | C | other_serial | - | - | unverified | - | needs engine |
 | 8011 | Uniden | BCD-996T | C | other_serial | - | - | unverified | - | needs engine |
 | 1033 | Vertex Standard | VX-1700 | C | yaesu_other | - | - | unverified | - | needs engine |

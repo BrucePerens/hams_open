@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use radioctl_core::description::{Family, KenwoodDialect, RigDescription};
+use radioctl_core::description::{Family, KenwoodDialect, ReceiverProtocol, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
 use radioctl_core::error::RigError;
 use radioctl_core::transcript::{Expect, Panel, Transcript};
@@ -44,6 +44,29 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         Family::Flex => Box::new(crate::flex::FlexEngine::new(description.clone())?),
         Family::Hpsdr => Box::new(crate::hpsdr_net::HpsdrEngine::new(description.clone())?),
         Family::SerialVendor => crate::serial_vendor::engine_for(description)?,
+        Family::Receiver => receiver_engine(description)?,
+    })
+}
+
+// [@ANCHOR: radioctl_conformance_receiver_engine]
+/// The engine of a receiver-family description, by its protocol.
+fn receiver_engine(description: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
+    let protocol = description.receiver.as_ref().map(|r| r.protocol);
+    Ok(match protocol {
+        Some(ReceiverProtocol::Aor) => Box::new(crate::aor::engine(description.clone())?),
+        Some(ReceiverProtocol::RohdeSchwarz) => Box::new(crate::rs::engine(description.clone())?),
+        Some(ReceiverProtocol::IcomMarine) => {
+            Box::new(crate::icom_marine::engine(description.clone())?)
+        }
+        Some(ReceiverProtocol::IcomPcr) => Box::new(crate::icom_pcr::engine(description.clone())?),
+        Some(ReceiverProtocol::Jrc) => Box::new(crate::jrc::engine(description.clone())?),
+        Some(ReceiverProtocol::Uniden) => Box::new(crate::uniden::engine(description.clone())?),
+        _ => {
+            return Err(RigError::new(
+                radioctl_core::error::ErrorKind::Unsupported,
+                "no engine for this receiver protocol yet",
+            ))
+        }
     })
 }
 

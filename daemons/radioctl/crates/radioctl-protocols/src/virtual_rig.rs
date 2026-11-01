@@ -32,6 +32,7 @@ use crate::civ::{self, Frame, FrameParser, Parsed};
 use crate::civ_scope::{ScopeAnswer, ScopeSim, SCOPE_CMD, SUB_WAVEFORM};
 use crate::elecraft;
 use crate::kenwood::{self, Token, Tokenizer};
+use crate::receiver::VirtualReceiver;
 use crate::yaesu_legacy as legacy;
 
 /// Signal level a fresh virtual rig reports (the simulator's raw 30).
@@ -155,6 +156,8 @@ enum Wire {
         pending: Vec<u8>,
         last_byte_at: Duration,
     },
+    /// A receiver or scanner with a line protocol; see `receiver`.
+    Receiver(Box<VirtualReceiver>),
 }
 
 /// One virtual radio.
@@ -205,6 +208,9 @@ impl VirtualRig {
                 pending: Vec::new(),
                 last_byte_at: Duration::ZERO,
             },
+            (Family::Receiver, _, _) if desc.receiver.is_some() => {
+                Wire::Receiver(Box::new(VirtualReceiver::new(desc)?))
+            }
             (Family::YaesuNewcat, _, _) if desc.yaesu.is_some() => Wire::Yaesu {
                 params: desc.yaesu.clone().unwrap_or(YaesuParams {
                     model_id: 0,
@@ -332,6 +338,7 @@ impl VirtualRig {
                 }
                 out
             }
+            Wire::Receiver(twin) => twin.feed(bytes, now, &mut self.state),
             Wire::Yaesu { tokenizer, .. } => {
                 let tokens = tokenizer.feed(bytes, now);
                 let mut out = Vec::new();
@@ -1240,7 +1247,8 @@ impl VirtualRig {
             | Wire::Elecraft { .. }
             | Wire::Yaesu { .. }
             | Wire::KenwoodHh { .. }
-            | Wire::YaesuLegacy { .. } => 0,
+            | Wire::YaesuLegacy { .. }
+            | Wire::Receiver(_) => 0,
         }
     }
 

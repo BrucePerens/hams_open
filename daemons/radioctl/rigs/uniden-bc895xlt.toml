@@ -1,0 +1,83 @@
+# Rig description: Uniden BC895XLT (uniden protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (read for facts only: rigs/uniden/uniden.c, rigs/uniden/bc895.c) and `rigctl -m 8003 --dump-caps` output;
+# no vendor manual was read. The engine and its gaps: crates/radioctl-protocols/src/uniden.rs.
+# Hamlib lists: serial 2400..9600 baud, 8N1, handshake NONE; receive 29 MHz to 956 MHz (1 range(s)); no transmit range (receiver). The description format has no field
+# for frequency ranges, filters or function lists, so they are not repeated beyond this note.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "uniden-bc895xlt"
+name = "Uniden BC895XLT"
+family = "receiver"
+
+[receiver]
+protocol = "uniden"
+dialect = "uniden"
+baud = 9600
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 154445000
+mode = "fm"
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[modes]]
+mode = "fm"
+code = 2
+
+[[modes]]
+mode = "wfm"
+code = 3
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 8003 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/uniden/uniden.c (uniden_transaction, uniden_set_freq, uniden_get_freq, uniden_set_mode, uniden_get_mode, uniden_get_level): ASCII commands RF, RM, SG ended by CR, answered OK or NG/ERR/ORER", note = "Which of the dialect families of Hamlib's backend the model belongs to. Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/uniden/bc895.c (uniden_get_freq: RF)", note = "Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 8003 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib gives a speed range (2400 to 9600); the default recorded here is 9600 (a common default inside Hamlib's range; Hamlib gives only the range). Hamlib's settings, not a measurement of the radio. The daemon does not yet apply these to the port; the operator configures them." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 8003 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/uniden/uniden.c and the model file's rig_caps (has_get_level, set/get freq and mode entries); `rigctl -m 8003 --dump-caps` (Hamlib 4.6.2) Can get/set lines", note = "Receiver: no PTT, CW, power or SWR capability is claimed (Hamlib lists no transmit range and the engine has no transmit path). Frequency, mode and the raw signal (SG) are what the engine implements; attenuator, squelch, memories, banks and scanning are not. Absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/uniden/uniden.c uniden_set_mode and uniden_get_mode (RM AM, RM FM, RM NFM, RM WFM)", note = "The codes 1 AM, 2 FM, 3 WFM are radioctl's own numbering (the wire spells the mode as a name). Narrow FM (RM NFM) is read as FM and never sent: Hamlib picks it by passband width, which radioctl cannot express." }
+verified = { state = "unverified" }

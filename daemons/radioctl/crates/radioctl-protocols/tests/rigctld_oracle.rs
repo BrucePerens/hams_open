@@ -1320,3 +1320,216 @@ fn known_yaesu_legacy_divergences(file: &str) -> Vec<&'static str> {
     }
     vec!["GetFrequency(A)", "GetMode"]
 }
+
+// Tests [@ANCHOR: radioctl_aor_dialect_encode]
+// Tests [@ANCHOR: radioctl_aor_dialect_decode]
+// Tests [@ANCHOR: radioctl_aor_twin_line]
+#[test]
+fn the_aor_files_against_hamlib_record_every_disagreement() {
+    // Frequency and mode on 145.5 MHz in FM and AM, which every AOR file here has. Signal strength
+    // is not compared: Hamlib reports a calibrated figure and radioctl the raw reading.
+    for (file, model, baud) in [
+        ("aor-ar8000", 5002, 9600),
+        ("aor-ar8200", 5001, 9600),
+        ("aor-ar8600", 5013, 9600),
+        ("aor-ar5000", 5004, 9600),
+        ("aor-ar5000a", 5014, 9600),
+        ("aor-ar2700", 5008, 9600),
+        ("aor-sr2200", 5016, 19200),
+    ] {
+        let desc = shipped(file);
+        let steps = vec![
+            Op::SetFrequency(Vfo::A, Hz(145_500_000)),
+            Op::GetFrequency(Vfo::A),
+            Op::SetMode(Mode::Am),
+            Op::GetMode,
+            Op::SetMode(Mode::Fm),
+            Op::GetMode,
+        ];
+        let (divergences, refused, wire) = compare(model, &desc, baud, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(got, known_aor_divergences(file), "{file}: {divergences:#?}");
+    }
+}
+
+/// The steps on which Hamlib and radioctl disagree for an AOR file (see the test above).
+///
+/// Only the AR5000 and AR5000A: Hamlib sets a mode there as `MD<m>` ended by CR followed by `BW<w>`
+/// with no terminator at all, and reads it back with `MD` and `BW`. radioctl sends `MD<m>` only and
+/// the virtual rig has no `BW` command, so Hamlib's unterminated `BW` is never answered and each of
+/// its mode steps fails. Open question for a real AR5000: does it accept `BW` without CR, and does
+/// it answer `MD` alone? radioctl follows the line protocol of the other AOR models.
+fn known_aor_divergences(file: &str) -> Vec<&'static str> {
+    if file.starts_with("aor-ar5000") {
+        return vec!["SetMode(Am)", "GetMode", "SetMode(Fm)", "GetMode"];
+    }
+    Vec::new()
+}
+
+// Tests [@ANCHOR: radioctl_uniden_dialect_encode]
+// Tests [@ANCHOR: radioctl_uniden_dialect_decode]
+// Tests [@ANCHOR: radioctl_uniden_twin_line]
+#[test]
+fn the_uniden_files_against_hamlib_record_every_disagreement() {
+    for (file, model) in [
+        ("uniden-bc245xlt", 8002),
+        ("uniden-bc250d", 8006),
+        ("uniden-bc780xlt", 8001),
+        ("uniden-bc895xlt", 8003),
+        ("uniden-bc898t", 8012),
+    ] {
+        let desc = shipped(file);
+        let steps = vec![
+            Op::SetFrequency(Vfo::A, Hz(154_445_000)),
+            Op::GetFrequency(Vfo::A),
+            Op::SetMode(Mode::Am),
+            Op::GetMode,
+            Op::SetMode(Mode::Wfm),
+            Op::GetMode,
+        ];
+        let (divergences, refused, wire) = compare(model, &desc, 9600, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(got, Vec::<&str>::new(), "{file}: {divergences:#?}");
+    }
+}
+
+/// Runs `steps` against Hamlib for each `(file, model, baud)` and pins the disagreements.
+fn oracle_family(files: &[(&str, u32, u32)], steps: &[Op], known: fn(&str) -> Vec<&'static str>) {
+    for (file, model, baud) in files {
+        let desc = shipped(file);
+        let steps: Vec<Op> = steps
+            .iter()
+            .filter(|op| {
+                use radioctl_core::capability::Capability;
+                desc.capabilities.has(op.required_capability())
+                    || matches!(op, Op::GetMode if desc.capabilities.has(Capability::ReadMode))
+            })
+            .cloned()
+            .collect();
+        let (divergences, refused, wire) = compare(*model, &desc, *baud, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<&str> = divergences.iter().map(|d| d.step.as_str()).collect();
+        assert_eq!(got, known(file), "{file}: {divergences:#?}");
+    }
+}
+
+fn hf_steps() -> Vec<Op> {
+    vec![
+        Op::SetFrequency(Vfo::A, Hz(7_074_000)),
+        Op::GetFrequency(Vfo::A),
+        Op::SetMode(Mode::Usb),
+        Op::GetMode,
+        Op::SetMode(Mode::Am),
+        Op::GetMode,
+    ]
+}
+
+// Tests [@ANCHOR: radioctl_jrc_dialect_encode]
+// Tests [@ANCHOR: radioctl_jrc_dialect_decode]
+// Tests [@ANCHOR: radioctl_jrc_twin_line]
+#[test]
+fn the_jrc_files_against_hamlib_record_every_disagreement() {
+    // The JST-145 and JST-245 are left out: Hamlib's `jst145_open` sends `H1` and `X` and never
+    // gets further against the virtual rig, even when it answers `X` (rigctld never listens, seen
+    // with a pseudo-terminal and a hand-written answer). The cause was not isolated; it may be the
+    // order of its start-up reads. Their commands are checked against Hamlib's source in the unit
+    // tests only.
+    oracle_family(
+        &[
+            ("jrc-nrd-535d", 6006, 4800),
+            ("jrc-nrd-545", 6007, 4800),
+            ("jrc-nrd-525", 6005, 4800),
+        ],
+        &hf_steps(),
+        |_| Vec::new(),
+    );
+}
+
+// Tests [@ANCHOR: radioctl_pcr_dialect_encode]
+// Tests [@ANCHOR: radioctl_pcr_dialect_decode]
+// Tests [@ANCHOR: radioctl_pcr_twin_line]
+#[test]
+fn the_pcr_files_against_hamlib_record_every_disagreement() {
+    oracle_family(
+        &[
+            ("icom-ic-pcr100", 4002, 9600),
+            ("icom-ic-pcr1000", 4001, 9600),
+            ("icom-ic-pcr1500", 4003, 38400),
+            ("icom-ic-pcr2500", 4004, 38400),
+        ],
+        &hf_steps(),
+        |_| Vec::new(),
+    );
+}
+
+// Tests [@ANCHOR: radioctl_marine_dialect_encode]
+// Tests [@ANCHOR: radioctl_marine_dialect_decode]
+// Tests [@ANCHOR: radioctl_marine_twin_line]
+#[test]
+fn the_marine_files_against_hamlib_record_every_disagreement() {
+    oracle_family(
+        &[
+            ("icom-ic-m700pro", 30001, 4800),
+            ("icom-ic-m710", 30003, 4800),
+            ("icom-ic-m802", 30002, 4800),
+            ("icom-ic-m803", 30004, 4800),
+        ],
+        &hf_steps(),
+        |_| Vec::new(),
+    );
+}
+
+// Tests [@ANCHOR: radioctl_rs_dialect_encode]
+// Tests [@ANCHOR: radioctl_rs_dialect_decode]
+// Tests [@ANCHOR: radioctl_rs_twin_line]
+#[test]
+fn the_rohde_schwarz_files_against_hamlib_record_every_disagreement() {
+    oracle_family(
+        &[("rs-esmc", 27001, 9600), ("rs-eb200", 27002, 9600)],
+        &hf_steps(),
+        |_| Vec::new(),
+    );
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode]
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+#[test]
+fn the_optoscan_files_against_hamlib_record_every_disagreement() {
+    // Frequency and mode only; the board has AM, FM and WFM.
+    let steps = vec![
+        Op::SetFrequency(Vfo::A, Hz(154_445_000)),
+        Op::GetFrequency(Vfo::A),
+        Op::SetMode(Mode::Am),
+        Op::GetMode,
+        Op::SetMode(Mode::Wfm),
+        Op::GetMode,
+    ];
+    oracle_family(
+        &[
+            ("optoscan-os535", 3052, 19200),
+            ("optoscan-os456", 3053, 19200),
+        ],
+        &steps,
+        known_optoscan_divergences,
+    );
+}
+
+/// Every step differs for the OptoScan files because Hamlib cannot open the radio: its open
+/// sends the OptoScan "remote on" command (CI-V command 7F, sub-command 02), which the CI-V
+/// virtual rig (written from the ordinary command set) does not answer, so every later Hamlib
+/// command fails. radioctl does not send the OptoScan extension, and whether the real board needs
+/// it before it accepts frequency and mode commands is an open question for a volunteer.
+fn known_optoscan_divergences(_file: &str) -> Vec<&'static str> {
+    vec![
+        "SetFrequency(A, Hz(154445000))",
+        "GetFrequency(A)",
+        "SetMode(Am)",
+        "GetMode",
+        "SetMode(Wfm)",
+        "GetMode",
+        "final mode",
+    ]
+}
