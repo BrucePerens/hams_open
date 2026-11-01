@@ -24,6 +24,7 @@ pub mod config;
 pub mod daemon;
 pub mod discovery;
 pub mod knob;
+pub mod meter_cal;
 pub mod names;
 pub mod reply;
 pub mod rigs;

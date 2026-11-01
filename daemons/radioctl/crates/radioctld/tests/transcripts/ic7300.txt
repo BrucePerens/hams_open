@@ -62,6 +62,10 @@
 > L KEYSPD 20
 < RPRT -11
 > l SWR
+< 1
+> l ALC
+< 0
+> l COMP
 < RPRT -11
 > l RAWSTR
 < 30
