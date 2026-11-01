@@ -1,8 +1,8 @@
 #!/bin/bash
 # Helper for the Windows VM on the Yoga C940.
 set -u
-. /usr/lib/yoga-windows-vm/common.sh || exit 1
-SHARE=/usr/share/yoga-windows-vm
+. "${YWV_LIB:-/usr/lib/yoga-windows-vm}/common.sh" || exit 1
+SHARE=${YWV_SHARE:-/usr/share/yoga-windows-vm}
 VIRSH="virsh -c qemu:///system"
 as_root() { [ "$(id -u)" = 0 ] || exec sudo -- "$0" "$@"; }
 state() { local s; s=$($VIRSH domstate "$DOMAIN" 2>/dev/null) || s=undefined; echo "$s"; }
@@ -36,6 +36,37 @@ render_xml() { # $1=overlay|raw
 define_vm() { render_xml "$1" | $VIRSH define /dev/stdin; }
 
 sgval() { sgdisk -i "$1" "$DISK" | awk -F': ' -v k="$2" '$1==k {print $2}' | awk '{print $1}'; }
+
+# Patch the VM's COPY of the BCD (in head.img only; the host ESP and native
+# Windows are never touched): no hypervisor (VBS cannot run under KVM without
+# nested virtualisation and hangs the boot loader) and no automatic recovery
+# (so a boot failure shows its real error).
+patch_bcd() {
+    local s1 off tmp o t
+    s1=$(sgdisk -i 1 "$DATA_DIR/head.img" 2>/dev/null | awk -F': ' '/First sector/ {print $2}' | awk '{print $1}')
+    off=$((s1*512)); tmp=$(mktemp)
+    mcopy -n -i "$DATA_DIR/head.img@@$off" ::/EFI/Microsoft/Boot/BCD "$tmp" || return 1
+    for o in $(hivexsh "$tmp" <<<'cd Objects
+ls'); do
+        t=$(hivexget "$tmp" "\\Objects\\$o\\Description" Type 2>/dev/null)
+        [ "$t" = 270532611 ] || continue
+        hivexsh -w "$tmp" <<<"cd \\Objects\\$o\\Elements
+add 250000c2
+add 16000009" 2>/dev/null
+        hivexsh -w "$tmp" <<<"cd \\Objects\\$o\\Elements\\250000c2
+setval 1
+Element
+hex:3:00,00,00,00,00,00,00,00
+commit"
+        hivexsh -w "$tmp" <<<"cd \\Objects\\$o\\Elements\\16000009
+setval 1
+Element
+hex:3:00
+commit"
+    done
+    mcopy -o -i "$DATA_DIR/head.img@@$off" "$tmp" ::/EFI/Microsoft/Boot/BCD
+    rm -f "${tmp:?}"
+}
 
 new_overlay() {
     MODE=overlay disk_up || exit 1
@@ -77,6 +108,7 @@ cmd_init() {
         { mmd $m ::/EFI ::/EFI/Boot
           mcopy $m -s -p /boot/efi/EFI/Microsoft ::/EFI/
           mcopy $m /boot/efi/EFI/Microsoft/Boot/bootmgfw.efi ::/EFI/Boot/bootx64.efi; }
+        patch_bcd
         log "built virtual disk head ($s3 sectors) and tail"
     fi
     install -m 0640 -o root -g libvirt-qemu /sys/firmware/acpi/tables/MSDM "$DATA_DIR/MSDM.aml"
@@ -88,7 +120,15 @@ cmd_init() {
 
 cmd_view() { exec virt-viewer -c qemu:///system --attach "$DOMAIN"; }
 cmd_start() { $VIRSH start "$DOMAIN" || exit 1; if [ "${1:-}" = --viewer ]; then cmd_view; fi; }
-cmd_launch() { if [ "$(state)" != running ]; then $VIRSH start "$DOMAIN" || exit 1; fi; cmd_view; }
+cmd_launch() {
+    if [ "$(state)" != running ]; then
+        $VIRSH start "$DOMAIN" || {
+            command -v notify-send >/dev/null && notify-send "Windows VM did not start" "Is your user in the libvirt group, and is /windows in use? See: yoga-windows-vm status"
+            exit 1
+        }
+    fi
+    cmd_view
+}
 cmd_stop() {
     if [ "$(state)" != running ]; then echo "not running"; return 0; fi
     $VIRSH shutdown "$DOMAIN" >/dev/null
@@ -137,6 +177,6 @@ c=${1:-}; if [ $# -gt 0 ]; then shift; fi
 case "$c" in
 init) cmd_init ;; start) cmd_start "$@" ;; view) cmd_view ;; launch) cmd_launch ;;
 stop) cmd_stop ;; status) cmd_status ;; mode) cmd_mode "$@" ;; autostart) cmd_autostart "$@" ;;
-remount) cmd_remount ;; reset-overlay) cmd_reset_overlay ;;
+remount) cmd_remount ;; patch-bcd) as_root patch-bcd; patch_bcd ;; reset-overlay) cmd_reset_overlay ;;
 *) usage; exit 1 ;;
 esac

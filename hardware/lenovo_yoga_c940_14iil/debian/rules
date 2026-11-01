@@ -4,6 +4,20 @@
 
 P = debian/lenovo-yoga-c940-14iil-support
 
+W = debian/lenovo-yoga-c940-14iil-windows-vm
+V = windows-vm
+
 override_dh_auto_install:
 	install -D -m 0644 tlp.d/20-lenovo-yoga-c940-14iil.conf $(P)/usr/share/lenovo-yoga-c940-14iil-support/20-lenovo-yoga-c940-14iil.conf
 	install -D -m 0755 scripts/check-features $(P)/usr/lib/lenovo-yoga-c940-14iil-support/check-features
+	install -D -m 0755 $(V)/bin/yoga-windows-vm $(W)/usr/bin/yoga-windows-vm
+	install -D -m 0644 $(V)/lib/common.sh $(W)/usr/lib/yoga-windows-vm/common.sh
+	install -D -m 0755 $(V)/hooks/50-yoga-windows-vm $(W)/etc/libvirt/hooks/qemu.d/50-yoga-windows-vm
+	install -D -m 0644 $(V)/conf/yoga-windows-vm.conf $(W)/etc/yoga-windows-vm/yoga-windows-vm.conf
+	install -D -m 0644 $(V)/conf/apparmor-libvirt-qemu $(W)/usr/share/yoga-windows-vm/apparmor-libvirt-qemu
+	install -D -m 0644 $(V)/xml/yoga-windows.xml.in $(W)/usr/share/yoga-windows-vm/yoga-windows.xml.in
+	install -D -m 0644 $(V)/systemd/yoga-windows-vm.service $(W)/usr/lib/systemd/system/yoga-windows-vm.service
+	install -D -m 0644 $(V)/desktop/yoga-windows-vm.desktop $(W)/usr/share/applications/yoga-windows-vm.desktop
+
+override_dh_installsystemd:
+	dh_installsystemd -plenovo-yoga-c940-14iil-windows-vm --no-enable --no-start --name=yoga-windows-vm yoga-windows-vm.service

@@ -1,6 +1,6 @@
 [Unit]
 Description=Windows VM on the Yoga C940 (headless build server)
-Documentation=file:///usr/share/doc/lenovo-yoga-c940-windows-vm/README.md
+Documentation=file:///usr/share/doc/lenovo-yoga-c940-14iil-windows-vm/README.md
 # Ordering After= libvirt-guests means we are stopped BEFORE it at host
 # shutdown, so Windows gets an ACPI shutdown instead of a managed save.
 After=libvirtd.service libvirt-guests.service network-online.target local-fs.target

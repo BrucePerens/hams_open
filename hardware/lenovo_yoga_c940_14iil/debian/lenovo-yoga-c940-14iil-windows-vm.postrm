@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+AA=/etc/apparmor.d/local/abstractions/libvirt-qemu
+case "$1" in
+    purge|remove)
+        if [ -f "$AA" ]; then
+            sed -i '/^# BEGIN yoga-windows-vm$/,/^# END yoga-windows-vm$/d' "$AA"
+        fi
+        ;;
+esac
+#DEBHELPER#

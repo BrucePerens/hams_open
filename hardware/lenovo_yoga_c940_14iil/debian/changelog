@@ -1,3 +1,11 @@
+lenovo-yoga-c940-14iil (1.1.0) unstable; urgency=medium
+
+  * New binary package lenovo-yoga-c940-14iil-windows-vm: the existing Windows
+    install in a KVM virtual machine (overlay mode by default, raw mode behind an
+    explicit switch, autostart off by default).
+
+ -- Bruce Perens <bruce@perens.com>  Sat, 31 Oct 2026 18:00:00 -0700
+
 lenovo-yoga-c940-14iil (1.0.0) unstable; urgency=medium
 
   * Initial release: depends on convertible-helper, convertible-power and

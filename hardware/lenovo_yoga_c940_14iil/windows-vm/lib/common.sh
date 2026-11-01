@@ -19,7 +19,7 @@ vm_running() { pgrep -f "qemu.*guest=$DOMAIN," >/dev/null 2>&1; }
 win_mounted() {
     local maj_min
     maj_min=$(lsblk -dno MAJ:MIN "$WIN_DEV" 2>/dev/null | tr -d ' ') || return 1
-    awk -v mm="$maj_min" '$3 == mm {f=1} END {exit !f}' /proc/self/mountinfo
+    awk -v mm="$maj_min" '$3 == mm {f=1} END {exit !f}' "${YWV_MOUNTINFO:-/proc/self/mountinfo}"
 }
 
 dm_up_p() { dmsetup info "$DM_NAME" >/dev/null 2>&1; }
