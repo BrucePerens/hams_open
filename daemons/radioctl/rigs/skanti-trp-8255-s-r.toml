@@ -1,0 +1,79 @@
+# Rig description: Skanti TRP 8255 S R (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/skanti/trp8255.c, read for facts only, and `rigctl -m 14004 --dump-caps`); no vendor protocol document was read and no code or table was copied.
+# Hamlib lists: serial 300..2400 baud, 7O1, handshake NONE; no receive range listed. The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
+# Dialect trp8255 (skanti.rs): through the control unit, which acknowledges every byte with ACK or NAK. Hamlib writes one byte and waits for its acknowledgement; radioctl sends a whole command and counts the acknowledgements (open question against a real control unit). Set-only. The control-unit start-up bytes (SOH STX) are not sent. Mode codes: `X` USB, `Y` LSB, `Z` AM, `[` RTTY, `]` CW.
+schema = 1
+capabilities = ["set-frequency", "set-mode", "set-ptt"]
+
+[rig]
+id = "skanti-trp-8255-s-r"
+name = "Skanti TRP 8255 S R"
+family = "serial-vendor"
+
+[vendor]
+protocol = "skanti"
+dialect = "trp8255"
+data_bits = 7
+parity = "O"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14200000
+mode = "usb"
+
+[[modes]]
+mode = "usb"
+code = "X"
+
+[[modes]]
+mode = "lsb"
+code = "Y"
+
+[[modes]]
+mode = "am"
+code = "Z"
+
+[[modes]]
+mode = "rtty"
+code = "["
+
+[[modes]]
+mode = "cw"
+code = "]"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 14004 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 14004 --dump-caps` (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/skanti/trp8255.c rigs/skanti/trp8255.c (frame formats)", note = "Command frames read for facts only; no code copied. The dialect names are ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 14004 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/skanti/trp8255.c", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command; absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/skanti/trp8255.c (mode character definitions)", note = "Mode characters as the backend defines them; modes with no entry in radioctl's vocabulary are not listed." }
+verified = { state = "unverified" }

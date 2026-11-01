@@ -242,6 +242,20 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "m0nka-mchf-qrp": [1045],
     "philips-prm8060": [28001],
     "rft-ekd-500": [24001],
+    "barrett-2050": [32001],
+    "barrett-4050": [32003],
+    "barrett-950": [32002],
+    "codan-envoy": [34001],
+    "codan-ngt": [34002],
+    "dorji-dra818u": [31002],
+    "dorji-dra818v": [31001],
+    "guohe-pmr-171": [1052],
+    "guohe-q900": [1051],
+    "kachina-505dsp": [18001],
+    "lowe-hf-235": [10004],
+    "racal-ra3702": [11005],
+    "skanti-trp-8255-s-r": [14004],
+    "skanti-trp8000": [14002],
     "tentec-rx-320": [16003],
     "tentec-rx-331": [16012],
     "tentec-rx-340": [16004],
@@ -329,6 +343,10 @@ _PARALLEL_PORT = (
     "a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport "
     "(serial, TCP, UDP only)"
 )
+_BIT_BANGED_SERIAL = (
+    "a DRM receiver kit whose DDS chip Hamlib steers by bit-banging the serial port's TX, RTS and DTR lines: "
+    "there is no byte protocol on the wire, and radioctl's serial transport sends bytes, not line toggles"
+)
 NOT_APPLICABLE: dict[int, str] = {
     1: _NOT_A_RADIO,
     6: _NOT_A_RADIO,
@@ -349,6 +367,7 @@ NOT_APPLICABLE: dict[int, str] = {
     26002: _KERNEL_TUNER,
     25008: _MEASURING,
     23001: _PARALLEL_PORT,
+    25001: _BIT_BANGED_SERIAL,
     25006: _PARALLEL_PORT,
     15001: _WINRADIO_DRIVER,
     15002: _WINRADIO_DRIVER,

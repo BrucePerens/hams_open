@@ -1,7 +1,7 @@
 # Rig description: Ten-Tec TT-599 Eagle (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/tentec/orion.c, orion.h (the Eagle shares the Orion backend; rig_model checks only change the bandwidth reset), read for facts only, and `rigctl -m 16013 --dump-caps`); no vendor protocol document was read and no code or table was copied.
-# Hamlib lists: serial 57600..57600 baud, 8N1, handshake CTS/RTS; receive 500000 to 54000000 Hz in 23 range(s). The description format has no field for frequency ranges or serial settings, so they are not repeated here.
+# Hamlib lists: serial 57600..57600 baud, 8N1, handshake CTS/RTS; receive 500000 to 54000000 Hz in 23 range(s). The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
 # Dialect orion, as the TT-565 (Hamlib uses one backend for both). Hamlib's mode list for the Eagle has no RTTY.
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt"]
@@ -14,6 +14,10 @@ family = "serial-vendor"
 [vendor]
 protocol = "tentec"
 dialect = "orion"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "rtscts"
 
 [timing]
 timeout_ms = 2000

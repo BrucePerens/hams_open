@@ -687,6 +687,88 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_vendor_vendor_of] (radioctl-protocols) The vendor protocol of a description, or why it has none.
 - [@ANCHOR: radioctl:radioctl_vendor_engine_for] (radioctl-protocols) The engine of a vendor serial description.
 - [@ANCHOR: radioctl:radioctl_vendor_twin_for] (radioctl-protocols) The virtual radio of a vendor serial description.
+- [@ANCHOR: radioctl:radioctl_barrett_frame] (radioctl-protocols) An answer of the radio: XOFF, the text, CR LF, XON.
+- [@ANCHOR: radioctl:radioctl_barrett_unframe] (radioctl-protocols) The text of an answer taken up to (not including) its XON: the XOFF in front and the CR LF at
+- [@ANCHOR: radioctl:radioctl_barrett_band_offset] (radioctl-protocols) The memory-channel offset (0 to 9) of the band holding a frequency, or none above 30 MHz.
+- [@ANCHOR: radioctl:radioctl_barrett_tuning_from_name] (radioctl-protocols) The tuning (direct `TR`/`TC` or memory channels from a base number) of a Barrett dialect name.
+- [@ANCHOR: radioctl:radioctl_barrett_engine_new] (radioctl-protocols) Builds an engine from a Barrett vendor description.
+- [@ANCHOR: radioctl:radioctl_barrett_engine_encode] (radioctl-protocols) The Barrett engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_barrett_engine_feed] (radioctl-protocols) The Barrett engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_barrett_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_barrett_twin_answer] (radioctl-protocols) The answer text to one command line, or `None` for a line the radio does not know.
+- [@ANCHOR: radioctl:radioctl_barrett_twin_snapshot] (radioctl-protocols) The Barrett twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_barrett_twin_feed] (radioctl-protocols) The Barrett twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_barrett_twin_front_panel] (radioctl-protocols) The Barrett twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_codan_khz_text] (radioctl-protocols) A frequency as kilohertz with up to three decimals and no trailing zeros (`14074`, `14074.5`).
+- [@ANCHOR: radioctl:radioctl_codan_parse_khz] (radioctl-protocols) The frequency of a kilohertz number with up to three decimals, or `None`.
+- [@ANCHOR: radioctl:radioctl_codan_engine_new] (radioctl-protocols) Builds an engine from a CODAN vendor description.
+- [@ANCHOR: radioctl:radioctl_codan_engine_encode] (radioctl-protocols) The CODAN engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_codan_engine_feed] (radioctl-protocols) The CODAN engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_codan_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_codan_twin_answer] (radioctl-protocols) The answer line to one command line.
+- [@ANCHOR: radioctl:radioctl_codan_twin_snapshot] (radioctl-protocols) The CODAN twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_codan_twin_feed] (radioctl-protocols) The CODAN twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_codan_twin_front_panel] (radioctl-protocols) The CODAN twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_dorji_band_from_name] (radioctl-protocols) The band of a dialect name (`dra818u`, `dra818v`).
+- [@ANCHOR: radioctl:radioctl_dorji_band_contains] (radioctl-protocols) Whether the module can tune `hz`.
+- [@ANCHOR: radioctl:radioctl_dorji_channel] (radioctl-protocols) The frequency rounded to the nearest 12.5 kHz channel.
+- [@ANCHOR: radioctl:radioctl_dorji_mhz_text] (radioctl-protocols) A frequency as `fff.ffff` megahertz.
+- [@ANCHOR: radioctl:radioctl_dorji_parse_mhz] (radioctl-protocols) The frequency of `fff.ffff`, or `None`.
+- [@ANCHOR: radioctl:radioctl_dorji_engine_new] (radioctl-protocols) Builds an engine from a Dorji vendor description.
+- [@ANCHOR: radioctl:radioctl_dorji_engine_encode] (radioctl-protocols) The Dorji engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_dorji_engine_feed] (radioctl-protocols) The Dorji engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_dorji_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_dorji_twin_answer] (radioctl-protocols) The answer line to one command line, or `None` for a line the module does not know.
+- [@ANCHOR: radioctl:radioctl_dorji_twin_snapshot] (radioctl-protocols) The Dorji twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_dorji_twin_feed] (radioctl-protocols) The Dorji twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_dorji_twin_front_panel] (radioctl-protocols) The Dorji twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_guohe_crc16] (radioctl-protocols) CRC-16/CCITT-FALSE.
+- [@ANCHOR: radioctl:radioctl_guohe_build_frame] (radioctl-protocols) A frame for `command` with `data`.
+- [@ANCHOR: radioctl:radioctl_guohe_parse_frame] (radioctl-protocols) The command and data of a whole frame, or `None` if the header, length or CRC is wrong.
+- [@ANCHOR: radioctl:radioctl_guohe_take_frame] (radioctl-protocols) Takes one frame candidate off the front of a receive buffer, dropping bytes in front of a header.
+- [@ANCHOR: radioctl:radioctl_guohe_engine_new] (radioctl-protocols) Builds an engine from a Guohe vendor description.
+- [@ANCHOR: radioctl:radioctl_guohe_engine_encode] (radioctl-protocols) The Guohe engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_guohe_engine_feed] (radioctl-protocols) The Guohe engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_guohe_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_guohe_twin_snapshot] (radioctl-protocols) The Guohe twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_guohe_twin_feed] (radioctl-protocols) The Guohe twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_guohe_twin_front_panel] (radioctl-protocols) The Guohe twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_kachina_dds_bytes] (radioctl-protocols) The four bytes of a frequency (30 kHz to 30 MHz), or `None` outside that range.
+- [@ANCHOR: radioctl:radioctl_kachina_frequency_of] (radioctl-protocols) The frequency of four DDS bytes (the antenna bits are ignored), rounded to the hertz.
+- [@ANCHOR: radioctl:radioctl_kachina_frame] (radioctl-protocols) A Kachina frame: STX, the command letter, the data and ETX.
+- [@ANCHOR: radioctl:radioctl_kachina_engine_new] (radioctl-protocols) Builds an engine from a Kachina vendor description.
+- [@ANCHOR: radioctl:radioctl_kachina_engine_encode] (radioctl-protocols) The Kachina engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_kachina_engine_feed] (radioctl-protocols) The Kachina engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_kachina_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_kachina_twin_frame] (radioctl-protocols) Handles one frame at the front of the buffer: its answer byte, or `None` when more bytes
+- [@ANCHOR: radioctl:radioctl_kachina_twin_snapshot] (radioctl-protocols) The Kachina twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_kachina_twin_feed] (radioctl-protocols) The Kachina twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_kachina_twin_front_panel] (radioctl-protocols) The Kachina twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_lowe_khz_text] (radioctl-protocols) A frequency as kilohertz with six decimals (`14200.000000`).
+- [@ANCHOR: radioctl:radioctl_lowe_parse_khz] (radioctl-protocols) The frequency of a kilohertz decimal with at most six decimals, or `None`.
+- [@ANCHOR: radioctl:radioctl_lowe_mode_name] (radioctl-protocols) The mode name Hamlib writes for a description mode code, or `None`.
+- [@ANCHOR: radioctl:radioctl_lowe_engine_new] (radioctl-protocols) Builds an engine from a Lowe vendor description.
+- [@ANCHOR: radioctl:radioctl_lowe_engine_encode] (radioctl-protocols) The Lowe engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_lowe_engine_feed] (radioctl-protocols) The Lowe engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_lowe_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_lowe_twin_snapshot] (radioctl-protocols) The Lowe twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_lowe_twin_feed] (radioctl-protocols) The Lowe twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_lowe_twin_front_panel] (radioctl-protocols) The Lowe twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
+- [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
+- [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
+- [@ANCHOR: radioctl:radioctl_skanti_engine_new] (radioctl-protocols) Builds an engine from a Skanti vendor description.
+- [@ANCHOR: radioctl:radioctl_skanti_engine_encode] (radioctl-protocols) The Skanti engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_skanti_engine_feed] (radioctl-protocols) The Skanti engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_apply_8000] (radioctl-protocols) Applies one TRP8000 command line; `false` for one the radio does not know.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_feed_8255] (radioctl-protocols) One byte of the control-unit dialect: the answer byte.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_apply_8255_line] (radioctl-protocols) Applies a completed control-unit line of the TRP 8255 twin.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_snapshot] (radioctl-protocols) The Skanti twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_feed] (radioctl-protocols) The Skanti twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_skanti_twin_front_panel] (radioctl-protocols) The Skanti twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_racal_dialect_words] (radioctl-protocols) The command words of the dialect: ask frequency, ask mode, set frequency, set mode.
+- [@ANCHOR: radioctl:radioctl_racal_dialect_parse_frequency] (radioctl-protocols) The frequency in a reply's number: megahertz on the Racal-6790 family, hertz on the RA3702.
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_default_filter] (radioctl-protocols) The filter index this engine selects for a mode.
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_sideband] (radioctl-protocols) The `m` of the tuning formula: -1 lower side (and CW), +1 upper side, 0 otherwise.
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_correction] (radioctl-protocols) The `c` of the RX-320 tuning formula: half the filter width plus 200 Hz, or 0 in CW.

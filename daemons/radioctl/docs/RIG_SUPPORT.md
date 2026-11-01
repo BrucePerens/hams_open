@@ -9,23 +9,23 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **255** (261 description files), **89%** of the real radios
+- Not applicable (not a radio, or no transport radioctl has): **29**
+- Real radios (models less not applicable): **284**; with a radioctl description: **269** (275 description files), **94%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 255 |
+| described | 269 |
 | engine only | 1 |
 | needs variant | 0 |
-| needs engine | 18 |
-| odd device | 11 |
-| not applicable | 28 |
+| needs engine | 6 |
+| odd device | 8 |
+| not applicable | 29 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 282 |
-| manual-checked | 31 |
+| unverified | 281 |
+| manual-checked | 32 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 134 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 56 |
-| D | odd device | 54 | 23 |
+| C | new engine | 82 | 68 |
+| D | odd device | 54 | 25 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 61 | 0 |
+| other_serial | C/D | aor | 94 | 75 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -72,6 +72,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 - AmQRP DDS-60 (25006): a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport (serial, TCP, UDP only)
 - DTTS Microwave Society DttSP IPC (23003): not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the radio, not the program in front of it
 - DTTS Microwave Society DttSP UDP (23004): not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the radio, not the program in front of it
+- Elektor Elektor 3/04 (25001): a DRM receiver kit whose DDS chip Hamlib steers by bit-banging the serial port's TX, RTS and DTR lines: there is no byte protocol on the wire, and radioctl's serial transport sends bytes, not line toggles
 - FlexRadio SDR-1000 (23001): a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport (serial, TCP, UDP only)
 - FlexRadio/Apache PowerSDR (2048): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - FLRig  (4): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
@@ -122,17 +123,17 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 5001 | AOR | AR8200 | C | other_serial | aor | `aor-ar8200` | unverified | - | described |
 | 5013 | AOR | AR8600 | C | other_serial | aor | `aor-ar8600` | unverified | - | described |
 | 5016 | AOR | SR2200 | C | other_serial | aor | `aor-sr2200` | unverified | - | described |
-| 32001 | Barrett | 2050 | C | other_serial | - | - | unverified | - | needs engine |
-| 32003 | Barrett | 4050 | C | other_serial | - | - | unverified | - | needs engine |
-| 32002 | Barrett | 950 | C | other_serial | - | - | unverified | - | needs engine |
+| 32001 | Barrett | 2050 | C | other_serial | - | `barrett-2050` | unverified | - | described |
+| 32003 | Barrett | 4050 | C | other_serial | - | `barrett-4050` | unverified | - | described |
+| 32002 | Barrett | 950 | C | other_serial | - | `barrett-950` | unverified | - | described |
 | 2053 | BG2FX | FX4/C/CR/L | D | other_serial | - | `bg2fx-fx4` | unverified | - | described |
-| 34001 | CODAN | Envoy | C | other_serial | - | - | unverified | - | needs engine |
-| 34002 | CODAN | NGT | C | other_serial | - | - | unverified | - | needs engine |
+| 34001 | CODAN | Envoy | C | other_serial | - | `codan-envoy` | unverified | - | described |
+| 34002 | CODAN | NGT | C | other_serial | - | `codan-ngt` | unverified | - | described |
 | 25003 | Coding Technologies | Digital World Traveller | D | other_usb | dwt | `digital-world-traveller` | unverified | - | described |
 | 39001 | Commradio | CTX-10 | D | other_serial | - | `commradio-ctx-10` | unverified | - | described |
 | 2055 | DL2MAN | (tr)uSDX | D | other_serial | - | `dl2man-trusdx` | unverified | - | described |
-| 31002 | Dorji | DRA818U | D | other_serial | - | - | unverified | - | odd device |
-| 31001 | Dorji | DRA818V | D | other_serial | - | - | unverified | - | odd device |
+| 31002 | Dorji | DRA818U | D | other_serial | - | `dorji-dra818u` | manual-checked | - | described |
+| 31001 | Dorji | DRA818V | D | other_serial | - | `dorji-dra818v` | unverified | - | described |
 | 9002 | Drake | R-8A | C | other_serial | - | `drake-r-8a` | unverified | - | described |
 | 9003 | Drake | R-8B | C | other_serial | - | `drake-r-8b` | unverified | - | described |
 | 23003 | DTTS Microwave Society | DttSP IPC | D | other_device_driver | - | - | unverified | - | not applicable |
@@ -145,7 +146,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | `elecraft-kx2` | unverified | - | described |
 | 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | unverified | - | described |
 | 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
-| 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | odd device |
+| 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | not applicable |
 | 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | `elektor-sdr-usb` | unverified | - | described |
 | 25012 | FiFi | FiFi-SDR | D | other_usb | si570_usb | `fifi-sdr` | unverified | - | described |
 | 2036 | FlexRadio | 6xxx | A | flexradio_network | flex | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | unverified | - | described |
@@ -162,8 +163,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 4 | FLRig | - | D | other_network | - | - | unverified | - | not applicable |
 | 25015 | Funkamateur | FA-SDR | D | other_usb | si570_usb | `funkamateur-fa-sdr` | unverified | - | described |
 | 35001 | GOMSPACE | GS100 | D | other_serial | - | `gomspace-gs100` | unverified | - | described |
-| 1052 | Guohe | PMR-171 | C | other_serial | - | - | unverified | - | needs engine |
-| 1051 | Guohe | Q900 | C | other_serial | - | - | unverified | - | needs engine |
+| 1052 | Guohe | PMR-171 | C | other_serial | - | `guohe-pmr-171` | unverified | - | described |
+| 1051 | Guohe | Q900 | C | other_serial | - | `guohe-q900` | unverified | - | described |
 | 1 | Hamlib | Dummy | D | virtual | - | - | unverified | - | not applicable |
 | 6 | Hamlib | Dummy No VFO | D | virtual | - | - | unverified | - | not applicable |
 | 2 | Hamlib | NET rigctl | D | unclassified | - | - | unverified | - | not applicable |
@@ -256,7 +257,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 6005 | JRC | NRD-525 | C | other_serial | jrc | `jrc-nrd-525` | unverified | - | described |
 | 6006 | JRC | NRD-535D | C | other_serial | jrc | `jrc-nrd-535d` | unverified | - | described |
 | 6007 | JRC | NRD-545 DSP | C | other_serial | jrc | `jrc-nrd-545` | unverified | - | described |
-| 18001 | Kachina | 505DSP | C | other_serial | - | - | unverified | - | needs engine |
+| 18001 | Kachina | 505DSP | C | other_serial | - | `kachina-505dsp` | unverified | - | described |
 | 2015 | Kenwood | R-5000 | A | kenwood_ascii | kenwood | `kenwood-r-5000` | unverified | - | described |
 | 2033 | Kenwood | TH-D72A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d72a` | unverified | - | described |
 | 2042 | Kenwood | TH-D74 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d74` | unverified | - | described |
@@ -294,7 +295,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2039 | Kenwood | TS-990S | A | kenwood_ascii | kenwood | `kenwood-ts-990s` | manual-checked | - | described |
 | 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | si570_usb | `kth-si570-pic-usb` | unverified | - | described |
 | 2050 | Lab599 | TX-500 | C | other_serial | - | `lab599-tx-500` | unverified | - | described |
-| 10004 | Lowe | HF-235 | C | other_serial | - | - | unverified | - | needs engine |
+| 10004 | Lowe | HF-235 | C | other_serial | - | `lowe-hf-235` | unverified | - | described |
 | 1045 | M0NKA | mcHF QRP | D | other_serial | - | `m0nka-mchf-qrp` | unverified | - | described |
 | 2049 | Malachite | DSP | D | other_serial | - | `malachite-dsp` | unverified | - | described |
 | 36001 | MDS | 4710 | D | other_serial | - | - | unverified | - | odd device |
@@ -311,7 +312,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 28001 | Philips/Simoco | PRM8060 | D | other_serial | - | `philips-prm8060` | unverified | - | described |
 | 2052 | QRPLabs | QCX/QDX | D | other_serial | - | `qrplabs-qcx-qdx` | unverified | - | described |
 | 2057 | QRPLabs | QMX | D | other_serial | - | `qrplabs-qmx` | unverified | - | described |
-| 11005 | Racal | RA3702 | C | other_serial | - | - | unverified | - | needs engine |
+| 11005 | Racal | RA3702 | C | other_serial | - | `racal-ra3702` | unverified | - | described |
 | 11003 | Racal | RA6790/GM | C | other_serial | - | `racal-ra6790-gm` | unverified | - | described |
 | 8004 | Radio Shack | PRO-2052 | C | other_serial | - | - | unverified | - | needs engine |
 | 24001 | RFT | EKD-500 | D | other_serial | - | `rft-ekd-500` | unverified | - | described |
@@ -325,8 +326,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2056 | SDR Radio | SDRConsole | D | other_serial | - | - | unverified | - | not applicable |
 | 2051 | SDRPlay | SDRUno | D | other_serial | - | - | unverified | - | not applicable |
 | 2032 | SigFox | Transfox | D | other_serial | - | - | unverified | - | odd device |
-| 14004 | Skanti | TRP 8255 S R | C | other_serial | - | - | unverified | - | needs engine |
-| 14002 | Skanti | TRP8000 | C | other_serial | - | - | unverified | - | needs engine |
+| 14004 | Skanti | TRP 8255 S R | C | other_serial | - | `skanti-trp-8255-s-r` | unverified | - | described |
+| 14002 | Skanti | TRP8000 | C | other_serial | - | `skanti-trp8000` | unverified | - | described |
 | 25009 | SoftRock | Si570 AVR-USB | D | other_usb | si570_usb | `softrock-si570-avr-usb` | unverified | - | described |
 | 22001 | TAPR | DSP-10 | D | other_serial | - | - | unverified | - | odd device |
 | 3064 | Ten-Tec | Delta II | C | other_serial | - | `tentec-delta-ii` | unverified | - | described |

@@ -1,7 +1,7 @@
 # Rig description: Drake R-8A (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/drake/drake.c, r8a.c, read for facts only, and `rigctl -m 9002 --dump-caps`); no vendor protocol document was read and no code or table was copied.
-# Hamlib lists: serial 9600..9600 baud, 8N1, handshake CTS/RTS; receive 100000 to 30000000 Hz in 2 range(s). The description format has no field for frequency ranges or serial settings, so they are not repeated here.
+# Hamlib lists: serial 9600..9600 baud, 8N1, handshake CTS/RTS; receive 100000 to 30000000 Hz in 2 range(s). The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
 # Dialect r8: CR-ended commands, LF-ended replies (`F<7 digits of 10 Hz>`, `RF`, `M<c>`, `RM`). A receiver: no PTT. Hamlib's AMS and (R-8B) ECSS modes have no entry in radioctl's mode vocabulary and are not listed.
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
@@ -14,6 +14,10 @@ family = "serial-vendor"
 [vendor]
 protocol = "drake"
 dialect = "r8"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "rtscts"
 
 [timing]
 timeout_ms = 200

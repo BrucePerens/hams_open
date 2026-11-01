@@ -346,13 +346,17 @@ impl Rigctld {
             let probe = TcpListener::bind("127.0.0.1:0").expect("free port");
             probe.local_addr().expect("addr").port()
         };
-        // The Racal RA6790/GM is 7 data bits, even parity, 2 stop bits in Hamlib, which a
-        // pseudo-terminal refuses (`tcsetattr` fails and `rig_open` returns "Invalid
-        // configuration"); the virtual radio ignores framing, so Hamlib is told 8N1 for it.
-        let conf = if model == 11003 {
-            "cache_timeout=0,data_bits=8,serial_parity=None,stop_bits=1"
-        } else {
-            "cache_timeout=0"
+        // Hamlib's line settings for some radios are ones a pseudo-terminal refuses (7 data bits
+        // with two stop bits makes `tcsetattr` fail and `rig_open` returns "Invalid
+        // configuration"), or ones that would swallow bytes of the protocol (XON/XOFF handshake
+        // eats the 11 and 13 bytes that frame a Barrett answer). The virtual radio ignores
+        // framing, so Hamlib is told 8N1 and no handshake for these models.
+        let conf = match model {
+            11003 | 11005 | 14002 | 14004 => {
+                "cache_timeout=0,data_bits=8,serial_parity=None,stop_bits=1,serial_handshake=None"
+            }
+            32001..=32003 => "cache_timeout=0,serial_handshake=None",
+            _ => "cache_timeout=0",
         };
         let mut child = Reaped(
             Command::new(rigctld_binary())
@@ -1945,6 +1949,19 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
             ("tentec-rx-350", 16005, 57600),
             ("tentec-rx-340", 16004, 9600),
             ("tentec-rx-331", 16012, 9600),
+            ("racal-ra3702", 11005, 9600),
+            ("skanti-trp8000", 14002, 300),
+            ("skanti-trp-8255-s-r", 14004, 2400),
+            ("barrett-950", 32002, 9600),
+            ("barrett-2050", 32001, 9600),
+            ("barrett-4050", 32003, 9600),
+            ("codan-envoy", 34001, 9600),
+            ("codan-ngt", 34002, 9600),
+            ("kachina-505dsp", 18001, 9600),
+            ("guohe-pmr-171", 1052, 4800),
+            ("guohe-q900", 1051, 38400),
+            ("dorji-dra818u", 31002, 9600),
+            ("dorji-dra818v", 31001, 9600),
         ],
         &hf_steps(),
         known_vendor_divergences,
@@ -1960,6 +1977,12 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
 ///   command and the write fails. Whether the real Jupiter wants the CR is not known.
 /// * Drake R-8A and R-8B are not in the batch: Hamlib 4.6.2's `rigctld` aborts ("stack smashing
 ///   detected") in the `VB` exchange of its open, whatever the twin answers, so no step can run.
+/// * Lowe HF-235 is not in the batch: Hamlib 4.6.2's `rigctld` aborts ("stack smashing detected")
+///   in `lowe_get_freq` whatever the radio answers (tried with a full, a short and an empty answer),
+///   so no step can run.
+/// * Dorji DRA818U and DRA818V: Hamlib's `set_mode` accepts any mode and only reads the width (it
+///   sends the group command again); radioctl's description lists FM (12.5 kHz) and wide FM
+///   (25 kHz) only and refuses USB and AM.
 /// * The RX-320 (set-only) agrees on frequency and mode in the scenario; Hamlib builds its frames
 ///   with a string function, so a zero byte inside one (the filter index 0 of a 6000 Hz write) would
 ///   cut it short on its wire; the scenario's filters do not hit that.
@@ -1970,6 +1993,7 @@ fn known_vendor_divergences(file: &str) -> Vec<&'static str> {
             "GetFrequency(A)",
             "final freq_a",
         ],
+        "dorji-dra818u" | "dorji-dra818v" => vec!["SetMode(Usb)", "SetMode(Am)"],
         _ => Vec::new(),
     }
 }

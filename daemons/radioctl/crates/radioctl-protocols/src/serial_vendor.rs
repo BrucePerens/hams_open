@@ -133,6 +133,13 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Rshfiq => Box::new(crate::rshfiq::RshfiqEngine::new(desc.clone())?),
         VendorProtocol::Rft => Box::new(crate::rft::RftEngine::new(desc.clone())?),
         VendorProtocol::Prm80 => Box::new(crate::prm80::Prm80Engine::new(desc.clone())?),
+        VendorProtocol::Skanti => Box::new(crate::skanti::SkantiEngine::new(desc.clone())?),
+        VendorProtocol::Barrett => Box::new(crate::barrett::BarrettEngine::new(desc.clone())?),
+        VendorProtocol::Codan => Box::new(crate::codan::CodanEngine::new(desc.clone())?),
+        VendorProtocol::Kachina => Box::new(crate::kachina::KachinaEngine::new(desc.clone())?),
+        VendorProtocol::Lowe => Box::new(crate::lowe::LoweEngine::new(desc.clone())?),
+        VendorProtocol::Guohe => Box::new(crate::guohe::GuoheEngine::new(desc.clone())?),
+        VendorProtocol::Dorji => Box::new(crate::dorji::DorjiEngine::new(desc.clone())?),
     })
 }
 
@@ -153,6 +160,13 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Rshfiq => Box::new(crate::rshfiq::RshfiqTwin::new(desc)?),
         VendorProtocol::Rft => Box::new(crate::rft::RftTwin::new(desc)?),
         VendorProtocol::Prm80 => Box::new(crate::prm80::Prm80Twin::new(desc)?),
+        VendorProtocol::Skanti => Box::new(crate::skanti::SkantiTwin::new(desc)?),
+        VendorProtocol::Barrett => Box::new(crate::barrett::BarrettTwin::new(desc)?),
+        VendorProtocol::Codan => Box::new(crate::codan::CodanTwin::new(desc)?),
+        VendorProtocol::Kachina => Box::new(crate::kachina::KachinaTwin::new(desc)?),
+        VendorProtocol::Lowe => Box::new(crate::lowe::LoweTwin::new(desc)?),
+        VendorProtocol::Guohe => Box::new(crate::guohe::GuoheTwin::new(desc)?),
+        VendorProtocol::Dorji => Box::new(crate::dorji::DorjiTwin::new(desc)?),
     })
 }
 
