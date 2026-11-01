@@ -188,10 +188,12 @@ pub fn vfo_name(vfo: Vfo) -> &'static str {
 pub enum LevelSource {
     /// A numeric level of the rig, scaled by the rig family's range.
     Radio(Level),
-    /// The SWR meter, tenths of a unit on the rig side.
+    /// The SWR meter: tenths of a unit from `read-swr`, else the raw meter via `meter_cal`.
     Swr,
     /// The raw S-meter reading.
     RawStr,
+    /// A raw transmitter meter converted by the unverified [`crate::meter_cal`] points.
+    Meter(radioctl_core::units::Meter),
 }
 
 /// A level radioctld can serve.
@@ -207,7 +209,7 @@ pub struct LevelInfo {
     pub fraction: bool,
 }
 
-const LEVELS: [LevelInfo; 10] = [
+const LEVELS: [LevelInfo; 11] = [
     // Hamlib's PREAMP and ATT are integer levels in decibels. radioctld serves the attenuator in
     // decibels but the preamplifier as a step number (1, 2): a stage's gain varies by band and
     // model and no source we may use states it. The `\dump_state` lists carry the step numbers.
@@ -260,6 +262,12 @@ const LEVELS: [LevelInfo; 10] = [
         fraction: false,
     },
     LevelInfo {
+        name: "ALC",
+        bit: 29,
+        source: LevelSource::Meter(radioctl_core::units::Meter::Alc),
+        fraction: true,
+    },
+    LevelInfo {
         name: "SWR",
         bit: 28,
         source: LevelSource::Swr,
@@ -274,7 +282,7 @@ const LEVELS: [LevelInfo; 10] = [
 ];
 
 /// Level names Hamlib has that radioctld does not serve: asking for one is "not available".
-const OTHER_LEVELS: [&str; 22] = [
+const OTHER_LEVELS: [&str; 21] = [
     "VOXDELAY",
     "SQL",
     "IF",
@@ -291,7 +299,6 @@ const OTHER_LEVELS: [&str; 22] = [
     "METER",
     "VOXGAIN",
     "ANTIVOX",
-    "ALC",
     "STRENGTH",
     "RFPOWER_METER",
     "RFPOWER_METER_WATTS",
@@ -414,7 +421,11 @@ pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo> {
                     && !description.levels.lacks(level)
                     && level_range(description, level).is_some()
             }
-            LevelSource::Swr => description.capabilities.has(Capability::ReadSwr),
+            LevelSource::Swr => {
+                description.capabilities.has(Capability::ReadSwr)
+                    || description.capabilities.has(Capability::ReadMeters)
+            }
+            LevelSource::Meter(_) => description.capabilities.has(Capability::ReadMeters),
             LevelSource::RawStr => description.capabilities.has(Capability::ReadSignal),
         })
         .copied()
@@ -553,7 +564,13 @@ mod tests {
     fn only_a_rig_with_ranges_and_the_capability_serves_levels() {
         let ic = RigDescription::ic7300();
         let served = served_levels(&ic);
-        assert!(served.iter().all(|l| l.source == LevelSource::RawStr));
+        let names: Vec<_> = served.iter().map(|l| l.name).collect();
+        assert_eq!(names, ["RAWSTR"]);
+        // Raw meters add ALC and SWR (converted by the unverified `meter_cal` points).
+        let mut metered = ic.clone();
+        metered.capabilities = CapabilitySet::of(&[Capability::ReadSignal, Capability::ReadMeters]);
+        let names: Vec<_> = served_levels(&metered).iter().map(|l| l.name).collect();
+        assert_eq!(names, ["RAWSTR", "ALC", "SWR"]);
         assert_eq!(level_range(&ic, Level::AfGain), Some((0, 255)));
         assert_eq!(level_range(&ic, Level::KeyerSpeed), None);
         let mut kx = RigDescription::ic7300();
@@ -567,12 +584,16 @@ mod tests {
         let served = served_levels(&kx);
         assert_eq!(
             served.len(),
-            LEVELS.len() - 2,
+            LEVELS.len() - 3,
             "no ATT or PREAMP without steps"
         );
         kx.levels.attenuator_db = vec![12];
         kx.levels.preamp_steps = 1;
-        assert_eq!(served_levels(&kx).len(), LEVELS.len());
+        assert_eq!(
+            served_levels(&kx).len(),
+            LEVELS.len() - 1,
+            "no ALC without raw meters"
+        );
         assert_eq!(level_range(&kx, Level::Attenuator), Some((0, 12)));
         assert_eq!(level_range(&kx, Level::Preamp), Some((0, 1)));
         kx.levels = Default::default();

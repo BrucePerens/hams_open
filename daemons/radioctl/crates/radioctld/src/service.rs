@@ -22,7 +22,7 @@ use radioctl_core::event::Source;
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::rig::{Freshness, RigHandle};
 use radioctl_core::txstate::TxState;
-use radioctl_core::units::{Hz, Mode, Vfo};
+use radioctl_core::units::{Hz, Meter, Mode, Vfo};
 use radioctl_splitter::arbiter::{ClientId, PttOwner};
 
 use crate::caps::{dump_caps, dump_state, CapsView};
@@ -475,6 +475,14 @@ impl RigService {
                     raw.to_string()
                 }
             }
+            LevelSource::Swr if !self.description.capabilities.has(Capability::ReadSwr) => {
+                let ratio = self.meter(Meter::Swr).await?;
+                fmt_float(crate::meter_cal::swr_ratio(ratio))
+            }
+            LevelSource::Meter(meter) => {
+                let raw = self.meter(meter).await?;
+                fmt_float(crate::meter_cal::alc_fraction(raw))
+            }
             LevelSource::Swr => {
                 let Observation::Swr(tenths) = self.read(Field::Swr, Op::GetSwr).await? else {
                     return Err(EIO);
@@ -490,6 +498,15 @@ impl RigService {
             }
         };
         Ok(Body::Fields(vec![("", text)]))
+    }
+
+    // [@ANCHOR: radioctld_service_meter]
+    /// A raw transmitter meter deflection (read-only; the read never keys the rig).
+    async fn meter(&self, meter: Meter) -> Result<u16, i32> {
+        match self.read(Field::Meter(meter), Op::GetMeter(meter)).await? {
+            Observation::Meter(got, raw) if got == meter => Ok(raw),
+            _ => Err(EIO),
+        }
     }
 
     // [@ANCHOR: radioctld_service_set_level]

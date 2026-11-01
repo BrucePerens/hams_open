@@ -1454,6 +1454,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_knob_watch] (radioctld) Watches the rig's event stream for up to `wait` for a frequency change whose source is
 - [@ANCHOR: radioctl:radioctld_knob_result] (radioctld) The report line for an outcome. A knob that was not seen counts as a check that did not pass
 - [@ANCHOR: radioctl:radioctld_knob_check] (radioctld) The whole check, or `None` when the description does not claim the capability. Without a
+- [@ANCHOR: radioctl:radioctld_meter_cal_swr_ratio] (radioctld) The SWR ratio (1.0 or more) for a raw 0 to 255 SWR meter deflection. Unverified estimate.
+- [@ANCHOR: radioctl:radioctld_meter_cal_alc_fraction] (radioctld) The ALC level as a 0 to 1 fraction for a raw 0 to 255 ALC meter deflection. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_cli_stdin_lines_from] (radioctld) Lines from `rx` as a [`BufRead`], and a poll that is true once a line was waiting (and
 - [@ANCHOR: radioctl:radioctld_cli_stdin_lines_spawn] (radioctld) Starts the thread that reads the process's standard input line by line.
 - [@ANCHOR: radioctl:radioctld_cli_stdin_lines_read] (radioctld) Reads from the current line.
@@ -1512,6 +1514,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_service_set_rit_offset] (radioctld) `J` and `Z`: 0 switches the function off; any other offset sets it and switches on.
 - [@ANCHOR: radioctl:radioctld_service_served_level] (radioctld) The level info if this rig serves the named level.
 - [@ANCHOR: radioctl:radioctld_service_get_level] (radioctld) `l`: a level as the client sees it (a 0 to 1 fraction, or the rig's own integer).
+- [@ANCHOR: radioctl:radioctld_service_meter] (radioctld) A raw transmitter meter deflection (read-only; the read never keys the rig).
 - [@ANCHOR: radioctl:radioctld_service_set_level] (radioctld) `L`: sets a numeric level; meters are read-only.
 - [@ANCHOR: radioctl:radioctld_service_get_func] (radioctld) `u`: RIT or XIT on or off.
 - [@ANCHOR: radioctl:radioctld_service_set_func] (radioctld) `U`: RIT or XIT on or off.
