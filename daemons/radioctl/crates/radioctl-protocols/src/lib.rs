@@ -9,6 +9,7 @@
 //! Bytes are always handled with checked access (`get`, never indexing): reply parsing is the
 //! attack surface.
 
+pub mod adat;
 pub mod alinco;
 pub mod aor;
 pub mod aor_classic;
@@ -16,10 +17,12 @@ pub mod ar7030;
 pub mod attenuation;
 pub mod civ;
 pub mod civ_scope;
+pub mod commradio;
 pub mod conformance;
 pub mod drake;
 pub mod elecraft;
 pub mod flex;
+pub mod gomspace;
 pub mod hpsdr_net;
 pub mod icom_marine;
 pub mod icom_pcr;
@@ -29,10 +32,13 @@ pub mod kenwood_hh;
 pub mod kenwood_ts890;
 pub mod kenwood_ts890_lan;
 pub mod prelude;
+pub mod prm80;
 pub mod racal;
 pub mod receiver;
+pub mod rft;
 pub mod rs;
 pub mod rs_hf;
+pub mod rshfiq;
 pub mod serial_vendor;
 pub mod tentec;
 pub mod uniden;

@@ -10,16 +10,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **242** (248 description files), **84%** of the real radios
+- Real radios (models less not applicable): **285**; with a radioctl description: **249** (255 description files), **87%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 242 |
+| described | 249 |
 | engine only | 1 |
 | needs variant | 0 |
 | needs engine | 24 |
-| odd device | 18 |
+| odd device | 11 |
 | not applicable | 28 |
 
 | Verification level | Models |
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 134 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 50 |
-| D | odd device | 54 | 16 |
+| D | odd device | 54 | 23 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 48 | 0 |
+| other_serial | C/D | aor | 94 | 55 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -101,7 +101,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Hamlib id | Manufacturer | Model | Tier | Family | Engine | Description | Verification | Verified by | Status |
 |---:|---|---|---|---|---|---|---|---|---|
-| 29001 | ADAT www.adat.ch | ADT-200A | D | other_serial | - | - | unverified | - | odd device |
+| 29001 | ADAT www.adat.ch | ADT-200A | D | other_serial | - | `adat-adt-200a` | unverified | - | described |
 | 25016 | AE9RB | Si570 Peaberry V1 | D | other_usb | - | `ae9rb-peaberry-v1` | unverified | - | described |
 | 25017 | AE9RB | Si570 Peaberry V2 | D | other_usb | - | `ae9rb-peaberry-v2` | unverified | - | described |
 | 9 | Airspy | SDR#/gpredict | D | other_network | - | - | unverified | - | not applicable |
@@ -129,7 +129,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 34001 | CODAN | Envoy | C | other_serial | - | - | unverified | - | needs engine |
 | 34002 | CODAN | NGT | C | other_serial | - | - | unverified | - | needs engine |
 | 25003 | Coding Technologies | Digital World Traveller | D | other_usb | - | `digital-world-traveller` | unverified | - | described |
-| 39001 | Commradio | CTX-10 | D | other_serial | - | - | unverified | - | odd device |
+| 39001 | Commradio | CTX-10 | D | other_serial | - | `commradio-ctx-10` | unverified | - | described |
 | 2055 | DL2MAN | (tr)uSDX | D | other_serial | - | `dl2man-trusdx` | unverified | - | described |
 | 31002 | Dorji | DRA818U | D | other_serial | - | - | unverified | - | odd device |
 | 31001 | Dorji | DRA818V | D | other_serial | - | - | unverified | - | odd device |
@@ -161,14 +161,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2048 | FlexRadio/Apache | PowerSDR | D | other_serial | - | - | unverified | - | not applicable |
 | 4 | FLRig | - | D | other_network | - | - | unverified | - | not applicable |
 | 25015 | Funkamateur | FA-SDR | D | other_usb | - | `funkamateur-fa-sdr` | unverified | - | described |
-| 35001 | GOMSPACE | GS100 | D | other_serial | - | - | unverified | - | odd device |
+| 35001 | GOMSPACE | GS100 | D | other_serial | - | `gomspace-gs100` | unverified | - | described |
 | 1052 | Guohe | PMR-171 | C | other_serial | - | - | unverified | - | needs engine |
 | 1051 | Guohe | Q900 | C | other_serial | - | - | unverified | - | needs engine |
 | 1 | Hamlib | Dummy | D | virtual | - | - | unverified | - | not applicable |
 | 6 | Hamlib | Dummy No VFO | D | virtual | - | - | unverified | - | not applicable |
 | 2 | Hamlib | NET rigctl | D | unclassified | - | - | unverified | - | not applicable |
 | 2046 | Hilberling | PT-8000A | C | other_serial | - | - | unverified | - | needs engine |
-| 25019 | HobbyPCB | RS-HFIQ | D | other_serial | - | - | unverified | - | odd device |
+| 25019 | HobbyPCB | RS-HFIQ | D | other_serial | - | `hobbypcb-rs-hfiq` | unverified | - | described |
 | 3054 | Icom | IC ID-1 | A | icom_civ | civ | `icom-id-1` | unverified | - | described |
 | 3002 | Icom | IC-1275 | A | icom_civ | civ | `icom-ic-1275` | unverified | - | described |
 | 3003 | Icom | IC-271 | A | icom_civ | civ | `icom-ic-271` | unverified | - | described |
@@ -295,7 +295,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | - | `kth-si570-pic-usb` | unverified | - | described |
 | 2050 | Lab599 | TX-500 | C | other_serial | - | - | unverified | - | needs engine |
 | 10004 | Lowe | HF-235 | C | other_serial | - | - | unverified | - | needs engine |
-| 1045 | M0NKA | mcHF QRP | D | other_serial | - | - | unverified | - | odd device |
+| 1045 | M0NKA | mcHF QRP | D | other_serial | - | `m0nka-mchf-qrp` | unverified | - | described |
 | 2049 | Malachite | DSP | D | other_serial | - | `malachite-dsp` | unverified | - | described |
 | 36001 | MDS | 4710 | D | other_serial | - | - | unverified | - | odd device |
 | 36002 | MDS | 9710 | D | other_serial | - | - | unverified | - | odd device |
@@ -308,13 +308,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2040 | OpenHPSDR | PiHPSDR | D | other_serial | - | - | unverified | - | not applicable |
 | 3053 | Optoelectronics | OptoScan456 | C | other_serial | civ | `optoscan-os456` | unverified | - | described |
 | 3052 | Optoelectronics | OptoScan535 | C | other_serial | civ | `optoscan-os535` | unverified | - | described |
-| 28001 | Philips/Simoco | PRM8060 | D | other_serial | - | - | unverified | - | odd device |
+| 28001 | Philips/Simoco | PRM8060 | D | other_serial | - | `philips-prm8060` | unverified | - | described |
 | 2052 | QRPLabs | QCX/QDX | D | other_serial | - | `qrplabs-qcx-qdx` | unverified | - | described |
 | 2057 | QRPLabs | QMX | D | other_serial | - | `qrplabs-qmx` | unverified | - | described |
 | 11005 | Racal | RA3702 | C | other_serial | - | - | unverified | - | needs engine |
 | 11003 | Racal | RA6790/GM | C | other_serial | - | `racal-ra6790-gm` | unverified | - | described |
 | 8004 | Radio Shack | PRO-2052 | C | other_serial | - | - | unverified | - | needs engine |
-| 24001 | RFT | EKD-500 | D | other_serial | - | - | unverified | - | odd device |
+| 24001 | RFT | EKD-500 | D | other_serial | - | `rft-ekd-500` | unverified | - | described |
 | 32004 | Rhode&Schwarz | 4100 | C | other_network | - | - | unverified | - | needs engine |
 | 27002 | Rohde&Schwarz | EB200 | C | other_serial | rs | `rs-eb200` | unverified | - | described |
 | 27004 | Rohde&Schwarz | EK895/6 | C | other_serial | rs | `rs-ek895`, `rs-ek896` | manual-checked | - | described |

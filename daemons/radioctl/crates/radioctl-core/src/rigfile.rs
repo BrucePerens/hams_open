@@ -304,6 +304,30 @@ struct HpsdrSection {
 struct VendorSection {
     protocol: String,
     dialect: String,
+    #[serde(default = "default_data_bits")]
+    data_bits: u8,
+    #[serde(default = "default_parity")]
+    parity: String,
+    #[serde(default = "default_stop_bits")]
+    stop_bits: u8,
+    #[serde(default = "default_flow")]
+    flow: String,
+}
+
+fn default_data_bits() -> u8 {
+    8
+}
+
+fn default_parity() -> String {
+    "N".to_string()
+}
+
+fn default_stop_bits() -> u8 {
+    1
+}
+
+fn default_flow() -> String {
+    "none".to_string()
 }
 
 #[derive(Deserialize)]
@@ -593,9 +617,29 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         .map(|v| {
             let protocol = VendorProtocol::from_name(&v.protocol)
                 .ok_or_else(|| bad(format!("unknown vendor.protocol {:?}", v.protocol)))?;
+            let parity = match v.parity.as_str() {
+                "N" => 'N',
+                "E" => 'E',
+                "O" => 'O',
+                other => {
+                    return Err(bad(format!(
+                        "vendor.parity must be N, E or O, not {other:?}"
+                    )))
+                }
+            };
+            if !(5..=8).contains(&v.data_bits) || !(1..=2).contains(&v.stop_bits) {
+                return Err(bad("vendor line settings out of range"));
+            }
+            if !matches!(v.flow.as_str(), "none" | "xonxoff" | "rtscts") {
+                return Err(bad("vendor.flow must be none, xonxoff or rtscts"));
+            }
             Ok::<VendorParams, RigError>(VendorParams {
                 protocol,
                 dialect: v.dialect.clone(),
+                data_bits: v.data_bits,
+                parity,
+                stop_bits: v.stop_bits,
+                flow: v.flow.clone(),
             })
         })
         .transpose()?;
@@ -634,7 +678,15 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         levels,
         capabilities: CapabilitySet::of(&capabilities),
         // A USB device has no engine yet, so no mode has a wire code.
-        mode_codes: build_mode_codes(&doc.modes, family == Family::UsbDevice)?,
+        mode_codes: build_mode_codes(
+            &doc.modes,
+            family == Family::UsbDevice
+                || (family == Family::SerialVendor
+                    && !doc
+                        .capabilities
+                        .iter()
+                        .any(|c| c == "read-mode" || c == "set-mode")),
+        )?,
         timing: check_timing(&doc.timing)?,
         default_frequency: Hz(doc.defaults.frequency_hz),
         default_mode,

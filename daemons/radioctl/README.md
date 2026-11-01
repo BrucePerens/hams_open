@@ -548,6 +548,61 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_racal_twin_new] (radioctl-protocols) A twin in the description's default state.
 - [@ANCHOR: radioctl:radioctl_racal_twin_feed] (radioctl-protocols) The twin feed of the racal code.
 - [@ANCHOR: radioctl:radioctl_racal_twin_front_panel] (radioctl-protocols) The twin front panel of the racal code.
+- [@ANCHOR: radioctl:radioctl_adat_value_of] (radioctl-protocols) What follows the first space of a reply line, with surrounding blanks removed.
+- [@ANCHOR: radioctl:radioctl_commradio_push_escaped] (radioctl-protocols) Appends `byte`, escaped when it is a reserved byte.
+- [@ANCHOR: radioctl:radioctl_gomspace_table_of] (radioctl-protocols) The configuration table of a VFO.
+- [@ANCHOR: radioctl:radioctl_gomspace_twin_slot] (radioctl-protocols) The frequency of the selected table, if it is one the twin has.
+- [@ANCHOR: radioctl:radioctl_prm80_hex_byte] (radioctl-protocols) The value of exactly two hex digits.
+- [@ANCHOR: radioctl:radioctl_rshfiq_engine_new] (radioctl-protocols) Builds an engine from an RS-HFIQ vendor description.
+- [@ANCHOR: radioctl:radioctl_rshfiq_engine_encode] (radioctl-protocols) The encode of the rshfiq code.
+- [@ANCHOR: radioctl:radioctl_rshfiq_engine_feed] (radioctl-protocols) The feed of the rshfiq code.
+- [@ANCHOR: radioctl:radioctl_rshfiq_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_rshfiq_twin_feed] (radioctl-protocols) The feed of the rshfiq code.
+- [@ANCHOR: radioctl:radioctl_rshfiq_twin_front_panel] (radioctl-protocols) The front panel of the rshfiq code.
+- [@ANCHOR: radioctl:radioctl_rft_format_khz] (radioctl-protocols) A frequency as kilohertz with exactly six decimals (`14200.000000`).
+- [@ANCHOR: radioctl:radioctl_rft_parse_khz] (radioctl-protocols) The frequency of a kilohertz decimal (at most three decimals are significant), or `None` when
+- [@ANCHOR: radioctl:radioctl_rft_engine_new] (radioctl-protocols) Builds an engine from an RFT vendor description.
+- [@ANCHOR: radioctl:radioctl_rft_engine_encode] (radioctl-protocols) The encode of the rft code.
+- [@ANCHOR: radioctl:radioctl_rft_engine_feed] (radioctl-protocols) The feed of the rft code.
+- [@ANCHOR: radioctl:radioctl_rft_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_rft_twin_frequency] (radioctl-protocols) The frequency the twin is tuned to.
+- [@ANCHOR: radioctl:radioctl_rft_twin_feed] (radioctl-protocols) The feed of the rft code.
+- [@ANCHOR: radioctl:radioctl_rft_twin_front_panel] (radioctl-protocols) The front panel of the rft code.
+- [@ANCHOR: radioctl:radioctl_adat_mode_code_of_name] (radioctl-protocols) The wire code of a mode name, or `None`.
+- [@ANCHOR: radioctl:radioctl_adat_parse_frequency] (radioctl-protocols) The frequency of a number with a unit (`14.2MHz`, `7100.5kHz`, `800Hz`, `1.296GHz`), exact to
+- [@ANCHOR: radioctl:radioctl_adat_engine_new] (radioctl-protocols) Builds an engine from an ADAT vendor description.
+- [@ANCHOR: radioctl:radioctl_adat_engine_encode] (radioctl-protocols) The encode of the adat code.
+- [@ANCHOR: radioctl:radioctl_adat_engine_feed] (radioctl-protocols) The feed of the adat code.
+- [@ANCHOR: radioctl:radioctl_adat_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_adat_twin_feed] (radioctl-protocols) The feed of the adat code.
+- [@ANCHOR: radioctl:radioctl_adat_twin_front_panel] (radioctl-protocols) The front panel of the adat code.
+- [@ANCHOR: radioctl:radioctl_gomspace_count_prompts] (radioctl-protocols) How many prompts `bytes` holds.
+- [@ANCHOR: radioctl:radioctl_gomspace_lines_between_prompts] (radioctl-protocols) The text lines of `bytes` outside the prompts, without line ends and without blank lines.
+- [@ANCHOR: radioctl:radioctl_gomspace_engine_new] (radioctl-protocols) Builds an engine from a GomSpace vendor description.
+- [@ANCHOR: radioctl:radioctl_gomspace_engine_encode] (radioctl-protocols) The encode of the gomspace code.
+- [@ANCHOR: radioctl:radioctl_gomspace_engine_feed] (radioctl-protocols) The feed of the gomspace code.
+- [@ANCHOR: radioctl:radioctl_gomspace_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_gomspace_twin_feed] (radioctl-protocols) The feed of the gomspace code.
+- [@ANCHOR: radioctl:radioctl_gomspace_twin_front_panel] (radioctl-protocols) The front panel of the gomspace code.
+- [@ANCHOR: radioctl:radioctl_commradio_crc16] (radioctl-protocols) CRC-16/KERMIT of `data` (`"123456789"` gives `0x2189`), continuing from `crc`.
+- [@ANCHOR: radioctl:radioctl_commradio_frame] (radioctl-protocols) A frame to `address` carrying message `kind` and `payload`.
+- [@ANCHOR: radioctl:radioctl_commradio_unframe] (radioctl-protocols) The message type and payload of a whole frame (`FE` to `FD`) addressed to `address`, or
+- [@ANCHOR: radioctl:radioctl_commradio_engine_new] (radioctl-protocols) Builds an engine from a CommRadio vendor description.
+- [@ANCHOR: radioctl:radioctl_commradio_engine_encode] (radioctl-protocols) The encode of the commradio code.
+- [@ANCHOR: radioctl:radioctl_commradio_engine_feed] (radioctl-protocols) The feed of the commradio code.
+- [@ANCHOR: radioctl:radioctl_commradio_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_commradio_twin_feed] (radioctl-protocols) The feed of the commradio code.
+- [@ANCHOR: radioctl:radioctl_commradio_twin_front_panel] (radioctl-protocols) The front panel of the commradio code.
+- [@ANCHOR: radioctl:radioctl_prm80_rx_from_pll] (radioctl-protocols) The receive frequency of a PLL word.
+- [@ANCHOR: radioctl:radioctl_prm80_pll_from_rx] (radioctl-protocols) The PLL word that receives `hz`, or `None` when it does not fit sixteen bits.
+- [@ANCHOR: radioctl:radioctl_prm80_decode_state] (radioctl-protocols) The state of a 22-character `E` answer, or `None` when it is not eleven hex bytes.
+- [@ANCHOR: radioctl:radioctl_prm80_engine_new] (radioctl-protocols) Builds an engine from a PRM80 vendor description.
+- [@ANCHOR: radioctl:radioctl_prm80_engine_encode] (radioctl-protocols) The encode of the prm80 code.
+- [@ANCHOR: radioctl:radioctl_prm80_engine_feed] (radioctl-protocols) The feed of the prm80 code.
+- [@ANCHOR: radioctl:radioctl_prm80_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_prm80_twin_state_line] (radioctl-protocols) The 22-character `E` answer.
+- [@ANCHOR: radioctl:radioctl_prm80_twin_feed] (radioctl-protocols) The feed of the prm80 code.
+- [@ANCHOR: radioctl:radioctl_prm80_twin_front_panel] (radioctl-protocols) The front panel of the prm80 code.
 - [@ANCHOR: radioctl:radioctl_tentec_write_reply] (radioctl-protocols) The write reply of the tentec code.
 - [@ANCHOR: radioctl:radioctl_tentec_twin_slot] (radioctl-protocols) The twin slot of the tentec code.
 - [@ANCHOR: radioctl:radioctl_core_vendorprotocol_from_name] (radioctl-core) The protocol with a file-format name.

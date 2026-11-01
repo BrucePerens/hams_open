@@ -175,12 +175,24 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
   refuses them. The transport and the per-protocol engines are the to-do `radioctl-usb-hid-transport` (hams_com `night_shift_todo/medium`).
 - Kenwood CAT emulations (done, on the classic Kenwood engine): (tr)uSDX (2055), Malachite DSP (2049), BG2FX FX-4 (2053),
   ELAD FDM-DUO (33001); the QRP Labs QCX/QDX and QMX went in with the Kenwood batch.
-- Left in Tier D, each needing an engine or a transport of its own: Microtelecom Perseus (3074, a vendor USB library with
-  firmware load) and N2ADR HiQSDR (25014, UDP control packets): both go with the USB/network transport to-do; SigFox Transfox
-  (2032, its own commands over the Kenwood framing); M0NKA mcHF (1045, the FT-847 five-byte CAT in `yaesu_legacy`, owned by the
-  Yaesu legacy batch); and the serial kits and small makers: ADAT ADT-200A (29001), AnyTone D578A (37001), Commradio CTX-10
-  (39001), Dorji DRA818U and V (31001, 31002), GOMSPACE GS100 (35001), HobbyPCB RS-HFIQ (25019), MDS 4710 and 9710 (36001,
-  36002), Philips/Simoco PRM8060 (28001), RFT EKD-500 (24001), SAT-Schneider DRT1 (25002), TAPR DSP-10 (22001) and Elektor 3/04 (25001).
+- Serial radios and kits (done, 2026-10-31, Hamlib 4.6.2 facts only, each in its own engine file with a virtual twin,
+  `family = "serial-vendor"`; the `[vendor]` section now also states data bits, parity, stop bits and flow control and
+  `radioctld` applies them): HobbyPCB RS-HFIQ (25019, `rshfiq.rs`), ADAT ADT-200A (29001, `adat.rs`), RFT EKD-500 (24001,
+  `rft.rs`, set-frequency only), CommRadio CTX-10 (39001, `commradio.rs`, CRC-framed, 3 Mbaud), GomSpace GS100 (35001,
+  `gomspace.rs`, a console with a prompt), Philips PRM8060 (28001, `prm80.rs`, **read only**: its setters are `:`-prompt
+  dialogues that the one-request engine interface cannot run), and M0NKA mcHF (1045, data only on the FT-847 `yaesu_legacy`
+  engine, same five-byte CAT).
+- Left in Tier D, with the reason:
+
+| Model | Reason |
+|---|---|
+| Microtelecom Perseus (3074), N2ADR HiQSDR (25014) | a vendor USB library with firmware load, and UDP control packets: the USB/network transport agent |
+| Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002), Elektor 3/04 (25001) | the remaining small-vendor batch (Dorji, MDS and Elektor engines) |
+| SigFox Transfox (2032) | a transverter controller, not a tuner: its own commands (`C20`/`C21`/`C22` and `C30`/`C31`/`C32` set, `C2x`/`C3x` read, `Cs` identify, `CS` firmware) over the Kenwood framing without the `ID` handshake. Needs a dialect in `kenwood.rs`, which the Tier A batch is changing; file after it merges |
+| AnyTone D578A (37001) | Hamlib's driver imitates the vendor programming tool's handshake (`+ADATA:` framed records, a keep-alive thread, frequency read from fixed offsets of a 100-odd byte record); no protocol text exists, so a captured transcript is needed before an engine can be trusted |
+| SAT-Schneider DRT1 (25002) | a DRM receiver tuned by toggling RTS, DTR and break to clock an AD9951 DDS; no byte stream, so it needs a control-line transport (radioctl has serial bytes, TCP, UDP). The DDS arithmetic is in `kit/drt1.c` |
+| TAPR DSP-10 (22001) | Hamlib's frequency and mode setters return "not implemented" after a FIXME (the tuning-word formula is disabled), so there is no command to transcribe; TAPR's own manual was not read |
+| PRM8060 setters | the `R` dialogue (receive PLL word, then transmit PLL word, each after a `:` prompt) needs an engine hook that sends the next argument when a prompt arrives |
 - Measuring instrument: the mRS miniVNA (25008) is a vector network analyser that Hamlib lists as a tuner.
 - Parallel-port devices: FlexRadio SDR-1000 (23001) and the AmQRP DDS-60 (25006); radioctl has no parallel-port transport.
 

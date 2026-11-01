@@ -103,6 +103,14 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Drake => Box::new(crate::drake::DrakeEngine::new(desc.clone())?),
         VendorProtocol::Alinco => Box::new(crate::alinco::AlincoEngine::new(desc.clone())?),
         VendorProtocol::Racal => Box::new(crate::racal::RacalEngine::new(desc.clone())?),
+        VendorProtocol::Commradio => {
+            Box::new(crate::commradio::CommradioEngine::new(desc.clone())?)
+        }
+        VendorProtocol::Adat => Box::new(crate::adat::AdatEngine::new(desc.clone())?),
+        VendorProtocol::Gomspace => Box::new(crate::gomspace::GomspaceEngine::new(desc.clone())?),
+        VendorProtocol::Rshfiq => Box::new(crate::rshfiq::RshfiqEngine::new(desc.clone())?),
+        VendorProtocol::Rft => Box::new(crate::rft::RftEngine::new(desc.clone())?),
+        VendorProtocol::Prm80 => Box::new(crate::prm80::Prm80Engine::new(desc.clone())?),
     })
 }
 
@@ -114,6 +122,12 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Drake => Box::new(crate::drake::DrakeTwin::new(desc)?),
         VendorProtocol::Alinco => Box::new(crate::alinco::AlincoTwin::new(desc)?),
         VendorProtocol::Racal => Box::new(crate::racal::RacalTwin::new(desc)?),
+        VendorProtocol::Commradio => Box::new(crate::commradio::CommradioTwin::new(desc)?),
+        VendorProtocol::Adat => Box::new(crate::adat::AdatTwin::new(desc)?),
+        VendorProtocol::Gomspace => Box::new(crate::gomspace::GomspaceTwin::new(desc)?),
+        VendorProtocol::Rshfiq => Box::new(crate::rshfiq::RshfiqTwin::new(desc)?),
+        VendorProtocol::Rft => Box::new(crate::rft::RftTwin::new(desc)?),
+        VendorProtocol::Prm80 => Box::new(crate::prm80::Prm80Twin::new(desc)?),
     })
 }
 
