@@ -29,6 +29,26 @@ pub enum ScopeAxis {
     ScrollFixed,
 }
 
+/// A scope setting that is a small choice code of the rig's own (a switch or a short list), as
+/// opposed to the span, axis, reference level and edges that have operations of their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ScopeSetting {
+    /// The scope display on the rig's screen: 0 off, 1 on.
+    Display,
+    /// Which scope layout the rig shows (bandscope, waterfall, audio scope and so on).
+    Layout,
+    /// Which of the rig's stored fixed-mode ranges is in use (0 is the rig's choice of default).
+    Range,
+    /// Display pause: 0 running, 1 paused.
+    Pause,
+    /// Which frequencies get a marker: 0 receive only, 1 receive and transmit.
+    Marker,
+    /// The scope's own attenuator, in steps of 10 dB from 0.
+    Attenuator,
+    /// Peak hold: 0 off, 1 on.
+    MaxHold,
+}
+
 /// One complete sweep of a rig's scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeFrame {
@@ -48,6 +68,28 @@ pub struct ScopeFrame {
     pub amplitude_max: u16,
     /// One amplitude per pixel, lowest frequency first.
     pub samples: Vec<u8>,
+}
+
+/// One sweep of a rig's filter scope (the passband display, not the band): a few hundred pixels
+/// of amplitude with no frequency axis, since the rig draws it around the receive passband.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilterScopeFrame {
+    /// Sequence number in the order the actor published filter-scope frames, from 1.
+    pub seq: u64,
+    /// The receiver: 0 (Main) or 1 (Sub).
+    pub receiver: u8,
+    /// The largest value a sample can take (the rig's amplitude units; 0 is the display bottom).
+    pub amplitude_max: u16,
+    /// One amplitude per pixel, lowest audio frequency first.
+    pub samples: Vec<u8>,
+}
+
+impl FilterScopeFrame {
+    // [@ANCHOR: radioctl_core_filter_scope_frame_peak]
+    /// The largest sample in the sweep, or 0 for an empty one.
+    pub fn peak(&self) -> u8 {
+        self.samples.iter().copied().max().unwrap_or(0)
+    }
 }
 
 impl ScopeFrame {
@@ -84,5 +126,19 @@ mod tests {
         };
         assert_eq!(frame.span(), Hz(10_000));
         assert_eq!(frame.centre(), Hz(14_075_000));
+    }
+
+    // Tests [@ANCHOR: radioctl_core_filter_scope_frame_peak]
+    #[test]
+    fn filter_scope_peak_is_the_largest_sample() {
+        let mut frame = FilterScopeFrame {
+            seq: 1,
+            receiver: 0,
+            amplitude_max: 50,
+            samples: vec![3, 40, 7],
+        };
+        assert_eq!(frame.peak(), 40);
+        frame.samples.clear();
+        assert_eq!(frame.peak(), 0);
     }
 }

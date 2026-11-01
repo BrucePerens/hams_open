@@ -141,12 +141,15 @@ fact of `rigs/kenwood-ts-890s.toml`).
   `DD0` (waveform output; the engine sets LAN medium cycle). The LAN-only `##DD2` frame (640 hexadecimal
   samples, 00 strongest to 8C weakest, read from the August 2018 guide, `ts890_pc_command_e.pdf`) becomes a
   `ScopeFrame` for the main receiver, placed from the last `FA`/`FB`, `FR`, `BS3` and `BS4` the engine saw
-  (turning the output on reads them first) in center mode only; sweeps in fixed or auto-scroll mode, or
-  before those are known, are counted and dropped. The rig sends frames only while auto information
-  (`transceive`) is on. `##DD3` (filter scope) is checked and dropped, the expanded analysis range (`BSO`)
-  is assumed off. The virtual rig answers `BS0` to `BSC` and `DD0` and sends synthetic `##DD2` frames.
-- **Does not cover:** an operation for `BS0` (display on/off), `BS1`, `BS5` and `BSM` (fixed ranges and
-  edges), `BS6` to `BS9` and `BSA`/`BSB`/`BSD`/`BSE`/`BSG` to `BSO`; the COM/USB `DD2`/`DD3`/`DD4` forms; CW
+  (turning the output on reads them first) in center mode, and in fixed mode from the edges of the last
+  `BSM` read; sweeps in auto-scroll mode (whose edges move), or before those are known, are counted and
+  dropped. The rig sends frames only while auto information (`transceive`) is on. `BS0`, `BS1`, `BS5` and
+  `BS6` to `BS9` are scope settings (`Op::SetScopeSetting`, the guide's digit is the code); `BSM` stores the
+  edges of fixed range 1 to 3 (`Op::SetScopeEdges`). `##DD3` (filter scope, 213 samples) becomes a
+  `FilterScopeFrame` on its own stream (`RigHandle::filter_scope_frames`); the expanded analysis range
+  (`BSO`) is assumed off. The virtual rig answers `BS0` to `BSC`, `BSM` and `DD0` and sends synthetic `##DD2`
+  and `##DD3` frames.
+- **Does not cover:** `BSA`/`BSB`/`BSD`/`BSE`/`BSG` to `BSO`; the COM/USB `DD2`/`DD3`/`DD4` forms; CW
   text, memories, the menu (`EX`) and the `PSQ/PKS` pin note.
 - **Oracle:** Hamlib 4.6.2's TS-890S backend reads the frequency and mode with `IF;` and sets the frequency
   with `SF`, neither of which is in the guide, so the virtual rig refuses them and the frequency and mode steps

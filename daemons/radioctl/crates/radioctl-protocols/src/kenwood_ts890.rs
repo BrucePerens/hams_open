@@ -33,10 +33,13 @@
 //! fixed or auto-scroll mode, or before those are known, the sweep is counted
 //! ([`Ts890Engine::scope_frames_dropped`]) and not published. The guide sends nothing unless the
 //! rig's auto information is on (`transceive`). `##DD3` (the filter scope, 213 samples 00 to 32) is
-//! checked and dropped: the core has no filter-scope frame. `BSO` (expanded analysis range, whose
-//! output range exceeds the displayed span) is assumed off. Not mapped to an operation yet: `BS0`
-//! (display on/off), `BS1`, `BS5` and `BSM` (fixed-mode ranges and edges), `BS6` to `BS9`, `BSA`, `BSB`
-//! and `BSD` to `BSO`.
+//! published as a [`FilterScopeFrame`] (00 strongest, flipped like the bandscope's). `BSO` (expanded
+//! analysis range, whose output range exceeds the displayed span) is assumed off. `BS0`, `BS1`, `BS5`
+//! and `BS6` to `BS9` are [`ScopeSetting`]s (the guide's digit is the choice code). `BSM` stores the
+//! edges of fixed-mode range 1 to 3 (`Op::SetScopeEdges`, 8-digit hertz); its read form, whose
+//! `BSM0` answer is the edges now in use, is consumed by the engine to place fixed-mode sweeps
+//! (auto scroll moves its edges, so those sweeps are still counted and dropped). Not mapped to an
+//! operation yet: `BSA`, `BSB` and `BSD` to `BSO`.
 //!
 //! Not implemented: CW text, memories, the LAN session beyond the two login frames in [`lan_connect_request`] and
 //! [`lan_login`] (the session that sends them, with the owner's account, and keeps the line alive is
@@ -48,7 +51,7 @@ use radioctl_core::description::{Family, KenwoodDialect, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::scope::{ScopeAxis, ScopeFrame};
+use radioctl_core::scope::{FilterScopeFrame, ScopeAxis, ScopeFrame, ScopeSetting};
 use radioctl_core::units::{Hz, Level, Vfo};
 
 use crate::attenuation;
@@ -71,6 +74,8 @@ pub const SCOPE_SAMPLE_MAX: u8 = 0x8C;
 const FILTER_SCOPE_SAMPLE_MAX: u8 = 0x32;
 /// The longest command or frame the engine buffers (`##DD2` is 1286 bytes).
 const MAX_FRAME: usize = 2048;
+/// Eight digits of hertz hold a `BSM` edge.
+const MAX_EDGE_HZ: u64 = 99_999_999;
 /// The `DD0` value the engine sets to turn the waveform output on: LAN, medium cycle (our choice).
 const SCOPE_OUTPUT_ON: u8 = 2;
 
@@ -163,6 +168,8 @@ struct ScopeContext {
     rx_vfo: Option<Vfo>,
     axis: Option<ScopeAxis>,
     span: Option<Hz>,
+    /// The lower and upper edge of the fixed range in use, from the last `BSM` read.
+    edges: Option<(Hz, Hz)>,
     dropped: u64,
 }
 
@@ -350,8 +357,53 @@ fn scope_reference_code(hundredths: i16) -> Option<u16> {
     u16::try_from(offset / 50).ok()
 }
 
+// [@ANCHOR: radioctl_ts890_scope_setting_wire]
+/// The `BS` letter and the largest digit of a scope setting.
+fn scope_setting_wire(setting: ScopeSetting) -> (char, u8) {
+    match setting {
+        ScopeSetting::Display => ('0', 1),
+        ScopeSetting::Layout => ('1', 4),
+        ScopeSetting::Range => ('5', 3),
+        ScopeSetting::Pause => ('6', 1),
+        ScopeSetting::Marker => ('7', 1),
+        ScopeSetting::Attenuator => ('8', 3),
+        ScopeSetting::MaxHold => ('9', 1),
+    }
+}
+
+// [@ANCHOR: radioctl_ts890_scope_setting_of]
+/// The scope setting a `BS` letter names, if it is one of the mapped ones.
+fn scope_setting_of(letter: &str) -> Option<ScopeSetting> {
+    [
+        ScopeSetting::Display,
+        ScopeSetting::Layout,
+        ScopeSetting::Range,
+        ScopeSetting::Pause,
+        ScopeSetting::Marker,
+        ScopeSetting::Attenuator,
+        ScopeSetting::MaxHold,
+    ]
+    .into_iter()
+    .find(|setting| letter.starts_with(scope_setting_wire(*setting).0))
+}
+
+// [@ANCHOR: radioctl_ts890_scope_edges_of]
+/// The edges of a `BSM0` answer (`body` is what follows `BSM`: the range digit and two eight-digit
+/// frequencies), or `None` for another range number, a wrong length or edges that are not low to
+/// high.
+fn scope_edges_of(body: &str) -> Option<(Hz, Hz)> {
+    let digits = body.strip_prefix('0')?;
+    if digits.len() != 16 {
+        return None;
+    }
+    let low = parse_digits(digits.get(..8)?)?;
+    let high = parse_digits(digits.get(8..)?)?;
+    (low < high).then_some((Hz(low), Hz(high)))
+}
+
 // [@ANCHOR: radioctl_ts890_decode_scope]
-/// A `BS3`, `BS4` or `BSC` answer after the command name `BS`; other `BS` commands are not mapped.
+/// A `BS` answer after the command name `BS` that is an observation (`BS3`, `BS4`, `BSC` and the
+/// scope settings); other `BS` commands are not mapped.
 fn decode_scope(rest: &str) -> Option<Observation> {
     let (sub, value) = (rest.get(..1)?, rest.get(1..)?);
     match sub {
@@ -366,7 +418,13 @@ fn decode_scope(rest: &str) -> Option<Observation> {
             let step = i16::try_from(parse_digits(value).filter(|_| value.len() == 3)?).ok()?;
             (step <= 60).then_some(Observation::ScopeReference(0, step * 50 - 2000))
         }
-        _ => None,
+        letter => {
+            let setting = scope_setting_of(letter)?;
+            let code = parse_digits(value).filter(|_| value.len() == 1)?;
+            let code = u8::try_from(code).ok()?;
+            (code <= scope_setting_wire(setting).1)
+                .then_some(Observation::ScopeSetting(0, setting, code))
+        }
     }
 }
 
@@ -396,26 +454,60 @@ impl Ts890Engine {
             Some(Vfo::B) => self.scope.freq_b,
             _ => self.scope.freq_a,
         };
+        let centre_hz = centre.map(|hz| hz.0);
         let placed = match (samples, self.scope.axis, self.scope.span, centre) {
             (Some(samples), Some(ScopeAxis::Center), Some(span), Some(centre)) => {
-                Some((samples, span, centre))
+                let half = span.0 / 2;
+                Some((
+                    ScopeAxis::Center,
+                    (
+                        Hz(centre.0.saturating_sub(half)),
+                        Hz(centre.0.saturating_add(half)),
+                    ),
+                    samples,
+                ))
             }
+            (Some(samples), Some(ScopeAxis::Fixed), _, _) => self
+                .scope
+                .edges
+                .map(|edges| (ScopeAxis::Fixed, edges, samples)),
             _ => None,
         };
-        let Some((samples, span, centre)) = placed else {
+        let Some((axis, (low, high), samples)) = placed else {
             self.scope.dropped += 1;
             return None;
         };
-        let half = span.0 / 2;
+        let out_of_range =
+            axis == ScopeAxis::Fixed && centre_hz.is_none_or(|hz| hz < low.0 || hz > high.0);
         Some(ScopeFrame {
             seq: 0,
             receiver: 0,
-            axis: ScopeAxis::Center,
-            low: Hz(centre.0.saturating_sub(half)),
-            high: Hz(centre.0.saturating_add(half)),
-            out_of_range: false,
+            axis,
+            low,
+            high,
+            out_of_range,
             amplitude_max: u16::from(SCOPE_SAMPLE_MAX),
             samples: samples.into_iter().map(|v| SCOPE_SAMPLE_MAX - v).collect(),
+        })
+    }
+
+    // [@ANCHOR: radioctl_ts890_engine_filter_scope_frame]
+    /// A `##DD3` body as a filter-scope frame (flipped to 0 at the bottom), or `None` (and a count)
+    /// when it is malformed.
+    fn filter_scope_frame(&mut self, body: &str) -> Option<FilterScopeFrame> {
+        let Some(samples) = scope_samples(body, FILTER_SCOPE_SAMPLES, FILTER_SCOPE_SAMPLE_MAX)
+        else {
+            self.scope.dropped += 1;
+            return None;
+        };
+        Some(FilterScopeFrame {
+            seq: 0,
+            receiver: 0,
+            amplitude_max: u16::from(FILTER_SCOPE_SAMPLE_MAX),
+            samples: samples
+                .into_iter()
+                .map(|v| FILTER_SCOPE_SAMPLE_MAX - v)
+                .collect(),
         })
     }
 
@@ -437,10 +529,10 @@ impl Ts890Engine {
 
     // [@ANCHOR: radioctl_ts890_engine_scope_start]
     /// The commands that turn the waveform output on: first read what the frames are placed from
-    /// (`FA`, `FB`, `FR`, `BS3`, `BS4`; the answers update the engine's copies as they arrive), then
+    /// (`FA`, `FB`, `FR`, `BS3`, `BS4`, `BSM`; the answers update the engine's copies as they arrive), then
     /// `DD0`. Nothing here transmits.
     fn scope_start() -> String {
-        format!("FA;FB;FR;BS3;BS4;DD0{SCOPE_OUTPUT_ON};")
+        format!("FA;FB;FR;BS3;BS4;BSM;DD0{SCOPE_OUTPUT_ON};")
     }
 }
 
@@ -552,7 +644,8 @@ impl ProtocolEngine for Ts890Engine {
                 let code = scope_axis_code(*axis)
                     .ok_or_else(|| Self::unsupported("the TS-890S scrolls in one mode only"))?;
                 self.scope.axis = Some(*axis);
-                Self::command(format!("BS3{code};"), none)
+                // The edges in use depend on the mode, so read them again.
+                Self::command(format!("BS3{code};BSM;"), none)
             }
             Op::GetScopeSpan(0) => Self::command("BS4;".into(), observe(Field::ScopeSpan(0))),
             Op::SetScopeSpan(0, span) => {
@@ -572,6 +665,34 @@ impl ProtocolEngine for Ts890Engine {
                 })?;
                 Self::command(format!("BSC{step:03};"), none)
             }
+            Op::GetScopeSetting(0, setting) => {
+                let (letter, _) = scope_setting_wire(*setting);
+                Self::command(
+                    format!("BS{letter};"),
+                    observe(Field::ScopeSetting(0, *setting)),
+                )
+            }
+            Op::SetScopeSetting(0, setting, code) => {
+                let (letter, max) = scope_setting_wire(*setting);
+                if *code > max {
+                    return Err(Self::unsupported("scope setting code outside the guide"));
+                }
+                // A new range or layout changes the edges in use.
+                let reread = if *setting == ScopeSetting::Range {
+                    "BSM;"
+                } else {
+                    ""
+                };
+                Self::command(format!("BS{letter}{code};{reread}"), none)
+            }
+            Op::SetScopeEdges(range @ 1..=3, 1, low, high) => {
+                if low.0 >= high.0 || high.0 > MAX_EDGE_HZ {
+                    return Err(Self::unsupported(
+                        "fixed-mode edges are 8-digit hertz, lower below upper",
+                    ));
+                }
+                Self::command(format!("BSM{range}{:08}{:08};BSM;", low.0, high.0), none)
+            }
             _ => return Err(Self::unsupported("not implemented for the TS-890S engine")),
         };
         Ok(request)
@@ -586,11 +707,15 @@ impl ProtocolEngine for Ts890Engine {
                     if let Some(body) = text.strip_prefix("##DD2") {
                         out.extend(self.scope_frame(body).map(Inbound::ScopeFrame));
                     } else if let Some(body) = text.strip_prefix("##DD3") {
-                        // The filter scope has no core frame; checked, counted if malformed.
-                        if scope_samples(body, FILTER_SCOPE_SAMPLES, FILTER_SCOPE_SAMPLE_MAX)
-                            .is_none()
-                        {
-                            self.scope.dropped += 1;
+                        out.extend(self.filter_scope_frame(body).map(Inbound::FilterScopeFrame));
+                    } else if let Some(body) = text.strip_prefix("BSM") {
+                        // The answer to a `BSM` read: kept for placing fixed-mode sweeps; not
+                        // an observation, since the core has no field for it.
+                        match scope_edges_of(body) {
+                            Some(edges) => self.scope.edges = Some(edges),
+                            None => {
+                                out.push(Inbound::Unrecognised(format!("{text};").into_bytes()))
+                            }
                         }
                     } else {
                         let inbound = self.decode(&text);

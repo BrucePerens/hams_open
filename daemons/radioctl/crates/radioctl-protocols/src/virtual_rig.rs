@@ -741,6 +741,16 @@ impl VirtualRig {
         out
     }
 
+    // [@ANCHOR: radioctl_virtual_filter_scope_sweep]
+    /// The `##DD3` filter-scope frame a TS-890S sends with its waveform output on LAN; empty for
+    /// any other model or when output is off.
+    pub fn filter_scope_sweep(&mut self) -> Vec<u8> {
+        if self.is_ts890() {
+            return self.ts890_filter_sweep();
+        }
+        Vec::new()
+    }
+
     // [@ANCHOR: radioctl_virtual_civ_mode_reply]
     /// `04` answers `code filter`; `26 <sel>` answers `code data filter`. A data mode is its
     /// sideband's code with the DATA byte set; `04` cannot show the flag, so it shows the
