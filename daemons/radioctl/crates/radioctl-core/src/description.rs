@@ -534,6 +534,7 @@ impl LegacyFreqForm {
         }
     }
 
+    // [@ANCHOR: radioctl_core_legacy_form_unit]
     /// Hertz per count for the binary and BCD forms, in thousandths of a hertz.
     fn unit_millihz(self) -> u64 {
         match self {

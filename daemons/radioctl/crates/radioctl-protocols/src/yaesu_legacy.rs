@@ -889,6 +889,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_legacy_form_encode]
     // Tests [@ANCHOR: radioctl_core_legacy_form_decode]
     // Tests [@ANCHOR: radioctl_core_legacy_form_width]
+    // Tests [@ANCHOR: radioctl_core_legacy_form_unit]
     #[test]
     fn the_frequency_forms_encode_the_manuals_worked_examples() {
         use radioctl_core::description::LegacyFreqForm as F;

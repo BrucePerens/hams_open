@@ -1220,6 +1220,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ylegacy_decode_block] (radioctl-protocols) Decodes a status reply into frequency, mode, PTT and split at the offsets the description lists.
 - [@ANCHOR: radioctl:radioctl_virtual_legacy_model_block] (radioctl-protocols) One five-byte block of a virtual block-protocol Yaesu legacy model: commands change state, the listed status reads answer from the state, a radio that echoes sends the command back.
 - [@ANCHOR: radioctl:radioctl_core_legacy_form_width] (radioctl-core) Bytes a frequency in a legacy block form occupies.
+- [@ANCHOR: radioctl:radioctl_core_legacy_form_unit] (radioctl-core) Thousandths of a hertz per count of a legacy block frequency form.
 - [@ANCHOR: radioctl:radioctl_core_legacy_form_encode] (radioctl-core) A frequency as the bytes of a legacy block form (BCD or binary, either byte order, 10 Hz, 1 Hz, 1.25 Hz or 0.625 Hz units, or the FRG-8800 step form).
 - [@ANCHOR: radioctl:radioctl_core_legacy_form_decode] (radioctl-core) The inverse of the above, refusing a non-digit nibble, a bad step code or a wrong length.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_legacy_form] (radioctl-core) Maps a rig file's frequency-form name to a legacy form.
