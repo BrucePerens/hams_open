@@ -9,15 +9,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **176** (181 description files)
+- With a radioctl description: **181** (186 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 176 |
+| described | 181 |
 | engine only | 14 |
 | needs variant | 22 |
-| needs engine | 39 |
+| needs engine | 34 |
 | odd device | 54 |
 | not applicable | 8 |
 
@@ -34,14 +34,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 121 |
 | B | variants of an existing engine | 41 | 19 |
-| C | new engine | 83 | 36 |
+| C | new engine | 83 | 41 |
 | D | odd device | 54 | 0 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 28 | 0 |
+| other_serial | C/D | aor | 94 | 33 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 22 | 0 |
@@ -84,8 +84,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25016 | AE9RB | Si570 Peaberry V1 | D | other_usb | - | - | unverified | - | odd device |
 | 25017 | AE9RB | Si570 Peaberry V2 | D | other_usb | - | - | unverified | - | odd device |
 | 9 | Airspy | SDR#/gpredict | D | other_network | - | - | unverified | - | odd device |
-| 17001 | Alinco | DX-77 | C | other_serial | - | - | unverified | - | needs engine |
-| 17002 | Alinco | DX-SR8 | C | other_serial | - | - | unverified | - | needs engine |
+| 17001 | Alinco | DX-77 | C | other_serial | - | `alinco-dx-77` | unverified | - | described |
+| 17002 | Alinco | DX-SR8 | C | other_serial | - | `alinco-dx-sr8` | unverified | - | described |
 | 25006 | AmQRP | DDS-60 | D | other_parallel | - | - | unverified | - | odd device |
 | 25013 | AMSAT-UK | FUNcube Dongle | D | other_usb | - | - | unverified | - | odd device |
 | 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | - | - | unverified | - | odd device |
@@ -112,8 +112,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2055 | DL2MAN | (tr)uSDX | D | other_serial | - | - | unverified | - | odd device |
 | 31002 | Dorji | DRA818U | D | other_serial | - | - | unverified | - | odd device |
 | 31001 | Dorji | DRA818V | D | other_serial | - | - | unverified | - | odd device |
-| 9002 | Drake | R-8A | C | other_serial | - | - | unverified | - | needs engine |
-| 9003 | Drake | R-8B | C | other_serial | - | - | unverified | - | needs engine |
+| 9002 | Drake | R-8A | C | other_serial | - | `drake-r-8a` | unverified | - | described |
+| 9003 | Drake | R-8B | C | other_serial | - | `drake-r-8b` | unverified | - | described |
 | 23003 | DTTS Microwave Society | DttSP IPC | D | other_device_driver | - | - | unverified | - | odd device |
 | 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | odd device |
 | 33001 | ELAD | FDM-DUO | D | other_serial | - | - | unverified | - | odd device |
@@ -291,7 +291,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2052 | QRPLabs | QCX/QDX | D | other_serial | - | - | unverified | - | odd device |
 | 2057 | QRPLabs | QMX | D | other_serial | - | - | unverified | - | odd device |
 | 11005 | Racal | RA3702 | C | other_serial | - | - | unverified | - | needs engine |
-| 11003 | Racal | RA6790/GM | C | other_serial | - | - | unverified | - | needs engine |
+| 11003 | Racal | RA6790/GM | C | other_serial | - | `racal-ra6790-gm` | unverified | - | described |
 | 8004 | Radio Shack | PRO-2052 | C | other_serial | - | - | unverified | - | needs engine |
 | 24001 | RFT | EKD-500 | D | other_serial | - | - | unverified | - | odd device |
 | 32004 | Rhode&Schwarz | 4100 | C | other_network | - | - | unverified | - | needs engine |

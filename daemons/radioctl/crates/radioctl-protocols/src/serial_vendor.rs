@@ -100,6 +100,9 @@ pub fn vendor_of(desc: &RigDescription) -> Result<(VendorProtocol, &str), RigErr
 pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
     Ok(match vendor_of(desc)?.0 {
         VendorProtocol::Tentec => Box::new(crate::tentec::TentecEngine::new(desc.clone())?),
+        VendorProtocol::Drake => Box::new(crate::drake::DrakeEngine::new(desc.clone())?),
+        VendorProtocol::Alinco => Box::new(crate::alinco::AlincoEngine::new(desc.clone())?),
+        VendorProtocol::Racal => Box::new(crate::racal::RacalEngine::new(desc.clone())?),
     })
 }
 
@@ -108,6 +111,9 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
 pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> {
     Ok(match vendor_of(desc)?.0 {
         VendorProtocol::Tentec => Box::new(crate::tentec::TentecTwin::new(desc)?),
+        VendorProtocol::Drake => Box::new(crate::drake::DrakeTwin::new(desc)?),
+        VendorProtocol::Alinco => Box::new(crate::alinco::AlincoTwin::new(desc)?),
+        VendorProtocol::Racal => Box::new(crate::racal::RacalTwin::new(desc)?),
     })
 }
 

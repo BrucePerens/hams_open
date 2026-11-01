@@ -1,0 +1,79 @@
+# Rig description: Alinco DX-SR8 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/alinco/dxsr8.c, alinco.h, read for facts only, and `rigctl -m 17002 --dump-caps`); no vendor protocol document was read and no code or table was copied.
+# Hamlib lists: serial 9600..9600 baud, 8N1, handshake NONE; receive 135000 to 30000000 Hz in 2 range(s). The description format has no field for frequency ranges or serial settings, so they are not repeated here.
+# Dialect dxsr8: `AL~RW_xxx`/`AL~RR_xxx` verbs ended by CR LF; echo line, then `OK` or the value. Hamlib reports mode codes 2 and 3 both as CW; radioctl reports 3 as CW-R (a recorded difference).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt"]
+
+[rig]
+id = "alinco-dx-sr8"
+name = "Alinco DX-SR8"
+family = "serial-vendor"
+
+[vendor]
+protocol = "alinco"
+dialect = "dxsr8"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "usb"
+code = 0x0
+
+[[modes]]
+mode = "lsb"
+code = 0x1
+
+[[modes]]
+mode = "cw"
+code = 0x2
+
+[[modes]]
+mode = "cw-r"
+code = 0x3
+
+[[modes]]
+mode = "am"
+code = 0x4
+
+[[modes]]
+mode = "fm"
+code = 0x5
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 17002 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 17002 --dump-caps` (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/alinco/dxsr8.c, alinco.h (frame formats and the dialect split)", note = "Command frames read for facts only; no code copied. The dialect names are ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 17002 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/alinco/dxsr8.c, alinco.h", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command; absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/alinco/dxsr8.c, alinco.h (mode character definitions)", note = "Mode characters as the backend defines them; modes with no entry in radioctl's vocabulary are not listed." }
+verified = { state = "unverified" }

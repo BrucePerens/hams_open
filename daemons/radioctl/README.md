@@ -514,6 +514,36 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_description_code_mode] (radioctl-core) The mode for a wire code, if the model has one.
 - [@ANCHOR: radioctl:radioctl_core_description_ic7300] (radioctl-core) An Icom IC-7300 style CI-V description (address 0x94). Unverified; see the module note.
 - [@ANCHOR: radioctl:radioctl_core_description_ts2000] (radioctl-core) A Kenwood TS-2000 style ASCII description. Unverified; see the module note.
+- [@ANCHOR: radioctl:radioctl_alinco_dialect_end] (radioctl-protocols) The dialect end of the alinco code.
+- [@ANCHOR: radioctl:radioctl_alinco_command] (radioctl-protocols) The command of the alinco code.
+- [@ANCHOR: radioctl:radioctl_drake_encode_frequency] (radioctl-protocols) `F` and seven digits of 10 Hz units, CR; `None` unless a multiple of 10 Hz below 100 MHz.
+- [@ANCHOR: radioctl:radioctl_drake_decode_frequency] (radioctl-protocols) The frequency of a `*fffff.ff*uHz` line (without CR LF), or `None`.
+- [@ANCHOR: radioctl:radioctl_drake_decode_mode] (radioctl-protocols) The mode of the mode, width and synchronous bytes of an `RM` line, per `description`.
+- [@ANCHOR: radioctl:radioctl_drake_engine_new] (radioctl-protocols) Builds an engine from a Drake vendor description.
+- [@ANCHOR: radioctl:radioctl_drake_engine_encode] (radioctl-protocols) The engine encode of the drake code.
+- [@ANCHOR: radioctl:radioctl_drake_engine_feed] (radioctl-protocols) The engine feed of the drake code.
+- [@ANCHOR: radioctl:radioctl_drake_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_drake_twin_state_line] (radioctl-protocols) The `RM` answer: three filler bytes, then mode, width and synchronous bytes.
+- [@ANCHOR: radioctl:radioctl_drake_twin_feed] (radioctl-protocols) The twin feed of the drake code.
+- [@ANCHOR: radioctl:radioctl_drake_twin_front_panel] (radioctl-protocols) The twin front panel of the drake code.
+- [@ANCHOR: radioctl:radioctl_alinco_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
+- [@ANCHOR: radioctl:radioctl_alinco_decode_status] (radioctl-protocols) The mode character and receive frequency of a DX-77 status line (26 characters).
+- [@ANCHOR: radioctl:radioctl_alinco_engine_new] (radioctl-protocols) Builds an engine from an Alinco vendor description.
+- [@ANCHOR: radioctl:radioctl_alinco_decode_reply] (radioctl-protocols) The decode reply of the alinco code.
+- [@ANCHOR: radioctl:radioctl_alinco_engine_encode] (radioctl-protocols) The engine encode of the alinco code.
+- [@ANCHOR: radioctl:radioctl_alinco_engine_feed] (radioctl-protocols) The engine feed of the alinco code.
+- [@ANCHOR: radioctl:radioctl_alinco_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_alinco_twin_answer] (radioctl-protocols) The second line (without its CR LF) for a command, or `None` for an unknown command.
+- [@ANCHOR: radioctl:radioctl_alinco_twin_feed] (radioctl-protocols) The twin feed of the alinco code.
+- [@ANCHOR: radioctl:radioctl_alinco_twin_front_panel] (radioctl-protocols) The twin front panel of the alinco code.
+- [@ANCHOR: radioctl:radioctl_racal_format_mhz] (radioctl-protocols) A frequency as a megahertz decimal with up to six decimals and no trailing zeros (`14.2`).
+- [@ANCHOR: radioctl:radioctl_racal_parse_mhz] (radioctl-protocols) The frequency of a megahertz decimal (`14.2`, `7`, `0.5`), or `None`.
+- [@ANCHOR: radioctl:radioctl_racal_engine_new] (radioctl-protocols) Builds an engine from a Racal vendor description.
+- [@ANCHOR: radioctl:radioctl_racal_engine_encode] (radioctl-protocols) The engine encode of the racal code.
+- [@ANCHOR: radioctl:radioctl_racal_engine_feed] (radioctl-protocols) The engine feed of the racal code.
+- [@ANCHOR: radioctl:radioctl_racal_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_racal_twin_feed] (radioctl-protocols) The twin feed of the racal code.
+- [@ANCHOR: radioctl:radioctl_racal_twin_front_panel] (radioctl-protocols) The twin front panel of the racal code.
 - [@ANCHOR: radioctl:radioctl_tentec_write_reply] (radioctl-protocols) The write reply of the tentec code.
 - [@ANCHOR: radioctl:radioctl_tentec_twin_slot] (radioctl-protocols) The twin slot of the tentec code.
 - [@ANCHOR: radioctl:radioctl_core_vendorprotocol_from_name] (radioctl-core) The protocol with a file-format name.
