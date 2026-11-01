@@ -1,0 +1,60 @@
+# Rig description: Kenwood TM-D710(G) (Kenwood handheld/mobile ASCII CAT, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 source facts (no Kenwood manual read for this model). No radio has been connected, so every `verified` is unverified.
+# Engine and gaps: crates/radioctl-protocols/src/kenwood_hh.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt"]
+
+[rig]
+id = "kenwood-tm-d710"
+name = "Kenwood TM-D710(G)"
+family = "kenwood-hh"
+
+[kenwood_hh]
+dialect = "tm710"
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 145000000
+mode = "fm"
+
+[[modes]]
+mode = "fm"
+code = 0
+
+[[modes]]
+mode = "am"
+code = 2
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in Hamlib 4.6.2", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood_hh.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/tmd710.c: tmd710.c tmd710_pull_fo/tmd710_push_fo: FO <band> reply of 48 characters, frequency columns 5-14, mode is the 13th field (last column 47)", note = "Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/tmd710.c: caps: serial 9600 bit/s, retry 3, write_delay 0/1 ms", note = "Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults: 145 MHz FM", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/th.c and tmd710.c: th_set_ptt: TX/RX; th_get_level: SM; th_set_freq, th_get_freq", note = "Frequency, mode and PTT as the dialect fact; PTT is TX/RX (set only; no PTT read command is known, so read-ptt is absent). Both bands are addressable with FO 0 and FO 1 (second-vfo); a set rewrites the line read last. Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/tmd710.c: mode table (digit to mode)", note = "Narrow FM, DV and DR have no radioctl mode and are not mapped. Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }

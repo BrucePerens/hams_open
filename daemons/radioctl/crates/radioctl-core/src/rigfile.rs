@@ -26,9 +26,9 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodDialect,
-    KenwoodParams, LevelParams, RigDescription, ScopeParams, Timing, YaesuLegacyParams,
-    YaesuParams,
+    CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
+    KenwoodDialect, KenwoodHhParams, KenwoodParams, LevelParams, RigDescription, ScopeParams,
+    Timing, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -127,6 +127,7 @@ struct FileDoc {
     elecraft: Option<ElecraftSection>,
     yaesu: Option<YaesuSection>,
     yaesu_legacy: Option<YaesuLegacySection>,
+    kenwood_hh: Option<KenwoodHhSection>,
     flex: Option<FlexSection>,
     hpsdr: Option<HpsdrSection>,
     scope: Option<ScopeSection>,
@@ -197,6 +198,12 @@ struct YaesuSection {
 #[serde(deny_unknown_fields)]
 struct YaesuLegacySection {
     stop_bits: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KenwoodHhSection {
+    dialect: String,
 }
 
 #[derive(Deserialize)]
@@ -344,6 +351,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "yaesu-legacy" => Family::YaesuLegacy,
         "flex-smartsdr" => Family::Flex,
         "hpsdr-network" => Family::Hpsdr,
+        "kenwood-hh" => Family::KenwoodHh,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
     match (
@@ -359,11 +367,13 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         | (Family::ElecraftAscii, None, None, Some(_), None, None)
         | (Family::YaesuNewcat, None, None, None, Some(_), None)
         | (Family::YaesuLegacy, None, None, None, None, Some(_))
-            if doc.flex.is_none() && doc.hpsdr.is_none() => {}
+            if doc.flex.is_none() && doc.hpsdr.is_none() && doc.kenwood_hh.is_none() => {}
         (Family::Flex, None, None, None, None, None)
-            if doc.flex.is_some() && doc.hpsdr.is_none() => {}
+            if doc.flex.is_some() && doc.hpsdr.is_none() && doc.kenwood_hh.is_none() => {}
         (Family::Hpsdr, None, None, None, None, None)
-            if doc.hpsdr.is_some() && doc.flex.is_none() => {}
+            if doc.hpsdr.is_some() && doc.flex.is_none() && doc.kenwood_hh.is_none() => {}
+        (Family::KenwoodHh, None, None, None, None, None)
+            if doc.kenwood_hh.is_some() && doc.flex.is_none() && doc.hpsdr.is_none() => {}
         _ => return Err(bad("the family block does not match rig.family")),
     }
     if doc
@@ -423,6 +433,15 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let yaesu_legacy = doc.yaesu_legacy.as_ref().map(|y| YaesuLegacyParams {
         stop_bits: y.stop_bits,
     });
+    let kenwood_hh = doc
+        .kenwood_hh
+        .as_ref()
+        .map(|k| {
+            HhDialect::from_name(&k.dialect)
+                .map(|dialect| KenwoodHhParams { dialect })
+                .ok_or_else(|| bad(format!("unknown kenwood_hh.dialect {:?}", k.dialect)))
+        })
+        .transpose()?;
     let flex = doc.flex.as_ref().map(|f| FlexParams {
         model: f.model.clone(),
         scus: f.scus,
@@ -455,6 +474,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         elecraft,
         yaesu,
         yaesu_legacy,
+        kenwood_hh,
         flex,
         hpsdr,
         scope,
@@ -768,6 +788,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.yaesu_legacy.is_some() {
         keys.push("yaesu_legacy.stop_bits".to_string());
+    }
+    if description.kenwood_hh.is_some() {
+        keys.push("kenwood_hh.dialect".to_string());
     }
     if description.flex.is_some() {
         keys.push("flex.model".to_string());

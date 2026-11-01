@@ -381,7 +381,7 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Level::MonitorLevel | Level::Attenuator | Level::Preamp => None,
         },
         // The legacy five-byte engine has no level commands, so no level has a range.
-        Family::YaesuLegacy => None,
+        Family::YaesuLegacy | Family::KenwoodHh => None,
         // The OpenHPSDR control plane has no level commands.
         Family::Hpsdr => None,
         // SmartSDR levels are percentages (0-100) in the engine.

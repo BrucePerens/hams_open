@@ -83,7 +83,7 @@ Left, with the reason:
 | TS-990S (2039) | Described from its PC command reference (`kenwood.dialect = "ts990"`: main band only, mode as `OM0`, no split, PTT read or levels). Open: the sub receiver as a second rig, the levels (band digits, other ranges) and the LAN stream (`##CN`, `##ID`), unverified |
 | TRC-80 (2030) | a transceiver module for a commercial radio; Hamlib reads its frequency from `IF` (`kenwood_get_freq_if`), a different path from the other models; needs a guide or a volunteer |
 | Levels, signal and meters on the older models (all but the TS-480) | the per-model AG/RG/PC/KS/SM forms. The TS-870S manual was read: AGnnn, RGnnn, SMnnnn, KS 001-100, PC 010-100, parameterless RU/RD (a TS-870S dialect of the engine, or per-description level ranges, would carry these). The TS-480's RG is 000-100 (pinned). Manuals for the rest are in `~/manuals/kenwood/` but their command tables are scanned images not yet read |
-| The 10 TH/TM handhelds (`kenwood_hh_ascii`, Tier B) | a different command family (CR-terminated, no `IF`); not covered here |
+| The 10 TH/TM handhelds (`kenwood_hh_ascii`, Tier B) | done: engine `kenwood_hh` (CR-terminated, no `IF`; dialects `th`, `tm710`, `th72`, `th74`), 10 files from Hamlib facts, all unverified. Open: the `TC 1` PC-control entry named in the work brief (in none of the sources read, so not sent), band switching (`BC`), split, levels, memories, narrow FM and DV/DR modes |
 
 ### Yaesu newcat and Elecraft: what is done and what is left
 
