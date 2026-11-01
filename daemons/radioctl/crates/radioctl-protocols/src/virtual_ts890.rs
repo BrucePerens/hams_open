@@ -47,6 +47,8 @@ pub(super) struct Ts890Scope {
     centred_edges: Option<(u32, u32)>,
     reference: u16,
     output: u8,
+    /// `DD1`, the filter-scope output: 0 off, 1 LAN, 2 COM/USB.
+    filter_output: u8,
     sweep: u32,
     /// The lower and upper edge of each fixed-mode range in hertz; entry 0 is the default range.
     edges: [(u32, u32); 4],
@@ -90,6 +92,7 @@ impl Default for Ts890Scope {
             centred_edges: None,
             reference: 40,
             output: 0,
+            filter_output: 0,
             sweep: 0,
             edges: DEFAULT_EDGES,
         }
@@ -223,6 +226,16 @@ impl VirtualRig {
             }
             ("BS", sub) => self.ts890_scope_command(sub),
             ("DD", "0") => Some(format!("DD0{};", self.ts890_scope.output)),
+            ("DD", "1") => Some(format!("DD1{};", self.ts890_scope.filter_output)),
+            ("DD", set) if set.len() == 2 && set.starts_with('1') => {
+                match set[1..].parse::<u8>().ok().filter(|v| *v <= 2) {
+                    Some(value) => {
+                        self.ts890_scope.filter_output = value;
+                        None
+                    }
+                    None => Some(REFUSED.to_string()),
+                }
+            }
             ("DD", set) if set.len() == 2 && set.starts_with('0') => {
                 match set[1..].parse::<u8>().ok().filter(|v| *v <= 5) {
                     Some(value) => {
@@ -428,10 +441,10 @@ impl VirtualRig {
     }
 
     // [@ANCHOR: radioctl_virtual_ts890_filter_sweep]
-    /// One `##DD3` frame (LAN output) under the same conditions as [`Self::ts890_sweep`]: 213
-    /// deterministic samples from 00 to 32.
+    /// One `##DD3` frame (LAN output) when the filter-scope output is on LAN (`DD1` 1) and auto
+    /// information is on, as the guide says (p. 70): 213 deterministic samples from 00 to 32.
     pub(super) fn ts890_filter_sweep(&mut self) -> Vec<u8> {
-        let on = self.state.transceive && (1..=3).contains(&self.ts890_scope.output);
+        let on = self.state.transceive && self.ts890_scope.filter_output == 1;
         if !on || self.desc.scope.is_none() {
             return Vec::new();
         }

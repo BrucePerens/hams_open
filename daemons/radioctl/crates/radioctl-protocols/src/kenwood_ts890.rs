@@ -25,7 +25,7 @@
 //! edition, `ts890_pc_command_e.pdf`, sha256 47aaa103...): with the `scope` capability the core scope
 //! operations map to `BS3` (axis: 0 center, 1 fixed, 2 auto scroll, read as [`ScopeAxis::ScrollFixed`]),
 //! `BS4` (span, full width: 5, 10, 25, 50, 100, 200, 500 kHz), `BSC` (reference level, 000 is -20 dB,
-//! 0.5 dB a step) and `DD0` (waveform output: 0 off, and our choice `2`, LAN medium cycle, on). The LAN
+//! 0.5 dB a step) and `DD0` (waveform output: 0 off, and our choice `2`, LAN medium cycle, on) and `DD1` (filter-scope output, which `##DD3` needs: 0 off, `1` LAN on; switched on and off with `DD0`). The LAN
 //! sends the bandscope as `##DD2` + 640 two-digit hexadecimal samples (00 strongest to 8C weakest) +
 //! `;`; the engine flips them to the core's "0 is the bottom" and publishes a [`ScopeFrame`] for the
 //! main receiver. The frame carries no frequency: the engine keeps the last `FA`/`FB`, `FR`, `BS3`
@@ -85,6 +85,9 @@ const MAX_FRAME: usize = 2048;
 const MAX_EDGE_HZ: u64 = 99_999_999;
 /// The `DD0` value the engine sets to turn the waveform output on: LAN, medium cycle (our choice).
 const SCOPE_OUTPUT_ON: u8 = 2;
+/// The `DD1` value the engine sets to turn the filter-scope output on: LAN (the guide's only LAN
+/// choice, p. 17); `##DD3` is sent only with it.
+const FILTER_SCOPE_OUTPUT_ON: u8 = 1;
 
 /// How a level is written: the command and the guide's range.
 struct LevelWire {
@@ -617,9 +620,9 @@ impl Ts890Engine {
     // [@ANCHOR: radioctl_ts890_engine_scope_start]
     /// The commands that turn the waveform output on: first read what the frames are placed from
     /// (`FA`, `FB`, `FR`, `BS3`, `BS4`, `BSO`, `BSM`; the answers update the engine's copies as they arrive), then
-    /// `DD0`. Nothing here transmits.
+    /// `DD0` and `DD1` (the bandscope and the filter scope are switched separately). Nothing here transmits.
     fn scope_start() -> String {
-        format!("FA;FB;FR;BS3;BS4;BSO;BSM;DD0{SCOPE_OUTPUT_ON};")
+        format!("FA;FB;FR;BS3;BS4;BSO;BSM;DD0{SCOPE_OUTPUT_ON};DD1{FILTER_SCOPE_OUTPUT_ON};")
     }
 }
 
@@ -727,7 +730,7 @@ impl ProtocolEngine for Ts890Engine {
                 let text = if *on {
                     Self::scope_start()
                 } else {
-                    "DD00;".to_string()
+                    "DD00;DD10;".to_string()
                 };
                 Self::command(text, none)
             }

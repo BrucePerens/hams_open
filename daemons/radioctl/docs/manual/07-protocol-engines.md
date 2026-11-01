@@ -138,7 +138,7 @@ fact of `rigs/kenwood-ts-890s.toml`).
   station's secret store and never in a description. The commands after login are those of the serial link.
 - **Bandscope (unverified, virtual rig only):** the core scope operations map to `BS3` (center, fixed, auto
   scroll), `BS4` (span 5 to 500 kHz), `BSC` (reference level, half-decibel steps from -20 to +10 dB) and
-  `DD0` (waveform output; the engine sets LAN medium cycle). The LAN-only `##DD2` frame (640 hexadecimal
+  `DD0` (waveform output; the engine sets LAN medium cycle) and `DD1` (filter-scope output, which `##DD3` needs; the engine sets LAN). The LAN-only `##DD2` frame (640 hexadecimal
   samples, 00 strongest to 8C weakest, read from the August 2018 guide, `ts890_pc_command_e.pdf`) becomes a
   `ScopeFrame` for the main receiver, placed from the last `FA`/`FB`, `FR`, `BS3` and `BS4` the engine saw
   (turning the output on reads them first) in center mode, and in fixed mode from the edges of the last
@@ -153,7 +153,7 @@ fact of `rigs/kenwood-ts-890s.toml`).
   `FilterScopeFrame` on its own stream (`RigHandle::filter_scope_frames`). With the expanded analysis range
   (`BSO`) on, a center-mode sweep is placed over the width the guide gives (100 kHz span: 300 kHz, 200 kHz: 400 kHz);
   any other expanded case, expanded scroll mode or an unread `BSO` is dropped. The virtual rig answers every `BS`
-  command above, `BSM` and `DD0` and sends synthetic `##DD2` and `##DD3` frames; its auto-scroll edges are our model
+  command above, `BSM`, `DD0` and `DD1` and sends synthetic `##DD2` and `##DD3` frames; its auto-scroll edges are our model
   (a page of the span's width), since the guide gives none.
 - **Does not cover:** the COM/USB `DD2`/`DD3`/`DD4` forms; the audio scope and oscilloscope waveforms; CW
   text, memories, the menu (`EX`) and the `PSQ/PKS` pin note.
