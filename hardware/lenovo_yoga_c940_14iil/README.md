@@ -15,8 +15,8 @@ recommends `thermald`, `bolt`, `v4l-utils`, `fprintd`, `libpam-fprintd`, `intel-
 It installs `/etc/tlp.d/20-lenovo-yoga-c940-14iil.conf` (governors, platform profile `low-power` on battery and
 `performance` on AC, both NVMe drives) and `/usr/lib/lenovo-yoga-c940-14iil-support/check-features` (read-only feature check).
 
-A Windows virtual machine for this laptop is planned as a separate binary package from this source directory (a marked
-place is in `debian/control`); it is not part of this package.
+A Windows virtual machine for this laptop is a separate binary package from this source directory,
+`lenovo-yoga-c940-14iil-windows-vm` (see `windows-vm/README.md`); it is not part of this package.
 
 ## Features, verified 2026-10-31 on one machine (kernel 6.12.113, GNOME, 15 GiB RAM)
 

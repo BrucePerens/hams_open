@@ -26,6 +26,21 @@ Description: Lenovo Yoga C940-14IIL (81Q9) hardware support for Debian
  .
  The settings are applied only when the DMI product version is
  "Lenovo Yoga C940-14IIL".
-# A separate binary package carrying a Windows virtual machine for this
-# laptop is to be added here later, from this same source directory.  Do not
-# add it as part of this package.
+
+Package: lenovo-yoga-c940-14iil-windows-vm
+Architecture: all
+Depends: qemu-system-x86, qemu-system-modules-spice, qemu-utils, libvirt-daemon-system, libvirt-clients,
+         virt-manager, virt-viewer, ovmf, swtpm, swtpm-tools, passt, virtiofsd, gdisk, dosfstools, mtools,
+         dmsetup, libhivex-bin, util-linux, procps, ${misc:Depends}
+Recommends: lenovo-yoga-c940-14iil-support
+Description: run the existing Windows install of a Lenovo Yoga C940 in a KVM virtual machine
+ Boots the Windows installation already on the laptop's NVMe drive in a libvirt/QEMU
+ virtual machine (UEFI, virtual TPM 2.0, the firmware's OEM key passed through so Windows
+ stays activated, SPICE display with clipboard and USB redirection, ssh forwarded to host
+ port 2222), using a small virtual GPT disk with its own EFI system partition and the real
+ Windows partition mapped in with device-mapper.  A libvirt hook unmounts /windows before
+ the VM starts and remounts it afterwards, and refuses to do either while it would be unsafe.
+ .
+ The default mode is an overlay: the real partition is never written.  Writing to it
+ (so the same Windows state is shared with a native boot) is a separate, explicit switch.
+ See the README.

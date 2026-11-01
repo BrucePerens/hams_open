@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+AA=/etc/apparmor.d/local/abstractions/libvirt-qemu
+BEGIN='# BEGIN yoga-windows-vm'
+END='# END yoga-windows-vm'
+case "$1" in
+    configure)
+        # Let the Windows VM read its copy of the firmware MSDM table (-acpitable).
+        mkdir -p /etc/apparmor.d/local/abstractions
+        if ! grep -qF "$BEGIN" "$AA" 2>/dev/null; then
+            { echo "$BEGIN"; cat /usr/share/yoga-windows-vm/apparmor-libvirt-qemu; echo "$END"; } >> "$AA"
+        fi
+        ;;
+esac
+#DEBHELPER#

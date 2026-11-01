@@ -1,0 +1,18 @@
+[Unit]
+Description=Windows VM on the Yoga C940 (headless build server)
+Documentation=file:///usr/share/doc/lenovo-yoga-c940-14iil-windows-vm/README.md
+# Ordering After= libvirt-guests means we are stopped BEFORE it at host
+# shutdown, so Windows gets an ACPI shutdown instead of a managed save.
+After=libvirtd.service libvirt-guests.service network-online.target local-fs.target
+Requires=libvirtd.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/virsh -c qemu:///system start yoga-windows
+ExecStop=/usr/bin/yoga-windows-vm stop
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target
