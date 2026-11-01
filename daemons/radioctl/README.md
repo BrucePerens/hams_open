@@ -467,6 +467,67 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 
 ## Function reference
 
+- [@ANCHOR: radioctl:radioctl_core_usb_target_matches] (radioctl-core) Whether a device that reports these ids and strings is the one asked for.
+- [@ANCHOR: radioctl:radioctl_core_usb_target_label] (radioctl-core) `usb:VVVV:PPPP` (with `:serial` when one is set), for status and logs.
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_new] (radioctl-core) A bus with `device` plugged in.
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_unplug] (radioctl-core) Unplugs the device: open handles fail with [`UsbFailure::NoDevice`] and `open` fails.
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_plug] (radioctl-core) Plugs the device back in.
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_opens] (radioctl-core) How many times the device has been opened.
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_log] (radioctl-core) Every transfer the device has received, oldest first.
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_open] (radioctl-core) `open` (see the source).
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_handle_transfers] (radioctl-core) `control_in` (see the source).
+- [@ANCHOR: radioctl:radioctl_core_usb_status_code] (radioctl-core) The status byte.
+- [@ANCHOR: radioctl:radioctl_core_usb_status_from_code] (radioctl-core) The status of a byte; an unknown byte is [`UsbStatus::Other`].
+- [@ANCHOR: radioctl:radioctl_core_usb_transfer_op] (radioctl-core) The operation byte of the frame.
+- [@ANCHOR: radioctl:radioctl_core_usb_transfer_encode] (radioctl-core) The request frame.
+- [@ANCHOR: radioctl:radioctl_core_usb_transfer_decode] (radioctl-core) Decodes the first request frame in `bytes`; returns it and the number of bytes it used.
+- [@ANCHOR: radioctl:radioctl_core_usb_reply_encode] (radioctl-core) The reply frame.
+- [@ANCHOR: radioctl:radioctl_core_usb_reply_decode] (radioctl-core) Decodes the first reply frame in `bytes`; returns it and the number of bytes it used.
+- [@ANCHOR: radioctl:radioctl_core_usb_execute] (radioctl-core) Performs `transfer` on `device` and returns its reply.
+- [@ANCHOR: radioctl:radioctl_core_usb_config_new] (radioctl-core) One-second transfers, the default backoff and one first attempt.
+- [@ANCHOR: radioctl:radioctl_core_usb_link_status] (radioctl-core) The current link status.
+- [@ANCHOR: radioctl:radioctl_core_usb_link_watch] (radioctl-core) A receiver that wakes on every status change.
+- [@ANCHOR: radioctl:radioctl_core_usb_link_stats] (radioctl-core) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctl_core_usb_link_into_parts] (radioctl-core) Splits the link into the byte stream (for [`crate::rig::spawn`]) and the monitor the owner keeps for the life of the rig.
+- [@ANCHOR: radioctl:radioctl_core_usb_monitor_status] (radioctl-core) The current link status.
+- [@ANCHOR: radioctl:radioctl_core_usb_monitor_watch] (radioctl-core) A receiver that wakes on every status change.
+- [@ANCHOR: radioctl:radioctl_core_usb_monitor_stats] (radioctl-core) A snapshot of the counters.
+- [@ANCHOR: radioctl:radioctl_core_usb_supervisor_run] (radioctl-core) The supervisor thread: first open, then sessions and reopens until shutdown.
+- [@ANCHOR: radioctl:radioctl_core_usb_sleep_dropping] (radioctl-core) Waits `delay`, dropping (and counting) bytes the actor writes meanwhile.
+- [@ANCHOR: radioctl:radioctl_core_usb_session] (radioctl-core) One open device: decode request frames, perform them, send the replies, until shutdown or loss.
+- [@ANCHOR: radioctl:radioctl_core_usb_serve] (radioctl-core) Performs every complete request frame in `pending`; `Some(why)` when the device was lost.
+- [@ANCHOR: radioctl:radioctl_core_usb_open] (radioctl-core) Opens the device through `backend` and starts the supervisor thread and bridge tasks on `runtime`.
+- [@ANCHOR: radioctl:radioctl_core_libusb_backend_new] (radioctl-core) A libusb context.
+- [@ANCHOR: radioctl:radioctl_core_libusb_backend_open] (radioctl-core) `open` (see the source).
+- [@ANCHOR: radioctl:radioctl_si570_usb_word_from_hz] (radioctl-protocols) The 11.21 fixed-point oscillator word for a receive frequency, or `None` when it does not fit in 32 bits (oscillator above 2047 MHz).
+- [@ANCHOR: radioctl:radioctl_si570_usb_hz_from_word] (radioctl-protocols) The receive frequency for an oscillator word, rounded to the nearest hertz; `None` for a multiplier of zero.
+- [@ANCHOR: radioctl:radioctl_si570_usb_engine_new] (radioctl-protocols) Builds an engine from a `si570` or `fifisdr` USB description.
+- [@ANCHOR: radioctl:radioctl_si570_usb_set_value] (radioctl-protocols) wValue of the set-frequency request on this board.
+- [@ANCHOR: radioctl:radioctl_si570_usb_engine_encode] (radioctl-protocols) `encode` (see the source).
+- [@ANCHOR: radioctl:radioctl_si570_usb_engine_feed] (radioctl-protocols) `feed` (see the source).
+- [@ANCHOR: radioctl:radioctl_si570_usb_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_si570_usb_twin_ptt] (radioctl-protocols) Whether the board is keyed.
+- [@ANCHOR: radioctl:radioctl_si570_usb_twin_control] (radioctl-protocols) `control_in` (see the source).
+- [@ANCHOR: radioctl:radioctl_funcube_command_report] (radioctl-protocols) The 64-byte report for command `command` with argument bytes `args`.
+- [@ANCHOR: radioctl:radioctl_funcube_engine_new] (radioctl-protocols) Builds an engine from a `funcube` USB description.
+- [@ANCHOR: radioctl:radioctl_funcube_exchange] (radioctl-protocols) `exchange` (see the source).
+- [@ANCHOR: radioctl:radioctl_funcube_engine_encode] (radioctl-protocols) `encode` (see the source).
+- [@ANCHOR: radioctl:radioctl_funcube_engine_feed] (radioctl-protocols) `feed` (see the source).
+- [@ANCHOR: radioctl:radioctl_funcube_twin_new] (radioctl-protocols) A twin in the description's default state; `legacy` makes it an older dongle that refuses the hertz commands.
+- [@ANCHOR: radioctl:radioctl_funcube_twin_frequency] (radioctl-protocols) The frequency the dongle is tuned to.
+- [@ANCHOR: radioctl:radioctl_funcube_twin_interrupt] (radioctl-protocols) `interrupt_write` (see the source).
+- [@ANCHOR: radioctl:radioctl_dwt_engine_new] (radioctl-protocols) Builds an engine from a `dwt` USB description.
+- [@ANCHOR: radioctl:radioctl_dwt_engine_encode] (radioctl-protocols) `encode` (see the source).
+- [@ANCHOR: radioctl:radioctl_dwt_engine_feed] (radioctl-protocols) `feed` (see the source).
+- [@ANCHOR: radioctl:radioctl_dwt_twin_khz] (radioctl-protocols) The kilohertz the receiver was last tuned to, if it has been tuned.
+- [@ANCHOR: radioctl:radioctl_dwt_twin_control_out] (radioctl-protocols) `control_out` (see the source).
+- [@ANCHOR: radioctl:radioctl_usb_family_engine_for] (radioctl-protocols) The engine of a USB-device description, or why there is none.
+- [@ANCHOR: radioctl:radioctl_usb_family_twin_for] (radioctl-protocols) The virtual device of a USB-device description, for the fake backend.
+- [@ANCHOR: radioctl:radioctl_usb_family_target_for] (radioctl-protocols) What to look for on the USB bus for a description (any serial number; the daemon's configuration narrows it).
+- [@ANCHOR: radioctl:radioctl_usb_family_stand_in_new] (radioctl-protocols) The stand-in for a description.
+- [@ANCHOR: radioctl:radioctl_usb_family_stand_in_feed] (radioctl-protocols) Performs every complete request frame in `bytes` on the device; returns the reply frames.
+- [@ANCHOR: radioctl:radioctld_rigs_real_usb_backend] (radioctld) The libusb backend of a build with the `usb` feature.
+- [@ANCHOR: radioctl:radioctld_rigs_real_usb_backend_missing] (radioctld) A build without the `usb` feature cannot open a USB device; it says so rather than fail later.
 - [@ANCHOR: radioctl:radioctl_core_vfo_other] (radioctl-core) The other VFO.
 - [@ANCHOR: radioctl:radioctl_core_txstate_from_cache] (radioctl-core) The inputs of the transmit-frequency derivation, read from the cached observations.
 - [@ANCHOR: radioctl:radioctl_core_txstate_rx_vfo] (radioctl-core) The VFO the rig receives on (the reported one, else VFO A).

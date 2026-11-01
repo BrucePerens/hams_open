@@ -186,6 +186,44 @@ records the decisions that shape the code.
       would carry 28 files; `rigfile::rigs_dir` finds them and the error names the file.
     - Typed wrappers for `Op` groups that have one caller (RIT, split offsets, filter width): `execute(Op::..)`
       is already one call.
+22. **USB devices are a transport: a frame over a byte stream, behind a device-access trait**
+    (Bruce, 2026-10-31). The SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World
+    Traveller) speak vendor control transfers or HID reports, not a byte stream, but the actor, the
+    link-watch/unkey rules and every engine are written against a byte stream. So an engine encodes
+    each operation as a *request frame* (`usb_wire::UsbTransfer`: control in/out, bulk, interrupt, and
+    interrupt write-then-read for a HID command and reply) and decodes a *reply frame*; `usb_link`
+    runs a supervisor thread that owns the open device, performs one transfer at a time and writes
+    the reply, with the serial link's rules: loss (`NoDevice`) is `Reconnecting`, writes meanwhile
+    are dropped and counted, reopen is by id and strings with backoff, and the actor unkeys the
+    device before any other command after a reopen. A timeout or stall is reported to the engine and
+    does not take the link down; a lost or timed-out transfer gives the engine no inbound at all, so
+    the command ends in the actor's own typed `Timeout`.
+
+    Device access is two traits, `UsbBackend::open(target)` (by vendor id, product id, manufacturer
+    and product strings, serial number, interface to claim; called again after every loss, which is the
+    hot-plug reconnect) and `UsbDevice` (control in/out, bulk and interrupt read/write). The relay's
+    zero-privilege broker implements them over a file descriptor or a proxy it hands over, and no
+    engine or link code changes. Implementations: `FakeUsbBackend` (a virtual twin that can be
+    unplugged and replugged, with a transfer log; every test uses it and no test touches a USB
+    device) and `LibusbBackend`, the direct backend over the `rusb` crate (MIT, with `libusb1-sys`,
+    MIT, linking the system libusb-1.0 dynamically) behind the cargo feature `usb`, **off by
+    default**, so the default build, its dependency tree and the binary's run-time libraries are
+    unchanged. `cargo deny check licenses advisories` against the broker's policy passes for the new
+    crates (the only licence failures are older dependencies that policy never covered). `radioctld`
+    has the same feature and `kind = "usb"` in `[rig.transport]` (optional `vid`, `pid`, `serial`,
+    `transfer_timeout_ms`); a build without the feature refuses it with a clear message, and a
+    `virtual` transport on a USB description runs the twin over the fake bus.
+
+    The FUNcube needs no HID library: Hamlib talks to it with libusb interrupt transfers on its
+    HID interface (interface 2, endpoints 0x02 and 0x82, 64-byte reports), so `hidapi` is not a
+    dependency. Engines: `si570_usb.rs` (frequency, and PTT where the kit lists it, request 0x50,
+    unverified, gate closed), `funcube.rs` (frequency, with Hamlib's hertz-then-kilohertz fallback
+    spread over two calls), `dwt.rs` (set frequency only). *Not done:* the Elektor SDR-USB (an FTDI
+    bit-bang I2C programmer for a Cypress PLL), the pre-0x0F00 DG8SAQ firmware that needs the Si570
+    registers solved on the host, the FiFi-SDR's own 0xAB/0xAC requests, and the FUNcube's LNA,
+    mixer and IF gain and RSSI. *Rejected:* a second engine interface that returns transfers instead
+    of bytes (the actor, the link watch and the transcript machinery would all need a twin), and
+    `nusb` or `hidapi` as the direct backend (libusb is what Hamlib uses, so its facts carry over).
 
 ## Consequences
 

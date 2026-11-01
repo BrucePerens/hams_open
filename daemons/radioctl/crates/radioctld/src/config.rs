@@ -27,6 +27,9 @@
 //!                                          # read, off unless configured) or "tcp" (address,
 //!                                          # framing = "raw" | "ts890-lan", lan_account,
 //!                                          # lan_administrator, lan_password_secret, idle_timeout_ms)
+//!                                          # or "usb" (a USB SDR board or dongle: optional vid, pid,
+//!                                          # serial, transfer_timeout_ms; the description supplies
+//!                                          # the ids and strings; needs a build with feature `usb`)
 //!
 //! [[rotator]]
 //! name = "g5500"
@@ -133,6 +136,12 @@ enum TransportSection {
         lan_password_secret: Option<String>,
         idle_timeout_ms: Option<u64>,
     },
+    Usb {
+        vid: Option<u16>,
+        pid: Option<u16>,
+        serial: Option<String>,
+        transfer_timeout_ms: Option<u64>,
+    },
 }
 
 /// `baud = 19200` or `baud = "auto"`.
@@ -227,6 +236,19 @@ pub enum TransportConfig {
         framing: TcpFraming,
         /// Silence on the wire after which the link is declared lost and reconnected.
         idle_timeout: Option<Duration>,
+    },
+    /// A USB SDR board or dongle driven by vendor control transfers or HID reports
+    /// (`radioctl_core::usb_link`), reopened with backoff after an unplug. The description names
+    /// the vendor and product ids and strings; these keys narrow or override them.
+    Usb {
+        /// Vendor id override (default: the description's).
+        vid: Option<u16>,
+        /// Product id override (default: the description's).
+        pid: Option<u16>,
+        /// The serial number string, to tell two identical boards apart.
+        serial: Option<String>,
+        /// Longest wait for one USB transfer.
+        transfer_timeout: Duration,
     },
 }
 
@@ -542,6 +564,31 @@ fn transport_config(
                 address,
                 framing,
                 idle_timeout,
+            })
+        }
+        TransportSection::Usb {
+            vid,
+            pid,
+            serial,
+            transfer_timeout_ms,
+        } => {
+            if serial.as_deref().is_some_and(str::is_empty) {
+                return Err("usb transport serial must not be empty".to_string());
+            }
+            if vid == Some(0) || pid == Some(0) {
+                return Err("usb transport vid and pid must not be 0".to_string());
+            }
+            Ok(TransportConfig::Usb {
+                vid,
+                pid,
+                serial,
+                transfer_timeout: Duration::from_millis(in_range(
+                    "transfer_timeout_ms",
+                    transfer_timeout_ms,
+                    1000,
+                    50,
+                    10_000,
+                )?),
             })
         }
     }
@@ -936,6 +983,42 @@ kind = "virtual"
         );
         assert!(parse(&ROTATOR.replace("kind = \"virtual\"", "kind = \"serial\"")).is_err());
         assert!(parse(&ROTATOR.replace("model =", "bogus = 1\nmodel =")).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctld_config_transport]
+    #[test]
+    fn a_usb_transport_takes_optional_ids_a_serial_and_a_bounded_timeout() {
+        let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));
+        let usb = |config: Result<Config, String>| match config.expect("usb").rigs[0].transport.clone() {
+            TransportConfig::Usb {
+                vid,
+                pid,
+                serial,
+                transfer_timeout,
+            } => (vid, pid, serial, transfer_timeout),
+            other => panic!("not usb: {other:?}"),
+        };
+        assert_eq!(
+            usb(with("kind = \"usb\"")),
+            (None, None, None, Duration::from_millis(1000))
+        );
+        assert_eq!(
+            usb(with(
+                "kind = \"usb\"\nvid = 0x16C0\npid = 0x05DC\nserial = \"A12\"\ntransfer_timeout_ms = 250"
+            )),
+            (
+                Some(0x16C0),
+                Some(0x05DC),
+                Some("A12".to_string()),
+                Duration::from_millis(250)
+            )
+        );
+        assert!(with("kind = \"usb\"\nserial = \"\"").is_err());
+        assert!(with("kind = \"usb\"\nvid = 0").is_err());
+        assert!(with("kind = \"usb\"\ntransfer_timeout_ms = 10").is_err());
+        assert!(with("kind = \"usb\"\ntransfer_timeout_ms = 20000").is_err());
+        assert!(with("kind = \"usb\"\nbaud = 9600").is_err(), "no serial keys on a USB transport");
+        assert!(with("kind = \"usb\"\naddress = \"x:1\"").is_err());
     }
 
     // Tests [@ANCHOR: radioctld_config_transport]

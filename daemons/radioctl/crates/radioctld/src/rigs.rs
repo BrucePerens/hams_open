@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use radioctl_core::baud_probe::{probe, rates_text, ProbeResult, SerialProbePort};
 use radioctl_core::capability::Capability;
-use radioctl_core::description::RigDescription;
+use radioctl_core::description::{Family, RigDescription};
 use radioctl_core::engine::{ProtocolEngine, Request};
 use radioctl_core::error::RigError;
 use radioctl_core::net::{open_link, Framing, NetConfig, NetMonitor, RawFraming};
@@ -21,6 +21,8 @@ use radioctl_core::op::Op;
 use radioctl_core::rig::{spawn, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
 use radioctl_core::serial::{open_serial, LineControl, PortTarget, SerialConfig, SerialMonitor};
+use radioctl_core::usb_device::{FakeUsbBackend, UsbBackend};
+use radioctl_core::usb_link::{open_usb, UsbConfig, UsbMonitor};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::kenwood_ts890_lan::{LanCredentials, Ts890LanFraming, KEEPALIVE_EVERY};
@@ -64,6 +66,8 @@ pub struct BuiltRig {
     pub serial_link: Option<SerialMonitor>,
     /// The network link's status and counters, for TCP rigs.
     pub net_link: Option<NetMonitor>,
+    /// The USB link's status and counters, for USB rigs (virtual USB rigs included).
+    pub usb_link: Option<UsbMonitor>,
     /// What the baud probe found, when the configuration asked for one (`baud = "auto"` or
     /// `baud_probe`); `None` for a fixed rate, which is the default.
     pub baud_probe: Option<ProbeResult>,
@@ -156,8 +160,54 @@ pub async fn build_rig(
     let mut virtual_control = None;
     let mut serial_link = None;
     let mut net_link = None;
+    let mut usb_link = None;
     let mut baud_probe = None;
     let handle: RigHandle = match &rig.transport {
+        // A virtual USB board is its twin behind the fake bus: the same link, frames and engine
+        // as a real one, with no USB device.
+        TransportConfig::Virtual { .. } if description.family == Family::UsbDevice => {
+            let twin = radioctl_protocols::usb_family::twin_for(&description).map_err(fail)?;
+            let target = radioctl_protocols::usb_family::target_for(&description).map_err(fail)?;
+            let backend: Arc<dyn UsbBackend> = Arc::new(FakeUsbBackend::new(twin));
+            let link = open_usb(runtime, backend, UsbConfig::new(target))
+                .await
+                .map_err(fail)?;
+            options.link_watch = Some(link.watch());
+            let (transport, monitor) = link.into_parts();
+            usb_link = Some(monitor);
+            spawn(runtime, engine, transport, options).map_err(fail)?
+        }
+        TransportConfig::Usb {
+            vid,
+            pid,
+            serial,
+            transfer_timeout,
+        } => {
+            if description.family != Family::UsbDevice {
+                return Err(format!(
+                    "rig {}: transport usb needs a usb-device description, {} is not one",
+                    rig.name, description.id
+                ));
+            }
+            let mut target =
+                radioctl_protocols::usb_family::target_for(&description).map_err(fail)?;
+            target.vendor_id = vid.unwrap_or(target.vendor_id);
+            target.product_id = pid.unwrap_or(target.product_id);
+            target.serial = serial.clone();
+            let mut usb = UsbConfig::new(target);
+            usb.transfer_timeout = *transfer_timeout;
+            // One attempt at start, as for a serial port: a board that is not plugged in, or
+            // cannot be opened (a missing udev rule), stops the daemon from starting. After that
+            // the link reopens it without limit; the actor marks the link down meanwhile and
+            // unkeys the rig when it is back (RigOptions::link_watch).
+            let link = open_usb(runtime, real_usb_backend().map_err(fail)?, usb)
+                .await
+                .map_err(fail)?;
+            options.link_watch = Some(link.watch());
+            let (transport, monitor) = link.into_parts();
+            usb_link = Some(monitor);
+            spawn(runtime, engine, transport, options).map_err(fail)?
+        }
         TransportConfig::Virtual { reply_delay } => {
             let virtual_rig = VirtualRig::from_description(&description).map_err(fail)?;
             let (stream, control) = spawn_virtual_rig(runtime, virtual_rig, *reply_delay);
@@ -255,8 +305,26 @@ pub async fn build_rig(
         virtual_control,
         serial_link,
         net_link,
+        usb_link,
         baud_probe,
     })
+}
+
+// [@ANCHOR: radioctld_rigs_real_usb_backend]
+/// The libusb backend of a build with the `usb` feature.
+#[cfg(feature = "usb")]
+fn real_usb_backend() -> Result<Arc<dyn UsbBackend>, RigError> {
+    Ok(Arc::new(radioctl_core::usb_libusb::LibusbBackend::new()?))
+}
+
+// [@ANCHOR: radioctld_rigs_real_usb_backend_missing]
+/// A build without the `usb` feature cannot open a USB device; it says so rather than fail later.
+#[cfg(not(feature = "usb"))]
+fn real_usb_backend() -> Result<Arc<dyn UsbBackend>, RigError> {
+    Err(RigError::new(
+        radioctl_core::error::ErrorKind::Unsupported,
+        "this radioctld was built without USB support (cargo feature `usb`, needs libusb-1.0)",
+    ))
 }
 
 // [@ANCHOR: radioctld_rigs_serial_config]

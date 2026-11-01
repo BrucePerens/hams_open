@@ -2,8 +2,7 @@
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/elektor507.c, read for facts only) and `rigctl -m 25007 --dump-caps`; no vendor document was read and no code was copied.
 # Hamlib lists: receive 30 kHz to 30 MHz. An FTDI FT232R used as a bit-banged port that clocks an Si570-style synthesizer; the frequency is computed on the host from the oscillator (default 10 MHz) and the divider limits. Hamlib also selects antennas and levels.
-# NO ENGINE YET: this device speaks USB vendor requests or HID reports, and radioctl has no USB control or HID transport, so radioctld cannot open it.
-# The description records what the transport will need (night_shift_todo/medium/radioctl-usb-hid-transport.md).
+# NO ENGINE YET: the USB transport exists, but this board programs a Cypress PLL through an FTDI chip in bit-bang mode (an I2C bit-banger over bulk writes), which is not implemented. radioctld refuses it with that reason.
 schema = 1
 capabilities = ["read-frequency", "set-frequency"]
 
@@ -51,5 +50,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25007 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/elektor507.c", note = "A capability is claimed when Hamlib's backend implements it; there is no engine yet, so none can be exercised." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25007 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/elektor507.c", note = "A capability is claimed when Hamlib's backend implements it. No engine: the FTDI bit-bang PLL programming is not implemented, so none of the claimed capabilities can be exercised." }
 verified = { state = "unverified" }

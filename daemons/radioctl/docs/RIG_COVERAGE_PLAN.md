@@ -169,10 +169,12 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
   (2056), SDRUno (2051) and PiHPSDR (2040) are programs that imitate a Kenwood CAT server, so a program speaking
   TS-2000 or TS-480 CAT can already use those descriptions.
 - Kernel tuner cards: Video4Linux (26001) and Video4Linux2 (26002), reached only through the kernel's ioctl interface.
-- USB boards and dongles (10 described, no engine): the Si570 kits (SoftRock AVR-USB, KTH PIC-USB, Peaberry V1 and V2, FA-SDR),
-  FiFi-SDR, the two FUNcube dongles, Elektor SDR-USB and the Digital World Traveller have `family = "usb-device"` descriptions
-  (USB ids, strings, multiplier; Hamlib 4.6.2 facts) but radioctl has no USB control or HID transport, so `engine_for`
-  refuses them. The transport and the per-protocol engines are the to-do `radioctl-usb-hid-transport` (hams_com `night_shift_todo/medium`).
+- USB boards and dongles (10 described, 9 with an engine): the USB transport (`usb_link`, with the `UsbBackend` trait, a fake
+  backend and the libusb backend behind the `usb` feature) and three engines are done: `si570_usb.rs` (SoftRock AVR-USB, KTH PIC-USB,
+  Peaberry V1 and V2, FA-SDR, FiFi-SDR: frequency, PTT where listed), `funcube.rs` (both FUNcube dongles: frequency) and `dwt.rs`
+  (Digital World Traveller: set frequency only, as Hamlib's libusb build). All unverified, tested against virtual twins. Not done:
+  the Elektor SDR-USB (FTDI bit-bang I2C programming of a Cypress PLL), the pre-0x0F00 DG8SAQ firmware, the FiFi-SDR 0xAB/0xAC
+  requests, and the FUNcube gain and RSSI commands. Perseus (3074) and HiQSDR (25014, UDP) are not in this transport.
 - Kenwood CAT emulations (done, on the classic Kenwood engine): (tr)uSDX (2055), Malachite DSP (2049), BG2FX FX-4 (2053),
   ELAD FDM-DUO (33001); the QRP Labs QCX/QDX and QMX went in with the Kenwood batch.
 - Serial radios and kits (done, 2026-10-31, Hamlib 4.6.2 facts only, each in its own engine file with a virtual twin,
@@ -186,7 +188,7 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
 
 | Model | Reason |
 |---|---|
-| Microtelecom Perseus (3074), N2ADR HiQSDR (25014) | a vendor USB library with firmware load, and UDP control packets: the USB/network transport agent |
+| Microtelecom Perseus (3074), N2ADR HiQSDR (25014) | Perseus: a vendor USB library with firmware load (needs a loader on top of the USB transport, which now exists); HiQSDR: UDP control packets, not USB |
 | Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002), Elektor 3/04 (25001) | the remaining small-vendor batch (Dorji, MDS and Elektor engines) |
 | SigFox Transfox (2032) | a transverter controller, not a tuner: its own commands (`C20`/`C21`/`C22` and `C30`/`C31`/`C32` set, `C2x`/`C3x` read, `Cs` identify, `CS` firmware) over the Kenwood framing without the `ID` handshake. Needs a dialect in `kenwood.rs`, which the Tier A batch is changing; file after it merges |
 | AnyTone D578A (37001) | Hamlib's driver imitates the vendor programming tool's handshake (`+ADATA:` framed records, a keep-alive thread, frequency read from fixed offsets of a 100-odd byte record); no protocol text exists, so a captured transcript is needed before an engine can be trusted |

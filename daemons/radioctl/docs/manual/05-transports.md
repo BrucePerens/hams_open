@@ -18,7 +18,7 @@ transport exists; that comment is out of date.
 | TCP, bounded connect only (`connect_tcp`) | **Implemented** | no |
 | Network link, TCP or UDP (`net::open_link`: network serial server, a radio's own CAT port, a FlexRadio's SmartSDR port 4992 (unverified), `rigctld`, framed or login radios through the `Framing` hooks) | **Implemented**, tested against loopback fakes, unverified on a radio | yes, with backoff, and the actor unkeys on every reconnect |
 | Pseudo-terminal | works as a serial path with `LineControl::Unmanaged` | as serial |
-| Native USB (`nusb`) | **Planned** | |
+| USB devices that speak control transfers or HID reports (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller): `usb_link::open_usb` over a `UsbBackend` | **Implemented**, tested against virtual twins on a fake bus, unverified on a board; the direct libusb backend is the cargo feature `usb` (off by default) | yes, with backoff, and the actor unkeys on every reopen |
 | Kenwood TS-890S LAN (`kenwood_ts890_lan::Ts890LanFraming`: `##CN`, `##ID` login, keep-alive) | **Implemented** from Kenwood's public guide, tested against a fake radio, unverified on a radio | yes: the link logs in again after a reconnect |
 | Icom network control (UDP with its own login and audio streams) | **Planned**: no public manual was used; only the generic `Framing` hooks exist | |
 
@@ -202,6 +202,54 @@ What the caller sees, and does not see:
   **planned**.
 - The supervisor keeps running after you drop the `SerialLink` struct; it stops only when the byte
   stream is dropped.
+
+## USB devices
+
+Some SDR boards and dongles have no serial port: the Si570 kits (SoftRock, KTH, Peaberry, FA-SDR),
+the FiFi-SDR, the FUNcube dongles and the Digital World Traveller are tuned with USB vendor control
+transfers or HID reports. They are still a transport: `radioctl_core::usb_link::open_usb` gives the
+actor the same byte stream, status watch and counters as a serial link, and the engines (`si570_usb`,
+`funcube`, `dwt`) stay sans-IO.
+
+What goes over the stream is a frame, not CAT: the engine writes a request frame
+(`usb_wire::UsbTransfer`: control in or out with request type, request, wValue, wIndex and data; bulk
+or interrupt read and write; or an interrupt write followed by the read of its answer) and reads a
+reply frame (`UsbReply`: status and data). A supervisor thread owns the open device and performs one
+transfer at a time. The rules are the serial link's:
+
+- If the device is lost (a transfer reports `NoDevice`) the status is `Reconnecting`, commands are
+  refused with `LinkDown`, bytes written meanwhile are dropped and counted, and the device is looked
+  up again by vendor id, product id, manufacturer and product strings and serial number with
+  exponential backoff, because it usually re-enumerates. The V-USB boards all share 16C0:05DC and are
+  told apart by their strings; two identical boards need the serial number.
+- After a reopen the actor unkeys the device before it serves anything else (pass `link.watch()` as
+  `RigOptions::link_watch`). The transmit gate is unchanged: a board's PTT request is refused while
+  the gate is closed and never reaches the device.
+- A transfer that times out or stalls does not take the link down; the command ends in the actor's
+  typed `Timeout` or a refusal.
+
+Device access is behind two traits in `radioctl_core::usb_device`: `UsbBackend::open(&UsbTarget)` and
+`UsbDevice` (`control_in`, `control_out`, `bulk_write`, `bulk_read`, `interrupt_write`,
+`interrupt_read`). `FakeUsbBackend` serves a virtual twin that can be unplugged and plugged back
+(`unplug`, `plug`, `opens`, `log`) and is what the tests use; `usb_libusb::LibusbBackend` opens the
+device directly through libusb and exists only with the cargo feature `usb`
+(`cargo build -p radioctld --features usb`, needs libusb-1.0 and a udev rule giving your user access
+to the board; the kernel driver is detached while the interface is claimed). The relay's
+zero-privilege broker will implement the same traits over a handle it hands over.
+
+```toml
+[rig.transport]
+kind = "usb"                  # the description supplies the ids and strings
+# serial = "A12345"           # only if two identical boards are attached
+# vid = 0x16C0                # optional overrides of the description's ids
+# pid = 0x05DC
+# transfer_timeout_ms = 1000  # 50 to 10000
+```
+
+A build without the `usb` feature refuses this transport at start with a message saying so.
+`kind = "virtual"` on a USB description runs the board's twin on the fake bus, for trying
+clients. Status: unverified on every board; the Elektor SDR-USB has a description but no engine yet
+(it programs a Cypress PLL through an FTDI chip in bit-bang mode).
 
 ## TCP
 
