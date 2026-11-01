@@ -27,9 +27,10 @@ use serde::Deserialize;
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
-    KenwoodDialect, KenwoodHhParams, KenwoodParams, LevelParams, ReceiverParams, ReceiverProtocol,
-    RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol, VendorParams, VendorProtocol,
-    YaesuLegacyParams, YaesuParams,
+    KenwoodDialect, KenwoodHhParams, KenwoodParams, LegacyBlock, LegacyCommand, LegacyFlag,
+    LegacyFreqForm, LegacyRead, LevelParams, ReceiverParams, ReceiverProtocol, RigDescription,
+    ScopeParams, Timing, UsbParams, UsbProtocol, VendorParams, VendorProtocol, YaesuLegacyParams,
+    YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -206,6 +207,59 @@ struct YaesuLegacySection {
     stop_bits: u8,
     #[serde(default)]
     high_band_flag: bool,
+    #[serde(default)]
+    echo: bool,
+    set_frequency: Option<LegacyCommandEntry>,
+    set_mode: Option<LegacyCommandEntry>,
+    ptt_on: Option<[u8; 5]>,
+    ptt_off: Option<[u8; 5]>,
+    split_on: Option<[u8; 5]>,
+    split_off: Option<[u8; 5]>,
+    #[serde(default)]
+    reads: Vec<LegacyReadEntry>,
+    #[serde(default)]
+    status_modes: Vec<ModeEntry>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyCommandEntry {
+    template: [u8; 5],
+    at: u8,
+    form: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyFreqEntry {
+    offset: u16,
+    form: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyModeEntry {
+    offset: u16,
+    mask: u8,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyFlagEntry {
+    offset: u16,
+    mask: u8,
+    on_when_set: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyReadEntry {
+    request: [u8; 5],
+    length: u16,
+    frequency: Option<LegacyFreqEntry>,
+    mode: Option<LegacyModeEntry>,
+    ptt: Option<LegacyFlagEntry>,
+    split: Option<LegacyFlagEntry>,
 }
 
 #[derive(Deserialize)]
@@ -501,10 +555,17 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
             })
         })
         .transpose()?;
-    let yaesu_legacy = doc.yaesu_legacy.as_ref().map(|y| YaesuLegacyParams {
-        stop_bits: y.stop_bits,
-        high_band_flag: y.high_band_flag,
-    });
+    let yaesu_legacy = doc
+        .yaesu_legacy
+        .as_ref()
+        .map(|y| {
+            Ok::<YaesuLegacyParams, RigError>(YaesuLegacyParams {
+                stop_bits: y.stop_bits,
+                high_band_flag: y.high_band_flag,
+                block: build_legacy_block(y)?,
+            })
+        })
+        .transpose()?;
     let kenwood_hh = doc
         .kenwood_hh
         .as_ref()
@@ -740,6 +801,101 @@ fn build_scope(
     }))
 }
 
+// [@ANCHOR: radioctl_core_rigfile_legacy_form]
+fn legacy_form(name: &str) -> Result<LegacyFreqForm, RigError> {
+    Ok(match name {
+        "bcd-10hz-msb" => LegacyFreqForm::Bcd10HzMsb,
+        "bcd-10hz-lsb" => LegacyFreqForm::Bcd10HzLsb,
+        "bcd-1hz-msb" => LegacyFreqForm::Bcd1HzMsb,
+        "bin-10hz-msb3" => LegacyFreqForm::Bin10HzMsb3,
+        "bin-10hz-lsb3" => LegacyFreqForm::Bin10HzLsb3,
+        "bin-10hz-msb4" => LegacyFreqForm::Bin10HzMsb4,
+        "bin-1hz-msb4" => LegacyFreqForm::Bin1HzMsb4,
+        "bin-1.25hz-msb4" => LegacyFreqForm::Bin125Msb4,
+        "bin-0.625hz-msb4" => LegacyFreqForm::Bin0625Msb4,
+        "frg8800" => LegacyFreqForm::Frg8800,
+        other => return Err(bad(format!("unknown frequency form {other:?}"))),
+    })
+}
+
+// [@ANCHOR: radioctl_core_rigfile_build_legacy_block]
+fn build_legacy_block(y: &YaesuLegacySection) -> Result<Option<LegacyBlock>, RigError> {
+    let command = |entry: &LegacyCommandEntry| -> Result<LegacyCommand, RigError> {
+        if entry.at > 4 {
+            return Err(bad("a command slot starts inside the five-byte block"));
+        }
+        Ok(LegacyCommand {
+            template: entry.template,
+            at: entry.at,
+            form: entry.form.as_deref().map(legacy_form).transpose()?,
+        })
+    };
+    let pair = |on: Option<[u8; 5]>, off: Option<[u8; 5]>| match (on, off) {
+        (Some(a), Some(b)) => Ok(Some((a, b))),
+        (None, None) => Ok(None),
+        _ => Err(bad("an on block needs its off block")),
+    };
+    let flag = |f: &LegacyFlagEntry| LegacyFlag {
+        offset: f.offset,
+        mask: f.mask,
+        on_when_set: f.on_when_set,
+    };
+    let mut reads = Vec::new();
+    for r in &y.reads {
+        reads.push(LegacyRead {
+            request: r.request,
+            length: r.length,
+            frequency: r
+                .frequency
+                .as_ref()
+                .map(|f| legacy_form(&f.form).map(|form| (f.offset, form)))
+                .transpose()?,
+            mode: r.mode.as_ref().map(|m| (m.offset, m.mask)),
+            ptt: r.ptt.as_ref().map(flag),
+            split: r.split.as_ref().map(flag),
+        });
+    }
+    let status_modes = if y.status_modes.is_empty() {
+        Vec::new()
+    } else {
+        build_mode_codes(&y.status_modes, false)?
+            .into_iter()
+            .map(|(mode, code)| (code, mode))
+            .collect()
+    };
+    let block = LegacyBlock {
+        set_frequency: y.set_frequency.as_ref().map(command).transpose()?,
+        set_mode: y.set_mode.as_ref().map(command).transpose()?,
+        ptt: pair(y.ptt_on, y.ptt_off)?,
+        split: pair(y.split_on, y.split_off)?,
+        reads,
+        status_modes,
+        echo: y.echo,
+    };
+    let any = block.set_frequency.is_some()
+        || block.set_mode.is_some()
+        || block.ptt.is_some()
+        || block.split.is_some()
+        || !block.reads.is_empty();
+    if block
+        .set_frequency
+        .as_ref()
+        .is_some_and(|c| c.form.is_none())
+    {
+        return Err(bad("the set-frequency command needs a frequency form"));
+    }
+    if block.reads.iter().any(|r| {
+        r.frequency
+            .is_some_and(|(o, f)| usize::from(o) + f.width() > usize::from(r.length))
+            || r.mode.is_some_and(|(o, _)| o >= r.length)
+            || r.ptt.is_some_and(|p| p.offset >= r.length)
+            || r.split.is_some_and(|p| p.offset >= r.length)
+    }) {
+        return Err(bad("a status field lies outside its reply"));
+    }
+    Ok(any.then_some(block))
+}
+
 // [@ANCHOR: radioctl_core_rigfile_build_mode_codes]
 fn build_mode_codes(
     entries: &[ModeEntry],
@@ -935,6 +1091,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         keys.push("yaesu_legacy.stop_bits".to_string());
         if legacy.high_band_flag {
             keys.push("yaesu_legacy.high_band_flag".to_string());
+        }
+        if legacy.block.is_some() {
+            keys.push("yaesu_legacy.block".to_string());
         }
     }
     if description.kenwood_hh.is_some() {

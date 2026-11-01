@@ -1,0 +1,87 @@
+# Rig description: Yaesu FRG-9600 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 frg9600.c facts only: the FRG-9600 user manual has no CAT chapter. Write-only receiver, 60 to 905 MHz.
+# Unlike the other models the opcode comes FIRST in the block: 0A then four BCD bytes (most significant first, 10 Hz units); a mode block carries the mode code in the first byte.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["set-frequency", "set-mode"]
+
+[rig]
+id = "yaesu-frg-9600"
+name = "Yaesu FRG-9600"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[yaesu_legacy.set_frequency]
+template = [0x0a, 0x00, 0x00, 0x00, 0x00]
+at = 1
+form = "bcd-10hz-msb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x00]
+at = 0
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 145000000
+mode = "fm"
+
+[[modes]]
+mode = "lsb"
+code = 0x10
+
+[[modes]]
+mode = "usb"
+code = 0x11
+
+[[modes]]
+mode = "am"
+code = 0x15
+
+[[modes]]
+mode = "fm"
+code = 0x16
+
+[[modes]]
+mode = "wfm"
+code = 0x17
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/frg9600.c: caps: serial_stop_bits 2, 4800 baud" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/frg9600.c: frg9600_set_freq: first byte 0A then the BCD of freq/10, most significant byte first; frg9600_set_mode: first byte is the mode code, the rest zero", note = "Unverified: no vendor page." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/frg9600.c: caps: only set_freq and set_mode", note = "No reads." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/frg9600.c: mode set values 10 LSB, 11 USB, 14 AM narrow, 15 AM wide, 16 FM narrow, 17 wide FM", note = "AM narrow is not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

@@ -1,0 +1,91 @@
+# Rig description: Yaesu VR-5000 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's VR-5000 User Manual, CAT chapter (PDF pages 55 to 57) and Hamlib 4.6.2 vr5000.c. Receiver, 100 kHz to 2.6 GHz. Hamlib's frequency and mode reads return values it cached from the last set (the radio is not asked), so reads are not offered.
+# Open question: the manual prints 34 for the 25 kHz step where Hamlib sends 35. The step byte sent here is 02 (100 Hz), a value both agree on.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["set-frequency", "set-mode"]
+
+[rig]
+id = "yaesu-vr-5000"
+name = "Yaesu VR-5000"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x01]
+at = 0
+form = "bin-10hz-msb4"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x02, 0x00, 0x00, 0x07]
+at = 0
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 145000000
+mode = "fm"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "wfm"
+code = 0x48
+
+[[modes]]
+mode = "fm"
+code = 0x88
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu VR-5000 User Manual (file vr5000_user_manual.pdf, sha256 c37badd3c78a669968e0806218e91a2cfe403519ded786d4ddd2ee02bdd66dd4): CAT chapter, PDF p.57 (printed 55): 4800, 9600 or 57600 baud (menu CAT RATE), 8 data, no parity, 2 stop; built-in level converter", note = "The description does not yet carry the baud-rate choice." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu VR-5000 User Manual (file vr5000_user_manual.pdf, sha256 c37badd3c78a669968e0806218e91a2cfe403519ded786d4ddd2ee02bdd66dd4): CAT chapter, PDF p.57 (printed 55): set frequency: parameters F1 to F4 then opcode 01 (main VFO) or 31 (sub): a 32-bit binary count of 10 Hz, most significant byte first, 439.70 MHz is 02 9E ED D0 01; receiving mode: parameters M1 (mode) and M2 (channel step) then opcode 07 (main) or 37 (sub); status read E7 returns one byte", note = "The manual does not say whether the parameters go first-to-last or reversed; the printed order and Hamlib agree. Status E7 (squelch bit 7, S-meter in the low bits, layout unclear) is not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/vr5000.c: vr5000_get_freq returns the cached frequency without asking the radio" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu VR-5000 User Manual (file vr5000_user_manual.pdf, sha256 c37badd3c78a669968e0806218e91a2cfe403519ded786d4ddd2ee02bdd66dd4): CAT chapter, PDF p.57 (printed 55): M1: 00 LSB, 01 USB, 02 CW, 04 AM, 44 wide AM, 48 wide FM, 84 narrow AM, 88 narrow FM", note = "Wide and narrow AM variants are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

@@ -49,7 +49,9 @@
 
 use std::time::Duration;
 
-use radioctl_core::description::{Family, RigDescription};
+use radioctl_core::description::{
+    Family, LegacyBlock, LegacyCommand, LegacyFlag, LegacyRead, RigDescription,
+};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
@@ -93,6 +95,8 @@ enum Pending {
     FrequencyMode,
     RxStatus,
     TxStatus,
+    /// A block-protocol status read; the index is into `LegacyBlock::reads`.
+    Block(usize),
 }
 
 // [@ANCHOR: radioctl_ylegacy_encode_bcd_frequency]
@@ -162,6 +166,8 @@ pub struct YaesuLegacyEngine {
     pending: Pending,
     buffer: Vec<u8>,
     last_byte_at: Duration,
+    /// The command bytes a radio that echoes (FT-767GX) is expected to send back.
+    echo_of: Option<Vec<u8>>,
 }
 
 impl YaesuLegacyEngine {
@@ -179,7 +185,148 @@ impl YaesuLegacyEngine {
             pending: Pending::Nothing,
             buffer: Vec::new(),
             last_byte_at: Duration::ZERO,
+            echo_of: None,
         })
+    }
+
+    fn spec(&self) -> Option<&LegacyBlock> {
+        self.desc
+            .yaesu_legacy
+            .as_ref()
+            .and_then(|y| y.block.as_ref())
+    }
+
+    // [@ANCHOR: radioctl_ylegacy_fill_command]
+    /// A command's block with the parameter bytes in its slot.
+    fn fill(command: &LegacyCommand, params: &[u8]) -> [u8; 5] {
+        let mut out = command.template;
+        for (i, byte) in params.iter().enumerate() {
+            if let Some(slot) = out.get_mut(usize::from(command.at) + i) {
+                *slot = *byte;
+            }
+        }
+        out
+    }
+
+    // [@ANCHOR: radioctl_ylegacy_encode_block]
+    /// The request for an operation on a block-protocol model, and what to expect back.
+    fn encode_block(&self, op: &Op) -> Result<(Request, Pending), RigError> {
+        let block = self
+            .spec()
+            .ok_or_else(|| Self::unsupported("no block commands"))?;
+        let ack = if block.echo {
+            ReplyKind::Ack
+        } else {
+            ReplyKind::None
+        };
+        let send = |bytes: [u8; 5]| Request {
+            bytes: bytes.to_vec(),
+            reply: ack,
+        };
+        let read_for = |want: &dyn Fn(&LegacyRead) -> bool, field: Field| {
+            block
+                .reads
+                .iter()
+                .position(want)
+                .map(|index| {
+                    (
+                        Request {
+                            bytes: block.reads[index].request.to_vec(),
+                            reply: ReplyKind::Observation(field),
+                        },
+                        Pending::Block(index),
+                    )
+                })
+                .ok_or_else(|| Self::unsupported("this model has no such status read"))
+        };
+        match op {
+            Op::SetFrequency(Vfo::A, hz) => {
+                let command = block
+                    .set_frequency
+                    .as_ref()
+                    .ok_or_else(|| Self::unsupported("no set-frequency command"))?;
+                let form = command
+                    .form
+                    .ok_or_else(|| Self::unsupported("no frequency form"))?;
+                let bytes = form.encode(*hz).ok_or_else(|| {
+                    Self::unsupported("frequency not representable in this model's command")
+                })?;
+                Ok((send(Self::fill(command, &bytes)), Pending::Nothing))
+            }
+            Op::SetMode(mode) => {
+                let command = block
+                    .set_mode
+                    .as_ref()
+                    .ok_or_else(|| Self::unsupported("no set-mode command"))?;
+                let code = self
+                    .desc
+                    .mode_code(*mode)
+                    .ok_or_else(|| Self::unsupported("mode not in the description"))?;
+                Ok((send(Self::fill(command, &[code])), Pending::Nothing))
+            }
+            Op::SetPtt(on) => {
+                let (a, b) = block
+                    .ptt
+                    .ok_or_else(|| Self::unsupported("no PTT command"))?;
+                Ok((send(if *on { a } else { b }), Pending::Nothing))
+            }
+            Op::SetSplit(on) => {
+                let (a, b) = block
+                    .split
+                    .ok_or_else(|| Self::unsupported("no split command"))?;
+                Ok((send(if *on { a } else { b }), Pending::Nothing))
+            }
+            Op::GetFrequency(Vfo::A) => {
+                read_for(&|r| r.frequency.is_some(), Field::Frequency(Vfo::A))
+            }
+            Op::GetMode => read_for(&|r| r.mode.is_some(), Field::Mode),
+            Op::GetPtt => read_for(&|r| r.ptt.is_some(), Field::Ptt),
+            Op::GetSplit => read_for(&|r| r.split.is_some(), Field::Split),
+            _ => Err(Self::unsupported(
+                "not implemented for the Yaesu legacy engine",
+            )),
+        }
+    }
+
+    // [@ANCHOR: radioctl_ylegacy_decode_block]
+    fn decode_block(&self, read: &LegacyRead, reply: &[u8]) -> Vec<Inbound> {
+        let flag = |f: &LegacyFlag| {
+            reply
+                .get(usize::from(f.offset))
+                .map(|b| (b & f.mask != 0) == f.on_when_set)
+        };
+        let mut out = Vec::new();
+        if let Some((offset, form)) = read.frequency {
+            let start = usize::from(offset);
+            match reply
+                .get(start..start + form.width())
+                .and_then(|b| form.decode(b))
+            {
+                Some(hz) => out.push(Inbound::Observation(Observation::Frequency(Vfo::A, hz))),
+                None => return vec![Inbound::Unrecognised(reply.to_vec())],
+            }
+        }
+        if let Some((offset, mask)) = read.mode {
+            let mode = reply.get(usize::from(offset)).and_then(|b| {
+                let code = b & mask;
+                self.spec()?
+                    .status_modes
+                    .iter()
+                    .find(|(c, _)| *c == code)
+                    .map(|(_, m)| *m)
+            });
+            match mode {
+                Some(mode) => out.push(Inbound::Observation(Observation::Mode(mode))),
+                None => return vec![Inbound::Unrecognised(reply.to_vec())],
+            }
+        }
+        if let Some(on) = read.ptt.as_ref().and_then(flag) {
+            out.push(Inbound::Observation(Observation::Ptt(on)));
+        }
+        if let Some(on) = read.split.as_ref().and_then(flag) {
+            out.push(Inbound::Observation(Observation::Split(on)));
+        }
+        out
     }
 
     fn unsupported(what: &str) -> RigError {
@@ -221,6 +368,16 @@ impl ProtocolEngine for YaesuLegacyEngine {
         }
         let none = ReplyKind::None;
         let zero = [0u8; 4];
+        if self.spec().is_some() {
+            let (request, pending) = self.encode_block(op)?;
+            self.pending = pending;
+            self.echo_of = self
+                .spec()
+                .is_some_and(|b| b.echo)
+                .then(|| request.bytes.clone());
+            self.buffer.clear();
+            return Ok(request);
+        }
         let (request, pending) = match op {
             Op::GetFrequency(Vfo::A) => (
                 Self::block(
@@ -321,23 +478,46 @@ impl ProtocolEngine for YaesuLegacyEngine {
         }
         self.last_byte_at = now;
         self.buffer.extend_from_slice(bytes);
+        let mut out = Vec::new();
+        if let Some(echo) = self.echo_of.clone() {
+            if self.buffer.len() < echo.len() {
+                return out;
+            }
+            let got: Vec<u8> = self.buffer.drain(..echo.len()).collect();
+            self.echo_of = None;
+            out.push(if got == echo {
+                Inbound::Ack
+            } else {
+                Inbound::Nak
+            });
+            if self.buffer.is_empty() {
+                return out;
+            }
+        }
         let need = match self.pending {
+            Pending::Block(index) => self
+                .spec()
+                .and_then(|b| b.reads.get(index))
+                .map_or(1, |r| usize::from(r.length)),
             Pending::Nothing => {
-                return if self.buffer.is_empty() {
-                    Vec::new()
-                } else {
-                    vec![Inbound::Unrecognised(std::mem::take(&mut self.buffer))]
-                };
+                if !self.buffer.is_empty() {
+                    out.push(Inbound::Unrecognised(std::mem::take(&mut self.buffer)));
+                }
+                return out;
             }
             Pending::FrequencyMode => 5,
             Pending::RxStatus | Pending::TxStatus => 1,
         };
         if self.buffer.len() < need {
-            return Vec::new();
+            return out;
         }
         let answer: Vec<u8> = self.buffer.drain(..need).collect();
         let pending = std::mem::replace(&mut self.pending, Pending::Nothing);
-        let mut out = match (pending, answer.as_slice()) {
+        out.extend(match (pending, answer.as_slice()) {
+            (Pending::Block(index), reply) => match self.spec().and_then(|b| b.reads.get(index)) {
+                Some(read) => self.decode_block(read, reply),
+                None => vec![Inbound::Unrecognised(answer.clone())],
+            },
             (Pending::FrequencyMode, bytes) => self.decode_frequency_mode(bytes),
             (Pending::RxStatus, [status]) => {
                 vec![Inbound::Observation(Observation::Signal(u16::from(
@@ -352,7 +532,7 @@ impl ProtocolEngine for YaesuLegacyEngine {
                 Inbound::Observation(Observation::Power(u16::from(status & 0x0F))),
             ],
             _ => vec![Inbound::Unrecognised(answer)],
-        };
+        });
         if !self.buffer.is_empty() {
             out.push(Inbound::Unrecognised(std::mem::take(&mut self.buffer)));
         }
@@ -578,6 +758,366 @@ mod tests {
         assert_eq!(
             e.encode(&Op::SetMode(Mode::Fm)).expect("encodes").bytes,
             [0x08, 0, 0, 0, 0x07]
+        );
+    }
+
+    /// The block-protocol descriptions added after the FT-817 family.
+    const BLOCK_RIGS: [&str; 23] = [
+        "yaesu-ft-747gx",
+        "yaesu-ft-757gx",
+        "yaesu-ft-757gxii",
+        "yaesu-ft-767gx",
+        "yaesu-ft-840",
+        "yaesu-ft-890",
+        "yaesu-ft-900",
+        "yaesu-ft-920",
+        "yaesu-ft-990",
+        "yaesu-ft-990-oldrom",
+        "yaesu-ft-1000",
+        "yaesu-ft-1000d",
+        "yaesu-ft-1000mp",
+        "yaesu-ft-1000mp-mkv",
+        "yaesu-ft-1000mp-mkv-field",
+        "yaesu-ft-100",
+        "yaesu-ft-600",
+        "yaesu-ft-980",
+        "yaesu-frg-100",
+        "yaesu-frg-8800",
+        "yaesu-frg-9600",
+        "yaesu-vr-5000",
+        "vertex-vx-1700",
+    ];
+
+    fn send(
+        e: &mut YaesuLegacyEngine,
+        r: &mut crate::virtual_rig::VirtualRig,
+        op: Op,
+    ) -> Vec<Inbound> {
+        let request = e.encode(&op).expect("encodes");
+        let answer = r.feed(&request.bytes, T0);
+        e.feed(&answer, T0)
+    }
+
+    // Tests [@ANCHOR: radioctl_ylegacy_encode_block]
+    // Tests [@ANCHOR: radioctl_ylegacy_decode_block]
+    // Tests [@ANCHOR: radioctl_ylegacy_fill_command]
+    // Tests [@ANCHOR: radioctl_virtual_legacy_model_block]
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_legacy_block]
+    // Tests [@ANCHOR: radioctl_core_rigfile_legacy_form]
+    #[test]
+    fn every_block_protocol_twin_sets_and_reads_back_what_its_description_offers() {
+        use crate::virtual_rig::VirtualRig;
+        use radioctl_core::capability::Capability;
+        for id in BLOCK_RIGS {
+            let d = shipped(id);
+            let hz = Hz(d.default_frequency.0 - d.default_frequency.0 % 1_000);
+            let mut e = YaesuLegacyEngine::new(d.clone()).expect("engine");
+            let mut r = VirtualRig::from_description(&d).expect("rig");
+            let spec = d
+                .yaesu_legacy
+                .as_ref()
+                .and_then(|y| y.block.clone())
+                .expect("block");
+            assert!(
+                send(&mut e, &mut r, Op::SetFrequency(Vfo::A, hz))
+                    .iter()
+                    .all(|i| *i == Inbound::Ack),
+                "{id}"
+            );
+            assert_eq!(r.state().freq_a, hz, "{id}: frequency set");
+            let reads_frequency = d.capabilities.has(Capability::ReadFrequency);
+            if reads_frequency {
+                let got = send(&mut e, &mut r, Op::GetFrequency(Vfo::A));
+                assert!(
+                    got.contains(&Inbound::Observation(Observation::Frequency(Vfo::A, hz))),
+                    "{id}: {got:?}"
+                );
+            } else {
+                assert!(
+                    e.encode(&Op::GetFrequency(Vfo::A)).is_err(),
+                    "{id}: set-only"
+                );
+            }
+            for (mode, _) in d.mode_codes.clone() {
+                send(&mut e, &mut r, Op::SetMode(mode));
+                assert_eq!(r.state().mode, mode, "{id}: {mode:?} set");
+                let readable = spec.status_modes.iter().any(|(_, m)| *m == mode);
+                if d.capabilities.has(Capability::ReadMode) && readable {
+                    let got = send(&mut e, &mut r, Op::GetMode);
+                    assert!(
+                        got.contains(&Inbound::Observation(Observation::Mode(mode))),
+                        "{id}: {mode:?} read: {got:?}"
+                    );
+                }
+            }
+            if d.capabilities.has(Capability::SetPtt) {
+                send(&mut e, &mut r, Op::SetPtt(true));
+                assert!(r.state().ptt, "{id}: PTT on");
+                if d.capabilities.has(Capability::ReadPtt) {
+                    let got = send(&mut e, &mut r, Op::GetPtt);
+                    assert!(
+                        got.contains(&Inbound::Observation(Observation::Ptt(true))),
+                        "{id}: {got:?}"
+                    );
+                }
+                send(&mut e, &mut r, Op::SetPtt(false));
+                assert!(!r.state().ptt, "{id}: PTT off");
+            } else {
+                assert!(e.encode(&Op::SetPtt(true)).is_err(), "{id}: no CAT PTT");
+            }
+            if d.capabilities.has(Capability::ReadPtt) {
+                // Receiving reads as not transmitting.
+                let got = send(&mut e, &mut r, Op::GetPtt);
+                assert!(
+                    got.contains(&Inbound::Observation(Observation::Ptt(false))),
+                    "{id}: {got:?}"
+                );
+            }
+            if d.capabilities.has(Capability::Split) {
+                send(&mut e, &mut r, Op::SetSplit(true));
+                assert!(r.state().split, "{id}: split on");
+                let got = send(&mut e, &mut r, Op::GetSplit);
+                assert!(
+                    got.contains(&Inbound::Observation(Observation::Split(true))),
+                    "{id}: {got:?}"
+                );
+                send(&mut e, &mut r, Op::SetSplit(false));
+            }
+        }
+    }
+
+    // Tests [@ANCHOR: radioctl_core_legacy_form_encode]
+    // Tests [@ANCHOR: radioctl_core_legacy_form_decode]
+    // Tests [@ANCHOR: radioctl_core_legacy_form_width]
+    // Tests [@ANCHOR: radioctl_core_legacy_form_unit]
+    #[test]
+    fn the_frequency_forms_encode_the_manuals_worked_examples() {
+        use radioctl_core::description::LegacyFreqForm as F;
+        // 14.25000 MHz is 00 50 42 01 on the wire for the least-significant-first BCD forms
+        // (FT-747, FT-757GXII, FT-840 and the others' manuals).
+        assert_eq!(
+            F::Bcd10HzLsb.encode(Hz(14_250_000)),
+            Some(vec![0x00, 0x50, 0x42, 0x01])
+        );
+        assert_eq!(
+            F::Bcd10HzLsb.decode(&[0x00, 0x50, 0x42, 0x01]),
+            Some(Hz(14_250_000))
+        );
+        // FT-100 manual's example: 439.70 MHz is 00 00 97 43.
+        assert_eq!(
+            F::Bcd10HzLsb.encode(Hz(439_700_000)),
+            Some(vec![0x00, 0x00, 0x97, 0x43])
+        );
+        // VR-5000 manual's example: 439.70 MHz is 02 9E ED D0.
+        assert_eq!(
+            F::Bin10HzMsb4.encode(Hz(439_700_000)),
+            Some(vec![0x02, 0x9E, 0xED, 0xD0])
+        );
+        // FRG-8800 manual's example: 14.254 MHz is 01 54 42 01; +75 Hz sets the step nibble to 8.
+        assert_eq!(
+            F::Frg8800.encode(Hz(14_254_000)),
+            Some(vec![0x01, 0x54, 0x42, 0x01])
+        );
+        assert_eq!(
+            F::Frg8800.encode(Hz(14_254_075)),
+            Some(vec![0x08, 0x54, 0x42, 0x01])
+        );
+        assert_eq!(
+            F::Frg8800.decode(&[0x08, 0x54, 0x42, 0x01]),
+            Some(Hz(14_254_075))
+        );
+        assert_eq!(F::Frg8800.encode(Hz(14_254_010)), None, "not a 25 Hz step");
+        // FT-890 family status: three binary bytes in 10 Hz units, most significant first.
+        assert_eq!(
+            F::Bin10HzMsb3.encode(Hz(14_250_000)),
+            Some(vec![0x15, 0xBE, 0x68])
+        );
+        assert_eq!(
+            F::Bin10HzLsb3.encode(Hz(14_250_000)),
+            Some(vec![0x68, 0xBE, 0x15])
+        );
+        // FT-100 status: 1.25 Hz units; 5 Hz is the finest whole-hertz step.
+        assert_eq!(
+            F::Bin125Msb4.encode(Hz(14_250_000)),
+            Some(vec![0x00, 0xAD, 0xF3, 0x40])
+        );
+        assert_eq!(F::Bin125Msb4.encode(Hz(14_250_001)), None);
+        assert_eq!(
+            F::Bin125Msb4.decode(&[0x00, 0xAD, 0xF3, 0x40]),
+            Some(Hz(14_250_000))
+        );
+        // FT-747 status: eight BCD digits of hertz, most significant first.
+        assert_eq!(
+            F::Bcd1HzMsb.encode(Hz(14_250_025)),
+            Some(vec![0x14, 0x25, 0x00, 0x25])
+        );
+        // FT-1000MP status as Hamlib reads it: 0.625 Hz units.
+        assert_eq!(
+            F::Bin0625Msb4.decode(&[0x01, 0x58, 0x5B, 0x00]),
+            Some(Hz(14_104_800))
+        );
+        assert_eq!(F::Bcd10HzMsb.decode(&[0x4A, 0, 0, 0]), None);
+        assert_eq!(F::Bin10HzMsb3.decode(&[1, 2]), None);
+        assert_eq!(F::Bin10HzMsb3.width(), 3);
+        assert_eq!(F::Bin125Msb4.width(), 4);
+        assert_eq!(
+            F::Bin10HzMsb3.encode(Hz(2_000_000_000)),
+            None,
+            "too big for 24 bits"
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_ylegacy_encode_block]
+    // Tests [@ANCHOR: radioctl_ylegacy_fill_command]
+    #[test]
+    fn block_commands_are_the_manuals_wire_bytes() {
+        let wire = |id: &str, op: Op| {
+            YaesuLegacyEngine::new(shipped(id))
+                .expect("engine")
+                .encode(&op)
+                .expect("encodes")
+                .bytes
+        };
+        assert_eq!(
+            wire("yaesu-ft-747gx", Op::SetFrequency(Vfo::A, Hz(14_250_000))),
+            [0x00, 0x50, 0x42, 0x01, 0x0A]
+        );
+        assert_eq!(
+            wire("yaesu-ft-747gx", Op::SetMode(Mode::Usb)),
+            [0, 0, 0, 1, 0x0C]
+        );
+        assert_eq!(wire("yaesu-ft-747gx", Op::SetPtt(true)), [0, 0, 0, 1, 0x0F]);
+        assert_eq!(wire("yaesu-ft-747gx", Op::GetPtt), [0, 0, 0, 0, 0x10]);
+        assert_eq!(
+            wire("yaesu-ft-890", Op::GetFrequency(Vfo::A)),
+            [0, 0, 0, 3, 0x10]
+        );
+        assert_eq!(wire("yaesu-ft-890", Op::GetPtt), [0, 0, 0, 0, 0xFA]);
+        assert_eq!(
+            wire("yaesu-ft-767gx", Op::SetFrequency(Vfo::A, Hz(14_250_000))),
+            [0x00, 0x50, 0x42, 0x01, 0x08]
+        );
+        assert_eq!(
+            wire("yaesu-ft-767gx", Op::SetMode(Mode::Fm)),
+            [0, 0, 0, 0x14, 0x0A]
+        );
+        assert_eq!(
+            wire("yaesu-frg-8800", Op::SetFrequency(Vfo::A, Hz(14_254_000))),
+            [0x01, 0x54, 0x42, 0x01, 0x01]
+        );
+        assert_eq!(
+            wire("yaesu-frg-8800", Op::SetMode(Mode::Usb)),
+            [0, 0, 0, 2, 0x80]
+        );
+        assert_eq!(
+            wire("yaesu-frg-9600", Op::SetFrequency(Vfo::A, Hz(145_000_000))),
+            [0x0A, 0x14, 0x50, 0x00, 0x00]
+        );
+        assert_eq!(
+            wire("yaesu-frg-9600", Op::SetMode(Mode::Fm)),
+            [0x16, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            wire("yaesu-vr-5000", Op::SetFrequency(Vfo::A, Hz(439_700_000))),
+            [0x02, 0x9E, 0xED, 0xD0, 0x01]
+        );
+        assert_eq!(
+            wire("yaesu-vr-5000", Op::SetMode(Mode::Fm)),
+            [0x88, 0x02, 0, 0, 0x07]
+        );
+        assert_eq!(
+            wire("yaesu-ft-100", Op::SetFrequency(Vfo::A, Hz(439_700_000))),
+            [0x00, 0x00, 0x97, 0x43, 0x0A]
+        );
+        let mut e = YaesuLegacyEngine::new(shipped("yaesu-ft-890")).expect("engine");
+        assert!(e.encode(&Op::GetSignal).is_err(), "meters are not mapped");
+        assert!(
+            e.encode(&Op::SetFrequency(Vfo::A, Hz(14_250_005))).is_err(),
+            "10 Hz units"
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_ylegacy_engine_feed]
+    // Tests [@ANCHOR: radioctl_ylegacy_decode_block]
+    #[test]
+    fn a_status_block_is_counted_by_length_and_a_bad_field_is_unrecognised() {
+        let mut e = YaesuLegacyEngine::new(shipped("yaesu-ft-890")).expect("engine");
+        e.encode(&Op::GetFrequency(Vfo::A)).expect("get");
+        // The 18-byte VFO A and B block: VFO A's frequency at offset 1, mode at offset 6.
+        let mut block = vec![0u8; 18];
+        block[1..4].copy_from_slice(&[0x15, 0xBE, 0x68]);
+        block[6] = 0x01;
+        assert!(e.feed(&block[..10], T0).is_empty(), "partial");
+        assert_eq!(
+            e.feed(&block[10..], T0),
+            vec![
+                Inbound::Observation(Observation::Frequency(Vfo::A, Hz(14_250_000))),
+                Inbound::Observation(Observation::Mode(Mode::Usb)),
+            ]
+        );
+        e.encode(&Op::GetMode).expect("get");
+        block[6] = 0x07;
+        assert!(matches!(
+            e.feed(&block, T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+        // The flags block: transmitting is bit 7 of the third byte.
+        e.encode(&Op::GetPtt).expect("get");
+        assert_eq!(
+            e.feed(&[0x00, 0x00, 0x80, 0x08, 0x41], T0),
+            vec![
+                Inbound::Observation(Observation::Ptt(true)),
+                Inbound::Observation(Observation::Split(false)),
+            ]
+        );
+        // The FT-767GX echoes: a matching echo is an Ack, a different one a Nak.
+        let mut e = YaesuLegacyEngine::new(shipped("yaesu-ft-767gx")).expect("engine");
+        let request = e.encode(&Op::SetMode(Mode::Usb)).expect("set");
+        assert_eq!(request.reply, ReplyKind::Ack);
+        assert!(e.feed(&request.bytes[..3], T0).is_empty());
+        assert_eq!(e.feed(&request.bytes[3..], T0), vec![Inbound::Ack]);
+        e.encode(&Op::SetMode(Mode::Usb)).expect("set");
+        assert_eq!(e.feed(&[1, 2, 3, 4, 5], T0), vec![Inbound::Nak]);
+    }
+
+    /// Where the manuals or Hamlib disagree with each other, the description follows the manual and
+    /// this test pins the choice so a change is visible. None of these is settled without a radio.
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_legacy_block]
+    #[test]
+    fn the_open_questions_are_pinned_to_the_choice_made() {
+        let spec = |id: &str| {
+            shipped(id)
+                .yaesu_legacy
+                .and_then(|y| y.block)
+                .expect("block")
+        };
+        // FT-747GX: the manual's update block is 345 bytes, Hamlib reads 344; the displayed
+        // frequency is at offset 2 by the manual, offset 1 in Hamlib.
+        let ft747 = spec("yaesu-ft-747gx");
+        assert_eq!(ft747.reads[0].length, 345);
+        assert_eq!(ft747.reads[0].frequency.map(|f| f.0), Some(2));
+        // FT-890 split-on parameter: Hamlib and the FT-840/900 manuals send 1; the FT-890 manual's
+        // table prints 0.
+        assert_eq!(spec("yaesu-ft-890").split.map(|s| s.0[3]), Some(1));
+        // FT-1000MP status frequency unit: Hamlib's 0.625 Hz, unconfirmed by the manual.
+        assert_eq!(
+            spec("yaesu-ft-1000mp").reads[0].frequency.map(|f| f.1),
+            Some(radioctl_core::description::LegacyFreqForm::Bin0625Msb4)
+        );
+        // FT-920: Hamlib's plain-hertz reading of the record's frequency.
+        assert_eq!(
+            spec("yaesu-ft-920").reads[0].frequency.map(|f| f.1),
+            Some(radioctl_core::description::LegacyFreqForm::Bin1HzMsb4)
+        );
+        // FT-990: the manual's operating-data record is 16 bytes, Hamlib reads 32.
+        assert_eq!(spec("yaesu-ft-990").reads[1].length, 32);
+        // FT-100: the manual's status block is 16 bytes, Hamlib reads 32.
+        assert_eq!(spec("yaesu-ft-100").reads[0].length, 16);
+        // VR-5000 set-mode step byte is the one both sources agree on (100 Hz, 02), not the 25 kHz
+        // code on which the manual (34) and Hamlib (35) differ.
+        assert_eq!(
+            spec("yaesu-vr-5000").set_mode.map(|c| c.template[1]),
+            Some(0x02)
         );
     }
 }

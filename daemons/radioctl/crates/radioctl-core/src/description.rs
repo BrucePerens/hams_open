@@ -489,6 +489,229 @@ pub struct YaesuLegacyParams {
     /// True when a frequency from 1.2 to 1.3 GHz is sent as its seven low digits with the nibble C ahead
     /// (the FT-736R's 1.2 GHz module, as Hamlib's `ft736_set_freq` does); false for every other model.
     pub high_band_flag: bool,
+    /// The block-protocol commands and status reads of the later models (FT-747 to FT-1000MP and
+    /// the receivers), or `None` for the FT-817 family, whose commands the engine knows itself.
+    pub block: Option<LegacyBlock>,
+}
+
+/// How a frequency is written into five-byte-block bytes (a command's parameters or a field of a
+/// status record).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegacyFreqForm {
+    /// Eight BCD digits in four bytes, most significant first, 10 Hz units (FT-817 family,
+    /// FT-767GX status, FRG-9600 set).
+    Bcd10HzMsb,
+    /// Eight BCD digits in four bytes, least significant byte first, 10 Hz units (the set-frequency
+    /// parameters of FT-747 to FT-1000MP and the FT-757GXII status).
+    Bcd10HzLsb,
+    /// Eight BCD digits in four bytes, most significant first, 1 Hz units (FT-747 status; the radio
+    /// resolves 25 Hz).
+    Bcd1HzMsb,
+    /// Binary, three bytes, most significant first, 10 Hz units (FT-840, 890, 900, 990, 1000).
+    Bin10HzMsb3,
+    /// Binary, three bytes, least significant first, 10 Hz units (FRG-100).
+    Bin10HzLsb3,
+    /// Binary, four bytes, most significant first, 10 Hz units (VR-5000 set).
+    Bin10HzMsb4,
+    /// Binary, four bytes, most significant first, 1 Hz units (FT-920 status, as Hamlib reads it).
+    Bin1HzMsb4,
+    /// Binary, four bytes, most significant first, 1.25 Hz units (FT-100 status).
+    Bin125Msb4,
+    /// Binary, four bytes, most significant first, 0.625 Hz units (FT-1000MP status, as Hamlib reads it).
+    Bin0625Msb4,
+    /// The FRG-8800 form: BCD digits least significant first from the 100 Hz digit, the low nibble
+    /// of the first byte a one-hot code of the 25 Hz step. Writes only.
+    Frg8800,
+}
+
+impl LegacyFreqForm {
+    // [@ANCHOR: radioctl_core_legacy_form_width]
+    /// Bytes a frequency in this form occupies.
+    pub fn width(self) -> usize {
+        match self {
+            LegacyFreqForm::Bin10HzMsb3 | LegacyFreqForm::Bin10HzLsb3 => 3,
+            _ => 4,
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_legacy_form_unit]
+    /// Hertz per count for the binary and BCD forms, in thousandths of a hertz.
+    fn unit_millihz(self) -> u64 {
+        match self {
+            LegacyFreqForm::Bcd1HzMsb | LegacyFreqForm::Bin1HzMsb4 => 1_000,
+            LegacyFreqForm::Bin125Msb4 => 1_250,
+            LegacyFreqForm::Bin0625Msb4 => 625,
+            _ => 10_000,
+        }
+    }
+
+    fn is_bcd(self) -> bool {
+        matches!(
+            self,
+            LegacyFreqForm::Bcd10HzMsb | LegacyFreqForm::Bcd10HzLsb | LegacyFreqForm::Bcd1HzMsb
+        )
+    }
+
+    fn lsb_first(self) -> bool {
+        matches!(
+            self,
+            LegacyFreqForm::Bcd10HzLsb | LegacyFreqForm::Bin10HzLsb3 | LegacyFreqForm::Frg8800
+        )
+    }
+
+    // [@ANCHOR: radioctl_core_legacy_form_encode]
+    /// The bytes for a frequency, or `None` when it is not a whole count of this form's unit or
+    /// does not fit the width.
+    pub fn encode(self, hz: Hz) -> Option<Vec<u8>> {
+        if self == LegacyFreqForm::Frg8800 {
+            // The BCD digits of the 10 Hz count, least significant byte first; the first byte keeps
+            // the 100 Hz digit in its high nibble and a one-hot code of the 25 Hz step in the low.
+            if !hz.0.is_multiple_of(25) || hz.0 > 999_999_975 {
+                return None;
+            }
+            let mut rest = hz.0 / 10;
+            let mut out = vec![0u8; 4];
+            for byte in out.iter_mut() {
+                let pair = (rest % 100) as u8;
+                *byte = ((pair / 10) << 4) | (pair % 10);
+                rest /= 100;
+            }
+            out[0] = (out[0] & 0xF0) | (1 << ((hz.0 % 100) / 25));
+            return Some(out);
+        }
+        let millihz = hz.0.checked_mul(1_000)?;
+        let unit = self.unit_millihz();
+        if !millihz.is_multiple_of(unit) {
+            return None;
+        }
+        let count = millihz / unit;
+        let width = self.width();
+        let mut bytes = vec![0u8; width];
+        if self.is_bcd() {
+            let mut rest = count;
+            for byte in bytes.iter_mut().rev() {
+                let pair = (rest % 100) as u8;
+                *byte = ((pair / 10) << 4) | (pair % 10);
+                rest /= 100;
+            }
+            if rest != 0 {
+                return None;
+            }
+        } else {
+            if count >> (8 * width) != 0 {
+                return None;
+            }
+            for (i, byte) in bytes.iter_mut().rev().enumerate() {
+                *byte = (count >> (8 * i)) as u8;
+            }
+        }
+        if self.lsb_first() {
+            bytes.reverse();
+        }
+        Some(bytes)
+    }
+
+    // [@ANCHOR: radioctl_core_legacy_form_decode]
+    /// The frequency in hertz from the bytes (as many as [`LegacyFreqForm::width`]), or `None` on a
+    /// non-digit BCD nibble, a bad step code or a wrong-length slice.
+    pub fn decode(self, bytes: &[u8]) -> Option<Hz> {
+        if bytes.len() != self.width() {
+            return None;
+        }
+        if self == LegacyFreqForm::Frg8800 {
+            let pair = |b: u8| {
+                (b >> 4 <= 9 && b & 15 <= 9).then(|| u64::from(b >> 4) * 10 + u64::from(b & 15))
+            };
+            let step = match bytes[0] & 15 {
+                1 => 0,
+                2 => 25,
+                4 => 50,
+                8 => 75,
+                _ => return None,
+            };
+            return Some(Hz(u64::from(bytes[0] >> 4) * 100
+                + step
+                + pair(bytes[1])? * 1_000
+                + pair(bytes[2])? * 100_000
+                + pair(bytes[3])? * 10_000_000));
+        }
+        let mut ordered = bytes.to_vec();
+        if self.lsb_first() {
+            ordered.reverse();
+        }
+        let mut count: u64 = 0;
+        for byte in &ordered {
+            if self.is_bcd() {
+                let (high, low) = (byte >> 4, byte & 15);
+                if high > 9 || low > 9 {
+                    return None;
+                }
+                count = count * 100 + u64::from(high * 10 + low);
+            } else {
+                count = count * 256 + u64::from(*byte);
+            }
+        }
+        // Whole hertz only: the 1.25 Hz and 0.625 Hz forms round down.
+        Some(Hz(count * self.unit_millihz() / 1_000))
+    }
+}
+
+/// A five-byte command with a slot for a parameter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyCommand {
+    /// The block as sent, the slot bytes zero (or whatever a fixed byte there should be).
+    pub template: [u8; 5],
+    /// Index in the block of the first slot byte (the mode code, or the first frequency byte).
+    pub at: u8,
+    /// How a frequency fills the slot, for the set-frequency command.
+    pub form: Option<LegacyFreqForm>,
+}
+
+/// A flag in a status record: a byte offset, a mask, and whether the feature is on when a bit of the mask is set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LegacyFlag {
+    /// Byte offset in the reply.
+    pub offset: u16,
+    /// Bits of the byte that matter.
+    pub mask: u8,
+    /// True when the feature is on if any masked bit is set; false when it is on if they are all clear.
+    pub on_when_set: bool,
+}
+
+/// One status read: the request, the reply length and where the fields are in the reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyRead {
+    /// The five request bytes.
+    pub request: [u8; 5],
+    /// Reply length in bytes.
+    pub length: u16,
+    /// Offset and form of the frequency, if the reply has it.
+    pub frequency: Option<(u16, LegacyFreqForm)>,
+    /// Offset and mask of the mode byte, if the reply has it.
+    pub mode: Option<(u16, u8)>,
+    /// PTT flag.
+    pub ptt: Option<LegacyFlag>,
+    /// Split flag.
+    pub split: Option<LegacyFlag>,
+}
+
+/// The commands and status reads of a block-protocol Yaesu legacy model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyBlock {
+    /// Set the frequency.
+    pub set_frequency: Option<LegacyCommand>,
+    /// Set the mode; the slot is one byte of the description's mode code.
+    pub set_mode: Option<LegacyCommand>,
+    /// PTT on and PTT off blocks.
+    pub ptt: Option<([u8; 5], [u8; 5])>,
+    /// Split on and split off blocks.
+    pub split: Option<([u8; 5], [u8; 5])>,
+    /// Status reads.
+    pub reads: Vec<LegacyRead>,
+    /// Mode codes as the status reads return them (they differ from the set codes on most models).
+    pub status_modes: Vec<(u8, Mode)>,
+    /// True when the radio echoes each command block (FT-767GX) and the engine expects the echo.
+    pub echo: bool,
 }
 
 /// FlexRadio SmartSDR parameters.

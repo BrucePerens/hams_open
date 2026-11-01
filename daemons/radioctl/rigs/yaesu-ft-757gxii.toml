@@ -1,0 +1,116 @@
+# Rig description: Yaesu FT-757GXII (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-757GXII Operating Manual, CAT chapter (PDF pages 34 to 37); Hamlib serves the FT-757GX with the same backend (ft757gx.c).
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "split"]
+
+[rig]
+id = "yaesu-ft-757gxii"
+name = "Yaesu FT-757GXII"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+split_on = [0x00, 0x00, 0x00, 0x01, 0x01]
+split_off = [0x00, 0x00, 0x00, 0x00, 0x01]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0x10]
+length = 75
+frequency = { offset = 5, form = "bcd-10hz-lsb" }
+mode = { offset = 9, mask = 0x07 }
+ptt = { offset = 0, mask = 0x20, on_when_set = true }
+split = { offset = 0, mask = 0x02, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x05
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x05
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-757GXII Operating Manual (file archive_ft757gxii/yaesuft757gxii00unse.pdf, sha256 1806f9a118904eafe19e4559836eef49a7ab399acb663605c2ce2c564af7b88f): CAT chapter, PDF p.34 (printed 30): 4800 bit/s, 1 start, 8 data, no parity, 2 stop; at most 100 ms between bytes of a command" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-757GXII Operating Manual (file archive_ft757gxii/yaesuft757gxii00unse.pdf, sha256 1806f9a118904eafe19e4559836eef49a7ab399acb663605c2ce2c564af7b88f): CAT chapter, PDF p.35-36 (printed 31-32): opcodes 01 split, 05 VFO A/B, 0A set frequency (BCD, least significant byte first, 100 MHz digit included, 14.25 MHz is 00 50 42 01 0A), 0C mode select (00 LSB, 01 USB, 02 CW wide, 03 CW narrow, 04 AM, 05 FM), 10 with parameter 00 returns the 75-byte status: byte 0 flags (bit 1 split, bit 5 TX), operating frequency at offsets 5 to 8 as BCD with the least significant pair first (10 Hz), mode at offset 9", note = "Hamlib 4.6.2 ft757gx.c agrees on length, offsets and byte order." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-757GXII Operating Manual (file archive_ft757gxii/yaesuft757gxii00unse.pdf, sha256 1806f9a118904eafe19e4559836eef49a7ab399acb663605c2ce2c564af7b88f): CAT chapter, PDF p.35 (printed 31): PTT is a hardware line on the CAT jack (pin 4), there is no PTT opcode", note = "So no set-ptt; read-ptt comes from flag bit 5 of the status. Parameter 01 of opcode 10 returns an S-meter byte (0 to 0F); not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-757GXII Operating Manual (file archive_ft757gxii/yaesuft757gxii00unse.pdf, sha256 1806f9a118904eafe19e4559836eef49a7ab399acb663605c2ce2c564af7b88f): CAT chapter, PDF p.35 (printed 31): mode select codes 00 to 05", note = "CW narrow (03) is not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

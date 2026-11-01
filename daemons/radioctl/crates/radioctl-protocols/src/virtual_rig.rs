@@ -851,6 +851,14 @@ impl VirtualRig {
             .yaesu_legacy
             .as_ref()
             .is_some_and(|y| y.high_band_flag);
+        if self
+            .desc
+            .yaesu_legacy
+            .as_ref()
+            .is_some_and(|y| y.block.is_some())
+        {
+            return self.legacy_model_block(block);
+        }
         let [a, b, c, d, opcode] = block else {
             return Vec::new();
         };
@@ -930,6 +938,105 @@ impl VirtualRig {
             }
             _ => Vec::new(),
         }
+    }
+
+    // [@ANCHOR: radioctl_virtual_legacy_model_block]
+    /// One five-byte block for a block-protocol model: the description's commands change state,
+    /// its status reads answer with the fields at the offsets it lists (everything else zero), and
+    /// a radio that echoes sends the command back first.
+    fn legacy_model_block(&mut self, block: &[u8]) -> Vec<u8> {
+        let Some(spec) = self
+            .desc
+            .yaesu_legacy
+            .as_ref()
+            .and_then(|y| y.block.clone())
+        else {
+            return Vec::new();
+        };
+        let fixed_match = |template: &[u8; 5], at: usize, width: usize| {
+            block.len() == 5
+                && (0..5).all(|i| (at..at + width).contains(&i) || block[i] == template[i])
+        };
+        let mut out = if spec.echo {
+            block.to_vec()
+        } else {
+            Vec::new()
+        };
+        if let Some((on, off)) = spec.ptt {
+            if block == on {
+                self.state.ptt = true;
+                return out;
+            }
+            if block == off {
+                self.state.ptt = false;
+                return out;
+            }
+        }
+        if let Some((on, off)) = spec.split {
+            if block == on {
+                self.state.split = true;
+                return out;
+            }
+            if block == off {
+                self.state.split = false;
+                return out;
+            }
+        }
+        if let Some(read) = spec.reads.iter().find(|r| block == r.request) {
+            let mut reply = vec![0u8; usize::from(read.length)];
+            if let Some((offset, form)) = read.frequency {
+                if let Some(bytes) = form.encode(self.state.freq_a) {
+                    let start = usize::from(offset);
+                    reply[start..start + bytes.len()].copy_from_slice(&bytes);
+                }
+            }
+            if let Some((offset, _)) = read.mode {
+                if let Some((code, _)) = spec
+                    .status_modes
+                    .iter()
+                    .find(|(_, m)| *m == self.state.mode)
+                {
+                    reply[usize::from(offset)] = *code;
+                }
+            }
+            for (flag, on) in [(read.ptt, self.state.ptt), (read.split, self.state.split)] {
+                if let Some(f) = flag {
+                    // Set the first masked bit when the feature's state matches "on when set".
+                    if on == f.on_when_set {
+                        reply[usize::from(f.offset)] |= f.mask & f.mask.wrapping_neg();
+                    }
+                }
+            }
+            out.extend(reply);
+            return out;
+        }
+        if let Some(command) = &spec.set_frequency {
+            if let Some(form) = command.form {
+                let at = usize::from(command.at);
+                if fixed_match(&command.template, at, form.width()) {
+                    if let Some(hz) = block
+                        .get(at..at + form.width())
+                        .and_then(|b| form.decode(b))
+                    {
+                        self.state.freq_a = hz;
+                        return out;
+                    }
+                }
+            }
+        }
+        if let Some(command) = &spec.set_mode {
+            if fixed_match(&command.template, usize::from(command.at), 1) {
+                if let Some(mode) = block
+                    .get(usize::from(command.at))
+                    .and_then(|code| self.desc.code_mode(*code))
+                {
+                    self.state.mode = mode;
+                }
+                return out;
+            }
+        }
+        out.clear();
+        out
     }
 
     // [@ANCHOR: radioctl_virtual_yaesu_command]

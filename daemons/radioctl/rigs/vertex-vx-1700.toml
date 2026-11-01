@@ -1,0 +1,124 @@
+# Rig description: Vertex Standard VX-1700 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 vx1700.c facts only. Hamlib's header says its code follows Vertex Standard's VX-1700 CAT manual (10-14-2008); the only public copy found is on a site whose robots.txt disallows AI agents, so it was NOT read. The protocol is the FT-890 family's five-byte block protocol.
+# Marine HF radio; the radio must have its CAT DIP switch set and answers 00 or F0 per command in a way Hamlib does not model. Not modelled.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt"]
+
+[rig]
+id = "vertex-vx-1700"
+name = "Vertex Standard VX-1700"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x02, 0x10]
+length = 19
+frequency = { offset = 2, form = "bin-10hz-msb3" }
+mode = { offset = 7, mask = 0x07 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0xfa]
+length = 5
+ptt = { offset = 2, mask = 0x80, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "rtty"
+code = 0x05
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "rtty"
+code = 0x08
+
+[[modes]]
+mode = "rtty-r"
+code = 0x09
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/vx1700.c: caps: serial_rate 4800, serial_stop_bits 2", note = "Unverified: the vendor CAT manual was not read." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/vx1700.c: vx1700_do_freq_cmd and the ncmd table: 0A set frequency, 0C mode (00 LSB, 01 USB, 02 CW wide, 03 CW narrow, 04 AM, 08 RTTY-LSB wide, 09 RTTY-USB wide), 0F PTT; vx1700_read_op_data: opcode 10 parameter 2 returns 19 bytes, the frequency three binary bytes most significant first in 10 Hz units at offset 2, the mode at offset 7; vx1700_get_ptt: opcode FA returns 5 bytes, bit 7 of the third is transmission in progress", note = "Hamlib's header notes two errors in the vendor manual (channel numbering, and that the frequency uses three bytes with the fourth always zero). Narrow CW and RTTY variants are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/vx1700.c: caps: get_freq, get_mode, get_ptt, set_ptt", note = "Meters and split are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/vx1700.c: vx1700_set_mode" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

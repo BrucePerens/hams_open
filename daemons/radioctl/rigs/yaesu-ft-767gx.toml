@@ -1,0 +1,92 @@
+# Rig description: Yaesu FT-767GX (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-767GX Operating Manual, CAT chapter 4.18 (PDF pages 36 to 38); Hamlib ft767gx.c agrees.
+# The radio echoes every command block and answers a read only after the computer sends an acknowledge block (opcode 0B). The engine consumes the echo (an Ack or a Nak) but does not do the acknowledge round trip, so the status reads are described in the manual but not offered: set-only here.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["set-frequency", "set-mode"]
+
+[rig]
+id = "yaesu-ft-767gx"
+name = "Yaesu FT-767GX"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+echo = true
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x08]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 3
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x10
+
+[[modes]]
+mode = "usb"
+code = 0x11
+
+[[modes]]
+mode = "cw"
+code = 0x12
+
+[[modes]]
+mode = "am"
+code = 0x13
+
+[[modes]]
+mode = "fm"
+code = 0x14
+
+[[modes]]
+mode = "rtty"
+code = 0x15
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-767GX Operating Manual (file rigpix/rigpix_ft767gx_manual.pdf, sha256 7e443b64eccf586ab5a276c29d2981fe2d85539bf26b0a06bd13d7f29b7d072f): CAT chapter 4.18, PDF p.36 (printed 34): 4800 bit/s, 1 start, 8 data, no parity, 2 stop; the radio echoes each 5-byte command within 5 to 20 ms" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-767GX Operating Manual (file rigpix/rigpix_ft767gx_manual.pdf, sha256 7e443b64eccf586ab5a276c29d2981fe2d85539bf26b0a06bd13d7f29b7d072f): CAT chapter, PDF p.37-38 (printed 35-36): 08 set frequency (BCD, least significant byte first, 14.25 MHz is 00 50 42 01 08); 0A with parameter 10 to 15 selects LSB, USB, CW, AM, FM, FSK; 0B acknowledge (not echoed); status of 5, 8, 26 or 86 bytes follows the acknowledge, the 86-byte block holds flags (bit 0 PTT, bit 3 split), the operating frequency as BCD most significant first at offsets 1 to 4, and a mode/band byte with the mode in its low three bits", note = "Not implemented: the acknowledge round trip, so no status read. PTT is a hardware line." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-767GX Operating Manual (file rigpix/rigpix_ft767gx_manual.pdf, sha256 7e443b64eccf586ab5a276c29d2981fe2d85539bf26b0a06bd13d7f29b7d072f): CAT chapter, PDF p.37 (printed 35): opcode table", note = "Set-only because the status needs the acknowledge handshake." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-767GX Operating Manual (file rigpix/rigpix_ft767gx_manual.pdf, sha256 7e443b64eccf586ab5a276c29d2981fe2d85539bf26b0a06bd13d7f29b7d072f): CAT chapter, PDF p.37 (printed 35): 0A parameters 10h LSB, 11h USB, 12h CW, 13h AM, 14h FM, 15h FSK", note = "FSK is mapped to rtty." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

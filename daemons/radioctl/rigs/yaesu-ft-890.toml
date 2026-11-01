@@ -1,0 +1,129 @@
+# Rig description: Yaesu FT-890 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-890 Operating Manual, CAT chapter (PDF p.45-48 (printed 31-34)); Hamlib 4.6.2 ft890.c as a cross-check.
+# Open question: the FT-890 manual prints the split parameter the other way round from the FT-840/900 manuals and Hamlib; radioctl sends 1 for on as Hamlib does.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split"]
+
+[rig]
+id = "yaesu-ft-890"
+name = "Yaesu FT-890"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+split_on = [0x00, 0x00, 0x00, 0x01, 0x01]
+split_off = [0x00, 0x00, 0x00, 0x00, 0x01]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x03, 0x10]
+length = 18
+frequency = { offset = 1, form = "bin-10hz-msb3" }
+mode = { offset = 6, mask = 0x07 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x02, 0x10]
+length = 19
+frequency = { offset = 2, form = "bin-10hz-msb3" }
+mode = { offset = 7, mask = 0x07 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0xfa]
+length = 5
+ptt = { offset = 2, mask = 0x80, on_when_set = true }
+split = { offset = 0, mask = 0x04, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x03
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x04
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x06
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-890 Operating Manual (file archive_ft890/yaesuxcvrft89000unse.pdf, sha256 63da892d980dcbda36dda9593df8ddb598315aaafaf55c0c26cc304629ea6a87): CAT chapter, PDF p.45-48 (printed 31-34): 4800 bit/s, 1 start, 8 data, no parity, 2 stop, TTL levels; at most 200 ms between bytes of a block" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-890 Operating Manual (file archive_ft890/yaesuxcvrft89000unse.pdf, sha256 63da892d980dcbda36dda9593df8ddb598315aaafaf55c0c26cc304629ea6a87): CAT chapter, PDF p.45-48 (printed 31-34): 0A set frequency (BCD, least significant byte first, 10 Hz, 14.25 MHz is 00 50 42 01 0A); 0C mode (0 LSB, 1 USB, 2 CW wide, 3 CW narrow, 4 AM wide, 5 AM narrow, 6 or 7 FM); 0F PTT (1 transmit); 01 split (Hamlib sends parameter 1 for on; the FT-890 manual's table says 0 is ON, which contradicts the FT-840 and FT-900 manuals and Hamlib and is probably a misprint); 10 with parameter 3 returns the 18-byte VFO A and B records (VFO A: frequency as three binary bytes, most significant first, in 10 Hz units at offsets 1 to 3, mode at offset 6; VFO B follows at +9) and with parameter 2 the 19-byte operating record (one memory-status byte first, so frequency at offsets 2 to 4 and mode at 7); mode codes 0 LSB, 1 USB, 2 CW, 3 AM, 4 FM; FA returns three flag bytes then 08 41: split is bit 2 of the first, transmitting is bit 7 of the third", note = "Hamlib 4.6.2 agrees on offsets, lengths, units and codes." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-890 Operating Manual (file archive_ft890/yaesuxcvrft89000unse.pdf, sha256 63da892d980dcbda36dda9593df8ddb598315aaafaf55c0c26cc304629ea6a87): CAT chapter, PDF p.45-48 (printed 31-34): opcode table and flag layout", note = "S-meter and power meter (opcode F7) are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-890 Operating Manual (file archive_ft890/yaesuxcvrft89000unse.pdf, sha256 63da892d980dcbda36dda9593df8ddb598315aaafaf55c0c26cc304629ea6a87): CAT chapter, PDF p.45-48 (printed 31-34): mode codes of opcode 0C", note = "Narrow CW and AM and the second FM code are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

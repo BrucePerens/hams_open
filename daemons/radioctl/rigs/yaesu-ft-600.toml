@@ -1,0 +1,114 @@
+# Rig description: Yaesu FT-600 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 ft600.c facts only: the public FT-600 manual found is a 16-page extract without the CAT appendix, so no vendor page confirms any byte.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt"]
+
+[rig]
+id = "yaesu-ft-600"
+name = "Yaesu FT-600"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x02, 0x10]
+length = 19
+frequency = { offset = 1, form = "bin-10hz-msb3" }
+mode = { offset = 6, mask = 0xff }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "data"
+code = 0x05
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "data"
+code = 0x09
+
+[[modes]]
+mode = "cw"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft600.c: caps: serial_stop_bits 2", note = "Unverified: no FT-600 CAT page read." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft600.c: ft600_get_freq and ft600_get_mode read the 19-byte block of opcode 10 parameter 2: the frequency from bytes 1 to 3 as binary times 10 Hz, the mode from byte 6 (0 LSB, 1 USB, 2 CW, 4 AM, 5 packet-USB); ncmd table: 0A set frequency, 0C mode (parameter 0 LSB, 1 USB, 9 DIG, 3 CW, 4 AM), 0F PTT, 01 split", note = "The set-mode codes differ from the read codes in Hamlib's tables (CW is 3 to set, 2 to read; DIG is 9 and 5): kept as Hamlib has them, an open question for a volunteer. Hamlib has no PTT read for this radio. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft600.c: caps: get_ptt NULL, split commands exist but no split read", note = "Split is not offered: no read, and the command is unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft600.c: ncmd set-mode entries and ft600_get_mode", note = "Set and read codes differ; see the block fact." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

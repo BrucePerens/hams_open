@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **207** (213 description files), **72%** of the real radios
+- Real radios (models less not applicable): **285**; with a radioctl description: **230** (236 description files), **80%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 207 |
+| described | 230 |
 | engine only | 9 |
-| needs variant | 22 |
-| needs engine | 29 |
+| needs variant | 0 |
+| needs engine | 28 |
 | odd device | 18 |
 | not applicable | 28 |
 
@@ -34,8 +34,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 126 |
-| B | variants of an existing engine | 41 | 19 |
-| C | new engine | 83 | 46 |
+| B | variants of an existing engine | 42 | 42 |
+| C | new engine | 82 | 46 |
 | D | odd device | 54 | 16 |
 
 ### By family
@@ -44,7 +44,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---|---:|---:|---:|
 | other_serial | C/D | aor | 94 | 44 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
-| yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
+| yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 15 | 0 |
 | kenwood_hh_ascii | B | kenwood_hh | 10 | 10 | 0 |
@@ -59,7 +59,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | virtual | D | - | 2 | 0 | 0 |
 | other_none | C | - | 1 | 0 | 0 |
 | unclassified | D | - | 1 | 0 | 0 |
-| yaesu_other | C | - | 1 | 0 | 0 |
+| yaesu_other | B | yaesu_legacy | 1 | 1 | 0 |
 
 ## Descriptions without a Hamlib model
 
@@ -351,7 +351,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 8012 | Uniden | BC898T | C | other_serial | uniden | `uniden-bc898t` | unverified | - | described |
 | 8010 | Uniden | BCD-396T | C | other_serial | uniden | `uniden-bcd396t` | manual-checked | - | described |
 | 8011 | Uniden | BCD-996T | C | other_serial | uniden | `uniden-bcd996t` | manual-checked | - | described |
-| 1033 | Vertex Standard | VX-1700 | C | yaesu_other | - | - | unverified | - | needs engine |
+| 1033 | Vertex Standard | VX-1700 | B | yaesu_other | yaesu_legacy | `vertex-vx-1700` | unverified | - | described |
 | 26001 | Video4Linux | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
 | 26002 | Video4Linux2 | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
 | 12004 | Watkins-Johnson | WJ-8888 | C | other_serial | - | - | unverified | - | needs engine |
@@ -368,40 +368,40 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3089 | Xiegu | X5105 | A | icom_civ | civ | `xiegu-x5105` | unverified | - | described |
 | 3087 | Xiegu | X6100 | A | icom_civ | civ | `xiegu-x6100` | unverified | - | described |
 | 3091 | Xiegu | X6200 | A | icom_civ | civ | `xiegu-x6200` | unverified | - | described |
-| 1017 | Yaesu | FRG-100 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1019 | Yaesu | FRG-8800 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1018 | Yaesu | FRG-9600 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1021 | Yaesu | FT-100 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1002 | Yaesu | FT-1000 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1003 | Yaesu | FT-1000D | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1024 | Yaesu | FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1017 | Yaesu | FRG-100 | B | yaesu_legacy | yaesu_legacy | `yaesu-frg-100` | unverified | - | described |
+| 1019 | Yaesu | FRG-8800 | B | yaesu_legacy | yaesu_legacy | `yaesu-frg-8800` | unverified | - | described |
+| 1018 | Yaesu | FRG-9600 | B | yaesu_legacy | yaesu_legacy | `yaesu-frg-9600` | unverified | - | described |
+| 1021 | Yaesu | FT-100 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-100` | unverified | - | described |
+| 1002 | Yaesu | FT-1000 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000` | unverified | - | described |
+| 1003 | Yaesu | FT-1000D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000d` | unverified | - | described |
+| 1024 | Yaesu | FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp` | unverified | - | described |
 | 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-2000` | unverified | - | described |
 | 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450` | manual-checked | - | described |
 | 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450d` | unverified | - | described |
-| 1039 | Yaesu | FT-600 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1039 | Yaesu | FT-600 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-600` | unverified | - | described |
 | 1047 | Yaesu | FT-650 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-650` | unverified | - | described |
 | 1049 | Yaesu | FT-710 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-710` | unverified | - | described |
 | 1010 | Yaesu | FT-736R | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-736r` | unverified | - | described |
-| 1005 | Yaesu | FT-747GX | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1006 | Yaesu | FT-757GX | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1007 | Yaesu | FT-757GXII | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1009 | Yaesu | FT-767GX | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1005 | Yaesu | FT-747GX | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-747gx` | unverified | - | described |
+| 1006 | Yaesu | FT-757GX | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-757gx` | unverified | - | described |
+| 1007 | Yaesu | FT-757GXII | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-757gxii` | unverified | - | described |
+| 1009 | Yaesu | FT-767GX | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-767gx` | unverified | - | described |
 | 1020 | Yaesu | FT-817 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-817` | unverified | - | described |
 | 1041 | Yaesu | FT-818 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-818` | unverified | - | described |
-| 1011 | Yaesu | FT-840 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1011 | Yaesu | FT-840 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-840` | unverified | - | described |
 | 1001 | Yaesu | FT-847 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-847` | unverified | - | described |
 | 1038 | Yaesu | FT-847UNI | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-847uni` | unverified | - | described |
 | 1022 | Yaesu | FT-857 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-857d` | unverified | - | described |
-| 1015 | Yaesu | FT-890 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1015 | Yaesu | FT-890 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-890` | unverified | - | described |
 | 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-891` | unverified | - | described |
 | 1023 | Yaesu | FT-897 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897` | unverified | - | described |
 | 1043 | Yaesu | FT-897D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897d` | unverified | - | described |
-| 1013 | Yaesu | FT-900 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1014 | Yaesu | FT-920 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1013 | Yaesu | FT-900 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-900` | unverified | - | described |
+| 1014 | Yaesu | FT-920 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-920` | unverified | - | described |
 | 1028 | Yaesu | FT-950 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-950` | unverified | - | described |
-| 1031 | Yaesu | FT-980 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1016 | Yaesu | FT-990 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1048 | Yaesu | FT-990 Old Rom | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1031 | Yaesu | FT-980 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-980` | unverified | - | described |
+| 1016 | Yaesu | FT-990 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990` | unverified | - | described |
+| 1048 | Yaesu | FT-990 Old Rom | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990-oldrom` | unverified | - | described |
 | 1035 | Yaesu | FT-991 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-991a` | unverified | - | described |
 | 1042 | Yaesu | FTDX-10 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx10` | unverified | - | described |
 | 1040 | Yaesu | FTDX-101D | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx101d` | unverified | - | described |
@@ -411,6 +411,6 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1032 | Yaesu | FTDX-5000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-5000` | unverified | - | described |
 | 1030 | Yaesu | FTDX-9000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000` | unverified | - | described |
 | 1050 | Yaesu | FTDX-9000 Old | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000-old` | unverified | - | described |
-| 1025 | Yaesu | MARK-V Field FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1004 | Yaesu | MARK-V FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
-| 1026 | Yaesu | VR-5000 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
+| 1025 | Yaesu | MARK-V Field FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp-mkv-field` | unverified | - | described |
+| 1004 | Yaesu | MARK-V FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp-mkv` | unverified | - | described |
+| 1026 | Yaesu | VR-5000 | B | yaesu_legacy | yaesu_legacy | `yaesu-vr-5000` | unverified | - | described |
