@@ -1,0 +1,76 @@
+# Rig description: M0NKA mcHF QRP (FT-847 emulation, legacy five-byte CAT, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# The mcHF transceiver emulates the FT-847 CAT; Hamlib gives it its own caps block (mchfqrp_caps, model 1045) in rigs/yaesu/ft847.c that reuses the FT-847 command functions. This file is the FT-847 description with the mcHF's HF-only range and defaults; written from Hamlib 4.6.2 source facts (no mcHF or Yaesu document read). No radio has been connected, so every `verified` is unverified.
+# Gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt"]
+
+[rig]
+id = "m0nka-mchf-qrp"
+name = "M0NKA mcHF QRP"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[timing]
+timeout_ms = 1000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "cw-r"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x08
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in Hamlib 4.6.2", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft847.c: mchfqrp_caps serial_stop_bits = 2 (4800 to 115200 baud)", note = "Two stop bits as for the FT-817 family. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft847.c: rig caps timeouts, from rigctl --dump-caps (model 1045): timeout 1000 ms, write delay 50 ms", note = "Hamlib's settings, not a measurement of the radio. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft847.c: ft847.c native command table: 01 set frequency (four BCD bytes of 10 Hz), 03 read frequency and mode (five bytes), 07 set mode (mode in the first parameter byte: 0 LSB, 1 USB, 2 CW, 3 CWR, 4 AM, 8 FM), 08 and 88 PTT, 4800 to 57600 bit/s, two stop bits", note = "Same five-byte layout as the FT-817. The narrow modes (82, 83, 84, 88), satellite mode, the E7/F7 status reads and the table's parameter byte 1 on the 88 PTT-off block are not modelled; whether the PTT-off block needs that byte is an open question. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft847.c: mode bytes of the set-mode block", note = "Narrow modes have no radioctl mode and are not mapped. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }

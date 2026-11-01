@@ -54,6 +54,18 @@ pub enum VendorProtocol {
     Alinco,
     /// Racal RA6790/GM receiver (`racal.rs`).
     Racal,
+    /// CommRadio CTX-10: CRC-framed binary on a 3 Mbaud line (`commradio.rs`).
+    Commradio,
+    /// ADAT ADT-200A: `$`-prefixed ASCII commands (`adat.rs`).
+    Adat,
+    /// GomSpace GS100 ground-station transceiver: a shell with a prompt (`gomspace.rs`).
+    Gomspace,
+    /// HobbyPCB RS-HFIQ: `*`-prefixed ASCII commands (`rshfiq.rs`).
+    Rshfiq,
+    /// RFT EKD-500 receiver: a set-only ASCII frequency command (`rft.rs`).
+    Rft,
+    /// Philips PRM8060 / PRM80 family: a prompt-driven console (`prm80.rs`).
+    Prm80,
 }
 
 impl VendorProtocol {
@@ -65,6 +77,12 @@ impl VendorProtocol {
             "drake" => Some(VendorProtocol::Drake),
             "alinco" => Some(VendorProtocol::Alinco),
             "racal" => Some(VendorProtocol::Racal),
+            "commradio" => Some(VendorProtocol::Commradio),
+            "adat" => Some(VendorProtocol::Adat),
+            "gomspace" => Some(VendorProtocol::Gomspace),
+            "rshfiq" => Some(VendorProtocol::Rshfiq),
+            "rft" => Some(VendorProtocol::Rft),
+            "prm80" => Some(VendorProtocol::Prm80),
             _ => None,
         }
     }
@@ -77,6 +95,12 @@ impl VendorProtocol {
             VendorProtocol::Drake => "drake",
             VendorProtocol::Alinco => "alinco",
             VendorProtocol::Racal => "racal",
+            VendorProtocol::Commradio => "commradio",
+            VendorProtocol::Adat => "adat",
+            VendorProtocol::Gomspace => "gomspace",
+            VendorProtocol::Rshfiq => "rshfiq",
+            VendorProtocol::Rft => "rft",
+            VendorProtocol::Prm80 => "prm80",
         }
     }
 }
@@ -88,6 +112,14 @@ pub struct VendorParams {
     pub protocol: VendorProtocol,
     /// The model variant inside the protocol (`orion`, `argonaut`, ...); the engine validates it.
     pub dialect: String,
+    /// Data bits on the serial line (8 unless the description says otherwise).
+    pub data_bits: u8,
+    /// Parity: `N`, `E` or `O`.
+    pub parity: char,
+    /// Stop bits.
+    pub stop_bits: u8,
+    /// Flow control: `none`, `xonxoff` or `rtscts`.
+    pub flow: String,
 }
 
 /// The USB protocol of a [`Family::UsbDevice`] rig.
@@ -996,6 +1028,16 @@ mod tests {
             Some(VendorProtocol::Racal)
         );
         assert_eq!(VendorProtocol::Racal.name(), "racal");
+        for p in [
+            VendorProtocol::Commradio,
+            VendorProtocol::Adat,
+            VendorProtocol::Gomspace,
+            VendorProtocol::Rshfiq,
+            VendorProtocol::Rft,
+            VendorProtocol::Prm80,
+        ] {
+            assert_eq!(VendorProtocol::from_name(p.name()), Some(p));
+        }
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

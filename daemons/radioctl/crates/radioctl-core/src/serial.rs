@@ -184,6 +184,27 @@ impl SerialConfig {
                 "xonxoff" => Flow::Software,
                 _ => Flow::None,
             };
+        } else if let Some(v) = &description.vendor {
+            self.data_bits = if v.data_bits == 7 {
+                DataBits::Seven
+            } else {
+                DataBits::Eight
+            };
+            self.parity = match v.parity {
+                'E' => Parity::Even,
+                'O' => Parity::Odd,
+                _ => Parity::None,
+            };
+            self.stop_bits = if v.stop_bits == 2 {
+                StopBits::Two
+            } else {
+                StopBits::One
+            };
+            self.flow = match v.flow.as_str() {
+                "rtscts" => Flow::Hardware,
+                "xonxoff" => Flow::Software,
+                _ => Flow::None,
+            };
         } else if let Some(y) = &description.yaesu_legacy {
             self.stop_bits = if y.stop_bits == 2 {
                 StopBits::Two

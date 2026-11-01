@@ -456,6 +456,39 @@ async fn a_split_link_keeps_status_and_counters_on_the_monitor() {
 
 // Tests [@ANCHOR: radioctl_core_serial_config_with_description]
 // Tests [@ANCHOR: radioctl_core_serial_open_port]
+// Tests [@ANCHOR: radioctl_core_rigfile_parse]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_vendor_descriptions_seven_even_two_line_reaches_the_port() {
+    // The RFT EKD-500 states 7 data bits, even parity, 2 stop bits and RTS/CTS flow control in its
+    // `[vendor]` section; a bad parity letter is refused at load.
+    let text = include_str!("../../../rigs/rft-ekd-500.toml");
+    let description = rigfile::parse(text).expect("file").description;
+    let (master, path) = pty();
+    let config = fast_config(&path).with_description_line(&description);
+    // A pty keeps eight data bits whatever the open asks for, so the 7-bit value and the parity
+    // are checked on the configuration and the settings a pty honours on the port.
+    assert_eq!(config.data_bits, radioctl_core::serial::DataBits::Seven);
+    assert_eq!(config.parity, radioctl_core::serial::Parity::Even);
+    let link = open_serial(&Handle::current(), config).await.expect("open");
+    assert_eq!(master.stop_bits().expect("stop"), serialport::StopBits::Two);
+    assert_eq!(
+        master.flow_control().expect("flow"),
+        serialport::FlowControl::Hardware
+    );
+    drop(link);
+    for (from, to) in [
+        ("parity = \"E\"", "parity = \"X\""),
+        ("data_bits = 7", "data_bits = 9"),
+        ("stop_bits = 2", "stop_bits = 3"),
+        ("flow = \"rtscts\"", "flow = \"dtr\""),
+    ] {
+        assert!(text.contains(from), "{from}");
+        assert!(rigfile::parse(&text.replace(from, to)).is_err(), "{to}");
+    }
+}
+
+// Tests [@ANCHOR: radioctl_core_serial_config_with_description]
+// Tests [@ANCHOR: radioctl_core_serial_open_port]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_descriptions_line_settings_reach_the_port() {
     // A receiver description (AR8000: 8 data bits, no parity, two stop bits, XON/XOFF) must be what
