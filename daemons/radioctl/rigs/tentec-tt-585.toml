@@ -1,0 +1,83 @@
+# Rig description: Ten-Tec TT-585 Paragon (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/tentec/paragon.c, read for facts only, and `rigctl -m 16009 --dump-caps`); no Ten-Tec document for the Paragon was found, and no code or table was copied.
+# Hamlib lists: serial 1200 baud, 8N1, handshake NONE, 100 ms between bytes and 200 ms after a command; receive 100 kHz to 30 MHz, transmit the HF amateur bands at 5 to 100 W. The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
+# Dialect paragon (paragon.rs): bare-character commands without a terminator; the frequency in megahertz with five decimals and `W` for the point, then `@`; mode letters; `\` asks for a 30-byte status block that carries the frequency digits and the mode as a bit. The mode codes below are those status bits. No PTT command (Hamlib has none). Not in the engine: VFO and split (Hamlib only toggles them), memories, the filter letters and the announce toggle.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
+
+[rig]
+id = "tentec-tt-585"
+name = "Ten-Tec TT-585 Paragon"
+family = "serial-vendor"
+
+[vendor]
+protocol = "paragon"
+dialect = "paragon"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 1000
+retries = 0
+inter_command_ms = 200
+
+[defaults]
+frequency_hz = 14200000
+mode = "usb"
+
+[[modes]]
+mode = "cw"
+code = 2
+
+[[modes]]
+mode = "usb"
+code = 4
+
+[[modes]]
+mode = "lsb"
+code = 8
+
+[[modes]]
+mode = "am"
+code = 16
+
+[[modes]]
+mode = "fm"
+code = 32
+
+[[modes]]
+mode = "rtty"
+code = 64
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 16009 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 16009 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio; the 200 ms command gap is Hamlib's post-write delay." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/tentec/paragon.c (tt585_set_freq, tt585_get_freq, tt585_set_mode, tt585_get_mode, tt585_get_status_data)", note = "Command frames and status bytes read for facts only; no code copied. The dialect name is ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 16009 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/tentec/paragon.c", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command; absence in Hamlib (no PTT) is taken as absence on the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/tentec/paragon.c (tt585_get_mode: status byte 7 bits)", note = "The codes are the status-byte bits; the set commands are letters (N, O, P, L, M, XP) kept in the engine." }
+verified = { state = "unverified" }

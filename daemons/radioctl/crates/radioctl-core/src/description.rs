@@ -86,6 +86,8 @@ pub enum VendorProtocol {
     Xg3,
     /// SigFox Transfox transverter controller (`transfox.rs`).
     Transfox,
+    /// Ten-Tec TT-585 Paragon (`paragon.rs`).
+    Paragon,
 }
 
 impl VendorProtocol {
@@ -113,6 +115,7 @@ impl VendorProtocol {
             "mds" => Some(VendorProtocol::Mds),
             "xg3" => Some(VendorProtocol::Xg3),
             "transfox" => Some(VendorProtocol::Transfox),
+            "paragon" => Some(VendorProtocol::Paragon),
             _ => None,
         }
     }
@@ -141,6 +144,7 @@ impl VendorProtocol {
             VendorProtocol::Mds => "mds",
             VendorProtocol::Xg3 => "xg3",
             VendorProtocol::Transfox => "transfox",
+            VendorProtocol::Paragon => "paragon",
         }
     }
 }
@@ -1122,6 +1126,11 @@ mod tests {
             Some(VendorProtocol::Transfox)
         );
         assert_eq!(VendorProtocol::Transfox.name(), "transfox");
+        assert_eq!(
+            VendorProtocol::from_name("paragon"),
+            Some(VendorProtocol::Paragon)
+        );
+        assert_eq!(VendorProtocol::Paragon.name(), "paragon");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 
