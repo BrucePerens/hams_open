@@ -37,6 +37,10 @@ pub enum Family {
     /// Receivers, scanners and marine radios with a line or frame protocol of their own
     /// (AOR, Uniden, JRC, Rohde and Schwarz, Icom PCR and marine); see [`ReceiverProtocol`].
     Receiver,
+    /// USB radios and SDR boards that speak vendor control requests or HID reports (Si570 kits,
+    /// FUNcube, FiFi-SDR, ...). Described, but without an engine: radioctl has no USB control or
+    /// HID transport yet (`night_shift_todo/medium/radioctl-usb-hid-transport.md`).
+    UsbDevice,
 }
 
 /// The protocol of a [`Family::SerialVendor`] rig; each has its own engine file.
@@ -84,6 +88,67 @@ pub struct VendorParams {
     pub protocol: VendorProtocol,
     /// The model variant inside the protocol (`orion`, `argonaut`, ...); the engine validates it.
     pub dialect: String,
+}
+
+/// The USB protocol of a [`Family::UsbDevice`] rig.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UsbProtocol {
+    /// Si570 synthesizer boards on the V-USB shared id (SoftRock AVR-USB, KTH PIC-USB, Peaberry, FA-SDR):
+    /// vendor control requests with a frequency word in 11.21 fixed point.
+    Si570,
+    /// FiFi-SDR: the Si570 requests plus its own read and write requests.
+    Fifisdr,
+    /// AMSAT-UK FUNcube Dongle and Pro+: 64-byte HID reports.
+    Funcube,
+    /// Elektor SDR-USB: an FTDI chip in bit-bang mode.
+    Elektor507,
+    /// Digital World Traveller DRM receiver.
+    Dwt,
+}
+
+impl UsbProtocol {
+    const ALL: [UsbProtocol; 5] = [
+        UsbProtocol::Si570,
+        UsbProtocol::Fifisdr,
+        UsbProtocol::Funcube,
+        UsbProtocol::Elektor507,
+        UsbProtocol::Dwt,
+    ];
+
+    // [@ANCHOR: radioctl_core_usbprotocol_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        match self {
+            UsbProtocol::Si570 => "si570",
+            UsbProtocol::Fifisdr => "fifisdr",
+            UsbProtocol::Funcube => "funcube",
+            UsbProtocol::Elektor507 => "elektor507",
+            UsbProtocol::Dwt => "dwt",
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_usbprotocol_from_name]
+    /// The protocol with a file-format name.
+    pub fn from_name(name: &str) -> Option<UsbProtocol> {
+        UsbProtocol::ALL.into_iter().find(|p| p.name() == name)
+    }
+}
+
+/// Parameters of a [`Family::UsbDevice`] rig.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsbParams {
+    /// The device's protocol.
+    pub protocol: UsbProtocol,
+    /// USB vendor id.
+    pub vendor_id: u16,
+    /// USB product id.
+    pub product_id: u16,
+    /// The manufacturer string the device reports (V-USB boards share one id and are told apart by it); empty when none is used.
+    pub manufacturer: String,
+    /// The product string the device reports; empty when none is used.
+    pub product: String,
+    /// The Si570 frequency multiplier of the board (2 or 4), 0 for a device that has none.
+    pub multiplier: u8,
 }
 
 /// Which protocol engine a [`Family::Receiver`] description uses.
@@ -486,6 +551,8 @@ pub struct RigDescription {
     pub vendor: Option<VendorParams>,
     /// Receiver parameters, present for [`Family::Receiver`].
     pub receiver: Option<ReceiverParams>,
+    /// USB device parameters, present for [`Family::UsbDevice`].
+    pub usb: Option<UsbParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// Attenuator and preamplifier steps.
@@ -544,6 +611,7 @@ impl RigDescription {
             flex: None,
             hpsdr: None,
             vendor: None,
+            usb: None,
             receiver: None,
             scope: None,
             levels: LevelParams::default(),
@@ -599,6 +667,7 @@ impl RigDescription {
             flex: None,
             hpsdr: None,
             vendor: None,
+            usb: None,
             receiver: None,
             scope: None,
             levels: LevelParams::default(),
@@ -665,6 +734,16 @@ mod tests {
         assert_eq!(RigDescription::ic7300().mode_code(Mode::Usb), Some(0x01));
         assert_eq!(RigDescription::ts2000().mode_code(Mode::Usb), Some(b'2'));
         assert_eq!(RigDescription::ts2000().code_mode(b'8'), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_usbprotocol_name]
+    // Tests [@ANCHOR: radioctl_core_usbprotocol_from_name]
+    #[test]
+    fn usb_protocol_names_round_trip() {
+        for p in UsbProtocol::ALL {
+            assert_eq!(UsbProtocol::from_name(p.name()), Some(p));
+        }
+        assert_eq!(UsbProtocol::from_name("nope"), None);
     }
 
     // Tests [@ANCHOR: radioctl_core_vendorprotocol_from_name]

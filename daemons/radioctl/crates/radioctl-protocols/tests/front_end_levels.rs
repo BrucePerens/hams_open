@@ -121,6 +121,10 @@ fn a_model_without_a_levels_block_refuses_both_levels() {
         if desc.levels.max_attenuation_db().is_some() || desc.levels.preamp_steps > 0 {
             continue;
         }
+        // A USB device has no engine (tests/usb_devices.rs pins the refusal).
+        if desc.family == radioctl_core::description::Family::UsbDevice {
+            continue;
+        }
         let mut engine = engine_for(&desc).expect("engine");
         for op in [
             Op::GetLevel(Level::Attenuator),
