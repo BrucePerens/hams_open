@@ -2,7 +2,7 @@
 //! `radioctld`: the rigctld-protocol server. This binary owns the one tokio runtime of the
 //! process; the library only ever receives its `Handle`.
 //!
-//! Usage: `radioctld --config FILE [--check]`. `--check` validates the configuration and the rig
+//! Usage: `radioctld --config FILE [--check]`; `--help` or `-h` prints the usage and exits 0. `--check` validates the configuration and the rig
 //! descriptions it names and exits without listening.
 
 use std::path::{Path, PathBuf};
@@ -18,6 +18,8 @@ use radioctld::rigs::load_description;
 struct Cli {
     config: PathBuf,
     check: bool,
+    /// `--help` or `-h` was given: print the usage and exit with status 0.
+    help: bool,
 }
 
 const USAGE: &str = "usage: radioctld --config FILE [--check]";
@@ -27,6 +29,7 @@ const USAGE: &str = "usage: radioctld --config FILE [--check]";
 fn parse_args(args: &[String]) -> Result<Cli, String> {
     let mut config = None;
     let mut check = false;
+    let mut help = false;
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -37,12 +40,21 @@ fn parse_args(args: &[String]) -> Result<Cli, String> {
                 }
             }
             "--check" => check = true,
+            "--help" | "-h" => help = true,
             other => return Err(format!("unknown argument {other:?}")),
         }
+    }
+    if help {
+        return Ok(Cli {
+            config: config.unwrap_or_default(),
+            check,
+            help,
+        });
     }
     Ok(Cli {
         config: config.ok_or("--config is required")?,
         check,
+        help,
     })
 }
 
@@ -115,6 +127,10 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if cli.help {
+        println!("{USAGE}");
+        return ExitCode::SUCCESS;
+    }
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -142,6 +158,12 @@ mod tests {
         assert!(parse_args(&args(&["--config"])).is_err());
         assert!(parse_args(&args(&["-c", "a", "-c", "b"])).is_err());
         assert!(parse_args(&args(&["-c", "a", "--listen", "0.0.0.0"])).is_err());
+        // `--help` and `-h` ask for the usage, with or without a config, and are not an error.
+        for flag in ["--help", "-h"] {
+            assert!(parse_args(&args(&[flag])).expect("help").help, "{flag}");
+            assert!(parse_args(&args(&["-c", "a", flag])).expect("help").help);
+            assert!(!cli.help);
+        }
     }
 
     // Tests [@ANCHOR: radioctld_main_load]
@@ -165,6 +187,7 @@ mod tests {
         let cli = Cli {
             config: file,
             check: true,
+            help: false,
         };
         assert_eq!(run(&cli), Ok(()));
         std::fs::remove_dir_all(&dir).expect("cleanup");

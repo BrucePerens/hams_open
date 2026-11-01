@@ -15,7 +15,7 @@ been tried (chapter [11](11-testing.md)).
 radioctld --config FILE [--check]
 ```
 
-`--check` validates the configuration and every rig description it names, prints
+`--help` (or `-h`) prints the usage line and exits 0. `--check` validates the configuration and every rig description it names, prints
 `radioctld: configuration ok, N rig(s)`, and exits without listening. Without it the daemon brings up
 every rig, prints one `radioctld: NAME listening on ADDRESS` line each, and runs until Ctrl-C. On exit
 it stops the listeners and clients and always sends each rig an unkey, whoever is recorded as holding the

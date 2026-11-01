@@ -238,6 +238,63 @@ async fn a_vanished_port_is_reopened_with_backoff_and_bytes_in_between_are_dropp
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+// Tests [@ANCHOR: radioctl_core_serial_open]
+// Tests [@ANCHOR: radioctl_core_serial_resolve]
+// Tests [@ANCHOR: radioctl_core_serial_supervisor_run]
+// Tests [@ANCHOR: radioctl_core_serial_link_watch]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_replug_at_another_device_path_is_not_found_by_a_path_target_until_the_path_is_back() {
+    // A real USB unplug can renumber `/dev/ttyUSB0` to `/dev/ttyUSB1`. A `path =` target names
+    // one node, so the supervisor keeps retrying that node and never opens the new one (a
+    // `usb = { vid, pid }` target looks the device up again each time). Here the node is a
+    // symlink: the radio comes back at a different pty under another name.
+    let dir =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("renumber-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let link_path = dir.join("ttyUSB0");
+    let renumbered = dir.join("ttyUSB1");
+    let (first_master, first_path) = pty();
+    std::os::unix::fs::symlink(&first_path, &link_path).expect("symlink");
+    let link = open_serial(&Handle::current(), fast_config(&link_path))
+        .await
+        .expect("open");
+    let mut watch = link.watch();
+    drop(first_master);
+    std::fs::remove_file(&link_path).expect("unplug");
+    let (mut second_master, second_path) = pty();
+    std::os::unix::fs::symlink(&second_path, &renumbered).expect("symlink");
+    timeout(Duration::from_secs(3), async {
+        while !matches!(*watch.borrow_and_update(), LinkStatus::Reconnecting { .. }) {
+            watch.changed().await.expect("status");
+        }
+    })
+    .await
+    .expect("noticed the unplug");
+    // Several retry periods pass (the test config retries every few milliseconds): still down.
+    sleep(Duration::from_millis(500)).await;
+    assert!(
+        matches!(*watch.borrow(), LinkStatus::Reconnecting { .. }),
+        "the renumbered node must not be opened by a path target: {:?}",
+        *watch.borrow()
+    );
+    assert_eq!(link.stats().reconnects, 0, "{:?}", link.stats());
+    // The radio answers at the new node, but nobody is listening there.
+    let _ = second_master.write_all(b"MD3;");
+    // Putting the path back (the device node is at the old name again) reconnects.
+    std::os::unix::fs::symlink(&second_path, &link_path).expect("symlink");
+    timeout(Duration::from_secs(5), async {
+        while !matches!(
+            *watch.borrow_and_update(),
+            LinkStatus::Connected { generation: 2, .. }
+        ) {
+            watch.changed().await.expect("status");
+        }
+    })
+    .await
+    .expect("reconnected once the path exists again");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 // Tests [@ANCHOR: radioctl_core_serial_open_port]
 // Tests [@ANCHOR: radioctl_core_serial_control_set_line]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

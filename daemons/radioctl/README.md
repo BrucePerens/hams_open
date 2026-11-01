@@ -1364,7 +1364,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_rotctl_service_disconnect] (radioctld) `LineService::disconnect` for a rotator: nothing is held per client.
 - [@ANCHOR: radioctl:radioctld_server_rig_answer] (radioctld) `LineService::answer` for a rig.
 - [@ANCHOR: radioctl:radioctld_server_rig_disconnect] (radioctld) `LineService::disconnect` for a rig: releases the transmitter if the client held it.
-- [@ANCHOR: radioctl:radioctld_main_parse_args] (radioctld) Parses the command line (without the program name).
+- [@ANCHOR: radioctl:radioctld_main_parse_args] (radioctld) Parses the command line (without the program name); `--help`/`-h` is a request for the usage, not an error.
 - [@ANCHOR: radioctl:radioctld_main_load] (radioctld) Reads the configuration file and every rig description it names.
 - [@ANCHOR: radioctl:radioctld_main_run] (radioctld) Runs the daemon until the process is interrupted.
 - [@ANCHOR: radioctl:radioctld_main] (radioctld) The daemon entry point: reads the command line, loads the configuration, runs the daemon on the one runtime it owns.
