@@ -110,6 +110,7 @@ impl UsbDevice for Broken {
 // Tests [@ANCHOR: radioctl_core_usb_reply_decode]
 // Tests [@ANCHOR: radioctl_core_usb_status_code]
 // Tests [@ANCHOR: radioctl_core_usb_status_from_code]
+// Tests [@ANCHOR: radioctl_core_usb_put_header]
 #[test]
 fn every_frame_round_trips_and_partial_or_bad_frames_are_told_apart() {
     let transfers = [
@@ -209,6 +210,7 @@ fn every_frame_round_trips_and_partial_or_bad_frames_are_told_apart() {
 }
 
 // Tests [@ANCHOR: radioctl_core_usb_execute]
+// Tests [@ANCHOR: radioctl_core_usb_status_of]
 #[test]
 fn a_transfer_failure_or_a_short_write_never_reads_as_success() {
     let mut gone = Broken(UsbFailure::NoDevice);
@@ -293,6 +295,7 @@ fn a_target_is_told_apart_by_ids_strings_and_serial() {
 // Tests [@ANCHOR: radioctl_core_fake_usb_opens]
 // Tests [@ANCHOR: radioctl_core_fake_usb_log]
 // Tests [@ANCHOR: radioctl_core_fake_usb_open]
+// Tests [@ANCHOR: radioctl_core_fake_usb_handle_enter]
 // Tests [@ANCHOR: radioctl_core_fake_usb_handle_transfers]
 #[test]
 fn the_fake_bus_logs_transfers_and_fails_when_unplugged() {

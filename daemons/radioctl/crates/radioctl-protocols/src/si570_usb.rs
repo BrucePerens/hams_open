@@ -274,6 +274,7 @@ impl UsbDevice for Si570Twin {
         }
     }
 
+    // [@ANCHOR: radioctl_si570_usb_twin_control_out]
     fn control_out(
         &mut self,
         request_type: u8,

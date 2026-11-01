@@ -248,6 +248,7 @@ struct FakeHandle {
 }
 
 impl FakeHandle {
+    // [@ANCHOR: radioctl_core_fake_usb_handle_enter]
     fn enter(
         &self,
         transfer: FakeTransfer,

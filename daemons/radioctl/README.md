@@ -469,6 +469,14 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 
 ## Function reference
 
+- [@ANCHOR: radioctl:radioctl_core_usb_put_header] (radioctl-core) `put_header` (see the source).
+- [@ANCHOR: radioctl:radioctl_core_usb_status_of] (radioctl-core) `status_of` (see the source).
+- [@ANCHOR: radioctl:radioctl_core_fake_usb_handle_enter] (radioctl-core) `enter` (see the source).
+- [@ANCHOR: radioctl:radioctl_core_libusb_failure] (radioctl-core) The link's view of a libusb error: a vanished device and an I/O failure reopen the device, a stall is a refusal, a timeout is a timeout.
+- [@ANCHOR: radioctl:radioctl_core_libusb_read_into] (radioctl-core) Runs a libusb read into a buffer of `length` bytes and returns what arrived.
+- [@ANCHOR: radioctl:radioctl_usb_family_usb_of] (radioctl-protocols) `usb_of` (see the source).
+- [@ANCHOR: radioctl:radioctl_funcube_twin_interrupt_read] (radioctl-protocols) `interrupt_read` (see the source).
+- [@ANCHOR: radioctl:radioctl_si570_usb_twin_control_out] (radioctl-protocols) `control_out` (see the source).
 - [@ANCHOR: radioctl:radioctl_core_usb_target_matches] (radioctl-core) Whether a device that reports these ids and strings is the one asked for.
 - [@ANCHOR: radioctl:radioctl_core_usb_target_label] (radioctl-core) `usb:VVVV:PPPP` (with `:serial` when one is set), for status and logs.
 - [@ANCHOR: radioctl:radioctl_core_fake_usb_new] (radioctl-core) A bus with `device` plugged in.

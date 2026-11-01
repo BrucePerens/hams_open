@@ -148,6 +148,7 @@ pub enum FrameError {
     Malformed,
 }
 
+// [@ANCHOR: radioctl_core_usb_put_header]
 fn put_header(op: u8, a: u8, b: u8, value: u16, index: u16, len: u16, data: &[u8]) -> Vec<u8> {
     let mut out = vec![op, a, b];
     out.extend_from_slice(&value.to_le_bytes());
@@ -354,6 +355,7 @@ impl UsbReply {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_status_of]
 fn status_of(failure: &UsbFailure) -> UsbStatus {
     match failure {
         UsbFailure::Timeout => UsbStatus::Timeout,

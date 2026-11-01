@@ -14,6 +14,7 @@ use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::usb_device::{UsbDevice, UsbTarget};
 use radioctl_core::usb_wire::{execute, FrameError, UsbReply, UsbStatus, UsbTransfer};
 
+// [@ANCHOR: radioctl_usb_family_usb_of]
 fn usb_of(desc: &RigDescription) -> Result<&radioctl_core::description::UsbParams, RigError> {
     match (&desc.family, &desc.usb) {
         (Family::UsbDevice, Some(usb)) => Ok(usb),

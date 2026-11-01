@@ -326,6 +326,7 @@ impl UsbDevice for FuncubeTwin {
         Ok(data.len())
     }
 
+    // [@ANCHOR: radioctl_funcube_twin_interrupt_read]
     fn interrupt_read(
         &mut self,
         endpoint: u8,

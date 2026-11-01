@@ -32,13 +32,28 @@ impl LibusbBackend {
     }
 }
 
-fn failure(error: rusb::Error) -> UsbFailure {
+// [@ANCHOR: radioctl_core_libusb_failure]
+/// The link's view of a libusb error: a vanished device and an I/O failure reopen the device, a
+/// stall is a refusal, a timeout is a timeout.
+pub fn failure(error: rusb::Error) -> UsbFailure {
     match error {
         rusb::Error::Timeout => UsbFailure::Timeout,
         rusb::Error::NoDevice | rusb::Error::Io => UsbFailure::NoDevice,
         rusb::Error::Pipe => UsbFailure::Stall,
         other => UsbFailure::Other(other.to_string()),
     }
+}
+
+// [@ANCHOR: radioctl_core_libusb_read_into]
+/// Runs a libusb read into a buffer of `length` bytes and returns what arrived.
+pub fn read_into(
+    length: usize,
+    read: impl FnOnce(&mut [u8]) -> rusb::Result<usize>,
+) -> Result<Vec<u8>, UsbFailure> {
+    let mut buffer = vec![0u8; length];
+    let n = read(&mut buffer).map_err(failure)?;
+    buffer.truncate(n);
+    Ok(buffer)
 }
 
 impl UsbBackend for LibusbBackend {
@@ -120,13 +135,10 @@ impl UsbDevice for LibusbDevice {
         length: u16,
         timeout: Duration,
     ) -> Result<Vec<u8>, UsbFailure> {
-        let mut buffer = vec![0u8; usize::from(length)];
-        let n = self
-            .handle
-            .read_control(request_type, request, value, index, &mut buffer, timeout)
-            .map_err(failure)?;
-        buffer.truncate(n);
-        Ok(buffer)
+        read_into(usize::from(length), |buffer| {
+            self.handle
+                .read_control(request_type, request, value, index, buffer, timeout)
+        })
     }
 
     fn control_out(
@@ -160,13 +172,9 @@ impl UsbDevice for LibusbDevice {
         length: usize,
         timeout: Duration,
     ) -> Result<Vec<u8>, UsbFailure> {
-        let mut buffer = vec![0u8; length];
-        let n = self
-            .handle
-            .read_bulk(endpoint, &mut buffer, timeout)
-            .map_err(failure)?;
-        buffer.truncate(n);
-        Ok(buffer)
+        read_into(length, |buffer| {
+            self.handle.read_bulk(endpoint, buffer, timeout)
+        })
     }
 
     fn interrupt_write(
@@ -186,12 +194,8 @@ impl UsbDevice for LibusbDevice {
         length: usize,
         timeout: Duration,
     ) -> Result<Vec<u8>, UsbFailure> {
-        let mut buffer = vec![0u8; length];
-        let n = self
-            .handle
-            .read_interrupt(endpoint, &mut buffer, timeout)
-            .map_err(failure)?;
-        buffer.truncate(n);
-        Ok(buffer)
+        read_into(length, |buffer| {
+            self.handle.read_interrupt(endpoint, buffer, timeout)
+        })
     }
 }

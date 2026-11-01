@@ -201,6 +201,8 @@ fn the_si570_engine_encodes_the_documented_requests() {
 // Tests [@ANCHOR: radioctl_si570_usb_twin_ptt]
 // Tests [@ANCHOR: radioctl_si570_usb_twin_control]
 // Tests [@ANCHOR: radioctl_usb_family_twin_for]
+// Tests [@ANCHOR: radioctl_usb_family_usb_of]
+// Tests [@ANCHOR: radioctl_si570_usb_twin_control_out]
 // Tests [@ANCHOR: radioctl_usb_family_target_for]
 // Tests [@ANCHOR: radioctl_core_fake_usb_handle_transfers]
 #[tokio::test]
@@ -289,6 +291,7 @@ fn the_funcube_engine_exchanges_sixty_four_byte_reports() {
 // Tests [@ANCHOR: radioctl_funcube_engine_feed]
 // Tests [@ANCHOR: radioctl_funcube_twin_new]
 // Tests [@ANCHOR: radioctl_funcube_twin_interrupt]
+// Tests [@ANCHOR: radioctl_funcube_twin_interrupt_read]
 // Tests [@ANCHOR: radioctl_funcube_twin_frequency]
 #[tokio::test]
 async fn both_funcube_dongles_tune_and_read_back_through_the_link() {
