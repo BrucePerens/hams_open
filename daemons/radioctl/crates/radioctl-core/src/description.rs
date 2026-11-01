@@ -29,6 +29,8 @@ pub enum Family {
     Flex,
     /// OpenHPSDR (ANAN, Hermes) over UDP, control plane only (Protocol 1 or 2).
     Hpsdr,
+    /// Kenwood handheld and mobile ASCII commands ended by a carriage return (TH-D7, TM-D710, ...).
+    KenwoodHh,
 }
 
 /// CI-V parameters.
@@ -129,6 +131,51 @@ pub struct KenwoodParams {
     pub model_id: u16,
     /// The command set.
     pub dialect: KenwoodDialect,
+}
+
+/// Which command set a Kenwood handheld or mobile speaks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HhDialect {
+    /// TH-D7, TH-F6/F7, TH-G71, TM-D700, TM-V7: `FQ`, `MD`, `BC`, `TX`/`RX`.
+    Th,
+    /// TM-D710 and TM-V71: the fixed-width `FO` line (47 characters, mode in the last).
+    Tm710,
+    /// TH-D72: the `FO` line of 52 characters, the mode in the last.
+    Th72,
+    /// TH-D74: the `FO` line of 72 characters, the mode at column 31, `MD v,k` to set it.
+    Th74,
+}
+
+impl HhDialect {
+    // [@ANCHOR: radioctl_core_hh_dialect_name]
+    /// The name used in rig description files.
+    pub fn name(self) -> &'static str {
+        match self {
+            HhDialect::Th => "th",
+            HhDialect::Tm710 => "tm710",
+            HhDialect::Th72 => "th72",
+            HhDialect::Th74 => "th74",
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_hh_dialect_from_name]
+    /// The dialect with a file-format name.
+    pub fn from_name(name: &str) -> Option<HhDialect> {
+        match name {
+            "th" => Some(HhDialect::Th),
+            "tm710" => Some(HhDialect::Tm710),
+            "th72" => Some(HhDialect::Th72),
+            "th74" => Some(HhDialect::Th74),
+            _ => None,
+        }
+    }
+}
+
+/// Kenwood handheld and mobile parameters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KenwoodHhParams {
+    /// The command set.
+    pub dialect: HhDialect,
 }
 
 /// Elecraft-style parameters.
@@ -293,6 +340,8 @@ pub struct RigDescription {
     pub yaesu: Option<YaesuParams>,
     /// Yaesu legacy parameters, present for [`Family::YaesuLegacy`].
     pub yaesu_legacy: Option<YaesuLegacyParams>,
+    /// Kenwood handheld and mobile parameters, present for [`Family::KenwoodHh`].
+    pub kenwood_hh: Option<KenwoodHhParams>,
     /// FlexRadio parameters, present for [`Family::Flex`].
     pub flex: Option<FlexParams>,
     /// OpenHPSDR parameters, present for [`Family::Hpsdr`].
@@ -351,6 +400,7 @@ impl RigDescription {
             elecraft: None,
             yaesu: None,
             yaesu_legacy: None,
+            kenwood_hh: None,
             flex: None,
             hpsdr: None,
             scope: None,
@@ -403,6 +453,7 @@ impl RigDescription {
             elecraft: None,
             yaesu: None,
             yaesu_legacy: None,
+            kenwood_hh: None,
             flex: None,
             hpsdr: None,
             scope: None,
@@ -440,6 +491,21 @@ impl RigDescription {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_core_hh_dialect_name]
+    // Tests [@ANCHOR: radioctl_core_hh_dialect_from_name]
+    #[test]
+    fn handheld_dialect_names_round_trip() {
+        for d in [
+            HhDialect::Th,
+            HhDialect::Tm710,
+            HhDialect::Th72,
+            HhDialect::Th74,
+        ] {
+            assert_eq!(HhDialect::from_name(d.name()), Some(d));
+        }
+        assert_eq!(HhDialect::from_name("nope"), None);
+    }
+
     use super::*;
 
     // Tests [@ANCHOR: radioctl_core_description_mode_code]

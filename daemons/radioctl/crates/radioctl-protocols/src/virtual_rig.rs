@@ -148,6 +148,8 @@ enum Wire {
         params: YaesuParams,
         tokenizer: Tokenizer,
     },
+    /// Kenwood handheld/mobile CR-ended lines, kept by the simulator in `kenwood_hh`.
+    KenwoodHh { sim: crate::kenwood_hh::HhSim },
     /// Five-byte blocks; `pending` holds the bytes of a block still arriving.
     YaesuLegacy {
         pending: Vec<u8>,
@@ -190,6 +192,14 @@ impl VirtualRig {
                     .clone()
                     .unwrap_or(ElecraftParams { model_id: 0 }),
                 tokenizer: Tokenizer::default(),
+            },
+            (Family::KenwoodHh, _, _) if desc.kenwood_hh.is_some() => Wire::KenwoodHh {
+                sim: crate::kenwood_hh::HhSim::new(
+                    desc.kenwood_hh
+                        .map_or(radioctl_core::description::HhDialect::Th, |k| k.dialect),
+                    desc.default_frequency,
+                    desc.mode_code(desc.default_mode).unwrap_or(0),
+                ),
             },
             (Family::YaesuLegacy, _, _) if desc.yaesu_legacy.is_some() => Wire::YaesuLegacy {
                 pending: Vec::new(),
@@ -302,6 +312,7 @@ impl VirtualRig {
                 }
                 out
             }
+            Wire::KenwoodHh { sim } => sim.feed(bytes, now, &self.desc, &mut self.state),
             Wire::YaesuLegacy {
                 pending,
                 last_byte_at,
@@ -1223,6 +1234,7 @@ impl VirtualRig {
             Wire::Civ { .. }
             | Wire::Elecraft { .. }
             | Wire::Yaesu { .. }
+            | Wire::KenwoodHh { .. }
             | Wire::YaesuLegacy { .. } => 0,
         }
     }

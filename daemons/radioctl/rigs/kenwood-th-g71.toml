@@ -1,0 +1,60 @@
+# Rig description: Kenwood TH-G71 (Kenwood handheld/mobile ASCII CAT, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 source facts (no Kenwood manual read for this model). No radio has been connected, so every `verified` is unverified.
+# Engine and gaps: crates/radioctl-protocols/src/kenwood_hh.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "read-signal"]
+
+[rig]
+id = "kenwood-th-g71"
+name = "Kenwood TH-G71"
+family = "kenwood-hh"
+
+[kenwood_hh]
+dialect = "th"
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 145000000
+mode = "fm"
+
+[[modes]]
+mode = "fm"
+code = 0
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in Hamlib 4.6.2", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood_hh.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/th.c and thg71.c: th.c th_set_freq/th_get_freq: FQ <11 digits>,<step>, CR terminated; th_set_mode/th_get_mode: MD n", note = "Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/thg71.c: caps: serial 9600 bit/s, retry 3, write_delay 0/1 ms", note = "Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults: 145 MHz FM", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/th.c and thg71.c: th_set_ptt: TX/RX; th_get_level: SM; th_set_freq, th_get_freq", note = "Frequency, mode and PTT as the dialect fact; PTT is TX/RX (set only; no PTT read command is known, so read-ptt is absent). The S-meter is SM 0 answering SM 0,n (th.c th_get_level). Only the current band is addressable; VFO B is refused (Hamlib switches bands with BC). Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/thg71.c: mode table (digit to mode)", note = "Narrow FM, DV and DR have no radioctl mode and are not mapped. Facts only (command strings, offsets, mode table); no code or comments copied. Unverified." }
+verified = { state = "unverified" }

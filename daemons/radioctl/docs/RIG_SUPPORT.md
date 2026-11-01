@@ -9,14 +9,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **125** (130 description files)
+- With a radioctl description: **135** (140 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 125 |
+| described | 135 |
 | engine only | 14 |
-| needs variant | 37 |
+| needs variant | 27 |
 | needs engine | 75 |
 | odd device | 54 |
 | not applicable | 8 |
@@ -33,7 +33,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 121 |
-| B | variants of an existing engine | 41 | 4 |
+| B | variants of an existing engine | 41 | 14 |
 | C | new engine | 83 | 0 |
 | D | odd device | 54 | 0 |
 
@@ -46,7 +46,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 22 | 0 |
 | yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
-| kenwood_hh_ascii | B | - | 10 | 0 | 0 |
+| kenwood_hh_ascii | B | kenwood_hh | 10 | 10 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
 | other_usb | D | - | 10 | 0 | 0 |
 | flexradio_network | A | flex | 9 | 1 | 0 |
@@ -237,16 +237,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 6007 | JRC | NRD-545 DSP | C | other_serial | - | - | unverified | - | needs engine |
 | 18001 | Kachina | 505DSP | C | other_serial | - | - | unverified | - | needs engine |
 | 2015 | Kenwood | R-5000 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
-| 2033 | Kenwood | TH-D72A | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2042 | Kenwood | TH-D74 | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2017 | Kenwood | TH-D7A | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2019 | Kenwood | TH-F6A | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2020 | Kenwood | TH-F7E | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2023 | Kenwood | TH-G71 | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2026 | Kenwood | TM-D700 | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2034 | Kenwood | TM-D710(G) | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2027 | Kenwood | TM-V7 | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
-| 2035 | Kenwood | TM-V71(A) | B | kenwood_hh_ascii | - | - | unverified | - | needs variant |
+| 2033 | Kenwood | TH-D72A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d72a` | unverified | - | described |
+| 2042 | Kenwood | TH-D74 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d74` | unverified | - | described |
+| 2017 | Kenwood | TH-D7A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d7a` | unverified | - | described |
+| 2019 | Kenwood | TH-F6A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-f6a` | unverified | - | described |
+| 2020 | Kenwood | TH-F7E | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-f7e` | unverified | - | described |
+| 2023 | Kenwood | TH-G71 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-g71` | unverified | - | described |
+| 2026 | Kenwood | TM-D700 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-d700` | unverified | - | described |
+| 2034 | Kenwood | TM-D710(G) | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-d710` | unverified | - | described |
+| 2027 | Kenwood | TM-V7 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-v7` | unverified | - | described |
+| 2035 | Kenwood | TM-V71(A) | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-v71` | unverified | - | described |
 | 2030 | Kenwood | TRC-80 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
 | 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | `kenwood-ts-140s` | unverified | - | described |
 | 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
