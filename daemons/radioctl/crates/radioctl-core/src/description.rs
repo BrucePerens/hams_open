@@ -80,6 +80,8 @@ pub enum VendorProtocol {
     Guohe,
     /// Dorji DRA818U and DRA818V modules (`dorji.rs`).
     Dorji,
+    /// MDS 4710 and 9710 data radios (`mds.rs`).
+    Mds,
 }
 
 impl VendorProtocol {
@@ -104,6 +106,7 @@ impl VendorProtocol {
             "lowe" => Some(VendorProtocol::Lowe),
             "guohe" => Some(VendorProtocol::Guohe),
             "dorji" => Some(VendorProtocol::Dorji),
+            "mds" => Some(VendorProtocol::Mds),
             _ => None,
         }
     }
@@ -129,6 +132,7 @@ impl VendorProtocol {
             VendorProtocol::Lowe => "lowe",
             VendorProtocol::Guohe => "guohe",
             VendorProtocol::Dorji => "dorji",
+            VendorProtocol::Mds => "mds",
         }
     }
 }
@@ -1101,6 +1105,8 @@ mod tests {
             Some(VendorProtocol::Dorji)
         );
         assert_eq!(VendorProtocol::Dorji.name(), "dorji");
+        assert_eq!(VendorProtocol::from_name("mds"), Some(VendorProtocol::Mds));
+        assert_eq!(VendorProtocol::Mds.name(), "mds");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

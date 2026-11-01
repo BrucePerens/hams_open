@@ -118,7 +118,7 @@ pub fn vendor_of(desc: &RigDescription) -> Result<(VendorProtocol, &str), RigErr
 /// The engine of a vendor serial description.
 pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
     Ok(match vendor_of(desc)?.0 {
-        VendorProtocol::Tentec if vendor_of(desc)?.1 == "rx320" => {
+        VendorProtocol::Tentec if matches!(vendor_of(desc)?.1, "rx320" | "tt550") => {
             Box::new(crate::tentec_rx320::Rx320Engine::new(desc.clone())?)
         }
         VendorProtocol::Tentec => Box::new(crate::tentec::TentecEngine::new(desc.clone())?),
@@ -140,6 +140,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Lowe => Box::new(crate::lowe::LoweEngine::new(desc.clone())?),
         VendorProtocol::Guohe => Box::new(crate::guohe::GuoheEngine::new(desc.clone())?),
         VendorProtocol::Dorji => Box::new(crate::dorji::DorjiEngine::new(desc.clone())?),
+        VendorProtocol::Mds => Box::new(crate::mds::MdsEngine::new(desc.clone())?),
     })
 }
 
@@ -147,7 +148,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
 /// The virtual radio of a vendor serial description.
 pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> {
     Ok(match vendor_of(desc)?.0 {
-        VendorProtocol::Tentec if vendor_of(desc)?.1 == "rx320" => {
+        VendorProtocol::Tentec if matches!(vendor_of(desc)?.1, "rx320" | "tt550") => {
             Box::new(crate::tentec_rx320::Rx320Twin::new(desc)?)
         }
         VendorProtocol::Tentec => Box::new(crate::tentec::TentecTwin::new(desc)?),
@@ -167,6 +168,7 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Lowe => Box::new(crate::lowe::LoweTwin::new(desc)?),
         VendorProtocol::Guohe => Box::new(crate::guohe::GuoheTwin::new(desc)?),
         VendorProtocol::Dorji => Box::new(crate::dorji::DorjiTwin::new(desc)?),
+        VendorProtocol::Mds => Box::new(crate::mds::MdsTwin::new(desc)?),
     })
 }
 
@@ -245,8 +247,11 @@ mod tests {
             };
             assert_eq!(snap.frequency, desc.default_frequency, "{}", desc.id);
             assert!(!snap.ptt, "{}", desc.id);
-            let mode = snap.mode_code.and_then(|c| desc.code_mode(c));
-            assert_eq!(mode, Some(desc.default_mode), "{}", desc.id);
+            // A twin of a radio with no mode keeps none.
+            if snap.mode_code.is_some() {
+                let mode = snap.mode_code.and_then(|c| desc.code_mode(c));
+                assert_eq!(mode, Some(desc.default_mode), "{}", desc.id);
+            }
             seen += 1;
         }
         assert!(seen >= 10, "{seen} vendor files");

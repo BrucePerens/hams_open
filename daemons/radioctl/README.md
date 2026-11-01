@@ -754,6 +754,15 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_lowe_twin_snapshot] (radioctl-protocols) The Lowe twin's frequency, mode code and PTT state.
 - [@ANCHOR: radioctl:radioctl_lowe_twin_feed] (radioctl-protocols) The Lowe twin's answers to the controller's bytes.
 - [@ANCHOR: radioctl:radioctl_lowe_twin_front_panel] (radioctl-protocols) The Lowe twin tuned or keyed from its front panel.
+- [@ANCHOR: radioctl:radioctl_mds_mhz_text] (radioctl-protocols) A frequency as megahertz with four decimals (`450.0000`), rounded to 100 Hz.
+- [@ANCHOR: radioctl:radioctl_mds_parse_mhz] (radioctl-protocols) The frequency of a megahertz number with up to four decimals, or `None`.
+- [@ANCHOR: radioctl:radioctl_mds_engine_new] (radioctl-protocols) Builds an engine from an MDS vendor description.
+- [@ANCHOR: radioctl:radioctl_mds_engine_encode] (radioctl-protocols) The MDS engine's encoding of an operation into command bytes.
+- [@ANCHOR: radioctl:radioctl_mds_engine_feed] (radioctl-protocols) The MDS engine's decoding of the radio's bytes.
+- [@ANCHOR: radioctl:radioctl_mds_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_mds_twin_snapshot] (radioctl-protocols) The MDS twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_mds_twin_feed] (radioctl-protocols) The MDS twin's answers to the controller's bytes.
+- [@ANCHOR: radioctl:radioctl_mds_twin_front_panel] (radioctl-protocols) The MDS twin tuned from its front panel.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
@@ -774,6 +783,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_correction] (radioctl-protocols) The `c` of the RX-320 tuning formula: half the filter width plus 200 Hz, or 0 in CW.
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_tuning_words] (radioctl-protocols) The coarse, fine and BFO words for `hz` in `mode` with the filter at `filter`, or `None` for an
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_frequency_of] (radioctl-protocols) The frequency the words tune to in `mode` with the filter at `filter`.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_variant_from_name] (radioctl-protocols) The variant of a dialect name.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_tuning_words_for] (radioctl-protocols) The tuning words of a variant.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_frequency_of_for] (radioctl-protocols) The frequency tuning words of a variant tune to.
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_frame] (radioctl-protocols) `N` and the three words, CR.
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_engine_new] (radioctl-protocols) Builds an engine from an RX-320 description (`tentec`, dialect `rx320`).
 - [@ANCHOR: radioctl:radioctl_tentec_rx320_engine_encode] (radioctl-protocols) The RX-320 engine encode: `N` tuning words, or `W`, `N` and `M` for a mode.
