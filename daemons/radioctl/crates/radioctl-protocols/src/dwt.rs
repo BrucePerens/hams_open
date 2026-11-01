@@ -128,13 +128,36 @@ impl DwtTwin {
 }
 
 impl UsbDevice for DwtTwin {
-    fn control_in(&mut self, _t: u8, _r: u8, _v: u16, _i: u16, _l: u16, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn control_in(
+        &mut self,
+        _t: u8,
+        _r: u8,
+        _v: u16,
+        _i: u16,
+        _l: u16,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
     // [@ANCHOR: radioctl_dwt_twin_control_out]
-    fn control_out(&mut self, request_type: u8, request: u8, value: u16, index: u16, data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
-        match (request_type, request, value, index, data.get(..7), data.get(7..)) {
+    fn control_out(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        match (
+            request_type,
+            request,
+            value,
+            index,
+            data.get(..7),
+            data.get(7..),
+        ) {
             (0, 0, 0, 0, Some(prefix), Some([hi, lo])) if prefix == PREFIX => {
                 self.khz = Some(u16::from_be_bytes([*hi, *lo]));
                 Ok(data.len())
@@ -143,19 +166,39 @@ impl UsbDevice for DwtTwin {
         }
     }
 
-    fn bulk_write(&mut self, _endpoint: u8, _data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn bulk_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn bulk_read(&mut self, _endpoint: u8, _length: usize, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn bulk_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn interrupt_write(&mut self, _endpoint: u8, _data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn interrupt_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn interrupt_read(&mut self, _endpoint: u8, _length: usize, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn interrupt_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 }

@@ -197,7 +197,11 @@ impl ProtocolEngine for FuncubeEngine {
             out.push(match (accepted, pending) {
                 (false, _) => Inbound::Nak,
                 (true, Pending::ReadFrequency) => {
-                    match reply.data.get(2..6).and_then(|w| <[u8; 4]>::try_from(w).ok()) {
+                    match reply
+                        .data
+                        .get(2..6)
+                        .and_then(|w| <[u8; 4]>::try_from(w).ok())
+                    {
                         Some(w) => Inbound::Observation(Observation::Frequency(
                             Vfo::A,
                             Hz(u64::from(u32::from_le_bytes(w))),
@@ -242,31 +246,66 @@ impl FuncubeTwin {
 }
 
 impl UsbDevice for FuncubeTwin {
-    fn control_in(&mut self, _t: u8, _r: u8, _v: u16, _i: u16, _l: u16, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn control_in(
+        &mut self,
+        _t: u8,
+        _r: u8,
+        _v: u16,
+        _i: u16,
+        _l: u16,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn control_out(&mut self, _t: u8, _r: u8, _v: u16, _i: u16, _d: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn control_out(
+        &mut self,
+        _t: u8,
+        _r: u8,
+        _v: u16,
+        _i: u16,
+        _d: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn bulk_write(&mut self, _endpoint: u8, _data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn bulk_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn bulk_read(&mut self, _endpoint: u8, _length: usize, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn bulk_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
     // [@ANCHOR: radioctl_funcube_twin_interrupt]
-    fn interrupt_write(&mut self, endpoint: u8, data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn interrupt_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         if endpoint != OUTPUT_ENDPOINT || data.len() != REPORT {
             return Err(UsbFailure::Stall);
         }
         let command = data.first().copied().unwrap_or(0);
         let word = |from: usize, len: usize| -> u32 {
             data.get(from..from + len)
-                .map(|b| b.iter().rev().fold(0u32, |acc, byte| (acc << 8) | u32::from(*byte)))
+                .map(|b| {
+                    b.iter()
+                        .rev()
+                        .fold(0u32, |acc, byte| (acc << 8) | u32::from(*byte))
+                })
                 .unwrap_or(0)
         };
         let mut success = true;
@@ -287,7 +326,12 @@ impl UsbDevice for FuncubeTwin {
         Ok(data.len())
     }
 
-    fn interrupt_read(&mut self, endpoint: u8, length: usize, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn interrupt_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         if endpoint != INPUT_ENDPOINT || self.answer.is_empty() {
             return Err(UsbFailure::Timeout);
         }

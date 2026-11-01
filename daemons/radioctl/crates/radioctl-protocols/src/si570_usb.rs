@@ -253,10 +253,20 @@ impl Si570Twin {
 
 impl UsbDevice for Si570Twin {
     // [@ANCHOR: radioctl_si570_usb_twin_control]
-    fn control_in(&mut self, request_type: u8, request: u8, value: u16, index: u16, length: u16, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn control_in(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        length: u16,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         match (request_type, request, index, length) {
             (VENDOR_IN, REQUEST_READ_FREQUENCY, 0, 4) => Ok(self.word.to_le_bytes().to_vec()),
-            (VENDOR_IN, REQUEST_SET_PTT, 0, 3) if self.protocol == UsbProtocol::Si570 && value <= 1 => {
+            (VENDOR_IN, REQUEST_SET_PTT, 0, 3)
+                if self.protocol == UsbProtocol::Si570 && value <= 1 =>
+            {
                 self.ptt = value == 1;
                 Ok(vec![0, 0, 0])
             }
@@ -264,12 +274,26 @@ impl UsbDevice for Si570Twin {
         }
     }
 
-    fn control_out(&mut self, request_type: u8, request: u8, value: u16, index: u16, data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn control_out(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         let expected = match self.protocol {
             UsbProtocol::Fifisdr => 0,
             _ => 0x700 + SI570_I2C_ADDRESS,
         };
-        match (request_type, request, value, index, <[u8; 4]>::try_from(data)) {
+        match (
+            request_type,
+            request,
+            value,
+            index,
+            <[u8; 4]>::try_from(data),
+        ) {
             (VENDOR_OUT, REQUEST_SET_FREQ_BY_VALUE, v, 0, Ok(word)) if v == expected => {
                 self.word = u32::from_le_bytes(word);
                 Ok(data.len())
@@ -278,19 +302,39 @@ impl UsbDevice for Si570Twin {
         }
     }
 
-    fn bulk_write(&mut self, _endpoint: u8, _data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn bulk_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn bulk_read(&mut self, _endpoint: u8, _length: usize, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn bulk_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn interrupt_write(&mut self, _endpoint: u8, _data: &[u8], _timeout: Duration) -> Result<usize, UsbFailure> {
+    fn interrupt_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 
-    fn interrupt_read(&mut self, _endpoint: u8, _length: usize, _timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn interrupt_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
     }
 }

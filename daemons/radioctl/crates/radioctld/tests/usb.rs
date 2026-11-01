@@ -23,7 +23,10 @@ use tokio::runtime::Handle;
 async fn a_virtual_si570_board_is_tuned_over_the_usb_link_and_the_gate_stays_closed() {
     let text = config_text("", "softrock", "softrock-si570-avr-usb.toml", false, false);
     let daemon = start(&text).await;
-    assert!(daemon.rigs[0].usb_link.is_some(), "the rig runs over the USB link");
+    assert!(
+        daemon.rigs[0].usb_link.is_some(),
+        "the rig runs over the USB link"
+    );
     assert!(daemon.rigs[0].serial_link.is_none() && daemon.rigs[0].net_link.is_none());
     let mut client = Client::connect(&daemon).await;
     assert_eq!(client.ask("f").await, "7074000\n");
@@ -36,7 +39,13 @@ async fn a_virtual_si570_board_is_tuned_over_the_usb_link_and_the_gate_stays_clo
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_virtual_funcube_and_traveller_are_served_too() {
-    let text = config_text("", "funcube", "amsat-uk-funcube-dongle-pro-plus.toml", false, false);
+    let text = config_text(
+        "",
+        "funcube",
+        "amsat-uk-funcube-dongle-pro-plus.toml",
+        false,
+        false,
+    );
     let daemon = start(&text).await;
     let mut client = Client::connect(&daemon).await;
     assert_eq!(client.ask("F 145800000").await, "RPRT 0\n");
@@ -58,7 +67,14 @@ fn usb_text(file: &str) -> String {
 async fn start_error(file: &str) -> String {
     let config = Config::parse(&usb_text(file), Path::new(".")).expect("config");
     let description = load_description(&config.rigs[0].description).expect("description");
-    match daemon::start(&Handle::current(), &config, vec![description], common::quiet_options).await {
+    match daemon::start(
+        &Handle::current(),
+        &config,
+        vec![description],
+        common::quiet_options,
+    )
+    .await
+    {
         Ok(_) => panic!("started"),
         Err(why) => why,
     }
@@ -77,7 +93,9 @@ async fn a_usb_transport_needs_a_usb_device_description() {
     let why = start_error("elecraft-kx3.toml").await;
     assert!(why.contains("needs a usb-device description"), "{why}");
     assert_eq!(
-        load_description(&rigs_dir().join("fifi-sdr.toml")).expect("fifi").family,
+        load_description(&rigs_dir().join("fifi-sdr.toml"))
+            .expect("fifi")
+            .family,
         Family::UsbDevice
     );
 }
@@ -93,12 +111,20 @@ async fn a_usb_board_without_an_engine_is_not_started() {
 #[tokio::test]
 async fn a_build_with_the_usb_feature_looks_for_the_board_and_reports_it_absent() {
     // Ids no device has, so libusb lists the bus and opens nothing.
-    let text = usb_text("fifi-sdr.toml").replace("kind = \"usb\"", "kind = \"usb\"\nvid = 0xFFFF\npid = 0xFFFE");
+    let text = usb_text("fifi-sdr.toml").replace(
+        "kind = \"usb\"",
+        "kind = \"usb\"\nvid = 0xFFFF\npid = 0xFFFE",
+    );
     let config = Config::parse(&text, Path::new(".")).expect("config");
     let description = load_description(&config.rigs[0].description).expect("description");
-    let why = daemon::start(&Handle::current(), &config, vec![description], common::quiet_options)
-        .await
-        .err()
-        .expect("absent");
+    let why = daemon::start(
+        &Handle::current(),
+        &config,
+        vec![description],
+        common::quiet_options,
+    )
+    .await
+    .err()
+    .expect("absent");
     assert!(why.contains("not plugged in"), "{why}");
 }

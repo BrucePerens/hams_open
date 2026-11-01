@@ -989,15 +989,16 @@ kind = "virtual"
     #[test]
     fn a_usb_transport_takes_optional_ids_a_serial_and_a_bounded_timeout() {
         let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));
-        let usb = |config: Result<Config, String>| match config.expect("usb").rigs[0].transport.clone() {
-            TransportConfig::Usb {
-                vid,
-                pid,
-                serial,
-                transfer_timeout,
-            } => (vid, pid, serial, transfer_timeout),
-            other => panic!("not usb: {other:?}"),
-        };
+        let usb =
+            |config: Result<Config, String>| match config.expect("usb").rigs[0].transport.clone() {
+                TransportConfig::Usb {
+                    vid,
+                    pid,
+                    serial,
+                    transfer_timeout,
+                } => (vid, pid, serial, transfer_timeout),
+                other => panic!("not usb: {other:?}"),
+            };
         assert_eq!(
             usb(with("kind = \"usb\"")),
             (None, None, None, Duration::from_millis(1000))
@@ -1017,7 +1018,10 @@ kind = "virtual"
         assert!(with("kind = \"usb\"\nvid = 0").is_err());
         assert!(with("kind = \"usb\"\ntransfer_timeout_ms = 10").is_err());
         assert!(with("kind = \"usb\"\ntransfer_timeout_ms = 20000").is_err());
-        assert!(with("kind = \"usb\"\nbaud = 9600").is_err(), "no serial keys on a USB transport");
+        assert!(
+            with("kind = \"usb\"\nbaud = 9600").is_err(),
+            "no serial keys on a USB transport"
+        );
         assert!(with("kind = \"usb\"\naddress = \"x:1\"").is_err());
     }
 

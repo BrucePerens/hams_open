@@ -218,7 +218,7 @@ impl StandIn {
             StandIn::Flex(radio) => radio.greeting(),
             StandIn::Rig(_) | StandIn::Vendor(_) | StandIn::HpsdrBridge(_) | StandIn::Usb(_) => {
                 Vec::new()
-            },
+            }
         }
     }
 

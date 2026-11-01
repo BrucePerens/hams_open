@@ -237,13 +237,16 @@ device directly through libusb and exists only with the cargo feature `usb`
 to the board; the kernel driver is detached while the interface is claimed). The relay's
 zero-privilege broker will implement the same traits over a handle it hands over.
 
-```toml
+```toml radioctld
+[[rig]]
+name = "softrock"
+description = "softrock-si570-avr-usb.toml"   # supplies the ids and strings
 [rig.transport]
-kind = "usb"                  # the description supplies the ids and strings
-# serial = "A12345"           # only if two identical boards are attached
-# vid = 0x16C0                # optional overrides of the description's ids
+kind = "usb"
+serial = "A12345"                             # only if two identical boards are attached
+# vid = 0x16C0                                # optional overrides of the description's ids
 # pid = 0x05DC
-# transfer_timeout_ms = 1000  # 50 to 10000
+transfer_timeout_ms = 1000                    # 50 to 10000
 ```
 
 A build without the `usb` feature refuses this transport at start with a message saying so.

@@ -50,5 +50,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25003 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/dwt.c", note = "A capability is claimed when Hamlib's backend implements it. Hamlib's Windows build (vendor DLL) reads and sets the frequency; its libusb build, the only one radioctl follows, sets it only, so read-frequency is not claimed. The set is implemented by dwt.rs and tested against its virtual twin, not a receiver." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25003 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/dwt.c", note = "A capability is claimed when Hamlib's backend implements it. Open question for a volunteer: Hamlib marks the request (type 0, request 0) FIXME and truncates the kilohertz to 16 bits, so the FM band cannot be tuned here. Hamlib's Windows build (vendor DLL) reads and sets the frequency; its libusb build, the only one radioctl follows, sets it only, so read-frequency is not claimed. The set is implemented by dwt.rs and tested against its virtual twin, not a receiver." }
 verified = { state = "unverified" }

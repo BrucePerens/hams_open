@@ -183,23 +183,56 @@ impl UsbTransfer {
         let op = self.op();
         let cut = |data: &[u8]| data.get(..MAX_DATA).unwrap_or(data).to_vec();
         match self {
-            UsbTransfer::ControlIn { request_type, request, value, index, length } => {
-                put_header(op, *request_type, *request, *value, *index, *length, &[])
-            }
-            UsbTransfer::ControlOut { request_type, request, value, index, data } => {
+            UsbTransfer::ControlIn {
+                request_type,
+                request,
+                value,
+                index,
+                length,
+            } => put_header(op, *request_type, *request, *value, *index, *length, &[]),
+            UsbTransfer::ControlOut {
+                request_type,
+                request,
+                value,
+                index,
+                data,
+            } => {
                 let data = cut(data);
-                put_header(op, *request_type, *request, *value, *index, data_len(&data), &data)
+                put_header(
+                    op,
+                    *request_type,
+                    *request,
+                    *value,
+                    *index,
+                    data_len(&data),
+                    &data,
+                )
             }
-            UsbTransfer::BulkWrite { endpoint, data } | UsbTransfer::InterruptWrite { endpoint, data } => {
+            UsbTransfer::BulkWrite { endpoint, data }
+            | UsbTransfer::InterruptWrite { endpoint, data } => {
                 let data = cut(data);
                 put_header(op, *endpoint, 0, 0, 0, data_len(&data), &data)
             }
-            UsbTransfer::BulkRead { endpoint, length } | UsbTransfer::InterruptRead { endpoint, length } => {
+            UsbTransfer::BulkRead { endpoint, length }
+            | UsbTransfer::InterruptRead { endpoint, length } => {
                 put_header(op, *endpoint, 0, 0, 0, *length, &[])
             }
-            UsbTransfer::InterruptExchange { out_endpoint, in_endpoint, data, read_length } => {
+            UsbTransfer::InterruptExchange {
+                out_endpoint,
+                in_endpoint,
+                data,
+                read_length,
+            } => {
                 let data = cut(data);
-                put_header(op, *out_endpoint, *in_endpoint, *read_length, 0, data_len(&data), &data)
+                put_header(
+                    op,
+                    *out_endpoint,
+                    *in_endpoint,
+                    *read_length,
+                    0,
+                    data_len(&data),
+                    &data,
+                )
             }
         }
     }
@@ -208,8 +241,17 @@ impl UsbTransfer {
     /// Decodes the first request frame in `bytes`; returns it and the number of bytes it used.
     pub fn decode(bytes: &[u8]) -> Result<(UsbTransfer, usize), FrameError> {
         let head = bytes.get(..REQUEST_HEADER).ok_or(FrameError::Incomplete)?;
-        let word = |at: usize| u16::from_le_bytes([head.get(at).copied().unwrap_or(0), head.get(at + 1).copied().unwrap_or(0)]);
-        let (op, a, b) = (head.first().copied().unwrap_or(0), head.get(1).copied().unwrap_or(0), head.get(2).copied().unwrap_or(0));
+        let word = |at: usize| {
+            u16::from_le_bytes([
+                head.get(at).copied().unwrap_or(0),
+                head.get(at + 1).copied().unwrap_or(0),
+            ])
+        };
+        let (op, a, b) = (
+            head.first().copied().unwrap_or(0),
+            head.get(1).copied().unwrap_or(0),
+            head.get(2).copied().unwrap_or(0),
+        );
         let (value, index, len) = (word(3), word(5), word(7));
         if usize::from(len) > MAX_DATA {
             return Err(FrameError::Malformed);
@@ -217,16 +259,48 @@ impl UsbTransfer {
         let sends = matches!(op, 2 | 3 | 5 | 7);
         let used = REQUEST_HEADER + if sends { usize::from(len) } else { 0 };
         let data = || -> Result<Vec<u8>, FrameError> {
-            bytes.get(REQUEST_HEADER..used).map(<[u8]>::to_vec).ok_or(FrameError::Incomplete)
+            bytes
+                .get(REQUEST_HEADER..used)
+                .map(<[u8]>::to_vec)
+                .ok_or(FrameError::Incomplete)
         };
         let transfer = match op {
-            1 => UsbTransfer::ControlIn { request_type: a, request: b, value, index, length: len },
-            2 => UsbTransfer::ControlOut { request_type: a, request: b, value, index, data: data()? },
-            3 => UsbTransfer::BulkWrite { endpoint: a, data: data()? },
-            4 => UsbTransfer::BulkRead { endpoint: a, length: len },
-            5 => UsbTransfer::InterruptWrite { endpoint: a, data: data()? },
-            6 => UsbTransfer::InterruptRead { endpoint: a, length: len },
-            7 => UsbTransfer::InterruptExchange { out_endpoint: a, in_endpoint: b, data: data()?, read_length: value },
+            1 => UsbTransfer::ControlIn {
+                request_type: a,
+                request: b,
+                value,
+                index,
+                length: len,
+            },
+            2 => UsbTransfer::ControlOut {
+                request_type: a,
+                request: b,
+                value,
+                index,
+                data: data()?,
+            },
+            3 => UsbTransfer::BulkWrite {
+                endpoint: a,
+                data: data()?,
+            },
+            4 => UsbTransfer::BulkRead {
+                endpoint: a,
+                length: len,
+            },
+            5 => UsbTransfer::InterruptWrite {
+                endpoint: a,
+                data: data()?,
+            },
+            6 => UsbTransfer::InterruptRead {
+                endpoint: a,
+                length: len,
+            },
+            7 => UsbTransfer::InterruptExchange {
+                out_endpoint: a,
+                in_endpoint: b,
+                data: data()?,
+                read_length: value,
+            },
             _ => return Err(FrameError::Malformed),
         };
         Ok((transfer, used))
@@ -259,11 +333,16 @@ impl UsbReply {
     /// Decodes the first reply frame in `bytes`; returns it and the number of bytes it used.
     pub fn decode(bytes: &[u8]) -> Result<(UsbReply, usize), FrameError> {
         let head = bytes.get(..REPLY_HEADER).ok_or(FrameError::Incomplete)?;
-        let len = usize::from(u16::from_le_bytes([head.get(2).copied().unwrap_or(0), head.get(3).copied().unwrap_or(0)]));
+        let len = usize::from(u16::from_le_bytes([
+            head.get(2).copied().unwrap_or(0),
+            head.get(3).copied().unwrap_or(0),
+        ]));
         if len > MAX_DATA {
             return Err(FrameError::Malformed);
         }
-        let data = bytes.get(REPLY_HEADER..REPLY_HEADER + len).ok_or(FrameError::Incomplete)?;
+        let data = bytes
+            .get(REPLY_HEADER..REPLY_HEADER + len)
+            .ok_or(FrameError::Incomplete)?;
         Ok((
             UsbReply {
                 op: head.first().copied().unwrap_or(0),
@@ -299,24 +378,48 @@ pub fn execute(device: &mut dyn UsbDevice, transfer: &UsbTransfer, timeout: Dura
         Err(failure) => (status_of(&failure), Vec::new()),
     };
     let (status, data) = match transfer {
-        UsbTransfer::ControlIn { request_type, request, value, index, length } => {
-            read(device.control_in(*request_type, *request, *value, *index, *length, timeout))
-        }
-        UsbTransfer::ControlOut { request_type, request, value, index, data } => wrote(
+        UsbTransfer::ControlIn {
+            request_type,
+            request,
+            value,
+            index,
+            length,
+        } => read(device.control_in(*request_type, *request, *value, *index, *length, timeout)),
+        UsbTransfer::ControlOut {
+            request_type,
+            request,
+            value,
+            index,
+            data,
+        } => wrote(
             device.control_out(*request_type, *request, *value, *index, data, timeout),
             data.len(),
         ),
-        UsbTransfer::BulkWrite { endpoint, data } => wrote(device.bulk_write(*endpoint, data, timeout), data.len()),
-        UsbTransfer::BulkRead { endpoint, length } => read(device.bulk_read(*endpoint, usize::from(*length), timeout)),
+        UsbTransfer::BulkWrite { endpoint, data } => {
+            wrote(device.bulk_write(*endpoint, data, timeout), data.len())
+        }
+        UsbTransfer::BulkRead { endpoint, length } => {
+            read(device.bulk_read(*endpoint, usize::from(*length), timeout))
+        }
         UsbTransfer::InterruptWrite { endpoint, data } => {
             wrote(device.interrupt_write(*endpoint, data, timeout), data.len())
         }
         UsbTransfer::InterruptRead { endpoint, length } => {
             read(device.interrupt_read(*endpoint, usize::from(*length), timeout))
         }
-        UsbTransfer::InterruptExchange { out_endpoint, in_endpoint, data, read_length } => {
-            match wrote(device.interrupt_write(*out_endpoint, data, timeout), data.len()) {
-                (UsbStatus::Ok, _) => read(device.interrupt_read(*in_endpoint, usize::from(*read_length), timeout)),
+        UsbTransfer::InterruptExchange {
+            out_endpoint,
+            in_endpoint,
+            data,
+            read_length,
+        } => {
+            match wrote(
+                device.interrupt_write(*out_endpoint, data, timeout),
+                data.len(),
+            ) {
+                (UsbStatus::Ok, _) => {
+                    read(device.interrupt_read(*in_endpoint, usize::from(*read_length), timeout))
+                }
                 failed => failed,
             }
         }

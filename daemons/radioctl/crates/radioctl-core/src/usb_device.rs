@@ -43,7 +43,14 @@ pub struct UsbTarget {
 impl UsbTarget {
     // [@ANCHOR: radioctl_core_usb_target_matches]
     /// Whether a device that reports these ids and strings is the one asked for.
-    pub fn matches(&self, vid: u16, pid: u16, manufacturer: &str, product: &str, serial: &str) -> bool {
+    pub fn matches(
+        &self,
+        vid: u16,
+        pid: u16,
+        manufacturer: &str,
+        product: &str,
+        serial: &str,
+    ) -> bool {
         self.vendor_id == vid
             && self.product_id == pid
             && (self.manufacturer.is_empty() || self.manufacturer == manufacturer)
@@ -55,7 +62,10 @@ impl UsbTarget {
     /// `usb:VVVV:PPPP` (with `:serial` when one is set), for status and logs.
     pub fn label(&self) -> String {
         match &self.serial {
-            Some(serial) => format!("usb:{:04x}:{:04x}:{serial}", self.vendor_id, self.product_id),
+            Some(serial) => format!(
+                "usb:{:04x}:{:04x}:{serial}",
+                self.vendor_id, self.product_id
+            ),
             None => format!("usb:{:04x}:{:04x}", self.vendor_id, self.product_id),
         }
     }
@@ -100,16 +110,36 @@ pub trait UsbDevice: Send {
     ) -> Result<usize, UsbFailure>;
 
     /// Writes `data` to a bulk OUT endpoint.
-    fn bulk_write(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure>;
+    fn bulk_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure>;
 
     /// Reads up to `length` bytes from a bulk IN endpoint.
-    fn bulk_read(&mut self, endpoint: u8, length: usize, timeout: Duration) -> Result<Vec<u8>, UsbFailure>;
+    fn bulk_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure>;
 
     /// Writes `data` to an interrupt OUT endpoint (a HID output report).
-    fn interrupt_write(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure>;
+    fn interrupt_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure>;
 
     /// Reads up to `length` bytes from an interrupt IN endpoint (a HID input report).
-    fn interrupt_read(&mut self, endpoint: u8, length: usize, timeout: Duration) -> Result<Vec<u8>, UsbFailure>;
+    fn interrupt_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure>;
 }
 
 /// Finds and opens USB devices.
@@ -218,7 +248,10 @@ struct FakeHandle {
 }
 
 impl FakeHandle {
-    fn enter(&self, transfer: FakeTransfer) -> Result<MutexGuard<'_, Box<dyn UsbDevice>>, UsbFailure> {
+    fn enter(
+        &self,
+        transfer: FakeTransfer,
+    ) -> Result<MutexGuard<'_, Box<dyn UsbDevice>>, UsbFailure> {
         if !self.shared.present.load(Ordering::SeqCst) {
             return Err(UsbFailure::NoDevice);
         }
@@ -229,32 +262,80 @@ impl FakeHandle {
 
 impl UsbDevice for FakeHandle {
     // [@ANCHOR: radioctl_core_fake_usb_handle_transfers]
-    fn control_in(&mut self, request_type: u8, request: u8, value: u16, index: u16, length: u16, timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
-        self.enter(FakeTransfer::ControlIn(request_type, request, value, index, length))?
-            .control_in(request_type, request, value, index, length, timeout)
+    fn control_in(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        length: u16,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
+        self.enter(FakeTransfer::ControlIn(
+            request_type,
+            request,
+            value,
+            index,
+            length,
+        ))?
+        .control_in(request_type, request, value, index, length, timeout)
     }
 
-    fn control_out(&mut self, request_type: u8, request: u8, value: u16, index: u16, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure> {
-        self.enter(FakeTransfer::ControlOut(request_type, request, value, index, data.to_vec()))?
-            .control_out(request_type, request, value, index, data, timeout)
+    fn control_out(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        self.enter(FakeTransfer::ControlOut(
+            request_type,
+            request,
+            value,
+            index,
+            data.to_vec(),
+        ))?
+        .control_out(request_type, request, value, index, data, timeout)
     }
 
-    fn bulk_write(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure> {
+    fn bulk_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         self.enter(FakeTransfer::BulkWrite(endpoint, data.to_vec()))?
             .bulk_write(endpoint, data, timeout)
     }
 
-    fn bulk_read(&mut self, endpoint: u8, length: usize, timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn bulk_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         self.enter(FakeTransfer::BulkRead(endpoint, length))?
             .bulk_read(endpoint, length, timeout)
     }
 
-    fn interrupt_write(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure> {
+    fn interrupt_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         self.enter(FakeTransfer::InterruptWrite(endpoint, data.to_vec()))?
             .interrupt_write(endpoint, data, timeout)
     }
 
-    fn interrupt_read(&mut self, endpoint: u8, length: usize, timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn interrupt_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         self.enter(FakeTransfer::InterruptRead(endpoint, length))?
             .interrupt_read(endpoint, length, timeout)
     }

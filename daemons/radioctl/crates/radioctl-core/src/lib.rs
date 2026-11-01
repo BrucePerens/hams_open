@@ -28,7 +28,7 @@ pub mod txstate;
 pub mod units;
 pub mod usb;
 pub mod usb_device;
-pub mod usb_link;
 #[cfg(feature = "usb")]
 pub mod usb_libusb;
+pub mod usb_link;
 pub mod usb_wire;

@@ -92,8 +92,14 @@ impl UsbBackend for LibusbBackend {
         }
         Err(down(match (candidates, last_open_error) {
             (0, _) => format!("{} is not plugged in", target.label()),
-            (_, Some(why)) => format!("{} cannot be opened ({why}); check the udev rule", target.label()),
-            (_, None) => format!("no {} has the expected strings or serial number", target.label()),
+            (_, Some(why)) => format!(
+                "{} cannot be opened ({why}); check the udev rule",
+                target.label()
+            ),
+            (_, None) => format!(
+                "no {} has the expected strings or serial number",
+                target.label()
+            ),
         }))
     }
 }
@@ -105,7 +111,15 @@ struct LibusbDevice {
 impl UsbDevice for LibusbDevice {
     // The transfers below are one-line calls into rusb; they can only be exercised on a real device,
     // which no test touches, so they carry no anchor.
-    fn control_in(&mut self, request_type: u8, request: u8, value: u16, index: u16, length: u16, timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn control_in(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        length: u16,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         let mut buffer = vec![0u8; usize::from(length)];
         let n = self
             .handle
@@ -115,30 +129,68 @@ impl UsbDevice for LibusbDevice {
         Ok(buffer)
     }
 
-    fn control_out(&mut self, request_type: u8, request: u8, value: u16, index: u16, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure> {
+    fn control_out(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
         self.handle
             .write_control(request_type, request, value, index, data, timeout)
             .map_err(failure)
     }
 
-    fn bulk_write(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure> {
-        self.handle.write_bulk(endpoint, data, timeout).map_err(failure)
+    fn bulk_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        self.handle
+            .write_bulk(endpoint, data, timeout)
+            .map_err(failure)
     }
 
-    fn bulk_read(&mut self, endpoint: u8, length: usize, timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn bulk_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         let mut buffer = vec![0u8; length];
-        let n = self.handle.read_bulk(endpoint, &mut buffer, timeout).map_err(failure)?;
+        let n = self
+            .handle
+            .read_bulk(endpoint, &mut buffer, timeout)
+            .map_err(failure)?;
         buffer.truncate(n);
         Ok(buffer)
     }
 
-    fn interrupt_write(&mut self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<usize, UsbFailure> {
-        self.handle.write_interrupt(endpoint, data, timeout).map_err(failure)
+    fn interrupt_write(
+        &mut self,
+        endpoint: u8,
+        data: &[u8],
+        timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        self.handle
+            .write_interrupt(endpoint, data, timeout)
+            .map_err(failure)
     }
 
-    fn interrupt_read(&mut self, endpoint: u8, length: usize, timeout: Duration) -> Result<Vec<u8>, UsbFailure> {
+    fn interrupt_read(
+        &mut self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
         let mut buffer = vec![0u8; length];
-        let n = self.handle.read_interrupt(endpoint, &mut buffer, timeout).map_err(failure)?;
+        let n = self
+            .handle
+            .read_interrupt(endpoint, &mut buffer, timeout)
+            .map_err(failure)?;
         buffer.truncate(n);
         Ok(buffer)
     }

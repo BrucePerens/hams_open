@@ -50,6 +50,15 @@ kind = "virtual"                              # an in-memory rig generated from 
 #                                             #   the password (mode 0600; never the password here)
 # idle_timeout_ms = 12000                     # silence that counts as a lost link (default: none for raw)
 
+# [rig.transport]
+# kind = "usb"                                # a USB SDR board or dongle (Si570 kits, FiFi-SDR, FUNcube, ...):
+#                                             # the description supplies the ids and strings; needs a radioctld
+#                                             # built with --features usb (libusb-1.0); reopened after an unplug
+# serial = "A12345"                           # only if two identical boards are attached
+# vid = 0x16C0                                # optional overrides of the description's ids
+# pid = 0x05DC
+# transfer_timeout_ms = 1000                  # longest wait for one USB transfer (50 to 10000)
+
 # One [[rotator]] per rotator, served in Hamlib's rotctld text protocol on its own listener
 # (rotctl -m 2 -r 127.0.0.1:4533). Tested against the virtual rotator only; unverified on a real one.
 # [[rotator]]

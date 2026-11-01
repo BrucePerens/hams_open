@@ -17,6 +17,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - Vocabulary, sans-IO protocol engines and virtual rigs.
   - Rig actor with queue, cache, polling, events and the transmit gate.
   - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
+  - USB SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect), Elecraft KX3, Yaesu newcat and legacy five-byte, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V).
 - Rig descriptions: 126 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
@@ -29,7 +30,7 @@ daemons/radioctl/
   Cargo.toml              workspace (resolver 2), shared lints: no unsafe, no unwrap/expect/panic
   rust-toolchain.toml     pinned toolchain
   radioctld.example.toml  annotated example configuration
-  crates/radioctl-core/       typed values, capability model, errors, rig actor, network links, rig-file loader
+  crates/radioctl-core/       typed values, capability model, errors, rig actor, network and USB links (`usb_device` traits and fake bus, `usb_wire` frames, `usb_link`, `usb_libusb` behind the `usb` feature), rig-file loader
   crates/radioctl-protocols/  sans-IO protocol engines (one per family), virtual rigs, conformance replay, hpsdr bridge
   crates/radioctl-splitter/   virtual IC-7300 CI-V / TS-2000 CAT endpoints (pty, TCP) in front of one rig actor
   crates/radioctld/           rigctld text-protocol server (library + binary `radioctld`) and the examples
@@ -337,6 +338,7 @@ cd tools && python3 -m unittest test_hamlib_caps_matrix                         
 ### Serial and TCP rigs
 
 - Serial: `path` or `usb = { vid, pid, serial }`, `baud` (fixed, or `"auto"` / `baud_probe` for the optional read-only probe).
+- USB boards (`kind = "usb"`): the description gives the ids and strings; optional `serial`, `vid`, `pid`, `transfer_timeout_ms`. Needs `cargo build -p radioctld --features usb` (libusb-1.0); a build without it refuses the transport. `kind = "virtual"` on a USB description runs its twin on the fake bus.
 - `lines = "managed"` (default) drives DTR/RTS; `lines = "unmanaged"` is for a pty or other port without DTR/RTS.
 - TCP rigs use the reconnecting network link (`net::open_link`):
   - one attempt at start, then reconnection with backoff;

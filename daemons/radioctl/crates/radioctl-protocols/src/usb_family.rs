@@ -103,13 +103,20 @@ impl UsbFrameStandIn {
             match UsbTransfer::decode(&self.pending) {
                 Ok((transfer, used)) => {
                     self.pending.drain(..used);
-                    out.extend(execute(self.device.as_mut(), &transfer, Duration::from_secs(1)).encode());
+                    out.extend(
+                        execute(self.device.as_mut(), &transfer, Duration::from_secs(1)).encode(),
+                    );
                 }
                 Err(FrameError::Incomplete) => break,
                 Err(FrameError::Malformed) => {
                     self.pending.clear();
                     out.extend(
-                        UsbReply { op: 0, status: UsbStatus::Other, data: Vec::new() }.encode(),
+                        UsbReply {
+                            op: 0,
+                            status: UsbStatus::Other,
+                            data: Vec::new(),
+                        }
+                        .encode(),
                     );
                     break;
                 }
