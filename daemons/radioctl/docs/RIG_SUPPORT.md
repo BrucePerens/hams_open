@@ -10,13 +10,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **230** (236 description files), **80%** of the real radios
+- Real radios (models less not applicable): **285**; with a radioctl description: **238** (244 description files), **83%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 230 |
-| engine only | 9 |
+| described | 238 |
+| engine only | 1 |
 | needs variant | 0 |
 | needs engine | 28 |
 | odd device | 18 |
@@ -33,7 +33,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 126 |
+| A | data only on an existing engine | 135 | 134 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 46 |
 | D | odd device | 54 | 16 |
@@ -50,7 +50,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | kenwood_hh_ascii | B | kenwood_hh | 10 | 10 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
 | other_usb | D | - | 10 | 10 | 0 |
-| flexradio_network | A | flex | 9 | 1 | 0 |
+| flexradio_network | A | flex | 9 | 9 | 0 |
 | other_network | C/D | - | 8 | 0 | 0 |
 | elecraft_ascii | A | elecraft | 7 | 6 | 0 |
 | icom_marine | C | icom_marine | 4 | 4 | 0 |
@@ -150,14 +150,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25012 | FiFi | FiFi-SDR | D | other_usb | - | `fifi-sdr` | unverified | - | described |
 | 2036 | FlexRadio | 6xxx | A | flexradio_network | flex | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | unverified | - | described |
 | 23001 | FlexRadio | SDR-1000 | D | other_parallel | - | - | unverified | - | not applicable |
-| 23005 | FlexRadio | SmartSDR Slice A | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23006 | FlexRadio | SmartSDR Slice B | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23007 | FlexRadio | SmartSDR Slice C | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23008 | FlexRadio | SmartSDR Slice D | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23009 | FlexRadio | SmartSDR Slice E | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23010 | FlexRadio | SmartSDR Slice F | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23011 | FlexRadio | SmartSDR Slice G | A | flexradio_network | flex | - | unverified | - | engine only |
-| 23012 | FlexRadio | SmartSDR Slice H | A | flexradio_network | flex | - | unverified | - | engine only |
+| 23005 | FlexRadio | SmartSDR Slice A | A | flexradio_network | flex | `flex-smartsdr-slice-a` | unverified | - | described |
+| 23006 | FlexRadio | SmartSDR Slice B | A | flexradio_network | flex | `flex-smartsdr-slice-b` | unverified | - | described |
+| 23007 | FlexRadio | SmartSDR Slice C | A | flexradio_network | flex | `flex-smartsdr-slice-c` | unverified | - | described |
+| 23008 | FlexRadio | SmartSDR Slice D | A | flexradio_network | flex | `flex-smartsdr-slice-d` | unverified | - | described |
+| 23009 | FlexRadio | SmartSDR Slice E | A | flexradio_network | flex | `flex-smartsdr-slice-e` | unverified | - | described |
+| 23010 | FlexRadio | SmartSDR Slice F | A | flexradio_network | flex | `flex-smartsdr-slice-f` | unverified | - | described |
+| 23011 | FlexRadio | SmartSDR Slice G | A | flexradio_network | flex | `flex-smartsdr-slice-g` | unverified | - | described |
+| 23012 | FlexRadio | SmartSDR Slice H | A | flexradio_network | flex | `flex-smartsdr-slice-h` | unverified | - | described |
 | 2048 | FlexRadio/Apache | PowerSDR | D | other_serial | - | - | unverified | - | not applicable |
 | 4 | FLRig | - | D | other_network | - | - | unverified | - | not applicable |
 | 25015 | Funkamateur | FA-SDR | D | other_usb | - | `funkamateur-fa-sdr` | unverified | - | described |

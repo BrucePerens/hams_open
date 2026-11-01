@@ -721,6 +721,9 @@ pub struct FlexParams {
     pub model: String,
     /// Spectrum capture units (receiver front ends): 1, or 2 on the FLEX-6700.
     pub scus: u8,
+    /// The slice receiver (0 is slice A) the description's VFO A is; the SmartSDR slice A to H
+    /// models of Hamlib are slices 0 to 7.
+    pub slice: u8,
 }
 
 /// OpenHPSDR network radio parameters.

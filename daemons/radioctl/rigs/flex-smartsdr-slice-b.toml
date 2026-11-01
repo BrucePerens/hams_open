@@ -1,0 +1,148 @@
+# Rig description: FlexRadio SmartSDR Slice B (schema 1; Hamlib model 23006 "SmartSDR Slice B": VFO A is slice receiver 1 of whichever FLEX-6000 series radio answers). See crates/radioctl-core/src/rigfile.rs for the format.
+#
+# SOURCE: FlexRadio's published SmartSDR API documentation, the "smartsdr-api-docs" wiki,
+#   https://github.com/flexradio/smartsdr-api-docs/wiki (cloned from smartsdr-api-docs.wiki.git,
+#   commit 8a397c11421a260247a730e50acadbecf65b4772, 2026-10-06). Pages are named in each fact.
+#   The wiki page "Known API Responses" embeds a header file whose comment forbids copying; it was
+#   not used. Hamlib source was not read for this file, except the model names.
+# SCOPE: control plane only (TCP port 4992). Meters, spectrum and audio are VITA-49 UDP streams
+#   (port 4991) that need a stream interface this description does not use, so read-signal,
+#   read-power and read-swr are not claimed. See crates/radioctl-protocols/src/flex.rs.
+#
+# EVERYTHING HERE IS UNVERIFIED: written from the documentation, never run against a radio (the
+# radio was powered off when this was written). Mode codes are only table indexes: SmartSDR names
+# modes by text (usb, lsb, cw, am, fm, digu, digl, rtty) and the engine holds the spellings.
+schema = 1
+capabilities = [
+  "read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw",
+  "transceive", "filter", "levels", "identify",
+]
+
+[rig]
+id = "flex-smartsdr-slice-b"
+name = "FlexRadio SmartSDR Slice B"
+family = "flex-smartsdr"
+
+[flex]
+model = "FLEX-6000"
+scus = 1
+slice = 1
+
+[timing]
+timeout_ms = 1500
+retries = 1
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 1
+[[modes]]
+mode = "usb"
+code = 2
+[[modes]]
+mode = "cw"
+code = 3
+[[modes]]
+mode = "am"
+code = 4
+[[modes]]
+mode = "fm"
+code = 5
+[[modes]]
+mode = "data"
+code = 6
+[[modes]]
+mode = "data-r"
+code = 7
+[[modes]]
+mode = "rtty"
+code = 8
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: Home, SmartSDR TCPIP API (port 4992)", note = "The id and display name are our own labels; the model name is the one the TCPIP info page prints (model=\"FLEX-6700\")." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "flex.model"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP info (model parameter)", note = "FLEX-6000 is a generic label: these models are not tied to one radio; the info reply names the actual model." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "flex.slice"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 model names \"SmartSDR Slice A\" to \"SmartSDR Slice H\" (rigs/flexradio/smartsdr.c, model numbers 23005 to 23012); SmartSDR API wiki: TCPIP slice (slice numbers start at 0), SmartSDR Status Responses (slice <n>)", note = "Slice letter A is receiver 0, B is 1 and so on up to H as 7. That Hamlib's letters map to these receiver numbers is the natural reading of the model names, not something the Hamlib source file was read to confirm (only the model names were taken from it)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "flex.scus"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP scu, TCPIP preamp, TCPIP info", note = "The SCU pages say the second SCU is FLEX-6700 only (TCPIP scu, TCPIP preamp), so one SCU. TCPIP atu: the 6300 has the antenna tuner as an option. Slice counts are not documented per model; the info reply (slice=) gives them at run time." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.timeout_ms"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/flex.rs", note = "Our choice; the wiki gives no response time. The first command of a link also waits for the subscriptions and info." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.retries"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/flex.rs", note = "Our choice; every command has a sequence number and exactly one reply, so retries are kept low. Transmit commands are never retried." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.inter_command_ms"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/flex.rs", note = "Our choice; the wiki specifies no minimum gap. The keepalive is never enabled, so no ping cadence is required." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/flex.rs", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.set-ptt"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP xmit (xmit 1 and xmit 0), Interlock State Transition Diagram", note = "Transmit-capable; the rig actor's transmit gate applies and the engine can only emit xmit 1 for Op::SetPtt(true). xmit 0 always unkeys." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.send-cw"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP cwx (cwx send, spaces sent as 0x7f)", note = "Transmit-capable; the engine refuses quotes, bars, control characters and non-ASCII, and more than 100 characters (our limit)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-ptt"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: SmartSDR Status Responses (Interlock / PTT Status), TCPIP xmit (interlock states)", note = "From interlock state; PTT_REQUESTED, TRANSMITTING and UNKEY_REQUESTED count as keyed. Whether sub tx all delivers interlock status is not stated on the wiki." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.transceive"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP sub and TCPIP unsub (sub slice|tx|pan all)", note = "The radio pushes status for subscribed objects; the engine subscribes on the first command of a link." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.filter"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP filt (filt <slice> <low> <high> in hertz), SmartSDR Status Responses (filter_lo and filter_hi in MHz)", note = "Width is hi minus lo; setting keeps the reported low edge." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.levels"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP slice (audio_level 0-100), TCPIP transmit (miclevel 0-100, rfpower 0-100)", note = "AfGain, MicGain and RfPower only. The status keys for the transmit levels are not listed on the wiki; the engine assumes they match the set parameters." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.identify"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP version (SmartSDR-MB component), TCPIP info", note = "Firmware only; there is no numeric model id (GetModelId is unsupported)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: TCPIP slice (slice t, slice s mode=), SmartSDR Status Responses (slice RF_frequency and mode)", note = "VFO A is slice 0; the engine never creates a slice." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "SmartSDR API wiki: SmartSDR Supported Modes (usb, lsb, cw, am, sam, fm, nfm, dfm, digl, digu, rtty)", note = "Data is digu and data-r is digl. sam, nfm, dfm and fdv have no core mode and are not mapped. The codes are table indexes only." }
+verified = { state = "unverified" }

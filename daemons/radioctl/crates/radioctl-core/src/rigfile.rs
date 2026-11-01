@@ -273,6 +273,8 @@ struct KenwoodHhSection {
 struct FlexSection {
     model: String,
     scus: u8,
+    #[serde(default)]
+    slice: u8,
 }
 
 #[derive(Deserialize)]
@@ -578,6 +580,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let flex = doc.flex.as_ref().map(|f| FlexParams {
         model: f.model.clone(),
         scus: f.scus,
+        slice: f.slice,
     });
     let hpsdr = doc.hpsdr.as_ref().map(|h| HpsdrParams {
         model: h.model.clone(),
@@ -1102,6 +1105,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     if description.flex.is_some() {
         keys.push("flex.model".to_string());
         keys.push("flex.scus".to_string());
+        if description.flex.as_ref().is_some_and(|f| f.slice != 0) {
+            keys.push("flex.slice".to_string());
+        }
     }
     if description.vendor.is_some() {
         keys.extend(["vendor.protocol", "vendor.dialect"].map(String::from));
