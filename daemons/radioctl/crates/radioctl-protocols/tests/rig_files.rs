@@ -109,6 +109,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "aor-ar7030p",
         "dorji-dra818u",
         "tentec-tt-550",
+        "elecraft-xg3",
     ];
     for loaded in load_all() {
         let summary = loaded.verification_summary();

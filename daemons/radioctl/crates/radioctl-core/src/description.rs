@@ -82,6 +82,8 @@ pub enum VendorProtocol {
     Dorji,
     /// MDS 4710 and 9710 data radios (`mds.rs`).
     Mds,
+    /// Elecraft XG3 signal source (`xg3.rs`).
+    Xg3,
 }
 
 impl VendorProtocol {
@@ -107,6 +109,7 @@ impl VendorProtocol {
             "guohe" => Some(VendorProtocol::Guohe),
             "dorji" => Some(VendorProtocol::Dorji),
             "mds" => Some(VendorProtocol::Mds),
+            "xg3" => Some(VendorProtocol::Xg3),
             _ => None,
         }
     }
@@ -133,6 +136,7 @@ impl VendorProtocol {
             VendorProtocol::Guohe => "guohe",
             VendorProtocol::Dorji => "dorji",
             VendorProtocol::Mds => "mds",
+            VendorProtocol::Xg3 => "xg3",
         }
     }
 }
@@ -1107,6 +1111,8 @@ mod tests {
         assert_eq!(VendorProtocol::Dorji.name(), "dorji");
         assert_eq!(VendorProtocol::from_name("mds"), Some(VendorProtocol::Mds));
         assert_eq!(VendorProtocol::Mds.name(), "mds");
+        assert_eq!(VendorProtocol::from_name("xg3"), Some(VendorProtocol::Xg3));
+        assert_eq!(VendorProtocol::Xg3.name(), "xg3");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

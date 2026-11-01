@@ -763,6 +763,16 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_mds_twin_snapshot] (radioctl-protocols) The MDS twin's frequency, mode code and PTT state.
 - [@ANCHOR: radioctl:radioctl_mds_twin_feed] (radioctl-protocols) The MDS twin's answers to the controller's bytes.
 - [@ANCHOR: radioctl:radioctl_mds_twin_front_panel] (radioctl-protocols) The MDS twin tuned from its front panel.
+- [@ANCHOR: radioctl:radioctl_xg3_frequency_text] (radioctl-protocols) The XG3 frequency argument: eleven digits of hertz.
+- [@ANCHOR: radioctl:radioctl_xg3_decode] (radioctl-protocols) Decodes an XG3 answer: `F,<11 digits>`, `O,<2 digits>` or `V,<major>.<minor>`.
+- [@ANCHOR: radioctl:radioctl_xg3_engine_new] (radioctl-protocols) Builds an XG3 engine from a vendor description of dialect `xg3`.
+- [@ANCHOR: radioctl:radioctl_xg3_engine_encode] (radioctl-protocols) Encodes frequency, output switch (PTT) and version for the XG3; refuses frequencies outside 1.5 to 1400 MHz.
+- [@ANCHOR: radioctl:radioctl_xg3_engine_feed] (radioctl-protocols) Splits received bytes at `;` and decodes the answers; a bare `;` is ignored.
+- [@ANCHOR: radioctl:radioctl_xg3_twin_new] (radioctl-protocols) A virtual XG3 in the description's default state.
+- [@ANCHOR: radioctl:radioctl_xg3_twin_command] (radioctl-protocols) One command of the virtual XG3: set when given an argument, answer when not.
+- [@ANCHOR: radioctl:radioctl_xg3_twin_snapshot] (radioctl-protocols) The virtual XG3's frequency and output state, for the Hamlib oracle batch.
+- [@ANCHOR: radioctl:radioctl_xg3_twin_feed] (radioctl-protocols) The virtual XG3 answers the manual's F, O, L, G, C, M, V and I commands and ignores the rest.
+- [@ANCHOR: radioctl:radioctl_xg3_twin_front_panel] (radioctl-protocols) A knob turned at the virtual XG3: frequency or output.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).

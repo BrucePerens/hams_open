@@ -1959,6 +1959,7 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
             ("codan-ngt", 34002, 9600),
             ("kachina-505dsp", 18001, 9600),
             ("tentec-tt-550", 16001, 57600),
+            ("elecraft-xg3", 2038, 9600),
             ("guohe-pmr-171", 1052, 4800),
             ("guohe-q900", 1051, 38400),
             ("dorji-dra818u", 31002, 9600),
