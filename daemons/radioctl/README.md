@@ -514,6 +514,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_description_code_mode] (radioctl-core) The mode for a wire code, if the model has one.
 - [@ANCHOR: radioctl:radioctl_core_description_ic7300] (radioctl-core) An Icom IC-7300 style CI-V description (address 0x94). Unverified; see the module note.
 - [@ANCHOR: radioctl:radioctl_core_description_ts2000] (radioctl-core) A Kenwood TS-2000 style ASCII description. Unverified; see the module note.
+- [@ANCHOR: radioctl:radioctl_alinco_dialect_end] (radioctl-protocols) The dialect end of the alinco code.
+- [@ANCHOR: radioctl:radioctl_alinco_command] (radioctl-protocols) The command of the alinco code.
 - [@ANCHOR: radioctl:radioctl_drake_encode_frequency] (radioctl-protocols) `F` and seven digits of 10 Hz units, CR; `None` unless a multiple of 10 Hz below 100 MHz.
 - [@ANCHOR: radioctl:radioctl_drake_decode_frequency] (radioctl-protocols) The frequency of a `*fffff.ff*uHz` line (without CR LF), or `None`.
 - [@ANCHOR: radioctl:radioctl_drake_decode_mode] (radioctl-protocols) The mode of the mode, width and synchronous bytes of an `RM` line, per `description`.

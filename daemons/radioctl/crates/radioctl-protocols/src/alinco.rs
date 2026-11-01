@@ -56,6 +56,7 @@ impl Dialect {
         }
     }
 
+    // [@ANCHOR: radioctl_alinco_dialect_end]
     fn end(self) -> &'static [u8] {
         match self {
             Dialect::Dx77 => b"\r",
@@ -108,6 +109,7 @@ impl AlincoEngine {
         })
     }
 
+    // [@ANCHOR: radioctl_alinco_command]
     fn command(&self, text: &str) -> Vec<u8> {
         let mut bytes = text.as_bytes().to_vec();
         bytes.extend_from_slice(self.dialect.end());
@@ -374,6 +376,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_alinco_engine_new]
+    // Tests [@ANCHOR: radioctl_alinco_dialect_end]
+    // Tests [@ANCHOR: radioctl_alinco_command]
     #[test]
     fn engine_refuses_other_families() {
         assert!(AlincoEngine::new(RigDescription::ts2000()).is_err());
