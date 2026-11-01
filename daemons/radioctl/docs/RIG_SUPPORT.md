@@ -10,22 +10,22 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **238** (244 description files), **83%** of the real radios
+- Real radios (models less not applicable): **285**; with a radioctl description: **242** (248 description files), **84%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 238 |
+| described | 242 |
 | engine only | 1 |
 | needs variant | 0 |
-| needs engine | 28 |
+| needs engine | 24 |
 | odd device | 18 |
 | not applicable | 28 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 286 |
-| manual-checked | 27 |
+| unverified | 282 |
+| manual-checked | 31 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 134 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 46 |
+| C | new engine | 82 | 50 |
 | D | odd device | 54 | 16 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 44 | 0 |
+| other_serial | C/D | aor | 94 | 48 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -112,12 +112,12 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | - | `amsat-uk-funcube-dongle-pro-plus` | unverified | - | described |
 | 37001 | AnyTone | D578A | D | other_serial | - | - | unverified | - | odd device |
 | 5008 | AOR | AR2700 | C | other_serial | aor | `aor-ar2700` | unverified | - | described |
-| 5006 | AOR | AR3000A | C | other_serial | - | - | unverified | - | needs engine |
-| 5005 | AOR | AR3030 | C | other_serial | - | - | unverified | - | needs engine |
+| 5006 | AOR | AR3000A | C | other_serial | aor | `aor-ar3000a` | manual-checked | - | described |
+| 5005 | AOR | AR3030 | C | other_serial | aor | `aor-ar3030` | manual-checked | - | described |
 | 5004 | AOR | AR5000 | C | other_serial | aor | `aor-ar5000` | unverified | - | described |
 | 5014 | AOR | AR5000A | C | other_serial | aor | `aor-ar5000a` | unverified | - | described |
-| 5003 | AOR | AR7030 | C | other_serial | - | - | unverified | - | needs engine |
-| 5015 | AOR | AR7030 Plus | C | other_serial | - | - | unverified | - | needs engine |
+| 5003 | AOR | AR7030 | C | other_serial | aor | `aor-ar7030` | manual-checked | - | described |
+| 5015 | AOR | AR7030 Plus | C | other_serial | aor | `aor-ar7030p` | manual-checked | - | described |
 | 5002 | AOR | AR8000 | C | other_serial | aor | `aor-ar8000` | unverified | - | described |
 | 5001 | AOR | AR8200 | C | other_serial | aor | `aor-ar8200` | unverified | - | described |
 | 5013 | AOR | AR8600 | C | other_serial | aor | `aor-ar8600` | unverified | - | described |

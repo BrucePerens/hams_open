@@ -1,0 +1,91 @@
+# Rig description: AOR AR3030 (aor protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# The AR3030 command facts were read in AOR's operating manual (section 7, Computer control, PDF pages 41 to 46) under Bruce Perens' decision of 2026-10-31;
+# the capability list and timing come from Hamlib 4.6.2 (read for facts only: rigs/aor/ar3030.c) and `rigctl -m 5005 --dump-caps` output. The engine and its gaps: crates/radioctl-protocols/src/aor_classic.rs.
+# Hamlib lists: serial 4800..9600 baud, 8 data bits, 2 stop bits, RTS/CTS; receive 30 kHz to 30 MHz; no transmit range (receiver).
+# Open question for a volunteer: the manual gives the frequency in the dial-state answer in units of 10 Hz, and Hamlib's get-frequency reads the same digits as hertz; the engine follows the manual.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "aor-ar3030"
+name = "AOR AR3030"
+family = "receiver"
+
+[receiver]
+protocol = "aor"
+dialect = "ar3030"
+baud = 9600
+data_bits = 8
+parity = "N"
+stop_bits = 2
+flow = "rtscts"
+
+[timing]
+timeout_ms = 500
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 7074000
+mode = "usb"
+
+[[modes]]
+mode = "cw"
+code = 67
+
+[[modes]]
+mode = "usb"
+code = 85
+
+[[modes]]
+mode = "lsb"
+code = 76
+
+[[modes]]
+mode = "am"
+code = 65
+
+[[modes]]
+mode = "fm"
+code = 78
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 5005 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "manual", reference = "AR3030 operating manual (AOR), section 7 Computer control (RS232C), printed pages 40 to 44 (PDF pages 41 to 46), https://www.rigpix.com/aor/ar3030_manual.pdf (kept as rigpix_ar3030_manual.pdf), sha256 a73307a5d107479753a0a1620838725d98270f4127b5fd7eb81c0ad74fde53ce", note = "ASCII commands ended by CR; every command is answered CR LF (about 1 ms to wait before the next); D reads the dial state, Y the signal level (00 to 3F hex), a frequency is sent in MHz and a mode as one letter; remote control is started on the radio by typing the baud rate (4800 or 9600) and ENT, and ended with Q." }
+verified = { state = "manual-checked", reference = "AR3030 manual section 7, PDF pages 41 to 46, 7-3 to 7-9" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "manual", reference = "AR3030 operating manual (AOR), section 7 Computer control (RS232C), printed pages 40 to 44 (PDF pages 41 to 46), https://www.rigpix.com/aor/ar3030_manual.pdf (kept as rigpix_ar3030_manual.pdf), sha256 a73307a5d107479753a0a1620838725d98270f4127b5fd7eb81c0ad74fde53ce; formats 1 and 2 (PDF pages 43 to 44)", note = "Dial state: D, R(att) G(agc) B(filter) T(tone), F and eight digits in units of 10 Hz, then the mode letter. The mode letter sits after the frequency; Hamlib reads it from a fixed offset (25) that is one more than the format gives (24) if single spaces separate the fields: an open question for a real radio." }
+verified = { state = "manual-checked", reference = "AR3030 manual section 7, PDF pages 43 to 44, formats 1 and 2" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "manual", reference = "AR3030 operating manual (AOR), section 7 Computer control (RS232C), printed pages 40 to 44 (PDF pages 41 to 46), https://www.rigpix.com/aor/ar3030_manual.pdf (kept as rigpix_ar3030_manual.pdf), sha256 a73307a5d107479753a0a1620838725d98270f4127b5fd7eb81c0ad74fde53ce; 7-2 Communication parameters (PDF page 42)", note = "4800 or 9600 baud (chosen at start-up), 8 data bits, no parity, 2 stop bits, hardware handshake through RTS and CTS (connect them together for a three-wire cable). Hamlib lists the same. The default recorded is 9600." }
+verified = { state = "manual-checked", reference = "AR3030 manual section 7-2, PDF page 42, communication parameters" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 5005 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "AR3030 operating manual (AOR), section 7 Computer control (RS232C), printed pages 40 to 44 (PDF pages 41 to 46), https://www.rigpix.com/aor/ar3030_manual.pdf (kept as rigpix_ar3030_manual.pdf), sha256 a73307a5d107479753a0a1620838725d98270f4127b5fd7eb81c0ad74fde53ce; 7-5 to 7-9 (PDF pages 43 to 45)", note = "Frequency, mode and signal (Y) only; memories, attenuator, AGC, filter and tone are not implemented. Receiver: no transmit path." }
+verified = { state = "manual-checked", reference = "AR3030 manual section 7, PDF pages 43 to 45, command list" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "AR3030 operating manual (AOR), section 7 Computer control (RS232C), printed pages 40 to 44 (PDF pages 41 to 46), https://www.rigpix.com/aor/ar3030_manual.pdf (kept as rigpix_ar3030_manual.pdf), sha256 a73307a5d107479753a0a1620838725d98270f4127b5fd7eb81c0ad74fde53ce; 7-6 and 7-9 (PDF pages 43 to 45)", note = "C CW, U USB, L LSB, A AM, N FM; S (synchronous AM) and X (fax) have no radioctl mode and are not mapped." }
+verified = { state = "manual-checked", reference = "AR3030 manual section 7, PDF pages 44 to 45, mode letters" }

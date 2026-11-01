@@ -147,6 +147,8 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 | Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx-9000-old`, `yaesu-ftdx10`, `yaesu-ftdx101d`, `yaesu-ft-450d`, `yaesu-ft-450`, `yaesu-ft-950`, `yaesu-ft-2000`, `yaesu-ftdx-1200`, `yaesu-ftdx-3000`, `yaesu-ftdx-5000`, `yaesu-ftdx-9000`, `yaesu-ft-891`, `yaesu-ft-710`, `yaesu-ftdx-101mp` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact); the FT-450 from Hamlib 4.6.2 facts only |
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-897`, `yaesu-ft-847`, `yaesu-ft-847uni`, `yaesu-ft-650`, `yaesu-ft-736r`, `yaesu-ft-818`, and the block-protocol models `yaesu-ft-747gx`, `yaesu-ft-757gx`, `yaesu-ft-757gxii`, `yaesu-ft-767gx`, `yaesu-ft-840`, `yaesu-ft-890`, `yaesu-ft-900`, `yaesu-ft-920`, `yaesu-ft-990`, `yaesu-ft-990-oldrom`, `yaesu-ft-1000`, `yaesu-ft-1000d`, `yaesu-ft-1000mp`, `yaesu-ft-1000mp-mkv`, `yaesu-ft-1000mp-mkv-field`, `yaesu-ft-100`, `yaesu-ft-600`, `yaesu-ft-980`, `yaesu-frg-100`, `yaesu-frg-8800`, `yaesu-frg-9600`, `yaesu-vr-5000`, `vertex-vx-1700` | Operating manuals' CAT chapters The FT-897, FT-847, FT-847UNI, FT-650 and FT-736R files are from Hamlib 4.6.2 facts only (the FT-897 shares the FT-897D's CAT chapter); the last three are set-only. The block-protocol models (opcode 10 status reads, per-model frequency byte order and units, all described in the files as data) come from the Yaesu manuals' CAT chapters where a copy was found (FT-747GX, FT-757GXII, FT-767GX, FT-840, FT-890, FT-900, FT-920, FT-990, FT-1000, FT-1000MP MARK-V, FT-100, FRG-100, FRG-8800, VR-5000) and from Hamlib facts for the FT-600, FT-980, FRG-9600 and VX-1700; every frequency unit or offset the two sources disagree on is an open question pinned in tests. |
 | AOR receivers (ASCII `RF`/`MD`/`LM`) | `aor-ar8000`, `aor-ar8200`, `aor-ar8600`, `aor-ar5000`, `aor-ar5000a`, `aor-ar2700`, `aor-sr2200` | Hamlib 4.6.2 source (facts only) |
+| AOR AR3030 and AR3000A (ASCII `D`/`Y`, MHz entry) | `aor-ar3030`, `aor-ar3000a` | AOR operating manuals' RS-232 chapters (manual-checked) |
+| AOR AR7030 and AR7030 Plus (binary nibble protocol) | `aor-ar7030`, `aor-ar7030p` | AOR's remote protocol text (manual-checked; the Plus by Hamlib's reading) |
 | Uniden scanners (ASCII `RF`/`RM`/`SG`) | `uniden-bc245xlt`, `uniden-bc250d`, `uniden-bc780xlt`, `uniden-bc895xlt`, `uniden-bc898t` | Hamlib 4.6.2 source (facts only) |
 | Uniden digital scanners (`GLG`/`QSH`) | `uniden-bcd396t`, `uniden-bcd996t` | Uniden's remote command specification (facts only; manual-checked) |
 | JRC (ASCII `F`/`D`/`I`) | `jrc-nrd-525`, `jrc-nrd-535d`, `jrc-nrd-545`, `jrc-jst-145`, `jrc-jst-245` | Hamlib 4.6.2 source (facts only) |
@@ -1349,6 +1351,38 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_rs_dialect_decode] (radioctl-protocols) Rs dialect decode.
 - [@ANCHOR: radioctl:radioctl_rs_twin_new] (radioctl-protocols) The twin of a Rohde and Schwarz description.
 - [@ANCHOR: radioctl:radioctl_rs_twin_line] (radioctl-protocols) Rs twin line.
+- [@ANCHOR: radioctl:radioctl_receiver_twin_raw_default] (radioctl-protocols) For a protocol that is not line-oriented: the bytes the radio sends for these bytes the
+- [@ANCHOR: radioctl:radioctl_aorc_engine] (radioctl-protocols) The engine for an AR3030 or AR3000A description.
+- [@ANCHOR: radioctl:radioctl_aorc_style_of] (radioctl-protocols) The style of a description's dialect, `None` for any other.
+- [@ANCHOR: radioctl:radioctl_aorc_handles] (radioctl-protocols) Aorc handles.
+- [@ANCHOR: radioctl:radioctl_aorc_megahertz] (radioctl-protocols) A frequency as megahertz text with the given number of decimals, from integers only.
+- [@ANCHOR: radioctl:radioctl_aorc_parse_megahertz] (radioctl-protocols) A decimal megahertz text (`7.074`, `0145.50000`) as hertz, rounded to 10 Hz; `None` for anything
+- [@ANCHOR: radioctl:radioctl_aorc_dialect_from_description] (radioctl-protocols) Aorc dialect from description.
+- [@ANCHOR: radioctl:radioctl_aorc_dialect_encode] (radioctl-protocols) Aorc dialect encode.
+- [@ANCHOR: radioctl:radioctl_aorc_dialect_status] (radioctl-protocols) Aorc dialect status.
+- [@ANCHOR: radioctl:radioctl_aorc_dialect_decode] (radioctl-protocols) Aorc dialect decode.
+- [@ANCHOR: radioctl:radioctl_aorc_ar3030_state] (radioctl-protocols) The frequency (hertz) and mode letter of an AR3030 dial-state line.
+- [@ANCHOR: radioctl:radioctl_aorc_ar3000a_state] (radioctl-protocols) The frequency (hertz) and mode letter of an AR3000A dial-state line: after the `Y`, nine digits
+- [@ANCHOR: radioctl:radioctl_aorc_twin_new] (radioctl-protocols) The twin of an AR3030 or AR3000A description.
+- [@ANCHOR: radioctl:radioctl_aorc_twin_reply] (radioctl-protocols) One answer line, ended CR LF.
+- [@ANCHOR: radioctl:radioctl_aorc_twin_state_line] (radioctl-protocols) The dial-state line.
+- [@ANCHOR: radioctl:radioctl_aorc_twin_apply] (radioctl-protocols) Applies a frequency and/or mode entry such as `7.074000`, `C` or `128.8A`.
+- [@ANCHOR: radioctl:radioctl_aorc_twin_line] (radioctl-protocols) Aorc twin line.
+- [@ANCHOR: radioctl:radioctl_ar7030_handles] (radioctl-protocols) Ar7030 handles.
+- [@ANCHOR: radioctl:radioctl_ar7030_counts_of] (radioctl-protocols) The 24-bit count for a frequency, rounded to the nearest step.
+- [@ANCHOR: radioctl:radioctl_ar7030_hz_of] (radioctl-protocols) The frequency of a 24-bit count, rounded to the nearest hertz.
+- [@ANCHOR: radioctl:radioctl_ar7030_set_address] (radioctl-protocols) The bytes that select a page and address.
+- [@ANCHOR: radioctl:radioctl_ar7030_write_byte] (radioctl-protocols) The bytes that write one byte at the current address.
+- [@ANCHOR: radioctl:radioctl_ar7030_engine_new] (radioctl-protocols) The engine for an AR7030 or AR7030 Plus description.
+- [@ANCHOR: radioctl:radioctl_ar7030_engine_description] (radioctl-protocols) Ar7030 engine description.
+- [@ANCHOR: radioctl:radioctl_ar7030_engine_encode] (radioctl-protocols) Ar7030 engine encode.
+- [@ANCHOR: radioctl:radioctl_ar7030_engine_feed] (radioctl-protocols) Ar7030 engine feed.
+- [@ANCHOR: radioctl:radioctl_ar7030_twin_new] (radioctl-protocols) The twin of an AR7030 or AR7030 Plus description.
+- [@ANCHOR: radioctl:radioctl_ar7030_twin_refresh] (radioctl-protocols) Copies the front-panel state into the working memory the controller reads.
+- [@ANCHOR: radioctl:radioctl_ar7030_twin_read] (radioctl-protocols) The byte at the current page and address.
+- [@ANCHOR: radioctl:radioctl_ar7030_twin_execute] (radioctl-protocols) Runs a routine; the bytes it sends, if any.
+- [@ANCHOR: radioctl:radioctl_ar7030_twin_line] (radioctl-protocols) Ar7030 twin line.
+- [@ANCHOR: radioctl:radioctl_ar7030_twin_raw] (radioctl-protocols) Ar7030 twin raw.
 - [@ANCHOR: radioctl:radioctl_rshf_engine] (radioctl-protocols) The engine for an EK 895, EK 896, XK 2100 or XK 852 description.
 - [@ANCHOR: radioctl:radioctl_rshf_handles] (radioctl-protocols) Rshf handles.
 - [@ANCHOR: radioctl:radioctl_rshf_style_of] (radioctl-protocols) The style of a description's dialect, `None` for any other.

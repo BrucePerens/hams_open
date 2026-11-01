@@ -1,0 +1,95 @@
+# Rig description: AOR AR7030 (aor protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# The protocol facts were read in AOR's "AR-7030 Computer remote control protocol" text (firmware 1.1A to 1.4B) under Bruce Perens' decision of 2026-10-31;
+# the capability list, timing and (for the Plus) the use of the same protocol come from Hamlib 4.6.2 (read for facts only: rigs/aor/ar7030.c) and `rigctl -m 5003 --dump-caps` output. The engine and its gaps: crates/radioctl-protocols/src/ar7030.rs.
+# Hamlib lists a receive range of 10 kHz to 2600 MHz for the AR7030, which looks like a copy of another AOR entry; the radio covers 10 kHz to 32 MHz and the engine accepts up to 32 MHz.
+# Hamlib lists: serial 1200 baud, 8 data bits, 1 stop bit, no handshake; no transmit range (receiver).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "aor-ar7030"
+name = "AOR AR7030"
+family = "receiver"
+
+[receiver]
+protocol = "aor"
+dialect = "ar7030"
+baud = 1200
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 500
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 7074000
+mode = "usb"
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[modes]]
+mode = "fm"
+code = 3
+
+[[modes]]
+mode = "rtty"
+code = 4
+
+[[modes]]
+mode = "cw"
+code = 5
+
+[[modes]]
+mode = "lsb"
+code = 6
+
+[[modes]]
+mode = "usb"
+code = 7
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 5003 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "manual", reference = "AOR AR-7030 Computer remote control protocol (firmware 1.1A to 1.4B), copy kept as textfiles_ar7030_rs232_command_list.pdf in ~/manuals/aor, sha256 88a9c5e27d0abd8854bf8cf11b1e18bd563e98cf5bd835f75231529453e00edf; sections 3 and 6 (PDF pages 1 and 2)", note = "Binary, one byte per command: the high nibble is the operation (0 NOP, 1 set address high, 2 execute routine, 3 set H register, 4 set address, 5 set page, 6 write data, 7 read data, 8 lock level, 9 mask, A button), the low nibble its data; a read answers one byte; 1200 baud, no parity, 8 data bits, 1 stop bit, no flow control." }
+verified = { state = "manual-checked", reference = "AR-7030 remote protocol text, PDF pages 1 and 2, sections 3 (serial data protocol) and 6 (operation codes)" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "manual", reference = "AOR AR-7030 Computer remote control protocol (firmware 1.1A to 1.4B), copy kept as textfiles_ar7030_rs232_command_list.pdf in ~/manuals/aor, sha256 88a9c5e27d0abd8854bf8cf11b1e18bd563e98cf5bd835f75231529453e00edf; sections 6, 8 and 14 (PDF pages 2 to 6)", note = "Frequency: three bytes at page 0, address 0x1A, value 376635.2228 per MHz (44.545 MHz / 2^24 per count); mode byte at 0x1D (1 AM, 2 Sync, 3 NFM, 4 Data, 5 CW, 6 LSB, 7 USB); routine 4 sets all parameters from memory, routine 14 sends the signal strength as 0 to 255; lock level 1 is advised around multi-byte access." }
+verified = { state = "manual-checked", reference = "AR-7030 remote protocol text, PDF pages 2 to 6, sections 6, 8 (routines) and 14 (working memory)" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "manual", reference = "AOR AR-7030 Computer remote control protocol (firmware 1.1A to 1.4B), copy kept as textfiles_ar7030_rs232_command_list.pdf in ~/manuals/aor, sha256 88a9c5e27d0abd8854bf8cf11b1e18bd563e98cf5bd835f75231529453e00edf; section 3 (PDF page 1)", note = "1200 baud, no parity, 8 data bits, 1 stop bit, no hardware or software flow control. Hamlib lists the same." }
+verified = { state = "manual-checked", reference = "AR-7030 remote protocol text, PDF page 1, section 3" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 5003 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "AOR AR-7030 Computer remote control protocol (firmware 1.1A to 1.4B), copy kept as textfiles_ar7030_rs232_command_list.pdf in ~/manuals/aor, sha256 88a9c5e27d0abd8854bf8cf11b1e18bd563e98cf5bd835f75231529453e00edf; sections 6 and 8 (PDF pages 2 to 4)", note = "Frequency, mode and signal (routine 14) only. The Plus's second VFO, memories, filters, AGC and levels are not implemented. Receiver: no transmit path." }
+verified = { state = "manual-checked", reference = "AR-7030 remote protocol text, PDF pages 2 to 4, operation codes and routines" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "AOR AR-7030 Computer remote control protocol (firmware 1.1A to 1.4B), copy kept as textfiles_ar7030_rs232_command_list.pdf in ~/manuals/aor, sha256 88a9c5e27d0abd8854bf8cf11b1e18bd563e98cf5bd835f75231529453e00edf; section 14 working memory, mode byte (PDF pages 5 to 6)", note = "1 AM, 3 NFM, 4 Data (mapped to RTTY, as Hamlib does), 5 CW, 6 LSB, 7 USB; 2 (synchronous AM) has no radioctl mode and is not mapped." }
+verified = { state = "manual-checked", reference = "AR-7030 remote protocol text, PDF pages 5 to 6, working memory, mode" }

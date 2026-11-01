@@ -62,6 +62,12 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
 fn receiver_engine(description: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
     let protocol = description.receiver.as_ref().map(|r| r.protocol);
     Ok(match protocol {
+        Some(ReceiverProtocol::Aor) if crate::ar7030::handles(description) => {
+            Box::new(crate::ar7030::engine(description.clone())?)
+        }
+        Some(ReceiverProtocol::Aor) if crate::aor_classic::handles(description) => {
+            Box::new(crate::aor_classic::engine(description.clone())?)
+        }
         Some(ReceiverProtocol::Aor) => Box::new(crate::aor::engine(description.clone())?),
         Some(ReceiverProtocol::RohdeSchwarz) if crate::rs_hf::handles(description) => {
             Box::new(crate::rs_hf::engine(description.clone())?)

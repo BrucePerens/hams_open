@@ -1,0 +1,95 @@
+# Rig description: AOR AR3000A (aor protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# The AR3000A command facts were read in AOR's operating manual (section 6-6, Computer control; a scanned copy, PDF pages 50 to 53, read by OCR and page images) under Bruce Perens' decision of 2026-10-31;
+# the capability list and timing come from Hamlib 4.6.2 (read for facts only: rigs/aor/ar3000.c) and `rigctl -m 5006 --dump-caps` output. The engine and its gaps: crates/radioctl-protocols/src/aor_classic.rs.
+# Hamlib lists: serial 4800..9600 baud, 8 data bits, 2 stop bits, RTS/CTS; receive 100 kHz to 2036 MHz; no transmit range (receiver).
+# Open questions for a volunteer: whether the radio answers a setting (Hamlib does not wait for one), and the exact layout of the dial-state line (the engine reads the nine digits after Y as megahertz in 10 Hz units; Hamlib multiplies the number after Y by ten).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "aor-ar3000a"
+name = "AOR AR3000A"
+family = "receiver"
+
+[receiver]
+protocol = "aor"
+dialect = "ar3000a"
+baud = 4800
+data_bits = 8
+parity = "N"
+stop_bits = 2
+flow = "rtscts"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 145500000
+mode = "fm"
+
+[[modes]]
+mode = "fm"
+code = 78
+
+[[modes]]
+mode = "wfm"
+code = 87
+
+[[modes]]
+mode = "am"
+code = 65
+
+[[modes]]
+mode = "lsb"
+code = 76
+
+[[modes]]
+mode = "usb"
+code = 85
+
+[[modes]]
+mode = "cw"
+code = 67
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 5006 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "manual", reference = "AR3000A operating manual (AOR), section 6-6 Computer control, printed pages 48 to 51 (PDF pages 50 to 53; a scan, read by OCR and checked against page images), https://rigreference.com/storage/manuals/aor/Manual-AOR_AR-3000-A.pdf (a third-party mirror; kept as rigreference_ar3000a_manual.pdf in ~/manuals/aor), sha256 in SHA256SUMS", note = "RS-232 remote mode is started with the radio's REMOTE switch; the radio prints a welcome banner and a > ready prompt; every command ends with CR; D displays the dial state, Y the signal strength." }
+verified = { state = "manual-checked", reference = "AR3000A manual section 6-6, PDF pages 51 to 53, (B) starting RS232C mode, (C) input commands, (E) output data" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "manual", reference = "AR3000A operating manual (AOR), section 6-6 Computer control, printed pages 48 to 51 (PDF pages 50 to 53; a scan, read by OCR and checked against page images), https://rigreference.com/storage/manuals/aor/Manual-AOR_AR-3000-A.pdf (a third-party mirror; kept as rigreference_ar3000a_manual.pdf in ~/manuals/aor), sha256 in SHA256SUMS; (E) Output data (PDF page 53)", note = "Dial state: memory channel, J0, attenuator W (on) or X (off), step Z in kHz, frequency Y in MHz, mode letter Q (NFM), R (WFM), S (AM), T (LSB), U (USB), V (CW). A frequency is entered in MHz (0.1 to 2036) followed by a mode letter N, W, A, L, U or C; the receiver tunes in multiples of 50 Hz." }
+verified = { state = "manual-checked", reference = "AR3000A manual section 6-6, PDF pages 52 to 53, input commands and output data format" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "manual", reference = "AR3000A operating manual (AOR), section 6-6 Computer control, printed pages 48 to 51 (PDF pages 50 to 53; a scan, read by OCR and checked against page images), https://rigreference.com/storage/manuals/aor/Manual-AOR_AR-3000-A.pdf (a third-party mirror; kept as rigreference_ar3000a_manual.pdf in ~/manuals/aor), sha256 in SHA256SUMS; (A) initial setting (PDF page 50)", note = "4800 baud (9600 with an internal switch), no parity, 8 data bits, 2 stop bits; RTS/CTS pins used or shorted together. Hamlib lists the same range. The default recorded is 4800." }
+verified = { state = "manual-checked", reference = "AR3000A manual section 6-6, PDF page 50, initial setting" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 5006 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "AR3000A operating manual (AOR), section 6-6 Computer control, printed pages 48 to 51 (PDF pages 50 to 53; a scan, read by OCR and checked against page images), https://rigreference.com/storage/manuals/aor/Manual-AOR_AR-3000-A.pdf (a third-party mirror; kept as rigreference_ar3000a_manual.pdf in ~/manuals/aor), sha256 in SHA256SUMS; (C) and (E) (PDF pages 51 to 53)", note = "Frequency, mode and signal (Y: letters A to P, % while the squelch is closed) only; memories, banks, attenuator and mute commands are not implemented. Receiver: no transmit path." }
+verified = { state = "manual-checked", reference = "AR3000A manual section 6-6, PDF pages 52 to 53, command lists" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "AR3000A operating manual (AOR), section 6-6 Computer control, printed pages 48 to 51 (PDF pages 50 to 53; a scan, read by OCR and checked against page images), https://rigreference.com/storage/manuals/aor/Manual-AOR_AR-3000-A.pdf (a third-party mirror; kept as rigreference_ar3000a_manual.pdf in ~/manuals/aor), sha256 in SHA256SUMS; (C) input commands (PDF page 51)", note = "N narrow FM, W wide FM, A AM, L LSB, U USB, C CW for setting (the dial-state answer uses Q to V)." }
+verified = { state = "manual-checked", reference = "AR3000A manual section 6-6, PDF page 51, mode letters" }

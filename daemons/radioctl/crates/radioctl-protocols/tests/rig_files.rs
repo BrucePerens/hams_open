@@ -103,6 +103,10 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "rs-ek896",
         "uniden-bcd396t",
         "uniden-bcd996t",
+        "aor-ar3030",
+        "aor-ar3000a",
+        "aor-ar7030",
+        "aor-ar7030p",
     ];
     for loaded in load_all() {
         let summary = loaded.verification_summary();

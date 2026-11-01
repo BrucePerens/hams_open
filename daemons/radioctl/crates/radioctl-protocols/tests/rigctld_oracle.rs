@@ -1097,6 +1097,55 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     }
 }
 
+// Tests [@ANCHOR: radioctl_aorc_dialect_encode]
+// Tests [@ANCHOR: radioctl_aorc_dialect_decode]
+// Tests [@ANCHOR: radioctl_aorc_twin_line]
+// Tests [@ANCHOR: radioctl_ar7030_engine_encode]
+// Tests [@ANCHOR: radioctl_ar7030_engine_feed]
+// Tests [@ANCHOR: radioctl_ar7030_twin_raw]
+#[test]
+fn the_older_aor_files_against_hamlib_record_every_disagreement() {
+    oracle_family(
+        &[
+            ("aor-ar3030", 5005, 9600),
+            ("aor-ar3000a", 5006, 4800),
+            ("aor-ar7030", 5003, 1200),
+            ("aor-ar7030p", 5015, 1200),
+        ],
+        &hf_steps(),
+        known_older_aor_divergences,
+    );
+}
+
+/// The steps on which Hamlib and radioctl disagree for the older AOR files.
+///
+/// Only the AR7030: its tuning step is 2.655 Hz and Hamlib's `ar7030_set_freq` truncates the count
+/// (7 074 000 Hz becomes a count that reads back as 7 073 998 Hz) where radioctl rounds to the
+/// nearest count (7 074 001 Hz). The AR7030 Plus code of Hamlib picks the best of three
+/// neighbouring counts. Which the radio prefers is not known; the difference is under 3 Hz.
+///
+/// The AR7030 Plus: every Hamlib operation is reported as failed although the virtual rig does
+/// receive and apply Hamlib's frequency and USB writes (the final frequency agrees and the final
+/// mode is USB, Hamlib's last successful write). Hamlib's Plus open reads the calibration and filter
+/// tables first and its bytes do reach the twin; why the operations still report failure (an
+/// answer the Plus code expects that the virtual rig does not give, or the timing of its 12 ms
+/// post-write delay) was not isolated. Open question for a real radio and for the twin.
+fn known_older_aor_divergences(file: &str) -> Vec<&'static str> {
+    match file {
+        "aor-ar7030" => vec!["GetFrequency(A)", "final freq_a"],
+        "aor-ar7030p" => vec![
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Usb)",
+            "GetMode",
+            "SetMode(Am)",
+            "GetMode",
+            "final mode",
+        ],
+        _ => Vec::new(),
+    }
+}
+
 // Tests [@ANCHOR: radioctl_rshf_dialect_encode]
 // Tests [@ANCHOR: radioctl_rshf_dialect_decode]
 // Tests [@ANCHOR: radioctl_rshf_twin_line]
