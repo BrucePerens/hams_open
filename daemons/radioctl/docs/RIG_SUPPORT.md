@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **273** (279 description files), **96%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **274** (280 description files), **96%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 273 |
+| described | 274 |
 | engine only | 0 |
 | needs variant | 0 |
-| needs engine | 5 |
+| needs engine | 4 |
 | odd device | 6 |
 | not applicable | 29 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 69 |
+| C | new engine | 82 | 70 |
 | D | odd device | 54 | 27 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 78 | 0 |
+| other_serial | C/D | aor | 94 | 79 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -314,7 +314,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2057 | QRPLabs | QMX | D | other_serial | - | `qrplabs-qmx` | unverified | - | described |
 | 11005 | Racal | RA3702 | C | other_serial | - | `racal-ra3702` | unverified | - | described |
 | 11003 | Racal | RA6790/GM | C | other_serial | - | `racal-ra6790-gm` | unverified | - | described |
-| 8004 | Radio Shack | PRO-2052 | C | other_serial | - | - | unverified | - | needs engine |
+| 8004 | Radio Shack | PRO-2052 | C | other_serial | - | `radioshack-pro-2052` | unverified | - | described |
 | 24001 | RFT | EKD-500 | D | other_serial | - | `rft-ekd-500` | unverified | - | described |
 | 32004 | Rhode&Schwarz | 4100 | C | other_network | - | - | unverified | - | needs engine |
 | 27002 | Rohde&Schwarz | EB200 | C | other_serial | rs | `rs-eb200` | unverified | - | described |
