@@ -1282,6 +1282,7 @@ fn the_yaesu_legacy_files_against_hamlib_record_every_disagreement() {
     for (file, model) in [
         ("yaesu-ft-818", 1041),
         ("yaesu-ft-857d", 1022),
+        ("yaesu-ft-897", 1023),
         ("yaesu-ft-897d", 1043),
     ] {
         let desc = shipped(file);

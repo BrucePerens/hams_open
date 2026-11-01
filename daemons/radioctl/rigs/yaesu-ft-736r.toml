@@ -1,0 +1,74 @@
+# Rig description: Yaesu FT-736R (legacy five-byte CAT, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 source facts (no Yaesu manual read for this model). No radio has been connected, so every `verified` is unverified.
+# Gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["set-frequency", "set-mode", "set-ptt"]
+
+[rig]
+id = "yaesu-ft-736r"
+name = "Yaesu FT-736R"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+high_band_flag = true
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 30
+
+[defaults]
+frequency_hz = 145000000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "fm"
+code = 0x08
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in Hamlib 4.6.2", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft736.c: rig caps serial_stop_bits = 2", note = "Two stop bits as for the FT-817 family. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.high_band_flag"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft736.c: ft736_set_freq: above 1.2 GHz the high nibble of the first frequency byte is set to C", note = "The 1.2 GHz module's frequency form. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft736.c: rig caps timeouts, from rigctl --dump-caps (model 1010): timeout 2000 ms, write delay 30 ms", note = "Hamlib's settings, not a measurement of the radio. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft736.c: ft736.c: 01 set frequency (four BCD bytes of 10 Hz; above 1.2 GHz the first nibble is replaced by C), 07 set mode (first parameter byte: 00 LSB, 01 USB, 02 CW, 82 CW narrow, 08 FM, 88 FM narrow), 08/88 PTT, 4800 bit/s, two stop bits", note = "No frequency or mode read is implemented by Hamlib for this radio, so the description is set-only. Narrow CW and FM, split, the sub-VFO, repeater offset, CTCSS and the E7/F7 status reads are not modelled. The high_band_flag form is Hamlib's and unverified. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft736.c: mode bytes of the set-mode block", note = "Narrow modes have no radioctl mode and are not mapped. Facts only; no code or comments copied. Unverified." }
+verified = { state = "unverified" }

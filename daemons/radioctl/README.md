@@ -145,7 +145,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 | Kenwood handhelds and mobiles | `kenwood-th-d7a`, `kenwood-th-f6a`, `kenwood-th-f7e`, `kenwood-th-g71`, `kenwood-tm-d700`, `kenwood-tm-v7`, `kenwood-th-d72a`, `kenwood-tm-d710`, `kenwood-tm-v71`, `kenwood-th-d74` | Hamlib 4.6.2 facts only; every fact unverified |
 | Xiegu (CI-V) | `xiegu-g90`, `xiegu-x6100`, `xiegu-x6200`, `xiegu-x108g`, `xiegu-x5105` | Hamlib facts only, with Hamlib's shared addresses |
 | Yaesu newcat | `yaesu-ft-991a`, `yaesu-ftdx10`, `yaesu-ftdx101d`, `yaesu-ft-450d`, `yaesu-ft-450`, `yaesu-ft-950`, `yaesu-ft-2000`, `yaesu-ftdx-1200`, `yaesu-ftdx-3000`, `yaesu-ftdx-5000`, `yaesu-ftdx-9000`, `yaesu-ft-891`, `yaesu-ft-710`, `yaesu-ftdx-101mp` | Yaesu's CAT Operation Reference Manuals (document, PDF page and sha256 per fact); the FT-450 from Hamlib 4.6.2 facts only |
-| Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
+| Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-897`, `yaesu-ft-847`, `yaesu-ft-847uni`, `yaesu-ft-650`, `yaesu-ft-736r`, `yaesu-ft-818` | Operating manuals' CAT chapters The FT-897, FT-847, FT-847UNI, FT-650 and FT-736R files are from Hamlib 4.6.2 facts only (the FT-897 shares the FT-897D's CAT chapter); the last three are set-only. |
 | FlexRadio | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
 | OpenHPSDR | `anan-10`, `anan-100` | `daemons/hpsdr` and the OpenHPSDR protocols |
 
@@ -1167,6 +1167,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_feed] (radioctl-protocols) Feeds received bytes to the newcat engine.
 - [@ANCHOR: radioctl:radioctl_virtual_legacy_block] (radioctl-protocols) One five-byte block of a virtual FT-817/857/897: reads answer, settings change state, unknown opcodes are silent.
 - [@ANCHOR: radioctl:radioctl_ylegacy_encode_bcd_frequency] (radioctl-protocols) The four BCD bytes of a frequency in 10 Hz units (multiples of 10 Hz below 1 GHz).
+- [@ANCHOR: radioctl:radioctl_ylegacy_encode_frequency] (radioctl-protocols) The four frequency bytes, with the FT-736R's first-nibble C form above 1.2 GHz when the description asks for it.
+- [@ANCHOR: radioctl:radioctl_ylegacy_decode_frequency] (radioctl-protocols) The inverse of the above.
 - [@ANCHOR: radioctl:radioctl_ylegacy_decode_bcd_frequency] (radioctl-protocols) The frequency from four BCD bytes of 10 Hz units.
 - [@ANCHOR: radioctl:radioctl_ylegacy_engine_new] (radioctl-protocols) Builds a legacy five-byte engine from a yaesu-legacy description.
 - [@ANCHOR: radioctl:radioctl_ylegacy_decode_frequency_mode] (radioctl-protocols) The frequency of VFO A and the mode from a five-byte 03 answer.

@@ -326,6 +326,9 @@ pub struct YaesuParams {
 pub struct YaesuLegacyParams {
     /// Stop bits on the CAT serial line (2 on the FT-817, FT-857 and FT-897).
     pub stop_bits: u8,
+    /// True when a frequency from 1.2 to 1.3 GHz is sent as its seven low digits with the nibble C ahead
+    /// (the FT-736R's 1.2 GHz module, as Hamlib's `ft736_set_freq` does); false for every other model.
+    pub high_band_flag: bool,
 }
 
 /// FlexRadio SmartSDR parameters.
