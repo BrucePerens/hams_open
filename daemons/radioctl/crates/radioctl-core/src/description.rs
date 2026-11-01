@@ -92,6 +92,8 @@ pub enum VendorProtocol {
     Micom,
     /// N2ADR HiQSDR UDP control frame (`hiqsdr.rs`).
     Hiqsdr,
+    /// Watkins-Johnson WJ-8888 (`wj.rs`).
+    Wj,
 }
 
 impl VendorProtocol {
@@ -122,6 +124,7 @@ impl VendorProtocol {
             "paragon" => Some(VendorProtocol::Paragon),
             "micom" => Some(VendorProtocol::Micom),
             "hiqsdr" => Some(VendorProtocol::Hiqsdr),
+            "wj" => Some(VendorProtocol::Wj),
             _ => None,
         }
     }
@@ -153,6 +156,7 @@ impl VendorProtocol {
             VendorProtocol::Paragon => "paragon",
             VendorProtocol::Micom => "micom",
             VendorProtocol::Hiqsdr => "hiqsdr",
+            VendorProtocol::Wj => "wj",
         }
     }
 }
@@ -1149,6 +1153,8 @@ mod tests {
             Some(VendorProtocol::Hiqsdr)
         );
         assert_eq!(VendorProtocol::Hiqsdr.name(), "hiqsdr");
+        assert_eq!(VendorProtocol::from_name("wj"), Some(VendorProtocol::Wj));
+        assert_eq!(VendorProtocol::Wj.name(), "wj");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

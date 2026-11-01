@@ -268,6 +268,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "tentec-tt-585": [16009],
     "micom-2-3": [38001],
     "n2adr-hiqsdr": [25014],
+    "watkins-johnson-wj-8888": [12004],
     "barrett-4100": [32004],
     "mds-4710": [36001],
     "mds-9710": [36002],

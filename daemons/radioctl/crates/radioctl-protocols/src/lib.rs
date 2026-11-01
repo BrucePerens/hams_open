@@ -63,6 +63,7 @@ pub mod uniden_digital;
 pub mod usb_family;
 pub mod virtual_flex;
 pub mod virtual_rig;
+pub mod wj;
 pub mod xg3;
 pub mod yaesu;
 pub mod yaesu_legacy;

@@ -824,6 +824,17 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_barrett4100_twin_snapshot] (radioctl-protocols) The virtual Barrett 4100's receive frequency and key state.
 - [@ANCHOR: radioctl:radioctl_barrett4100_twin_feed] (radioctl-protocols) The virtual Barrett 4100 reads CR-ended commands and answers them framed by XOFF and XON.
 - [@ANCHOR: radioctl:radioctl_barrett4100_twin_front_panel] (radioctl-protocols) A knob turned at the virtual Barrett 4100: frequency or PTT.
+- [@ANCHOR: radioctl:radioctl_wj_mode_code] (radioctl-protocols) The WJ-8888 mode bits (AM 0, FM 1, CW 2, LSB 5, USB 6).
+- [@ANCHOR: radioctl:radioctl_wj_bcd_digits] (radioctl-protocols) The four BCD bytes of a WJ-8888 frequency: seven digits of 10 Hz units.
+- [@ANCHOR: radioctl:radioctl_wj_command_frame] (radioctl-protocols) The ten-byte WJ-8888 command frame for a frequency, a mode and a width code.
+- [@ANCHOR: radioctl:radioctl_wj_decode_frame] (radioctl-protocols) The frequency and mode bits of a WJ-8888 command frame.
+- [@ANCHOR: radioctl:radioctl_wj_engine_new] (radioctl-protocols) Builds a WJ-8888 engine from a vendor description of dialect `wj8888`.
+- [@ANCHOR: radioctl:radioctl_wj_engine_encode] (radioctl-protocols) Updates the WJ-8888 settings for frequency or mode and returns the whole command frame.
+- [@ANCHOR: radioctl:radioctl_wj_engine_feed] (radioctl-protocols) The WJ-8888 engine sends no monitor frame; anything received is unrecognised.
+- [@ANCHOR: radioctl:radioctl_wj_twin_new] (radioctl-protocols) A virtual WJ-8888 in the description's default state.
+- [@ANCHOR: radioctl:radioctl_wj_twin_snapshot] (radioctl-protocols) The virtual WJ-8888's frequency and mode bits.
+- [@ANCHOR: radioctl:radioctl_wj_twin_feed] (radioctl-protocols) The virtual WJ-8888 decodes ten-byte command frames.
+- [@ANCHOR: radioctl:radioctl_wj_twin_front_panel] (radioctl-protocols) A knob turned at the virtual WJ-8888: frequency or mode.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
