@@ -1,0 +1,87 @@
+# Rig description: Rohde&Schwarz XK852 (rohde-schwarz protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (read for facts only: rigs/rs/xk852.c, xk852.h; its backend status is Alpha) and `rigctl -m 27005 --dump-caps` output; no manual for the XK 852 could be found.
+# The engine and its gaps: crates/radioctl-protocols/src/rs_hf.rs. The radio is a 150 W HF transceiver; its PTT (Hamlib: LF * X 1 or 2 CR) is NOT encoded here, so it is described as a receiver.
+# The status line the radio answers to its status query is parsed by column offsets in Hamlib; the layout between the fields is not documented, and the virtual twin reproduces only those offsets.
+# Hamlib lists: serial 9600 baud, 7 data bits, even parity, 1 stop bit, no handshake, 200 ms after each write; receive 1.5 to 30 MHz.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
+
+[rig]
+id = "rs-xk852"
+name = "Rohde&Schwarz XK852"
+family = "receiver"
+
+[receiver]
+protocol = "rohde-schwarz"
+dialect = "xk852"
+baud = 9600
+data_bits = 7
+parity = "E"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 200
+
+[defaults]
+frequency_hz = 7074000
+mode = "usb"
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[modes]]
+mode = "usb"
+code = 2
+
+[[modes]]
+mode = "lsb"
+code = 3
+
+[[modes]]
+mode = "cw"
+code = 5
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 27005 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/xk852.c (xk852_transaction, xk852_send_command: every command, settings included, waits for an answer line up to CR)", note = "LF ... CR framing. Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/xk852.c (xk852_set_freq *F plus seven digits in 10 Hz units, xk852_set_mode *I plus one digit, xk852_query_state *O1 and xk852_parse_state), xk852.h (mode enumeration)", note = "Frequency is rounded to 10 Hz; the status answer to *O1 carries the frequency at its first field and the mode at a fixed column." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 27005 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib's settings." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 27005 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/xk852.c rig_caps and the functions wired in", note = "Receive-side operations only (frequency, mode). Hamlib also wires PTT, RF power and squelch levels; they are not implemented." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/xk852.h (XK852_MODE_AME 1, USB 2, LSB 3, CW 5, ISB 6, FSK 7 to 9), rigs/rs/xk852.c xk852_set_mode and xk852_get_mode", note = "AM, USB, LSB and CW only (what Hamlib maps); ISB and FSK have no unambiguous radioctl mode." }
+verified = { state = "unverified" }

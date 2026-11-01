@@ -63,12 +63,18 @@ fn receiver_engine(description: &RigDescription) -> Result<Box<dyn ProtocolEngin
     let protocol = description.receiver.as_ref().map(|r| r.protocol);
     Ok(match protocol {
         Some(ReceiverProtocol::Aor) => Box::new(crate::aor::engine(description.clone())?),
+        Some(ReceiverProtocol::RohdeSchwarz) if crate::rs_hf::handles(description) => {
+            Box::new(crate::rs_hf::engine(description.clone())?)
+        }
         Some(ReceiverProtocol::RohdeSchwarz) => Box::new(crate::rs::engine(description.clone())?),
         Some(ReceiverProtocol::IcomMarine) => {
             Box::new(crate::icom_marine::engine(description.clone())?)
         }
         Some(ReceiverProtocol::IcomPcr) => Box::new(crate::icom_pcr::engine(description.clone())?),
         Some(ReceiverProtocol::Jrc) => Box::new(crate::jrc::engine(description.clone())?),
+        Some(ReceiverProtocol::Uniden) if crate::uniden_digital::handles(description) => {
+            Box::new(crate::uniden_digital::engine(description.clone())?)
+        }
         Some(ReceiverProtocol::Uniden) => Box::new(crate::uniden::engine(description.clone())?),
         _ => {
             return Err(RigError::new(

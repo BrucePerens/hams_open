@@ -110,12 +110,11 @@ fn every_receiver_round_trips_frequency_mode_and_signal_through_its_twin() {
         let mut engine = engine_for(&desc).unwrap_or_else(|e| panic!("{}: {e}", desc.id));
         let mut rig = VirtualRig::from_description(&desc).expect("twin");
         let id = &desc.id;
+        // A frequency every model covers: 100 kHz above its own starting frequency (the scanners
+        // refuse what is outside their bands, so a fixed HF frequency would not do for all).
+        let target = Hz(desc.default_frequency.0 + 100_000);
         if desc.capabilities.has(Capability::SetFrequency) {
-            let seen = exchange(
-                &mut *engine,
-                &mut rig,
-                Op::SetFrequency(Vfo::A, Hz(14_100_000)),
-            );
+            let seen = exchange(&mut *engine, &mut rig, Op::SetFrequency(Vfo::A, target));
             assert_eq!(
                 seen,
                 vec![Inbound::Ack],
@@ -127,7 +126,7 @@ fn every_receiver_round_trips_frequency_mode_and_signal_through_its_twin() {
             assert!(
                 seen.contains(&Inbound::Observation(Observation::Frequency(
                     Vfo::A,
-                    Hz(14_100_000)
+                    target
                 ))),
                 "{id}: {seen:?}"
             );

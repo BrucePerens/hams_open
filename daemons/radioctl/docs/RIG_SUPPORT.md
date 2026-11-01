@@ -10,22 +10,22 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **202** (207 description files), **70%** of the real radios
+- Real radios (models less not applicable): **285**; with a radioctl description: **207** (213 description files), **72%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 202 |
+| described | 207 |
 | engine only | 9 |
 | needs variant | 22 |
-| needs engine | 34 |
+| needs engine | 29 |
 | odd device | 18 |
 | not applicable | 28 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 289 |
-| manual-checked | 24 |
+| unverified | 286 |
+| manual-checked | 27 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 126 |
 | B | variants of an existing engine | 41 | 19 |
-| C | new engine | 83 | 41 |
+| C | new engine | 83 | 46 |
 | D | odd device | 54 | 16 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 39 | 0 |
+| other_serial | C/D | aor | 94 | 44 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -317,10 +317,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 24001 | RFT | EKD-500 | D | other_serial | - | - | unverified | - | odd device |
 | 32004 | Rhode&Schwarz | 4100 | C | other_network | - | - | unverified | - | needs engine |
 | 27002 | Rohde&Schwarz | EB200 | C | other_serial | rs | `rs-eb200` | unverified | - | described |
-| 27004 | Rohde&Schwarz | EK895/6 | C | other_serial | - | - | unverified | - | needs engine |
+| 27004 | Rohde&Schwarz | EK895/6 | C | other_serial | rs | `rs-ek895`, `rs-ek896` | manual-checked | - | described |
 | 27001 | Rohde&Schwarz | ESMC | C | other_serial | rs | `rs-esmc` | unverified | - | described |
-| 27003 | Rohde&Schwarz | XK2100 | C | other_serial | - | - | unverified | - | needs engine |
-| 27005 | Rohde&Schwarz | XK852 | C | other_serial | - | - | unverified | - | needs engine |
+| 27003 | Rohde&Schwarz | XK2100 | C | other_serial | rs | `rs-xk2100` | unverified | - | described |
+| 27005 | Rohde&Schwarz | XK852 | C | other_serial | rs | `rs-xk852` | unverified | - | described |
 | 25002 | SAT-Schneider | DRT1 | D | other_serial | - | - | unverified | - | odd device |
 | 2056 | SDR Radio | SDRConsole | D | other_serial | - | - | unverified | - | not applicable |
 | 2051 | SDRPlay | SDRUno | D | other_serial | - | - | unverified | - | not applicable |
@@ -349,8 +349,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 8001 | Uniden | BC780xlt | C | other_serial | uniden | `uniden-bc780xlt` | unverified | - | described |
 | 8003 | Uniden | BC895xlt | C | other_serial | uniden | `uniden-bc895xlt` | unverified | - | described |
 | 8012 | Uniden | BC898T | C | other_serial | uniden | `uniden-bc898t` | unverified | - | described |
-| 8010 | Uniden | BCD-396T | C | other_serial | - | - | unverified | - | needs engine |
-| 8011 | Uniden | BCD-996T | C | other_serial | - | - | unverified | - | needs engine |
+| 8010 | Uniden | BCD-396T | C | other_serial | uniden | `uniden-bcd396t` | manual-checked | - | described |
+| 8011 | Uniden | BCD-996T | C | other_serial | uniden | `uniden-bcd996t` | manual-checked | - | described |
 | 1033 | Vertex Standard | VX-1700 | C | yaesu_other | - | - | unverified | - | needs engine |
 | 26001 | Video4Linux | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
 | 26002 | Video4Linux2 | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |

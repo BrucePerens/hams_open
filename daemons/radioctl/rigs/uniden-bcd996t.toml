@@ -1,0 +1,83 @@
+# Rig description: Uniden BCD996T (uniden protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# The BCD996T command facts were read in Uniden's Operation Specification, 7.13 Remote Command, under Bruce Perens' decision of 2026-10-31 (facts only; the document carries a Uniden end user licence agreement
+# with confidentiality and attribution terms: it was not copied and the licence's notice is not claimed; the project owner should decide whether those terms allow shipping these facts). The serial settings and receive ranges
+# come from Hamlib 4.6.2 (rigs/uniden/bcd996t.c) and `rigctl -m 8011 --dump-caps` output; Hamlib's frequency and mode functions for this scanner are stubs, so the oracle batch cannot test it.
+# The engine and its gaps: crates/radioctl-protocols/src/uniden_digital.rs. Hamlib lists: serial 9600..115200 baud, 8N1, no handshake; receive 25 to 512, 764 to 776, 794 to 956 and 1240 to 1300 MHz (4 ranges); no transmit range (scanner).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
+
+[rig]
+id = "uniden-bcd996t"
+name = "Uniden BCD996T"
+family = "receiver"
+
+[receiver]
+protocol = "uniden"
+dialect = "bcd996t"
+baud = 9600
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 1
+
+[defaults]
+frequency_hz = 154445000
+mode = "fm"
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[modes]]
+mode = "fm"
+code = 2
+
+[[modes]]
+mode = "wfm"
+code = 3
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 8011 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "manual", reference = "Uniden BCD996T Operation Specification, 7.13 Remote Command (Uniden Programming Control Codes), https://rigreference.com/storage/manuals/uniden/uniden-bcd996t-programming-control-codes.pdf (a third-party mirror), sha256 93b2dc85ff2aacfaffb3d3d59b652085dbae38991bad8028a4cc6d90951e099a; remote command format (PDF page 7) and command list (page 8)", note = "ASCII commands and answers ended by CR only; the next command waits for the answer; errors ERR, NG, FER, ORER; a setting is answered <CMD>,OK. No 'PC control mode' entry command is described: the baud rate is set on the scanner and Program Mode (PRG/EPG) is needed only for memory access." }
+verified = { state = "manual-checked", reference = "Uniden BCD996T Operation Specification 7.13, PDF pages 7 and 8, remote communication format and error replies" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "manual", reference = "Uniden BCD996T Operation Specification, 7.13 Remote Command (Uniden Programming Control Codes), https://rigreference.com/storage/manuals/uniden/uniden-bcd996t-programming-control-codes.pdf (a third-party mirror), sha256 93b2dc85ff2aacfaffb3d3d59b652085dbae38991bad8028a4cc6d90951e099a; QSH (PDF page 11) and GLG (page 13)", note = "GLG reads the reception (frequency or TGID, modulation AM/FM/NFM/WFM, attenuation, CTCSS/DCS, names, squelch, mute; empty fields until something is received); QSH sets the frequency and modulation in quick search hold. Frequency is eight digits in 100 Hz (the document's FRQ format). The radioctl modes AM, FM and WFM map to the scanner's AM, FM and WFM; NFM is read as FM." }
+verified = { state = "manual-checked", reference = "Uniden BCD996T Operation Specification 7.13, PDF pages 11 and 13, QSH and GLG" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 8011 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "The manual's remote communication format gives 9600/19200/38400/57600/115200 bps, 8 data bits, no parity, 1 stop bit, no flow control, the same as Hamlib; the default recorded is 9600." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 8011 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Uniden BCD996T Operation Specification, 7.13 Remote Command (Uniden Programming Control Codes), https://rigreference.com/storage/manuals/uniden/uniden-bcd996t-programming-control-codes.pdf (a third-party mirror), sha256 93b2dc85ff2aacfaffb3d3d59b652085dbae38991bad8028a4cc6d90951e099a; command list (PDF page 8)", note = "Frequency and mode only: the specification offers no signal-strength reading (GLG carries squelch and mute, STS the display). Key presses, memories and program mode are not implemented." }
+verified = { state = "manual-checked", reference = "Uniden BCD996T Operation Specification 7.13, PDF page 8, remote command list" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Uniden BCD996T Operation Specification, 7.13 Remote Command (Uniden Programming Control Codes), https://rigreference.com/storage/manuals/uniden/uniden-bcd996t-programming-control-codes.pdf (a third-party mirror), sha256 93b2dc85ff2aacfaffb3d3d59b652085dbae38991bad8028a4cc6d90951e099a; QSH [MOD] and GLG [MOD] (PDF pages 11 and 13)", note = "AM, FM, NFM and WFM are the documented modulations (FMB on the BCD996T); radioctl's FM covers FM and NFM, and sends FM." }
+verified = { state = "manual-checked", reference = "Uniden BCD996T Operation Specification 7.13, PDF pages 11 and 13, modulation values" }

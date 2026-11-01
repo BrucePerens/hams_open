@@ -191,7 +191,13 @@ impl VirtualReceiver {
             .ok_or_else(|| RigError::new(ErrorKind::Unsupported, "description lacks [receiver]"))?;
         let twin: Box<dyn ReceiverTwin> = match params.protocol {
             ReceiverProtocol::Aor => Box::new(crate::aor::AorTwin::new(desc)?),
+            ReceiverProtocol::Uniden if crate::uniden_digital::handles(desc) => {
+                Box::new(crate::uniden_digital::UnidenDigitalTwin::new(desc)?)
+            }
             ReceiverProtocol::Uniden => Box::new(crate::uniden::UnidenTwin::new(desc)?),
+            ReceiverProtocol::RohdeSchwarz if crate::rs_hf::handles(desc) => {
+                Box::new(crate::rs_hf::RsHfTwin::new(desc)?)
+            }
             ReceiverProtocol::RohdeSchwarz => Box::new(crate::rs::RsTwin::new(desc)?),
             ReceiverProtocol::IcomMarine => Box::new(crate::icom_marine::MarineTwin::new(desc)?),
             ReceiverProtocol::IcomPcr => Box::new(crate::icom_pcr::PcrTwin::new(desc)?),

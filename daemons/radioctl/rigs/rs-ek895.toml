@@ -1,0 +1,79 @@
+# Rig description: Rohde&Schwarz EK895 (rohde-schwarz protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# The EK 895 / EK 896 command facts were read in the Rohde & Schwarz operator manual (chapter 2, Remote Control, PDF pages 66 to 77) under Bruce Perens' decision of 2026-10-31;
+# the serial line settings, timing and capability list come from Hamlib 4.6.2 (read for facts only: rigs/rs/ek89x.c) and `rigctl -m 27004 --dump-caps` output. Hamlib has one entry for both models (EK895/6).
+# The EK895 and the EK896 share this dialect; the EK 896 adds digital selection (option FK 896), which is not used. The engine and its gaps: crates/radioctl-protocols/src/rs_hf.rs.
+# Hamlib lists: serial 9600..38400 baud, 7 data bits, odd parity, 1 stop bit, no handshake; receive 0 to 30 MHz; no transmit range (receiver).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal"]
+
+[rig]
+id = "rs-ek895"
+name = "Rohde&Schwarz EK895"
+family = "receiver"
+
+[receiver]
+protocol = "rohde-schwarz"
+dialect = "ek895"
+baud = 9600
+data_bits = 7
+parity = "O"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 7074000
+mode = "usb"
+
+[[modes]]
+mode = "usb"
+code = 15
+
+[[modes]]
+mode = "lsb"
+code = 16
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 27004 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "manual", reference = "Rohde & Schwarz VLF-HF Receivers EK 895 / EK 896, Operator Manual (General), chapter 2 Remote Control, document number 6075.6991.82.01, https://www.classicbroadcast.de/downloads/rohde_EK895_1.pdf, sha256 a2261ebdb675f33ca237d864e64b1154be66389a37b7538e41d794aa4eb63219; chapter 2.1 General (PDF page 66)", note = "Command blocks start with LF and end with CR; an answer is a block in the same framing; a setting is answered only when it ends with a question mark (reply requested)." }
+verified = { state = "manual-checked", reference = "R&S EK 895/896 Operator Manual 6075.6991.82.01, PDF page 66, chapter 2.1 block framing" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "manual", reference = "Rohde & Schwarz VLF-HF Receivers EK 895 / EK 896, Operator Manual (General), chapter 2 Remote Control, document number 6075.6991.82.01, https://www.classicbroadcast.de/downloads/rohde_EK895_1.pdf, sha256 a2261ebdb675f33ca237d864e64b1154be66389a37b7538e41d794aa4eb63219; chapters 2.3.1, 2.3.2 and 2.6 (PDF pages 68 and 73 to 74)", note = "F<hertz> sets and F? reads the frequency (0 to 30 000 000 Hz in 1 Hz steps); I<n> sets and I? reads the modulation (15 L USB, 16 L LSB; 17 and 18 are the independent-sideband modes); L? reads the receive level in dB(uV) (code L, 0 to 120, listed in 2.6, its reply layout not shown in the data-link chapter and assumed to follow the general rule of 2.1). Addressed operation (A01 to A99) is not used. Hamlib ek89x.c sends the same F and I commands." }
+verified = { state = "manual-checked", reference = "R&S EK 895/896 Operator Manual 6075.6991.82.01, PDF pages 68 and 73 to 74, F, I and the list of commands" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 27004 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib's settings (7 data bits, odd parity, 1 stop bit); the data-link chapter read does not give the line settings (they are in the user manual 6045.6712.12, not found). The default recorded is 9600, the lowest of Hamlib's range." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 27004 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/ek89x.c rig_caps (set/get frequency and mode, no level or PTT functions)", note = "Receiver: no PTT, CW or transmitter meters. Frequency and mode are the operations in the manual's data-link chapter; the signal reading uses the L command of the same chapter's command list. Absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Rohde & Schwarz VLF-HF Receivers EK 895 / EK 896, Operator Manual (General), chapter 2 Remote Control, document number 6075.6991.82.01, https://www.classicbroadcast.de/downloads/rohde_EK895_1.pdf, sha256 a2261ebdb675f33ca237d864e64b1154be66389a37b7538e41d794aa4eb63219; chapter 2.3.2 Modulation Mode (PDF page 68)", note = "Codes 15 (L USB) and 16 (L LSB) map to USB and LSB; the independent-sideband codes 17 and 18 have no radioctl mode and are not mapped. Hamlib ek89x.c uses the same codes." }
+verified = { state = "manual-checked", reference = "R&S EK 895/896 Operator Manual 6075.6991.82.01, PDF page 68, chapter 2.3.2 modulation mode codes 15 and 16" }
