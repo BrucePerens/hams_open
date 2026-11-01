@@ -9,16 +9,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **186** (191 description files)
+- With a radioctl description: **188** (193 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 186 |
+| described | 188 |
 | engine only | 9 |
 | needs variant | 22 |
 | needs engine | 34 |
-| odd device | 54 |
+| odd device | 52 |
 | not applicable | 8 |
 
 | Verification level | Models |
@@ -35,13 +35,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 126 |
 | B | variants of an existing engine | 41 | 19 |
 | C | new engine | 83 | 41 |
-| D | odd device | 54 | 0 |
+| D | odd device | 54 | 2 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 33 | 0 |
+| other_serial | C/D | aor | 94 | 35 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -288,8 +288,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3053 | Optoelectronics | OptoScan456 | C | other_serial | civ | `optoscan-os456` | unverified | - | described |
 | 3052 | Optoelectronics | OptoScan535 | C | other_serial | civ | `optoscan-os535` | unverified | - | described |
 | 28001 | Philips/Simoco | PRM8060 | D | other_serial | - | - | unverified | - | odd device |
-| 2052 | QRPLabs | QCX/QDX | D | other_serial | - | - | unverified | - | odd device |
-| 2057 | QRPLabs | QMX | D | other_serial | - | - | unverified | - | odd device |
+| 2052 | QRPLabs | QCX/QDX | D | other_serial | - | `qrplabs-qcx-qdx` | unverified | - | described |
+| 2057 | QRPLabs | QMX | D | other_serial | - | `qrplabs-qmx` | unverified | - | described |
 | 11005 | Racal | RA3702 | C | other_serial | - | - | unverified | - | needs engine |
 | 11003 | Racal | RA6790/GM | C | other_serial | - | `racal-ra6790-gm` | unverified | - | described |
 | 8004 | Radio Shack | PRO-2052 | C | other_serial | - | - | unverified | - | needs engine |

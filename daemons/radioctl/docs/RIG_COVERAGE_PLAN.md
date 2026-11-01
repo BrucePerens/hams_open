@@ -101,7 +101,7 @@ Left, with the reason:
 
 One description family, `serial-vendor`, carries every small-maker serial protocol (`[vendor] protocol = ...`, `dialect = ...`), each with its own engine file (`tentec.rs`, `drake.rs`, `alinco.rs`, `racal.rs`) and a virtual twin in the same file (`serial_vendor.rs` holds the shared receive buffer and dispatch).
 
-Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine. Also done (2026-10-31, Hamlib facts only): Drake R-8A and R-8B (`drake.rs`, dialect `r8`), Alinco DX-77 and DX-SR8 (`alinco.rs`, dialects `dx77` and `dxsr8`), Racal RA6790/GM (`racal.rs`, dialect `ra6790`).
+Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine. Also done (2026-10-31, Hamlib facts only): Drake R-8A and R-8B (`drake.rs`, dialect `r8`), Alinco DX-77 and DX-SR8 (`alinco.rs`, dialects `dx77` and `dxsr8`), Racal RA6790/GM (`racal.rs`, dialect `ra6790`); QRP Labs QCX/QDX and QMX (Kenwood TS-480 emulation, descriptions only on the classic Kenwood engine; the ID answer 20 and the IF length are assumptions).
 
 Left, with the reason:
 
@@ -110,6 +110,8 @@ Left, with the reason:
 | RX-320 (16003), RX-350 (16005) | DSP receivers tuned by a computed tuning factor and BFO words; needs its own dialect and a tolerance-based round-trip test |
 | RX-340 (16004), RX-331 (16012) | `$`-prefixed ASCII receiver protocol |
 | TT-550 Pegasus (16001), TT-585 Paragon (16009) | each has its own binary protocol |
+| Skanti TRP8000, TRP 8255 S R (14002, 14004), Barrett 950/2050/4050 (32001-32003), CODAN Envoy/NGT (34001, 34002), Guohe Q900/PMR-171 (1051, 1052) | not started: Barrett replies are framed by XON/XOFF bytes, Guohe has its own binary protocol (`pmr171.c`); each needs a protocol read and an engine file |
+| Elektor 3/04 (25001), Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002) | not started; kit and OEM modules with their own command sets |
 | Racal RA3702 (11005) | the RA37xx packet protocol (LF-started frames with a receiver number in the header, `QF`/`QM` queries); not read yet |
 | Hamlib oracle batch for the vendor serial files | the oracle harness drives `VirtualRig`; it needs a generic twin hook |
 

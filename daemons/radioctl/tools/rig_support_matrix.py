@@ -208,6 +208,8 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "xiegu-x5105": [3089],
     "xiegu-x6100": [3087],
     "xiegu-x6200": [3091],
+    "qrplabs-qcx-qdx": [2052],
+    "qrplabs-qmx": [2057],
     "racal-ra6790-gm": [11003],
     "tentec-delta-ii": [3064],
     "tentec-omni-vi-plus": [3051],
