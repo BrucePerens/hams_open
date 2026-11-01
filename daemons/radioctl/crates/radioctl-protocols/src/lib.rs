@@ -53,6 +53,7 @@ pub mod si570_usb;
 pub mod skanti;
 pub mod tentec;
 pub mod tentec_rx320;
+pub mod transfox;
 pub mod uniden;
 pub mod uniden_digital;
 pub mod usb_family;

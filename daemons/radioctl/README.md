@@ -773,6 +773,14 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_xg3_twin_snapshot] (radioctl-protocols) The virtual XG3's frequency and output state, for the Hamlib oracle batch.
 - [@ANCHOR: radioctl:radioctl_xg3_twin_feed] (radioctl-protocols) The virtual XG3 answers the manual's F, O, L, G, C, M, V and I commands and ignores the rest.
 - [@ANCHOR: radioctl:radioctl_xg3_twin_front_panel] (radioctl-protocols) A knob turned at the virtual XG3: frequency or output.
+- [@ANCHOR: radioctl:radioctl_transfox_decode] (radioctl-protocols) Decodes a Transfox answer: `FA` and eleven digits, or `TX` / `RX`.
+- [@ANCHOR: radioctl:radioctl_transfox_engine_new] (radioctl-protocols) Builds a Transfox engine from a vendor description of dialect `transfox`.
+- [@ANCHOR: radioctl:radioctl_transfox_engine_encode] (radioctl-protocols) Encodes frequency (1 to 1450 MHz) and the transmit state for the Transfox.
+- [@ANCHOR: radioctl:radioctl_transfox_engine_feed] (radioctl-protocols) Splits received bytes at `;` and decodes the answers; a bare `;` is ignored.
+- [@ANCHOR: radioctl:radioctl_transfox_twin_new] (radioctl-protocols) A virtual Transfox in the description's default state.
+- [@ANCHOR: radioctl:radioctl_transfox_twin_snapshot] (radioctl-protocols) The virtual Transfox's frequency and transmit state, for the Hamlib oracle batch.
+- [@ANCHOR: radioctl:radioctl_transfox_twin_feed] (radioctl-protocols) The virtual Transfox answers `FA;` and `Cs;` and takes `FA<digits>;`, `TX;` and `RX;`.
+- [@ANCHOR: radioctl:radioctl_transfox_twin_front_panel] (radioctl-protocols) A knob turned at the virtual Transfox: frequency or transmit.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
