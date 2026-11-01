@@ -209,6 +209,10 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "xiegu-x6100": [3087],
     "xiegu-x6200": [3091],
     "qrplabs-qcx-qdx": [2052],
+    "dl2man-trusdx": [2055],
+    "malachite-dsp": [2049],
+    "bg2fx-fx4": [2053],
+    "elad-fdm-duo": [33001],
     "qrplabs-qmx": [2057],
     "racal-ra6790-gm": [11003],
     "tentec-delta-ii": [3064],
@@ -263,6 +267,10 @@ _KERNEL_TUNER = (
     "Video4Linux: Hamlib reaches the tuner only through the kernel's V4L ioctl interface (a driver, not a wire "
     "protocol), and it is an FM/AM broadcast tuner card; radioctl has no device-driver transport"
 )
+_MEASURING = (
+    "not a radio: a vector network analyser (antenna and component measurement) that Hamlib lists as a tuner so "
+    "programs can sweep it; radioctl drives radios"
+)
 _PARALLEL_PORT = (
     "a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport "
     "(serial, TCP, UDP only)"
@@ -285,6 +293,7 @@ NOT_APPLICABLE: dict[int, str] = {
     2056: _SOFTWARE_CAT,
     26001: _KERNEL_TUNER,
     26002: _KERNEL_TUNER,
+    25008: _MEASURING,
     23001: _PARALLEL_PORT,
     25006: _PARALLEL_PORT,
     15001: _WINRADIO_DRIVER,

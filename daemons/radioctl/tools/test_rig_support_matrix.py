@@ -87,7 +87,7 @@ class SupportMatrixTests(unittest.TestCase):
         self.assertLessEqual(makers - {"Winradio"}, {
             "Hamlib", "FLRig", "TRXManager", "N3FJP", "Airspy", "N2ADR James Ahlstrom", "DTTS Microwave Society",
             "OpenHPSDR", "FlexRadio/Apache", "SDRPlay", "Thetis", "SDR Radio", "Video4Linux", "Video4Linux2",
-            "FlexRadio", "AmQRP"})
+            "FlexRadio", "AmQRP", "mRS"})
 
     # Tests [@ANCHOR: radioctl_support_build_rows]
     def test_rows_cover_every_model_once_and_ic7300_is_described(self):
