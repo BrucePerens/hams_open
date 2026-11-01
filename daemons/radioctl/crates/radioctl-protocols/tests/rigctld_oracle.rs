@@ -1605,6 +1605,7 @@ fn the_uniden_files_against_hamlib_record_every_disagreement() {
         ("uniden-bc780xlt", 8001),
         ("uniden-bc895xlt", 8003),
         ("uniden-bc898t", 8012),
+        ("radioshack-pro-2052", 8004),
     ] {
         let desc = shipped(file);
         let steps = vec![

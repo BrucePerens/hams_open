@@ -63,6 +63,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "uniden-bc780xlt": [8001],
     "uniden-bc895xlt": [8003],
     "uniden-bc898t": [8012],
+    "radioshack-pro-2052": [8004],
     "uniden-bcd396t": [8010],
     "uniden-bcd996t": [8011],
     "aor-ar2700": [5008],
