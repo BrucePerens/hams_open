@@ -141,6 +141,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Guohe => Box::new(crate::guohe::GuoheEngine::new(desc.clone())?),
         VendorProtocol::Dorji => Box::new(crate::dorji::DorjiEngine::new(desc.clone())?),
         VendorProtocol::Mds => Box::new(crate::mds::MdsEngine::new(desc.clone())?),
+        VendorProtocol::Xg3 => Box::new(crate::xg3::Xg3Engine::new(desc.clone())?),
     })
 }
 
@@ -169,6 +170,7 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Guohe => Box::new(crate::guohe::GuoheTwin::new(desc)?),
         VendorProtocol::Dorji => Box::new(crate::dorji::DorjiTwin::new(desc)?),
         VendorProtocol::Mds => Box::new(crate::mds::MdsTwin::new(desc)?),
+        VendorProtocol::Xg3 => Box::new(crate::xg3::Xg3Twin::new(desc)?),
     })
 }
 

@@ -10,13 +10,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **272** (278 description files), **95%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **273** (279 description files), **96%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 272 |
-| engine only | 1 |
+| described | 273 |
+| engine only | 0 |
 | needs variant | 0 |
 | needs engine | 5 |
 | odd device | 6 |
@@ -24,8 +24,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 280 |
-| manual-checked | 33 |
+| unverified | 279 |
+| manual-checked | 34 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -33,7 +33,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 134 |
+| A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 69 |
 | D | odd device | 54 | 27 |
@@ -52,7 +52,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_usb | D | si570_usb | 10 | 10 | 0 |
 | flexradio_network | A | flex | 9 | 9 | 0 |
 | other_network | C/D | - | 8 | 0 | 0 |
-| elecraft_ascii | A | elecraft | 7 | 6 | 0 |
+| elecraft_ascii | A | elecraft | 7 | 7 | 0 |
 | icom_marine | C | icom_marine | 4 | 4 | 0 |
 | icom_pcr_ascii | C | icom_pcr | 4 | 4 | 0 |
 | other_parallel | D | - | 2 | 0 | 0 |
@@ -145,7 +145,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | `elecraft-k4` | unverified | - | described |
 | 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | `elecraft-kx2` | unverified | - | described |
 | 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | unverified | - | described |
-| 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
+| 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | `elecraft-xg3` | manual-checked | - | described |
 | 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | not applicable |
 | 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | `elektor-sdr-usb` | unverified | - | described |
 | 25012 | FiFi | FiFi-SDR | D | other_usb | si570_usb | `fifi-sdr` | unverified | - | described |
