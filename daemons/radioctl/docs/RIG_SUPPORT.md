@@ -10,22 +10,22 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **269** (275 description files), **94%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **272** (278 description files), **95%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 269 |
+| described | 272 |
 | engine only | 1 |
 | needs variant | 0 |
-| needs engine | 6 |
-| odd device | 8 |
+| needs engine | 5 |
+| odd device | 6 |
 | not applicable | 29 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 281 |
-| manual-checked | 32 |
+| unverified | 280 |
+| manual-checked | 33 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 134 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 68 |
-| D | odd device | 54 | 25 |
+| C | new engine | 82 | 69 |
+| D | odd device | 54 | 27 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 75 | 0 |
+| other_serial | C/D | aor | 94 | 78 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -298,8 +298,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 10004 | Lowe | HF-235 | C | other_serial | - | `lowe-hf-235` | unverified | - | described |
 | 1045 | M0NKA | mcHF QRP | D | other_serial | - | `m0nka-mchf-qrp` | unverified | - | described |
 | 2049 | Malachite | DSP | D | other_serial | - | `malachite-dsp` | unverified | - | described |
-| 36001 | MDS | 4710 | D | other_serial | - | - | unverified | - | odd device |
-| 36002 | MDS | 9710 | D | other_serial | - | - | unverified | - | odd device |
+| 36001 | MDS | 4710 | D | other_serial | - | `mds-4710` | unverified | - | described |
+| 36002 | MDS | 9710 | D | other_serial | - | `mds-9710` | unverified | - | described |
 | 38001 | Micom | Micom 2/3 | C | other_serial | - | - | unverified | - | needs engine |
 | 3074 | Microtelecom | Perseus | D | other_serial | - | - | unverified | - | odd device |
 | 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | not applicable |
@@ -338,7 +338,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 16005 | Ten-Tec | RX-350 | C | other_serial | - | `tentec-rx-350` | unverified | - | described |
 | 16007 | Ten-Tec | TT-516 Argonaut V | C | other_serial | - | `tentec-tt-516` | unverified | - | described |
 | 16002 | Ten-Tec | TT-538 Jupiter | C | other_serial | - | `tentec-tt-538` | unverified | - | described |
-| 16001 | Ten-Tec | TT-550 | C | other_serial | - | - | unverified | - | needs engine |
+| 16001 | Ten-Tec | TT-550 | C | other_serial | - | `tentec-tt-550` | manual-checked | - | described |
 | 16008 | Ten-Tec | TT-565/566 Orion I/II | C | other_serial | - | `tentec-tt-565` | unverified | - | described |
 | 16009 | Ten-Tec | TT-585 Paragon | C | other_serial | - | - | unverified | - | needs engine |
 | 16011 | Ten-Tec | TT-588 Omni VII | C | other_serial | - | `tentec-tt-588` | unverified | - | described |
