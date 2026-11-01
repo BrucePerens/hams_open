@@ -1,0 +1,76 @@
+# Rig description: Kenwood TS-930 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/kenwood/ts930.c, kenwood.c, read for facts only, and `rigctl -m 2022 --dump-caps` output), named in each fact below.
+# Hamlib lists: serial 1200..57600 baud, 8N1, no handshake; receive 0.15-30 MHz.
+# model_id 0 is a placeholder: Hamlib has no ID for the TS-930 (its rig_open is kenwood_open with a comment that the ID of this rig is not known), so identify is not claimed and the number must not be used to recognise a radio.
+# The TS-930 manuals read (ts930_text.pdf, qslnet_TS-930-User-Manual.pdf) have no command tables.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt"]
+
+[rig]
+id = "kenwood-ts-930"
+name = "Kenwood TS-930"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 0
+
+[timing]
+timeout_ms = 500
+retries = 10
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 2022 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts930.c (rig_open = kenwood_open, ID unknown) and rigs/kenwood/kenwood.c (no kenwood_ids entry for RIG_MODEL_TS930)", note = "The value 0 is a placeholder and not an ID; identify is not claimed. A volunteer ID; answer would replace it." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 2022 --dump-caps (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio. retries is capped at 10 in this repository." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts930.c, the rig_caps of this model", note = "Hamlib implements frequency, mode, VFO, RIT/XIT, PTT, DCD, functions, levels and memory for this model with the classic Kenwood functions. Claimed here: frequency, mode and PTT set only (the engine reads PTT through IF, whose layout on this radio is not documented). The IF-232C level converter is required." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=FSK/RTTY, 7=CW-R); the mode list is that of `rigctl -m 2022 --dump-caps`", note = "Default Kenwood mode letters; modes Hamlib does not list for this model are omitted." }
+verified = { state = "unverified" }
+

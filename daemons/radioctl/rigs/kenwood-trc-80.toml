@@ -1,0 +1,81 @@
+# Rig description: Kenwood TRC-80 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/kenwood/trc80.c, kenwood.c, read for facts only, and `rigctl -m 2030 --dump-caps` output), named in each fact below.
+# Hamlib lists: serial 9600 baud, 8N1, hardware handshake; receive 0.5-30 MHz, transmit 1.8-30 MHz up to 100 W (25 W AM).
+# Dialect "trc80": the classic command set, but the frequency is read from IF (Hamlib kenwood_get_freq_if). The TRC-80/TK-80 is a transceiver module; no Kenwood document for it was found.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "identify"]
+
+[rig]
+id = "kenwood-trc-80"
+name = "Kenwood TRC-80"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 16
+dialect = "trc80"
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 2030 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c, the kenwood_ids table (numeric id 16) and kenwood_id_string_list for RIG_MODEL_TRC80", note = "The ID; answer is three digits." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/trc80.c rig_caps (`.get_freq = kenwood_get_freq_if`, `.set_freq = kenwood_set_freq`)", note = "Only the frequency read differs from the classic engine (IF; instead of FA;)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 2030 --dump-caps (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio. retries is capped at 10 in this repository." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/trc80.c, the rig_caps of this model", note = "Hamlib implements frequency, mode, PTT, RIT, DCD, functions and levels, memory and power state for this model. Only frequency, mode, PTT and identify are claimed because the engine implements those commands." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=FSK/RTTY, 7=CW-R); the mode list is that of `rigctl -m 2030 --dump-caps`", note = "Default Kenwood mode letters; modes Hamlib does not list for this model are omitted." }
+verified = { state = "unverified" }
+

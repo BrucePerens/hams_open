@@ -123,6 +123,10 @@ pub struct KenwoodEngine {
     fn_sp: bool,
     /// The TS-990S dialect (`kenwood.dialect = "ts990"`): the mode through `OM0`, no `MD`.
     ts990: bool,
+    /// The R-5000 dialect: the `IF` answer lacks five characters after the frequency.
+    r5000: bool,
+    /// The TRC-80 dialect: the frequency is read from `IF`.
+    if_frequency: bool,
 }
 
 impl KenwoodEngine {
@@ -148,8 +152,11 @@ impl KenwoodEngine {
         }
         use radioctl_core::description::KenwoodDialect;
         let dialect = desc.kenwood.as_ref().map(|k| k.dialect);
-        let older = matches!(dialect, Some(KenwoodDialect::Ts440 | KenwoodDialect::Ts450));
-        let fn_sp = dialect == Some(KenwoodDialect::Ts440);
+        let older = matches!(
+            dialect,
+            Some(KenwoodDialect::Ts440 | KenwoodDialect::Ts450 | KenwoodDialect::R5000)
+        );
+        let fn_sp = matches!(dialect, Some(KenwoodDialect::Ts440 | KenwoodDialect::R5000));
         let ts990 = dialect == Some(KenwoodDialect::Ts990);
         Ok(KenwoodEngine {
             desc,
@@ -157,6 +164,8 @@ impl KenwoodEngine {
             older,
             fn_sp,
             ts990,
+            r5000: dialect == Some(KenwoodDialect::R5000),
+            if_frequency: dialect == Some(KenwoodDialect::Trc80),
         })
     }
 
@@ -350,6 +359,16 @@ impl KenwoodEngine {
     /// The observations in an `IF` answer (without `IF` and `;`): 35 characters, laid out as the
     /// module note says. `None` when the length or a field is wrong.
     fn decode_if(&self, body: &str) -> Option<Vec<Inbound>> {
+        // The R-5000's answer is five characters shorter (Hamlib `if_len` 32 against 37): the
+        // five missing characters are taken to follow the frequency, and the rest to be laid out
+        // as the TS-440S's from there on.
+        let widened;
+        let body = if self.r5000 && body.len() == 30 && body.is_ascii() {
+            widened = format!("{}00000{}", &body[..11], &body[11..]);
+            widened.as_str()
+        } else {
+            body
+        };
         let field = |from: usize, to: usize| body.get(from..to);
         if body.len() != 35 || !body.is_ascii() {
             return None;
@@ -515,6 +534,10 @@ impl ProtocolEngine for KenwoodEngine {
         }
         let none = ReplyKind::None;
         let request = match op {
+            Op::GetFrequency(Vfo::A) if self.if_frequency => Self::command(
+                "IF;".into(),
+                ReplyKind::Observation(Field::Frequency(Vfo::A)),
+            ),
             Op::GetFrequency(vfo) => {
                 let name = if *vfo == Vfo::A { "FA" } else { "FB" };
                 Self::command(

@@ -1,0 +1,86 @@
+# Rig description: Kenwood R-5000 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/kenwood/r5000.c, kenwood.c, read for facts only, and `rigctl -m 2015 --dump-caps` output), named in each fact below.
+# Hamlib lists: serial 4800 baud, 8N2, no handshake; receive 0.1-30 MHz and 108-174 MHz (receiver only).
+# Dialect "r5000": the TS-440S (IC-10) command set with an IF answer of 32 characters in Hamlib (if_len 32; the TS-440S is 37 there), i.e. five characters shorter, taken here to lack the first offset field. That position is an inference, not a documented layout.
+# The R-5000 user manual (German, r5000_user.pdf) names the IF-232 / IC-10 interface only; it has no command table.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "identify"]
+
+[rig]
+id = "kenwood-r-5000"
+name = "Kenwood R-5000"
+family = "kenwood-ascii"
+
+[kenwood]
+model_id = 5
+dialect = "r5000"
+
+[timing]
+timeout_ms = 500
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[modes]]
+mode = "am"
+code = "5"
+
+[[modes]]
+mode = "rtty"
+code = "6"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 2015 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c, the kenwood_ids table (numeric id 5) and kenwood_id_string_list (\"005\") for RIG_MODEL_R5000; rigs/kenwood/ic10.c ic10_get_info (R-5000)", note = "The ID; answer is three digits." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/r5000.c `r5000_priv_caps` (`if_len` 32) and rigs/kenwood/ic10.c (IF parsing: mode is the 4th character from the end, VFO the 3rd, split flag the last)", note = "the radioctl dialect r5000 is the ts440 dialect (MD set only, mode read from IF, FN/SP) with an IF body of 30 characters after IF; the TS-440S answer is 35 (IC-10 manual, read for that model). That the missing five characters are those after the frequency is an assumption: only the tail positions are known from Hamlib." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 2015 --dump-caps (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio. retries is capped at 10 in this repository." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/r5000.c, the rig_caps of this model", note = "Hamlib implements frequency, mode, VFO, function lock, antenna, memory, transceive and info for this model through its IC-10 backend. No PTT, level or split is claimed (receiver; no levels in Hamlib). Set-frequency, set-mode and identify use FA, MD and ID as in the TS-440S dialect." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=FSK/RTTY, 7=CW-R); the mode list is that of `rigctl -m 2015 --dump-caps`", note = "Default Kenwood mode letters; modes Hamlib does not list for this model are omitted." }
+verified = { state = "unverified" }
+

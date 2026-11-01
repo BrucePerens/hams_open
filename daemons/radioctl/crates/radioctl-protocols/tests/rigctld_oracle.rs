@@ -1173,7 +1173,7 @@ fn known_yaesu_divergences(_file: &str) -> Vec<&'static str> {
 
 /// The Yaesu, Elecraft and Kenwood ASCII descriptions added in the October 31 batches, with
 /// Hamlib's model number and the baud rate the comparison uses.
-const ASCII_BATCH: [(&str, u32, u32); 31] = [
+const ASCII_BATCH: [(&str, u32, u32); 35] = [
     ("yaesu-ft-450", 1027, 38400),
     ("yaesu-ft-450d", 1046, 38400),
     ("yaesu-ft-950", 1028, 38400),
@@ -1205,6 +1205,10 @@ const ASCII_BATCH: [(&str, u32, u32); 31] = [
     ("kenwood-ts-940s", 2011, 57600),
     ("kenwood-ts-950s", 2012, 57600),
     ("kenwood-ts-950sdx", 2013, 57600),
+    ("kenwood-ts-930", 2022, 57600),
+    ("kenwood-trc-80", 2030, 9600),
+    ("elecraft-k2", 2021, 4800),
+    ("yaesu-ftdx-9000-old", 1050, 38400),
 ];
 
 // Tests [@ANCHOR: radioctl_yaesu_engine_encode]
@@ -1263,6 +1267,54 @@ fn known_ascii_batch_divergences(file: &str) -> Vec<&'static str> {
         "yaesu-ft-450" | "yaesu-ft-450d" | "yaesu-ftdx-9000" => {
             vec!["SetFrequency(B, Hz(14025000))", "GetFrequency(B)"]
         }
+        // TRC-80: Hamlib's `kenwood_get_freq_if` reads 12 characters after `IF` (one more than the
+        // 11-digit frequency field of the TS-2000 layout the virtual rig answers with), so it
+        // reads ten times the frequency, and its set then fails. The TRC-80's own IF layout is
+        // unknown (no document); which side is right for the module is an open question, pinned.
+        // Elecraft K2: Hamlib's open sequence (`K2;`, `K22;`, `ID;`, `IF;`, `MD;` and a final `FW;`)
+        // ends in a `FW;` read the virtual Elecraft does not answer, so Hamlib never gets a
+        // connection and every step fails with no answer: a limit of the harness, not a finding
+        // about the radio. Pinned as an open question (the K2 filter read `FW` is not modelled).
+        "elecraft-k2" => vec![
+            "GetFrequency(A)",
+            "GetMode",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetFrequency(A, Hz(14060000))",
+            "SetMode(Cw)",
+            "GetFrequency(A)",
+            "GetMode",
+        ],
+        // FTDX-9000 Old: Hamlib sends `ID;` and stops: its model for the older firmware does not
+        // accept the 0101 answer of the FTDX-9000 (the ID of the old firmware is unknown, see the
+        // file), so every step fails. Pinned as an open question needing a volunteer's `ID;`.
+        "yaesu-ftdx-9000-old" => vec![
+            "GetFrequency(A)",
+            "GetMode",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetFrequency(A, Hz(14060000))",
+            "SetMode(Cw)",
+            "GetFrequency(A)",
+            "GetMode",
+            "GetPtt",
+            "SetFrequency(B, Hz(14025000))",
+            "GetFrequency(B)",
+            "final freq_a",
+            "final mode",
+        ],
+        "kenwood-trc-80" => vec![
+            "GetFrequency(A)",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetFrequency(A, Hz(14060000))",
+            "GetFrequency(A)",
+            "final freq_a",
+        ],
         "kenwood-ts-450s" | "kenwood-ts-480" | "kenwood-ts-570d" | "kenwood-ts-570s" => {
             vec!["GetFrequency(B)"]
         }

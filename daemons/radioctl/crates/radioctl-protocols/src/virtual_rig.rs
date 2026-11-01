@@ -1154,6 +1154,17 @@ impl VirtualRig {
             self.state.freq_b
         };
         let mode = self.desc.mode_code(self.state.mode).map_or('0', char::from);
+        // The R-5000's answer lacks the five characters after the frequency (see the engine).
+        let region = if self
+            .desc
+            .kenwood
+            .as_ref()
+            .is_some_and(|k| k.dialect == radioctl_core::description::KenwoodDialect::R5000)
+        {
+            region.get(5..).unwrap_or("").to_string()
+        } else {
+            region
+        };
         format!(
             "IF{:011}{region}{}{}000{}{}{}0{}0000;",
             frequency.0,
