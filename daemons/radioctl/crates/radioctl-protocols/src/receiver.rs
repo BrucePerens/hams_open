@@ -45,6 +45,14 @@ pub trait Dialect: Debug + Send + 'static {
         false
     }
 
+    /// The commands that make a freshly opened or reconnected receiver ready to talk, in order
+    /// (an Icom PCR is powered on and told to stop its automatic updates). The default sends
+    /// nothing. Never a command that transmits (a receiver cannot).
+    // [@ANCHOR: radioctl_receiver_dialect_open_commands_default]
+    fn open_commands(&mut self, _desc: &RigDescription) -> Vec<(Vec<u8>, ReplyKind)> {
+        Vec::new()
+    }
+
     /// Whether a line is a bare acknowledgement or refusal, before [`Dialect::decode`] sees it.
     /// The default: an empty line acknowledges a setting, a line starting `?` refuses.
     // [@ANCHOR: radioctl_receiver_dialect_status_default]
@@ -158,6 +166,31 @@ impl<D: Dialect> ProtocolEngine for LineEngine<D> {
             }
         }
         out
+    }
+
+    // [@ANCHOR: radioctl_receiver_engine_open_requests]
+    fn open_requests(&mut self) -> Vec<Request> {
+        let requests: Vec<Request> = self
+            .dialect
+            .open_commands(&self.desc)
+            .into_iter()
+            .map(|(bytes, reply)| Request { bytes, reply })
+            .collect();
+        // The actor writes and waits for them one at a time, so the answer being decoded is
+        // always the one for the request just written; they share one reply kind.
+        if let Some(last) = requests.last() {
+            self.buffer.clear();
+            self.expecting = last.reply;
+        }
+        requests
+    }
+
+    // [@ANCHOR: radioctl_receiver_engine_link_restored]
+    fn link_restored(&mut self) -> Vec<Request> {
+        // A half line or an unanswered request of the old link must not meet the new one.
+        self.buffer.clear();
+        self.expecting = ReplyKind::None;
+        self.open_requests()
     }
 }
 

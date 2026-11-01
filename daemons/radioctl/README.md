@@ -1185,7 +1185,10 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_fail_closed] (radioctl-core) Writes an unkey and waits for its answer, not preemptible, up to three attempts with backoff: used when a transmit command was written but never answered, when the watchdog fires and when the actor stops. An unkey that cannot be done is counted (`unkey_failures`) and reported as `Alarm::UnkeyFailed`.
 - [@ANCHOR: radioctl:radioctl_core_actor_unkey_on_stop] (radioctl-core) When the last handle is dropped, a rig whose cache says keyed or whose gate was open is unkeyed before the actor ends.
 - [@ANCHOR: radioctl:radioctl_core_actor_restore_session] (radioctl-core) After the fail-closed unkey of a restored link, writes the requests the engine returns from `link_restored` (session set-up the rig forgot), once each, before the `LinkRestored` event.
+- [@ANCHOR: radioctl:radioctl_core_actor_open_session] (radioctl-core) Once, as the actor starts with the link up, writes the requests the engine returns from `open_requests` (an Icom PCR is powered on) before any queued command is served; a failed write takes the link down.
+- [@ANCHOR: radioctl:radioctl_core_actor_write_session_requests] (radioctl-core) Writes session requests once each, in order, waiting for the reply each names.
 - [@ANCHOR: radioctl:radioctl_core_engine_box_link_restored] (radioctl-core) Forwards the link-restored hook to the boxed engine.
+- [@ANCHOR: radioctl:radioctl_core_engine_box_open_requests] (radioctl-core) Forwards the open hook to the boxed engine.
 - [@ANCHOR: radioctl:radioctl_elecraft_engine_link_restored] (radioctl-protocols) Drops a half frame and sends `AI2;` again if the controller had turned auto-information on.
 - [@ANCHOR: radioctl:radioctl_flex_engine_link_restored] (radioctl-protocols) Drops the old connection's half line and owed replies; sends the `sub` lines and `info` again, once, if the client was subscribed.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_link_restored] (radioctl-protocols) Drops a half frame and sends `AI` again if the controller had turned auto-information on.
@@ -1648,6 +1651,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_receiver_engine_description] (radioctl-protocols) Receiver engine description.
 - [@ANCHOR: radioctl:radioctl_receiver_engine_encode] (radioctl-protocols) Receiver engine encode.
 - [@ANCHOR: radioctl:radioctl_receiver_engine_feed] (radioctl-protocols) Receiver engine feed.
+- [@ANCHOR: radioctl:radioctl_receiver_engine_open_requests] (radioctl-protocols) The dialect's open commands as requests; the answers are expected as acknowledgements.
+- [@ANCHOR: radioctl:radioctl_receiver_engine_link_restored] (radioctl-protocols) Drops a half line and sends the open commands again.
+- [@ANCHOR: radioctl:radioctl_receiver_dialect_open_commands_default] (radioctl-protocols) A receiver dialect sends nothing when the rig opens, unless it overrides this.
 - [@ANCHOR: radioctl:radioctl_receiver_virtual_new] (radioctl-protocols) The virtual radio of a description (the twin of its protocol).
 - [@ANCHOR: radioctl:radioctl_receiver_virtual_feed] (radioctl-protocols) Consumes bytes the controller wrote; the bytes the radio answers.
 - [@ANCHOR: radioctl:radioctl_aor_engine] (radioctl-protocols) The engine for an AOR description.
@@ -1684,6 +1690,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_pcr_engine] (radioctl-protocols) The engine for an Icom PCR description.
 - [@ANCHOR: radioctl:radioctl_pcr_tuning_command] (radioctl-protocols) The `K0` tuning command for a frequency, mode character and filter character.
 - [@ANCHOR: radioctl:radioctl_pcr_dialect_from_description] (radioctl-protocols) Pcr dialect from description.
+- [@ANCHOR: radioctl:radioctl_pcr_dialect_open_commands] (radioctl-protocols) `H101` (power on) then `G300` (no automatic updates), as Hamlib opens a PCR.
 - [@ANCHOR: radioctl:radioctl_pcr_dialect_encode] (radioctl-protocols) Pcr dialect encode.
 - [@ANCHOR: radioctl:radioctl_pcr_dialect_status] (radioctl-protocols) Pcr dialect status.
 - [@ANCHOR: radioctl:radioctl_pcr_dialect_decode] (radioctl-protocols) Pcr dialect decode.

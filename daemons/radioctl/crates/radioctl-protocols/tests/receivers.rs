@@ -205,3 +205,23 @@ proptest::proptest! {
         }
     }
 }
+
+// Tests [@ANCHOR: radioctl_receiver_dialect_open_commands_default]
+// Tests [@ANCHOR: radioctl_receiver_engine_open_requests]
+// Tests [@ANCHOR: radioctl_core_engine_box_open_requests]
+#[test]
+fn only_the_icom_pcr_receivers_have_an_open_step() {
+    for desc in receivers() {
+        let pcr = desc
+            .receiver
+            .as_ref()
+            .is_some_and(|r| r.protocol == radioctl_core::description::ReceiverProtocol::IcomPcr);
+        let mut engine = engine_for(&desc).unwrap_or_else(|e| panic!("{}: {e}", desc.id));
+        assert_eq!(
+            engine.open_requests().len(),
+            if pcr { 2 } else { 0 },
+            "{}",
+            desc.id
+        );
+    }
+}

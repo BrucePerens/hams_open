@@ -24,10 +24,11 @@
 //!   sent as the liveness query `H1?` (`H101` power on, `H100` off) and answered from the
 //!   remembered values.
 //!
-//! Gaps: Hamlib powers the radio on before use (`H101`, then `G300` to stop automatic updates, at
-//! 9600 baud for the PCR100 and PCR1000 and 38400 for the others); the engine has no open hook,
-//! so the operator must power the receiver on and send those two commands first. The second
-//! receiver of the PCR2500, squelch, volume, filters, noise blanker and AGC are not implemented.
+//! Open: like Hamlib, the engine powers the radio on (`H101`) and then stops its automatic
+//! updates (`G300`) when the rig actor starts, and again after a link loss (`open_requests` and
+//! `link_restored`; 9600 baud for the PCR100 and PCR1000 and 38400 for the others).
+//!
+//! Gaps: the second receiver of the PCR2500, squelch, volume, filters, noise blanker and AGC are not implemented.
 
 use radioctl_core::description::{ReceiverProtocol, RigDescription};
 use radioctl_core::engine::{Inbound, ReplyKind};
@@ -124,6 +125,15 @@ impl Dialect for PcrDialect {
         }
     }
 
+    // [@ANCHOR: radioctl_pcr_dialect_open_commands]
+    /// Hamlib's open: `H101` powers the receiver on, `G300` stops its automatic updates.
+    fn open_commands(&mut self, _desc: &RigDescription) -> Vec<(Vec<u8>, ReplyKind)> {
+        vec![
+            (b"H101\n".to_vec(), ReplyKind::Ack),
+            (b"G300\n".to_vec(), ReplyKind::Ack),
+        ]
+    }
+
     // [@ANCHOR: radioctl_pcr_dialect_terminator]
     fn terminator(&self) -> u8 {
         if self.lead {
@@ -140,6 +150,15 @@ impl Dialect for PcrDialect {
             .and_then(|at| line.get(at..))
             .unwrap_or(line);
         match line.get(..4) {
+            // The power state answer to an open request is a bare acknowledgement; to a
+            // liveness read it is the observation `decode` builds.
+            Some("H101") if !matches!(expecting, ReplyKind::Observation(_)) => {
+                Some(if expecting == ReplyKind::Ack {
+                    vec![Inbound::Ack]
+                } else {
+                    Vec::new()
+                })
+            }
             Some("G000") => {
                 if let Some((hz, mode)) = self.pending.take() {
                     self.freq = hz;
@@ -288,6 +307,48 @@ mod tests {
 
     fn bytes(e: &mut PcrEngine, op: Op) -> Vec<u8> {
         e.encode(&op).expect("encode").bytes
+    }
+
+    // Tests [@ANCHOR: radioctl_pcr_dialect_open_commands]
+    // Tests [@ANCHOR: radioctl_receiver_engine_open_requests]
+    // Tests [@ANCHOR: radioctl_receiver_engine_link_restored]
+    // Tests [@ANCHOR: radioctl_pcr_dialect_status]
+    #[test]
+    fn the_open_requests_are_power_on_then_no_automatic_updates_and_their_answers_acknowledge() {
+        for id in [
+            "icom-ic-pcr100",
+            "icom-ic-pcr1000",
+            "icom-ic-pcr1500",
+            "icom-ic-pcr2500",
+        ] {
+            let mut e = engine(shipped(id)).expect("engine");
+            let open = e.open_requests();
+            let wire: Vec<&[u8]> = open.iter().map(|r| r.bytes.as_slice()).collect();
+            assert_eq!(wire, [b"H101\n".as_slice(), b"G300\n".as_slice()], "{id}");
+            assert!(open.iter().all(|r| r.reply == ReplyKind::Ack), "{id}");
+            // The radio's answers acknowledge the request being waited for, one each.
+            let term: &[u8] = if id == "icom-ic-pcr1000" {
+                b"\r"
+            } else {
+                b"\n"
+            };
+            for answer in ["H101", "G000"] {
+                let mut line = answer.as_bytes().to_vec();
+                line.extend_from_slice(term);
+                assert_eq!(e.feed(&line, T0), vec![Inbound::Ack], "{id} {answer}");
+                e.open_requests();
+            }
+            // After a link loss the same two are sent again, and a half line is dropped.
+            e.encode(&Op::GetSignal).expect("signal");
+            e.feed(b"I1", T0);
+            let again = e.link_restored();
+            assert_eq!(again.len(), 2, "{id}");
+            assert_eq!(
+                e.feed(b"I1", T0 + Duration::from_millis(10)),
+                Vec::<Inbound>::new(),
+                "{id}: the old half line is gone"
+            );
+        }
     }
 
     // Tests [@ANCHOR: radioctl_pcr_tuning_command]
