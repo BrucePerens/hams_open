@@ -355,7 +355,10 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Some((wire.min, wire.max))
         }
         Family::IcomCiv => match level {
-            Level::KeyerSpeed => None,
+            Level::KeyerSpeed => Some((
+                radioctl_protocols::civ::KEYER_WPM_MIN,
+                radioctl_protocols::civ::KEYER_WPM_MAX,
+            )),
             _ => Some((0, 255)),
         },
         // The TS-890S dialect has no monitor-level command and a keyer speed from 4.
@@ -572,7 +575,7 @@ mod tests {
         let names: Vec<_> = served_levels(&metered).iter().map(|l| l.name).collect();
         assert_eq!(names, ["RAWSTR", "ALC", "SWR"]);
         assert_eq!(level_range(&ic, Level::AfGain), Some((0, 255)));
-        assert_eq!(level_range(&ic, Level::KeyerSpeed), None);
+        assert_eq!(level_range(&ic, Level::KeyerSpeed), Some((6, 48)));
         let mut kx = RigDescription::ic7300();
         kx.family = Family::ElecraftAscii;
         kx.capabilities = CapabilitySet::of(&[

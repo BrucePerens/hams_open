@@ -856,10 +856,19 @@ fn known_ts890_divergences() -> Vec<&'static str> {
 
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
 // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+// Tests [@ANCHOR: radioctl_civ_keyer_wpm_to_raw]
+// Tests [@ANCHOR: radioctl_civ_keyer_raw_to_wpm]
 #[test]
 fn ic7300_agrees_with_hamlib_on_frequency_and_mode() {
-    let desc = RigDescription::ic7300();
-    let (divergences, refused, wire) = compare(HAMLIB_IC7300, &desc, 19200, &scenario());
+    let desc = shipped("icom-ic-7300");
+    // The keyer speed is words per minute on both sides; the wire scale (`14 0C`, 6 to 48 wpm
+    // over 0 to 255) is checked by Hamlib reading back what radioctl's engine encoded.
+    let mut steps = scenario();
+    for wpm in [6, 13, 25, 40, 48] {
+        steps.push(Op::SetLevel(Level::KeyerSpeed, wpm));
+        steps.push(Op::GetLevel(Level::KeyerSpeed));
+    }
+    let (divergences, refused, wire) = compare(HAMLIB_IC7300, &desc, 19200, &steps);
     report("IC-7300", &divergences, &refused, &wire);
     assert!(divergences.is_empty(), "{divergences:#?}");
 }

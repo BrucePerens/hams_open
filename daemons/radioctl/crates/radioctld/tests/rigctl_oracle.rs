@@ -220,10 +220,7 @@ async fn hamlibs_client_reads_back_the_capabilities_radioctld_advertises() {
     );
     assert!(caps.contains("AF(0.000000..1.000000/0.003922)"), "{caps}");
     assert!(caps.contains("RAWSTR(0..255/1)"), "{caps}");
-    assert!(
-        !caps.contains("KEYSPD"),
-        "CI-V keyer speed is not implemented: {caps}"
-    );
+    assert!(caps.contains("KEYSPD(6..48/1)"), "{caps}");
     // The front-end lists are read back by Hamlib's own client from \dump_state: the preamplifier
     // as step numbers (Hamlib prints them with its dB unit), the attenuator in decibels.
     assert!(caps.contains("Preamp: 1dB 2dB"), "{caps}");
@@ -335,12 +332,8 @@ async fn hamlibs_rigctl_drives_a_virtual_ic7300_and_sees_what_it_cannot_do() {
     rigctl(&daemon, &["S", "1", "VFOB"]).await;
     eventually("split", || rig.state().split).await;
     assert_eq!(printed(&rigctl(&daemon, &["s"]).await), "1\nVFOB\n");
-    let level = rigctl(&daemon, &["l", "KEYSPD"]).await;
-    assert!(
-        everything(&level).contains("Invalid parameter"),
-        "{}",
-        everything(&level)
-    );
+    // Hamlib reads the virtual rig's keyer speed (18 wpm) back through the `14 0C` table.
+    assert_eq!(printed(&rigctl(&daemon, &["l", "KEYSPD"]).await), "18\n");
     assert_eq!(printed(&rigctl(&daemon, &["l", "RAWSTR"]).await), "30\n");
     assert_eq!(printed(&rigctl(&daemon, &["t"]).await), "0\n");
     daemon.stop().await;

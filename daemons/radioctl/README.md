@@ -372,7 +372,7 @@ All on purpose.
 - Split is VFO A to receive and VFO B to transmit. `X`/`\set_split_freq_mode` accept only the mode the rig is already in.
 - Passbands for a rig with no filter control are the mode's typical width.
 - Levels are scaled (0 to 1, or the rig's own integer for keyer speed) by the ranges the engines enforce. The ranges are repeated in `names::level_range` and pinned to the engines by `tests/levels.rs`.
-- The CI-V keyer speed is not served because that engine does not carry it.
+- The CI-V keyer speed (`14 0C`) is 6 to 48 wpm, mapped to the radio's raw 0 to 250 by a measured table (unverified on a radio).
 
 ### Tests
 
@@ -1280,6 +1280,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_filter_scope_sweep] (radioctl-protocols) The `##DD3` filter-scope frame a virtual TS-890S sends with its waveform output on LAN; empty for other models or with output off.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_level_of] (radioctl-protocols) The level behind a `14` sub-command (AF 01, RF 02, power 0A, mic 0B, monitor 15).
 - [@ANCHOR: radioctl:radioctl_civ_level_sub] (radioctl-protocols) Wire sub-command of a level under `14`, for the levels this engine supports.
+- [@ANCHOR: radioctl:radioctl_civ_keyer_wpm_to_raw] (radioctl-protocols) The raw `14 0C` value for a keyer speed of 6 to 48 words per minute (a measured table); `None` outside the range.
+- [@ANCHOR: radioctl:radioctl_civ_keyer_raw_to_wpm] (radioctl-protocols) The keyer speed in words per minute for a raw `14 0C` value, the slowest speed whose raw value is not below it; `None` above 250.
 - [@ANCHOR: radioctl:radioctl_civ_meter_sub] (radioctl-protocols) Wire sub-command of a raw meter under `15` (SWR 12, ALC 13, COMP 14, Vd 15, Id 16).
 - [@ANCHOR: radioctl:radioctl_civ_sub_meter] (radioctl-protocols) The raw meter behind a `15` sub-command.
 - [@ANCHOR: radioctl:radioctl_civ_base_mode] (radioctl-protocols) The sideband a data mode sits on and the DATA flag.

@@ -672,10 +672,15 @@ impl VirtualRig {
         let value = civ_level_of(sub)
             .filter(|level| !self.desc.levels.lacks(*level))
             .and_then(|level| self.state.levels.get(&level));
-        match value {
-            Some(value) => {
+        let raw = match civ_level_of(sub) {
+            // The rig holds words per minute; the wire carries the 0 to 255 scale.
+            Some(Level::KeyerSpeed) => value.and_then(|wpm| civ::keyer_wpm_to_raw(*wpm)),
+            _ => value.copied(),
+        };
+        match raw {
+            Some(raw) => {
                 let mut data = vec![sub];
-                data.extend(civ::encode_bcd_meter(*value));
+                data.extend(civ::encode_bcd_meter(raw));
                 CivReply::Data(0x14, data)
             }
             None => CivReply::Ng,
@@ -686,8 +691,18 @@ impl VirtualRig {
     fn civ_level_set(&mut self, sub: u8, value: &[u8]) -> CivReply {
         match (civ_level_of(sub), civ::decode_bcd_meter(value)) {
             (Some(level), Some(raw)) if raw <= 255 && !self.desc.levels.lacks(level) => {
-                self.state.levels.insert(level, raw);
-                CivReply::Ok
+                let stored = if level == Level::KeyerSpeed {
+                    civ::keyer_raw_to_wpm(raw)
+                } else {
+                    Some(raw)
+                };
+                match stored {
+                    Some(stored) => {
+                        self.state.levels.insert(level, stored);
+                        CivReply::Ok
+                    }
+                    None => CivReply::Ng,
+                }
             }
             _ => CivReply::Ng,
         }
@@ -1674,7 +1689,7 @@ enum CivReply {
 }
 
 // [@ANCHOR: radioctl_virtual_civ_level_of]
-/// The level behind a `14` sub-command (AF 01, RF 02, power 0A, mic 0B, monitor 15).
+/// The level behind a `14` sub-command (AF 01, RF 02, keyer speed 0C, power 0A, mic 0B, monitor 15).
 fn civ_level_of(sub: u8) -> Option<Level> {
     match sub {
         0x01 => Some(Level::AfGain),
@@ -1682,6 +1697,7 @@ fn civ_level_of(sub: u8) -> Option<Level> {
         0x0A => Some(Level::RfPower),
         0x0B => Some(Level::MicGain),
         0x15 => Some(Level::MonitorLevel),
+        0x0C => Some(Level::KeyerSpeed),
         _ => None,
     }
 }
@@ -2083,10 +2099,12 @@ mod tests {
             ng,
             "over 255"
         );
+        assert_eq!(civ_ask(&mut rig, 0xA4, &[0x14, 0x0C, 0x01, 0x28]), ok);
+        assert_eq!(rig.state().levels.get(&Level::KeyerSpeed), Some(&27));
         assert_eq!(
             civ_ask(&mut rig, 0xA4, &[0x14, 0x0C]),
-            ng,
-            "keyer speed is a gap"
+            vec![0xFE, 0xFE, 0xE0, 0xA4, 0x14, 0x0C, 0x01, 0x28, 0xFD],
+            "keyer speed reads back on the 0 to 255 scale"
         );
         assert_eq!(
             civ_ask(&mut rig, 0xA4, &[0x14, 0x0B, 0x01, 0x9A]),
