@@ -9,7 +9,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **188** (193 description files)
+- Not applicable (not a radio, or no transport radioctl has): **27**
+- Real radios (models less not applicable): **286**; with a radioctl description: **188** (193 description files), **65%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
@@ -18,8 +19,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | engine only | 9 |
 | needs variant | 22 |
 | needs engine | 34 |
-| odd device | 52 |
-| not applicable | 8 |
+| odd device | 33 |
+| not applicable | 27 |
 
 | Verification level | Models |
 |---|---:|
@@ -67,6 +68,25 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 ## Models that are not applicable
 
+- Airspy SDR#/gpredict (9): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
+- AmQRP DDS-60 (25006): a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport (serial, TCP, UDP only)
+- DTTS Microwave Society DttSP IPC (23003): not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the radio, not the program in front of it
+- DTTS Microwave Society DttSP UDP (23004): not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the radio, not the program in front of it
+- FlexRadio SDR-1000 (23001): a parallel-port device: Hamlib bit-bangs the printer port, and radioctl has no parallel-port transport (serial, TCP, UDP only)
+- FlexRadio/Apache PowerSDR (2048): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
+- FLRig  (4): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
+- Hamlib Dummy (1): not a radio: a simulator; radioctl has its own virtual rigs (the virtual transport and the per-family twins)
+- Hamlib Dummy No VFO (6): not a radio: a simulator; radioctl has its own virtual rigs (the virtual transport and the per-family twins)
+- Hamlib NET rigctl (2): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
+- N2ADR James Ahlstrom Quisk (10): not a radio: a software SDR or DSP program that offers a control interface of its own; radioctl drives the radio, not the program in front of it
+- N3FJP ACLog (8): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
+- OpenHPSDR PiHPSDR (2040): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
+- SDR Radio SDRConsole (2056): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
+- SDRPlay SDRUno (2051): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
+- Thetis  (2054): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
+- TRXManager TRXManager 5.7.630+ (5): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
+- Video4Linux SW/FM radio (26001): Video4Linux: Hamlib reaches the tuner only through the kernel's V4L ioctl interface (a driver, not a wire protocol), and it is an FM/AM broadcast tuner card; radioctl has no device-driver transport
+- Video4Linux2 SW/FM radio (26002): Video4Linux: Hamlib reaches the tuner only through the kernel's V4L ioctl interface (a driver, not a wire protocol), and it is an FM/AM broadcast tuner card; radioctl has no device-driver transport
 - Winradio WR-1000 (15001): WiNRADiO: Hamlib reaches the radio only through the vendor's driver API (a Linux kernel driver's ioctl interface or the Windows vendor DLL); the radio's own USB protocol is not published, so radioctl has no wire protocol to speak
 - Winradio WR-1500 (15002): WiNRADiO: Hamlib reaches the radio only through the vendor's driver API (a Linux kernel driver's ioctl interface or the Windows vendor DLL); the radio's own USB protocol is not published, so radioctl has no wire protocol to speak
 - Winradio WR-1550 (15003): WiNRADiO: Hamlib reaches the radio only through the vendor's driver API (a Linux kernel driver's ioctl interface or the Windows vendor DLL); the radio's own USB protocol is not published, so radioctl has no wire protocol to speak
@@ -83,10 +103,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 29001 | ADAT www.adat.ch | ADT-200A | D | other_serial | - | - | unverified | - | odd device |
 | 25016 | AE9RB | Si570 Peaberry V1 | D | other_usb | - | - | unverified | - | odd device |
 | 25017 | AE9RB | Si570 Peaberry V2 | D | other_usb | - | - | unverified | - | odd device |
-| 9 | Airspy | SDR#/gpredict | D | other_network | - | - | unverified | - | odd device |
+| 9 | Airspy | SDR#/gpredict | D | other_network | - | - | unverified | - | not applicable |
 | 17001 | Alinco | DX-77 | C | other_serial | - | `alinco-dx-77` | unverified | - | described |
 | 17002 | Alinco | DX-SR8 | C | other_serial | - | `alinco-dx-sr8` | unverified | - | described |
-| 25006 | AmQRP | DDS-60 | D | other_parallel | - | - | unverified | - | odd device |
+| 25006 | AmQRP | DDS-60 | D | other_parallel | - | - | unverified | - | not applicable |
 | 25013 | AMSAT-UK | FUNcube Dongle | D | other_usb | - | - | unverified | - | odd device |
 | 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | - | - | unverified | - | odd device |
 | 37001 | AnyTone | D578A | D | other_serial | - | - | unverified | - | odd device |
@@ -114,8 +134,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 31001 | Dorji | DRA818V | D | other_serial | - | - | unverified | - | odd device |
 | 9002 | Drake | R-8A | C | other_serial | - | `drake-r-8a` | unverified | - | described |
 | 9003 | Drake | R-8B | C | other_serial | - | `drake-r-8b` | unverified | - | described |
-| 23003 | DTTS Microwave Society | DttSP IPC | D | other_device_driver | - | - | unverified | - | odd device |
-| 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | odd device |
+| 23003 | DTTS Microwave Society | DttSP IPC | D | other_device_driver | - | - | unverified | - | not applicable |
+| 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | not applicable |
 | 33001 | ELAD | FDM-DUO | D | other_serial | - | - | unverified | - | odd device |
 | 2021 | Elecraft | K2 | A | elecraft_ascii | elecraft | `elecraft-k2` | unverified | - | described |
 | 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | `elecraft-k3` | unverified | - | described |
@@ -128,7 +148,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | - | unverified | - | odd device |
 | 25012 | FiFi | FiFi-SDR | D | other_usb | - | - | unverified | - | odd device |
 | 2036 | FlexRadio | 6xxx | A | flexradio_network | flex | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | unverified | - | described |
-| 23001 | FlexRadio | SDR-1000 | D | other_parallel | - | - | unverified | - | odd device |
+| 23001 | FlexRadio | SDR-1000 | D | other_parallel | - | - | unverified | - | not applicable |
 | 23005 | FlexRadio | SmartSDR Slice A | A | flexradio_network | flex | - | unverified | - | engine only |
 | 23006 | FlexRadio | SmartSDR Slice B | A | flexradio_network | flex | - | unverified | - | engine only |
 | 23007 | FlexRadio | SmartSDR Slice C | A | flexradio_network | flex | - | unverified | - | engine only |
@@ -137,15 +157,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 23010 | FlexRadio | SmartSDR Slice F | A | flexradio_network | flex | - | unverified | - | engine only |
 | 23011 | FlexRadio | SmartSDR Slice G | A | flexradio_network | flex | - | unverified | - | engine only |
 | 23012 | FlexRadio | SmartSDR Slice H | A | flexradio_network | flex | - | unverified | - | engine only |
-| 2048 | FlexRadio/Apache | PowerSDR | D | other_serial | - | - | unverified | - | odd device |
-| 4 | FLRig | - | D | other_network | - | - | unverified | - | odd device |
+| 2048 | FlexRadio/Apache | PowerSDR | D | other_serial | - | - | unverified | - | not applicable |
+| 4 | FLRig | - | D | other_network | - | - | unverified | - | not applicable |
 | 25015 | Funkamateur | FA-SDR | D | other_usb | - | - | unverified | - | odd device |
 | 35001 | GOMSPACE | GS100 | D | other_serial | - | - | unverified | - | odd device |
 | 1052 | Guohe | PMR-171 | C | other_serial | - | - | unverified | - | needs engine |
 | 1051 | Guohe | Q900 | C | other_serial | - | - | unverified | - | needs engine |
-| 1 | Hamlib | Dummy | D | virtual | - | - | unverified | - | odd device |
-| 6 | Hamlib | Dummy No VFO | D | virtual | - | - | unverified | - | odd device |
-| 2 | Hamlib | NET rigctl | D | unclassified | - | - | unverified | - | odd device |
+| 1 | Hamlib | Dummy | D | virtual | - | - | unverified | - | not applicable |
+| 6 | Hamlib | Dummy No VFO | D | virtual | - | - | unverified | - | not applicable |
+| 2 | Hamlib | NET rigctl | D | unclassified | - | - | unverified | - | not applicable |
 | 2046 | Hilberling | PT-8000A | C | other_serial | - | - | unverified | - | needs engine |
 | 25019 | HobbyPCB | RS-HFIQ | D | other_serial | - | - | unverified | - | odd device |
 | 3054 | Icom | IC ID-1 | A | icom_civ | civ | `icom-id-1` | unverified | - | described |
@@ -282,9 +302,9 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3074 | Microtelecom | Perseus | D | other_serial | - | - | unverified | - | odd device |
 | 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | odd device |
 | 25014 | N2ADR | HiQSDR | D | other_network | - | - | unverified | - | odd device |
-| 10 | N2ADR James Ahlstrom | Quisk | D | other_network | - | - | unverified | - | odd device |
-| 8 | N3FJP | ACLog | D | other_network | - | - | unverified | - | odd device |
-| 2040 | OpenHPSDR | PiHPSDR | D | other_serial | - | - | unverified | - | odd device |
+| 10 | N2ADR James Ahlstrom | Quisk | D | other_network | - | - | unverified | - | not applicable |
+| 8 | N3FJP | ACLog | D | other_network | - | - | unverified | - | not applicable |
+| 2040 | OpenHPSDR | PiHPSDR | D | other_serial | - | - | unverified | - | not applicable |
 | 3053 | Optoelectronics | OptoScan456 | C | other_serial | civ | `optoscan-os456` | unverified | - | described |
 | 3052 | Optoelectronics | OptoScan535 | C | other_serial | civ | `optoscan-os535` | unverified | - | described |
 | 28001 | Philips/Simoco | PRM8060 | D | other_serial | - | - | unverified | - | odd device |
@@ -301,8 +321,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 27003 | Rohde&Schwarz | XK2100 | C | other_serial | - | - | unverified | - | needs engine |
 | 27005 | Rohde&Schwarz | XK852 | C | other_serial | - | - | unverified | - | needs engine |
 | 25002 | SAT-Schneider | DRT1 | D | other_serial | - | - | unverified | - | odd device |
-| 2056 | SDR Radio | SDRConsole | D | other_serial | - | - | unverified | - | odd device |
-| 2051 | SDRPlay | SDRUno | D | other_serial | - | - | unverified | - | odd device |
+| 2056 | SDR Radio | SDRConsole | D | other_serial | - | - | unverified | - | not applicable |
+| 2051 | SDRPlay | SDRUno | D | other_serial | - | - | unverified | - | not applicable |
 | 2032 | SigFox | Transfox | D | other_serial | - | - | unverified | - | odd device |
 | 14004 | Skanti | TRP 8255 S R | C | other_serial | - | - | unverified | - | needs engine |
 | 14002 | Skanti | TRP8000 | C | other_serial | - | - | unverified | - | needs engine |
@@ -321,8 +341,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 16009 | Ten-Tec | TT-585 Paragon | C | other_serial | - | - | unverified | - | needs engine |
 | 16011 | Ten-Tec | TT-588 Omni VII | C | other_serial | - | `tentec-tt-588` | unverified | - | described |
 | 16013 | Ten-Tec | TT-599 Eagle | C | other_serial | - | `tentec-tt-599` | unverified | - | described |
-| 2054 | Thetis | - | D | other_serial | - | - | unverified | - | odd device |
-| 5 | TRXManager | TRXManager 5.7.630+ | D | other_network | - | - | unverified | - | odd device |
+| 2054 | Thetis | - | D | other_serial | - | - | unverified | - | not applicable |
+| 5 | TRXManager | TRXManager 5.7.630+ | D | other_network | - | - | unverified | - | not applicable |
 | 8002 | Uniden | BC245xlt | C | other_serial | uniden | `uniden-bc245xlt` | unverified | - | described |
 | 8006 | Uniden | BC250D | C | other_serial | uniden | `uniden-bc250d` | unverified | - | described |
 | 8001 | Uniden | BC780xlt | C | other_serial | uniden | `uniden-bc780xlt` | unverified | - | described |
@@ -331,8 +351,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 8010 | Uniden | BCD-396T | C | other_serial | - | - | unverified | - | needs engine |
 | 8011 | Uniden | BCD-996T | C | other_serial | - | - | unverified | - | needs engine |
 | 1033 | Vertex Standard | VX-1700 | C | yaesu_other | - | - | unverified | - | needs engine |
-| 26001 | Video4Linux | SW/FM radio | D | other_device_driver | - | - | unverified | - | odd device |
-| 26002 | Video4Linux2 | SW/FM radio | D | other_device_driver | - | - | unverified | - | odd device |
+| 26001 | Video4Linux | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
+| 26002 | Video4Linux2 | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
 | 12004 | Watkins-Johnson | WJ-8888 | C | other_serial | - | - | unverified | - | needs engine |
 | 15001 | Winradio | WR-1000 | C | other_device_driver | - | - | unverified | - | not applicable |
 | 15002 | Winradio | WR-1500 | C | other_device_driver | - | - | unverified | - | not applicable |

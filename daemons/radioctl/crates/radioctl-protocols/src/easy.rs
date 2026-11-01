@@ -114,7 +114,8 @@ pub async fn open_serial_rig_with(
 pub async fn open_serial_rig(which: &str, port: &str, baud: u32) -> Result<SerialRig, RigError> {
     let runtime = current_runtime()?;
     let description = rigfile::load(which)?.description;
-    let config = SerialConfig::new(PortTarget::Path(port.into()), baud);
+    let config =
+        SerialConfig::new(PortTarget::Path(port.into()), baud).with_description_line(&description);
     open_serial_rig_with(&runtime, &description, config, RigOptions::default()).await
 }
 

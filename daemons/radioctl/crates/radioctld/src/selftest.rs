@@ -393,7 +393,8 @@ pub async fn open(
         let (stream, _control) = spawn_virtual_rig(&Handle::current(), radio, Duration::ZERO);
         return spawn_current(engine, wire_tap(stream, wire), options).map_err(|e| e.detail);
     }
-    let mut config = SerialConfig::new(parse_target(target)?, baud);
+    let mut config =
+        SerialConfig::new(parse_target(target)?, baud).with_description_line(description);
     config.first_open_attempts = 3;
     if unmanaged {
         config.lines = LineControl::Unmanaged;

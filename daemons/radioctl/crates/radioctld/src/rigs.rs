@@ -180,7 +180,7 @@ pub async fn build_rig(
                     let mut probe_engine =
                         engine_for(&description).map_err(|e| format!("{}: {e}", rig.name))?;
                     // The template's rate is replaced at every open.
-                    let template = serial_config(target, PROBE_TEMPLATE_BAUD, *lines);
+                    let template = serial_config(target, PROBE_TEMPLATE_BAUD, *lines, &description);
                     let mut port = SerialProbePort::new(runtime.clone(), template);
                     let found = probe(&mut port, &mut probe_engine, rates)
                         .await
@@ -196,7 +196,7 @@ pub async fn build_rig(
                     rate
                 }
             };
-            let serial = serial_config(target, rate, *lines);
+            let serial = serial_config(target, rate, *lines, &description);
             let link = open_serial(runtime, serial).await.map_err(fail)?;
             // The actor watches the port: a port loss takes the link down, a reopen unkeys the
             // rig before any other command (RigOptions::link_watch). The control lines and
@@ -260,10 +260,16 @@ pub async fn build_rig(
 }
 
 // [@ANCHOR: radioctld_rigs_serial_config]
-/// The serial configuration of a rig at `baud`: 8N1, the configured line handling, one open
-/// attempt. The probe and the real link use the same one, so the port is opened the same way.
-fn serial_config(target: &PortTarget, baud: u32, lines: LineControl) -> SerialConfig {
-    let mut serial = SerialConfig::new(target.clone(), baud);
+/// The serial configuration of a rig at `baud`: the description's line settings (data bits, parity,
+/// stop bits, flow; 8N1 when it states none), the configured line handling, one open attempt. The
+/// probe and the real link use the same one, so the port is opened the same way.
+fn serial_config(
+    target: &PortTarget,
+    baud: u32,
+    lines: LineControl,
+    description: &RigDescription,
+) -> SerialConfig {
+    let mut serial = SerialConfig::new(target.clone(), baud).with_description_line(description);
     serial.lines = lines;
     serial
 }

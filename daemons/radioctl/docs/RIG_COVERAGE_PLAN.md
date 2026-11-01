@@ -143,7 +143,7 @@ ever publishes the USB protocol, or a volunteer documents it, they move to Tier 
 
 Skip any model whose only documentation forbids copying; mark it "needs engine, no usable source" in RIG_SUPPORT.md.
 
-## Tier D: odd devices (54 models)
+## Tier D: odd devices (54 models, 19 of them not applicable)
 
 SDR boards and dongles on USB or serial (SoftRock, FUNcube, Peaberry, FiFi-SDR, Elektor, QRP Labs, Malachite,
 SDRPlay), network drivers (FLRig, TRXManager, N3FJP, Airspy, Quisk, HiQSDR, DttSP), parallel-port devices (SDR-1000,
@@ -153,6 +153,18 @@ DDS-60), Video4Linux radios, Hamlib's dummy and NET rigctl entries, and Hamlib's
 - Network drivers that only forward to another program (FLRig, NET rigctl) get a pass-through transport, not an engine.
 - Parallel-port and Video4Linux hardware: document as unsupported unless a volunteer asks for it and tests it.
 - Done last; most value is in HPSDR and SDR dongles on Linux.
+
+Decisions (2026-10-31, Bruce): Hamlib entries that are not real radios are **not applicable** and are not implemented
+(radioctl has better virtual rigs of its own); `RIG_SUPPORT.md` counts them separately so that parity means every real
+radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matrix.py` holds the one-line reason of each):
+
+- Simulators: Hamlib Dummy (1) and Dummy No VFO (6).
+- Clients of another rig server or program: NET rigctl (2), FLRig (4), TRXManager (5), ACLog (8), SDR# and gpredict (9).
+- Software SDR or DSP programs: Quisk (10), DttSP IPC (23003) and UDP (23004); PowerSDR (2048), Thetis (2054), SDRConsole
+  (2056), SDRUno (2051) and PiHPSDR (2040) are programs that imitate a Kenwood CAT server, so a program speaking
+  TS-2000 or TS-480 CAT can already use those descriptions.
+- Kernel tuner cards: Video4Linux (26001) and Video4Linux2 (26002), reached only through the kernel's ioctl interface.
+- Parallel-port devices: FlexRadio SDR-1000 (23001) and the AmQRP DDS-60 (25006); radioctl has no parallel-port transport.
 
 ## Recommended order
 
