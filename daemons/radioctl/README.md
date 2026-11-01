@@ -148,10 +148,12 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-897`, `yaesu-ft-847`, `yaesu-ft-847uni`, `yaesu-ft-650`, `yaesu-ft-736r`, `yaesu-ft-818` | Operating manuals' CAT chapters The FT-897, FT-847, FT-847UNI, FT-650 and FT-736R files are from Hamlib 4.6.2 facts only (the FT-897 shares the FT-897D's CAT chapter); the last three are set-only. |
 | AOR receivers (ASCII `RF`/`MD`/`LM`) | `aor-ar8000`, `aor-ar8200`, `aor-ar8600`, `aor-ar5000`, `aor-ar5000a`, `aor-ar2700`, `aor-sr2200` | Hamlib 4.6.2 source (facts only) |
 | Uniden scanners (ASCII `RF`/`RM`/`SG`) | `uniden-bc245xlt`, `uniden-bc250d`, `uniden-bc780xlt`, `uniden-bc895xlt`, `uniden-bc898t` | Hamlib 4.6.2 source (facts only) |
+| Uniden digital scanners (`GLG`/`QSH`) | `uniden-bcd396t`, `uniden-bcd996t` | Uniden's remote command specification (facts only; manual-checked) |
 | JRC (ASCII `F`/`D`/`I`) | `jrc-nrd-525`, `jrc-nrd-535d`, `jrc-nrd-545`, `jrc-jst-145`, `jrc-jst-245` | Hamlib 4.6.2 source (facts only) |
 | Icom PCR (ASCII `K0`) | `icom-ic-pcr100`, `icom-ic-pcr1000`, `icom-ic-pcr1500`, `icom-ic-pcr2500` | Hamlib 4.6.2 source (facts only) |
 | Icom marine (`$PICOA`) | `icom-ic-m700pro`, `icom-ic-m710`, `icom-ic-m802`, `icom-ic-m803` | Hamlib 4.6.2 source (facts only) |
 | Rohde and Schwarz (ASCII `FREQ`/`DEM`) | `rs-esmc`, `rs-eb200` | Hamlib 4.6.2 source (facts only) |
+| Rohde and Schwarz HF (LF/CR blocks `F`/`I`, `*F`/`*I`) | `rs-ek895`, `rs-ek896` (operator manual, manual-checked), `rs-xk2100`, `rs-xk852` (Hamlib 4.6.2 source) | EK 895/896 manual chapter 2; Hamlib facts only |
 | OptoScan boards (CI-V at 0x80) | `optoscan-os535`, `optoscan-os456` | Hamlib 4.6.2 source (facts only) |
 | Yaesu legacy five-byte | `yaesu-ft-817`, `yaesu-ft-857d`, `yaesu-ft-897d`, `yaesu-ft-818` | Operating manuals' CAT chapters |
 | FlexRadio | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's SmartSDR API wiki |
@@ -1337,6 +1339,32 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_rs_dialect_decode] (radioctl-protocols) Rs dialect decode.
 - [@ANCHOR: radioctl:radioctl_rs_twin_new] (radioctl-protocols) The twin of a Rohde and Schwarz description.
 - [@ANCHOR: radioctl:radioctl_rs_twin_line] (radioctl-protocols) Rs twin line.
+- [@ANCHOR: radioctl:radioctl_rshf_engine] (radioctl-protocols) The engine for an EK 895, EK 896, XK 2100 or XK 852 description.
+- [@ANCHOR: radioctl:radioctl_rshf_handles] (radioctl-protocols) Rshf handles.
+- [@ANCHOR: radioctl:radioctl_rshf_style_of] (radioctl-protocols) The style of a description's dialect, `None` for any other.
+- [@ANCHOR: radioctl:radioctl_rshf_dialect_from_description] (radioctl-protocols) Rshf dialect from description.
+- [@ANCHOR: radioctl:radioctl_rshf_dialect_encode] (radioctl-protocols) Rshf dialect encode.
+- [@ANCHOR: radioctl:radioctl_rshf_dialect_status] (radioctl-protocols) Rshf dialect status.
+- [@ANCHOR: radioctl:radioctl_rshf_dialect_decode] (radioctl-protocols) Rshf dialect decode.
+- [@ANCHOR: radioctl:radioctl_rshf_number_after] (radioctl-protocols) The unsigned number that follows `tag` at the start of a reply line.
+- [@ANCHOR: radioctl:radioctl_rshf_tagged_digits] (radioctl-protocols) The `count` digits that follow the first `tag` anywhere in a status line.
+- [@ANCHOR: radioctl:radioctl_rshf_twin_new] (radioctl-protocols) The twin of an EK 895, EK 896, XK 2100 or XK 852 description.
+- [@ANCHOR: radioctl:radioctl_rshf_twin_reply] (radioctl-protocols) One answer line: LF, the text, CR.
+- [@ANCHOR: radioctl:radioctl_rshf_twin_status_line] (radioctl-protocols) The XK 852's status line, with its fields at the columns Hamlib reads them from
+- [@ANCHOR: radioctl:radioctl_rshf_twin_line] (radioctl-protocols) Rshf twin line.
+- [@ANCHOR: radioctl:radioctl_rshf_twin_xk852_line] (radioctl-protocols) One command line of the XK 852: a setting is answered with the status line.
+- [@ANCHOR: radioctl:radioctl_unidig_engine] (radioctl-protocols) The engine for a BCD396T or BCD996T description.
+- [@ANCHOR: radioctl:radioctl_unidig_handles] (radioctl-protocols) Unidig handles.
+- [@ANCHOR: radioctl:radioctl_unidig_dialect_from_description] (radioctl-protocols) Unidig dialect from description.
+- [@ANCHOR: radioctl:radioctl_unidig_dialect_encode] (radioctl-protocols) Unidig dialect encode.
+- [@ANCHOR: radioctl:radioctl_unidig_dialect_status] (radioctl-protocols) Unidig dialect status.
+- [@ANCHOR: radioctl:radioctl_unidig_dialect_decode] (radioctl-protocols) Unidig dialect decode.
+- [@ANCHOR: radioctl:radioctl_unidig_qsh] (radioctl-protocols) A `QSH` command line with only the frequency (eight digits) and/or the modulation filled in.
+- [@ANCHOR: radioctl:radioctl_unidig_frequency] (radioctl-protocols) A `GLG` frequency field: eight digits in 100 Hz, or a decimal number of megahertz.
+- [@ANCHOR: radioctl:radioctl_unidig_modulation] (radioctl-protocols) The radioctl mode of a modulation name; narrow FM and FM both read as [`Mode::Fm`].
+- [@ANCHOR: radioctl:radioctl_unidig_twin_new] (radioctl-protocols) The twin of a BCD396T or BCD996T description.
+- [@ANCHOR: radioctl:radioctl_unidig_twin_reply] (radioctl-protocols) One answer line, ended by CR only.
+- [@ANCHOR: radioctl:radioctl_unidig_twin_line] (radioctl-protocols) Unidig twin line.
 - [@ANCHOR: radioctl:radioctl_marine_mode_name] (radioctl-protocols) The name the radio uses for a mode, if the description has it.
 - [@ANCHOR: radioctl:radioctl_pcr_dialect_terminator] (radioctl-protocols) Pcr dialect terminator.
 - [@ANCHOR: radioctl:radioctl_receiver_dialect_status_default] (radioctl-protocols) Receiver dialect status default.

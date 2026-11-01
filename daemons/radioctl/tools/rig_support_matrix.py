@@ -40,6 +40,10 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "optoscan-os456": [3053],
     "optoscan-os535": [3052],
     "rs-eb200": [27002],
+    "rs-ek895": [27004],
+    "rs-ek896": [27004],
+    "rs-xk2100": [27003],
+    "rs-xk852": [27005],
     "rs-esmc": [27001],
     "icom-ic-m700pro": [30001],
     "icom-ic-m710": [30003],
@@ -59,6 +63,8 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "uniden-bc780xlt": [8001],
     "uniden-bc895xlt": [8003],
     "uniden-bc898t": [8012],
+    "uniden-bcd396t": [8010],
+    "uniden-bcd996t": [8011],
     "aor-ar2700": [5008],
     "aor-ar5000": [5004],
     "aor-ar5000a": [5014],
@@ -325,11 +331,11 @@ FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
 MODEL_ENGINES: dict[int, str] = {
     **{i: "aor" for i in (5001, 5002, 5004, 5008, 5013, 5014, 5016)},
     **{i: "civ" for i in (3052, 3053)},
-    **{i: "rs" for i in (27001, 27002)},
+    **{i: "rs" for i in (27001, 27002, 27003, 27004, 27005)},
     **{i: "icom_marine" for i in (30001, 30002, 30003, 30004)},
     **{i: "icom_pcr" for i in (4001, 4002, 4003, 4004)},
     **{i: "jrc" for i in (6001, 6002, 6005, 6006, 6007)},
-    **{i: "uniden" for i in (8001, 8002, 8003, 8006, 8012)},
+    **{i: "uniden" for i in (8001, 8002, 8003, 8006, 8010, 8011, 8012)},
 }
 
 # Manufacturers whose models (outside the families above) need a new engine: Tier C. Every other

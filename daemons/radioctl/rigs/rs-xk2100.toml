@@ -1,0 +1,91 @@
+# Rig description: Rohde&Schwarz XK2100 (rohde-schwarz protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (read for facts only: rigs/rs/xk2100.c, gp2000.c) and `rigctl -m 27003 --dump-caps` output; no manual for the XK 2100 could be found.
+# The engine and its gaps: crates/radioctl-protocols/src/rs_hf.rs. Hamlib lists this radio as a transceiver with PTT, but its PTT command is sent without the LF and CR framing every other command has,
+# so PTT is NOT encoded here; the radio is described as a receiver until a volunteer shows the transmit framing.
+# Hamlib lists: serial 9600..38400 baud, 7 data bits, even parity, 1 stop bit, no handshake (the source comment says the radio wants RTS on and RTS/CTS); receive 1.5 to 30 MHz.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
+
+[rig]
+id = "rs-xk2100"
+name = "Rohde&Schwarz XK2100"
+family = "receiver"
+
+[receiver]
+protocol = "rohde-schwarz"
+dialect = "xk2100"
+baud = 9600
+data_bits = 7
+parity = "E"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14100000
+mode = "usb"
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[modes]]
+mode = "usb"
+code = 2
+
+[[modes]]
+mode = "lsb"
+code = 3
+
+[[modes]]
+mode = "cw"
+code = 5
+
+[[modes]]
+mode = "fm"
+code = 9
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in `rigctl -m 27003 --dump-caps` (Hamlib 4.6.2)", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/gp2000.c (gp2000_transaction, gp2000_set_freq, gp2000_get_freq): commands framed LF ... CR, answers read up to CR", note = "The framing is the same LF/CR block framing the EK 895/896 manual documents. Facts only, no code copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/gp2000.c (gp2000_set_freq sends F<hz>,<hz>; gp2000_get_freq F? answered F<hz>; gp2000_set_mode I<n>; gp2000_get_mode I?)", note = "Hamlib sends the frequency twice, separated by a comma, on set; the reason is not stated. Facts only." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "receiver.line"
+provenance = { kind = "program-output", reference = "`rigctl -m 27003 --dump-caps` (Hamlib 4.6.2): Serial speed, data bits, parity, stop bits, handshake lines", note = "Hamlib's settings; the default recorded is 9600, the lowest of Hamlib's range." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 27003 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: a starting frequency and mode for a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/xk2100.c rig_caps, rigs/rs/gp2000.c (functions wired in)", note = "Receive-side operations only (frequency, mode). Hamlib also wires levels (AF, squelch), PTT and an identity read; they are not implemented. No signal reading exists in Hamlib's backend (get strength is not implemented)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/rs/gp2000.c gp2000_set_mode and gp2000_get_mode (AM 1, USB 2, LSB 3, CW 5, FM 9, packet USB 13, packet LSB 14)", note = "The two packet modes have no unambiguous radioctl mode and are not mapped." }
+verified = { state = "unverified" }

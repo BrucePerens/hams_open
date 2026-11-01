@@ -1097,6 +1097,66 @@ fn known_icom_batch_divergences(file: &str) -> Vec<&'static str> {
     }
 }
 
+// Tests [@ANCHOR: radioctl_rshf_dialect_encode]
+// Tests [@ANCHOR: radioctl_rshf_dialect_decode]
+// Tests [@ANCHOR: radioctl_rshf_twin_line]
+// Tests [@ANCHOR: radioctl_rshf_twin_xk852_line]
+#[test]
+fn the_rohde_schwarz_hf_files_against_hamlib_record_every_disagreement() {
+    // The EK 895 and 896 take only USB and LSB (modulation codes 15 and 16); the EK 895/6 is one
+    // Hamlib model (27004) for both files.
+    let sideband = vec![
+        Op::SetFrequency(Vfo::A, Hz(7_074_000)),
+        Op::GetFrequency(Vfo::A),
+        Op::SetMode(Mode::Usb),
+        Op::GetMode,
+        Op::SetMode(Mode::Lsb),
+        Op::GetMode,
+    ];
+    oracle_family(
+        &[("rs-ek895", 27004, 9600), ("rs-ek896", 27004, 9600)],
+        &sideband,
+        |_| Vec::new(),
+    );
+    oracle_family(
+        &[("rs-xk2100", 27003, 9600), ("rs-xk852", 27005, 9600)],
+        &hf_steps(),
+        |_| Vec::new(),
+    );
+}
+
+// Tests [@ANCHOR: radioctl_unidig_dialect_encode]
+// Tests [@ANCHOR: radioctl_unidig_dialect_decode]
+// Tests [@ANCHOR: radioctl_unidig_twin_line]
+#[test]
+fn the_uniden_digital_files_against_hamlib_record_every_disagreement() {
+    // Hamlib's frequency and mode functions for these scanners are stubs (uniden_digital.c), so
+    // every Hamlib step is refused while radioctl answers from the document's GLG and QSH.
+    let steps = vec![
+        Op::SetFrequency(Vfo::A, Hz(155_100_000)),
+        Op::GetFrequency(Vfo::A),
+        Op::SetMode(Mode::Am),
+        Op::GetMode,
+    ];
+    oracle_family(
+        &[
+            ("uniden-bcd396t", 8010, 9600),
+            ("uniden-bcd996t", 8011, 9600),
+        ],
+        &steps,
+        |_| {
+            vec![
+                "SetFrequency(A, Hz(155100000))",
+                "GetFrequency(A)",
+                "SetMode(Am)",
+                "GetMode",
+                "final freq_a",
+                "final mode",
+            ]
+        },
+    );
+}
+
 // Tests [@ANCHOR: radioctl_civ_engine_encode]
 // Tests [@ANCHOR: radioctl_civ_engine_decode]
 // Tests [@ANCHOR: radioctl_virtual_civ_dispatch]

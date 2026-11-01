@@ -74,7 +74,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
     // The only files that may hold `manual-checked` facts: those whose vendor manual was read
     // (see the facts' references, each with the manual's SHA-256). Nothing else is verified in
     // any way, and nothing is hardware-verified or transcript-checked.
-    const MANUAL_READ: [&str; 24] = [
+    const MANUAL_READ: &[&str] = &[
         "kenwood-ts-440s",
         "kenwood-ts-450s",
         "kenwood-ts-480",
@@ -99,6 +99,10 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "icom-ic-718",
         "icom-ic-746",
         "icom-ic-746pro",
+        "rs-ek895",
+        "rs-ek896",
+        "uniden-bcd396t",
+        "uniden-bcd996t",
     ];
     for loaded in load_all() {
         let summary = loaded.verification_summary();
