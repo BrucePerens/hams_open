@@ -388,6 +388,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
         Family::SerialVendor => None,
         // The receiver engines have no level commands yet.
         Family::Receiver => None,
+        // A USB device has no engine yet.
+        Family::UsbDevice => None,
         // SmartSDR levels are percentages (0-100) in the engine.
         Family::Flex => match level {
             Level::AfGain | Level::MicGain | Level::RfPower => Some((0, 100)),

@@ -164,6 +164,10 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
   (2056), SDRUno (2051) and PiHPSDR (2040) are programs that imitate a Kenwood CAT server, so a program speaking
   TS-2000 or TS-480 CAT can already use those descriptions.
 - Kernel tuner cards: Video4Linux (26001) and Video4Linux2 (26002), reached only through the kernel's ioctl interface.
+- USB boards and dongles (10 described, no engine): the Si570 kits (SoftRock AVR-USB, KTH PIC-USB, Peaberry V1 and V2, FA-SDR),
+  FiFi-SDR, the two FUNcube dongles, Elektor SDR-USB and the Digital World Traveller have `family = "usb-device"` descriptions
+  (USB ids, strings, multiplier; Hamlib 4.6.2 facts) but radioctl has no USB control or HID transport, so `engine_for`
+  refuses them. The transport and the per-protocol engines are the to-do `radioctl-usb-hid-transport` (hams_com `night_shift_todo/medium`).
 - Parallel-port devices: FlexRadio SDR-1000 (23001) and the AmQRP DDS-60 (25006); radioctl has no parallel-port transport.
 
 ## Recommended order

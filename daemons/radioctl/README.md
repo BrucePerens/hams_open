@@ -1269,6 +1269,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_level] (radioctl-protocols) `AGnnn`, `RGnnn`, `MGnnn`, `KSnnn`, `PCnnn`: a read when `arg` is empty, else a set inside the guide's range.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_name] (radioctl-core) The name used in rig description files.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_from_name] (radioctl-core) The protocol with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_usb] (radioctl-core) The USB-device parameters of a description file: protocol, USB ids, strings and multiplier.
+- [@ANCHOR: radioctl:radioctl_core_usbprotocol_name] (radioctl-core) The name of a USB protocol in rig description files.
+- [@ANCHOR: radioctl:radioctl_core_usbprotocol_from_name] (radioctl-core) The USB protocol with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_receiver] (radioctl-core) Core rigfile build receiver.
 - [@ANCHOR: radioctl:radioctl_receiver_engine_new] (radioctl-protocols) Builds the engine of a [`Family::Receiver`] description of protocol `protocol`.
 - [@ANCHOR: radioctl:radioctl_receiver_engine_split_lines] (radioctl-protocols) Takes every complete line out of the buffer: the text without line feeds and spaces at

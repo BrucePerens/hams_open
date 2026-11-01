@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use radioctl_core::description::{Family, KenwoodDialect, ReceiverProtocol, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
-use radioctl_core::error::RigError;
+use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::transcript::{Expect, Panel, Transcript};
 
 use crate::civ::CivEngine;
@@ -45,6 +45,15 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         Family::Hpsdr => Box::new(crate::hpsdr_net::HpsdrEngine::new(description.clone())?),
         Family::SerialVendor => crate::serial_vendor::engine_for(description)?,
         Family::Receiver => receiver_engine(description)?,
+        Family::UsbDevice => {
+            return Err(RigError::new(
+                ErrorKind::Unsupported,
+                format!(
+                    "{} is a USB device; radioctl has no USB control or HID transport yet",
+                    description.name
+                ),
+            ))
+        }
     })
 }
 

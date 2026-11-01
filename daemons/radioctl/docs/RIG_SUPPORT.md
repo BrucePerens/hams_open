@@ -10,16 +10,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **27**
-- Real radios (models less not applicable): **286**; with a radioctl description: **188** (193 description files), **65%** of the real radios
+- Real radios (models less not applicable): **286**; with a radioctl description: **198** (203 description files), **69%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 188 |
+| described | 198 |
 | engine only | 9 |
 | needs variant | 22 |
 | needs engine | 34 |
-| odd device | 33 |
+| odd device | 23 |
 | not applicable | 27 |
 
 | Verification level | Models |
@@ -36,7 +36,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 126 |
 | B | variants of an existing engine | 41 | 19 |
 | C | new engine | 83 | 41 |
-| D | odd device | 54 | 2 |
+| D | odd device | 54 | 12 |
 
 ### By family
 
@@ -49,7 +49,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | yaesu_newcat_ascii | A | yaesu | 15 | 15 | 0 |
 | kenwood_hh_ascii | B | kenwood_hh | 10 | 10 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
-| other_usb | D | - | 10 | 0 | 0 |
+| other_usb | D | - | 10 | 10 | 0 |
 | flexradio_network | A | flex | 9 | 1 | 0 |
 | other_network | C/D | - | 8 | 0 | 0 |
 | elecraft_ascii | A | elecraft | 7 | 6 | 0 |
@@ -101,14 +101,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | Hamlib id | Manufacturer | Model | Tier | Family | Engine | Description | Verification | Verified by | Status |
 |---:|---|---|---|---|---|---|---|---|---|
 | 29001 | ADAT www.adat.ch | ADT-200A | D | other_serial | - | - | unverified | - | odd device |
-| 25016 | AE9RB | Si570 Peaberry V1 | D | other_usb | - | - | unverified | - | odd device |
-| 25017 | AE9RB | Si570 Peaberry V2 | D | other_usb | - | - | unverified | - | odd device |
+| 25016 | AE9RB | Si570 Peaberry V1 | D | other_usb | - | `ae9rb-peaberry-v1` | unverified | - | described |
+| 25017 | AE9RB | Si570 Peaberry V2 | D | other_usb | - | `ae9rb-peaberry-v2` | unverified | - | described |
 | 9 | Airspy | SDR#/gpredict | D | other_network | - | - | unverified | - | not applicable |
 | 17001 | Alinco | DX-77 | C | other_serial | - | `alinco-dx-77` | unverified | - | described |
 | 17002 | Alinco | DX-SR8 | C | other_serial | - | `alinco-dx-sr8` | unverified | - | described |
 | 25006 | AmQRP | DDS-60 | D | other_parallel | - | - | unverified | - | not applicable |
-| 25013 | AMSAT-UK | FUNcube Dongle | D | other_usb | - | - | unverified | - | odd device |
-| 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | - | - | unverified | - | odd device |
+| 25013 | AMSAT-UK | FUNcube Dongle | D | other_usb | - | `amsat-uk-funcube-dongle` | unverified | - | described |
+| 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | - | `amsat-uk-funcube-dongle-pro-plus` | unverified | - | described |
 | 37001 | AnyTone | D578A | D | other_serial | - | - | unverified | - | odd device |
 | 5008 | AOR | AR2700 | C | other_serial | aor | `aor-ar2700` | unverified | - | described |
 | 5006 | AOR | AR3000A | C | other_serial | - | - | unverified | - | needs engine |
@@ -127,7 +127,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2053 | BG2FX | FX4/C/CR/L | D | other_serial | - | - | unverified | - | odd device |
 | 34001 | CODAN | Envoy | C | other_serial | - | - | unverified | - | needs engine |
 | 34002 | CODAN | NGT | C | other_serial | - | - | unverified | - | needs engine |
-| 25003 | Coding Technologies | Digital World Traveller | D | other_usb | - | - | unverified | - | odd device |
+| 25003 | Coding Technologies | Digital World Traveller | D | other_usb | - | `digital-world-traveller` | unverified | - | described |
 | 39001 | Commradio | CTX-10 | D | other_serial | - | - | unverified | - | odd device |
 | 2055 | DL2MAN | (tr)uSDX | D | other_serial | - | - | unverified | - | odd device |
 | 31002 | Dorji | DRA818U | D | other_serial | - | - | unverified | - | odd device |
@@ -145,8 +145,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | unverified | - | described |
 | 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
 | 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | odd device |
-| 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | - | unverified | - | odd device |
-| 25012 | FiFi | FiFi-SDR | D | other_usb | - | - | unverified | - | odd device |
+| 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | `elektor-sdr-usb` | unverified | - | described |
+| 25012 | FiFi | FiFi-SDR | D | other_usb | - | `fifi-sdr` | unverified | - | described |
 | 2036 | FlexRadio | 6xxx | A | flexradio_network | flex | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | unverified | - | described |
 | 23001 | FlexRadio | SDR-1000 | D | other_parallel | - | - | unverified | - | not applicable |
 | 23005 | FlexRadio | SmartSDR Slice A | A | flexradio_network | flex | - | unverified | - | engine only |
@@ -159,7 +159,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 23012 | FlexRadio | SmartSDR Slice H | A | flexradio_network | flex | - | unverified | - | engine only |
 | 2048 | FlexRadio/Apache | PowerSDR | D | other_serial | - | - | unverified | - | not applicable |
 | 4 | FLRig | - | D | other_network | - | - | unverified | - | not applicable |
-| 25015 | Funkamateur | FA-SDR | D | other_usb | - | - | unverified | - | odd device |
+| 25015 | Funkamateur | FA-SDR | D | other_usb | - | `funkamateur-fa-sdr` | unverified | - | described |
 | 35001 | GOMSPACE | GS100 | D | other_serial | - | - | unverified | - | odd device |
 | 1052 | Guohe | PMR-171 | C | other_serial | - | - | unverified | - | needs engine |
 | 1051 | Guohe | Q900 | C | other_serial | - | - | unverified | - | needs engine |
@@ -291,7 +291,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | `kenwood-ts-950s` | unverified | - | described |
 | 2013 | Kenwood | TS-950SDX | A | kenwood_ascii | kenwood | `kenwood-ts-950sdx` | unverified | - | described |
 | 2039 | Kenwood | TS-990S | A | kenwood_ascii | kenwood | `kenwood-ts-990s` | manual-checked | - | described |
-| 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | - | - | unverified | - | odd device |
+| 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | - | `kth-si570-pic-usb` | unverified | - | described |
 | 2050 | Lab599 | TX-500 | C | other_serial | - | - | unverified | - | needs engine |
 | 10004 | Lowe | HF-235 | C | other_serial | - | - | unverified | - | needs engine |
 | 1045 | M0NKA | mcHF QRP | D | other_serial | - | - | unverified | - | odd device |
@@ -326,7 +326,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2032 | SigFox | Transfox | D | other_serial | - | - | unverified | - | odd device |
 | 14004 | Skanti | TRP 8255 S R | C | other_serial | - | - | unverified | - | needs engine |
 | 14002 | Skanti | TRP8000 | C | other_serial | - | - | unverified | - | needs engine |
-| 25009 | SoftRock | Si570 AVR-USB | D | other_usb | - | - | unverified | - | odd device |
+| 25009 | SoftRock | Si570 AVR-USB | D | other_usb | - | `softrock-si570-avr-usb` | unverified | - | described |
 | 22001 | TAPR | DSP-10 | D | other_serial | - | - | unverified | - | odd device |
 | 3064 | Ten-Tec | Delta II | C | other_serial | - | `tentec-delta-ii` | unverified | - | described |
 | 3051 | Ten-Tec | Omni VI Plus | C | other_serial | - | `tentec-omni-vi-plus` | unverified | - | described |

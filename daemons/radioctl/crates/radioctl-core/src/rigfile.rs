@@ -28,8 +28,8 @@ use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
     KenwoodDialect, KenwoodHhParams, KenwoodParams, LevelParams, ReceiverParams, ReceiverProtocol,
-    RigDescription, ScopeParams, Timing, VendorParams, VendorProtocol, YaesuLegacyParams,
-    YaesuParams,
+    RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol, VendorParams, VendorProtocol,
+    YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -133,11 +133,14 @@ struct FileDoc {
     hpsdr: Option<HpsdrSection>,
     vendor: Option<VendorSection>,
     receiver: Option<ReceiverSection>,
+    #[serde(default)]
+    usb: Option<UsbSection>,
     scope: Option<ScopeSection>,
     levels: Option<LevelsSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
     capabilities: Vec<String>,
+    #[serde(default)]
     modes: Vec<ModeEntry>,
     facts: Vec<FactEntry>,
 }
@@ -245,6 +248,17 @@ struct HpsdrSection {
 struct VendorSection {
     protocol: String,
     dialect: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UsbSection {
+    protocol: String,
+    vendor_id: u16,
+    product_id: u16,
+    manufacturer: String,
+    product: String,
+    multiplier: u8,
 }
 
 #[derive(Deserialize)]
@@ -380,6 +394,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "kenwood-hh" => Family::KenwoodHh,
         "serial-vendor" => Family::SerialVendor,
         "receiver" => Family::Receiver,
+        "usb-device" => Family::UsbDevice,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
     let others = doc.civ.is_some()
@@ -390,6 +405,9 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         || doc.flex.is_some()
         || doc.hpsdr.is_some()
         || doc.kenwood_hh.is_some();
+    if doc.usb.is_some() != (family == Family::UsbDevice) {
+        return Err(bad("the family block does not match rig.family"));
+    }
     if doc.receiver.is_some() != (family == Family::Receiver) {
         return Err(bad("the family block does not match rig.family"));
     }
@@ -414,6 +432,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         (Family::KenwoodHh, None, None, None, None, None)
             if doc.kenwood_hh.is_some() && doc.flex.is_none() && doc.hpsdr.is_none() => {}
         (Family::SerialVendor, ..) if doc.vendor.is_some() && !others => {}
+        (Family::UsbDevice, None, None, None, None, None)
+            if doc.flex.is_none()
+                && doc.hpsdr.is_none()
+                && doc.kenwood_hh.is_none()
+                && doc.vendor.is_none() => {}
         (Family::Receiver, None, None, None, None, None)
             if doc.flex.is_none()
                 && doc.hpsdr.is_none()
@@ -513,6 +536,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         })
         .transpose()?;
     let receiver = doc.receiver.as_ref().map(build_receiver).transpose()?;
+    let usb = doc.usb.as_ref().map(build_usb).transpose()?;
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
         let capability = Capability::from_name(name)
@@ -541,13 +565,32 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         hpsdr,
         vendor,
         receiver,
+        usb,
         scope,
         levels,
         capabilities: CapabilitySet::of(&capabilities),
-        mode_codes: build_mode_codes(&doc.modes)?,
+        // A USB device has no engine yet, so no mode has a wire code.
+        mode_codes: build_mode_codes(&doc.modes, family == Family::UsbDevice)?,
         timing: check_timing(&doc.timing)?,
         default_frequency: Hz(doc.defaults.frequency_hz),
         default_mode,
+    })
+}
+
+// [@ANCHOR: radioctl_core_rigfile_build_usb]
+fn build_usb(u: &UsbSection) -> Result<UsbParams, RigError> {
+    let protocol = UsbProtocol::from_name(&u.protocol)
+        .ok_or_else(|| bad(format!("unknown usb.protocol {:?}", u.protocol)))?;
+    if !matches!(u.multiplier, 0 | 1 | 2 | 4 | 8) {
+        return Err(bad("usb.multiplier must be 0, 1, 2, 4 or 8"));
+    }
+    Ok(UsbParams {
+        protocol,
+        vendor_id: u.vendor_id,
+        product_id: u.product_id,
+        manufacturer: u.manufacturer.clone(),
+        product: u.product.clone(),
+        multiplier: u.multiplier,
     })
 }
 
@@ -698,7 +741,10 @@ fn build_scope(
 }
 
 // [@ANCHOR: radioctl_core_rigfile_build_mode_codes]
-fn build_mode_codes(entries: &[ModeEntry]) -> Result<Vec<(Mode, u8)>, RigError> {
+fn build_mode_codes(
+    entries: &[ModeEntry],
+    may_be_empty: bool,
+) -> Result<Vec<(Mode, u8)>, RigError> {
     let mut out: Vec<(Mode, u8)> = Vec::new();
     for entry in entries {
         let mode = Mode::from_name(&entry.mode)
@@ -731,7 +777,7 @@ fn build_mode_codes(entries: &[ModeEntry]) -> Result<Vec<(Mode, u8)>, RigError> 
         }
         out.push((mode, code));
     }
-    if out.is_empty() {
+    if out.is_empty() && !may_be_empty {
         return Err(bad("a description needs at least one mode code"));
     }
     Ok(out)
@@ -906,6 +952,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         if receiver.address.is_some() {
             keys.push("receiver.address".to_string());
         }
+    }
+    if description.usb.is_some() {
+        keys.extend(["usb.protocol", "usb.ids"].map(String::from));
     }
     if description.hpsdr.is_some() {
         keys.extend(["hpsdr.model", "hpsdr.protocol", "hpsdr.anan10"].map(String::from));
