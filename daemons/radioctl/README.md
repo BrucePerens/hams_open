@@ -41,6 +41,7 @@ daemons/radioctl/
   docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md)
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
   tools/rig_support_matrix.py   writes docs/RIG_SUPPORT.md (Hamlib models vs. descriptions vs. verification)
+  tools/wire_to_transcript.py   turns a bench_console --wire capture and its --log into a transcript fixture
   data/hamlib-<version>/  generated capability_matrix.json and HAMLIB_DIFFERENCES.md
 ```
 
@@ -1477,6 +1478,15 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_support_render] (tools) The RIG_SUPPORT.md text.
 - [@ANCHOR: radioctl:radioctl_support_generate] (tools) The Markdown for the repository as it is now.
 - [@ANCHOR: radioctl:radioctl_support_main] (tools) Writes docs/RIG_SUPPORT.md or checks it with --check.
+- [@ANCHOR: radioctl:radioctl_wire_parse_wire] (tools) Parses the `SECONDS tx|rx HEX` lines of a bench_console `--wire` file.
+- [@ANCHOR: radioctl:radioctl_wire_parse_log] (tools) Parses the commands and result lines of a `--log` file.
+- [@ANCHOR: radioctl:radioctl_wire_exchanges] (tools) Pairs each `tx` frame with the `rx` bytes after it; `rx` before any `tx` is unsolicited.
+- [@ANCHOR: radioctl:radioctl_wire_op_of] (tools) The transcript `op` for a console command, or none.
+- [@ANCHOR: radioctl:radioctl_wire_expect_of] (tools) The transcript `expect` for a console result line, or none.
+- [@ANCHOR: radioctl:radioctl_wire_redact] (tools) Zeroes given byte strings in a frame (serial numbers, addresses).
+- [@ANCHOR: radioctl:radioctl_wire_toml_text] (tools) A TOML string for an ASCII frame, or none for binary.
+- [@ANCHOR: radioctl:radioctl_wire_convert] (tools) The transcript TOML for one capture; polls and unsolicited frames become comments.
+- [@ANCHOR: radioctl:radioctl_wire_main] (tools) Command line of wire_to_transcript.py.
 - [@ANCHOR: radioctl:radioctld_rigs_service_config] (radioctld) The per-rig service settings from the configuration.
 - [@ANCHOR: radioctl:radioctld_rigs_build_rig] (radioctld) Brings up one rig on `runtime`: engine, transport, actor, service. The transmit gate is
 - [@ANCHOR: radioctl:radioctld_rigs_serial_config] (radioctld) The serial configuration of a rig at a rate: 8N1, the configured line handling, one open attempt; the baud probe and the real link open the port the same way.
