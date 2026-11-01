@@ -26,6 +26,7 @@ Description: Lenovo Yoga C940-14IIL (81Q9) hardware support for Debian
  .
  The settings are applied only when the DMI product version is
  "Lenovo Yoga C940-14IIL".
+
 Package: lenovo-yoga-c940-14iil-windows-vm
 Architecture: all
 Depends: qemu-system-x86, qemu-system-modules-spice, qemu-utils, libvirt-daemon-system, libvirt-clients,
