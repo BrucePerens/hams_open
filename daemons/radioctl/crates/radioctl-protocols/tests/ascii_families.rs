@@ -26,7 +26,7 @@ const NOW: Duration = Duration::from_secs(10);
 /// Description id, the number the model answers to `ID;` and the digits of its frequency fields
 /// (Yaesu only; 0 elsewhere). A second, independent copy of the numbers in each file: a typo in
 /// either shows up here. The sources are named in each file's facts.
-const BATCH: [(&str, u16, u8); 29] = [
+const BATCH: [(&str, u16, u8); 32] = [
     ("yaesu-ft-450", 241, 8),
     ("yaesu-ft-450d", 244, 8),
     ("yaesu-ft-950", 310, 8),
@@ -56,6 +56,9 @@ const BATCH: [(&str, u16, u8); 29] = [
     ("kenwood-ts-940s", 1, 0),
     ("kenwood-ts-950s", 8, 0),
     ("kenwood-ts-950sdx", 12, 0),
+    ("kenwood-ts-930", 0, 0),
+    ("elecraft-k2", 17, 0),
+    ("yaesu-ftdx-9000-old", 101, 8),
 ];
 
 /// The ASCII descriptions in `rigs/` that this test drives (the TS-890S dialect has its own
@@ -272,9 +275,12 @@ fn the_batch_ids_and_frequency_widths_match_the_sources_and_no_two_files_share_a
         if let Some(yaesu) = &desc.yaesu {
             assert_eq!(yaesu.frequency_digits, digits, "{id}");
         }
-        // The TS-680S has no identify: Hamlib's number for it is a guess (see its file).
+        // The TS-680S has no identify: Hamlib's number for it is a guess (see its file); the
+        // TS-930 has no known ID at all (0 is a placeholder).
         assert!(
-            desc.capabilities.has(Capability::Identify) || id == "kenwood-ts-680s",
+            desc.capabilities.has(Capability::Identify)
+                || id == "kenwood-ts-680s"
+                || id == "kenwood-ts-930",
             "{id}"
         );
     }

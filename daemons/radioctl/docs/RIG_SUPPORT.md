@@ -9,13 +9,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **181** (186 description files)
+- With a radioctl description: **186** (191 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 181 |
-| engine only | 14 |
+| described | 186 |
+| engine only | 9 |
 | needs variant | 22 |
 | needs engine | 34 |
 | odd device | 54 |
@@ -32,7 +32,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Tier | Meaning | Models | Described |
 |---|---|---:|---:|
-| A | data only on an existing engine | 135 | 121 |
+| A | data only on an existing engine | 135 | 126 |
 | B | variants of an existing engine | 41 | 19 |
 | C | new engine | 83 | 41 |
 | D | odd device | 54 | 0 |
@@ -44,14 +44,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_serial | C/D | aor | 94 | 33 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 9 | 0 |
-| kenwood_ascii | A | kenwood | 25 | 22 | 0 |
-| yaesu_newcat_ascii | A | yaesu | 15 | 14 | 0 |
+| kenwood_ascii | A | kenwood | 25 | 25 | 0 |
+| yaesu_newcat_ascii | A | yaesu | 15 | 15 | 0 |
 | kenwood_hh_ascii | B | kenwood_hh | 10 | 10 | 0 |
 | other_device_driver | C/D | - | 10 | 0 | 0 |
 | other_usb | D | - | 10 | 0 | 0 |
 | flexradio_network | A | flex | 9 | 1 | 0 |
 | other_network | C/D | - | 8 | 0 | 0 |
-| elecraft_ascii | A | elecraft | 7 | 5 | 0 |
+| elecraft_ascii | A | elecraft | 7 | 6 | 0 |
 | icom_marine | C | icom_marine | 4 | 4 | 0 |
 | icom_pcr_ascii | C | icom_pcr | 4 | 4 | 0 |
 | other_parallel | D | - | 2 | 0 | 0 |
@@ -117,7 +117,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 23003 | DTTS Microwave Society | DttSP IPC | D | other_device_driver | - | - | unverified | - | odd device |
 | 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | odd device |
 | 33001 | ELAD | FDM-DUO | D | other_serial | - | - | unverified | - | odd device |
-| 2021 | Elecraft | K2 | A | elecraft_ascii | elecraft | - | unverified | - | engine only |
+| 2021 | Elecraft | K2 | A | elecraft_ascii | elecraft | `elecraft-k2` | unverified | - | described |
 | 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | `elecraft-k3` | unverified | - | described |
 | 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | `elecraft-k3s` | unverified | - | described |
 | 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | `elecraft-k4` | unverified | - | described |
@@ -236,7 +236,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 6006 | JRC | NRD-535D | C | other_serial | jrc | `jrc-nrd-535d` | unverified | - | described |
 | 6007 | JRC | NRD-545 DSP | C | other_serial | jrc | `jrc-nrd-545` | unverified | - | described |
 | 18001 | Kachina | 505DSP | C | other_serial | - | - | unverified | - | needs engine |
-| 2015 | Kenwood | R-5000 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2015 | Kenwood | R-5000 | A | kenwood_ascii | kenwood | `kenwood-r-5000` | unverified | - | described |
 | 2033 | Kenwood | TH-D72A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d72a` | unverified | - | described |
 | 2042 | Kenwood | TH-D74 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d74` | unverified | - | described |
 | 2017 | Kenwood | TH-D7A | B | kenwood_hh_ascii | kenwood_hh | `kenwood-th-d7a` | unverified | - | described |
@@ -247,7 +247,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2034 | Kenwood | TM-D710(G) | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-d710` | unverified | - | described |
 | 2027 | Kenwood | TM-V7 | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-v7` | unverified | - | described |
 | 2035 | Kenwood | TM-V71(A) | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-v71` | unverified | - | described |
-| 2030 | Kenwood | TRC-80 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2030 | Kenwood | TRC-80 | A | kenwood_ascii | kenwood | `kenwood-trc-80` | unverified | - | described |
 | 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | `kenwood-ts-140s` | unverified | - | described |
 | 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
 | 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | `kenwood-ts-440s` | manual-checked | - | described |
@@ -266,7 +266,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2009 | Kenwood | TS-850 | A | kenwood_ascii | kenwood | `kenwood-ts-850` | unverified | - | described |
 | 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | `kenwood-ts-870s` | manual-checked | - | described |
 | 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | unverified | - | described |
-| 2022 | Kenwood | TS-930 | A | kenwood_ascii | kenwood | - | unverified | - | engine only |
+| 2022 | Kenwood | TS-930 | A | kenwood_ascii | kenwood | `kenwood-ts-930` | unverified | - | described |
 | 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | `kenwood-ts-940s` | unverified | - | described |
 | 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | `kenwood-ts-950s` | unverified | - | described |
 | 2013 | Kenwood | TS-950SDX | A | kenwood_ascii | kenwood | `kenwood-ts-950sdx` | unverified | - | described |
@@ -389,7 +389,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1037 | Yaesu | FTDX-3000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-3000` | unverified | - | described |
 | 1032 | Yaesu | FTDX-5000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-5000` | unverified | - | described |
 | 1030 | Yaesu | FTDX-9000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000` | unverified | - | described |
-| 1050 | Yaesu | FTDX-9000 Old | A | yaesu_newcat_ascii | yaesu | - | unverified | - | engine only |
+| 1050 | Yaesu | FTDX-9000 Old | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000-old` | unverified | - | described |
 | 1025 | Yaesu | MARK-V Field FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1004 | Yaesu | MARK-V FT-1000MP | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |
 | 1026 | Yaesu | VR-5000 | B | yaesu_legacy | yaesu_legacy | - | unverified | - | needs variant |

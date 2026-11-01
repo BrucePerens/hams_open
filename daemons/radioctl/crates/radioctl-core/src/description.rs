@@ -217,6 +217,13 @@ pub enum KenwoodDialect {
     /// `SM0`, `AI2`, but the mode is `OM0` (read) and `OM0<m>` (set), there is no `MD`, `FR`, `FT` or
     /// transmit state in `IF`, and the sub band is a second receiver and not a VFO B.
     Ts990,
+    /// The R-5000 set (Hamlib's IC-10 backend, no Kenwood document read): the TS-440S set with an
+    /// `IF` answer five characters shorter (30 characters between `IF` and `;`: the first
+    /// offset field is absent), split by `FN` and `SP`.
+    R5000,
+    /// The TRC-80 set (Hamlib's `kenwood_get_freq_if`): the classic set, but the frequency is read
+    /// from `IF` and not from `FA`.
+    Trc80,
 }
 
 impl KenwoodDialect {
@@ -229,6 +236,8 @@ impl KenwoodDialect {
             KenwoodDialect::Ts440 => "ts440",
             KenwoodDialect::Ts450 => "ts450",
             KenwoodDialect::Ts990 => "ts990",
+            KenwoodDialect::R5000 => "r5000",
+            KenwoodDialect::Trc80 => "trc80",
         }
     }
 
@@ -241,6 +250,8 @@ impl KenwoodDialect {
             "ts440" => Some(KenwoodDialect::Ts440),
             "ts450" => Some(KenwoodDialect::Ts450),
             "ts990" => Some(KenwoodDialect::Ts990),
+            "r5000" => Some(KenwoodDialect::R5000),
+            "trc80" => Some(KenwoodDialect::Trc80),
             _ => None,
         }
     }
@@ -693,6 +704,8 @@ mod tests {
             KenwoodDialect::Ts440,
             KenwoodDialect::Ts450,
             KenwoodDialect::Ts990,
+            KenwoodDialect::R5000,
+            KenwoodDialect::Trc80,
         ] {
             assert_eq!(KenwoodDialect::from_name(d.name()), Some(d));
         }

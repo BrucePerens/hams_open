@@ -1,0 +1,73 @@
+# Rig description: Elecraft K2 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# EVERYTHING HERE IS UNVERIFIED: written from public text, never run against a radio.
+# The K2 Programmer's Reference itself was not found; its command reference as reproduced in the KIO2 manual (page 7) gives ID017, an IF answer of about 38 characters
+# with the K3 field order, and the K2 meta-command `K2n;` (K20 normal, K21 RTTY reported as LSB/USB, K22 extended, K23 extended without RTTY). radioctl sends neither K2n nor AI.
+# The K3 Programmer's Reference (Rev. G5) says the K3 command set is a superset of the K2's; frequency (11 digits), mode digits and TX/RX are taken from it.
+# Hamlib lists the K2 at 4800 baud 8N2 with a 2000 ms timeout (band changes can take 500 ms). The earlier plan note that the K2 answers "a shorter IF" is not supported by the page read.
+# Not claimed: split, RIT/XIT, levels, signal and VFO B (K2 forms not read); the engine's K3 forms for them are unproven on the K2.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "identify"]
+
+[rig]
+id = "elecraft-k2"
+name = "Elecraft K2"
+family = "elecraft-ascii"
+
+[elecraft]
+model_id = 17
+
+[timing]
+timeout_ms = 2000
+retries = 3
+inter_command_ms = 100
+
+[defaults]
+frequency_hz = 14060000
+mode = "cw"
+
+[[modes]]
+mode = "lsb"
+code = "1"
+
+[[modes]]
+mode = "usb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "cw-r"
+code = "7"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "Elecraft KIO2 / K2 manual, command reference, page 7 of 10 as hosted at https://www.manualsdir.com/manuals/636109/elecraft-kio2-k2.html?page=7 (IF, ID, K2 meta-command, GT, KS, KY); read as web text, not downloaded; no sha256", note = "The id and display name are our own labels." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "elecraft.model_id"
+provenance = { kind = "manual", reference = "Elecraft KIO2 / K2 manual, command reference, page 7 of 10 as hosted at https://www.manualsdir.com/manuals/636109/elecraft-kio2-k2.html?page=7 (IF, ID, K2 meta-command, GT, KS, KY); read as web text, not downloaded; no sha256", note = "ID returns ID017; for compatibility with older software (the K3 family answers the same)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/k2.c rig_caps and k2_priv_caps", note = "Timeout 2000 ms, 10 retries (capped at 3 here), 100 ms between commands, 4800 baud 8N2. Hamlib settings, not a measurement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "manual", reference = "Elecraft K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (sha256 015b60c1b5f44346247a00375a23174012ce4da66a6a27eaa00c00c20877f95d): FA and FB p. 11, MD p. 16, TX p. 28, RX p. 23", note = "Only the starting state of a virtual rig." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/k2.c rig_caps and k2_priv_caps", note = "Hamlib implements frequency, VFO, mode, PTT, levels, RIT/XIT and memory for the K2; only the commands the K3 Programmer's Reference and the KIO2 page give (FA, MD, TX, RX, ID) are claimed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/k2.c rig_caps and k2_priv_caps", note = "K2_MODES: CW, CW-R, SSB, PKTLSB, PKTUSB. Mode digits follow the K3 Programmer's Reference MD (1 LSB, 2 USB, 3 CW, 7 CW-REV); the K2 data modes are not claimed (their digits on the K2 are not stated in the sources read)." }
+verified = { state = "unverified" }
+

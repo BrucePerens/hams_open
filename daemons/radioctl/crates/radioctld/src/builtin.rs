@@ -94,9 +94,11 @@ mod tests {
     fn a_directory_and_the_embedded_set_give_the_same_descriptions() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs");
         let mut from_dir = load_texts(&RigSource::Dir(dir)).expect("dir");
-        from_dir.sort();
+        // By text, not by label: a path label (`.../x.toml`) and an embedded label (`embedded:x`)
+        // order differently when one id is a prefix of another (`x-9000` and `x-9000-old`).
+        from_dir.sort_by(|a, b| a.1.cmp(&b.1));
         let mut embedded = load_texts(&RigSource::Embedded).expect("embedded");
-        embedded.sort();
+        embedded.sort_by(|a, b| a.1.cmp(&b.1));
         assert_eq!(from_dir.len(), embedded.len());
         assert!(from_dir.iter().zip(&embedded).all(|(d, e)| d.1 == e.1));
         assert!(load_texts(&RigSource::Dir("/nonexistent-rigs".into())).is_err());

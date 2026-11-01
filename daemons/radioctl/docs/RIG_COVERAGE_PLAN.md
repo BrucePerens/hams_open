@@ -78,10 +78,8 @@ Left, with the reason:
 
 | Model (Hamlib id) | What is needed |
 |---|---|
-| R-5000 (2015) | Hamlib's IC-10 dialect with an `IF` of 32 characters; the TS-440S is done as `kenwood.dialect = "ts440"` (its IC-10 manual shows a 38-character `IF`, not Hamlib's 37) and the R-5000 needs a twin |
-| TS-930 (2022) | Hamlib has no `ID` for it (the number is unknown), so the description cannot be written honestly; needs a volunteer's `ID;` answer |
+| (done 2026-10-31, Hamlib facts, unverified) | R-5000 (`kenwood.dialect = "r5000"`: IC-10 set, an IF of 30 characters after IF, five fewer than the TS-440S: the position of the missing field is inferred), TRC-80 (`"trc80"`: the frequency is read from IF; Hamlib reads 12 characters after IF so it disagrees with the virtual rig, pinned), TS-930 (classic set, no known ID: `model_id = 0` is a placeholder and identify is not claimed), Elecraft K2 (K3 command forms for frequency, mode and TX/RX, ID017 from the KIO2 manual page), Yaesu FTDX-9000 Old (same data as the FTDX-9000; Hamlib's ID check rejects 0101, pinned) |
 | TS-990S (2039) | Described from its PC command reference (`kenwood.dialect = "ts990"`: main band only, mode as `OM0`, no split, PTT read or levels). Open: the sub receiver as a second rig, the levels (band digits, other ranges) and the LAN stream (`##CN`, `##ID`), unverified |
-| TRC-80 (2030) | a transceiver module for a commercial radio; Hamlib reads its frequency from `IF` (`kenwood_get_freq_if`), a different path from the other models; needs a guide or a volunteer |
 | Levels, signal and meters on the older models (all but the TS-480) | the per-model AG/RG/PC/KS/SM forms. The TS-870S manual was read: AGnnn, RGnnn, SMnnnn, KS 001-100, PC 010-100, parameterless RU/RD (a TS-870S dialect of the engine, or per-description level ranges, would carry these). The TS-480's RG is 000-100 (pinned). Manuals for the rest are in `~/manuals/kenwood/` but their command tables are scanned images not yet read |
 | The 10 TH/TM handhelds (`kenwood_hh_ascii`, Tier B) | done: engine `kenwood_hh` (CR-terminated, no `IF`; dialects `th`, `tm710`, `th72`, `th74`), 10 files from Hamlib facts, all unverified. Open: the `TC 1` PC-control entry named in the work brief (in none of the sources read, so not sent), band switching (`BC`), split, levels, memories, narrow FM and DV/DR modes |
 
@@ -93,9 +91,7 @@ Left, with the reason:
 
 | Model (Hamlib id) | What is needed |
 |---|---|
-| Yaesu FTDX-9000 Old (1050) | Hamlib's separate model for older firmware; its ID is not in the FTDX9000 guide. Needs a volunteer's `ID;` answer |
-| Elecraft K2 (2021) | the K2 answers a shorter `IF`/`MD` set (K2 Owner's Manual appendix); needs a K2 dialect in `elecraft.rs` |
-| Elecraft XG3 (2038) | a signal source, not a transceiver: no frequency/mode commands of the K3 family; needs its own engine or a note as "not a rig" |
+| Elecraft XG3 (2038) | a signal source with its own single-letter command set (XG3 owner's manual, page 18 on): needs its own engine |
 | Levels on the FT-450D, FT-950, FT-2000, FTDX-5000, FTDX-9000 (MG and PC 0-255) and FT-891 (RG 0-30) | per-model level ranges in the Yaesu engine (the table is the FT-991A's) |
 | Split on the FT-891 (`ST`), FT-710 and the dual-receiver Yaesus (`FT` selects a band) | `ST` and band-transmitter forms in the Yaesu engine |
 | XIT/RIT on the FT-450, FT-891, FT-710 (`CF`, no `RT`/`XT`) | the `CF` clarifier command in the Yaesu engine |

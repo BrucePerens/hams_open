@@ -19,10 +19,12 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_ts440_is]
     /// True when this rig speaks the TS-440S or the TS-450S/TS-690S dialect.
     pub(super) fn is_ts440(&self) -> bool {
-        self.desc
-            .kenwood
-            .as_ref()
-            .is_some_and(|k| matches!(k.dialect, KenwoodDialect::Ts440 | KenwoodDialect::Ts450))
+        self.desc.kenwood.as_ref().is_some_and(|k| {
+            matches!(
+                k.dialect,
+                KenwoodDialect::Ts440 | KenwoodDialect::Ts450 | KenwoodDialect::R5000
+            )
+        })
     }
 
     // [@ANCHOR: radioctl_virtual_ts440_is_fn_sp]
@@ -31,7 +33,7 @@ impl VirtualRig {
         self.desc
             .kenwood
             .as_ref()
-            .is_some_and(|k| k.dialect == KenwoodDialect::Ts440)
+            .is_some_and(|k| matches!(k.dialect, KenwoodDialect::Ts440 | KenwoodDialect::R5000))
     }
 
     // [@ANCHOR: radioctl_virtual_ts440_command]
