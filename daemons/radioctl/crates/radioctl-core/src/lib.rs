@@ -27,3 +27,8 @@ pub mod transport;
 pub mod txstate;
 pub mod units;
 pub mod usb;
+pub mod usb_device;
+#[cfg(feature = "usb")]
+pub mod usb_libusb;
+pub mod usb_link;
+pub mod usb_wire;

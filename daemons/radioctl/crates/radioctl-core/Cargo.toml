@@ -14,6 +14,10 @@ workspace = true
 # Convenience constructor that builds and owns a small tokio runtime. For radioctld and the C ABI
 # only; never on by default, the library otherwise runs on a runtime the caller supplies.
 owned-runtime = ["tokio/rt-multi-thread"]
+# Direct libusb access for USB SDR boards and dongles (`usb_libusb`): needs the libusb-1.0
+# library at run time. Off by default so the default build and its dependency audit stay as they
+# are; the relay's broker supplies its own `UsbBackend` instead.
+usb = ["dep:rusb"]
 
 [dependencies]
 serde = { workspace = true }
@@ -23,6 +27,8 @@ tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "macros
 # No libudev: USB serial ports are found by reading sysfs on Linux (see usb.rs), so a build needs
 # no libudev development package and a release binary needs no libudev at run time.
 serialport = { version = "4.10", default-features = false }
+# libusb bindings (MIT), only with the `usb` feature; links the system libusb-1.0 dynamically.
+rusb = { version = "0.9", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "macros", "test-util"] }

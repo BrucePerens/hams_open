@@ -48,6 +48,8 @@ pub struct Served {
     pub serial_link: Option<SerialMonitor>,
     /// The network link's status and counters, for TCP rigs.
     pub net_link: Option<NetMonitor>,
+    /// The USB link's status and counters, for USB rigs.
+    pub usb_link: Option<radioctl_core::usb_link::UsbMonitor>,
     /// What the baud probe found, for a serial rig configured with `baud = "auto"` or
     /// `baud_probe`; `None` otherwise.
     pub baud_probe: Option<ProbeResult>,
@@ -161,6 +163,7 @@ async fn start_one(
         virtual_control: built.virtual_control,
         serial_link: built.serial_link,
         net_link: built.net_link,
+        usb_link: built.usb_link,
         baud_probe: built.baud_probe,
     })
 }

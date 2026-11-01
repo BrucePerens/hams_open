@@ -378,6 +378,10 @@ MODEL_ENGINES: dict[int, str] = {
     **{i: "icom_pcr" for i in (4001, 4002, 4003, 4004)},
     **{i: "jrc" for i in (6001, 6002, 6005, 6006, 6007)},
     **{i: "uniden" for i in (8001, 8002, 8003, 8006, 8010, 8011, 8012)},
+    # Tier D USB boards driven by the USB transport (usb_link).
+    **{i: "si570_usb" for i in (25009, 25011, 25012, 25015, 25016, 25017)},
+    **{i: "funcube" for i in (25013, 25018)},
+    25003: "dwt",
 }
 
 # Manufacturers whose models (outside the families above) need a new engine: Tier C. Every other
@@ -460,7 +464,7 @@ def classify(model: dict) -> tuple[str, str, str | None]:
         return family, tier, engine
     if model["rig_list"]["mfg"] in TIER_C_MAKERS:
         return family, "C", MODEL_ENGINES.get(model["rig_list"]["model_id"])
-    return family, "D", None
+    return family, "D", MODEL_ENGINES.get(model["rig_list"]["model_id"])
 
 
 # [@ANCHOR: radioctl_support_status]

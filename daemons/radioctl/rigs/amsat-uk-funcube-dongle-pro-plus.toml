@@ -2,8 +2,7 @@
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/funcube.c, funcube.h, read for facts only) and `rigctl -m 25018 --dump-caps`; no vendor document was read and no code was copied.
 # Hamlib lists: receive 150 kHz to 1.9 GHz. Same HID framing as the FUNcube Dongle (commands 0x65 and 0x66); the Pro+ adds LNA, mixer and IF gain commands that are not described here.
-# NO ENGINE YET: this device speaks USB vendor requests or HID reports, and radioctl has no USB control or HID transport, so radioctld cannot open it.
-# The description records what the transport will need (night_shift_todo/medium/radioctl-usb-hid-transport.md).
+# ENGINE: crates/radioctl-protocols/src/funcube.rs (frequency; 64-byte reports as libusb interrupt transfers on interface 2) over the USB transport (radioctl-core usb_link; `transport kind = "usb"` in radioctld, which needs a build with the `usb` cargo feature and libusb-1.0). Tested only against the virtual twin on the fake USB bus; unverified on a dongle.
 schema = 1
 capabilities = ["read-frequency", "set-frequency"]
 
@@ -51,5 +50,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25018 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/funcube.c, funcube.h", note = "A capability is claimed when Hamlib's backend implements it; there is no engine yet, so none can be exercised." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25018 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/funcube.c, funcube.h", note = "A capability is claimed when Hamlib's backend implements it. Only frequency is implemented, by the FUNcube engine (funcube.rs); tested against its virtual twin, not a dongle." }
 verified = { state = "unverified" }

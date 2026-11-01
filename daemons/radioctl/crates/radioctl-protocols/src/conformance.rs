@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use radioctl_core::description::{Family, KenwoodDialect, ReceiverProtocol, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
-use radioctl_core::error::{ErrorKind, RigError};
+use radioctl_core::error::RigError;
 use radioctl_core::transcript::{Expect, Panel, Transcript};
 
 use crate::civ::CivEngine;
@@ -45,15 +45,7 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         Family::Hpsdr => Box::new(crate::hpsdr_net::HpsdrEngine::new(description.clone())?),
         Family::SerialVendor => crate::serial_vendor::engine_for(description)?,
         Family::Receiver => receiver_engine(description)?,
-        Family::UsbDevice => {
-            return Err(RigError::new(
-                ErrorKind::Unsupported,
-                format!(
-                    "{} is a USB device; radioctl has no USB control or HID transport yet",
-                    description.name
-                ),
-            ))
-        }
+        Family::UsbDevice => crate::usb_family::engine_for(description)?,
     })
 }
 
@@ -127,6 +119,7 @@ enum StandIn {
     Flex(Box<VirtualFlex>),
     Vendor(Box<dyn crate::serial_vendor::VendorTwin>),
     HpsdrBridge(BridgeStandIn),
+    Usb(Box<crate::usb_family::UsbFrameStandIn>),
 }
 
 /// What the `hpsdr_io` bridge answers on its line protocol, with no radio behind it: frequency,
@@ -206,6 +199,9 @@ impl StandIn {
         Ok(match description.family {
             Family::Flex => StandIn::Flex(Box::new(VirtualFlex::from_description(description)?)),
             Family::SerialVendor => StandIn::Vendor(crate::serial_vendor::twin_for(description)?),
+            Family::UsbDevice => StandIn::Usb(Box::new(crate::usb_family::UsbFrameStandIn::new(
+                description,
+            )?)),
             Family::Hpsdr => StandIn::HpsdrBridge(BridgeStandIn {
                 freq: description.default_frequency.0,
                 ptt: false,
@@ -220,7 +216,9 @@ impl StandIn {
     fn prologue(&self) -> Vec<u8> {
         match self {
             StandIn::Flex(radio) => radio.greeting(),
-            StandIn::Rig(_) | StandIn::Vendor(_) | StandIn::HpsdrBridge(_) => Vec::new(),
+            StandIn::Rig(_) | StandIn::Vendor(_) | StandIn::HpsdrBridge(_) | StandIn::Usb(_) => {
+                Vec::new()
+            }
         }
     }
 
@@ -232,6 +230,7 @@ impl StandIn {
             StandIn::Flex(radio) => radio.feed(bytes, NOW),
             StandIn::Vendor(twin) => twin.feed(bytes, NOW),
             StandIn::HpsdrBridge(bridge) => bridge.feed(bytes),
+            StandIn::Usb(device) => device.feed(bytes),
         }
     }
 
@@ -251,6 +250,7 @@ impl StandIn {
             }
             StandIn::Vendor(twin) => twin.front_panel(panel),
             StandIn::HpsdrBridge(_) => Err("the hpsdr_io bridge pushes nothing unasked".into()),
+            StandIn::Usb(_) => Err("a USB board has no front panel to turn here".into()),
         }
     }
 }

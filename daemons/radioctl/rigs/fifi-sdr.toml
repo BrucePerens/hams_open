@@ -2,8 +2,7 @@
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/fifisdr.c, read for facts only) and `rigctl -m 25012 --dump-caps`; no vendor document was read and no code was copied.
 # Hamlib lists: receive 39.1 kHz to 175 MHz. Si570 by-value frequency word (requests 0x32 and 0x3A); the multiplier is read from the device (request 0x39), default 4. Hamlib also sets mode, levels and a clarifier through vendor requests 0xAB and 0xAC, not described here.
-# NO ENGINE YET: this device speaks USB vendor requests or HID reports, and radioctl has no USB control or HID transport, so radioctld cannot open it.
-# The description records what the transport will need (night_shift_todo/medium/radioctl-usb-hid-transport.md).
+# ENGINE: crates/radioctl-protocols/src/si570_usb.rs (frequency) over the USB transport (radioctl-core usb_link; `transport kind = "usb"` in radioctld, which needs a build with the `usb` cargo feature and libusb-1.0). Tested only against the virtual twin on the fake USB bus; unverified on a board.
 schema = 1
 capabilities = ["read-frequency", "set-frequency"]
 
@@ -51,5 +50,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25012 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/fifisdr.c", note = "A capability is claimed when Hamlib's backend implements it; there is no engine yet, so none can be exercised." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25012 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/fifisdr.c", note = "A capability is claimed when Hamlib's backend implements it. Only frequency is implemented, by the Si570 USB engine (si570_usb.rs); tested against its virtual twin, not a board." }
 verified = { state = "unverified" }

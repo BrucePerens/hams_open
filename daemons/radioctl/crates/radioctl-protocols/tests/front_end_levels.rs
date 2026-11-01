@@ -121,8 +121,11 @@ fn a_model_without_a_levels_block_refuses_both_levels() {
         if desc.levels.max_attenuation_db().is_some() || desc.levels.preamp_steps > 0 {
             continue;
         }
-        // A USB device has no engine (tests/usb_devices.rs pins the refusal).
-        if desc.family == radioctl_core::description::Family::UsbDevice {
+        // The Elektor SDR-USB and the Digital World Traveller have no engine (tests/usb_devices.rs
+        // pins why); every other USB board refuses levels like any other model.
+        if desc.family == radioctl_core::description::Family::UsbDevice
+            && engine_for(&desc).is_err()
+        {
             continue;
         }
         let mut engine = engine_for(&desc).expect("engine");

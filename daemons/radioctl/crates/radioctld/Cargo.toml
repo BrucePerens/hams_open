@@ -28,6 +28,10 @@ path = "src/bin/radioctl_selftest.rs"
 # `rigctl` binary (or RIGCTL=/path) and fails loudly without it; off by default so a machine
 # without Hamlib can still run the rest. Run: cargo test -p radioctld --features hamlib-oracle
 hamlib-oracle = []
+# Direct libusb access for USB SDR boards and dongles (`transport kind = "usb"`); needs libusb-1.0. Off by
+# default: the default build and its dependency audit are unchanged, and a build without it refuses a usb
+# transport with a clear message.
+usb = ["radioctl-core/usb"]
 
 [dependencies]
 radioctl-core = { path = "../radioctl-core" }

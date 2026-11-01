@@ -2,10 +2,9 @@
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/dwt.c, read for facts only) and `rigctl -m 25003 --dump-caps`; no vendor document was read and no code was copied.
 # Hamlib lists: receive 150 kHz to 30 MHz and 87.5 to 108 MHz. A DRM receiver: Hamlib reaches it through the vendor's Windows DLL on one build and over USB on the other; the USB variant sets the frequency only (no mode, no read).
-# NO ENGINE YET: this device speaks USB vendor requests or HID reports, and radioctl has no USB control or HID transport, so radioctld cannot open it.
-# The description records what the transport will need (night_shift_todo/medium/radioctl-usb-hid-transport.md).
+# ENGINE: crates/radioctl-protocols/src/dwt.rs (set frequency only, over the USB transport; Hamlib's libusb build has no read and marks the request FIXME). Tested only against the virtual twin on the fake USB bus; unverified on a receiver. Hamlib's Windows build reads the frequency through the vendor DLL (afgusbfe.dll); that path is not used.
 schema = 1
-capabilities = ["read-frequency", "set-frequency"]
+capabilities = ["set-frequency"]
 
 [rig]
 id = "digital-world-traveller"
@@ -51,5 +50,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25003 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/dwt.c", note = "A capability is claimed when Hamlib's backend implements it; there is no engine yet, so none can be exercised." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25003 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/dwt.c", note = "A capability is claimed when Hamlib's backend implements it. Open question for a volunteer: Hamlib marks the request (type 0, request 0) FIXME and truncates the kilohertz to 16 bits, so the FM band cannot be tuned here. Hamlib's Windows build (vendor DLL) reads and sets the frequency; its libusb build, the only one radioctl follows, sets it only, so read-frequency is not claimed. The set is implemented by dwt.rs and tested against its virtual twin, not a receiver." }
 verified = { state = "unverified" }
