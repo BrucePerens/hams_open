@@ -155,6 +155,9 @@ pub fn decode_if(payload: &str, desc: &RigDescription) -> Option<Vec<Observation
 pub struct ElecraftEngine {
     desc: RigDescription,
     tokenizer: Tokenizer,
+    /// The auto-information the controller turned on (`AI2;`), which the rig loses with the
+    /// link; sent again by [`ProtocolEngine::link_restored`].
+    transceive: bool,
 }
 
 impl ElecraftEngine {
@@ -170,6 +173,7 @@ impl ElecraftEngine {
         Ok(ElecraftEngine {
             desc,
             tokenizer: Tokenizer::default(),
+            transceive: false,
         })
     }
 
@@ -209,7 +213,7 @@ impl ElecraftEngine {
     }
 
     // [@ANCHOR: radioctl_elecraft_encode_set]
-    fn encode_set(&self, op: &Op) -> Result<Request, RigError> {
+    fn encode_set(&mut self, op: &Op) -> Result<Request, RigError> {
         Ok(match op {
             Op::SetFrequency(vfo, hz) => {
                 if hz.0 > MAX_HZ {
@@ -227,7 +231,10 @@ impl ElecraftEngine {
             }
             Op::SetPtt(true) => Self::set("TX;".into()),
             Op::SetPtt(false) => Self::set("RX;".into()),
-            Op::SetTransceive(on) => Self::set(format!("AI{};", if *on { 2 } else { 0 })),
+            Op::SetTransceive(on) => {
+                self.transceive = *on;
+                Self::set(format!("AI{};", if *on { 2 } else { 0 }))
+            }
             Op::SetSplit(true) => Self::set("FT1;".into()),
             Op::SetSplit(false) => Self::set("FR0;".into()),
             Op::SetRit(on) => Self::set(format!("RT{};", u8::from(*on))),
@@ -421,6 +428,20 @@ impl ProtocolEngine for ElecraftEngine {
             }
         }
         out
+    }
+
+    // [@ANCHOR: radioctl_elecraft_engine_link_restored]
+    fn link_restored(&mut self) -> Vec<Request> {
+        // A half frame from the old link must not be joined to the new link's first bytes.
+        self.tokenizer = Tokenizer::default();
+        if !self.transceive {
+            return Vec::new();
+        }
+        // The rig forgot its auto-information with the link: turn it on again.
+        match self.encode(&Op::SetTransceive(true)) {
+            Ok(request) => vec![request],
+            Err(_) => Vec::new(),
+        }
     }
 }
 

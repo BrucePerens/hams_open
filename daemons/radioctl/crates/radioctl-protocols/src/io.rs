@@ -160,6 +160,12 @@ impl VirtualRigControl {
         lock(&self.shared.rig).state().clone()
     }
 
+    // [@ANCHOR: radioctl_virtual_io_forget_session]
+    /// The rig forgets the session set up on the old link (see `VirtualRig::forget_session`).
+    pub fn forget_session(&self) {
+        lock(&self.shared.rig).forget_session();
+    }
+
     // [@ANCHOR: radioctl_virtual_io_front_panel]
     /// Turns a knob on the rig; any unsolicited bytes go out without delay.
     pub fn front_panel(&self, change: PanelChange) {

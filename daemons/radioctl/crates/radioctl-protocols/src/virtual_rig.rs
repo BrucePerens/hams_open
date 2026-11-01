@@ -270,6 +270,15 @@ impl VirtualRig {
         })
     }
 
+    // [@ANCHOR: radioctl_virtual_forget_session]
+    /// The radio loses what the controller set up on the old link (a power cycle or a dropped
+    /// connection): auto-information goes back to off. The dial, the mode and the key stay as
+    /// they were, a transmitter does not unkey itself because a cable was pulled.
+    pub fn forget_session(&mut self) {
+        self.state.transceive = false;
+        self.state.auto_info = 0;
+    }
+
     // [@ANCHOR: radioctl_virtual_state]
     /// The rig's current state, for assertions.
     pub fn state(&self) -> &RigState {

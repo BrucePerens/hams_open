@@ -124,6 +124,10 @@ pub trait ProtocolEngine: Send + 'static {
     fn encode(&mut self, op: &Op) -> Result<Request, RigError>;
 
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>;
+
+    fn link_restored(&mut self) -> Vec<Request> {
+        Vec::new()
+    }
 }
 
 pub struct Request {

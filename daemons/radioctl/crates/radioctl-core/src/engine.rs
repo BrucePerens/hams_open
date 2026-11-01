@@ -63,6 +63,16 @@ pub trait ProtocolEngine: Send + 'static {
 
     /// Consumes received bytes; `now` is the caller's monotonic time.
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>;
+
+    /// The link to the rig came back after a loss. Whatever session state the engine had
+    /// established on the old link (Kenwood and Elecraft `AI2;` auto-information, Flex
+    /// subscriptions) is gone from the rig; the engine drops any half-received frame and
+    /// unanswered request, and returns the requests that set the session up again, in order,
+    /// or none if it had set nothing up. The actor writes them once, after the fail-closed
+    /// unkey and before the link-restored event; the default sets up nothing.
+    fn link_restored(&mut self) -> Vec<Request> {
+        Vec::new()
+    }
 }
 
 impl ProtocolEngine for Box<dyn ProtocolEngine> {
@@ -82,6 +92,12 @@ impl ProtocolEngine for Box<dyn ProtocolEngine> {
     /// Feeds the boxed engine.
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
         self.as_mut().feed(bytes, now)
+    }
+
+    // [@ANCHOR: radioctl_core_engine_box_link_restored]
+    /// Forwards the link-restored hook to the boxed engine.
+    fn link_restored(&mut self) -> Vec<Request> {
+        self.as_mut().link_restored()
     }
 }
 
@@ -110,6 +126,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_engine_box_description]
     // Tests [@ANCHOR: radioctl_core_engine_box_encode]
     // Tests [@ANCHOR: radioctl_core_engine_box_feed]
+    // Tests [@ANCHOR: radioctl_core_engine_box_link_restored]
     #[test]
     fn a_boxed_engine_is_an_engine() {
         let mut boxed: Box<dyn ProtocolEngine> = Box::new(Echo(RigDescription::ic7300()));
@@ -123,6 +140,10 @@ mod tests {
         assert_eq!(
             ProtocolEngine::feed(&mut boxed, b"yz", Duration::ZERO),
             vec![Inbound::Unrecognised(b"yz".to_vec())]
+        );
+        assert!(
+            ProtocolEngine::link_restored(&mut boxed).is_empty(),
+            "an engine with no session state sets nothing up"
         );
     }
 }

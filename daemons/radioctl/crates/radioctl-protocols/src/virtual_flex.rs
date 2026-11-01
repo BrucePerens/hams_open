@@ -218,6 +218,20 @@ impl VirtualFlex {
         }
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_forget_session]
+    /// A new client connection: the radio keeps no subscriptions of the old one.
+    pub fn forget_session(&mut self) {
+        self.sub_slice = false;
+        self.sub_tx = false;
+        self.sub_pan = false;
+    }
+
+    // [@ANCHOR: radioctl_virtual_flex_subscribed]
+    /// Whether this client is subscribed to slice, tx and pan status.
+    pub fn subscribed(&self) -> (bool, bool, bool) {
+        (self.sub_slice, self.sub_tx, self.sub_pan)
+    }
+
     // [@ANCHOR: radioctl_virtual_flex_slice_status_if_subscribed]
     fn slice_status_if_subscribed(&self) -> String {
         if self.sub_slice {

@@ -85,6 +85,18 @@ impl VirtualFlexControl {
         lock(&self.shared.rig).state().clone()
     }
 
+    // [@ANCHOR: radioctl_virtual_flex_control_forget_session]
+    /// The radio forgets this client's subscriptions (the client reconnected).
+    pub fn forget_session(&self) {
+        lock(&self.shared.rig).forget_session();
+    }
+
+    // [@ANCHOR: radioctl_virtual_flex_control_subscribed]
+    /// Whether the client is subscribed to slice, tx and pan status.
+    pub fn subscribed(&self) -> (bool, bool, bool) {
+        lock(&self.shared.rig).subscribed()
+    }
+
     /// Every command line the radio has received, in order.
     pub fn received(&self) -> Vec<String> {
         lock(&self.shared.rig).received().to_vec()
