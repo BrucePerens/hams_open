@@ -26,8 +26,9 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodDialect, KenwoodParams,
-    LevelParams, RigDescription, ScopeParams, Timing, YaesuLegacyParams, YaesuParams,
+    CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HpsdrParams, KenwoodDialect,
+    KenwoodParams, LevelParams, RigDescription, ScopeParams, Timing, YaesuLegacyParams,
+    YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -154,6 +155,16 @@ struct CivSection {
     echo: bool,
     #[serde(default = "default_frequency_bytes")]
     frequency_bytes: u8,
+    #[serde(default)]
+    command_set: CivCommandSetName,
+}
+
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+enum CivCommandSetName {
+    #[default]
+    Standard,
+    F8101,
 }
 
 fn default_frequency_bytes() -> u8 {
@@ -368,6 +379,10 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         model_id: c.model_id,
         echo: c.echo,
         frequency_bytes: c.frequency_bytes,
+        command_set: match c.command_set {
+            CivCommandSetName::Standard => CivCommandSet::Standard,
+            CivCommandSetName::F8101 => CivCommandSet::F8101,
+        },
     });
     let kenwood = doc
         .kenwood
@@ -699,6 +714,13 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         .is_some_and(|c| c.frequency_bytes != 5)
     {
         keys.push("civ.frequency_bytes".to_string());
+    }
+    if description
+        .civ
+        .as_ref()
+        .is_some_and(|c| c.command_set != CivCommandSet::Standard)
+    {
+        keys.push("civ.command_set".to_string());
     }
     if description.scope.is_some() {
         keys.extend(

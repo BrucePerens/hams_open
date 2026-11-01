@@ -11,12 +11,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use radioctl_core::capability::Capability;
-use radioctl_core::description::{Family, RigDescription};
+use radioctl_core::description::{CivCommandSet, Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
 use radioctl_core::error::ErrorKind;
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Level, Vfo};
+use radioctl_core::units::{Hz, Level, Mode, Vfo};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::virtual_rig::VirtualRig;
 
@@ -93,6 +93,10 @@ const ADDRESSES: &[(&str, u8)] = &[
     ("icom-ic-r10", 0x52),
     ("icom-ic-r20", 0x6C),
     ("icom-ic-r30", 0x9C),
+    ("icom-ic-820h", 0x42),
+    ("icom-ic-821h", 0x4C),
+    ("icom-ic-92d", 0x01),
+    ("icom-ic-f8101", 0x8A),
 ];
 
 fn icom_files() -> Vec<RigDescription> {
@@ -149,31 +153,35 @@ fn every_icom_file_round_trips_what_it_claims_and_refuses_the_rest() {
         let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
         let has = |c: Capability| desc.capabilities.has(c);
 
-        let start = desc.default_frequency;
-        assert_eq!(
-            read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
-            Observation::Frequency(Vfo::A, start),
-            "{id}"
-        );
-        write(
-            engine.as_mut(),
-            &mut rig,
-            &Op::SetFrequency(Vfo::A, Hz(7_074_000)),
-        );
-        assert_eq!(
-            read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
-            Observation::Frequency(Vfo::A, Hz(7_074_000)),
-            "{id}"
-        );
-
-        // Every mode the file lists, in the order listed (data modes follow their sidebands).
-        for (mode, _) in &desc.mode_codes {
-            write(engine.as_mut(), &mut rig, &Op::SetMode(*mode));
+        // A model whose description claims no frequency (the IC-92D: Hamlib has no frequency
+        // function for it) is only asked for its identity below.
+        if has(Capability::ReadFrequency) {
+            let start = desc.default_frequency;
             assert_eq!(
-                read(engine.as_mut(), &mut rig, &Op::GetMode),
-                Observation::Mode(*mode),
-                "{id} {mode:?}"
+                read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
+                Observation::Frequency(Vfo::A, start),
+                "{id}"
             );
+            write(
+                engine.as_mut(),
+                &mut rig,
+                &Op::SetFrequency(Vfo::A, Hz(7_074_000)),
+            );
+            assert_eq!(
+                read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
+                Observation::Frequency(Vfo::A, Hz(7_074_000)),
+                "{id}"
+            );
+
+            // Every mode the file lists, in the order listed (data modes follow their sidebands).
+            for (mode, _) in &desc.mode_codes {
+                write(engine.as_mut(), &mut rig, &Op::SetMode(*mode));
+                assert_eq!(
+                    read(engine.as_mut(), &mut rig, &Op::GetMode),
+                    Observation::Mode(*mode),
+                    "{id} {mode:?}"
+                );
+            }
         }
 
         if has(Capability::ReadPtt) {
@@ -279,6 +287,11 @@ fn four_and_six_byte_frequency_fields_go_on_the_wire_as_the_description_says() {
     let mut seen = BTreeSet::new();
     for desc in &files {
         let civ = desc.civ.as_ref().expect("civ block");
+        if !desc.capabilities.has(Capability::SetFrequency)
+            || civ.command_set != CivCommandSet::Standard
+        {
+            continue; // no frequency claim (IC-92D), or its own frame (IC-F8101, tested below)
+        }
         let mut engine = engine_for(desc).expect("engine");
         let mut rig = VirtualRig::from_description(desc).expect("virtual rig");
         let request = engine
@@ -317,4 +330,43 @@ fn four_and_six_byte_frequency_fields_go_on_the_wire_as_the_description_says() {
         }
     }
     assert_eq!(seen, BTreeSet::from([4, 6]), "a 4-byte and a 6-byte model");
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode_f8101]
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_civ_dispatch]
+#[test]
+fn the_ic_f8101_sets_frequency_and_mode_with_its_own_1a_commands() {
+    let desc = icom_files()
+        .into_iter()
+        .find(|d| d.id == "icom-ic-f8101")
+        .expect("IC-F8101 file");
+    let mut engine = engine_for(&desc).expect("engine");
+    let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
+    // 14.074 MHz as the five-byte field, behind 1A 35.
+    let set = engine
+        .encode(&Op::SetFrequency(Vfo::A, Hz(14_074_000)))
+        .expect("encode");
+    assert_eq!(
+        set.bytes,
+        vec![0xFE, 0xFE, 0x8A, 0xE0, 0x1A, 0x35, 0x00, 0x40, 0x07, 0x14, 0x00, 0xFD]
+    );
+    let _ = engine.feed(&rig.feed(&set.bytes, NOW), NOW);
+    assert_eq!(
+        read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
+        Observation::Frequency(Vfo::A, Hz(14_074_000))
+    );
+    // CW is code 03: 1A 36 00 03, and the mode is read back by 1A 34.
+    let mode = engine.encode(&Op::SetMode(Mode::Cw)).expect("encode");
+    assert_eq!(
+        mode.bytes,
+        vec![0xFE, 0xFE, 0x8A, 0xE0, 0x1A, 0x36, 0x00, 0x03, 0xFD]
+    );
+    let _ = engine.feed(&rig.feed(&mode.bytes, NOW), NOW);
+    let get = engine.encode(&Op::GetMode).expect("encode");
+    assert_eq!(get.bytes, vec![0xFE, 0xFE, 0x8A, 0xE0, 0x1A, 0x34, 0xFD]);
+    assert_eq!(
+        read(engine.as_mut(), &mut rig, &Op::GetMode),
+        Observation::Mode(Mode::Cw)
+    );
 }
