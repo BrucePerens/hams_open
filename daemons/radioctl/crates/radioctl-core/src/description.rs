@@ -44,6 +44,12 @@ pub enum Family {
 pub enum VendorProtocol {
     /// Ten-Tec (`tentec.rs`): Orion/Eagle ASCII, Argonaut/Jupiter/Omni VII binary.
     Tentec,
+    /// Drake R-8A and R-8B receivers (`drake.rs`).
+    Drake,
+    /// Alinco DX-77 and DX-SR8 (`alinco.rs`).
+    Alinco,
+    /// Racal RA6790/GM receiver (`racal.rs`).
+    Racal,
 }
 
 impl VendorProtocol {
@@ -52,6 +58,9 @@ impl VendorProtocol {
     pub fn from_name(name: &str) -> Option<VendorProtocol> {
         match name {
             "tentec" => Some(VendorProtocol::Tentec),
+            "drake" => Some(VendorProtocol::Drake),
+            "alinco" => Some(VendorProtocol::Alinco),
+            "racal" => Some(VendorProtocol::Racal),
             _ => None,
         }
     }
@@ -61,6 +70,9 @@ impl VendorProtocol {
     pub fn name(self) -> &'static str {
         match self {
             VendorProtocol::Tentec => "tentec",
+            VendorProtocol::Drake => "drake",
+            VendorProtocol::Alinco => "alinco",
+            VendorProtocol::Racal => "racal",
         }
     }
 }
@@ -653,6 +665,21 @@ mod tests {
             Some(VendorProtocol::Tentec)
         );
         assert_eq!(VendorProtocol::Tentec.name(), "tentec");
+        assert_eq!(
+            VendorProtocol::from_name("drake"),
+            Some(VendorProtocol::Drake)
+        );
+        assert_eq!(VendorProtocol::Drake.name(), "drake");
+        assert_eq!(
+            VendorProtocol::from_name("alinco"),
+            Some(VendorProtocol::Alinco)
+        );
+        assert_eq!(VendorProtocol::Alinco.name(), "alinco");
+        assert_eq!(
+            VendorProtocol::from_name("racal"),
+            Some(VendorProtocol::Racal)
+        );
+        assert_eq!(VendorProtocol::Racal.name(), "racal");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

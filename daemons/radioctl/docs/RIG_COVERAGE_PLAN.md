@@ -101,11 +101,11 @@ Left, with the reason:
 | XIT/RIT on the FT-450, FT-891, FT-710 (`CF`, no `RT`/`XT`) | the `CF` clarifier command in the Yaesu engine |
 | K4 levels, RIT/XIT, signal and split | the K4 forms of AG, RG, KS, MG, PC, RA, PA, RT/XT/RU/RD and SM differ from the K3 ones the Elecraft engine sends |
 
-### Ten-Tec, vendor serial engines: what is done and what is left
+### Vendor serial engines (Ten-Tec, Drake, Alinco, Racal): what is done and what is left
 
-One description family, `serial-vendor`, carries every small-maker serial protocol (`[vendor] protocol = ...`, `dialect = ...`), each with its own engine file (`tentec.rs` first) and a virtual twin in the same file (`serial_vendor.rs` holds the shared receive buffer and dispatch).
+One description family, `serial-vendor`, carries every small-maker serial protocol (`[vendor] protocol = ...`, `dialect = ...`), each with its own engine file (`tentec.rs`, `drake.rs`, `alinco.rs`, `racal.rs`) and a virtual twin in the same file (`serial_vendor.rs` holds the shared receive buffer and dispatch).
 
-Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine.
+Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine. Also done (2026-10-31, Hamlib facts only): Drake R-8A and R-8B (`drake.rs`, dialect `r8`), Alinco DX-77 and DX-SR8 (`alinco.rs`, dialects `dx77` and `dxsr8`), Racal RA6790/GM (`racal.rs`, dialect `ra6790`).
 
 Left, with the reason:
 
@@ -114,7 +114,8 @@ Left, with the reason:
 | RX-320 (16003), RX-350 (16005) | DSP receivers tuned by a computed tuning factor and BFO words; needs its own dialect and a tolerance-based round-trip test |
 | RX-340 (16004), RX-331 (16012) | `$`-prefixed ASCII receiver protocol |
 | TT-550 Pegasus (16001), TT-585 Paragon (16009) | each has its own binary protocol |
-| Hamlib oracle batch for the Ten-Tec files | the oracle harness drives `VirtualRig`; it needs a generic twin hook |
+| Racal RA3702 (11005) | the RA37xx packet protocol (LF-started frames with a receiver number in the header, `QF`/`QM` queries); not read yet |
+| Hamlib oracle batch for the vendor serial files | the oracle harness drives `VirtualRig`; it needs a generic twin hook |
 
 ## Tier B: variants of an existing engine (41 models)
 
