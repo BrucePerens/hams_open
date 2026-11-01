@@ -1,0 +1,67 @@
+# Rig description: Dorji DRA818V (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/dorji/dra818.c, read for facts only, and `rigctl -m 31001 --dump-caps`); no vendor protocol document was read and no code or table was copied.
+# Hamlib lists: serial 9600..9600 baud, 8N1, handshake NONE; receive 134000000 to 174000000 Hz in 1 range(s). The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
+# Dialect dra818v (dorji.rs): a 134 to 174 MHz FM module with the DRA818U's command set (Hamlib uses the same routines; the range is Hamlib's, no DRA818V datasheet was found). The module has no read commands, so there are no read capabilities. Mode codes: `0` the 12.5 kHz channel (radioctl `fm`), `1` the 25 kHz channel (radioctl `wfm`). No PTT command.
+schema = 1
+capabilities = ["set-frequency", "set-mode"]
+
+[rig]
+id = "dorji-dra818v"
+name = "Dorji DRA818V"
+family = "serial-vendor"
+
+[vendor]
+protocol = "dorji"
+dialect = "dra818v"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 1000
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 145000000
+mode = "fm"
+
+[[modes]]
+mode = "fm"
+code = "0"
+
+[[modes]]
+mode = "wfm"
+code = "1"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 31001 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 31001 --dump-caps` (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/dorji/dra818.c rigs/dorji/dra818.c (group command)", note = "Command frames read for facts only; no code copied. The dialect names are ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 31001 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/dorji/dra818.c", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command; absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/dorji/dra818.c (mode character definitions)", note = "Mode characters as the backend defines them; modes with no entry in radioctl's vocabulary are not listed." }
+verified = { state = "unverified" }

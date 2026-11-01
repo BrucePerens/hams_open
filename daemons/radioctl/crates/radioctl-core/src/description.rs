@@ -52,7 +52,7 @@ pub enum VendorProtocol {
     Drake,
     /// Alinco DX-77 and DX-SR8 (`alinco.rs`).
     Alinco,
-    /// Racal RA6790/GM receiver (`racal.rs`).
+    /// Racal RA6790/GM, RA3702 and Ten-Tec RX-331 and RX-340 receivers (`racal.rs`).
     Racal,
     /// CommRadio CTX-10: CRC-framed binary on a 3 Mbaud line (`commradio.rs`).
     Commradio,
@@ -66,6 +66,20 @@ pub enum VendorProtocol {
     Rft,
     /// Philips PRM8060 / PRM80 family: a prompt-driven console (`prm80.rs`).
     Prm80,
+    /// Skanti TRP8000 and TRP 8255 S R (`skanti.rs`).
+    Skanti,
+    /// Barrett 950, 2050 and 4050 (`barrett.rs`).
+    Barrett,
+    /// CODAN Envoy and NGT (`codan.rs`).
+    Codan,
+    /// Kachina 505DSP (`kachina.rs`).
+    Kachina,
+    /// Lowe HF-235 (`lowe.rs`).
+    Lowe,
+    /// Guohe PMR-171 (`guohe.rs`).
+    Guohe,
+    /// Dorji DRA818U and DRA818V modules (`dorji.rs`).
+    Dorji,
 }
 
 impl VendorProtocol {
@@ -83,6 +97,13 @@ impl VendorProtocol {
             "rshfiq" => Some(VendorProtocol::Rshfiq),
             "rft" => Some(VendorProtocol::Rft),
             "prm80" => Some(VendorProtocol::Prm80),
+            "skanti" => Some(VendorProtocol::Skanti),
+            "barrett" => Some(VendorProtocol::Barrett),
+            "codan" => Some(VendorProtocol::Codan),
+            "kachina" => Some(VendorProtocol::Kachina),
+            "lowe" => Some(VendorProtocol::Lowe),
+            "guohe" => Some(VendorProtocol::Guohe),
+            "dorji" => Some(VendorProtocol::Dorji),
             _ => None,
         }
     }
@@ -101,6 +122,13 @@ impl VendorProtocol {
             VendorProtocol::Rshfiq => "rshfiq",
             VendorProtocol::Rft => "rft",
             VendorProtocol::Prm80 => "prm80",
+            VendorProtocol::Skanti => "skanti",
+            VendorProtocol::Barrett => "barrett",
+            VendorProtocol::Codan => "codan",
+            VendorProtocol::Kachina => "kachina",
+            VendorProtocol::Lowe => "lowe",
+            VendorProtocol::Guohe => "guohe",
+            VendorProtocol::Dorji => "dorji",
         }
     }
 }
@@ -1038,6 +1066,41 @@ mod tests {
         ] {
             assert_eq!(VendorProtocol::from_name(p.name()), Some(p));
         }
+        assert_eq!(
+            VendorProtocol::from_name("skanti"),
+            Some(VendorProtocol::Skanti)
+        );
+        assert_eq!(VendorProtocol::Skanti.name(), "skanti");
+        assert_eq!(
+            VendorProtocol::from_name("barrett"),
+            Some(VendorProtocol::Barrett)
+        );
+        assert_eq!(VendorProtocol::Barrett.name(), "barrett");
+        assert_eq!(
+            VendorProtocol::from_name("codan"),
+            Some(VendorProtocol::Codan)
+        );
+        assert_eq!(VendorProtocol::Codan.name(), "codan");
+        assert_eq!(
+            VendorProtocol::from_name("kachina"),
+            Some(VendorProtocol::Kachina)
+        );
+        assert_eq!(VendorProtocol::Kachina.name(), "kachina");
+        assert_eq!(
+            VendorProtocol::from_name("lowe"),
+            Some(VendorProtocol::Lowe)
+        );
+        assert_eq!(VendorProtocol::Lowe.name(), "lowe");
+        assert_eq!(
+            VendorProtocol::from_name("guohe"),
+            Some(VendorProtocol::Guohe)
+        );
+        assert_eq!(VendorProtocol::Guohe.name(), "guohe");
+        assert_eq!(
+            VendorProtocol::from_name("dorji"),
+            Some(VendorProtocol::Dorji)
+        );
+        assert_eq!(VendorProtocol::Dorji.name(), "dorji");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

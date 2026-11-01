@@ -1,0 +1,80 @@
+# Rig description: Barrett 4050 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/barrett/barrett.c, 4050.c, read for facts only, and `rigctl -m 32003 --dump-caps`); no vendor protocol document was read and no code or table was copied.
+# Hamlib lists: serial 9600..115200 baud, 8N1, handshake XONXOFF; receive 1600000 to 30000000 Hz in 1 range(s). The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
+# Dialect barrett4050 (barrett.rs). Hamlib tunes the 4050 only through a memory channel (ten band channels from number 9990: `XC`, `IDC`, `PC`), so the description has no second VFO or split; its open also reads the version and selects channel 9999 (`IDC9999`, `XC9999`, `IC`), which the engine does not send. Hamlib's source comments that the TC command does not work on the 4050 (not implemented as of 2022-01-12), which is why it tunes through channels. The first byte of the `IB` mode answer is an assumption.
+# Serial line: Hamlib's handshake for this radio is XON/XOFF, but every answer is framed by an XOFF byte in front and an XON byte at the end, which a kernel serial port with software flow control would swallow before the engine saw them; the description therefore asks for no flow control (an open question: whether the radio needs its flow-control bytes honoured).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt"]
+
+[rig]
+id = "barrett-4050"
+name = "Barrett 4050"
+family = "serial-vendor"
+
+[vendor]
+protocol = "barrett"
+dialect = "barrett4050"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 500
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14200000
+mode = "usb"
+
+[[modes]]
+mode = "usb"
+code = "U"
+
+[[modes]]
+mode = "lsb"
+code = "L"
+
+[[modes]]
+mode = "cw"
+code = "C"
+
+[[modes]]
+mode = "am"
+code = "A"
+
+[[modes]]
+mode = "rtty"
+code = "F"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 32003 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 32003 --dump-caps` (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/barrett/barrett.c, 4050.c rigs/barrett/barrett.c (frame formats)", note = "Command frames read for facts only; no code copied. The dialect names are ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 32003 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/barrett/barrett.c, 4050.c", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command; absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/barrett/barrett.c, 4050.c (mode character definitions)", note = "Mode characters as the backend defines them; modes with no entry in radioctl's vocabulary are not listed." }
+verified = { state = "unverified" }

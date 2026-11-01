@@ -1,7 +1,7 @@
 # Rig description: Ten-Tec RX-340 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/tentec/rx340.c, read for facts only, and `rigctl -m 16004 --dump-caps`); no vendor protocol document was read and no code or table was copied.
-# Hamlib lists: serial 75..38400 baud, 8N1, handshake NONE; receive 0 to 30000000 Hz in 1 range(s). The description format has no field for frequency ranges or serial settings, so they are not repeated here.
+# Hamlib lists: serial 75..38400 baud, 8N1, handshake NONE; receive 0 to 30000000 Hz in 1 range(s). The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
 # Dialect rx340 of the Racal family (racal.rs): commands without the `$0` prefix, six-decimal megahertz. Hamlib's open sends `*R1` (remote control), which radioctl does not send (the engine has no open hook). Modes ISB (5) and AM-sync (8) have no radioctl mode and are not listed. A receiver: no PTT.
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
@@ -14,6 +14,10 @@ family = "serial-vendor"
 [vendor]
 protocol = "racal"
 dialect = "rx340"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
 
 [timing]
 timeout_ms = 400

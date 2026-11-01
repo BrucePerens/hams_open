@@ -1,7 +1,7 @@
 # Rig description: Alinco DX-77 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/alinco/dx77.c, alinco.h, read for facts only, and `rigctl -m 17001 --dump-caps`); no vendor protocol document was read and no code or table was copied.
-# Hamlib lists: serial 9600..9600 baud, 8N2, handshake NONE; receive 500000 to 30000000 Hz in 3 range(s). The description format has no field for frequency ranges or serial settings, so they are not repeated here.
+# Hamlib lists: serial 9600..9600 baud, 8N2, handshake NONE; receive 500000 to 30000000 Hz in 3 range(s). The description format has no field for frequency ranges, so they are not repeated here; the serial line settings are in [vendor].
 # Dialect dx77: `AL` commands ended by CR; the radio echoes the command, then answers (`OK` or a 26-character status line). Hamlib's DX-77 has no PTT control. The code 2 (lower CW) is read as CW; setting CW sends the upper-CW code 3.
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
@@ -14,6 +14,10 @@ family = "serial-vendor"
 [vendor]
 protocol = "alinco"
 dialect = "dx77"
+data_bits = 8
+parity = "N"
+stop_bits = 2
+flow = "none"
 
 [timing]
 timeout_ms = 200

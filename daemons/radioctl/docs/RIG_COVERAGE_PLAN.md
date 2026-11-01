@@ -97,22 +97,25 @@ Left, with the reason:
 | XIT/RIT on the FT-450, FT-891, FT-710 (`CF`, no `RT`/`XT`) | the `CF` clarifier command in the Yaesu engine |
 | K4 levels, RIT/XIT, signal and split | the K4 forms of AG, RG, KS, MG, PC, RA, PA, RT/XT/RU/RD and SM differ from the K3 ones the Elecraft engine sends |
 
-### Vendor serial engines (Ten-Tec, Drake, Alinco, Racal): what is done and what is left
+### Vendor serial engines (Ten-Tec, Drake, Alinco, Racal, Skanti, Barrett, CODAN and others): what is done and what is left
 
-One description family, `serial-vendor`, carries every small-maker serial protocol (`[vendor] protocol = ...`, `dialect = ...`), each with its own engine file (`tentec.rs`, `drake.rs`, `alinco.rs`, `racal.rs`) and a virtual twin in the same file (`serial_vendor.rs` holds the shared receive buffer and dispatch).
+One description family, `serial-vendor`, carries every small-maker serial protocol (`[vendor] protocol = ...`, `dialect = ...`), each with its own engine file (`tentec.rs`, `tentec_rx320.rs`, `drake.rs`, `alinco.rs`, `racal.rs`, `skanti.rs`, `barrett.rs`, `codan.rs`, `kachina.rs`, `lowe.rs`, `guohe.rs`, `dorji.rs`) and a virtual twin in the same file (`serial_vendor.rs` holds the shared receive buffer and dispatch).
 
 Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine. Also done (2026-10-31, Hamlib facts only): Drake R-8A and R-8B (`drake.rs`, dialect `r8`), Alinco DX-77 and DX-SR8 (`alinco.rs`, dialects `dx77` and `dxsr8`), Racal RA6790/GM (`racal.rs`, dialect `ra6790`); QRP Labs QCX/QDX and QMX (Kenwood TS-480 emulation, descriptions only on the classic Kenwood engine; the ID answer 20 and the IF length are assumptions).
 
 Also done (2026-10-31, Hamlib facts only): Ten-Tec RX-320 (`tentec_rx320.rs`, dialect `rx320`: set-only, computed tuning words, the twin decodes the frequency back to the hertz), RX-350 (the Argonaut dialect: Hamlib's `rx350.c` uses the `tentec2.c` routines), RX-340 and RX-331 (dialects `rx340` and `rx331` of the Racal command family in `racal.rs`: same command letters, no prefix on the RX-340, `$0` prefix and `$0`-prefixed replies on the RX-331, six-decimal megahertz); Hilberling PT-8000A and Lab599 TX-500 (TS-480-style Kenwood commands, descriptions only on the classic Kenwood engine; the ID answer 20 is assumed for the TX-500). The Hamlib oracle batch now drives the vendor serial files (generic twin hook: `VendorTwin::snapshot`); Drake R-8A/R-8B are not in it because Hamlib 4.6.2's `rigctld` aborts ("stack smashing detected") in `drake_set_vfo` during its open, whatever the twin answers.
 
+Also done (2026-10-31, second batch): Skanti TRP8000 and TRP 8255 S R (`skanti.rs`: set-only; the 8255 acknowledges every byte, which the engine counts instead of pacing), Barrett 950, 2050 and 4050 (`barrett.rs`, answers framed by XOFF and XON; the description asks for no flow control because the kernel would swallow the framing bytes), CODAN Envoy and NGT (`codan.rs`, the CICS text console), Kachina 505DSP (`kachina.rs`, DDS-word frequency, set-only), Lowe HF-235 (`lowe.rs`), Racal RA3702 (dialect `ra3702` of `racal.rs`), Guohe PMR-171 (`guohe.rs`, CRC-16 frames) and Q900 (the FT-817 command set, a `yaesu-legacy` description), Dorji DRA818U and DRA818V (`dorji.rs`; the DRA818U from the datasheet pages 4 and 5, facts marked manual-checked). Elektor 3/04 is **not applicable** (the DDS is steered by bit-banging the serial port's TX, RTS and DTR lines; there is no byte protocol). Every vendor description now states its serial line in `[vendor]` (`data_bits`, `parity`, `stop_bits`, `flow`, from Hamlib's capabilities; the Barrett files ask for no flow control on purpose, see the file). Before this a Racal (7E2), a Skanti (7O1) or an Alinco DX-77 (8N2) was opened as 8N1. The Hamlib oracle batch runs all of these except the Lowe HF-235 and the two Drakes, whose `rigctld` aborts with "stack smashing detected" in `lowe_get_freq` and `drake_set_vfo` whatever the twin answers.
+
 Left, with the reason:
 
 | Model (Hamlib id) | What is needed |
 |---|---|
-| TT-550 Pegasus (16001), TT-585 Paragon (16009) | each has its own binary protocol |
-| Skanti TRP8000, TRP 8255 S R (14002, 14004), Barrett 950/2050/4050 (32001-32003), CODAN Envoy/NGT (34001, 34002), Guohe Q900/PMR-171 (1051, 1052) | not started: Barrett replies are framed by XON/XOFF bytes, Guohe has its own binary protocol (`pmr171.c`); each needs a protocol read and an engine file |
-| Elektor 3/04 (25001), Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002) | not started; kit and OEM modules with their own command sets |
-| Racal RA3702 (11005) | the RA37xx packet protocol (LF-started frames with a receiver number in the header, `QF`/`QM` queries); not read yet |
+| TT-550 Pegasus (16001) | tuning words from a floating-point filter and BFO model (`tt550.c`, `tt550_tuning_factor_calc`), with separate receive and transmit words, RIT/XIT and pass-band shift; the Pegasus Programmer's Reference (downloaded to `~/manuals/tentec/`) is the better source and was not read in this batch |
+| TT-585 Paragon (16009) | its own binary protocol (`paragon.c`); not read |
+| Watkins-Johnson WJ-8888 (12004) | a ten-byte frame with bit-packed fields; Hamlib's frequency packing keeps only part of the 10 Hz digits (`wj.c`), so a twin cannot round-trip it; needs the vendor manual (not found: premium-rx.org's copies return 404) |
+| Micom 2/3 (38001) | five command frames with reply frames of unknown content (`micom.c`, status Alpha in Hamlib); not read further |
+| MDS 4710/9710 (36001, 36002) | `mds.c` is a copy of the Barrett driver's shape with MDS command words (`TX`/`RX` frequency, `KEY`/`DKEY`); its PTT reply check dereferences a null pointer when a reply is not read, so the batch test could not run; not started |
 
 ### FlexRadio: what is done and what is left
 
