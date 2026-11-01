@@ -1961,6 +1961,7 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
             ("kachina-505dsp", 18001, 9600),
             ("tentec-tt-550", 16001, 57600),
             ("elecraft-xg3", 2038, 9600),
+            ("sigfox-transfox", 2032, 9600),
             ("guohe-pmr-171", 1052, 4800),
             ("guohe-q900", 1051, 38400),
             ("dorji-dra818u", 31002, 9600),
@@ -1987,6 +1988,11 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
 ///   filter (index 0) is cut at the zero byte, so the tuning words it sent for USB stay in the radio
 ///   and AM then decodes them 1400 Hz away from the frequency asked (the twin's frequency reads
 ///   7 075 400 where radioctl's engine, which retunes, has 7 074 000).
+/// * `sigfox-transfox`: Hamlib's `set_freq` is the generic Kenwood routine, which asks `ID;` after
+///   the `FA` write; Hamlib's own open for this radio skips the ID handshake because "rig has no
+///   ID command", so the twin (and, if Hamlib's comment is right, the radio) never answers and the
+///   write fails in Hamlib while radioctl's engine, which sends no ID, succeeds. Open question:
+///   whether a real Transfox answers `ID;`.
 /// * Lowe HF-235 is not in the batch: Hamlib 4.6.2's `rigctld` aborts ("stack smashing detected")
 ///   in `lowe_get_freq` whatever the radio answers (tried with a full, a short and an empty answer),
 ///   so no step can run.
@@ -2005,6 +2011,7 @@ fn known_vendor_divergences(file: &str) -> Vec<&'static str> {
         ],
         "dorji-dra818u" | "dorji-dra818v" => vec!["SetMode(Usb)", "SetMode(Am)"],
         "tentec-tt-550" => vec!["final freq_a"],
+        "sigfox-transfox" => vec!["SetFrequency(A, Hz(7074000))"],
         _ => Vec::new(),
     }
 }

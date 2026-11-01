@@ -84,6 +84,8 @@ pub enum VendorProtocol {
     Mds,
     /// Elecraft XG3 signal source (`xg3.rs`).
     Xg3,
+    /// SigFox Transfox transverter controller (`transfox.rs`).
+    Transfox,
 }
 
 impl VendorProtocol {
@@ -110,6 +112,7 @@ impl VendorProtocol {
             "dorji" => Some(VendorProtocol::Dorji),
             "mds" => Some(VendorProtocol::Mds),
             "xg3" => Some(VendorProtocol::Xg3),
+            "transfox" => Some(VendorProtocol::Transfox),
             _ => None,
         }
     }
@@ -137,6 +140,7 @@ impl VendorProtocol {
             VendorProtocol::Dorji => "dorji",
             VendorProtocol::Mds => "mds",
             VendorProtocol::Xg3 => "xg3",
+            VendorProtocol::Transfox => "transfox",
         }
     }
 }
@@ -1113,6 +1117,11 @@ mod tests {
         assert_eq!(VendorProtocol::Mds.name(), "mds");
         assert_eq!(VendorProtocol::from_name("xg3"), Some(VendorProtocol::Xg3));
         assert_eq!(VendorProtocol::Xg3.name(), "xg3");
+        assert_eq!(
+            VendorProtocol::from_name("transfox"),
+            Some(VendorProtocol::Transfox)
+        );
+        assert_eq!(VendorProtocol::Transfox.name(), "transfox");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

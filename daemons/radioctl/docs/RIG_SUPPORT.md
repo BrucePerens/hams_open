@@ -10,16 +10,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **274** (280 description files), **96%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **275** (281 description files), **96%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 274 |
+| described | 275 |
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 4 |
-| odd device | 6 |
+| odd device | 5 |
 | not applicable | 29 |
 
 | Verification level | Models |
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 70 |
-| D | odd device | 54 | 27 |
+| D | odd device | 54 | 28 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 79 | 0 |
+| other_serial | C/D | aor | 94 | 80 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -325,7 +325,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25002 | SAT-Schneider | DRT1 | D | other_serial | - | - | unverified | - | odd device |
 | 2056 | SDR Radio | SDRConsole | D | other_serial | - | - | unverified | - | not applicable |
 | 2051 | SDRPlay | SDRUno | D | other_serial | - | - | unverified | - | not applicable |
-| 2032 | SigFox | Transfox | D | other_serial | - | - | unverified | - | odd device |
+| 2032 | SigFox | Transfox | D | other_serial | - | `sigfox-transfox` | unverified | - | described |
 | 14004 | Skanti | TRP 8255 S R | C | other_serial | - | `skanti-trp-8255-s-r` | unverified | - | described |
 | 14002 | Skanti | TRP8000 | C | other_serial | - | `skanti-trp8000` | unverified | - | described |
 | 25009 | SoftRock | Si570 AVR-USB | D | other_usb | si570_usb | `softrock-si570-avr-usb` | unverified | - | described |
