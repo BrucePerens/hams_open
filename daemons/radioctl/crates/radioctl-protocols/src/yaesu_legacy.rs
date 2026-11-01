@@ -112,6 +112,32 @@ pub fn encode_bcd_frequency(hz: Hz) -> Option<[u8; 4]> {
     Some(out)
 }
 
+// [@ANCHOR: radioctl_ylegacy_encode_frequency]
+/// The four bytes of a frequency block. With `high_band_flag` (FT-736R), a frequency from 1.2 GHz
+/// up to 1.3 GHz is sent as the seven low digits of its 10 Hz count with the first nibble set to C,
+/// which stands for the digits 12 (Hamlib's `ft736_set_freq` ORs C into the first byte of the eight
+/// low digits, replacing the 2; unverified: no manual read).
+pub fn encode_frequency(hz: Hz, high_band_flag: bool) -> Option<[u8; 4]> {
+    if high_band_flag && hz.0 >= 1_200_000_000 && hz.0 < 1_300_000_000 && hz.0.is_multiple_of(10) {
+        let mut bytes = encode_bcd_frequency(Hz(hz.0 - 1_200_000_000))?;
+        bytes[0] |= 0xC0;
+        return Some(bytes);
+    }
+    encode_bcd_frequency(hz)
+}
+
+// [@ANCHOR: radioctl_ylegacy_decode_frequency]
+/// The inverse of [`encode_frequency`]: a first nibble of C stands for the digits 12.
+pub fn decode_frequency(bytes: &[u8], high_band_flag: bool) -> Option<Hz> {
+    if high_band_flag && bytes.first().is_some_and(|b| b >> 4 == 0xC) {
+        let mut plain = bytes.to_vec();
+        plain[0] &= 0x0F;
+        let hz = decode_bcd_frequency(&plain)?;
+        return Some(Hz(hz.0 + 1_200_000_000));
+    }
+    decode_bcd_frequency(bytes)
+}
+
 // [@ANCHOR: radioctl_ylegacy_decode_bcd_frequency]
 /// The frequency in hertz from four BCD bytes (10 Hz units), or `None` on a non-digit nibble.
 pub fn decode_bcd_frequency(bytes: &[u8]) -> Option<Hz> {
@@ -209,7 +235,12 @@ impl ProtocolEngine for YaesuLegacyEngine {
                 Pending::FrequencyMode,
             ),
             Op::SetFrequency(Vfo::A, hz) => {
-                let bcd = encode_bcd_frequency(*hz).ok_or_else(|| {
+                let high = self
+                    .desc
+                    .yaesu_legacy
+                    .as_ref()
+                    .is_some_and(|y| y.high_band_flag);
+                let bcd = encode_frequency(*hz, high).ok_or_else(|| {
                     Self::unsupported("frequency must be a multiple of 10 Hz below 1 GHz")
                 })?;
                 (Self::block(bcd, OP_SET_FREQUENCY, none), Pending::Nothing)
@@ -466,6 +497,87 @@ mod tests {
         let out = e.feed(&[0xA7], later);
         assert!(
             matches!(out.first(), Some(Inbound::Unrecognised(stale)) if stale == &[0x01, 0x40])
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_ylegacy_encode_frequency]
+    // Tests [@ANCHOR: radioctl_ylegacy_decode_frequency]
+    #[test]
+    fn the_high_band_flag_replaces_the_leading_digit_with_c() {
+        assert_eq!(
+            encode_frequency(Hz(1_240_000_000), true),
+            Some([0xC4, 0x00, 0x00, 0x00])
+        );
+        assert_eq!(
+            decode_frequency(&[0xC4, 0x00, 0x00, 0x00], true),
+            Some(Hz(1_240_000_000))
+        );
+        assert_eq!(
+            encode_frequency(Hz(144_200_000), true),
+            Some([0x14, 0x42, 0x00, 0x00])
+        );
+        assert_eq!(encode_frequency(Hz(1_240_000_000), false), None);
+        assert_eq!(decode_frequency(&[0xC4, 0, 0, 0], false), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_ylegacy_engine_encode]
+    // Tests [@ANCHOR: radioctl_virtual_legacy_block]
+    #[test]
+    fn the_hamlib_described_family_members_set_and_some_read_back() {
+        use crate::virtual_rig::VirtualRig;
+        for (id, reads, hz) in [
+            ("yaesu-ft-897", true, 7_100_000),
+            ("yaesu-ft-847", true, 144_200_000),
+            ("yaesu-ft-847uni", false, 14_200_000),
+            ("yaesu-ft-650", false, 50_100_000),
+            ("yaesu-ft-736r", false, 1_296_100_000),
+        ] {
+            let d = shipped(id);
+            let mut e = YaesuLegacyEngine::new(d.clone()).expect("engine");
+            let mut r = VirtualRig::from_description(&d).expect("rig");
+            fn send(e: &mut YaesuLegacyEngine, r: &mut VirtualRig, op: Op) -> Vec<Inbound> {
+                let request = e.encode(&op).expect("encodes");
+                let answer = r.feed(&request.bytes, T0);
+                e.feed(&answer, T0)
+            }
+            assert!(
+                send(&mut e, &mut r, Op::SetFrequency(Vfo::A, Hz(hz))).is_empty(),
+                "{id}"
+            );
+            assert!(
+                send(&mut e, &mut r, Op::SetMode(Mode::Usb)).is_empty(),
+                "{id}"
+            );
+            assert_eq!(r.state().freq_a, Hz(hz), "{id}");
+            assert_eq!(r.state().mode, Mode::Usb, "{id}");
+            if reads {
+                assert_eq!(
+                    send(&mut e, &mut r, Op::GetFrequency(Vfo::A)),
+                    vec![
+                        Inbound::Observation(Observation::Frequency(Vfo::A, Hz(hz))),
+                        Inbound::Observation(Observation::Mode(Mode::Usb)),
+                    ],
+                    "{id}"
+                );
+            } else {
+                assert!(
+                    e.encode(&Op::GetFrequency(Vfo::A)).is_err(),
+                    "{id}: one way"
+                );
+                assert!(e.encode(&Op::GetMode).is_err(), "{id}: one way");
+            }
+            assert!(e.encode(&Op::SetPtt(true)).is_ok(), "{id}");
+        }
+        let mut e = YaesuLegacyEngine::new(shipped("yaesu-ft-736r")).expect("engine");
+        assert_eq!(
+            e.encode(&Op::SetFrequency(Vfo::A, Hz(1_296_100_000)))
+                .expect("encodes")
+                .bytes,
+            [0xC9, 0x61, 0x00, 0x00, 0x01]
+        );
+        assert_eq!(
+            e.encode(&Op::SetMode(Mode::Fm)).expect("encodes").bytes,
+            [0x08, 0, 0, 0, 0x07]
         );
     }
 }

@@ -839,6 +839,11 @@ impl VirtualRig {
     /// One five-byte block: reads answer, settings change state, anything else is ignored (the
     /// radio is silent).
     fn legacy_block(&mut self, block: &[u8]) -> Vec<u8> {
+        let high_band = self
+            .desc
+            .yaesu_legacy
+            .as_ref()
+            .is_some_and(|y| y.high_band_flag);
         let [a, b, c, d, opcode] = block else {
             return Vec::new();
         };
@@ -847,7 +852,7 @@ impl VirtualRig {
                 let Some(mode) = self.desc.mode_code(self.state.mode) else {
                     return Vec::new();
                 };
-                let mut out = legacy::encode_bcd_frequency(self.state.freq_a)
+                let mut out = legacy::encode_frequency(self.state.freq_a, high_band)
                     .map(|bcd| bcd.to_vec())
                     .unwrap_or_default();
                 out.push(mode);
@@ -862,7 +867,7 @@ impl VirtualRig {
                 vec![power | split_bit | ptt_bit]
             }
             legacy::OP_SET_FREQUENCY => {
-                if let Some(hz) = legacy::decode_bcd_frequency(&[*a, *b, *c, *d]) {
+                if let Some(hz) = legacy::decode_frequency(&[*a, *b, *c, *d], high_band) {
                     self.state.freq_a = hz;
                 }
                 Vec::new()

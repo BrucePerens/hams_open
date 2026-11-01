@@ -199,6 +199,8 @@ struct YaesuSection {
 #[serde(deny_unknown_fields)]
 struct YaesuLegacySection {
     stop_bits: u8,
+    #[serde(default)]
+    high_band_flag: bool,
 }
 
 #[derive(Deserialize)]
@@ -453,6 +455,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         .transpose()?;
     let yaesu_legacy = doc.yaesu_legacy.as_ref().map(|y| YaesuLegacyParams {
         stop_bits: y.stop_bits,
+        high_band_flag: y.high_band_flag,
     });
     let kenwood_hh = doc
         .kenwood_hh
@@ -820,8 +823,11 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             keys.push("yaesu.frequency_digits".to_string());
         }
     }
-    if description.yaesu_legacy.is_some() {
+    if let Some(legacy) = &description.yaesu_legacy {
         keys.push("yaesu_legacy.stop_bits".to_string());
+        if legacy.high_band_flag {
+            keys.push("yaesu_legacy.high_band_flag".to_string());
+        }
     }
     if description.kenwood_hh.is_some() {
         keys.push("kenwood_hh.dialect".to_string());

@@ -118,9 +118,8 @@ Left, with the reason:
 
 ## Tier B: variants of an existing engine (41 models)
 
-- Yaesu legacy five-byte CAT (31 models): the FT-817, 818, 857 and 897 are done. The rest (FT-747, 767, 840, 890, 900,
-  920, 1000D, 1000MP, FT-100, FT-450 family outliers and others) differ in block layout, mode bytes and which commands
-  exist. Each needs its own parameters in `yaesu_legacy` and a transcript test.
+- Yaesu legacy five-byte CAT (31 models): done (9, one-pass from Hamlib 4.6.2 facts, all unverified): FT-817, 818, 857, 897D (manual) and FT-897, FT-847, FT-847UNI, FT-650, FT-736R (the last three are set-only: Hamlib never reads these radios; the FT-736R's 1.2 GHz form is `yaesu_legacy.high_band_flag`). Left (22) and why: these use a different read path, a status block fetched with opcode `10` (and a different set path: `0A` set frequency, `0C` set mode, `0F` PTT with a parameter), whose length, frequency offset and byte order differ per model, so each needs a block-layout description in `yaesu_legacy` and its own virtual twin: FT-747GX (344-byte dump, frequency set little-endian BCD), FT-757GX and GXII (75 bytes), FT-767GX (86), FT-840, 890, 900 (19-byte operating data), FT-920 (28), FT-990 and 990 Old Rom (32), FT-1000, 1000D (32/16), FT-1000MP, MkV and MkV Field (16), FT-100 and FT-600 (own 0A/0C/0F/10 blocks of 19 bytes), FT-980 (its own 0A/01 status), and the receivers FRG-100, FRG-8800, FRG-9600 and VR-5000 (each its own short opcode set). The byte order and units (10 Hz BCD, binary 1.25 Hz and so on) are not stated consistently in Hamlib (`to_bcd` against `to_bcd_be`), so they wait for a manual or a volunteer's capture rather than a guess. Also open: the FT-847 PTT-off block carries parameter byte 1 in Hamlib's table, which the engine does not send.
+- Vertex Standard VX-1700 (`yaesu_other`, Tier C): its own HF marine protocol (`vx1700.c`); not started.
 - Kenwood hand-helds and mobiles (TH-D7, D72, D74, F6, F7, G71, TM-D700, D710, V7, V71; 10 models): ASCII with CR and
   different command sets from the HF Kenwoods. A dialect in the Kenwood engine, not a new engine.
 - Source: public manuals and protocol notes; Hamlib as oracle.
