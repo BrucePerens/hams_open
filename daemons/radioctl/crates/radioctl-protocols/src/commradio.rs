@@ -57,6 +57,8 @@ pub fn crc16(data: &[u8], mut crc: u16) -> u16 {
     crc
 }
 
+// [@ANCHOR: radioctl_commradio_push_escaped]
+/// Appends `byte`, escaped when it is a reserved byte.
 fn push_escaped(out: &mut Vec<u8>, byte: u8) {
     if matches!(byte, SOF | EOF | ESC) {
         out.push(ESC);
@@ -293,6 +295,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_commradio_crc16]
+    // Tests [@ANCHOR: radioctl_commradio_push_escaped]
     // Tests [@ANCHOR: radioctl_commradio_frame]
     // Tests [@ANCHOR: radioctl_commradio_unframe]
     #[test]

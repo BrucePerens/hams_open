@@ -119,6 +119,7 @@ impl AdatEngine {
     }
 }
 
+// [@ANCHOR: radioctl_adat_value_of]
 /// What follows the first space of a reply line, with surrounding blanks removed.
 fn value_of(line: &[u8]) -> Option<&[u8]> {
     let line = line.strip_prefix(&[0u8]).unwrap_or(line);
@@ -337,6 +338,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_adat_engine_new]
+    // Tests [@ANCHOR: radioctl_adat_value_of]
     #[test]
     fn engine_refuses_other_families() {
         assert!(AdatEngine::new(RigDescription::ts2000()).is_err());

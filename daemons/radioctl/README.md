@@ -548,6 +548,11 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_racal_twin_new] (radioctl-protocols) A twin in the description's default state.
 - [@ANCHOR: radioctl:radioctl_racal_twin_feed] (radioctl-protocols) The twin feed of the racal code.
 - [@ANCHOR: radioctl:radioctl_racal_twin_front_panel] (radioctl-protocols) The twin front panel of the racal code.
+- [@ANCHOR: radioctl:radioctl_adat_value_of] (radioctl-protocols) What follows the first space of a reply line, with surrounding blanks removed.
+- [@ANCHOR: radioctl:radioctl_commradio_push_escaped] (radioctl-protocols) Appends `byte`, escaped when it is a reserved byte.
+- [@ANCHOR: radioctl:radioctl_gomspace_table_of] (radioctl-protocols) The configuration table of a VFO.
+- [@ANCHOR: radioctl:radioctl_gomspace_twin_slot] (radioctl-protocols) The frequency of the selected table, if it is one the twin has.
+- [@ANCHOR: radioctl:radioctl_prm80_hex_byte] (radioctl-protocols) The value of exactly two hex digits.
 - [@ANCHOR: radioctl:radioctl_rshfiq_engine_new] (radioctl-protocols) Builds an engine from an RS-HFIQ vendor description.
 - [@ANCHOR: radioctl:radioctl_rshfiq_engine_encode] (radioctl-protocols) The encode of the rshfiq code.
 - [@ANCHOR: radioctl:radioctl_rshfiq_engine_feed] (radioctl-protocols) The feed of the rshfiq code.

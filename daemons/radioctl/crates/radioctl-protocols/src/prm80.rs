@@ -54,6 +54,8 @@ pub struct State {
     pub rssi: u8,
 }
 
+// [@ANCHOR: radioctl_prm80_hex_byte]
+/// The value of exactly two hex digits.
 fn hex_byte(text: &[u8]) -> Option<u8> {
     let s = std::str::from_utf8(text).ok()?;
     if s.len() != 2 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -277,6 +279,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_prm80_rx_from_pll]
+    // Tests [@ANCHOR: radioctl_prm80_hex_byte]
     // Tests [@ANCHOR: radioctl_prm80_pll_from_rx]
     // Tests [@ANCHOR: radioctl_prm80_decode_state]
     #[test]

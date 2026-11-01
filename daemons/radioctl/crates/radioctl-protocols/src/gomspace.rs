@@ -35,6 +35,8 @@ fn unsupported(what: &str) -> RigError {
     RigError::new(ErrorKind::Unsupported, what.to_string())
 }
 
+// [@ANCHOR: radioctl_gomspace_table_of]
+/// The configuration table of a VFO.
 fn table_of(vfo: Vfo) -> u8 {
     match vfo {
         Vfo::A => TABLE_RX,
@@ -186,6 +188,8 @@ impl GomspaceTwin {
         })
     }
 
+    // [@ANCHOR: radioctl_gomspace_twin_slot]
+    /// The frequency of the selected table, if it is one the twin has.
     fn slot(&mut self) -> Option<&mut Hz> {
         match self.table {
             TABLE_RX => Some(&mut self.rx_hz),
@@ -266,6 +270,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_gomspace_engine_new]
+    // Tests [@ANCHOR: radioctl_gomspace_table_of]
+    // Tests [@ANCHOR: radioctl_gomspace_twin_slot]
     #[test]
     fn engine_refuses_other_families() {
         assert!(GomspaceEngine::new(RigDescription::ts2000()).is_err());
