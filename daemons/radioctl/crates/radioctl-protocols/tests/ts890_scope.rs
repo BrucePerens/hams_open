@@ -141,6 +141,9 @@ fn scope_settings_round_trip_through_the_virtual_rig_and_bad_ones_never_reach_th
         ("BS81;BS8;", "BS81;"),
         ("DD09;", "?;"),
         ("DD0;", "DD00;"),
+        ("DD13;", "?;"),
+        ("DD1;", "DD10;"),
+        ("DD11;DD1;", "DD11;"),
     ] {
         assert_eq!(
             String::from_utf8(rig.feed(command.as_bytes(), NOW)).expect("text"),
@@ -281,6 +284,38 @@ fn the_filter_scope_frame_is_published_flipped_and_a_bad_one_is_counted() {
     assert_eq!(engine.scope_frames_dropped(), 1);
 }
 
+// Tests [@ANCHOR: radioctl_ts890_engine_scope_start]
+// Tests [@ANCHOR: radioctl_ts890_engine_encode]
+// Tests [@ANCHOR: radioctl_virtual_ts890_filter_sweep]
+// Tests [@ANCHOR: radioctl_virtual_ts890_sweep]
+#[test]
+fn the_filter_scope_needs_dd1_and_the_bandscope_needs_dd0_and_off_stops_both() {
+    let (mut engine, mut rig) = pair();
+    exchange(&mut engine, &mut rig, Op::SetTransceive(true));
+    // DD0 alone (the bandscope) sends no ##DD3: the guide ties it to DD1 (p. 70).
+    rig.feed(b"DD02;", NOW);
+    assert_eq!(rig.scope_sweep().len(), 1286);
+    assert!(rig.filter_scope_sweep().is_empty(), "DD1 is still off");
+    rig.feed(b"DD11;", NOW);
+    assert_eq!(rig.filter_scope_sweep().len(), 432);
+    // DD1 alone sends no ##DD2.
+    rig.feed(b"DD00;", NOW);
+    assert!(rig.scope_sweep().is_empty());
+    assert_eq!(rig.filter_scope_sweep().len(), 432);
+    // The COM/USB choice of DD1 sends nothing on the LAN.
+    rig.feed(b"DD12;", NOW);
+    assert!(rig.filter_scope_sweep().is_empty());
+    // The engine's output-off command stops both.
+    rig.feed(b"DD02;DD11;", NOW);
+    let off = engine
+        .encode(&Op::SetScopeOutput(false))
+        .expect("encodes")
+        .bytes;
+    assert_eq!(off, b"DD00;DD10;");
+    rig.feed(&off, NOW);
+    assert!(rig.scope_sweep().is_empty() && rig.filter_scope_sweep().is_empty());
+}
+
 // Tests [@ANCHOR: radioctl_ts890_engine_encode]
 // Tests [@ANCHOR: radioctl_ts890_decode_scope]
 // Tests [@ANCHOR: radioctl_ts890_scope_setting_wire]
@@ -417,7 +452,7 @@ fn a_restored_link_asks_for_the_waveform_output_again() {
         .into_iter()
         .map(|r| String::from_utf8(r.bytes).expect("text"))
         .collect();
-    assert_eq!(texts, ["AI2;", "FA;FB;FR;BS3;BS4;BSO;BSM;DD02;"]);
+    assert_eq!(texts, ["AI2;", "FA;FB;FR;BS3;BS4;BSO;BSM;DD02;DD11;"]);
     engine.encode(&Op::SetScopeOutput(false)).expect("encode");
     assert_eq!(engine.link_restored().len(), 1);
 }
