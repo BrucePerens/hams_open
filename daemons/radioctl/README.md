@@ -687,6 +687,27 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_vendor_vendor_of] (radioctl-protocols) The vendor protocol of a description, or why it has none.
 - [@ANCHOR: radioctl:radioctl_vendor_engine_for] (radioctl-protocols) The engine of a vendor serial description.
 - [@ANCHOR: radioctl:radioctl_vendor_twin_for] (radioctl-protocols) The virtual radio of a vendor serial description.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_default_filter] (radioctl-protocols) The filter index this engine selects for a mode.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_sideband] (radioctl-protocols) The `m` of the tuning formula: -1 lower side (and CW), +1 upper side, 0 otherwise.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_correction] (radioctl-protocols) The `c` of the RX-320 tuning formula: half the filter width plus 200 Hz, or 0 in CW.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_tuning_words] (radioctl-protocols) The coarse, fine and BFO words for `hz` in `mode` with the filter at `filter`, or `None` for an
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_frequency_of] (radioctl-protocols) The frequency the words tune to in `mode` with the filter at `filter`.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_frame] (radioctl-protocols) `N` and the three words, CR.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_engine_new] (radioctl-protocols) Builds an engine from an RX-320 description (`tentec`, dialect `rx320`).
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_engine_encode] (radioctl-protocols) The RX-320 engine encode: `N` tuning words, or `W`, `N` and `M` for a mode.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_engine_feed] (radioctl-protocols) The RX-320 engine feed: the radio sends nothing, so any byte is unrecognised.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_twin_snapshot] (radioctl-protocols) The RX-320 twin's frequency (decoded from the tuning words), mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_twin_feed] (radioctl-protocols) The RX-320 twin: decodes `W`, `N` and `M` frames and answers nothing.
+- [@ANCHOR: radioctl:radioctl_tentec_rx320_twin_front_panel] (radioctl-protocols) The RX-320 twin tuned or switched from its front panel.
+- [@ANCHOR: radioctl:radioctl_racal_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
+- [@ANCHOR: radioctl:radioctl_racal_dialect_frequency] (radioctl-protocols) The megahertz field of a set-frequency command.
+- [@ANCHOR: radioctl:radioctl_racal_dialect_body] (radioctl-protocols) A reply line without the receiver number the RX-331 puts in front of it.
+- [@ANCHOR: radioctl:radioctl_racal_dialect_prefix] (radioctl-protocols) What every command of a Racal-family dialect starts with.
+- [@ANCHOR: radioctl:radioctl_racal_twin_snapshot] (radioctl-protocols) The Racal twin's frequency, mode code and PTT state (never transmitting).
+- [@ANCHOR: radioctl:radioctl_tentec_twin_snapshot] (radioctl-protocols) The Ten-Tec twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_alinco_twin_snapshot] (radioctl-protocols) The Alinco twin's frequency, mode code and PTT state.
+- [@ANCHOR: radioctl:radioctl_drake_twin_snapshot] (radioctl-protocols) The Drake twin's frequency, mode code and PTT state (never transmitting).
 - [@ANCHOR: radioctl:radioctl_tentec_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_tentec_vfo_letter] (radioctl-protocols) The letter of a VFO in Ten-Tec commands.
 - [@ANCHOR: radioctl:radioctl_tentec_encode_frequency] (radioctl-protocols) The four big-endian bytes of the binary dialects, or `None` above `u32::MAX` hertz.

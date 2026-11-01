@@ -23,13 +23,14 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use radioctl_core::description::RigDescription;
+use radioctl_core::description::{Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine};
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
 use radioctl_core::units::{Hz, Level, Meter, Mode, Vfo};
 use radioctl_protocols::conformance::engine_for;
-use radioctl_protocols::virtual_rig::{RigState, VirtualRig};
+use radioctl_protocols::serial_vendor::{twin_for, VendorTwin};
+use radioctl_protocols::virtual_rig::VirtualRig;
 use serialport::{SerialPort, TTYPort};
 
 const HAMLIB_TS2000: u32 = 2014;
@@ -105,9 +106,65 @@ enum Reading {
     NoAnswer,
 }
 
+/// What a stand-in radio holds, in the terms the final comparison uses.
+struct Snap {
+    frequency: u64,
+    mode: String,
+    ptt: bool,
+}
+
+/// The virtual radio a description gets: the family's virtual rig, or, for the vendor serial
+/// family (Ten-Tec, Drake, Alinco, Racal), its own twin (the generic twin hook).
+enum Radio {
+    Rig(Box<VirtualRig>),
+    Vendor(Box<dyn VendorTwin>, Box<RigDescription>),
+}
+
+impl Radio {
+    fn from_description(desc: &RigDescription) -> Radio {
+        if desc.family == Family::SerialVendor {
+            Radio::Vendor(twin_for(desc).expect("vendor twin"), Box::new(desc.clone()))
+        } else {
+            Radio::Rig(Box::new(
+                VirtualRig::from_description(desc).expect("virtual rig"),
+            ))
+        }
+    }
+
+    fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8> {
+        match self {
+            Radio::Rig(rig) => rig.feed(bytes, now),
+            Radio::Vendor(twin, _) => twin.feed(bytes, now),
+        }
+    }
+
+    fn snap(&self) -> Snap {
+        match self {
+            Radio::Rig(rig) => {
+                let s = rig.state();
+                Snap {
+                    frequency: s.freq_a.0,
+                    mode: format!("{:?}", s.mode),
+                    ptt: s.ptt,
+                }
+            }
+            Radio::Vendor(twin, desc) => {
+                let s = twin
+                    .snapshot()
+                    .expect("a twin in the oracle batch keeps its state");
+                Snap {
+                    frequency: s.frequency.0,
+                    mode: format!("{:?}", s.mode_code.and_then(|c| desc.code_mode(c))),
+                    ptt: s.ptt,
+                }
+            }
+        }
+    }
+}
+
 /// A virtual rig on the master side of a pty, answering whoever opens the slave.
 struct RadioOnPty {
-    rig: Arc<Mutex<VirtualRig>>,
+    rig: Arc<Mutex<Radio>>,
     wire: Arc<Mutex<Vec<u8>>>,
     refused: Arc<Mutex<Vec<String>>>,
     stop: Arc<AtomicBool>,
@@ -120,9 +177,7 @@ impl RadioOnPty {
         let (mut master, slave) = TTYPort::pair().expect("pty pair");
         let slave_path = slave.name().expect("slave name");
         drop(slave);
-        let rig = Arc::new(Mutex::new(
-            VirtualRig::from_description(desc).expect("virtual rig"),
-        ));
+        let rig = Arc::new(Mutex::new(Radio::from_description(desc)));
         let wire = Arc::new(Mutex::new(Vec::new()));
         let refused = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -172,8 +227,8 @@ impl RadioOnPty {
         }
     }
 
-    fn state(&self) -> RigState {
-        self.rig.lock().expect("lock").state().clone()
+    fn state(&self) -> Snap {
+        self.rig.lock().expect("lock").snap()
     }
 }
 
@@ -291,6 +346,14 @@ impl Rigctld {
             let probe = TcpListener::bind("127.0.0.1:0").expect("free port");
             probe.local_addr().expect("addr").port()
         };
+        // The Racal RA6790/GM is 7 data bits, even parity, 2 stop bits in Hamlib, which a
+        // pseudo-terminal refuses (`tcsetattr` fails and `rig_open` returns "Invalid
+        // configuration"); the virtual radio ignores framing, so Hamlib is told 8N1 for it.
+        let conf = if model == 11003 {
+            "cache_timeout=0,data_bits=8,serial_parity=None,stop_bits=1"
+        } else {
+            "cache_timeout=0"
+        };
         let mut child = Reaped(
             Command::new(rigctld_binary())
                 .args([
@@ -308,7 +371,7 @@ impl Rigctld {
                 // scenario produced a different wire (seen: the TS-2000 split step read `FA;` where
                 // it normally reads `FB;`). With the cache off every answer is read from the radio,
                 // so the wire does not depend on the clock.
-                .args(["-C", "cache_timeout=0"])
+                .args(["-C", conf])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -532,7 +595,7 @@ fn through_hamlib(oracle: &mut Rigctld, op: &Op) -> Reading {
 }
 
 /// The scenario step as radioctl's engine sees it, on a virtual rig.
-fn through_radioctl(engine: &mut dyn ProtocolEngine, rig: &mut VirtualRig, op: &Op) -> Reading {
+fn through_radioctl(engine: &mut dyn ProtocolEngine, rig: &mut Radio, op: &Op) -> Reading {
     let now = Duration::from_secs(1);
     let Ok(request) = engine.encode(op) else {
         return Reading::Failed;
@@ -589,7 +652,7 @@ fn compare(
 ) -> (Vec<Divergence>, Vec<String>, String) {
     let radio = RadioOnPty::start(desc);
     let mut oracle = Rigctld::start(model, &radio.slave, baud);
-    let mut mine_rig = VirtualRig::from_description(desc).expect("virtual rig");
+    let mut mine_rig = Radio::from_description(desc);
     let mut engine = engine_for(desc).expect("engine");
     let mut divergences = Vec::new();
     let mut gone = false;
@@ -609,18 +672,17 @@ fn compare(
             });
         }
     }
-    let (state_a, state_b) = (radio.state(), mine_rig.state().clone());
+    // A last step that expects no answer (a set-only receiver) returns from Hamlib as soon as the
+    // bytes are written, before the pty thread has read them: let the radio settle first.
+    thread::sleep(Duration::from_millis(400));
+    let (state_a, state_b) = (radio.state(), mine_rig.snap());
     for (name, a, b) in [
         (
             "final freq_a",
-            state_a.freq_a.0.to_string(),
-            state_b.freq_a.0.to_string(),
+            state_a.frequency.to_string(),
+            state_b.frequency.to_string(),
         ),
-        (
-            "final mode",
-            format!("{:?}", state_a.mode),
-            format!("{:?}", state_b.mode),
-        ),
+        ("final mode", state_a.mode.clone(), state_b.mode.clone()),
         (
             "final ptt",
             state_a.ptt.to_string(),
@@ -1861,4 +1923,66 @@ fn known_block_divergences(file: &str) -> Vec<String> {
         _ => &[],
     };
     steps.iter().map(|s| (*s).to_string()).collect()
+}
+
+// Tests [@ANCHOR: radioctl_tentec_twin_snapshot]
+// Tests [@ANCHOR: radioctl_alinco_twin_snapshot]
+// Tests [@ANCHOR: radioctl_drake_twin_snapshot]
+// Tests [@ANCHOR: radioctl_racal_twin_snapshot]
+#[test]
+fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
+    oracle_family(
+        &[
+            ("tentec-tt-516", 16007, 1200),
+            ("tentec-tt-538", 16002, 57600),
+            ("tentec-tt-565", 16008, 57600),
+            ("tentec-tt-588", 16011, 57600),
+            ("tentec-tt-599", 16013, 57600),
+            ("alinco-dx-77", 17001, 9600),
+            ("alinco-dx-sr8", 17002, 9600),
+            ("racal-ra6790-gm", 11003, 9600),
+            ("tentec-rx-320", 16003, 1200),
+            ("tentec-rx-350", 16005, 57600),
+            ("tentec-rx-340", 16004, 9600),
+            ("tentec-rx-331", 16012, 9600),
+        ],
+        &hf_steps(),
+        known_vendor_divergences,
+    );
+}
+
+/// The pinned disagreements of the vendor serial files with Hamlib 4.6.2, each an open question
+/// until a radio or a vendor document settles it (none is a decision that Hamlib is wrong).
+///
+/// * `tentec-tt-538` (Jupiter): Hamlib writes the frequency as `*A` and four bytes and sends only
+///   six bytes of what its code formats as a seven-byte frame (the trailing CR is cut by the length
+///   it passes), so the twin, which waits for the CR the engine sends, swallows the start of the next
+///   command and the write fails. Whether the real Jupiter wants the CR is not known.
+/// * Drake R-8A and R-8B are not in the batch: Hamlib 4.6.2's `rigctld` aborts ("stack smashing
+///   detected") in the `VB` exchange of its open, whatever the twin answers, so no step can run.
+/// * The RX-320 (set-only) agrees on frequency and mode in the scenario; Hamlib builds its frames
+///   with a string function, so a zero byte inside one (the filter index 0 of a 6000 Hz write) would
+///   cut it short on its wire; the scenario's filters do not hit that.
+fn known_vendor_divergences(file: &str) -> Vec<&'static str> {
+    match file {
+        "tentec-tt-538" => vec![
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "final freq_a",
+        ],
+        _ => Vec::new(),
+    }
+}
+
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+#[test]
+fn the_kenwood_emulation_files_against_hamlib_record_every_disagreement() {
+    oracle_family(
+        &[
+            ("hilberling-pt-8000a", 2046, 57600),
+            ("lab599-tx-500", 2050, 9600),
+        ],
+        &hf_steps(),
+        |_| Vec::new(),
+    );
 }

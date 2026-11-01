@@ -1,0 +1,76 @@
+# Rig description: Ten-Tec RX-320 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/tentec/tentec.c, rx320.c, read for facts only, and `rigctl -m 16003 --dump-caps`); no vendor protocol document was read and no code or table was copied.
+# Hamlib lists: serial 1200..1200 baud, 8N1, handshake NONE; receive 100000 to 30000000 Hz in 1 range(s). The description format has no field for frequency ranges or serial settings, so they are not repeated here.
+# Dialect rx320: set-only DSP receiver tuned by computed tuning words (`N` + coarse, fine and BFO words), filter `W` and mode `M` frames; see tentec_rx320.rs. Nothing the radio sends is read, as in Hamlib, so there are no read capabilities. A receiver: no PTT.
+# Hamlib builds the frames with snprintf and %c, so a zero byte inside one cuts it short on its wire; radioctl sends all the bytes (an open question against the real radio).
+schema = 1
+capabilities = ["set-frequency", "set-mode"]
+
+[rig]
+id = "tentec-rx-320"
+name = "Ten-Tec RX-320"
+family = "serial-vendor"
+
+[vendor]
+protocol = "tentec"
+dialect = "rx320"
+
+[timing]
+timeout_ms = 200
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 10000000
+mode = "am"
+
+[[modes]]
+mode = "am"
+code = "0"
+
+[[modes]]
+mode = "usb"
+code = "1"
+
+[[modes]]
+mode = "lsb"
+code = "2"
+
+[[modes]]
+mode = "cw"
+code = "3"
+
+[[modes]]
+mode = "fm"
+code = "4"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 16003 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 16003 --dump-caps` (Hamlib 4.6.2): Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/tentec/tentec.c, rx320.c rigs/tentec/tentec.c (tuning-factor calculation and frame formats)", note = "Command frames read for facts only; no code copied. The dialect names are ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 16003 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/tentec/tentec.c, rx320.c", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command; absence in Hamlib is taken as absence on the radio, which may be too cautious." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/tentec/tentec.c, rx320.c (mode character definitions)", note = "Mode characters as the backend defines them; modes with no entry in radioctl's vocabulary are not listed." }
+verified = { state = "unverified" }

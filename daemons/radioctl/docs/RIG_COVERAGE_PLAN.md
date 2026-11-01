@@ -103,17 +103,16 @@ One description family, `serial-vendor`, carries every small-maker serial protoc
 
 Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine. Also done (2026-10-31, Hamlib facts only): Drake R-8A and R-8B (`drake.rs`, dialect `r8`), Alinco DX-77 and DX-SR8 (`alinco.rs`, dialects `dx77` and `dxsr8`), Racal RA6790/GM (`racal.rs`, dialect `ra6790`); QRP Labs QCX/QDX and QMX (Kenwood TS-480 emulation, descriptions only on the classic Kenwood engine; the ID answer 20 and the IF length are assumptions).
 
+Also done (2026-10-31, Hamlib facts only): Ten-Tec RX-320 (`tentec_rx320.rs`, dialect `rx320`: set-only, computed tuning words, the twin decodes the frequency back to the hertz), RX-350 (the Argonaut dialect: Hamlib's `rx350.c` uses the `tentec2.c` routines), RX-340 and RX-331 (dialects `rx340` and `rx331` of the Racal command family in `racal.rs`: same command letters, no prefix on the RX-340, `$0` prefix and `$0`-prefixed replies on the RX-331, six-decimal megahertz); Hilberling PT-8000A and Lab599 TX-500 (TS-480-style Kenwood commands, descriptions only on the classic Kenwood engine; the ID answer 20 is assumed for the TX-500). The Hamlib oracle batch now drives the vendor serial files (generic twin hook: `VendorTwin::snapshot`); Drake R-8A/R-8B are not in it because Hamlib 4.6.2's `rigctld` aborts ("stack smashing detected") in `drake_set_vfo` during its open, whatever the twin answers.
+
 Left, with the reason:
 
 | Model (Hamlib id) | What is needed |
 |---|---|
-| RX-320 (16003), RX-350 (16005) | DSP receivers tuned by a computed tuning factor and BFO words; needs its own dialect and a tolerance-based round-trip test |
-| RX-340 (16004), RX-331 (16012) | `$`-prefixed ASCII receiver protocol |
 | TT-550 Pegasus (16001), TT-585 Paragon (16009) | each has its own binary protocol |
 | Skanti TRP8000, TRP 8255 S R (14002, 14004), Barrett 950/2050/4050 (32001-32003), CODAN Envoy/NGT (34001, 34002), Guohe Q900/PMR-171 (1051, 1052) | not started: Barrett replies are framed by XON/XOFF bytes, Guohe has its own binary protocol (`pmr171.c`); each needs a protocol read and an engine file |
 | Elektor 3/04 (25001), Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002) | not started; kit and OEM modules with their own command sets |
 | Racal RA3702 (11005) | the RA37xx packet protocol (LF-started frames with a receiver number in the header, `QF`/`QM` queries); not read yet |
-| Hamlib oracle batch for the vendor serial files | the oracle harness drives `VirtualRig`; it needs a generic twin hook |
 
 ### FlexRadio: what is done and what is left
 
@@ -137,7 +136,7 @@ descriptions for every model in that family. Order by number of models and by ho
 2. AOR (11 receivers; the AR8000, AR8200, AR8600, AR5000, AR5000A, AR2700 and SR2200 are done in `aor.rs`; the AR3030 and AR3000A in `aor_classic.rs` and the binary AR7030 and AR7030 Plus in `ar7030.rs`, all from the AOR documents) and Uniden/Radio Shack (8) and Icom PCR (4): ASCII scanners and receivers. The Uniden BC245XLT, BC250D, BC780XLT, BC895XLT and BC898T are done in `uniden.rs`, the Icom PCR four in `icom_pcr.rs`; the BCD-396T and BCD-996T are done in `uniden_digital.rs` from Uniden's remote command specification (Hamlib has only stubs for them, so the oracle test pins that every Hamlib step is refused).
 3. Rohde and Schwarz (6; the ESMC and EB200 are done in `rs.rs`, the EK895, EK896, XK852 and XK2100 in `rs_hf.rs`: the EK895/6 from the operator manual's data-link chapter, the two XK from Hamlib only because no manual was found; their PTT is not encoded), JRC (5; done in `jrc.rs`), Winradio (8 through their vendor interface), Barrett (3), Alinco (2), Racal (2),
    Drake (2), CODAN (2), Skanti (2), Optoelectronics (2; done: the OptoScan boards speak Icom CI-V at address 0x80, so they are plain `icom-civ` descriptions) and single models (Lowe, Watkins-Johnson, Kachina, Micom,
-   Lab599, Hilberling, Guohe).
+   Lab599 and Hilberling (done: TS-480-style Kenwood commands), Guohe).
 4. Icom marine (4): done in `icom_marine.rs`. They are not CI-V-like: Hamlib speaks NMEA-style `$PICOA` sentences to them.
 
 Winradio (8 models, Hamlib ids 15001 to 15007 and 15009) is **not applicable**: Hamlib reaches these radios only through

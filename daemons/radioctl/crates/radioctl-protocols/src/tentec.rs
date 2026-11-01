@@ -34,7 +34,7 @@ use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::transcript::Panel;
 use radioctl_core::units::{Hz, Mode, Vfo};
 
-use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, VendorTwin};
+use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, TwinSnapshot, VendorTwin};
 
 /// Carriage return, the end of every Ten-Tec command and reply line.
 const CR: u8 = b'\r';
@@ -473,6 +473,7 @@ impl TentecTwin {
         let need = match (first, self.rx.peek().get(1)) {
             (b'*', Some(b'A' | b'B')) => 7,
             (b'*', Some(b'M' | b'T')) => 5,
+            (b'*', Some(b'W')) => 4,
             (b'*', None) => return None,
             _ => 3,
         };
@@ -502,8 +503,21 @@ impl TentecTwin {
                 self.mode = [*a, *b];
                 reply.extend_from_slice(g);
             }
+            // Hamlib follows a mode write with a filter-width write (`*W` and a width byte); the
+            // twin keeps no width and acknowledges it.
+            [b'*', b'W', _, CR] => reply.extend_from_slice(g),
             [b'?', b'C', CR] if self.dialect == Dialect::Argonaut => {
                 reply.extend_from_slice(&[b'C', 0, u8::from(self.ptt), CR]);
+                reply.extend_from_slice(g);
+            }
+            // Hamlib's open asks for the selected VFO (`EVA` CR `G` CR, or `EVB`) and the split
+            // state (`O` and a flag byte); this twin always has VFO A selected and split off.
+            [b'?', b'E', CR] if self.dialect == Dialect::Argonaut => {
+                reply.extend_from_slice(b"EVA\r");
+                reply.extend_from_slice(g);
+            }
+            [b'?', b'O', CR] if self.dialect == Dialect::Argonaut => {
+                reply.extend_from_slice(&[b'O', 0, CR]);
                 reply.extend_from_slice(g);
             }
             [b'#', c @ (b'0' | b'1'), CR] if self.dialect == Dialect::Argonaut => {
@@ -524,6 +538,15 @@ impl TentecTwin {
 }
 
 impl VendorTwin for TentecTwin {
+    // [@ANCHOR: radioctl_tentec_twin_snapshot]
+    fn snapshot(&self) -> Option<TwinSnapshot> {
+        Some(TwinSnapshot {
+            frequency: Hz(self.freq[0]),
+            mode_code: Some(self.mode[0]),
+            ptt: self.ptt,
+        })
+    }
+
     // [@ANCHOR: radioctl_tentec_twin_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8> {
         self.rx.push(bytes, now);
@@ -762,5 +785,22 @@ mod tests {
         assert!(t.ptt);
         assert!(t.front_panel(Panel::Split(true)).is_err());
         assert!(t.front_panel(Panel::Mode(Mode::Cw)).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_tentec_twin_binary_frame]
+    #[test]
+    fn the_argonaut_twin_answers_the_vfo_and_split_questions_of_hamlibs_open() {
+        let path = format!(
+            "{}/../../rigs/tentec-tt-516.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(path).expect("rig file");
+        let desc = radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description;
+        let mut t = TentecTwin::new(&desc).expect("twin");
+        assert_eq!(t.feed(b"?E\r", Duration::from_secs(1)), b"EVA\rG\r");
+        assert_eq!(t.feed(b"?O\r", Duration::from_secs(1)), b"O\0\rG\r");
+        assert_eq!(t.feed(b"*W\x1e\r", Duration::from_secs(1)), b"G\r");
     }
 }

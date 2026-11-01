@@ -28,7 +28,7 @@ use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::transcript::Panel;
 use radioctl_core::units::{Hz, Vfo};
 
-use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, VendorTwin};
+use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, TwinSnapshot, VendorTwin};
 
 const LF: u8 = b'\n';
 
@@ -287,6 +287,11 @@ impl AlincoTwin {
                 self.codes.contains(&m).then(|| self.mode = m)?;
                 ok()
             }
+            // Hamlib follows a mode write with a filter write (`AL2J` and two digits on the
+            // DX-77, `AL~RW_NAR` and two digits on the DX-SR8); the engine never sends them and
+            // the twin acknowledges them without keeping the width.
+            (Dialect::Dx77, c) if c.starts_with("AL2J") => ok(),
+            (Dialect::Dxsr8, c) if c.starts_with("AL~RW_NAR") => ok(),
             (Dialect::Dxsr8, "AL~RR_RXF") => Some(format!("{:08}", self.hz)),
             (Dialect::Dxsr8, "AL~RR_RFM") => Some(format!("{:02}", self.mode)),
             (Dialect::Dxsr8, "AL~RR_PTT") => Some(format!("{:02}", u8::from(self.ptt))),
@@ -309,6 +314,15 @@ impl AlincoTwin {
 }
 
 impl VendorTwin for AlincoTwin {
+    // [@ANCHOR: radioctl_alinco_twin_snapshot]
+    fn snapshot(&self) -> Option<TwinSnapshot> {
+        Some(TwinSnapshot {
+            frequency: Hz(self.hz),
+            mode_code: Some(self.mode),
+            ptt: self.ptt,
+        })
+    }
+
     // [@ANCHOR: radioctl_alinco_twin_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8> {
         self.rx.push(bytes, now);
@@ -488,5 +502,14 @@ mod tests {
             e.feed(b"late\r\n", T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    // Tests [@ANCHOR: radioctl_alinco_twin_answer]
+    #[test]
+    fn the_twins_acknowledge_the_filter_writes_hamlib_adds_to_a_mode_write() {
+        let mut t = AlincoTwin::new(&shipped("alinco-dx-77")).expect("twin");
+        assert_eq!(t.feed(b"AL2J01\r", T0), b"AL2J01\r\nOK\r\n");
+        let mut t = AlincoTwin::new(&shipped("alinco-dx-sr8")).expect("twin");
+        assert_eq!(t.feed(b"AL~RW_NAR00\r\n", T0), b"AL~RW_NAR00\r\nOK\r\n");
     }
 }

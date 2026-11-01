@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **28**
-- Real radios (models less not applicable): **285**; with a radioctl description: **249** (255 description files), **87%** of the real radios
+- Real radios (models less not applicable): **285**; with a radioctl description: **255** (261 description files), **89%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 249 |
+| described | 255 |
 | engine only | 1 |
 | needs variant | 0 |
-| needs engine | 24 |
+| needs engine | 18 |
 | odd device | 11 |
 | not applicable | 28 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 134 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 50 |
+| C | new engine | 82 | 56 |
 | D | odd device | 54 | 23 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 55 | 0 |
+| other_serial | C/D | aor | 94 | 61 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -167,7 +167,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1 | Hamlib | Dummy | D | virtual | - | - | unverified | - | not applicable |
 | 6 | Hamlib | Dummy No VFO | D | virtual | - | - | unverified | - | not applicable |
 | 2 | Hamlib | NET rigctl | D | unclassified | - | - | unverified | - | not applicable |
-| 2046 | Hilberling | PT-8000A | C | other_serial | - | - | unverified | - | needs engine |
+| 2046 | Hilberling | PT-8000A | C | other_serial | - | `hilberling-pt-8000a` | unverified | - | described |
 | 25019 | HobbyPCB | RS-HFIQ | D | other_serial | - | `hobbypcb-rs-hfiq` | unverified | - | described |
 | 3054 | Icom | IC ID-1 | A | icom_civ | civ | `icom-id-1` | unverified | - | described |
 | 3002 | Icom | IC-1275 | A | icom_civ | civ | `icom-ic-1275` | unverified | - | described |
@@ -293,7 +293,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2013 | Kenwood | TS-950SDX | A | kenwood_ascii | kenwood | `kenwood-ts-950sdx` | unverified | - | described |
 | 2039 | Kenwood | TS-990S | A | kenwood_ascii | kenwood | `kenwood-ts-990s` | manual-checked | - | described |
 | 25011 | KTH-SDR kit | Si570 PIC-USB | D | other_usb | si570_usb | `kth-si570-pic-usb` | unverified | - | described |
-| 2050 | Lab599 | TX-500 | C | other_serial | - | - | unverified | - | needs engine |
+| 2050 | Lab599 | TX-500 | C | other_serial | - | `lab599-tx-500` | unverified | - | described |
 | 10004 | Lowe | HF-235 | C | other_serial | - | - | unverified | - | needs engine |
 | 1045 | M0NKA | mcHF QRP | D | other_serial | - | `m0nka-mchf-qrp` | unverified | - | described |
 | 2049 | Malachite | DSP | D | other_serial | - | `malachite-dsp` | unverified | - | described |
@@ -331,10 +331,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 22001 | TAPR | DSP-10 | D | other_serial | - | - | unverified | - | odd device |
 | 3064 | Ten-Tec | Delta II | C | other_serial | - | `tentec-delta-ii` | unverified | - | described |
 | 3051 | Ten-Tec | Omni VI Plus | C | other_serial | - | `tentec-omni-vi-plus` | unverified | - | described |
-| 16003 | Ten-Tec | RX-320 | C | other_serial | - | - | unverified | - | needs engine |
-| 16012 | Ten-Tec | RX-331 | C | other_serial | - | - | unverified | - | needs engine |
-| 16004 | Ten-Tec | RX-340 | C | other_serial | - | - | unverified | - | needs engine |
-| 16005 | Ten-Tec | RX-350 | C | other_serial | - | - | unverified | - | needs engine |
+| 16003 | Ten-Tec | RX-320 | C | other_serial | - | `tentec-rx-320` | unverified | - | described |
+| 16012 | Ten-Tec | RX-331 | C | other_serial | - | `tentec-rx-331` | unverified | - | described |
+| 16004 | Ten-Tec | RX-340 | C | other_serial | - | `tentec-rx-340` | unverified | - | described |
+| 16005 | Ten-Tec | RX-350 | C | other_serial | - | `tentec-rx-350` | unverified | - | described |
 | 16007 | Ten-Tec | TT-516 Argonaut V | C | other_serial | - | `tentec-tt-516` | unverified | - | described |
 | 16002 | Ten-Tec | TT-538 Jupiter | C | other_serial | - | `tentec-tt-538` | unverified | - | described |
 | 16001 | Ten-Tec | TT-550 | C | other_serial | - | - | unverified | - | needs engine |

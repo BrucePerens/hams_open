@@ -44,6 +44,7 @@ pub mod rshfiq;
 pub mod serial_vendor;
 pub mod si570_usb;
 pub mod tentec;
+pub mod tentec_rx320;
 pub mod uniden;
 pub mod uniden_digital;
 pub mod usb_family;
