@@ -19,8 +19,8 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
   - USB SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
-- Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect), Elecraft KX3, Yaesu newcat and legacy five-byte, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V).
-- Rig descriptions: 126 files in `rigs/` (list below). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
+- Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect and the handheld/mobile family), Elecraft, Yaesu newcat and the legacy block protocols, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V), the receiver families (AOR, Uniden, JRC, Icom PCR and marine, Rohde and Schwarz), about thirty small serial-vendor engines (Ten-Tec, Racal, Drake, Barrett, CODAN, MDS, MICOM, WJ, Paragon, XG3, Transfox and others), a UDP control frame (HiQSDR) and USB SDR boards.
+- Rig descriptions: 286 files in `rigs/`, 280 of the 284 real radios Hamlib 4.6.2 lists (counts in `docs/RIG_SUPPORT.md`). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
 - Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -351,7 +351,7 @@ cd tools && python3 -m unittest test_hamlib_caps_matrix                         
   - `lan_password_secret` names a file in `server.secrets_dir` (owner-readable only) holding the password, which is never in the configuration file or a message;
   - a refused login or a missing secret stops the daemon from starting.
 - Tested against a fake radio on loopback only (`tests/ts890_lan.rs`); unverified on a radio.
-- Known gap: after a reconnect the engine's session state (the TS-890S's `AI2;`, a Flex's subscriptions) is not re-sent (manual chapter 13).
+- After a reconnect the actor unkeys the rig and calls `ProtocolEngine::link_restored`, so the Kenwood, TS-890S, Elecraft, Flex and Barrett 4100 engines send their session set-up again (manual chapter 13).
 
 ### Rotators
 

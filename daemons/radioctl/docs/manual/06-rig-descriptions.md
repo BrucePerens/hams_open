@@ -77,7 +77,7 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-Forty-six files. All are unverified until a volunteer confirms them (`docs/VOLUNTEER_TESTING.md`); the Icom batch of October 31, 2026 is best-effort coverage of Hamlib's models, not a claim that the radios were tried. Every family has a hand-written transcript for at least one file
+The table below was written when there were forty-six files; `rigs/` holds 286 on November 1, 2026 and the second table lists the families added since. All are unverified until a volunteer confirms them (`docs/VOLUNTEER_TESTING.md`); the Icom batch of October 31, 2026 is best-effort coverage of Hamlib's models, not a claim that the radios were tried. Every family has a hand-written transcript for at least one file
 (twenty-three transcripts). The FlexRadio and ANAN ones are of a different kind and say so in their
 `origin`: `flex-6400-basic.toml` is the SmartSDR text protocol as radioctl's virtual FLEX-6400 speaks it
 (it opens with the radio's prologue step, `V` and `H` lines, and the first command carries the engine's
@@ -109,6 +109,26 @@ radio; both families are also tested through the actor against virtual radios (`
 | `yaesu-legacy` | `yaesu-ft-817`, `yaesu-ft-818`, `yaesu-ft-857d`, `yaesu-ft-897d` | Yaesu's operating manuals (CAT chapters), with page and SHA-256; the one fact the manuals leave out, the level of the PTT bit, is from Hamlib 4.6.2 and labelled `hamlib-source`. The FT-818ND file is from its own operating manual (chapter [7](07-protocol-engines.md) lists how its CAT chapter differs from the FT-817ND's), and takes the PTT level from that manual. Binary transcripts. |
 | `flex-smartsdr` | `flex-6300`, `flex-smartsdr-slice-a`, `flex-smartsdr-slice-b`, `flex-smartsdr-slice-c`, `flex-smartsdr-slice-d`, `flex-smartsdr-slice-e`, `flex-smartsdr-slice-f`, `flex-smartsdr-slice-g`, `flex-smartsdr-slice-h`, `flex-6400`, `flex-6600`, `flex-6700` | FlexRadio's published SmartSDR API wiki (commit and pages named in `flex.rs`); control plane only. |
 | `hpsdr-network` | `anan-10`, `anan-100` | The OpenHPSDR protocol work in the `hpsdr` crate (`daemons/hpsdr`, see its README for sources); control plane only. |
+
+Families and files added from October 31 to November 1, 2026 (Hamlib parity work; the per-model facts and
+their sources are in each file, the plan and the reasons for what is left in
+[RIG_COVERAGE_PLAN.md](../RIG_COVERAGE_PLAN.md), the counts in [RIG_SUPPORT.md](../RIG_SUPPORT.md)):
+
+| Family | Files | Written from |
+|---|---|---|
+| `kenwood-ascii` (later) | `bg2fx-fx4`, `dl2man-trusdx`, `elad-fdm-duo`, `hilberling-pt-8000a`, `lab599-tx-500`, `malachite-dsp`, `qrplabs-qcx-qdx`, `qrplabs-qmx` | Hamlib 4.6.2 facts only; radios that imitate the TS-480 or TS-2000 command set. |
+| `icom-civ` (Ten-Tec) | `tentec-delta-ii`, `tentec-omni-vi-plus` | Hamlib 4.6.2 facts only. |
+| `yaesu-legacy` (block protocol) | `yaesu-ft-100`, `yaesu-ft-600`, `yaesu-ft-747gx`, `yaesu-ft-757gx`, `yaesu-ft-757gxii`, `yaesu-ft-767gx`, `yaesu-ft-840`, `yaesu-ft-890`, `yaesu-ft-900`, `yaesu-ft-920`, `yaesu-ft-980`, `yaesu-ft-990`, `yaesu-ft-990-oldrom`, `yaesu-ft-1000`, `yaesu-ft-1000d`, `yaesu-ft-1000mp`, `yaesu-ft-1000mp-mkv`, `yaesu-ft-1000mp-mkv-field`, `yaesu-frg-100`, `yaesu-frg-8800`, `yaesu-frg-9600`, `yaesu-vr-5000`, `vertex-vx-1700`, `m0nka-mchf-qrp`, `guohe-q900` | Hamlib 4.6.2 facts only; data-driven command and status-read tables. |
+| `receiver` (`uniden`) | `radioshack-pro-2052` | Hamlib 4.6.2 facts only; the BC895 command family. |
+| `serial-vendor` (Ten-Tec) | `tentec-tt-516`, `tentec-tt-538`, `tentec-tt-550`, `tentec-tt-565`, `tentec-tt-588`, `tentec-tt-599`, `tentec-rx-320`, `tentec-rx-350`, `tentec-tt-585` | Hamlib 4.6.2 facts only, except the Pegasus (TT-550), whose mode, filter and frame facts are `manual-checked` against its Programmer's Reference Guide Rev 2.0 (receive side only). The Paragon is `paragon.rs`, no document found. |
+| `serial-vendor` (Racal, Drake, Alinco) | `racal-ra6790-gm`, `racal-ra3702`, `tentec-rx-331`, `tentec-rx-340`, `drake-r-8a`, `drake-r-8b`, `alinco-dx-77`, `alinco-dx-sr8` | Hamlib 4.6.2 facts only. |
+| `serial-vendor` (HF vendors) | `skanti-trp8000`, `skanti-trp-8255-s-r`, `barrett-950`, `barrett-2050`, `barrett-4050`, `barrett-4100`, `codan-envoy`, `codan-ngt`, `kachina-505dsp`, `lowe-hf-235`, `watkins-johnson-wj-8888`, `micom-2-3` | Hamlib 4.6.2 facts only. The WJ-8888 and MICOM frames are binary; the 4100 re-enters remote mode through the link-restored hook. |
+| `serial-vendor` (modules, kits, small radios) | `guohe-pmr-171`, `dorji-dra818u`, `dorji-dra818v`, `mds-4710`, `mds-9710`, `commradio-ctx-10`, `gomspace-gs100`, `philips-prm8060`, `rft-ekd-500`, `adat-adt-200a`, `hobbypcb-rs-hfiq`, `elecraft-xg3`, `sigfox-transfox`, `n2adr-hiqsdr` | Hamlib 4.6.2 facts; the XG3 and the DRA818U are `manual-checked` against their documents. The HiQSDR is a UDP control frame. |
+| `usb-device` | `ae9rb-peaberry-v1`, `ae9rb-peaberry-v2`, `funkamateur-fa-sdr`, `kth-si570-pic-usb`, `softrock-si570-avr-usb`, `amsat-uk-funcube-dongle`, `amsat-uk-funcube-dongle-pro-plus`, `fifi-sdr`, `elektor-sdr-usb`, `digital-world-traveller` | Hamlib 4.6.2 facts; USB transport with a fake and a libusb backend (feature `usb`). |
+
+Not described, with the reason: Winradio (vendor driver only), the 29 not-applicable models of
+RIG_SUPPORT.md, and four odd devices (AnyTone D578A, Microtelecom Perseus, SAT-Schneider DRT1, TAPR DSP-10;
+see the plan).
 
 The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
 files are copies in structure of the X108G and X6100 files: Hamlib 4.6.2 gives the X5105 the X108G's settings (CI-V
