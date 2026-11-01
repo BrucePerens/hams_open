@@ -1,0 +1,146 @@
+# Rig description: Yaesu FT-100 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-100 Operating Manual, CAT chapter (PDF pages 98 to 103); Hamlib 4.6.2 ft100.c agrees. The FT-100D manual has the same chapter (not compared cell by cell).
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split"]
+
+[rig]
+id = "yaesu-ft-100"
+name = "Yaesu FT-100"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+split_on = [0x00, 0x00, 0x00, 0x01, 0x01]
+split_off = [0x00, 0x00, 0x00, 0x00, 0x01]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0x10]
+length = 16
+frequency = { offset = 1, form = "bin-1.25hz-msb4" }
+mode = { offset = 5, mask = 0x0f }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x01, 0xfa]
+length = 8
+ptt = { offset = 0, mask = 0x80, on_when_set = true }
+split = { offset = 0, mask = 0x01, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "cw-r"
+code = 0x03
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "data"
+code = 0x05
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x06
+
+[[yaesu_legacy.status_modes]]
+mode = "wfm"
+code = 0x07
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "cw-r"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "data"
+code = 0x05
+
+[[modes]]
+mode = "fm"
+code = 0x06
+
+[[modes]]
+mode = "wfm"
+code = 0x07
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-100 Operating Manual (file ft100_manual.pdf, sha256 cd48e297fcd828b94536c8906c9f7bd2e857a07ab433de650d2e76fde6afd670): CAT chapter, PDF p.99 (printed 97): 8 data bits, no parity, two stop bits; the baud rate is not stated on the page (Hamlib: 4800)" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-100 Operating Manual (file ft100_manual.pdf, sha256 cd48e297fcd828b94536c8906c9f7bd2e857a07ab433de650d2e76fde6afd670): CAT chapter, PDF p.99-103 (printed 97-101): 0A set frequency (BCD, least significant byte first, 439.70 MHz is 00 00 97 43 0A); 0C mode (00 LSB, 01 USB, 02 CW, 03 CW-R, 04 AM, 05 DIG, 06 FM, 07 W-FM); 0F PTT; 01 split; 10 returns 16 bytes: the frequency as a 32-bit binary count in 1.25 Hz units, most significant byte first, at offsets 1 to 4, the mode in the low nibble of byte 5; FA with parameter 1 returns 8 status bytes: bit 0 split and bit 7 TX in the first", note = "The manual's opcode chart prints the frequency bytes in the opposite order from its worked example; the example and Hamlib agree on least significant first." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-100 Operating Manual (file ft100_manual.pdf, sha256 cd48e297fcd828b94536c8906c9f7bd2e857a07ab433de650d2e76fde6afd670): CAT chapter, PDF p.100-103 (printed 98-101): opcode table, status layouts", note = "Meters (F7) not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-100 Operating Manual (file ft100_manual.pdf, sha256 cd48e297fcd828b94536c8906c9f7bd2e857a07ab433de650d2e76fde6afd670): CAT chapter, PDF p.100 (printed 98): mode codes" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

@@ -1,0 +1,121 @@
+# Rig description: Yaesu FT-980 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Hamlib 4.6.2 ft980.c facts only: the FT-980 operating manual defers CAT to a separate interface manual that could not be fetched.
+# Hamlib reads five bytes back after each set (not modelled) and the whole 148-byte status for a read; PTT is the serial RTS line, not a CAT command.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode"]
+
+[rig]
+id = "yaesu-ft-980"
+name = "Yaesu FT-980"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x08]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0x01]
+length = 148
+frequency = { offset = 143, form = "bcd-10hz-lsb" }
+mode = { offset = 142, mask = 0xff }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "rtty"
+code = 0x06
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x07
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x10
+
+[[modes]]
+mode = "usb"
+code = 0x11
+
+[[modes]]
+mode = "cw"
+code = 0x12
+
+[[modes]]
+mode = "am"
+code = 0x14
+
+[[modes]]
+mode = "rtty"
+code = 0x16
+
+[[modes]]
+mode = "fm"
+code = 0x17
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft980.c: caps: serial_stop_bits", note = "Assumed 2 as for every other block-protocol Yaesu; unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft980.c: ft980_set_freq (opcode 08, BCD least significant first), ft980_set_mode (opcode 0A, parameter in the fourth byte: 10 LSB, 11 USB, 12 CW, 13 CW narrow, 14 AM, 15 AM narrow, 16 RTTY, 17 FM), ft980_get_status_data (opcode 01 returns 148 bytes; the operating frequency is the four bytes before the last, the operating mode the byte before them)", note = "Unverified: no FT-980 CAT document. Hamlib's status mode switch also folds narrow CW and AM into CW and AM; not mapped here. Hamlib reads five bytes back after each set; whether that is an echo is unknown and not modelled." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft980.c: caps: ptt_type RIG_PTT_SERIAL_RTS", note = "PTT is the RTS line, so no CAT set-ptt." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft980.c: ft980_set_mode md values" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

@@ -1,0 +1,153 @@
+# Rig description: Yaesu FT-1000MP (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-1000MP MARK-V Operating Manual, CAT chapter (PDF pages 88 to 99; the MARK-V Field manual's chapter is identical) and Hamlib 4.6.2 ft1000mp.c, which serves the FT-1000MP, MARK-V and MARK-V Field alike.
+# OPEN QUESTION: the unit of the frequency in the 16-byte status record. The manual's figure does not decode; Hamlib reads a 32-bit big-endian count in 0.625 Hz units, which agrees with the clarifier's stated resolution but is confirmed by no readable statement. Unverified.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split"]
+
+[rig]
+id = "yaesu-ft-1000mp"
+name = "Yaesu FT-1000MP"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+split_on = [0x00, 0x00, 0x00, 0x01, 0x01]
+split_off = [0x00, 0x00, 0x00, 0x00, 0x01]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x03, 0x10]
+length = 32
+frequency = { offset = 1, form = "bin-0.625hz-msb4" }
+mode = { offset = 7, mask = 0x07 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x02, 0x10]
+length = 16
+frequency = { offset = 1, form = "bin-0.625hz-msb4" }
+mode = { offset = 7, mask = 0x07 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0xfa]
+length = 5
+ptt = { offset = 0, mask = 0x80, on_when_set = true }
+split = { offset = 0, mask = 0x01, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x03
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "rtty"
+code = 0x05
+
+[[yaesu_legacy.status_modes]]
+mode = "data"
+code = 0x06
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "cw-r"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x06
+
+[[modes]]
+mode = "rtty"
+code = 0x08
+
+[[modes]]
+mode = "rtty-r"
+code = 0x09
+
+[[modes]]
+mode = "data-r"
+code = 0x0a
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-1000MP MARK-V Operating Manual (file ft1000mpmarkv_manual.pdf, sha256 980336e3e8b09f733d5a24e58972f60793d278eb0ed0f5d4413b8e7505049c02): CAT chapter, PDF p.88 (printed 86): 4800 bit/s, 8 data, no parity, 2 stop; built-in level converter" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-1000MP MARK-V Operating Manual (file ft1000mpmarkv_manual.pdf, sha256 980336e3e8b09f733d5a24e58972f60793d278eb0ed0f5d4413b8e7505049c02): CAT chapter, PDF p.89-97 (printed 87-95): 0A set main frequency (BCD, least significant byte first, 14.25 MHz is 00 50 42 01 0A); 0C mode (00 LSB, 01 USB, 02 CW, 03 CW-R, 04 AM, 05 AM sync, 06 FM, 07 FM wide, 08 RTTY-L, 09 RTTY-U, 0A packet-L, 0B packet-F); 0F PTT; 01 split; 10 with parameter 2 returns the 16-byte operating record (frequency in bytes 1 to 4, mode in bits 0 to 2 of byte 7: 0 LSB, 1 USB, 2 CW, 3 AM, 4 FM, 5 RTTY, 6 packet); FA with parameter 0 returns 3 flag bytes then ID bytes: bit 0 split, bit 7 PTT keyed in the first", note = "The status frequency unit is unverified (see the top of this file). The manual's text gives the FA reply ID bytes both as 10 00 and as 03 93; not used." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-1000MP MARK-V Operating Manual (file ft1000mpmarkv_manual.pdf, sha256 980336e3e8b09f733d5a24e58972f60793d278eb0ed0f5d4413b8e7505049c02): CAT chapter, PDF p.89 (printed 87): flag byte 1 layout", note = "Meters (F7) not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-1000MP MARK-V Operating Manual (file ft1000mpmarkv_manual.pdf, sha256 980336e3e8b09f733d5a24e58972f60793d278eb0ed0f5d4413b8e7505049c02): CAT chapter, PDF p.94 (printed 92): mode codes of opcode 0C", note = "AM sync, wide FM and packet-FM are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

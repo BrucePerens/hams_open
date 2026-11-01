@@ -1,0 +1,91 @@
+# Rig description: Yaesu FRG-8800 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FRG-8800 Operating Manual, CAT chapter (PDF pages 31 to 33) and Hamlib 4.6.2 frg8800.c. Write-only receiver.
+# The receiver must be sent "external control on" (five zero bytes) first; the engine does not send it (a volunteer's open item).
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["set-frequency", "set-mode"]
+
+[rig]
+id = "yaesu-frg-8800"
+name = "Yaesu FRG-8800"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x01]
+at = 0
+form = "frg8800"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x80]
+at = 3
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x01
+
+[[modes]]
+mode = "usb"
+code = 0x02
+
+[[modes]]
+mode = "cw"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x00
+
+[[modes]]
+mode = "fm"
+code = 0x0c
+
+[[modes]]
+mode = "wfm"
+code = 0x04
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FRG-8800 Operating Manual (file frg8800_manual.pdf, sha256 b733084f747fe6351ab3bdc535f7819d142c945a34bf9863081348b328d39622): CAT chapter, PDF p.31: input only, TTL, 4800 bit/s, 8 data, no parity, 2 stop; each byte within 300 ms of the last" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FRG-8800 Operating Manual (file frg8800_manual.pdf, sha256 b733084f747fe6351ab3bdc535f7819d142c945a34bf9863081348b328d39622): CAT chapter, PDF p.32: frequency set: byte 5 is 01; bytes 1 to 4 least significant first: byte 1 holds the 100 Hz digit in its high nibble and a one-hot code of the 25 Hz step in its low nibble (1 is +0, 2 is +25, 4 is +50, 8 is +75), byte 2 the 10 kHz and 1 kHz digits, byte 3 the 1 MHz and 100 kHz digits, byte 4 the 100 MHz and 10 MHz digits; 14.254 MHz is 01 54 42 01 01; mode set: byte 5 is 80 and byte 4 the mode; external control on is byte 4 and 5 zero, off is byte 4 = 80", note = "Hamlib 4.6.2 frg8800.c agrees on the frequency form." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FRG-8800 Operating Manual (file frg8800_manual.pdf, sha256 b733084f747fe6351ab3bdc535f7819d142c945a34bf9863081348b328d39622): CAT chapter, PDF p.31: the receiver returns no data" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FRG-8800 Operating Manual (file frg8800_manual.pdf, sha256 b733084f747fe6351ab3bdc535f7819d142c945a34bf9863081348b328d39622): CAT chapter, PDF p.32: mode codes: 00 AM wide, 08 AM narrow, 01 LSB, 02 USB, 03 CW wide, 0B CW narrow, 04 FM wide (option unit), 0C FM narrow", note = "Narrow AM and CW are not mapped. FM maps to the narrow code (as Hamlib), WFM to the wide." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

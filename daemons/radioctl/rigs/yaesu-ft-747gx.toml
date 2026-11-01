@@ -1,0 +1,119 @@
+# Rig description: Yaesu FT-747GX (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-747GX Operating Manual, CAT chapter (PDF pages 27 to 30), with Hamlib 4.6.2 ft747.c as a cross-check.
+# Status block: 345 bytes by the manual, 344 in Hamlib; radioctl follows the manual and records the difference as a pinned open question.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split"]
+
+[rig]
+id = "yaesu-ft-747gx"
+name = "Yaesu FT-747GX"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+split_on = [0x00, 0x00, 0x00, 0x01, 0x01]
+split_off = [0x00, 0x00, 0x00, 0x00, 0x01]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x00, 0x10]
+length = 345
+frequency = { offset = 2, form = "bcd-1hz-msb" }
+mode = { offset = 24, mask = 0x1f }
+ptt = { offset = 0, mask = 0x20, on_when_set = true }
+split = { offset = 0, mask = 0x02, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x10
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x08
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x01
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x06
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-747GX Operating Manual (file rigpix/rigpix_ft747gx_manual.pdf, sha256 bef5dee5821019bd2aac36a2b28dfff6b3d0b683bed2430d6050e329515c2856): CAT chapter 6, PDF p.27 (printed 26): 4800 bit/s, one start bit, 8 data bits, no parity, two stop bits, TTL levels; 50 to 200 ms between bytes of a block; no echo" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-747GX Operating Manual (file rigpix/rigpix_ft747gx_manual.pdf, sha256 bef5dee5821019bd2aac36a2b28dfff6b3d0b683bed2430d6050e329515c2856): CAT chapter, PDF p.27-30 (printed 26-29): opcodes 01 split, 05 VFO A/B, 0A set frequency (seven BCD digits, 10 Hz, least significant byte first, 14.25 MHz is 00 50 42 01 0A), 0C mode, 0F PTT (01 transmit), 10 update (345 bytes: flag byte 0 with TX bit 5 and split bit 1; displayed frequency 8 BCD digits most significant first in 1 Hz units with 25 Hz resolution at offsets 2 to 5; mode byte at offset 0x18 with bits 0 FM, 1 AM, 2 CW, 3 USB, 4 LSB and bit 7 narrow)", note = "The manual's printed offset column contradicts its hex column and its own arithmetic; the hex column and the total of 345 are self-consistent and are what is used. Hamlib reads a 344-byte block and takes the displayed frequency from offset 1 (four BCD bytes), which looks off by one against the manual; open question, needs a radio. Narrow variants (bit 7) are masked out." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "Yaesu FT-747GX Operating Manual (file rigpix/rigpix_ft747gx_manual.pdf, sha256 bef5dee5821019bd2aac36a2b28dfff6b3d0b683bed2430d6050e329515c2856): CAT chapter, PDF p.30 (printed 29): opcode chart and update map", note = "No S-meter or power-meter read exists in this radio's CAT." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-747GX Operating Manual (file rigpix/rigpix_ft747gx_manual.pdf, sha256 bef5dee5821019bd2aac36a2b28dfff6b3d0b683bed2430d6050e329515c2856): CAT chapter, PDF p.30 (printed 29): mode set 0C: 00 LSB, 01 USB, 02 CW wide, 03 CW narrow, 04 AM wide, 05 AM narrow, 06 FM wide, 07 FM narrow", note = "Narrow variants are not mapped (radioctl has no filter in the mode)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

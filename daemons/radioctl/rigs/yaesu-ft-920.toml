@@ -1,0 +1,153 @@
+# Rig description: Yaesu FT-920 (legacy five-byte CAT block protocol, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Written from Yaesu's FT-920 Operating Manual, CAT chapter (PDF pages 88 to 92) and Hamlib 4.6.2 ft920.c.
+# The manual gives the opcode chart and status flags but NO encoding for the 14-byte status record's frequency, mode or clarifier fields. The frequency and mode decoding here is Hamlib's (unverified); Hamlib reads the frequency as a plain big-endian count of hertz, whereas the FT-890 family counts 10 Hz units, so it may be wrong by a factor.
+# No radio has been connected, so every `verified` is unverified. Engine and gaps: crates/radioctl-protocols/src/yaesu_legacy.rs.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split"]
+
+[rig]
+id = "yaesu-ft-920"
+name = "Yaesu FT-920"
+family = "yaesu-legacy"
+
+[yaesu_legacy]
+stop_bits = 2
+ptt_on = [0x00, 0x00, 0x00, 0x01, 0x0f]
+ptt_off = [0x00, 0x00, 0x00, 0x00, 0x0f]
+split_on = [0x00, 0x00, 0x00, 0x01, 0x01]
+split_off = [0x00, 0x00, 0x00, 0x00, 0x01]
+
+[yaesu_legacy.set_frequency]
+template = [0x00, 0x00, 0x00, 0x00, 0x0a]
+at = 0
+form = "bcd-10hz-lsb"
+
+[yaesu_legacy.set_mode]
+template = [0x00, 0x00, 0x00, 0x00, 0x0c]
+at = 3
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x03, 0x10]
+length = 28
+frequency = { offset = 1, form = "bin-1hz-msb4" }
+mode = { offset = 7, mask = 0x47 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x02, 0x10]
+length = 28
+frequency = { offset = 1, form = "bin-1hz-msb4" }
+mode = { offset = 7, mask = 0x47 }
+
+[[yaesu_legacy.reads]]
+request = [0x00, 0x00, 0x00, 0x01, 0xfa]
+length = 8
+ptt = { offset = 0, mask = 0x80, on_when_set = true }
+split = { offset = 0, mask = 0x03, on_when_set = true }
+
+[[yaesu_legacy.status_modes]]
+mode = "lsb"
+code = 0x00
+
+[[yaesu_legacy.status_modes]]
+mode = "usb"
+code = 0x40
+
+[[yaesu_legacy.status_modes]]
+mode = "cw"
+code = 0x41
+
+[[yaesu_legacy.status_modes]]
+mode = "cw-r"
+code = 0x01
+
+[[yaesu_legacy.status_modes]]
+mode = "am"
+code = 0x02
+
+[[yaesu_legacy.status_modes]]
+mode = "fm"
+code = 0x03
+
+[[yaesu_legacy.status_modes]]
+mode = "data-r"
+code = 0x04
+
+[[yaesu_legacy.status_modes]]
+mode = "data"
+code = 0x05
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 50
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "cw"
+code = 0x02
+
+[[modes]]
+mode = "cw-r"
+code = 0x03
+
+[[modes]]
+mode = "am"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x06
+
+[[modes]]
+mode = "data"
+code = 0x0a
+
+[[modes]]
+mode = "data-r"
+code = 0x08
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the manual or Hamlib", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.stop_bits"
+provenance = { kind = "manual", reference = "Yaesu FT-920 Operating Manual (file rigpix/rigpix_ft920_manual.pdf, sha256 c931afbe9915c1101b4df0bc0290faa4612037b6561c890eee946cb110a19ed6): CAT chapter, PDF p.90 (printed 88): 4800 bit/s, 1 start, 8 data, no parity, 2 stop; built-in level converter; at most 200 ms between bytes; no echo" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu_legacy.block"
+provenance = { kind = "manual", reference = "Yaesu FT-920 Operating Manual (file rigpix/rigpix_ft920_manual.pdf, sha256 c931afbe9915c1101b4df0bc0290faa4612037b6561c890eee946cb110a19ed6): CAT chapter, PDF p.88-91 (printed 86-89): opcodes 01 split, 0A set VFO-A frequency (BCD, least significant byte first), 0C mode set (00 LSB, 01 USB, 02 CW-USB, 03 CW-LSB, 04 AM wide, 05 AM narrow, 06 FM, 07 FM narrow, 08 and 0A data), 10 with parameter 02 returns the 28-byte operating data (two 14-byte records), FA with parameter 01 returns 8 flag bytes: byte 0 bit 7 is PTT grounded, bits 0 and 1 split", note = "The record's frequency, mode and clarifier encodings are not in the manual; they come from Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8) rigs/yaesu/ft920.c (frequency at offset 1, mode at offset 7 with codes 00 LSB, 01 CW-LSB, 02 AM, 03 FM, 04 data-LSB, 05 data-USB, 06 data-FM, 40 USB, 41 CW-USB, bit 7 narrow, mask 47 here). PTT opcode 0F is not in the manual's chart; it is Hamlib's." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/yaesu/ft920.c: ft920_set_ptt: opcode 0F with parameter 1 or 0", note = "The manual's flag table has a bit for PTT grounded via a CAT command, which implies the opcode exists, but its chart omits it. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Yaesu FT-920 Operating Manual (file rigpix/rigpix_ft920_manual.pdf, sha256 c931afbe9915c1101b4df0bc0290faa4612037b6561c890eee946cb110a19ed6): CAT chapter, PDF p.89 (printed 87): note 6, mode set codes", note = "Data-FM (0B), narrow variants and VFO-B codes are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-protocols/src/yaesu_legacy.rs: 50 ms between commands, 2 s reply timeout", note = "Our default, inside the manuals' limit of 200 ms between bytes of a block; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py style defaults", note = "Only a virtual rig's starting state." }
+verified = { state = "unverified" }

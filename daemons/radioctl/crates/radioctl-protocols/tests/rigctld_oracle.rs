@@ -1644,4 +1644,171 @@ fn known_optoscan_divergences(_file: &str) -> Vec<&'static str> {
         "GetMode",
         "final mode",
     ]
+
+// Tests [@ANCHOR: radioctl_ylegacy_encode_block]
+// Tests [@ANCHOR: radioctl_ylegacy_decode_block]
+// Tests [@ANCHOR: radioctl_virtual_legacy_model_block]
+#[test]
+fn the_block_protocol_yaesu_files_against_hamlib_record_every_disagreement() {
+    // The 22 later Yaesu models (Hamlib model numbers from RIG_SUPPORT.md). What each side
+    // reads back after the same sets is compared; the final states of the two virtual rigs too.
+    // A disagreement is recorded in `known_block_divergences` with its cause, never skipped.
+    let mut wrong: Vec<String> = Vec::new();
+    for (file, model) in [
+        ("yaesu-ft-747gx", 1005),
+        ("yaesu-ft-757gx", 1006),
+        ("yaesu-ft-757gxii", 1007),
+        ("yaesu-ft-767gx", 1009),
+        ("yaesu-ft-840", 1011),
+        ("yaesu-ft-890", 1015),
+        ("yaesu-ft-900", 1013),
+        ("yaesu-ft-920", 1014),
+        ("yaesu-ft-990", 1016),
+        ("yaesu-ft-990-oldrom", 1048),
+        ("yaesu-ft-1000", 1002),
+        ("yaesu-ft-1000d", 1003),
+        ("yaesu-ft-1000mp", 1024),
+        ("yaesu-ft-1000mp-mkv", 1004),
+        ("yaesu-ft-1000mp-mkv-field", 1025),
+        ("yaesu-ft-100", 1021),
+        ("yaesu-ft-600", 1039),
+        ("yaesu-ft-980", 1031),
+        ("yaesu-frg-100", 1017),
+        ("yaesu-frg-8800", 1019),
+        ("yaesu-frg-9600", 1018),
+        ("yaesu-vr-5000", 1026),
+        ("vertex-vx-1700", 1033),
+    ] {
+        let desc = shipped(file);
+        let mut steps = scenario();
+        if desc
+            .capabilities
+            .has(radioctl_core::capability::Capability::ReadPtt)
+        {
+            steps.push(Op::GetPtt);
+        }
+        let (divergences, refused, wire) = compare(model, &desc, 4800, &steps);
+        report(file, &divergences, &refused, &wire);
+        let got: Vec<String> = divergences.iter().map(|d| d.step.clone()).collect();
+        if got != known_block_divergences(file) {
+            wrong.push(format!("{file}: {divergences:#?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The steps on which Hamlib and radioctl disagree for a block-protocol Yaesu file, with the cause
+/// where it is known; an empty list means the two agree on the whole scenario.
+fn known_block_divergences(file: &str) -> Vec<String> {
+    let steps: &[&str] = match file {
+        // Hamlib reads a 344-byte block (the manual says 345) and takes the displayed frequency from offset 1 (the manual puts the digits at offset 2): its read comes back as zero against the virtual rig, which answers by the manual. Open question; needs a radio.
+        "yaesu-ft-747gx" => &["GetFrequency(A)"],
+        // Hamlib's FT-757GX reads fail against the virtual rig, which answers the GXII manual's 75-byte status; Hamlib's wire here holds no status request, only sets, so its reads cannot be answered from the status. Cause not isolated. No CAT document for the original GX was found.
+        "yaesu-ft-757gx" => &[
+            "GetFrequency(A)",
+            "GetMode",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetMode(Cw)",
+            "GetMode",
+            "GetPtt",
+            "final mode",
+        ],
+        // Hamlib sent nothing (empty wire) to the virtual rig for this model, so every step is NoAnswer from Hamlib; its backend needs something at open that the virtual rig, built from the manual, does not provide. Cause not isolated.
+        "yaesu-ft-757gxii" => &[
+            "GetFrequency(A)",
+            "GetMode",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetFrequency(A, Hz(14060000))",
+            "SetMode(Cw)",
+            "GetFrequency(A)",
+            "GetMode",
+            "GetPtt",
+            "final freq_a",
+            "final mode",
+        ],
+        // Hamlib sent only zero bytes (its handshake of the 767's echo and acknowledge protocol); the virtual rig echoes but Hamlib then gets no status. radioctl is set-only for this radio (reads need the acknowledge round trip, not implemented), so its reads are refused.
+        "yaesu-ft-767gx" => &[
+            "GetFrequency(A)",
+            "GetMode",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetFrequency(A, Hz(14060000))",
+            "SetMode(Cw)",
+            "GetFrequency(A)",
+            "GetMode",
+            "final freq_a",
+            "final mode",
+        ],
+        // Hamlib's set-mode to LSB fails and its wire shows only the later CW set being sent. Cause not isolated. The frequency reads agree through the VFO data block (opcode 10, parameter 3).
+        "yaesu-ft-840" => &["SetMode(Lsb)", "GetMode"],
+        // As the FT-840: Hamlib's set-mode to LSB fails (cause not isolated).
+        "yaesu-ft-890" => &["SetMode(Lsb)", "GetMode"],
+        // As the FT-840: Hamlib's set-mode to LSB fails (cause not isolated).
+        "yaesu-ft-900" => &["SetMode(Lsb)", "GetMode"],
+        // The old-ROM (1492-byte whole-radio update) layout offsets in this description are unverified guesses at which 16-byte record is missing; Hamlib's ft990v12 reads other offsets. Open question.
+        "yaesu-ft-990-oldrom" => &["GetFrequency(A)", "GetMode"],
+        // Hamlib's FT-1000 (model 1002) sends no status request in this scenario (its wire is only the sets), so its reads fail; the FT-1000D (model 1003, same manual) agrees. Cause not isolated.
+        "yaesu-ft-1000" => &["GetFrequency(A)", "GetMode"],
+        // Hamlib sets CW with mode code 03 (the manual's CW-R/CW-LSB) where the description's set code for CW is 02, so Hamlib's final mode on the virtual rig is CW-R. Open question: the manual calls 02 CW and 03 CW-R; Hamlib's comments call 02 CW-USB and 03 CW-LSB.
+        "yaesu-ft-1000mp" => &["final mode"],
+        "yaesu-ft-1000mp-mkv" => &["final mode"],
+        "yaesu-ft-1000mp-mkv-field" => &["final mode"],
+        // Hamlib reads 32 bytes for the status (its struct holds 16 bytes plus 16 of stuffing) where the manual's block is 16 bytes; the virtual rig answers 16, so Hamlib's frequency and mode reads fail. Open question; needs a radio.
+        "yaesu-ft-100" => &["GetFrequency(A)", "GetMode"],
+        // Hamlib sent nothing (empty wire) to the virtual rig for this model; radioctl follows Hamlib's own tables with no manual, so nothing here is confirmed. Cause not isolated.
+        "yaesu-ft-980" => &[
+            "GetFrequency(A)",
+            "GetMode",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetFrequency(A, Hz(14060000))",
+            "SetMode(Cw)",
+            "GetFrequency(A)",
+            "GetMode",
+            "final freq_a",
+            "final mode",
+        ],
+        // Hamlib's mode read fails against the virtual rig: Hamlib maps mode codes through its own table (hardware codes 0 to 7 of the set command) where the description reads the manual's 0 to 4 record codes. Open question.
+        "yaesu-frg-100" => &["GetMode", "GetMode", "GetMode", "final mode"],
+        // By design: the FRG-8800 is write-only, so radioctl refuses reads where Hamlib answers from the frequency it last set.
+        "yaesu-frg-8800" => &["GetFrequency(A)", "GetFrequency(A)"],
+        // By design: the FRG-9600 is write-only, so radioctl refuses reads where Hamlib answers from the frequency it last set.
+        "yaesu-frg-9600" => &["GetFrequency(A)", "GetFrequency(A)"],
+        // By design: radioctl offers no reads for the VR-5000 (Hamlib answers from its cache of the last set); and Hamlib's mode set uses codes whose final state differs (cause not isolated).
+        "yaesu-vr-5000" => &[
+            "GetFrequency(A)",
+            "GetMode",
+            "GetFrequency(A)",
+            "GetMode",
+            "GetFrequency(A)",
+            "GetMode",
+            "final mode",
+        ],
+        // Hamlib sent nothing useful to the virtual rig for this model (it probes at open with something the virtual rig does not answer); every step is NoAnswer from Hamlib. Cause not isolated; no VX-1700 CAT manual was read.
+        "vertex-vx-1700" => &[
+            "GetFrequency(A)",
+            "GetMode",
+            "SetFrequency(A, Hz(7074000))",
+            "GetFrequency(A)",
+            "SetMode(Lsb)",
+            "GetMode",
+            "SetFrequency(A, Hz(14060000))",
+            "SetMode(Cw)",
+            "GetFrequency(A)",
+            "GetMode",
+            "GetPtt",
+            "final freq_a",
+            "final mode",
+        ],
+        _ => &[],
+    };
+    steps.iter().map(|s| (*s).to_string()).collect()
 }
