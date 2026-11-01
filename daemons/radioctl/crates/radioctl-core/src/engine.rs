@@ -12,7 +12,7 @@ use std::time::Duration;
 use crate::description::RigDescription;
 use crate::error::RigError;
 use crate::op::{Field, Observation, Op};
-use crate::scope::ScopeFrame;
+use crate::scope::{FilterScopeFrame, ScopeFrame};
 
 /// A partial frame older than this when more bytes arrive is discarded as stale.
 pub const PARTIAL_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
@@ -45,6 +45,9 @@ pub enum Inbound {
     /// A complete scope sweep. It is not a cache field: the actor publishes it on the scope
     /// frame stream (`seq` is assigned there).
     ScopeFrame(ScopeFrame),
+    /// A complete filter-scope sweep. Like [`Inbound::ScopeFrame`] it is not a cache field: the
+    /// actor publishes it on the filter-scope stream (`seq` is assigned there).
+    FilterScopeFrame(FilterScopeFrame),
     /// The rig accepted the last command.
     Ack,
     /// The rig refused the last command.

@@ -17,6 +17,9 @@ const REFUSED: &str = "?;";
 /// The weakest `##DD2` sample (-100 dB) and the number of samples in a frame.
 const SWEEP_MAX: u8 = 0x8C;
 const SWEEP_SAMPLES: usize = 640;
+/// The weakest `##DD3` sample (-50 dB) and the number of samples in a filter-scope frame.
+const FILTER_SWEEP_MAX: u8 = 0x32;
+const FILTER_SWEEP_SAMPLES: usize = 213;
 
 /// The bandscope settings of a virtual TS-890S (every `BS` command the guide has up to `BSC`, kept
 /// as the digits the guide defines) and the sweep counter.
@@ -36,7 +39,18 @@ pub(super) struct Ts890Scope {
     reference: u16,
     output: u8,
     sweep: u32,
+    /// The lower and upper edge of each fixed-mode range in hertz; entry 0 is the default range.
+    edges: [(u32, u32); 4],
 }
+
+/// The edges of every fixed-mode range at the start (our choice, not a radio's): the 20 m band
+/// for the default range, then 40 m, 80 m and 15 m.
+const DEFAULT_EDGES: [(u32, u32); 4] = [
+    (14_000_000, 14_350_000),
+    (7_000_000, 7_300_000),
+    (3_500_000, 4_000_000),
+    (21_000_000, 21_450_000),
+];
 
 impl Default for Ts890Scope {
     // [@ANCHOR: radioctl_virtual_ts890_scope_default]
@@ -57,6 +71,7 @@ impl Default for Ts890Scope {
             reference: 40,
             output: 0,
             sweep: 0,
+            edges: DEFAULT_EDGES,
         }
     }
 }
@@ -266,6 +281,7 @@ impl VirtualRig {
                     None => Some(REFUSED.to_string()),
                 };
             }
+            "M" => return self.ts890_edges_command(arg),
             _ => return Some(REFUSED.to_string()),
         };
         if arg.is_empty() {
@@ -288,6 +304,61 @@ impl VirtualRig {
             }
             _ => Some(REFUSED.to_string()),
         }
+    }
+
+    // [@ANCHOR: radioctl_virtual_ts890_edges_command]
+    /// `BSM`: a read answers the edges of the range in use as `BSM0` and two eight-digit
+    /// frequencies; a set stores the edges of range 1 to 3 (range 0 cannot be set), and two
+    /// `99999999` put that range's initial edges back.
+    fn ts890_edges_command(&mut self, arg: &str) -> Option<String> {
+        let scope = &mut self.ts890_scope;
+        if arg.is_empty() {
+            let (low, high) = scope.edges[usize::from(scope.range)];
+            return Some(format!("BSM0{low:08}{high:08};"));
+        }
+        let range = arg
+            .get(..1)
+            .and_then(|digit| digit.parse::<usize>().ok())
+            .filter(|range| (1..=3).contains(range));
+        let low = arg.get(1..9).and_then(kenwood::parse_digits);
+        let high = arg.get(9..17).and_then(kenwood::parse_digits);
+        match (range, low, high, arg.len()) {
+            (Some(range), Some(99_999_999), Some(99_999_999), 17) => {
+                scope.edges[range] = DEFAULT_EDGES[range];
+                None
+            }
+            (Some(range), Some(low), Some(high), 17) if low < high => {
+                match (u32::try_from(low), u32::try_from(high)) {
+                    (Ok(low), Ok(high)) => {
+                        scope.edges[range] = (low, high);
+                        None
+                    }
+                    _ => Some(REFUSED.to_string()),
+                }
+            }
+            _ => Some(REFUSED.to_string()),
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_ts890_filter_sweep]
+    /// One `##DD3` frame (LAN output) under the same conditions as [`Self::ts890_sweep`]: 213
+    /// deterministic samples from 00 to 32.
+    pub(super) fn ts890_filter_sweep(&mut self) -> Vec<u8> {
+        let on = self.state.transceive && (1..=3).contains(&self.ts890_scope.output);
+        if !on || self.desc.scope.is_none() {
+            return Vec::new();
+        }
+        let mut out = String::from("##DD3");
+        for index in 0..FILTER_SWEEP_SAMPLES {
+            let value = crate::civ_scope::sample_value(
+                index,
+                self.ts890_scope.sweep,
+                u16::from(FILTER_SWEEP_MAX),
+            );
+            out.push_str(&format!("{value:02X}"));
+        }
+        out.push(';');
+        out.into_bytes()
     }
 
     // [@ANCHOR: radioctl_virtual_ts890_sweep]

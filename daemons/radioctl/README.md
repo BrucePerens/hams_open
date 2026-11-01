@@ -216,7 +216,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   - no `IF`; `OM` carries the mode; split goes through `TB`;
   - the LAN session `kenwood_ts890_lan` (`##CN;`, `##ID` login, keep-alive) is wired into `radioctld`'s `tcp` transport as `framing = "ts890-lan"`;
   - tested against a fake radio on loopback only;
-  - the bandscope is not implemented;
+  - the bandscope (`BS0`-`BS9`, `BSC`, `BSM`, `DD0`, LAN `##DD2` and `##DD3` frames) is implemented against the virtual rig only;
   - Hamlib's TS-890S backend reads with `IF;`, which the guide does not list, so the oracle records the frequency and mode steps as divergences (`known_ts890_divergences`).
 
 ### Xiegu
@@ -558,8 +558,11 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode_scope] (radioctl-protocols) The scope operations of the core API (output, axis mode, span, fixed edges, reference level) as CI-V command 27; a span the model does not offer is refused before the wire.
 - [@ANCHOR: radioctl:radioctl_core_scope_frame_span] (radioctl-core) The width of a scope sweep's axis.
 - [@ANCHOR: radioctl:radioctl_core_scope_frame_centre] (radioctl-core) The centre of a scope sweep's axis.
+- [@ANCHOR: radioctl:radioctl_core_filter_scope_frame_peak] (radioctl-core) The largest sample in a filter-scope sweep, or 0 for an empty one.
 - [@ANCHOR: radioctl:radioctl_core_handle_scope_frames] (radioctl-core) A stream of the rig's scope sweeps as typed frames, separate from the status-change events; lag is counted.
 - [@ANCHOR: radioctl:radioctl_core_scope_stream_next] (radioctl-core) The next scope sweep; frames missed while lagging are skipped and counted.
+- [@ANCHOR: radioctl:radioctl_core_handle_filter_scope_frames] (radioctl-core) A stream of the rig's filter-scope sweeps, separate from the band scope's stream, with its own lag count.
+- [@ANCHOR: radioctl:radioctl_core_filter_scope_stream_next] (radioctl-core) The next filter-scope sweep; frames missed while lagging are skipped and counted.
 - [@ANCHOR: radioctl:radioctl_virtual_io_scope_sweep] (radioctl-protocols) Makes a virtual rig send one scope sweep on its own.
 - [@ANCHOR: radioctl:radioctl_civ_engine_scope_request_for] (radioctl-protocols) A scope command as a CI-V request with the reply the caller will wait for.
 - [@ANCHOR: radioctl:radioctl_scope_axis_from_mode] (radioctl-protocols) The core scope axis for a CI-V scope mode.
@@ -1270,6 +1273,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_civ_filter] (radioctl-protocols) Answers `1A 03` with the filter index for the current width and mode; NG when the width is not in the mode's table.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_filter_set] (radioctl-protocols) Sets the filter width from a `1A 03` index byte, by the mode's table.
 - [@ANCHOR: radioctl:radioctl_virtual_scope_sweep] (radioctl-protocols) The bytes the rig sends on its own for one scope sweep of the Main receiver at the VFO A frequency, as broadcast frames; empty when the model has no scope, output is off or the scope is held.
+- [@ANCHOR: radioctl:radioctl_virtual_filter_scope_sweep] (radioctl-protocols) The `##DD3` filter-scope frame a virtual TS-890S sends with its waveform output on LAN; empty for other models or with output off.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_level_of] (radioctl-protocols) The level behind a `14` sub-command (AF 01, RF 02, power 0A, mic 0B, monitor 15).
 - [@ANCHOR: radioctl:radioctl_civ_level_sub] (radioctl-protocols) Wire sub-command of a level under `14`, for the levels this engine supports.
 - [@ANCHOR: radioctl:radioctl_civ_meter_sub] (radioctl-protocols) Wire sub-command of a raw meter under `15` (SWR 12, ALC 13, COMP 14, Vd 15, Id 16).
@@ -1605,7 +1609,11 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_scope_axis_of] (radioctl-protocols) The axis mode a `BS3` digit names.
 - [@ANCHOR: radioctl:radioctl_ts890_scope_span_code] (radioctl-protocols) The `BS4` digit of a span in hertz, if the rig offers it.
 - [@ANCHOR: radioctl:radioctl_ts890_scope_reference_code] (radioctl-protocols) The three `BSC` digits of a reference level in hundredths of a dB.
-- [@ANCHOR: radioctl:radioctl_ts890_decode_scope] (radioctl-protocols) A `BS3`, `BS4` or `BSC` answer after the command name `BS`.
+- [@ANCHOR: radioctl:radioctl_ts890_decode_scope] (radioctl-protocols) A `BS` answer after the command name `BS` that is an observation (`BS3`, `BS4`, `BSC`, the scope settings).
+- [@ANCHOR: radioctl:radioctl_ts890_scope_setting_wire] (radioctl-protocols) The `BS` letter and the largest digit of a scope setting.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_setting_of] (radioctl-protocols) The scope setting a `BS` letter names, if it is one of the mapped ones.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_edges_of] (radioctl-protocols) The edges of a `BSM0` answer, or none for another range number, a wrong length or edges that are not low to high.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_filter_scope_frame] (radioctl-protocols) A `##DD3` body as a filter-scope frame, or dropped and counted when malformed.
 - [@ANCHOR: radioctl:radioctl_ts890_scope_samples] (radioctl-protocols) The samples of a `##DD2` or `##DD3` body, none above the guide's maximum.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frame] (radioctl-protocols) A `##DD2` body as a frame placed from what the engine last saw, or dropped and counted.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_note] (radioctl-protocols) Keeps what the frame edges are computed from.
@@ -1623,6 +1631,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_scope_default] (radioctl-protocols) The starting bandscope state of a virtual TS-890S.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_scope_command] (radioctl-protocols) One `BS` command of the virtual TS-890S: a read, or a set inside the guide's range.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_sweep] (radioctl-protocols) One `##DD2` frame from a virtual TS-890S when the LAN waveform output is on.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_filter_sweep] (radioctl-protocols) One `##DD3` frame from a virtual TS-890S when the LAN waveform output is on.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_edges_command] (radioctl-protocols) `BSM` on a virtual TS-890S: reads the edges in use, stores the edges of range 1 to 3, or restores the initial ones.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_name] (radioctl-core) The name used in rig description files.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_from_name] (radioctl-core) The protocol with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_usb] (radioctl-core) The USB-device parameters of a description file: protocol, USB ids, strings and multiplier.

@@ -346,7 +346,7 @@ is the application's business (a secret store, never a configuration file or a l
 `Box::new(Ts890LanFraming::new(credentials))` to `open_link` with `idle_timeout` a little above the
 keep-alive interval; after the login the stream is the ordinary TS-890S CAT stream
 (`Ts890Engine`). A wrong password or a denied connection fails `open_link` with `LinkDown` and a message
-that says which; the bandscope output (`##DD2`, `##DD3`) is not implemented.
+that says which; the bandscope output (`##DD2`, `##DD3`) is decoded by the engine (chapter 7).
 
 `radioctld` wires this session into its `tcp` transport: `framing = "ts890-lan"` with `lan_account`,
 `lan_administrator` and `lan_password_secret` (the name of a file in `server.secrets_dir`; chapter

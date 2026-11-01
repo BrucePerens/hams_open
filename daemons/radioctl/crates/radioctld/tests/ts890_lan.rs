@@ -15,7 +15,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use common::{quiet_options, rigs_dir, Client};
+use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
+use radioctl_core::scope::ScopeAxis;
+use radioctl_core::units::Hz;
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctld::config::Config;
 use radioctld::daemon;
@@ -23,6 +26,7 @@ use radioctld::rigs::load_description;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
@@ -41,6 +45,10 @@ struct Radio {
     addr: std::net::SocketAddr,
     counts: Arc<Counts>,
     connections: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    /// The virtual rig behind the login, so a test can make it send a sweep.
+    rig: Arc<Mutex<VirtualRig>>,
+    /// Bytes the rig sends on its own, written to every logged-in connection.
+    pushes: broadcast::Sender<Vec<u8>>,
 }
 
 async fn radio() -> Radio {
@@ -53,13 +61,16 @@ async fn radio() -> Radio {
     let connections = Arc::new(Mutex::new(Vec::new()));
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("addr");
-    let (rig2, counts2, connections2) = (
+    let (pushes, _) = broadcast::channel::<Vec<u8>>(16);
+    let (rig2, counts2, connections2, pushes2) = (
         Arc::clone(&rig),
         Arc::clone(&counts),
         Arc::clone(&connections),
+        pushes.clone(),
     );
     tokio::spawn(async move {
         while let Ok((mut stream, _)) = listener.accept().await {
+            let mut pushed = pushes2.subscribe();
             counts2.connections.fetch_add(1, Ordering::SeqCst);
             let (rig, counts) = (Arc::clone(&rig2), Arc::clone(&counts2));
             let task = tokio::spawn(async move {
@@ -68,9 +79,25 @@ async fn radio() -> Radio {
                 let mut stage = 0;
                 loop {
                     // The guide's rule: no communication for 10 seconds closes the connection.
-                    let n = match timeout(Duration::from_secs(10), stream.read(&mut chunk)).await {
-                        Ok(Ok(n)) if n > 0 => n,
-                        _ => return,
+                    let n = tokio::select! {
+                        bytes = pushed.recv() => {
+                            match bytes {
+                                Ok(bytes) if stage == 2 => {
+                                    if stream.write_all(&bytes).await.is_err() {
+                                        return;
+                                    }
+                                }
+                                Err(broadcast::error::RecvError::Closed) => return,
+                                _ => {}
+                            }
+                            continue;
+                        }
+                        read = timeout(Duration::from_secs(10), stream.read(&mut chunk)) => {
+                            match read {
+                                Ok(Ok(n)) if n > 0 => n,
+                                _ => return,
+                            }
+                        }
                     };
                     buf.extend_from_slice(&chunk[..n]);
                     while let Some(end) = buf.iter().position(|b| *b == b';') {
@@ -116,10 +143,21 @@ async fn radio() -> Radio {
         addr,
         counts,
         connections,
+        rig,
+        pushes,
     }
 }
 
 impl Radio {
+    /// The rig sends one bandscope sweep (`##DD2`) and one filter-scope sweep (`##DD3`) on its own,
+    /// as a TS-890S with its waveform output on LAN does.
+    fn sweep(&self) {
+        let mut rig = self.rig.lock().expect("rig");
+        let mut bytes = rig.scope_sweep();
+        bytes.extend(rig.filter_scope_sweep());
+        let _ = self.pushes.send(bytes);
+    }
+
     /// Drops every live connection, as a power cycle would. The listener stays.
     fn drop_connections(&self) {
         for task in self.connections.lock().expect("tasks").drain(..) {
@@ -348,4 +386,57 @@ async fn a_raw_tcp_rig_is_on_the_reconnecting_link_too() {
         sleep(Duration::from_millis(100)).await;
     }
     daemon.stop().await;
+}
+
+// Tests [@ANCHOR: radioctld_rigs_tcp_framing]
+// Tests [@ANCHOR: radioctl_core_handle_scope_frames]
+// Tests [@ANCHOR: radioctl_core_scope_stream_next]
+// Tests [@ANCHOR: radioctl_core_handle_filter_scope_frames]
+// Tests [@ANCHOR: radioctl_core_filter_scope_stream_next]
+// Tests [@ANCHOR: radioctl_ts890_engine_scope_frame]
+// Tests [@ANCHOR: radioctl_ts890_engine_filter_scope_frame]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_lan_sweeps_reach_the_scope_streams_through_the_daemon() {
+    let radio = radio().await;
+    let dir = secrets("sweeps", "admin");
+    let daemon = start(&text(radio.addr, &dir, "")).await.expect("daemon");
+    let rig = daemon.rigs[0].service.rig();
+    let mut scope = rig.scope_frames();
+    let mut filter = rig.filter_scope_frames();
+    rig.execute(Op::SetFrequency(
+        radioctl_core::units::Vfo::A,
+        Hz(14_074_000),
+    ))
+    .await
+    .expect("frequency");
+    rig.execute(Op::SetTransceive(true))
+        .await
+        .expect("transceive");
+    rig.execute(Op::SetScopeOutput(true))
+        .await
+        .expect("output on");
+    assert_eq!(
+        rig.execute(Op::GetScopeAxis(0)).await.expect("axis"),
+        Some(Observation::ScopeAxis(0, ScopeAxis::Center))
+    );
+    radio.sweep();
+    let frame = timeout(Duration::from_secs(10), scope.next())
+        .await
+        .expect("a bandscope frame arrives")
+        .expect("stream open");
+    assert_eq!((frame.seq, frame.samples.len()), (1, 640));
+    assert_eq!((frame.low, frame.high), (Hz(14_049_000), Hz(14_099_000)));
+    let filter_frame = timeout(Duration::from_secs(10), filter.next())
+        .await
+        .expect("a filter-scope frame arrives")
+        .expect("stream open");
+    assert_eq!((filter_frame.seq, filter_frame.samples.len()), (1, 213));
+    let stats = rig.stats();
+    assert_eq!((stats.scope_frames, stats.filter_scope_frames), (1, 1));
+    assert_eq!(stats.unrecognised, 0);
+    // The CAT side still works while the sweeps flow.
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("f").await, "14074000\n");
+    daemon.stop().await;
+    std::fs::remove_dir_all(&dir).expect("cleanup");
 }

@@ -44,7 +44,7 @@ use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
 use crate::op::{Alarm, Field, Observation, Op};
 use crate::poll::{PollConfig, PollEntry, PollSchedule};
-use crate::scope::ScopeFrame;
+use crate::scope::{FilterScopeFrame, ScopeFrame};
 use crate::serial::LinkStatus;
 use crate::transport::Transport;
 use crate::txstate::TxState;
@@ -185,6 +185,10 @@ pub struct RigStats {
     pub scope_frames: u64,
     /// Scope frames a stream subscriber missed because it lagged.
     pub scope_lagged: u64,
+    /// Filter-scope frames published.
+    pub filter_scope_frames: u64,
+    /// Filter-scope frames a stream subscriber missed because it lagged.
+    pub filter_scope_lagged: u64,
     /// Unkeys the transmit watchdog forced (time limit or heartbeat lapse).
     pub watchdog_unkeys: u64,
     /// Unkeys the actor tried on its own and could not complete: the rig may be on the air.
@@ -209,6 +213,8 @@ struct Counters {
     stream_lagged: AtomicU64,
     scope_frames: AtomicU64,
     scope_lagged: AtomicU64,
+    filter_scope_frames: AtomicU64,
+    filter_scope_lagged: AtomicU64,
     watchdog_unkeys: AtomicU64,
     unkey_failures: AtomicU64,
     unkeys_coalesced: AtomicU64,
@@ -237,6 +243,7 @@ struct Shared {
     epoch: Instant,
     events: broadcast::Sender<RigEvent>,
     scope: broadcast::Sender<ScopeFrame>,
+    filter_scope: broadcast::Sender<FilterScopeFrame>,
     counters: Counters,
     default_timeout: Duration,
 }
@@ -283,6 +290,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
     let capabilities = description.capabilities.clone();
     let (events, _) = broadcast::channel(options.stream_capacity.max(1));
     let (scope, _) = broadcast::channel(options.scope_capacity.max(1));
+    let (filter_scope, _) = broadcast::channel(options.scope_capacity.max(1));
     let shared = Arc::new(Shared {
         id,
         capabilities,
@@ -298,6 +306,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         epoch: Instant::now(),
         events,
         scope,
+        filter_scope,
         counters: Counters::default(),
         default_timeout: options.default_timeout,
     });
@@ -442,6 +451,8 @@ impl RigHandle {
             stream_lagged: c.stream_lagged.load(Ordering::Relaxed),
             scope_frames: c.scope_frames.load(Ordering::Relaxed),
             scope_lagged: c.scope_lagged.load(Ordering::Relaxed),
+            filter_scope_frames: c.filter_scope_frames.load(Ordering::Relaxed),
+            filter_scope_lagged: c.filter_scope_lagged.load(Ordering::Relaxed),
             watchdog_unkeys: c.watchdog_unkeys.load(Ordering::Relaxed),
             unkey_failures: c.unkey_failures.load(Ordering::Relaxed),
             unkeys_coalesced: c.unkeys_coalesced.load(Ordering::Relaxed),
@@ -487,6 +498,17 @@ impl RigHandle {
     pub fn scope_frames(&self) -> ScopeStream {
         ScopeStream {
             rx: self.shared.scope.subscribe(),
+            shared: Arc::downgrade(&self.shared),
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_handle_filter_scope_frames]
+    /// A stream of the rig's filter-scope sweeps, starting now; separate from the band scope's
+    /// stream, with its own lag count in `filter_scope_lagged`. A rig that has no filter scope
+    /// never sends any.
+    pub fn filter_scope_frames(&self) -> FilterScopeStream {
+        FilterScopeStream {
+            rx: self.shared.filter_scope.subscribe(),
             shared: Arc::downgrade(&self.shared),
         }
     }
@@ -793,6 +815,34 @@ impl ScopeStream {
                         shared
                             .counters
                             .scope_lagged
+                            .fetch_add(missed, Ordering::Relaxed);
+                    }
+                }
+                Err(broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    }
+}
+
+/// An async stream of filter-scope sweeps.
+pub struct FilterScopeStream {
+    rx: broadcast::Receiver<FilterScopeFrame>,
+    shared: Weak<Shared>,
+}
+
+impl FilterScopeStream {
+    // [@ANCHOR: radioctl_core_filter_scope_stream_next]
+    /// The next sweep, or `None` once the rig has stopped. Frames missed while lagging are
+    /// skipped and counted.
+    pub async fn next(&mut self) -> Option<FilterScopeFrame> {
+        loop {
+            match self.rx.recv().await {
+                Ok(frame) => return Some(frame),
+                Err(broadcast::error::RecvError::Lagged(missed)) => {
+                    if let Some(shared) = self.shared.upgrade() {
+                        shared
+                            .counters
+                            .filter_scope_lagged
                             .fetch_add(missed, Ordering::Relaxed);
                     }
                 }
@@ -1482,7 +1532,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Inbound::Ack => o.kind == ReplyKind::Ack,
             Inbound::Nak => true,
             Inbound::Observation(value) => o.kind == ReplyKind::Observation(value.field()),
-            Inbound::ScopeFrame(_) | Inbound::Unrecognised(_) => false,
+            Inbound::ScopeFrame(_) | Inbound::FilterScopeFrame(_) | Inbound::Unrecognised(_) => {
+                false
+            }
         };
         let at = self.outstanding.iter().position(fits)?;
         self.outstanding.remove(at).map(|o| o.seq)
@@ -1560,7 +1612,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     Inbound::Ack => expect == ReplyKind::Ack,
                     Inbound::Nak => expect != ReplyKind::None,
                     Inbound::Observation(value) => expect == ReplyKind::Observation(value.field()),
-                    Inbound::ScopeFrame(_) | Inbound::Unrecognised(_) => false,
+                    Inbound::ScopeFrame(_)
+                    | Inbound::FilterScopeFrame(_)
+                    | Inbound::Unrecognised(_) => false,
                 };
                 if would_fit {
                     self.shared
@@ -1589,6 +1643,16 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                         + 1;
                     frame.seq = seq;
                     let _ = self.shared.scope.send(frame);
+                }
+                Inbound::FilterScopeFrame(mut frame) => {
+                    let seq = self
+                        .shared
+                        .counters
+                        .filter_scope_frames
+                        .fetch_add(1, Ordering::Relaxed)
+                        + 1;
+                    frame.seq = seq;
+                    let _ = self.shared.filter_scope.send(frame);
                 }
                 Inbound::Ack if done.is_none() && !stale && expect == ReplyKind::Ack => {
                     done = Some(Ok(None))
@@ -1654,6 +1718,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Op::SetScopeSpan(rx, span) => self.observe(Observation::ScopeSpan(*rx, *span), source),
             Op::SetScopeReference(rx, centi_db) => {
                 self.observe(Observation::ScopeReference(*rx, *centi_db), source)
+            }
+            Op::SetScopeSetting(rx, setting, code) => {
+                self.observe(Observation::ScopeSetting(*rx, *setting, *code), source)
             }
             Op::SendCw(_) => self.arm_watchdog(Instant::now()),
             // A stop clears the CW buffer but says nothing about PTT: the rig may still be keyed

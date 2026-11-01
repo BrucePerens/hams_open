@@ -3,7 +3,7 @@
 //! reports back.
 
 use crate::capability::Capability;
-use crate::scope::ScopeAxis;
+use crate::scope::{ScopeAxis, ScopeSetting};
 use crate::units::{Hz, Level, Meter, Mode, Vfo};
 
 /// A command to a rig.
@@ -87,6 +87,10 @@ pub enum Op {
     SetScopeReference(u8, i16),
     /// Read a receiver's reference level.
     GetScopeReference(u8),
+    /// Set a receiver's scope setting to the rig's own choice code (see [`ScopeSetting`]).
+    SetScopeSetting(u8, ScopeSetting, u8),
+    /// Read a receiver's scope setting.
+    GetScopeSetting(u8, ScopeSetting),
 }
 
 /// A kind of value the actor caches.
@@ -137,6 +141,8 @@ pub enum Field {
     ScopeSpan(u8),
     /// A receiver's scope reference level.
     ScopeReference(u8),
+    /// A receiver's scope setting.
+    ScopeSetting(u8, ScopeSetting),
     /// A safety condition the actor reports on its own (see [`Alarm`]).
     Alarm,
 }
@@ -207,6 +213,8 @@ pub enum Observation {
     ScopeSpan(u8, Hz),
     /// A receiver's scope reference level in hundredths of a dB.
     ScopeReference(u8, i16),
+    /// A receiver's scope setting, as the rig's choice code.
+    ScopeSetting(u8, ScopeSetting, u8),
     /// A safety condition reported by the actor, never by the rig.
     Alarm(Alarm),
 }
@@ -238,6 +246,7 @@ impl Observation {
             Observation::ScopeAxis(rx, _) => Field::ScopeAxis(*rx),
             Observation::ScopeSpan(rx, _) => Field::ScopeSpan(*rx),
             Observation::ScopeReference(rx, _) => Field::ScopeReference(*rx),
+            Observation::ScopeSetting(rx, setting, _) => Field::ScopeSetting(*rx, *setting),
             Observation::Alarm(_) => Field::Alarm,
         }
     }
@@ -280,7 +289,9 @@ impl Op {
             | Op::GetScopeSpan(_)
             | Op::SetScopeEdges(..)
             | Op::SetScopeReference(..)
-            | Op::GetScopeReference(_) => Capability::Scope,
+            | Op::GetScopeReference(_)
+            | Op::SetScopeSetting(..)
+            | Op::GetScopeSetting(..) => Capability::Scope,
         }
     }
 
@@ -358,6 +369,14 @@ mod tests {
         assert_eq!(
             Observation::ScopeSpan(0, Hz(50_000)).field(),
             Field::ScopeSpan(0)
+        );
+        assert_eq!(
+            Observation::ScopeSetting(1, ScopeSetting::MaxHold, 1).field(),
+            Field::ScopeSetting(1, ScopeSetting::MaxHold)
+        );
+        assert_eq!(
+            Op::GetScopeSetting(0, ScopeSetting::Pause).required_capability(),
+            Capability::Scope
         );
         assert_eq!(
             Observation::ScopeReference(0, -200).field(),
