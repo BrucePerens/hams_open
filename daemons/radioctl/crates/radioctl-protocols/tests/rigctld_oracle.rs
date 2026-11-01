@@ -1963,6 +1963,7 @@ fn the_vendor_serial_files_against_hamlib_record_every_disagreement() {
             ("elecraft-xg3", 2038, 9600),
             ("sigfox-transfox", 2032, 9600),
             ("tentec-tt-585", 16009, 1200),
+            ("micom-2-3", 38001, 9600),
             ("guohe-pmr-171", 1052, 4800),
             ("guohe-q900", 1051, 38400),
             ("dorji-dra818u", 31002, 9600),

@@ -82,6 +82,9 @@ async fn drop_and_restore(
     })
     .await
     .expect("link restored event");
+    // The virtual radio reads what the actor wrote on a task of its own: give it time to take
+    // the session set-up in, so that a count taken next is a count of everything sent.
+    sleep(Duration::from_millis(100)).await;
 }
 
 async fn ascii_rig(

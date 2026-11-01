@@ -88,6 +88,8 @@ pub enum VendorProtocol {
     Transfox,
     /// Ten-Tec TT-585 Paragon (`paragon.rs`).
     Paragon,
+    /// Motorola MICOM 2 and 3 (`micom.rs`).
+    Micom,
 }
 
 impl VendorProtocol {
@@ -116,6 +118,7 @@ impl VendorProtocol {
             "xg3" => Some(VendorProtocol::Xg3),
             "transfox" => Some(VendorProtocol::Transfox),
             "paragon" => Some(VendorProtocol::Paragon),
+            "micom" => Some(VendorProtocol::Micom),
             _ => None,
         }
     }
@@ -145,6 +148,7 @@ impl VendorProtocol {
             VendorProtocol::Xg3 => "xg3",
             VendorProtocol::Transfox => "transfox",
             VendorProtocol::Paragon => "paragon",
+            VendorProtocol::Micom => "micom",
         }
     }
 }
@@ -1131,6 +1135,11 @@ mod tests {
             Some(VendorProtocol::Paragon)
         );
         assert_eq!(VendorProtocol::Paragon.name(), "paragon");
+        assert_eq!(
+            VendorProtocol::from_name("micom"),
+            Some(VendorProtocol::Micom)
+        );
+        assert_eq!(VendorProtocol::Micom.name(), "micom");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

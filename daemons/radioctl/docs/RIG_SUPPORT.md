@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **276** (282 description files), **97%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **277** (283 description files), **97%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 276 |
+| described | 277 |
 | engine only | 0 |
 | needs variant | 0 |
-| needs engine | 3 |
+| needs engine | 2 |
 | odd device | 5 |
 | not applicable | 29 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 71 |
+| C | new engine | 82 | 72 |
 | D | odd device | 54 | 28 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 81 | 0 |
+| other_serial | C/D | aor | 94 | 82 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -300,7 +300,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2049 | Malachite | DSP | D | other_serial | - | `malachite-dsp` | unverified | - | described |
 | 36001 | MDS | 4710 | D | other_serial | - | `mds-4710` | unverified | - | described |
 | 36002 | MDS | 9710 | D | other_serial | - | `mds-9710` | unverified | - | described |
-| 38001 | Micom | Micom 2/3 | C | other_serial | - | - | unverified | - | needs engine |
+| 38001 | Micom | Micom 2/3 | C | other_serial | - | `micom-2-3` | unverified | - | described |
 | 3074 | Microtelecom | Perseus | D | other_serial | - | - | unverified | - | odd device |
 | 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | not applicable |
 | 25014 | N2ADR | HiQSDR | D | other_network | - | - | unverified | - | odd device |
