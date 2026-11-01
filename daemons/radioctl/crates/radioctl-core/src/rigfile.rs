@@ -858,7 +858,7 @@ fn build_legacy_block(y: &YaesuLegacySection) -> Result<Option<LegacyBlock>, Rig
     let status_modes = if y.status_modes.is_empty() {
         Vec::new()
     } else {
-        build_mode_codes(&y.status_modes)?
+        build_mode_codes(&y.status_modes, false)?
             .into_iter()
             .map(|(mode, code)| (code, mode))
             .collect()
