@@ -792,6 +792,18 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_paragon_twin_snapshot] (radioctl-protocols) The virtual Paragon's frequency and mode bit, for the Hamlib oracle batch.
 - [@ANCHOR: radioctl:radioctl_paragon_twin_feed] (radioctl-protocols) The virtual Paragon takes frequency, mode, filter and toggle commands and answers `\` with a status block.
 - [@ANCHOR: radioctl:radioctl_paragon_twin_front_panel] (radioctl-protocols) A knob turned at the virtual Paragon: frequency or mode.
+- [@ANCHOR: radioctl:radioctl_micom_checksum] (radioctl-protocols) The MICOM frame checksum: the sum of the bytes before it, modulo 256.
+- [@ANCHOR: radioctl:radioctl_micom_set_frequency_frames] (radioctl-protocols) The five frames that set the MICOM frequency, in Hamlib's captured sequence.
+- [@ANCHOR: radioctl:radioctl_micom_decode_frequency] (radioctl-protocols) The frequency in bytes 4 to 7 of a MICOM answer frame.
+- [@ANCHOR: radioctl:radioctl_micom_take_frame] (radioctl-protocols) Takes one MICOM frame (start byte 24, length byte, L + 5 bytes) from the receive buffer, skipping stray bytes and a trailing 15.
+- [@ANCHOR: radioctl:radioctl_micom_engine_new] (radioctl-protocols) Builds a MICOM engine from a vendor description of dialect `micom`.
+- [@ANCHOR: radioctl:radioctl_micom_engine_encode] (radioctl-protocols) Encodes set and get frequency and PTT for the MICOM.
+- [@ANCHOR: radioctl:radioctl_micom_engine_feed] (radioctl-protocols) Splits received bytes into MICOM frames and decodes the frequency answer.
+- [@ANCHOR: radioctl:radioctl_micom_twin_new] (radioctl-protocols) A virtual MICOM in the description's default state.
+- [@ANCHOR: radioctl:radioctl_micom_twin_frequency_frame] (radioctl-protocols) The virtual MICOM's frequency answer frame (bytes 2 and 3 are an assumption).
+- [@ANCHOR: radioctl:radioctl_micom_twin_snapshot] (radioctl-protocols) The virtual MICOM's frequency and key state, for the Hamlib oracle batch.
+- [@ANCHOR: radioctl:radioctl_micom_twin_feed] (radioctl-protocols) The virtual MICOM acknowledges the frequency frames, answers the frequency read and takes the key frames.
+- [@ANCHOR: radioctl:radioctl_micom_twin_front_panel] (radioctl-protocols) A knob turned at the virtual MICOM: frequency or PTT.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).

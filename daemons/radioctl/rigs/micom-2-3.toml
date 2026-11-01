@@ -1,0 +1,63 @@
+# Rig description: Motorola MICOM 2 and 3 (Hamlib's single "Micom 2/3" entry) (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/motorola/micom.c, status Alpha, read for facts only, and `rigctl -m 38001 --dump-caps`); no Motorola document was found, and no code or table was copied.
+# Hamlib lists: serial 9600 baud, 8 data bits, ODD parity, 2 stop bits, no handshake, timeout 500 ms. The description format has no field for frequency ranges, so none is recorded.
+# Dialect micom (micom.rs): binary frames (24, length, body, checksum, 03); set frequency is five frames in Hamlib's captured sequence, get frequency one frame answered by an acknowledgement and a frame carrying the frequency in bytes 4 to 7. The engine cannot write Hamlib's final acknowledgement frame after a read (open question). PTT has two fixed frames and no answer. No mode, VFO or level exists in Hamlib's driver; the mode below is a placeholder.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "set-ptt"]
+
+[rig]
+id = "micom-2-3"
+name = "Motorola MICOM 2/3"
+family = "serial-vendor"
+
+[vendor]
+protocol = "micom"
+dialect = "micom"
+data_bits = 8
+parity = "O"
+stop_bits = 2
+flow = "none"
+
+[timing]
+timeout_ms = 500
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14200000
+mode = "usb"
+
+[[modes]]
+mode = "usb"
+code = 4
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 38001 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 38001 --dump-caps` (Hamlib 4.6.2): Write delay, Post Write delay, timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "repo-code", reference = "placeholder so that the description loads: Hamlib's MICOM driver has no mode command", note = "Not a fact about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/motorola/micom.c (micom_set_freq, micom_get_freq, micom_set_ptt, micom_read_frame)", note = "Frames read for facts only; no code copied. The dialect name is ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 38001 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/motorola/micom.c", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command." }
+verified = { state = "unverified" }

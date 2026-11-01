@@ -348,6 +348,16 @@ async fn a_dropped_lan_session_logs_in_again_and_the_engine_turns_auto_informati
     })
     .await
     .expect("link restored event");
+    // The radio's task reads what the actor wrote after the event: wait for it, then for a
+    // possible repeat.
+    timeout(Duration::from_secs(5), async {
+        while counts.ai2.load(Ordering::SeqCst) < 2 {
+            sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("AI2; sent again");
+    sleep(Duration::from_millis(200)).await;
     assert_eq!(counts.logins.load(Ordering::SeqCst), 2, "logged in again");
     assert_eq!(
         counts.ai2.load(Ordering::SeqCst),
