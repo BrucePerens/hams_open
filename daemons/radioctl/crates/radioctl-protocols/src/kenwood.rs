@@ -68,9 +68,22 @@ pub enum Token {
 pub struct Tokenizer {
     pending: Vec<u8>,
     last_byte_at: Duration,
+    /// Bytes buffered without a terminator before the stream is called junk; 0 means
+    /// [`MAX_PENDING`].
+    max_pending: usize,
 }
 
 impl Tokenizer {
+    // [@ANCHOR: radioctl_kenwood_tokenizer_with_max_pending]
+    /// A tokenizer that holds up to `max_pending` bytes of one command (the TS-890S bandscope
+    /// frame is 1286 bytes where every other command is shorter than [`MAX_PENDING`]).
+    pub fn with_max_pending(max_pending: usize) -> Tokenizer {
+        Tokenizer {
+            max_pending,
+            ..Tokenizer::default()
+        }
+    }
+
     // [@ANCHOR: radioctl_kenwood_tokenizer_feed]
     /// Adds bytes received at `now` and returns every complete token.
     ///
@@ -96,7 +109,12 @@ impl Tokenizer {
                 out.push(Token::Junk(raw));
             }
         }
-        if self.pending.len() > MAX_PENDING {
+        let limit = if self.max_pending == 0 {
+            MAX_PENDING
+        } else {
+            self.max_pending
+        };
+        if self.pending.len() > limit {
             out.push(Token::Junk(std::mem::take(&mut self.pending)));
         }
         out
