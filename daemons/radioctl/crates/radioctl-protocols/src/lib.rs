@@ -21,6 +21,8 @@ pub mod kenwood_hh;
 pub mod kenwood_ts890;
 pub mod kenwood_ts890_lan;
 pub mod prelude;
+pub mod serial_vendor;
+pub mod tentec;
 pub mod virtual_flex;
 pub mod virtual_rig;
 pub mod yaesu;

@@ -28,7 +28,7 @@ use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
     KenwoodDialect, KenwoodHhParams, KenwoodParams, LevelParams, RigDescription, ScopeParams,
-    Timing, YaesuLegacyParams, YaesuParams,
+    Timing, VendorParams, VendorProtocol, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -130,6 +130,7 @@ struct FileDoc {
     kenwood_hh: Option<KenwoodHhSection>,
     flex: Option<FlexSection>,
     hpsdr: Option<HpsdrSection>,
+    vendor: Option<VendorSection>,
     scope: Option<ScopeSection>,
     levels: Option<LevelsSection>,
     timing: TimingSection,
@@ -219,6 +220,13 @@ struct HpsdrSection {
     model: String,
     protocol: u8,
     anan10: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct VendorSection {
+    protocol: String,
+    dialect: String,
 }
 
 #[derive(Deserialize)]
@@ -352,8 +360,17 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "flex-smartsdr" => Family::Flex,
         "hpsdr-network" => Family::Hpsdr,
         "kenwood-hh" => Family::KenwoodHh,
+        "serial-vendor" => Family::SerialVendor,
         other => return Err(bad(format!("unknown family {other:?}"))),
     };
+    let others = doc.civ.is_some()
+        || doc.kenwood.is_some()
+        || doc.elecraft.is_some()
+        || doc.yaesu.is_some()
+        || doc.yaesu_legacy.is_some()
+        || doc.flex.is_some()
+        || doc.hpsdr.is_some()
+        || doc.kenwood_hh.is_some();
     match (
         family,
         &doc.civ,
@@ -374,7 +391,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
             if doc.hpsdr.is_some() && doc.flex.is_none() && doc.kenwood_hh.is_none() => {}
         (Family::KenwoodHh, None, None, None, None, None)
             if doc.kenwood_hh.is_some() && doc.flex.is_none() && doc.hpsdr.is_none() => {}
+        (Family::SerialVendor, ..) if doc.vendor.is_some() && !others => {}
         _ => return Err(bad("the family block does not match rig.family")),
+    }
+    if family != Family::SerialVendor && doc.vendor.is_some() {
+        return Err(bad("the family block does not match rig.family"));
     }
     if doc
         .civ
@@ -451,6 +472,18 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         protocol: h.protocol,
         anan10: h.anan10,
     });
+    let vendor = doc
+        .vendor
+        .as_ref()
+        .map(|v| {
+            let protocol = VendorProtocol::from_name(&v.protocol)
+                .ok_or_else(|| bad(format!("unknown vendor.protocol {:?}", v.protocol)))?;
+            Ok::<VendorParams, RigError>(VendorParams {
+                protocol,
+                dialect: v.dialect.clone(),
+            })
+        })
+        .transpose()?;
     let mut capabilities = Vec::new();
     for name in &doc.capabilities {
         let capability = Capability::from_name(name)
@@ -477,6 +510,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         kenwood_hh,
         flex,
         hpsdr,
+        vendor,
         scope,
         levels,
         capabilities: CapabilitySet::of(&capabilities),
@@ -795,6 +829,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     if description.flex.is_some() {
         keys.push("flex.model".to_string());
         keys.push("flex.scus".to_string());
+    }
+    if description.vendor.is_some() {
+        keys.extend(["vendor.protocol", "vendor.dialect"].map(String::from));
     }
     if description.hpsdr.is_some() {
         keys.extend(["hpsdr.model", "hpsdr.protocol", "hpsdr.anan10"].map(String::from));

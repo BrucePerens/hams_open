@@ -506,6 +506,36 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_description_code_mode] (radioctl-core) The mode for a wire code, if the model has one.
 - [@ANCHOR: radioctl:radioctl_core_description_ic7300] (radioctl-core) An Icom IC-7300 style CI-V description (address 0x94). Unverified; see the module note.
 - [@ANCHOR: radioctl:radioctl_core_description_ts2000] (radioctl-core) A Kenwood TS-2000 style ASCII description. Unverified; see the module note.
+- [@ANCHOR: radioctl:radioctl_tentec_write_reply] (radioctl-protocols) The write reply of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_slot] (radioctl-protocols) The twin slot of the tentec code.
+- [@ANCHOR: radioctl:radioctl_core_vendorprotocol_from_name] (radioctl-core) The protocol with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_vendorprotocol_name] (radioctl-core) The file-format name.
+- [@ANCHOR: radioctl:radioctl_vendor_rxbuffer_push] (radioctl-protocols) Appends `bytes` received at `now`. Returns the stale partial frame if the buffer held
+- [@ANCHOR: radioctl:radioctl_vendor_rxbuffer_take_line] (radioctl-protocols) Removes and returns the first line up to and excluding `terminator`.
+- [@ANCHOR: radioctl:radioctl_vendor_rxbuffer_take] (radioctl-protocols) Removes and returns the first `n` bytes if that many have arrived.
+- [@ANCHOR: radioctl:radioctl_vendor_rxbuffer_peek] (radioctl-protocols) The bytes held so far.
+- [@ANCHOR: radioctl:radioctl_vendor_rxbuffer_take_all] (radioctl-protocols) Removes and returns everything held.
+- [@ANCHOR: radioctl:radioctl_vendor_parse_decimal] (radioctl-protocols) The value of a non-empty run of ASCII digits (at most 18 of them), or `None`.
+- [@ANCHOR: radioctl:radioctl_vendor_vendor_of] (radioctl-protocols) The vendor protocol of a description, or why it has none.
+- [@ANCHOR: radioctl:radioctl_vendor_engine_for] (radioctl-protocols) The engine of a vendor serial description.
+- [@ANCHOR: radioctl:radioctl_vendor_twin_for] (radioctl-protocols) The virtual radio of a vendor serial description.
+- [@ANCHOR: radioctl:radioctl_tentec_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
+- [@ANCHOR: radioctl:radioctl_tentec_vfo_letter] (radioctl-protocols) The letter of a VFO in Ten-Tec commands.
+- [@ANCHOR: radioctl:radioctl_tentec_encode_frequency] (radioctl-protocols) The four big-endian bytes of the binary dialects, or `None` above `u32::MAX` hertz.
+- [@ANCHOR: radioctl:radioctl_tentec_decode_frequency] (radioctl-protocols) The frequency of four big-endian bytes, or `None` unless exactly four.
+- [@ANCHOR: radioctl:radioctl_tentec_engine_new] (radioctl-protocols) Builds an engine from a Ten-Tec vendor description.
+- [@ANCHOR: radioctl:radioctl_tentec_encode_mode_write] (radioctl-protocols) The encode mode write of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_encode_ptt] (radioctl-protocols) The encode ptt of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_frame_len] (radioctl-protocols) Bytes in a binary-dialect answer.
+- [@ANCHOR: radioctl:radioctl_tentec_decode_binary] (radioctl-protocols) The decode binary of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_decode_orion_line] (radioctl-protocols) The decode orion line of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_engine_encode] (radioctl-protocols) The engine encode of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_engine_feed] (radioctl-protocols) The engine feed of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_orion_line] (radioctl-protocols) The twin orion line of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_binary_frame] (radioctl-protocols) Handles one binary command at the front of the buffer; `None` when more bytes are needed.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_feed] (radioctl-protocols) The twin feed of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_front_panel] (radioctl-protocols) The twin front panel of the tentec code.
 - [@ANCHOR: radioctl:radioctl_core_error_new] (radioctl-core) Builds an error with the default retry hint for its kind and an empty transcript.
 - [@ANCHOR: radioctl:radioctl_core_error_with_transcript] (radioctl-core) Attaches the transcript tail.
 - [@ANCHOR: radioctl:radioctl_core_observation_field] (radioctl-core) The cache field this observation updates.

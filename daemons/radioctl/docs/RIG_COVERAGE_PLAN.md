@@ -101,6 +101,21 @@ Left, with the reason:
 | XIT/RIT on the FT-450, FT-891, FT-710 (`CF`, no `RT`/`XT`) | the `CF` clarifier command in the Yaesu engine |
 | K4 levels, RIT/XIT, signal and split | the K4 forms of AG, RG, KS, MG, PC, RA, PA, RT/XT/RU/RD and SM differ from the K3 ones the Elecraft engine sends |
 
+### Ten-Tec, vendor serial engines: what is done and what is left
+
+One description family, `serial-vendor`, carries every small-maker serial protocol (`[vendor] protocol = ...`, `dialect = ...`), each with its own engine file (`tentec.rs` first) and a virtual twin in the same file (`serial_vendor.rs` holds the shared receive buffer and dispatch).
+
+Done (7, 2026-10-31, Hamlib 4.6.2 facts only, no vendor document read): Orion TT-565/566 and Eagle TT-599 (dialect `orion`, ASCII), Argonaut V TT-516 (`argonaut`), Jupiter TT-538 (`jupiter`), Omni VII TT-588 (`omnivii`); the Omni VI Plus and Delta II speak CI-V (Hamlib reuses its Icom backend) and run on the Icom engine.
+
+Left, with the reason:
+
+| Model (Hamlib id) | What is needed |
+|---|---|
+| RX-320 (16003), RX-350 (16005) | DSP receivers tuned by a computed tuning factor and BFO words; needs its own dialect and a tolerance-based round-trip test |
+| RX-340 (16004), RX-331 (16012) | `$`-prefixed ASCII receiver protocol |
+| TT-550 Pegasus (16001), TT-585 Paragon (16009) | each has its own binary protocol |
+| Hamlib oracle batch for the Ten-Tec files | the oracle harness drives `VirtualRig`; it needs a generic twin hook |
+
 ## Tier B: variants of an existing engine (41 models)
 
 - Yaesu legacy five-byte CAT (31 models): the FT-817, 818, 857 and 897 are done. The rest (FT-747, 767, 840, 890, 900,

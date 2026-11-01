@@ -9,15 +9,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- With a radioctl description: **135** (140 description files)
+- With a radioctl description: **142** (147 description files)
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 135 |
+| described | 142 |
 | engine only | 14 |
 | needs variant | 27 |
-| needs engine | 75 |
+| needs engine | 68 |
 | odd device | 54 |
 | not applicable | 8 |
 
@@ -34,14 +34,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 121 |
 | B | variants of an existing engine | 41 | 14 |
-| C | new engine | 83 | 0 |
+| C | new engine | 83 | 7 |
 | D | odd device | 54 | 0 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | - | 94 | 0 | 0 |
+| other_serial | C/D | - | 94 | 7 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 4 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 22 | 0 |
@@ -308,19 +308,19 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 14002 | Skanti | TRP8000 | C | other_serial | - | - | unverified | - | needs engine |
 | 25009 | SoftRock | Si570 AVR-USB | D | other_usb | - | - | unverified | - | odd device |
 | 22001 | TAPR | DSP-10 | D | other_serial | - | - | unverified | - | odd device |
-| 3064 | Ten-Tec | Delta II | C | other_serial | - | - | unverified | - | needs engine |
-| 3051 | Ten-Tec | Omni VI Plus | C | other_serial | - | - | unverified | - | needs engine |
+| 3064 | Ten-Tec | Delta II | C | other_serial | - | `tentec-delta-ii` | unverified | - | described |
+| 3051 | Ten-Tec | Omni VI Plus | C | other_serial | - | `tentec-omni-vi-plus` | unverified | - | described |
 | 16003 | Ten-Tec | RX-320 | C | other_serial | - | - | unverified | - | needs engine |
 | 16012 | Ten-Tec | RX-331 | C | other_serial | - | - | unverified | - | needs engine |
 | 16004 | Ten-Tec | RX-340 | C | other_serial | - | - | unverified | - | needs engine |
 | 16005 | Ten-Tec | RX-350 | C | other_serial | - | - | unverified | - | needs engine |
-| 16007 | Ten-Tec | TT-516 Argonaut V | C | other_serial | - | - | unverified | - | needs engine |
-| 16002 | Ten-Tec | TT-538 Jupiter | C | other_serial | - | - | unverified | - | needs engine |
+| 16007 | Ten-Tec | TT-516 Argonaut V | C | other_serial | - | `tentec-tt-516` | unverified | - | described |
+| 16002 | Ten-Tec | TT-538 Jupiter | C | other_serial | - | `tentec-tt-538` | unverified | - | described |
 | 16001 | Ten-Tec | TT-550 | C | other_serial | - | - | unverified | - | needs engine |
-| 16008 | Ten-Tec | TT-565/566 Orion I/II | C | other_serial | - | - | unverified | - | needs engine |
+| 16008 | Ten-Tec | TT-565/566 Orion I/II | C | other_serial | - | `tentec-tt-565` | unverified | - | described |
 | 16009 | Ten-Tec | TT-585 Paragon | C | other_serial | - | - | unverified | - | needs engine |
-| 16011 | Ten-Tec | TT-588 Omni VII | C | other_serial | - | - | unverified | - | needs engine |
-| 16013 | Ten-Tec | TT-599 Eagle | C | other_serial | - | - | unverified | - | needs engine |
+| 16011 | Ten-Tec | TT-588 Omni VII | C | other_serial | - | `tentec-tt-588` | unverified | - | described |
+| 16013 | Ten-Tec | TT-599 Eagle | C | other_serial | - | `tentec-tt-599` | unverified | - | described |
 | 2054 | Thetis | - | D | other_serial | - | - | unverified | - | odd device |
 | 5 | TRXManager | TRXManager 5.7.630+ | D | other_network | - | - | unverified | - | odd device |
 | 8002 | Uniden | BC245xlt | C | other_serial | - | - | unverified | - | needs engine |

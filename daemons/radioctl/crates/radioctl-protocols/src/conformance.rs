@@ -43,6 +43,7 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         )?),
         Family::Flex => Box::new(crate::flex::FlexEngine::new(description.clone())?),
         Family::Hpsdr => Box::new(crate::hpsdr_net::HpsdrEngine::new(description.clone())?),
+        Family::SerialVendor => crate::serial_vendor::engine_for(description)?,
     })
 }
 
@@ -80,6 +81,7 @@ fn panel_change(panel: Panel) -> PanelChange {
 enum StandIn {
     Rig(Box<VirtualRig>),
     Flex(Box<VirtualFlex>),
+    Vendor(Box<dyn crate::serial_vendor::VendorTwin>),
     HpsdrBridge(BridgeStandIn),
 }
 
@@ -159,6 +161,7 @@ impl StandIn {
     fn for_description(description: &RigDescription) -> Result<StandIn, RigError> {
         Ok(match description.family {
             Family::Flex => StandIn::Flex(Box::new(VirtualFlex::from_description(description)?)),
+            Family::SerialVendor => StandIn::Vendor(crate::serial_vendor::twin_for(description)?),
             Family::Hpsdr => StandIn::HpsdrBridge(BridgeStandIn {
                 freq: description.default_frequency.0,
                 ptt: false,
@@ -173,7 +176,7 @@ impl StandIn {
     fn prologue(&self) -> Vec<u8> {
         match self {
             StandIn::Flex(radio) => radio.greeting(),
-            StandIn::Rig(_) | StandIn::HpsdrBridge(_) => Vec::new(),
+            StandIn::Rig(_) | StandIn::Vendor(_) | StandIn::HpsdrBridge(_) => Vec::new(),
         }
     }
 
@@ -183,6 +186,7 @@ impl StandIn {
         match self {
             StandIn::Rig(rig) => rig.feed(bytes, NOW),
             StandIn::Flex(radio) => radio.feed(bytes, NOW),
+            StandIn::Vendor(twin) => twin.feed(bytes, NOW),
             StandIn::HpsdrBridge(bridge) => bridge.feed(bytes),
         }
     }
@@ -201,6 +205,7 @@ impl StandIn {
                 };
                 Ok(radio.front_panel(change))
             }
+            StandIn::Vendor(twin) => twin.front_panel(panel),
             StandIn::HpsdrBridge(_) => Err("the hpsdr_io bridge pushes nothing unasked".into()),
         }
     }

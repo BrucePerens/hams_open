@@ -31,6 +31,44 @@ pub enum Family {
     Hpsdr,
     /// Kenwood handheld and mobile ASCII commands ended by a carriage return (TH-D7, TM-D710, ...).
     KenwoodHh,
+    /// Vendor serial protocols of the smaller makers (Ten-Tec, Drake, Racal, ...): one engine
+    /// per protocol, chosen by [`VendorParams::protocol`].
+    SerialVendor,
+}
+
+/// The protocol of a [`Family::SerialVendor`] rig; each has its own engine file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VendorProtocol {
+    /// Ten-Tec (`tentec.rs`): Orion/Eagle ASCII, Argonaut/Jupiter/Omni VII binary.
+    Tentec,
+}
+
+impl VendorProtocol {
+    // [@ANCHOR: radioctl_core_vendorprotocol_from_name]
+    /// The protocol with a file-format name.
+    pub fn from_name(name: &str) -> Option<VendorProtocol> {
+        match name {
+            "tentec" => Some(VendorProtocol::Tentec),
+            _ => None,
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_vendorprotocol_name]
+    /// The file-format name.
+    pub fn name(self) -> &'static str {
+        match self {
+            VendorProtocol::Tentec => "tentec",
+        }
+    }
+}
+
+/// Parameters of a [`Family::SerialVendor`] rig.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VendorParams {
+    /// The protocol (engine file).
+    pub protocol: VendorProtocol,
+    /// The model variant inside the protocol (`orion`, `argonaut`, ...); the engine validates it.
+    pub dialect: String,
 }
 
 /// CI-V parameters.
@@ -346,6 +384,8 @@ pub struct RigDescription {
     pub flex: Option<FlexParams>,
     /// OpenHPSDR parameters, present for [`Family::Hpsdr`].
     pub hpsdr: Option<HpsdrParams>,
+    /// Vendor serial parameters, present for [`Family::SerialVendor`].
+    pub vendor: Option<VendorParams>,
     /// Spectrum scope parameters, for the models that have a scope over CAT.
     pub scope: Option<ScopeParams>,
     /// Attenuator and preamplifier steps.
@@ -403,6 +443,7 @@ impl RigDescription {
             kenwood_hh: None,
             flex: None,
             hpsdr: None,
+            vendor: None,
             scope: None,
             levels: LevelParams::default(),
             capabilities: CapabilitySet::of(&[
@@ -456,6 +497,7 @@ impl RigDescription {
             kenwood_hh: None,
             flex: None,
             hpsdr: None,
+            vendor: None,
             scope: None,
             levels: LevelParams::default(),
             capabilities: CapabilitySet::of(&[
@@ -521,6 +563,18 @@ mod tests {
         assert_eq!(RigDescription::ic7300().mode_code(Mode::Usb), Some(0x01));
         assert_eq!(RigDescription::ts2000().mode_code(Mode::Usb), Some(b'2'));
         assert_eq!(RigDescription::ts2000().code_mode(b'8'), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_vendorprotocol_from_name]
+    // Tests [@ANCHOR: radioctl_core_vendorprotocol_name]
+    #[test]
+    fn vendor_protocol_names_round_trip() {
+        assert_eq!(
+            VendorProtocol::from_name("tentec"),
+            Some(VendorProtocol::Tentec)
+        );
+        assert_eq!(VendorProtocol::Tentec.name(), "tentec");
+        assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 
     // Tests [@ANCHOR: radioctl_core_kenwood_dialect_name]
