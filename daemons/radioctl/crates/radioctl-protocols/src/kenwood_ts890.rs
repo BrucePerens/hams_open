@@ -33,13 +33,20 @@
 //! fixed or auto-scroll mode, or before those are known, the sweep is counted
 //! ([`Ts890Engine::scope_frames_dropped`]) and not published. The guide sends nothing unless the
 //! rig's auto information is on (`transceive`). `##DD3` (the filter scope, 213 samples 00 to 32) is
-//! published as a [`FilterScopeFrame`] (00 strongest, flipped like the bandscope's). `BSO` (expanded
-//! analysis range, whose output range exceeds the displayed span) is assumed off. `BS0`, `BS1`, `BS5`
+//! published as a [`FilterScopeFrame`] (00 strongest, flipped like the bandscope's). `BS0`, `BS1`, `BS5`
 //! and `BS6` to `BS9` are [`ScopeSetting`]s (the guide's digit is the choice code). `BSM` stores the
 //! edges of fixed-mode range 1 to 3 (`Op::SetScopeEdges`, 8-digit hertz); its read form, whose
 //! `BSM0` answer is the edges now in use, is consumed by the engine to place fixed-mode sweeps
-//! (auto scroll moves its edges, so those sweeps are still counted and dropped). Not mapped to an
-//! operation yet: `BSA`, `BSB` and `BSD` to `BSO`.
+//! (auto scroll moves its edges: those sweeps are placed from the last `BSM0` read, flagged
+//! `out_of_range` once the receive frequency is outside it, and the engine reads `BSM` again after
+//! every frequency it sets while scrolling; the guide does not say the rig pushes the new edges, so
+//! a dial turn on the rig leaves the placement stale until the next read). `BSA`, `BSB`, `BSO` and
+//! the audio scope and oscilloscope commands `BSG` to `BSK`, `BSN` are [`ScopeSetting`]s, `BSL` (the
+//! overflow state) is one that can only be read, and `BSD` (waterfall clear) and `BSE` (marker
+//! shift or centre) are [`ScopeAction`]s. With `BSO` (expand) on the sweep covers a wider range than
+//! the display; the guide gives that range only for a span of 100 kHz (300 kHz) and 200 kHz
+//! (400 kHz), centred, so a sweep in any other expanded case, in scroll mode, or while the expand
+//! state is unknown is counted and dropped.
 //!
 //! Not implemented: CW text, memories, the LAN session beyond the two login frames in [`lan_connect_request`] and
 //! [`lan_login`] (the session that sends them, with the owner's account, and keeps the line alive is
@@ -51,7 +58,7 @@ use radioctl_core::description::{Family, KenwoodDialect, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::scope::{FilterScopeFrame, ScopeAxis, ScopeFrame, ScopeSetting};
+use radioctl_core::scope::{FilterScopeFrame, ScopeAction, ScopeAxis, ScopeFrame, ScopeSetting};
 use radioctl_core::units::{Hz, Level, Vfo};
 
 use crate::attenuation;
@@ -170,6 +177,8 @@ struct ScopeContext {
     span: Option<Hz>,
     /// The lower and upper edge of the fixed range in use, from the last `BSM` read.
     edges: Option<(Hz, Hz)>,
+    /// `BSO` (expanded analysis range) as last read or set.
+    expand: Option<bool>,
     dropped: u64,
 }
 
@@ -357,34 +366,82 @@ fn scope_reference_code(hundredths: i16) -> Option<u16> {
     u16::try_from(offset / 50).ok()
 }
 
+/// How a scope setting is written: the `BS` letter, the smallest and largest digit the guide
+/// allows, and whether the guide has a set form.
+struct ScopeWire {
+    letter: char,
+    min: u8,
+    max: u8,
+    writable: bool,
+}
+
 // [@ANCHOR: radioctl_ts890_scope_setting_wire]
-/// The `BS` letter and the largest digit of a scope setting.
-fn scope_setting_wire(setting: ScopeSetting) -> (char, u8) {
-    match setting {
-        ScopeSetting::Display => ('0', 1),
-        ScopeSetting::Layout => ('1', 4),
-        ScopeSetting::Range => ('5', 3),
-        ScopeSetting::Pause => ('6', 1),
-        ScopeSetting::Marker => ('7', 1),
-        ScopeSetting::Attenuator => ('8', 3),
-        ScopeSetting::MaxHold => ('9', 1),
+/// The `BS` letter, digit range and writability of a scope setting.
+fn scope_setting_wire(setting: ScopeSetting) -> ScopeWire {
+    let (letter, min, max, writable) = match setting {
+        ScopeSetting::Display => ('0', 0, 1, true),
+        ScopeSetting::Layout => ('1', 0, 4, true),
+        ScopeSetting::Range => ('5', 0, 3, true),
+        ScopeSetting::Pause => ('6', 0, 1, true),
+        ScopeSetting::Marker => ('7', 0, 1, true),
+        ScopeSetting::Attenuator => ('8', 0, 3, true),
+        ScopeSetting::MaxHold => ('9', 0, 1, true),
+        ScopeSetting::Averaging => ('A', 0, 3, true),
+        ScopeSetting::WaterfallSpeed => ('B', 1, 4, true),
+        ScopeSetting::AudioAttenuator => ('G', 0, 3, true),
+        ScopeSetting::AudioSpan => ('H', 0, 1, true),
+        ScopeSetting::OscilloscopeLevel => ('I', 0, 3, true),
+        ScopeSetting::OscilloscopeSweep => ('J', 0, 5, true),
+        ScopeSetting::ShiftPosition => ('K', 0, 8, true),
+        ScopeSetting::Overflow => ('L', 0, 1, false),
+        ScopeSetting::AudioPause => ('N', 0, 1, true),
+        ScopeSetting::Expand => ('O', 0, 1, true),
+    };
+    ScopeWire {
+        letter,
+        min,
+        max,
+        writable,
     }
 }
+
+/// Every scope setting the engine maps.
+const SCOPE_SETTINGS: [ScopeSetting; 17] = [
+    ScopeSetting::Display,
+    ScopeSetting::Layout,
+    ScopeSetting::Range,
+    ScopeSetting::Pause,
+    ScopeSetting::Marker,
+    ScopeSetting::Attenuator,
+    ScopeSetting::MaxHold,
+    ScopeSetting::Averaging,
+    ScopeSetting::WaterfallSpeed,
+    ScopeSetting::Expand,
+    ScopeSetting::AudioAttenuator,
+    ScopeSetting::AudioSpan,
+    ScopeSetting::OscilloscopeLevel,
+    ScopeSetting::OscilloscopeSweep,
+    ScopeSetting::ShiftPosition,
+    ScopeSetting::AudioPause,
+    ScopeSetting::Overflow,
+];
 
 // [@ANCHOR: radioctl_ts890_scope_setting_of]
 /// The scope setting a `BS` letter names, if it is one of the mapped ones.
 fn scope_setting_of(letter: &str) -> Option<ScopeSetting> {
-    [
-        ScopeSetting::Display,
-        ScopeSetting::Layout,
-        ScopeSetting::Range,
-        ScopeSetting::Pause,
-        ScopeSetting::Marker,
-        ScopeSetting::Attenuator,
-        ScopeSetting::MaxHold,
-    ]
-    .into_iter()
-    .find(|setting| letter.starts_with(scope_setting_wire(*setting).0))
+    let first = letter.chars().next()?;
+    SCOPE_SETTINGS
+        .into_iter()
+        .find(|setting| scope_setting_wire(*setting).letter == first)
+}
+
+// [@ANCHOR: radioctl_ts890_scope_action_wire]
+/// The command (without `BS`) of a one-shot scope action.
+fn scope_action_letter(action: ScopeAction) -> char {
+    match action {
+        ScopeAction::ClearWaterfall => 'D',
+        ScopeAction::MarkerShift => 'E',
+    }
 }
 
 // [@ANCHOR: radioctl_ts890_scope_edges_of]
@@ -422,9 +479,22 @@ fn decode_scope(rest: &str) -> Option<Observation> {
             let setting = scope_setting_of(letter)?;
             let code = parse_digits(value).filter(|_| value.len() == 1)?;
             let code = u8::try_from(code).ok()?;
-            (code <= scope_setting_wire(setting).1)
+            let wire = scope_setting_wire(setting);
+            (wire.min..=wire.max)
+                .contains(&code)
                 .then_some(Observation::ScopeSetting(0, setting, code))
         }
+    }
+}
+
+// [@ANCHOR: radioctl_ts890_expanded_span]
+/// The width a sweep covers with expand on, for the spans the guide gives (100 kHz is 300 kHz and
+/// 200 kHz is 400 kHz); `None` for any other span, whose expanded width the guide does not say.
+fn expanded_span(span: Hz) -> Option<u64> {
+    match span.0 {
+        100_000 => Some(300_000),
+        200_000 => Some(400_000),
+        _ => None,
     }
 }
 
@@ -455,22 +525,36 @@ impl Ts890Engine {
             _ => self.scope.freq_a,
         };
         let centre_hz = centre.map(|hz| hz.0);
+        let expand = self.scope.expand;
         let placed = match (samples, self.scope.axis, self.scope.span, centre) {
             (Some(samples), Some(ScopeAxis::Center), Some(span), Some(centre)) => {
-                let half = span.0 / 2;
-                Some((
-                    ScopeAxis::Center,
+                let swept = match expand {
+                    Some(false) => Some(span.0),
+                    Some(true) => expanded_span(span),
+                    None => None,
+                };
+                swept.map(|swept| {
+                    let half = swept / 2;
                     (
-                        Hz(centre.0.saturating_sub(half)),
-                        Hz(centre.0.saturating_add(half)),
-                    ),
-                    samples,
-                ))
+                        ScopeAxis::Center,
+                        (
+                            Hz(centre.0.saturating_sub(half)),
+                            Hz(centre.0.saturating_add(half)),
+                        ),
+                        samples,
+                    )
+                })
             }
+            // Expand does not apply to a fixed range.
             (Some(samples), Some(ScopeAxis::Fixed), _, _) => self
                 .scope
                 .edges
                 .map(|edges| (ScopeAxis::Fixed, edges, samples)),
+            // The edges auto scroll has moved to, as of the last `BSM0` read.
+            (Some(samples), Some(ScopeAxis::ScrollFixed), _, _) if expand == Some(false) => self
+                .scope
+                .edges
+                .map(|edges| (ScopeAxis::ScrollFixed, edges, samples)),
             _ => None,
         };
         let Some((axis, (low, high), samples)) = placed else {
@@ -478,7 +562,7 @@ impl Ts890Engine {
             return None;
         };
         let out_of_range =
-            axis == ScopeAxis::Fixed && centre_hz.is_none_or(|hz| hz < low.0 || hz > high.0);
+            axis != ScopeAxis::Center && centre_hz.is_none_or(|hz| hz < low.0 || hz > high.0);
         Some(ScopeFrame {
             seq: 0,
             receiver: 0,
@@ -523,16 +607,19 @@ impl Ts890Engine {
             Observation::RxVfo(vfo) => self.scope.rx_vfo = Some(vfo),
             Observation::ScopeAxis(0, axis) => self.scope.axis = Some(axis),
             Observation::ScopeSpan(0, span) => self.scope.span = Some(span),
+            Observation::ScopeSetting(0, ScopeSetting::Expand, code) => {
+                self.scope.expand = Some(code == 1);
+            }
             _ => {}
         }
     }
 
     // [@ANCHOR: radioctl_ts890_engine_scope_start]
     /// The commands that turn the waveform output on: first read what the frames are placed from
-    /// (`FA`, `FB`, `FR`, `BS3`, `BS4`, `BSM`; the answers update the engine's copies as they arrive), then
+    /// (`FA`, `FB`, `FR`, `BS3`, `BS4`, `BSO`, `BSM`; the answers update the engine's copies as they arrive), then
     /// `DD0`. Nothing here transmits.
     fn scope_start() -> String {
-        format!("FA;FB;FR;BS3;BS4;BSM;DD0{SCOPE_OUTPUT_ON};")
+        format!("FA;FB;FR;BS3;BS4;BSO;BSM;DD0{SCOPE_OUTPUT_ON};")
     }
 }
 
@@ -560,7 +647,13 @@ impl ProtocolEngine for Ts890Engine {
                 let name = if *vfo == Vfo::A { "FA" } else { "FB" };
                 // What the next bandscope frame is placed from.
                 self.note(&Inbound::Observation(Observation::Frequency(*vfo, *hz)));
-                Self::command(format!("{name}{:011};", hz.0), none)
+                // Auto scroll moves its edges with the frequency, so read them again.
+                let reread = if self.scope.axis == Some(ScopeAxis::ScrollFixed) {
+                    "BSM;"
+                } else {
+                    ""
+                };
+                Self::command(format!("{name}{:011};{reread}", hz.0), none)
             }
             Op::GetMode => Self::command("OM0;".into(), observe(Field::Mode)),
             Op::SetMode(mode) => {
@@ -666,16 +759,25 @@ impl ProtocolEngine for Ts890Engine {
                 Self::command(format!("BSC{step:03};"), none)
             }
             Op::GetScopeSetting(0, setting) => {
-                let (letter, _) = scope_setting_wire(*setting);
+                let letter = scope_setting_wire(*setting).letter;
                 Self::command(
                     format!("BS{letter};"),
                     observe(Field::ScopeSetting(0, *setting)),
                 )
             }
             Op::SetScopeSetting(0, setting, code) => {
-                let (letter, max) = scope_setting_wire(*setting);
-                if *code > max {
+                let wire = scope_setting_wire(*setting);
+                if !wire.writable {
+                    return Err(Self::unsupported(
+                        "the guide has no set form for this scope setting",
+                    ));
+                }
+                if !(wire.min..=wire.max).contains(code) {
                     return Err(Self::unsupported("scope setting code outside the guide"));
+                }
+                let letter = wire.letter;
+                if *setting == ScopeSetting::Expand {
+                    self.scope.expand = Some(*code == 1);
                 }
                 // A new range or layout changes the edges in use.
                 let reread = if *setting == ScopeSetting::Range {
@@ -684,6 +786,15 @@ impl ProtocolEngine for Ts890Engine {
                     ""
                 };
                 Self::command(format!("BS{letter}{code};{reread}"), none)
+            }
+            Op::ScopeAction(0, action) => {
+                if *action == ScopeAction::MarkerShift && self.scope.axis == Some(ScopeAxis::Center)
+                {
+                    return Err(Self::unsupported(
+                        "marker shift and centre are invalid in center mode",
+                    ));
+                }
+                Self::command(format!("BS{};", scope_action_letter(*action)), none)
             }
             Op::SetScopeEdges(range @ 1..=3, 1, low, high) => {
                 if low.0 >= high.0 || high.0 > MAX_EDGE_HZ {
@@ -708,6 +819,9 @@ impl ProtocolEngine for Ts890Engine {
                         out.extend(self.scope_frame(body).map(Inbound::ScopeFrame));
                     } else if let Some(body) = text.strip_prefix("##DD3") {
                         out.extend(self.filter_scope_frame(body).map(Inbound::FilterScopeFrame));
+                    } else if text == "BSD" {
+                        // The rig's confirmation that the waterfall was cleared (sent with auto
+                        // information on): nothing to report.
                     } else if let Some(body) = text.strip_prefix("BSM") {
                         // The answer to a `BSM` read: kept for placing fixed-mode sweeps; not
                         // an observation, since the core has no field for it.

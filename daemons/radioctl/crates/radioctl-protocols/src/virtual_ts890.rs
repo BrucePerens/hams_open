@@ -36,12 +36,24 @@ pub(super) struct Ts890Scope {
     max_hold: u8,
     averaging: u8,
     waterfall_speed: u8,
+    audio_attenuator: u8,
+    audio_span: u8,
+    oscilloscope_level: u8,
+    oscilloscope_sweep: u8,
+    shift_position: u8,
+    audio_pause: u8,
+    expand: u8,
+    /// Edges set by the marker-center command in fixed mode, until the mode or range changes.
+    centred_edges: Option<(u32, u32)>,
     reference: u16,
     output: u8,
     sweep: u32,
     /// The lower and upper edge of each fixed-mode range in hertz; entry 0 is the default range.
     edges: [(u32, u32); 4],
 }
+
+/// The span choices of `BS4` in hertz.
+const SPANS_HZ: [u64; 7] = [5_000, 10_000, 25_000, 50_000, 100_000, 200_000, 500_000];
 
 /// The edges of every fixed-mode range at the start (our choice, not a radio's): the 20 m band
 /// for the default range, then 40 m, 80 m and 15 m.
@@ -68,6 +80,14 @@ impl Default for Ts890Scope {
             max_hold: 0,
             averaging: 0,
             waterfall_speed: 1,
+            audio_attenuator: 0,
+            audio_span: 0,
+            oscilloscope_level: 0,
+            oscilloscope_sweep: 0,
+            shift_position: 4,
+            audio_pause: 0,
+            expand: 0,
+            centred_edges: None,
             reference: 40,
             output: 0,
             sweep: 0,
@@ -265,6 +285,25 @@ impl VirtualRig {
             "9" => (&mut scope.max_hold, 1, 1),
             "A" => (&mut scope.averaging, 3, 1),
             "B" => (&mut scope.waterfall_speed, 4, 1),
+            "G" => (&mut scope.audio_attenuator, 3, 1),
+            "H" => (&mut scope.audio_span, 1, 1),
+            "I" => (&mut scope.oscilloscope_level, 3, 1),
+            "J" => (&mut scope.oscilloscope_sweep, 5, 1),
+            "K" => (&mut scope.shift_position, 8, 1),
+            "N" => (&mut scope.audio_pause, 1, 1),
+            "O" => (&mut scope.expand, 1, 1),
+            // The overflow state has a read form only; this rig never overflows.
+            "L" => {
+                return Some(if arg.is_empty() {
+                    "BSL0;".to_string()
+                } else {
+                    REFUSED.to_string()
+                })
+            }
+            // Waterfall clear: the rig confirms it when auto information is on.
+            "D" if arg.is_empty() => return self.state.transceive.then(|| "BSD;".to_string()),
+            // Marker shift (auto scroll) or centre (fixed); invalid in center mode.
+            "E" if arg.is_empty() => return self.ts890_marker_shift(),
             "C" => {
                 if arg.is_empty() {
                     return Some(format!("BSC{:03};", scope.reference));
@@ -300,9 +339,57 @@ impl VirtualRig {
             }
             (false, Some(value)) if !(letter == "B" && value == 0) => {
                 *slot = value;
+                if matches!(letter, "3" | "5") {
+                    scope.centred_edges = None;
+                }
                 None
             }
             _ => Some(REFUSED.to_string()),
+        }
+    }
+
+    // [@ANCHOR: radioctl_virtual_ts890_current_edges]
+    /// The edges the scope now shows. Fixed mode: the range's own, or those the marker-center
+    /// command moved. Auto scroll (our model; the guide gives none): the page of the span's width
+    /// that holds the receive frequency, so the edges move when the dial leaves the page.
+    fn ts890_current_edges(&self) -> (u32, u32) {
+        let scope = &self.ts890_scope;
+        if scope.mode != 2 {
+            return scope
+                .centred_edges
+                .unwrap_or(scope.edges[usize::from(scope.range)]);
+        }
+        let freq = if self.kenwood_rx_vfo == 1 {
+            self.state.freq_b.0
+        } else {
+            self.state.freq_a.0
+        };
+        let span = SPANS_HZ[usize::from(scope.span.min(6))];
+        let low = freq - freq % span;
+        let clamp = |hz: u64| u32::try_from(hz).unwrap_or(u32::MAX);
+        (clamp(low), clamp(low + span))
+    }
+
+    // [@ANCHOR: radioctl_virtual_ts890_marker_shift]
+    /// `BSE`: in fixed mode the range is re-centred on the receive frequency (until the mode or
+    /// range changes); in auto scroll it has no effect here; in center mode the rig refuses it.
+    fn ts890_marker_shift(&mut self) -> Option<String> {
+        match self.ts890_scope.mode {
+            0 => Some(REFUSED.to_string()),
+            1 => {
+                let (low, high) = self.ts890_current_edges();
+                let freq = if self.kenwood_rx_vfo == 1 {
+                    self.state.freq_b.0
+                } else {
+                    self.state.freq_a.0
+                };
+                let half = u64::from(high - low) / 2;
+                let clamp = |hz: u64| u32::try_from(hz).unwrap_or(u32::MAX);
+                self.ts890_scope.centred_edges =
+                    Some((clamp(freq.saturating_sub(half)), clamp(freq + half)));
+                None
+            }
+            _ => None,
         }
     }
 
@@ -313,7 +400,7 @@ impl VirtualRig {
     fn ts890_edges_command(&mut self, arg: &str) -> Option<String> {
         let scope = &mut self.ts890_scope;
         if arg.is_empty() {
-            let (low, high) = scope.edges[usize::from(scope.range)];
+            let (low, high) = self.ts890_current_edges();
             return Some(format!("BSM0{low:08}{high:08};"));
         }
         let range = arg
