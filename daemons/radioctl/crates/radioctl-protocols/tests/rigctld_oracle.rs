@@ -1644,6 +1644,7 @@ fn known_optoscan_divergences(_file: &str) -> Vec<&'static str> {
         "GetMode",
         "final mode",
     ]
+}
 
 // Tests [@ANCHOR: radioctl_ylegacy_encode_block]
 // Tests [@ANCHOR: radioctl_ylegacy_decode_block]

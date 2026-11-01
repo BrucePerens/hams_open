@@ -346,7 +346,7 @@ FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
     "kenwood_hh_ascii": ("B", "kenwood_hh"),
     "icom_pcr_ascii": ("C", None),
     "icom_marine": ("C", None),
-    "yaesu_other": ("C", None),
+    "yaesu_other": ("B", "yaesu_legacy"),
 }
 
 # Hamlib model id -> radioctl engine, for Tier C models whose engine exists (a Tier C model not listed here
