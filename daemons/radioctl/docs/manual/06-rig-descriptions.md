@@ -306,6 +306,14 @@ owner.
    everywhere else.
 2. Capture the exchange (a serial tap, or the transcript tail of a `RigError`), and keep the capture
    free of serial numbers, keys and addresses.
+   `bench_console --log LOG --wire WIRE` records both halves on one clock; then
+   `python3 tools/wire_to_transcript.py --rig RIG_ID --wire WIRE --log LOG [--redact 'HEX BYTES']... --out FILE`
+   writes the `[[step]]` file with `origin = "capture"`. Each console command is paired with the
+   exchange that finished last before its result line; polls, unsolicited frames and anything it
+   cannot convert (a command or result it does not know) are left as comments, and a step that
+   shares its window with a poll carries a `# check:` comment. Read every step against the log,
+   copy the file to `rigs/transcripts/` and run `cargo test -p radioctl-protocols --test rig_files`
+   to see that it replays, and only then keep it.
 3. For each fact you exercised, change `verified` to `hardware-verified` with the radio, its firmware
    version, the date and what exactly you tested:
 

@@ -221,13 +221,13 @@ fn parse_op(words: &[&str]) -> Result<Op, String> {
 }
 
 /// Puts a tap between the actor and the transport: bytes both ways go to `wire` as hexadecimal
-/// lines. Returns the stream the actor should use.
-fn tapped<T>(transport: T, wire: Arc<Mutex<File>>) -> DuplexStream
+/// lines, timed from `started` (the console's own clock, so the wire file and the log file line up).
+/// Returns the stream the actor should use.
+fn tapped<T>(transport: T, wire: Arc<Mutex<File>>, started: Instant) -> DuplexStream
 where
     T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Unpin + 'static,
 {
     let (actor_side, mut tap_side) = tokio::io::duplex(8192);
-    let started = Instant::now();
     tokio::spawn(async move {
         let mut inner = transport;
         let (mut from_radio, mut from_actor) = ([0u8; 1024], [0u8; 1024]);
@@ -292,7 +292,7 @@ async fn open_rig(
             }
         });
         return Ok(match wire {
-            Some(wire) => spawn_current(engine, tapped(stream, wire), options)?,
+            Some(wire) => spawn_current(engine, tapped(stream, wire, out.started), options)?,
             None => spawn_current(engine, stream, options)?,
         });
     }
@@ -322,7 +322,7 @@ async fn open_rig(
     // The monitor (control lines, status, counters) lives as long as the program.
     std::mem::forget(monitor);
     Ok(match wire {
-        Some(wire) => spawn_current(engine, tapped(transport, wire), options)?,
+        Some(wire) => spawn_current(engine, tapped(transport, wire, out.started), options)?,
         None => spawn_current(engine, transport, options)?,
     })
 }
