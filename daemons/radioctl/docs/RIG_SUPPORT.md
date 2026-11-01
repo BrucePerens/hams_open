@@ -10,16 +10,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **277** (283 description files), **97%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **278** (284 description files), **97%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 277 |
+| described | 278 |
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 2 |
-| odd device | 5 |
+| odd device | 4 |
 | not applicable | 29 |
 
 | Verification level | Models |
@@ -36,7 +36,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 72 |
-| D | odd device | 54 | 28 |
+| D | odd device | 54 | 29 |
 
 ### By family
 
@@ -51,7 +51,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_device_driver | C/D | - | 10 | 0 | 0 |
 | other_usb | D | si570_usb | 10 | 10 | 0 |
 | flexradio_network | A | flex | 9 | 9 | 0 |
-| other_network | C/D | - | 8 | 0 | 0 |
+| other_network | C/D | - | 8 | 1 | 0 |
 | elecraft_ascii | A | elecraft | 7 | 7 | 0 |
 | icom_marine | C | icom_marine | 4 | 4 | 0 |
 | icom_pcr_ascii | C | icom_pcr | 4 | 4 | 0 |
@@ -303,7 +303,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 38001 | Micom | Micom 2/3 | C | other_serial | - | `micom-2-3` | unverified | - | described |
 | 3074 | Microtelecom | Perseus | D | other_serial | - | - | unverified | - | odd device |
 | 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | not applicable |
-| 25014 | N2ADR | HiQSDR | D | other_network | - | - | unverified | - | odd device |
+| 25014 | N2ADR | HiQSDR | D | other_network | - | `n2adr-hiqsdr` | unverified | - | described |
 | 10 | N2ADR James Ahlstrom | Quisk | D | other_network | - | - | unverified | - | not applicable |
 | 8 | N3FJP | ACLog | D | other_network | - | - | unverified | - | not applicable |
 | 2040 | OpenHPSDR | PiHPSDR | D | other_serial | - | - | unverified | - | not applicable |

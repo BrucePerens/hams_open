@@ -90,6 +90,8 @@ pub enum VendorProtocol {
     Paragon,
     /// Motorola MICOM 2 and 3 (`micom.rs`).
     Micom,
+    /// N2ADR HiQSDR UDP control frame (`hiqsdr.rs`).
+    Hiqsdr,
 }
 
 impl VendorProtocol {
@@ -119,6 +121,7 @@ impl VendorProtocol {
             "transfox" => Some(VendorProtocol::Transfox),
             "paragon" => Some(VendorProtocol::Paragon),
             "micom" => Some(VendorProtocol::Micom),
+            "hiqsdr" => Some(VendorProtocol::Hiqsdr),
             _ => None,
         }
     }
@@ -149,6 +152,7 @@ impl VendorProtocol {
             VendorProtocol::Transfox => "transfox",
             VendorProtocol::Paragon => "paragon",
             VendorProtocol::Micom => "micom",
+            VendorProtocol::Hiqsdr => "hiqsdr",
         }
     }
 }
@@ -1140,6 +1144,11 @@ mod tests {
             Some(VendorProtocol::Micom)
         );
         assert_eq!(VendorProtocol::Micom.name(), "micom");
+        assert_eq!(
+            VendorProtocol::from_name("hiqsdr"),
+            Some(VendorProtocol::Hiqsdr)
+        );
+        assert_eq!(VendorProtocol::Hiqsdr.name(), "hiqsdr");
         assert_eq!(VendorProtocol::from_name("nope"), None);
     }
 

@@ -145,6 +145,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Transfox => Box::new(crate::transfox::TransfoxEngine::new(desc.clone())?),
         VendorProtocol::Paragon => Box::new(crate::paragon::ParagonEngine::new(desc.clone())?),
         VendorProtocol::Micom => Box::new(crate::micom::MicomEngine::new(desc.clone())?),
+        VendorProtocol::Hiqsdr => Box::new(crate::hiqsdr::HiqsdrEngine::new(desc.clone())?),
     })
 }
 
@@ -177,6 +178,7 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Transfox => Box::new(crate::transfox::TransfoxTwin::new(desc)?),
         VendorProtocol::Paragon => Box::new(crate::paragon::ParagonTwin::new(desc)?),
         VendorProtocol::Micom => Box::new(crate::micom::MicomTwin::new(desc)?),
+        VendorProtocol::Hiqsdr => Box::new(crate::hiqsdr::HiqsdrTwin::new(desc)?),
     })
 }
 

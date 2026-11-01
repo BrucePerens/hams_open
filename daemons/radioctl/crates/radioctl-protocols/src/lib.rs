@@ -29,6 +29,7 @@ pub mod flex;
 pub mod funcube;
 pub mod gomspace;
 pub mod guohe;
+pub mod hiqsdr;
 pub mod hpsdr_net;
 pub mod icom_marine;
 pub mod icom_pcr;

@@ -804,6 +804,16 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_micom_twin_snapshot] (radioctl-protocols) The virtual MICOM's frequency and key state, for the Hamlib oracle batch.
 - [@ANCHOR: radioctl:radioctl_micom_twin_feed] (radioctl-protocols) The virtual MICOM acknowledges the frequency frames, answers the frequency read and takes the key frames.
 - [@ANCHOR: radioctl:radioctl_micom_twin_front_panel] (radioctl-protocols) A knob turned at the virtual MICOM: frequency or PTT.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_phase_word] (radioctl-protocols) The HiQSDR tuning phase word of a frequency: frequency over the 122.88 MHz reference clock times 2^32, rounded.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_word_frequency] (radioctl-protocols) The frequency a HiQSDR phase word tunes to, rounded to the hertz.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_initial_frame] (radioctl-protocols) The HiQSDR control frame Hamlib builds at open: zero tuning, level 120, 48 kHz.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_engine_new] (radioctl-protocols) Builds a HiQSDR engine from a vendor description of dialect `hiqsdr`.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_engine_encode] (radioctl-protocols) Updates the HiQSDR control frame for frequency, mode or key and returns the whole frame.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_engine_feed] (radioctl-protocols) The HiQSDR sends nothing back on the control port; anything received is unrecognised.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_twin_new] (radioctl-protocols) A virtual HiQSDR in the description's default state.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_twin_snapshot] (radioctl-protocols) The virtual HiQSDR's tuned frequency, mode byte and key state.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_twin_feed] (radioctl-protocols) The virtual HiQSDR keeps the last 22-byte control frame it was sent.
+- [@ANCHOR: radioctl:radioctl_hiqsdr_twin_front_panel] (radioctl-protocols) The virtual HiQSDR has no front panel.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).
