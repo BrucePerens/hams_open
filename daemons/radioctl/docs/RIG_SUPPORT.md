@@ -10,15 +10,15 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **279** (285 description files), **98%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **280** (286 description files), **98%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 279 |
+| described | 280 |
 | engine only | 0 |
 | needs variant | 0 |
-| needs engine | 1 |
+| needs engine | 0 |
 | odd device | 4 |
 | not applicable | 29 |
 
@@ -35,14 +35,14 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 |---|---|---:|---:|
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
-| C | new engine | 82 | 73 |
+| C | new engine | 82 | 74 |
 | D | odd device | 54 | 29 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 82 | 0 |
+| other_serial | C/D | aor | 94 | 83 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -355,7 +355,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1033 | Vertex Standard | VX-1700 | B | yaesu_other | yaesu_legacy | `vertex-vx-1700` | unverified | - | described |
 | 26001 | Video4Linux | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
 | 26002 | Video4Linux2 | SW/FM radio | D | other_device_driver | - | - | unverified | - | not applicable |
-| 12004 | Watkins-Johnson | WJ-8888 | C | other_serial | - | - | unverified | - | needs engine |
+| 12004 | Watkins-Johnson | WJ-8888 | C | other_serial | - | `watkins-johnson-wj-8888` | unverified | - | described |
 | 15001 | Winradio | WR-1000 | C | other_device_driver | - | - | unverified | - | not applicable |
 | 15002 | Winradio | WR-1500 | C | other_device_driver | - | - | unverified | - | not applicable |
 | 15003 | Winradio | WR-1550 | C | other_device_driver | - | - | unverified | - | not applicable |
