@@ -26,7 +26,7 @@ use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::transcript::Panel;
 use radioctl_core::units::{Hz, Mode, Vfo};
 
-use crate::serial_vendor::{vendor_of, RxBuffer, VendorTwin};
+use crate::serial_vendor::{vendor_of, RxBuffer, TwinSnapshot, VendorTwin};
 
 const CR: u8 = b'\r';
 const LF: u8 = b'\n';
@@ -225,6 +225,19 @@ impl DrakeTwin {
 }
 
 impl VendorTwin for DrakeTwin {
+    // [@ANCHOR: radioctl_drake_twin_snapshot]
+    fn snapshot(&self) -> Option<TwinSnapshot> {
+        Some(TwinSnapshot {
+            frequency: Hz(self.units * 10),
+            mode_code: self
+                .codes
+                .iter()
+                .find(|(m, _)| *m == self.mode)
+                .map(|(_, c)| *c),
+            ptt: false,
+        })
+    }
+
     // [@ANCHOR: radioctl_drake_twin_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8> {
         self.rx.push(bytes, now);

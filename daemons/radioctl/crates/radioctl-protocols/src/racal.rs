@@ -3,8 +3,14 @@
 //!
 //! **Sources.** Facts only, read from Hamlib 4.6.2 (released tarball, sha256
 //! b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): `rigs/racal/racal.c` and
-//! `ra6790.c`. No Racal document was read; nothing is verified against a radio. The RA3702
-//! (`ra37xx.c`, its own packet framing with a receiver number in a header) is not implemented.
+//! `ra6790.c`, and for the Ten-Tec RX-340 and RX-331 (which speak the same command letters)
+//! `rigs/tentec/rx340.c` and `rx331.c`. No vendor document was read; nothing is verified against a
+//! radio. The RA3702 (`ra37xx.c`, its own packet framing) is in `ra37xx.rs`.
+//!
+//! Dialects: `ra6790` (the commands below, `$0` prefix, shortest megahertz decimal), `rx340`
+//! (no prefix, six-decimal megahertz, both CW codes 3 and 4 read as CW; Hamlib's open sends `*R1`
+//! to take remote control, which the engine has no hook for and the twin ignores) and `rx331`
+//! (the `$0` prefix, six decimals, and replies that also start with `$0`).
 //!
 //! Commands are `$`, the receiver number (0 by default in Hamlib), the command text and CR.
 //! `F<MHz>` sets the frequency in megahertz as a decimal number; `TF` asks for it, answered
@@ -20,9 +26,69 @@ use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::transcript::Panel;
 use radioctl_core::units::{Hz, Vfo};
 
-use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, VendorTwin};
+use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, TwinSnapshot, VendorTwin};
 
 const CR: u8 = b'\r';
+
+/// The Racal-family command dialects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dialect {
+    /// Racal RA6790/GM.
+    Ra6790,
+    /// Ten-Tec RX-340.
+    Rx340,
+    /// Ten-Tec RX-331.
+    Rx331,
+}
+
+impl Dialect {
+    // [@ANCHOR: radioctl_racal_dialect_from_name]
+    /// The dialect with a file-format name.
+    pub fn from_name(name: &str) -> Option<Dialect> {
+        match name {
+            "ra6790" => Some(Dialect::Ra6790),
+            "rx340" => Some(Dialect::Rx340),
+            "rx331" => Some(Dialect::Rx331),
+            _ => None,
+        }
+    }
+
+    // [@ANCHOR: radioctl_racal_dialect_prefix]
+    /// What every command starts with.
+    fn prefix(self) -> &'static str {
+        match self {
+            Dialect::Rx340 => "",
+            Dialect::Ra6790 | Dialect::Rx331 => "$0",
+        }
+    }
+
+    // [@ANCHOR: radioctl_racal_dialect_frequency]
+    /// The megahertz field of a set-frequency command.
+    pub fn frequency_text(self, hz: Hz) -> String {
+        match self {
+            Dialect::Ra6790 => format_mhz(hz),
+            Dialect::Rx340 | Dialect::Rx331 => {
+                format!("{}.{:06}", hz.0 / 1_000_000, hz.0 % 1_000_000)
+            }
+        }
+    }
+
+    // [@ANCHOR: radioctl_racal_dialect_body]
+    /// A reply line without the receiver number the RX-331 puts in front of it.
+    fn body(self, line: &[u8]) -> Option<&[u8]> {
+        match self {
+            Dialect::Rx331 => match line {
+                [b'$', rest @ ..] => {
+                    let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
+                    // Hamlib compares the number with the receiver it addressed (0).
+                    (digits > 0 && rest.get(..digits) == Some(b"0")).then(|| &rest[digits..])
+                }
+                _ => None,
+            },
+            Dialect::Ra6790 | Dialect::Rx340 => Some(line),
+        }
+    }
+}
 
 fn unsupported(what: &str) -> RigError {
     RigError::new(ErrorKind::Unsupported, what.to_string())
@@ -70,6 +136,7 @@ enum Pending {
 #[derive(Debug)]
 pub struct RacalEngine {
     desc: RigDescription,
+    dialect: Dialect,
     pending: Pending,
     rx: RxBuffer,
 }
@@ -78,12 +145,12 @@ impl RacalEngine {
     // [@ANCHOR: radioctl_racal_engine_new]
     /// Builds an engine from a Racal vendor description.
     pub fn new(desc: RigDescription) -> Result<RacalEngine, RigError> {
-        let (_, dialect) = vendor_of(&desc)?;
-        if dialect != "ra6790" {
-            return Err(unsupported("unknown Racal dialect in the description"));
-        }
+        let (_, name) = vendor_of(&desc)?;
+        let dialect = Dialect::from_name(name)
+            .ok_or_else(|| unsupported("unknown Racal dialect in the description"))?;
         Ok(RacalEngine {
             desc,
+            dialect,
             pending: Pending::Nothing,
             rx: RxBuffer::default(),
         })
@@ -100,19 +167,20 @@ impl ProtocolEngine for RacalEngine {
         if !self.desc.capabilities.has(op.required_capability()) {
             return Err(unsupported("capability not in the rig description"));
         }
+        let prefix = self.dialect.prefix();
         let (text, reply, pending) = match op {
             Op::GetFrequency(Vfo::A) => (
-                "$0TF\r".to_string(),
+                format!("{prefix}TF\r"),
                 ReplyKind::Observation(Field::Frequency(Vfo::A)),
                 Pending::Frequency,
             ),
             Op::SetFrequency(Vfo::A, hz) => (
-                format!("$0F{}\r", format_mhz(*hz)),
+                format!("{prefix}F{}\r", self.dialect.frequency_text(*hz)),
                 ReplyKind::None,
                 Pending::Nothing,
             ),
             Op::GetMode => (
-                "$0TDI\r".to_string(),
+                format!("{prefix}TDI\r"),
                 ReplyKind::Observation(Field::Mode),
                 Pending::Mode,
             ),
@@ -122,7 +190,7 @@ impl ProtocolEngine for RacalEngine {
                     .mode_code(*mode)
                     .ok_or_else(|| unsupported("mode not in the description"))?;
                 (
-                    format!("$0D{}\r", char::from(code)),
+                    format!("{prefix}D{}\r", char::from(code)),
                     ReplyKind::None,
                     Pending::Nothing,
                 )
@@ -145,15 +213,24 @@ impl ProtocolEngine for RacalEngine {
         }
         while let Some(line) = self.rx.take_line(CR) {
             let pending = std::mem::replace(&mut self.pending, Pending::Nothing);
-            out.extend(match (pending, line.as_slice()) {
+            let Some(body) = self.dialect.body(&line) else {
+                out.push(Inbound::Unrecognised(line));
+                continue;
+            };
+            out.extend(match (pending, body) {
                 (Pending::Frequency, [b'F', rest @ ..]) => match parse_mhz(rest) {
                     Some(hz) => vec![Inbound::Observation(Observation::Frequency(Vfo::A, hz))],
                     None => vec![Inbound::Unrecognised(line.clone())],
                 },
                 (Pending::Mode, [b'D', code, b'I', width @ ..]) if !width.is_empty() => {
-                    // Both CW codes (3 variable BFO, 4 BFO centre) read as CW.
-                    let code = if *code == b'3' { b'4' } else { *code };
-                    match self.desc.code_mode(code) {
+                    // Both CW codes (3 variable BFO, 4 BFO centre) read as CW: the one the
+                    // description does not carry is read as the one it does.
+                    let found = self.desc.code_mode(*code).or_else(|| match code {
+                        b'3' => self.desc.code_mode(b'4'),
+                        b'4' => self.desc.code_mode(b'3'),
+                        _ => None,
+                    });
+                    match found {
                         Some(m) => vec![Inbound::Observation(Observation::Mode(m))],
                         None => vec![Inbound::Unrecognised(line.clone())],
                     }
@@ -168,6 +245,7 @@ impl ProtocolEngine for RacalEngine {
 /// A virtual Racal RA6790.
 #[derive(Debug)]
 pub struct RacalTwin {
+    dialect: Dialect,
     rx: RxBuffer,
     hz: Hz,
     mode: u8,
@@ -178,8 +256,11 @@ impl RacalTwin {
     // [@ANCHOR: radioctl_racal_twin_new]
     /// A twin in the description's default state.
     pub fn new(desc: &RigDescription) -> Result<RacalTwin, RigError> {
-        vendor_of(desc)?;
+        let (_, name) = vendor_of(desc)?;
+        let dialect = Dialect::from_name(name)
+            .ok_or_else(|| unsupported("unknown Racal dialect in the description"))?;
         Ok(RacalTwin {
+            dialect,
             rx: RxBuffer::default(),
             hz: desc.default_frequency,
             mode: desc.mode_code(desc.default_mode).unwrap_or(b'1'),
@@ -189,20 +270,44 @@ impl RacalTwin {
 }
 
 impl VendorTwin for RacalTwin {
+    // [@ANCHOR: radioctl_racal_twin_snapshot]
+    fn snapshot(&self) -> Option<TwinSnapshot> {
+        Some(TwinSnapshot {
+            frequency: self.hz,
+            mode_code: Some(self.mode),
+            ptt: false,
+        })
+    }
+
     // [@ANCHOR: radioctl_racal_twin_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8> {
         self.rx.push(bytes, now);
         let mut out = Vec::new();
         while let Some(line) = self.rx.take_line(CR) {
-            match line.as_slice() {
-                b"$0TF" => out.extend(format!("F{}\r", format_mhz(self.hz)).into_bytes()),
-                b"$0TDI" => out.extend(format!("D{}I3\r", char::from(self.mode)).into_bytes()),
-                [b'$', b'0', b'F', rest @ ..] => {
+            // Commands carry the dialect's prefix; replies of the RX-331 carry `$0` too.
+            let prefix = self.dialect.prefix().as_bytes();
+            let Some(cmd) = line.strip_prefix(prefix) else {
+                continue;
+            };
+            let reply_prefix = if self.dialect == Dialect::Rx331 {
+                "$0"
+            } else {
+                ""
+            };
+            match cmd {
+                b"TF" => out.extend(
+                    format!("{reply_prefix}F{}\r", self.dialect.frequency_text(self.hz))
+                        .into_bytes(),
+                ),
+                b"TDI" => {
+                    out.extend(format!("{reply_prefix}D{}I3\r", char::from(self.mode)).into_bytes())
+                }
+                [b'F', rest @ ..] => {
                     if let Some(hz) = parse_mhz(rest) {
                         self.hz = hz;
                     }
                 }
-                [b'$', b'0', b'D', c] if self.codes.contains(c) => self.mode = *c,
+                [b'D', c] if self.codes.contains(c) => self.mode = *c,
                 _ => {}
             }
         }
@@ -312,5 +417,95 @@ mod tests {
             e.feed(b"D9I3\r", T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    fn dialect_file(id: &str) -> RigDescription {
+        let path = format!("{}/../../rigs/{id}.toml", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(path).expect("rig file");
+        radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description
+    }
+
+    // Tests [@ANCHOR: radioctl_racal_dialect_from_name]
+    // Tests [@ANCHOR: radioctl_racal_dialect_frequency]
+    // Tests [@ANCHOR: radioctl_racal_dialect_body]
+    // Tests [@ANCHOR: radioctl_racal_dialect_prefix]
+    #[test]
+    fn the_ten_tec_dialects_have_their_own_prefix_decimals_and_reply_prefix() {
+        assert_eq!(Dialect::from_name("rx340"), Some(Dialect::Rx340));
+        assert_eq!(Dialect::from_name("nope"), None);
+        assert_eq!(Dialect::Ra6790.frequency_text(Hz(14_200_000)), "14.2");
+        assert_eq!(Dialect::Rx340.frequency_text(Hz(14_200_000)), "14.200000");
+        assert_eq!(Dialect::Rx331.frequency_text(Hz(500)), "0.000500");
+        assert_eq!(Dialect::Rx331.body(b"$0F7.0"), Some(&b"F7.0"[..]));
+        assert_eq!(Dialect::Rx331.body(b"$1F7.0"), None);
+        assert_eq!(Dialect::Rx331.body(b"F7.0"), None);
+        assert_eq!(Dialect::Rx340.body(b"F7.0"), Some(&b"F7.0"[..]));
+        assert_eq!(Dialect::Ra6790.prefix(), "$0");
+        assert_eq!(Dialect::Rx340.prefix(), "");
+    }
+
+    #[test]
+    fn the_rx340_and_rx331_files_round_trip_against_their_twins() {
+        for (id, set, get, reply) in [
+            ("tentec-rx-340", "F14.200000\r", "TF\r", "F14.200000\r"),
+            (
+                "tentec-rx-331",
+                "$0F14.200000\r",
+                "$0TF\r",
+                "$0F14.200000\r",
+            ),
+        ] {
+            let desc = dialect_file(id);
+            let mut e = RacalEngine::new(desc.clone()).expect("engine");
+            let mut t = RacalTwin::new(&desc).expect("twin");
+            let r = e
+                .encode(&Op::SetFrequency(Vfo::A, Hz(14_200_000)))
+                .expect("encodes");
+            assert_eq!(r.bytes, set.as_bytes(), "{id}");
+            t.feed(&r.bytes, T0);
+            let r = e.encode(&Op::GetFrequency(Vfo::A)).expect("encodes");
+            assert_eq!(r.bytes, get.as_bytes(), "{id}");
+            let answer = t.feed(&r.bytes, T0);
+            assert_eq!(answer, reply.as_bytes(), "{id}");
+            assert_eq!(
+                e.feed(&answer, T0),
+                vec![Inbound::Observation(Observation::Frequency(
+                    Vfo::A,
+                    Hz(14_200_000)
+                ))]
+            );
+            for mode in [Mode::Am, Mode::Fm, Mode::Cw, Mode::Lsb, Mode::Usb] {
+                let r = e.encode(&Op::SetMode(mode)).expect("encodes");
+                t.feed(&r.bytes, T0);
+                let r = e.encode(&Op::GetMode).expect("encodes");
+                let answer = t.feed(&r.bytes, T0);
+                assert_eq!(
+                    e.feed(&answer, T0),
+                    vec![Inbound::Observation(Observation::Mode(mode))],
+                    "{id} {mode:?}"
+                );
+            }
+            // The radio's other CW code, and a reply from another receiver number.
+            e.encode(&Op::GetMode).expect("encodes");
+            let other_cw = if id == "tentec-rx-331" {
+                "$0D4I3\r"
+            } else {
+                "D4I3\r"
+            };
+            assert_eq!(
+                e.feed(other_cw.as_bytes(), T0),
+                vec![Inbound::Observation(Observation::Mode(Mode::Cw))],
+                "{id}"
+            );
+            e.encode(&Op::GetFrequency(Vfo::A)).expect("encodes");
+            assert!(matches!(
+                e.feed(b"$7F7\r", T0).as_slice(),
+                [Inbound::Unrecognised(_)]
+            ));
+            // The radio ignores what it does not know (Hamlib's remote-control command).
+            assert!(t.feed(b"*R1\r", T0).is_empty());
+        }
     }
 }

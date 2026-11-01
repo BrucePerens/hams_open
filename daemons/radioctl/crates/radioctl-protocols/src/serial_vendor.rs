@@ -12,9 +12,28 @@ use radioctl_core::description::{Family, RigDescription, VendorProtocol};
 use radioctl_core::engine::{ProtocolEngine, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::transcript::Panel;
+use radioctl_core::units::Hz;
+
+/// What a vendor twin holds, for harnesses that compare it with another implementation of the
+/// same protocol (the Hamlib oracle batch).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TwinSnapshot {
+    /// The frequency of the receive VFO.
+    pub frequency: Hz,
+    /// The mode code of the receive VFO as the description's `[[modes]]` table spells it, or
+    /// `None` for a twin that keeps no mode.
+    pub mode_code: Option<u8>,
+    /// Whether the twin is transmitting.
+    pub ptt: bool,
+}
 
 /// A virtual radio of one vendor serial family.
 pub trait VendorTwin: Send {
+    /// The frequency, mode code and PTT state the twin holds now, for the twins that expose them
+    /// (the Hamlib oracle batch compares it); `None` for one that does not.
+    fn snapshot(&self) -> Option<TwinSnapshot> {
+        None
+    }
     /// Consumes the controller's bytes at `now`; returns what the radio sends back.
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8>;
     /// Turns a knob at the radio; `Err` names a knob this twin has not got.
@@ -99,6 +118,9 @@ pub fn vendor_of(desc: &RigDescription) -> Result<(VendorProtocol, &str), RigErr
 /// The engine of a vendor serial description.
 pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
     Ok(match vendor_of(desc)?.0 {
+        VendorProtocol::Tentec if vendor_of(desc)?.1 == "rx320" => {
+            Box::new(crate::tentec_rx320::Rx320Engine::new(desc.clone())?)
+        }
         VendorProtocol::Tentec => Box::new(crate::tentec::TentecEngine::new(desc.clone())?),
         VendorProtocol::Drake => Box::new(crate::drake::DrakeEngine::new(desc.clone())?),
         VendorProtocol::Alinco => Box::new(crate::alinco::AlincoEngine::new(desc.clone())?),
@@ -118,6 +140,9 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
 /// The virtual radio of a vendor serial description.
 pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> {
     Ok(match vendor_of(desc)?.0 {
+        VendorProtocol::Tentec if vendor_of(desc)?.1 == "rx320" => {
+            Box::new(crate::tentec_rx320::Rx320Twin::new(desc)?)
+        }
         VendorProtocol::Tentec => Box::new(crate::tentec::TentecTwin::new(desc)?),
         VendorProtocol::Drake => Box::new(crate::drake::DrakeTwin::new(desc)?),
         VendorProtocol::Alinco => Box::new(crate::alinco::AlincoTwin::new(desc)?),
@@ -178,5 +203,38 @@ mod tests {
         assert!(vendor_of(&desc).is_err());
         assert!(engine_for(&desc).is_err());
         assert!(twin_for(&desc).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_tentec_twin_snapshot]
+    // Tests [@ANCHOR: radioctl_alinco_twin_snapshot]
+    // Tests [@ANCHOR: radioctl_drake_twin_snapshot]
+    // Tests [@ANCHOR: radioctl_racal_twin_snapshot]
+    #[test]
+    fn every_shipped_vendor_twin_reports_its_default_state() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs");
+        let mut seen = 0;
+        for entry in std::fs::read_dir(dir).expect("rigs") {
+            let path = entry.expect("entry").path();
+            if path.extension().is_none_or(|e| e != "toml") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).expect("read");
+            let desc = radioctl_core::rigfile::parse(&text)
+                .expect("loads")
+                .description;
+            if desc.family != Family::SerialVendor {
+                continue;
+            }
+            let twin = twin_for(&desc).expect("twin");
+            let Some(snap) = twin.snapshot() else {
+                continue;
+            };
+            assert_eq!(snap.frequency, desc.default_frequency, "{}", desc.id);
+            assert!(!snap.ptt, "{}", desc.id);
+            let mode = snap.mode_code.and_then(|c| desc.code_mode(c));
+            assert_eq!(mode, Some(desc.default_mode), "{}", desc.id);
+            seen += 1;
+        }
+        assert!(seen >= 10, "{seen} vendor files");
     }
 }
