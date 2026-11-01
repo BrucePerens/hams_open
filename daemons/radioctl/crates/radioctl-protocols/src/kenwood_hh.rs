@@ -128,12 +128,14 @@ impl KenwoodHhEngine {
         RigError::new(ErrorKind::Unsupported, what.to_string())
     }
 
+    // [@ANCHOR: radioctl_hh_command]
     fn command(text: String, reply: ReplyKind) -> Request {
         let mut bytes = text.into_bytes();
         bytes.push(CR);
         Request { bytes, reply }
     }
 
+    // [@ANCHOR: radioctl_hh_edited_line]
     /// The remembered `FO` line of a band with `edit` applied, or the reason it cannot be built.
     fn edited_line(
         &self,
@@ -415,6 +417,7 @@ impl HhSim {
         String::from_utf8(bytes).unwrap_or_default()
     }
 
+    // [@ANCHOR: radioctl_hh_sim_line]
     fn line(
         &mut self,
         line: &str,
@@ -557,6 +560,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_hh_engine_feed]
     // Tests [@ANCHOR: radioctl_hh_decode_line]
     // Tests [@ANCHOR: radioctl_hh_sim_feed]
+    // Tests [@ANCHOR: radioctl_hh_command]
+    // Tests [@ANCHOR: radioctl_hh_sim_line]
     #[test]
     fn the_fq_dialect_sends_the_documented_lines() {
         let d = shipped("kenwood-th-d7a");
@@ -612,6 +617,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_hh_parse_fo]
+    // Tests [@ANCHOR: radioctl_hh_edited_line]
     // Tests [@ANCHOR: radioctl_hh_sim_new]
     // Tests [@ANCHOR: radioctl_hh_sim_fo_line]
     #[test]

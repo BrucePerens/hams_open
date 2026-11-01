@@ -1173,6 +1173,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_hh_sim_new] (radioctl-protocols) A virtual handheld in its default state.
 - [@ANCHOR: radioctl:radioctl_hh_sim_fo_line] (radioctl-protocols) The virtual handheld's `FO` line for a band.
 - [@ANCHOR: radioctl:radioctl_hh_sim_feed] (radioctl-protocols) The virtual handheld's answers to command lines.
+- [@ANCHOR: radioctl:radioctl_hh_command] (radioctl-protocols) A handheld command line ended by a carriage return.
+- [@ANCHOR: radioctl:radioctl_hh_edited_line] (radioctl-protocols) The remembered `FO` line of a band with one edit applied.
+- [@ANCHOR: radioctl:radioctl_hh_sim_line] (radioctl-protocols) The virtual handheld's answer to one command line.
 - [@ANCHOR: radioctl:radioctl_ts890_level_wire] (radioctl-protocols) The wire form of a level, or `None` where the guide has no such level command here.
 - [@ANCHOR: radioctl:radioctl_ts890_lan_connect_request] (radioctl-protocols) The first LAN frame: `##CN;` asks the radio for a connection (guide p. 71); it answers `##CN1;` (authorised) or `##CN0;` (denied).
 - [@ANCHOR: radioctl:radioctl_ts890_lan_login] (radioctl-protocols) The second LAN frame, `##ID<type><len><len><account><password>;` (guide p. 72): `administrator` picks account type 0 (administrator) or 1 (user); each length is two digits, 1 to 32.  # Errors  `Unsupported` for an empty or over-long account or password, or one that holds a `;` or a non-ASCII byte (the frame could not be told apart from its terminator).
