@@ -506,6 +506,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_description_code_mode] (radioctl-core) The mode for a wire code, if the model has one.
 - [@ANCHOR: radioctl:radioctl_core_description_ic7300] (radioctl-core) An Icom IC-7300 style CI-V description (address 0x94). Unverified; see the module note.
 - [@ANCHOR: radioctl:radioctl_core_description_ts2000] (radioctl-core) A Kenwood TS-2000 style ASCII description. Unverified; see the module note.
+- [@ANCHOR: radioctl:radioctl_tentec_write_reply] (radioctl-protocols) The write reply of the tentec code.
+- [@ANCHOR: radioctl:radioctl_tentec_twin_slot] (radioctl-protocols) The twin slot of the tentec code.
 - [@ANCHOR: radioctl:radioctl_core_vendorprotocol_from_name] (radioctl-core) The protocol with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_vendorprotocol_name] (radioctl-core) The file-format name.
 - [@ANCHOR: radioctl:radioctl_vendor_rxbuffer_push] (radioctl-protocols) Appends `bytes` received at `now`. Returns the stale partial frame if the buffer held

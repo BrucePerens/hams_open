@@ -137,6 +137,7 @@ impl TentecEngine {
         Request { bytes, reply }
     }
 
+    // [@ANCHOR: radioctl_tentec_write_reply]
     fn write_reply(&self) -> ReplyKind {
         if self.dialect.acknowledges() {
             ReplyKind::Ack
@@ -419,6 +420,7 @@ impl TentecTwin {
         })
     }
 
+    // [@ANCHOR: radioctl_tentec_twin_slot]
     fn slot(letter: u8) -> Option<usize> {
         match letter {
             b'A' => Some(0),
@@ -656,6 +658,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_tentec_decode_binary]
     // Tests [@ANCHOR: radioctl_tentec_frame_len]
     // Tests [@ANCHOR: radioctl_tentec_twin_new]
+    // Tests [@ANCHOR: radioctl_tentec_write_reply]
+    // Tests [@ANCHOR: radioctl_tentec_twin_slot]
     // Tests [@ANCHOR: radioctl_tentec_twin_feed]
     // Tests [@ANCHOR: radioctl_tentec_twin_orion_line]
     // Tests [@ANCHOR: radioctl_tentec_twin_binary_frame]
