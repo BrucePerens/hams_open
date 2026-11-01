@@ -17,8 +17,8 @@
 //! `Debug` hides the password, and sends them only in the login frame. Where they come from (a
 //! secret store, never a configuration file or a log) is the application's business.
 //!
-//! Not implemented: the LAN-only `##DD2` and `##DD3` bandscope output (they pass through as CAT
-//! text and the engine does not understand them).
+//! The LAN-only `##DD2` and `##DD3` bandscope frames pass through here as ordinary payload (this
+//! layer only swallows the keep-alive answer); [`crate::kenwood_ts890::Ts890Engine`] decodes them.
 
 use std::fmt;
 use std::time::Duration;

@@ -174,6 +174,8 @@ pub struct VirtualRig {
     /// when they differ.
     kenwood_rx_vfo: u8,
     kenwood_tx_vfo: u8,
+    /// TS-890S: the bandscope settings and the sweep counter.
+    ts890_scope: virtual_ts890::Ts890Scope,
 }
 
 impl VirtualRig {
@@ -267,6 +269,7 @@ impl VirtualRig {
             civ_b_selected: false,
             kenwood_rx_vfo: 0,
             kenwood_tx_vfo: 0,
+            ts890_scope: virtual_ts890::Ts890Scope::default(),
         })
     }
 
@@ -723,6 +726,9 @@ impl VirtualRig {
     /// frequency, as broadcast frames; empty when the model has no scope, output is off or the
     /// scope is held.
     pub fn scope_sweep(&mut self) -> Vec<u8> {
+        if self.is_ts890() {
+            return self.ts890_sweep();
+        }
         let (Wire::Civ { params, .. }, Some(scope)) = (&self.wire, self.scope.as_mut()) else {
             return Vec::new();
         };

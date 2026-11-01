@@ -11,7 +11,7 @@
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `elecraft.model_id`, `yaesu.model_id`,
 //! `yaesu.frequency_digits` (only when not 9),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
-//! `scope.spans_hz` (an optional `[scope]` block, icom-civ only), `levels.attenuator_db` and
+//! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
 //!
 //! Verified states: `unverified`; `manual-checked` (needs `reference`); `transcript-checked`
@@ -836,8 +836,10 @@ fn build_scope(
     let Some(scope) = section else {
         return Ok(None);
     };
-    if family != Family::IcomCiv {
-        return Err(bad("a [scope] block is only defined for icom-civ"));
+    if !matches!(family, Family::IcomCiv | Family::KenwoodAscii) {
+        return Err(bad(
+            "a [scope] block is only defined for icom-civ and kenwood-ascii",
+        ));
     }
     let sane = (1..=2).contains(&scope.receivers)
         && scope.line_length > 0
@@ -1642,7 +1644,22 @@ verified = { state = "unverified" }
     #[test]
     fn a_scope_block_is_icom_only_sane_and_needs_its_facts() {
         let scope = "\n[scope]\nreceivers = 1\nline_length = 475\nsamples_per_frame = 50\namplitude_max = 160\nspans_hz = [5000, 10000]\n";
-        expect_rejected(&format!("{GOOD}{scope}"), "only defined for icom-civ");
+        let fact = "\n[[facts]]\nkey = \"scope.*\"\nprovenance = { kind = \"hamlib-source\", reference = \"Hamlib 4.6.2 rigs/icom/ic7300.c\", note = \"facts only\" }\nverified = { state = \"unverified\" }\n";
+        // The Kenwood dialect with a scope (the TS-890S) is allowed; another family is not.
+        let kenwood = parse(&format!("{GOOD}{scope}{fact}")).expect("kenwood scope loads");
+        assert!(kenwood.description.scope.is_some());
+        let section = ScopeSection {
+            receivers: 1,
+            line_length: 475,
+            samples_per_frame: 50,
+            amplitude_max: 160,
+            spans_hz: vec![5000],
+        };
+        let refused = build_scope(Some(&section), Family::Flex).expect_err("refused");
+        assert!(
+            refused.detail.contains("only defined for icom-civ"),
+            "{refused:?}"
+        );
         let civ = GOOD
             .replace("kenwood-ascii", "icom-civ")
             .replace(
@@ -1654,7 +1671,6 @@ verified = { state = "unverified" }
             .replace("code = 0x31", "code = 0");
         let with_scope = format!("{civ}{scope}");
         expect_rejected(&with_scope, "no provenance fact covers \"scope.receivers\"");
-        let fact = "\n[[facts]]\nkey = \"scope.*\"\nprovenance = { kind = \"hamlib-source\", reference = \"Hamlib 4.6.2 rigs/icom/ic7300.c\", note = \"facts only\" }\nverified = { state = \"unverified\" }\n";
         let loaded = parse(&format!("{with_scope}{fact}")).expect("loads");
         let params = loaded.description.scope.expect("scope");
         assert_eq!((params.receivers, params.line_length), (1, 475));

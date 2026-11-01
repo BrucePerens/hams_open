@@ -908,6 +908,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_civ_engine_encode] (radioctl-protocols) Encodes an Op as a CI-V request with the reply to expect; refuses VFO B, transceive and anything the description lacks.
 - [@ANCHOR: radioctl:radioctl_civ_engine_feed] (radioctl-protocols) Decodes CI-V replies and unsolicited transceive frames; skips echoes of our own frames and frames from other stations.
 - [@ANCHOR: radioctl:radioctl_kenwood_tokenizer_feed] (radioctl-protocols) Adds bytes received at `now` and returns every complete token.
+- [@ANCHOR: radioctl:radioctl_kenwood_tokenizer_with_max_pending] (radioctl-protocols) A tokenizer that holds up to `max_pending` bytes of one command (the TS-890S bandscope frame is 1286 bytes).
 - [@ANCHOR: radioctl:radioctl_kenwood_parse_digits] (radioctl-protocols) Parses a string of ASCII digits only (no sign, no spaces).
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_new] (radioctl-protocols) Builds an engine from a Kenwood-style description.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_encode] (radioctl-protocols) Encodes an Op as a Kenwood ASCII request; refuses PTT readback, power meter and CW.
@@ -1594,11 +1595,21 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_lan_login] (radioctl-protocols) The second LAN frame, `##ID<type><len><len><account><password>;` (guide p. 72): `administrator` picks account type 0 (administrator) or 1 (user); each length is two digits, 1 to 32.  # Errors  `Unsupported` for an empty or over-long account or password, or one that holds a `;` or a non-ASCII byte (the frame could not be told apart from its terminator).
 - [@ANCHOR: radioctl:radioctl_ts890_lan_reply] (radioctl-protocols) What a LAN answer says: `Some(true)` for `##CN1;` and `##ID1;` (authorised), `Some(false)` for `##CN0;` and `##ID0;`, `None` for anything else.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_new] (radioctl-protocols) Builds an engine from a Kenwood-family description whose dialect is `ts890`.  # Errors  `Unsupported` for any other description.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frames_dropped] (radioctl-protocols) Bandscope sweeps received and not published.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_decode] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_decode_step] (radioctl-protocols) An `RA` or `PA` answer: one digit, the step, mapped by the description.
 - [@ANCHOR: radioctl:radioctl_ts890_vfo_of] (radioctl-protocols) The VFO named by an `FR`/`FT` digit (`0` is A).
 - [@ANCHOR: radioctl:radioctl_ts890_decode_offset] (radioctl-protocols) The `RF` answer after its name: a direction digit (0 plus, 1 minus) and four digits of hertz.
 - [@ANCHOR: radioctl:radioctl_ts890_decode_level] (radioctl-protocols) A numeric level answer: the command name and its three digits (`AG128`).
+- [@ANCHOR: radioctl:radioctl_ts890_scope_axis_code] (radioctl-protocols) The `BS3` digit of an axis mode.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_axis_of] (radioctl-protocols) The axis mode a `BS3` digit names.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_span_code] (radioctl-protocols) The `BS4` digit of a span in hertz, if the rig offers it.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_reference_code] (radioctl-protocols) The three `BSC` digits of a reference level in hundredths of a dB.
+- [@ANCHOR: radioctl:radioctl_ts890_decode_scope] (radioctl-protocols) A `BS3`, `BS4` or `BSC` answer after the command name `BS`.
+- [@ANCHOR: radioctl:radioctl_ts890_scope_samples] (radioctl-protocols) The samples of a `##DD2` or `##DD3` body, none above the guide's maximum.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frame] (radioctl-protocols) A `##DD2` body as a frame placed from what the engine last saw, or dropped and counted.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_note] (radioctl-protocols) Keeps what the frame edges are computed from.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_scope_start] (radioctl-protocols) The commands that turn the waveform output on: read the context, then `DD0`.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_encode] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_feed] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_virtual_ts440_is] (radioctl-protocols) True when this rig speaks the TS-440S dialect.
@@ -1609,6 +1620,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_is] (radioctl-protocols) True when this rig speaks the TS-890S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_command] (radioctl-protocols) One TS-890S command; the reply bytes (none for a setting, `?;` for a refusal).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_level] (radioctl-protocols) `AGnnn`, `RGnnn`, `MGnnn`, `KSnnn`, `PCnnn`: a read when `arg` is empty, else a set inside the guide's range.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_scope_default] (radioctl-protocols) The starting bandscope state of a virtual TS-890S.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_scope_command] (radioctl-protocols) One `BS` command of the virtual TS-890S: a read, or a set inside the guide's range.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_sweep] (radioctl-protocols) One `##DD2` frame from a virtual TS-890S when the LAN waveform output is on.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_name] (radioctl-core) The name used in rig description files.
 - [@ANCHOR: radioctl:radioctl_core_receiver_protocol_from_name] (radioctl-core) The protocol with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_usb] (radioctl-core) The USB-device parameters of a description file: protocol, USB ids, strings and multiplier.

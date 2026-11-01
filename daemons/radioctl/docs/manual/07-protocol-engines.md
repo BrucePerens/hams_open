@@ -136,8 +136,18 @@ fact of `rigs/kenwood-ts-890s.toml`).
   `lan_connect_request` and `lan_login` and the answers read by `lan_reply`. **No transport sends them yet:** a
   session needs the owner's administrator or user account from the radio's LAN menu, which belongs in the
   station's secret store and never in a description. The commands after login are those of the serial link.
-- **Does not cover:** the bandscope (`BS0` to `BS9` and the LAN-only waveform data `##DD2`, `##DD3`), CW text,
-  memories, the menu (`EX`), the `PSQ/PKS` pin note, and LAN session keep-alive.
+- **Bandscope (unverified, virtual rig only):** the core scope operations map to `BS3` (center, fixed, auto
+  scroll), `BS4` (span 5 to 500 kHz), `BSC` (reference level, half-decibel steps from -20 to +10 dB) and
+  `DD0` (waveform output; the engine sets LAN medium cycle). The LAN-only `##DD2` frame (640 hexadecimal
+  samples, 00 strongest to 8C weakest, read from the August 2018 guide, `ts890_pc_command_e.pdf`) becomes a
+  `ScopeFrame` for the main receiver, placed from the last `FA`/`FB`, `FR`, `BS3` and `BS4` the engine saw
+  (turning the output on reads them first) in center mode only; sweeps in fixed or auto-scroll mode, or
+  before those are known, are counted and dropped. The rig sends frames only while auto information
+  (`transceive`) is on. `##DD3` (filter scope) is checked and dropped, the expanded analysis range (`BSO`)
+  is assumed off. The virtual rig answers `BS0` to `BSC` and `DD0` and sends synthetic `##DD2` frames.
+- **Does not cover:** an operation for `BS0` (display on/off), `BS1`, `BS5` and `BSM` (fixed ranges and
+  edges), `BS6` to `BS9` and `BSA`/`BSB`/`BSD`/`BSE`/`BSG` to `BSO`; the COM/USB `DD2`/`DD3`/`DD4` forms; CW
+  text, memories, the menu (`EX`) and the `PSQ/PKS` pin note.
 - **Oracle:** Hamlib 4.6.2's TS-890S backend reads the frequency and mode with `IF;` and sets the frequency
   with `SF`, neither of which is in the guide, so the virtual rig refuses them and the frequency and mode steps
   diverge (`rigctld_oracle.rs` records which). A bench run would show whether a real TS-890S answers `IF;`;

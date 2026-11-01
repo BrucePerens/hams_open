@@ -4,7 +4,7 @@
 # selects the engine in crates/radioctl-protocols/src/kenwood_ts890.rs, where the gaps are listed. No radio
 # has been connected, so every `verified` is unverified.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify", "scope"]
 
 [rig]
 id = "kenwood-ts-890s"
@@ -14,6 +14,13 @@ family = "kenwood-ascii"
 [kenwood]
 model_id = 24
 dialect = "ts890"
+
+[scope]
+receivers = 1
+line_length = 640
+samples_per_frame = 640
+amplitude_max = 140
+spans_hz = [5000, 10000, 25000, 50000, 100000, 200000, 500000]
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -117,4 +124,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: OM, PDF p. 52: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R, C LSB-D, D USB-D", note = "Mapping to radioctl modes is ours: FSK is rtty, FSK-R is rtty-r, LSB-D is data-r, USB-D is data. PSK, FM-D and AM-D (A, B, E, F) are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "scope.*"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (August 2018 edition), file ts890_pc_command_e.pdf, sha256 47aaa1031686d02f229456321fd018e8b53666819016aeb1e19531877cb64ae7: BS4 (span codes 0 to 6: 5, 10, 25, 50, 100, 200, 500 kHz), ##DD2 (LAN output only: 640 samples as two hexadecimal digits each, 00h strongest to 8Ch weakest, -100 dB)", note = "One bandscope (the main receiver). samples_per_frame is the whole 640-sample line because the LAN frame carries it at once. The older rev1 edition the other facts cite was not available for this read; its text may differ." }
 verified = { state = "unverified" }
