@@ -43,7 +43,10 @@ CATALOGUE = {
     },
     "portal_member": {
         "kind": "portal",
-        "groups": ("base.group_portal", "user_websites.group_user_websites_user"),
+        "groups": ("base.group_portal",),
+        # Production members also hold the user_websites group; a database without that module has no such group, and
+        # its portal user is exactly the user_websites-less shape (a zero_sudo-only install runs these tests too).
+        "groups_if_installed": ("user_websites.group_user_websites_user",),
         "website": "none",
         "prod": "143 active members, user.website_id empty for all; most have their own member site (website_slug)",
     },
@@ -106,6 +109,14 @@ class Persona:
         return f"Persona({self.key}, login={self.user.login}, allowed={self.allowed})"
 
 
+def missing_prerequisites(env, spec):
+    """What a catalogue entry needs that this database lacks: its groups and, for a website-bound user, the website model."""
+    missing = [xmlid for xmlid in spec.get("groups", ()) if not env.ref(xmlid, raise_if_not_found=False)]
+    if spec.get("website") == "own" and "website" not in env:
+        missing.append("model website")
+    return missing
+
+
 def _group(env, xmlid):
     group = env.ref(xmlid, raise_if_not_found=False)
     if not group:
@@ -121,7 +132,11 @@ def build_persona(env, key, allowed=None, extra_group=None):
         raise PersonaError(f"No persona '{key}'. Catalogue: {sorted(CATALOGUE)}")
     if "existing_user" in spec:
         return Persona(key, env.ref(spec["existing_user"]), allowed=allowed)
+    missing = missing_prerequisites(env, spec)
+    if missing:
+        raise PersonaError(f"Persona {key} needs {', '.join(missing)}, which is not installed; install its module in this run.")
     groups = [_group(env, xmlid) for xmlid in spec["groups"]]
+    groups += [env.ref(xmlid) for xmlid in spec.get("groups_if_installed", ()) if env.ref(xmlid, raise_if_not_found=False)]
     if extra_group:
         groups.append(extra_group)
     number = next(_persona_counter)
@@ -131,8 +146,9 @@ def build_persona(env, key, allowed=None, extra_group=None):
         "login": f"persona_{key}_{number}",
         "password": password,
         "group_ids": [(6, 0, [group.id for group in groups])],
-        "website_id": False,
     }
+    if "website_id" in env["res.users"]._fields:
+        values["website_id"] = False
     if spec["website"] == "own":
         values["website_id"] = env["website"].create({"name": f"Persona website {number}"}).id
     if "website_slug" in env["res.users"]._fields:
@@ -140,7 +156,7 @@ def build_persona(env, key, allowed=None, extra_group=None):
         values["website_slug"] = f"persona-{key.replace('_', '-')}-{number}"
     user = env["res.users"].with_context(no_reset_password=True).create(values)
     # Odoo fills in a default website for a new user on some installs; production users have none.
-    if spec["website"] == "none" and user.website_id:
+    if spec["website"] == "none" and "website_id" in user._fields and user.website_id:
         user.write({"website_id": False})
     return Persona(key, user, password=password, allowed=allowed)
 
@@ -226,8 +242,7 @@ def model_personas(env, model_name, mode="read"):
     for key, spec in CATALOGUE.items():
         if "groups" not in spec:
             continue
-        held = [env.ref(xmlid, raise_if_not_found=False) for xmlid in spec["groups"]]
-        if not all(held):
+        if missing_prerequisites(env, spec):
             continue
         persona = build_persona(env, key)
         match = persona.user.all_group_ids & named
@@ -343,7 +358,8 @@ def _probe_user(env, rule, login, values):
     for candidate in [groups] + [group for group in groups]:
         try:
             with env.cr.savepoint():
-                values = {"website_id": False, **values}
+                if "website_id" in env["res.users"]._fields:
+                    values = {"website_id": False, **values}
                 if "website_slug" in env["res.users"]._fields:
                     values["website_slug"] = login.replace("_", "-")
                 return env["res.users"].with_context(no_reset_password=True).create(
