@@ -527,6 +527,31 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_funcube_twin_new] (radioctl-protocols) A twin in the description's default state; `legacy` makes it an older dongle that refuses the hertz commands.
 - [@ANCHOR: radioctl:radioctl_funcube_twin_frequency] (radioctl-protocols) The frequency the dongle is tuned to.
 - [@ANCHOR: radioctl:radioctl_funcube_twin_interrupt] (radioctl-protocols) `interrupt_write` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_files_in_dir] (radioctl-protocols) The two files in `dir`: `fx2.hex` and `fpga.rbs`.
+- [@ANCHOR: radioctl:radioctl_perseus_files_default_dir] (radioctl-protocols) The directory in use: `env_dir` (the value of `RADIOCTL_PERSEUS_FIRMWARE_DIR`) when set and not empty, else `$HOME/.config/radioctl/firmware/perseus` (`home` is `$HOME`).
+- [@ANCHOR: radioctl:radioctl_perseus_read_file] (radioctl-protocols) `read_file` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_parse_intel_hex] (radioctl-protocols) Parses Intel HEX text into data records, checking every record's checksum.
+- [@ANCHOR: radioctl:radioctl_perseus_load_fx2] (radioctl-protocols) Loads the FX2 firmware into the board's RAM: hold the CPU in reset, write every record at its address, release the reset.
+- [@ANCHOR: radioctl:radioctl_perseus_configure_fpga] (radioctl-protocols) Configures the FPGA: reset, the bitstream in 63-byte pieces, a check, a pause for `wait(50 ms)`, then the status read whose second byte is the DONE line.
+- [@ANCHOR: radioctl:radioctl_perseus_product_id_is_pre_series] (radioctl-protocols) True for one of the few pre-production units (any other product code), which drive the attenuator with inverted sense.
+- [@ANCHOR: radioctl:radioctl_perseus_read_product_id] (radioctl-protocols) Reads the product record from the EEPROM through the board's command endpoints.
+- [@ANCHOR: radioctl:radioctl_perseus_target] (radioctl-protocols) The USB target for the blank (`blank` true) or running board.
+- [@ANCHOR: radioctl:radioctl_perseus_preselector_for] (radioctl-protocols) The preselector filter index for a tuning frequency: the first filter whose upper cut-off is above it, the wide-band path above the last or when preselection is off.
+- [@ANCHOR: radioctl:radioctl_perseus_tuning_word] (radioctl-protocols) The 32-bit tuning word for a centre frequency: `f / 80 MHz * 2^32`, truncated.
+- [@ANCHOR: radioctl:radioctl_perseus_open_ready] (radioctl-protocols) Opens the board and makes it ready: if the running board is not on the bus the blank one is found, the user's FX2 firmware loaded and the renumbering waited for (`wait` is called with the pause; a real caller sleeps); then the EEPROM record is read and the user's FPGA image configured.
+- [@ANCHOR: radioctl:radioctl_perseus_product] (radioctl-protocols) The EEPROM product record read at open.
+- [@ANCHOR: radioctl:radioctl_perseus_port_e] (radioctl-protocols) `port_e` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_sio] (radioctl-protocols) `sio` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_set_attenuator_db] (radioctl-protocols) Sets the input attenuator to 0, 10, 20 or 30 dB (the high nibble of the front-end port); anything else is refused.
+- [@ANCHOR: radioctl:radioctl_perseus_set_adc] (radioctl-protocols) Sets ADC dither and the ADC preamplifier (bits of the serial-IO control byte).
+- [@ANCHOR: radioctl:radioctl_perseus_set_frequency] (radioctl-protocols) Tunes the digital down-converter to `frequency_hz` (0 to 40 MHz) and, with `preselector` on, selects the matching preselector filter (the low nibble of the front-end port).
+- [@ANCHOR: radioctl:radioctl_perseus_shutdown] (radioctl-protocols) Resets the FPGA, disconnects the preselector filters and sets 30 dB attenuation.
+- [@ANCHOR: radioctl:radioctl_perseus_virtual_new] (radioctl-protocols) A board with no firmware (`running` false) or with it running, a production unit with serial number `serial`, whose FPGA reports DONE after any non-empty bitstream when `fpga_done` is true.
+- [@ANCHOR: radioctl:radioctl_perseus_virtual_state] (radioctl-protocols) What the board has been told so far.
+- [@ANCHOR: radioctl:radioctl_perseus_virtual_open] (radioctl-protocols) `open` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_virtual_control_out] (radioctl-protocols) `control_out` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_virtual_bulk_write] (radioctl-protocols) `bulk_write` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_virtual_bulk_read] (radioctl-protocols) `bulk_read` (see the source).
 - [@ANCHOR: radioctl:radioctl_dwt_engine_new] (radioctl-protocols) Builds an engine from a `dwt` USB description.
 - [@ANCHOR: radioctl:radioctl_dwt_engine_encode] (radioctl-protocols) `encode` (see the source).
 - [@ANCHOR: radioctl:radioctl_dwt_engine_feed] (radioctl-protocols) `feed` (see the source).

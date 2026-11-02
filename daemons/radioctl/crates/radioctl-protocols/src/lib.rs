@@ -46,6 +46,7 @@ pub mod lowe;
 pub mod mds;
 pub mod micom;
 pub mod paragon;
+pub mod perseus;
 pub mod prelude;
 pub mod prm80;
 pub mod racal;
