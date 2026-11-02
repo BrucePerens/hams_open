@@ -128,3 +128,22 @@ async fn a_build_with_the_usb_feature_looks_for_the_board_and_reports_it_absent(
     .expect("absent");
     assert!(why.contains("not plugged in"), "{why}");
 }
+
+// Tests [@ANCHOR: radioctld_rigs_build_rig]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_virtual_perseus_is_tuned_and_has_no_transmit_path() {
+    let text = config_text("", "perseus", "microtelecom-perseus-usb.toml", false, false);
+    let daemon = start(&text).await;
+    assert!(daemon.rigs[0].usb_link.is_some());
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("F 14074000").await, "RPRT 0\n");
+    assert_eq!(client.ask("L ATT 20").await, "RPRT 0\n");
+    assert_eq!(client.ask("L PREAMP 1").await, "RPRT 0\n");
+    // Receive only: keying is refused whether or not the gate is open.
+    assert_ne!(client.ask("T 1").await, "RPRT 0\n");
+    assert_eq!(
+        client.ask("t").await,
+        "RPRT -11\n",
+        "there is no PTT to read"
+    );
+}

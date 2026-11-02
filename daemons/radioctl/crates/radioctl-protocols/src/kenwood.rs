@@ -485,6 +485,8 @@ fn level_wire(level: Level) -> LevelWire {
         // and one-digit forms (`front_end_command`); the names are kept for `decode`.
         Level::Attenuator => ("RA", false, 0, 0),
         Level::Preamp => ("PA", false, 0, 0),
+        // Receiver-board levels with no Kenwood command; the encoder refuses both first.
+        Level::Dither | Level::Preselector => ("", false, 0, 0),
     };
     LevelWire {
         name,
@@ -617,6 +619,10 @@ impl ProtocolEngine for KenwoodEngine {
                     h => format!("RD{:05};", h.unsigned_abs()),
                 };
                 Self::command(format!("RC;{step}"), none)
+            }
+            Op::GetLevel(Level::Dither | Level::Preselector)
+            | Op::SetLevel(Level::Dither | Level::Preselector, _) => {
+                return Err(Self::unsupported("no such level on this rig"));
             }
             Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
                 attenuation::step_of(&self.desc, *level, 0)?;

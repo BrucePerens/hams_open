@@ -247,6 +247,7 @@ serial = "A12345"                             # only if two identical boards are
 # vid = 0x16C0                                # optional overrides of the description's ids
 # pid = 0x05DC
 transfer_timeout_ms = 1000                    # 50 to 10000
+# firmware_dir = "/srv/perseus"               # Microtelecom Perseus only: your own fx2.hex and fpga.rbs
 ```
 
 A build without the `usb` feature refuses this transport at start with a message saying so.

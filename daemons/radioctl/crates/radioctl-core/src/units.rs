@@ -142,9 +142,15 @@ pub enum Level {
     /// and second stage. The gain of a stage differs by band and model and is not stated here; a
     /// model accepts steps up to `levels.preamp_steps` of its description.
     Preamp,
+    /// ADC dither of a direct-sampling receiver (the Perseus): 0 off, 1 on. Only a model whose
+    /// description says so has it.
+    Dither,
+    /// Front-end preselector of a receiver that has one (the Perseus): 0 is the wide-band path,
+    /// 1 selects the band filter for the tuned frequency automatically.
+    Preselector,
 }
 
-const LEVEL_NAMES: [(Level, &str); 8] = [
+const LEVEL_NAMES: [(Level, &str); 10] = [
     (Level::AfGain, "af-gain"),
     (Level::RfGain, "rf-gain"),
     (Level::MicGain, "mic-gain"),
@@ -153,6 +159,8 @@ const LEVEL_NAMES: [(Level, &str); 8] = [
     (Level::RfPower, "rf-power"),
     (Level::Attenuator, "attenuator"),
     (Level::Preamp, "preamp"),
+    (Level::Dither, "dither"),
+    (Level::Preselector, "preselector"),
 ];
 
 /// A transmitter or power-supply meter read in the rig's own raw scale. Unlike

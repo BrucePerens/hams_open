@@ -30,9 +30,15 @@
 //! **Boundary.** Receive streaming (bulk endpoint 0x82, the FIFO-enable bit, the choice of sample
 //! rate image) is the job of the shared-receiver service, which feeds hams.com members; radioctl
 //! stops at loading, tuning, attenuator, preselector, ADC dither and preamplifier. The board is
-//! exclusive: the vendor application and this module cannot both own it. This module is a
-//! library, not a `ProtocolEngine`: the engine seam is one request per operation and this board
-//! needs a multi-step load first, so wiring it into `radioctld` is future work.
+//! exclusive: the vendor application and this module cannot both own it. The load is not an
+//! engine's job (the engine seam is one request per operation): [`PerseusLoaderBackend`] is a
+//! [`UsbBackend`] whose `open` runs the whole sequence, and what it returns is a
+//! [`PerseusSession`], a [`UsbDevice`] that takes the daemon's front-end operations as
+//! radioctl-internal control requests (never sent to the board) and turns them into the board's
+//! bulk commands. `crate::perseus_engine::PerseusEngine` encodes the actor's operations as those
+//! requests, so the board is an ordinary `usb-device` rig (`microtelecom-perseus-usb`) behind the
+//! USB link, which reopens, and so reloads, it after an unplug. The board is receive-only: there
+//! is no transmit path anywhere in this module or the engine.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -141,9 +147,15 @@ fn read_file(path: &Path, what: &str) -> Result<Vec<u8>, RigError> {
         err(
             ErrorKind::LinkDown,
             format!(
-                "perseus: the {what} is not available at {} ({e}); radioctl does not ship it, \
-                 supply it there (see the perseus module documentation)",
-                path.display()
+                "perseus: the {what} is not available at {} ({e}); radioctl does not ship it. \
+                 Put fx2.hex and fpga.rbs in {} (or in the directory named by \
+                 RADIOCTL_PERSEUS_FIRMWARE_DIR). Microtelecom publishes the FPGA images and the \
+                 FX2 firmware records in its open libperseus-sdr repository \
+                 (github.com/Microtelecom/libperseus-sdr, LGPL-3.0); the FX2 image must be \
+                 converted to Intel HEX. The vendor's own installation also carries them",
+                path.display(),
+                path.parent()
+                    .map_or_else(String::new, |d| d.display().to_string()),
             ),
         )
     })
@@ -537,6 +549,262 @@ impl PerseusControl {
             .bulk_write(EP_CMD, &[CMD_SHUTDOWN], TIMEOUT)
             .map(|_| ())
             .map_err(|e| usb_err("shutdown", e))
+    }
+}
+
+impl PerseusControl {
+    // [@ANCHOR: radioctl_perseus_from_device]
+    /// A control over a board that already runs firmware with its FPGA configured (the product
+    /// record is read here). Used by the virtual ready board; [`PerseusControl::open_ready`] is
+    /// the real path.
+    pub fn from_device(mut dev: Box<dyn UsbDevice>) -> Result<PerseusControl, RigError> {
+        let product = read_product_id(dev.as_mut())?;
+        Ok(PerseusControl {
+            dev,
+            product,
+            frontend: 0,
+            sio_control: 0,
+            sio_word: 0,
+            preselector: None,
+        })
+    }
+}
+
+/// Request type of a session operation (vendor, host to device).
+pub const SESSION_REQUEST_TYPE: u8 = 0x40;
+/// Session request: tune. `data` is the centre frequency in hertz, 8 bytes little endian.
+pub const SESSION_TUNE: u8 = 0x21;
+/// Session request: input attenuator, `value` in decibels (0, 10, 20 or 30).
+pub const SESSION_ATTENUATOR: u8 = 0x22;
+/// Session request: ADC dither, `value` 0 or 1.
+pub const SESSION_DITHER: u8 = 0x23;
+/// Session request: ADC preamplifier, `value` 0 or 1.
+pub const SESSION_PREAMP: u8 = 0x24;
+/// Session request: preselector, `value` 1 for the band filter of the tuned frequency, 0 for the
+/// wide-band path.
+pub const SESSION_PRESELECTOR: u8 = 0x25;
+
+/// A running board as a [`UsbDevice`] that takes the session requests above. Dropping it sends
+/// the board's shutdown command (FPGA reset, preselector off, 30 dB attenuation), the safe state.
+pub struct PerseusSession {
+    control: PerseusControl,
+    frequency_hz: Option<f64>,
+    preselector: bool,
+    dither: bool,
+    preamp: bool,
+}
+
+impl PerseusSession {
+    // [@ANCHOR: radioctl_perseus_session_new]
+    /// A session over a ready control: preselection on, dither and preamplifier off.
+    pub fn new(control: PerseusControl) -> PerseusSession {
+        PerseusSession {
+            control,
+            frequency_hz: None,
+            preselector: true,
+            dither: false,
+            preamp: false,
+        }
+    }
+
+    // [@ANCHOR: radioctl_perseus_session_failure]
+    fn failure(error: &RigError) -> UsbFailure {
+        match error.kind {
+            ErrorKind::LinkDown => UsbFailure::NoDevice,
+            ErrorKind::Timeout => UsbFailure::Timeout,
+            _ => UsbFailure::Stall,
+        }
+    }
+}
+
+impl Drop for PerseusSession {
+    // [@ANCHOR: radioctl_perseus_session_drop]
+    fn drop(&mut self) {
+        let _ = self.control.shutdown();
+    }
+}
+
+impl UsbDevice for PerseusSession {
+    fn control_in(
+        &mut self,
+        _request_type: u8,
+        _request: u8,
+        _value: u16,
+        _index: u16,
+        _length: u16,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
+        Err(UsbFailure::Stall)
+    }
+
+    // [@ANCHOR: radioctl_perseus_session_control_out]
+    fn control_out(
+        &mut self,
+        request_type: u8,
+        request: u8,
+        value: u16,
+        _index: u16,
+        data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        if request_type != SESSION_REQUEST_TYPE {
+            return Err(UsbFailure::Stall);
+        }
+        let outcome = match request {
+            SESSION_TUNE => {
+                let hz = <[u8; 8]>::try_from(data)
+                    .map(u64::from_le_bytes)
+                    .map_err(|_| UsbFailure::Stall)?;
+                let hz = hz as f64;
+                let done = self.control.set_frequency(hz, self.preselector);
+                if done.is_ok() {
+                    self.frequency_hz = Some(hz);
+                }
+                done
+            }
+            SESSION_ATTENUATOR => {
+                let db = u8::try_from(value).map_err(|_| UsbFailure::Stall)?;
+                self.control.set_attenuator_db(db)
+            }
+            SESSION_DITHER | SESSION_PREAMP | SESSION_PRESELECTOR if value > 1 => {
+                return Err(UsbFailure::Stall)
+            }
+            SESSION_DITHER => {
+                let done = self.control.set_adc(value == 1, self.preamp);
+                if done.is_ok() {
+                    self.dither = value == 1;
+                }
+                done
+            }
+            SESSION_PREAMP => {
+                let done = self.control.set_adc(self.dither, value == 1);
+                if done.is_ok() {
+                    self.preamp = value == 1;
+                }
+                done
+            }
+            SESSION_PRESELECTOR => {
+                let on = value == 1;
+                let done = match self.frequency_hz {
+                    Some(hz) => self.control.set_frequency(hz, on),
+                    None => Ok(()),
+                };
+                if done.is_ok() {
+                    self.preselector = on;
+                }
+                done
+            }
+            _ => return Err(UsbFailure::Stall),
+        };
+        outcome.map(|()| data.len()).map_err(|e| Self::failure(&e))
+    }
+
+    fn bulk_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        Err(UsbFailure::Stall)
+    }
+
+    fn bulk_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
+        Err(UsbFailure::Stall)
+    }
+
+    fn interrupt_write(
+        &mut self,
+        _endpoint: u8,
+        _data: &[u8],
+        _timeout: Duration,
+    ) -> Result<usize, UsbFailure> {
+        Err(UsbFailure::Stall)
+    }
+
+    fn interrupt_read(
+        &mut self,
+        _endpoint: u8,
+        _length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbFailure> {
+        Err(UsbFailure::Stall)
+    }
+}
+
+/// Opens a real (or virtual) board through the inner backend, loading the user's firmware as
+/// needed, and returns a [`PerseusSession`]. The USB link calls it on every (re)open.
+pub struct PerseusLoaderBackend {
+    inner: Arc<dyn UsbBackend>,
+    files: PerseusFiles,
+    real_time: bool,
+}
+
+impl PerseusLoaderBackend {
+    // [@ANCHOR: radioctl_perseus_loader_new]
+    /// A loader over `inner` using `files`. With `real_time` false the renumbering and FPGA
+    /// pauses are not slept (a virtual board needs none).
+    pub fn new(
+        inner: Arc<dyn UsbBackend>,
+        files: PerseusFiles,
+        real_time: bool,
+    ) -> PerseusLoaderBackend {
+        PerseusLoaderBackend {
+            inner,
+            files,
+            real_time,
+        }
+    }
+}
+
+impl UsbBackend for PerseusLoaderBackend {
+    // [@ANCHOR: radioctl_perseus_loader_open]
+    fn open(&self, _target: &UsbTarget) -> Result<Box<dyn UsbDevice>, RigError> {
+        let real_time = self.real_time;
+        let mut wait = |d: Duration| {
+            if real_time {
+                std::thread::sleep(d);
+            }
+        };
+        let control = PerseusControl::open_ready(self.inner.as_ref(), &self.files, &mut wait)?;
+        Ok(Box::new(PerseusSession::new(control)))
+    }
+}
+
+/// A virtual Perseus whose firmware is already running and FPGA configured: opens straight into
+/// a [`PerseusSession`], needing no files. Clone it: all clones are the same board.
+#[derive(Clone)]
+pub struct ReadyVirtualPerseus {
+    board: VirtualPerseusBackend,
+}
+
+impl ReadyVirtualPerseus {
+    // [@ANCHOR: radioctl_perseus_ready_virtual_new]
+    /// A production unit with serial number `serial`.
+    pub fn new(serial: u16) -> ReadyVirtualPerseus {
+        ReadyVirtualPerseus {
+            board: VirtualPerseusBackend::new(true, serial, true),
+        }
+    }
+
+    // [@ANCHOR: radioctl_perseus_ready_virtual_board]
+    /// The virtual board, to read what it has been told.
+    pub fn board(&self) -> &VirtualPerseusBackend {
+        &self.board
+    }
+}
+
+impl UsbBackend for ReadyVirtualPerseus {
+    // [@ANCHOR: radioctl_perseus_ready_virtual_open]
+    fn open(&self, _target: &UsbTarget) -> Result<Box<dyn UsbDevice>, RigError> {
+        let dev = self.board.open(&target(false))?;
+        Ok(Box::new(PerseusSession::new(PerseusControl::from_device(
+            dev,
+        )?)))
     }
 }
 

@@ -339,7 +339,7 @@ cd tools && python3 -m unittest test_hamlib_caps_matrix                         
 ### Serial and TCP rigs
 
 - Serial: `path` or `usb = { vid, pid, serial }`, `baud` (fixed, or `"auto"` / `baud_probe` for the optional read-only probe).
-- USB boards (`kind = "usb"`): the description gives the ids and strings; optional `serial`, `vid`, `pid`, `transfer_timeout_ms`. Needs `cargo build -p radioctld --features usb` (libusb-1.0); a build without it refuses the transport. `kind = "virtual"` on a USB description runs its twin on the fake bus.
+- USB boards (`kind = "usb"`): the description gives the ids and strings; optional `serial`, `vid`, `pid`, `transfer_timeout_ms`, `firmware_dir` (Perseus only: the user's own `fx2.hex` and `fpga.rbs`; also `RADIOCTL_PERSEUS_FIRMWARE_DIR`, else `~/.config/radioctl/firmware/perseus`). Needs `cargo build -p radioctld --features usb` (libusb-1.0); a build without it refuses the transport. `kind = "virtual"` on a USB description runs its twin on the fake bus.
 - `lines = "managed"` (default) drives DTR/RTS; `lines = "unmanaged"` is for a pty or other port without DTR/RTS.
 - TCP rigs use the reconnecting network link (`net::open_link`):
   - one attempt at start, then reconnection with backoff;
@@ -553,6 +553,22 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_perseus_virtual_control_out] (radioctl-protocols) `control_out` (see the source).
 - [@ANCHOR: radioctl:radioctl_perseus_virtual_bulk_write] (radioctl-protocols) `bulk_write` (see the source).
 - [@ANCHOR: radioctl:radioctl_perseus_virtual_bulk_read] (radioctl-protocols) `bulk_read` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_engine_encode] (radioctl-protocols) `encode` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_engine_feed] (radioctl-protocols) `feed` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_engine_new] (radioctl-protocols) Builds an engine from a `perseus` USB description.
+- [@ANCHOR: radioctl:radioctl_perseus_engine_transfer] (radioctl-protocols) `transfer` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_from_device] (radioctl-protocols) A control over a board that already runs firmware with its FPGA configured (the product record is read here).
+- [@ANCHOR: radioctl:radioctl_perseus_loader_new] (radioctl-protocols) A loader over `inner` using `files`.
+- [@ANCHOR: radioctl:radioctl_perseus_loader_open] (radioctl-protocols) `open` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_ready_virtual_board] (radioctl-protocols) The virtual board, to read what it has been told.
+- [@ANCHOR: radioctl:radioctl_perseus_ready_virtual_new] (radioctl-protocols) A production unit with serial number `serial`.
+- [@ANCHOR: radioctl:radioctl_perseus_ready_virtual_open] (radioctl-protocols) `open` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_session_control_out] (radioctl-protocols) `control_out` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_session_drop] (radioctl-protocols) `drop` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_session_failure] (radioctl-protocols) `failure` (see the source).
+- [@ANCHOR: radioctl:radioctl_perseus_session_new] (radioctl-protocols) A session over a ready control: preselection on, dither and preamplifier off.
+- [@ANCHOR: radioctl:radioctl_usb_family_backend_for] (radioctl-protocols) The backend to open a description's device through: `inner` itself, except for a board that needs the user's own firmware loaded when it is opened (the Perseus), whose backend loads it from `firmware_dir`, else `env_dir` (`RADIOCTL_PERSEUS_FIRMWARE_DIR`), else `$HOME/.config/radioctl/firmware/perseus` (`home` is `$HOME`).
+- [@ANCHOR: radioctl:radioctld_rigs_start_usb_rig] (radioctld) Opens the USB link through `backend` and starts the rig actor over it.
 - [@ANCHOR: radioctl:radioctl_dwt_engine_new] (radioctl-protocols) Builds an engine from a `dwt` USB description.
 - [@ANCHOR: radioctl:radioctl_dwt_engine_encode] (radioctl-protocols) `encode` (see the source).
 - [@ANCHOR: radioctl:radioctl_dwt_engine_feed] (radioctl-protocols) `feed` (see the source).

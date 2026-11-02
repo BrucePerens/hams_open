@@ -393,7 +393,7 @@ fn level_sub(level: Level) -> Option<u8> {
         Level::MicGain => Some(0x0B),
         Level::MonitorLevel => Some(0x15),
         Level::KeyerSpeed => Some(KEYER_SUB),
-        Level::Attenuator | Level::Preamp => None,
+        Level::Attenuator | Level::Preamp | Level::Dither | Level::Preselector => None,
     }
 }
 

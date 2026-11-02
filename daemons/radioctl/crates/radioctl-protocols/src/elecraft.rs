@@ -77,6 +77,9 @@ pub fn level_wire(level: Level) -> LevelWire {
         // here are never read for them; the prefixes make the command names available.
         Level::Attenuator => ("RA", 0, 0),
         Level::Preamp => ("PA", 0, 0),
+        // Receiver-board levels with no Elecraft command; the empty prefix matches no reply and the
+        // encoder refuses both before it asks for a wire form.
+        Level::Dither | Level::Preselector => ("", 0, 0),
     };
     LevelWire { prefix, min, max }
 }
@@ -253,6 +256,10 @@ impl ElecraftEngine {
                 }
                 Self::set(format!("BW{:04};", hz.0 / 10))
             }
+            Op::GetLevel(Level::Dither | Level::Preselector)
+            | Op::SetLevel(Level::Dither | Level::Preselector, _) => {
+                return Err(Self::unsupported("no such level on this rig"));
+            }
             Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
                 let step = crate::attenuation::step_of(&self.desc, *level, *value)?;
                 if *level == Level::Attenuator {
@@ -390,6 +397,9 @@ impl ProtocolEngine for ElecraftEngine {
             return Err(Self::unsupported("capability not in the rig description"));
         }
         let level_get = |level: Level| {
+            if matches!(level, Level::Dither | Level::Preselector) {
+                return Err(Self::unsupported("no such level on this rig"));
+            }
             if crate::attenuation::is_front_end_level(level) {
                 crate::attenuation::step_of(&self.desc, level, 0)?;
             }

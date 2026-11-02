@@ -66,7 +66,11 @@ fn level_wire(level: Level) -> Option<LevelWire> {
         Level::MicGain => ("MG", false, 0, 100),
         Level::KeyerSpeed => ("KS", false, 4, 60),
         Level::RfPower => ("PC", false, 5, 100),
-        Level::MonitorLevel | Level::Attenuator | Level::Preamp => return None,
+        Level::MonitorLevel
+        | Level::Attenuator
+        | Level::Preamp
+        | Level::Dither
+        | Level::Preselector => return None,
     };
     Some(LevelWire {
         name,
