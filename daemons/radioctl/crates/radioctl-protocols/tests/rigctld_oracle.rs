@@ -1103,6 +1103,7 @@ const ICOM_BATCH_ONE: &[(&str, u32)] = &[
     ("icom-ic-9100", 3068),
     ("icom-ic-r8600", 3079),
     ("icom-ic-r75", 3039),
+    ("microtelecom-perseus", 3074),
     ("icom-ic-r9500", 3066),
     ("icom-ic-706", 3009),
     ("icom-ic-706mkii", 3010),

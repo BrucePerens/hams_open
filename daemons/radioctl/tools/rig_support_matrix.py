@@ -295,6 +295,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "amsat-uk-funcube-dongle": [25013],
     "amsat-uk-funcube-dongle-pro-plus": [25018],
     "elektor-sdr-usb": [25007],
+    "microtelecom-perseus": [3074],
     "digital-world-traveller": [25003],
     "yaesu-ft-818": [1041],
     "yaesu-ft-857d": [1022],
@@ -410,7 +411,7 @@ FAMILY_TIERS: dict[str, tuple[str, str | None]] = {
 # still `needs engine`). Descriptions of these models are `described`; an undescribed one is `engine only`.
 MODEL_ENGINES: dict[int, str] = {
     **{i: "aor" for i in (5001, 5002, 5003, 5004, 5005, 5006, 5008, 5013, 5014, 5015, 5016)},
-    **{i: "civ" for i in (3052, 3053)},
+    **{i: "civ" for i in (3052, 3053, 3074)},
     **{i: "rs" for i in (27001, 27002, 27003, 27004, 27005)},
     **{i: "icom_marine" for i in (30001, 30002, 30003, 30004)},
     **{i: "icom_pcr" for i in (4001, 4002, 4003, 4004)},

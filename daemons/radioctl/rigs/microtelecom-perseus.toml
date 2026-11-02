@@ -1,0 +1,114 @@
+# Rig description: Microtelecom Perseus over CI-V (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# WHAT THIS CONTROLS: Hamlib's model 3074 is a CI-V dialect that the vendor's Perseus Windows application serves on a (virtual) serial port: it is the CAT port of that application, not the receiver board. The board itself speaks no CI-V (FX2 firmware and an FPGA over USB). Direct USB control (firmware loader, tuning, attenuator, preselector) is the separate description microtelecom-perseus-usb; the two are exclusive, as only one program can own the board.
+# Facts: the vendor's CAT manual (EN03, read for facts, marked manual-checked) and Hamlib 4.6.2 (rigs/icom/perseus.c, read for facts only, and `rigctl -m 3074 --dump-caps` output).
+# Hamlib lists: serial 300..19200 baud, 8N1, ctrl=NONE; receive 10 kHz to 30 MHz, modes AM SAM USB LSB CW CWR RTTY RTTYR FM; no transmit (receiver); attenuator 10, 20, 30 dB; S-meter 0 = -140 dBm to 255 = +30 dBm. The description format has no field for frequency ranges or filter tables.
+# Not listed: SAM (command code 0x06 on the Perseus, which Icom uses for wide FM; radioctl's vocabulary has no SAM), DRM (0x09) and USER (0x0A). The ADC preamplifier and dither command (16 02, values 0..3 as two bits) and AGC (16 12) are not the Icom encodings the engine sends, so they are not claimed (open question pinned in tests). Perseus replies to any destination address (manual).
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal", "levels", "identify"]
+
+[rig]
+id = "microtelecom-perseus"
+name = "Microtelecom Perseus (CAT port of the vendor application)"
+family = "icom-civ"
+
+[civ]
+address = 0xE1
+controller = 0xE0
+model_id = 0xE1
+echo = false
+
+[levels]
+attenuator_db = [10, 20, 30]
+attenuator_any_up_to_db = 0
+preamp_steps = 0
+absent = ["af-gain", "rf-gain", "mic-gain", "monitor-level", "keyer-speed", "rf-power"]
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 14074000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = 0x00
+
+[[modes]]
+mode = "usb"
+code = 0x01
+
+[[modes]]
+mode = "am"
+code = 0x02
+
+[[modes]]
+mode = "cw"
+code = 0x03
+
+[[modes]]
+mode = "rtty"
+code = 0x04
+
+[[modes]]
+mode = "fm"
+code = 0x05
+
+[[modes]]
+mode = "cw-r"
+code = 0x07
+
+[[modes]]
+mode = "rtty-r"
+code = 0x08
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3074 --dump-caps`. The device is the vendor application's CAT port, see the header." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.address"
+provenance = { kind = "manual", reference = "Microtelecom, PERSEUS Receiver CAT Interface Reference Manual, Revision EN03 (30 November 2012), 7 pages, https://rigreference.com/storage/manuals/perseus/PERSEUS_CI-V_Interface-EN03.pdf--5a548637594e28.20451632.pdf (Microtelecom's own URL, microtelecom.it/perseus/PERSEUS_CI-V_Interface-EN03.pdf, now answers 404; Hamlib's perseus.c cites it), sha256 0de08ea1c1dc44214dae52065e68c982bbebe2e7822f0696a7f10f1a32d5b63f; section 'Read Default Address Command (CMD $19 $00)'", note = "The manual says the Perseus replies with its predefined address $E1 and answers requests whatever the destination address; Hamlib's default address in perseus.c is the same. model_id is set equal to the CI-V address, as for the other receivers here." }
+verified = { state = "manual-checked", reference = "Perseus CAT manual EN03, section 'Read Default Address Command (CMD $19 $00)'" }
+[[facts]]
+key = "civ.controller"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/src/civ_bridge.rs: DEFAULT_CONTROLLER_ADDRESS 0xE0", note = "The conventional controller address; the manual does not name one." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.model_id"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/perseus.c (`perseus_priv_caps`, `default address` field)", note = "Set equal to the CI-V address; the manual describes command 19 00 as returning the address $E1." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.echo"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: the simulator does not echo", note = "A design choice for the virtual rig; the application's virtual serial port is not known to echo (not measured)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "rigctl -m 3074 --dump-caps (Hamlib 4.6.2): Write delay and timeout lines", note = "Hamlib's settings, not a measurement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Microtelecom, PERSEUS Receiver CAT Interface Reference Manual, Revision EN03 (30 November 2012), 7 pages, https://rigreference.com/storage/manuals/perseus/PERSEUS_CI-V_Interface-EN03.pdf--5a548637594e28.20451632.pdf (Microtelecom's own URL, microtelecom.it/perseus/PERSEUS_CI-V_Interface-EN03.pdf, now answers 404; Hamlib's perseus.c cites it), sha256 0de08ea1c1dc44214dae52065e68c982bbebe2e7822f0696a7f10f1a32d5b63f; section 'Set Attenuator Command (CMD $11)': values $00 off, $10, $20, $30 for 10, 20 and 30 dB; an empty value reads it back", note = "Agrees with Hamlib's attenuator list in perseus.c. The S-meter (15 02, BCD 0 to 255 for -140 dBm to +30 dBm) is read by the engine's signal read; its scale is not modelled here. The manual documents no 14-series gain levels and Hamlib lists none, so they are marked absent. No preamplifier step is listed: the Perseus preamp is a bit of command 16 02 shared with dither." }
+verified = { state = "manual-checked", reference = "Perseus CAT manual EN03, section 'Set Attenuator Command (CMD $11)': values $00 off, $10, $20, $30 for 10, 20 and 30 dB; an empty value reads it back" }
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "rigctl -m 3074 --dump-caps (Hamlib 4.6.2) \"Can set/get\" and \"Get level\" lines; rigs/icom/perseus.c rig_caps (functions: frequency, mode, level)", note = "A capability is claimed when Hamlib's backend lists it (frequency, mode, attenuator and raw S-meter, squelch not claimed) and the engine implements the command. No PTT, split or RIT: Perseus is a receiver. `identify` (19 00) is claimed because the manual documents it." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "Microtelecom, PERSEUS Receiver CAT Interface Reference Manual, Revision EN03 (30 November 2012), 7 pages, https://rigreference.com/storage/manuals/perseus/PERSEUS_CI-V_Interface-EN03.pdf--5a548637594e28.20451632.pdf (Microtelecom's own URL, microtelecom.it/perseus/PERSEUS_CI-V_Interface-EN03.pdf, now answers 404; Hamlib's perseus.c cites it), sha256 0de08ea1c1dc44214dae52065e68c982bbebe2e7822f0696a7f10f1a32d5b63f; section 'Mode Setting Commands': 00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 SAM, 07 CW-R, 08 RTTY-R, 09 DRM, 0A USER", note = "Only the demodulator is set; the filter-width byte is ignored. SAM, DRM and USER have no entry in radioctl's mode vocabulary and are not listed. Hamlib's perseus.c maps SAM to 0x06 itself, in agreement." }
+verified = { state = "manual-checked", reference = "Perseus CAT manual EN03, section 'Mode Setting Commands': 00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 SAM, 07 CW-R, 08 RTTY-R, 09 DRM, 0A USER" }
