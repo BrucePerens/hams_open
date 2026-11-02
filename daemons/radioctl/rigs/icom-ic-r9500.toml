@@ -5,7 +5,7 @@
 # Hamlib lists: serial 300..1200 baud, 8N1, ctrl=NONE; receive 0.005-30 MHz; 30-3335 MHz; transmit none (receiver). The description format has no field for
 # frequency ranges, filter tables or function lists, so they are not repeated here; the CI-V address, baud rate and
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
-# Hamlib modes with no entry in radioctl's mode vocabulary, not listed: AMS.
+# Hamlib modes with no entry in radioctl's mode vocabulary, not listed: none (AMS is listed as sam, sam-l and sam-u from the manual's CI-V table).
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "levels", "identify"]
 
@@ -70,6 +70,18 @@ code = 0x07
 mode = "rtty-r"
 code = 0x08
 
+[[modes]]
+mode = "sam"
+code = 0x11
+
+[[modes]]
+mode = "sam-l"
+code = 0x14
+
+[[modes]]
+mode = "sam-u"
+code = 0x15
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3066 --dump-caps`." }
@@ -119,3 +131,18 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3066 --dump-caps` Mode list", note = "Icom's manual for this model was read for facts under Bruce Perens' decision of 2026-10-31 (see the facts marked manual-checked); this fact was not compared with it and is still Hamlib's. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (AMS). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.sam"
+provenance = { kind = "manual", reference = "Icom IC-R9500 Instruction Manual, document A-6553H-1EX-q, CI-V command table, PDF page 167 (command 06 sub-commands 11 S-AM(D), 14 S-AM(L), 15 S-AM(U)); https://archive.org/download/icom-69ed63/icr9500-manual-e.pdf, sha256 e701692a2022e15354651c42dbb50fa98491e2466d18b05d900319a2e16a347e", note = "Synchronous AM with both sidebands (D), lower (L) and upper (U), mapped to radioctl sam, sam-l and sam-u. Hamlib calls the radio's synchronous mode AMS for this model; radioctl reports the three modes the manual lists. Read for facts under Bruce Perens' decision of 2026-10-31; the PDF is kept outside every repository in ~/manuals/icom/ with its sha256 in SHA256SUMS." }
+verified = { state = "manual-checked", reference = "IC-R9500 manual CI-V table, PDF page 167: 11 S-AM(D), 14 S-AM(L), 15 S-AM(U)" }
+
+[[facts]]
+key = "mode.sam-l"
+provenance = { kind = "manual", reference = "Icom IC-R9500 Instruction Manual, CI-V command table, PDF page 167 (14 S-AM(L))", note = "See mode.sam." }
+verified = { state = "manual-checked", reference = "IC-R9500 manual CI-V table, PDF page 167: 14 S-AM(L)" }
+
+[[facts]]
+key = "mode.sam-u"
+provenance = { kind = "manual", reference = "Icom IC-R9500 Instruction Manual, CI-V command table, PDF page 167 (15 S-AM(U))", note = "See mode.sam." }
+verified = { state = "manual-checked", reference = "IC-R9500 manual CI-V table, PDF page 167: 15 S-AM(U)" }

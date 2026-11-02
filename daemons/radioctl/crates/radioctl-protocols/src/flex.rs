@@ -154,11 +154,12 @@ pub fn format_mhz(hz: Hz) -> String {
 
 /// The SmartSDR spelling of each mode the core vocabulary can express ("SmartSDR Supported
 /// Modes"). `digu` and `digl` are the Flex data modes on the upper and lower sideband.
-pub const MODE_NAMES: [(Mode, &str); 7] = [
+pub const MODE_NAMES: [(Mode, &str); 8] = [
     (Mode::Lsb, "lsb"),
     (Mode::Usb, "usb"),
     (Mode::Cw, "cw"),
     (Mode::Am, "am"),
+    (Mode::Sam, "sam"),
     (Mode::Fm, "fm"),
     (Mode::Data, "digu"),
     (Mode::DataR, "digl"),
@@ -1150,7 +1151,11 @@ mod tests {
         assert_eq!(mode_from_name("USB"), Some(Mode::Usb));
         assert_eq!(mode_from_name("DIGL"), Some(Mode::DataR));
         assert_eq!(mode_from_name("RTTY"), Some(Mode::Rtty));
-        assert_eq!(mode_from_name("sam"), None);
+        // SmartSDR's one synchronous mode (SmartSDR Supported Modes); it has no lower or upper variants.
+        assert_eq!(mode_from_name("sam"), Some(Mode::Sam));
+        assert_eq!(mode_name(Mode::Sam), Some("sam"));
+        assert_eq!(mode_name(Mode::SamL), None);
+        assert_eq!(mode_name(Mode::SamU), None);
         for (mode, name) in MODE_NAMES {
             assert_eq!(mode_from_name(name), Some(mode));
         }

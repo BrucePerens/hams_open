@@ -46,9 +46,15 @@ pub enum Mode {
     DataR,
     /// D-STAR digital voice (Icom code 17); the D-STAR models only.
     DStar,
+    /// Synchronous AM, both sidebands (Hamlib SAM; older Hamlib models call it AMS): the receiver locks to the carrier.
+    Sam,
+    /// Synchronous AM, lower sideband only (Hamlib SAL).
+    SamL,
+    /// Synchronous AM, upper sideband only (Hamlib SAH).
+    SamU,
 }
 
-const MODE_NAMES: [(Mode, &str); 12] = [
+const MODE_NAMES: [(Mode, &str); 15] = [
     (Mode::Lsb, "lsb"),
     (Mode::Usb, "usb"),
     (Mode::Am, "am"),
@@ -61,6 +67,9 @@ const MODE_NAMES: [(Mode, &str); 12] = [
     (Mode::Data, "data"),
     (Mode::DataR, "data-r"),
     (Mode::DStar, "d-star"),
+    (Mode::Sam, "sam"),
+    (Mode::SamL, "sam-l"),
+    (Mode::SamU, "sam-u"),
 ];
 
 impl Mode {

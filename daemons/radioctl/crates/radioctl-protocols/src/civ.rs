@@ -588,7 +588,7 @@ impl CivEngine {
     // [@ANCHOR: radioctl_civ_engine_filter_table_is_am]
     fn filter_table_is_am(&self) -> Result<bool, RigError> {
         match self.mode {
-            Some(Mode::Am) => Ok(true),
+            Some(Mode::Am | Mode::Sam | Mode::SamL | Mode::SamU) => Ok(true),
             Some(Mode::Fm | Mode::Wfm) => Err(Self::unsupported("no filter width in FM")),
             Some(_) => Ok(false),
             None => Err(Self::unsupported(

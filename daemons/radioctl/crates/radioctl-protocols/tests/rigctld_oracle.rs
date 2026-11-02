@@ -71,6 +71,9 @@ fn hamlib_mode(mode: Mode) -> &'static str {
         Mode::Data => "PKTUSB",
         Mode::DataR => "PKTLSB",
         Mode::DStar => "D-STAR",
+        Mode::Sam => "SAM",
+        Mode::SamL => "SAL",
+        Mode::SamU => "SAH",
     }
 }
 
@@ -89,6 +92,9 @@ fn from_hamlib_mode(name: &str) -> Option<Mode> {
         Mode::Data,
         Mode::DataR,
         Mode::DStar,
+        Mode::Sam,
+        Mode::SamL,
+        Mode::SamU,
     ]
     .into_iter()
     .find(|m| hamlib_mode(*m) == name)

@@ -710,7 +710,10 @@ impl VirtualRig {
 
     // [@ANCHOR: radioctl_virtual_civ_filter]
     fn civ_filter_get(&self) -> CivReply {
-        let am = self.state.mode == Mode::Am;
+        let am = matches!(
+            self.state.mode,
+            Mode::Am | Mode::Sam | Mode::SamL | Mode::SamU
+        );
         let index = u32::try_from(self.state.filter_width.0)
             .ok()
             .and_then(|hz| civ::filter_hz_to_index(am, hz));
@@ -723,7 +726,10 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_civ_filter_set]
     fn civ_filter_set(&mut self, byte: u8) -> CivReply {
         let (high, low) = (byte >> 4, byte & 15);
-        let am = self.state.mode == Mode::Am;
+        let am = matches!(
+            self.state.mode,
+            Mode::Am | Mode::Sam | Mode::SamL | Mode::SamU
+        );
         let width = (high <= 9 && low <= 9)
             .then(|| civ::filter_index_to_hz(am, high * 10 + low))
             .flatten();
