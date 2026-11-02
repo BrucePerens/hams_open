@@ -395,6 +395,37 @@ fn the_perseus_cat_port_has_three_attenuator_steps_and_pins_what_it_does_not_cla
         .encode(&Op::SetLevel(Level::Preamp, 1))
         .expect_err("refused");
     assert_eq!(err.kind, ErrorKind::Unsupported);
-    // SAM (mode byte 06 on the Perseus) has no radioctl mode, so no mode maps to 06.
-    assert!(perseus.mode_codes.iter().all(|(_, code)| *code != 0x06));
+    // SAM is mode byte 06 on the Perseus (where Icom uses 06 for wide FM): sam maps to 06, wfm is absent.
+    assert!(perseus.mode_codes.contains(&(Mode::Sam, 0x06)));
+    assert!(perseus.mode_codes.iter().all(|(m, _)| *m != Mode::Wfm));
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode]
+#[test]
+fn synchronous_am_goes_on_the_wire_with_the_code_the_manual_gives_and_reads_back() {
+    // IC-R9500 manual CI-V table: mode 06 sub-codes 11 S-AM(D), 14 S-AM(L), 15 S-AM(U).
+    let files = icom_files();
+    let r9500 = files
+        .iter()
+        .find(|d| d.id == "icom-ic-r9500")
+        .expect("r9500 file");
+    for (mode, code) in [(Mode::Sam, 0x11), (Mode::SamL, 0x14), (Mode::SamU, 0x15)] {
+        let mut engine = engine_for(r9500).expect("engine");
+        let mut rig = VirtualRig::from_description(r9500).expect("virtual rig");
+        let set = engine.encode(&Op::SetMode(mode)).expect("encode");
+        assert_eq!(set.bytes[4], 0x06);
+        assert_eq!(set.bytes[5], code);
+        let _ = engine.feed(&rig.feed(&set.bytes, NOW), NOW);
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetMode),
+            Observation::Mode(mode)
+        );
+    }
+    // A model whose manual documents no synchronous mode refuses it rather than guessing.
+    let ic7300 = files
+        .iter()
+        .find(|d| d.id == "icom-ic-7300")
+        .expect("7300 file");
+    let mut engine = engine_for(ic7300).expect("engine");
+    assert!(engine.encode(&Op::SetMode(Mode::Sam)).is_err());
 }

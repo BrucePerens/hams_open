@@ -5,7 +5,7 @@
 # Hamlib lists: serial 300..19200 baud, 8N1, ctrl=NONE; receive 0.03-60 MHz; transmit none (receiver). The description format has no field for
 # frequency ranges, filter tables or function lists, so they are not repeated here; the CI-V address, baud rate and
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
-# Hamlib modes with no entry in radioctl's mode vocabulary, not listed: AMS.
+# Hamlib modes with no entry in radioctl's mode vocabulary, not listed: AMS (the manual says the RS-R75 software shows an S-AM mode but the receiver only does normal AM, PDF page 43, so no synchronous mode is claimed).
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal", "levels", "identify"]
 

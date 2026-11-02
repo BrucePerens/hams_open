@@ -17,7 +17,7 @@ struct ModeEntry {
     nominal_width_hz: u32,
 }
 
-const MODES: [ModeEntry; 12] = [
+const MODES: [ModeEntry; 15] = [
     ModeEntry {
         mode: Mode::Am,
         name: "AM",
@@ -89,6 +89,24 @@ const MODES: [ModeEntry; 12] = [
         name: "D-STAR",
         bit: 24,
         nominal_width_hz: 6250,
+    },
+    ModeEntry {
+        mode: Mode::Sam,
+        name: "SAM",
+        bit: 16,
+        nominal_width_hz: 6000,
+    },
+    ModeEntry {
+        mode: Mode::SamL,
+        name: "SAL",
+        bit: 17,
+        nominal_width_hz: 6000,
+    },
+    ModeEntry {
+        mode: Mode::SamU,
+        name: "SAH",
+        bit: 18,
+        nominal_width_hz: 6000,
     },
 ];
 
@@ -553,6 +571,11 @@ mod tests {
         assert_eq!(mode_bit(Mode::Lsb), 0x8);
         assert_eq!(mode_mask(&[Mode::Am, Mode::Cw, Mode::Fm]), 0x23);
         assert_eq!(mode_mask(&[]), 0);
+        // Synchronous AM: Hamlib's SAM, SAL and SAH are bits 16, 17 and 18.
+        assert_eq!(mode_bit(Mode::Sam), 1 << 16);
+        assert_eq!(mode_bit(Mode::SamL), 1 << 17);
+        assert_eq!(mode_bit(Mode::SamU), 1 << 18);
+        assert_eq!(mode_from_hamlib("sah"), Some(Mode::SamU));
     }
 
     // Tests [@ANCHOR: radioctld_names_nominal_width]
