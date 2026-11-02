@@ -150,6 +150,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Micom => Box::new(crate::micom::MicomEngine::new(desc.clone())?),
         VendorProtocol::Hiqsdr => Box::new(crate::hiqsdr::HiqsdrEngine::new(desc.clone())?),
         VendorProtocol::Wj => Box::new(crate::wj::WjEngine::new(desc.clone())?),
+        VendorProtocol::Anytone => Box::new(crate::anytone::AnytoneEngine::new(desc.clone())?),
     })
 }
 
@@ -187,6 +188,7 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Micom => Box::new(crate::micom::MicomTwin::new(desc)?),
         VendorProtocol::Hiqsdr => Box::new(crate::hiqsdr::HiqsdrTwin::new(desc)?),
         VendorProtocol::Wj => Box::new(crate::wj::WjTwin::new(desc)?),
+        VendorProtocol::Anytone => Box::new(crate::anytone::AnytoneTwin::new(desc)?),
     })
 }
 

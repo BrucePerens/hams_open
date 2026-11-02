@@ -11,6 +11,7 @@
 
 pub mod adat;
 pub mod alinco;
+pub mod anytone;
 pub mod aor;
 pub mod aor_classic;
 pub mod ar7030;
