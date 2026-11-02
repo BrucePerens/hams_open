@@ -173,6 +173,7 @@ const MODULES: &[Module] = &[
 ];
 
 pub(crate) fn out_dir() -> PathBuf {
+    // [@ANCHOR: bench_mcp_main_out_dir]
     let d = std::env::var("BENCH_MCP_OUT")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("bench_mcp"));
@@ -220,6 +221,7 @@ fn pick<'a>(
 }
 
 fn connect(i: &Instrument) -> Result<Link, String> {
+    // [@ANCHOR: bench_mcp_main_connect]
     match i.kind {
         Kind::Scope => Link::tcp(i.host.as_deref().unwrap_or_default(), i.port),
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
@@ -230,6 +232,7 @@ fn connect(i: &Instrument) -> Result<Link, String> {
 
 /// One call at a time per instrument: a serial port or a scope socket has a single conversation.
 fn instrument_lock(name: &str) -> Arc<Mutex<()>> {
+    // [@ANCHOR: bench_mcp_main_instrument_lock]
     static LOCKS: Mutex<Option<HashMap<String, Arc<Mutex<()>>>>> = Mutex::new(None);
     let mut g = LOCKS.lock().unwrap_or_else(|e| e.into_inner());
     g.get_or_insert_with(HashMap::new)
@@ -550,6 +553,7 @@ impl ServerHandler for BenchServer {
         request: CallToolRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
+        // [@ANCHOR: bench_mcp_main_call_tool]
         let name = request.name.to_string();
         let args = Value::Object(request.arguments.unwrap_or_default());
         let insts = self.insts.clone();
@@ -569,6 +573,7 @@ impl ServerHandler for BenchServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // [@ANCHOR: bench_mcp_main_serve]
     // The root helper of the USB hub tools: `sudo -n bench_mcp --usb-priv <operation> ...`; it takes no config and serves no MCP.
     let argv: Vec<String> = std::env::args().skip(1).collect();
     if argv.first().map(|a| a.as_str()) == Some(usb_hub::privileged::FLAG) {
@@ -1097,5 +1102,54 @@ mod tests {
         assert!(e.contains("needs tier"), "{e}");
         let e = call(&insts(), "bench_psu_output", &json!({"on": true})).unwrap_err();
         assert!(e.contains("needs tier Full"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_connect]
+    #[test]
+    fn a_scope_connects_over_tcp_and_a_supply_over_serial_and_other_kinds_have_no_scpi_link() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let mut v = insts();
+        let scope = v.iter().position(|i| i.name == "scope").unwrap();
+        let psu = v.iter().position(|i| i.name == "psu").unwrap();
+        v[scope].port = port;
+        let server = std::thread::spawn(move || listener.accept().map(|_| ()).is_ok());
+        assert!(connect(&v[scope]).is_ok());
+        assert!(server.join().unwrap());
+        // The supply's serial path is opened (here a path with no device behind it).
+        v[psu].serial = Some("/nonexistent/ttyUSB9".into());
+        let e = connect(&v[psu]).err().unwrap();
+        assert!(e.starts_with("open /nonexistent/ttyUSB9"), "{e}");
+        v[psu].kind = Kind::Audio;
+        let e = connect(&v[psu]).err().unwrap();
+        assert!(e.contains("have no SCPI link"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_instrument_lock]
+    #[test]
+    fn one_lock_per_instrument_name_is_shared_by_every_caller() {
+        let a = instrument_lock("lock_test_a");
+        assert!(Arc::ptr_eq(&a, &instrument_lock("lock_test_a")));
+        assert!(!Arc::ptr_eq(&a, &instrument_lock("lock_test_b")));
+        // A second caller for the same name waits for the first.
+        let g = a.lock().unwrap();
+        let again = instrument_lock("lock_test_a");
+        assert!(again.try_lock().is_err());
+        drop(g);
+        assert!(again.try_lock().is_ok());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_out_dir]
+    #[test]
+    fn the_output_directory_is_the_environments_or_a_default_and_is_created() {
+        let dir = std::env::temp_dir().join(format!("bench_mcp_out_{}", std::process::id()));
+        let sub = dir.join("nested");
+        std::env::set_var("BENCH_MCP_OUT", &sub);
+        let got = out_dir();
+        std::env::remove_var("BENCH_MCP_OUT");
+        assert_eq!(got, sub);
+        assert!(sub.is_dir());
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(out_dir(), std::env::temp_dir().join("bench_mcp"));
     }
 }

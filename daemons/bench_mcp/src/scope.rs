@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
 fn ch(args: &Value) -> Result<u8, String> {
+    // [@ANCHOR: bench_mcp_scope_ch]
     match args.get("channel").and_then(|c| c.as_u64()) {
         Some(c @ 1..=2) => Ok(c as u8),
         _ => Err("channel must be 1 or 2".into()),
@@ -21,6 +22,7 @@ fn stamp() -> String {
 }
 
 pub fn status(s: &mut Link) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_status]
     let mode = s.query("TRIG_MODE?")?;
     let tdiv = s.number("TDIV?")?;
     let sara = s.number("SARA?")?;
@@ -42,6 +44,7 @@ pub fn status(s: &mut Link) -> Result<Value, String> {
 }
 
 pub fn measure(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_measure]
     let c = ch(args)?;
     let items: Vec<String> = match args.get("items").and_then(|i| i.as_array()) {
         Some(a) => a
@@ -108,6 +111,7 @@ fn analyse(volts: &[f32], sara: f64) -> Analysis {
 }
 
 pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_capture]
     let c = ch(args)?;
     let stopped = Link::value(&s.query("TRIG_MODE?")?) == "STOP";
     if stopped && args.get("allow_stopped").and_then(|v| v.as_bool()) != Some(true) {
@@ -219,6 +223,7 @@ pub fn spectrum(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String>
 }
 
 pub fn screenshot(s: &mut Link, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_screenshot]
     let raw = s.raw_until_idle("SCDP", 1500, 30)?;
     if raw.len() < 100 {
         return Err(format!("screenshot: only {} bytes", raw.len()));
@@ -236,6 +241,7 @@ pub fn screenshot(s: &mut Link, out: &Path) -> Result<Value, String> {
 }
 
 pub fn set(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_set]
     let mut done = Vec::new();
     let mut cmd = |s: &mut Link, c: String| -> Result<(), String> {
         s.send(&c)?;
@@ -447,5 +453,235 @@ mod spectrum_tests {
         )
         .is_err());
         assert!(spectrum(&mut l2, &json!({"channel": 3}), Path::new("/tmp")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod tool_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader, Write};
+    use std::sync::{Arc, Mutex};
+
+    /// A scope on a local socket: `reply` gets each command line and returns the bytes to send back, or `None` for a command
+    /// that has no reply. Returns the port and every command received.
+    fn scope(
+        reply: impl Fn(&str) -> Option<Vec<u8>> + Send + 'static,
+    ) -> (u16, Arc<Mutex<Vec<String>>>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        std::thread::spawn(move || {
+            let (sock, _) = listener.accept().unwrap();
+            let mut out = sock.try_clone().unwrap();
+            for line in BufReader::new(sock).lines() {
+                let Ok(l) = line else { break };
+                log.lock().unwrap().push(l.clone());
+                if let Some(r) = reply(&l) {
+                    out.write_all(&r).unwrap();
+                }
+            }
+        });
+        (port, seen)
+    }
+
+    /// The replies of a scope in the given trigger mode to the queries `status` makes.
+    fn status_reply(mode: &'static str) -> impl Fn(&str) -> Option<Vec<u8>> {
+        move |c| {
+            let r = match c {
+                "TRIG_MODE?" => format!("TRIG_MODE {mode}"),
+                "TDIV?" => "TDIV 1.00E-03S".into(),
+                "SARA?" => "SARA 1.00E+06Sa/s".into(),
+                "C1:VDIV?" => "C1:VDIV 5.00E-01V".into(),
+                "C2:VDIV?" => "C2:VDIV 2.00E+00V".into(),
+                "C1:OFST?" | "C2:OFST?" => "C1:OFST 0.00E+00V".into(),
+                "C1:CPL?" => "C1:CPL D1M".into(),
+                "C2:CPL?" => "C2:CPL A1M".into(),
+                "C1:ATTN?" | "C2:ATTN?" => "C1:ATTN 10".into(),
+                _ => return None,
+            };
+            Some(format!("{r}\n").into_bytes())
+        }
+    }
+
+    fn out_dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("bench_scope_{name}_{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_status]
+    #[test]
+    fn the_status_reads_the_trigger_the_timebase_and_both_channels() {
+        let (port, _) = scope(status_reply("STOP"));
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let v = status(&mut l).unwrap();
+        assert_eq!(v["trigger_mode"], "STOP");
+        assert_eq!(v["acquisition"], "stopped");
+        assert_eq!(v["timebase_s_per_div"], 1.0e-3);
+        assert_eq!(v["sample_rate_sa_s"], 1.0e6);
+        assert_eq!(v["channels"][1]["vdiv_v"], 2.0);
+        assert_eq!(v["channels"][1]["coupling"], "A1M");
+        assert_eq!(v["channels"][0]["attenuation"], 10.0);
+        let (port, _) = scope(status_reply("AUTO"));
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        assert_eq!(status(&mut l).unwrap()["acquisition"], "running");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_measure]
+    // Tests [@ANCHOR: bench_mcp_scope_ch]
+    #[test]
+    fn measurements_are_asked_per_channel_and_only_for_plain_item_names() {
+        let (port, seen) = scope(|c| {
+            c.strip_prefix("C2:PAVA? ")
+                .map(|it| format!("C2:PAVA {it},1.5E+00V\n").into_bytes())
+        });
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let v = measure(&mut l, &json!({"channel": 2})).unwrap();
+        assert_eq!(v["PKPK"], "1.5E+00V");
+        assert_eq!(v.as_object().unwrap().len(), 4);
+        let v = measure(&mut l, &json!({"channel": 2, "items": ["RMS", 7]})).unwrap();
+        assert_eq!(v.as_object().unwrap().keys().collect::<Vec<_>>(), ["RMS"]);
+        for bad in [json!({"channel": 3}), json!({}), json!({"channel": "1"})] {
+            assert_eq!(
+                measure(&mut l, &bad).unwrap_err(),
+                "channel must be 1 or 2",
+                "{bad}"
+            );
+        }
+        let before = seen.lock().unwrap().len();
+        assert_eq!(
+            measure(&mut l, &json!({"channel": 1, "items": ["PK PK;X"]})).unwrap_err(),
+            "bad item"
+        );
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            before,
+            "nothing is sent for a bad item"
+        );
+    }
+
+    /// A scope that serves a 1 kHz square wave of 8-bit samples (1 MSa/s, 1 V/div, so 25 counts per volt-division).
+    fn square_wave_scope(mode: &'static str) -> (u16, Arc<Mutex<Vec<String>>>) {
+        scope(move |c| {
+            let r = match c {
+                "TRIG_MODE?" => format!("TRIG_MODE {mode}\n").into_bytes(),
+                "C1:VDIV?" => b"C1:VDIV 1.00E+00V\n".to_vec(),
+                "C1:OFST?" => b"C1:OFST 0.00E+00V\n".to_vec(),
+                "SARA?" => b"SARA 1.00E+06Sa/s\n".to_vec(),
+                "C1:WF? DAT2" => {
+                    let data: Vec<u8> = (0..4000)
+                        .map(|i| if (i / 500) % 2 == 1 { 50i8 as u8 } else { 0 })
+                        .collect();
+                    let mut r = b"C1:WF DAT2,#9000004000".to_vec();
+                    r.extend(data);
+                    r.extend(b"\n\n");
+                    r
+                }
+                _ => return None,
+            };
+            Some(r)
+        })
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_capture]
+    // Tests [@ANCHOR: bench_mcp_scope_ch]
+    #[test]
+    fn a_capture_is_written_as_f32_volts_with_its_edges_and_a_stopped_scope_is_refused() {
+        let dir = out_dir("capture");
+        let (port, seen) = square_wave_scope("AUTO");
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let v = capture(&mut l, &json!({"channel": 1}), &dir).unwrap();
+        assert_eq!(v["samples"], 4000);
+        assert_eq!(v["acquisition_was_stopped"], false);
+        assert_eq!(v["rising_edges"], 4);
+        assert!((v["estimated_frequency_hz"].as_f64().unwrap() - 1000.0).abs() < 1.0);
+        assert!((v["pkpk_v"].as_f64().unwrap() - 2.0).abs() < 1e-6, "{v}");
+        let bytes = std::fs::read(v["file"].as_str().unwrap()).unwrap();
+        assert_eq!(bytes.len(), 4000 * 4);
+        assert_eq!(
+            f32::from_le_bytes(bytes[2000..2004].try_into().unwrap()),
+            2.0
+        );
+        assert!(seen
+            .lock()
+            .unwrap()
+            .contains(&"WFSU SP,1,NP,0,FP,0".to_string()));
+        assert_eq!(
+            capture(&mut l, &json!({"channel": 0}), &dir).unwrap_err(),
+            "channel must be 1 or 2"
+        );
+        // A stopped scope holds an old frame: refused unless the caller says that is wanted.
+        let (port, _) = square_wave_scope("STOP");
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let e = capture(&mut l, &json!({"channel": 1}), &dir).unwrap_err();
+        assert!(e.contains("scope is stopped"), "{e}");
+        let v = capture(&mut l, &json!({"channel": 1, "allow_stopped": true}), &dir).unwrap();
+        assert_eq!(v["acquisition_was_stopped"], true);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_screenshot]
+    #[test]
+    fn a_screenshot_is_saved_by_its_image_type_and_a_short_reply_is_an_error() {
+        let dir = out_dir("shot");
+        let mut bmp = b"BM".to_vec();
+        bmp.extend(vec![7u8; 300]);
+        let (port, _) = scope(move |c| (c == "SCDP").then(|| bmp.clone()));
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let v = screenshot(&mut l, &dir).unwrap();
+        assert_eq!(v["bytes"], 302);
+        let f = v["file"].as_str().unwrap();
+        assert!(f.ends_with(".bmp"), "{f}");
+        assert_eq!(std::fs::read(f).unwrap().len(), 302);
+        let (port, _) = scope(|c| (c == "SCDP").then(|| b"BM1234".to_vec()));
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let e = screenshot(&mut l, &dir).unwrap_err();
+        assert_eq!(e, "screenshot: only 6 bytes");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_set]
+    // Tests [@ANCHOR: bench_mcp_scope_ch]
+    #[test]
+    fn settings_become_the_scopes_commands_and_bad_values_are_refused_before_sending() {
+        let (port, seen) = scope(status_reply("AUTO"));
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let v = set(
+            &mut l,
+            &json!({"timebase_s": 0.001, "channel": 2, "vdiv_v": 0.5, "coupling": "D1M",
+                    "trigger_mode": "NORM", "trigger_type": "EDGE"}),
+        )
+        .unwrap();
+        assert_eq!(
+            v["sent"],
+            json!([
+                "TDIV 1E-3S",
+                "C2:VDIV 5E-1V",
+                "C2:CPL D1M",
+                "TRIG_MODE NORM",
+                "TRSE EDGE,SR,C2"
+            ])
+        );
+        assert_eq!(v["status"]["trigger_mode"], "AUTO");
+        assert!(seen.lock().unwrap().iter().any(|c| c == "TRIG_MODE NORM"));
+        let before = seen.lock().unwrap().len();
+        for (bad, msg) in [
+            (json!({"channel": 1, "coupling": "AC"}), "bad coupling"),
+            (json!({"vdiv_v": 1.0}), "channel must be 1 or 2"),
+            (json!({"trigger_mode": "FAST"}), "bad trigger_mode"),
+            (
+                json!({"channel": 1, "trigger_type": "PATTERN"}),
+                "trigger_type must be",
+            ),
+        ] {
+            let e = set(&mut l, &bad).unwrap_err();
+            assert!(e.starts_with(msg), "{bad}: {e}");
+        }
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            before,
+            "a refused call sends nothing"
+        );
     }
 }
