@@ -11,7 +11,7 @@ organization, configurable per deployment rather than hardcoded.
   inbox.
     * **BDD Criteria:**
         * *Given* `hams_base.compliance_org_name` is configured (or left unset, falling back to
-          "HAMS Organization")
+          the name of the sending company, `company.name`)
         * *When* any notification email renders through Odoo's stock notification layout
         * *Then* the compliance footer renders with the configured organization name, without
           raising a `KeyError` -- a real, previously-shipped bug: the xpath referenced a bare

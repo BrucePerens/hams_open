@@ -53,6 +53,11 @@ Moving a ticket into "Spam / Phishing" sends no stage-change mail-back: the From
 the spammer (a reply confirms a live inbox) or a real customer whose address was spoofed. Moving
 it back out of that stage mails the customer as usual.
 
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_no_assignment_notice_for_spam]**
+A ticket created already in "Spam / Phishing" is still assigned to the on-duty admin, but the
+assignment email and the toast are skipped: quarantined mail pages nobody. A "New" ticket notifies
+its assignee as before.
+
 ### A member can submit a ticket that is routed to an agent
 The portal submit form creates the ticket under the helpdesk service account, also for the transaction's access check on the agent assignment note, so a plain member is never refused over contact access.
 <!-- [@ANCHOR: hams_helpdesk:portal_submit_service_default_env] -->

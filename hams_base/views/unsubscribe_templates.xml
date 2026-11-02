@@ -10,7 +10,7 @@
                             <div class="col-lg-8 offset-lg-2">
                                 <h1 class="text-center mb-4">Unsubscribe Options</h1>
                                 <p class="lead text-center text-muted">
-                                    Manage how HAMS communicates with you.
+                                    Manage how <t t-out="website.company_id.name"/> communicates with you.
                                 </p>
                                 
                                 <div t-if="website.email_delivery_notice()" id="email_delivery_notice" class="alert alert-warning mt-4" role="alert">

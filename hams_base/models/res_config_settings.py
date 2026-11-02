@@ -4,7 +4,8 @@ from odoo import models, fields, api
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
-    compliance_org_name = fields.Char("Compliance Organization Name", config_parameter="hams_base.compliance_org_name", default="HAMS Organization")
+    compliance_org_name = fields.Char("Compliance Organization Name", config_parameter="hams_base.compliance_org_name",
+                                     help="Leave empty to use the company name (Settings > Companies), the single source of the site's name.")
     # Must be Char, not Text: any res.config.settings field that declares
     # config_parameter= is passed through _get_classified_fields(), which
     # only allows boolean/integer/float/char/selection/many2one/datetime
@@ -13,7 +14,7 @@ class ResConfigSettings(models.TransientModel):
     # WHOLE installation, not just when this field is touched. The
     # corresponding view field now sets widget="text" to keep the
     # multi-line textarea rendering a Text field got by default.
-    compliance_mailing_address = fields.Char("Compliance Mailing Address", config_parameter="hams_base.compliance_mailing_address", default="123 Main St, Anytown USA")
+    compliance_mailing_address = fields.Char("Compliance Mailing Address", config_parameter="hams_base.compliance_mailing_address")
 
     dns_spf_record = fields.Text("SPF Record (TXT)", compute="_compute_dns_records")
     enable_dmarc_instructions = fields.Boolean("Enable Custom DMARC", config_parameter="hams_base.enable_dmarc_instructions", default=False, help="Disable if using AWS SES or another provider that manages DMARC natively.")
